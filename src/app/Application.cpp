@@ -2,6 +2,8 @@
 
 #include <chrono>
 
+#include "Logger.hpp"
+
 namespace meow::app
 {
 	namespace
@@ -32,12 +34,14 @@ namespace meow::app
 	Application::Application(const meow::MeowCore::Config& engineConfig)
 		: m_engine(engineConfig)
 	{
+		INFO(LogCategory::App, "Application created.");
 	}
 
 	Application::~Application()
 	{
 		if (!m_layersAttached)
 		{
+			VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
 			return;
 		}
 
@@ -52,15 +56,20 @@ namespace meow::app
 		// This can be thought of like the onDestroy() function in unity or something like that,
 		// where you can do cleanup of game objects and such, but the actual application is still running until this destructor returns and the application is destroyed
 		m_layers.DetachAll(context);
+		INFO(LogCategory::App, "Application shutdown complete.");
 	}
 
 	void Application::PushLayer(std::unique_ptr<AppLayer> layer)
 	{
 		m_layers.Push(std::move(layer));
+		VERBOSE(LogCategory::App, "Layer pushed to stack.");
 	}
 
 	int Application::Run()
 	{
+		INFO(LogCategory::App, "Application run loop starting.");
+		Logger::SetFrameNumber(0);
+
 		LayerContext attachContext{
 			.engine = m_engine,
 			.deltaTimeSeconds = 0.0,
@@ -77,6 +86,8 @@ namespace meow::app
 		auto previousFrameTime = Clock::now();
 		while (!m_engine.ShouldClose())
 		{
+			Logger::SetFrameNumber(m_frameIndex);
+
 			// Pump event sounds funny but it just means we are polling for events and such, so we call PumpEvents() here to poll for events and such before we do any updating or rendering
 			// So like input events or window events and such
 			m_engine.PumpEvents();
@@ -108,6 +119,9 @@ namespace meow::app
 
 			++m_frameIndex;
 		}
+
+		INFO(LogCategory::App, "Application run loop exited.");
+		Logger::ClearFrameNumber();
 
 		return 0;
 	}

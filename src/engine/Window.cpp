@@ -1,6 +1,7 @@
 #include "Window.hpp"
 
-#include <stdexcept>
+#include "Logger.hpp"
+#include "MeowExceptions.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -9,9 +10,11 @@ namespace meow
 {
 	Window::Window(const char* title, int width, int height)
 	{
+		INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
+
 		if (!glfwInit())
 		{
-			throw std::runtime_error("Failed to initialize GLFW.");
+			throw WindowError("Failed to initialize GLFW.");
 		}
 
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -19,12 +22,16 @@ namespace meow
 		if (m_window == nullptr)
 		{
 			glfwTerminate();
-			throw std::runtime_error("Failed to create GLFW window.");
+			throw WindowError("Failed to create GLFW window.");
 		}
+
+		INFO(LogCategory::Window, "Window created successfully.");
 	}
 
 	Window::~Window()
 	{
+		VERBOSE(LogCategory::Window, "Destroying window resources.");
+
 		if (m_window != nullptr)
 		{
 			glfwDestroyWindow(m_window);

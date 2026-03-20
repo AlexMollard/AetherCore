@@ -1,5 +1,7 @@
 #include "LayerStack.hpp"
 
+#include "Logger.hpp"
+
 namespace meow::app
 {
 	void LayerStack::Push(std::unique_ptr<AppLayer> layer)
@@ -9,6 +11,7 @@ namespace meow::app
 
 	void LayerStack::AttachAll(LayerContext& context)
 	{
+		INFO(LogCategory::App, "Attaching layers.");
 		for (const auto& layer : m_layers)
 		{
 			layer->OnAttach(context);
@@ -17,6 +20,7 @@ namespace meow::app
 
 	void LayerStack::DetachAll(LayerContext& context)
 	{
+		INFO(LogCategory::App, "Detaching layers.");
 		for (auto it = m_layers.rbegin(); it != m_layers.rend(); ++it)
 		{
 			(*it)->OnDetach(context);

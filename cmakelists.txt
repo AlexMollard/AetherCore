@@ -25,6 +25,10 @@ FetchContent_MakeAvailable(glfw glm vk-bootstrap)
 add_library(Engine STATIC)
 
 target_sources(Engine PRIVATE
+    src/engine/LogCategory.hpp
+    src/engine/Logger.hpp
+    src/engine/Logger.cpp
+    src/engine/MeowExceptions.hpp
     src/engine/MeowCore.cpp
     src/engine/MeowCore.hpp
     src/engine/RenderGraph.cpp
@@ -48,6 +52,10 @@ target_link_libraries(Engine PUBLIC
 # Tell the engine where its own headers are
 target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine)
 
+if (MSVC)
+    target_compile_options(Engine PRIVATE /Zc:preprocessor)
+endif()
+
 # ---------------------------------------------------------------------------
 # 3. The Application (Executable)
 # ---------------------------------------------------------------------------
@@ -65,6 +73,10 @@ target_sources(App PRIVATE
 )
 
 target_include_directories(App PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app)
+
+if (MSVC)
+    target_compile_options(App PRIVATE /Zc:preprocessor)
+endif()
 
 # The App "inherits" Vulkan, GLFW, and GLM automatically from the Engine target!
 target_link_libraries(App PRIVATE Engine)

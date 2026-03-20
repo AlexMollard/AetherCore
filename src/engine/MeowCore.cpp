@@ -1,11 +1,14 @@
 #include "MeowCore.hpp"
 
+#include "Logger.hpp"
+
 namespace meow
 {
 	MeowCore::MeowCore(const Config& config)
 		: m_window(config.appName, config.width, config.height),
 		m_vulkanContext(m_window, config.appName)
 	{
+		INFO(LogCategory::Engine, "Engine core initialized.");
 	}
 
 	bool MeowCore::ShouldClose() const
@@ -20,6 +23,7 @@ namespace meow
 
 	void MeowCore::BeginFrame()
 	{
+		// Frame hooks will route through here as rendering systems are expanded.
 	}
 
 	void MeowCore::EndFrame()
