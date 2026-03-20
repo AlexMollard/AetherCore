@@ -1,0 +1,56 @@
+# Build directories
+/build/
+/build-*/
+/out/
+/bin/
+/lib/
+
+# CMake generated files
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/compile_commands.json
+/CTestTestfile.cmake
+/Testing/
+/install_manifest.txt
+
+# Visual Studio / MSBuild
+/.vs/
+*.sln
+*.vcxproj*
+*.vcproj*
+*.filters
+*.user
+*.opendb
+*.suo
+*.ipch
+*.pdb
+*.obj
+*.idb
+*.ilk
+*.tlog
+*.lastbuildstate
+*.recipe
+
+# Ninja / Make
+.ninja_deps
+.ninja_log
+build.ninja
+Makefile
+
+# Compiler intermediates
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Vulkan / shader outputs
+*.spv
+
+# Editors and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
