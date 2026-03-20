@@ -25,9 +25,14 @@ FetchContent_MakeAvailable(glfw glm vk-bootstrap)
 add_library(Engine STATIC)
 
 target_sources(Engine PRIVATE
+    src/engine/MeowCore.cpp
+    src/engine/MeowCore.hpp
     src/engine/RenderGraph.cpp
     src/engine/RenderGraph.hpp
+    src/engine/VulkanContext.hpp
     src/engine/VulkanContext.cpp
+    src/engine/Window.hpp
+    src/engine/Window.cpp
 )
 
 # Find Vulkan on the system
@@ -41,12 +46,25 @@ target_link_libraries(Engine PUBLIC
 )
 
 # Tell the engine where its own headers are
-target_include_directories(Engine PUBLIC src/engine)
+target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine)
 
 # ---------------------------------------------------------------------------
 # 3. The Application (Executable)
 # ---------------------------------------------------------------------------
-add_executable(App src/main.cpp)
+add_executable(App)
+
+target_sources(App PRIVATE
+    src/main.cpp
+    src/app/Application.cpp
+    src/app/Application.hpp
+    src/app/AppLayer.hpp
+    src/app/LayerStack.cpp
+    src/app/LayerStack.hpp
+    src/app/layers/SandboxLayer.cpp
+    src/app/layers/SandboxLayer.hpp
+)
+
+target_include_directories(App PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/app)
 
 # The App "inherits" Vulkan, GLFW, and GLM automatically from the Engine target!
 target_link_libraries(App PRIVATE Engine)

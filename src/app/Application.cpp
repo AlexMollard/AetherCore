@@ -1,0 +1,124 @@
+#include "Application.hpp"
+
+#include <chrono>
+
+namespace meow::app
+{
+	namespace
+	{
+		using Clock = std::chrono::steady_clock;
+	}
+
+	void AppLayer::OnAttach(LayerContext& context)
+	{
+		(void)context;
+	}
+
+	void AppLayer::OnDetach(LayerContext& context)
+	{
+		(void)context;
+	}
+
+	void AppLayer::OnUpdate(LayerContext& context)
+	{
+		(void)context;
+	}
+
+	void AppLayer::OnGui(LayerContext& context)
+	{
+		(void)context;
+	}
+
+	Application::Application(const meow::MeowCore::Config& engineConfig)
+		: m_engine(engineConfig)
+	{
+	}
+
+	Application::~Application()
+	{
+		if (!m_layersAttached)
+		{
+			return;
+		}
+
+		LayerContext context{
+			.engine = m_engine,
+			.deltaTimeSeconds = 0.0,
+			.frameIndex = m_frameIndex,
+		};
+
+		// OnExit:
+		// We call DetachAll() here to detach all layers before the application is destroyed,
+		// This can be thought of like the onDestroy() function in unity or something like that,
+		// where you can do cleanup of game objects and such, but the actual application is still running until this destructor returns and the application is destroyed
+		m_layers.DetachAll(context);
+	}
+
+	void Application::PushLayer(std::unique_ptr<AppLayer> layer)
+	{
+		m_layers.Push(std::move(layer));
+	}
+
+	int Application::Run()
+	{
+		LayerContext attachContext{
+			.engine = m_engine,
+			.deltaTimeSeconds = 0.0,
+			.frameIndex = 0,
+		};
+
+		// Startup:
+		// We call AttachAll() here to attach all layers before the main loop starts,
+		// This can be thought of like the onStart() function in unity or something like that, 
+		// where you can do initialization of game objects and such, but the actual game loop starts after this function returns and the main loop starts
+		m_layers.AttachAll(attachContext);
+		m_layersAttached = true;
+
+		auto previousFrameTime = Clock::now();
+		while (!m_engine.ShouldClose())
+		{
+			// Pump event sounds funny but it just means we are polling for events and such, so we call PumpEvents() here to poll for events and such before we do any updating or rendering
+			// So like input events or window events and such
+			m_engine.PumpEvents();
+
+			const auto currentFrameTime = Clock::now();
+			const auto deltaTime = std::chrono::duration<double>(currentFrameTime - previousFrameTime).count();
+			previousFrameTime = currentFrameTime;
+
+			// Per frame context:
+			// A helper struct with useful objects and info you can use in your layers for the current frame.
+			LayerContext frameContext{
+				.engine = m_engine,
+				.deltaTimeSeconds = deltaTime,
+				.frameIndex = m_frameIndex,
+			};
+
+			// Update:
+			// Game logic and such should be updated in the OnUpdate() function of the layers, so we call UpdateAll() here to update all layers
+			m_layers.UpdateAll(frameContext);
+
+			// Render:
+			// Im thinking all assets are implicitly rendered in the engine.beginFrame()
+			// The only explicit renderering i want the application to do is any gui like imgui so inside of the GuiAll() function 
+			// there will be imgui calls for editor windows and such that you can have for each layer, but the actual rendering of
+			// the game world and such is all handled by the engine implicitly in the BeginFrame() and EndFrame() calls
+			m_engine.BeginFrame();
+			m_layers.GuiAll(frameContext);
+			m_engine.EndFrame();
+
+			++m_frameIndex;
+		}
+
+		return 0;
+	}
+
+	meow::MeowCore& Application::GetEngine()
+	{
+		return m_engine;
+	}
+
+	const meow::MeowCore& Application::GetEngine() const
+	{
+		return m_engine;
+	}
+}
