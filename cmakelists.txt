@@ -26,26 +26,45 @@ FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA)
 add_library(Engine STATIC)
 
 target_sources(Engine PRIVATE
+    src/engine/BindlessContract.hpp
+    src/engine/BindlessContract.cpp
+    src/engine/BindlessManager.hpp
+    src/engine/BindlessManager.cpp
+    src/engine/CommandRecorder.hpp
+    src/engine/CommandRecorder.cpp
     src/engine/CrashHandler.hpp
     src/engine/CrashHandler.cpp
+    src/engine/GraphicsPipeline.hpp
+    src/engine/GraphicsPipeline.cpp
     src/engine/LogCategory.hpp
     src/engine/Logger.hpp
     src/engine/Logger.cpp
     src/engine/MeowExceptions.hpp
     src/engine/MeowCore.cpp
     src/engine/MeowCore.hpp
+    src/engine/Mesh.hpp
+    src/engine/Mesh.cpp
+    src/engine/PrimitiveMeshes.hpp
+    src/engine/PrimitiveMeshes.cpp
     src/engine/PassResourceCompiler.hpp
     src/engine/PassResourceCompiler.cpp
     src/engine/ResourcePool.hpp
     src/engine/ResourcePool.cpp
     src/engine/RenderGraph.cpp
     src/engine/RenderGraph.hpp
+    src/engine/RenderQueue.hpp
+    src/engine/RenderQueue.cpp
+    src/engine/Scene.hpp
+    src/engine/Scene.cpp
+    src/engine/Swapchain.hpp
+    src/engine/Swapchain.cpp
     src/engine/UniqueBuffer.hpp
     src/engine/UniqueBuffer.cpp
     src/engine/UniqueImage.hpp
     src/engine/UniqueImage.cpp
     src/engine/VulkanContext.hpp
     src/engine/VulkanContext.cpp
+    src/engine/VulkanUtils.hpp
     src/engine/VmaImplementation.cpp
     src/engine/Window.hpp
     src/engine/Window.cpp

@@ -9,13 +9,33 @@ namespace meow
 		: m_window(config.appName, config.width, config.height),
 		m_vulkanContext(m_window, config.appName)
 	{
+		m_swapchain.Initialize(m_vulkanContext, m_window);
+		m_bindlessManager.Initialize(m_vulkanContext);
+		m_resourcePool.ConfigureBindlessImages({
+			.manager = &m_bindlessManager,
+			.device = m_vulkanContext.GetDevice().device,
+			});
+		m_primitiveMeshes.Initialize(
+			m_vulkanContext.GetDevice().device,
+			m_vulkanContext.GetAllocator());
 		io::FileSystem::InitializeDefaultMounts();
 
-		INFO(LogCategory::Engine, "Engine core initialized.");
+		INFO(
+			LogCategory::Engine,
+			"Engine core initialized. Bindless sampled-image capacity: {}",
+			m_bindlessManager.GetCapacity());
+	}
+
+	void MeowCore::WaitIdle() const
+	{
+		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 	}
 
 	MeowCore::~MeowCore()
 	{
+		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
+		m_bindlessManager.Shutdown();
 		io::FileSystem::Shutdown();
 	}
 
@@ -31,11 +51,22 @@ namespace meow
 
 	void MeowCore::BeginFrame()
 	{
-		// Frame hooks will route through here as rendering systems are expanded.
+		m_swapchain.BeginFrame(m_vulkanContext.GetDevice().device);
+		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
 
 	void MeowCore::EndFrame()
 	{
+		if (m_swapchain.IsFrameValid())
+		{
+			// Game-world render: scene objects -> render queue -> Vulkan commands.
+			m_scene.FlushToQueue(m_renderQueue);
+			m_renderQueue.Flush(m_currentRecorder);
+			m_renderQueue.Clear();
+		}
+		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
+		++m_frameIndex;
+		m_bindlessManager.AdvanceFrame(m_frameIndex);
 	}
 
 	Window& MeowCore::GetWindow()
@@ -56,5 +87,63 @@ namespace meow
 	const VulkanContext& MeowCore::GetVulkanContext() const
 	{
 		return m_vulkanContext;
+	}
+
+	BindlessManager& MeowCore::GetBindlessManager()
+	{
+		return m_bindlessManager;
+	}
+
+	const BindlessManager& MeowCore::GetBindlessManager() const
+	{
+		return m_bindlessManager;
+	}
+
+	ResourcePool& MeowCore::GetResourcePool()
+	{
+		return m_resourcePool;
+	}
+
+	const ResourcePool& MeowCore::GetResourcePool() const
+	{
+		return m_resourcePool;
+	}
+
+	VkCommandBuffer MeowCore::GetCurrentCommandBuffer() const
+	{
+		return m_swapchain.GetCurrentCommandBuffer();
+	}
+
+	VkFormat MeowCore::GetSwapchainImageFormat() const
+	{
+		return m_swapchain.GetImageFormat();
+	}
+
+	RenderQueue* MeowCore::GetRenderQueue()
+	{
+		return &m_renderQueue;
+	}
+
+	Scene* MeowCore::GetScene()
+	{
+		return &m_scene;
+	}
+
+	const Mesh& MeowCore::GetPrimitiveMesh(PrimitiveMesh primitive) const
+	{
+		return m_primitiveMeshes.Get(primitive);
+	}
+
+	GraphicsPipeline MeowCore::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
+	{
+		return GraphicsPipeline::Create(m_vulkanContext.GetDevice().device, desc);
+	}
+
+	Mesh MeowCore::CreateMesh(std::span<const Mesh::Vertex> vertices)
+	{
+		return Mesh::Create(
+			m_vulkanContext.GetDevice().device,
+			m_vulkanContext.GetAllocator(),
+			vertices);
 	}
 }

@@ -50,7 +50,12 @@ namespace meow::app
 			.engine = m_engine,
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = m_frameIndex,
+			.scene = m_engine.GetScene(),
 		};
+
+		// Wait for the GPU to finish all in-flight work before tearing down app-layer
+		// resources (pipelines, buffers, etc.) that may still be referenced by the GPU.
+		m_engine.WaitIdle();
 
 		// OnExit:
 		// We call DetachAll() here to detach all layers before the application is destroyed,
@@ -91,6 +96,7 @@ namespace meow::app
 			.engine = m_engine,
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = 0,
+			.scene = m_engine.GetScene(),
 		};
 
 		// Startup:
@@ -119,6 +125,8 @@ namespace meow::app
 				.engine = m_engine,
 				.deltaTimeSeconds = deltaTime,
 				.frameIndex = m_frameIndex,
+				.renderQueue = m_engine.GetRenderQueue(),
+				.scene = m_engine.GetScene(),
 			};
 
 			// Update:

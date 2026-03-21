@@ -5,6 +5,8 @@
 namespace meow
 {
 	class MeowCore;
+	class RenderQueue;
+	class Scene;
 }
 
 namespace meow::app
@@ -14,6 +16,8 @@ namespace meow::app
 		meow::MeowCore& engine;
 		double deltaTimeSeconds = 0.0;
 		std::uint64_t frameIndex = 0;
+		meow::RenderQueue* renderQueue = nullptr;
+		meow::Scene* scene = nullptr;
 	};
 
 	class AppLayer
