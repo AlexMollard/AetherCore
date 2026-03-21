@@ -42,6 +42,8 @@ target_sources(Engine PRIVATE
 # Find Vulkan on the system
 find_package(Vulkan REQUIRED)
 
+include(SlangShaders)
+
 target_link_libraries(Engine PUBLIC 
     Vulkan::Vulkan
     glfw
@@ -80,3 +82,5 @@ endif()
 
 # The App "inherits" Vulkan, GLFW, and GLM automatically from the Engine target!
 target_link_libraries(App PRIVATE Engine)
+
+meowcore_enable_slang_shader_compilation(App)
