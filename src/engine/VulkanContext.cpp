@@ -80,9 +80,19 @@ namespace meow
 			throw VulkanError("Failed to create Vulkan surface.");
 		}
 
+		VkPhysicalDeviceVulkan11Features requiredFeatures11{};
+		requiredFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+		requiredFeatures11.shaderDrawParameters = VK_TRUE;
+
 		VkPhysicalDeviceVulkan12Features requiredFeatures12{};
 		requiredFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 		requiredFeatures12.bufferDeviceAddress = VK_TRUE;
+		requiredFeatures12.descriptorIndexing = VK_TRUE;
+		requiredFeatures12.runtimeDescriptorArray = VK_TRUE;
+		requiredFeatures12.descriptorBindingPartiallyBound = VK_TRUE;
+		requiredFeatures12.descriptorBindingVariableDescriptorCount = VK_TRUE;
+		requiredFeatures12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
+		requiredFeatures12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 
 		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
 		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -92,6 +102,7 @@ namespace meow
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
 		auto physicalDeviceResult = selector.set_surface(m_surface)
 			.set_minimum_version(1, 4)
+			.set_required_features_11(requiredFeatures11)
 			.set_required_features_12(requiredFeatures12)
 			.set_required_features_13(requiredFeatures13)
 			.select();
@@ -109,6 +120,21 @@ namespace meow
 		}
 
 		m_device = deviceResult.value();
+
+		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);
+		if (!graphicsQueueResult)
+		{
+			throw VulkanError("Failed to get graphics queue.");
+		}
+		m_graphicsQueue = graphicsQueueResult.value();
+		m_graphicsQueueFamily = m_device->get_queue_index(vkb::QueueType::graphics).value();
+
+		const auto presentQueueResult = m_device->get_queue(vkb::QueueType::present);
+		if (!presentQueueResult)
+		{
+			throw VulkanError("Failed to get present queue.");
+		}
+		m_presentQueue = presentQueueResult.value();
 
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
@@ -170,5 +196,20 @@ namespace meow
 	VmaAllocator VulkanContext::GetAllocator() const
 	{
 		return m_allocator;
+	}
+
+	VkQueue VulkanContext::GetGraphicsQueue() const
+	{
+		return m_graphicsQueue;
+	}
+
+	VkQueue VulkanContext::GetPresentQueue() const
+	{
+		return m_presentQueue;
+	}
+
+	std::uint32_t VulkanContext::GetGraphicsQueueFamily() const
+	{
+		return m_graphicsQueueFamily;
 	}
 }
