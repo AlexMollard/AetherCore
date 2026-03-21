@@ -2,23 +2,26 @@
 #include <memory>
 
 #include "Application.hpp"
+#include "CrashHandler.hpp"
 #include "Logger.hpp"
 #include "MeowExceptions.hpp"
 #include "layers/SandboxLayer.hpp"
 
 namespace
 {
-	// This is just a simple RAII guard to ensure that the logger is properly shutdown when the application exits, even if an exception is thrown.
-	class LoggerShutdownGuard
+	// This is just a simple RAII guard to ensure that the logger and crashhandler are properly shutdown when the application exits, even if an exception is thrown.
+	class RuntimeSystemsGuard
 	{
 	public:
-		LoggerShutdownGuard()
+		RuntimeSystemsGuard()
 		{
 			meow::Logger::Initialize();
+			meow::CrashHandler::Install("MeowCore");
 		}
 
-		~LoggerShutdownGuard()
+		~RuntimeSystemsGuard()
 		{
+			meow::CrashHandler::Uninstall();
 			meow::Logger::Shutdown();
 		}
 	};
@@ -26,7 +29,7 @@ namespace
 
 int main()
 {
-	LoggerShutdownGuard loggerShutdownGuard;
+	RuntimeSystemsGuard runtimeSystemsGuard;
 
 	try
 	{
@@ -41,6 +44,10 @@ int main()
 	{
 		const auto* engineError = dynamic_cast<const meow::EngineError*>(&exception);
 		const meow::LogCategory category = engineError != nullptr ? engineError->Category() : meow::LogCategory::Std;
+		if (category == meow::LogCategory::Vulkan)
+		{
+			meow::CrashHandler::ReportGraphicsFault("UnhandledVulkanException", exception.what());
+		}
 		ERROR(category, "Unhandled exception: {}", exception.what());
 		return -1;
 	}
