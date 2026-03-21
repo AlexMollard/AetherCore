@@ -16,6 +16,7 @@ namespace meow
 		};
 
 		explicit MeowCore(const Config& config = {});
+		~MeowCore();
 
 		[[nodiscard]] bool ShouldClose() const;
 		void PumpEvents() const;

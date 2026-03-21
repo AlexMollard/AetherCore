@@ -39,6 +39,19 @@ target_sources(Engine PRIVATE
     src/engine/Window.cpp
 )
 
+target_sources(Engine PRIVATE
+    src/engine/io/IFileBackend.hpp
+    src/engine/io/FileGlobOptions.hpp
+    src/engine/io/DirectoryBackend.hpp
+    src/engine/io/DirectoryBackend.cpp
+    src/engine/io/FileRequest.hpp
+    src/engine/io/FileRequest.cpp
+    src/engine/io/IOThread.hpp
+    src/engine/io/IOThread.cpp
+    src/engine/io/FileSystem.hpp
+    src/engine/io/FileSystem.cpp
+)
+
 # Find Vulkan on the system
 find_package(Vulkan REQUIRED)
 
@@ -53,6 +66,7 @@ target_link_libraries(Engine PUBLIC
 
 # Tell the engine where its own headers are
 target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine)
+target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/io)
 
 if (MSVC)
     target_compile_options(Engine PRIVATE /Zc:preprocessor)

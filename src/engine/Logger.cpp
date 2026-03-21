@@ -98,6 +98,8 @@ namespace meow
 				return "Validation";
 			case LogCategory::Asset:
 				return "Asset";
+			case LogCategory::FileSystem:
+				return "FileSystem";
 			case LogCategory::App:
 				return "App";
 			case LogCategory::Std:

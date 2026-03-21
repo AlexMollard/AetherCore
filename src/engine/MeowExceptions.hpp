@@ -82,4 +82,23 @@ namespace meow
 			return LogCategory::Asset;
 		}
 	};
+
+	class FileSystemError : public EngineError
+	{
+	public:
+		explicit FileSystemError(const std::string& message)
+			: EngineError(message)
+		{
+		}
+
+		explicit FileSystemError(const char* message)
+			: EngineError(message)
+		{
+		}
+
+		[[nodiscard]] LogCategory Category() const noexcept override
+		{
+			return LogCategory::FileSystem;
+		}
+	};
 }

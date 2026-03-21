@@ -2,6 +2,7 @@
 
 #include <chrono>
 
+#include "FileSystem.hpp"
 #include "Logger.hpp"
 
 namespace meow::app
@@ -68,6 +69,22 @@ namespace meow::app
 	int Application::Run()
 	{
 		INFO(LogCategory::App, "Application run loop starting.");
+
+		// Testing the VFS, normally loading shader files would be done in a pipeline creation inside a render graph but im not upto that yet
+		const auto shaderFiles = io::FileSystem::Glob("shaders://**/*.slang.spv");
+		if (shaderFiles.empty())
+		{
+			WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.slang.spv");
+		}
+		else
+		{
+			INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFiles.size());
+			for (const auto& shaderFile : shaderFiles)
+			{
+				VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
+			}
+		}
+
 		Logger::SetFrameNumber(0);
 
 		LayerContext attachContext{

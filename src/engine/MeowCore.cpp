@@ -1,5 +1,6 @@
 #include "MeowCore.hpp"
 
+#include "FileSystem.hpp"
 #include "Logger.hpp"
 
 namespace meow
@@ -8,7 +9,14 @@ namespace meow
 		: m_window(config.appName, config.width, config.height),
 		m_vulkanContext(m_window, config.appName)
 	{
+		io::FileSystem::InitializeDefaultMounts();
+
 		INFO(LogCategory::Engine, "Engine core initialized.");
+	}
+
+	MeowCore::~MeowCore()
+	{
+		io::FileSystem::Shutdown();
 	}
 
 	bool MeowCore::ShouldClose() const

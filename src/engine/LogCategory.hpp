@@ -9,6 +9,7 @@ namespace meow
 		Vulkan,
 		Validation,
 		Asset,
+		FileSystem,
 		App,
 		Std,
 		Unknown,
