@@ -7,6 +7,8 @@
 
 namespace meow
 {
+	class BindlessManager;
+
 	class UniqueImage
 	{
 	public:
@@ -25,6 +27,12 @@ namespace meow
 			const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		void Reset();
+		void EnsureBindlessSampled(
+			BindlessManager& bindlessManager,
+			VkDevice device,
+			VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		void ReleaseBindlessSampled(bool deferSlotFree = true);
 
 		[[nodiscard]] VkImage Get() const;
 		[[nodiscard]] VmaAllocation GetAllocation() const;
@@ -38,6 +46,10 @@ namespace meow
 		[[nodiscard]] VkImageLayout GetLastKnownLayout() const;
 		[[nodiscard]] std::uint32_t GetQueueFamilyOwner() const;
 		[[nodiscard]] std::uint64_t GetVirtualResourceId() const;
+		[[nodiscard]] bool HasBindlessSampled() const;
+		[[nodiscard]] std::uint32_t GetBindlessSampledSlot() const;
+		[[nodiscard]] VkImageView GetDefaultView() const;
+		[[nodiscard]] VkSampler GetDefaultSampler() const;
 
 		void SetLastKnownLayout(VkImageLayout layout);
 		void SetQueueFamilyOwner(std::uint32_t queueFamilyIndex);
@@ -46,6 +58,8 @@ namespace meow
 		explicit operator bool() const;
 
 	private:
+		static constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
+
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkImage m_image = VK_NULL_HANDLE;
 		VmaAllocation m_allocation = VK_NULL_HANDLE;
@@ -58,5 +72,10 @@ namespace meow
 		VkImageLayout m_lastKnownLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		std::uint32_t m_queueFamilyOwner = VK_QUEUE_FAMILY_IGNORED;
 		std::uint64_t m_virtualResourceId = 0;
+		BindlessManager* m_bindlessManager = nullptr;
+		VkDevice m_bindlessDevice = VK_NULL_HANDLE;
+		VkImageView m_defaultView = VK_NULL_HANDLE;
+		VkSampler m_defaultSampler = VK_NULL_HANDLE;
+		std::uint32_t m_bindlessSlot = kInvalidBindlessSlot;
 	};
 }

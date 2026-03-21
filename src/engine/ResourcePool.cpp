@@ -1,6 +1,8 @@
 #include "ResourcePool.hpp"
 
 #include <algorithm>
+
+#include "BindlessManager.hpp"
 #include "MeowExceptions.hpp"
 
 namespace meow
@@ -11,11 +13,26 @@ namespace meow
 		{
 			return std::find(owners.begin(), owners.end(), ownerId) != owners.end();
 		}
+
+		bool CanCrossQueueAlias(const ResourceContract& a, const ResourceContract& b)
+		{
+			if (a.lifetime.queue == b.lifetime.queue)
+			{
+				return true;
+			}
+
+			return a.alias.allowCrossQueueAliasing && b.alias.allowCrossQueueAliasing;
+		}
 	}
 
 	bool LifetimeWindow::Overlaps(const LifetimeWindow& other) const
 	{
 		return firstPass <= other.lastPass && other.firstPass <= lastPass;
+	}
+
+	bool LifetimeWindow::IsValid() const
+	{
+		return firstPass <= lastPass;
 	}
 
 	bool VirtualBufferHandle::IsValid() const
@@ -30,13 +47,16 @@ namespace meow
 
 	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(
 		const BufferResourceDesc& desc,
-		const LifetimeWindow& lifetime,
-		const bool transient)
+		const ResourceContract& contract)
 	{
+		if (!contract.lifetime.IsValid())
+		{
+			throw VulkanError("Invalid buffer lifetime window. firstPass must be <= lastPass.");
+		}
+
 		m_virtualBuffers.push_back(BufferVirtualRecord{
 			.desc = desc,
-			.lifetime = lifetime,
-			.transient = transient,
+			.contract = contract,
 			});
 
 		return VirtualBufferHandle{
@@ -47,13 +67,16 @@ namespace meow
 
 	VirtualImageHandle ResourcePool::CreateVirtualImage(
 		const ImageResourceDesc& desc,
-		const LifetimeWindow& lifetime,
-		const bool transient)
+		const ResourceContract& contract)
 	{
+		if (!contract.lifetime.IsValid())
+		{
+			throw VulkanError("Invalid image lifetime window. firstPass must be <= lastPass.");
+		}
+
 		m_virtualImages.push_back(ImageVirtualRecord{
 			.desc = desc,
-			.lifetime = lifetime,
-			.transient = transient,
+			.contract = contract,
 			});
 
 		return VirtualImageHandle{
@@ -62,22 +85,64 @@ namespace meow
 		};
 	}
 
+	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(
+		const BufferResourceDesc& desc,
+		const LifetimeWindow& lifetime,
+		const bool transient)
+	{
+		ResourceContract contract{};
+		contract.lifetime = lifetime;
+		contract.transient = transient;
+		return CreateVirtualBuffer(desc, contract);
+	}
+
+	VirtualImageHandle ResourcePool::CreateVirtualImage(
+		const ImageResourceDesc& desc,
+		const LifetimeWindow& lifetime,
+		const bool transient)
+	{
+		ResourceContract contract{};
+		contract.lifetime = lifetime;
+		contract.transient = transient;
+		return CreateVirtualImage(desc, contract);
+	}
+
+	void ResourcePool::ConfigureBindlessImages(const BindlessImageConfig& config)
+	{
+		m_bindlessImageConfig = config;
+	}
+
 	void ResourcePool::SetLifetime(const VirtualBufferHandle handle, const LifetimeWindow& lifetime)
 	{
 		auto& record = RequireBufferRecord(handle);
-		record.lifetime = lifetime;
+		record.contract.lifetime = lifetime;
 	}
 
 	void ResourcePool::SetLifetime(const VirtualImageHandle handle, const LifetimeWindow& lifetime)
 	{
 		auto& record = RequireImageRecord(handle);
-		record.lifetime = lifetime;
+		record.contract.lifetime = lifetime;
 	}
 
 	bool ResourcePool::AliasBuffer(const VirtualBufferHandle aliasHandle, const VirtualBufferHandle sourceHandle)
 	{
 		auto& alias = RequireBufferRecord(aliasHandle);
 		const auto& source = RequireBufferRecord(sourceHandle);
+
+		if (!alias.contract.alias.allowExplicitAliasing || !source.contract.alias.allowExplicitAliasing)
+		{
+			return false;
+		}
+
+		if (!CanCrossQueueAlias(alias.contract, source.contract))
+		{
+			return false;
+		}
+
+		if (alias.contract.visibility != source.contract.visibility)
+		{
+			return false;
+		}
 
 		if (source.physicalId.has_value())
 		{
@@ -99,7 +164,7 @@ namespace meow
 			}
 		}
 
-		if (alias.lifetime.Overlaps(source.lifetime))
+		if (alias.contract.lifetime.Overlaps(source.contract.lifetime))
 		{
 			return false;
 		}
@@ -113,6 +178,21 @@ namespace meow
 	{
 		auto& alias = RequireImageRecord(aliasHandle);
 		const auto& source = RequireImageRecord(sourceHandle);
+
+		if (!alias.contract.alias.allowExplicitAliasing || !source.contract.alias.allowExplicitAliasing)
+		{
+			return false;
+		}
+
+		if (!CanCrossQueueAlias(alias.contract, source.contract))
+		{
+			return false;
+		}
+
+		if (alias.contract.visibility != source.contract.visibility)
+		{
+			return false;
+		}
 
 		if (source.physicalId.has_value())
 		{
@@ -146,7 +226,7 @@ namespace meow
 			}
 		}
 
-		if (alias.lifetime.Overlaps(source.lifetime))
+		if (alias.contract.lifetime.Overlaps(source.contract.lifetime))
 		{
 			return false;
 		}
@@ -168,7 +248,7 @@ namespace meow
 			};
 			auto& sourceRecord = RequireBufferRecord(sourceHandle);
 
-			if (record.lifetime.Overlaps(sourceRecord.lifetime))
+			if (record.contract.lifetime.Overlaps(sourceRecord.contract.lifetime))
 			{
 				throw VulkanError("Aliased buffer resources have overlapping lifetime windows.");
 			}
@@ -191,7 +271,7 @@ namespace meow
 			return m_physicalBuffers[*record.physicalId].resource;
 		}
 
-		if (record.transient)
+		if (record.contract.transient && record.contract.alias.allowAutomaticAliasing)
 		{
 			for (std::uint32_t i = 0; i < m_physicalBuffers.size(); ++i)
 			{
@@ -201,7 +281,17 @@ namespace meow
 					continue;
 				}
 
-				if (!CanAliasWithOwners(record.lifetime, physical.owners, m_virtualBuffers))
+				if (physical.visibility != record.contract.visibility)
+				{
+					continue;
+				}
+
+				if (physical.queue != record.contract.lifetime.queue && !record.contract.alias.allowCrossQueueAliasing)
+				{
+					continue;
+				}
+
+				if (!CanAliasWithOwners(record.contract, physical.owners, m_virtualBuffers))
 				{
 					continue;
 				}
@@ -216,6 +306,8 @@ namespace meow
 		m_physicalBuffers.push_back(BufferPhysicalRecord{
 			.resource = std::move(resource),
 			.owners = { handle.id - 1 },
+			.visibility = record.contract.visibility,
+			.queue = record.contract.lifetime.queue,
 			});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalBuffers.size() - 1);
@@ -234,7 +326,7 @@ namespace meow
 			};
 			auto& sourceRecord = RequireImageRecord(sourceHandle);
 
-			if (record.lifetime.Overlaps(sourceRecord.lifetime))
+			if (record.contract.lifetime.Overlaps(sourceRecord.contract.lifetime))
 			{
 				throw VulkanError("Aliased image resources have overlapping lifetime windows.");
 			}
@@ -249,15 +341,18 @@ namespace meow
 					physical.owners.push_back(handle.id - 1);
 				}
 			}
+			EnsureImageVisibilityBindings(sourceResource, record.contract);
 			return sourceResource;
 		}
 
 		if (record.physicalId.has_value())
 		{
-			return m_physicalImages[*record.physicalId].resource;
+			auto& existing = m_physicalImages[*record.physicalId].resource;
+			EnsureImageVisibilityBindings(existing, record.contract);
+			return existing;
 		}
 
-		if (record.transient)
+		if (record.contract.transient && record.contract.alias.allowAutomaticAliasing)
 		{
 			for (std::uint32_t i = 0; i < m_physicalImages.size(); ++i)
 			{
@@ -267,21 +362,35 @@ namespace meow
 					continue;
 				}
 
-				if (!CanAliasWithOwners(record.lifetime, physical.owners, m_virtualImages))
+				if (physical.visibility != record.contract.visibility)
+				{
+					continue;
+				}
+
+				if (physical.queue != record.contract.lifetime.queue && !record.contract.alias.allowCrossQueueAliasing)
+				{
+					continue;
+				}
+
+				if (!CanAliasWithOwners(record.contract, physical.owners, m_virtualImages))
 				{
 					continue;
 				}
 
 				record.physicalId = i;
 				physical.owners.push_back(handle.id - 1);
+				EnsureImageVisibilityBindings(physical.resource, record.contract);
 				return physical.resource;
 			}
 		}
 
 		UniqueImage resource = factory(record.desc);
+		EnsureImageVisibilityBindings(resource, record.contract);
 		m_physicalImages.push_back(ImagePhysicalRecord{
 			.resource = std::move(resource),
 			.owners = { handle.id - 1 },
+			.visibility = record.contract.visibility,
+			.queue = record.contract.lifetime.queue,
 			});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalImages.size() - 1);
@@ -375,7 +484,7 @@ namespace meow
 	}
 
 	bool ResourcePool::CanAliasWithOwners(
-		const LifetimeWindow& candidateLifetime,
+		const ResourceContract& candidateContract,
 		const std::vector<std::uint32_t>& ownerIds,
 		const std::vector<BufferVirtualRecord>& records) const
 	{
@@ -386,7 +495,18 @@ namespace meow
 				continue;
 			}
 
-			if (candidateLifetime.Overlaps(records[ownerId].lifetime))
+			const auto& ownerContract = records[ownerId].contract;
+			if (candidateContract.lifetime.Overlaps(ownerContract.lifetime))
+			{
+				return false;
+			}
+
+			if (!CanCrossQueueAlias(candidateContract, ownerContract))
+			{
+				return false;
+			}
+
+			if (candidateContract.visibility != ownerContract.visibility)
 			{
 				return false;
 			}
@@ -396,7 +516,7 @@ namespace meow
 	}
 
 	bool ResourcePool::CanAliasWithOwners(
-		const LifetimeWindow& candidateLifetime,
+		const ResourceContract& candidateContract,
 		const std::vector<std::uint32_t>& ownerIds,
 		const std::vector<ImageVirtualRecord>& records) const
 	{
@@ -407,13 +527,41 @@ namespace meow
 				continue;
 			}
 
-			if (candidateLifetime.Overlaps(records[ownerId].lifetime))
+			const auto& ownerContract = records[ownerId].contract;
+			if (candidateContract.lifetime.Overlaps(ownerContract.lifetime))
+			{
+				return false;
+			}
+
+			if (!CanCrossQueueAlias(candidateContract, ownerContract))
+			{
+				return false;
+			}
+
+			if (candidateContract.visibility != ownerContract.visibility)
 			{
 				return false;
 			}
 		}
 
 		return true;
+	}
+
+	void ResourcePool::EnsureImageVisibilityBindings(UniqueImage& image, const ResourceContract& contract)
+	{
+		if (contract.visibility == ResourceVisibility::BindlessSampled)
+		{
+			if (m_bindlessImageConfig.manager == nullptr || m_bindlessImageConfig.device == VK_NULL_HANDLE)
+			{
+				throw VulkanError("Bindless sampled image requested, but ResourcePool bindless image config is not set.");
+			}
+
+			image.EnsureBindlessSampled(
+				*m_bindlessImageConfig.manager,
+				m_bindlessImageConfig.device,
+				m_bindlessImageConfig.sampledAspectMask,
+				m_bindlessImageConfig.sampledLayout);
+		}
 	}
 
 	bool ResourcePool::IsBufferCompatible(const BufferResourceDesc& requested, const UniqueBuffer& existing)

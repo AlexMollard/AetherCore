@@ -10,15 +10,13 @@ namespace meow
 	struct BufferLifetimeRequest
 	{
 		BufferResourceDesc desc{};
-		LifetimeWindow lifetime{};
-		bool transient = true;
+		ResourceContract contract{};
 	};
 
 	struct ImageLifetimeRequest
 	{
 		ImageResourceDesc desc{};
-		LifetimeWindow lifetime{};
-		bool transient = true;
+		ResourceContract contract{};
 	};
 
 	struct CompiledResourceSet

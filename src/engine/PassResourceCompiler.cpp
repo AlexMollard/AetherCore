@@ -13,8 +13,8 @@ namespace meow
 			std::vector<std::uint32_t> order(requests.size());
 			std::iota(order.begin(), order.end(), 0);
 			std::stable_sort(order.begin(), order.end(), [&](const std::uint32_t lhs, const std::uint32_t rhs) {
-				const auto& a = requests[lhs].lifetime;
-				const auto& b = requests[rhs].lifetime;
+				const auto& a = requests[lhs].contract.lifetime;
+				const auto& b = requests[rhs].contract.lifetime;
 				if (a.firstPass != b.firstPass)
 				{
 					return a.firstPass < b.firstPass;
@@ -39,13 +39,13 @@ namespace meow
 		out.buffers.reserve(bufferRequests.size());
 		for (const auto& request : bufferRequests)
 		{
-			out.buffers.push_back(pool.CreateVirtualBuffer(request.desc, request.lifetime, request.transient));
+			out.buffers.push_back(pool.CreateVirtualBuffer(request.desc, request.contract));
 		}
 
 		out.images.reserve(imageRequests.size());
 		for (const auto& request : imageRequests)
 		{
-			out.images.push_back(pool.CreateVirtualImage(request.desc, request.lifetime, request.transient));
+			out.images.push_back(pool.CreateVirtualImage(request.desc, request.contract));
 		}
 
 		const auto bufferOrder = BuildMaterializationOrder(bufferRequests);
