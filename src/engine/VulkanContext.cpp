@@ -80,10 +80,20 @@ namespace meow
 			throw VulkanError("Failed to create Vulkan surface.");
 		}
 
+		VkPhysicalDeviceVulkan12Features requiredFeatures12{};
+		requiredFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+		requiredFeatures12.bufferDeviceAddress = VK_TRUE;
+
+		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
+		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+		requiredFeatures13.dynamicRendering = VK_TRUE;
+		requiredFeatures13.synchronization2 = VK_TRUE;
+
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
 		auto physicalDeviceResult = selector.set_surface(m_surface)
 			.set_minimum_version(1, 4)
-			.add_required_extension(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
+			.set_required_features_12(requiredFeatures12)
+			.set_required_features_13(requiredFeatures13)
 			.select();
 
 		if (!physicalDeviceResult)
@@ -99,12 +109,32 @@ namespace meow
 		}
 
 		m_device = deviceResult.value();
+
+		VmaAllocatorCreateInfo allocatorCreateInfo{};
+		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
+		allocatorCreateInfo.device = m_device->device;
+		allocatorCreateInfo.instance = m_instance->instance;
+		allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+
+		const VkResult allocatorResult = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
+		if (allocatorResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format("Failed to create VMA allocator. VkResult={}", static_cast<int>(allocatorResult)));
+		}
+
 		INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");
 	}
 
 	VulkanContext::~VulkanContext()
 	{
 		VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
+
+		if (m_allocator != VK_NULL_HANDLE)
+		{
+			vmaDestroyAllocator(m_allocator);
+			m_allocator = VK_NULL_HANDLE;
+		}
 
 		if (m_device.has_value())
 		{
@@ -135,5 +165,10 @@ namespace meow
 	VkSurfaceKHR VulkanContext::GetSurface() const
 	{
 		return m_surface;
+	}
+
+	VmaAllocator VulkanContext::GetAllocator() const
+	{
+		return m_allocator;
 	}
 }

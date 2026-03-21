@@ -15,8 +15,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMake")
 FetchContent_Declare(glfw GIT_REPOSITORY https://github.com/glfw/glfw GIT_TAG 3.4)
 FetchContent_Declare(glm  GIT_REPOSITORY https://github.com/g-truc/glm  GIT_TAG 1.0.3)
 FetchContent_Declare(vk-bootstrap GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap GIT_TAG v1.4.341)
+FetchContent_Declare(VMA GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git GIT_TAG v3.3.0)
 
-FetchContent_MakeAvailable(glfw glm vk-bootstrap)
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA)
 
 # ---------------------------------------------------------------------------
 # 2. The Core Render Engine (Library)
@@ -37,6 +38,7 @@ target_sources(Engine PRIVATE
     src/engine/RenderGraph.hpp
     src/engine/VulkanContext.hpp
     src/engine/VulkanContext.cpp
+    src/engine/VmaImplementation.cpp
     src/engine/Window.hpp
     src/engine/Window.cpp
 )
@@ -73,6 +75,7 @@ endif()
 # Tell the engine where its own headers are
 target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine)
 target_include_directories(Engine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src/engine/io)
+target_include_directories(Engine PUBLIC ${vma_SOURCE_DIR}/include)
 
 if (MSVC)
     target_compile_options(Engine PRIVATE /Zc:preprocessor)
