@@ -34,8 +34,16 @@ target_sources(Engine PRIVATE
     src/engine/MeowExceptions.hpp
     src/engine/MeowCore.cpp
     src/engine/MeowCore.hpp
+    src/engine/PassResourceCompiler.hpp
+    src/engine/PassResourceCompiler.cpp
+    src/engine/ResourcePool.hpp
+    src/engine/ResourcePool.cpp
     src/engine/RenderGraph.cpp
     src/engine/RenderGraph.hpp
+    src/engine/UniqueBuffer.hpp
+    src/engine/UniqueBuffer.cpp
+    src/engine/UniqueImage.hpp
+    src/engine/UniqueImage.cpp
     src/engine/VulkanContext.hpp
     src/engine/VulkanContext.cpp
     src/engine/VmaImplementation.cpp
