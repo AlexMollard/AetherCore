@@ -1,5 +1,6 @@
 #pragma once
 
+#include <span>
 #include <string_view>
 
 #include <vulkan/vulkan.h>
@@ -15,6 +16,8 @@ namespace meow
 			std::string_view vertexEntry = "vertexMain";
 			std::string_view fragmentEntry = "fragmentMain";
 			VkFormat         colorFormat = VK_FORMAT_UNDEFINED;
+			// Descriptor set layouts bound into the pipeline layout in order.
+			std::span<const VkDescriptorSetLayout> setLayouts;
 		};
 
 		GraphicsPipeline() = default;

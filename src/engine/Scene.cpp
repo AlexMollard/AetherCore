@@ -28,6 +28,11 @@ namespace meow
 		}
 	}
 
+	void Scene::SetViewProjection(const glm::mat4& viewProjection)
+	{
+		m_viewProjection = viewProjection;
+	}
+
 	void Scene::FlushToQueue(RenderQueue& queue) const
 	{
 		for (const auto& [id, obj] : m_objects)
@@ -41,6 +46,7 @@ namespace meow
 				.mesh = obj.desc.mesh,
 				.vertexCount = count,
 				.instanceCount = 1,
+				.modelMatrix = obj.transform,
 				});
 		}
 	}

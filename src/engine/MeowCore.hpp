@@ -5,6 +5,7 @@
 
 #include "BindlessManager.hpp"
 #include "CommandRecorder.hpp"
+#include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Mesh.hpp"
 #include "PrimitiveMeshes.hpp"
@@ -45,7 +46,8 @@ namespace meow
 		[[nodiscard]] ResourcePool& GetResourcePool();
 		[[nodiscard]] const ResourcePool& GetResourcePool() const;
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
-		[[nodiscard]] VkFormat GetSwapchainImageFormat() const;
+		[[nodiscard]] VkFormat   GetSwapchainImageFormat() const;
+		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
 		[[nodiscard]] RenderQueue* GetRenderQueue();
 		[[nodiscard]] Scene* GetScene();
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
@@ -57,6 +59,7 @@ namespace meow
 		VulkanContext m_vulkanContext;
 		Swapchain m_swapchain;
 		BindlessManager m_bindlessManager;
+		FrameConstantsBuffer m_frameConstantsBuffer;
 		ResourcePool m_resourcePool;
 		RenderQueue m_renderQueue;
 		Scene m_scene;

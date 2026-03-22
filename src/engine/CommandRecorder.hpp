@@ -4,6 +4,8 @@
 
 #include <vulkan/vulkan.h>
 
+#include "DrawPushConstants.hpp"
+
 namespace meow
 {
 	class GraphicsPipeline;
@@ -22,11 +24,16 @@ namespace meow
 			std::uint32_t instanceCount = 1,
 			std::uint32_t firstVertex = 0,
 			std::uint32_t firstInstance = 0);
+		void DrawIndexed(
+			std::uint32_t indexCount,
+			std::uint32_t instanceCount = 1,
+			std::uint32_t firstIndex = 0,
+			std::int32_t  vertexOffset = 0,
+			std::uint32_t firstInstance = 0);
 		void BindVertexBuffer(VkBuffer buffer, VkDeviceSize offset = 0);
-
-		// For engine-internal use only (Swapchain, MeowCore, etc.)
-		[[nodiscard]] VkCommandBuffer GetRaw() const { return m_cmd; }
-
+		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
+		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);
+		void PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc);
 	private:
 		VkCommandBuffer m_cmd = VK_NULL_HANDLE;
 	};

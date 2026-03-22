@@ -6,6 +6,9 @@
 #include <utility>
 #include <vector>
 
+#include <glm/glm.hpp>
+
+#include "DrawPushConstants.hpp"
 #include "FileSystem.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
@@ -39,8 +42,7 @@ namespace meow
 		: m_device(std::exchange(other.m_device, VK_NULL_HANDLE))
 		, m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE))
 		, m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE))
-	{
-	}
+	{}
 
 	GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline&& other) noexcept
 	{
@@ -108,14 +110,32 @@ namespace meow
 			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 		};
 		constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
-			{
+			{   // location 0 : position
 				.location = 0,
 				.binding = 0,
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, position)),
 			},
-			{
+			{   // location 1 : normal
 				.location = 1,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
+				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, normal)),
+			},
+			{   // location 2 : tangent (xyz + bitangent sign in w)
+				.location = 2,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, tangent)),
+			},
+			{   // location 3 : uv
+				.location = 3,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32_SFLOAT,
+				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, uv)),
+			},
+			{   // location 4 : color
+				.location = 4,
 				.binding = 0,
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, color)),
@@ -125,7 +145,7 @@ namespace meow
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.vertexBindingDescriptionCount = 1,
 			.pVertexBindingDescriptions = &kVertexBinding,
-			.vertexAttributeDescriptionCount = 2,
+			.vertexAttributeDescriptionCount = 5,
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
@@ -169,8 +189,17 @@ namespace meow
 		};
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
+		constexpr VkPushConstantRange kModelRange{
+			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+			.offset = 0,
+			.size = sizeof(DrawPushConstants),  // 72 bytes: mat4 model + VkDeviceAddress
+		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size()),
+			.pSetLayouts = desc.setLayouts.data(),
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &kModelRange,
 		};
 		vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout);
 

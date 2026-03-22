@@ -34,6 +34,8 @@ namespace meow
 		[[nodiscard]] Handle AddRenderObject(const RenderObjectDesc& desc);
 		void RemoveRenderObject(Handle handle);
 		void SetTransform(Handle handle, const glm::mat4& transform);
+		void SetViewProjection(const glm::mat4& viewProjection);
+		[[nodiscard]] const glm::mat4& GetViewProjection() const { return m_viewProjection; }
 
 		// Engine-internal: write all registered objects as DrawCommands into the queue.
 		void FlushToQueue(RenderQueue& queue) const;
@@ -47,5 +49,6 @@ namespace meow
 
 		std::unordered_map<std::size_t, RenderObject> m_objects;
 		std::size_t m_nextId = 1;
+		glm::mat4   m_viewProjection{ 1.0f };
 	};
 }

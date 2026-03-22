@@ -54,6 +54,10 @@ target_sources(Engine PRIVATE
     src/engine/RenderGraph.hpp
     src/engine/RenderQueue.hpp
     src/engine/RenderQueue.cpp
+    src/engine/FrameConstants.hpp
+    src/engine/FrameConstantsBuffer.hpp
+    src/engine/FrameConstantsBuffer.cpp
+    src/engine/DrawPushConstants.hpp
     src/engine/Scene.hpp
     src/engine/Scene.cpp
     src/engine/Swapchain.hpp
@@ -93,6 +97,10 @@ target_link_libraries(Engine PUBLIC
     glfw
     glm::glm
     vk-bootstrap
+)
+
+target_compile_definitions(Engine PUBLIC
+    GLM_FORCE_DEPTH_ZERO_TO_ONE  # Vulkan depth range is [0, 1], not [-1, 1]
 )
 
 if (WIN32)

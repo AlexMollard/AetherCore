@@ -1,6 +1,7 @@
 #include "MeowCore.hpp"
 
 #include "FileSystem.hpp"
+#include "FrameConstants.hpp"
 #include "Logger.hpp"
 
 namespace meow
@@ -11,6 +12,7 @@ namespace meow
 	{
 		m_swapchain.Initialize(m_vulkanContext, m_window);
 		m_bindlessManager.Initialize(m_vulkanContext);
+		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_resourcePool.ConfigureBindlessImages({
 			.manager = &m_bindlessManager,
 			.device = m_vulkanContext.GetDevice().device,
@@ -34,6 +36,7 @@ namespace meow
 	MeowCore::~MeowCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+		m_frameConstantsBuffer.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		m_bindlessManager.Shutdown();
 		io::FileSystem::Shutdown();
@@ -59,9 +62,19 @@ namespace meow
 	{
 		if (m_swapchain.IsFrameValid())
 		{
-			// Game-world render: scene objects -> render queue -> Vulkan commands.
+			const auto frameIdx = static_cast<std::uint32_t>(
+				m_frameIndex % Swapchain::kMaxFramesInFlight);
+
+			// Write per-frame camera data into the GPU buffer then get its BDA.
+			// The address is pushed alongside the model matrix as a raw pointer —
+			// no descriptor set binding required.
+			FrameConstants fc;
+			fc.viewProj = m_scene.GetViewProjection();
+			m_frameConstantsBuffer.Write(frameIdx, fc);
+			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
+
 			m_scene.FlushToQueue(m_renderQueue);
-			m_renderQueue.Flush(m_currentRecorder);
+			m_renderQueue.Flush(m_currentRecorder, frameAddr);
 			m_renderQueue.Clear();
 		}
 		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
@@ -117,6 +130,11 @@ namespace meow
 	VkFormat MeowCore::GetSwapchainImageFormat() const
 	{
 		return m_swapchain.GetImageFormat();
+	}
+
+	VkExtent2D MeowCore::GetSwapchainExtent() const
+	{
+		return m_swapchain.GetExtent();
 	}
 
 	RenderQueue* MeowCore::GetRenderQueue()

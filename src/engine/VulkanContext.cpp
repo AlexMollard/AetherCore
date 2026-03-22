@@ -99,9 +99,13 @@ namespace meow
 		requiredFeatures13.dynamicRendering = VK_TRUE;
 		requiredFeatures13.synchronization2 = VK_TRUE;
 
+		VkPhysicalDeviceFeatures requiredFeatures10{};
+		requiredFeatures10.shaderInt64 = VK_TRUE;
+
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
 		auto physicalDeviceResult = selector.set_surface(m_surface)
 			.set_minimum_version(1, 4)
+			.set_required_features(requiredFeatures10)
 			.set_required_features_11(requiredFeatures11)
 			.set_required_features_12(requiredFeatures12)
 			.set_required_features_13(requiredFeatures13)

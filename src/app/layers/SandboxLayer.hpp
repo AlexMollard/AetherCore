@@ -23,5 +23,6 @@ namespace meow::app
 		meow::GraphicsPipeline m_trianglePipeline;
 		const meow::Mesh* m_triangleMesh = nullptr;
 		meow::Scene::Handle    m_triangleHandle;
+		float                  m_rotation = 0.0f;  // degrees, accumulated over time
 	};
 }

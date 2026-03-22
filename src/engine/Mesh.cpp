@@ -42,6 +42,38 @@ namespace meow
 		return mesh;
 	}
 
+	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
+	{
+		Mesh mesh = Create(device, allocator, vertices);
+
+		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
+		const VkDeviceSize indexBufferSize = sizeof(std::uint32_t) * indices.size();
+
+		VkBufferCreateInfo indexBufferInfo{};
+		indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		indexBufferInfo.size = indexBufferSize;
+		indexBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+		VmaAllocationCreateInfo allocInfo{};
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+			| VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+		VmaAllocationInfo allocResult{};
+		const VkResult result = vmaCreateBuffer(
+			allocator, &indexBufferInfo, &allocInfo,
+			&mesh.m_indexBuffer, &mesh.m_indexAllocation, &allocResult);
+
+		if (result != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to create index buffer for Mesh.");
+		}
+
+		std::memcpy(allocResult.pMappedData, indices.data(), static_cast<std::size_t>(indexBufferSize));
+
+		return mesh;
+	}
+
 	Mesh::~Mesh()
 	{
 		Destroy();
@@ -53,12 +85,18 @@ namespace meow
 		, m_buffer(other.m_buffer)
 		, m_allocation(other.m_allocation)
 		, m_vertexCount(other.m_vertexCount)
+		, m_indexBuffer(other.m_indexBuffer)
+		, m_indexAllocation(other.m_indexAllocation)
+		, m_indexCount(other.m_indexCount)
 	{
 		other.m_device = VK_NULL_HANDLE;
 		other.m_allocator = nullptr;
 		other.m_buffer = VK_NULL_HANDLE;
 		other.m_allocation = nullptr;
 		other.m_vertexCount = 0;
+		other.m_indexBuffer = VK_NULL_HANDLE;
+		other.m_indexAllocation = nullptr;
+		other.m_indexCount = 0;
 	}
 
 	Mesh& Mesh::operator=(Mesh&& other) noexcept
@@ -72,18 +110,31 @@ namespace meow
 			m_buffer = other.m_buffer;
 			m_allocation = other.m_allocation;
 			m_vertexCount = other.m_vertexCount;
+			m_indexBuffer = other.m_indexBuffer;
+			m_indexAllocation = other.m_indexAllocation;
+			m_indexCount = other.m_indexCount;
 
 			other.m_device = VK_NULL_HANDLE;
 			other.m_allocator = nullptr;
 			other.m_buffer = VK_NULL_HANDLE;
 			other.m_allocation = nullptr;
 			other.m_vertexCount = 0;
+			other.m_indexBuffer = VK_NULL_HANDLE;
+			other.m_indexAllocation = nullptr;
+			other.m_indexCount = 0;
 		}
 		return *this;
 	}
 
 	void Mesh::Destroy()
 	{
+		if (m_indexBuffer != VK_NULL_HANDLE && m_allocator != nullptr)
+		{
+			vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
+			m_indexBuffer = VK_NULL_HANDLE;
+			m_indexAllocation = nullptr;
+		}
+		m_indexCount = 0;
 		if (m_buffer != VK_NULL_HANDLE && m_allocator != nullptr)
 		{
 			vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
