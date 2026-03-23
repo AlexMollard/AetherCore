@@ -56,6 +56,8 @@ namespace meow
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
 
 	private:
+		void RecreateSwapchain();
+
 		Window m_window;
 		VulkanContext m_vulkanContext;
 		Swapchain m_swapchain;

@@ -213,8 +213,16 @@ namespace meow
 
 		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			WARN(LogCategory::Vulkan, "Swapchain out of date — skipping frame.");
+			WARN(LogCategory::Vulkan, "Swapchain out of date - recreation needed.");
+			m_needsRecreation = true;
 			return;
+		}
+
+		if (acquireResult == VK_SUBOPTIMAL_KHR)
+		{
+			// Suboptimal: we can still present this frame, but request recreation afterwards.
+			WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
+			m_needsRecreation = true;
 		}
 
 		vkResetFences(device, 1, &frame.inFlight);
@@ -330,7 +338,11 @@ namespace meow
 			.pSwapchains = &m_swapchain.swapchain,
 			.pImageIndices = &m_imageIndex,
 		};
-		vkQueuePresentKHR(presentQueue, &presentInfo);
+		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
+		if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
+		{
+			m_needsRecreation = true;
+		}
 
 		m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
 	}
@@ -362,5 +374,15 @@ namespace meow
 	bool Swapchain::IsFrameValid() const
 	{
 		return m_frameValid;
+	}
+
+	bool Swapchain::NeedsRecreation() const
+	{
+		return m_needsRecreation;
+	}
+
+	void Swapchain::ClearRecreationFlag()
+	{
+		m_needsRecreation = false;
 	}
 }

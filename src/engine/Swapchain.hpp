@@ -33,6 +33,8 @@ namespace meow
 		[[nodiscard]] VkFormat GetImageFormat() const;
 		[[nodiscard]] VkFormat GetDepthFormat() const;
 		[[nodiscard]] bool IsFrameValid() const;
+		[[nodiscard]] bool NeedsRecreation() const;
+		void ClearRecreationFlag();
 
 	private:
 		struct FrameSync
@@ -57,5 +59,6 @@ namespace meow
 		std::uint32_t m_imageIndex = 0;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		bool m_frameValid = false;
+		bool m_needsRecreation = false;
 	};
 }

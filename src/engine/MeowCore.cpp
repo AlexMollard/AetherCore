@@ -1,5 +1,8 @@
 #include "MeowCore.hpp"
 
+#define GLFW_INCLUDE_NONE
+#include <GLFW/glfw3.h>
+
 #include "FileSystem.hpp"
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
@@ -52,8 +55,33 @@ namespace meow
 		m_window.PollEvents();
 	}
 
+	void MeowCore::RecreateSwapchain()
+	{
+		// Wait out minimized state (extent = 0,0) before recreating.
+		int w = 0;
+		int h = 0;
+		glfwGetFramebufferSize(m_window.GetHandle(), &w, &h);
+		while (w == 0 || h == 0)
+		{
+			glfwWaitEvents();
+			glfwGetFramebufferSize(m_window.GetHandle(), &w, &h);
+		}
+
+		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
+		m_swapchain.ClearRecreationFlag();
+		m_swapchain.Initialize(m_vulkanContext, m_window);
+
+		// TODO: notify render graph to rebuild extent-dependent transient resources. (Once i actually make it.)
+		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
+	}
+
 	void MeowCore::BeginFrame()
 	{
+		if (m_swapchain.NeedsRecreation())
+		{
+			RecreateSwapchain();
+		}
 		m_swapchain.BeginFrame(m_vulkanContext.GetDevice().device);
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
