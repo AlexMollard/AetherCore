@@ -14,6 +14,9 @@ namespace meow::app
 		m_trianglePipeline = context.engine.CreateGraphicsPipeline({
 			.shaderVfsPath = "shaders://hellotriangle.slang.spv",
 			.colorFormat = context.engine.GetSwapchainImageFormat(),
+			.depthFormat = context.engine.GetSwapchainDepthFormat(),
+			.depthTestEnable = true,
+			.depthWriteEnable = true,
 			});
 
 		m_triangleMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Cube);

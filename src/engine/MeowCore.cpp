@@ -132,6 +132,11 @@ namespace meow
 		return m_swapchain.GetImageFormat();
 	}
 
+	VkFormat MeowCore::GetSwapchainDepthFormat() const
+	{
+		return m_swapchain.GetDepthFormat();
+	}
+
 	VkExtent2D MeowCore::GetSwapchainExtent() const
 	{
 		return m_swapchain.GetExtent();

@@ -168,6 +168,16 @@ namespace meow
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
 		};
+		const VkPipelineDepthStencilStateCreateInfo depthStencil{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+			.depthTestEnable = desc.depthTestEnable ? VK_TRUE : VK_FALSE,
+			.depthWriteEnable = desc.depthWriteEnable ? VK_TRUE : VK_FALSE,
+			.depthCompareOp = desc.depthCompareOp,
+			.depthBoundsTestEnable = VK_FALSE,
+			.stencilTestEnable = VK_FALSE,
+			.minDepthBounds = 0.0f,
+			.maxDepthBounds = 1.0f,
+		};
 		const VkPipelineColorBlendAttachmentState colorBlendAttach{
 			.colorWriteMask =
 				VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
@@ -207,6 +217,7 @@ namespace meow
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 			.colorAttachmentCount = 1,
 			.pColorAttachmentFormats = &desc.colorFormat,
+			.depthAttachmentFormat = desc.depthFormat,
 		};
 		const VkGraphicsPipelineCreateInfo pipelineInfo{
 			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -218,6 +229,7 @@ namespace meow
 			.pViewportState = &viewportState,
 			.pRasterizationState = &rasterizer,
 			.pMultisampleState = &multisampling,
+			.pDepthStencilState = &depthStencil,
 			.pColorBlendState = &colorBlend,
 			.pDynamicState = &dynamicState,
 			.layout = layout,

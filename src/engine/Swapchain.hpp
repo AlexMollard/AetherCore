@@ -6,6 +6,8 @@
 #include <VkBootstrap.h>
 #include <vulkan/vulkan.h>
 
+#include "UniqueImage.hpp"
+
 namespace meow
 {
 	class VulkanContext;
@@ -29,6 +31,7 @@ namespace meow
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] VkExtent2D GetExtent() const;
 		[[nodiscard]] VkFormat GetImageFormat() const;
+		[[nodiscard]] VkFormat GetDepthFormat() const;
 		[[nodiscard]] bool IsFrameValid() const;
 
 	private:
@@ -43,6 +46,9 @@ namespace meow
 		vkb::Swapchain m_swapchain{};
 		std::vector<VkImage> m_images;
 		std::vector<VkImageView> m_imageViews;
+		UniqueImage m_depthImage;
+		VkImageView m_depthView = VK_NULL_HANDLE;
+		VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
 		// One renderFinished semaphore per swapchain image: by the time an image is
 		// re-acquired, the presentation engine must have consumed its semaphore.
 		std::vector<VkSemaphore> m_renderFinishedSemaphores;

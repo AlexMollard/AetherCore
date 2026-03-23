@@ -47,6 +47,7 @@ namespace meow
 		[[nodiscard]] const ResourcePool& GetResourcePool() const;
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] VkFormat   GetSwapchainImageFormat() const;
+		[[nodiscard]] VkFormat   GetSwapchainDepthFormat() const;
 		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
 		[[nodiscard]] RenderQueue* GetRenderQueue();
 		[[nodiscard]] Scene* GetScene();

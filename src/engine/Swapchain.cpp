@@ -11,6 +11,29 @@
 
 namespace meow
 {
+	namespace
+	{
+		VkFormat PickDepthFormat(const VkPhysicalDevice physicalDevice)
+		{
+			constexpr VkFormat kCandidates[] = {
+				VK_FORMAT_D32_SFLOAT,
+				VK_FORMAT_D16_UNORM,
+			};
+
+			for (const VkFormat format : kCandidates)
+			{
+				VkFormatProperties props{};
+				vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+				if ((props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
+				{
+					return format;
+				}
+			}
+
+			throw VulkanError("Failed to find a supported depth format.");
+		}
+	}
+
 	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window)
 	{
 		int w = 0;
@@ -34,9 +57,49 @@ namespace meow
 		m_swapchain = result.value();
 		m_images = m_swapchain.get_images().value();
 		m_imageViews = m_swapchain.get_image_views().value();
+		m_depthFormat = PickDepthFormat(ctx.GetDevice().physical_device);
 		m_graphicsQueueFamily = ctx.GetGraphicsQueueFamily();
 
 		VkDevice device = ctx.GetDevice().device;
+
+		const VkImageCreateInfo depthImageInfo{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = m_depthFormat,
+			.extent = {
+				.width = m_swapchain.extent.width,
+				.height = m_swapchain.extent.height,
+				.depth = 1,
+			},
+			.mipLevels = 1,
+			.arrayLayers = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+			.tiling = VK_IMAGE_TILING_OPTIMAL,
+			.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+		const VmaAllocationCreateInfo depthAllocInfo{
+			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		};
+		m_depthImage = UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo);
+
+		const VkImageViewCreateInfo depthViewInfo{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = m_depthImage.Get(),
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = m_depthFormat,
+			.subresourceRange = {
+				.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+				.baseMipLevel = 0,
+				.levelCount = 1,
+				.baseArrayLayer = 0,
+				.layerCount = 1,
+			},
+		};
+		if (vkCreateImageView(device, &depthViewInfo, nullptr, &m_depthView) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to create depth image view.");
+		}
 
 		for (auto& frame : m_frames)
 		{
@@ -88,6 +151,14 @@ namespace meow
 		{
 			return;
 		}
+
+		if (m_depthView != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(device, m_depthView, nullptr);
+			m_depthView = VK_NULL_HANDLE;
+		}
+		m_depthImage.Reset();
+		m_depthFormat = VK_FORMAT_UNDEFINED;
 
 		for (auto& frame : m_frames)
 		{
@@ -162,6 +233,15 @@ namespace meow
 			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
+		// Transition: UNDEFINED → DEPTH_ATTACHMENT_OPTIMAL
+		vkutil::TransitionImage(
+			frame.commandBuffer, m_depthImage.Get(),
+			VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE,
+			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			VK_IMAGE_ASPECT_DEPTH_BIT);
+
 		// Begin dynamic rendering
 		const VkRenderingAttachmentInfo colorAttach{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -171,12 +251,21 @@ namespace meow
 			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
 			.clearValue = {.color = { { 0.05f, 0.05f, 0.07f, 1.0f } } },
 		};
+		const VkRenderingAttachmentInfo depthAttach{
+			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+			.imageView = m_depthView,
+			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+			.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+			.clearValue = {.depthStencil = { 1.0f, 0 } },
+		};
 		const VkRenderingInfo renderInfo{
 			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 			.renderArea = { { 0, 0 }, m_swapchain.extent },
 			.layerCount = 1,
 			.colorAttachmentCount = 1,
 			.pColorAttachments = &colorAttach,
+			.pDepthAttachment = &depthAttach,
 		};
 		vkCmdBeginRendering(frame.commandBuffer, &renderInfo);
 
@@ -263,6 +352,11 @@ namespace meow
 	VkFormat Swapchain::GetImageFormat() const
 	{
 		return m_swapchain.image_format;
+	}
+
+	VkFormat Swapchain::GetDepthFormat() const
+	{
+		return m_depthFormat;
 	}
 
 	bool Swapchain::IsFrameValid() const

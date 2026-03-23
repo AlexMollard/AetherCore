@@ -16,6 +16,10 @@ namespace meow
 			std::string_view vertexEntry = "vertexMain";
 			std::string_view fragmentEntry = "fragmentMain";
 			VkFormat         colorFormat = VK_FORMAT_UNDEFINED;
+			VkFormat         depthFormat = VK_FORMAT_UNDEFINED;
+			bool             depthTestEnable = false;
+			bool             depthWriteEnable = false;
+			VkCompareOp      depthCompareOp = VK_COMPARE_OP_LESS;
 			// Descriptor set layouts bound into the pipeline layout in order.
 			std::span<const VkDescriptorSetLayout> setLayouts;
 		};
