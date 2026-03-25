@@ -80,5 +80,6 @@ function(meowcore_enable_slang_shader_compilation target_name)
     endforeach()
 
     add_custom_target(CompileShaders ALL DEPENDS ${MEOWCORE_SHADER_OUTPUTS})
+    set_target_properties(CompileShaders PROPERTIES FOLDER "CMake")
     add_dependencies(${target_name} CompileShaders)
 endfunction()
