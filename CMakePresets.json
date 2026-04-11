@@ -1,0 +1,77 @@
+{
+    "version": 9,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "windows-vs2022",
+            "displayName": "Windows · Visual Studio 2022",
+            "inherits": "base",
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build/vs2022",
+            "installDir": "${sourceDir}/install",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-ninja",
+            "displayName": "Windows · Ninja Multi-Config (faster builds)",
+            "inherits": "base",
+            "generator": "Ninja Multi-Config",
+            "binaryDir": "${sourceDir}/build/ninja",
+            "installDir": "${sourceDir}/install",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "vs2022-debug",
+            "displayName": "VS2022 · Debug",
+            "configurePreset": "windows-vs2022",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2022-release",
+            "displayName": "VS2022 · Release",
+            "configurePreset": "windows-vs2022",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2022-relwithdebinfo",
+            "displayName": "VS2022 · RelWithDebInfo",
+            "configurePreset": "windows-vs2022",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "ninja-debug",
+            "displayName": "Ninja · Debug",
+            "configurePreset": "windows-ninja",
+            "configuration": "Debug"
+        },
+        {
+            "name": "ninja-release",
+            "displayName": "Ninja · Release",
+            "configurePreset": "windows-ninja",
+            "configuration": "Release"
+        },
+        {
+            "name": "ninja-relwithdebinfo",
+            "displayName": "Ninja · RelWithDebInfo",
+            "configurePreset": "windows-ninja",
+            "configuration": "RelWithDebInfo"
+        }
+    ]
+}
