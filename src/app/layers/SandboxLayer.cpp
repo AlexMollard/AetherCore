@@ -11,7 +11,7 @@ namespace meow::app
 	{
 		INFO(LogCategory::App, "Sandbox layer attached.");
 
-		m_trianglePipeline = context.engine.CreateGraphicsPipeline({
+		m_cubePipeline = context.engine.CreateGraphicsPipeline({
 			.shaderVfsPath = "shaders://hellotriangle.slang.spv",
 			.colorFormat = context.engine.GetSwapchainImageFormat(),
 			.depthFormat = context.engine.GetSwapchainDepthFormat(),
@@ -19,11 +19,16 @@ namespace meow::app
 			.depthWriteEnable = true,
 			});
 
-		m_triangleMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Cube);
+		m_cubeMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Cube);
 
-		m_triangleHandle = context.scene->AddRenderObject({
-			.pipeline = &m_trianglePipeline,
-			.mesh = m_triangleMesh,
+		m_cubeHandle = context.scene->AddRenderObject({
+			.pipeline = &m_cubePipeline,
+			.mesh = m_cubeMesh,
+			});
+
+		m_cubeHandleTwo = context.scene->AddRenderObject({
+			.pipeline = &m_cubePipeline,
+			.mesh = m_cubeMesh,
 			});
 
 		// Set up a perspective camera looking at the origin.
@@ -33,9 +38,10 @@ namespace meow::app
 
 	void SandboxLayer::OnDetach(LayerContext& context)
 	{
-		context.scene->RemoveRenderObject(m_triangleHandle);
-		m_triangleMesh = nullptr;
-		m_trianglePipeline.Destroy();
+		context.scene->RemoveRenderObject(m_cubeHandle);
+		context.scene->RemoveRenderObject(m_cubeHandleTwo);
+		m_cubeMesh = nullptr;
+		m_cubePipeline.Destroy();
 	}
 
 	void SandboxLayer::OnUpdate(LayerContext& context)
@@ -43,11 +49,19 @@ namespace meow::app
 		// Rotate 45 degrees per second around Y.
 		m_rotation += static_cast<float>(context.deltaTimeSeconds) * 45.0f;
 
-		const glm::mat4 model = glm::rotate(
+		glm::mat4 model = glm::rotate(
 			glm::mat4{ 1.0f },
 			glm::radians(m_rotation),
 			{ 0.0f, 1.0f, 0.0f });
-		context.scene->SetTransform(m_triangleHandle, model);
+		context.scene->SetTransform(m_cubeHandle, model);
+
+		glm::mat4 modelTwo = glm::rotate(
+			glm::mat4{ 1.0f },
+			glm::radians(m_rotation),
+			{ 0.0f, -1.0f, 0.0f });
+		
+		modelTwo = glm::translate(modelTwo, { 0.0f, 0.0f, -2.0f });
+		context.scene->SetTransform(m_cubeHandleTwo, modelTwo);
 
 		// Recompute the view-projection (accounts for window resize).
 		const VkExtent2D extent = context.engine.GetSwapchainExtent();

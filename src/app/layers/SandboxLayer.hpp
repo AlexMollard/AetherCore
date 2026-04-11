@@ -20,9 +20,10 @@ namespace meow::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		meow::GraphicsPipeline m_trianglePipeline;
-		const meow::Mesh* m_triangleMesh = nullptr;
-		meow::Scene::Handle    m_triangleHandle;
+		meow::GraphicsPipeline m_cubePipeline;
+		const meow::Mesh* m_cubeMesh = nullptr;
+		meow::Scene::Handle    m_cubeHandle;
+		meow::Scene::Handle    m_cubeHandleTwo;
 		float                  m_rotation = 0.0f;  // degrees, accumulated over time
 	};
 }
