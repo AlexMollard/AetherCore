@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 #include "AppLayer.hpp"
 #include "Entity.hpp"
 #include "GraphicsPipeline.hpp"
@@ -21,11 +23,20 @@ namespace meow::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		meow::GraphicsPipeline m_cubePipeline;
+		static constexpr int kRingCount = 8;
+
+		meow::GraphicsPipeline m_pipeline;
 		const meow::Mesh*      m_cubeMesh = nullptr;
-		meow::Entity           m_cubeEntity;
-		meow::Entity           m_cubeEntityTwo;
-		meow::Texture          m_cubeTexture;
-		float                  m_rotation = 0.0f;  // degrees, accumulated over time
+		const meow::Mesh*      m_quadMesh = nullptr;
+		meow::Texture          m_debugTexture;
+
+		meow::Entity m_groundEntity;
+		meow::Entity m_centerEntity;
+		std::array<meow::Entity, kRingCount> m_ringEntities{};
+		meow::Entity m_orbitEntityA;
+		meow::Entity m_orbitEntityB;
+
+		float m_time        = 0.0f;  // total elapsed seconds
+		float m_cameraAngle = 0.0f;  // degrees, orbits the whole scene
 	};
 }
