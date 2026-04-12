@@ -38,6 +38,8 @@ namespace meow
 		m_postProcessStack.SetFxaaEnabled(false);
 		RegisterPasses();
 
+		m_input.Init(m_window.GetHandle());
+
 		// Upload pool — used for immediate-submit texture uploads.
 		// TRANSIENT: hints that command buffers are short-lived.
 		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
@@ -176,6 +178,7 @@ namespace meow
 			RecreateSwapchain();
 		}
 
+		m_input.Update();
 		m_swapchain.BeginFrame(m_vulkanContext.GetDevice().device);
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
@@ -289,6 +292,9 @@ namespace meow
 	{
 		return &m_scene;
 	}
+
+	Input& MeowCore::GetInput()             { return m_input; }
+	const Input& MeowCore::GetInput() const { return m_input; }
 
 	void MeowCore::SetTonemapMode(TonemapMode mode)
 	{

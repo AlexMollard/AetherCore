@@ -7,6 +7,7 @@ namespace meow
 	class MeowCore;
 	class Scene;
 	class World;
+	class Input;
 }
 
 namespace meow::app
@@ -18,6 +19,7 @@ namespace meow::app
 		std::uint64_t frameIndex = 0;
 		meow::Scene* scene = nullptr;
 		meow::World* world = nullptr;
+		meow::Input* input = nullptr;
 	};
 
 	class AppLayer

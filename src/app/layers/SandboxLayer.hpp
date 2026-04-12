@@ -2,12 +2,9 @@
 
 #include <array>
 
-#include <GLFW/glfw3.h>
-
 #include "AppLayer.hpp"
 #include "Entity.hpp"
 #include "GraphicsPipeline.hpp"
-#include "PostProcessStack.hpp"
 #include "Texture.hpp"
 
 namespace meow
@@ -41,9 +38,5 @@ namespace meow::app
 
 		float m_time        = 0.0f;
 		float m_cameraAngle = 0.0f;
-
-		// Key edge-detection: track previous-frame press state.
-		bool m_prevKeyT = false;
-		bool m_prevKeyF = false;
 	};
 }

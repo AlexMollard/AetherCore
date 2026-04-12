@@ -152,10 +152,9 @@ namespace meow::app
 
 		// ── Keyboard: T = cycle tonemap, F = toggle FXAA ─────────────────────
 		{
-			GLFWwindow* win = context.engine.GetWindow().GetHandle();
+			const meow::Input& input = *context.input;
 
-			const bool keyT = glfwGetKey(win, GLFW_KEY_T) == GLFW_PRESS;
-			if (keyT && !m_prevKeyT)
+			if (input.IsKeyPressed(meow::Key::T))
 			{
 				const auto next = static_cast<meow::TonemapMode>(
 					(static_cast<int>(context.engine.GetTonemapMode()) + 1) % 3);
@@ -164,16 +163,13 @@ namespace meow::app
 				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
 				INFO(LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 			}
-			m_prevKeyT = keyT;
 
-			const bool keyF = glfwGetKey(win, GLFW_KEY_F) == GLFW_PRESS;
-			if (keyF && !m_prevKeyF)
+			if (input.IsKeyPressed(meow::Key::F))
 			{
 				const bool enabled = !context.engine.IsFxaaEnabled();
 				context.engine.SetFxaaEnabled(enabled);
 				INFO(LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
 			}
-			m_prevKeyF = keyF;
 		}
 
 		// ── Camera: slow circular orbit, looking at the origin ────────────────

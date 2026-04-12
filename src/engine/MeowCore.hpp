@@ -9,6 +9,7 @@
 #include "CommandRecorder.hpp"
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
+#include "Input.hpp"
 #include "Mesh.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimitiveMeshes.hpp"
@@ -74,6 +75,9 @@ namespace meow
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 
+		[[nodiscard]] Input& GetInput();
+		[[nodiscard]] const Input& GetInput() const;
+
 	private:
 		void RecreateSwapchain();
 		void RegisterPasses();
@@ -97,5 +101,6 @@ namespace meow
 		// Manages all offscreen targets and post-processing pipelines.
 		// Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
+		Input m_input;
 	};
 }

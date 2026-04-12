@@ -52,6 +52,7 @@ namespace meow::app
 			.frameIndex = m_frameIndex,
 			.scene = m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
+			.input = &m_engine.GetInput(),
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
@@ -99,6 +100,7 @@ namespace meow::app
 			.frameIndex = 0,
 			.scene = m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
+			.input = &m_engine.GetInput(),
 		};
 
 		// Startup:
@@ -129,6 +131,7 @@ namespace meow::app
 				.frameIndex = m_frameIndex,
 				.scene = m_engine.GetScene(),
 				.world = &m_engine.GetWorld(),
+				.input = &m_engine.GetInput(),
 			};
 
 			// Update:
