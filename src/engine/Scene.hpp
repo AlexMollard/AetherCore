@@ -14,9 +14,10 @@ namespace meow
 	// Describes a renderable object when registering it with the Scene.
 	struct RenderObjectDesc
 	{
-		const GraphicsPipeline* pipeline = nullptr;
-		const Mesh* mesh = nullptr;  // null = shader-hardcoded verts
-		std::uint32_t           vertexCount = 0;        // used when mesh == nullptr
+		const GraphicsPipeline* pipeline   = nullptr;
+		const Mesh*             mesh       = nullptr;      // null = shader-hardcoded verts
+		std::uint32_t           vertexCount  = 0;          // used when mesh == nullptr
+		std::uint32_t           albedoSlot = 0xFFFFFFFFu; // 0xFFFFFFFF → vertex colour fallback
 	};
 
 	// A container of persistent renderable objects. App layers register objects

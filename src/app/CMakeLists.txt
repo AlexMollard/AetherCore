@@ -16,3 +16,11 @@ target_link_libraries(App PRIVATE Engine)
 
 meowcore_target_defaults(App)
 meowcore_enable_slang_shader_compilation(App)
+
+# Copy textures from resources/ into the build output so the VFS "assets://" mount can find them.
+add_custom_command(TARGET App POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/textures"
+        "${CMAKE_BINARY_DIR}/assets/textures"
+    COMMENT "Copying textures → build/assets/textures"
+)

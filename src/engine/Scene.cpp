@@ -42,11 +42,12 @@ namespace meow
 				: obj.desc.vertexCount;
 
 			queue.Submit({
-				.pipeline = obj.desc.pipeline,
-				.mesh = obj.desc.mesh,
-				.vertexCount = count,
+				.pipeline    = obj.desc.pipeline,
+				.mesh        = obj.desc.mesh,
+				.vertexCount   = count,
 				.instanceCount = 1,
 				.modelMatrix = obj.transform,
+				.albedoSlot  = obj.desc.albedoSlot,
 				});
 		}
 	}

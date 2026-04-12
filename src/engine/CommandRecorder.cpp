@@ -35,7 +35,7 @@ namespace meow
 
 	void CommandRecorder::PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc)
 	{
-		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(DrawPushConstants), &pc);
+		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawPushConstants), &pc);
 	}
 
 	void CommandRecorder::DrawIndexed(

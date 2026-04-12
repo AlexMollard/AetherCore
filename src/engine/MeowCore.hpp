@@ -2,7 +2,9 @@
 
 #include <chrono>
 #include <cstdint>
+#include <functional>
 #include <span>
+#include <string_view>
 
 #include "BindlessManager.hpp"
 #include "CommandRecorder.hpp"
@@ -16,8 +18,10 @@
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
 #include "Swapchain.hpp"
+#include "Texture.hpp"
 #include "VulkanContext.hpp"
 #include "Window.hpp"
+#include "World.hpp"
 
 namespace meow
 {
@@ -59,13 +63,17 @@ namespace meow
 		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
 		[[nodiscard]] RenderQueue* GetRenderQueue();
 		[[nodiscard]] Scene* GetScene();
+		[[nodiscard]] World& GetWorld();
+		[[nodiscard]] const World& GetWorld() const;
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
+		[[nodiscard]] Texture          CreateTexture(std::string_view path);
 
 	private:
 		void RecreateSwapchain();
 		void RegisterPasses();
+		void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn);
 
 		Window m_window;
 		VulkanContext m_vulkanContext;
@@ -76,10 +84,12 @@ namespace meow
 		RenderGraph m_renderGraph;
 		RenderQueue m_renderQueue;
 		Scene m_scene;
+		World m_world;
 		PrimitiveMeshes m_primitiveMeshes;
 		CommandRecorder m_currentRecorder; // engine-internal, filled by BeginFrame
 		std::uint64_t m_frameIndex = 0;
 		std::chrono::steady_clock::time_point m_tonemapCycleStart = std::chrono::steady_clock::now();
+		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 
 		// Manages all offscreen targets and post-processing pipelines.
 		// Recreated on swapchain resize.

@@ -1,5 +1,7 @@
 #include "MeowCore.hpp"
 
+#include <stdexcept>
+
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
@@ -35,6 +37,24 @@ namespace meow
 			});
 		RegisterPasses();
 
+		// Upload pool — used for immediate-submit texture uploads.
+		// TRANSIENT: hints that command buffers are short-lived.
+		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
+		const VkCommandPoolCreateInfo uploadPoolInfo{
+			.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.flags            = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+			                    VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.queueFamilyIndex = m_vulkanContext.GetGraphicsQueueFamily(),
+		};
+		if (vkCreateCommandPool(
+			m_vulkanContext.GetDevice().device,
+			&uploadPoolInfo,
+			nullptr,
+			&m_uploadPool) != VK_SUCCESS)
+		{
+			throw std::runtime_error("MeowCore: failed to create upload command pool.");
+		}
+
 		INFO(
 			LogCategory::Engine,
 			"Engine core initialized. Bindless sampled-image capacity: {}",
@@ -52,6 +72,11 @@ namespace meow
 		m_postProcessStack.Destroy();
 		m_frameConstantsBuffer.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
+		if (m_uploadPool != VK_NULL_HANDLE)
+		{
+			vkDestroyCommandPool(m_vulkanContext.GetDevice().device, m_uploadPool, nullptr);
+			m_uploadPool = VK_NULL_HANDLE;
+		}
 		m_bindlessManager.Shutdown();
 		io::FileSystem::Shutdown();
 	}
@@ -117,7 +142,11 @@ namespace meow
 			.Execute([this](PassContext& ctx)
 				{
 					m_scene.FlushToQueue(m_renderQueue);
-					m_renderQueue.Flush(ctx.recorder, ctx.frameConstantsAddr);
+					m_world.FlushToQueue(m_renderQueue);
+					m_renderQueue.Flush(
+						ctx.recorder,
+						ctx.frameConstantsAddr,
+						m_bindlessManager.GetSet());
 					m_renderQueue.Clear();
 				});
 
@@ -269,6 +298,16 @@ namespace meow
 		return &m_scene;
 	}
 
+	World& MeowCore::GetWorld()
+	{
+		return m_world;
+	}
+
+	const World& MeowCore::GetWorld() const
+	{
+		return m_world;
+	}
+
 	const Mesh& MeowCore::GetPrimitiveMesh(PrimitiveMesh primitive) const
 	{
 		return m_primitiveMeshes.Get(primitive);
@@ -285,5 +324,46 @@ namespace meow
 			m_vulkanContext.GetDevice().device,
 			m_vulkanContext.GetAllocator(),
 			vertices);
+	}
+
+	Texture MeowCore::CreateTexture(std::string_view path)
+	{
+		return Texture::LoadFromFile(
+			path,
+			m_vulkanContext.GetDevice().device,
+			m_vulkanContext.GetAllocator(),
+			m_vulkanContext.GetGraphicsQueue(),
+			m_uploadPool,
+			m_bindlessManager);
+	}
+
+	void MeowCore::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn)
+	{
+		const VkCommandBufferAllocateInfo allocInfo{
+			.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			.commandPool        = m_uploadPool,
+			.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			.commandBufferCount = 1,
+		};
+		VkCommandBuffer cmd = VK_NULL_HANDLE;
+		vkAllocateCommandBuffers(m_vulkanContext.GetDevice().device, &allocInfo, &cmd);
+
+		const VkCommandBufferBeginInfo beginInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		};
+		vkBeginCommandBuffer(cmd, &beginInfo);
+		fn(cmd);
+		vkEndCommandBuffer(cmd);
+
+		const VkSubmitInfo submitInfo{
+			.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.commandBufferCount = 1,
+			.pCommandBuffers    = &cmd,
+		};
+		vkQueueSubmit(m_vulkanContext.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
+		vkQueueWaitIdle(m_vulkanContext.GetGraphicsQueue());
+
+		vkFreeCommandBuffers(m_vulkanContext.GetDevice().device, m_uploadPool, 1, &cmd);
 	}
 }

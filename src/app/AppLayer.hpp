@@ -6,6 +6,7 @@ namespace meow
 {
 	class MeowCore;
 	class Scene;
+	class World;
 }
 
 namespace meow::app
@@ -16,6 +17,7 @@ namespace meow::app
 		double deltaTimeSeconds = 0.0;
 		std::uint64_t frameIndex = 0;
 		meow::Scene* scene = nullptr;
+		meow::World* world = nullptr;
 	};
 
 	class AppLayer

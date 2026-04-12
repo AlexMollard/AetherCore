@@ -51,6 +51,7 @@ namespace meow::app
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = m_frameIndex,
 			.scene = m_engine.GetScene(),
+			.world = &m_engine.GetWorld(),
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
@@ -97,6 +98,7 @@ namespace meow::app
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = 0,
 			.scene = m_engine.GetScene(),
+			.world = &m_engine.GetWorld(),
 		};
 
 		// Startup:
@@ -126,6 +128,7 @@ namespace meow::app
 				.deltaTimeSeconds = deltaTime,
 				.frameIndex = m_frameIndex,
 				.scene = m_engine.GetScene(),
+				.world = &m_engine.GetWorld(),
 			};
 
 			// Update:

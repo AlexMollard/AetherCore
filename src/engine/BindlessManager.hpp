@@ -35,8 +35,9 @@ namespace meow
 		[[nodiscard]] VkDescriptorSet GetSet() const;
 		[[nodiscard]] std::uint32_t GetCapacity() const;
 		[[nodiscard]] std::uint64_t GetCurrentFrame() const;
-		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex() { return bindless::kDescriptorSetIndex; }
+		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex()  { return bindless::kDescriptorSetIndex; }
 		[[nodiscard]] static constexpr std::uint32_t GetSampledImageBinding() { return bindless::kSampledImageBinding; }
+		[[nodiscard]] static constexpr std::uint32_t GetLinearSamplerBinding() { return 1u; }
 
 		[[nodiscard]] std::uint32_t AllocateSampledImageSlot();
 		void FreeSampledImageSlot(std::uint32_t slot);
@@ -68,5 +69,6 @@ namespace meow
 		std::vector<std::uint32_t> m_freeSlots;
 		std::vector<bool> m_slotAllocated;
 		std::vector<PendingSlotFree> m_pendingSlotFrees;
+		VkSampler m_linearSampler = VK_NULL_HANDLE;
 	};
 }

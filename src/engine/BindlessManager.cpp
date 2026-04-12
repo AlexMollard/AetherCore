@@ -32,18 +32,42 @@ namespace meow
 		m_currentFrame = 0;
 		m_pendingSlotFrees.clear();
 
-		const VkDescriptorPoolSize poolSize{
-			.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = m_capacity,
+		// ── Immutable linear sampler (binding 1) ──────────────────────────────
+		// Created before the layout so the handle can be embedded as immutable.
+		const VkSamplerCreateInfo samplerInfo{
+			.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter               = VK_FILTER_LINEAR,
+			.minFilter               = VK_FILTER_LINEAR,
+			.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.mipLodBias              = 0.0f,
+			.anisotropyEnable        = VK_FALSE,
+			.compareEnable           = VK_FALSE,
+			.minLod                  = 0.0f,
+			.maxLod                  = VK_LOD_CLAMP_NONE,
+			.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+			.unnormalizedCoordinates = VK_FALSE,
+		};
+		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler) != VK_SUCCESS)
+		{
+			throw VulkanError("BindlessManager: failed to create linear sampler.");
+		}
+
+		// ── Descriptor pool ───────────────────────────────────────────────────
+		const VkDescriptorPoolSize poolSizes[2] = {
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity },
+			{ VK_DESCRIPTOR_TYPE_SAMPLER,                1          },
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-			.maxSets = 1,
-			.poolSizeCount = 1,
-			.pPoolSizes = &poolSize,
+			.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext         = nullptr,
+			.flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+			.maxSets       = 1,
+			.poolSizeCount = 2,
+			.pPoolSizes    = poolSizes,
 		};
 
 		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
@@ -52,32 +76,48 @@ namespace meow
 			throw VulkanError(std::format("Failed to create bindless descriptor pool. VkResult={}", static_cast<int>(poolResult)));
 		}
 
-		const VkDescriptorSetLayoutBinding binding{
-			.binding = bindless::kSampledImageBinding,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.descriptorCount = m_capacity,
-			.stageFlags = bindless::kDefaultStages,
-			.pImmutableSamplers = nullptr,
+		// ── Descriptor set layout ─────────────────────────────────────────────
+		// binding 0 — COMBINED_IMAGE_SAMPLER array (bindless image array)
+		// binding 1 — SAMPLER (immutable linear sampler, shared by all draws)
+		const VkDescriptorSetLayoutBinding bindings[2] = {
+			{
+				.binding         = bindless::kSampledImageBinding, // 0
+				.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+				.descriptorCount = m_capacity,
+				.stageFlags      = bindless::kDefaultStages,
+				.pImmutableSamplers = nullptr,
+			},
+			{
+				.binding            = 1,
+				.descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLER,
+				.descriptorCount    = 1,
+				.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
+				.pImmutableSamplers = &m_linearSampler, // embedded in the layout
+			},
 		};
 
-		const VkDescriptorBindingFlags bindingFlags =
+		// VARIABLE_DESCRIPTOR_COUNT must be on the LAST binding; since binding 1
+		// (the immutable sampler) is last and has a fixed count of 1, we drop
+		// VARIABLE_DESCRIPTOR_COUNT from binding 0 instead.
+		const VkDescriptorBindingFlags bindingFlags[2] = {
 			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-			VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+			0, // immutable sampler needs no special flags
+		};
 
 		const VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.pNext = nullptr,
-			.bindingCount = 1,
-			.pBindingFlags = &bindingFlags,
+			.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+			.pNext        = nullptr,
+			.bindingCount = 2,
+			.pBindingFlags = bindingFlags,
 		};
 
 		const VkDescriptorSetLayoutCreateInfo layoutCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.pNext = &bindingFlagsInfo,
-			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = 1,
-			.pBindings = &binding,
+			.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.pNext        = &bindingFlagsInfo,
+			.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+			.bindingCount = 2,
+			.pBindings    = bindings,
 		};
 
 		const VkResult layoutResult = vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_layout);
@@ -87,24 +127,14 @@ namespace meow
 		}
 
 		const VkDescriptorSetAllocateInfo allocateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.pNext = nullptr,
-			.descriptorPool = m_pool,
+			.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.pNext              = nullptr,
+			.descriptorPool     = m_pool,
 			.descriptorSetCount = 1,
-			.pSetLayouts = &m_layout,
+			.pSetLayouts        = &m_layout,
 		};
 
-		const VkDescriptorSetVariableDescriptorCountAllocateInfo variableCountInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-			.pNext = nullptr,
-			.descriptorSetCount = 1,
-			.pDescriptorCounts = &m_capacity,
-		};
-
-		auto chainedAllocateInfo = allocateInfo;
-		chainedAllocateInfo.pNext = &variableCountInfo;
-
-		const VkResult setResult = vkAllocateDescriptorSets(m_device, &chainedAllocateInfo, &m_set);
+		const VkResult setResult = vkAllocateDescriptorSets(m_device, &allocateInfo, &m_set);
 		if (setResult != VK_SUCCESS)
 		{
 			throw VulkanError(std::format("Failed to allocate bindless descriptor set. VkResult={}", static_cast<int>(setResult)));
@@ -127,6 +157,7 @@ namespace meow
 			return;
 		}
 
+		// Destroy layout before sampler (layout embeds the sampler handle).
 		if (m_layout != VK_NULL_HANDLE)
 		{
 			vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
@@ -137,6 +168,12 @@ namespace meow
 		{
 			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
 			m_pool = VK_NULL_HANDLE;
+		}
+
+		if (m_linearSampler != VK_NULL_HANDLE)
+		{
+			vkDestroySampler(m_device, m_linearSampler, nullptr);
+			m_linearSampler = VK_NULL_HANDLE;
 		}
 
 		m_set = VK_NULL_HANDLE;

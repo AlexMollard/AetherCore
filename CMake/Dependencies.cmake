@@ -40,6 +40,14 @@ FetchContent_Declare(VMA
     EXCLUDE_FROM_ALL
 )
 
+FetchContent_Declare(stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+
 find_package(Vulkan REQUIRED)
 
 # Suppress GLFW's own build warnings — we don't own that code.
@@ -48,7 +56,7 @@ set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA)
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb)
 
 # ---------------------------------------------------------------------------
 # Solution folder organisation (Visual Studio only — ignored by other generators)

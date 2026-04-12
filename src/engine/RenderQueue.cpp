@@ -12,7 +12,10 @@ namespace meow
 		m_commands.push_back(cmd);
 	}
 
-	void RenderQueue::Flush(CommandRecorder& recorder, VkDeviceAddress frameConstantsAddr)
+	void RenderQueue::Flush(
+		CommandRecorder& recorder,
+		VkDeviceAddress  frameConstantsAddr,
+		VkDescriptorSet  bindlessSet)
 	{
 		if (!recorder.IsValid())
 		{
@@ -24,9 +27,22 @@ namespace meow
 			if (cmd.pipeline != nullptr)
 			{
 				recorder.BindGraphicsPipeline(*cmd.pipeline);
+
+				// Bind the bindless descriptor set (set 0) if supplied.
+				if (bindlessSet != VK_NULL_HANDLE)
+				{
+					vkCmdBindDescriptorSets(
+						recorder.GetCommandBuffer(),
+						VK_PIPELINE_BIND_POINT_GRAPHICS,
+						cmd.pipeline->GetLayout(),
+						0, 1, &bindlessSet,
+						0, nullptr);
+				}
+
 				const DrawPushConstants pc{
-					.model = cmd.modelMatrix,
-					.frameAddr = frameConstantsAddr,
+					.model      = cmd.modelMatrix,
+					.frameAddr  = frameConstantsAddr,
+					.albedoSlot = cmd.albedoSlot,
 				};
 				recorder.PushConstants(cmd.pipeline->GetLayout(), pc);
 			}

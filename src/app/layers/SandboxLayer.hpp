@@ -1,8 +1,9 @@
 #pragma once
 
 #include "AppLayer.hpp"
+#include "Entity.hpp"
 #include "GraphicsPipeline.hpp"
-#include "Scene.hpp"
+#include "Texture.hpp"
 
 namespace meow
 {
@@ -21,9 +22,10 @@ namespace meow::app
 
 	private:
 		meow::GraphicsPipeline m_cubePipeline;
-		const meow::Mesh* m_cubeMesh = nullptr;
-		meow::Scene::Handle    m_cubeHandle;
-		meow::Scene::Handle    m_cubeHandleTwo;
+		const meow::Mesh*      m_cubeMesh = nullptr;
+		meow::Entity           m_cubeEntity;
+		meow::Entity           m_cubeEntityTwo;
+		meow::Texture          m_cubeTexture;
 		float                  m_rotation = 0.0f;  // degrees, accumulated over time
 	};
 }
