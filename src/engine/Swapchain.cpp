@@ -42,8 +42,8 @@ namespace meow
 
 		vkb::SwapchainBuilder builder{ ctx.GetDevice() };
 		auto result = builder
-			.set_desired_format({ VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-			.add_fallback_format({ VK_FORMAT_R8G8B8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			.set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			.add_fallback_format({ VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 			.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
 			.set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
 			.set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -250,46 +250,6 @@ namespace meow
 			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 			VK_IMAGE_ASPECT_DEPTH_BIT);
 
-		// Begin dynamic rendering
-		const VkRenderingAttachmentInfo colorAttach{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.imageView = m_imageViews[m_imageIndex],
-			.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-			.clearValue = {.color = { { 0.05f, 0.05f, 0.07f, 1.0f } } },
-		};
-		const VkRenderingAttachmentInfo depthAttach{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-			.imageView = m_depthView,
-			.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-			.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-			.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-			.clearValue = {.depthStencil = { 1.0f, 0 } },
-		};
-		const VkRenderingInfo renderInfo{
-			.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-			.renderArea = { { 0, 0 }, m_swapchain.extent },
-			.layerCount = 1,
-			.colorAttachmentCount = 1,
-			.pColorAttachments = &colorAttach,
-			.pDepthAttachment = &depthAttach,
-		};
-		vkCmdBeginRendering(frame.commandBuffer, &renderInfo);
-
-		// Set dynamic viewport and scissor
-		const VkViewport viewport{
-			.x = 0.0f,
-			.y = 0.0f,
-			.width = static_cast<float>(m_swapchain.extent.width),
-			.height = static_cast<float>(m_swapchain.extent.height),
-			.minDepth = 0.0f,
-			.maxDepth = 1.0f,
-		};
-		const VkRect2D scissor{ { 0, 0 }, m_swapchain.extent };
-		vkCmdSetViewport(frame.commandBuffer, 0, 1, &viewport);
-		vkCmdSetScissor(frame.commandBuffer, 0, 1, &scissor);
-
 		m_frameValid = true;
 	}
 
@@ -303,8 +263,6 @@ namespace meow
 
 		FrameSync& frame = m_frames[m_currentFrame];
 		VkCommandBuffer cmd = frame.commandBuffer;
-
-		vkCmdEndRendering(cmd);
 
 		// Transition: COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR
 		vkutil::TransitionImage(
@@ -369,6 +327,26 @@ namespace meow
 	VkFormat Swapchain::GetDepthFormat() const
 	{
 		return m_depthFormat;
+	}
+
+	VkImage Swapchain::GetCurrentImage() const
+	{
+		return m_frameValid ? m_images[m_imageIndex] : VK_NULL_HANDLE;
+	}
+
+	VkImageView Swapchain::GetCurrentImageView() const
+	{
+		return m_frameValid ? m_imageViews[m_imageIndex] : VK_NULL_HANDLE;
+	}
+
+	VkImage Swapchain::GetDepthImage() const
+	{
+		return m_depthImage.Get();
+	}
+
+	VkImageView Swapchain::GetDepthImageView() const
+	{
+		return m_depthView;
 	}
 
 	bool Swapchain::IsFrameValid() const

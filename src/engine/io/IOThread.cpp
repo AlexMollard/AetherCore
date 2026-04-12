@@ -4,8 +4,7 @@ namespace meow::io
 {
 	IOThread::IOThread()
 		: m_thread(&IOThread::WorkerLoop, this)
-	{
-	}
+	{}
 
 	IOThread::~IOThread()
 	{

@@ -125,7 +125,6 @@ namespace meow::app
 				.engine = m_engine,
 				.deltaTimeSeconds = deltaTime,
 				.frameIndex = m_frameIndex,
-				.renderQueue = m_engine.GetRenderQueue(),
 				.scene = m_engine.GetScene(),
 			};
 

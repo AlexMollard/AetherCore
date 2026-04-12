@@ -12,13 +12,11 @@ namespace meow
 	public:
 		explicit EngineError(const std::string& message)
 			: std::runtime_error(message)
-		{
-		}
+		{}
 
 		explicit EngineError(const char* message)
 			: std::runtime_error(message)
-		{
-		}
+		{}
 
 		[[nodiscard]] virtual LogCategory Category() const noexcept
 		{
@@ -31,13 +29,11 @@ namespace meow
 	public:
 		explicit WindowError(const std::string& message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		explicit WindowError(const char* message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -50,13 +46,11 @@ namespace meow
 	public:
 		explicit VulkanError(const std::string& message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		explicit VulkanError(const char* message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -69,13 +63,11 @@ namespace meow
 	public:
 		explicit AssetError(const std::string& message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		explicit AssetError(const char* message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -88,13 +80,11 @@ namespace meow
 	public:
 		explicit FileSystemError(const std::string& message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		explicit FileSystemError(const char* message)
 			: EngineError(message)
-		{
-		}
+		{}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{

@@ -25,7 +25,7 @@ namespace meow
 			{
 				recorder.BindGraphicsPipeline(*cmd.pipeline);
 				const DrawPushConstants pc{
-					.model     = cmd.modelMatrix,
+					.model = cmd.modelMatrix,
 					.frameAddr = frameConstantsAddr,
 				};
 				recorder.PushConstants(cmd.pipeline->GetLayout(), pc);

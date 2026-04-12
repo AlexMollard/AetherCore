@@ -12,6 +12,19 @@ namespace meow
 	class UniqueImage
 	{
 	public:
+		// Concise description for the common-case Create overload.
+		// Aspect and sampler are deduced automatically from the format and usage.
+		struct Desc
+		{
+			VkExtent2D            extent = {};
+			VkFormat              format = VK_FORMAT_UNDEFINED;
+			VkImageUsageFlags     usage = 0;
+			std::uint32_t         mipLevels = 1;
+			std::uint32_t         arrayLayers = 1;
+			VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+			VmaMemoryUsage        memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+		};
+
 		UniqueImage() = default;
 		~UniqueImage();
 
@@ -21,6 +34,16 @@ namespace meow
 		UniqueImage(UniqueImage&& other) noexcept;
 		UniqueImage& operator=(UniqueImage&& other) noexcept;
 
+		// High-level overload: builds VkImageCreateInfo from Desc, allocates via VMA,
+		// and creates the default VkImageView automatically.  Aspect is deduced from
+		// the format; device is stored so Reset() can destroy the view.
+		static UniqueImage Create(
+			VkDevice device,
+			VmaAllocator allocator,
+			const Desc& desc);
+
+		// Low-level overload: caller supplies the full Vulkan structs directly.
+		// No default view is created; callers manage their own VkImageViews.
 		static UniqueImage Create(
 			VmaAllocator allocator,
 			const VkImageCreateInfo& imageCreateInfo,

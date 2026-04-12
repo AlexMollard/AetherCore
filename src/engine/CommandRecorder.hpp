@@ -17,6 +17,7 @@ namespace meow
 		explicit CommandRecorder(VkCommandBuffer cmd) : m_cmd(cmd) {}
 
 		[[nodiscard]] bool IsValid() const { return m_cmd != VK_NULL_HANDLE; }
+		[[nodiscard]] VkCommandBuffer GetCommandBuffer() const { return m_cmd; }
 
 		void BindGraphicsPipeline(const GraphicsPipeline& pipeline);
 		void Draw(

@@ -141,13 +141,18 @@ namespace meow
 				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, color)),
 			},
 		};
-		const VkPipelineVertexInputStateCreateInfo vertexInput{
+		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		};
+		const VkPipelineVertexInputStateCreateInfo kMeshVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.vertexBindingDescriptionCount = 1,
 			.pVertexBindingDescriptions = &kVertexBinding,
 			.vertexAttributeDescriptionCount = 5,
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
+		const VkPipelineVertexInputStateCreateInfo& vertexInput =
+			desc.noVertexInput ? kEmptyVertexInput : kMeshVertexInput;
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -199,17 +204,23 @@ namespace meow
 		};
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
-		constexpr VkPushConstantRange kModelRange{
+		const VkPushConstantRange kModelRange{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
 			.offset = 0,
 			.size = sizeof(DrawPushConstants),  // 72 bytes: mat4 model + VkDeviceAddress
 		};
+		const VkPushConstantRange kCustomRange{
+			.stageFlags = desc.pushConstantStages,
+			.offset = 0,
+			.size = desc.pushConstantSize,
+		};
+		const bool useCustomPush = desc.pushConstantSize > 0;
 		const VkPipelineLayoutCreateInfo layoutInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 			.setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size()),
 			.pSetLayouts = desc.setLayouts.data(),
 			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &kModelRange,
+			.pPushConstantRanges = useCustomPush ? &kCustomRange : &kModelRange,
 		};
 		vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout);
 

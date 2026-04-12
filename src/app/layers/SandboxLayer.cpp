@@ -13,7 +13,7 @@ namespace meow::app
 
 		m_cubePipeline = context.engine.CreateGraphicsPipeline({
 			.shaderVfsPath = "shaders://hellotriangle.slang.spv",
-			.colorFormat = context.engine.GetSwapchainImageFormat(),
+			.colorFormat = context.engine.GetForwardColorFormat(),
 			.depthFormat = context.engine.GetSwapchainDepthFormat(),
 			.depthTestEnable = true,
 			.depthWriteEnable = true,
@@ -59,7 +59,7 @@ namespace meow::app
 			glm::mat4{ 1.0f },
 			glm::radians(m_rotation),
 			{ 0.0f, -1.0f, 0.0f });
-		
+
 		modelTwo = glm::translate(modelTwo, { 0.0f, 0.0f, -2.0f });
 		context.scene->SetTransform(m_cubeHandleTwo, modelTwo);
 
@@ -79,5 +79,7 @@ namespace meow::app
 	}
 
 	void SandboxLayer::OnGui(LayerContext& context)
-	{}
+	{
+		(void)context;
+	}
 }

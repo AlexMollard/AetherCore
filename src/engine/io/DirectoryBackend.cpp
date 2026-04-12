@@ -73,8 +73,7 @@ namespace meow::io
 
 	DirectoryBackend::DirectoryBackend(std::filesystem::path rootPath)
 		: m_rootPath(std::move(rootPath))
-	{
-	}
+	{}
 
 	bool DirectoryBackend::Exists(std::string_view relativePath) const
 	{

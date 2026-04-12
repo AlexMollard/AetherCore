@@ -25,6 +25,16 @@ namespace meow
 			m_vulkanContext.GetAllocator());
 		io::FileSystem::InitializeDefaultMounts();
 
+		m_postProcessStack = PostProcessStack::Create({
+			.device = m_vulkanContext.GetDevice().device,
+			.allocator = m_vulkanContext.GetAllocator(),
+			.extent = m_swapchain.GetExtent(),
+			.swapchainFormat = m_swapchain.GetImageFormat(),
+			.bindlessManager = &m_bindlessManager,
+			.renderGraph = &m_renderGraph,
+			});
+		RegisterPasses();
+
 		INFO(
 			LogCategory::Engine,
 			"Engine core initialized. Bindless sampled-image capacity: {}",
@@ -39,6 +49,7 @@ namespace meow
 	MeowCore::~MeowCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+		m_postProcessStack.Destroy();
 		m_frameConstantsBuffer.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		m_bindlessManager.Shutdown();
@@ -72,8 +83,60 @@ namespace meow
 		m_swapchain.ClearRecreationFlag();
 		m_swapchain.Initialize(m_vulkanContext, m_window);
 
-		// TODO: notify render graph to rebuild extent-dependent transient resources. (Once i actually make it.)
+		// Rebuild extent-dependent offscreen targets and re-register passes.
+		m_postProcessStack.Destroy();
+		m_renderGraph.Clear();
+		m_postProcessStack = PostProcessStack::Create({
+			.device = m_vulkanContext.GetDevice().device,
+			.allocator = m_vulkanContext.GetAllocator(),
+			.extent = m_swapchain.GetExtent(),
+			.swapchainFormat = m_swapchain.GetImageFormat(),
+			.bindlessManager = &m_bindlessManager,
+			.renderGraph = &m_renderGraph,
+			});
+		RegisterPasses();
+
 		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
+	}
+
+	void MeowCore::RegisterPasses()
+	{
+		// ── Pass 1: Forward ───────────────────────────────────────────────────
+		// Renders all scene objects into the HDR offscreen buffer.
+		m_renderGraph.AddPass("$EngineForward")
+			.WriteColor(
+				m_postProcessStack.GetHdrColor(),
+				VK_ATTACHMENT_LOAD_OP_CLEAR,
+				VK_ATTACHMENT_STORE_OP_STORE,
+				ClearColorValue(0.05f, 0.05f, 0.07f, 1.0f))
+			.WriteDepth(
+				m_renderGraph.GetSwapchainDepth(),
+				VK_ATTACHMENT_LOAD_OP_CLEAR,
+				VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				ClearDepthValue(1.0f))
+			.Execute([this](PassContext& ctx)
+				{
+					m_scene.FlushToQueue(m_renderQueue);
+					m_renderQueue.Flush(ctx.recorder, ctx.frameConstantsAddr);
+					m_renderQueue.Clear();
+				});
+
+		// ── Passes 2–3: Tonemap + FXAA ────────────────────────────────────────
+		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
+
+		// ── Pass 4: UI overlay ────────────────────────────────────────────────
+		// Loads the FXAA output and composites UI on top.
+		m_renderGraph.AddPass("$UIOverlay")
+			.WriteColor(
+				m_renderGraph.GetSwapchainColor(),
+				VK_ATTACHMENT_LOAD_OP_LOAD,
+				VK_ATTACHMENT_STORE_OP_STORE,
+				{})
+			.Execute([this](PassContext& ctx)
+				{
+					// TODO: record ImGui draw commands via ctx.recorder.
+					(void)ctx;
+				});
 	}
 
 	void MeowCore::BeginFrame()
@@ -82,6 +145,16 @@ namespace meow
 		{
 			RecreateSwapchain();
 		}
+
+		// Cycle tonemap mode every 3 seconds.
+		using namespace std::chrono;
+		constexpr float kCycleSeconds = 3.0f;
+		constexpr int   kModeCount = 3;
+		const float elapsed =
+			duration<float>(steady_clock::now() - m_tonemapCycleStart).count();
+		const auto mode = static_cast<TonemapMode>(
+			static_cast<int>(elapsed / kCycleSeconds) % kModeCount);
+		m_postProcessStack.SetTonemapMode(mode);
 		m_swapchain.BeginFrame(m_vulkanContext.GetDevice().device);
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
@@ -94,16 +167,22 @@ namespace meow
 				m_frameIndex % Swapchain::kMaxFramesInFlight);
 
 			// Write per-frame camera data into the GPU buffer then get its BDA.
-			// The address is pushed alongside the model matrix as a raw pointer —
-			// no descriptor set binding required.
 			FrameConstants fc;
 			fc.viewProj = m_scene.GetViewProjection();
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
 
-			m_scene.FlushToQueue(m_renderQueue);
-			m_renderQueue.Flush(m_currentRecorder, frameAddr);
-			m_renderQueue.Clear();
+			const FrameTarget frameTarget{
+				.colorImage = m_swapchain.GetCurrentImage(),
+				.colorView = m_swapchain.GetCurrentImageView(),
+				.depthImage = m_swapchain.GetDepthImage(),
+				.depthView = m_swapchain.GetDepthImageView(),
+				.colorFormat = m_swapchain.GetImageFormat(),
+				.depthFormat = m_swapchain.GetDepthFormat(),
+				.extent = m_swapchain.GetExtent(),
+			};
+
+			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr);
 		}
 		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
 		++m_frameIndex;
@@ -148,6 +227,16 @@ namespace meow
 	const ResourcePool& MeowCore::GetResourcePool() const
 	{
 		return m_resourcePool;
+	}
+
+	RenderGraph& MeowCore::GetRenderGraph()
+	{
+		return m_renderGraph;
+	}
+
+	const RenderGraph& MeowCore::GetRenderGraph() const
+	{
+		return m_renderGraph;
 	}
 
 	VkCommandBuffer MeowCore::GetCurrentCommandBuffer() const

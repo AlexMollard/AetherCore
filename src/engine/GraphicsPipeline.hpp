@@ -20,6 +20,13 @@ namespace meow
 			bool             depthTestEnable = false;
 			bool             depthWriteEnable = false;
 			VkCompareOp      depthCompareOp = VK_COMPARE_OP_LESS;
+			// Set true for full-screen / procedural passes that generate vertices
+			// from SV_VertexID — no vertex buffer or attribute declarations needed.
+			bool             noVertexInput = false;
+			// Override the default DrawPushConstants block. If size is 0 the
+			// default model-matrix + BDA range is used instead.
+			uint32_t         pushConstantSize = 0;
+			VkShaderStageFlags pushConstantStages = VK_SHADER_STAGE_ALL_GRAPHICS;
 			// Descriptor set layouts bound into the pipeline layout in order.
 			std::span<const VkDescriptorSetLayout> setLayouts;
 		};

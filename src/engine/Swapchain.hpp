@@ -32,6 +32,11 @@ namespace meow
 		[[nodiscard]] VkExtent2D GetExtent() const;
 		[[nodiscard]] VkFormat GetImageFormat() const;
 		[[nodiscard]] VkFormat GetDepthFormat() const;
+		// Per-frame image/view accessors used by RenderGraph::Execute.
+		[[nodiscard]] VkImage     GetCurrentImage()     const;
+		[[nodiscard]] VkImageView GetCurrentImageView() const;
+		[[nodiscard]] VkImage     GetDepthImage()       const;
+		[[nodiscard]] VkImageView GetDepthImageView()   const;
 		[[nodiscard]] bool IsFrameValid() const;
 		[[nodiscard]] bool NeedsRecreation() const;
 		void ClearRecreationFlag();

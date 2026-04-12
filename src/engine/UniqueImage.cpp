@@ -83,6 +83,75 @@ namespace meow
 		return *this;
 	}
 
+	namespace
+	{
+		// Deduces the canonical VkImageAspectFlags for a given format.
+		// Depth/stencil combinations set both bits; everything else is COLOR.
+		VkImageAspectFlags DeduceAspect(VkFormat format)
+		{
+			switch (format)
+			{
+			case VK_FORMAT_D16_UNORM:
+			case VK_FORMAT_D32_SFLOAT:
+			case VK_FORMAT_X8_D24_UNORM_PACK32:
+				return VK_IMAGE_ASPECT_DEPTH_BIT;
+			case VK_FORMAT_D16_UNORM_S8_UINT:
+			case VK_FORMAT_D24_UNORM_S8_UINT:
+			case VK_FORMAT_D32_SFLOAT_S8_UINT:
+				return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+			default:
+				return VK_IMAGE_ASPECT_COLOR_BIT;
+			}
+		}
+	} // anonymous namespace
+
+	UniqueImage UniqueImage::Create(
+		VkDevice device,
+		VmaAllocator allocator,
+		const Desc& desc)
+	{
+		const VkImageCreateInfo imageInfo{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			.imageType = VK_IMAGE_TYPE_2D,
+			.format = desc.format,
+			.extent = { desc.extent.width, desc.extent.height, 1u },
+			.mipLevels = desc.mipLevels,
+			.arrayLayers = desc.arrayLayers,
+			.samples = desc.samples,
+			.tiling = VK_IMAGE_TILING_OPTIMAL,
+			.usage = desc.usage,
+			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+		const VmaAllocationCreateInfo allocInfo{
+			.usage = desc.memoryUsage,
+		};
+		UniqueImage out = Create(allocator, imageInfo, allocInfo);
+
+		// Create the default view so callers can use GetDefaultView() immediately
+		// without a separate vkCreateImageView call. The device is stored so
+		// Reset() (via ReleaseBindlessSampled) can destroy the view.
+		const VkImageAspectFlags aspect = DeduceAspect(desc.format);
+		const VkImageViewCreateInfo viewInfo{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = out.m_image,
+			.viewType = desc.arrayLayers > 1
+								? VK_IMAGE_VIEW_TYPE_2D_ARRAY
+								: VK_IMAGE_VIEW_TYPE_2D,
+			.format = desc.format,
+			.subresourceRange = { aspect, 0, desc.mipLevels, 0, desc.arrayLayers },
+		};
+		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out.m_defaultView);
+		if (viewResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format(
+				"UniqueImage::Create: failed to create default view. VkResult={}",
+				static_cast<int>(viewResult)));
+		}
+		out.m_bindlessDevice = device; // allows Reset() to destroy the view
+		return out;
+	}
+
 	UniqueImage UniqueImage::Create(
 		VmaAllocator allocator,
 		const VkImageCreateInfo& imageCreateInfo,
@@ -157,33 +226,39 @@ namespace meow
 			return;
 		}
 
-		const VkImageViewCreateInfo viewCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.image = m_image,
-			.viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
-			.format = m_format,
-			.components = {
-				.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-				.a = VK_COMPONENT_SWIZZLE_IDENTITY,
-			},
-			.subresourceRange = {
-				.aspectMask = aspectMask,
-				.baseMipLevel = 0,
-				.levelCount = m_mipLevels,
-				.baseArrayLayer = 0,
-				.layerCount = m_arrayLayers,
-			},
-		};
+		// Reuse the view created by the high-level Create() overload if available,
+		// rather than creating a redundant second view on the same image.
+		const bool ownView = (m_defaultView == VK_NULL_HANDLE);
+		VkImageView view = m_defaultView;
 
-		VkImageView view = VK_NULL_HANDLE;
-		const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
-		if (viewResult != VK_SUCCESS)
+		if (ownView)
 		{
-			throw VulkanError(std::format("Failed to create image view for bindless registration. VkResult={}", static_cast<int>(viewResult)));
+			const VkImageViewCreateInfo viewCreateInfo{
+				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+				.pNext = nullptr,
+				.flags = 0,
+				.image = m_image,
+				.viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+				.format = m_format,
+				.components = {
+					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
+					.a = VK_COMPONENT_SWIZZLE_IDENTITY,
+				},
+				.subresourceRange = {
+					.aspectMask = aspectMask,
+					.baseMipLevel = 0,
+					.levelCount = m_mipLevels,
+					.baseArrayLayer = 0,
+					.layerCount = m_arrayLayers,
+				},
+			};
+			const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
+			if (viewResult != VK_SUCCESS)
+			{
+				throw VulkanError(std::format("Failed to create image view for bindless registration. VkResult={}", static_cast<int>(viewResult)));
+			}
 		}
 
 		const VkSamplerCreateInfo samplerCreateInfo{
@@ -211,7 +286,7 @@ namespace meow
 		const VkResult samplerResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &sampler);
 		if (samplerResult != VK_SUCCESS)
 		{
-			vkDestroyImageView(device, view, nullptr);
+			if (ownView) vkDestroyImageView(device, view, nullptr);
 			throw VulkanError(std::format("Failed to create sampler for bindless registration. VkResult={}", static_cast<int>(samplerResult)));
 		}
 
@@ -228,7 +303,7 @@ namespace meow
 				bindlessManager.FreeSampledImageSlot(slot);
 			}
 			vkDestroySampler(device, sampler, nullptr);
-			vkDestroyImageView(device, view, nullptr);
+			if (ownView) vkDestroyImageView(device, view, nullptr);
 			throw;
 		}
 

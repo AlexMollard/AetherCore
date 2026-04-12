@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
 #include <span>
 
@@ -8,7 +9,9 @@
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Mesh.hpp"
+#include "PostProcessStack.hpp"
 #include "PrimitiveMeshes.hpp"
+#include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
@@ -45,9 +48,14 @@ namespace meow
 		[[nodiscard]] const BindlessManager& GetBindlessManager() const;
 		[[nodiscard]] ResourcePool& GetResourcePool();
 		[[nodiscard]] const ResourcePool& GetResourcePool() const;
+		[[nodiscard]] RenderGraph& GetRenderGraph();
+		[[nodiscard]] const RenderGraph& GetRenderGraph() const;
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] VkFormat   GetSwapchainImageFormat() const;
 		[[nodiscard]] VkFormat   GetSwapchainDepthFormat() const;
+		// Format of the color attachment used by the engine's forward pass.
+		// All game-layer pipelines that render scene geometry must use this format.
+		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat() { return PostProcessStack::GetForwardColorFormat(); }
 		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
 		[[nodiscard]] RenderQueue* GetRenderQueue();
 		[[nodiscard]] Scene* GetScene();
@@ -57,6 +65,7 @@ namespace meow
 
 	private:
 		void RecreateSwapchain();
+		void RegisterPasses();
 
 		Window m_window;
 		VulkanContext m_vulkanContext;
@@ -64,10 +73,16 @@ namespace meow
 		BindlessManager m_bindlessManager;
 		FrameConstantsBuffer m_frameConstantsBuffer;
 		ResourcePool m_resourcePool;
+		RenderGraph m_renderGraph;
 		RenderQueue m_renderQueue;
 		Scene m_scene;
 		PrimitiveMeshes m_primitiveMeshes;
 		CommandRecorder m_currentRecorder; // engine-internal, filled by BeginFrame
 		std::uint64_t m_frameIndex = 0;
+		std::chrono::steady_clock::time_point m_tonemapCycleStart = std::chrono::steady_clock::now();
+
+		// Manages all offscreen targets and post-processing pipelines.
+		// Recreated on swapchain resize.
+		PostProcessStack m_postProcessStack;
 	};
 }
