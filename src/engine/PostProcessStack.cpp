@@ -64,11 +64,25 @@ namespace meow
 			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
 			});
 
+		// Tonemap pipeline that writes directly to the swapchain surface
+		// (used when FXAA is disabled to avoid the extra LDR intermediate pass).
+		stack.m_tonemapPipelineSwapchain = GraphicsPipeline::Create(desc.device, {
+			.shaderVfsPath = "shaders://tonemap.slang.spv",
+			.colorFormat = desc.swapchainFormat,
+			.noVertexInput = true,
+			.pushConstantSize = 3 * sizeof(uint32_t),
+			.pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
+			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+			});
+
+		stack.m_swapchainFormat = desc.swapchainFormat;
+
 		return stack;
 	}
 
 	void PostProcessStack::Destroy()
 	{
+		m_tonemapPipelineSwapchain.Destroy();
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
 		m_ldrColorImage.Reset();
@@ -79,6 +93,45 @@ namespace meow
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
 	{
+		if (!m_fxaaEnabled)
+		{
+			// ── FXAA disabled: tonemap writes directly to swapchain ───────────
+			graph.AddPass("$PostProcess")
+				.ReadTexture(m_hdrColor)
+				.WriteColor(
+					graph.GetSwapchainColor(),
+					VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+					VK_ATTACHMENT_STORE_OP_STORE,
+					{})
+				.Execute([this, &bindless](PassContext& ctx)
+					{
+						const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
+						const VkViewport vp{
+							.x = 0.0f, .y = 0.0f,
+							.width = static_cast<float>(ctx.extent.width),
+							.height = static_cast<float>(ctx.extent.height),
+							.minDepth = 0.0f, .maxDepth = 1.0f,
+						};
+						const VkRect2D scissor{ {0, 0}, ctx.extent };
+						vkCmdSetViewport(cmd, 0, 1, &vp);
+						vkCmdSetScissor(cmd, 0, 1, &scissor);
+						vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+							m_tonemapPipelineSwapchain.GetPipeline());
+						const VkDescriptorSet set = bindless.GetSet();
+						vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+							m_tonemapPipelineSwapchain.GetLayout(), 0, 1, &set, 0, nullptr);
+						struct { uint32_t hdrSlot; uint32_t mode; float exposure; } push;
+						push.hdrSlot  = m_hdrColorImage.GetBindlessSampledSlot();
+						push.mode     = static_cast<uint32_t>(m_tonemapMode);
+						push.exposure = m_exposure;
+						vkCmdPushConstants(cmd, m_tonemapPipelineSwapchain.GetLayout(),
+							VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+						vkCmdDraw(cmd, 3, 1, 0, 0);
+					});
+			return;
+		}
+
+		// ── FXAA enabled: tonemap → LDR intermediate, then FXAA → swapchain ─
 		// ── $PostProcess — Reinhard tonemap: HDR → LDR ────────────────────
 		graph.AddPass("$PostProcess")
 			.ReadTexture(m_hdrColor)

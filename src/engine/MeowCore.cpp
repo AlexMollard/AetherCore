@@ -35,6 +35,7 @@ namespace meow
 			.bindlessManager = &m_bindlessManager,
 			.renderGraph = &m_renderGraph,
 			});
+		m_postProcessStack.SetFxaaEnabled(false);
 		RegisterPasses();
 
 		// Upload pool — used for immediate-submit texture uploads.
@@ -175,15 +176,6 @@ namespace meow
 			RecreateSwapchain();
 		}
 
-		// Cycle tonemap mode every 3 seconds.
-		using namespace std::chrono;
-		constexpr float kCycleSeconds = 3.0f;
-		constexpr int   kModeCount = 3;
-		const float elapsed =
-			duration<float>(steady_clock::now() - m_tonemapCycleStart).count();
-		const auto mode = static_cast<TonemapMode>(
-			static_cast<int>(elapsed / kCycleSeconds) % kModeCount);
-		m_postProcessStack.SetTonemapMode(mode);
 		m_swapchain.BeginFrame(m_vulkanContext.GetDevice().device);
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
@@ -296,6 +288,26 @@ namespace meow
 	Scene* MeowCore::GetScene()
 	{
 		return &m_scene;
+	}
+
+	void MeowCore::SetTonemapMode(TonemapMode mode)
+	{
+		m_postProcessStack.SetTonemapMode(mode);
+	}
+
+	TonemapMode MeowCore::GetTonemapMode() const
+	{
+		return m_postProcessStack.GetTonemapMode();
+	}
+
+	void MeowCore::SetFxaaEnabled(bool enabled)
+	{
+		m_postProcessStack.SetFxaaEnabled(enabled);
+	}
+
+	bool MeowCore::IsFxaaEnabled() const
+	{
+		return m_postProcessStack.IsFxaaEnabled();
 	}
 
 	World& MeowCore::GetWorld()

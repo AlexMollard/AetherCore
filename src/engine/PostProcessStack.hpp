@@ -77,6 +77,11 @@ namespace meow
 		void SetExposure(float exposure) { m_exposure = exposure; }
 		[[nodiscard]] float GetExposure() const { return m_exposure; }
 
+		// FXAA toggle.  When disabled the tonemap pass writes directly to the
+		// swapchain, saving one full-screen pass and avoiding any blurring.
+		void SetFxaaEnabled(bool enabled) { m_fxaaEnabled = enabled; }
+		[[nodiscard]] bool IsFxaaEnabled() const { return m_fxaaEnabled; }
+
 		// Adds the $PostProcess (tonemap) and $FXAA passes to the render graph.
 		// bindless must outlive the graph (it is captured by the pass lambdas).
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
@@ -86,11 +91,14 @@ namespace meow
 		RGImage          m_hdrColor{};
 		GraphicsPipeline m_tonemapPipeline; // HDR → LDR
 
-		UniqueImage      m_ldrColorImage;   // R8G8B8A8_UNORM — tonemap output
+		UniqueImage      m_ldrColorImage;              // R8G8B8A8_UNORM — tonemap output
 		RGImage          m_ldrColor{};
-		GraphicsPipeline m_fxaaPipeline;    // LDR → swapchain (FXAA)
+		GraphicsPipeline m_fxaaPipeline;               // LDR → swapchain (FXAA)
+		GraphicsPipeline m_tonemapPipelineSwapchain;   // HDR → swapchain (no FXAA path)
+		VkFormat         m_swapchainFormat = VK_FORMAT_UNDEFINED;
 
 		TonemapMode      m_tonemapMode = TonemapMode::Reinhard;
-		float            m_exposure = 1.0f;
+		float            m_exposure    = 1.0f;
+		bool             m_fxaaEnabled = true;
 	};
 }

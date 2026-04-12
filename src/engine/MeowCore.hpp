@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <span>
@@ -70,6 +69,11 @@ namespace meow
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Texture          CreateTexture(std::string_view path);
 
+		void SetTonemapMode(TonemapMode mode);
+		[[nodiscard]] TonemapMode GetTonemapMode() const;
+		void SetFxaaEnabled(bool enabled);
+		[[nodiscard]] bool IsFxaaEnabled() const;
+
 	private:
 		void RecreateSwapchain();
 		void RegisterPasses();
@@ -88,7 +92,6 @@ namespace meow
 		PrimitiveMeshes m_primitiveMeshes;
 		CommandRecorder m_currentRecorder; // engine-internal, filled by BeginFrame
 		std::uint64_t m_frameIndex = 0;
-		std::chrono::steady_clock::time_point m_tonemapCycleStart = std::chrono::steady_clock::now();
 		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 
 		// Manages all offscreen targets and post-processing pipelines.
