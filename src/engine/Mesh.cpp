@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether
 {

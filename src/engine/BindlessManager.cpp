@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <format>
 
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 #include "VulkanContext.hpp"
 
 namespace aether

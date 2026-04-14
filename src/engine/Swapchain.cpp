@@ -4,7 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include "Logger.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 #include "VulkanContext.hpp"
 #include "VulkanUtils.hpp"
 #include "Window.hpp"

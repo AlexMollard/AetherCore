@@ -4,7 +4,7 @@
 #include "Application.hpp"
 #include "CrashHandler.hpp"
 #include "Logger.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 #include "layers/SandboxLayer.hpp"
 #include "layers/UILayer.hpp"
 

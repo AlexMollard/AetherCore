@@ -5,7 +5,7 @@
 #include <regex>
 #include <system_error>
 
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether::io
 {

@@ -12,7 +12,7 @@
 #include "IOThread.hpp"
 #include "LogCategory.hpp"
 #include "Logger.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether::io
 {

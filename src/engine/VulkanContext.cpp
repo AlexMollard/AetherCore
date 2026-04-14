@@ -7,7 +7,7 @@
 #include <GLFW/glfw3.h>
 
 #include "Logger.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 #include "Window.hpp"
 
 namespace

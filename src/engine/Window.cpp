@@ -1,7 +1,7 @@
 #include "Window.hpp"
 
 #include "Logger.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>

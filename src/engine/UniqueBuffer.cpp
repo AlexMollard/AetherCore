@@ -3,7 +3,7 @@
 #include <format>
 #include <utility>
 
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether
 {

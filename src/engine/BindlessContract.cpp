@@ -2,7 +2,7 @@
 
 #include <format>
 
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether::bindless
 {

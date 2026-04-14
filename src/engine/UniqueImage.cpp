@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "BindlessManager.hpp"
-#include "MeowExceptions.hpp"
+#include "AetherExceptions.hpp"
 
 namespace aether
 {
