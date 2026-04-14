@@ -6,7 +6,7 @@
 
 struct GLFWwindow;
 
-namespace meow
+namespace aether
 {
 	// Key codes that mirror GLFW_KEY_* values exactly, enabling
 	// zero-cost casting between Key and the raw int GLFW expects.
@@ -74,7 +74,7 @@ namespace meow
 		B4 = 3, B5 = 4, B6 = 5, B7 = 6, B8 = 7,
 	};
 
-	// Input manager — updated once per frame by MeowCore::BeginFrame().
+	// Input manager — updated once per frame by AetherCore::BeginFrame().
 	// Provides edge-triggered pressed/released queries so callers do not
 	// need to track previous-frame state themselves.
 	class Input
@@ -89,7 +89,7 @@ namespace meow
 		// Called once during engine construction.
 		void Init(GLFWwindow* window);
 
-		// Called every frame by MeowCore::BeginFrame() before layers run.
+		// Called every frame by AetherCore::BeginFrame() before layers run.
 		void Update();
 
 		// ── Keyboard ─────────────────────────────────────────────────────────

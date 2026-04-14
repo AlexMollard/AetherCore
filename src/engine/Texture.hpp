@@ -7,7 +7,7 @@
 
 #include "UniqueImage.hpp"
 
-namespace meow
+namespace aether
 {
 	class BindlessManager;
 

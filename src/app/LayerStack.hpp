@@ -5,7 +5,7 @@
 
 #include "AppLayer.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	class LayerStack
 	{

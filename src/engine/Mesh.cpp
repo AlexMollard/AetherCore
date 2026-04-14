@@ -4,7 +4,7 @@
 
 #include "MeowExceptions.hpp"
 
-namespace meow
+namespace aether
 {
 	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices)
 	{

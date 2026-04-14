@@ -9,7 +9,7 @@
 
 #include "FileGlobOptions.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	class IFileBackend
 	{

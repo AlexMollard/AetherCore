@@ -11,7 +11,7 @@
 #include "RenderGraph.hpp"
 #include "UniqueImage.hpp"
 
-namespace meow
+namespace aether
 {
 	// Tonemap operator applied in the $PostProcess pass.
 	enum class TonemapMode : uint32_t

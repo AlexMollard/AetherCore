@@ -2,7 +2,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace meow::vkutil
+namespace aether::vkutil
 {
 	inline void TransitionImage(
 		VkCommandBuffer cmd,

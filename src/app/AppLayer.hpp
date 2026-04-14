@@ -2,26 +2,26 @@
 
 #include <cstdint>
 
-namespace meow
+namespace aether
 {
-	class MeowCore;
+	class AetherCore;
 	class Scene;
 	class World;
 	class Input;
 	class CameraManager;
 }
 
-namespace meow::app
+namespace aether::app
 {
 	struct LayerContext
 	{
-		meow::MeowCore& engine;
+		aether::AetherCore& engine;
 		double deltaTimeSeconds = 0.0;
 		std::uint64_t frameIndex = 0;
-		meow::Scene* scene = nullptr;
-		meow::World* world = nullptr;
-		meow::Input* input = nullptr;
-		meow::CameraManager* cameras = nullptr;
+		aether::Scene* scene = nullptr;
+		aether::World* world = nullptr;
+		aether::Input* input = nullptr;
+		aether::CameraManager* cameras = nullptr;
 	};
 
 	class AppLayer

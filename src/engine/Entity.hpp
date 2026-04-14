@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <functional>
 
-namespace meow
+namespace aether
 {
 	// Opaque handle to an entity in a World.
 	// id == 0 is the null / invalid entity.
@@ -20,9 +20,9 @@ namespace meow
 }
 
 template <>
-struct std::hash<meow::Entity>
+struct std::hash<aether::Entity>
 {
-	std::size_t operator()(const meow::Entity& e) const noexcept
+	std::size_t operator()(const aether::Entity& e) const noexcept
 	{
 		return std::hash<std::uint32_t>{}(e.id);
 	}

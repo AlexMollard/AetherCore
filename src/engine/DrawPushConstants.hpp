@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
 	// The single push constant block for all standard draw calls.
 	// Laid out to match the shader's [[vk::push_constant]] struct.

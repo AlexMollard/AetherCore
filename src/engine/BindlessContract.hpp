@@ -6,7 +6,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace meow::bindless
+namespace aether::bindless
 {
 	inline constexpr std::uint32_t kDescriptorSetIndex = 1;
 	inline constexpr std::uint32_t kSampledImageBinding = 0;

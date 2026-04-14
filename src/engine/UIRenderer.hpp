@@ -7,20 +7,20 @@
 #include "QuadRenderer.hpp"
 #include "TextRenderer.hpp"
 
-namespace meow
+namespace aether
 {
-	class MeowCore;
+	class AetherCore;
 
 	// High-level UI renderer that composes dedicated text and quad renderers.
 	class UIRenderer
 	{
 	public:
-		void Init(MeowCore& engine,
+		void Init(AetherCore& engine,
 			std::string_view fontVfsPath,
 			std::string_view passNamePrefix = "UIPass",
 			int glyphSize = 48);
 
-		void Shutdown(MeowCore& engine);
+		void Shutdown(AetherCore& engine);
 
 		void DrawText(std::string_view text,
 			const UiPoint& point,

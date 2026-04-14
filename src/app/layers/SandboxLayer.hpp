@@ -6,15 +6,15 @@
 #include "CameraManager.hpp"
 #include "Entity.hpp"
 #include "GraphicsPipeline.hpp"
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 #include "Texture.hpp"
 
-namespace meow
+namespace aether
 {
 	class Mesh;
 }
 
-namespace meow::app
+namespace aether::app
 {
 	class SandboxLayer final : public AppLayer
 	{
@@ -27,20 +27,20 @@ namespace meow::app
 	private:
 		static constexpr int kRingCount = 8;
 
-		meow::GraphicsPipeline m_pipeline;
-		const meow::Mesh* m_cubeMesh = nullptr;
-		const meow::Mesh* m_quadMesh = nullptr;
-		meow::Texture          m_debugTexture;
+		aether::GraphicsPipeline m_pipeline;
+		const aether::Mesh* m_cubeMesh = nullptr;
+		const aether::Mesh* m_quadMesh = nullptr;
+		aether::Texture          m_debugTexture;
 
-		meow::Entity m_groundEntity;
-		meow::Entity m_centerEntity;
-		std::array<meow::Entity, kRingCount> m_ringEntities{};
-		meow::Entity m_orbitEntityA;
-		meow::Entity m_orbitEntityB;
-		meow::CameraHandle m_orbitCamera;
-		meow::CameraHandle m_freeCamera;
-		meow::CameraHandle m_rttCamera;
-		meow::MeowCore::CameraRenderTarget m_rttTarget;
+		aether::Entity m_groundEntity;
+		aether::Entity m_centerEntity;
+		std::array<aether::Entity, kRingCount> m_ringEntities{};
+		aether::Entity m_orbitEntityA;
+		aether::Entity m_orbitEntityB;
+		aether::CameraHandle m_orbitCamera;
+		aether::CameraHandle m_freeCamera;
+		aether::CameraHandle m_rttCamera;
+		aether::AetherCore::CameraRenderTarget m_rttTarget;
 
 		float m_time = 0.0f;
 		float m_cameraAngle = 0.0f;

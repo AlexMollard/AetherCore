@@ -1,6 +1,6 @@
 #pragma once
 
-namespace meow::io
+namespace aether::io
 {
 	struct FileGlobOptions
 	{

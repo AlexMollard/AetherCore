@@ -9,7 +9,7 @@
 #include "FrameConstants.hpp"
 #include "Swapchain.hpp"
 
-namespace meow
+namespace aether
 {
 	class VulkanContext;
 

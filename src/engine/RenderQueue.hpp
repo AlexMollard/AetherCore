@@ -6,7 +6,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
 	class CommandRecorder;
 	class GraphicsPipeline;
@@ -32,7 +32,7 @@ namespace meow
 		void Submit(const DrawCommand& cmd);
 
 		// Engine-internal: record all queued commands into the recorder then clear.
-		// frameConstantsAddr is the BDA of the per-frame FrameConstants buffer written by MeowCore.
+		// frameConstantsAddr is the BDA of the per-frame FrameConstants buffer written by AetherCore.
 		// bindlessSet (set 0) is bound once per draw when non-null.
 		void Flush(
 			CommandRecorder& recorder,

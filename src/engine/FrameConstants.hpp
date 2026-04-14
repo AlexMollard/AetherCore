@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace meow
+namespace aether
 {
 	// Per-frame constant data written once to a GPU uniform buffer before any draws.
 	// Consumed by all shaders via descriptor set 0, binding 0.

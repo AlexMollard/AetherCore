@@ -6,7 +6,7 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
 	class Window;
 

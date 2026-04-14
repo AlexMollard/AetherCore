@@ -10,7 +10,7 @@
 
 #include "CommandRecorder.hpp"
 
-namespace meow
+namespace aether
 {
 	// Opaque handle to a render-graph-managed image resource.
 	// Acquired from RenderGraph::GetSwapchainColor/Depth or future CreateTransient*.
@@ -50,7 +50,7 @@ namespace meow
 		VkDeviceAddress  frameConstantsAddr;
 	};
 
-	// Per-frame swapchain handles supplied to RenderGraph::Execute by MeowCore.
+	// Per-frame swapchain handles supplied to RenderGraph::Execute by AetherCore.
 	struct FrameTarget
 	{
 		VkImage     colorImage = VK_NULL_HANDLE;

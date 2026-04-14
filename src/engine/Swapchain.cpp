@@ -9,7 +9,7 @@
 #include "VulkanUtils.hpp"
 #include "Window.hpp"
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

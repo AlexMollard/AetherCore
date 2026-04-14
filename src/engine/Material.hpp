@@ -5,7 +5,7 @@
 
 #include <glm/glm.hpp>
 
-namespace meow
+namespace aether
 {
 	// Describes the shading properties of a surface.
 	// Bindless slot indices reference images registered in BindlessManager.

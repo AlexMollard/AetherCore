@@ -7,10 +7,10 @@
 #include "Components.hpp"
 #include "Logger.hpp"
 #include "Material.hpp"
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 #include "World.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	void SandboxLayer::OnAttach(LayerContext& context)
 	{
@@ -29,8 +29,8 @@ namespace meow::app
 			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
 			});
 
-		m_cubeMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Cube);
-		m_quadMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Quad);
+		m_cubeMesh = &context.engine.GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
+		m_quadMesh = &context.engine.GetPrimitiveMesh(aether::PrimitiveMesh::Quad);
 
 		m_debugTexture = context.engine.CreateTexture("assets://textures/tex_DebugUVTiles.png");
 		const uint32_t texSlot = m_debugTexture.GetBindlessSlot();
@@ -196,17 +196,17 @@ namespace meow::app
 			m = glm::rotate(m, t * glm::radians(60.0f), diagAxis);
 			m = glm::scale(m, { 0.7f, 0.7f, 0.7f });
 
-			meow::Entity& e = (i == 0) ? m_orbitEntityA : m_orbitEntityB;
+			aether::Entity& e = (i == 0) ? m_orbitEntityA : m_orbitEntityB;
 			context.world->Set(e, TransformComponent{ .localToWorld = m });
 		}
 
 		// ── Keyboard: T = cycle tonemap, F = toggle FXAA ─────────────────────
 		{
-			const meow::Input& input = *context.input;
+			const aether::Input& input = *context.input;
 
-			if (input.IsKeyPressed(meow::Key::T))
+			if (input.IsKeyPressed(aether::Key::T))
 			{
-				const auto next = static_cast<meow::TonemapMode>(
+				const auto next = static_cast<aether::TonemapMode>(
 					(static_cast<int>(context.engine.GetTonemapMode()) + 1) % 3);
 				context.engine.SetTonemapMode(next);
 
@@ -214,7 +214,7 @@ namespace meow::app
 				INFO(LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 			}
 
-			if (input.IsKeyPressed(meow::Key::F))
+			if (input.IsKeyPressed(aether::Key::F))
 			{
 				const bool enabled = !context.engine.IsFxaaEnabled();
 				context.engine.SetFxaaEnabled(enabled);
@@ -222,7 +222,7 @@ namespace meow::app
 			}
 
 			// C switches between orbit and free cameras at runtime.
-			if (input.IsKeyPressed(meow::Key::C))
+			if (input.IsKeyPressed(aether::Key::C))
 			{
 				const CameraHandle active = context.cameras->GetMainCamera();
 				const CameraHandle next = (active == m_orbitCamera) ? m_freeCamera : m_orbitCamera;

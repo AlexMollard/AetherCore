@@ -1,10 +1,10 @@
-option(MEOWCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party targets" OFF)
+option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party targets" OFF)
 
-# meowcore_target_defaults(<target>)
+# aethercore_target_defaults(<target>)
 #
 # Applies project-wide compiler flags to a first-party target.
 # Call this on every Engine / App target after its sources are declared.
-function(meowcore_target_defaults target)
+function(aethercore_target_defaults target)
     if(MSVC)
         target_compile_options(${target} PRIVATE
             # --- Warning level & conformance ---
@@ -56,7 +56,7 @@ function(meowcore_target_defaults target)
             WIN32_LEAN_AND_MEAN
         )
 
-        if(MEOWCORE_ENABLE_ASAN)
+        if(AETHERCORE_ENABLE_ASAN)
             target_compile_options(${target} PRIVATE /fsanitize=address)
         endif()
     else()
@@ -74,7 +74,7 @@ function(meowcore_target_defaults target)
             $<$<CONFIG:Release>:-Wl,--icf=all>          # Identical code folding; equivalent to /OPT:ICF
         )
 
-        if(MEOWCORE_ENABLE_ASAN)
+        if(AETHERCORE_ENABLE_ASAN)
             target_compile_options(${target} PRIVATE -fsanitize=address,undefined)
             target_link_options(${target} PRIVATE -fsanitize=address,undefined)
         endif()

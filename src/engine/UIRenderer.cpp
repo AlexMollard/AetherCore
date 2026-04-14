@@ -2,12 +2,12 @@
 
 #include <string>
 
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 
-namespace meow
+namespace aether
 {
 	void UIRenderer::Init(
-		MeowCore& engine,
+		AetherCore& engine,
 		std::string_view fontVfsPath,
 		std::string_view passNamePrefix,
 		int glyphSize)
@@ -19,7 +19,7 @@ namespace meow
 		m_textRenderer.Init(engine, fontVfsPath, prefix + ".Text", glyphSize);
 	}
 
-	void UIRenderer::Shutdown(MeowCore& engine)
+	void UIRenderer::Shutdown(AetherCore& engine)
 	{
 		m_textRenderer.Shutdown(engine);
 		m_quadRenderer.Shutdown(engine);

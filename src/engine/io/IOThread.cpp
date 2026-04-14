@@ -1,6 +1,6 @@
 #include "IOThread.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	IOThread::IOThread()
 		: m_thread(&IOThread::WorkerLoop, this)

@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
 	// Anchor-based point in screen space.
 	// anchor is normalized [0..1] relative to the framebuffer extent.

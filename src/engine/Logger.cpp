@@ -20,7 +20,7 @@
 #include <Windows.h>
 #endif
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

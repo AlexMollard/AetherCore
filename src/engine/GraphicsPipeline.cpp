@@ -13,7 +13,7 @@
 #include "Logger.hpp"
 #include "Mesh.hpp"
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

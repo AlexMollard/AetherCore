@@ -3,7 +3,7 @@
 #include "Mesh.hpp"
 #include "RenderQueue.hpp"
 
-namespace meow
+namespace aether
 {
 	Scene::Handle Scene::AddRenderObject(const RenderObjectDesc& desc)
 	{

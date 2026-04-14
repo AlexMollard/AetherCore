@@ -10,9 +10,9 @@
 #include "GraphicsPipeline.hpp"
 #include "UiLayout.hpp"
 
-namespace meow
+namespace aether
 {
-	class MeowCore;
+	class AetherCore;
 
 	// Manages an SDF text rendering pipeline and a font atlas.
 	//
@@ -35,13 +35,13 @@ namespace meow
 		// pass named `passName`.  The pass writes to the swapchain image using
 		// LOAD_OP_LOAD so it composites over whatever was already rendered.
 		// `glyphSize` is the atlas cell height in pixels (default 48).
-		void Init(MeowCore& engine,
+		void Init(AetherCore& engine,
 			std::string_view fontVfsPath,
 			std::string_view passName,
 			int              glyphSize = 48);
 
 		// Remove the render-graph pass, destroy the pipeline and atlas.
-		void Shutdown(MeowCore& engine);
+		void Shutdown(AetherCore& engine);
 
 		// Queue anchor-based text for this frame.
 		// Call during a layer's OnGui(); labels are flushed by the registered
@@ -80,7 +80,7 @@ namespace meow
 		void RegisterPass();
 
 		std::string               m_passName;
-		MeowCore* m_engine = nullptr;
+		AetherCore* m_engine = nullptr;
 		FontAtlas                 m_fontAtlas;
 		GraphicsPipeline          m_pipeline;
 		std::vector<PendingLabel> m_pendingLabels;

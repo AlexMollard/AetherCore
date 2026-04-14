@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <numeric>
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

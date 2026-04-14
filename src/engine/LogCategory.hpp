@@ -1,6 +1,6 @@
 #pragma once
 
-namespace meow
+namespace aether
 {
 	enum class LogCategory
 	{

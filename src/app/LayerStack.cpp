@@ -2,7 +2,7 @@
 
 #include "Logger.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	void LayerStack::Push(std::unique_ptr<AppLayer> layer)
 	{

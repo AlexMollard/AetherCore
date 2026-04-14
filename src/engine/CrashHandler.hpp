@@ -2,12 +2,12 @@
 
 #include <string_view>
 
-namespace meow
+namespace aether
 {
 	class CrashHandler
 	{
 	public:
-		static void Install(std::string_view appName = "MeowCore");
+		static void Install(std::string_view appName = "AetherCore");
 		static void Uninstall();
 		static void ReportGraphicsFault(std::string_view stage, std::string_view detail);
 	};

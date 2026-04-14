@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-namespace meow
+namespace aether
 {
 	class Input;
 

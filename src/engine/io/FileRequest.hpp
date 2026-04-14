@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace meow::io
+namespace aether::io
 {
 	enum class IOPriority
 	{

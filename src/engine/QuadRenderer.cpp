@@ -3,10 +3,10 @@
 #include <vulkan/vulkan.h>
 
 #include "Logger.hpp"
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 #include "RenderGraph.hpp"
 
-namespace meow
+namespace aether
 {
 	void QuadRenderer::RegisterPass()
 	{
@@ -86,7 +86,7 @@ namespace meow
 		}
 	}
 
-	void QuadRenderer::Init(MeowCore& engine, std::string_view passName)
+	void QuadRenderer::Init(AetherCore& engine, std::string_view passName)
 	{
 		m_engine = &engine;
 		m_passName = std::string(passName);
@@ -108,7 +108,7 @@ namespace meow
 		INFO(LogCategory::Engine, "QuadRenderer: pass '{}' registered.", m_passName);
 	}
 
-	void QuadRenderer::Shutdown(MeowCore& engine)
+	void QuadRenderer::Shutdown(AetherCore& engine)
 	{
 		if (m_ready)
 		{

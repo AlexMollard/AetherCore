@@ -7,7 +7,7 @@
 
 #include "Input.hpp"
 
-namespace meow
+namespace aether
 {
 	static constexpr float kPitchLimit = 89.0f;
 

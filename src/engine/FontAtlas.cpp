@@ -18,7 +18,7 @@
 #include "FileSystem.hpp"
 #include "Logger.hpp"
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

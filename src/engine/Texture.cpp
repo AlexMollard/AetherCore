@@ -16,7 +16,7 @@
 #include "FileSystem.hpp"
 #include "UniqueBuffer.hpp"
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

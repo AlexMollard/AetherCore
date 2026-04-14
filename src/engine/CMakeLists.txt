@@ -44,4 +44,4 @@ target_include_directories(Engine PUBLIC "${vma_SOURCE_DIR}/include")
 # Texture.cpp defines STB_IMAGE_IMPLEMENTATION once to pull in the implementation.
 target_include_directories(Engine PRIVATE "${stb_SOURCE_DIR}")
 
-meowcore_target_defaults(Engine)
+aethercore_target_defaults(Engine)

@@ -5,7 +5,7 @@
 #include "CommandRecorder.hpp"
 #include "RenderGraph.hpp"
 
-namespace meow
+namespace aether
 {
 	PostProcessStack PostProcessStack::Create(const Desc& desc)
 	{

@@ -12,9 +12,9 @@
 
 namespace
 {
-	meow::VulkanError MakeVkBootstrapError(const char* message, const vkb::Result<vkb::Instance>& result)
+	aether::VulkanError MakeVkBootstrapError(const char* message, const vkb::Result<vkb::Instance>& result)
 	{
-		return meow::VulkanError(std::string(message) + result.error().message());
+		return aether::VulkanError(std::string(message) + result.error().message());
 	}
 
 	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(
@@ -32,22 +32,22 @@ namespace
 
 		if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
 		{
-			meow::Logger::ErrorAt(meow::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::ErrorAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
 		}
 		else if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
 		{
-			meow::Logger::WarnAt(meow::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::WarnAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
 		}
 		else
 		{
-			meow::Logger::VerboseAt(meow::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::VerboseAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
 		}
 
 		return VK_FALSE;
 	}
 }
 
-namespace meow
+namespace aether
 {
 	VulkanContext::VulkanContext(const Window& window, const char* appName)
 	{

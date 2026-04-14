@@ -4,7 +4,7 @@
 
 #include "IFileBackend.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	class DirectoryBackend final : public IFileBackend
 	{

@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace meow
+namespace aether
 {
 	// ── Camera lifecycle ──────────────────────────────────────────────────────
 

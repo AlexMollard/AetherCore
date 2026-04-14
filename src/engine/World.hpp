@@ -6,7 +6,7 @@
 #include "Components.hpp"
 #include "Entity.hpp"
 
-namespace meow
+namespace aether
 {
 	class RenderQueue;
 

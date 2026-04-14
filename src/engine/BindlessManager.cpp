@@ -6,7 +6,7 @@
 #include "MeowExceptions.hpp"
 #include "VulkanContext.hpp"
 
-namespace meow
+namespace aether
 {
 	BindlessManager::~BindlessManager()
 	{

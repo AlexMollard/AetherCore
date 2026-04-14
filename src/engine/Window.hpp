@@ -2,7 +2,7 @@
 
 struct GLFWwindow;
 
-namespace meow
+namespace aether
 {
 	class Window
 	{

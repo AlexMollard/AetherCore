@@ -1,6 +1,6 @@
 #include "FileRequest.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	FileRequest::State FileRequest::GetState() const noexcept
 	{

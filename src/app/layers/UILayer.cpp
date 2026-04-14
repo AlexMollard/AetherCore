@@ -2,7 +2,7 @@
 
 #include "Logger.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	static constexpr std::string_view kFontPath = "assets://fonts/Roboto-Regular.ttf";
 
@@ -29,7 +29,7 @@ namespace meow::app
 
 		// Panel anchored to top-left with fixed margins in pixels.
 		m_uiRenderer.DrawQuad(
-			meow::UiRect{
+			aether::UiRect{
 				.anchorMin = { 0.0f, 0.0f },
 				.anchorMax = { 0.0f, 0.0f },
 				.offsetMinPx = { 12.0f, 12.0f },
@@ -38,8 +38,8 @@ namespace meow::app
 			glm::vec4(0.08f, 0.11f, 0.14f, 0.78f));
 
 		m_uiRenderer.DrawText(
-			"MeowCore",
-			meow::UiPoint{
+			"AetherCore",
+			aether::UiPoint{
 				.anchor = { 0.0f, 0.0f },
 				.offsetPx = { 24.0f, 48.0f },
 			},
@@ -48,7 +48,7 @@ namespace meow::app
 
 		m_uiRenderer.DrawText(
 			"SDF Text + Quad UI",
-			meow::UiPoint{
+			aether::UiPoint{
 				.anchor = { 0.0f, 0.0f },
 				.offsetPx = { 24.0f, 92.0f },
 			},

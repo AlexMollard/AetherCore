@@ -5,7 +5,7 @@
 
 #include "MeowExceptions.hpp"
 
-namespace meow
+namespace aether
 {
 	UniqueBuffer::~UniqueBuffer()
 	{

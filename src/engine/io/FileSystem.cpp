@@ -14,7 +14,7 @@
 #include "Logger.hpp"
 #include "MeowExceptions.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	namespace
 	{

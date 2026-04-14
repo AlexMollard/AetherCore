@@ -9,7 +9,7 @@
 
 #include "FileRequest.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	class IOThread
 	{

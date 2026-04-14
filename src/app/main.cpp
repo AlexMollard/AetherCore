@@ -16,14 +16,14 @@ namespace
 	public:
 		RuntimeSystemsGuard()
 		{
-			meow::Logger::Initialize();
-			meow::CrashHandler::Install("MeowCore");
+			aether::Logger::Initialize();
+			aether::CrashHandler::Install("AetherCore");
 		}
 
 		~RuntimeSystemsGuard()
 		{
-			meow::CrashHandler::Uninstall();
-			meow::Logger::Shutdown();
+			aether::CrashHandler::Uninstall();
+			aether::Logger::Shutdown();
 		}
 	};
 }
@@ -34,28 +34,28 @@ int main()
 
 	try
 	{
-		meow::Logger::SetMinimumLevel(meow::LogLevel::Verbose);
+		aether::Logger::SetMinimumLevel(aether::LogLevel::Verbose);
 
-		meow::app::Application application;
-		application.PushLayer(std::make_unique<meow::app::SandboxLayer>());
-		application.PushLayer(std::make_unique<meow::app::UILayer>());
+		aether::app::Application application;
+		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
+		application.PushLayer(std::make_unique<aether::app::UILayer>());
 		// Add more layers here as needed, like a editor layer or some kind of background layer even
 		return application.Run();
 	}
 	catch (const std::exception& exception)
 	{
-		const auto* engineError = dynamic_cast<const meow::EngineError*>(&exception);
-		const meow::LogCategory category = engineError != nullptr ? engineError->Category() : meow::LogCategory::Std;
-		if (category == meow::LogCategory::Vulkan)
+		const auto* engineError = dynamic_cast<const aether::EngineError*>(&exception);
+		const aether::LogCategory category = engineError != nullptr ? engineError->Category() : aether::LogCategory::Std;
+		if (category == aether::LogCategory::Vulkan)
 		{
-			meow::CrashHandler::ReportGraphicsFault("UnhandledVulkanException", exception.what());
+			aether::CrashHandler::ReportGraphicsFault("UnhandledVulkanException", exception.what());
 		}
 		ERROR(category, "Unhandled exception: {}", exception.what());
 		return -1;
 	}
 	catch (...)
 	{
-		ERROR(meow::LogCategory::Unknown, "Unknown non-standard exception.");
+		ERROR(aether::LogCategory::Unknown, "Unknown non-standard exception.");
 		return -1;
 	}
 }

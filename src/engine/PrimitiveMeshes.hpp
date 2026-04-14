@@ -5,7 +5,7 @@
 
 #include "Mesh.hpp"
 
-namespace meow
+namespace aether
 {
 	enum class PrimitiveMesh
 	{

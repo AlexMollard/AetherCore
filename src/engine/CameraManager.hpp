@@ -7,7 +7,7 @@
 
 #include "Camera.hpp"
 
-namespace meow
+namespace aether
 {
 	class Input;
 
@@ -19,9 +19,9 @@ namespace meow
 	};
 
 	// Manages a pool of Camera objects.  Maintains one designated "main" camera
-	// whose view/projection is used by MeowCore each frame to build FrameConstants.
+	// whose view/projection is used by AetherCore each frame to build FrameConstants.
 	//
-	// Camera updates (input processing) run automatically via MeowCore::Tick().
+	// Camera updates (input processing) run automatically via AetherCore::Tick().
 	// Cameras in CameraMode::Manual are never updated automatically.
 	class CameraManager
 	{
@@ -54,7 +54,7 @@ namespace meow
 
 		// ── Per-frame update ──────────────────────────────────────────────────
 		// Advances all non-Manual cameras by dt seconds.
-		// Called by MeowCore::Tick(); not typically called directly from app code.
+		// Called by AetherCore::Tick(); not typically called directly from app code.
 		void Update(const Input& input, float dt);
 
 	private:

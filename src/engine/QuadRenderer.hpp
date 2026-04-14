@@ -9,9 +9,9 @@
 #include "GraphicsPipeline.hpp"
 #include "UiLayout.hpp"
 
-namespace meow
+namespace aether
 {
-	class MeowCore;
+	class AetherCore;
 
 	class QuadRenderer
 	{
@@ -22,8 +22,8 @@ namespace meow
 		QuadRenderer(const QuadRenderer&) = delete;
 		QuadRenderer& operator=(const QuadRenderer&) = delete;
 
-		void Init(MeowCore& engine, std::string_view passName);
-		void Shutdown(MeowCore& engine);
+		void Init(AetherCore& engine, std::string_view passName);
+		void Shutdown(AetherCore& engine);
 
 		void DrawQuad(const UiRect& rect, glm::vec4 color = glm::vec4(1.f));
 
@@ -49,7 +49,7 @@ namespace meow
 		void RegisterPass();
 
 		std::string              m_passName;
-		MeowCore* m_engine = nullptr;
+		AetherCore* m_engine = nullptr;
 		GraphicsPipeline         m_pipeline;
 		std::vector<PendingQuad> m_pendingQuads;
 		bool                     m_ready = false;

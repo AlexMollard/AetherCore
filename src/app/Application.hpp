@@ -4,14 +4,14 @@
 
 #include "AppLayer.hpp"
 #include "LayerStack.hpp"
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	class Application
 	{
 	public:
-		explicit Application(const meow::MeowCore::Config& engineConfig = {});
+		explicit Application(const aether::AetherCore::Config& engineConfig = {});
 		~Application();
 
 		Application(const Application&) = delete;
@@ -20,11 +20,11 @@ namespace meow::app
 		void PushLayer(std::unique_ptr<AppLayer> layer);
 		int Run();
 
-		[[nodiscard]] meow::MeowCore& GetEngine();
-		[[nodiscard]] const meow::MeowCore& GetEngine() const;
+		[[nodiscard]] aether::AetherCore& GetEngine();
+		[[nodiscard]] const aether::AetherCore& GetEngine() const;
 
 	private:
-		meow::MeowCore m_engine;
+		aether::AetherCore m_engine;
 		LayerStack m_layers;
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;

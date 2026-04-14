@@ -1,4 +1,4 @@
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 
 #include <string>
 #include <stdexcept>
@@ -10,9 +10,9 @@
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
 
-namespace meow
+namespace aether
 {
-	MeowCore::MeowCore(const Config& config)
+	AetherCore::AetherCore(const Config& config)
 		: m_window(config.appName, config.width, config.height),
 		m_vulkanContext(m_window, config.appName)
 	{
@@ -60,7 +60,7 @@ namespace meow
 			nullptr,
 			&m_uploadPool) != VK_SUCCESS)
 		{
-			throw std::runtime_error("MeowCore: failed to create upload command pool.");
+			throw std::runtime_error("AetherCore: failed to create upload command pool.");
 		}
 
 		INFO(
@@ -69,12 +69,12 @@ namespace meow
 			m_bindlessManager.GetCapacity());
 	}
 
-	void MeowCore::WaitIdle() const
+	void AetherCore::WaitIdle() const
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 	}
 
-	MeowCore::~MeowCore()
+	AetherCore::~AetherCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 		m_postProcessStack.Destroy();
@@ -89,17 +89,17 @@ namespace meow
 		io::FileSystem::Shutdown();
 	}
 
-	bool MeowCore::ShouldClose() const
+	bool AetherCore::ShouldClose() const
 	{
 		return m_window.ShouldClose();
 	}
 
-	void MeowCore::PumpEvents() const
+	void AetherCore::PumpEvents() const
 	{
 		m_window.PollEvents();
 	}
 
-	void MeowCore::RecreateSwapchain()
+	void AetherCore::RecreateSwapchain()
 	{
 		// Wait out minimized state (extent = 0,0) before recreating.
 		int w = 0;
@@ -162,7 +162,7 @@ namespace meow
 		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
 	}
 
-	void MeowCore::RegisterPasses()
+	void AetherCore::RegisterPasses()
 	{
 		for (auto& [id, rt] : m_rtCameras)
 		{
@@ -211,7 +211,7 @@ namespace meow
 				});
 	}
 
-	void MeowCore::RegisterRttPassesFor(const uint32_t id)
+	void AetherCore::RegisterRttPassesFor(const uint32_t id)
 	{
 		auto it = m_rtCameras.find(id);
 		if (it == m_rtCameras.end())
@@ -268,13 +268,13 @@ namespace meow
 				});
 	}
 
-	void MeowCore::Tick(const float dt)
+	void AetherCore::Tick(const float dt)
 	{
 		m_input.Update();
 		m_cameraManager.Update(m_input, dt);
 	}
 
-	void MeowCore::BeginFrame()
+	void AetherCore::BeginFrame()
 	{
 		if (m_swapchain.NeedsRecreation())
 		{
@@ -285,7 +285,7 @@ namespace meow
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
 
-	void MeowCore::EndFrame()
+	void AetherCore::EndFrame()
 	{
 		if (m_swapchain.IsFrameValid())
 		{
@@ -328,113 +328,113 @@ namespace meow
 		m_bindlessManager.AdvanceFrame(m_frameIndex);
 	}
 
-	Window& MeowCore::GetWindow()
+	Window& AetherCore::GetWindow()
 	{
 		return m_window;
 	}
 
-	const Window& MeowCore::GetWindow() const
+	const Window& AetherCore::GetWindow() const
 	{
 		return m_window;
 	}
 
-	VulkanContext& MeowCore::GetVulkanContext()
+	VulkanContext& AetherCore::GetVulkanContext()
 	{
 		return m_vulkanContext;
 	}
 
-	const VulkanContext& MeowCore::GetVulkanContext() const
+	const VulkanContext& AetherCore::GetVulkanContext() const
 	{
 		return m_vulkanContext;
 	}
 
-	BindlessManager& MeowCore::GetBindlessManager()
+	BindlessManager& AetherCore::GetBindlessManager()
 	{
 		return m_bindlessManager;
 	}
 
-	const BindlessManager& MeowCore::GetBindlessManager() const
+	const BindlessManager& AetherCore::GetBindlessManager() const
 	{
 		return m_bindlessManager;
 	}
 
-	ResourcePool& MeowCore::GetResourcePool()
+	ResourcePool& AetherCore::GetResourcePool()
 	{
 		return m_resourcePool;
 	}
 
-	const ResourcePool& MeowCore::GetResourcePool() const
+	const ResourcePool& AetherCore::GetResourcePool() const
 	{
 		return m_resourcePool;
 	}
 
-	RenderGraph& MeowCore::GetRenderGraph()
+	RenderGraph& AetherCore::GetRenderGraph()
 	{
 		return m_renderGraph;
 	}
 
-	const RenderGraph& MeowCore::GetRenderGraph() const
+	const RenderGraph& AetherCore::GetRenderGraph() const
 	{
 		return m_renderGraph;
 	}
 
-	VkCommandBuffer MeowCore::GetCurrentCommandBuffer() const
+	VkCommandBuffer AetherCore::GetCurrentCommandBuffer() const
 	{
 		return m_swapchain.GetCurrentCommandBuffer();
 	}
 
-	VkFormat MeowCore::GetSwapchainImageFormat() const
+	VkFormat AetherCore::GetSwapchainImageFormat() const
 	{
 		return m_swapchain.GetImageFormat();
 	}
 
-	VkFormat MeowCore::GetSwapchainDepthFormat() const
+	VkFormat AetherCore::GetSwapchainDepthFormat() const
 	{
 		return m_swapchain.GetDepthFormat();
 	}
 
-	VkExtent2D MeowCore::GetSwapchainExtent() const
+	VkExtent2D AetherCore::GetSwapchainExtent() const
 	{
 		return m_swapchain.GetExtent();
 	}
 
-	RenderQueue* MeowCore::GetRenderQueue()
+	RenderQueue* AetherCore::GetRenderQueue()
 	{
 		return &m_renderQueue;
 	}
 
-	Scene* MeowCore::GetScene()
+	Scene* AetherCore::GetScene()
 	{
 		return &m_scene;
 	}
 
-	Input& MeowCore::GetInput() { return m_input; }
-	const Input& MeowCore::GetInput() const { return m_input; }
+	Input& AetherCore::GetInput() { return m_input; }
+	const Input& AetherCore::GetInput() const { return m_input; }
 
-	CameraManager& MeowCore::GetCameraManager() { return m_cameraManager; }
-	const CameraManager& MeowCore::GetCameraManager() const { return m_cameraManager; }
+	CameraManager& AetherCore::GetCameraManager() { return m_cameraManager; }
+	const CameraManager& AetherCore::GetCameraManager() const { return m_cameraManager; }
 
-	void MeowCore::SetTonemapMode(TonemapMode mode)
+	void AetherCore::SetTonemapMode(TonemapMode mode)
 	{
 		m_postProcessStack.SetTonemapMode(mode);
 	}
 
-	TonemapMode MeowCore::GetTonemapMode() const
+	TonemapMode AetherCore::GetTonemapMode() const
 	{
 		return m_postProcessStack.GetTonemapMode();
 	}
 
-	void MeowCore::SetFxaaEnabled(bool enabled)
+	void AetherCore::SetFxaaEnabled(bool enabled)
 	{
 		m_postProcessStack.SetFxaaEnabled(enabled);
 	}
 
-	bool MeowCore::IsFxaaEnabled() const
+	bool AetherCore::IsFxaaEnabled() const
 	{
 		return m_postProcessStack.IsFxaaEnabled();
 	}
 
-	MeowCore::CameraRenderTarget MeowCore::CreateCameraRenderTarget(
+	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(
 		const CameraHandle camera,
 		const VkExtent2D extent)
 	{
@@ -485,7 +485,7 @@ namespace meow
 		return CameraRenderTarget{ id };
 	}
 
-	void MeowCore::DestroyCameraRenderTarget(const CameraRenderTarget rt)
+	void AetherCore::DestroyCameraRenderTarget(const CameraRenderTarget rt)
 	{
 		if (!rt.IsValid())
 		{
@@ -510,7 +510,7 @@ namespace meow
 		m_rtCameras.erase(it);
 	}
 
-	RGImage MeowCore::GetRenderTargetColorImage(const CameraRenderTarget rt) const
+	RGImage AetherCore::GetRenderTargetColorImage(const CameraRenderTarget rt) const
 	{
 		auto it = m_rtCameras.find(rt.id);
 		if (it == m_rtCameras.end())
@@ -520,7 +520,7 @@ namespace meow
 		return it->second.rgColor;
 	}
 
-	uint32_t MeowCore::GetRenderTargetBindlessSlot(const CameraRenderTarget rt) const
+	uint32_t AetherCore::GetRenderTargetBindlessSlot(const CameraRenderTarget rt) const
 	{
 		auto it = m_rtCameras.find(rt.id);
 		if (it == m_rtCameras.end() || !it->second.colorImage.HasBindlessSampled())
@@ -530,27 +530,27 @@ namespace meow
 		return it->second.colorImage.GetBindlessSampledSlot();
 	}
 
-	World& MeowCore::GetWorld()
+	World& AetherCore::GetWorld()
 	{
 		return m_world;
 	}
 
-	const World& MeowCore::GetWorld() const
+	const World& AetherCore::GetWorld() const
 	{
 		return m_world;
 	}
 
-	const Mesh& MeowCore::GetPrimitiveMesh(PrimitiveMesh primitive) const
+	const Mesh& AetherCore::GetPrimitiveMesh(PrimitiveMesh primitive) const
 	{
 		return m_primitiveMeshes.Get(primitive);
 	}
 
-	GraphicsPipeline MeowCore::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
+	GraphicsPipeline AetherCore::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
 	{
 		return GraphicsPipeline::Create(m_vulkanContext.GetDevice().device, desc);
 	}
 
-	Mesh MeowCore::CreateMesh(std::span<const Mesh::Vertex> vertices)
+	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices)
 	{
 		return Mesh::Create(
 			m_vulkanContext.GetDevice().device,
@@ -558,7 +558,7 @@ namespace meow
 			vertices);
 	}
 
-	Texture MeowCore::CreateTexture(std::string_view path)
+	Texture AetherCore::CreateTexture(std::string_view path)
 	{
 		return Texture::LoadFromFile(
 			path,
@@ -569,7 +569,7 @@ namespace meow
 			m_bindlessManager);
 	}
 
-	void MeowCore::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn)
+	void AetherCore::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn)
 	{
 		const VkCommandBufferAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,

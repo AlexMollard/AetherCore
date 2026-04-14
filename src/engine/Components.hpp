@@ -4,7 +4,7 @@
 
 #include "Material.hpp"
 
-namespace meow
+namespace aether
 {
 	class GraphicsPipeline;
 	class Mesh;

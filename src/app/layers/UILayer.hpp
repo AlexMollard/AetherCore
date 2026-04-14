@@ -5,7 +5,7 @@
 #include "AppLayer.hpp"
 #include "UIRenderer.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	class UILayer final : public AppLayer
 	{
@@ -15,10 +15,10 @@ namespace meow::app
 		void OnUpdate(LayerContext& context) override;
 		void OnGui(LayerContext& context) override;
 
-		[[nodiscard]] meow::UIRenderer& GetUIRenderer() { return m_uiRenderer; }
+		[[nodiscard]] aether::UIRenderer& GetUIRenderer() { return m_uiRenderer; }
 
 	private:
-		meow::UIRenderer m_uiRenderer;
+		aether::UIRenderer m_uiRenderer;
 	};
 }
 

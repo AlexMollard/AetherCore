@@ -2,7 +2,7 @@
 
 #include "GraphicsPipeline.hpp"
 
-namespace meow
+namespace aether
 {
 	void CommandRecorder::BindGraphicsPipeline(const GraphicsPipeline& pipeline)
 	{

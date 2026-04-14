@@ -8,7 +8,7 @@
 
 #include "BindlessContract.hpp"
 
-namespace meow
+namespace aether
 {
 	class VulkanContext;
 

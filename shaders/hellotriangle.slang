@@ -16,7 +16,7 @@ struct FrameConstantsData
     float4x4 proj;
 };
 
-// Push constant block — matches meow::DrawPushConstants (80 bytes):
+// Push constant block — matches aether::DrawPushConstants (80 bytes):
 //   offset  0 : float4x4  model      (64 bytes)
 //   offset 64 : uint64_t  frameAddr  ( 8 bytes)
 //   offset 72 : uint       albedoSlot ( 4 bytes)

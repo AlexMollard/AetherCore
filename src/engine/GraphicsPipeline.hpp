@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
 	class GraphicsPipeline
 	{

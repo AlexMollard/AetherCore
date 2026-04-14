@@ -7,9 +7,9 @@
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
-namespace meow
+namespace aether
 {
-	// GPU-resident vertex buffer. Created via MeowCore::CreateMesh — app code
+	// GPU-resident vertex buffer. Created via AetherCore::CreateMesh — app code
 	// never touches VMA or VkBuffer directly.
 	class Mesh
 	{
@@ -32,7 +32,7 @@ namespace meow
 		Mesh(Mesh&&) noexcept;
 		Mesh& operator=(Mesh&&) noexcept;
 
-		// Engine-internal factory used by MeowCore::CreateMesh.
+		// Engine-internal factory used by AetherCore::CreateMesh.
 		static Mesh Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices);
 		static Mesh Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices);
 		void Destroy();

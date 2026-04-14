@@ -10,7 +10,7 @@
 #include "FileGlobOptions.hpp"
 #include "FileRequest.hpp"
 
-namespace meow::io
+namespace aether::io
 {
 	class FileSystem
 	{

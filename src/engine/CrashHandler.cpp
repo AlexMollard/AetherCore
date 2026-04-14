@@ -25,12 +25,12 @@
 #include <DbgHelp.h>
 #endif
 
-namespace meow
+namespace aether
 {
 	namespace
 	{
 		std::atomic<bool> g_installed{ false };
-		std::string g_appName = "MeowCore";
+		std::string g_appName = "AetherCore";
 		std::mutex g_writeMutex;
 		std::atomic_flag g_crashInProgress = ATOMIC_FLAG_INIT;
 

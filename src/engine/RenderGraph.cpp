@@ -8,7 +8,7 @@
 #include "Logger.hpp"
 #include "VulkanUtils.hpp"
 
-namespace meow
+namespace aether
 {
 	// ──────────────────────────────────────────────────────────────────────────
 	//  PassBuilder

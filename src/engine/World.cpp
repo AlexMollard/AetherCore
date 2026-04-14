@@ -3,7 +3,7 @@
 #include "Material.hpp"
 #include "RenderQueue.hpp"
 
-namespace meow
+namespace aether
 {
 	// ── Entity lifecycle ──────────────────────────────────────────────────────
 

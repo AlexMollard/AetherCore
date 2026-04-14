@@ -5,7 +5,7 @@
 #include "FileSystem.hpp"
 #include "Logger.hpp"
 
-namespace meow::app
+namespace aether::app
 {
 	namespace
 	{
@@ -32,7 +32,7 @@ namespace meow::app
 		(void)context;
 	}
 
-	Application::Application(const meow::MeowCore::Config& engineConfig)
+	Application::Application(const aether::AetherCore::Config& engineConfig)
 		: m_engine(engineConfig)
 	{
 		INFO(LogCategory::App, "Application created.");
@@ -162,12 +162,12 @@ namespace meow::app
 		return 0;
 	}
 
-	meow::MeowCore& Application::GetEngine()
+	aether::AetherCore& Application::GetEngine()
 	{
 		return m_engine;
 	}
 
-	const meow::MeowCore& Application::GetEngine() const
+	const aether::AetherCore& Application::GetEngine() const
 	{
 		return m_engine;
 	}

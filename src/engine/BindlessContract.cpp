@@ -4,7 +4,7 @@
 
 #include "MeowExceptions.hpp"
 
-namespace meow::bindless
+namespace aether::bindless
 {
 	std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(
 		std::span<const VkDescriptorSetLayout> pipelineLayouts,

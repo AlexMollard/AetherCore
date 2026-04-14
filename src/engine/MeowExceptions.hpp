@@ -5,7 +5,7 @@
 
 #include "LogCategory.hpp"
 
-namespace meow
+namespace aether
 {
 	class EngineError : public std::runtime_error
 	{

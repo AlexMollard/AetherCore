@@ -6,7 +6,7 @@
 
 #include "DrawPushConstants.hpp"
 
-namespace meow
+namespace aether
 {
 	class GraphicsPipeline;
 

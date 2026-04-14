@@ -5,7 +5,7 @@
 #include "BindlessManager.hpp"
 #include "MeowExceptions.hpp"
 
-namespace meow
+namespace aether
 {
 	namespace
 	{

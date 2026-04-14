@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace meow
+namespace aether
 {
 	void PrimitiveMeshes::Initialize(VkDevice device, VmaAllocator allocator)
 	{

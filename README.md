@@ -1,4 +1,4 @@
-## MeowCore: Modern Vulkan 1.4
+## AetherCore: Modern Vulkan 1.4
 
 
 ### 🛠 Tech Stack

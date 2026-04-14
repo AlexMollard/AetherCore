@@ -5,11 +5,11 @@
 #include "BindlessManager.hpp"
 #include "FileSystem.hpp"
 #include "Logger.hpp"
-#include "MeowCore.hpp"
+#include "AetherCore.hpp"
 #include "RenderGraph.hpp"
 #include "VulkanContext.hpp"
 
-namespace meow
+namespace aether
 {
 	void TextRenderer::RegisterPass()
 	{
@@ -32,7 +32,7 @@ namespace meow
 						return;
 					}
 
-					MeowCore& engine = *m_engine;
+					AetherCore& engine = *m_engine;
 					const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 					const VkExtent2D      ext = ctx.extent;
 
@@ -117,7 +117,7 @@ namespace meow
 	}
 
 	void TextRenderer::Init(
-		MeowCore& engine,
+		AetherCore& engine,
 		std::string_view fontVfsPath,
 		std::string_view passName,
 		int              glyphSize)
@@ -168,7 +168,7 @@ namespace meow
 			"TextRenderer: pass '{}' registered, font atlas ready.", m_passName);
 	}
 
-	void TextRenderer::Shutdown(MeowCore& engine)
+	void TextRenderer::Shutdown(AetherCore& engine)
 	{
 		if (m_ready)
 		{

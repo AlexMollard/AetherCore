@@ -14,8 +14,8 @@ target_sources(App
 # Engine propagates Vulkan, GLFW, GLM, and cxx_std_20 automatically.
 target_link_libraries(App PRIVATE Engine)
 
-meowcore_target_defaults(App)
-meowcore_enable_slang_shader_compilation(App)
+aethercore_target_defaults(App)
+aethercore_enable_slang_shader_compilation(App)
 
 # Copy textures from resources/ into the build output so the VFS "assets://" mount can find them.
 add_custom_command(TARGET App POST_BUILD

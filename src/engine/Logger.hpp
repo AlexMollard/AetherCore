@@ -9,7 +9,7 @@
 
 #include "LogCategory.hpp"
 
-namespace meow
+namespace aether
 {
 	enum class LogLevel
 	{
@@ -22,7 +22,7 @@ namespace meow
 	class Logger
 	{
 	public:
-		static void Initialize(std::string_view filePath = "logs/MeowCore.log");
+		static void Initialize(std::string_view filePath = "logs/AetherCore.log");
 		static void Shutdown();
 		static void Flush();
 		static void SetMinimumLevel(LogLevel level);
@@ -132,13 +132,13 @@ namespace meow
 }
 
 #define VERBOSE(category, formatText, ...) \
-	::meow::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+	::aether::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
 
 #define INFO(category, formatText, ...) \
-	::meow::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+	::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
 
 #define WARN(category, formatText, ...) \
-	::meow::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+	::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
 
 #define ERROR(category, formatText, ...) \
-	::meow::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+	::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)

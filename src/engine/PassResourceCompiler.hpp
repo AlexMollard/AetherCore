@@ -5,7 +5,7 @@
 
 #include "ResourcePool.hpp"
 
-namespace meow
+namespace aether
 {
 	struct BufferLifetimeRequest
 	{

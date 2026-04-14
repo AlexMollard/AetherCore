@@ -5,7 +5,7 @@
 #include "CommandRecorder.hpp"
 #include "Mesh.hpp"
 
-namespace meow
+namespace aether
 {
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
