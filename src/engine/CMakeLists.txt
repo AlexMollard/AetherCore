@@ -29,6 +29,8 @@ target_link_libraries(Engine
         vk-bootstrap
         # dbghelp is Windows-only; generator expression avoids the if(WIN32) block.
         $<$<PLATFORM_ID:Windows>:dbghelp>
+    PRIVATE
+        freetype
 )
 
 target_compile_definitions(Engine PUBLIC

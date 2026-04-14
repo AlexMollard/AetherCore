@@ -150,6 +150,7 @@ namespace meow
 		[[nodiscard]] PassBuilder AddPass(std::string name);
 
 		void RemovePass(const std::string& name);
+		[[nodiscard]] bool HasPass(std::string_view name) const;
 		void Clear();
 
 		[[nodiscard]] bool IsEmpty() const { return m_passes.empty(); }

@@ -24,3 +24,13 @@ add_custom_command(TARGET App POST_BUILD
         "${CMAKE_BINARY_DIR}/assets/textures"
     COMMENT "Copying textures → build/assets/textures"
 )
+
+# Copy fonts from resources/fonts/ into the build output.
+# Place .ttf files in resources/fonts/ before building.
+add_custom_command(TARGET App POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets/fonts"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
+        "${CMAKE_SOURCE_DIR}/resources/fonts"
+        "${CMAKE_BINARY_DIR}/assets/fonts"
+    COMMENT "Copying fonts → build/assets/fonts"
+)

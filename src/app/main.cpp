@@ -6,6 +6,7 @@
 #include "Logger.hpp"
 #include "MeowExceptions.hpp"
 #include "layers/SandboxLayer.hpp"
+#include "layers/UILayer.hpp"
 
 namespace
 {
@@ -37,6 +38,7 @@ int main()
 
 		meow::app::Application application;
 		application.PushLayer(std::make_unique<meow::app::SandboxLayer>());
+		application.PushLayer(std::make_unique<meow::app::UILayer>());
 		// Add more layers here as needed, like a editor layer or some kind of background layer even
 		return application.Run();
 	}

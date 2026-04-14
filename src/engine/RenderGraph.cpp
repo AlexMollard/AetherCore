@@ -98,6 +98,12 @@ namespace meow
 		}
 	}
 
+	bool RenderGraph::HasPass(std::string_view name) const
+	{
+		return std::find_if(m_passes.begin(), m_passes.end(),
+			[&](const PassRecord& p) { return p.name == name; }) != m_passes.end();
+	}
+
 	void RenderGraph::Clear()
 	{
 		m_passes.clear();
