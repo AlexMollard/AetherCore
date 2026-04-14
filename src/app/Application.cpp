@@ -53,6 +53,7 @@ namespace meow::app
 			.scene = m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
 			.input = &m_engine.GetInput(),
+			.cameras = &m_engine.GetCameraManager(),
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
@@ -101,6 +102,7 @@ namespace meow::app
 			.scene = m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
 			.input = &m_engine.GetInput(),
+			.cameras = &m_engine.GetCameraManager(),
 		};
 
 		// Startup:
@@ -132,7 +134,11 @@ namespace meow::app
 				.scene = m_engine.GetScene(),
 				.world = &m_engine.GetWorld(),
 				.input = &m_engine.GetInput(),
+				.cameras = &m_engine.GetCameraManager(),
 			};
+
+			// Update engine-level per-frame systems before layers run.
+			m_engine.Tick(static_cast<float>(deltaTime));
 
 			// Update:
 			// Game logic and such should be updated in the OnUpdate() function of the layers, so we call UpdateAll() here to update all layers

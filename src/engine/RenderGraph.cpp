@@ -62,6 +62,13 @@ namespace meow
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(VkExtent2D extent)
+	{
+		m_graph.m_passes[m_passIndex].extentOverride = extent;
+		m_graph.m_dirty = true;
+		return *this;
+	}
+
 	// ──────────────────────────────────────────────────────────────────────────
 	//  RenderGraph — pass management
 	// ──────────────────────────────────────────────────────────────────────────
@@ -171,37 +178,49 @@ namespace meow
 				};
 			}
 
-			// ── Begin dynamic rendering ──────────────────────────────────────
-			const VkRenderingInfo renderInfo{
-				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				.renderArea = { { 0, 0 }, target.extent },
-				.layerCount = 1,
-				.colorAttachmentCount = static_cast<uint32_t>(colorInfos.size()),
-				.pColorAttachments = colorInfos.data(),
-				.pDepthAttachment = hasDepth ? &depthInfo : nullptr,
-			};
-			vkCmdBeginRendering(cmd, &renderInfo);
+			// Resolve the effective render extent for this pass.
+			const VkExtent2D passExtent = pass.extentOverride.value_or(target.extent);
 
-			const VkViewport viewport{
-				.x = 0.0f,
-				.y = 0.0f,
-				.width = static_cast<float>(target.extent.width),
-				.height = static_cast<float>(target.extent.height),
-				.minDepth = 0.0f,
-				.maxDepth = 1.0f,
-			};
-			const VkRect2D scissor{ { 0, 0 }, target.extent };
-			vkCmdSetViewport(cmd, 0, 1, &viewport);
-			vkCmdSetScissor(cmd, 0, 1, &scissor);
+			// Barrier-only passes (ReadTexture declarations, no writes) skip the
+			// rendering block — barriers were already issued above.
+			const bool isBarrierOnly = colorInfos.empty() && !hasDepth;
+			if (!isBarrierOnly)
+			{
+				// ── Begin dynamic rendering ──────────────────────────────────────
+				const VkRenderingInfo renderInfo{
+					.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+					.renderArea = { { 0, 0 }, passExtent },
+					.layerCount = 1,
+					.colorAttachmentCount = static_cast<uint32_t>(colorInfos.size()),
+					.pColorAttachments = colorInfos.data(),
+					.pDepthAttachment = hasDepth ? &depthInfo : nullptr,
+				};
+				vkCmdBeginRendering(cmd, &renderInfo);
+
+				const VkViewport viewport{
+					.x = 0.0f,
+					.y = 0.0f,
+					.width = static_cast<float>(passExtent.width),
+					.height = static_cast<float>(passExtent.height),
+					.minDepth = 0.0f,
+					.maxDepth = 1.0f,
+				};
+				const VkRect2D scissor{ { 0, 0 }, passExtent };
+				vkCmdSetViewport(cmd, 0, 1, &viewport);
+				vkCmdSetScissor(cmd, 0, 1, &scissor);
+			}
 
 			// ── Execute callback ─────────────────────────────────────────────
 			if (pass.execute)
 			{
-				PassContext ctx{ recorder, target.extent, frameConstantsAddr };
+				PassContext ctx{ recorder, passExtent, frameConstantsAddr };
 				pass.execute(ctx);
 			}
 
-			vkCmdEndRendering(cmd);
+			if (!isBarrierOnly)
+			{
+				vkCmdEndRendering(cmd);
+			}
 		}
 	}
 

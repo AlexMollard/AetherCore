@@ -21,13 +21,13 @@ namespace meow::app
 			context.engine.GetBindlessManager().GetLayout();
 
 		m_pipeline = context.engine.CreateGraphicsPipeline({
-			.shaderVfsPath    = "shaders://hellotriangle.slang.spv",
-			.colorFormat      = context.engine.GetForwardColorFormat(),
-			.depthFormat      = context.engine.GetSwapchainDepthFormat(),
-			.depthTestEnable  = true,
+			.shaderVfsPath = "shaders://hellotriangle.slang.spv",
+			.colorFormat = context.engine.GetForwardColorFormat(),
+			.depthFormat = context.engine.GetSwapchainDepthFormat(),
+			.depthTestEnable = true,
 			.depthWriteEnable = true,
-			.setLayouts       = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		});
+			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+			});
 
 		m_cubeMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Cube);
 		m_quadMesh = &context.engine.GetPrimitiveMesh(meow::PrimitiveMesh::Quad);
@@ -36,9 +36,9 @@ namespace meow::app
 		const uint32_t texSlot = m_debugTexture.GetBindlessSlot();
 
 		// Convenience lambdas to keep entity setup readable.
-		auto pipe    = [&]() { return PipelineComponent{ .pipeline = &m_pipeline }; };
-		auto withTex = [&]() { return MaterialComponent{ .material = { .albedoSlot = texSlot } }; };
-		auto noTex   = []()  { return MaterialComponent{}; };
+		auto pipe = [&]() { return PipelineComponent{ .pipeline = &m_pipeline }; };
+		auto withTex = [&]() { return MaterialComponent{ .material = {.albedoSlot = texSlot } }; };
+		auto noTex = []() { return MaterialComponent{}; };
 
 		// ── Ground quad (textured) ────────────────────────────────────────────
 		m_groundEntity = context.world->CreateEntity();
@@ -77,6 +77,35 @@ namespace meow::app
 		context.world->Set(m_orbitEntityB, TransformComponent{});
 		context.world->Set(m_orbitEntityB, noTex());
 
+		// ── Cameras ──────────────────────────────────────────────────────────
+		m_orbitCamera = context.cameras->Create({
+			.mode = CameraMode::Orbit,
+			.orbitTarget = { 0.0f, 0.0f, 0.0f },
+			.orbitDistance = 8.0f,
+			.orbitYaw = 35.0f,
+			.orbitPitch = 22.0f,
+			});
+
+		m_freeCamera = context.cameras->Create({
+			.mode = CameraMode::Free,
+			.position = { 0.0f, 2.5f, 9.0f },
+			.yaw = 0.0f,
+			.pitch = -12.0f,
+			.moveSpeed = 6.0f,
+			.lookSpeed = 0.14f,
+			});
+
+		m_rttCamera = context.cameras->Create({
+			.mode = CameraMode::Orbit,
+			.orbitTarget = { 0.0f, 0.0f, 0.0f },
+			.orbitDistance = 11.0f,
+			.orbitYaw = 0.0f,
+			.orbitPitch = 62.0f,
+			});
+
+		context.cameras->SetMainCamera(m_orbitCamera);
+		m_rttTarget = context.engine.CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
+
 		INFO(LogCategory::App, "Scene built: ground + centre + {} ring + 2 orbit cubes.", kRingCount);
 	}
 
@@ -89,6 +118,27 @@ namespace meow::app
 		for (auto& e : m_ringEntities)
 			context.world->DestroyEntity(e);
 
+		if (m_rttTarget.IsValid())
+		{
+			context.engine.DestroyCameraRenderTarget(m_rttTarget);
+			m_rttTarget = {};
+		}
+		if (m_orbitCamera.IsValid())
+		{
+			context.cameras->Destroy(m_orbitCamera);
+			m_orbitCamera = {};
+		}
+		if (m_freeCamera.IsValid())
+		{
+			context.cameras->Destroy(m_freeCamera);
+			m_freeCamera = {};
+		}
+		if (m_rttCamera.IsValid())
+		{
+			context.cameras->Destroy(m_rttCamera);
+			m_rttCamera = {};
+		}
+
 		m_debugTexture.Destroy();
 		m_cubeMesh = nullptr;
 		m_quadMesh = nullptr;
@@ -97,7 +147,7 @@ namespace meow::app
 
 	void SandboxLayer::OnUpdate(LayerContext& context)
 	{
-		m_time        += static_cast<float>(context.deltaTimeSeconds);
+		m_time += static_cast<float>(context.deltaTimeSeconds);
 		m_cameraAngle += static_cast<float>(context.deltaTimeSeconds) * 12.0f;  // 12 deg/s orbit
 
 		const float t = m_time;
@@ -122,9 +172,9 @@ namespace meow::app
 		constexpr float kRingRadius = 2.8f;
 		for (int i = 0; i < kRingCount; ++i)
 		{
-			const float step     = glm::radians(360.0f / kRingCount);
-			const float angle    = t * glm::radians(40.0f) + static_cast<float>(i) * step;
-			const glm::vec3 pos  = { kRingRadius * std::cos(angle), 0.0f, kRingRadius * std::sin(angle) };
+			const float step = glm::radians(360.0f / kRingCount);
+			const float angle = t * glm::radians(40.0f) + static_cast<float>(i) * step;
+			const glm::vec3 pos = { kRingRadius * std::cos(angle), 0.0f, kRingRadius * std::sin(angle) };
 			const float selfSpin = t * glm::radians(90.0f + static_cast<float>(i) * 15.0f);
 
 			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
@@ -137,10 +187,10 @@ namespace meow::app
 		const glm::vec3 diagAxis = glm::normalize(glm::vec3{ 1.0f, 1.0f, 0.3f });
 		for (int i = 0; i < 2; ++i)
 		{
-			const float phase    = glm::radians(180.0f) * static_cast<float>(i);
+			const float phase = glm::radians(180.0f) * static_cast<float>(i);
 			const float orbAngle = t * glm::radians(25.0f) + phase;
-			const float bob      = 0.6f * std::sin(t * 1.5f + phase);
-			const glm::vec3 pos  = { 4.2f * std::cos(orbAngle), bob, 4.2f * std::sin(orbAngle) };
+			const float bob = 0.6f * std::sin(t * 1.5f + phase);
+			const glm::vec3 pos = { 4.2f * std::cos(orbAngle), bob, 4.2f * std::sin(orbAngle) };
 
 			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
 			m = glm::rotate(m, t * glm::radians(60.0f), diagAxis);
@@ -170,21 +220,30 @@ namespace meow::app
 				context.engine.SetFxaaEnabled(enabled);
 				INFO(LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
 			}
+
+			// C switches between orbit and free cameras at runtime.
+			if (input.IsKeyPressed(meow::Key::C))
+			{
+				const CameraHandle active = context.cameras->GetMainCamera();
+				const CameraHandle next = (active == m_orbitCamera) ? m_freeCamera : m_orbitCamera;
+				context.cameras->SetMainCamera(next);
+				INFO(LogCategory::App, "Main camera: {}", (next == m_freeCamera) ? "Free" : "Orbit");
+			}
 		}
 
-		// ── Camera: slow circular orbit, looking at the origin ────────────────
+		// Spin the RTT camera around the scene so the RTT texture is visibly live.
+		if (Camera* cam = context.cameras->TryGet(m_rttCamera))
 		{
-			const float camRad   = glm::radians(m_cameraAngle);
-			const glm::vec3 eye  = { 7.0f * std::cos(camRad), 4.0f, 7.0f * std::sin(camRad) };
+			cam->SetOrbitYawPitch(t * 18.0f, 62.0f);
+		}
 
-			const VkExtent2D extent = context.engine.GetSwapchainExtent();
-			const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-
-			glm::mat4 proj = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 100.0f);
-			proj[1][1] *= -1.0f;
-
-			const glm::mat4 view = glm::lookAt(eye, { 0.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f });
-			context.scene->SetViewProjection(proj * view);
+		// Feed RTT output into one cube once the texture has a valid bindless slot.
+		const uint32_t rtSlot = context.engine.GetRenderTargetBindlessSlot(m_rttTarget);
+		if (rtSlot != Material::kNoTexture)
+		{
+			context.world->Set(m_orbitEntityB, MaterialComponent{
+				.material = {.albedoSlot = rtSlot }
+				});
 		}
 	}
 

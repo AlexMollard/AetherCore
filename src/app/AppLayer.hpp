@@ -8,6 +8,7 @@ namespace meow
 	class Scene;
 	class World;
 	class Input;
+	class CameraManager;
 }
 
 namespace meow::app
@@ -20,6 +21,7 @@ namespace meow::app
 		meow::Scene* scene = nullptr;
 		meow::World* world = nullptr;
 		meow::Input* input = nullptr;
+		meow::CameraManager* cameras = nullptr;
 	};
 
 	class AppLayer

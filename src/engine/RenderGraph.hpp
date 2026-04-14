@@ -117,6 +117,11 @@ namespace meow
 			// Called between vkCmdBeginRendering and vkCmdEndRendering.
 			PassBuilder& Execute(std::function<void(PassContext&)> fn);
 
+			// Override the render area / viewport / scissor for this pass.
+			// When not set the pass renders at the swapchain extent.
+			// Required for render-to-texture passes whose target is not swapchain-sized.
+			PassBuilder& SetExtent(VkExtent2D extent);
+
 		private:
 			friend class RenderGraph;
 			PassBuilder(RenderGraph& graph, std::size_t passIndex);
@@ -184,6 +189,7 @@ namespace meow
 			std::optional<AttachmentRef>      depthWrite;
 			std::vector<RGImage>              textureReads;
 			std::function<void(PassContext&)> execute;
+			std::optional<VkExtent2D>         extentOverride; // if set, overrides target.extent
 		};
 
 		struct CompiledBarrier

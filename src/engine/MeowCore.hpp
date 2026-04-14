@@ -2,10 +2,14 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string_view>
+#include <unordered_map>
 
 #include "BindlessManager.hpp"
+#include "Camera.hpp"
+#include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
@@ -19,6 +23,7 @@
 #include "Scene.hpp"
 #include "Swapchain.hpp"
 #include "Texture.hpp"
+#include "UniqueImage.hpp"
 #include "VulkanContext.hpp"
 #include "Window.hpp"
 #include "World.hpp"
@@ -35,11 +40,21 @@ namespace meow
 			int height = 720;
 		};
 
+		// Opaque handle to a render-to-texture camera target.
+		struct CameraRenderTarget
+		{
+			uint32_t id = 0;
+			[[nodiscard]] bool IsValid() const { return id != 0; }
+		};
+
 		explicit MeowCore(const Config& config = {});
 		~MeowCore();
 
 		[[nodiscard]] bool ShouldClose() const;
 		void PumpEvents() const;
+		// Must be called once per frame BEFORE layer OnUpdate().
+		// Updates input state and advances all non-Manual cameras.
+		void Tick(float dt);
 		void BeginFrame();
 		void EndFrame();
 		void WaitIdle() const;
@@ -78,10 +93,33 @@ namespace meow
 		[[nodiscard]] Input& GetInput();
 		[[nodiscard]] const Input& GetInput() const;
 
+		// ── Camera system ─────────────────────────────────────────────────────
+		[[nodiscard]] CameraManager& GetCameraManager();
+		[[nodiscard]] const CameraManager& GetCameraManager() const;
+
+		[[nodiscard]] CameraRenderTarget CreateCameraRenderTarget(CameraHandle camera, VkExtent2D extent);
+		void DestroyCameraRenderTarget(CameraRenderTarget rt);
+		
+		[[nodiscard]] RGImage GetRenderTargetColorImage(CameraRenderTarget rt) const;
+		[[nodiscard]] uint32_t GetRenderTargetBindlessSlot(CameraRenderTarget rt) const;
+
 	private:
 		void RecreateSwapchain();
 		void RegisterPasses();
+		void RegisterRttPassesFor(uint32_t id);
 		void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn);
+
+		// Per-camera render-to-texture entry.
+		struct CameraRtEntry
+		{
+			CameraHandle                          camera;
+			VkExtent2D                            extent;
+			UniqueImage                           colorImage;
+			UniqueImage                           depthImage;
+			RGImage                               rgColor{};
+			RGImage                               rgDepth{};
+			std::unique_ptr<FrameConstantsBuffer> constants;
+		};
 
 		Window m_window;
 		VulkanContext m_vulkanContext;
@@ -102,5 +140,9 @@ namespace meow
 		// Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
 		Input m_input;
+		CameraManager m_cameraManager;
+
+		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
+		uint32_t m_nextRtId = 1;
 	};
 }
