@@ -43,6 +43,7 @@ namespace aether
 		: m_device(std::exchange(other.m_device, VK_NULL_HANDLE))
 		, m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE))
 		, m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE))
+		, m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
 	{}
 
 	GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline&& other) noexcept
@@ -53,6 +54,7 @@ namespace aether
 			m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
 			m_layout = std::exchange(other.m_layout, VK_NULL_HANDLE);
 			m_pipeline = std::exchange(other.m_pipeline, VK_NULL_HANDLE);
+			m_setLayoutCount = std::exchange(other.m_setLayoutCount, 0);
 		}
 		return *this;
 	}
@@ -74,6 +76,7 @@ namespace aether
 			m_layout = VK_NULL_HANDLE;
 		}
 		m_device = VK_NULL_HANDLE;
+		m_setLayoutCount = 0;
 	}
 
 	GraphicsPipeline GraphicsPipeline::Create(VkDevice device, const Desc& desc)
@@ -282,6 +285,7 @@ namespace aether
 		out.m_device = device;
 		out.m_layout = layout;
 		out.m_pipeline = pipeline;
+		out.m_setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size());
 		return out;
 	}
 }

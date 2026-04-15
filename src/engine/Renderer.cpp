@@ -1,5 +1,7 @@
 #include "Renderer.hpp"
 
+#include <utility>
+
 #include <glm/common.hpp>
 
 #include "PostProcessStack.hpp"
@@ -103,6 +105,44 @@ namespace aether
 	{
 		color = glm::max(color, glm::vec3(0.0f));
 		m_skyVoidColor = glm::vec4(color, 1.0f);
+	}
+
+	void Renderer::SetPointLights(std::vector<PointLight> lights)
+	{
+		for (PointLight& light : lights)
+		{
+			light.radius = glm::max(light.radius, 0.01f);
+			light.intensity = glm::max(light.intensity, 0.0f);
+			light.color = glm::max(light.color, glm::vec3(0.0f));
+		}
+		m_pointLights = std::move(lights);
+	}
+
+	void Renderer::ClearPointLights()
+	{
+		m_pointLights.clear();
+	}
+
+	void Renderer::SetSpotLights(std::vector<SpotLight> lights)
+	{
+		for (SpotLight& light : lights)
+		{
+			light.radius = glm::max(light.radius, 0.01f);
+			light.intensity = glm::max(light.intensity, 0.0f);
+			light.color = glm::max(light.color, glm::vec3(0.0f));
+			const float dirLen2 = glm::dot(light.direction, light.direction);
+			light.direction = (dirLen2 > 1e-8f)
+				? glm::normalize(light.direction)
+				: glm::vec3(0.0f, -1.0f, 0.0f);
+			light.innerAngleRad = glm::clamp(light.innerAngleRad, 0.01f, 1.54f);
+			light.outerAngleRad = glm::clamp(light.outerAngleRad, light.innerAngleRad + 0.01f, 1.55f);
+		}
+		m_spotLights = std::move(lights);
+	}
+
+	void Renderer::ClearSpotLights()
+	{
+		m_spotLights.clear();
 	}
 
 	glm::vec3 Renderer::GetSkyVoidColor() const

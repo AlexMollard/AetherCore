@@ -16,4 +16,6 @@ struct FrameConstantsData
     [[vk::offset(272)]] float4 skyHorizonColor;       // rgb=sky horizon color, a=unused
     [[vk::offset(288)]] float4 skyZenithColor;        // rgb=sky zenith color, a=unused
     [[vk::offset(304)]] float4 skyVoidColor;          // rgb=sky void color, a=unused
+    [[vk::offset(320)]] uint4  tiledLightGridInfo;    // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+    [[vk::offset(336)]] uint4  tiledLightBufferOffsets; // x=lightBase, y=headerBase, z=indexBase
 };

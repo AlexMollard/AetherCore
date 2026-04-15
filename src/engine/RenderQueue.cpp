@@ -18,7 +18,8 @@ namespace aether
 	void RenderQueue::Flush(
 		CommandRecorder& recorder,
 		VkDeviceAddress  frameConstantsAddr,
-		VkDescriptorSet  bindlessSet)
+		VkDescriptorSet  bindlessSet,
+		VkDescriptorSet  lightingSet)
 	{
 		if (!recorder.IsValid())
 		{
@@ -30,6 +31,7 @@ namespace aether
 		VkBuffer                lastVertexBuffer = VK_NULL_HANDLE;
 		VkBuffer                lastIndexBuffer = VK_NULL_HANDLE;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
+		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
 		std::stable_sort(m_commands.begin(), m_commands.end(),
 			[](const DrawCommand& a, const DrawCommand& b)
@@ -62,6 +64,7 @@ namespace aether
 				{
 					recorder.BindGraphicsPipeline(*cmd.pipeline);
 					lastPipeline = cmd.pipeline;
+					lastLightingSetPipeline = nullptr;
 				}
 
 				// Bind the bindless descriptor set (set 0) if supplied.
@@ -77,6 +80,23 @@ namespace aether
 							0, 1, &bindlessSet,
 							0, nullptr);
 						lastSetPipeline = cmd.pipeline;
+					}
+				}
+
+				// Bind optional set 1 (tiled/clustered lighting) when supported.
+				if (lightingSet != VK_NULL_HANDLE &&
+					cmd.pipeline == lastPipeline &&
+					cmd.pipeline->GetSetLayoutCount() > 1)
+				{
+					if (cmd.pipeline != lastLightingSetPipeline)
+					{
+						vkCmdBindDescriptorSets(
+							recorder.GetCommandBuffer(),
+							VK_PIPELINE_BIND_POINT_GRAPHICS,
+							cmd.pipeline->GetLayout(),
+							1, 1, &lightingSet,
+							0, nullptr);
+						lastLightingSetPipeline = cmd.pipeline;
 					}
 				}
 

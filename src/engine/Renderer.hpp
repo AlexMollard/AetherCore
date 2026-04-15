@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
+#include <vector>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
@@ -14,6 +16,25 @@ namespace aether
 	class Renderer
 	{
 	public:
+		struct PointLight
+		{
+			glm::vec3 position{ 0.0f };
+			float     radius = 1.0f;
+			glm::vec3 color{ 1.0f };
+			float     intensity = 1.0f;
+		};
+
+		struct SpotLight
+		{
+			glm::vec3 position{ 0.0f };
+			float     radius = 1.0f;
+			glm::vec3 direction{ 0.0f, -1.0f, 0.0f };
+			float     innerAngleRad = 0.35f;
+			glm::vec3 color{ 1.0f };
+			float     intensity = 1.0f;
+			float     outerAngleRad = 0.60f;
+		};
+
 		Renderer() = default;
 		~Renderer() = default;
 
@@ -52,6 +73,14 @@ namespace aether
 		[[nodiscard]] glm::vec3 GetSkyVoidColor() const;
 		[[nodiscard]] glm::vec4 GetSkyVoidColorVector() const { return m_skyVoidColor; }
 
+		// Local lights for tiled forward shading.
+		void SetPointLights(std::vector<PointLight> lights);
+		void ClearPointLights();
+		[[nodiscard]] std::span<const PointLight> GetPointLights() const { return m_pointLights; }
+		void SetSpotLights(std::vector<SpotLight> lights);
+		void ClearSpotLights();
+		[[nodiscard]] std::span<const SpotLight> GetSpotLights() const { return m_spotLights; }
+
 		// Swapchain format queries for pipeline creation.
 		[[nodiscard]] VkFormat GetColorFormat() const;
 		[[nodiscard]] VkFormat GetDepthFormat() const;
@@ -67,5 +96,7 @@ namespace aether
 		glm::vec4 m_skyHorizonColor{ 0.34f, 0.52f, 0.82f, 1.0f };
 		glm::vec4 m_skyZenithColor{ 0.08f, 0.19f, 0.45f, 1.0f };
 		glm::vec4 m_skyVoidColor{ 0.001f, 0.002f, 0.005f, 1.0f };
+		std::vector<PointLight> m_pointLights;
+		std::vector<SpotLight> m_spotLights;
 	};
 }

@@ -1,6 +1,8 @@
 #include "AetherCore.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstring>
 #include <unordered_map>
 #include <string>
 #include <stdexcept>
@@ -29,6 +31,7 @@ namespace aether
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_materialBuffer.Initialize(m_vulkanContext);
+		m_lightingManager.Initialize(m_vulkanContext, m_renderer);
 		m_resourcePool.ConfigureBindlessImages({
 			.manager = &m_bindlessManager,
 			.device = m_vulkanContext.GetDevice().device,
@@ -107,6 +110,7 @@ namespace aether
 			vkDestroyCommandPool(m_vulkanContext.GetDevice().device, m_uploadPool, nullptr);
 			m_uploadPool = VK_NULL_HANDLE;
 		}
+		m_lightingManager.Shutdown();
 		m_materialBuffer.Shutdown();
 		m_bindlessManager.Shutdown();
 		io::FileSystem::Shutdown();
@@ -202,7 +206,12 @@ namespace aether
 			m_scene,
 			m_world,
 			m_renderQueue,
-			m_bindlessManager.GetSet());
+			m_bindlessManager.GetSet(),
+			[this]()
+			{
+				const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+				return m_lightingManager.GetSet(frameIdx);
+			});
 
 		// ── Passes 3–5: Render-to-texture cameras ────────────────────────────
 		for (auto& [id, rt] : m_rtCameras)
@@ -269,12 +278,22 @@ namespace aether
 					fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
 
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+					m_lightingManager.UpdateForView(
+						frameIdx,
+						*cam,
+						rit->second.extent,
+						fc,
+						m_lightingManager.IsRttBinningEnabled());
 					rit->second.constants->Write(frameIdx, fc);
 					const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
 					m_scene.FlushToQueue(m_renderQueue);
 					m_world.FlushToQueue(m_renderQueue);
-					m_renderQueue.Flush(ctx.recorder, frameAddr, m_bindlessManager.GetSet());
+					m_renderQueue.Flush(
+						ctx.recorder,
+						frameAddr,
+						m_bindlessManager.GetSet(),
+						m_lightingManager.GetSet(frameIdx));
 					m_renderQueue.Clear();
 				});
 	}
@@ -327,6 +346,16 @@ namespace aether
 			fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
 			fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
 			fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
+
+			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
+			{
+				m_lightingManager.UpdateForView(frameIdx, *cam, m_swapchain.GetExtent(), fc, true);
+			}
+			else
+			{
+				fc.tiledLightGridInfo = glm::uvec4(0u);
+				fc.tiledLightBufferOffsets = glm::uvec4(0u);
+			}
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
@@ -388,6 +417,11 @@ namespace aether
 	const RenderGraph& AetherCore::GetRenderGraph() const
 	{
 		return m_renderGraph;
+	}
+
+	VkDescriptorSetLayout AetherCore::GetLightingSetLayout() const
+	{
+		return m_lightingManager.GetSetLayout();
 	}
 
 	VkCommandBuffer AetherCore::GetCurrentCommandBuffer() const
@@ -495,6 +529,16 @@ namespace aether
 	glm::vec3 AetherCore::GetAmbientLight() const
 	{
 		return m_renderer.GetAmbientLight();
+	}
+
+	void AetherCore::SetRttLightingBinningEnabled(const bool enabled)
+	{
+		m_lightingManager.SetRttBinningEnabled(enabled);
+	}
+
+	bool AetherCore::IsRttLightingBinningEnabled() const
+	{
+		return m_lightingManager.IsRttBinningEnabled();
 	}
 
 	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(

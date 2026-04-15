@@ -38,7 +38,8 @@ namespace aether
 		void Flush(
 			CommandRecorder& recorder,
 			VkDeviceAddress  frameConstantsAddr,
-			VkDescriptorSet  bindlessSet = VK_NULL_HANDLE);
+			VkDescriptorSet  bindlessSet = VK_NULL_HANDLE,
+			VkDescriptorSet  lightingSet = VK_NULL_HANDLE);
 		void Clear();
 
 		[[nodiscard]] bool IsEmpty() const;

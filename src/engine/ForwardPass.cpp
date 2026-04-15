@@ -13,7 +13,8 @@ namespace aether
 		Scene&          scene,
 		World&          world,
 		RenderQueue&    renderQueue,
-		VkDescriptorSet bindlessSet)
+		VkDescriptorSet bindlessSet,
+		std::function<VkDescriptorSet()> getLightingSet)
 	{
 		graph.AddPass("$EngineForward")
 			.WriteColor(
@@ -25,14 +26,15 @@ namespace aether
 				VK_ATTACHMENT_LOAD_OP_CLEAR,
 				VK_ATTACHMENT_STORE_OP_DONT_CARE,
 				ClearDepthValue(1.0f))
-			.Execute([&scene, &world, &renderQueue, bindlessSet](PassContext& ctx)
+			.Execute([&scene, &world, &renderQueue, bindlessSet, getLightingSet](PassContext& ctx)
 				{
 					scene.FlushToQueue(renderQueue);
 					world.FlushToQueue(renderQueue);
 					renderQueue.Flush(
 						ctx.recorder,
 						ctx.frameConstantsAddr,
-						bindlessSet);
+						bindlessSet,
+						getLightingSet ? getLightingSet() : VK_NULL_HANDLE);
 					renderQueue.Clear();
 				});
 	}

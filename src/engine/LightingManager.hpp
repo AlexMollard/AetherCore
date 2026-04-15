@@ -1,0 +1,82 @@
+#pragma once
+
+#include <array>
+#include <cstdint>
+#include <vector>
+
+#include <vulkan/vulkan.h>
+
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+
+#include "Camera.hpp"
+#include "FrameConstants.hpp"
+#include "Renderer.hpp"
+#include "Swapchain.hpp"
+#include "UniqueBuffer.hpp"
+#include "VulkanContext.hpp"
+
+namespace aether
+{
+	class LightingManager
+	{
+	public:
+		void Initialize(const VulkanContext& context, const Renderer& renderer);
+		void Shutdown();
+
+		void SetRttBinningEnabled(bool enabled) { m_rttBinningEnabled = enabled; }
+		[[nodiscard]] bool IsRttBinningEnabled() const { return m_rttBinningEnabled; }
+
+		[[nodiscard]] VkDescriptorSetLayout GetSetLayout() const;
+		[[nodiscard]] VkDescriptorSet GetSet(std::uint32_t frameSlot) const;
+
+		void UpdateForView(
+			std::uint32_t frameSlot,
+			const Camera& camera,
+			VkExtent2D extent,
+			FrameConstants& fc,
+			bool enableBinningForView) const;
+
+	private:
+		struct GpuLight
+		{
+			glm::vec4 positionRadius{ 0.0f };
+			glm::vec4 colorIntensity{ 0.0f };
+			glm::vec4 directionType{ 0.0f }; // xyz=dir for spot, w=type (0=point, 1=spot)
+			glm::vec4 params{ 0.0f };        // x=innerCos, y=outerCos for spot
+		};
+
+		struct TileHeader
+		{
+			std::uint32_t offset = 0;
+			std::uint32_t count = 0;
+		};
+
+		struct FrameLightingBuffers
+		{
+			UniqueBuffer lights;
+			UniqueBuffer tileHeaders;
+			UniqueBuffer tileIndices;
+			std::size_t lightsCapacity = 0;
+			std::size_t headersCapacity = 0;
+			std::size_t indicesCapacity = 0;
+		};
+
+		void EnsureBuffers(
+			std::uint32_t frameSlot,
+			std::size_t lightCount,
+			std::size_t tileCount,
+			std::size_t indexCount) const;
+		void UpdateDescriptorSet(std::uint32_t frameSlot) const;
+		void DisableForView(FrameConstants& fc) const;
+
+		const VulkanContext* m_context = nullptr;
+		const Renderer* m_renderer = nullptr;
+		VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
+		VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
+		std::array<VkDescriptorSet, Swapchain::kMaxFramesInFlight> m_sets{};
+		mutable std::array<FrameLightingBuffers, Swapchain::kMaxFramesInFlight> m_buffers;
+		bool m_rttBinningEnabled = false;
+		static constexpr std::uint32_t kTileSizePx = 16;
+	};
+}

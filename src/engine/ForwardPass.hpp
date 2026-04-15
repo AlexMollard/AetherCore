@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <vulkan/vulkan.h>
 
 #include "RenderGraph.hpp"
@@ -25,6 +27,7 @@ namespace aether
 			Scene&          scene,
 			World&          world,
 			RenderQueue&    renderQueue,
-			VkDescriptorSet bindlessSet);
+			VkDescriptorSet bindlessSet,
+			std::function<VkDescriptorSet()> getLightingSet);
 	};
 }

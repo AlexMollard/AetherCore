@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <array>
 #include <functional>
 #include <memory>
 #include <span>
@@ -13,10 +14,12 @@
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
 #include "ForwardPass.hpp"
+#include "FrameConstants.hpp"
 #include "FrameConstantsBuffer.hpp"
 #include "ModelAnimator.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
+#include "LightingManager.hpp"
 #include "Material.hpp"
 #include "MaterialBuffer.hpp"
 #include "Mesh.hpp"
@@ -31,6 +34,7 @@
 #include "Scene.hpp"
 #include "Swapchain.hpp"
 #include "Texture.hpp"
+#include "UniqueBuffer.hpp"
 #include "UniqueImage.hpp"
 #include "VulkanContext.hpp"
 #include "Window.hpp"
@@ -118,6 +122,8 @@ namespace aether
 		[[nodiscard]] float GetDirectionalLightIntensity() const;
 		void SetAmbientLight(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetAmbientLight() const;
+		void SetRttLightingBinningEnabled(bool enabled);
+		[[nodiscard]] bool IsRttLightingBinningEnabled() const;
 
 		// ── Format queries for app-layer pipeline creation ──────────────────
 		// Query the forward pass color format.
@@ -146,6 +152,7 @@ namespace aether
 		[[nodiscard]] BindlessManager& GetBindlessManager();
 		[[nodiscard]] const RenderGraph& GetRenderGraph() const;
 		[[nodiscard]] RenderGraph& GetRenderGraph();
+		[[nodiscard]] VkDescriptorSetLayout GetLightingSetLayout() const;
 		[[nodiscard]] const RenderQueue& GetRenderQueue() const;
 		[[nodiscard]] RenderQueue& GetRenderQueue();
 		[[nodiscard]] const ResourcePool& GetResourcePool() const;
@@ -188,6 +195,7 @@ namespace aether
 		CommandRecorder m_currentRecorder; // engine-internal, filled by BeginFrame
 		std::uint64_t m_frameIndex = 0;
 		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
+		LightingManager m_lightingManager;
 
 		// ── Services ─────────────────────────────────────────────────────────
 		Renderer m_renderer;

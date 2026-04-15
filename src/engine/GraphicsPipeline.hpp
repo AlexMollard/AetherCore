@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <span>
 #include <string_view>
 
@@ -46,10 +47,12 @@ namespace aether
 		[[nodiscard]] bool             IsValid()    const { return m_pipeline != VK_NULL_HANDLE; }
 		[[nodiscard]] VkPipeline       GetPipeline() const { return m_pipeline; }
 		[[nodiscard]] VkPipelineLayout GetLayout()   const { return m_layout; }
+		[[nodiscard]] std::uint32_t    GetSetLayoutCount() const { return m_setLayoutCount; }
 
 	private:
 		VkDevice         m_device = VK_NULL_HANDLE;
 		VkPipelineLayout m_layout = VK_NULL_HANDLE;
 		VkPipeline       m_pipeline = VK_NULL_HANDLE;
+		std::uint32_t    m_setLayoutCount = 0;
 	};
 }

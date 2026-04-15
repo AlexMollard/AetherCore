@@ -1,5 +1,6 @@
 #include "SandboxGameSystem.hpp"
 
+#include <array>
 #include <cmath>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -68,6 +69,9 @@ namespace aether::app
 		// ── Shared pipeline ───────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout =
 			m_engine->GetBindlessManager().GetLayout();
+		const VkDescriptorSetLayout lightingLayout =
+			m_engine->GetLightingSetLayout();
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
 		m_pipeline = m_assets->CreateGraphicsPipeline({
 			.shaderVfsPath = "shaders://gltf_mesh.slang.spv",
@@ -75,7 +79,7 @@ namespace aether::app
 			.depthFormat = m_engine->GetSwapchainDepthFormat(),
 			.depthTestEnable = true,
 			.depthWriteEnable = true,
-			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+			.setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 			});
 
 		m_cubeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
@@ -155,6 +159,31 @@ namespace aether::app
 
 		m_cameras->SetMainCamera(m_orbitCamera);
 		m_rttTarget = m_engine->CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
+
+		// ── Light demo (small grid so tile culling is easy to reason about) ──
+		{
+			std::vector<aether::Renderer::PointLight> pointLights;
+			pointLights.reserve(9);
+			for (int z = -1; z <= 1; ++z)
+			{
+				for (int x = -1; x <= 1; ++x)
+				{
+					aether::Renderer::PointLight l{};
+					l.position = glm::vec3(
+						static_cast<float>(x) * 2.0f,
+						0.5f,
+						static_cast<float>(z) * 2.0f);
+					l.radius = 3.0f;
+					l.intensity = 1.5f;
+					l.color = glm::vec3(
+						0.55f + 0.45f * std::sin(static_cast<float>(x) * 0.21f),
+						0.55f + 0.45f * std::sin(static_cast<float>(z) * 0.23f + 1.7f),
+						0.55f + 0.45f * std::sin(static_cast<float>(x - z) * 0.17f + 3.1f));
+					pointLights.push_back(l);
+				}
+			}
+			m_engine->GetRenderer().SetPointLights(std::move(pointLights));
+		}
 
 		// ── Load demo glTF ──────────────────────────────────────────────────────
 		constexpr std::string_view kDemoGltfPath = "assets://models/Fox/Fox.gltf";
@@ -365,6 +394,9 @@ namespace aether::app
 			m_cameras->Destroy(m_rttCamera);
 			m_rttCamera = {};
 		}
+
+		m_engine->GetRenderer().ClearPointLights();
+		m_engine->GetRenderer().ClearSpotLights();
 
 		// Clean up resources
 		m_debugTexture.Destroy();
