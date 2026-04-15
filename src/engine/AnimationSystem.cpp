@@ -8,13 +8,15 @@ namespace aether
 	void AnimationSystem::Update(World& world, float dt)
 	{
 		// Iterate over all entities with an animator and update their animations.
-		world.ForEachAnimator([dt](Entity entity, AnimatorComponent& animator)
+		auto view = world.View<AnimatorComponent>();
+		for (auto entity : view)
 		{
-			(void)entity;  // unused, but useful for future debugging
+			(void)entity;
+			auto& animator = view.get<AnimatorComponent>(entity);
 			if (animator.animator)
 			{
 				animator.animator->Update(dt);
 			}
-		});
+		}
 	}
 }

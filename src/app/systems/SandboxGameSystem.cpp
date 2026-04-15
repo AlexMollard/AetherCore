@@ -4,6 +4,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "World.hpp"
+#include "EcsHelpers.hpp"
 #include "Logger.hpp"
 #include "AetherCore.hpp"
 #include "AssetManager.hpp"
@@ -13,6 +14,16 @@
 
 namespace aether::app
 {
+	namespace
+	{
+		struct SandboxEntityTag { bool value = true; };
+		struct GroundTag { bool value = true; };
+		struct CenterTag { bool value = true; };
+		struct RingTag { int  index = 0; };
+		struct OrbitTag { float phase = 0.0f; bool isRttTarget = false; };
+		struct SandboxModelTag { bool value = true; };
+	}
+
 	std::uint32_t SandboxGameSystem::GetAnimationCount() const
 	{
 		if (!m_model || !m_model->animator)
@@ -35,9 +46,9 @@ namespace aether::app
 	}
 
 	void SandboxGameSystem::Init(aether::AetherCore& engine,
-	                              aether::AssetManager& assets,
-	                              aether::CameraManager& cameras,
-	                              aether::Input& input)
+		aether::AssetManager& assets,
+		aether::CameraManager& cameras,
+		aether::Input& input)
 	{
 		m_engine = &engine;
 		m_assets = &assets;
@@ -65,7 +76,7 @@ namespace aether::app
 			.depthTestEnable = true,
 			.depthWriteEnable = true,
 			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		});
+			});
 
 		m_cubeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
 		m_quadMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Quad);
@@ -84,18 +95,37 @@ namespace aether::app
 		m_assets->RegisterMaterial(m_rttFeedMaterial);
 
 		// ── Ground quad (textured) ────────────────────────────────────────────
-		m_groundEntity = world.SpawnMesh(m_pipeline, *m_quadMesh, m_debugTexturedMaterial);
+		{
+			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_quadMesh, m_debugTexturedMaterial);
+			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world.EmplaceOrReplace<GroundTag>(e, GroundTag{});
+		}
 
 		// ── Centre cube (textured, multi-axis spin) ───────────────────────────
-		m_centerEntity = world.SpawnMesh(m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+		{
+			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world.EmplaceOrReplace<CenterTag>(e, CenterTag{});
+		}
 
 		// ── Ring of 8 small cubes (vertex colour, no texture) ─────────────────
 		for (int i = 0; i < kRingCount; ++i)
-			m_ringEntities[i] = world.SpawnMesh(m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+		{
+			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world.EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
+		}
 
 		// ── Two wider-orbit cubes (one textured, one vertex colour) ───────────
-		m_orbitEntityA = world.SpawnMesh(m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
-		m_orbitEntityB = world.SpawnMesh(m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+		{
+			const aether::Entity eA = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+			world.EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
+			world.EmplaceOrReplace<OrbitTag>(eA, OrbitTag{ .phase = 0.0f, .isRttTarget = false });
+
+			const aether::Entity eB = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+			world.EmplaceOrReplace<SandboxEntityTag>(eB, SandboxEntityTag{});
+			world.EmplaceOrReplace<OrbitTag>(eB, OrbitTag{ .phase = glm::radians(180.0f), .isRttTarget = true });
+		}
 
 		// ── Cameras ──────────────────────────────────────────────────────────
 		m_orbitCamera = m_cameras->Create({
@@ -104,7 +134,7 @@ namespace aether::app
 			.orbitDistance = 8.0f,
 			.orbitYaw = 35.0f,
 			.orbitPitch = 22.0f,
-		});
+			});
 
 		m_freeCamera = m_cameras->Create({
 			.mode = aether::CameraMode::Free,
@@ -113,7 +143,7 @@ namespace aether::app
 			.pitch = -12.0f,
 			.moveSpeed = 6.0f,
 			.lookSpeed = 0.14f,
-		});
+			});
 
 		m_rttCamera = m_cameras->Create({
 			.mode = aether::CameraMode::Orbit,
@@ -121,7 +151,7 @@ namespace aether::app
 			.orbitDistance = 11.0f,
 			.orbitYaw = 0.0f,
 			.orbitPitch = 62.0f,
-		});
+			});
 
 		m_cameras->SetMainCamera(m_orbitCamera);
 		m_rttTarget = m_engine->CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
@@ -131,7 +161,9 @@ namespace aether::app
 		if (aether::io::FileSystem::Exists(kDemoGltfPath))
 		{
 			m_model = m_assets->LoadModel(kDemoGltfPath);
-			m_modelEntities = m_assets->SpawnModel(*m_model, m_pipeline, 0.05f);
+			m_modelEntityCount = aether::ecs::SpawnModel(
+				world, *m_assets, *m_model, m_pipeline, 0.05f,
+				SandboxEntityTag{}, SandboxModelTag{});
 
 			if (m_model->animator)
 			{
@@ -139,14 +171,7 @@ namespace aether::app
 				INFO(aether::LogCategory::App, "glTF has {} animation(s):", animCount);
 				for (std::uint32_t i = 0; i < animCount; ++i)
 					INFO(aether::LogCategory::App, "  [{}] {}", i, m_model->animator->GetAnimationName(i));
-
 				m_model->animator->SetAnimation(2);
-
-				// Register the animator with all spawned model entities.
-				for (const aether::Entity e : m_modelEntities)
-				{
-					world.Set(e, aether::AnimatorComponent{ .animator = &*m_model->animator });
-				}
 			}
 
 			INFO(aether::LogCategory::App,
@@ -176,7 +201,9 @@ namespace aether::app
 			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, { 0.0f, -0.5f, 0.0f });
 			m = glm::rotate(m, glm::radians(-90.0f), { 1.0f, 0.0f, 0.0f });
 			m = glm::scale(m, { 10.0f, 10.0f, 1.0f });
-			world.Set(m_groundEntity, aether::TransformComponent{ .localToWorld = m });
+			auto gView = world.View<GroundTag, aether::TransformComponent>();
+			for (auto e : gView)
+				gView.get<aether::TransformComponent>(e).localToWorld = m;
 		}
 
 		// ── Centre cube: slow dual-axis spin, slightly scaled up ──────────────
@@ -184,52 +211,55 @@ namespace aether::app
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, m_time * glm::radians(20.0f), { 0.0f, 1.0f, 0.0f });
 			m = glm::rotate(m, m_time * glm::radians(9.0f), { 1.0f, 0.0f, 0.0f });
 			m = glm::scale(m, { 1.2f, 1.2f, 1.2f });
-			world.Set(m_centerEntity, aether::TransformComponent{ .localToWorld = m });
+			auto cView = world.View<CenterTag, aether::TransformComponent>();
+			for (auto e : cView)
+				cView.get<aether::TransformComponent>(e).localToWorld = m;
 		}
 
 		// ── Ring: 8 cubes revolving around the origin ─────────────────────────
-		constexpr float kRingRadius = 2.8f;
-		for (int i = 0; i < kRingCount; ++i)
 		{
-			const float step = glm::radians(360.0f / kRingCount);
-			const float angle = m_time * glm::radians(40.0f) + static_cast<float>(i) * step;
-			const glm::vec3 pos = { kRingRadius * std::cos(angle), 0.0f, kRingRadius * std::sin(angle) };
-			const float selfSpin = m_time * glm::radians(90.0f + static_cast<float>(i) * 15.0f);
+			constexpr float kRingRadius = 2.8f;
+			const float kStep = glm::radians(360.0f / static_cast<float>(kRingCount));
+			auto rView = world.View<RingTag, aether::TransformComponent>();
+			for (auto e : rView)
+			{
+				const int i = rView.get<RingTag>(e).index;
+				const float angle = m_time * glm::radians(40.0f) + static_cast<float>(i) * kStep;
+				const glm::vec3 pos = { kRingRadius * std::cos(angle), 0.0f, kRingRadius * std::sin(angle) };
+				const float selfSpin = m_time * glm::radians(90.0f + static_cast<float>(i) * 15.0f);
 
-			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
-			m = glm::rotate(m, selfSpin, { 0.0f, 1.0f, 0.0f });
-			m = glm::scale(m, { 0.35f, 0.35f, 0.35f });
-			world.Set(m_ringEntities[i], aether::TransformComponent{ .localToWorld = m });
+				glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
+				m = glm::rotate(m, selfSpin, { 0.0f, 1.0f, 0.0f });
+				m = glm::scale(m, { 0.35f, 0.35f, 0.35f });
+				rView.get<aether::TransformComponent>(e).localToWorld = m;
+			}
 		}
 
 		// ── Orbit pair: 180° apart, wider radius, gentle Y bob ────────────────
-		const glm::vec3 diagAxis = glm::normalize(glm::vec3{ 1.0f, 1.0f, 0.3f });
-		for (int i = 0; i < 2; ++i)
 		{
-			const float phase = glm::radians(180.0f) * static_cast<float>(i);
-			const float orbAngle = m_time * glm::radians(25.0f) + phase;
-			const float bob = 0.6f * std::sin(m_time * 1.5f + phase);
-			const glm::vec3 pos = { 4.2f * std::cos(orbAngle), bob, 4.2f * std::sin(orbAngle) };
+			const glm::vec3 diagAxis = glm::normalize(glm::vec3{ 1.0f, 1.0f, 0.3f });
+			auto oView = world.View<OrbitTag, aether::TransformComponent>();
+			for (auto e : oView)
+			{
+				const float phase = oView.get<OrbitTag>(e).phase;
+				const float orbAngle = m_time * glm::radians(25.0f) + phase;
+				const float bob = 0.6f * std::sin(m_time * 1.5f + phase);
+				const glm::vec3 pos = { 4.2f * std::cos(orbAngle), bob, 4.2f * std::sin(orbAngle) };
 
-			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
-			m = glm::rotate(m, m_time * glm::radians(60.0f), diagAxis);
-			m = glm::scale(m, { 0.7f, 0.7f, 0.7f });
-
-			aether::Entity& e = (i == 0) ? m_orbitEntityA : m_orbitEntityB;
-			world.Set(e, aether::TransformComponent{ .localToWorld = m });
+				glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
+				m = glm::rotate(m, m_time * glm::radians(60.0f), diagAxis);
+				m = glm::scale(m, { 0.7f, 0.7f, 0.7f });
+				oView.get<aether::TransformComponent>(e).localToWorld = m;
+			}
 		}
 
 		// ── Model rotation: slow spin to show off the loaded asset ────────────
-		if (!m_modelEntities.empty())
 		{
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, m_time * glm::radians(15.0f), { 0.0f, 1.0f, 0.0f });
 			m = glm::scale(m, { 0.05f, 0.05f, 0.05f });
-			// All skinned primitives share the same placement transform.
-			for (const aether::Entity e : m_modelEntities)
-			{
-				if (const auto* skin = world.GetSkin(e); skin != nullptr)
-					world.Set(e, aether::TransformComponent{ .localToWorld = m });
-			}
+			auto modelView = world.View<SandboxModelTag, aether::SkinComponent, aether::TransformComponent>();
+			for (auto e : modelView)
+				modelView.get<aether::TransformComponent>(e).localToWorld = m;
 		}
 
 		// ── Keyboard: T = cycle tonemap, F = toggle FXAA ─────────────────────
@@ -273,9 +303,15 @@ namespace aether::app
 		{
 			m_rttFeedMaterial.albedoSlot = rtSlot;
 			m_assets->RegisterMaterial(m_rttFeedMaterial);
-			world.Set(m_orbitEntityB, aether::MaterialComponent{
-				.material = m_rttFeedMaterial
-			});
+			auto rttView = world.View<OrbitTag, aether::MaterialComponent>();
+			for (auto e : rttView)
+			{
+				if (rttView.get<OrbitTag>(e).isRttTarget)
+				{
+					rttView.get<aether::MaterialComponent>(e).material = m_rttFeedMaterial;
+					break;
+				}
+			}
 		}
 	}
 
@@ -286,16 +322,15 @@ namespace aether::app
 
 		INFO(aether::LogCategory::App, "SandboxGameSystem unregistered.");
 
-		// Clean up entities
-		world.DestroyEntity(m_groundEntity);
-		world.DestroyEntity(m_centerEntity);
-		world.DestroyEntity(m_orbitEntityA);
-		world.DestroyEntity(m_orbitEntityB);
-		for (auto& e : m_ringEntities)
-			world.DestroyEntity(e);
-		for (const aether::Entity e : m_modelEntities)
-			world.DestroyEntity(e);
-		m_modelEntities.clear();
+		// Clean up all sandbox entities in one pass.
+		std::vector<entt::entity> toDestroy;
+		{
+			auto allView = world.View<SandboxEntityTag>();
+			toDestroy.assign(allView.begin(), allView.end());
+		}
+		for (const entt::entity e : toDestroy)
+			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
+		m_modelEntityCount = 0;
 
 		// Unregister materials
 		if (m_model)

@@ -17,6 +17,7 @@
 #include "FileSystem.hpp"
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
+#include "EcsHelpers.hpp"
 
 namespace aether
 {
@@ -850,17 +851,18 @@ namespace aether
 
 		for (const LoadedModelPrimitive& primitive : model.primitives)
 		{
-			const Entity entity = m_world.CreateEntity();
-			m_world.Set(entity, PipelineComponent{ .pipeline = &pipeline });
-			m_world.Set(entity, MeshComponent{ .mesh = &primitive.mesh });
-			m_world.Set(entity, MaterialComponent{ .material = primitive.material });
-			m_world.Set(entity, TransformComponent{ .localToWorld = scaleMat * primitive.localTransform });
+			const Entity entity = aether::ecs::SpawnMesh(
+				m_world,
+				pipeline,
+				primitive.mesh,
+				primitive.material,
+				scaleMat * primitive.localTransform);
 
 			if (model.animator && primitive.skinIndex >= 0)
 			{
 				const VkDeviceAddress addr = model.animator->GetSkinBufferAddr(primitive.skinIndex);
 				if (addr != 0)
-					m_world.Set(entity, SkinComponent{ .skinBufferAddr = addr });
+					m_world.EmplaceOrReplace<SkinComponent>(entity, SkinComponent{ .skinBufferAddr = addr });
 			}
 
 			entities.push_back(entity);

@@ -26,6 +26,7 @@ target_link_libraries(Engine
         Vulkan::Vulkan
         glfw
         glm::glm
+        EnTT::EnTT
         vk-bootstrap
         # dbghelp is Windows-only; generator expression avoids the if(WIN32) block.
         $<$<PLATFORM_ID:Windows>:dbghelp>

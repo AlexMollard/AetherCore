@@ -8,7 +8,6 @@
 #include "CameraManager.hpp"
 #include "AetherCore.hpp"
 
-#include <array>
 #include <optional>
 #include <string_view>
 
@@ -40,7 +39,7 @@ namespace aether::app
 
 		[[nodiscard]] float GetTimeSeconds() const { return m_time; }
 		[[nodiscard]] std::size_t GetRingCount() const { return kRingCount; }
-		[[nodiscard]] std::size_t GetModelEntityCount() const { return m_modelEntities.size(); }
+		[[nodiscard]] std::size_t GetModelEntityCount() const { return m_modelEntityCount; }
 		[[nodiscard]] std::size_t GetModelPrimitiveCount() const { return m_model ? m_model->primitives.size() : 0; }
 		[[nodiscard]] std::uint32_t GetAnimationCount() const;
 		[[nodiscard]] std::string_view GetCurrentAnimationName() const;
@@ -55,13 +54,8 @@ namespace aether::app
 		aether::CameraManager* m_cameras = nullptr;
 		aether::Input* m_input = nullptr;
 
-		// Scene entities
-		aether::Entity m_groundEntity;
-		aether::Entity m_centerEntity;
-		std::array<aether::Entity, 8> m_ringEntities;
-		aether::Entity m_orbitEntityA;
-		aether::Entity m_orbitEntityB;
-		std::vector<aether::Entity> m_modelEntities;
+		// Scene entities are tagged in the world; no handles stored here.
+		std::size_t m_modelEntityCount = 0;
 
 		// Cameras
 		aether::CameraHandle m_orbitCamera;

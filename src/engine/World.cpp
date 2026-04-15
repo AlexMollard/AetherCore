@@ -5,175 +5,59 @@
 
 namespace aether
 {
+	entt::entity World::ToEntt(Entity entity) noexcept
+	{
+		return static_cast<entt::entity>(entity.id);
+	}
+
+	Entity World::FromEntt(entt::entity entity) noexcept
+	{
+		return Entity{ static_cast<std::uint32_t>(entt::to_integral(entity)) };
+	}
+
 	// ── Entity lifecycle ──────────────────────────────────────────────────────
 
-	Entity World::CreateEntity()
+	Entity World::Create()
 	{
-		return Entity{ m_nextId++ };
+		return FromEntt(m_registry.create());
 	}
 
-	void World::DestroyEntity(Entity entity)
+	void World::Destroy(Entity entity)
 	{
-		const std::uint32_t id = entity.id;
-		m_transforms.erase(id);
-		m_meshes.erase(id);
-		m_materials.erase(id);
-		m_pipelines.erase(id);
-		m_skins.erase(id);
-		m_animators.erase(id);
-	}
-
-	// ── Component setters ─────────────────────────────────────────────────────
-
-	void World::Set(Entity entity, TransformComponent component)
-	{
-		m_transforms[entity.id] = component;
-	}
-
-	void World::Set(Entity entity, MeshComponent component)
-	{
-		m_meshes[entity.id] = component;
-	}
-
-	void World::Set(Entity entity, MaterialComponent component)
-	{
-		m_materials[entity.id] = component;
-	}
-
-	void World::Set(Entity entity, PipelineComponent component)
-	{
-		m_pipelines[entity.id] = component;
-	}
-
-	void World::Set(Entity entity, SkinComponent component)
-	{
-		m_skins[entity.id] = component;
-	}
-
-	void World::Set(Entity entity, AnimatorComponent component)
-	{
-		m_animators[entity.id] = component;
-	}
-
-	// ── Convenience spawn ────────────────────────────────────────────────────
-
-	Entity World::SpawnMesh(GraphicsPipeline& pipeline,
-	                        const Mesh&        mesh,
-	                        Material           material,
-	                        const glm::mat4&   transform)
-	{
-		const Entity entity = CreateEntity();
-		Set(entity, PipelineComponent{ .pipeline = &pipeline });
-		Set(entity, MeshComponent{ .mesh = &mesh });
-		Set(entity, MaterialComponent{ .material = material });
-		Set(entity, TransformComponent{ .localToWorld = transform });
-		return entity;
-	}
-
-	// ── Component getters ─────────────────────────────────────────────────────
-
-	TransformComponent* World::GetTransform(Entity entity)
-	{
-		auto it = m_transforms.find(entity.id);
-		return it != m_transforms.end() ? &it->second : nullptr;
-	}
-
-	MeshComponent* World::GetMesh(Entity entity)
-	{
-		auto it = m_meshes.find(entity.id);
-		return it != m_meshes.end() ? &it->second : nullptr;
-	}
-
-	MaterialComponent* World::GetMaterial(Entity entity)
-	{
-		auto it = m_materials.find(entity.id);
-		return it != m_materials.end() ? &it->second : nullptr;
-	}
-
-	PipelineComponent* World::GetPipeline(Entity entity)
-	{
-		auto it = m_pipelines.find(entity.id);
-		return it != m_pipelines.end() ? &it->second : nullptr;
-	}
-
-	SkinComponent* World::GetSkin(Entity entity)
-	{
-		auto it = m_skins.find(entity.id);
-		return it != m_skins.end() ? &it->second : nullptr;
-	}
-
-	AnimatorComponent* World::GetAnimator(Entity entity)
-	{
-		auto it = m_animators.find(entity.id);
-		return it != m_animators.end() ? &it->second : nullptr;
-	}
-
-	const TransformComponent* World::GetTransform(Entity entity) const
-	{
-		auto it = m_transforms.find(entity.id);
-		return it != m_transforms.end() ? &it->second : nullptr;
-	}
-
-	const MeshComponent* World::GetMesh(Entity entity) const
-	{
-		auto it = m_meshes.find(entity.id);
-		return it != m_meshes.end() ? &it->second : nullptr;
-	}
-
-	const MaterialComponent* World::GetMaterial(Entity entity) const
-	{
-		auto it = m_materials.find(entity.id);
-		return it != m_materials.end() ? &it->second : nullptr;
-	}
-
-	const PipelineComponent* World::GetPipeline(Entity entity) const
-	{
-		auto it = m_pipelines.find(entity.id);
-		return it != m_pipelines.end() ? &it->second : nullptr;
-	}
-
-	const SkinComponent* World::GetSkin(Entity entity) const
-	{
-		auto it = m_skins.find(entity.id);
-		return it != m_skins.end() ? &it->second : nullptr;
-	}
-
-	const AnimatorComponent* World::GetAnimator(Entity entity) const
-	{
-		auto it = m_animators.find(entity.id);
-		return it != m_animators.end() ? &it->second : nullptr;
+		const entt::entity enttEntity = ToEntt(entity);
+		if (entity.IsValid() && m_registry.valid(enttEntity))
+		{
+			m_registry.destroy(enttEntity);
+		}
 	}
 
 	// ── Flush ─────────────────────────────────────────────────────────────────
 
 	void World::FlushToQueue(RenderQueue& queue) const
 	{
-		for (const auto& [id, pipelineComp] : m_pipelines)
+		auto view = m_registry.view<const PipelineComponent, const MeshComponent, const TransformComponent>();
+		for (auto enttEntity : view)
 		{
-			const auto meshIt      = m_meshes.find(id);
-			const auto transformIt = m_transforms.find(id);
-
-			if (meshIt == m_meshes.end() || transformIt == m_transforms.end())
-			{
-				continue;
-			}
+			const auto& pipelineComp = view.get<const PipelineComponent>(enttEntity);
+			const auto& meshComp = view.get<const MeshComponent>(enttEntity);
+			const auto& transformComp = view.get<const TransformComponent>(enttEntity);
 
 			std::uint32_t materialIndex = Material::kNoTexture;
-			if (const auto matIt = m_materials.find(id); matIt != m_materials.end())
+			if (const auto* material = m_registry.try_get<MaterialComponent>(enttEntity))
 			{
-				materialIndex = matIt->second.material.materialSlot;
+				materialIndex = material->material.materialSlot;
 			}
 
 			VkDeviceAddress skinBufferAddr = 0;
-			if (const auto skinIt = m_skins.find(id); skinIt != m_skins.end())
+			if (const auto* skin = m_registry.try_get<SkinComponent>(enttEntity))
 			{
-				skinBufferAddr = skinIt->second.skinBufferAddr;
+				skinBufferAddr = skin->skinBufferAddr;
 			}
 
 			queue.Submit({
 				.pipeline      = pipelineComp.pipeline,
-				.mesh          = meshIt->second.mesh,
-				.modelMatrix   = transformIt->second.localToWorld,
+				.mesh          = meshComp.mesh,
+				.modelMatrix   = transformComp.localToWorld,
 				.materialIndex = materialIndex,
 				.skinBufferAddr = skinBufferAddr,
 			});

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
-#include <unordered_map>
+#include <utility>
+
+#include <entt/entt.hpp>
 
 #include "Components.hpp"
 #include "Entity.hpp"
@@ -11,8 +13,7 @@ namespace aether
 {
 	class RenderQueue;
 
-	// Lightweight ECS world.  Components are stored in per-type hash maps keyed
-	// by entity id.  All methods are O(1) on average.
+	// Lightweight ECS world backed by entt::registry.
 	//
 	// Entities must have at minimum a PipelineComponent + MeshComponent +
 	// TransformComponent to be emitted by FlushToQueue().  MaterialComponent is
@@ -20,55 +21,75 @@ namespace aether
 	class World
 	{
 	public:
+		using Registry = entt::registry;
+
 		// ── Entity lifecycle ──────────────────────────────────────────────────
+		[[nodiscard]] Entity Create();
+		void Destroy(Entity entity);
 
-		[[nodiscard]] Entity CreateEntity();
-		void DestroyEntity(Entity entity);
-
-		// ── Convenience spawn ─────────────────────────────────────────────────
-		// Creates an entity with all four required components in one call.
-		// Use the low-level Set() overloads when you need finer control.
-		[[nodiscard]] Entity SpawnMesh(GraphicsPipeline& pipeline,
-		                               const Mesh&        mesh,
-		                               Material           material,
-		                               const glm::mat4&   transform = glm::mat4(1.0f));
-
-		// ── Component setters ─────────────────────────────────────────────────
-
-		void Set(Entity entity, TransformComponent component);
-		void Set(Entity entity, MeshComponent     component);
-		void Set(Entity entity, MaterialComponent  component);
-		void Set(Entity entity, PipelineComponent  component);
-		void Set(Entity entity, SkinComponent      component);
-		void Set(Entity entity, AnimatorComponent  component);
-
-		// ── Component getters (return nullptr when component is absent) ───────
-
-		[[nodiscard]] TransformComponent* GetTransform(Entity entity);
-		[[nodiscard]] MeshComponent*      GetMesh     (Entity entity);
-		[[nodiscard]] MaterialComponent*  GetMaterial (Entity entity);
-		[[nodiscard]] PipelineComponent*  GetPipeline (Entity entity);
-		[[nodiscard]] SkinComponent*      GetSkin     (Entity entity);
-		[[nodiscard]] AnimatorComponent*  GetAnimator (Entity entity);
-
-		[[nodiscard]] const TransformComponent* GetTransform(Entity entity) const;
-		[[nodiscard]] const MeshComponent*      GetMesh     (Entity entity) const;
-		[[nodiscard]] const MaterialComponent*  GetMaterial (Entity entity) const;
-		[[nodiscard]] const PipelineComponent*  GetPipeline (Entity entity) const;
-		[[nodiscard]] const SkinComponent*      GetSkin     (Entity entity) const;
-		[[nodiscard]] const AnimatorComponent*  GetAnimator (Entity entity) const;
-
-		// ── Entity iteration ──────────────────────────────────────────────────
-		// Calls the callback for each entity that has an animator component.
-		template<typename Func>
-		void ForEachAnimator(Func callback)
+		// ── Generic ENTT helpers ──────────────────────────────────────────────
+		template<typename T, typename... Args>
+		T& Emplace(Entity entity, Args&&... args)
 		{
-			for (auto& [id, animator] : m_animators)
-			{
-				if (animator.animator)
-					callback(Entity{ id }, animator);
-			}
+			return m_registry.emplace<T>(ToEntt(entity), std::forward<Args>(args)...);
 		}
+
+		template<typename T, typename... Args>
+		T& EmplaceOrReplace(Entity entity, Args&&... args)
+		{
+			return m_registry.emplace_or_replace<T>(ToEntt(entity), std::forward<Args>(args)...);
+		}
+
+		template<typename T>
+		T* TryGet(Entity entity)
+		{
+			return m_registry.try_get<T>(ToEntt(entity));
+		}
+
+		template<typename T>
+		const T* TryGet(Entity entity) const
+		{
+			return m_registry.try_get<T>(ToEntt(entity));
+		}
+
+		template<typename T>
+		T& Get(Entity entity)
+		{
+			return m_registry.get<T>(ToEntt(entity));
+		}
+
+		template<typename T>
+		const T& Get(Entity entity) const
+		{
+			return m_registry.get<T>(ToEntt(entity));
+		}
+
+		template<typename T>
+		bool Has(Entity entity) const
+		{
+			return m_registry.any_of<T>(ToEntt(entity));
+		}
+
+		template<typename T>
+		void Remove(Entity entity)
+		{
+			m_registry.remove<T>(ToEntt(entity));
+		}
+
+		template<typename... Components>
+		auto View()
+		{
+			return m_registry.view<Components...>();
+		}
+
+		template<typename... Components>
+		auto View() const
+		{
+			return m_registry.view<Components...>();
+		}
+
+		[[nodiscard]] Registry& GetRegistry() noexcept { return m_registry; }
+		[[nodiscard]] const Registry& GetRegistry() const noexcept { return m_registry; }
 
 		// ── Engine-internal ───────────────────────────────────────────────────
 
@@ -85,15 +106,10 @@ namespace aether
 		void UpdateSystems(float dt);
 
 	private:
-		std::uint32_t m_nextId = 1;
+		[[nodiscard]] static entt::entity ToEntt(Entity entity) noexcept;
+		[[nodiscard]] static Entity FromEntt(entt::entity entity) noexcept;
 
 		SystemRegistry m_systems;
-
-		std::unordered_map<std::uint32_t, TransformComponent> m_transforms;
-		std::unordered_map<std::uint32_t, MeshComponent>      m_meshes;
-		std::unordered_map<std::uint32_t, MaterialComponent>  m_materials;
-		std::unordered_map<std::uint32_t, PipelineComponent>  m_pipelines;
-		std::unordered_map<std::uint32_t, SkinComponent>      m_skins;
-		std::unordered_map<std::uint32_t, AnimatorComponent>  m_animators;
+		Registry m_registry;
 	};
 }
