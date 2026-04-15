@@ -13,7 +13,7 @@
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
 #include "FrameConstantsBuffer.hpp"
-#include "GltfAnimator.hpp"
+#include "ModelAnimator.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
 #include "Material.hpp"
@@ -34,7 +34,7 @@
 
 namespace aether
 {
-	struct LoadedGltfPrimitive
+	struct LoadedModelPrimitive
 	{
 		Mesh      mesh;
 		Material  material{};
@@ -42,11 +42,11 @@ namespace aether
 		std::int32_t skinIndex = -1;      // -1 = not skinned
 	};
 
-	struct LoadedGltfAsset
+	struct LoadedModel
 	{
-		std::vector<Texture>             textures;
-		std::vector<LoadedGltfPrimitive> primitives;
-		std::optional<GltfAnimator>      animator;
+		std::vector<Texture>              textures;
+		std::vector<LoadedModelPrimitive> primitives;
+		std::optional<ModelAnimator>      animator;
 	};
 
 	class AetherCore
@@ -104,7 +104,15 @@ namespace aether
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 		[[nodiscard]] Texture          CreateTexture(std::string_view path);
-		[[nodiscard]] LoadedGltfAsset  LoadGltfAsset(std::string_view path);
+		[[nodiscard]] LoadedModel  LoadModel(std::string_view path);
+
+		// Spawns all primitives from a loaded model into the engine's world.
+		// Materials are already registered by LoadModel — no extra setup needed.
+		// scale is applied on top of each primitive's localTransform.
+		// Returns one Entity per primitive (parallel to model.primitives).
+		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model,
+		                                              GraphicsPipeline& pipeline,
+		                                              float scale = 1.0f);
 
 		// ── Material registration ─────────────────────────────────────────────
 		// Upload a CPU Material to the GPU MaterialBuffer.  Fills mat.materialSlot.

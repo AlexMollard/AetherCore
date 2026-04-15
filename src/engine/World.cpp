@@ -49,6 +49,21 @@ namespace aether
 		m_skins[entity.id] = component;
 	}
 
+	// ── Convenience spawn ────────────────────────────────────────────────────
+
+	Entity World::SpawnMesh(GraphicsPipeline& pipeline,
+	                        const Mesh&        mesh,
+	                        Material           material,
+	                        const glm::mat4&   transform)
+	{
+		const Entity entity = CreateEntity();
+		Set(entity, PipelineComponent{ .pipeline = &pipeline });
+		Set(entity, MeshComponent{ .mesh = &mesh });
+		Set(entity, MaterialComponent{ .material = material });
+		Set(entity, TransformComponent{ .localToWorld = transform });
+		return entity;
+	}
+
 	// ── Component getters ─────────────────────────────────────────────────────
 
 	TransformComponent* World::GetTransform(Entity entity)

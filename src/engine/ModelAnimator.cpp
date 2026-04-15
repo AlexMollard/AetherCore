@@ -1,4 +1,4 @@
-#include "GltfAnimator.hpp"
+#include "ModelAnimator.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -67,12 +67,12 @@ namespace aether
 
 	// ── Factory ───────────────────────────────────────────────────────────────
 
-	GltfAnimator GltfAnimator::Create(
+	ModelAnimator ModelAnimator::Create(
 		VkDevice                 device,
 		VmaAllocator             allocator,
 		const assets::GltfAsset& asset)
 	{
-		GltfAnimator anim;
+		ModelAnimator anim;
 		anim.m_device    = device;
 		anim.m_allocator = allocator;
 		anim.m_animations = asset.animations;
@@ -141,7 +141,7 @@ namespace aether
 		return anim;
 	}
 
-	void GltfAnimator::Destroy()
+	void ModelAnimator::Destroy()
 	{
 		for (SkinData& skin : m_skins)
 		{
@@ -157,7 +157,7 @@ namespace aether
 
 	// ── Animation control ─────────────────────────────────────────────────────
 
-	float GltfAnimator::ComputeDuration(std::uint32_t animIndex) const
+	float ModelAnimator::ComputeDuration(std::uint32_t animIndex) const
 	{
 		if (animIndex >= m_animations.size())
 			return 0.0f;
@@ -170,7 +170,7 @@ namespace aether
 		return d;
 	}
 
-	void GltfAnimator::SetAnimation(std::uint32_t index)
+	void ModelAnimator::SetAnimation(std::uint32_t index)
 	{
 		if (index >= m_animations.size())
 			return;
@@ -181,7 +181,7 @@ namespace aether
 
 	// ── Per-frame update ──────────────────────────────────────────────────────
 
-	void GltfAnimator::ResetNodesToBind()
+	void ModelAnimator::ResetNodesToBind()
 	{
 		for (NodeState& node : m_nodes)
 		{
@@ -191,7 +191,7 @@ namespace aether
 		}
 	}
 
-	void GltfAnimator::Update(float dt)
+	void ModelAnimator::Update(float dt)
 	{
 		if (m_animations.empty())
 			return;
@@ -240,7 +240,7 @@ namespace aether
 
 	// ── Internal helpers ──────────────────────────────────────────────────────
 
-	void GltfAnimator::ComputeGlobalTransforms()
+	void ModelAnimator::ComputeGlobalTransforms()
 	{
 		// Pre-compute local matrices.
 		std::vector<glm::mat4> local(m_nodes.size());
@@ -273,7 +273,7 @@ namespace aether
 		}
 	}
 
-	void GltfAnimator::UploadSkinBuffers()
+	void ModelAnimator::UploadSkinBuffers()
 	{
 		for (SkinData& skin : m_skins)
 		{
@@ -294,19 +294,19 @@ namespace aether
 
 	// ── Public queries ────────────────────────────────────────────────────────
 
-	std::uint32_t GltfAnimator::GetAnimationCount() const
+	std::uint32_t ModelAnimator::GetAnimationCount() const
 	{
 		return static_cast<std::uint32_t>(m_animations.size());
 	}
 
-	std::string_view GltfAnimator::GetAnimationName(std::uint32_t index) const
+	std::string_view ModelAnimator::GetAnimationName(std::uint32_t index) const
 	{
 		if (index >= m_animations.size())
 			return {};
 		return m_animations[index].name;
 	}
 
-	VkDeviceAddress GltfAnimator::GetSkinBufferAddr(std::int32_t skinIndex) const
+	VkDeviceAddress ModelAnimator::GetSkinBufferAddr(std::int32_t skinIndex) const
 	{
 		if (skinIndex < 0 || static_cast<std::size_t>(skinIndex) >= m_skins.size())
 			return 0;

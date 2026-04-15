@@ -698,10 +698,10 @@ namespace aether
 		mat.materialSlot = Material::kNoTexture;
 	}
 
-	LoadedGltfAsset AetherCore::LoadGltfAsset(std::string_view path)
+	LoadedModel AetherCore::LoadModel(std::string_view path)
 	{
 		const assets::GltfAsset source = assets::GltfAsset::LoadFromVfsPath(path);
-		LoadedGltfAsset loaded;
+		LoadedModel loaded;
 
 		std::vector<std::uint32_t> imageSlots(source.images.size(), Material::kNoTexture);
 		loaded.textures.reserve(source.images.size());
@@ -756,7 +756,7 @@ namespace aether
 				continue;
 			}
 
-			LoadedGltfPrimitive loadedPrim;
+			LoadedModelPrimitive loadedPrim;
 			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices);
 
 			loadedPrim.skinIndex = primitive.skinIndex;
@@ -820,13 +820,43 @@ namespace aether
 		// Build animator when the asset has skins.
 		if (!source.skins.empty())
 		{
-			loaded.animator = GltfAnimator::Create(
+			loaded.animator = ModelAnimator::Create(
 				m_vulkanContext.GetDevice().device,
 				m_vulkanContext.GetAllocator(),
 				source);
 		}
 
 		return loaded;
+	}
+
+	std::vector<Entity> AetherCore::SpawnModel(LoadedModel& model,
+	                                           GraphicsPipeline& pipeline,
+	                                           float scale)
+	{
+		std::vector<Entity> entities;
+		entities.reserve(model.primitives.size());
+
+		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
+
+		for (const LoadedModelPrimitive& primitive : model.primitives)
+		{
+			const Entity entity = m_world.CreateEntity();
+			m_world.Set(entity, PipelineComponent{ .pipeline = &pipeline });
+			m_world.Set(entity, MeshComponent{ .mesh = &primitive.mesh });
+			m_world.Set(entity, MaterialComponent{ .material = primitive.material });
+			m_world.Set(entity, TransformComponent{ .localToWorld = scaleMat * primitive.localTransform });
+
+			if (model.animator && primitive.skinIndex >= 0)
+			{
+				const VkDeviceAddress addr = model.animator->GetSkinBufferAddr(primitive.skinIndex);
+				if (addr != 0)
+					m_world.Set(entity, SkinComponent{ .skinBufferAddr = addr });
+			}
+
+			entities.push_back(entity);
+		}
+
+		return entities;
 	}
 
 	void AetherCore::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn)

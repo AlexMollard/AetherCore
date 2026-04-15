@@ -24,6 +24,14 @@ namespace aether
 		[[nodiscard]] Entity CreateEntity();
 		void DestroyEntity(Entity entity);
 
+		// ── Convenience spawn ─────────────────────────────────────────────────
+		// Creates an entity with all four required components in one call.
+		// Use the low-level Set() overloads when you need finer control.
+		[[nodiscard]] Entity SpawnMesh(GraphicsPipeline& pipeline,
+		                               const Mesh&        mesh,
+		                               Material           material,
+		                               const glm::mat4&   transform = glm::mat4(1.0f));
+
 		// ── Component setters ─────────────────────────────────────────────────
 
 		void Set(Entity entity, TransformComponent component);

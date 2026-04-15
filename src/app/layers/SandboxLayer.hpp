@@ -44,8 +44,8 @@ namespace aether::app
 		aether::CameraHandle m_freeCamera;
 		aether::CameraHandle m_rttCamera;
 		aether::AetherCore::CameraRenderTarget m_rttTarget;
-		std::optional<aether::LoadedGltfAsset> m_loadedGltf;
-		std::vector<aether::Entity> m_gltfEntities;
+		std::optional<aether::LoadedModel> m_model;
+		std::vector<aether::Entity> m_modelEntities;
 		aether::Material m_debugTexturedMaterial{};
 		aether::Material m_untexturedMaterial{};
 		aether::Material m_rttFeedMaterial{};

@@ -14,29 +14,29 @@
 
 namespace aether
 {
-	// Runtime skeleton animator for glTF skinned meshes.
+	// Runtime skeleton animator for skinned models.
 	//
 	// Usage:
-	//   GltfAnimator anim = GltfAnimator::Create(device, allocator, asset);
+	//   ModelAnimator anim = ModelAnimator::Create(device, allocator, asset);
 	//   // per frame:
 	//   anim.Update(dt);
 	//   VkDeviceAddress skinAddr = anim.GetSkinBufferAddr(primitive.skinIndex);
 	//   // pass skinAddr as a push constant to the draw call
-	class GltfAnimator
+	class ModelAnimator
 	{
 	public:
-		GltfAnimator()  = default;
-		~GltfAnimator() = default;
+		ModelAnimator()  = default;
+		~ModelAnimator() = default;
 
-		GltfAnimator(const GltfAnimator&)            = delete;
-		GltfAnimator& operator=(const GltfAnimator&) = delete;
+		ModelAnimator(const ModelAnimator&)            = delete;
+		ModelAnimator& operator=(const ModelAnimator&) = delete;
 
-		GltfAnimator(GltfAnimator&&) noexcept            = default;
-		GltfAnimator& operator=(GltfAnimator&&) noexcept = default;
+		ModelAnimator(ModelAnimator&&) noexcept            = default;
+		ModelAnimator& operator=(ModelAnimator&&) noexcept = default;
 
-		// Build an animator from a fully-parsed GltfAsset.
+		// Build an animator from a fully-parsed glTF asset.
 		// device/allocator must outlive this object.
-		static GltfAnimator Create(
+		static ModelAnimator Create(
 			VkDevice                  device,
 			VmaAllocator              allocator,
 			const assets::GltfAsset&  asset);

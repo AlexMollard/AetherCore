@@ -50,47 +50,19 @@ namespace aether::app
 		m_rttFeedMaterial = {};
 		context.engine.RegisterMaterial(m_rttFeedMaterial);
 
-		// Convenience lambdas to keep entity setup readable.
-		auto pipe = [&]() { return PipelineComponent{ .pipeline = &m_pipeline }; };
-		auto withTex = [&]() { return MaterialComponent{ .material = m_debugTexturedMaterial }; };
-		auto noTex = [&]() { return MaterialComponent{ .material = m_untexturedMaterial }; };
-
 		// ── Ground quad (textured) ────────────────────────────────────────────
-		m_groundEntity = context.world->CreateEntity();
-		context.world->Set(m_groundEntity, pipe());
-		context.world->Set(m_groundEntity, MeshComponent{ .mesh = m_quadMesh });
-		context.world->Set(m_groundEntity, TransformComponent{});
-		context.world->Set(m_groundEntity, withTex());
+		m_groundEntity = context.world->SpawnMesh(m_pipeline, *m_quadMesh, m_debugTexturedMaterial);
 
 		// ── Centre cube (textured, multi-axis spin) ───────────────────────────
-		m_centerEntity = context.world->CreateEntity();
-		context.world->Set(m_centerEntity, pipe());
-		context.world->Set(m_centerEntity, MeshComponent{ .mesh = m_cubeMesh });
-		context.world->Set(m_centerEntity, TransformComponent{});
-		context.world->Set(m_centerEntity, withTex());
+		m_centerEntity = context.world->SpawnMesh(m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
 
 		// ── Ring of 8 small cubes (vertex colour, no texture) ─────────────────
 		for (int i = 0; i < kRingCount; ++i)
-		{
-			m_ringEntities[i] = context.world->CreateEntity();
-			context.world->Set(m_ringEntities[i], pipe());
-			context.world->Set(m_ringEntities[i], MeshComponent{ .mesh = m_cubeMesh });
-			context.world->Set(m_ringEntities[i], TransformComponent{});
-			context.world->Set(m_ringEntities[i], noTex());
-		}
+			m_ringEntities[i] = context.world->SpawnMesh(m_pipeline, *m_cubeMesh, m_untexturedMaterial);
 
 		// ── Two wider-orbit cubes (one textured, one vertex colour) ───────────
-		m_orbitEntityA = context.world->CreateEntity();
-		context.world->Set(m_orbitEntityA, pipe());
-		context.world->Set(m_orbitEntityA, MeshComponent{ .mesh = m_cubeMesh });
-		context.world->Set(m_orbitEntityA, TransformComponent{});
-		context.world->Set(m_orbitEntityA, withTex());
-
-		m_orbitEntityB = context.world->CreateEntity();
-		context.world->Set(m_orbitEntityB, pipe());
-		context.world->Set(m_orbitEntityB, MeshComponent{ .mesh = m_cubeMesh });
-		context.world->Set(m_orbitEntityB, TransformComponent{});
-		context.world->Set(m_orbitEntityB, noTex());
+		m_orbitEntityA = context.world->SpawnMesh(m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+		m_orbitEntityB = context.world->SpawnMesh(m_pipeline, *m_cubeMesh, m_untexturedMaterial);
 
 		// ── Cameras ──────────────────────────────────────────────────────────
 		m_orbitCamera = context.cameras->Create({
@@ -124,49 +96,23 @@ namespace aether::app
 		constexpr std::string_view kDemoGltfPath = "assets://models/Fox/Fox.gltf";
 		if (io::FileSystem::Exists(kDemoGltfPath))
 		{
-			m_loadedGltf = context.engine.LoadGltfAsset(kDemoGltfPath);
-			m_gltfEntities.reserve(m_loadedGltf->primitives.size());
+			m_model = context.engine.LoadModel(kDemoGltfPath);
+			m_modelEntities = context.engine.SpawnModel(*m_model, m_pipeline, 0.05f);
 
-			for (const LoadedGltfPrimitive& primitive : m_loadedGltf->primitives)
+			if (m_model->animator)
 			{
-				const Entity entity = context.world->CreateEntity();
-				context.world->Set(entity, PipelineComponent{ .pipeline = &m_pipeline });
-				context.world->Set(entity, MeshComponent{ .mesh = &primitive.mesh });
-				context.world->Set(entity, MaterialComponent{ .material = primitive.material });
-
-				// Scale fox to 0.05x. For skinned prims localTransform is already
-				// identity; for static prims it carries the node's world transform.
-				const glm::mat4 transform =
-					glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)) * primitive.localTransform;
-				context.world->Set(entity, TransformComponent{ .localToWorld = transform });
-
-				// Attach skin component so the renderer passes joint matrices.
-				if (m_loadedGltf->animator && primitive.skinIndex >= 0)
-				{
-					const VkDeviceAddress addr =
-						m_loadedGltf->animator->GetSkinBufferAddr(primitive.skinIndex);
-					if (addr != 0)
-						context.world->Set(entity, SkinComponent{ .skinBufferAddr = addr });
-				}
-
-				m_gltfEntities.push_back(entity);
-			}
-
-			// Log animation names.
-			if (m_loadedGltf->animator)
-			{
-				const std::uint32_t animCount = m_loadedGltf->animator->GetAnimationCount();
+				const std::uint32_t animCount = m_model->animator->GetAnimationCount();
 				INFO(LogCategory::App, "glTF has {} animation(s):", animCount);
 				for (std::uint32_t i = 0; i < animCount; ++i)
-					INFO(LogCategory::App, "  [{}] {}", i, m_loadedGltf->animator->GetAnimationName(i));
+					INFO(LogCategory::App, "  [{}] {}", i, m_model->animator->GetAnimationName(i));
 
-				m_loadedGltf->animator->SetAnimation(1);
+				m_model->animator->SetAnimation(2);
 			}
 
 			INFO(LogCategory::App,
 				"Loaded glTF scene from '{}' with {} render primitives.",
 				kDemoGltfPath,
-				m_loadedGltf->primitives.size());
+				m_model->primitives.size());
 		}
 		else
 		{
@@ -186,17 +132,17 @@ namespace aether::app
 		context.world->DestroyEntity(m_orbitEntityB);
 		for (auto& e : m_ringEntities)
 			context.world->DestroyEntity(e);
-		for (const Entity e : m_gltfEntities)
+		for (const Entity e : m_modelEntities)
 			context.world->DestroyEntity(e);
-		m_gltfEntities.clear();
-		if (m_loadedGltf)
+		m_modelEntities.clear();
+		if (m_model)
 		{
-			for (LoadedGltfPrimitive& primitive : m_loadedGltf->primitives)
+			for (LoadedModelPrimitive& primitive : m_model->primitives)
 			{
 				context.engine.UnregisterMaterial(primitive.material);
 			}
 		}
-		m_loadedGltf.reset();
+		m_model.reset();
 
 		context.engine.UnregisterMaterial(m_rttFeedMaterial);
 		context.engine.UnregisterMaterial(m_untexturedMaterial);
@@ -284,19 +230,19 @@ namespace aether::app
 			context.world->Set(e, TransformComponent{ .localToWorld = m });
 		}
 
-		// --- Fox: advance skeleton animation each frame ---
-		if (m_loadedGltf && m_loadedGltf->animator)
+		// --- Model: advance skeleton animation each frame ---
+		if (m_model && m_model->animator)
 		{
-			m_loadedGltf->animator->Update(static_cast<float>(context.deltaTimeSeconds));
+			m_model->animator->Update(static_cast<float>(context.deltaTimeSeconds));
 		}
 
-		// --- Fox rotation: slow spin to show off the loaded glTF asset ---
-		if (!m_gltfEntities.empty())
+		// --- Model rotation: slow spin to show off the loaded asset ---
+		if (!m_modelEntities.empty())
 		{
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, t * glm::radians(15.0f), { 0.0f, 1.0f, 0.0f });
 			m = glm::scale(m, { 0.05f, 0.05f, 0.05f });
 			// All skinned primitives share the same placement transform.
-			for (const aether::Entity e : m_gltfEntities)
+			for (const aether::Entity e : m_modelEntities)
 			{
 				if (const auto* skin = context.world->GetSkin(e); skin != nullptr)
 					context.world->Set(e, TransformComponent{ .localToWorld = m });
