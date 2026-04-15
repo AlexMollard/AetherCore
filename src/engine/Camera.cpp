@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Input.hpp"
@@ -12,22 +11,23 @@ namespace aether
 	static constexpr float kPitchLimit = 89.0f;
 
 	Camera::Camera(const CameraDesc& desc)
-		: m_mode(desc.mode),
-		m_position(desc.position),
-		m_yaw(desc.yaw),
-		m_pitch(desc.pitch),
-		m_orbitTarget(desc.orbitTarget),
-		m_orbitDistance(desc.orbitDistance),
-		m_orbitYaw(desc.orbitYaw),
-		m_orbitPitch(desc.orbitPitch),
-		m_fovDeg(desc.fovDegrees),
-		m_near(desc.nearPlane),
-		m_far(desc.farPlane),
-		m_moveSpeed(desc.moveSpeed),
-		m_lookSpeed(desc.lookSpeed),
-		m_orbitSpeed(desc.orbitSpeed),
-		m_zoomSpeed(desc.zoomSpeed)
-	{}
+	      : m_mode(desc.mode),
+	        m_position(desc.position),
+	        m_yaw(desc.yaw),
+	        m_pitch(desc.pitch),
+	        m_orbitTarget(desc.orbitTarget),
+	        m_orbitDistance(desc.orbitDistance),
+	        m_orbitYaw(desc.orbitYaw),
+	        m_orbitPitch(desc.orbitPitch),
+	        m_fovDeg(desc.fovDegrees),
+	        m_near(desc.nearPlane),
+	        m_far(desc.farPlane),
+	        m_moveSpeed(desc.moveSpeed),
+	        m_lookSpeed(desc.lookSpeed),
+	        m_orbitSpeed(desc.orbitSpeed),
+	        m_zoomSpeed(desc.zoomSpeed)
+	{
+	}
 
 	// ── Direction helpers ─────────────────────────────────────────────────────
 
@@ -37,10 +37,10 @@ namespace aether
 		const float yr = glm::radians(m_yaw);
 		const float pr = glm::radians(m_pitch);
 		return glm::normalize(glm::vec3{
-			-std::sin(yr) * std::cos(pr),
-			 std::sin(pr),
-			-std::cos(yr) * std::cos(pr),
-			});
+		        -std::sin(yr) * std::cos(pr),
+		        std::sin(pr),
+		        -std::cos(yr) * std::cos(pr),
+		});
 	}
 
 	glm::vec3 Camera::GetRight() const
@@ -127,12 +127,18 @@ namespace aether
 			const glm::vec3 fwd = GetForward();
 			const glm::vec3 right = GetRight();
 
-			if (input.IsKeyDown(Key::W)) m_position += fwd * m_moveSpeed * dt;
-			if (input.IsKeyDown(Key::S)) m_position -= fwd * m_moveSpeed * dt;
-			if (input.IsKeyDown(Key::D)) m_position += right * m_moveSpeed * dt;
-			if (input.IsKeyDown(Key::A)) m_position -= right * m_moveSpeed * dt;
-			if (input.IsKeyDown(Key::E)) m_position.y += m_moveSpeed * dt;
-			if (input.IsKeyDown(Key::Q)) m_position.y -= m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::W))
+				m_position += fwd * m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::S))
+				m_position -= fwd * m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::D))
+				m_position += right * m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::A))
+				m_position -= right * m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::E))
+				m_position.y += m_moveSpeed * dt;
+			if (input.IsKeyDown(Key::Q))
+				m_position.y -= m_moveSpeed * dt;
 
 			// Scroll wheel: scale move speed (min 0.5).
 			const float scroll = input.GetScrollDelta().y;
@@ -156,4 +162,4 @@ namespace aether
 				m_orbitDistance = std::max(0.1f, m_orbitDistance - scroll * m_zoomSpeed);
 		}
 	}
-}
+} // namespace aether

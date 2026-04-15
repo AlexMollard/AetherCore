@@ -1,7 +1,7 @@
 #include "Window.hpp"
 
-#include "Logger.hpp"
 #include "AetherExceptions.hpp"
+#include "Logger.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -54,4 +54,4 @@ namespace aether
 	{
 		glfwPollEvents();
 	}
-}
+} // namespace aether

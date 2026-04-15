@@ -12,7 +12,7 @@ namespace aether::app
 	void LayerStack::AttachAll(LayerContext& context)
 	{
 		INFO(LogCategory::App, "Attaching layers.");
-		for (const auto& layer : m_layers)
+		for (const auto& layer: m_layers)
 		{
 			layer->OnAttach(context);
 		}
@@ -29,7 +29,7 @@ namespace aether::app
 
 	void LayerStack::UpdateAll(LayerContext& context)
 	{
-		for (const auto& layer : m_layers)
+		for (const auto& layer: m_layers)
 		{
 			layer->OnUpdate(context);
 		}
@@ -37,9 +37,9 @@ namespace aether::app
 
 	void LayerStack::GuiAll(LayerContext& context)
 	{
-		for (const auto& layer : m_layers)
+		for (const auto& layer: m_layers)
 		{
 			layer->OnGui(context);
 		}
 	}
-}
+} // namespace aether::app

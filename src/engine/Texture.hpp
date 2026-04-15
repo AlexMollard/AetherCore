@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <string_view>
-
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -37,28 +36,20 @@ namespace aether
 		// Load an image from disk and upload it to the GPU.
 		// uploadQueue + uploadPool are used for a one-time synchronous transfer.
 		// The call blocks until the GPU copy is complete.
-		[[nodiscard]] static Texture LoadFromFile(
-			std::string_view path,
-			VkDevice         device,
-			VmaAllocator     allocator,
-			VkQueue          uploadQueue,
-			VkCommandPool    uploadPool,
-			BindlessManager& bindless);
+		[[nodiscard]] static Texture LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless);
 
-		[[nodiscard]] static Texture LoadFromDiskPath(
-			const std::filesystem::path& path,
-			VkDevice         device,
-			VmaAllocator     allocator,
-			VkQueue          uploadQueue,
-			VkCommandPool    uploadPool,
-			BindlessManager& bindless);
+		[[nodiscard]] static Texture LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless);
 
 		void Destroy();
 
-		[[nodiscard]] bool          IsValid()         const { return m_image.Get() != VK_NULL_HANDLE; }
+		[[nodiscard]] bool IsValid() const
+		{
+			return m_image.Get() != VK_NULL_HANDLE;
+		}
+
 		[[nodiscard]] std::uint32_t GetBindlessSlot() const;
 
 	private:
 		UniqueImage m_image;
 	};
-}
+} // namespace aether

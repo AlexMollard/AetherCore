@@ -15,14 +15,23 @@ namespace aether
 		virtual ~System() = default;
 
 		// Called once when the system is registered with the world.
-	virtual void OnRegister([[maybe_unused]] World& world) {}
+		virtual void OnRegister([[maybe_unused]] World& world)
+		{
+		}
+
 		// Called each frame to update this system. dt is the delta time in seconds.
 		virtual void Update(World& world, float dt) = 0;
 
 		// Called when the system is unregistered (optional cleanup).
-	virtual void OnUnregister([[maybe_unused]] World& world) {}
+		virtual void OnUnregister([[maybe_unused]] World& world)
+		{
+		}
+
 		// Convenient name for debugging (optional).
-		[[nodiscard]] virtual const char* GetName() const { return "System"; }
+		[[nodiscard]] virtual const char* GetName() const
+		{
+			return "System";
+		}
 	};
 
 	// Type-erased holder for any system, with virtual dispatch.
@@ -44,4 +53,4 @@ namespace aether
 	private:
 		std::vector<std::unique_ptr<System>> m_systems;
 	};
-}
+} // namespace aether

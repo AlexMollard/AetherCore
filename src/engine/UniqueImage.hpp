@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -16,13 +15,13 @@ namespace aether
 		// Aspect and sampler are deduced automatically from the format and usage.
 		struct Desc
 		{
-			VkExtent2D            extent = {};
-			VkFormat              format = VK_FORMAT_UNDEFINED;
-			VkImageUsageFlags     usage = 0;
-			std::uint32_t         mipLevels = 1;
-			std::uint32_t         arrayLayers = 1;
+			VkExtent2D extent = {};
+			VkFormat format = VK_FORMAT_UNDEFINED;
+			VkImageUsageFlags usage = 0;
+			std::uint32_t mipLevels = 1;
+			std::uint32_t arrayLayers = 1;
 			VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-			VmaMemoryUsage        memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+			VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 		};
 
 		UniqueImage() = default;
@@ -37,24 +36,14 @@ namespace aether
 		// High-level overload: builds VkImageCreateInfo from Desc, allocates via VMA,
 		// and creates the default VkImageView automatically.  Aspect is deduced from
 		// the format; device is stored so Reset() can destroy the view.
-		static UniqueImage Create(
-			VkDevice device,
-			VmaAllocator allocator,
-			const Desc& desc);
+		static UniqueImage Create(VkDevice device, VmaAllocator allocator, const Desc& desc);
 
 		// Low-level overload: caller supplies the full Vulkan structs directly.
 		// No default view is created; callers manage their own VkImageViews.
-		static UniqueImage Create(
-			VmaAllocator allocator,
-			const VkImageCreateInfo& imageCreateInfo,
-			const VmaAllocationCreateInfo& allocationCreateInfo);
+		static UniqueImage Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		void Reset();
-		void EnsureBindlessSampled(
-			BindlessManager& bindlessManager,
-			VkDevice device,
-			VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		void EnsureBindlessSampled(BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		void ReleaseBindlessSampled(bool deferSlotFree = true);
 
 		[[nodiscard]] VkImage Get() const;
@@ -101,4 +90,4 @@ namespace aether
 		VkSampler m_defaultSampler = VK_NULL_HANDLE;
 		std::uint32_t m_bindlessSlot = kInvalidBindlessSlot;
 	};
-}
+} // namespace aether

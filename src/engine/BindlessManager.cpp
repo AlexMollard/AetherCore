@@ -35,19 +35,19 @@ namespace aether
 		// ── Immutable linear sampler (binding 1) ──────────────────────────────
 		// Created before the layout so the handle can be embedded as immutable.
 		const VkSamplerCreateInfo samplerInfo{
-			.sType                   = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter               = VK_FILTER_LINEAR,
-			.minFilter               = VK_FILTER_LINEAR,
-			.mipmapMode              = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.mipLodBias              = 0.0f,
-			.anisotropyEnable        = VK_FALSE,
-			.compareEnable           = VK_FALSE,
-			.minLod                  = 0.0f,
-			.maxLod                  = VK_LOD_CLAMP_NONE,
-			.borderColor             = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = VK_FILTER_LINEAR,
+			.minFilter = VK_FILTER_LINEAR,
+			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+			.mipLodBias = 0.0f,
+			.anisotropyEnable = VK_FALSE,
+			.compareEnable = VK_FALSE,
+			.minLod = 0.0f,
+			.maxLod = VK_LOD_CLAMP_NONE,
+			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
 			.unnormalizedCoordinates = VK_FALSE,
 		};
 		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler) != VK_SUCCESS)
@@ -58,16 +58,16 @@ namespace aether
 		// ── Descriptor pool ───────────────────────────────────────────────────
 		const VkDescriptorPoolSize poolSizes[2] = {
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity },
-			{ VK_DESCRIPTOR_TYPE_SAMPLER,                1          },
+			{			    VK_DESCRIPTOR_TYPE_SAMPLER,          1 },
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
-			.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-			.pNext         = nullptr,
-			.flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-			.maxSets       = 1,
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+			.pNext = nullptr,
+			.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+			.maxSets = 1,
 			.poolSizeCount = 2,
-			.pPoolSizes    = poolSizes,
+			.pPoolSizes = poolSizes,
 		};
 
 		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
@@ -81,18 +81,18 @@ namespace aether
 		// binding 1 — SAMPLER (immutable linear sampler, shared by all draws)
 		const VkDescriptorSetLayoutBinding bindings[2] = {
 			{
-				.binding         = bindless::kSampledImageBinding, // 0
-				.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-				.descriptorCount = m_capacity,
-				.stageFlags      = bindless::kDefaultStages,
-				.pImmutableSamplers = nullptr,
-			},
+             .binding = bindless::kSampledImageBinding, // 0
+			        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+             .descriptorCount = m_capacity,
+             .stageFlags = bindless::kDefaultStages,
+             .pImmutableSamplers = nullptr,
+			 },
 			{
-				.binding            = 1,
-				.descriptorType     = VK_DESCRIPTOR_TYPE_SAMPLER,
-				.descriptorCount    = 1,
-				.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT,
-				.pImmutableSamplers = &m_linearSampler, // embedded in the layout
+             .binding = 1,
+             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+             .descriptorCount = 1,
+             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+             .pImmutableSamplers = &m_linearSampler, // embedded in the layout
 			},
 		};
 
@@ -100,24 +100,23 @@ namespace aether
 		// (the immutable sampler) is last and has a fixed count of 1, we drop
 		// VARIABLE_DESCRIPTOR_COUNT from binding 0 instead.
 		const VkDescriptorBindingFlags bindingFlags[2] = {
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
 			0, // immutable sampler needs no special flags
 		};
 
 		const VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{
-			.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.pNext        = nullptr,
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+			.pNext = nullptr,
 			.bindingCount = 2,
 			.pBindingFlags = bindingFlags,
 		};
 
 		const VkDescriptorSetLayoutCreateInfo layoutCreateInfo{
-			.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.pNext        = &bindingFlagsInfo,
-			.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.pNext = &bindingFlagsInfo,
+			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
 			.bindingCount = 2,
-			.pBindings    = bindings,
+			.pBindings = bindings,
 		};
 
 		const VkResult layoutResult = vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_layout);
@@ -127,11 +126,11 @@ namespace aether
 		}
 
 		const VkDescriptorSetAllocateInfo allocateInfo{
-			.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.pNext              = nullptr,
-			.descriptorPool     = m_pool,
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+			.pNext = nullptr,
+			.descriptorPool = m_pool,
 			.descriptorSetCount = 1,
-			.pSetLayouts        = &m_layout,
+			.pSetLayouts = &m_layout,
 		};
 
 		const VkResult setResult = vkAllocateDescriptorSets(m_device, &allocateInfo, &m_set);
@@ -266,9 +265,9 @@ namespace aether
 
 		const auto releaseFrame = m_currentFrame + static_cast<std::uint64_t>(m_deferredFreeFrames);
 		m_pendingSlotFrees.push_back(PendingSlotFree{
-			.slot = slot,
-			.releaseFrame = releaseFrame,
-			});
+		        .slot = slot,
+		        .releaseFrame = releaseFrame,
+		});
 	}
 
 	void BindlessManager::AdvanceFrame(const std::uint64_t frameIndex)
@@ -280,22 +279,20 @@ namespace aether
 			return;
 		}
 
-		std::erase_if(m_pendingSlotFrees, [&](const PendingSlotFree& pending) {
-			if (pending.releaseFrame > m_currentFrame)
-			{
-				return false;
-			}
+		std::erase_if(m_pendingSlotFrees,
+		        [&](const PendingSlotFree& pending)
+		        {
+			        if (pending.releaseFrame > m_currentFrame)
+			        {
+				        return false;
+			        }
 
-			FreeSlotImmediateUnlocked(pending.slot);
-			return true;
-			});
+			        FreeSlotImmediateUnlocked(pending.slot);
+			        return true;
+		        });
 	}
 
-	void BindlessManager::UpdateSampledImage(
-		const std::uint32_t slot,
-		VkImageView imageView,
-		VkSampler sampler,
-		const VkImageLayout imageLayout)
+	void BindlessManager::UpdateSampledImage(const std::uint32_t slot, VkImageView imageView, VkSampler sampler, const VkImageLayout imageLayout)
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
@@ -350,4 +347,4 @@ namespace aether
 		m_slotAllocated[slot] = false;
 		m_freeSlots.push_back(slot);
 	}
-}
+} // namespace aether

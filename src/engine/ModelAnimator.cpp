@@ -2,10 +2,9 @@
 
 #include <algorithm>
 #include <cstring>
-#include <stdexcept>
-
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <stdexcept>
 
 #include "AetherExceptions.hpp"
 
@@ -14,7 +13,12 @@ namespace aether
 	namespace
 	{
 		// Keyframe bracket for time t in a sorted time array.
-		struct Bracket { std::size_t lo; std::size_t hi; float alpha; };
+		struct Bracket
+		{
+			std::size_t lo;
+			std::size_t hi;
+			float alpha;
+		};
 
 		Bracket FindBracket(const std::vector<float>& times, float t)
 		{
@@ -63,17 +67,14 @@ namespace aether
 			const auto [lo, hi, a] = FindBracket(ch.times, t);
 			return glm::normalize(glm::slerp(toQuat(ch.values[lo]), toQuat(ch.values[hi]), a));
 		}
-	}
+	} // namespace
 
 	// ── Factory ───────────────────────────────────────────────────────────────
 
-	ModelAnimator ModelAnimator::Create(
-		VkDevice                 device,
-		VmaAllocator             allocator,
-		const assets::GltfAsset& asset)
+	ModelAnimator ModelAnimator::Create(VkDevice device, VmaAllocator allocator, const assets::GltfAsset& asset)
 	{
 		ModelAnimator anim;
-		anim.m_device    = device;
+		anim.m_device = device;
 		anim.m_allocator = allocator;
 		anim.m_animations = asset.animations;
 
@@ -85,15 +86,15 @@ namespace aether
 			NodeState& dst = anim.m_nodes[i];
 
 			dst.bind.translation = src.translation;
-			dst.bind.rotation    = src.rotation;
-			dst.bind.scale       = src.scale;
-			dst.bind.hasMatrix   = src.hasMatrix;
-			dst.bind.matrix      = src.matrix;
-			dst.parentIndex      = src.parentIndex;
+			dst.bind.rotation = src.rotation;
+			dst.bind.scale = src.scale;
+			dst.bind.hasMatrix = src.hasMatrix;
+			dst.bind.matrix = src.matrix;
+			dst.parentIndex = src.parentIndex;
 
 			dst.translation = src.translation;
-			dst.rotation    = src.rotation;
-			dst.scale       = src.scale;
+			dst.rotation = src.rotation;
+			dst.scale = src.scale;
 		}
 
 		// Build per-skin GPU buffers.
@@ -103,8 +104,8 @@ namespace aether
 			const assets::GltfSkin& src = asset.skins[i];
 			SkinData& dst = anim.m_skins[i];
 
-			dst.joints               = src.joints;
-			dst.inverseBindMatrices  = src.inverseBindMatrices;
+			dst.joints = src.joints;
+			dst.inverseBindMatrices = src.inverseBindMatrices;
 
 			// Pad inverse bind matrices to joint count if the accessor was missing.
 			if (dst.inverseBindMatrices.size() < dst.joints.size())
@@ -115,16 +116,14 @@ namespace aether
 				const VkDeviceSize bufSize = sizeof(glm::mat4) * dst.joints.size();
 				const VkBufferCreateInfo bufInfo{
 					.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-					.size  = bufSize,
-					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-					         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+					.size = bufSize,
+					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 				};
 				const VmaAllocationCreateInfo allocInfo{
-					.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-					         VMA_ALLOCATION_CREATE_MAPPED_BIT,
+					.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 					.usage = VMA_MEMORY_USAGE_AUTO,
 				};
-				dst.buffer    = UniqueBuffer::Create(allocator, device, bufInfo, allocInfo);
+				dst.buffer = UniqueBuffer::Create(allocator, device, bufInfo, allocInfo);
 				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
 
 				// Prime with identity so the mesh renders in bind pose before Update().
@@ -143,7 +142,7 @@ namespace aether
 
 	void ModelAnimator::Destroy()
 	{
-		for (SkinData& skin : m_skins)
+		for (SkinData& skin: m_skins)
 		{
 			skin.buffer.Reset();
 			skin.mappedPtr = nullptr;
@@ -151,7 +150,7 @@ namespace aether
 		m_skins.clear();
 		m_nodes.clear();
 		m_animations.clear();
-		m_device    = VK_NULL_HANDLE;
+		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
 	}
 
@@ -162,7 +161,7 @@ namespace aether
 		if (animIndex >= m_animations.size())
 			return 0.0f;
 		float d = 0.0f;
-		for (const assets::GltfAnimationChannel& ch : m_animations[animIndex].channels)
+		for (const assets::GltfAnimationChannel& ch: m_animations[animIndex].channels)
 		{
 			if (!ch.times.empty())
 				d = std::max(d, ch.times.back());
@@ -175,19 +174,19 @@ namespace aether
 		if (index >= m_animations.size())
 			return;
 		m_currentAnim = index;
-		m_time        = 0.0f;
-		m_duration    = ComputeDuration(index);
+		m_time = 0.0f;
+		m_duration = ComputeDuration(index);
 	}
 
 	// ── Per-frame update ──────────────────────────────────────────────────────
 
 	void ModelAnimator::ResetNodesToBind()
 	{
-		for (NodeState& node : m_nodes)
+		for (NodeState& node: m_nodes)
 		{
 			node.translation = node.bind.translation;
-			node.rotation    = node.bind.rotation;
-			node.scale       = node.bind.scale;
+			node.rotation = node.bind.rotation;
+			node.scale = node.bind.scale;
 		}
 	}
 
@@ -211,7 +210,7 @@ namespace aether
 
 		if (m_currentAnim < m_animations.size())
 		{
-			for (const assets::GltfAnimationChannel& ch : m_animations[m_currentAnim].channels)
+			for (const assets::GltfAnimationChannel& ch: m_animations[m_currentAnim].channels)
 			{
 				if (ch.nodeIndex >= m_nodes.size())
 					continue;
@@ -219,17 +218,17 @@ namespace aether
 				NodeState& node = m_nodes[ch.nodeIndex];
 				switch (ch.path)
 				{
-				case assets::GltfAnimationPath::Translation:
-					node.translation = SampleVec3(ch, m_time);
-					break;
-				case assets::GltfAnimationPath::Rotation:
-					node.rotation = SampleQuat(ch, m_time);
-					break;
-				case assets::GltfAnimationPath::Scale:
-					node.scale = SampleVec3(ch, m_time);
-					break;
-				default:
-					break;
+					case assets::GltfAnimationPath::Translation:
+						node.translation = SampleVec3(ch, m_time);
+						break;
+					case assets::GltfAnimationPath::Rotation:
+						node.rotation = SampleQuat(ch, m_time);
+						break;
+					case assets::GltfAnimationPath::Scale:
+						node.scale = SampleVec3(ch, m_time);
+						break;
+					default:
+						break;
 				}
 			}
 		}
@@ -253,16 +252,14 @@ namespace aether
 			}
 			else
 			{
-				local[i] = glm::translate(glm::mat4(1.0f), node.translation)
-				         * glm::mat4_cast(node.rotation)
-				         * glm::scale(glm::mat4(1.0f), node.scale);
+				local[i] = glm::translate(glm::mat4(1.0f), node.translation) * glm::mat4_cast(node.rotation) * glm::scale(glm::mat4(1.0f), node.scale);
 			}
 		}
 
 		// Walk parent chain for each node (robust regardless of node ordering).
 		for (std::size_t i = 0; i < m_nodes.size(); ++i)
 		{
-			glm::mat4    global = local[i];
+			glm::mat4 global = local[i];
 			std::int32_t parent = m_nodes[i].parentIndex;
 			while (parent >= 0)
 			{
@@ -275,7 +272,7 @@ namespace aether
 
 	void ModelAnimator::UploadSkinBuffers()
 	{
-		for (SkinData& skin : m_skins)
+		for (SkinData& skin: m_skins)
 		{
 			if (skin.mappedPtr == nullptr)
 				continue;
@@ -315,4 +312,4 @@ namespace aether
 			return 0;
 		return skin.buffer.GetDeviceAddress();
 	}
-}
+} // namespace aether

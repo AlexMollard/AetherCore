@@ -19,4 +19,4 @@ namespace aether::app
 	private:
 		std::vector<std::unique_ptr<AppLayer>> m_layers;
 	};
-}
+} // namespace aether::app

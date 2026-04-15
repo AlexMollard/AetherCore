@@ -26,4 +26,4 @@ namespace aether
 		Mesh m_quad;
 		Mesh m_cube;
 	};
-}
+} // namespace aether

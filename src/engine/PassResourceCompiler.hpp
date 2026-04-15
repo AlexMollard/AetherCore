@@ -28,11 +28,6 @@ namespace aether
 	class PassResourceCompiler
 	{
 	public:
-		static CompiledResourceSet Compile(
-			ResourcePool& pool,
-			const std::vector<BufferLifetimeRequest>& bufferRequests,
-			const std::vector<ImageLifetimeRequest>& imageRequests,
-			const ResourcePool::BufferFactory& bufferFactory,
-			const ResourcePool::ImageFactory& imageFactory);
+		static CompiledResourceSet Compile(ResourcePool& pool, const std::vector<BufferLifetimeRequest>& bufferRequests, const std::vector<ImageLifetimeRequest>& imageRequests, const ResourcePool::BufferFactory& bufferFactory, const ResourcePool::ImageFactory& imageFactory);
 	};
-}
+} // namespace aether

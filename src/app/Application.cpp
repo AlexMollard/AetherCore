@@ -2,9 +2,9 @@
 
 #include <chrono>
 
+#include "AnimationSystem.hpp"
 #include "FileSystem.hpp"
 #include "Logger.hpp"
-#include "AnimationSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app
@@ -13,30 +13,30 @@ namespace aether::app
 	{
 		using Clock = std::chrono::steady_clock;
 		constexpr std::string_view kUiFontPath = "assets://fonts/Roboto-Regular.ttf";
-	}
+	} // namespace
 
 	void AppLayer::OnAttach(LayerContext& context)
 	{
-		(void)context;
+		(void) context;
 	}
 
 	void AppLayer::OnDetach(LayerContext& context)
 	{
-		(void)context;
+		(void) context;
 	}
 
 	void AppLayer::OnUpdate(LayerContext& context)
 	{
-		(void)context;
+		(void) context;
 	}
 
 	void AppLayer::OnGui(LayerContext& context)
 	{
-		(void)context;
+		(void) context;
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig)
-		: m_engine(engineConfig)
+	      : m_engine(engineConfig)
 	{
 		INFO(LogCategory::App, "Application created.");
 	}
@@ -63,7 +63,8 @@ namespace aether::app
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
-		// resources (pipelines, buffers, etc.) that may still be referenced by the GPU.
+		// resources (pipelines, buffers, etc.) that may still be referenced by the
+		// GPU.
 		m_engine.WaitIdle();
 
 		// Unregister engine-level systems before detaching layers.
@@ -71,9 +72,11 @@ namespace aether::app
 		context.world->UnregisterSystem("AnimationSystem");
 
 		// OnExit:
-		// We call DetachAll() here to detach all layers before the application is destroyed,
-		// This can be thought of like the onDestroy() function in unity or something like that,
-		// where you can do cleanup of game objects and such, but the actual application is still running until this destructor returns and the application is destroyed
+		// We call DetachAll() here to detach all layers before the application is
+		// destroyed, This can be thought of like the onDestroy() function in unity or
+		// something like that, where you can do cleanup of game objects and such, but
+		// the actual application is still running until this destructor returns and
+		// the application is destroyed
 		m_layers.DetachAll(context);
 		m_uiRenderer.Shutdown(m_engine);
 		INFO(LogCategory::App, "Application shutdown complete.");
@@ -89,7 +92,8 @@ namespace aether::app
 	{
 		INFO(LogCategory::App, "Application run loop starting.");
 
-		// Testing the VFS, normally loading shader files would be done in a pipeline creation inside a render graph but im not upto that yet
+		// Testing the VFS, normally loading shader files would be done in a pipeline
+		// creation inside a render graph but im not upto that yet
 		const auto shaderFiles = io::FileSystem::Glob("shaders://**/*.slang.spv");
 		if (shaderFiles.empty())
 		{
@@ -98,7 +102,7 @@ namespace aether::app
 		else
 		{
 			INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFiles.size());
-			for (const auto& shaderFile : shaderFiles)
+			for (const auto& shaderFile: shaderFiles)
 			{
 				VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
 			}
@@ -122,8 +126,10 @@ namespace aether::app
 
 		// Startup:
 		// We call AttachAll() here to attach all layers before the main loop starts,
-		// This can be thought of like the onStart() function in unity or something like that, 
-		// where you can do initialization of game objects and such, but the actual game loop starts after this function returns and the main loop starts
+		// This can be thought of like the onStart() function in unity or something
+		// like that, where you can do initialization of game objects and such, but
+		// the actual game loop starts after this function returns and the main loop
+		// starts
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;
 
@@ -138,8 +144,10 @@ namespace aether::app
 		{
 			Logger::SetFrameNumber(m_frameIndex);
 
-			// Pump event sounds funny but it just means we are polling for events and such, so we call PumpEvents() here to poll for events and such before we do any updating or rendering
-			// So like input events or window events and such
+			// Pump event sounds funny but it just means we are polling for events and
+			// such, so we call PumpEvents() here to poll for events and such before we
+			// do any updating or rendering So like input events or window events and
+			// such
 			m_engine.PumpEvents();
 
 			const auto currentFrameTime = Clock::now();
@@ -147,7 +155,8 @@ namespace aether::app
 			previousFrameTime = currentFrameTime;
 
 			// Per frame context:
-			// A helper struct with useful objects and info you can use in your layers for the current frame.
+			// A helper struct with useful objects and info you can use in your layers
+			// for the current frame.
 			LayerContext frameContext{
 				.engine = m_engine,
 				.deltaTimeSeconds = deltaTime,
@@ -168,12 +177,14 @@ namespace aether::app
 			frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
 
 			// Update:
-			// Game logic and such should be updated in the OnUpdate() function of the layers, so we call UpdateAll() here to update all layers
+			// Game logic and such should be updated in the OnUpdate() function of the
+			// layers, so we call UpdateAll() here to update all layers
 			m_layers.UpdateAll(frameContext);
 
 			// Render:
 			// World rendering is handled implicitly by the engine's frame passes.
-			// GuiAll() is reserved for any explicit overlay/UI work layers want to submit.
+			// GuiAll() is reserved for any explicit overlay/UI work layers want to
+			// submit.
 			m_engine.BeginFrame();
 			m_layers.GuiAll(frameContext);
 			m_engine.EndFrame();
@@ -196,4 +207,4 @@ namespace aether::app
 	{
 		return m_engine;
 	}
-}
+} // namespace aether::app

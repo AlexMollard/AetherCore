@@ -4,16 +4,7 @@
 
 namespace aether::vkutil
 {
-	inline void TransitionImage(
-		VkCommandBuffer cmd,
-		VkImage image,
-		VkImageLayout oldLayout,
-		VkImageLayout newLayout,
-		VkPipelineStageFlags2 srcStage,
-		VkAccessFlags2 srcAccess,
-		VkPipelineStageFlags2 dstStage,
-		VkAccessFlags2 dstAccess,
-		VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT)
+	inline void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess, VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT)
 	{
 		const VkImageMemoryBarrier2 barrier{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -33,4 +24,4 @@ namespace aether::vkutil
 		};
 		vkCmdPipelineBarrier2(cmd, &dep);
 	}
-}
+} // namespace aether::vkutil

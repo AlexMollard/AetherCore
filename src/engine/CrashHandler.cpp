@@ -1,5 +1,4 @@
 #include "CrashHandler.hpp"
-#include "Logger.hpp"
 
 #include <array>
 #include <atomic>
@@ -9,21 +8,25 @@
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
-#include <fstream>
 #include <format>
+#include <fstream>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 
+#include "Logger.hpp"
+
+// clang-format off
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <Windows.h>
+#	include <DbgHelp.h>
 #endif
-#include <Windows.h>
-#include <DbgHelp.h>
-#endif
+// clang-format on
 
 namespace aether
 {
@@ -56,14 +59,7 @@ namespace aether
 			localTime = *std::localtime(&timePoint);
 #endif
 
-			return std::format(
-				"{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}",
-				localTime.tm_year + 1900,
-				localTime.tm_mon + 1,
-				localTime.tm_mday,
-				localTime.tm_hour,
-				localTime.tm_min,
-				localTime.tm_sec);
+			return std::format("{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}", localTime.tm_year + 1900, localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
 		}
 
 		std::filesystem::path BuildCrashBasePath()
@@ -83,25 +79,14 @@ namespace aether
 			const std::string& name = frame.symbol;
 			const std::string& file = frame.file;
 
-			if (name.find("WriteCallStack") != std::string::npos ||
-				name.find("WriteTextCrashReport") != std::string::npos ||
-				name.find("CaptureCrashArtifacts") != std::string::npos ||
-				name.find("SignalHandlerThunk") != std::string::npos ||
-				name.find("UnhandledExceptionFilterThunk") != std::string::npos ||
-				name.find("TerminateHandlerThunk") != std::string::npos)
+			if (name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("SignalHandlerThunk") != std::string::npos || name.find("UnhandledExceptionFilterThunk") != std::string::npos
+			        || name.find("TerminateHandlerThunk") != std::string::npos)
 			{
 				return true;
 			}
 
-			if (name.find("__scrt_common_main") != std::string::npos ||
-				name.find("invoke_main") != std::string::npos ||
-				name.find("mainCRTStartup") != std::string::npos ||
-				name.find("UnhandledExceptionFilter") != std::string::npos ||
-				name.find("BaseThreadInitThunk") != std::string::npos ||
-				name.find("RtlUserThreadStart") != std::string::npos ||
-				name.find("KiUserExceptionDispatcher") != std::string::npos ||
-				name.find("_C_specific_handler") != std::string::npos ||
-				name.find("seh_filter_exe") != std::string::npos)
+			if (name.find("__scrt_common_main") != std::string::npos || name.find("invoke_main") != std::string::npos || name.find("mainCRTStartup") != std::string::npos || name.find("UnhandledExceptionFilter") != std::string::npos || name.find("BaseThreadInitThunk") != std::string::npos || name.find("RtlUserThreadStart") != std::string::npos
+			        || name.find("KiUserExceptionDispatcher") != std::string::npos || name.find("_C_specific_handler") != std::string::npos || name.find("seh_filter_exe") != std::string::npos)
 			{
 				return true;
 			}
@@ -119,10 +104,12 @@ namespace aether
 			static std::once_flag symbolInitFlag;
 			static bool symbolsInitialized = false;
 
-			std::call_once(symbolInitFlag, [] {
-				SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
-				symbolsInitialized = SymInitialize(GetCurrentProcess(), nullptr, TRUE) == TRUE;
-				});
+			std::call_once(symbolInitFlag,
+			        []
+			        {
+				        SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+				        symbolsInitialized = SymInitialize(GetCurrentProcess(), nullptr, TRUE) == TRUE;
+			        });
 
 			return symbolsInitialized;
 		}
@@ -131,26 +118,26 @@ namespace aether
 		{
 			switch (code)
 			{
-			case EXCEPTION_ACCESS_VIOLATION:
-				return "EXCEPTION_ACCESS_VIOLATION";
-			case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-				return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
-			case EXCEPTION_BREAKPOINT:
-				return "EXCEPTION_BREAKPOINT";
-			case EXCEPTION_DATATYPE_MISALIGNMENT:
-				return "EXCEPTION_DATATYPE_MISALIGNMENT";
-			case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-				return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
-			case EXCEPTION_ILLEGAL_INSTRUCTION:
-				return "EXCEPTION_ILLEGAL_INSTRUCTION";
-			case EXCEPTION_IN_PAGE_ERROR:
-				return "EXCEPTION_IN_PAGE_ERROR";
-			case EXCEPTION_INT_DIVIDE_BY_ZERO:
-				return "EXCEPTION_INT_DIVIDE_BY_ZERO";
-			case EXCEPTION_STACK_OVERFLOW:
-				return "EXCEPTION_STACK_OVERFLOW";
-			default:
-				return "UNKNOWN_EXCEPTION";
+				case EXCEPTION_ACCESS_VIOLATION:
+					return "EXCEPTION_ACCESS_VIOLATION";
+				case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+					return "EXCEPTION_ARRAY_BOUNDS_EXCEEDED";
+				case EXCEPTION_BREAKPOINT:
+					return "EXCEPTION_BREAKPOINT";
+				case EXCEPTION_DATATYPE_MISALIGNMENT:
+					return "EXCEPTION_DATATYPE_MISALIGNMENT";
+				case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+					return "EXCEPTION_FLT_DIVIDE_BY_ZERO";
+				case EXCEPTION_ILLEGAL_INSTRUCTION:
+					return "EXCEPTION_ILLEGAL_INSTRUCTION";
+				case EXCEPTION_IN_PAGE_ERROR:
+					return "EXCEPTION_IN_PAGE_ERROR";
+				case EXCEPTION_INT_DIVIDE_BY_ZERO:
+					return "EXCEPTION_INT_DIVIDE_BY_ZERO";
+				case EXCEPTION_STACK_OVERFLOW:
+					return "EXCEPTION_STACK_OVERFLOW";
+				default:
+					return "UNKNOWN_EXCEPTION";
 			}
 		}
 
@@ -249,16 +236,7 @@ namespace aether
 
 				for (std::size_t i = 0; i < 128; ++i)
 				{
-					const BOOL advanced = StackWalk64(
-						machineType,
-						GetCurrentProcess(),
-						GetCurrentThread(),
-						&stackFrame,
-						&context,
-						nullptr,
-						SymFunctionTableAccess64,
-						SymGetModuleBase64,
-						nullptr);
+					const BOOL advanced = StackWalk64(machineType, GetCurrentProcess(), GetCurrentThread(), &stackFrame, &context, nullptr, SymFunctionTableAccess64, SymGetModuleBase64, nullptr);
 
 					if (advanced == FALSE || stackFrame.AddrPC.Offset == 0)
 					{
@@ -294,12 +272,10 @@ namespace aether
 			}
 
 			const CONTEXT& context = *exceptionPointers->ContextRecord;
-			output << std::format(
-				"RegisterSummary: RIP=0x{:X} RSP=0x{:X}\n",
-				static_cast<unsigned long long>(context.Rip),
-				static_cast<unsigned long long>(context.Rsp));
+			output << std::format("RegisterSummary: RIP=0x{:X} RSP=0x{:X}\n", static_cast<unsigned long long>(context.Rip), static_cast<unsigned long long>(context.Rsp));
 
-			auto describeRegister = [&](const char* name, const std::uint64_t value) {
+			auto describeRegister = [&](const char* name, const std::uint64_t value)
+			{
 				if (value == 0)
 				{
 					output << std::format("  {}: null\n", name);
@@ -319,13 +295,26 @@ namespace aether
 				}
 
 				output << std::format("  {}: 0x{:X}\n", name, static_cast<unsigned long long>(value));
-				};
+			};
 
-			describeRegister("RAX", context.Rax); // RAX is often used for return values, so it's useful to have it in the report
-			describeRegister("RBX", context.Rbx); // RBX is a callee-saved register, so it can sometimes hold important context across function calls
-			describeRegister("RCX", context.Rcx); // RCX is often used for the first integer argument in the Windows x64 calling convention, so it can sometimes indicate what the crashing function was trying to operate on
-			describeRegister("RDX", context.Rdx); // RDX is often used for the second integer argument in the Windows x64 calling convention, so it can sometimes indicate what the crashing function was trying to operate on
-			describeRegister("RBP", context.Rbp); // RBP is the base pointer and can sometimes be used to identify stack frames and local variables, although it's not always reliable since some functions omit the frame pointer
+			describeRegister("RAX",
+			        context.Rax); // RAX is often used for return values, so it's
+			                      // useful to have it in the report
+			describeRegister("RBX",
+			        context.Rbx); // RBX is a callee-saved register, so it can sometimes hold
+			                      // important context across function calls
+			describeRegister("RCX",
+			        context.Rcx); // RCX is often used for the first integer argument in the
+			                      // Windows x64 calling convention, so it can sometimes indicate
+			                      // what the crashing function was trying to operate on
+			describeRegister("RDX",
+			        context.Rdx); // RDX is often used for the second integer argument in the
+			                      // Windows x64 calling convention, so it can sometimes indicate
+			                      // what the crashing function was trying to operate on
+			describeRegister("RBP",
+			        context.Rbp); // RBP is the base pointer and can sometimes be used to
+			                      // identify stack frames and local variables, although it's not
+			                      // always reliable since some functions omit the frame pointer
 		}
 
 		void WriteExceptionHints(std::ofstream& output, EXCEPTION_POINTERS* exceptionPointers)
@@ -341,16 +330,10 @@ namespace aether
 				return;
 			}
 
-			const auto operation = record->ExceptionInformation[0] == 0 ? "read"
-				: (record->ExceptionInformation[0] == 1 ? "write"
-					: (record->ExceptionInformation[0] == 8 ? "execute" : "unknown"));
+			const auto operation = record->ExceptionInformation[0] == 0 ? "read" : (record->ExceptionInformation[0] == 1 ? "write" : (record->ExceptionInformation[0] == 8 ? "execute" : "unknown"));
 			const auto address = static_cast<std::uint64_t>(record->ExceptionInformation[1]);
 
-			output << std::format(
-				"AccessViolation: attempted to {} address 0x{:X}{}\n",
-				operation,
-				static_cast<unsigned long long>(address),
-				IsLikelyNullPointer(address) ? " (likely null/near-null dereference)" : "");
+			output << std::format("AccessViolation: attempted to {} address 0x{:X}{}\n", operation, static_cast<unsigned long long>(address), IsLikelyNullPointer(address) ? " (likely null/near-null dereference)" : "");
 		}
 
 		void WriteCallStack(std::ofstream& output, EXCEPTION_POINTERS* exceptionPointers, const StackFrame* faultFrame)
@@ -363,7 +346,7 @@ namespace aether
 			}
 
 			std::optional<StackFrame> likelyCrashSite;
-			for (const auto& frame : frames)
+			for (const auto& frame: frames)
 			{
 				if (!IsNoiseFrame(frame))
 				{
@@ -378,17 +361,11 @@ namespace aether
 				{
 					if (!likelyCrashSite->file.empty())
 					{
-						output << std::format(
-							"LikelyCrashSite: {} ({}:{})\n",
-							likelyCrashSite->symbol.empty() ? "<unknown>" : likelyCrashSite->symbol,
-							likelyCrashSite->file,
-							likelyCrashSite->line);
+						output << std::format("LikelyCrashSite: {} ({}:{})\n", likelyCrashSite->symbol.empty() ? "<unknown>" : likelyCrashSite->symbol, likelyCrashSite->file, likelyCrashSite->line);
 					}
 					else
 					{
-						output << std::format(
-							"LikelyCrashSite: {}\n",
-							likelyCrashSite->symbol.empty() ? "<unknown>" : likelyCrashSite->symbol);
+						output << std::format("LikelyCrashSite: {}\n", likelyCrashSite->symbol.empty() ? "<unknown>" : likelyCrashSite->symbol);
 					}
 				}
 			}
@@ -396,7 +373,7 @@ namespace aether
 			output << "CallStack (filtered):\n";
 			std::size_t filteredIndex = 0;
 			std::size_t filteredTotal = 0;
-			for (const auto& frame : frames)
+			for (const auto& frame: frames)
 			{
 				if (IsNoiseFrame(frame))
 				{
@@ -411,21 +388,11 @@ namespace aether
 
 				if (!frame.file.empty())
 				{
-					output << std::format(
-						"  [{}] {} + 0x{:X} ({}:{})\n",
-						filteredIndex,
-						frame.symbol.empty() ? "<unknown>" : frame.symbol,
-						static_cast<unsigned long long>(frame.displacement),
-						frame.file,
-						frame.line);
+					output << std::format("  [{}] {} + 0x{:X} ({}:{})\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.displacement), frame.file, frame.line);
 				}
 				else
 				{
-					output << std::format(
-						"  [{}] {} @ 0x{:X}\n",
-						filteredIndex,
-						frame.symbol.empty() ? "<unknown>" : frame.symbol,
-						static_cast<unsigned long long>(frame.address));
+					output << std::format("  [{}] {} @ 0x{:X}\n", filteredIndex, frame.symbol.empty() ? "<unknown>" : frame.symbol, static_cast<unsigned long long>(frame.address));
 				}
 
 				++filteredIndex;
@@ -440,16 +407,15 @@ namespace aether
 		}
 #endif
 
-		void WriteTextCrashReport(
-			const std::filesystem::path& reportPath,
-			const std::string_view reason,
-			const std::string_view detail,
+		void WriteTextCrashReport(const std::filesystem::path& reportPath,
+		        const std::string_view reason,
+		        const std::string_view detail,
 #ifdef _WIN32
-			EXCEPTION_POINTERS* exceptionPointers,
+		        EXCEPTION_POINTERS* exceptionPointers,
 #else
-			void*,
+		        void*,
 #endif
-			int signalNumber)
+		        int signalNumber)
 		{
 			std::ofstream output(reportPath, std::ios::out | std::ios::trunc);
 			if (!output)
@@ -477,14 +443,10 @@ namespace aether
 			if (exceptionPointers != nullptr && exceptionPointers->ExceptionRecord != nullptr)
 			{
 				const auto code = exceptionPointers->ExceptionRecord->ExceptionCode;
-				output << "ExceptionCode: 0x" << std::hex << code << std::dec
-					<< " (" << ExceptionCodeName(code) << ")\n";
-				output << "ExceptionAddress: 0x" << std::hex
-					<< reinterpret_cast<std::uintptr_t>(exceptionPointers->ExceptionRecord->ExceptionAddress)
-					<< std::dec << '\n';
+				output << "ExceptionCode: 0x" << std::hex << code << std::dec << " (" << ExceptionCodeName(code) << ")\n";
+				output << "ExceptionAddress: 0x" << std::hex << reinterpret_cast<std::uintptr_t>(exceptionPointers->ExceptionRecord->ExceptionAddress) << std::dec << '\n';
 
-				faultFrame = ResolveAddressToFrame(
-					reinterpret_cast<std::uint64_t>(exceptionPointers->ExceptionRecord->ExceptionAddress));
+				faultFrame = ResolveAddressToFrame(reinterpret_cast<std::uint64_t>(exceptionPointers->ExceptionRecord->ExceptionAddress));
 				hasFaultFrame = true;
 				if (!faultFrame.symbol.empty())
 				{
@@ -506,15 +468,14 @@ namespace aether
 #endif
 		}
 
-		void CaptureCrashArtifacts(
-			const std::string_view reason,
-			const std::string_view detail,
+		void CaptureCrashArtifacts(const std::string_view reason,
+		        const std::string_view detail,
 #ifdef _WIN32
-			EXCEPTION_POINTERS* exceptionPointers,
+		        EXCEPTION_POINTERS* exceptionPointers,
 #else
-			void* exceptionPointers,
+		        void* exceptionPointers,
 #endif
-			int signalNumber)
+		        int signalNumber)
 		{
 			if (g_crashInProgress.test_and_set())
 			{
@@ -576,7 +537,7 @@ namespace aether
 			CaptureCrashArtifacts("Signal", "Signal handler invoked.", nullptr, signalNumber);
 			std::_Exit(3);
 		}
-	}
+	} // namespace
 
 	void CrashHandler::Install(std::string_view appName)
 	{
@@ -626,4 +587,4 @@ namespace aether
 		const std::string reason = std::format("GraphicsFault:{}", stage);
 		CaptureDiagnosticReport(reason, detail);
 	}
-}
+} // namespace aether

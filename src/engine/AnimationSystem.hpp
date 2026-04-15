@@ -9,7 +9,11 @@ namespace aether
 	class AnimationSystem : public System
 	{
 	public:
-		const char* GetName() const override { return "AnimationSystem"; }
+		const char* GetName() const override
+		{
+			return "AnimationSystem";
+		}
+
 		void Update(World& world, float dt) override;
 	};
-}
+} // namespace aether

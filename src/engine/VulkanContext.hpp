@@ -1,9 +1,8 @@
 #pragma once
 
 #include <optional>
-
-#include <VkBootstrap.h>
 #include <vk_mem_alloc.h>
+#include <VkBootstrap.h>
 #include <vulkan/vulkan.h>
 
 namespace aether
@@ -40,4 +39,4 @@ namespace aether
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
 	};
-}
+} // namespace aether

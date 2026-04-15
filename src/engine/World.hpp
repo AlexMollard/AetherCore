@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <utility>
-
 #include <entt/entt.hpp>
+#include <utility>
 
 #include "Components.hpp"
 #include "Entity.hpp"
@@ -88,8 +87,15 @@ namespace aether
 			return m_registry.view<Components...>();
 		}
 
-		[[nodiscard]] Registry& GetRegistry() noexcept { return m_registry; }
-		[[nodiscard]] const Registry& GetRegistry() const noexcept { return m_registry; }
+		[[nodiscard]] Registry& GetRegistry() noexcept
+		{
+			return m_registry;
+		}
+
+		[[nodiscard]] const Registry& GetRegistry() const noexcept
+		{
+			return m_registry;
+		}
 
 		// ── Engine-internal ───────────────────────────────────────────────────
 
@@ -112,4 +118,4 @@ namespace aether
 		SystemRegistry m_systems;
 		Registry m_registry;
 	};
-}
+} // namespace aether

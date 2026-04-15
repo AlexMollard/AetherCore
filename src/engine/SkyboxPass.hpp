@@ -26,16 +26,16 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDevice device         = VK_NULL_HANDLE;
+			VkDevice device = VK_NULL_HANDLE;
 			VkFormat hdrColorFormat = VK_FORMAT_UNDEFINED;
 		};
 
 		SkyboxPass() = default;
 
-		SkyboxPass(const SkyboxPass&)            = delete;
+		SkyboxPass(const SkyboxPass&) = delete;
 		SkyboxPass& operator=(const SkyboxPass&) = delete;
 
-		SkyboxPass(SkyboxPass&&) noexcept            = default;
+		SkyboxPass(SkyboxPass&&) noexcept = default;
 		SkyboxPass& operator=(SkyboxPass&&) noexcept = default;
 
 		static SkyboxPass Create(const Desc& desc);
@@ -49,4 +49,4 @@ namespace aether
 	private:
 		GraphicsPipeline m_pipeline;
 	};
-}
+} // namespace aether

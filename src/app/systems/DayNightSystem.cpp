@@ -1,7 +1,6 @@
 #include "DayNightSystem.hpp"
 
 #include <cmath>
-
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
@@ -29,10 +28,7 @@ namespace aether::app
 		m_time += dt;
 
 		const float sunAngle = m_time * 0.18f;
-		const glm::vec3 sunDirection = glm::normalize(glm::vec3(
-			std::cos(sunAngle),
-			0.35f + 0.85f * std::sin(sunAngle * 0.7f),
-			std::sin(sunAngle)));
+		const glm::vec3 sunDirection = glm::normalize(glm::vec3(std::cos(sunAngle), 0.35f + 0.85f * std::sin(sunAngle * 0.7f), std::sin(sunAngle)));
 
 		const float dayFactor = glm::smoothstep(-0.05f, 0.35f, sunDirection.y);
 		const float horizonFactor = 1.0f - glm::smoothstep(0.0f, 0.50f, std::abs(sunDirection.y));
@@ -80,4 +76,4 @@ namespace aether::app
 	{
 		m_time = 0.0f;
 	}
-}
+} // namespace aether::app

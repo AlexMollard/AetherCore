@@ -11,12 +11,14 @@ namespace aether
 	{
 	public:
 		explicit EngineError(const std::string& message)
-			: std::runtime_error(message)
-		{}
+		      : std::runtime_error(message)
+		{
+		}
 
 		explicit EngineError(const char* message)
-			: std::runtime_error(message)
-		{}
+		      : std::runtime_error(message)
+		{
+		}
 
 		[[nodiscard]] virtual LogCategory Category() const noexcept
 		{
@@ -28,12 +30,14 @@ namespace aether
 	{
 	public:
 		explicit WindowError(const std::string& message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		explicit WindowError(const char* message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -45,12 +49,14 @@ namespace aether
 	{
 	public:
 		explicit VulkanError(const std::string& message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		explicit VulkanError(const char* message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -62,12 +68,14 @@ namespace aether
 	{
 	public:
 		explicit AssetError(const std::string& message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		explicit AssetError(const char* message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
@@ -79,16 +87,18 @@ namespace aether
 	{
 	public:
 		explicit FileSystemError(const std::string& message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		explicit FileSystemError(const char* message)
-			: EngineError(message)
-		{}
+		      : EngineError(message)
+		{
+		}
 
 		[[nodiscard]] LogCategory Category() const noexcept override
 		{
 			return LogCategory::FileSystem;
 		}
 	};
-}
+} // namespace aether

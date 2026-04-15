@@ -3,29 +3,27 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
-#include <unordered_map>
-#include <string>
 #include <stdexcept>
+#include <string>
+#include <unordered_map>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-
+#include <glm/common.hpp>
+#include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/geometric.hpp>
-#include <glm/common.hpp>
 
 #include "assets/GltfAsset.hpp"
+#include "EcsHelpers.hpp"
 #include "FileSystem.hpp"
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
-#include "EcsHelpers.hpp"
 
 namespace aether
 {
 	AetherCore::AetherCore(const Config& config)
-		: m_window(config.appName, config.width, config.height),
-		m_vulkanContext(m_window, config.appName)
+	      : m_window(config.appName, config.width, config.height), m_vulkanContext(m_window, config.appName)
 	{
 		m_swapchain.Initialize(m_vulkanContext, m_window);
 		m_bindlessManager.Initialize(m_vulkanContext);
@@ -33,31 +31,29 @@ namespace aether
 		m_materialBuffer.Initialize(m_vulkanContext);
 		m_lightingManager.Initialize(m_vulkanContext, m_renderer);
 		m_resourcePool.ConfigureBindlessImages({
-			.manager = &m_bindlessManager,
-			.device = m_vulkanContext.GetDevice().device,
-			});
-		m_primitiveMeshes.Initialize(
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator());
+		        .manager = &m_bindlessManager,
+		        .device = m_vulkanContext.GetDevice().device,
+		});
+		m_primitiveMeshes.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
 		io::FileSystem::InitializeDefaultMounts();
 
 		m_postProcessStack = PostProcessStack::Create({
-			.device = m_vulkanContext.GetDevice().device,
-			.allocator = m_vulkanContext.GetAllocator(),
-			.extent = m_swapchain.GetExtent(),
-			.swapchainFormat = m_swapchain.GetImageFormat(),
-			.bindlessManager = &m_bindlessManager,
-			.renderGraph = &m_renderGraph,
-			});
+		        .device = m_vulkanContext.GetDevice().device,
+		        .allocator = m_vulkanContext.GetAllocator(),
+		        .extent = m_swapchain.GetExtent(),
+		        .swapchainFormat = m_swapchain.GetImageFormat(),
+		        .bindlessManager = &m_bindlessManager,
+		        .renderGraph = &m_renderGraph,
+		});
 		m_postProcessStack.SetFxaaEnabled(false);
 
 		// Initialize services.
 		m_renderer.Initialize(&m_postProcessStack);
 
 		m_skyboxPass = SkyboxPass::Create({
-			.device = m_vulkanContext.GetDevice().device,
-			.hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
-			});
+		        .device = m_vulkanContext.GetDevice().device,
+		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
+		});
 
 		m_assetManager.Initialize(this);
 
@@ -74,15 +70,10 @@ namespace aether
 		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
 		const VkCommandPoolCreateInfo uploadPoolInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-								VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 			.queueFamilyIndex = m_vulkanContext.GetGraphicsQueueFamily(),
 		};
-		if (vkCreateCommandPool(
-			m_vulkanContext.GetDevice().device,
-			&uploadPoolInfo,
-			nullptr,
-			&m_uploadPool) != VK_SUCCESS)
+		if (vkCreateCommandPool(m_vulkanContext.GetDevice().device, &uploadPoolInfo, nullptr, &m_uploadPool) != VK_SUCCESS)
 		{
 			throw std::runtime_error("AetherCore: failed to create upload command pool.");
 		}
@@ -90,9 +81,7 @@ namespace aether
 		m_asyncComputeEnabled = m_vulkanContext.GetComputeQueue() != VK_NULL_HANDLE;
 		if (!m_asyncComputeEnabled)
 		{
-			WARN(
-				LogCategory::Engine,
-				"Async compute disabled: no dedicated compute queue available.");
+			WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
 		}
 
 		if (m_asyncComputeEnabled)
@@ -112,11 +101,7 @@ namespace aether
 			{
 				throw std::runtime_error("AetherCore: failed to create compute timeline semaphore.");
 			}
-			CommandRecorder::SetObjectName(
-				m_vulkanContext.GetDevice().device,
-				reinterpret_cast<std::uint64_t>(m_computeTimelineSemaphore),
-				VK_OBJECT_TYPE_SEMAPHORE,
-				"AsyncCompute.Timeline");
+			CommandRecorder::SetObjectName(m_vulkanContext.GetDevice().device, reinterpret_cast<std::uint64_t>(m_computeTimelineSemaphore), VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -126,15 +111,10 @@ namespace aether
 				auto& frame = m_asyncComputeFrames[frameI];
 				const VkCommandPoolCreateInfo poolInfo{
 					.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-					.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
-						VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+					.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
 					.queueFamilyIndex = m_vulkanContext.GetComputeQueueFamily(),
 				};
-				if (vkCreateCommandPool(
-					m_vulkanContext.GetDevice().device,
-					&poolInfo,
-					nullptr,
-					&frame.commandPool) != VK_SUCCESS)
+				if (vkCreateCommandPool(m_vulkanContext.GetDevice().device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
 				{
 					throw std::runtime_error("AetherCore: failed to create async compute command pool.");
 				}
@@ -145,10 +125,7 @@ namespace aether
 					.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
 					.commandBufferCount = 1,
 				};
-				if (vkAllocateCommandBuffers(
-					m_vulkanContext.GetDevice().device,
-					&allocInfo,
-					&frame.commandBuffer) != VK_SUCCESS)
+				if (vkAllocateCommandBuffers(m_vulkanContext.GetDevice().device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
 				{
 					throw std::runtime_error("AetherCore: failed to allocate async compute command buffer.");
 				}
@@ -159,23 +136,12 @@ namespace aether
 				}
 
 				const std::string suffix = "[" + std::to_string(frameI) + "]";
-				CommandRecorder::SetObjectName(
-					m_vulkanContext.GetDevice().device,
-					reinterpret_cast<std::uint64_t>(frame.commandBuffer),
-					VK_OBJECT_TYPE_COMMAND_BUFFER,
-					("AsyncCompute.Cmd" + suffix).c_str());
-				CommandRecorder::SetObjectName(
-					m_vulkanContext.GetDevice().device,
-					reinterpret_cast<std::uint64_t>(frame.inFlight),
-					VK_OBJECT_TYPE_FENCE,
-					("AsyncCompute.Fence" + suffix).c_str());
+				CommandRecorder::SetObjectName(m_vulkanContext.GetDevice().device, reinterpret_cast<std::uint64_t>(frame.commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, ("AsyncCompute.Cmd" + suffix).c_str());
+				CommandRecorder::SetObjectName(m_vulkanContext.GetDevice().device, reinterpret_cast<std::uint64_t>(frame.inFlight), VK_OBJECT_TYPE_FENCE, ("AsyncCompute.Fence" + suffix).c_str());
 			}
 		}
 
-		INFO(
-			LogCategory::Engine,
-			"Engine core initialized. Bindless sampled-image capacity: {}",
-			m_bindlessManager.GetCapacity());
+		INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_bindlessManager.GetCapacity());
 	}
 
 	void AetherCore::WaitIdle() const
@@ -186,7 +152,7 @@ namespace aether
 	AetherCore::~AetherCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
-		for (auto& frame : m_asyncComputeFrames)
+		for (auto& frame: m_asyncComputeFrames)
 		{
 			if (frame.inFlight != VK_NULL_HANDLE)
 			{
@@ -251,44 +217,41 @@ namespace aether
 
 		// Preserve current post-process settings across recreation.
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
-		const float       exposure = m_postProcessStack.GetExposure();
-		const bool        fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
+		const float exposure = m_postProcessStack.GetExposure();
+		const bool fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
 
 		// Rebuild extent-dependent offscreen targets and re-register passes.
 		m_postProcessStack.Destroy();
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
-			.device = m_vulkanContext.GetDevice().device,
-			.allocator = m_vulkanContext.GetAllocator(),
-			.extent = m_swapchain.GetExtent(),
-			.swapchainFormat = m_swapchain.GetImageFormat(),
-			.bindlessManager = &m_bindlessManager,
-			.renderGraph = &m_renderGraph,
-			});
+		        .device = m_vulkanContext.GetDevice().device,
+		        .allocator = m_vulkanContext.GetAllocator(),
+		        .extent = m_swapchain.GetExtent(),
+		        .swapchainFormat = m_swapchain.GetImageFormat(),
+		        .bindlessManager = &m_bindlessManager,
+		        .renderGraph = &m_renderGraph,
+		});
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 
 		// Re-register existing RTT images after graph clear.
-		for (auto& [id, rt] : m_rtCameras)
+		for (auto& [id, rt]: m_rtCameras)
 		{
 			if (rt.depthImage.GetFormat() != m_swapchain.GetDepthFormat())
 			{
 				rt.depthImage.Reset();
-				rt.depthImage = UniqueImage::Create(
-					m_vulkanContext.GetDevice().device,
-					m_vulkanContext.GetAllocator(),
-					{
-						.extent = rt.extent,
-						.format = m_swapchain.GetDepthFormat(),
-						.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-					});
+				rt.depthImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
+				        m_vulkanContext.GetAllocator(),
+				        {
+				                .extent = rt.extent,
+				                .format = m_swapchain.GetDepthFormat(),
+				                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+				        });
 			}
 
-			rt.rgColor = m_renderGraph.RegisterImage(
-				rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
-			rt.rgDepth = m_renderGraph.RegisterImage(
-				rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
+			rt.rgColor = m_renderGraph.RegisterImage(rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
+			rt.rgDepth = m_renderGraph.RegisterImage(rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
 		}
 		RegisterPasses();
 
@@ -305,22 +268,21 @@ namespace aether
 		// ── Pass 2: Forward ───────────────────────────────────────────────────
 		// Renders all scene objects into the HDR offscreen buffer.
 		// Loads the sky written by the previous pass instead of clearing.
-		m_forwardPass.RegisterPass(
-			m_renderGraph,
-			m_postProcessStack.GetHdrColor(),
-			m_renderGraph.GetSwapchainDepth(),
-			m_scene,
-			m_world,
-			m_renderQueue,
-			m_bindlessManager.GetSet(),
-			[this]()
-			{
-				const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
-				return m_lightingManager.GetSet(frameIdx);
-			});
+		m_forwardPass.RegisterPass(m_renderGraph,
+		        m_postProcessStack.GetHdrColor(),
+		        m_renderGraph.GetSwapchainDepth(),
+		        m_scene,
+		        m_world,
+		        m_renderQueue,
+		        m_bindlessManager.GetSet(),
+		        [this]()
+		        {
+			        const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+			        return m_lightingManager.GetSet(frameIdx);
+		        });
 
 		// ── Passes 3–5: Render-to-texture cameras ────────────────────────────
-		for (auto& [id, rt] : m_rtCameras)
+		for (auto& [id, rt]: m_rtCameras)
 		{
 			RegisterRttPassesFor(id);
 		}
@@ -328,6 +290,7 @@ namespace aether
 		// ── Passes 6–7: Tonemap + FXAA ────────────────────────────────────────
 		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
 	}
+
 	void AetherCore::RegisterRttPassesFor(const uint32_t id)
 	{
 		auto it = m_rtCameras.find(id);
@@ -342,67 +305,50 @@ namespace aether
 		const VkExtent2D extent = it->second.extent;
 
 		m_renderGraph.AddPass(passName)
-			.WriteColor(
-				color,
-				VK_ATTACHMENT_LOAD_OP_CLEAR,
-				VK_ATTACHMENT_STORE_OP_STORE,
-				ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
-			.WriteDepth(
-				depth,
-				VK_ATTACHMENT_LOAD_OP_CLEAR,
-				VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				ClearDepthValue(1.0f))
-			.SetExtent(extent)
-			.Execute([this, id](PassContext& ctx)
-				{
-					auto rit = m_rtCameras.find(id);
-					if (rit == m_rtCameras.end())
-					{
-						return;
-					}
+		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
+		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
+		        .SetExtent(extent)
+		        .Execute(
+		                [this, id](PassContext& ctx)
+		                {
+			                auto rit = m_rtCameras.find(id);
+			                if (rit == m_rtCameras.end())
+			                {
+				                return;
+			                }
 
-					Camera* cam = m_cameraManager.TryGet(rit->second.camera);
-					if (cam == nullptr || !rit->second.constants)
-					{
-						return;
-					}
+			                Camera* cam = m_cameraManager.TryGet(rit->second.camera);
+			                if (cam == nullptr || !rit->second.constants)
+			                {
+				                return;
+			                }
 
-					const float aspect = static_cast<float>(rit->second.extent.width) / static_cast<float>(rit->second.extent.height);
+			                const float aspect = static_cast<float>(rit->second.extent.width) / static_cast<float>(rit->second.extent.height);
 
-					FrameConstants fc{};
-					fc.view = cam->GetViewMatrix();
-					fc.proj = cam->GetProjectionMatrix(aspect);
-					fc.viewProj = fc.proj * fc.view;
-					fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
+			                FrameConstants fc{};
+			                fc.view = cam->GetViewMatrix();
+			                fc.proj = cam->GetProjectionMatrix(aspect);
+			                fc.viewProj = fc.proj * fc.view;
+			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 
-					fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
-					fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
-					fc.ambientColor = m_renderer.GetAmbientLightVector();
-					fc.sunColor = m_renderer.GetSunColorVector();
-					fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
-					fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
-					fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
+			                fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
+			                fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
+			                fc.ambientColor = m_renderer.GetAmbientLightVector();
+			                fc.sunColor = m_renderer.GetSunColorVector();
+			                fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
+			                fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
+			                fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
 
-					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
-					m_lightingManager.UpdateForView(
-						frameIdx,
-						VK_NULL_HANDLE,
-						*cam,
-						rit->second.extent,
-						fc,
-						m_lightingManager.IsRttBinningEnabled());
-					rit->second.constants->Write(frameIdx, fc);
-					const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
+			                const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+			                m_lightingManager.UpdateForView(frameIdx, VK_NULL_HANDLE, *cam, rit->second.extent, fc, m_lightingManager.IsRttBinningEnabled());
+			                rit->second.constants->Write(frameIdx, fc);
+			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-					m_scene.FlushToQueue(m_renderQueue);
-					m_world.FlushToQueue(m_renderQueue);
-					m_renderQueue.Flush(
-						ctx.recorder,
-						frameAddr,
-						m_bindlessManager.GetSet(),
-						m_lightingManager.GetSet(frameIdx));
-					m_renderQueue.Clear();
-				});
+			                m_scene.FlushToQueue(m_renderQueue);
+			                m_world.FlushToQueue(m_renderQueue);
+			                m_renderQueue.Flush(ctx.recorder, frameAddr, m_bindlessManager.GetSet(), m_lightingManager.GetSet(frameIdx));
+			                m_renderQueue.Clear();
+		                });
 	}
 
 	void AetherCore::Tick(const float dt)
@@ -428,8 +374,7 @@ namespace aether
 
 		if (m_swapchain.IsFrameValid())
 		{
-			const auto frameIdx = static_cast<std::uint32_t>(
-				m_frameIndex % Swapchain::kMaxFramesInFlight);
+			const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 
 			// Write per-frame camera data into the GPU buffer then get its BDA.
 			FrameConstants fc{};
@@ -458,7 +403,7 @@ namespace aether
 
 			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
 			{
-				const std::uint32_t computeFamily  = m_vulkanContext.GetComputeQueueFamily();
+				const std::uint32_t computeFamily = m_vulkanContext.GetComputeQueueFamily();
 				const std::uint32_t graphicsFamily = m_vulkanContext.GetGraphicsQueueFamily();
 
 				VkCommandBuffer lightingCmd = m_swapchain.GetCurrentCommandBuffer();
@@ -478,15 +423,7 @@ namespace aether
 					lightingCmd = asyncFrame.commandBuffer;
 				}
 
-				m_lightingManager.UpdateForView(
-					frameIdx,
-					lightingCmd,
-					*cam,
-					m_swapchain.GetExtent(),
-					fc,
-					true,
-					computeFamily,
-					graphicsFamily);
+				m_lightingManager.UpdateForView(frameIdx, lightingCmd, *cam, m_swapchain.GetExtent(), fc, true, computeFamily, graphicsFamily);
 
 				if (m_asyncComputeEnabled)
 				{
@@ -522,11 +459,7 @@ namespace aether
 					// before the fragment shader reads them.
 					if (computeFamily != graphicsFamily)
 					{
-						m_lightingManager.EmitAcquireBarriers(
-							frameIdx,
-							m_swapchain.GetCurrentCommandBuffer(),
-							computeFamily,
-							graphicsFamily);
+						m_lightingManager.EmitAcquireBarriers(frameIdx, m_swapchain.GetCurrentCommandBuffer(), computeFamily, graphicsFamily);
 					}
 				}
 			}
@@ -553,12 +486,7 @@ namespace aether
 			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr);
 			m_currentRecorder.EndDebugLabel();
 		}
-		m_swapchain.EndFrame(
-			m_vulkanContext.GetGraphicsQueue(),
-			m_vulkanContext.GetPresentQueue(),
-			computeFinished,
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-			m_computeTimelineValue);
+		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, m_computeTimelineValue);
 		++m_frameIndex;
 		m_bindlessManager.AdvanceFrame(m_frameIndex);
 	}
@@ -658,17 +586,45 @@ namespace aether
 		return m_swapchain;
 	}
 
-	Input& AetherCore::GetInput() { return m_input; }
-	const Input& AetherCore::GetInput() const { return m_input; }
+	Input& AetherCore::GetInput()
+	{
+		return m_input;
+	}
 
-	CameraManager& AetherCore::GetCameraManager() { return m_cameraManager; }
-	const CameraManager& AetherCore::GetCameraManager() const { return m_cameraManager; }
+	const Input& AetherCore::GetInput() const
+	{
+		return m_input;
+	}
 
-	Renderer& AetherCore::GetRenderer() { return m_renderer; }
-	const Renderer& AetherCore::GetRenderer() const { return m_renderer; }
+	CameraManager& AetherCore::GetCameraManager()
+	{
+		return m_cameraManager;
+	}
 
-	AssetManager& AetherCore::GetAssets() { return m_assetManager; }
-	const AssetManager& AetherCore::GetAssets() const { return m_assetManager; }
+	const CameraManager& AetherCore::GetCameraManager() const
+	{
+		return m_cameraManager;
+	}
+
+	Renderer& AetherCore::GetRenderer()
+	{
+		return m_renderer;
+	}
+
+	const Renderer& AetherCore::GetRenderer() const
+	{
+		return m_renderer;
+	}
+
+	AssetManager& AetherCore::GetAssets()
+	{
+		return m_assetManager;
+	}
+
+	const AssetManager& AetherCore::GetAssets() const
+	{
+		return m_assetManager;
+	}
 
 	void AetherCore::SetTonemapMode(TonemapMode mode)
 	{
@@ -735,9 +691,7 @@ namespace aether
 		return m_lightingManager.IsGpuBinningEnabled();
 	}
 
-	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(
-		const CameraHandle camera,
-		const VkExtent2D extent)
+	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(const CameraHandle camera, const VkExtent2D extent)
 	{
 		if (!m_cameraManager.TryGet(camera))
 		{
@@ -748,33 +702,25 @@ namespace aether
 		rt.camera = camera;
 		rt.extent = extent;
 
-		rt.colorImage = UniqueImage::Create(
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator(),
-			{
-				.extent = extent,
-				.format = GetForwardColorFormat(),
-				.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			});
-		rt.colorImage.EnsureBindlessSampled(
-			m_bindlessManager,
-			m_vulkanContext.GetDevice().device,
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		rt.colorImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
+		        m_vulkanContext.GetAllocator(),
+		        {
+		                .extent = extent,
+		                .format = GetForwardColorFormat(),
+		                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		        });
+		rt.colorImage.EnsureBindlessSampled(m_bindlessManager, m_vulkanContext.GetDevice().device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-		rt.depthImage = UniqueImage::Create(
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator(),
-			{
-				.extent = extent,
-				.format = m_swapchain.GetDepthFormat(),
-				.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-			});
+		rt.depthImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
+		        m_vulkanContext.GetAllocator(),
+		        {
+		                .extent = extent,
+		                .format = m_swapchain.GetDepthFormat(),
+		                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		        });
 
-		rt.rgColor = m_renderGraph.RegisterImage(
-			rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
-		rt.rgDepth = m_renderGraph.RegisterImage(
-			rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
+		rt.rgColor = m_renderGraph.RegisterImage(rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
+		rt.rgDepth = m_renderGraph.RegisterImage(rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(m_vulkanContext);
@@ -853,30 +799,17 @@ namespace aether
 
 	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices)
 	{
-		return Mesh::Create(
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator(),
-			vertices);
+		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), vertices);
 	}
 
 	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices)
 	{
-		return Mesh::Create(
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator(),
-			vertices,
-			indices);
+		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), vertices, indices);
 	}
 
 	Texture AetherCore::CreateTexture(std::string_view path)
 	{
-		return Texture::LoadFromFile(
-			path,
-			m_vulkanContext.GetDevice().device,
-			m_vulkanContext.GetAllocator(),
-			m_vulkanContext.GetGraphicsQueue(),
-			m_uploadPool,
-			m_bindlessManager);
+		return Texture::LoadFromFile(path, m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool, m_bindlessManager);
 	}
 
 	void AetherCore::RegisterMaterial(Material& mat)
@@ -891,9 +824,7 @@ namespace aether
 			gpu.occlusionStrength = mat.occlusionStrength;
 			gpu.alphaCutoff = mat.alphaCutoff;
 			gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
-			gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
-				| (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u)
-				| (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
+			gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u) | (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u) | (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
 			gpu.albedoSlot = mat.albedoSlot;
 			gpu.normalSlot = mat.normalSlot;
 			gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
@@ -906,7 +837,9 @@ namespace aether
 		const std::uint32_t slot = m_materialBuffer.AllocateSlot();
 		if (slot == MaterialBuffer::kInvalidSlot)
 		{
-			WARN(LogCategory::Engine, "RegisterMaterial: MaterialBuffer is full — material will render as default.");
+			WARN(LogCategory::Engine,
+			        "RegisterMaterial: MaterialBuffer is full — "
+			        "material will render as default.");
 			return;
 		}
 
@@ -917,9 +850,7 @@ namespace aether
 		gpu.occlusionStrength = mat.occlusionStrength;
 		gpu.alphaCutoff = mat.alphaCutoff;
 		gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
-		gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
-			| (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u)
-			| (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
+		gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u) | (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u) | (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
 		gpu.albedoSlot = mat.albedoSlot;
 		gpu.normalSlot = mat.normalSlot;
 		gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
@@ -991,7 +922,7 @@ namespace aether
 		}
 
 		loaded.primitives.reserve(source.primitives.size());
-		for (const assets::GltfPrimitive& primitive : source.primitives)
+		for (const assets::GltfPrimitive& primitive: source.primitives)
 		{
 			if (primitive.vertices.empty())
 			{
@@ -1027,7 +958,8 @@ namespace aether
 				mat.alphaMask = srcMat.alphaMask;
 
 				// Helper: resolve texture → bindless image slot
-				auto resolveSlot = [&](std::int32_t texIdx) -> std::uint32_t {
+				auto resolveSlot = [&](std::int32_t texIdx) -> std::uint32_t
+				{
 					if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
 					{
 						return Material::kNoTexture;
@@ -1038,7 +970,7 @@ namespace aether
 						return Material::kNoTexture;
 					}
 					return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
-					};
+				};
 
 				mat.albedoSlot = resolveSlot(srcMat.baseColorTexture);
 				mat.normalSlot = resolveSlot(srcMat.normalTexture);
@@ -1052,42 +984,27 @@ namespace aether
 			loaded.primitives.push_back(std::move(loadedPrim));
 		}
 
-		INFO(LogCategory::Engine,
-			"Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).",
-			std::string(path),
-			loaded.primitives.size(),
-			loaded.textures.size(),
-			source.animations.size());
+		INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
 
 		// Build animator when the asset has skins.
 		if (!source.skins.empty())
 		{
-			loaded.animator = ModelAnimator::Create(
-				m_vulkanContext.GetDevice().device,
-				m_vulkanContext.GetAllocator(),
-				source);
+			loaded.animator = ModelAnimator::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), source);
 		}
 
 		return loaded;
 	}
 
-	std::vector<Entity> AetherCore::SpawnModel(LoadedModel& model,
-		GraphicsPipeline& pipeline,
-		float scale)
+	std::vector<Entity> AetherCore::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale)
 	{
 		std::vector<Entity> entities;
 		entities.reserve(model.primitives.size());
 
 		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
 
-		for (const LoadedModelPrimitive& primitive : model.primitives)
+		for (const LoadedModelPrimitive& primitive: model.primitives)
 		{
-			const Entity entity = aether::ecs::SpawnMesh(
-				m_world,
-				pipeline,
-				primitive.mesh,
-				primitive.material,
-				scaleMat * primitive.localTransform);
+			const Entity entity = aether::ecs::SpawnMesh(m_world, pipeline, primitive.mesh, primitive.material, scaleMat * primitive.localTransform);
 
 			if (model.animator && primitive.skinIndex >= 0)
 			{
@@ -1131,4 +1048,4 @@ namespace aether
 
 		vkFreeCommandBuffers(m_vulkanContext.GetDevice().device, m_uploadPool, 1, &cmd);
 	}
-}
+} // namespace aether

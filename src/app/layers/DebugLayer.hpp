@@ -29,4 +29,4 @@ namespace aether::app
 		std::size_t m_frameHistoryHead = 0;
 		std::size_t m_frameHistoryCount = 0;
 	};
-}
+} // namespace aether::app

@@ -1,8 +1,7 @@
 #pragma once
 
-#include <vector>
-
 #include <glm/glm.hpp>
+#include <vector>
 
 #include "AetherCore.hpp"
 #include "AssetManager.hpp"
@@ -15,12 +14,7 @@
 namespace aether::ecs
 {
 	// Creates a single entity from an explicit mesh + material.
-	inline aether::Entity SpawnMesh(
-		aether::World& world,
-		aether::GraphicsPipeline& pipeline,
-		const aether::Mesh& mesh,
-		aether::Material material,
-		const glm::mat4& transform = glm::mat4(1.0f))
+	inline aether::Entity SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::Material material, const glm::mat4& transform = glm::mat4(1.0f))
 	{
 		const aether::Entity entity = world.Create();
 		world.EmplaceOrReplace<aether::PipelineComponent>(entity, aether::PipelineComponent{ .pipeline = &pipeline });
@@ -34,16 +28,10 @@ namespace aether::ecs
 	// tag list, and wires AnimatorComponent when the model has a skeleton.
 	// Returns the number of entities spawned.
 	template<typename... Tags>
-	inline std::size_t SpawnModel(
-		aether::World& world,
-		aether::AssetManager& assets,
-		aether::LoadedModel& model,
-		aether::GraphicsPipeline& pipeline,
-		float scale,
-		Tags... tags)
+	inline std::size_t SpawnModel(aether::World& world, aether::AssetManager& assets, aether::LoadedModel& model, aether::GraphicsPipeline& pipeline, float scale, Tags... tags)
 	{
 		const std::vector<aether::Entity> entities = assets.SpawnModel(model, pipeline, scale);
-		for (const aether::Entity e : entities)
+		for (const aether::Entity e: entities)
 		{
 			(world.EmplaceOrReplace<Tags>(e, tags), ...);
 			if (model.animator)
@@ -51,4 +39,4 @@ namespace aether::ecs
 		}
 		return entities.size();
 	}
-}
+} // namespace aether::ecs

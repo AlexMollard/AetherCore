@@ -3,10 +3,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <glm/common.hpp>
 #include <stdexcept>
 #include <vector>
-
-#include <glm/common.hpp>
 
 #include "FileSystem.hpp"
 
@@ -26,7 +25,7 @@ namespace
 		}
 		return mod;
 	}
-}
+} // namespace
 
 namespace aether
 {
@@ -47,23 +46,23 @@ namespace aether
 
 		const VkDescriptorSetLayoutBinding bindings[] = {
 			{
-				.binding = 0,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			},
+             .binding = 0,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .descriptorCount = 1,
+             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+			 },
 			{
-				.binding = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			},
+             .binding = 1,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .descriptorCount = 1,
+             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+			 },
 			{
-				.binding = 2,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.descriptorCount = 1,
-				.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			},
+             .binding = 2,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .descriptorCount = 1,
+             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+			 },
 		};
 
 		const VkDescriptorSetLayoutCreateInfo layoutInfo{
@@ -119,7 +118,7 @@ namespace aether
 		}
 
 		const VkDevice device = m_context->GetDevice().device;
-		for (auto& frame : m_buffers)
+		for (auto& frame: m_buffers)
 		{
 			frame.lights.Reset();
 			frame.tileHeaders.Reset();
@@ -170,15 +169,7 @@ namespace aether
 		return m_sets[frameSlot];
 	}
 
-	void LightingManager::UpdateForView(
-		const std::uint32_t frameSlot,
-		VkCommandBuffer cmd,
-		const Camera& camera,
-		const VkExtent2D extent,
-		FrameConstants& fc,
-		const bool enableBinningForView,
-		const std::uint32_t computeQueueFamily,
-		const std::uint32_t graphicsQueueFamily) const
+	void LightingManager::UpdateForView(const std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, const VkExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const std::uint32_t computeQueueFamily, const std::uint32_t graphicsQueueFamily) const
 	{
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
@@ -195,35 +186,28 @@ namespace aether
 		UpdateForViewCpu(frameSlot, camera, extent, fc);
 	}
 
-	void LightingManager::UpdateForViewGpu(
-		const std::uint32_t frameSlot,
-		VkCommandBuffer cmd,
-		const Camera& camera,
-		const VkExtent2D extent,
-		FrameConstants& fc,
-		const std::uint32_t srcQueueFamily,
-		const std::uint32_t dstQueueFamily) const
+	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, const VkExtent2D extent, FrameConstants& fc, const std::uint32_t srcQueueFamily, const std::uint32_t dstQueueFamily) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
-		for (const Renderer::PointLight& src : m_renderer->GetPointLights())
+		for (const Renderer::PointLight& src: m_renderer->GetPointLights())
 		{
 			lights.push_back(GpuLight{
-				.positionRadius = glm::vec4(src.position, src.radius),
-				.colorIntensity = glm::vec4(src.color, src.intensity),
-				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
-				.params = glm::vec4(0.0f),
-				});
+			        .positionRadius = glm::vec4(src.position, src.radius),
+			        .colorIntensity = glm::vec4(src.color, src.intensity),
+			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
+			        .params = glm::vec4(0.0f),
+			});
 		}
-		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
+		for (const Renderer::SpotLight& src: m_renderer->GetSpotLights())
 		{
 			lights.push_back(GpuLight{
-				.positionRadius = glm::vec4(src.position, src.radius),
-				.colorIntensity = glm::vec4(src.color, src.intensity),
-				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
-				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-				});
+			        .positionRadius = glm::vec4(src.position, src.radius),
+			        .colorIntensity = glm::vec4(src.color, src.intensity),
+			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
+			        .params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
+			});
 		}
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
@@ -245,16 +229,8 @@ namespace aether
 		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
 		LightingComputePush push{};
 		push.viewProj = proj * camera.GetViewMatrix();
-		push.params0 = glm::vec4(
-			camera.GetNearPlane(),
-			0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]),
-			static_cast<float>(extent.width),
-			static_cast<float>(extent.height));
-		push.params1 = glm::uvec4(
-			kTileSizePx,
-			tilesX,
-			tilesY,
-			static_cast<std::uint32_t>(lights.size()));
+		push.params0 = glm::vec4(camera.GetNearPlane(), 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
+		push.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		push.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
 
 		const VkMemoryBarrier2 hostToCompute{
@@ -307,10 +283,8 @@ namespace aether
 		// When queue families differ, issue QFOT release barriers on each buffer so
 		// the graphics queue can acquire ownership before the fragment shader reads.
 		// When same family, a plain memory barrier from compute to fragment suffices.
-		//const auto& frame = m_buffers[frameSlot];
-		const bool crossFamily = srcQueueFamily != dstQueueFamily &&
-			srcQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
-			dstQueueFamily != VK_QUEUE_FAMILY_IGNORED;
+		// const auto& frame = m_buffers[frameSlot];
+		const bool crossFamily = srcQueueFamily != dstQueueFamily && srcQueueFamily != VK_QUEUE_FAMILY_IGNORED && dstQueueFamily != VK_QUEUE_FAMILY_IGNORED;
 
 		if (crossFamily)
 		{
@@ -363,11 +337,7 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	void LightingManager::EmitAcquireBarriers(
-		const std::uint32_t frameSlot,
-		VkCommandBuffer graphicsCmd,
-		const std::uint32_t srcFamily,
-		const std::uint32_t dstFamily) const
+	void LightingManager::EmitAcquireBarriers(const std::uint32_t frameSlot, VkCommandBuffer graphicsCmd, const std::uint32_t srcFamily, const std::uint32_t dstFamily) const
 	{
 		if (srcFamily == dstFamily || srcFamily == VK_QUEUE_FAMILY_IGNORED || dstFamily == VK_QUEUE_FAMILY_IGNORED)
 		{
@@ -409,32 +379,28 @@ namespace aether
 		vkCmdPipelineBarrier2(graphicsCmd, &acquireDep);
 	}
 
-	void LightingManager::UpdateForViewCpu(
-		const std::uint32_t frameSlot,
-		const Camera& camera,
-		const VkExtent2D extent,
-		FrameConstants& fc) const
+	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const VkExtent2D extent, FrameConstants& fc) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
-		for (const Renderer::PointLight& src : m_renderer->GetPointLights())
+		for (const Renderer::PointLight& src: m_renderer->GetPointLights())
 		{
 			lights.push_back(GpuLight{
-				.positionRadius = glm::vec4(src.position, src.radius),
-				.colorIntensity = glm::vec4(src.color, src.intensity),
-				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
-				.params = glm::vec4(0.0f),
-				});
+			        .positionRadius = glm::vec4(src.position, src.radius),
+			        .colorIntensity = glm::vec4(src.color, src.intensity),
+			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
+			        .params = glm::vec4(0.0f),
+			});
 		}
-		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
+		for (const Renderer::SpotLight& src: m_renderer->GetSpotLights())
 		{
 			lights.push_back(GpuLight{
-				.positionRadius = glm::vec4(src.position, src.radius),
-				.colorIntensity = glm::vec4(src.color, src.intensity),
-				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
-				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-				});
+			        .positionRadius = glm::vec4(src.position, src.radius),
+			        .colorIntensity = glm::vec4(src.color, src.intensity),
+			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
+			        .params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
+			});
 		}
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
@@ -451,6 +417,7 @@ namespace aether
 			int maxTy = -1;
 			bool visible = false;
 		};
+
 		std::vector<ScreenBounds> bounds(lights.size());
 
 		const glm::mat4 view = camera.GetViewMatrix();
@@ -461,49 +428,49 @@ namespace aether
 		const float nearClip = camera.GetNearPlane();
 
 		auto computeLightBounds = [&](const GpuLight& light, ScreenBounds& out)
+		{
+			const glm::vec4 viewPos4 = view * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
+			const float depth = -viewPos4.z;
+			if (depth < nearClip)
 			{
-				const glm::vec4 viewPos4 = view * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
-				const float depth = -viewPos4.z;
-				if (depth < nearClip)
-				{
-					out.visible = false;
-					return;
-				}
+				out.visible = false;
+				return;
+			}
 
-				const glm::vec4 clip = viewProj * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
-				if (std::abs(clip.w) <= 1e-6f)
-				{
-					out.visible = false;
-					return;
-				}
+			const glm::vec4 clip = viewProj * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
+			if (std::abs(clip.w) <= 1e-6f)
+			{
+				out.visible = false;
+				return;
+			}
 
-				const glm::vec3 ndc = glm::vec3(clip) / clip.w;
-				const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
-				const float screenY = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(extent.height);
-				const float radiusPx = (light.positionRadius.w * pixelScaleY) / std::max(depth, nearClip);
-				if (radiusPx <= 0.5f)
-				{
-					out.visible = false;
-					return;
-				}
+			const glm::vec3 ndc = glm::vec3(clip) / clip.w;
+			const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
+			const float screenY = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(extent.height);
+			const float radiusPx = (light.positionRadius.w * pixelScaleY) / std::max(depth, nearClip);
+			if (radiusPx <= 0.5f)
+			{
+				out.visible = false;
+				return;
+			}
 
-				const float minX = screenX - radiusPx;
-				const float maxX = screenX + radiusPx;
-				const float minY = screenY - radiusPx;
-				const float maxY = screenY + radiusPx;
+			const float minX = screenX - radiusPx;
+			const float maxX = screenX + radiusPx;
+			const float minY = screenY - radiusPx;
+			const float maxY = screenY + radiusPx;
 
-				if (maxX < 0.0f || maxY < 0.0f || minX >= static_cast<float>(extent.width) || minY >= static_cast<float>(extent.height))
-				{
-					out.visible = false;
-					return;
-				}
+			if (maxX < 0.0f || maxY < 0.0f || minX >= static_cast<float>(extent.width) || minY >= static_cast<float>(extent.height))
+			{
+				out.visible = false;
+				return;
+			}
 
-				out.minTx = static_cast<int>(glm::clamp(std::floor(minX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
-				out.maxTx = static_cast<int>(glm::clamp(std::floor(maxX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
-				out.minTy = static_cast<int>(glm::clamp(std::floor(minY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
-				out.maxTy = static_cast<int>(glm::clamp(std::floor(maxY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
-				out.visible = true;
-			};
+			out.minTx = static_cast<int>(glm::clamp(std::floor(minX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
+			out.maxTx = static_cast<int>(glm::clamp(std::floor(maxX / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesX - 1u)));
+			out.minTy = static_cast<int>(glm::clamp(std::floor(minY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
+			out.maxTy = static_cast<int>(glm::clamp(std::floor(maxY / static_cast<float>(kTileSizePx)), 0.0f, static_cast<float>(tilesY - 1u)));
+			out.visible = true;
+		};
 
 		for (std::size_t lightIndex = 0; lightIndex < lights.size(); ++lightIndex)
 		{
@@ -573,45 +540,37 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, 0u);
 	}
 
-	void LightingManager::EnsureBuffers(
-		const std::uint32_t frameSlot,
-		const std::size_t lightCount,
-		const std::size_t tileCount,
-		const std::size_t indexCount) const
+	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
 		auto& frame = m_buffers[frameSlot];
 		const VkDevice device = m_context->GetDevice().device;
 		const VmaAllocator allocator = m_context->GetAllocator();
 
-		auto ensureBuffer = [&](UniqueBuffer& buffer,
-			std::size_t& capacity,
-			const std::size_t required,
-			const VkDeviceSize stride)
+		auto ensureBuffer = [&](UniqueBuffer& buffer, std::size_t& capacity, const std::size_t required, const VkDeviceSize stride)
+		{
+			const std::size_t safeRequired = std::max<std::size_t>(required, 1u);
+			if (buffer && capacity >= safeRequired)
 			{
-				const std::size_t safeRequired = std::max<std::size_t>(required, 1u);
-				if (buffer && capacity >= safeRequired)
-				{
-					return;
-				}
+				return;
+			}
 
-				capacity = std::max(safeRequired, capacity * 2u);
-				if (capacity == 0)
-				{
-					capacity = safeRequired;
-				}
+			capacity = std::max(safeRequired, capacity * 2u);
+			if (capacity == 0)
+			{
+				capacity = safeRequired;
+			}
 
-				buffer.Reset();
-				VkBufferCreateInfo info{
-					.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-					.size = stride * capacity,
-					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-				};
-				VmaAllocationCreateInfo allocInfo{};
-				allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-				allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-					VMA_ALLOCATION_CREATE_MAPPED_BIT;
-				buffer = UniqueBuffer::Create(allocator, device, info, allocInfo);
+			buffer.Reset();
+			VkBufferCreateInfo info{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				.size = stride * capacity,
+				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			};
+			VmaAllocationCreateInfo allocInfo{};
+			allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+			buffer = UniqueBuffer::Create(allocator, device, info, allocInfo);
+		};
 
 		ensureBuffer(frame.lights, frame.lightsCapacity, lightCount, sizeof(GpuLight));
 		ensureBuffer(frame.tileHeaders, frame.headersCapacity, tileCount, sizeof(TileHeader));
@@ -717,32 +676,31 @@ namespace aether
 
 		const VkWriteDescriptorSet writes[] = {
 			{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = m_sets[frameSlot],
-				.dstBinding = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pBufferInfo = &lightInfo,
-			},
+             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+             .dstSet = m_sets[frameSlot],
+             .dstBinding = 0,
+             .descriptorCount = 1,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .pBufferInfo = &lightInfo,
+			 },
 			{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = m_sets[frameSlot],
-				.dstBinding = 1,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pBufferInfo = &headerInfo,
-			},
+             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+             .dstSet = m_sets[frameSlot],
+             .dstBinding = 1,
+             .descriptorCount = 1,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .pBufferInfo = &headerInfo,
+			 },
 			{
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = m_sets[frameSlot],
-				.dstBinding = 2,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pBufferInfo = &indexInfo,
-			},
+             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+             .dstSet = m_sets[frameSlot],
+             .dstBinding = 2,
+             .descriptorCount = 1,
+             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+             .pBufferInfo = &indexInfo,
+			 },
 		};
-		vkUpdateDescriptorSets(m_context->GetDevice().device,
-			static_cast<std::uint32_t>(std::size(writes)), writes, 0, nullptr);
+		vkUpdateDescriptorSets(m_context->GetDevice().device, static_cast<std::uint32_t>(std::size(writes)), writes, 0, nullptr);
 	}
 
 	void LightingManager::DisableForView(FrameConstants& fc) const
@@ -750,4 +708,4 @@ namespace aether
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);
 	}
-}
+} // namespace aether

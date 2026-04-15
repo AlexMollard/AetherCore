@@ -1,12 +1,11 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
 
 #include "Mesh.hpp"
 
@@ -115,4 +114,4 @@ namespace aether::assets
 
 		static GltfAsset LoadFromVfsPath(std::string_view path);
 	};
-}
+} // namespace aether::assets

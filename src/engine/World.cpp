@@ -36,7 +36,7 @@ namespace aether
 	void World::FlushToQueue(RenderQueue& queue) const
 	{
 		auto view = m_registry.view<const PipelineComponent, const MeshComponent, const TransformComponent>();
-		for (auto enttEntity : view)
+		for (auto enttEntity: view)
 		{
 			const auto& pipelineComp = view.get<const PipelineComponent>(enttEntity);
 			const auto& meshComp = view.get<const MeshComponent>(enttEntity);
@@ -55,11 +55,11 @@ namespace aether
 			}
 
 			queue.Submit({
-				.pipeline      = pipelineComp.pipeline,
-				.mesh          = meshComp.mesh,
-				.modelMatrix   = transformComp.localToWorld,
-				.materialIndex = materialIndex,
-				.skinBufferAddr = skinBufferAddr,
+			        .pipeline = pipelineComp.pipeline,
+			        .mesh = meshComp.mesh,
+			        .modelMatrix = transformComp.localToWorld,
+			        .materialIndex = materialIndex,
+			        .skinBufferAddr = skinBufferAddr,
 			});
 		}
 	}
@@ -84,4 +84,4 @@ namespace aether
 	{
 		m_systems.UpdateAll(*this, dt);
 	}
-}
+} // namespace aether

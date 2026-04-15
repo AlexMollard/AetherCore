@@ -1,16 +1,15 @@
 #include "SandboxLayer.hpp"
 
 #include <cstdio>
+#include <glm/gtc/matrix_transform.hpp>
 #include <string>
 #include <string_view>
 
-#include <glm/gtc/matrix_transform.hpp>
-
 #include "Logger.hpp"
-#include "UIRenderer.hpp"
-#include "UiLayout.hpp"
-#include "World.hpp"
 #include "systems/SandboxGameSystem.hpp"
+#include "UiLayout.hpp"
+#include "UIRenderer.hpp"
+#include "World.hpp"
 
 namespace aether::app
 {
@@ -41,14 +40,13 @@ namespace aether::app
 
 	void SandboxLayer::DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const
 	{
-		ui.DrawText(
-			text,
-			aether::UiPoint{
-				.anchor = { 0.0f, 0.0f },
-				.offsetPx = { 24.0f, y },
-			},
-			18.0f,
-			glm::vec4(0.92f, 0.95f, 0.97f, 1.0f));
+		ui.DrawText(text,
+		        aether::UiPoint{
+		                .anchor = {  0.0f, 0.0f },
+		                .offsetPx = { 24.0f,    y },
+        },
+		        18.0f,
+		        glm::vec4(0.92f, 0.95f, 0.97f, 1.0f));
 	}
 
 	void SandboxLayer::OnAttach(LayerContext& context)
@@ -66,12 +64,12 @@ namespace aether::app
 	{
 		context.world->UnregisterSystem("SandboxGameSystem");
 		m_gameSystem = nullptr;
-		(void)context;
+		(void) context;
 	}
 
 	void SandboxLayer::OnUpdate(LayerContext& context)
 	{
-		(void)context;
+		(void) context;
 	}
 
 	void SandboxLayer::OnGui(LayerContext& context)
@@ -82,22 +80,21 @@ namespace aether::app
 		}
 
 		context.ui->DrawQuad(
-			aether::UiRect{
-				.anchorMin = { 0.0f, 0.0f },
-				.anchorMax = { 0.0f, 0.0f },
-				.offsetMinPx = { 12.0f, 12.0f },
-				.offsetMaxPx = { 410.0f, 248.0f },
-			},
-			glm::vec4(0.08f, 0.11f, 0.14f, 0.82f));
+		        aether::UiRect{
+		                .anchorMin = {   0.0f,   0.0f },
+		                .anchorMax = {   0.0f,   0.0f },
+		                .offsetMinPx = {  12.0f,  12.0f },
+		                .offsetMaxPx = { 410.0f, 248.0f },
+        },
+		        glm::vec4(0.08f, 0.11f, 0.14f, 0.82f));
 
-		context.ui->DrawText(
-			"Sandbox Debug",
-			aether::UiPoint{
-				.anchor = { 0.0f, 0.0f },
-				.offsetPx = { 24.0f, 42.0f },
-			},
-			28.0f,
-			glm::vec4(0.95f, 0.90f, 0.68f, 1.0f));
+		context.ui->DrawText("Sandbox Debug",
+		        aether::UiPoint{
+		                .anchor = {  0.0f,  0.0f },
+		                .offsetPx = { 24.0f, 42.0f },
+        },
+		        28.0f,
+		        glm::vec4(0.95f, 0.90f, 0.68f, 1.0f));
 
 		std::array<char, 128> line{};
 		const char* activeCameraName = GetActiveCameraName(context.cameras->GetMainCamera());
@@ -107,10 +104,7 @@ namespace aether::app
 
 		if (m_gameSystem)
 		{
-			std::snprintf(line.data(), line.size(), "Scene: %zu ring, %zu model prims, %u anims",
-				m_gameSystem->GetRingCount(),
-				m_gameSystem->GetModelPrimitiveCount(),
-				m_gameSystem->GetAnimationCount());
+			std::snprintf(line.data(), line.size(), "Scene: %zu ring, %zu model prims, %u anims", m_gameSystem->GetRingCount(), m_gameSystem->GetModelPrimitiveCount(), m_gameSystem->GetAnimationCount());
 			DrawDebugLine(*context.ui, line.data(), 106.0f);
 		}
 
@@ -119,15 +113,14 @@ namespace aether::app
 			const std::string_view currentAnimation = m_gameSystem->GetCurrentAnimationName();
 			if (!currentAnimation.empty())
 			{
-				context.ui->DrawText(
-					std::string("Anim: ") + std::string(currentAnimation),
-					aether::UiPoint{
-						.anchor = { 0.0f, 0.0f },
-						.offsetPx = { 24.0f, 130.0f },
-					},
-					18.0f,
-					glm::vec4(0.74f, 0.86f, 0.76f, 1.0f));
+				context.ui->DrawText(std::string("Anim: ") + std::string(currentAnimation),
+				        aether::UiPoint{
+				                .anchor = {  0.0f,   0.0f },
+				                .offsetPx = { 24.0f, 130.0f },
+                },
+				        18.0f,
+				        glm::vec4(0.74f, 0.86f, 0.76f, 1.0f));
 			}
 		}
 	}
-}
+} // namespace aether::app

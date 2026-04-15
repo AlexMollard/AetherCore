@@ -26,4 +26,4 @@ namespace aether::app
 
 		SandboxGameSystem* m_gameSystem = nullptr;
 	};
-}
+} // namespace aether::app

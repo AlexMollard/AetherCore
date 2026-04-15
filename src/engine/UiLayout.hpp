@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
@@ -48,4 +47,4 @@ namespace aether
 
 		return glm::vec4(x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0));
 	}
-}
+} // namespace aether

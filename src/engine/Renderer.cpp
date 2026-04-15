@@ -1,8 +1,7 @@
 #include "Renderer.hpp"
 
-#include <utility>
-
 #include <glm/common.hpp>
+#include <utility>
 
 #include "PostProcessStack.hpp"
 #include "Swapchain.hpp"
@@ -109,7 +108,7 @@ namespace aether
 
 	void Renderer::SetPointLights(std::vector<PointLight> lights)
 	{
-		for (PointLight& light : lights)
+		for (PointLight& light: lights)
 		{
 			light.radius = glm::max(light.radius, 0.01f);
 			light.intensity = glm::max(light.intensity, 0.0f);
@@ -125,15 +124,13 @@ namespace aether
 
 	void Renderer::SetSpotLights(std::vector<SpotLight> lights)
 	{
-		for (SpotLight& light : lights)
+		for (SpotLight& light: lights)
 		{
 			light.radius = glm::max(light.radius, 0.01f);
 			light.intensity = glm::max(light.intensity, 0.0f);
 			light.color = glm::max(light.color, glm::vec3(0.0f));
 			const float dirLen2 = glm::dot(light.direction, light.direction);
-			light.direction = (dirLen2 > 1e-8f)
-				? glm::normalize(light.direction)
-				: glm::vec3(0.0f, -1.0f, 0.0f);
+			light.direction = (dirLen2 > 1e-8f) ? glm::normalize(light.direction) : glm::vec3(0.0f, -1.0f, 0.0f);
 			light.innerAngleRad = glm::clamp(light.innerAngleRad, 0.01f, 1.54f);
 			light.outerAngleRad = glm::clamp(light.outerAngleRad, light.innerAngleRad + 0.01f, 1.55f);
 		}
@@ -158,15 +155,17 @@ namespace aether
 
 	VkFormat Renderer::GetDepthFormat() const
 	{
-		// Would be obtained from Swapchain via AetherCore, but for now return a placeholder.
-		// In practice, this is passed to the app via LayerContext during initialization.
+		// Would be obtained from Swapchain via AetherCore, but for now return a
+		// placeholder. In practice, this is passed to the app via LayerContext during
+		// initialization.
 		return VK_FORMAT_D32_SFLOAT;
 	}
 
 	VkExtent2D Renderer::GetExtent() const
 	{
 		// Would come from Swapchain, but we need a reference to it.
-		// For now, return a placeholder — this should be updated when we have Swapchain access.
+		// For now, return a placeholder — this should be updated when we have
+		// Swapchain access.
 		return VkExtent2D{ 1280, 720 };
 	}
-}
+} // namespace aether

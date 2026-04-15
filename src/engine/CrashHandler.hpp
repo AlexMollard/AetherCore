@@ -11,4 +11,4 @@ namespace aether
 		static void Uninstall();
 		static void ReportGraphicsFault(std::string_view stage, std::string_view detail);
 	};
-}
+} // namespace aether

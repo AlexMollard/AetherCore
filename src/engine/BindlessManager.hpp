@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-
 #include <vulkan/vulkan.h>
 
 #include "BindlessContract.hpp"
@@ -35,19 +34,27 @@ namespace aether
 		[[nodiscard]] VkDescriptorSet GetSet() const;
 		[[nodiscard]] std::uint32_t GetCapacity() const;
 		[[nodiscard]] std::uint64_t GetCurrentFrame() const;
-		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex()  { return bindless::kDescriptorSetIndex; }
-		[[nodiscard]] static constexpr std::uint32_t GetSampledImageBinding() { return bindless::kSampledImageBinding; }
-		[[nodiscard]] static constexpr std::uint32_t GetLinearSamplerBinding() { return 1u; }
+
+		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex()
+		{
+			return bindless::kDescriptorSetIndex;
+		}
+
+		[[nodiscard]] static constexpr std::uint32_t GetSampledImageBinding()
+		{
+			return bindless::kSampledImageBinding;
+		}
+
+		[[nodiscard]] static constexpr std::uint32_t GetLinearSamplerBinding()
+		{
+			return 1u;
+		}
 
 		[[nodiscard]] std::uint32_t AllocateSampledImageSlot();
 		void FreeSampledImageSlot(std::uint32_t slot);
 		void FreeSampledImageSlotDeferred(std::uint32_t slot);
 		void AdvanceFrame(std::uint64_t frameIndex);
-		void UpdateSampledImage(
-			std::uint32_t slot,
-			VkImageView imageView,
-			VkSampler sampler,
-			VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		void UpdateSampledImage(std::uint32_t slot, VkImageView imageView, VkSampler sampler, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	private:
 		struct PendingSlotFree
@@ -71,4 +78,4 @@ namespace aether
 		std::vector<PendingSlotFree> m_pendingSlotFrees;
 		VkSampler m_linearSampler = VK_NULL_HANDLE;
 	};
-}
+} // namespace aether

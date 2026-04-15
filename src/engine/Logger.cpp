@@ -14,10 +14,10 @@
 #include <vector>
 
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <Windows.h>
 #endif
 
 namespace aether
@@ -71,16 +71,16 @@ namespace aether
 		{
 			switch (level)
 			{
-			case LogLevel::Verbose:
-				return "VERB";
-			case LogLevel::Info:
-				return "INFO";
-			case LogLevel::Warn:
-				return "WARN";
-			case LogLevel::Error:
-				return "ERRO";
-			default:
-				return "UNKN";
+				case LogLevel::Verbose:
+					return "VERB";
+				case LogLevel::Info:
+					return "INFO";
+				case LogLevel::Warn:
+					return "WARN";
+				case LogLevel::Error:
+					return "ERRO";
+				default:
+					return "UNKN";
 			}
 		}
 
@@ -88,26 +88,26 @@ namespace aether
 		{
 			switch (category)
 			{
-			case LogCategory::Engine:
-				return "Engine";
-			case LogCategory::Window:
-				return "Window";
-			case LogCategory::Vulkan:
-				return "Vulkan";
-			case LogCategory::Validation:
-				return "Validation";
-			case LogCategory::Asset:
-				return "Asset";
-			case LogCategory::FileSystem:
-				return "FileSystem";
-			case LogCategory::App:
-				return "App";
-			case LogCategory::Std:
-				return "Std";
-			case LogCategory::Unknown:
-				return "Unknown";
-			default:
-				return "Unknown";
+				case LogCategory::Engine:
+					return "Engine";
+				case LogCategory::Window:
+					return "Window";
+				case LogCategory::Vulkan:
+					return "Vulkan";
+				case LogCategory::Validation:
+					return "Validation";
+				case LogCategory::Asset:
+					return "Asset";
+				case LogCategory::FileSystem:
+					return "FileSystem";
+				case LogCategory::App:
+					return "App";
+				case LogCategory::Std:
+					return "Std";
+				case LogCategory::Unknown:
+					return "Unknown";
+				default:
+					return "Unknown";
 			}
 		}
 
@@ -115,16 +115,16 @@ namespace aether
 		{
 			switch (level)
 			{
-			case LogLevel::Verbose:
-				return kAnsiGray;
-			case LogLevel::Info:
-				return kAnsiReset;
-			case LogLevel::Warn:
-				return kAnsiYellow;
-			case LogLevel::Error:
-				return kAnsiRed;
-			default:
-				return kAnsiReset;
+				case LogLevel::Verbose:
+					return kAnsiGray;
+				case LogLevel::Info:
+					return kAnsiReset;
+				case LogLevel::Warn:
+					return kAnsiYellow;
+				case LogLevel::Error:
+					return kAnsiRed;
+				default:
+					return kAnsiReset;
 			}
 		}
 
@@ -155,13 +155,7 @@ namespace aether
 			localTime = *std::localtime(&nowTime);
 #endif
 
-			std::snprintf(
-				cachedTimestamp,
-				sizeof(cachedTimestamp),
-				"%02d:%02d:%02d",
-				localTime.tm_hour,
-				localTime.tm_min,
-				localTime.tm_sec);
+			std::snprintf(cachedTimestamp, sizeof(cachedTimestamp), "%02d:%02d:%02d", localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
 
 			cachedSecond = nowTime;
 			return { cachedTimestamp, 8 };
@@ -185,9 +179,7 @@ namespace aether
 			const std::string_view timestamp = BuildTimestamp(entry.timestamp);
 			const std::string_view fileName = ExtractFileName(entry.filePath);
 
-			std::cerr
-				<< kAnsiGray << timestamp << kAnsiReset << " "
-				<< ToAnsiColor(entry.level) << ToLevelName(entry.level) << kAnsiReset;
+			std::cerr << kAnsiGray << timestamp << kAnsiReset << " " << ToAnsiColor(entry.level) << ToLevelName(entry.level) << kAnsiReset;
 
 			if (!entry.category.empty())
 			{
@@ -273,9 +265,7 @@ namespace aether
 			{
 				{
 					std::unique_lock lock(backend.mutex);
-					backend.condition.wait(lock, [&backend]() {
-						return backend.stopRequested || !backend.pendingEntries.empty();
-						});
+					backend.condition.wait(lock, [&backend]() { return backend.stopRequested || !backend.pendingEntries.empty(); });
 
 					if (backend.pendingEntries.empty() && backend.stopRequested)
 					{
@@ -287,7 +277,7 @@ namespace aether
 					processedSequence = backend.nextSequence;
 				}
 
-				for (const LogEntry& entry : batch)
+				for (const LogEntry& entry: batch)
 				{
 					WriteEntry(entry, backend.fileStream);
 				}
@@ -352,7 +342,7 @@ namespace aether
 			isEnabled = true;
 #endif
 		}
-	}
+	} // namespace
 
 	void Logger::Initialize(const std::string_view filePath)
 	{
@@ -428,9 +418,7 @@ namespace aether
 
 		const std::uint64_t targetSequence = backend.nextSequence;
 		backend.condition.notify_one();
-		backend.drainedCondition.wait(lock, [&backend, targetSequence]() {
-			return backend.completedSequence >= targetSequence;
-			});
+		backend.drainedCondition.wait(lock, [&backend, targetSequence]() { return backend.completedSequence >= targetSequence; });
 	}
 
 	void Logger::SetMinimumLevel(const LogLevel level)
@@ -464,11 +452,7 @@ namespace aether
 		Log(level, ToCategoryName(category), message, location);
 	}
 
-	void Logger::Log(
-		const LogLevel level,
-		const std::string_view category,
-		const std::string_view message,
-		const std::source_location& location)
+	void Logger::Log(const LogLevel level, const std::string_view category, const std::string_view message, const std::source_location& location)
 	{
 		if (!ShouldLog(level))
 		{
@@ -501,4 +485,4 @@ namespace aether
 		backend.condition.notify_one();
 	}
 
-}
+} // namespace aether

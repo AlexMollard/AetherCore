@@ -21,4 +21,4 @@ namespace aether::io
 
 		std::filesystem::path m_rootPath;
 	};
-}
+} // namespace aether::io

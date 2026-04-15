@@ -3,8 +3,9 @@
 namespace aether::io
 {
 	IOThread::IOThread()
-		: m_thread(&IOThread::WorkerLoop, this)
-	{}
+	      : m_thread(&IOThread::WorkerLoop, this)
+	{
+	}
 
 	IOThread::~IOThread()
 	{
@@ -60,4 +61,4 @@ namespace aether::io
 			m_idleCv.notify_all();
 		}
 	}
-}
+} // namespace aether::io

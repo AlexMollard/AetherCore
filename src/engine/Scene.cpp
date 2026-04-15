@@ -35,20 +35,18 @@ namespace aether
 
 	void Scene::FlushToQueue(RenderQueue& queue) const
 	{
-		for (const auto& [id, obj] : m_objects)
+		for (const auto& [id, obj]: m_objects)
 		{
-			const std::uint32_t count = (obj.desc.mesh != nullptr)
-				? obj.desc.mesh->GetVertexCount()
-				: obj.desc.vertexCount;
+			const std::uint32_t count = (obj.desc.mesh != nullptr) ? obj.desc.mesh->GetVertexCount() : obj.desc.vertexCount;
 
 			queue.Submit({
-				.pipeline    = obj.desc.pipeline,
-				.mesh        = obj.desc.mesh,
-				.vertexCount   = count,
-				.instanceCount = 1,
-				.modelMatrix = obj.transform,
-				.materialIndex = obj.desc.materialIndex,
-				});
+			        .pipeline = obj.desc.pipeline,
+			        .mesh = obj.desc.mesh,
+			        .vertexCount = count,
+			        .instanceCount = 1,
+			        .modelMatrix = obj.transform,
+			        .materialIndex = obj.desc.materialIndex,
+			});
 		}
 	}
-}
+} // namespace aether

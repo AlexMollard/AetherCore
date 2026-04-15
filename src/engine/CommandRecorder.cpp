@@ -9,11 +9,7 @@ namespace aether
 		vkCmdBindPipeline(m_cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetPipeline());
 	}
 
-	void CommandRecorder::Draw(
-		std::uint32_t vertexCount,
-		std::uint32_t instanceCount,
-		std::uint32_t firstVertex,
-		std::uint32_t firstInstance)
+	void CommandRecorder::Draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)
 	{
 		vkCmdDraw(m_cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 	}
@@ -61,13 +57,10 @@ namespace aether
 		}
 	}
 
-	void CommandRecorder::SetDebugLabelFunctions(
-		PFN_vkCmdBeginDebugUtilsLabelEXT beginFn,
-		PFN_vkCmdEndDebugUtilsLabelEXT endFn)
+	void CommandRecorder::SetDebugLabelFunctions(PFN_vkCmdBeginDebugUtilsLabelEXT beginFn, PFN_vkCmdEndDebugUtilsLabelEXT endFn)
 	{
 		s_beginDebugLabelFn = beginFn;
 		s_endDebugLabelFn = endFn;
-
 	}
 
 	void CommandRecorder::SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn)
@@ -82,21 +75,16 @@ namespace aether
 			return;
 		}
 		const VkDebugUtilsObjectNameInfoEXT info{
-			.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType   = type,
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = type,
 			.objectHandle = handle,
-			.pObjectName  = name,
+			.pObjectName = name,
 		};
 		s_setObjectNameFn(device, &info);
 	}
 
-	void CommandRecorder::DrawIndexed(
-		std::uint32_t indexCount,
-		std::uint32_t instanceCount,
-		std::uint32_t firstIndex,
-		std::int32_t  vertexOffset,
-		std::uint32_t firstInstance)
+	void CommandRecorder::DrawIndexed(std::uint32_t indexCount, std::uint32_t instanceCount, std::uint32_t firstIndex, std::int32_t vertexOffset, std::uint32_t firstInstance)
 	{
 		vkCmdDrawIndexed(m_cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 	}
-}
+} // namespace aether

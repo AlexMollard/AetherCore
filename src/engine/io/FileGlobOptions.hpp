@@ -8,4 +8,4 @@ namespace aether::io
 		bool includeDirectories = false;
 		bool caseSensitive = false;
 	};
-}
+} // namespace aether::io

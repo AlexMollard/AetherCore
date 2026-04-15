@@ -34,7 +34,7 @@ namespace aether
 		static void Log(LogLevel level, LogCategory category, std::string_view message, const std::source_location& location);
 		static void Log(LogLevel level, std::string_view category, std::string_view message, const std::source_location& location);
 
-		template <typename... Args>
+		template<typename... Args>
 		static void VerboseAt(LogCategory category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Verbose))
@@ -45,7 +45,7 @@ namespace aether
 			Log(LogLevel::Verbose, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void VerboseAt(std::string_view category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Verbose))
@@ -56,7 +56,7 @@ namespace aether
 			Log(LogLevel::Verbose, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void InfoAt(LogCategory category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Info))
@@ -67,7 +67,7 @@ namespace aether
 			Log(LogLevel::Info, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void InfoAt(std::string_view category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Info))
@@ -78,7 +78,7 @@ namespace aether
 			Log(LogLevel::Info, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void WarnAt(LogCategory category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Warn))
@@ -89,7 +89,7 @@ namespace aether
 			Log(LogLevel::Warn, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void WarnAt(std::string_view category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Warn))
@@ -100,7 +100,7 @@ namespace aether
 			Log(LogLevel::Warn, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void ErrorAt(LogCategory category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Error))
@@ -111,7 +111,7 @@ namespace aether
 			Log(LogLevel::Error, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
-		template <typename... Args>
+		template<typename... Args>
 		static void ErrorAt(std::string_view category, const std::source_location& location, std::format_string<Args...> formatText, Args&&... args)
 		{
 			if (!ShouldLog(LogLevel::Error))
@@ -123,22 +123,18 @@ namespace aether
 		}
 
 	private:
-		template <typename... Args>
+		template<typename... Args>
 		static std::string FormatMessage(std::format_string<Args...> formatText, Args&&... args)
 		{
 			return std::format(formatText, std::forward<Args>(args)...);
 		}
 	};
-}
+} // namespace aether
 
-#define VERBOSE(category, formatText, ...) \
-	::aether::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+#define VERBOSE(category, formatText, ...) ::aether::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 
-#define INFO(category, formatText, ...) \
-	::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+#define INFO(category, formatText, ...) ::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 
-#define WARN(category, formatText, ...) \
-	::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+#define WARN(category, formatText, ...) ::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 
-#define ERROR(category, formatText, ...) \
-	::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(,) __VA_ARGS__)
+#define ERROR(category, formatText, ...) ::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)

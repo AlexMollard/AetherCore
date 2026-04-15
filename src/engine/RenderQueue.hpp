@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-
 #include <glm/glm.hpp>
+#include <vector>
 #include <vulkan/vulkan.h>
 
 namespace aether
@@ -16,13 +15,13 @@ namespace aether
 	// Submitted by game/app code; consumed by the engine during EndFrame.
 	struct DrawCommand
 	{
-		const GraphicsPipeline* pipeline    = nullptr;
-		const Mesh*             mesh        = nullptr;      // null = no vertex buffer (shader-hardcoded verts)
-		std::uint32_t           vertexCount   = 0;          // used when mesh == nullptr
-		std::uint32_t           instanceCount = 1;
-		glm::mat4               modelMatrix{ 1.0f };        // per-object world transform
-		std::uint32_t           materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
-		VkDeviceAddress         skinBufferAddr = 0;          // BDA of joint palette; 0 = not skinned
+		const GraphicsPipeline* pipeline = nullptr;
+		const Mesh* mesh = nullptr;    // null = no vertex buffer (shader-hardcoded verts)
+		std::uint32_t vertexCount = 0; // used when mesh == nullptr
+		std::uint32_t instanceCount = 1;
+		glm::mat4 modelMatrix{ 1.0f };             // per-object world transform
+		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
+		VkDeviceAddress skinBufferAddr = 0;        // BDA of joint palette; 0 = not skinned
 	};
 
 	// Per-frame bucket that collects DrawCommands from app/scene code and flushes
@@ -33,13 +32,10 @@ namespace aether
 		void Submit(const DrawCommand& cmd);
 
 		// Engine-internal: record all queued commands into the recorder then clear.
-		// frameConstantsAddr is the BDA of the per-frame FrameConstants buffer written by AetherCore.
-		// bindlessSet (set 0) is bound once per draw when non-null.
-		void Flush(
-			CommandRecorder& recorder,
-			VkDeviceAddress  frameConstantsAddr,
-			VkDescriptorSet  bindlessSet = VK_NULL_HANDLE,
-			VkDescriptorSet  lightingSet = VK_NULL_HANDLE);
+		// frameConstantsAddr is the BDA of the per-frame FrameConstants buffer
+		// written by AetherCore. bindlessSet (set 0) is bound once per draw when
+		// non-null.
+		void Flush(CommandRecorder& recorder, VkDeviceAddress frameConstantsAddr, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE);
 		void Clear();
 
 		[[nodiscard]] bool IsEmpty() const;
@@ -47,4 +43,4 @@ namespace aether
 	private:
 		std::vector<DrawCommand> m_commands;
 	};
-}
+} // namespace aether

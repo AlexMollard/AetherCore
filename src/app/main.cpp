@@ -1,16 +1,18 @@
 #include <exception>
 #include <memory>
 
+#include "AetherExceptions.hpp"
 #include "Application.hpp"
 #include "CrashHandler.hpp"
-#include "Logger.hpp"
-#include "AetherExceptions.hpp"
 #include "layers/DebugLayer.hpp"
 #include "layers/SandboxLayer.hpp"
+#include "Logger.hpp"
 
 namespace
 {
-	// This is just a simple RAII guard to ensure that the logger and crashhandler are properly shutdown when the application exits, even if an exception is thrown.
+	// This is just a simple RAII guard to ensure that the logger and crashhandler
+	// are properly shutdown when the application exits, even if an exception is
+	// thrown.
 	class RuntimeSystemsGuard
 	{
 	public:
@@ -26,7 +28,7 @@ namespace
 			aether::Logger::Shutdown();
 		}
 	};
-}
+} // namespace
 
 int main()
 {
@@ -39,7 +41,8 @@ int main()
 		aether::app::Application application;
 		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
 		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
-		// Add more layers here as needed, like a editor layer or some kind of background layer even
+		// Add more layers here as needed, like a editor layer or some kind of
+		// background layer even
 		return application.Run();
 	}
 	catch (const std::exception& exception)

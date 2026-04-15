@@ -2,8 +2,8 @@
 
 #include <algorithm>
 
-#include "BindlessManager.hpp"
 #include "AetherExceptions.hpp"
+#include "BindlessManager.hpp"
 
 namespace aether
 {
@@ -23,7 +23,7 @@ namespace aether
 
 			return a.alias.allowCrossQueueAliasing && b.alias.allowCrossQueueAliasing;
 		}
-	}
+	} // namespace
 
 	bool LifetimeWindow::Overlaps(const LifetimeWindow& other) const
 	{
@@ -45,9 +45,7 @@ namespace aether
 		return id != 0 && generation != 0;
 	}
 
-	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(
-		const BufferResourceDesc& desc,
-		const ResourceContract& contract)
+	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(const BufferResourceDesc& desc, const ResourceContract& contract)
 	{
 		if (!contract.lifetime.IsValid())
 		{
@@ -55,9 +53,9 @@ namespace aether
 		}
 
 		m_virtualBuffers.push_back(BufferVirtualRecord{
-			.desc = desc,
-			.contract = contract,
-			});
+		        .desc = desc,
+		        .contract = contract,
+		});
 
 		return VirtualBufferHandle{
 			.id = static_cast<std::uint32_t>(m_virtualBuffers.size()),
@@ -65,9 +63,7 @@ namespace aether
 		};
 	}
 
-	VirtualImageHandle ResourcePool::CreateVirtualImage(
-		const ImageResourceDesc& desc,
-		const ResourceContract& contract)
+	VirtualImageHandle ResourcePool::CreateVirtualImage(const ImageResourceDesc& desc, const ResourceContract& contract)
 	{
 		if (!contract.lifetime.IsValid())
 		{
@@ -75,9 +71,9 @@ namespace aether
 		}
 
 		m_virtualImages.push_back(ImageVirtualRecord{
-			.desc = desc,
-			.contract = contract,
-			});
+		        .desc = desc,
+		        .contract = contract,
+		});
 
 		return VirtualImageHandle{
 			.id = static_cast<std::uint32_t>(m_virtualImages.size()),
@@ -85,10 +81,7 @@ namespace aether
 		};
 	}
 
-	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(
-		const BufferResourceDesc& desc,
-		const LifetimeWindow& lifetime,
-		const bool transient)
+	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(const BufferResourceDesc& desc, const LifetimeWindow& lifetime, const bool transient)
 	{
 		ResourceContract contract{};
 		contract.lifetime = lifetime;
@@ -96,10 +89,7 @@ namespace aether
 		return CreateVirtualBuffer(desc, contract);
 	}
 
-	VirtualImageHandle ResourcePool::CreateVirtualImage(
-		const ImageResourceDesc& desc,
-		const LifetimeWindow& lifetime,
-		const bool transient)
+	VirtualImageHandle ResourcePool::CreateVirtualImage(const ImageResourceDesc& desc, const LifetimeWindow& lifetime, const bool transient)
 	{
 		ResourceContract contract{};
 		contract.lifetime = lifetime;
@@ -203,9 +193,7 @@ namespace aether
 		}
 		else
 		{
-			if (alias.desc.extent.width > source.desc.extent.width ||
-				alias.desc.extent.height > source.desc.extent.height ||
-				alias.desc.extent.depth > source.desc.extent.depth)
+			if (alias.desc.extent.width > source.desc.extent.width || alias.desc.extent.height > source.desc.extent.height || alias.desc.extent.depth > source.desc.extent.depth)
 			{
 				return false;
 			}
@@ -304,11 +292,11 @@ namespace aether
 
 		UniqueBuffer resource = factory(record.desc);
 		m_physicalBuffers.push_back(BufferPhysicalRecord{
-			.resource = std::move(resource),
-			.owners = { handle.id - 1 },
-			.visibility = record.contract.visibility,
-			.queue = record.contract.lifetime.queue,
-			});
+		        .resource = std::move(resource),
+		        .owners = { handle.id - 1 },
+		        .visibility = record.contract.visibility,
+		        .queue = record.contract.lifetime.queue,
+		});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalBuffers.size() - 1);
 		return m_physicalBuffers.back().resource;
@@ -387,11 +375,11 @@ namespace aether
 		UniqueImage resource = factory(record.desc);
 		EnsureImageVisibilityBindings(resource, record.contract);
 		m_physicalImages.push_back(ImagePhysicalRecord{
-			.resource = std::move(resource),
-			.owners = { handle.id - 1 },
-			.visibility = record.contract.visibility,
-			.queue = record.contract.lifetime.queue,
-			});
+		        .resource = std::move(resource),
+		        .owners = { handle.id - 1 },
+		        .visibility = record.contract.visibility,
+		        .queue = record.contract.lifetime.queue,
+		});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalImages.size() - 1);
 		return m_physicalImages.back().resource;
@@ -483,12 +471,9 @@ namespace aether
 		return record;
 	}
 
-	bool ResourcePool::CanAliasWithOwners(
-		const ResourceContract& candidateContract,
-		const std::vector<std::uint32_t>& ownerIds,
-		const std::vector<BufferVirtualRecord>& records) const
+	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const
 	{
-		for (const auto ownerId : ownerIds)
+		for (const auto ownerId: ownerIds)
 		{
 			if (ownerId >= records.size())
 			{
@@ -515,12 +500,9 @@ namespace aether
 		return true;
 	}
 
-	bool ResourcePool::CanAliasWithOwners(
-		const ResourceContract& candidateContract,
-		const std::vector<std::uint32_t>& ownerIds,
-		const std::vector<ImageVirtualRecord>& records) const
+	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records) const
 	{
-		for (const auto ownerId : ownerIds)
+		for (const auto ownerId: ownerIds)
 		{
 			if (ownerId >= records.size())
 			{
@@ -553,14 +535,11 @@ namespace aether
 		{
 			if (m_bindlessImageConfig.manager == nullptr || m_bindlessImageConfig.device == VK_NULL_HANDLE)
 			{
-				throw VulkanError("Bindless sampled image requested, but ResourcePool bindless image config is not set.");
+				throw VulkanError("Bindless sampled image requested, but ResourcePool "
+				                  "bindless image config is not set.");
 			}
 
-			image.EnsureBindlessSampled(
-				*m_bindlessImageConfig.manager,
-				m_bindlessImageConfig.device,
-				m_bindlessImageConfig.sampledAspectMask,
-				m_bindlessImageConfig.sampledLayout);
+			image.EnsureBindlessSampled(*m_bindlessImageConfig.manager, m_bindlessImageConfig.device, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout);
 		}
 	}
 
@@ -587,9 +566,7 @@ namespace aether
 		}
 
 		const auto extent = existing.GetExtent();
-		if (requested.extent.width > extent.width ||
-			requested.extent.height > extent.height ||
-			requested.extent.depth > extent.depth)
+		if (requested.extent.width > extent.width || requested.extent.height > extent.height || requested.extent.depth > extent.depth)
 		{
 			return false;
 		}
@@ -606,4 +583,4 @@ namespace aether
 
 		return (requested.usage & ~existing.GetUsage()) == 0;
 	}
-}
+} // namespace aether

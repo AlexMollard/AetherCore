@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -26,7 +25,7 @@ namespace aether
 	{
 	public:
 		static constexpr std::uint32_t kMaxMaterials = 4096;
-		static constexpr std::uint32_t kInvalidSlot  = 0xFFFFFFFFu;
+		static constexpr std::uint32_t kInvalidSlot = 0xFFFFFFFFu;
 
 		MaterialBuffer() = default;
 		~MaterialBuffer();
@@ -37,7 +36,10 @@ namespace aether
 		void Initialize(const VulkanContext& ctx);
 		void Shutdown();
 
-		[[nodiscard]] bool IsInitialized() const { return m_device != VK_NULL_HANDLE; }
+		[[nodiscard]] bool IsInitialized() const
+		{
+			return m_device != VK_NULL_HANDLE;
+		}
 
 		// Allocate a free slot.  Returns kInvalidSlot when the buffer is full.
 		[[nodiscard]] std::uint32_t AllocateSlot();
@@ -50,16 +52,19 @@ namespace aether
 		void Write(std::uint32_t slot, const GpuMaterial& material);
 
 		// Buffer Device Address; store this in FrameConstants every frame.
-		[[nodiscard]] VkDeviceAddress GetDeviceAddress() const { return m_address; }
+		[[nodiscard]] VkDeviceAddress GetDeviceAddress() const
+		{
+			return m_address;
+		}
 
 	private:
-		mutable std::mutex    m_mutex;
-		VkDevice              m_device    = VK_NULL_HANDLE;
-		VmaAllocator          m_allocator = VK_NULL_HANDLE;
-		VkBuffer              m_buffer    = VK_NULL_HANDLE;
-		VmaAllocation         m_allocation{};
-		GpuMaterial*          m_mapped    = nullptr;
-		VkDeviceAddress       m_address   = 0;
+		mutable std::mutex m_mutex;
+		VkDevice m_device = VK_NULL_HANDLE;
+		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		VkBuffer m_buffer = VK_NULL_HANDLE;
+		VmaAllocation m_allocation{};
+		GpuMaterial* m_mapped = nullptr;
+		VkDeviceAddress m_address = 0;
 		std::vector<uint32_t> m_freeSlots;
 	};
-}
+} // namespace aether

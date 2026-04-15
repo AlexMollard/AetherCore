@@ -12,7 +12,7 @@ namespace aether
 	class Renderer;
 	class AssetManager;
 	class UIRenderer;
-}
+} // namespace aether
 
 namespace aether::app
 {
@@ -40,4 +40,4 @@ namespace aether::app
 		virtual void OnUpdate(LayerContext& context);
 		virtual void OnGui(LayerContext& context);
 	};
-}
+} // namespace aether::app

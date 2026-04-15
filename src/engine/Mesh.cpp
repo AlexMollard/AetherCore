@@ -24,13 +24,10 @@ namespace aether
 		// can be layered on top later without changing the Mesh API.
 		VmaAllocationCreateInfo allocInfo{};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-			| VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
 		VmaAllocationInfo allocResult{};
-		const VkResult result = vmaCreateBuffer(
-			allocator, &bufferInfo, &allocInfo,
-			&mesh.m_buffer, &mesh.m_allocation, &allocResult);
+		const VkResult result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &mesh.m_buffer, &mesh.m_allocation, &allocResult);
 
 		if (result != VK_SUCCESS)
 		{
@@ -56,13 +53,10 @@ namespace aether
 
 		VmaAllocationCreateInfo allocInfo{};
 		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
-			| VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
 		VmaAllocationInfo allocResult{};
-		const VkResult result = vmaCreateBuffer(
-			allocator, &indexBufferInfo, &allocInfo,
-			&mesh.m_indexBuffer, &mesh.m_indexAllocation, &allocResult);
+		const VkResult result = vmaCreateBuffer(allocator, &indexBufferInfo, &allocInfo, &mesh.m_indexBuffer, &mesh.m_indexAllocation, &allocResult);
 
 		if (result != VK_SUCCESS)
 		{
@@ -80,14 +74,7 @@ namespace aether
 	}
 
 	Mesh::Mesh(Mesh&& other) noexcept
-		: m_device(other.m_device)
-		, m_allocator(other.m_allocator)
-		, m_buffer(other.m_buffer)
-		, m_allocation(other.m_allocation)
-		, m_vertexCount(other.m_vertexCount)
-		, m_indexBuffer(other.m_indexBuffer)
-		, m_indexAllocation(other.m_indexAllocation)
-		, m_indexCount(other.m_indexCount)
+	      : m_device(other.m_device), m_allocator(other.m_allocator), m_buffer(other.m_buffer), m_allocation(other.m_allocation), m_vertexCount(other.m_vertexCount), m_indexBuffer(other.m_indexBuffer), m_indexAllocation(other.m_indexAllocation), m_indexCount(other.m_indexCount)
 	{
 		other.m_device = VK_NULL_HANDLE;
 		other.m_allocator = nullptr;
@@ -145,4 +132,4 @@ namespace aether
 		m_allocator = nullptr;
 		m_vertexCount = 0;
 	}
-}
+} // namespace aether

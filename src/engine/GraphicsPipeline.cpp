@@ -1,13 +1,12 @@
 #include "GraphicsPipeline.hpp"
 
+#include <cstddef>
+#include <glm/glm.hpp>
+#include <iterator>
 #include <stdexcept>
 #include <string>
-#include <cstddef>
-#include <iterator>
 #include <utility>
 #include <vector>
-
-#include <glm/glm.hpp>
 
 #include "DrawPushConstants.hpp"
 #include "FileSystem.hpp"
@@ -32,7 +31,7 @@ namespace aether
 			}
 			return mod;
 		}
-	}
+	} // namespace
 
 	GraphicsPipeline::~GraphicsPipeline()
 	{
@@ -40,11 +39,9 @@ namespace aether
 	}
 
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-		: m_device(std::exchange(other.m_device, VK_NULL_HANDLE))
-		, m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE))
-		, m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE))
-		, m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
-	{}
+	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)), m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)), m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
+	{
+	}
 
 	GraphicsPipeline& GraphicsPipeline::operator=(GraphicsPipeline&& other) noexcept
 	{
@@ -84,8 +81,7 @@ namespace aether
 		const auto spirv = io::FileSystem::ReadFile(desc.shaderVfsPath);
 		if (spirv.empty())
 		{
-			throw std::runtime_error(
-				"GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath));
+			throw std::runtime_error("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath));
 		}
 
 		VkShaderModule shaderModule = CreateShaderModule(device, spirv);
@@ -95,17 +91,17 @@ namespace aether
 
 		const VkPipelineShaderStageCreateInfo stages[2] = {
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_VERTEX_BIT,
-				.module = shaderModule,
-				.pName = vertEntry.c_str(),
-			},
+             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+             .stage = VK_SHADER_STAGE_VERTEX_BIT,
+             .module = shaderModule,
+             .pName = vertEntry.c_str(),
+			 },
 			{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-				.module = shaderModule,
-				.pName = fragEntry.c_str(),
-			},
+             .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+             .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+             .module = shaderModule,
+             .pName = fragEntry.c_str(),
+			 },
 		};
 
 		constexpr VkVertexInputBindingDescription kVertexBinding{
@@ -114,48 +110,55 @@ namespace aether
 			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 		};
 		constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
-			{   // location 0 : position
-				.location = 0,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, position)),
-			},
-			{   // location 1 : normal
-				.location = 1,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, normal)),
-			},
-			{   // location 2 : tangent (xyz + bitangent sign in w)
-				.location = 2,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32A32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, tangent)),
-			},
-			{   // location 3 : uv
-				.location = 3,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, uv)),
-			},
-			{   // location 4 : color
-				.location = 4,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, color)),
-			},
-			{   // location 5 : JOINTS_0
-				.location = 5,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32A32_UINT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
-			},
-			{   // location 6 : WEIGHTS_0
-				.location = 6,
-				.binding = 0,
-				.format = VK_FORMAT_R32G32B32A32_SFLOAT,
-				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
-			},
+			{
+             // location 0 : position
+             .location = 0,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,     position)),
+			 },
+			{
+             // location 1 : normal
+             .location = 1,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,       normal)),
+			 },
+			{
+             // location 2 : tangent (xyz + bitangent sign in w)
+             .location = 2,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,      tangent)),
+			 },
+			{
+             // location 3 : uv
+             .location = 3,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,           uv)),
+			 },
+			{
+             // location 4 : color
+             .location = 4,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,        color)),
+			 },
+			{
+             // location 5 : JOINTS_0
+             .location = 5,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32A32_UINT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
+			 },
+			{
+             // location 6 : WEIGHTS_0
+             .location = 6,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
+			 },
 		};
 		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -167,8 +170,7 @@ namespace aether
 			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVertexAttributes)),
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
-		const VkPipelineVertexInputStateCreateInfo& vertexInput =
-			desc.noVertexInput ? kEmptyVertexInput : kMeshVertexInput;
+		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : kMeshVertexInput;
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -207,9 +209,7 @@ namespace aether
 			.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
 			.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
 			.alphaBlendOp = VK_BLEND_OP_ADD,
-			.colorWriteMask =
-				VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
-				VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+			.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
 		};
 		const VkPipelineColorBlendStateCreateInfo colorBlend{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -270,8 +270,7 @@ namespace aether
 		};
 
 		VkPipeline pipeline = VK_NULL_HANDLE;
-		const VkResult result = vkCreateGraphicsPipelines(
-			device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);
+		const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 
@@ -288,4 +287,4 @@ namespace aether
 		out.m_setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size());
 		return out;
 	}
-}
+} // namespace aether

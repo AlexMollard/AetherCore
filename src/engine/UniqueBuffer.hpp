@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-
 #include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
@@ -19,11 +18,7 @@ namespace aether
 		UniqueBuffer(UniqueBuffer&& other) noexcept;
 		UniqueBuffer& operator=(UniqueBuffer&& other) noexcept;
 
-		static UniqueBuffer Create(
-			VmaAllocator allocator,
-			VkDevice device,
-			const VkBufferCreateInfo& bufferCreateInfo,
-			const VmaAllocationCreateInfo& allocationCreateInfo);
+		static UniqueBuffer Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		void Reset();
 
@@ -52,4 +47,4 @@ namespace aether
 		VkDeviceAddress m_deviceAddress = 0;
 		std::uint64_t m_virtualResourceId = 0;
 	};
-}
+} // namespace aether

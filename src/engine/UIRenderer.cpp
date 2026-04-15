@@ -6,11 +6,7 @@
 
 namespace aether
 {
-	void UIRenderer::Init(
-		AetherCore& engine,
-		std::string_view fontVfsPath,
-		std::string_view passNamePrefix,
-		int glyphSize)
+	void UIRenderer::Init(AetherCore& engine, std::string_view fontVfsPath, std::string_view passNamePrefix, int glyphSize)
 	{
 		const std::string prefix(passNamePrefix);
 
@@ -25,11 +21,7 @@ namespace aether
 		m_quadRenderer.Shutdown(engine);
 	}
 
-	void UIRenderer::DrawText(
-		std::string_view text,
-		const UiPoint& point,
-		float fontSize,
-		glm::vec4 color)
+	void UIRenderer::DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color)
 	{
 		m_textRenderer.DrawText(text, point, fontSize, color);
 	}
@@ -38,4 +30,4 @@ namespace aether
 	{
 		m_quadRenderer.DrawQuad(rect, color);
 	}
-}
+} // namespace aether

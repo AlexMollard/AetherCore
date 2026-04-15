@@ -2,12 +2,10 @@
 
 #include <array>
 #include <cstdint>
-#include <vector>
-
-#include <vulkan/vulkan.h>
-
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#include <vector>
+#include <vulkan/vulkan.h>
 
 #include "Camera.hpp"
 #include "CommandRecorder.hpp"
@@ -25,32 +23,35 @@ namespace aether
 		void Initialize(const VulkanContext& context, const Renderer& renderer);
 		void Shutdown();
 
-		void SetRttBinningEnabled(bool enabled) { m_rttBinningEnabled = enabled; }
-		[[nodiscard]] bool IsRttBinningEnabled() const { return m_rttBinningEnabled; }
-		void SetGpuBinningEnabled(bool enabled) { m_gpuBinningEnabled = enabled; }
-		[[nodiscard]] bool IsGpuBinningEnabled() const { return m_gpuBinningEnabled; }
+		void SetRttBinningEnabled(bool enabled)
+		{
+			m_rttBinningEnabled = enabled;
+		}
+
+		[[nodiscard]] bool IsRttBinningEnabled() const
+		{
+			return m_rttBinningEnabled;
+		}
+
+		void SetGpuBinningEnabled(bool enabled)
+		{
+			m_gpuBinningEnabled = enabled;
+		}
+
+		[[nodiscard]] bool IsGpuBinningEnabled() const
+		{
+			return m_gpuBinningEnabled;
+		}
 
 		[[nodiscard]] VkDescriptorSetLayout GetSetLayout() const;
 		[[nodiscard]] VkDescriptorSet GetSet(std::uint32_t frameSlot) const;
 
-		void UpdateForView(
-			std::uint32_t frameSlot,
-			VkCommandBuffer cmd,
-			const Camera& camera,
-			VkExtent2D extent,
-			FrameConstants& fc,
-			bool enableBinningForView,
-			std::uint32_t computeQueueFamily = VK_QUEUE_FAMILY_IGNORED,
-			std::uint32_t graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED) const;
+		void UpdateForView(std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, VkExtent2D extent, FrameConstants& fc, bool enableBinningForView, std::uint32_t computeQueueFamily = VK_QUEUE_FAMILY_IGNORED, std::uint32_t graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED) const;
 
 		// Emits QFOT acquire barriers on the lighting buffers from computeQueueFamily
 		// to graphicsQueueFamily. Must be called on the graphics command buffer
 		// before any fragment shader reads lighting data, when families differ.
-		void EmitAcquireBarriers(
-			std::uint32_t frameSlot,
-			VkCommandBuffer graphicsCmd,
-			std::uint32_t srcFamily,
-			std::uint32_t dstFamily) const;
+		void EmitAcquireBarriers(std::uint32_t frameSlot, VkCommandBuffer graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
 
 	private:
 		struct GpuLight
@@ -77,25 +78,10 @@ namespace aether
 			std::size_t indicesCapacity = 0;
 		};
 
-		void EnsureBuffers(
-			std::uint32_t frameSlot,
-			std::size_t lightCount,
-			std::size_t tileCount,
-			std::size_t indexCount) const;
+		void EnsureBuffers(std::uint32_t frameSlot, std::size_t lightCount, std::size_t tileCount, std::size_t indexCount) const;
 		void EnsureComputePipeline() const;
-		void UpdateForViewCpu(
-			std::uint32_t frameSlot,
-			const Camera& camera,
-			VkExtent2D extent,
-			FrameConstants& fc) const;
-		void UpdateForViewGpu(
-			std::uint32_t frameSlot,
-			VkCommandBuffer cmd,
-			const Camera& camera,
-			VkExtent2D extent,
-			FrameConstants& fc,
-			std::uint32_t srcQueueFamily,
-			std::uint32_t dstQueueFamily) const;
+		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, VkExtent2D extent, FrameConstants& fc) const;
+		void UpdateForViewGpu(std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, VkExtent2D extent, FrameConstants& fc, std::uint32_t srcQueueFamily, std::uint32_t dstQueueFamily) const;
 		void UpdateDescriptorSet(std::uint32_t frameSlot) const;
 		void DisableForView(FrameConstants& fc) const;
 
@@ -113,4 +99,4 @@ namespace aether
 		std::uint32_t m_maxLightsPerTile = 128;
 		static constexpr std::uint32_t kTileSizePx = 16;
 	};
-}
+} // namespace aether

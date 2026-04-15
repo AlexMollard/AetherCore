@@ -22,20 +22,17 @@ namespace aether
 		const VkBufferCreateInfo bufferInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.size = sizeof(FrameConstants),
-			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
-					 VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-					 VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 			.usage = VMA_MEMORY_USAGE_AUTO,
 		};
 
 		for (std::uint32_t i = 0; i < kFrameCount; ++i)
 		{
 			VmaAllocationInfo outInfo{};
-			if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo,
-				&m_frames[i].buffer, &m_frames[i].allocation, &outInfo) != VK_SUCCESS)
+			if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo, &m_frames[i].buffer, &m_frames[i].allocation, &outInfo) != VK_SUCCESS)
 			{
 				throw VulkanError(std::format("Failed to create FrameConstants buffer (frame {}).", i));
 			}
@@ -56,7 +53,7 @@ namespace aether
 			return;
 		}
 
-		for (auto& frame : m_frames)
+		for (auto& frame: m_frames)
 		{
 			if (frame.buffer != VK_NULL_HANDLE)
 			{
@@ -81,4 +78,4 @@ namespace aether
 	{
 		return m_frames[frameIndex].address;
 	}
-}
+} // namespace aether

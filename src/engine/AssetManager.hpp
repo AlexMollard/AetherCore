@@ -5,9 +5,9 @@
 #include <string_view>
 #include <vector>
 
+#include "GraphicsPipeline.hpp"
 #include "Mesh.hpp"
 #include "Texture.hpp"
-#include "GraphicsPipeline.hpp"
 
 namespace aether
 {
@@ -26,8 +26,7 @@ namespace aether
 
 		// Mesh creation.
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices);
-		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices,
-			std::span<const std::uint32_t> indices);
+		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 
 		// Texture creation.
 		[[nodiscard]] Texture CreateTexture(std::string_view path);
@@ -41,9 +40,7 @@ namespace aether
 
 		// Model loading and spawning.
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
-		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model,
-			GraphicsPipeline& pipeline,
-			float scale = 1.0f);
+		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
 	private:
 		friend class AetherCore; // Only AetherCore initializes/owns the AssetManager
@@ -53,4 +50,4 @@ namespace aether
 
 		AetherCore* m_engine = nullptr;
 	};
-}
+} // namespace aether

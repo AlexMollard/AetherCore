@@ -6,10 +6,7 @@
 
 namespace aether::bindless
 {
-	std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(
-		std::span<const VkDescriptorSetLayout> pipelineLayouts,
-		VkDescriptorSetLayout bindlessLayout,
-		const std::uint32_t bindlessSetIndex)
+	std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, const std::uint32_t bindlessSetIndex)
 	{
 		if (bindlessLayout == VK_NULL_HANDLE)
 		{
@@ -29,12 +26,7 @@ namespace aether::bindless
 		return out;
 	}
 
-	VkPipelineLayout CreatePipelineLayoutWithBindless(
-		VkDevice device,
-		std::span<const VkDescriptorSetLayout> pipelineLayouts,
-		VkDescriptorSetLayout bindlessLayout,
-		std::span<const VkPushConstantRange> pushConstantRanges,
-		const std::uint32_t bindlessSetIndex)
+	VkPipelineLayout CreatePipelineLayoutWithBindless(VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
 	{
 		if (device == VK_NULL_HANDLE)
 		{
@@ -56,11 +48,9 @@ namespace aether::bindless
 		const VkResult result = vkCreatePipelineLayout(device, &createInfo, nullptr, &layout);
 		if (result != VK_SUCCESS)
 		{
-			throw VulkanError(std::format(
-				"Failed to create bindless-aware pipeline layout. VkResult={}",
-				static_cast<int>(result)));
+			throw VulkanError(std::format("Failed to create bindless-aware pipeline layout. VkResult={}", static_cast<int>(result)));
 		}
 
 		return layout;
 	}
-}
+} // namespace aether::bindless

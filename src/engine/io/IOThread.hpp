@@ -47,4 +47,4 @@ namespace aether::io
 		std::size_t m_pendingCount = 0;
 		bool m_shutdown = false;
 	};
-}
+} // namespace aether::io

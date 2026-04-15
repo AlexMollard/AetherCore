@@ -98,7 +98,7 @@ namespace aether
 
 	void CameraManager::Update(const Input& input, float dt)
 	{
-		for (auto& [id, cam] : m_cameras)
+		for (auto& [id, cam]: m_cameras)
 			cam.Update(input, dt);
 	}
-}
+} // namespace aether

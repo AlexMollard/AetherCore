@@ -50,4 +50,4 @@ namespace aether
 	{
 		class ModelAnimator* animator = nullptr;
 	};
-}
+} // namespace aether

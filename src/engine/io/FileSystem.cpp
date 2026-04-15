@@ -1,19 +1,19 @@
 #include "FileSystem.hpp"
 
-#include <map>
 #include <filesystem>
 #include <initializer_list>
+#include <map>
 #include <string>
 #include <thread>
 #include <utility>
 
+#include "AetherExceptions.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp"
-#include "PakBackend.hpp"
 #include "LogCategory.hpp"
 #include "Logger.hpp"
-#include "AetherExceptions.hpp"
+#include "PakBackend.hpp"
 
 namespace aether::io
 {
@@ -21,7 +21,8 @@ namespace aether::io
 	{
 		struct FileSystemBackend
 		{
-			// std::less<> enables heterogeneous lookup so string_view keys work without allocation.
+			// std::less<> enables heterogeneous lookup so string_view keys work without
+			// allocation.
 			std::map<std::string, std::unique_ptr<IFileBackend>, std::less<>> mounts;
 			std::unique_ptr<IOThread> ioThread;
 		};
@@ -52,7 +53,7 @@ namespace aether::io
 
 		std::filesystem::path ResolveMountedDirectory(const std::initializer_list<std::filesystem::path>& candidates)
 		{
-			for (const auto& candidate : candidates)
+			for (const auto& candidate: candidates)
 			{
 				std::error_code errorCode;
 				if (std::filesystem::exists(candidate, errorCode))
@@ -63,7 +64,7 @@ namespace aether::io
 
 			return *candidates.begin();
 		}
-	}
+	} // namespace
 
 	void FileSystem::Initialize()
 	{
@@ -94,7 +95,7 @@ namespace aether::io
 			workingDirectory / "../../data/assets.pak",
 		};
 		bool pakMounted = false;
-		for (const auto& candidate : pakCandidates)
+		for (const auto& candidate: pakCandidates)
 		{
 			std::error_code ec;
 			if (std::filesystem::exists(candidate, ec))
@@ -107,21 +108,21 @@ namespace aether::io
 		if (!pakMounted)
 		{
 			const auto assetsDirectory = ResolveMountedDirectory({
-				workingDirectory / "assets",
-				workingDirectory / "../assets",
-				workingDirectory / "../../assets",
+			        workingDirectory / "assets",
+			        workingDirectory / "../assets",
+			        workingDirectory / "../../assets",
 			});
 			Mount("assets", assetsDirectory);
 		}
 
 		// ── shaders:// ────────────────────────────────────────────────────────
 		const auto shaderDirectory = ResolveMountedDirectory({
-			workingDirectory / "shaders",
-			workingDirectory / "build/shaders",
-			workingDirectory / "../shaders",
-			workingDirectory / "../../shaders",
-			workingDirectory / "../build/shaders",
-			workingDirectory / "../../build/shaders",
+		        workingDirectory / "shaders",
+		        workingDirectory / "build/shaders",
+		        workingDirectory / "../shaders",
+		        workingDirectory / "../../shaders",
+		        workingDirectory / "../build/shaders",
+		        workingDirectory / "../../build/shaders",
 		});
 		Mount("shaders", shaderDirectory);
 
@@ -155,8 +156,7 @@ namespace aether::io
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
-		s_backend->mounts.insert_or_assign(std::string(mountPoint),
-			std::make_unique<DirectoryBackend>(std::move(physicalPath)));
+		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_unique<DirectoryBackend>(std::move(physicalPath)));
 	}
 
 	void FileSystem::MountPak(std::string_view mountPoint, std::filesystem::path pakPath)
@@ -167,8 +167,7 @@ namespace aether::io
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
-		s_backend->mounts.insert_or_assign(std::string(mountPoint),
-			std::make_unique<PakBackend>(std::move(pakPath)));
+		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_unique<PakBackend>(std::move(pakPath)));
 	}
 
 	bool FileSystem::Exists(std::string_view virtualPath)
@@ -228,22 +227,22 @@ namespace aether::io
 
 		const std::string virtualPathString(virtualPath);
 		auto handle = std::make_shared<FileRequest>();
-		VERBOSE(LogCategory::FileSystem, "RequestAsync (priority={}): {}",
-			static_cast<int>(priority), virtualPathString);
+		VERBOSE(LogCategory::FileSystem, "RequestAsync (priority={}): {}", static_cast<int>(priority), virtualPathString);
 
-		s_backend->ioThread->Submit(priority, [handle, virtualPathString]()
-			{
-				try
-				{
-					handle->m_data = FileSystem::ReadFile(virtualPathString);
-					handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
-				}
-				catch (const std::exception& e)
-				{
-					handle->m_error = e.what();
-					handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
-				}
-			});
+		s_backend->ioThread->Submit(priority,
+		        [handle, virtualPathString]()
+		        {
+			        try
+			        {
+				        handle->m_data = FileSystem::ReadFile(virtualPathString);
+				        handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
+			        }
+			        catch (const std::exception& e)
+			        {
+				        handle->m_error = e.what();
+				        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
+			        }
+		        });
 
 		return handle;
 	}
@@ -265,4 +264,4 @@ namespace aether::io
 		}
 		s_backend->ioThread->Flush();
 	}
-}
+} // namespace aether::io

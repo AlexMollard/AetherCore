@@ -14,8 +14,7 @@ namespace aether
 		return m_engine->CreateMesh(vertices);
 	}
 
-	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices,
-	                               std::span<const std::uint32_t> indices)
+	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices)
 	{
 		return m_engine->CreateMesh(vertices, indices);
 	}
@@ -45,10 +44,8 @@ namespace aether
 		return m_engine->LoadModel(path);
 	}
 
-	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model,
-	                                              GraphicsPipeline& pipeline,
-	                                              float scale)
+	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale)
 	{
 		return m_engine->SpawnModel(model, pipeline, scale);
 	}
-}
+} // namespace aether

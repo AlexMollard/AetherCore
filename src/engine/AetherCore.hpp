@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cstdint>
 #include <array>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <span>
@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "AssetManager.hpp"
 #include "BindlessManager.hpp"
 #include "Camera.hpp"
 #include "CameraManager.hpp"
@@ -16,22 +17,21 @@
 #include "ForwardPass.hpp"
 #include "FrameConstants.hpp"
 #include "FrameConstantsBuffer.hpp"
-#include "ModelAnimator.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
 #include "LightingManager.hpp"
 #include "Material.hpp"
 #include "MaterialBuffer.hpp"
 #include "Mesh.hpp"
+#include "ModelAnimator.hpp"
 #include "PostProcessStack.hpp"
-#include "SkyboxPass.hpp"
 #include "PrimitiveMeshes.hpp"
+#include "Renderer.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
-#include "Renderer.hpp"
-#include "AssetManager.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
+#include "SkyboxPass.hpp"
 #include "Swapchain.hpp"
 #include "Texture.hpp"
 #include "UniqueBuffer.hpp"
@@ -44,17 +44,17 @@ namespace aether
 {
 	struct LoadedModelPrimitive
 	{
-		Mesh      mesh;
-		Material  material{};
+		Mesh mesh;
+		Material material{};
 		glm::mat4 localTransform{ 1.0f }; // identity for skinned primitives
 		std::int32_t skinIndex = -1;      // -1 = not skinned
 	};
 
 	struct LoadedModel
 	{
-		std::vector<Texture>              textures;
+		std::vector<Texture> textures;
 		std::vector<LoadedModelPrimitive> primitives;
-		std::optional<ModelAnimator>      animator;
+		std::optional<ModelAnimator> animator;
 	};
 
 	class AetherCore
@@ -71,7 +71,11 @@ namespace aether
 		struct CameraRenderTarget
 		{
 			uint32_t id = 0;
-			[[nodiscard]] bool IsValid() const { return id != 0; }
+
+			[[nodiscard]] bool IsValid() const
+			{
+				return id != 0;
+			}
 		};
 
 		explicit AetherCore(const Config& config = {});
@@ -99,20 +103,20 @@ namespace aether
 		[[nodiscard]] CameraManager& GetCameraManager();
 		[[nodiscard]] const CameraManager& GetCameraManager() const;
 
-		// ── Asset creation (used by app layer or engine internals) ──────────────────
+		// ── Asset creation (used by app layer or engine internals)
+		// ──────────────────
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
-		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
-		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
-		[[nodiscard]] Texture          CreateTexture(std::string_view path);
+		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices);
+		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
+		[[nodiscard]] Texture CreateTexture(std::string_view path);
 		void RegisterMaterial(Material& mat);
 		void UnregisterMaterial(Material& mat);
-		[[nodiscard]] LoadedModel  LoadModel(std::string_view path);
-		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model,
-			GraphicsPipeline& pipeline,
-			float scale = 1.0f);
+		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
+		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
-		// ── Rendering controls (used by app layer or engine internals) ──────────────────
+		// ── Rendering controls (used by app layer or engine internals)
+		// ──────────────────
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
 		void SetFxaaEnabled(bool enabled);
@@ -129,7 +133,11 @@ namespace aether
 
 		// ── Format queries for app-layer pipeline creation ──────────────────
 		// Query the forward pass color format.
-		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat() { return PostProcessStack::GetForwardColorFormat(); }
+		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat()
+		{
+			return PostProcessStack::GetForwardColorFormat();
+		}
+
 		// Query swapchain extent.
 		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
 		// Query swapchain depth format.
@@ -174,12 +182,12 @@ namespace aether
 		// ── Per-camera render-to-texture entry ───────────────────────────────
 		struct CameraRtEntry
 		{
-			CameraHandle                          camera;
-			VkExtent2D                            extent;
-			UniqueImage                           colorImage;
-			UniqueImage                           depthImage;
-			RGImage                               rgColor{};
-			RGImage                               rgDepth{};
+			CameraHandle camera;
+			VkExtent2D extent;
+			UniqueImage colorImage;
+			UniqueImage depthImage;
+			RGImage rgColor{};
+			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
 		};
 
@@ -226,4 +234,4 @@ namespace aether
 		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
 		uint32_t m_nextRtId = 1;
 	};
-}
+} // namespace aether

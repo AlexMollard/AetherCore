@@ -16,7 +16,11 @@ namespace aether::app
 	public:
 		void Init(aether::Renderer& renderer);
 
-		const char* GetName() const override { return "DayNightSystem"; }
+		const char* GetName() const override
+		{
+			return "DayNightSystem";
+		}
+
 		void OnRegister(aether::World& world) override;
 		void Update(aether::World& world, float dt) override;
 		void OnUnregister(aether::World& world) override;
@@ -25,4 +29,4 @@ namespace aether::app
 		aether::Renderer* m_renderer = nullptr;
 		float m_time = 0.0f;
 	};
-}
+} // namespace aether::app

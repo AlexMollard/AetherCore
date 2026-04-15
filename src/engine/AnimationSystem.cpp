@@ -1,7 +1,7 @@
 #include "AnimationSystem.hpp"
 
-#include "World.hpp"
 #include "ModelAnimator.hpp"
+#include "World.hpp"
 
 namespace aether
 {
@@ -9,9 +9,9 @@ namespace aether
 	{
 		// Iterate over all entities with an animator and update their animations.
 		auto view = world.View<AnimatorComponent>();
-		for (auto entity : view)
+		for (auto entity: view)
 		{
-			(void)entity;
+			(void) entity;
 			auto& animator = view.get<AnimatorComponent>(entity);
 			if (animator.animator)
 			{
@@ -19,4 +19,4 @@ namespace aether
 			}
 		}
 	}
-}
+} // namespace aether

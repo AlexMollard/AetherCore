@@ -1,9 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <unordered_map>
-
 #include <glm/glm.hpp>
+#include <unordered_map>
 
 namespace aether
 {
@@ -14,10 +13,10 @@ namespace aether
 	// Describes a renderable object when registering it with the Scene.
 	struct RenderObjectDesc
 	{
-		const GraphicsPipeline* pipeline   = nullptr;
-		const Mesh*             mesh       = nullptr;      // null = shader-hardcoded verts
-		std::uint32_t           vertexCount  = 0;          // used when mesh == nullptr
-		std::uint32_t           materialIndex = 0xFFFFFFFFu;
+		const GraphicsPipeline* pipeline = nullptr;
+		const Mesh* mesh = nullptr;    // null = shader-hardcoded verts
+		std::uint32_t vertexCount = 0; // used when mesh == nullptr
+		std::uint32_t materialIndex = 0xFFFFFFFFu;
 	};
 
 	// A container of persistent renderable objects. App layers register objects
@@ -29,27 +28,36 @@ namespace aether
 		struct Handle
 		{
 			std::size_t id = 0;
-			[[nodiscard]] bool IsValid() const { return id != 0; }
+
+			[[nodiscard]] bool IsValid() const
+			{
+				return id != 0;
+			}
 		};
 
 		[[nodiscard]] Handle AddRenderObject(const RenderObjectDesc& desc);
 		void RemoveRenderObject(Handle handle);
 		void SetTransform(Handle handle, const glm::mat4& transform);
 		void SetViewProjection(const glm::mat4& viewProjection);
-		[[nodiscard]] const glm::mat4& GetViewProjection() const { return m_viewProjection; }
 
-		// Engine-internal: write all registered objects as DrawCommands into the queue.
+		[[nodiscard]] const glm::mat4& GetViewProjection() const
+		{
+			return m_viewProjection;
+		}
+
+		// Engine-internal: write all registered objects as DrawCommands into the
+		// queue.
 		void FlushToQueue(RenderQueue& queue) const;
 
 	private:
 		struct RenderObject
 		{
 			RenderObjectDesc desc;
-			glm::mat4        transform{ 1.0f };
+			glm::mat4 transform{ 1.0f };
 		};
 
 		std::unordered_map<std::size_t, RenderObject> m_objects;
 		std::size_t m_nextId = 1;
-		glm::mat4   m_viewProjection{ 1.0f };
+		glm::mat4 m_viewProjection{ 1.0f };
 	};
-}
+} // namespace aether

@@ -3,8 +3,8 @@
 #include <format>
 #include <utility>
 
-#include "BindlessManager.hpp"
 #include "AetherExceptions.hpp"
+#include "BindlessManager.hpp"
 
 namespace aether
 {
@@ -14,23 +14,23 @@ namespace aether
 	}
 
 	UniqueImage::UniqueImage(UniqueImage&& other) noexcept
-		: m_allocator(std::exchange(other.m_allocator, VK_NULL_HANDLE)),
-		m_image(std::exchange(other.m_image, VK_NULL_HANDLE)),
-		m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
-		m_allocationInfo(other.m_allocationInfo),
-		m_extent(other.m_extent),
-		m_format(other.m_format),
-		m_usage(other.m_usage),
-		m_mipLevels(other.m_mipLevels),
-		m_arrayLayers(other.m_arrayLayers),
-		m_lastKnownLayout(other.m_lastKnownLayout),
-		m_queueFamilyOwner(other.m_queueFamilyOwner),
-		m_virtualResourceId(other.m_virtualResourceId),
-		m_bindlessManager(std::exchange(other.m_bindlessManager, nullptr)),
-		m_bindlessDevice(std::exchange(other.m_bindlessDevice, VK_NULL_HANDLE)),
-		m_defaultView(std::exchange(other.m_defaultView, VK_NULL_HANDLE)),
-		m_defaultSampler(std::exchange(other.m_defaultSampler, VK_NULL_HANDLE)),
-		m_bindlessSlot(std::exchange(other.m_bindlessSlot, kInvalidBindlessSlot))
+	      : m_allocator(std::exchange(other.m_allocator, VK_NULL_HANDLE)),
+	        m_image(std::exchange(other.m_image, VK_NULL_HANDLE)),
+	        m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
+	        m_allocationInfo(other.m_allocationInfo),
+	        m_extent(other.m_extent),
+	        m_format(other.m_format),
+	        m_usage(other.m_usage),
+	        m_mipLevels(other.m_mipLevels),
+	        m_arrayLayers(other.m_arrayLayers),
+	        m_lastKnownLayout(other.m_lastKnownLayout),
+	        m_queueFamilyOwner(other.m_queueFamilyOwner),
+	        m_virtualResourceId(other.m_virtualResourceId),
+	        m_bindlessManager(std::exchange(other.m_bindlessManager, nullptr)),
+	        m_bindlessDevice(std::exchange(other.m_bindlessDevice, VK_NULL_HANDLE)),
+	        m_defaultView(std::exchange(other.m_defaultView, VK_NULL_HANDLE)),
+	        m_defaultSampler(std::exchange(other.m_defaultSampler, VK_NULL_HANDLE)),
+	        m_bindlessSlot(std::exchange(other.m_bindlessSlot, kInvalidBindlessSlot))
 	{
 		other.m_allocationInfo = {};
 		other.m_extent = {};
@@ -91,24 +91,21 @@ namespace aether
 		{
 			switch (format)
 			{
-			case VK_FORMAT_D16_UNORM:
-			case VK_FORMAT_D32_SFLOAT:
-			case VK_FORMAT_X8_D24_UNORM_PACK32:
-				return VK_IMAGE_ASPECT_DEPTH_BIT;
-			case VK_FORMAT_D16_UNORM_S8_UINT:
-			case VK_FORMAT_D24_UNORM_S8_UINT:
-			case VK_FORMAT_D32_SFLOAT_S8_UINT:
-				return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-			default:
-				return VK_IMAGE_ASPECT_COLOR_BIT;
+				case VK_FORMAT_D16_UNORM:
+				case VK_FORMAT_D32_SFLOAT:
+				case VK_FORMAT_X8_D24_UNORM_PACK32:
+					return VK_IMAGE_ASPECT_DEPTH_BIT;
+				case VK_FORMAT_D16_UNORM_S8_UINT:
+				case VK_FORMAT_D24_UNORM_S8_UINT:
+				case VK_FORMAT_D32_SFLOAT_S8_UINT:
+					return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+				default:
+					return VK_IMAGE_ASPECT_COLOR_BIT;
 			}
 		}
 	} // anonymous namespace
 
-	UniqueImage UniqueImage::Create(
-		VkDevice device,
-		VmaAllocator allocator,
-		const Desc& desc)
+	UniqueImage UniqueImage::Create(VkDevice device, VmaAllocator allocator, const Desc& desc)
 	{
 		const VkImageCreateInfo imageInfo{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -135,27 +132,20 @@ namespace aether
 		const VkImageViewCreateInfo viewInfo{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 			.image = out.m_image,
-			.viewType = desc.arrayLayers > 1
-								? VK_IMAGE_VIEW_TYPE_2D_ARRAY
-								: VK_IMAGE_VIEW_TYPE_2D,
+			.viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 			.format = desc.format,
 			.subresourceRange = { aspect, 0, desc.mipLevels, 0, desc.arrayLayers },
 		};
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out.m_defaultView);
 		if (viewResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format(
-				"UniqueImage::Create: failed to create default view. VkResult={}",
-				static_cast<int>(viewResult)));
+			throw VulkanError(std::format("UniqueImage::Create: failed to create default view. VkResult={}", static_cast<int>(viewResult)));
 		}
 		out.m_bindlessDevice = device; // allows Reset() to destroy the view
 		return out;
 	}
 
-	UniqueImage UniqueImage::Create(
-		VmaAllocator allocator,
-		const VkImageCreateInfo& imageCreateInfo,
-		const VmaAllocationCreateInfo& allocationCreateInfo)
+	UniqueImage UniqueImage::Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
 	{
 		UniqueImage out;
 		out.m_allocator = allocator;
@@ -166,13 +156,7 @@ namespace aether
 		out.m_arrayLayers = imageCreateInfo.arrayLayers;
 		out.m_lastKnownLayout = imageCreateInfo.initialLayout;
 
-		const VkResult createResult = vmaCreateImage(
-			allocator,
-			&imageCreateInfo,
-			&allocationCreateInfo,
-			&out.m_image,
-			&out.m_allocation,
-			&out.m_allocationInfo);
+		const VkResult createResult = vmaCreateImage(allocator, &imageCreateInfo, &allocationCreateInfo, &out.m_image, &out.m_allocation, &out.m_allocationInfo);
 
 		if (createResult != VK_SUCCESS)
 		{
@@ -205,11 +189,7 @@ namespace aether
 		m_virtualResourceId = 0;
 	}
 
-	void UniqueImage::EnsureBindlessSampled(
-		BindlessManager& bindlessManager,
-		const VkDevice device,
-		const VkImageAspectFlags aspectMask,
-		const VkImageLayout descriptorLayout)
+	void UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout)
 	{
 		if (!(*this))
 		{
@@ -234,26 +214,29 @@ namespace aether
 		if (ownView)
 		{
 			const VkImageViewCreateInfo viewCreateInfo{
-				.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-				.pNext = nullptr,
-				.flags = 0,
-				.image = m_image,
-				.viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
-				.format = m_format,
-				.components = {
-					.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.g = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.b = VK_COMPONENT_SWIZZLE_IDENTITY,
-					.a = VK_COMPONENT_SWIZZLE_IDENTITY,
-				},
-				.subresourceRange = {
-					.aspectMask = aspectMask,
-					.baseMipLevel = 0,
-					.levelCount = m_mipLevels,
-					.baseArrayLayer = 0,
-					.layerCount = m_arrayLayers,
-				},
-			};
+        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .pNext = nullptr,
+        .flags = 0,
+        .image = m_image,
+        .viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY
+                                      : VK_IMAGE_VIEW_TYPE_2D,
+        .format = m_format,
+        .components =
+            {
+                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+            },
+        .subresourceRange =
+            {
+                .aspectMask = aspectMask,
+                .baseMipLevel = 0,
+                .levelCount = m_mipLevels,
+                .baseArrayLayer = 0,
+                .layerCount = m_arrayLayers,
+            },
+    };
 			const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
 			if (viewResult != VK_SUCCESS)
 			{
@@ -286,7 +269,8 @@ namespace aether
 		const VkResult samplerResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &sampler);
 		if (samplerResult != VK_SUCCESS)
 		{
-			if (ownView) vkDestroyImageView(device, view, nullptr);
+			if (ownView)
+				vkDestroyImageView(device, view, nullptr);
 			throw VulkanError(std::format("Failed to create sampler for bindless registration. VkResult={}", static_cast<int>(samplerResult)));
 		}
 
@@ -303,7 +287,8 @@ namespace aether
 				bindlessManager.FreeSampledImageSlot(slot);
 			}
 			vkDestroySampler(device, sampler, nullptr);
-			if (ownView) vkDestroyImageView(device, view, nullptr);
+			if (ownView)
+				vkDestroyImageView(device, view, nullptr);
 			throw;
 		}
 
@@ -444,4 +429,4 @@ namespace aether
 	{
 		return m_image != VK_NULL_HANDLE;
 	}
-}
+} // namespace aether

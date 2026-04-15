@@ -22,34 +22,34 @@ namespace aether::assets
 	{
 		constexpr std::int32_t kInvalidIndex = -1;
 
-			std::pair<std::string_view, std::string_view> SplitVfsPath(std::string_view vfsPath)
+		std::pair<std::string_view, std::string_view> SplitVfsPath(std::string_view vfsPath)
+		{
+			constexpr std::string_view kSeparator = "://";
+			const std::size_t sep = vfsPath.find(kSeparator);
+			if (sep == std::string_view::npos)
 			{
-				constexpr std::string_view kSeparator = "://";
-				const std::size_t sep = vfsPath.find(kSeparator);
-				if (sep == std::string_view::npos)
-				{
-					throw std::runtime_error("Invalid VFS path (missing ://): " + std::string(vfsPath));
-				}
-				return { vfsPath.substr(0, sep), vfsPath.substr(sep + kSeparator.size()) };
+				throw std::runtime_error("Invalid VFS path (missing ://): " + std::string(vfsPath));
+			}
+			return { vfsPath.substr(0, sep), vfsPath.substr(sep + kSeparator.size()) };
+		}
+
+		std::string ResolveRelativeVfsPath(std::string_view baseFilePath, std::string_view relativePath)
+		{
+			if (relativePath.starts_with("data:"))
+			{
+				return std::string(relativePath);
 			}
 
-			std::string ResolveRelativeVfsPath(std::string_view baseFilePath, std::string_view relativePath)
+			if (relativePath.find("://") != std::string_view::npos)
 			{
-				if (relativePath.starts_with("data:"))
-				{
-					return std::string(relativePath);
-				}
-
-				if (relativePath.find("://") != std::string_view::npos)
-				{
-					return std::string(relativePath);
-				}
-
-				auto [mount, baseRelative] = SplitVfsPath(baseFilePath);
-				std::filesystem::path base = std::filesystem::path(std::string(baseRelative)).parent_path();
-				std::filesystem::path resolved = (base / std::filesystem::path(std::string(relativePath))).lexically_normal();
-				return std::string(mount) + "://" + resolved.generic_string();
+				return std::string(relativePath);
 			}
+
+			auto [mount, baseRelative] = SplitVfsPath(baseFilePath);
+			std::filesystem::path base = std::filesystem::path(std::string(baseRelative)).parent_path();
+			std::filesystem::path resolved = (base / std::filesystem::path(std::string(relativePath))).lexically_normal();
+			return std::string(mount) + "://" + resolved.generic_string();
+		}
 
 		std::int32_t ToIndex(const cgltf_node* value, const cgltf_data& data)
 		{
@@ -114,13 +114,13 @@ namespace aether::assets
 		{
 			switch (interpolation)
 			{
-			case cgltf_interpolation_type_step:
-				return GltfInterpolation::Step;
-			case cgltf_interpolation_type_cubic_spline:
-				return GltfInterpolation::CubicSpline;
-			case cgltf_interpolation_type_linear:
-			default:
-				return GltfInterpolation::Linear;
+				case cgltf_interpolation_type_step:
+					return GltfInterpolation::Step;
+				case cgltf_interpolation_type_cubic_spline:
+					return GltfInterpolation::CubicSpline;
+				case cgltf_interpolation_type_linear:
+				default:
+					return GltfInterpolation::Linear;
 			}
 		}
 
@@ -128,15 +128,15 @@ namespace aether::assets
 		{
 			switch (path)
 			{
-			case cgltf_animation_path_type_rotation:
-				return GltfAnimationPath::Rotation;
-			case cgltf_animation_path_type_scale:
-				return GltfAnimationPath::Scale;
-			case cgltf_animation_path_type_weights:
-				return GltfAnimationPath::Weights;
-			case cgltf_animation_path_type_translation:
-			default:
-				return GltfAnimationPath::Translation;
+				case cgltf_animation_path_type_rotation:
+					return GltfAnimationPath::Rotation;
+				case cgltf_animation_path_type_scale:
+					return GltfAnimationPath::Scale;
+				case cgltf_animation_path_type_weights:
+					return GltfAnimationPath::Weights;
+				case cgltf_animation_path_type_translation:
+				default:
+					return GltfAnimationPath::Translation;
 			}
 		}
 
@@ -157,25 +157,15 @@ namespace aether::assets
 		{
 			if (source.has_translation)
 			{
-				destination.translation = glm::vec3(
-					static_cast<float>(source.translation[0]),
-					static_cast<float>(source.translation[1]),
-					static_cast<float>(source.translation[2]));
+				destination.translation = glm::vec3(static_cast<float>(source.translation[0]), static_cast<float>(source.translation[1]), static_cast<float>(source.translation[2]));
 			}
 			if (source.has_rotation)
 			{
-				destination.rotation = glm::quat(
-					static_cast<float>(source.rotation[3]),
-					static_cast<float>(source.rotation[0]),
-					static_cast<float>(source.rotation[1]),
-					static_cast<float>(source.rotation[2]));
+				destination.rotation = glm::quat(static_cast<float>(source.rotation[3]), static_cast<float>(source.rotation[0]), static_cast<float>(source.rotation[1]), static_cast<float>(source.rotation[2]));
 			}
 			if (source.has_scale)
 			{
-				destination.scale = glm::vec3(
-					static_cast<float>(source.scale[0]),
-					static_cast<float>(source.scale[1]),
-					static_cast<float>(source.scale[2]));
+				destination.scale = glm::vec3(static_cast<float>(source.scale[0]), static_cast<float>(source.scale[1]), static_cast<float>(source.scale[2]));
 			}
 			if (source.has_matrix)
 			{
@@ -193,7 +183,7 @@ namespace aether::assets
 			}
 			return out;
 		}
-	}
+	} // namespace
 
 	GltfAsset GltfAsset::LoadFromVfsPath(std::string_view path)
 	{
@@ -211,11 +201,7 @@ namespace aether::assets
 
 		cgltf_options options{};
 		cgltf_data* data = nullptr;
-		const cgltf_result parseResult = cgltf_parse(
-			&options,
-			sourceBytes.data(),
-			sourceBytes.size(),
-			&data);
+		const cgltf_result parseResult = cgltf_parse(&options, sourceBytes.data(), sourceBytes.size(), &data);
 		if (parseResult != cgltf_result_success || data == nullptr)
 		{
 			throw std::runtime_error("Failed to parse glTF file: " + vfsPath);
@@ -260,8 +246,8 @@ namespace aether::assets
 			const cgltf_image& image = data->images[i];
 			const std::string imageUri = ToString(image.uri);
 			asset.images.push_back({
-				.name = ToString(image.name),
-				.uri = imageUri.empty() ? std::string() : ResolveRelativeVfsPath(vfsPath, imageUri),
+			        .name = ToString(image.name),
+			        .uri = imageUri.empty() ? std::string() : ResolveRelativeVfsPath(vfsPath, imageUri),
 			});
 		}
 
@@ -270,8 +256,8 @@ namespace aether::assets
 		{
 			const cgltf_texture& texture = data->textures[i];
 			asset.textures.push_back({
-				.name = ToString(texture.name),
-				.imageIndex = ToIndex(texture.image, *data),
+			        .name = ToString(texture.name),
+			        .imageIndex = ToIndex(texture.image, *data),
 			});
 		}
 
@@ -281,17 +267,10 @@ namespace aether::assets
 			const cgltf_material& material = data->materials[i];
 			GltfMaterial out;
 			out.name = ToString(material.name);
-			out.baseColorFactor = glm::vec4(
-				static_cast<float>(material.pbr_metallic_roughness.base_color_factor[0]),
-				static_cast<float>(material.pbr_metallic_roughness.base_color_factor[1]),
-				static_cast<float>(material.pbr_metallic_roughness.base_color_factor[2]),
-				static_cast<float>(material.pbr_metallic_roughness.base_color_factor[3]));
+			out.baseColorFactor = glm::vec4(static_cast<float>(material.pbr_metallic_roughness.base_color_factor[0]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[1]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[2]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[3]));
 			out.metallicFactor = static_cast<float>(material.pbr_metallic_roughness.metallic_factor);
 			out.roughnessFactor = static_cast<float>(material.pbr_metallic_roughness.roughness_factor);
-			out.emissiveFactor = glm::vec3(
-				static_cast<float>(material.emissive_factor[0]),
-				static_cast<float>(material.emissive_factor[1]),
-				static_cast<float>(material.emissive_factor[2]));
+			out.emissiveFactor = glm::vec3(static_cast<float>(material.emissive_factor[0]), static_cast<float>(material.emissive_factor[1]), static_cast<float>(material.emissive_factor[2]));
 			out.alphaCutoff = static_cast<float>(material.alpha_cutoff);
 			out.doubleSided = material.double_sided;
 			out.alphaBlend = material.alpha_mode == cgltf_alpha_mode_blend;
@@ -442,11 +421,7 @@ namespace aether::assets
 					if (joints0 != nullptr)
 					{
 						cgltf_accessor_read_uint(joints0, v, uintValues.data(), 4);
-						vertex.jointIndices = glm::uvec4(
-							static_cast<std::uint32_t>(uintValues[0]),
-							static_cast<std::uint32_t>(uintValues[1]),
-							static_cast<std::uint32_t>(uintValues[2]),
-							static_cast<std::uint32_t>(uintValues[3]));
+						vertex.jointIndices = glm::uvec4(static_cast<std::uint32_t>(uintValues[0]), static_cast<std::uint32_t>(uintValues[1]), static_cast<std::uint32_t>(uintValues[2]), static_cast<std::uint32_t>(uintValues[3]));
 					}
 					if (weights0 != nullptr)
 					{
@@ -464,7 +439,7 @@ namespace aether::assets
 				if (color0 != nullptr)
 				{
 					float maxColor = 0.0f;
-					for (const Mesh::Vertex& vtx : out.vertices)
+					for (const Mesh::Vertex& vtx: out.vertices)
 					{
 						maxColor = std::max(maxColor, std::max(vtx.color.r, std::max(vtx.color.g, vtx.color.b)));
 					}
@@ -472,7 +447,7 @@ namespace aether::assets
 					// Treat near-black COLOR_0 streams as invalid tint data.
 					if (maxColor < 0.01f)
 					{
-						for (Mesh::Vertex& vtx : out.vertices)
+						for (Mesh::Vertex& vtx: out.vertices)
 						{
 							vtx.color = glm::vec3(1.0f);
 						}
@@ -496,7 +471,7 @@ namespace aether::assets
 				// In that case, generate smooth vertex normals from indexed triangles.
 				if (normal == nullptr)
 				{
-					for (auto& vtx : out.vertices)
+					for (auto& vtx: out.vertices)
 					{
 						vtx.normal = glm::vec3(0.0f);
 					}
@@ -525,12 +500,10 @@ namespace aether::assets
 						}
 					}
 
-					for (auto& vtx : out.vertices)
+					for (auto& vtx: out.vertices)
 					{
 						const float len2 = glm::dot(vtx.normal, vtx.normal);
-						vtx.normal = (len2 > 1e-16f)
-							? glm::normalize(vtx.normal)
-							: glm::vec3(0.0f, 1.0f, 0.0f);
+						vtx.normal = (len2 > 1e-16f) ? glm::normalize(vtx.normal) : glm::vec3(0.0f, 1.0f, 0.0f);
 					}
 				}
 
@@ -584,11 +557,7 @@ namespace aether::assets
 					outChannel.times[i] = value[0];
 
 					cgltf_accessor_read_float(output, i, value.data(), componentCount);
-					outChannel.values[i] = glm::vec4(
-						value[0],
-						value[1],
-						value[2],
-						isRotation ? value[3] : 0.0f);
+					outChannel.values[i] = glm::vec4(value[0], value[1], value[2], isRotation ? value[3] : 0.0f);
 				}
 
 				outAnim.channels.push_back(std::move(outChannel));
@@ -600,4 +569,4 @@ namespace aether::assets
 		cgltf_free(data);
 		return asset;
 	}
-}
+} // namespace aether::assets

@@ -20,4 +20,4 @@ namespace aether
 	private:
 		GLFWwindow* m_window = nullptr;
 	};
-}
+} // namespace aether

@@ -2,9 +2,9 @@
 
 #include <memory>
 
+#include "AetherCore.hpp"
 #include "AppLayer.hpp"
 #include "LayerStack.hpp"
-#include "AetherCore.hpp"
 #include "UIRenderer.hpp"
 
 namespace aether::app
@@ -31,4 +31,4 @@ namespace aether::app
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;
 	};
-}
+} // namespace aether::app

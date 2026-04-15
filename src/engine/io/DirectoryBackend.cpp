@@ -57,8 +57,7 @@ namespace aether::io
 					continue;
 				}
 
-				if (c == '.' || c == '^' || c == '$' || c == '+' || c == '(' || c == ')' ||
-					c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
+				if (c == '.' || c == '^' || c == '$' || c == '+' || c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
 				{
 					regex += '\\';
 				}
@@ -69,11 +68,12 @@ namespace aether::io
 			regex += '$';
 			return regex;
 		}
-	}
+	} // namespace
 
 	DirectoryBackend::DirectoryBackend(std::filesystem::path rootPath)
-		: m_rootPath(std::move(rootPath))
-	{}
+	      : m_rootPath(std::move(rootPath))
+	{
+	}
 
 	bool DirectoryBackend::Exists(std::string_view relativePath) const
 	{
@@ -125,8 +125,7 @@ namespace aether::io
 		}
 
 		const auto normalizedPattern = NormalizePath(std::string(pattern));
-		const auto regexFlags = options.caseSensitive ? std::regex_constants::ECMAScript
-			: (std::regex_constants::ECMAScript | std::regex_constants::icase);
+		const auto regexFlags = options.caseSensitive ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
 		const std::regex matcher(GlobToRegex(normalizedPattern), regexFlags);
 
 		std::error_code errorCode;
@@ -197,4 +196,4 @@ namespace aether::io
 	{
 		return m_rootPath / relativePath;
 	}
-}
+} // namespace aether::io

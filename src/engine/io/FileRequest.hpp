@@ -20,7 +20,12 @@ namespace aether::io
 	class FileRequest
 	{
 	public:
-		enum class State { Pending, Complete, Failed };
+		enum class State
+		{
+			Pending,
+			Complete,
+			Failed
+		};
 
 		[[nodiscard]] State GetState() const noexcept;
 		[[nodiscard]] std::span<const std::byte> GetData() const noexcept;
@@ -36,4 +41,4 @@ namespace aether::io
 	};
 
 	using FileRequestHandle = std::shared_ptr<FileRequest>;
-}
+} // namespace aether::io

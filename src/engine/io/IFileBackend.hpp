@@ -21,4 +21,4 @@ namespace aether::io
 		[[nodiscard]] virtual std::unique_ptr<std::istream> OpenStream(std::string_view relativePath) const = 0;
 		[[nodiscard]] virtual std::vector<std::string> Glob(std::string_view pattern, const FileGlobOptions& options) const = 0;
 	};
-}
+} // namespace aether::io

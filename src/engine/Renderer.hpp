@@ -1,9 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <glm/glm.hpp>
 #include <span>
 #include <vector>
-#include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
 namespace aether
@@ -19,20 +19,20 @@ namespace aether
 		struct PointLight
 		{
 			glm::vec3 position{ 0.0f };
-			float     radius = 1.0f;
+			float radius = 1.0f;
 			glm::vec3 color{ 1.0f };
-			float     intensity = 1.0f;
+			float intensity = 1.0f;
 		};
 
 		struct SpotLight
 		{
 			glm::vec3 position{ 0.0f };
-			float     radius = 1.0f;
+			float radius = 1.0f;
 			glm::vec3 direction{ 0.0f, -1.0f, 0.0f };
-			float     innerAngleRad = 0.35f;
+			float innerAngleRad = 0.35f;
 			glm::vec3 color{ 1.0f };
-			float     intensity = 1.0f;
-			float     outerAngleRad = 0.60f;
+			float intensity = 1.0f;
+			float outerAngleRad = 0.60f;
 		};
 
 		Renderer() = default;
@@ -53,33 +53,68 @@ namespace aether
 		void SetDirectionalLight(glm::vec3 direction, float intensity);
 		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
 		[[nodiscard]] float GetDirectionalLightIntensity() const;
-		[[nodiscard]] glm::vec4 GetDirectionalLightVector() const { return m_sunDirectionIntensity; }
+
+		[[nodiscard]] glm::vec4 GetDirectionalLightVector() const
+		{
+			return m_sunDirectionIntensity;
+		}
+
 		void SetSunColor(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetSunColor() const;
-		[[nodiscard]] glm::vec4 GetSunColorVector() const { return m_sunColor; }
+
+		[[nodiscard]] glm::vec4 GetSunColorVector() const
+		{
+			return m_sunColor;
+		}
 
 		// Ambient light controls.
 		void SetAmbientLight(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetAmbientLight() const;
-		[[nodiscard]] glm::vec4 GetAmbientLightVector() const { return m_ambientColor; }
+
+		[[nodiscard]] glm::vec4 GetAmbientLightVector() const
+		{
+			return m_ambientColor;
+		}
 
 		// Sky color controls used by the skybox pass.
 		void SetSkyGradient(glm::vec3 horizonColor, glm::vec3 zenithColor);
 		[[nodiscard]] glm::vec3 GetSkyHorizonColor() const;
 		[[nodiscard]] glm::vec3 GetSkyZenithColor() const;
-		[[nodiscard]] glm::vec4 GetSkyHorizonColorVector() const { return m_skyHorizonColor; }
-		[[nodiscard]] glm::vec4 GetSkyZenithColorVector() const { return m_skyZenithColor; }
+
+		[[nodiscard]] glm::vec4 GetSkyHorizonColorVector() const
+		{
+			return m_skyHorizonColor;
+		}
+
+		[[nodiscard]] glm::vec4 GetSkyZenithColorVector() const
+		{
+			return m_skyZenithColor;
+		}
+
 		void SetSkyVoidColor(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetSkyVoidColor() const;
-		[[nodiscard]] glm::vec4 GetSkyVoidColorVector() const { return m_skyVoidColor; }
+
+		[[nodiscard]] glm::vec4 GetSkyVoidColorVector() const
+		{
+			return m_skyVoidColor;
+		}
 
 		// Local lights for tiled forward shading.
 		void SetPointLights(std::vector<PointLight> lights);
 		void ClearPointLights();
-		[[nodiscard]] std::span<const PointLight> GetPointLights() const { return m_pointLights; }
+
+		[[nodiscard]] std::span<const PointLight> GetPointLights() const
+		{
+			return m_pointLights;
+		}
+
 		void SetSpotLights(std::vector<SpotLight> lights);
 		void ClearSpotLights();
-		[[nodiscard]] std::span<const SpotLight> GetSpotLights() const { return m_spotLights; }
+
+		[[nodiscard]] std::span<const SpotLight> GetSpotLights() const
+		{
+			return m_spotLights;
+		}
 
 		// Swapchain format queries for pipeline creation.
 		[[nodiscard]] VkFormat GetColorFormat() const;
@@ -99,4 +134,4 @@ namespace aether
 		std::vector<PointLight> m_pointLights;
 		std::vector<SpotLight> m_spotLights;
 	};
-}
+} // namespace aether

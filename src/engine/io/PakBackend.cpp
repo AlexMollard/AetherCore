@@ -54,8 +54,7 @@ namespace aether::io
 					regex += "[^/]";
 					continue;
 				}
-				if (c == '.' || c == '^' || c == '$' || c == '+' || c == '(' || c == ')' ||
-				    c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
+				if (c == '.' || c == '^' || c == '$' || c == '+' || c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' || c == '|' || c == '\\')
 				{
 					regex += '\\';
 				}
@@ -68,7 +67,7 @@ namespace aether::io
 	} // namespace
 
 	PakBackend::PakBackend(std::filesystem::path pakPath)
-	    : m_pakPath(std::move(pakPath))
+	      : m_pakPath(std::move(pakPath))
 	{
 		std::ifstream pak(m_pakPath, std::ios::binary);
 		if (!pak)
@@ -85,14 +84,12 @@ namespace aether::io
 		}
 		if (header.version != 1)
 		{
-			throw FileSystemError("Unsupported pak version ("
-			    + std::to_string(header.version) + ") in: " + m_pakPath.string());
+			throw FileSystemError("Unsupported pak version (" + std::to_string(header.version) + ") in: " + m_pakPath.string());
 		}
 
 		// Read entry table.
 		std::vector<PakEntry> entries(header.numEntries);
-		pak.read(reinterpret_cast<char*>(entries.data()),
-		         static_cast<std::streamsize>(header.numEntries * sizeof(PakEntry)));
+		pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(header.numEntries * sizeof(PakEntry)));
 
 		// Read path-data section.
 		std::vector<char> pathData(static_cast<std::size_t>(header.pathDataSize));
@@ -107,10 +104,10 @@ namespace aether::io
 		m_assetDataBase = header.assetDataOffset;
 		m_index.reserve(header.numEntries);
 
-		for (const auto& e : entries)
+		for (const auto& e: entries)
 		{
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
-			m_index.emplace(std::move(path), EntryInfo{e.dataOffset, e.dataSize});
+			m_index.emplace(std::move(path), EntryInfo{ e.dataOffset, e.dataSize });
 		}
 	}
 
@@ -138,8 +135,7 @@ namespace aether::io
 		pak.seekg(static_cast<std::streamoff>(m_assetDataBase + info.offset));
 
 		std::vector<std::byte> buffer(static_cast<std::size_t>(info.size));
-		pak.read(reinterpret_cast<char*>(buffer.data()),
-		         static_cast<std::streamsize>(info.size));
+		pak.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(info.size));
 
 		if (!pak)
 		{
@@ -157,17 +153,14 @@ namespace aether::io
 		return std::make_unique<std::istringstream>(std::move(buf), std::ios::binary);
 	}
 
-	std::vector<std::string> PakBackend::Glob(std::string_view pattern,
-	                                           const FileGlobOptions& options) const
+	std::vector<std::string> PakBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
 	{
-		const auto regexFlags = options.caseSensitive
-		    ? std::regex::ECMAScript
-		    : std::regex::ECMAScript | std::regex::icase;
+		const auto regexFlags = options.caseSensitive ? std::regex::ECMAScript : std::regex::ECMAScript | std::regex::icase;
 
 		const std::regex re(GlobToRegex(pattern), regexFlags);
 
 		std::vector<std::string> results;
-		for (const auto& [path, info] : m_index)
+		for (const auto& [path, info]: m_index)
 		{
 			if (std::regex_search(path, re))
 			{

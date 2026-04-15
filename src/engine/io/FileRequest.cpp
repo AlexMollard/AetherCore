@@ -16,4 +16,4 @@ namespace aether::io
 	{
 		return m_error;
 	}
-}
+} // namespace aether::io

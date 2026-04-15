@@ -15,24 +15,21 @@ namespace aether
 
 	void MaterialBuffer::Initialize(const VulkanContext& ctx)
 	{
-		m_device    = ctx.GetDevice().device;
+		m_device = ctx.GetDevice().device;
 		m_allocator = ctx.GetAllocator();
 
 		const VkBufferCreateInfo bufferInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size  = sizeof(GpuMaterial) * kMaxMaterials,
-			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-			         VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+			.size = sizeof(GpuMaterial) * kMaxMaterials,
+			.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-			         VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 			.usage = VMA_MEMORY_USAGE_AUTO,
 		};
 
 		VmaAllocationInfo outInfo{};
-		if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo,
-		                    &m_buffer, &m_allocation, &outInfo) != VK_SUCCESS)
+		if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo, &m_buffer, &m_allocation, &outInfo) != VK_SUCCESS)
 		{
 			throw VulkanError("Failed to create MaterialBuffer GPU buffer.");
 		}
@@ -40,7 +37,7 @@ namespace aether
 		m_mapped = static_cast<GpuMaterial*>(outInfo.pMappedData);
 
 		const VkBufferDeviceAddressInfo addrInfo{
-			.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 			.buffer = m_buffer,
 		};
 		m_address = vkGetBufferDeviceAddress(m_device, &addrInfo);
@@ -66,9 +63,9 @@ namespace aether
 			m_buffer = VK_NULL_HANDLE;
 		}
 
-		m_mapped    = nullptr;
-		m_address   = 0;
-		m_device    = VK_NULL_HANDLE;
+		m_mapped = nullptr;
+		m_address = 0;
+		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
 		m_freeSlots.clear();
 	}
@@ -103,4 +100,4 @@ namespace aether
 		}
 		m_mapped[slot] = material;
 	}
-}
+} // namespace aether

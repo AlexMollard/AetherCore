@@ -1,10 +1,9 @@
 #pragma once
 
+#include <glm/glm.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <glm/glm.hpp>
 
 #include "GraphicsPipeline.hpp"
 #include "UiLayout.hpp"
@@ -27,7 +26,10 @@ namespace aether
 
 		void DrawQuad(const UiRect& rect, glm::vec4 color = glm::vec4(1.f));
 
-		[[nodiscard]] bool IsReady() const { return m_ready; }
+		[[nodiscard]] bool IsReady() const
+		{
+			return m_ready;
+		}
 
 	private:
 		struct QuadPush
@@ -36,8 +38,8 @@ namespace aether
 			glm::vec4 rect;       // x, y, w, h in screen pixels (top-left origin)
 			glm::vec4 color;      // RGBA tint (linear)
 		};
-		static_assert(sizeof(QuadPush) == 48,
-			"QuadPush must match ui_quad.slang push constant block.");
+
+		static_assert(sizeof(QuadPush) == 48, "QuadPush must match ui_quad.slang push constant block.");
 
 		struct PendingQuad
 		{
@@ -48,10 +50,10 @@ namespace aether
 		void EnsurePassRegistered();
 		void RegisterPass();
 
-		std::string              m_passName;
+		std::string m_passName;
 		AetherCore* m_engine = nullptr;
-		GraphicsPipeline         m_pipeline;
+		GraphicsPipeline m_pipeline;
 		std::vector<PendingQuad> m_pendingQuads;
-		bool                     m_ready = false;
+		bool m_ready = false;
 	};
-}
+} // namespace aether

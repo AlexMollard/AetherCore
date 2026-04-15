@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <format>
 
+#include "CommandRecorder.hpp"
 #include "DrawPushConstants.hpp"
 #include "GraphicsPipeline.hpp"
-#include "CommandRecorder.hpp"
 #include "Mesh.hpp"
 
 namespace aether
@@ -15,11 +15,7 @@ namespace aether
 		m_commands.push_back(cmd);
 	}
 
-	void RenderQueue::Flush(
-		CommandRecorder& recorder,
-		VkDeviceAddress  frameConstantsAddr,
-		VkDescriptorSet  bindlessSet,
-		VkDescriptorSet  lightingSet)
+	void RenderQueue::Flush(CommandRecorder& recorder, VkDeviceAddress frameConstantsAddr, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet)
 	{
 		if (!recorder.IsValid())
 		{
@@ -27,36 +23,32 @@ namespace aether
 		}
 
 		const GraphicsPipeline* lastPipeline = nullptr;
-		const Mesh*             lastMesh = nullptr;
-		VkBuffer                lastVertexBuffer = VK_NULL_HANDLE;
-		VkBuffer                lastIndexBuffer = VK_NULL_HANDLE;
+		const Mesh* lastMesh = nullptr;
+		VkBuffer lastVertexBuffer = VK_NULL_HANDLE;
+		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
-		std::stable_sort(m_commands.begin(), m_commands.end(),
-			[](const DrawCommand& a, const DrawCommand& b)
-			{
-				if (a.pipeline != b.pipeline)
-				{
-					return a.pipeline < b.pipeline;
-				}
-				if (a.mesh != b.mesh)
-				{
-					return a.mesh < b.mesh;
-				}
-				return a.materialIndex < b.materialIndex;
-			});
+		std::stable_sort(m_commands.begin(),
+		        m_commands.end(),
+		        [](const DrawCommand& a, const DrawCommand& b)
+		        {
+			        if (a.pipeline != b.pipeline)
+			        {
+				        return a.pipeline < b.pipeline;
+			        }
+			        if (a.mesh != b.mesh)
+			        {
+				        return a.mesh < b.mesh;
+			        }
+			        return a.materialIndex < b.materialIndex;
+		        });
 
 		recorder.BeginDebugLabel("RenderQueue.Flush", 0.85f, 0.60f, 0.18f, 1.0f);
 
-		for (const DrawCommand& cmd : m_commands)
+		for (const DrawCommand& cmd: m_commands)
 		{
-			const std::string drawLabel = std::format(
-				"Draw P={} M={} Mat={}{}",
-				reinterpret_cast<const void*>(cmd.pipeline),
-				reinterpret_cast<const void*>(cmd.mesh),
-				cmd.materialIndex,
-				(cmd.mesh != nullptr && cmd.mesh->IsIndexed()) ? " Indexed" : " NonIndexed");
+			const std::string drawLabel = std::format("Draw P={} M={} Mat={}{}", reinterpret_cast<const void*>(cmd.pipeline), reinterpret_cast<const void*>(cmd.mesh), cmd.materialIndex, (cmd.mesh != nullptr && cmd.mesh->IsIndexed()) ? " Indexed" : " NonIndexed");
 			recorder.BeginDebugLabel(drawLabel.c_str(), 0.95f, 0.40f, 0.25f, 1.0f);
 			if (cmd.pipeline != nullptr)
 			{
@@ -70,40 +62,29 @@ namespace aether
 				// Bind the bindless descriptor set (set 0) if supplied.
 				if (bindlessSet != VK_NULL_HANDLE && cmd.pipeline == lastPipeline)
 				{
-					// Descriptor set 0 is tied to pipeline layout; rebind on pipeline switch.
+					// Descriptor set 0 is tied to pipeline layout; rebind on pipeline
+					// switch.
 					if (cmd.pipeline != lastSetPipeline)
 					{
-						vkCmdBindDescriptorSets(
-							recorder.GetCommandBuffer(),
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							cmd.pipeline->GetLayout(),
-							0, 1, &bindlessSet,
-							0, nullptr);
+						vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, cmd.pipeline->GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
 						lastSetPipeline = cmd.pipeline;
 					}
 				}
 
 				// Bind optional set 1 (tiled/clustered lighting) when supported.
-				if (lightingSet != VK_NULL_HANDLE &&
-					cmd.pipeline == lastPipeline &&
-					cmd.pipeline->GetSetLayoutCount() > 1)
+				if (lightingSet != VK_NULL_HANDLE && cmd.pipeline == lastPipeline && cmd.pipeline->GetSetLayoutCount() > 1)
 				{
 					if (cmd.pipeline != lastLightingSetPipeline)
 					{
-						vkCmdBindDescriptorSets(
-							recorder.GetCommandBuffer(),
-							VK_PIPELINE_BIND_POINT_GRAPHICS,
-							cmd.pipeline->GetLayout(),
-							1, 1, &lightingSet,
-							0, nullptr);
+						vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, cmd.pipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
 						lastLightingSetPipeline = cmd.pipeline;
 					}
 				}
 
 				const DrawPushConstants pc{
-					.model          = cmd.modelMatrix,
-					.frameAddr      = frameConstantsAddr,
-					.materialIndex  = cmd.materialIndex,
+					.model = cmd.modelMatrix,
+					.frameAddr = frameConstantsAddr,
+					.materialIndex = cmd.materialIndex,
 					.skinBufferAddr = cmd.skinBufferAddr,
 				};
 				recorder.PushConstants(cmd.pipeline->GetLayout(), pc);
@@ -135,9 +116,7 @@ namespace aether
 			}
 			else
 			{
-				const std::uint32_t count = (cmd.mesh != nullptr)
-					? cmd.mesh->GetVertexCount()
-					: cmd.vertexCount;
+				const std::uint32_t count = (cmd.mesh != nullptr) ? cmd.mesh->GetVertexCount() : cmd.vertexCount;
 
 				recorder.Draw(count, cmd.instanceCount);
 			}
@@ -157,4 +136,4 @@ namespace aether
 	{
 		return m_commands.empty();
 	}
-}
+} // namespace aether

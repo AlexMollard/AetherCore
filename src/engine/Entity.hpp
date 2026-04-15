@@ -12,14 +12,17 @@ namespace aether
 	{
 		std::uint32_t id = 0;
 
-		[[nodiscard]] bool IsValid() const noexcept { return id != 0; }
+		[[nodiscard]] bool IsValid() const noexcept
+		{
+			return id != 0;
+		}
 
 		bool operator==(const Entity&) const noexcept = default;
 		bool operator!=(const Entity&) const noexcept = default;
 	};
-}
+} // namespace aether
 
-template <>
+template<>
 struct std::hash<aether::Entity>
 {
 	std::size_t operator()(const aether::Entity& e) const noexcept

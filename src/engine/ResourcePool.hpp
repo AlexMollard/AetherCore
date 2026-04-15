@@ -4,7 +4,6 @@
 #include <functional>
 #include <optional>
 #include <vector>
-
 #include <vulkan/vulkan.h>
 
 #include "UniqueBuffer.hpp"
@@ -109,23 +108,13 @@ namespace aether
 		using BufferFactory = std::function<UniqueBuffer(const BufferResourceDesc&)>;
 		using ImageFactory = std::function<UniqueImage(const ImageResourceDesc&)>;
 
-		[[nodiscard]] VirtualBufferHandle CreateVirtualBuffer(
-			const BufferResourceDesc& desc,
-			const ResourceContract& contract);
+		[[nodiscard]] VirtualBufferHandle CreateVirtualBuffer(const BufferResourceDesc& desc, const ResourceContract& contract);
 
-		[[nodiscard]] VirtualImageHandle CreateVirtualImage(
-			const ImageResourceDesc& desc,
-			const ResourceContract& contract);
+		[[nodiscard]] VirtualImageHandle CreateVirtualImage(const ImageResourceDesc& desc, const ResourceContract& contract);
 
-		[[nodiscard]] VirtualBufferHandle CreateVirtualBuffer(
-			const BufferResourceDesc& desc,
-			const LifetimeWindow& lifetime,
-			bool transient = true);
+		[[nodiscard]] VirtualBufferHandle CreateVirtualBuffer(const BufferResourceDesc& desc, const LifetimeWindow& lifetime, bool transient = true);
 
-		[[nodiscard]] VirtualImageHandle CreateVirtualImage(
-			const ImageResourceDesc& desc,
-			const LifetimeWindow& lifetime,
-			bool transient = true);
+		[[nodiscard]] VirtualImageHandle CreateVirtualImage(const ImageResourceDesc& desc, const LifetimeWindow& lifetime, bool transient = true);
 
 		void ConfigureBindlessImages(const BindlessImageConfig& config);
 
@@ -181,15 +170,9 @@ namespace aether
 		ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle);
 		const ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle) const;
 
-		[[nodiscard]] bool CanAliasWithOwners(
-			const ResourceContract& candidateContract,
-			const std::vector<std::uint32_t>& ownerIds,
-			const std::vector<BufferVirtualRecord>& records) const;
+		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const;
 
-		[[nodiscard]] bool CanAliasWithOwners(
-			const ResourceContract& candidateContract,
-			const std::vector<std::uint32_t>& ownerIds,
-			const std::vector<ImageVirtualRecord>& records) const;
+		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records) const;
 
 		static bool IsBufferCompatible(const BufferResourceDesc& requested, const UniqueBuffer& existing);
 		static bool IsImageCompatible(const ImageResourceDesc& requested, const UniqueImage& existing);
@@ -202,4 +185,4 @@ namespace aether
 		std::vector<BufferPhysicalRecord> m_physicalBuffers;
 		std::vector<ImagePhysicalRecord> m_physicalImages;
 	};
-}
+} // namespace aether

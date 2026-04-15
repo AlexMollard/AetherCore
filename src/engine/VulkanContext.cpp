@@ -6,9 +6,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "Logger.hpp"
 #include "AetherExceptions.hpp"
 #include "CommandRecorder.hpp"
+#include "Logger.hpp"
 #include "Window.hpp"
 
 namespace
@@ -18,18 +18,12 @@ namespace
 		return aether::VulkanError(std::string(message) + result.error().message());
 	}
 
-	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(
-		VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		VkDebugUtilsMessageTypeFlagsEXT messageType,
-		const VkDebugUtilsMessengerCallbackDataEXT* callbackData,
-		void* userData)
+	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
 	{
-		(void)userData;
+		(void) userData;
 
 		const char* type = vkb::to_string_message_type(messageType);
-		const char* message = callbackData != nullptr && callbackData->pMessage != nullptr
-			? callbackData->pMessage
-			: "Unknown validation layer message.";
+		const char* message = callbackData != nullptr && callbackData->pMessage != nullptr ? callbackData->pMessage : "Unknown validation layer message.";
 
 		if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
 		{
@@ -46,7 +40,7 @@ namespace
 
 		return VK_FALSE;
 	}
-}
+} // namespace
 
 namespace aether
 {
@@ -56,18 +50,12 @@ namespace aether
 
 		vkb::InstanceBuilder instanceBuilder;
 		auto instanceResult = instanceBuilder.set_app_name(appName)
-			.require_api_version(1, 4, 0)
-			.request_validation_layers()
-			.set_debug_callback(LogValidationMessage)
-			.set_debug_messenger_severity(
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-			.set_debug_messenger_type(
-				VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-				VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-			.build();
+		                              .require_api_version(1, 4, 0)
+		                              .request_validation_layers()
+		                              .set_debug_callback(LogValidationMessage)
+		                              .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		                              .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+		                              .build();
 
 		if (!instanceResult)
 		{
@@ -105,13 +93,7 @@ namespace aether
 		requiredFeatures10.shaderInt64 = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
-		auto physicalDeviceResult = selector.set_surface(m_surface)
-			.set_minimum_version(1, 4)
-			.set_required_features(requiredFeatures10)
-			.set_required_features_11(requiredFeatures11)
-			.set_required_features_12(requiredFeatures12)
-			.set_required_features_13(requiredFeatures13)
-			.select();
+		auto physicalDeviceResult = selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13).select();
 
 		if (!physicalDeviceResult)
 		{
@@ -154,15 +136,9 @@ namespace aether
 		}
 		m_presentQueue = presentQueueResult.value();
 
-		CommandRecorder::SetDebugLabelFunctions(
-			reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
-				vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")),
-			reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
-				vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
+		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")), reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
 
-		CommandRecorder::SetObjectNameFunction(
-			reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
-				vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT")));
+		CommandRecorder::SetObjectNameFunction(reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT")));
 
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
@@ -253,4 +229,4 @@ namespace aether
 	{
 		return m_computeQueueFamily;
 	}
-}
+} // namespace aether

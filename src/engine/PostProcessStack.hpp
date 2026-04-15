@@ -2,9 +2,8 @@
 
 #include <cstdint>
 #include <span>
-
-#include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
+#include <vulkan/vulkan.h>
 
 #include "BindlessManager.hpp"
 #include "GraphicsPipeline.hpp"
@@ -16,7 +15,7 @@ namespace aether
 	// Tonemap operator applied in the $PostProcess pass.
 	enum class TonemapMode : uint32_t
 	{
-		Reinhard = 0, // x / (x + 1) — simple, cheap
+		Reinhard = 0,   // x / (x + 1) — simple, cheap
 		AcesFilmic = 1, // Narkowicz 2015 fit — filmic toe + shoulder
 		Uncharted2 = 2, // John Hable curve — warm filmic look
 	};
@@ -26,7 +25,8 @@ namespace aether
 	//
 	// Lifetime contract
 	// -----------------
-	//  1. Create()         — allocates GPU resources, registers images with the graph
+	//  1. Create()         — allocates GPU resources, registers images with the
+	//  graph
 	//  2. RegisterPasses() — adds $PostProcess and $FXAA passes to the graph;
 	//                        must be called every time the graph is rebuilt
 	//  3. Destroy()        — releases all GPU resources; call before or during
@@ -39,12 +39,12 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDevice         device = VK_NULL_HANDLE;
-			VmaAllocator     allocator = VK_NULL_HANDLE;
-			VkExtent2D       extent = {};
-			VkFormat         swapchainFormat = VK_FORMAT_UNDEFINED;
+			VkDevice device = VK_NULL_HANDLE;
+			VmaAllocator allocator = VK_NULL_HANDLE;
+			VkExtent2D extent = {};
+			VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;
 			BindlessManager* bindlessManager = nullptr; // non-owning
-			RenderGraph* renderGraph = nullptr; // non-owning
+			RenderGraph* renderGraph = nullptr;         // non-owning
 		};
 
 		PostProcessStack() = default;
@@ -67,38 +67,62 @@ namespace aether
 
 		// RenderGraph handle for the HDR buffer — pass to the forward pass's
 		// WriteColor() so the graph tracks the write→read dependency.
-		[[nodiscard]] RGImage GetHdrColor() const { return m_hdrColor; }
+		[[nodiscard]] RGImage GetHdrColor() const
+		{
+			return m_hdrColor;
+		}
 
 		// Select the tonemap curve applied in $PostProcess (default: Reinhard).
-		void SetTonemapMode(TonemapMode mode) { m_tonemapMode = mode; }
-		[[nodiscard]] TonemapMode GetTonemapMode() const { return m_tonemapMode; }
+		void SetTonemapMode(TonemapMode mode)
+		{
+			m_tonemapMode = mode;
+		}
+
+		[[nodiscard]] TonemapMode GetTonemapMode() const
+		{
+			return m_tonemapMode;
+		}
 
 		// Pre-tonemap exposure multiplier (default: 1.0 = no change).
-		void SetExposure(float exposure) { m_exposure = exposure; }
-		[[nodiscard]] float GetExposure() const { return m_exposure; }
+		void SetExposure(float exposure)
+		{
+			m_exposure = exposure;
+		}
+
+		[[nodiscard]] float GetExposure() const
+		{
+			return m_exposure;
+		}
 
 		// FXAA toggle.  When disabled the tonemap pass writes directly to the
 		// swapchain, saving one full-screen pass and avoiding any blurring.
-		void SetFxaaEnabled(bool enabled) { m_fxaaEnabled = enabled; }
-		[[nodiscard]] bool IsFxaaEnabled() const { return m_fxaaEnabled; }
+		void SetFxaaEnabled(bool enabled)
+		{
+			m_fxaaEnabled = enabled;
+		}
+
+		[[nodiscard]] bool IsFxaaEnabled() const
+		{
+			return m_fxaaEnabled;
+		}
 
 		// Adds the $PostProcess (tonemap) and $FXAA passes to the render graph.
 		// bindless must outlive the graph (it is captured by the pass lambdas).
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
 
 	private:
-		UniqueImage      m_hdrColorImage;   // R16G16B16A16_SFLOAT — forward output
-		RGImage          m_hdrColor{};
+		UniqueImage m_hdrColorImage; // R16G16B16A16_SFLOAT — forward output
+		RGImage m_hdrColor{};
 		GraphicsPipeline m_tonemapPipeline; // HDR → LDR
 
-		UniqueImage      m_ldrColorImage;              // R8G8B8A8_UNORM — tonemap output
-		RGImage          m_ldrColor{};
-		GraphicsPipeline m_fxaaPipeline;               // LDR → swapchain (FXAA)
-		GraphicsPipeline m_tonemapPipelineSwapchain;   // HDR → swapchain (no FXAA path)
-		VkFormat         m_swapchainFormat = VK_FORMAT_UNDEFINED;
+		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM — tonemap output
+		RGImage m_ldrColor{};
+		GraphicsPipeline m_fxaaPipeline;             // LDR → swapchain (FXAA)
+		GraphicsPipeline m_tonemapPipelineSwapchain; // HDR → swapchain (no FXAA path)
+		VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
 
-		TonemapMode      m_tonemapMode = TonemapMode::Reinhard;
-		float            m_exposure    = 1.0f;
-		bool             m_fxaaEnabled = true;
+		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
+		float m_exposure = 1.0f;
+		bool m_fxaaEnabled = true;
 	};
-}
+} // namespace aether

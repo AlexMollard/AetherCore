@@ -22,26 +22,29 @@ namespace aether::io
 	// Example:  "models/Fox/Fox.gltf"
 
 #pragma pack(push, 1)
+
 	struct PakHeader
 	{
-		char     magic[4];          // "AEPK"
-		uint32_t version;           // 1
+		char magic[4];    // "AEPK"
+		uint32_t version; // 1
 		uint32_t numEntries;
-		uint32_t reserved;          // must be 0
-		uint64_t pathDataOffset;    // byte offset of path-data section
-		uint64_t pathDataSize;      // byte length of path-data section
-		uint64_t assetDataOffset;   // byte offset of asset-data section
-		uint64_t assetDataSize;     // byte length of asset-data section
+		uint32_t reserved;        // must be 0
+		uint64_t pathDataOffset;  // byte offset of path-data section
+		uint64_t pathDataSize;    // byte length of path-data section
+		uint64_t assetDataOffset; // byte offset of asset-data section
+		uint64_t assetDataSize;   // byte length of asset-data section
 	};
+
 	static_assert(sizeof(PakHeader) == 48);
 
 	struct PakEntry
 	{
-		uint32_t pathOffset;        // byte offset within path-data section
-		uint32_t pathLen;           // character count, NOT including null terminator
-		uint64_t dataOffset;        // byte offset within asset-data section
-		uint64_t dataSize;          // byte count
+		uint32_t pathOffset; // byte offset within path-data section
+		uint32_t pathLen;    // character count, NOT including null terminator
+		uint64_t dataOffset; // byte offset within asset-data section
+		uint64_t dataSize;   // byte count
 	};
+
 	static_assert(sizeof(PakEntry) == 24);
 #pragma pack(pop)
 
@@ -53,11 +56,10 @@ namespace aether::io
 		// Throws FileSystemError if the file is missing or has an invalid header.
 		explicit PakBackend(std::filesystem::path pakPath);
 
-		[[nodiscard]] bool                          Exists(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::byte>        Read(std::string_view relativePath) const override;
+		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
+		[[nodiscard]] std::vector<std::byte> Read(std::string_view relativePath) const override;
 		[[nodiscard]] std::unique_ptr<std::istream> OpenStream(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::string>      Glob(std::string_view pattern,
-		                                                  const FileGlobOptions& options) const override;
+		[[nodiscard]] std::vector<std::string> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
 
 	private:
 		struct EntryInfo
@@ -66,8 +68,8 @@ namespace aether::io
 			uint64_t size;   // byte count
 		};
 
-		std::filesystem::path                       m_pakPath;
-		uint64_t                                    m_assetDataBase{0};
-		std::unordered_map<std::string, EntryInfo>  m_index;
+		std::filesystem::path m_pakPath;
+		uint64_t m_assetDataBase{ 0 };
+		std::unordered_map<std::string, EntryInfo> m_index;
 	};
 } // namespace aether::io

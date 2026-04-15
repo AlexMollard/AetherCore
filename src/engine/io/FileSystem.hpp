@@ -31,7 +31,8 @@ namespace aether::io
 
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
-		// Synchronous read — returns entire file contents. Fine for startup / shader loading.
+		// Synchronous read — returns entire file contents. Fine for startup / shader
+		// loading.
 		[[nodiscard]] static std::vector<std::byte> ReadFile(std::string_view virtualPath);
 
 		// Synchronous stream — caller owns the returned stream.
@@ -42,13 +43,12 @@ namespace aether::io
 		//   *  matches within one path segment
 		//   ?  matches one character within one segment
 		//   ** matches across directory boundaries
-		[[nodiscard]] static std::vector<std::string> Glob(std::string_view virtualPattern,
-			const FileGlobOptions& options = {});
+		[[nodiscard]] static std::vector<std::string> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
 
 		// Asynchronous read — returns immediately with a handle.
-		// Poll FileRequestHandle::GetState() or call FileSystem::WaitFor() to synchronise.
-		[[nodiscard]] static FileRequestHandle RequestAsync(std::string_view virtualPath,
-			IOPriority priority = IOPriority::Normal);
+		// Poll FileRequestHandle::GetState() or call FileSystem::WaitFor() to
+		// synchronise.
+		[[nodiscard]] static FileRequestHandle RequestAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);
 
 		// Block until the given async request has completed.
 		static void WaitFor(const FileRequestHandle& handle);
@@ -56,4 +56,4 @@ namespace aether::io
 		// Block until all outstanding async requests have completed.
 		static void Flush();
 	};
-}
+} // namespace aether::io

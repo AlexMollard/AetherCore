@@ -13,15 +13,15 @@ namespace aether
 	}
 
 	UniqueBuffer::UniqueBuffer(UniqueBuffer&& other) noexcept
-		: m_allocator(std::exchange(other.m_allocator, VK_NULL_HANDLE)),
-		m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
-		m_buffer(std::exchange(other.m_buffer, VK_NULL_HANDLE)),
-		m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
-		m_allocationInfo(other.m_allocationInfo),
-		m_usage(other.m_usage),
-		m_size(other.m_size),
-		m_deviceAddress(other.m_deviceAddress),
-		m_virtualResourceId(other.m_virtualResourceId)
+	      : m_allocator(std::exchange(other.m_allocator, VK_NULL_HANDLE)),
+	        m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
+	        m_buffer(std::exchange(other.m_buffer, VK_NULL_HANDLE)),
+	        m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
+	        m_allocationInfo(other.m_allocationInfo),
+	        m_usage(other.m_usage),
+	        m_size(other.m_size),
+	        m_deviceAddress(other.m_deviceAddress),
+	        m_virtualResourceId(other.m_virtualResourceId)
 	{
 		other.m_allocationInfo = {};
 		other.m_usage = 0;
@@ -58,11 +58,7 @@ namespace aether
 		return *this;
 	}
 
-	UniqueBuffer UniqueBuffer::Create(
-		VmaAllocator allocator,
-		VkDevice device,
-		const VkBufferCreateInfo& bufferCreateInfo,
-		const VmaAllocationCreateInfo& allocationCreateInfo)
+	UniqueBuffer UniqueBuffer::Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
 	{
 		UniqueBuffer out;
 		out.m_allocator = allocator;
@@ -70,13 +66,7 @@ namespace aether
 		out.m_usage = bufferCreateInfo.usage;
 		out.m_size = bufferCreateInfo.size;
 
-		const VkResult createResult = vmaCreateBuffer(
-			allocator,
-			&bufferCreateInfo,
-			&allocationCreateInfo,
-			&out.m_buffer,
-			&out.m_allocation,
-			&out.m_allocationInfo);
+		const VkResult createResult = vmaCreateBuffer(allocator, &bufferCreateInfo, &allocationCreateInfo, &out.m_buffer, &out.m_allocation, &out.m_allocationInfo);
 
 		if (createResult != VK_SUCCESS)
 		{
@@ -168,4 +158,4 @@ namespace aether
 	{
 		return m_buffer != VK_NULL_HANDLE;
 	}
-}
+} // namespace aether
