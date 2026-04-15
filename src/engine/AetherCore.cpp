@@ -263,6 +263,10 @@ namespace aether
 					fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
 					fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
 					fc.ambientColor = m_renderer.GetAmbientLightVector();
+					fc.sunColor = m_renderer.GetSunColorVector();
+					fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
+					fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
+					fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
 
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 					rit->second.constants->Write(frameIdx, fc);
@@ -319,6 +323,10 @@ namespace aether
 			fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
 			fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
 			fc.ambientColor = m_renderer.GetAmbientLightVector();
+			fc.sunColor = m_renderer.GetSunColorVector();
+			fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
+			fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
+			fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);

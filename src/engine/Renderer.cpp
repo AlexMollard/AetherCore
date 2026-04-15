@@ -59,6 +59,17 @@ namespace aether
 		return m_sunDirectionIntensity.w;
 	}
 
+	void Renderer::SetSunColor(glm::vec3 color)
+	{
+		color = glm::max(color, glm::vec3(0.0f));
+		m_sunColor = glm::vec4(color, 1.0f);
+	}
+
+	glm::vec3 Renderer::GetSunColor() const
+	{
+		return glm::vec3(m_sunColor);
+	}
+
 	void Renderer::SetAmbientLight(glm::vec3 color)
 	{
 		color = glm::max(color, glm::vec3(0.0f));
@@ -68,6 +79,35 @@ namespace aether
 	glm::vec3 Renderer::GetAmbientLight() const
 	{
 		return glm::vec3(m_ambientColor);
+	}
+
+	void Renderer::SetSkyGradient(glm::vec3 horizonColor, glm::vec3 zenithColor)
+	{
+		horizonColor = glm::max(horizonColor, glm::vec3(0.0f));
+		zenithColor = glm::max(zenithColor, glm::vec3(0.0f));
+		m_skyHorizonColor = glm::vec4(horizonColor, 1.0f);
+		m_skyZenithColor = glm::vec4(zenithColor, 1.0f);
+	}
+
+	glm::vec3 Renderer::GetSkyHorizonColor() const
+	{
+		return glm::vec3(m_skyHorizonColor);
+	}
+
+	glm::vec3 Renderer::GetSkyZenithColor() const
+	{
+		return glm::vec3(m_skyZenithColor);
+	}
+
+	void Renderer::SetSkyVoidColor(glm::vec3 color)
+	{
+		color = glm::max(color, glm::vec3(0.0f));
+		m_skyVoidColor = glm::vec4(color, 1.0f);
+	}
+
+	glm::vec3 Renderer::GetSkyVoidColor() const
+	{
+		return glm::vec3(m_skyVoidColor);
 	}
 
 	VkFormat Renderer::GetColorFormat() const

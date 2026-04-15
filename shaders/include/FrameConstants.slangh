@@ -1,0 +1,19 @@
+// Shared per-frame constants layout for Slang shaders.
+// Keep this struct in lockstep with aether::FrameConstants in
+// src/engine/FrameConstants.hpp.
+
+struct FrameConstantsData
+{
+    [[vk::offset(0)]]   float4x4 viewProj;
+    [[vk::offset(64)]]  float4x4 view;
+    [[vk::offset(128)]] float4x4 proj;
+    [[vk::offset(192)]] uint64_t materialBufferAddr;
+    // offset 200: _pad0 (not accessed in shaders)
+    [[vk::offset(208)]] float4 sunDirectionIntensity; // xyz=world dir, w=intensity
+    [[vk::offset(224)]] float4 ambientColor;          // rgb=ambient term, a=unused
+    [[vk::offset(240)]] float4 cameraWorldPos;        // xyz=camera pos, w=1
+    [[vk::offset(256)]] float4 sunColor;              // rgb=sun light color, a=unused
+    [[vk::offset(272)]] float4 skyHorizonColor;       // rgb=sky horizon color, a=unused
+    [[vk::offset(288)]] float4 skyZenithColor;        // rgb=sky zenith color, a=unused
+    [[vk::offset(304)]] float4 skyVoidColor;          // rgb=sky void color, a=unused
+};

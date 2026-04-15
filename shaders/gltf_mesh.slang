@@ -15,15 +15,19 @@
 //   offset 72 : uint      materialIndex   index into MaterialBuffer
 //   offset 76 : uint      _pad0
 //
-// FrameConstantsData  (256 bytes, matches aether::FrameConstants):
+// FrameConstantsData  (320 bytes, matches aether::FrameConstants):
 //   offset   0 : float4x4  viewProj
 //   offset  64 : float4x4  view
 //   offset 128 : float4x4  proj
 //   offset 192 : uint64_t  materialBufferAddr   BDA → GpuMaterial[]
 //   offset 200 : uint64_t  _pad0
 //   offset 208 : float4    sunDirectionIntensity  (xyz=world dir, w=intensity)
-//   offset 224 : float4    ambientColor           (rgb=sky, a=unused)
+//   offset 224 : float4    ambientColor           (rgb=ambient, a=unused)
 //   offset 240 : float4    cameraWorldPos         (xyz=camera pos, w=1)
+//   offset 256 : float4    sunColor               (rgb=sun light color, a=unused)
+//   offset 272 : float4    skyHorizonColor        (rgb=sky horizon color, a=unused)
+//   offset 288 : float4    skyZenithColor         (rgb=sky zenith color, a=unused)
+//   offset 304 : float4    skyVoidColor           (rgb=sky void color, a=unused)
 //
 // GpuMaterial  (80 bytes, matches aether::GpuMaterial):
 //   offset  0  : float4  baseColorFactor
@@ -43,6 +47,8 @@
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
+#include "include/FrameConstants.slangh"
+
 // ── Shared constants ─────────────────────────────────────────────────────
 static const uint  kNoTexture     = 0xFFFFFFFFu;
 static const float kPI            = 3.14159265358979323846;
@@ -51,18 +57,6 @@ static const uint  kFlagAlphaBlend  = 2u;
 static const uint  kFlagAlphaMask   = 4u;
 
 // ── GPU structs (layout must exactly match their C++ counterparts) ────────
-
-struct FrameConstantsData
-{
-    [[vk::offset(0)]]   float4x4 viewProj;
-    [[vk::offset(64)]]  float4x4 view;
-    [[vk::offset(128)]] float4x4 proj;
-    [[vk::offset(192)]] uint64_t materialBufferAddr;
-    // offset 200: _pad0 (not accessed)
-    [[vk::offset(208)]] float4 sunDirectionIntensity; // xyz=world-space dir, w=intensity
-    [[vk::offset(224)]] float4 ambientColor;          // rgb=sky color, a=unused
-    [[vk::offset(240)]] float4 cameraWorldPos;        // xyz=camera position, w=1
-};
 
 struct GpuMaterial
 {
@@ -328,6 +322,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // ── PBR lighting (Cook-Torrance BRDF, single directional sun) ─────────
     float3 sunDir       = normalize(fc->sunDirectionIntensity.xyz);
     float  sunIntensity = fc->sunDirectionIntensity.w;
+    float3 sunColor     = fc->sunColor.rgb;
     float3 ambientColor = fc->ambientColor.rgb;
 
     float3 camWorldPos = fc->cameraWorldPos.xyz;
@@ -360,7 +355,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 diffuse = kD * baseColor.rgb / kPI;
 
     // Direct sun contribution.
-    float3 Lo = (diffuse + specular) * (sunIntensity * NdotL);
+    float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL));
 
     // Image-based ambient (constant approximation — replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ao;

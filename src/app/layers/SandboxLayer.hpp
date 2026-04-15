@@ -25,5 +25,6 @@ namespace aether::app
 		void DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const;
 
 		SandboxGameSystem* m_gameSystem = nullptr;
+		float m_lightTime = 0.0f;
 	};
 }

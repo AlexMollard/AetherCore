@@ -9,18 +9,7 @@
 //
 // No descriptor sets — all data comes from the push-constant BDA pointer.
 
-// ── FrameConstantsData ────────────────────────────────────────────────────
-// Mirrors aether::FrameConstants exactly (see FrameConstants.hpp).
-struct FrameConstantsData
-{
-    [[vk::offset(0)]]   float4x4 viewProj;
-    [[vk::offset(64)]]  float4x4 view;
-    [[vk::offset(128)]] float4x4 proj;
-    // offsets 192–207  materialBufferAddr / _pad0 — not accessed here
-    [[vk::offset(208)]] float4 sunDirectionIntensity; // xyz = world-space dir, w = intensity
-    [[vk::offset(224)]] float4 ambientColor;          // rgb = base sky colour, a = unused
-    [[vk::offset(240)]] float4 cameraWorldPos;        // xyz = camera pos, w = 1
-};
+#include "include/FrameConstants.slangh"
 
 struct SkyboxPush
 {
@@ -58,17 +47,44 @@ VSOut vertexMain(uint vertexID : SV_VertexID)
 // Returns a linear-HDR sky colour for a given world-space view direction.
 //
 // horizonColor  — base colour near the horizon (typically a brightened
-//                 version of ambientColor.rgb).
+//                 sky-horizon tint supplied by the app.
 // sunDir        — normalised world-space direction TOWARDS the sun.
 // sunIntensity  — directional light intensity scalar.
 
-float3 EvalSky(float3 worldDir, float3 sunDir, float sunIntensity, float3 horizonColor)
+float Hash31(float3 p)
 {
-    // Simple two-band gradient: horizon (t = 0) → zenith (t = 1).
-    // Squared ramp gives a subtle atmospheric density feel.
-    const float t         = saturate(worldDir.y * 0.5f + 0.5f);
-    const float3 zenith   = horizonColor * 0.30f;
-    float3 sky            = lerp(horizonColor, zenith, t * t);
+    return frac(sin(dot(p, float3(127.1f, 311.7f, 74.3f))) * 43758.5f);
+}
+
+float StarField(float3 dir)
+{
+    const float3 cell = floor(dir * 180.0f);
+    float star = smoothstep(0.997f, 1.0f, Hash31(cell));
+    star *= saturate(dir.y + 0.1f); // hide below the horizon
+    return star;
+}
+
+float3 EvalSky(
+    float3 worldDir,
+    float3 sunDir,
+    float3 sunColor,
+    float  sunIntensity,
+    float3 horizonColor,
+    float3 zenithColor,
+    float3 voidColor)
+{
+    const float sunAltitude = saturate(sunDir.y);
+    const float nightAmount = 1.0f - smoothstep(-0.10f, 0.25f, sunDir.y);
+
+    // Three-band gradient: horizon → mid-sky → zenith.
+    // This breaks up the large flat ramp and gives the sky more depth.
+    const float t       = saturate(worldDir.y * 0.5f + 0.5f);
+    const float3 warmHorizon = horizonColor + float3(0.20f, 0.08f, 0.02f) * (1.0f - sunAltitude);
+    const float3 zenith = zenithColor * lerp(1.0f, 0.45f, nightAmount);
+    const float3 midSky = lerp(horizonColor, zenith, 0.45f) + float3(0.0f, 0.02f, 0.08f);
+
+    float3 sky = lerp(warmHorizon, midSky, smoothstep(0.0f, 0.4f, t));
+    sky        = lerp(sky, zenith, smoothstep(0.3f, 1.0f, t));
 
     // Below the horizon: darken gently to avoid a sharp cutoff.
     const float belowHorizon = saturate(-worldDir.y * 4.0f);
@@ -81,9 +97,41 @@ float3 EvalSky(float3 worldDir, float3 sunDir, float sunIntensity, float3 horizo
     // Wide glow halo around the sun.
     const float sunHalo  = smoothstep(0.94f, 1.0f, cosAngle) * 0.20f;
 
-    // Warm white for the disk, orange-amber for the halo.
-    sky += sunDisk * float3(1.5f, 1.35f, 1.1f)  * sunIntensity;
-    sky += sunHalo * float3(1.0f, 0.65f, 0.25f) * sunIntensity;
+    // Lower sun altitude shifts the disk and halo warmer.
+    const float3 diskColor  = lerp(
+        float3(1.6f, 0.6f, 0.2f),
+        float3(1.5f, 1.35f, 1.1f),
+        sunAltitude);
+    const float3 haloColor  = lerp(
+        float3(1.0f, 0.3f, 0.05f),
+        float3(1.0f, 0.65f, 0.25f),
+        sunAltitude);
+
+    sky += sunDisk * diskColor * sunColor * sunIntensity;
+    sky += sunHalo * haloColor * sunColor * sunIntensity;
+
+    // The sky brightens along the entire horizon in the sun's azimuth,
+    // not just at the solar disk itself.
+    const float2 worldDirXZ = worldDir.xz / max(length(worldDir.xz), 1e-4f);
+    const float2 sunDirXZ   = sunDir.xz   / max(length(sunDir.xz),   1e-4f);
+    const float  azimuthDot = dot(worldDirXZ, sunDirXZ);
+    const float  horizonMask = saturate(1.0f - abs(worldDir.y) * 3.5f);
+    const float  horizonGlow = smoothstep(0.4f, 1.0f, azimuthDot) * horizonMask * 0.35f;
+    sky += horizonGlow * lerp(
+        float3(1.0f, 0.4f, 0.1f),
+        float3(1.0f, 0.8f, 0.5f),
+        sunAltitude) * sunColor * sunIntensity;
+
+    // At night, darken the sky aggressively to make the cycle more obvious.
+    sky *= lerp(1.0f, 0.18f, nightAmount);
+
+    // Cheap night stars.
+    sky += StarField(worldDir) * nightAmount * float3(0.9f, 0.95f, 1.0f);
+
+    // Force a near-black void below the horizon.
+    // Keep a small transition band to avoid hard aliasing at exactly y=0.
+    const float voidBlend = 1.0f - smoothstep(-0.22f, -0.015f, worldDir.y);
+    sky = lerp(sky, voidColor, voidBlend);
 
     return sky;
 }
@@ -111,22 +159,26 @@ float4 fragmentMain(VSOut input) : SV_Target0
 
     // ── Step 2: view-space → world-space ────────────────────────────────
     // fc->view is the world→view rotation R (column-major, same convention
-    // as model matrix).  The inverse of an orthogonal rotation is its
-    // transpose: worldDir = R^T * viewDir.
-    //
-    // In SPIR-V column-major: float3x3(M[0].xyz, M[1].xyz, M[2].xyz)
-    // constructs a matrix whose columns are those vectors, giving the
-    // upper-left 3×3 of M directly.  Transposing it yields R^T.
+    // as model matrix). The inverse of an orthogonal rotation is its
+    // transpose, which is equivalent to multiplying the view-space row
+    // vector by R directly.
     const float3x3 viewRot   = float3x3(fc->view[0].xyz, fc->view[1].xyz, fc->view[2].xyz);
-    const float3   worldDir  = normalize(mul(transpose(viewRot), viewDir));
+    const float3   worldDir  = normalize(mul(viewDir, viewRot));
 
     // ── Step 3: evaluate sky ─────────────────────────────────────────────
-    const float3 sunDir      = normalize(fc->sunDirectionIntensity.xyz);
+    const float3 sunDir       = normalize(fc->sunDirectionIntensity.xyz);
     const float  sunIntensity = fc->sunDirectionIntensity.w;
+    const float3 sunColor     = fc->sunColor.rgb;
+    const float3 horizonColor = fc->skyHorizonColor.rgb;
+    const float3 zenithColor  = fc->skyZenithColor.rgb;
+    const float3 voidColor    = fc->skyVoidColor.rgb;
 
-    // Drive horizon colour from ambientColor.  Scale up so the sky reads
-    // brighter than the ambient hemisphere term used in scene lighting.
-    const float3 horizonColor = max(fc->ambientColor.rgb * 7.0f, float3(0.04f, 0.06f, 0.10f));
-
-    return float4(EvalSky(worldDir, sunDir, sunIntensity, horizonColor), 1.0f);
+    return float4(EvalSky(
+        worldDir,
+        sunDir,
+        sunColor,
+        sunIntensity,
+        horizonColor,
+        zenithColor,
+        voidColor), 1.0f);
 }
