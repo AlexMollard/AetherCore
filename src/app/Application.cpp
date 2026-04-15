@@ -167,10 +167,8 @@ namespace aether::app
 			m_layers.UpdateAll(frameContext);
 
 			// Render:
-			// Im thinking all assets are implicitly rendered in the engine.beginFrame()
-			// The only explicit renderering i want the application to do is any gui like imgui so inside of the GuiAll() function 
-			// there will be imgui calls for editor windows and such that you can have for each layer, but the actual rendering of
-			// the game world and such is all handled by the engine implicitly in the BeginFrame() and EndFrame() calls
+			// World rendering is handled implicitly by the engine's frame passes.
+			// GuiAll() is reserved for any explicit overlay/UI work layers want to submit.
 			m_engine.BeginFrame();
 			m_layers.GuiAll(frameContext);
 			m_engine.EndFrame();

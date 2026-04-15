@@ -12,6 +12,7 @@
 #include "Camera.hpp"
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
+#include "ForwardPass.hpp"
 #include "FrameConstantsBuffer.hpp"
 #include "ModelAnimator.hpp"
 #include "GraphicsPipeline.hpp"
@@ -20,6 +21,7 @@
 #include "MaterialBuffer.hpp"
 #include "Mesh.hpp"
 #include "PostProcessStack.hpp"
+#include "SkyboxPass.hpp"
 #include "PrimitiveMeshes.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
@@ -103,8 +105,8 @@ namespace aether
 		void UnregisterMaterial(Material& mat);
 		[[nodiscard]] LoadedModel  LoadModel(std::string_view path);
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model,
-		                                              GraphicsPipeline& pipeline,
-		                                              float scale = 1.0f);
+			GraphicsPipeline& pipeline,
+			float scale = 1.0f);
 
 		// ── Rendering controls (used by app layer or engine internals) ──────────────────
 		void SetTonemapMode(TonemapMode mode);
@@ -194,6 +196,8 @@ namespace aether
 		// Manages all offscreen targets and post-processing pipelines.
 		// Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
+		SkyboxPass m_skyboxPass;
+		ForwardPass m_forwardPass;
 		Input m_input;
 		CameraManager m_cameraManager;
 		MaterialBuffer m_materialBuffer;

@@ -47,9 +47,15 @@ namespace aether
 			.renderGraph = &m_renderGraph,
 			});
 		m_postProcessStack.SetFxaaEnabled(false);
-		
+
 		// Initialize services.
 		m_renderer.Initialize(&m_postProcessStack);
+
+		m_skyboxPass = SkyboxPass::Create({
+			.device = m_vulkanContext.GetDevice().device,
+			.hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
+			});
+
 		m_assetManager.Initialize(this);
 
 		RegisterPasses();
@@ -93,6 +99,7 @@ namespace aether
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 		m_postProcessStack.Destroy();
+		m_skyboxPass.Destroy();
 		m_frameConstantsBuffer.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		if (m_uploadPool != VK_NULL_HANDLE)
@@ -180,54 +187,32 @@ namespace aether
 
 	void AetherCore::RegisterPasses()
 	{
-		// ── Pass 1: Forward ───────────────────────────────────────────────────
-		// Renders all scene objects into the HDR offscreen buffer.
-		m_renderGraph.AddPass("$EngineForward")
-			.WriteColor(
-				m_postProcessStack.GetHdrColor(),
-				VK_ATTACHMENT_LOAD_OP_CLEAR,
-				VK_ATTACHMENT_STORE_OP_STORE,
-				ClearColorValue(0.05f, 0.05f, 0.07f, 1.0f))
-			.WriteDepth(
-				m_renderGraph.GetSwapchainDepth(),
-				VK_ATTACHMENT_LOAD_OP_CLEAR,
-				VK_ATTACHMENT_STORE_OP_DONT_CARE,
-				ClearDepthValue(1.0f))
-			.Execute([this](PassContext& ctx)
-				{
-					m_scene.FlushToQueue(m_renderQueue);
-					m_world.FlushToQueue(m_renderQueue);
-					m_renderQueue.Flush(
-						ctx.recorder,
-						ctx.frameConstantsAddr,
-						m_bindlessManager.GetSet());
-					m_renderQueue.Clear();
-				});
+		// ── Pass 1: Skybox ────────────────────────────────────────────────────
+		// Clears the HDR buffer with a procedural gradient sky.
+		// Forward geometry then loads this colour as its background.
+		m_skyboxPass.RegisterPass(m_renderGraph, m_postProcessStack.GetHdrColor());
 
-		// ── Passes 2–4: Render-to-texture cameras ────────────────────────────
+		// ── Pass 2: Forward ───────────────────────────────────────────────────
+		// Renders all scene objects into the HDR offscreen buffer.
+		// Loads the sky written by the previous pass instead of clearing.
+		m_forwardPass.RegisterPass(
+			m_renderGraph,
+			m_postProcessStack.GetHdrColor(),
+			m_renderGraph.GetSwapchainDepth(),
+			m_scene,
+			m_world,
+			m_renderQueue,
+			m_bindlessManager.GetSet());
+
+		// ── Passes 3–5: Render-to-texture cameras ────────────────────────────
 		for (auto& [id, rt] : m_rtCameras)
 		{
 			RegisterRttPassesFor(id);
 		}
 
-		// ── Passes 5–6: Tonemap + FXAA ────────────────────────────────────────
+		// ── Passes 6–7: Tonemap + FXAA ────────────────────────────────────────
 		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
-
-		// ── Pass 7: UI overlay ────────────────────────────────────────────────
-		// Loads the FXAA output and composites UI on top.
-		m_renderGraph.AddPass("$UIOverlay")
-			.WriteColor(
-				m_renderGraph.GetSwapchainColor(),
-				VK_ATTACHMENT_LOAD_OP_LOAD,
-				VK_ATTACHMENT_STORE_OP_STORE,
-				{})
-			.Execute([this](PassContext& ctx)
-				{
-					// TODO: record ImGui draw commands via ctx.recorder.
-					(void)ctx;
-				});
 	}
-
 	void AetherCore::RegisterRttPassesFor(const uint32_t id)
 	{
 		auto it = m_rtCameras.find(id);
@@ -654,20 +639,20 @@ namespace aether
 		{
 			// Already registered — just refresh the GPU copy.
 			GpuMaterial gpu{};
-			gpu.baseColorFactor         = mat.baseColorFactor;
-			gpu.metallicFactor          = mat.metallicFactor;
-			gpu.roughnessFactor         = mat.roughnessFactor;
-			gpu.occlusionStrength       = mat.occlusionStrength;
-			gpu.alphaCutoff             = mat.alphaCutoff;
-			gpu.emissiveFactor          = glm::vec4(mat.emissiveFactor, 0.0f);
-			gpu.flags  = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
-					   | (mat.alphaBlend  ? GpuMaterial::kAlphaBlend  : 0u)
-					   | (mat.alphaMask   ? GpuMaterial::kAlphaMask   : 0u);
-			gpu.albedoSlot              = mat.albedoSlot;
-			gpu.normalSlot              = mat.normalSlot;
-			gpu.metallicRoughnessSlot   = mat.metallicRoughnessSlot;
-			gpu.occlusionSlot           = mat.occlusionSlot;
-			gpu.emissiveSlot            = mat.emissiveSlot;
+			gpu.baseColorFactor = mat.baseColorFactor;
+			gpu.metallicFactor = mat.metallicFactor;
+			gpu.roughnessFactor = mat.roughnessFactor;
+			gpu.occlusionStrength = mat.occlusionStrength;
+			gpu.alphaCutoff = mat.alphaCutoff;
+			gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
+			gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
+				| (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u)
+				| (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
+			gpu.albedoSlot = mat.albedoSlot;
+			gpu.normalSlot = mat.normalSlot;
+			gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
+			gpu.occlusionSlot = mat.occlusionSlot;
+			gpu.emissiveSlot = mat.emissiveSlot;
 			m_materialBuffer.Write(mat.materialSlot, gpu);
 			return;
 		}
@@ -680,20 +665,20 @@ namespace aether
 		}
 
 		GpuMaterial gpu{};
-		gpu.baseColorFactor         = mat.baseColorFactor;
-		gpu.metallicFactor          = mat.metallicFactor;
-		gpu.roughnessFactor         = mat.roughnessFactor;
-		gpu.occlusionStrength       = mat.occlusionStrength;
-		gpu.alphaCutoff             = mat.alphaCutoff;
-		gpu.emissiveFactor          = glm::vec4(mat.emissiveFactor, 0.0f);
-		gpu.flags  = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
-				   | (mat.alphaBlend  ? GpuMaterial::kAlphaBlend  : 0u)
-				   | (mat.alphaMask   ? GpuMaterial::kAlphaMask   : 0u);
-		gpu.albedoSlot              = mat.albedoSlot;
-		gpu.normalSlot              = mat.normalSlot;
-		gpu.metallicRoughnessSlot   = mat.metallicRoughnessSlot;
-		gpu.occlusionSlot           = mat.occlusionSlot;
-		gpu.emissiveSlot            = mat.emissiveSlot;
+		gpu.baseColorFactor = mat.baseColorFactor;
+		gpu.metallicFactor = mat.metallicFactor;
+		gpu.roughnessFactor = mat.roughnessFactor;
+		gpu.occlusionStrength = mat.occlusionStrength;
+		gpu.alphaCutoff = mat.alphaCutoff;
+		gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
+		gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
+			| (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u)
+			| (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
+		gpu.albedoSlot = mat.albedoSlot;
+		gpu.normalSlot = mat.normalSlot;
+		gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
+		gpu.occlusionSlot = mat.occlusionSlot;
+		gpu.emissiveSlot = mat.emissiveSlot;
 
 		m_materialBuffer.Write(slot, gpu);
 		mat.materialSlot = slot;
@@ -786,14 +771,14 @@ namespace aether
 				Material& mat = loadedPrim.material;
 
 				// ── PBR factors ─────────────────────────────────────────────
-				mat.baseColorFactor   = srcMat.baseColorFactor;
-				mat.metallicFactor    = srcMat.metallicFactor;
-				mat.roughnessFactor   = srcMat.roughnessFactor;
-				mat.emissiveFactor    = srcMat.emissiveFactor;
-				mat.alphaCutoff       = srcMat.alphaCutoff;
-				mat.doubleSided       = srcMat.doubleSided;
-				mat.alphaBlend        = srcMat.alphaBlend;
-				mat.alphaMask         = srcMat.alphaMask;
+				mat.baseColorFactor = srcMat.baseColorFactor;
+				mat.metallicFactor = srcMat.metallicFactor;
+				mat.roughnessFactor = srcMat.roughnessFactor;
+				mat.emissiveFactor = srcMat.emissiveFactor;
+				mat.alphaCutoff = srcMat.alphaCutoff;
+				mat.doubleSided = srcMat.doubleSided;
+				mat.alphaBlend = srcMat.alphaBlend;
+				mat.alphaMask = srcMat.alphaMask;
 
 				// Helper: resolve texture → bindless image slot
 				auto resolveSlot = [&](std::int32_t texIdx) -> std::uint32_t {
@@ -807,13 +792,13 @@ namespace aether
 						return Material::kNoTexture;
 					}
 					return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
-				};
+					};
 
-				mat.albedoSlot            = resolveSlot(srcMat.baseColorTexture);
-				mat.normalSlot            = resolveSlot(srcMat.normalTexture);
+				mat.albedoSlot = resolveSlot(srcMat.baseColorTexture);
+				mat.normalSlot = resolveSlot(srcMat.normalTexture);
 				mat.metallicRoughnessSlot = resolveSlot(srcMat.metallicRoughnessTexture);
-				mat.occlusionSlot         = resolveSlot(srcMat.occlusionTexture);
-				mat.emissiveSlot          = resolveSlot(srcMat.emissiveTexture);
+				mat.occlusionSlot = resolveSlot(srcMat.occlusionTexture);
+				mat.emissiveSlot = resolveSlot(srcMat.emissiveTexture);
 
 				RegisterMaterial(mat);
 			}
@@ -841,8 +826,8 @@ namespace aether
 	}
 
 	std::vector<Entity> AetherCore::SpawnModel(LoadedModel& model,
-	                                           GraphicsPipeline& pipeline,
-	                                           float scale)
+		GraphicsPipeline& pipeline,
+		float scale)
 	{
 		std::vector<Entity> entities;
 		entities.reserve(model.primitives.size());
