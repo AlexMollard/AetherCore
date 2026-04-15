@@ -9,6 +9,8 @@ namespace aether
 	class World;
 	class Input;
 	class CameraManager;
+	class Renderer;
+	class AssetManager;
 }
 
 namespace aether::app
@@ -22,6 +24,8 @@ namespace aether::app
 		aether::World* world = nullptr;
 		aether::Input* input = nullptr;
 		aether::CameraManager* cameras = nullptr;
+		aether::Renderer* renderer = nullptr;
+		aether::AssetManager* assets = nullptr;
 	};
 
 	class AppLayer

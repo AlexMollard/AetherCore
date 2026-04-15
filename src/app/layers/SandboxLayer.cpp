@@ -18,14 +18,14 @@ namespace aether::app
 		INFO(LogCategory::App, "Sandbox layer attached.");
 
 		// Configure a visible default key light for PBR assets.
-		context.engine.SetDirectionalLight(glm::vec3(0.35f, 0.88f, 0.31f), 4.5f);
-		context.engine.SetAmbientLight(glm::vec3(0.12f, 0.13f, 0.15f));
+		context.renderer->SetDirectionalLight(glm::vec3(0.35f, 0.88f, 0.31f), 4.5f);
+		context.renderer->SetAmbientLight(glm::vec3(0.12f, 0.13f, 0.15f));
 
 		// ── Shared pipeline ───────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout =
 			context.engine.GetBindlessManager().GetLayout();
 
-		m_pipeline = context.engine.CreateGraphicsPipeline({
+		m_pipeline = context.assets->CreateGraphicsPipeline({
 			.shaderVfsPath = "shaders://gltf_mesh.slang.spv",
 			.colorFormat = context.engine.GetForwardColorFormat(),
 			.depthFormat = context.engine.GetSwapchainDepthFormat(),
@@ -37,18 +37,18 @@ namespace aether::app
 		m_cubeMesh = &context.engine.GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
 		m_quadMesh = &context.engine.GetPrimitiveMesh(aether::PrimitiveMesh::Quad);
 
-		m_debugTexture = context.engine.CreateTexture("assets://textures/tex_DebugUVTiles.png");
+		m_debugTexture = context.assets->CreateTexture("assets://textures/tex_DebugUVTiles.png");
 		const uint32_t texSlot = m_debugTexture.GetBindlessSlot();
 
 		m_debugTexturedMaterial = {};
 		m_debugTexturedMaterial.albedoSlot = texSlot;
-		context.engine.RegisterMaterial(m_debugTexturedMaterial);
+		context.assets->RegisterMaterial(m_debugTexturedMaterial);
 
 		m_untexturedMaterial = {};
-		context.engine.RegisterMaterial(m_untexturedMaterial);
+		context.assets->RegisterMaterial(m_untexturedMaterial);
 
 		m_rttFeedMaterial = {};
-		context.engine.RegisterMaterial(m_rttFeedMaterial);
+		context.assets->RegisterMaterial(m_rttFeedMaterial);
 
 		// ── Ground quad (textured) ────────────────────────────────────────────
 		m_groundEntity = context.world->SpawnMesh(m_pipeline, *m_quadMesh, m_debugTexturedMaterial);
@@ -96,8 +96,8 @@ namespace aether::app
 		constexpr std::string_view kDemoGltfPath = "assets://models/Fox/Fox.gltf";
 		if (io::FileSystem::Exists(kDemoGltfPath))
 		{
-			m_model = context.engine.LoadModel(kDemoGltfPath);
-			m_modelEntities = context.engine.SpawnModel(*m_model, m_pipeline, 0.05f);
+			m_model = context.assets->LoadModel(kDemoGltfPath);
+			m_modelEntities = context.assets->SpawnModel(*m_model, m_pipeline, 0.05f);
 
 			if (m_model->animator)
 			{
@@ -139,16 +139,14 @@ namespace aether::app
 		{
 			for (LoadedModelPrimitive& primitive : m_model->primitives)
 			{
-				context.engine.UnregisterMaterial(primitive.material);
+				context.assets->UnregisterMaterial(primitive.material);
 			}
 		}
 		m_model.reset();
 
-		context.engine.UnregisterMaterial(m_rttFeedMaterial);
-		context.engine.UnregisterMaterial(m_untexturedMaterial);
-		context.engine.UnregisterMaterial(m_debugTexturedMaterial);
-
-		if (m_rttTarget.IsValid())
+		context.assets->UnregisterMaterial(m_rttFeedMaterial);
+		context.assets->UnregisterMaterial(m_untexturedMaterial);
+		context.assets->UnregisterMaterial(m_debugTexturedMaterial);
 		{
 			context.engine.DestroyCameraRenderTarget(m_rttTarget);
 			m_rttTarget = {};
@@ -257,7 +255,7 @@ namespace aether::app
 			{
 				const auto next = static_cast<aether::TonemapMode>(
 					(static_cast<int>(context.engine.GetTonemapMode()) + 1) % 3);
-				context.engine.SetTonemapMode(next);
+				context.renderer->SetTonemapMode(next);
 
 				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
 				INFO(LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
@@ -265,8 +263,8 @@ namespace aether::app
 
 			if (input.IsKeyPressed(aether::Key::F))
 			{
-				const bool enabled = !context.engine.IsFxaaEnabled();
-				context.engine.SetFxaaEnabled(enabled);
+				const bool enabled = !context.renderer->IsFxaaEnabled();
+				context.renderer->SetFxaaEnabled(enabled);
 				INFO(LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
 			}
 
@@ -291,7 +289,7 @@ namespace aether::app
 		if (rtSlot != Material::kNoTexture)
 		{
 			m_rttFeedMaterial.albedoSlot = rtSlot;
-			context.engine.RegisterMaterial(m_rttFeedMaterial);
+			context.assets->RegisterMaterial(m_rttFeedMaterial);
 			context.world->Set(m_orbitEntityB, MaterialComponent{
 				.material = m_rttFeedMaterial
 				});

@@ -23,6 +23,8 @@
 #include "PrimitiveMeshes.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
+#include "Renderer.hpp"
+#include "AssetManager.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
 #include "Swapchain.hpp"
@@ -69,6 +71,7 @@ namespace aether
 		explicit AetherCore(const Config& config = {});
 		~AetherCore();
 
+		// ── Frame lifecycle ──────────────────────────────────────────────────
 		[[nodiscard]] bool ShouldClose() const;
 		void PumpEvents() const;
 		// Must be called once per frame BEFORE layer OnUpdate().
@@ -78,82 +81,86 @@ namespace aether
 		void EndFrame();
 		void WaitIdle() const;
 
-		[[nodiscard]] Window& GetWindow();
-		[[nodiscard]] const Window& GetWindow() const;
-		[[nodiscard]] VulkanContext& GetVulkanContext();
-		[[nodiscard]] const VulkanContext& GetVulkanContext() const;
-		[[nodiscard]] BindlessManager& GetBindlessManager();
-		[[nodiscard]] const BindlessManager& GetBindlessManager() const;
-		[[nodiscard]] ResourcePool& GetResourcePool();
-		[[nodiscard]] const ResourcePool& GetResourcePool() const;
-		[[nodiscard]] RenderGraph& GetRenderGraph();
-		[[nodiscard]] const RenderGraph& GetRenderGraph() const;
-		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
-		[[nodiscard]] VkFormat   GetSwapchainImageFormat() const;
-		[[nodiscard]] VkFormat   GetSwapchainDepthFormat() const;
-		// Format of the color attachment used by the engine's forward pass.
-		// All game-layer pipelines that render scene geometry must use this format.
-		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat() { return PostProcessStack::GetForwardColorFormat(); }
-		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
-		[[nodiscard]] RenderQueue* GetRenderQueue();
-		[[nodiscard]] Scene* GetScene();
+		// ── Service accessors ────────────────────────────────────────────────
+		[[nodiscard]] Renderer& GetRenderer();
+		[[nodiscard]] const Renderer& GetRenderer() const;
+		[[nodiscard]] AssetManager& GetAssets();
+		[[nodiscard]] const AssetManager& GetAssets() const;
 		[[nodiscard]] World& GetWorld();
 		[[nodiscard]] const World& GetWorld() const;
+		[[nodiscard]] Input& GetInput();
+		[[nodiscard]] const Input& GetInput() const;
+		[[nodiscard]] CameraManager& GetCameraManager();
+		[[nodiscard]] const CameraManager& GetCameraManager() const;
+
+		// ── Asset creation (used by app layer or engine internals) ──────────────────
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 		[[nodiscard]] Texture          CreateTexture(std::string_view path);
+		void RegisterMaterial(Material& mat);
+		void UnregisterMaterial(Material& mat);
 		[[nodiscard]] LoadedModel  LoadModel(std::string_view path);
-
-		// Spawns all primitives from a loaded model into the engine's world.
-		// Materials are already registered by LoadModel — no extra setup needed.
-		// scale is applied on top of each primitive's localTransform.
-		// Returns one Entity per primitive (parallel to model.primitives).
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model,
 		                                              GraphicsPipeline& pipeline,
 		                                              float scale = 1.0f);
 
-		// ── Material registration ─────────────────────────────────────────────
-		// Upload a CPU Material to the GPU MaterialBuffer.  Fills mat.materialSlot.
-		// The slot is stable until UnregisterMaterial() is called.
-		void RegisterMaterial(Material& mat);
-
-		// Release the GPU slot previously assigned by RegisterMaterial().
-		void UnregisterMaterial(Material& mat);
-
+		// ── Rendering controls (used by app layer or engine internals) ──────────────────
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
-
-		// Directional light controls used by the forward PBR shader.
 		void SetDirectionalLight(glm::vec3 direction, float intensity);
 		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
 		[[nodiscard]] float GetDirectionalLightIntensity() const;
 		void SetAmbientLight(glm::vec3 color);
 		[[nodiscard]] glm::vec3 GetAmbientLight() const;
 
-		[[nodiscard]] Input& GetInput();
-		[[nodiscard]] const Input& GetInput() const;
+		// ── Format queries for app-layer pipeline creation ──────────────────
+		// Query the forward pass color format.
+		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat() { return PostProcessStack::GetForwardColorFormat(); }
+		// Query swapchain extent.
+		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
+		// Query swapchain depth format.
+		[[nodiscard]] VkFormat GetSwapchainDepthFormat() const;
+		// Query swapchain image format.
+		[[nodiscard]] VkFormat GetSwapchainImageFormat() const;
+		// Get current swapchain command buffer (used by engine internals).
+		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 
-		// ── Camera system ─────────────────────────────────────────────────────
-		[[nodiscard]] CameraManager& GetCameraManager();
-		[[nodiscard]] const CameraManager& GetCameraManager() const;
-
+		// ── Render target management ─────────────────────────────────────────
 		[[nodiscard]] CameraRenderTarget CreateCameraRenderTarget(CameraHandle camera, VkExtent2D extent);
 		void DestroyCameraRenderTarget(CameraRenderTarget rt);
-		
 		[[nodiscard]] RGImage GetRenderTargetColorImage(CameraRenderTarget rt) const;
 		[[nodiscard]] uint32_t GetRenderTargetBindlessSlot(CameraRenderTarget rt) const;
 
+		// ── Engine internals (used by engine subsystems, not app layer) ──────
+		[[nodiscard]] const VulkanContext& GetVulkanContext() const;
+		[[nodiscard]] VulkanContext& GetVulkanContext();
+		[[nodiscard]] const Swapchain& GetSwapchain() const;
+		[[nodiscard]] Swapchain& GetSwapchain();
+		[[nodiscard]] const BindlessManager& GetBindlessManager() const;
+		[[nodiscard]] BindlessManager& GetBindlessManager();
+		[[nodiscard]] const RenderGraph& GetRenderGraph() const;
+		[[nodiscard]] RenderGraph& GetRenderGraph();
+		[[nodiscard]] const RenderQueue& GetRenderQueue() const;
+		[[nodiscard]] RenderQueue& GetRenderQueue();
+		[[nodiscard]] const ResourcePool& GetResourcePool() const;
+		[[nodiscard]] ResourcePool& GetResourcePool();
+		[[nodiscard]] const Scene& GetScene() const;
+		[[nodiscard]] Scene& GetScene();
+		[[nodiscard]] const Window& GetWindow() const;
+		[[nodiscard]] Window& GetWindow();
+
 	private:
+		// ── Frame graph and rendering ───────────────────────────────────────
 		void RecreateSwapchain();
 		void RegisterPasses();
 		void RegisterRttPassesFor(uint32_t id);
 		void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn);
 
-		// Per-camera render-to-texture entry.
+		// ── Per-camera render-to-texture entry ───────────────────────────────
 		struct CameraRtEntry
 		{
 			CameraHandle                          camera;
@@ -180,14 +187,16 @@ namespace aether
 		std::uint64_t m_frameIndex = 0;
 		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 
+		// ── Services ─────────────────────────────────────────────────────────
+		Renderer m_renderer;
+		AssetManager m_assetManager;
+
 		// Manages all offscreen targets and post-processing pipelines.
 		// Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
 		Input m_input;
 		CameraManager m_cameraManager;
 		MaterialBuffer m_materialBuffer;
-		glm::vec4 m_sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
-		glm::vec4 m_ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };
 
 		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
 		uint32_t m_nextRtId = 1;

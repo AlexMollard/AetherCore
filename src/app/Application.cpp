@@ -50,10 +50,12 @@ namespace aether::app
 			.engine = m_engine,
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = m_frameIndex,
-			.scene = m_engine.GetScene(),
+			.scene = &m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
 			.input = &m_engine.GetInput(),
 			.cameras = &m_engine.GetCameraManager(),
+			.renderer = &m_engine.GetRenderer(),
+			.assets = &m_engine.GetAssets(),
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
@@ -99,10 +101,12 @@ namespace aether::app
 			.engine = m_engine,
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = 0,
-			.scene = m_engine.GetScene(),
+			.scene = &m_engine.GetScene(),
 			.world = &m_engine.GetWorld(),
 			.input = &m_engine.GetInput(),
 			.cameras = &m_engine.GetCameraManager(),
+			.renderer = &m_engine.GetRenderer(),
+			.assets = &m_engine.GetAssets(),
 		};
 
 		// Startup:
@@ -131,10 +135,12 @@ namespace aether::app
 				.engine = m_engine,
 				.deltaTimeSeconds = deltaTime,
 				.frameIndex = m_frameIndex,
-				.scene = m_engine.GetScene(),
+				.scene = &m_engine.GetScene(),
 				.world = &m_engine.GetWorld(),
 				.input = &m_engine.GetInput(),
 				.cameras = &m_engine.GetCameraManager(),
+				.renderer = &m_engine.GetRenderer(),
+				.assets = &m_engine.GetAssets(),
 			};
 
 			// Update engine-level per-frame systems before layers run.

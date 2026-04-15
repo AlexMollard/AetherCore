@@ -46,6 +46,11 @@ namespace aether
 			.renderGraph = &m_renderGraph,
 			});
 		m_postProcessStack.SetFxaaEnabled(false);
+		
+		// Initialize services.
+		m_renderer.Initialize(&m_postProcessStack);
+		m_assetManager.Initialize(this);
+
 		RegisterPasses();
 
 		m_input.Init(m_window.GetHandle());
@@ -270,8 +275,8 @@ namespace aether
 					fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 
 					fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
-					fc.sunDirectionIntensity = m_sunDirectionIntensity;
-					fc.ambientColor = m_ambientColor;
+					fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
+					fc.ambientColor = m_renderer.GetAmbientLightVector();
 
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 					rit->second.constants->Write(frameIdx, fc);
@@ -326,8 +331,8 @@ namespace aether
 			}
 
 			fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
-			fc.sunDirectionIntensity = m_sunDirectionIntensity;
-			fc.ambientColor = m_ambientColor;
+			fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
+			fc.ambientColor = m_renderer.GetAmbientLightVector();
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
@@ -349,16 +354,6 @@ namespace aether
 		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
 		++m_frameIndex;
 		m_bindlessManager.AdvanceFrame(m_frameIndex);
-	}
-
-	Window& AetherCore::GetWindow()
-	{
-		return m_window;
-	}
-
-	const Window& AetherCore::GetWindow() const
-	{
-		return m_window;
 	}
 
 	VulkanContext& AetherCore::GetVulkanContext()
@@ -421,14 +416,34 @@ namespace aether
 		return m_swapchain.GetExtent();
 	}
 
-	RenderQueue* AetherCore::GetRenderQueue()
+	RenderQueue& AetherCore::GetRenderQueue()
 	{
-		return &m_renderQueue;
+		return m_renderQueue;
 	}
 
-	Scene* AetherCore::GetScene()
+	const RenderQueue& AetherCore::GetRenderQueue() const
 	{
-		return &m_scene;
+		return m_renderQueue;
+	}
+
+	Scene& AetherCore::GetScene()
+	{
+		return m_scene;
+	}
+
+	const Scene& AetherCore::GetScene() const
+	{
+		return m_scene;
+	}
+
+	Swapchain& AetherCore::GetSwapchain()
+	{
+		return m_swapchain;
+	}
+
+	const Swapchain& AetherCore::GetSwapchain() const
+	{
+		return m_swapchain;
 	}
 
 	Input& AetherCore::GetInput() { return m_input; }
@@ -437,60 +452,55 @@ namespace aether
 	CameraManager& AetherCore::GetCameraManager() { return m_cameraManager; }
 	const CameraManager& AetherCore::GetCameraManager() const { return m_cameraManager; }
 
+	Renderer& AetherCore::GetRenderer() { return m_renderer; }
+	const Renderer& AetherCore::GetRenderer() const { return m_renderer; }
+
+	AssetManager& AetherCore::GetAssets() { return m_assetManager; }
+	const AssetManager& AetherCore::GetAssets() const { return m_assetManager; }
+
 	void AetherCore::SetTonemapMode(TonemapMode mode)
 	{
-		m_postProcessStack.SetTonemapMode(mode);
+		m_renderer.SetTonemapMode(mode);
 	}
 
 	TonemapMode AetherCore::GetTonemapMode() const
 	{
-		return m_postProcessStack.GetTonemapMode();
+		return m_renderer.GetTonemapMode();
 	}
 
 	void AetherCore::SetFxaaEnabled(bool enabled)
 	{
-		m_postProcessStack.SetFxaaEnabled(enabled);
+		m_renderer.SetFxaaEnabled(enabled);
 	}
 
 	bool AetherCore::IsFxaaEnabled() const
 	{
-		return m_postProcessStack.IsFxaaEnabled();
+		return m_renderer.IsFxaaEnabled();
 	}
 
 	void AetherCore::SetDirectionalLight(glm::vec3 direction, const float intensity)
 	{
-		const float len2 = glm::dot(direction, direction);
-		if (len2 < 1e-8f)
-		{
-			direction = glm::vec3(0.577f, 0.577f, 0.577f);
-		}
-		else
-		{
-			direction = glm::normalize(direction);
-		}
-
-		m_sunDirectionIntensity = glm::vec4(direction, glm::max(intensity, 0.0f));
+		m_renderer.SetDirectionalLight(direction, intensity);
 	}
 
 	glm::vec3 AetherCore::GetDirectionalLightDirection() const
 	{
-		return glm::vec3(m_sunDirectionIntensity);
+		return m_renderer.GetDirectionalLightDirection();
 	}
 
 	float AetherCore::GetDirectionalLightIntensity() const
 	{
-		return m_sunDirectionIntensity.w;
+		return m_renderer.GetDirectionalLightIntensity();
 	}
 
 	void AetherCore::SetAmbientLight(glm::vec3 color)
 	{
-		color = glm::max(color, glm::vec3(0.0f));
-		m_ambientColor = glm::vec4(color, 1.0f);
+		m_renderer.SetAmbientLight(color);
 	}
 
 	glm::vec3 AetherCore::GetAmbientLight() const
 	{
-		return glm::vec3(m_ambientColor);
+		return m_renderer.GetAmbientLight();
 	}
 
 	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(
