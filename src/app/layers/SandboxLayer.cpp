@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Components.hpp"
+#include "FileSystem.hpp"
 #include "Logger.hpp"
 #include "Material.hpp"
 #include "AetherCore.hpp"
@@ -21,7 +22,7 @@ namespace aether::app
 			context.engine.GetBindlessManager().GetLayout();
 
 		m_pipeline = context.engine.CreateGraphicsPipeline({
-			.shaderVfsPath = "shaders://hellotriangle.slang.spv",
+			.shaderVfsPath = "shaders://gltf_mesh.slang.spv",
 			.colorFormat = context.engine.GetForwardColorFormat(),
 			.depthFormat = context.engine.GetSwapchainDepthFormat(),
 			.depthTestEnable = true,
@@ -35,10 +36,20 @@ namespace aether::app
 		m_debugTexture = context.engine.CreateTexture("assets://textures/tex_DebugUVTiles.png");
 		const uint32_t texSlot = m_debugTexture.GetBindlessSlot();
 
+		m_debugTexturedMaterial = {};
+		m_debugTexturedMaterial.albedoSlot = texSlot;
+		context.engine.RegisterMaterial(m_debugTexturedMaterial);
+
+		m_untexturedMaterial = {};
+		context.engine.RegisterMaterial(m_untexturedMaterial);
+
+		m_rttFeedMaterial = {};
+		context.engine.RegisterMaterial(m_rttFeedMaterial);
+
 		// Convenience lambdas to keep entity setup readable.
 		auto pipe = [&]() { return PipelineComponent{ .pipeline = &m_pipeline }; };
-		auto withTex = [&]() { return MaterialComponent{ .material = {.albedoSlot = texSlot } }; };
-		auto noTex = []() { return MaterialComponent{}; };
+		auto withTex = [&]() { return MaterialComponent{ .material = m_debugTexturedMaterial }; };
+		auto noTex = [&]() { return MaterialComponent{ .material = m_untexturedMaterial }; };
 
 		// ── Ground quad (textured) ────────────────────────────────────────────
 		m_groundEntity = context.world->CreateEntity();
@@ -106,6 +117,34 @@ namespace aether::app
 		context.cameras->SetMainCamera(m_orbitCamera);
 		m_rttTarget = context.engine.CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
 
+		constexpr std::string_view kDemoGltfPath = "assets://models/Fox/Fox.gltf";
+		if (io::FileSystem::Exists(kDemoGltfPath))
+		{
+			m_loadedGltf = context.engine.LoadGltfAsset(kDemoGltfPath);
+			m_gltfEntities.reserve(m_loadedGltf->primitives.size());
+
+			for (const LoadedGltfPrimitive& primitive : m_loadedGltf->primitives)
+			{
+				const Entity entity = context.world->CreateEntity();
+				context.world->Set(entity, PipelineComponent{ .pipeline = &m_pipeline });
+				context.world->Set(entity, MeshComponent{ .mesh = &primitive.mesh });
+				context.world->Set(entity, MaterialComponent{ .material = primitive.material });
+				context.world->Set(entity, TransformComponent{ .localToWorld = primitive.localTransform });
+				m_gltfEntities.push_back(entity);
+			}
+
+			INFO(LogCategory::App,
+				"Loaded glTF scene from '{}' with {} render primitives.",
+				kDemoGltfPath,
+				m_loadedGltf->primitives.size());
+		}
+		else
+		{
+			INFO(LogCategory::App,
+				"No demo glTF found at '{}'; skipping glTF scene load.",
+				kDemoGltfPath);
+		}
+
 		INFO(LogCategory::App, "Scene built: ground + centre + {} ring + 2 orbit cubes.", kRingCount);
 	}
 
@@ -117,6 +156,21 @@ namespace aether::app
 		context.world->DestroyEntity(m_orbitEntityB);
 		for (auto& e : m_ringEntities)
 			context.world->DestroyEntity(e);
+		for (const Entity e : m_gltfEntities)
+			context.world->DestroyEntity(e);
+		m_gltfEntities.clear();
+		if (m_loadedGltf)
+		{
+			for (LoadedGltfPrimitive& primitive : m_loadedGltf->primitives)
+			{
+				context.engine.UnregisterMaterial(primitive.material);
+			}
+		}
+		m_loadedGltf.reset();
+
+		context.engine.UnregisterMaterial(m_rttFeedMaterial);
+		context.engine.UnregisterMaterial(m_untexturedMaterial);
+		context.engine.UnregisterMaterial(m_debugTexturedMaterial);
 
 		if (m_rttTarget.IsValid())
 		{
@@ -241,8 +295,10 @@ namespace aether::app
 		const uint32_t rtSlot = context.engine.GetRenderTargetBindlessSlot(m_rttTarget);
 		if (rtSlot != Material::kNoTexture)
 		{
+			m_rttFeedMaterial.albedoSlot = rtSlot;
+			context.engine.RegisterMaterial(m_rttFeedMaterial);
 			context.world->Set(m_orbitEntityB, MaterialComponent{
-				.material = {.albedoSlot = rtSlot }
+				.material = m_rttFeedMaterial
 				});
 		}
 	}

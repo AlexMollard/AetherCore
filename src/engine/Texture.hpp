@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <string_view>
 
 #include <vk_mem_alloc.h>
@@ -38,6 +39,14 @@ namespace aether
 		// The call blocks until the GPU copy is complete.
 		[[nodiscard]] static Texture LoadFromFile(
 			std::string_view path,
+			VkDevice         device,
+			VmaAllocator     allocator,
+			VkQueue          uploadQueue,
+			VkCommandPool    uploadPool,
+			BindlessManager& bindless);
+
+		[[nodiscard]] static Texture LoadFromDiskPath(
+			const std::filesystem::path& path,
 			VkDevice         device,
 			VmaAllocator     allocator,
 			VkQueue          uploadQueue,

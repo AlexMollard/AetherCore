@@ -8,22 +8,22 @@
 namespace aether
 {
 	// The single push constant block for all standard draw calls.
-	// Laid out to match the shader's [[vk::push_constant]] struct.
+	// Laid out to match the shader's [[vk::push_constant]] PushData struct.
 	//
 	//   offset  0 : mat4     model          (64 bytes) — per-object world transform
-	//   offset 64 : u64      frameAddr      ( 8 bytes) — BDA pointer to FrameConstants
-	//   offset 72 : uint32_t albedoSlot     ( 4 bytes) — bindless sampled-image index
-	//   offset 76 : uint32_t _pad0          ( 4 bytes) — explicit padding
+	//   offset 64 : uint64   frameAddr      ( 8 bytes) — BDA of FrameConstants
+	//   offset 72 : uint32   materialIndex  ( 4 bytes) — index into MaterialBuffer
+	//   offset 76 : uint32   _pad0          ( 4 bytes)
 	//
 	// Total: 80 bytes (well within the 128-byte minimum Vulkan guarantee).
 	struct DrawPushConstants
 	{
-		glm::mat4       model{ 1.0f };
-		VkDeviceAddress frameAddr  = 0;        // VkDeviceAddress = uint64_t
-		std::uint32_t   albedoSlot = 0xFFFFFFFFu; // 0xFFFFFFFF → vertex colour fallback
-		std::uint32_t   _pad0      = 0;
+		glm::mat4       model         { 1.0f };
+		VkDeviceAddress frameAddr     = 0;
+		std::uint32_t   materialIndex = 0xFFFFFFFFu; // kNoMaterial → vertex-colour fallback
+		std::uint32_t   _pad0         = 0;
 	};
 
 	static_assert(sizeof(DrawPushConstants) == 80,
-		"DrawPushConstants layout changed — update shaders.");
+		"DrawPushConstants layout changed — update gltf_mesh.slang.");
 }

@@ -1,12 +1,15 @@
 #pragma once
 
 #include <array>
+#include <optional>
+#include <vector>
 
 #include "AppLayer.hpp"
 #include "CameraManager.hpp"
 #include "Entity.hpp"
 #include "GraphicsPipeline.hpp"
 #include "AetherCore.hpp"
+#include "Material.hpp"
 #include "Texture.hpp"
 
 namespace aether
@@ -41,6 +44,11 @@ namespace aether::app
 		aether::CameraHandle m_freeCamera;
 		aether::CameraHandle m_rttCamera;
 		aether::AetherCore::CameraRenderTarget m_rttTarget;
+		std::optional<aether::LoadedGltfAsset> m_loadedGltf;
+		std::vector<aether::Entity> m_gltfEntities;
+		aether::Material m_debugTexturedMaterial{};
+		aether::Material m_untexturedMaterial{};
+		aether::Material m_rttFeedMaterial{};
 
 		float m_time = 0.0f;
 		float m_cameraAngle = 0.0f;

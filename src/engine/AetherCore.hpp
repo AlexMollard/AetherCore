@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "BindlessManager.hpp"
 #include "Camera.hpp"
@@ -14,6 +15,8 @@
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
+#include "Material.hpp"
+#include "MaterialBuffer.hpp"
 #include "Mesh.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimitiveMeshes.hpp"
@@ -30,6 +33,19 @@
 
 namespace aether
 {
+	struct LoadedGltfPrimitive
+	{
+		Mesh mesh;
+		Material material{};
+		glm::mat4 localTransform{ 1.0f };
+	};
+
+	struct LoadedGltfAsset
+	{
+		std::vector<Texture> textures;
+		std::vector<LoadedGltfPrimitive> primitives;
+	};
+
 	class AetherCore
 	{
 	public:
@@ -83,7 +99,17 @@ namespace aether
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
+		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 		[[nodiscard]] Texture          CreateTexture(std::string_view path);
+		[[nodiscard]] LoadedGltfAsset  LoadGltfAsset(std::string_view path);
+
+		// ── Material registration ─────────────────────────────────────────────
+		// Upload a CPU Material to the GPU MaterialBuffer.  Fills mat.materialSlot.
+		// The slot is stable until UnregisterMaterial() is called.
+		void RegisterMaterial(Material& mat);
+
+		// Release the GPU slot previously assigned by RegisterMaterial().
+		void UnregisterMaterial(Material& mat);
 
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
@@ -141,6 +167,7 @@ namespace aether
 		PostProcessStack m_postProcessStack;
 		Input m_input;
 		CameraManager m_cameraManager;
+		MaterialBuffer m_materialBuffer;
 
 		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
 		uint32_t m_nextRtId = 1;

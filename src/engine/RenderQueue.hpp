@@ -21,7 +21,7 @@ namespace aether
 		std::uint32_t           vertexCount   = 0;          // used when mesh == nullptr
 		std::uint32_t           instanceCount = 1;
 		glm::mat4               modelMatrix{ 1.0f };        // per-object world transform
-		std::uint32_t           albedoSlot  = 0xFFFFFFFFu; // 0xFFFFFFFF → vertex colour fallback
+		std::uint32_t           materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
 	};
 
 	// Per-frame bucket that collects DrawCommands from app/scene code and flushes

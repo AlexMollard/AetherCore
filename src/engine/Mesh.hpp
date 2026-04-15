@@ -21,6 +21,8 @@ namespace aether
 			glm::vec4 tangent;  // xyz = tangent direction, w = bitangent sign (+1 or -1)
 			glm::vec2 uv;
 			glm::vec3 color;
+			glm::uvec4 jointIndices{ 0u, 0u, 0u, 0u };
+			glm::vec4 jointWeights{ 1.0f, 0.0f, 0.0f, 0.0f };
 		};
 
 		Mesh() = default;

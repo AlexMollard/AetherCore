@@ -1,5 +1,6 @@
 #include "Texture.hpp"
 
+#include <filesystem>
 #include <cstring>
 #include <stdexcept>
 #include <string>
@@ -98,6 +99,98 @@ namespace aether
 			};
 			vkCmdPipelineBarrier2(cmd, &depInfo);
 		}
+
+		UniqueImage UploadRgbaToGpuImage(
+			const stbi_uc*      pixels,
+			int                 width,
+			int                 height,
+			VkDevice            device,
+			VmaAllocator        allocator,
+			VkQueue             uploadQueue,
+			VkCommandPool       uploadPool,
+			BindlessManager&    bindless)
+		{
+			const VkDeviceSize imageBytes = static_cast<VkDeviceSize>(width) * height * 4;
+
+			const VkBufferCreateInfo stagingBufInfo{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				.size = imageBytes,
+				.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+			};
+			const VmaAllocationCreateInfo stagingAllocInfo{
+				.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+					VMA_ALLOCATION_CREATE_MAPPED_BIT,
+				.usage = VMA_MEMORY_USAGE_AUTO,
+			};
+			UniqueBuffer staging = UniqueBuffer::Create(
+				allocator, device, stagingBufInfo, stagingAllocInfo);
+
+			std::memcpy(staging.GetAllocationInfo().pMappedData, pixels, imageBytes);
+
+			UniqueImage image = UniqueImage::Create(device, allocator, {
+				.extent = { static_cast<std::uint32_t>(width),
+							 static_cast<std::uint32_t>(height) },
+				.format = VK_FORMAT_R8G8B8A8_SRGB,
+				.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				});
+
+			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
+
+			TransitionImageLayout(
+				cmd,
+				image.Get(),
+				VK_IMAGE_LAYOUT_UNDEFINED,
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+				VK_ACCESS_2_NONE,
+				VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+				VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
+			const VkBufferImageCopy copyRegion{
+				.bufferOffset = 0,
+				.bufferRowLength = 0,
+				.bufferImageHeight = 0,
+				.imageSubresource = {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.mipLevel = 0,
+					.baseArrayLayer = 0,
+					.layerCount = 1,
+				},
+				.imageOffset = { 0, 0, 0 },
+				.imageExtent = {
+					static_cast<std::uint32_t>(width),
+					static_cast<std::uint32_t>(height),
+					1,
+				},
+			};
+			vkCmdCopyBufferToImage(
+				cmd,
+				staging.Get(),
+				image.Get(),
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				1,
+				&copyRegion);
+
+			TransitionImageLayout(
+				cmd,
+				image.Get(),
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+				VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+				VK_ACCESS_2_TRANSFER_WRITE_BIT,
+				VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+
+			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
+
+			image.EnsureBindlessSampled(
+				bindless,
+				device,
+				VK_IMAGE_ASPECT_COLOR_BIT,
+				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+			return image;
+		}
 	}
 
 	Texture Texture::LoadFromFile(
@@ -129,98 +222,59 @@ namespace aether
 				stbi_failure_reason());
 		}
 
-		const VkDeviceSize imageBytes =
-			static_cast<VkDeviceSize>(width) * height * 4;
-
-		// ── 2. Upload pixels to a CPU-visible staging buffer ───────────────
-		const VkBufferCreateInfo stagingBufInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size  = imageBytes,
-			.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		};
-		const VmaAllocationCreateInfo stagingAllocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-			         VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO,
-		};
-		UniqueBuffer staging = UniqueBuffer::Create(
-			allocator, device, stagingBufInfo, stagingAllocInfo);
-
-		std::memcpy(staging.GetAllocationInfo().pMappedData, pixels, imageBytes);
+		Texture texture;
+		texture.m_image = UploadRgbaToGpuImage(
+			pixels,
+			width,
+			height,
+			device,
+			allocator,
+			uploadQueue,
+			uploadPool,
+			bindless);
 		stbi_image_free(pixels);
 
-		// ── 3. Allocate the destination GPU image ──────────────────────────
-		// R8G8B8A8_SRGB: the hardware converts sRGB storage → linear on sample,
-		// which is correct for albedo textures used in a linear render pipeline.
+		return texture;
+	}
+
+	Texture Texture::LoadFromDiskPath(
+		const std::filesystem::path& path,
+		VkDevice         device,
+		VmaAllocator     allocator,
+		VkQueue          uploadQueue,
+		VkCommandPool    uploadPool,
+		BindlessManager& bindless)
+	{
+		int width = 0;
+		int height = 0;
+		int channels = 0;
+
+		stbi_uc* const pixels = stbi_load(
+			path.string().c_str(),
+			&width,
+			&height,
+			&channels,
+			STBI_rgb_alpha);
+
+		if (pixels == nullptr)
+		{
+			throw std::runtime_error(
+				"Texture::LoadFromDiskPath: failed to load '" + path.string() + "': " +
+				stbi_failure_reason());
+		}
+
 		Texture texture;
-		texture.m_image = UniqueImage::Create(device, allocator, {
-			.extent  = { static_cast<std::uint32_t>(width),
-			             static_cast<std::uint32_t>(height) },
-			.format  = VK_FORMAT_R8G8B8A8_SRGB,
-			.usage   = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		});
-
-		// ── 4. Record and immediately submit the copy ──────────────────────
-		VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
-
-		// UNDEFINED → TRANSFER_DST_OPTIMAL
-		TransitionImageLayout(
-			cmd,
-			texture.m_image.Get(),
-			VK_IMAGE_LAYOUT_UNDEFINED,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-			VK_ACCESS_2_NONE,
-			VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT);
-
-		const VkBufferImageCopy copyRegion{
-			.bufferOffset      = 0,
-			.bufferRowLength   = 0, // tightly packed
-			.bufferImageHeight = 0,
-			.imageSubresource  = {
-				.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT,
-				.mipLevel       = 0,
-				.baseArrayLayer = 0,
-				.layerCount     = 1,
-			},
-			.imageOffset = { 0, 0, 0 },
-			.imageExtent = {
-				static_cast<std::uint32_t>(width),
-				static_cast<std::uint32_t>(height),
-				1,
-			},
-		};
-		vkCmdCopyBufferToImage(
-			cmd,
-			staging.Get(),
-			texture.m_image.Get(),
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			1,
-			&copyRegion);
-
-		// TRANSFER_DST_OPTIMAL → SHADER_READ_ONLY_OPTIMAL
-		TransitionImageLayout(
-			cmd,
-			texture.m_image.Get(),
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-
-		EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
-
-		// staging buffer freed here as UniqueBuffer goes out of scope.
-
-		// ── 5. Register in the bindless descriptor set ─────────────────────
-		texture.m_image.EnsureBindlessSampled(
-			bindless,
+		texture.m_image = UploadRgbaToGpuImage(
+			pixels,
+			width,
+			height,
 			device,
-			VK_IMAGE_ASPECT_COLOR_BIT,
-			VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			allocator,
+			uploadQueue,
+			uploadPool,
+			bindless);
 
+		stbi_image_free(pixels);
 		return texture;
 	}
 

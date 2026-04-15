@@ -1,11 +1,17 @@
 #include "AetherCore.hpp"
 
+#include <algorithm>
+#include <unordered_map>
 #include <string>
 #include <stdexcept>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/quaternion.hpp>
+
+#include "assets/GltfAsset.hpp"
 #include "FileSystem.hpp"
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
@@ -19,6 +25,7 @@ namespace aether
 		m_swapchain.Initialize(m_vulkanContext, m_window);
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
+		m_materialBuffer.Initialize(m_vulkanContext);
 		m_resourcePool.ConfigureBindlessImages({
 			.manager = &m_bindlessManager,
 			.device = m_vulkanContext.GetDevice().device,
@@ -85,6 +92,7 @@ namespace aether
 			vkDestroyCommandPool(m_vulkanContext.GetDevice().device, m_uploadPool, nullptr);
 			m_uploadPool = VK_NULL_HANDLE;
 		}
+		m_materialBuffer.Shutdown();
 		m_bindlessManager.Shutdown();
 		io::FileSystem::Shutdown();
 	}
@@ -257,6 +265,8 @@ namespace aether
 					fc.proj = cam->GetProjectionMatrix(aspect);
 					fc.viewProj = fc.proj * fc.view;
 
+					fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
+
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 					rit->second.constants->Write(frameIdx, fc);
 					const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
@@ -307,6 +317,8 @@ namespace aether
 				// Backward compatibility
 				fc.viewProj = m_scene.GetViewProjection();
 			}
+
+			fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
@@ -558,6 +570,15 @@ namespace aether
 			vertices);
 	}
 
+	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices)
+	{
+		return Mesh::Create(
+			m_vulkanContext.GetDevice().device,
+			m_vulkanContext.GetAllocator(),
+			vertices,
+			indices);
+	}
+
 	Texture AetherCore::CreateTexture(std::string_view path)
 	{
 		return Texture::LoadFromFile(
@@ -567,6 +588,184 @@ namespace aether
 			m_vulkanContext.GetGraphicsQueue(),
 			m_uploadPool,
 			m_bindlessManager);
+	}
+
+	void AetherCore::RegisterMaterial(Material& mat)
+	{
+		if (mat.materialSlot != Material::kNoTexture)
+		{
+			// Already registered — just refresh the GPU copy.
+			GpuMaterial gpu{};
+			gpu.baseColorFactor         = mat.baseColorFactor;
+			gpu.metallicFactor          = mat.metallicFactor;
+			gpu.roughnessFactor         = mat.roughnessFactor;
+			gpu.occlusionStrength       = mat.occlusionStrength;
+			gpu.alphaCutoff             = mat.alphaCutoff;
+			gpu.emissiveFactor          = glm::vec4(mat.emissiveFactor, 0.0f);
+			gpu.flags  = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
+					   | (mat.alphaBlend  ? GpuMaterial::kAlphaBlend  : 0u)
+					   | (mat.alphaMask   ? GpuMaterial::kAlphaMask   : 0u);
+			gpu.albedoSlot              = mat.albedoSlot;
+			gpu.normalSlot              = mat.normalSlot;
+			gpu.metallicRoughnessSlot   = mat.metallicRoughnessSlot;
+			gpu.occlusionSlot           = mat.occlusionSlot;
+			gpu.emissiveSlot            = mat.emissiveSlot;
+			m_materialBuffer.Write(mat.materialSlot, gpu);
+			return;
+		}
+
+		const std::uint32_t slot = m_materialBuffer.AllocateSlot();
+		if (slot == MaterialBuffer::kInvalidSlot)
+		{
+			WARN(LogCategory::Engine, "RegisterMaterial: MaterialBuffer is full — material will render as default.");
+			return;
+		}
+
+		GpuMaterial gpu{};
+		gpu.baseColorFactor         = mat.baseColorFactor;
+		gpu.metallicFactor          = mat.metallicFactor;
+		gpu.roughnessFactor         = mat.roughnessFactor;
+		gpu.occlusionStrength       = mat.occlusionStrength;
+		gpu.alphaCutoff             = mat.alphaCutoff;
+		gpu.emissiveFactor          = glm::vec4(mat.emissiveFactor, 0.0f);
+		gpu.flags  = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u)
+				   | (mat.alphaBlend  ? GpuMaterial::kAlphaBlend  : 0u)
+				   | (mat.alphaMask   ? GpuMaterial::kAlphaMask   : 0u);
+		gpu.albedoSlot              = mat.albedoSlot;
+		gpu.normalSlot              = mat.normalSlot;
+		gpu.metallicRoughnessSlot   = mat.metallicRoughnessSlot;
+		gpu.occlusionSlot           = mat.occlusionSlot;
+		gpu.emissiveSlot            = mat.emissiveSlot;
+
+		m_materialBuffer.Write(slot, gpu);
+		mat.materialSlot = slot;
+	}
+
+	void AetherCore::UnregisterMaterial(Material& mat)
+	{
+		if (mat.materialSlot == Material::kNoTexture)
+		{
+			return;
+		}
+		m_materialBuffer.FreeSlot(mat.materialSlot);
+		mat.materialSlot = Material::kNoTexture;
+	}
+
+	LoadedGltfAsset AetherCore::LoadGltfAsset(std::string_view path)
+	{
+		const assets::GltfAsset source = assets::GltfAsset::LoadFromVfsPath(path);
+		LoadedGltfAsset loaded;
+
+		std::vector<std::uint32_t> imageSlots(source.images.size(), Material::kNoTexture);
+		loaded.textures.reserve(source.images.size());
+		for (std::size_t imageIndex = 0; imageIndex < source.images.size(); ++imageIndex)
+		{
+			const assets::GltfImage& image = source.images[imageIndex];
+			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
+			{
+				continue;
+			}
+
+			Texture texture = CreateTexture(image.uri);
+
+			imageSlots[imageIndex] = texture.GetBindlessSlot();
+			loaded.textures.push_back(std::move(texture));
+		}
+
+		std::vector<glm::mat4> localNodeTransforms(source.nodes.size(), glm::mat4(1.0f));
+		for (std::size_t nodeIndex = 0; nodeIndex < source.nodes.size(); ++nodeIndex)
+		{
+			const assets::GltfNode& node = source.nodes[nodeIndex];
+			if (node.hasMatrix)
+			{
+				localNodeTransforms[nodeIndex] = node.matrix;
+				continue;
+			}
+
+			const glm::mat4 t = glm::translate(glm::mat4(1.0f), node.translation);
+			const glm::mat4 r = glm::mat4_cast(node.rotation);
+			const glm::mat4 s = glm::scale(glm::mat4(1.0f), node.scale);
+			localNodeTransforms[nodeIndex] = t * r * s;
+		}
+
+		std::vector<glm::mat4> worldNodeTransforms(source.nodes.size(), glm::mat4(1.0f));
+		for (std::size_t nodeIndex = 0; nodeIndex < source.nodes.size(); ++nodeIndex)
+		{
+			glm::mat4 transform = localNodeTransforms[nodeIndex];
+			std::int32_t parent = source.nodes[nodeIndex].parentIndex;
+			while (parent >= 0)
+			{
+				transform = localNodeTransforms[static_cast<std::size_t>(parent)] * transform;
+				parent = source.nodes[static_cast<std::size_t>(parent)].parentIndex;
+			}
+			worldNodeTransforms[nodeIndex] = transform;
+		}
+
+		loaded.primitives.reserve(source.primitives.size());
+		for (const assets::GltfPrimitive& primitive : source.primitives)
+		{
+			if (primitive.vertices.empty())
+			{
+				continue;
+			}
+
+			LoadedGltfPrimitive loadedPrim;
+			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices);
+
+			if (primitive.nodeIndex < worldNodeTransforms.size())
+			{
+				loadedPrim.localTransform = worldNodeTransforms[primitive.nodeIndex];
+			}
+
+			if (primitive.materialIndex >= 0 && static_cast<std::size_t>(primitive.materialIndex) < source.materials.size())
+			{
+				const assets::GltfMaterial& srcMat = source.materials[static_cast<std::size_t>(primitive.materialIndex)];
+				Material& mat = loadedPrim.material;
+
+				// ── PBR factors ─────────────────────────────────────────────
+				mat.baseColorFactor   = srcMat.baseColorFactor;
+				mat.metallicFactor    = srcMat.metallicFactor;
+				mat.roughnessFactor   = srcMat.roughnessFactor;
+				mat.emissiveFactor    = srcMat.emissiveFactor;
+				mat.alphaCutoff       = srcMat.alphaCutoff;
+				mat.doubleSided       = srcMat.doubleSided;
+				mat.alphaBlend        = srcMat.alphaBlend;
+				mat.alphaMask         = srcMat.alphaMask;
+
+				// Helper: resolve texture → bindless image slot
+				auto resolveSlot = [&](std::int32_t texIdx) -> std::uint32_t {
+					if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
+					{
+						return Material::kNoTexture;
+					}
+					const assets::GltfTexture& tex = source.textures[static_cast<std::size_t>(texIdx)];
+					if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageSlots.size())
+					{
+						return Material::kNoTexture;
+					}
+					return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
+				};
+
+				mat.albedoSlot            = resolveSlot(srcMat.baseColorTexture);
+				mat.normalSlot            = resolveSlot(srcMat.normalTexture);
+				mat.metallicRoughnessSlot = resolveSlot(srcMat.metallicRoughnessTexture);
+				mat.occlusionSlot         = resolveSlot(srcMat.occlusionTexture);
+				mat.emissiveSlot          = resolveSlot(srcMat.emissiveTexture);
+
+				RegisterMaterial(mat);
+			}
+
+			loaded.primitives.push_back(std::move(loadedPrim));
+		}
+
+		INFO(LogCategory::Engine,
+			"Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).",
+			std::string(path),
+			loaded.primitives.size(),
+			loaded.textures.size(),
+			source.animations.size());
+
+		return loaded;
 	}
 
 	void AetherCore::ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn)

@@ -6,6 +6,7 @@
 #include <span>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "BindlessManager.hpp"
 #include "Camera.hpp"
@@ -14,6 +15,7 @@
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
+#include "Material.hpp"
 #include "Mesh.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimitiveMeshes.hpp"
@@ -30,6 +32,19 @@
 
 namespace aether
 {
+	struct LoadedGltfPrimitive
+	{
+		Mesh mesh;
+		Material material{};
+		glm::mat4 localTransform{ 1.0f };
+	};
+
+	struct LoadedGltfAsset
+	{
+		std::vector<Texture> textures;
+		std::vector<LoadedGltfPrimitive> primitives;
+	};
+
 	class AetherCore
 	{
 	public:
@@ -84,6 +99,7 @@ namespace aether
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh             CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Texture          CreateTexture(std::string_view path);
+		[[nodiscard]] LoadedGltfAsset  LoadGltfAsset(std::string_view path);
 
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;

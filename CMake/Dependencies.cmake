@@ -48,6 +48,14 @@ FetchContent_Declare(stb
     EXCLUDE_FROM_ALL
 )
 
+FetchContent_Declare(cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG        v1.15
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+
 FetchContent_Declare(freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
     GIT_TAG        VER-2-14-3
@@ -71,7 +79,7 @@ set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype)
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf)
 
 # ---------------------------------------------------------------------------
 # Solution folder organisation (Visual Studio only — ignored by other generators)
@@ -85,6 +93,7 @@ foreach(_dep IN ITEMS
         glm vk-bootstrap
         VulkanMemoryAllocator
         freetype
+    cgltf
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")

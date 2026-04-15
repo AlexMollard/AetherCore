@@ -40,9 +40,9 @@ namespace aether
 				}
 
 				const DrawPushConstants pc{
-					.model      = cmd.modelMatrix,
-					.frameAddr  = frameConstantsAddr,
-					.albedoSlot = cmd.albedoSlot,
+					.model         = cmd.modelMatrix,
+					.frameAddr     = frameConstantsAddr,
+					.materialIndex = cmd.materialIndex,
 				};
 				recorder.PushConstants(cmd.pipeline->GetLayout(), pc);
 			}

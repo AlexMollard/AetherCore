@@ -42,6 +42,9 @@ target_include_directories(Engine PUBLIC "${vma_SOURCE_DIR}/include")
 
 # stb is header-only: add its source directory as a private include path.
 # Texture.cpp defines STB_IMAGE_IMPLEMENTATION once to pull in the implementation.
-target_include_directories(Engine PRIVATE "${stb_SOURCE_DIR}")
+target_include_directories(Engine PRIVATE
+    "${stb_SOURCE_DIR}"
+    "${cgltf_SOURCE_DIR}"
+)
 
 aethercore_target_defaults(Engine)

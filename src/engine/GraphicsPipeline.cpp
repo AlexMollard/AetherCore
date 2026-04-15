@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <cstddef>
+#include <iterator>
 #include <utility>
 #include <vector>
 
@@ -140,6 +141,18 @@ namespace aether
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
 				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, color)),
 			},
+			{   // location 5 : JOINTS_0
+				.location = 5,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32A32_UINT,
+				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
+			},
+			{   // location 6 : WEIGHTS_0
+				.location = 6,
+				.binding = 0,
+				.format = VK_FORMAT_R32G32B32A32_SFLOAT,
+				.offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
+			},
 		};
 		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -148,7 +161,7 @@ namespace aether
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 			.vertexBindingDescriptionCount = 1,
 			.pVertexBindingDescriptions = &kVertexBinding,
-			.vertexAttributeDescriptionCount = 5,
+			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVertexAttributes)),
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
 		const VkPipelineVertexInputStateCreateInfo& vertexInput =
@@ -214,7 +227,7 @@ namespace aether
 		const VkPushConstantRange kModelRange{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			.offset = 0,
-			.size = sizeof(DrawPushConstants),  // 80 bytes: mat4 model + BDA + albedoSlot + pad
+			.size = sizeof(DrawPushConstants),
 		};
 		const VkPushConstantRange kCustomRange{
 			.stageFlags = desc.pushConstantStages,

@@ -107,17 +107,17 @@ namespace aether
 				continue;
 			}
 
-			std::uint32_t albedoSlot = Material::kNoTexture;
+			std::uint32_t materialIndex = Material::kNoTexture;
 			if (const auto matIt = m_materials.find(id); matIt != m_materials.end())
 			{
-				albedoSlot = matIt->second.material.albedoSlot;
+				materialIndex = matIt->second.material.materialSlot;
 			}
 
 			queue.Submit({
-				.pipeline    = pipelineComp.pipeline,
-				.mesh        = meshIt->second.mesh,
-				.modelMatrix = transformIt->second.localToWorld,
-				.albedoSlot  = albedoSlot,
+				.pipeline      = pipelineComp.pipeline,
+				.mesh          = meshIt->second.mesh,
+				.modelMatrix   = transformIt->second.localToWorld,
+				.materialIndex = materialIndex,
 			});
 		}
 	}

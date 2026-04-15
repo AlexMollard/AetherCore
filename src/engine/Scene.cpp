@@ -47,7 +47,7 @@ namespace aether
 				.vertexCount   = count,
 				.instanceCount = 1,
 				.modelMatrix = obj.transform,
-				.albedoSlot  = obj.desc.albedoSlot,
+				.materialIndex = obj.desc.materialIndex,
 				});
 		}
 	}
