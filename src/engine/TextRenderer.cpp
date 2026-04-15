@@ -1,6 +1,9 @@
 #include "TextRenderer.hpp"
 
+#include <cstring>
+
 #include <vulkan/vulkan.h>
+#include <vk_mem_alloc.h>
 
 #include "BindlessManager.hpp"
 #include "FileSystem.hpp"
@@ -35,6 +38,8 @@ namespace aether
 					AetherCore& engine = *m_engine;
 					const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 					const VkExtent2D      ext = ctx.extent;
+					const std::uint32_t frameSlot = static_cast<std::uint32_t>(
+						engine.GetBindlessManager().GetCurrentFrame() % Swapchain::kMaxFramesInFlight);
 
 					const VkViewport viewport{
 						.x = 0.f,
@@ -48,17 +53,8 @@ namespace aether
 					vkCmdSetViewport(cmd, 0, 1, &viewport);
 					vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-					ctx.recorder.BindGraphicsPipeline(m_pipeline);
-
-					const VkDescriptorSet bindlessSet = engine.GetBindlessManager().GetSet();
-					vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-						m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
-
-					const glm::vec4 screenSize{
-						static_cast<float>(ext.width),
-						static_cast<float>(ext.height),
-						0.f, 0.f,
-					};
+					std::vector<GlyphInstance> glyphs;
+					glyphs.reserve(256);
 
 					for (const PendingLabel& label : m_pendingLabels)
 					{
@@ -74,8 +70,7 @@ namespace aether
 								continue;
 							}
 
-							const GlyphPush push{
-								.screenSize = screenSize,
+							glyphs.push_back({
 								.glyphRect = glm::vec4(
 									cursorX + g.bearingX * label.fontSize,
 									label.position.y - g.bearingY * label.fontSize,
@@ -83,19 +78,84 @@ namespace aether
 									g.height * label.fontSize),
 								.uvRect = g.uvRect,
 								.color = label.color,
-								.atlasSlot = m_fontAtlas.GetBindlessSlot(),
-							};
+							});
 
-							vkCmdPushConstants(
-								cmd,
-								m_pipeline.GetLayout(),
-								VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-								0, sizeof(GlyphPush), &push);
-
-							ctx.recorder.Draw(6);
 							cursorX += g.advanceX * label.fontSize;
 						}
 					}
+
+					if (glyphs.empty())
+					{
+						m_pendingLabels.clear();
+						return;
+					}
+
+					const VkDeviceSize glyphBytes = static_cast<VkDeviceSize>(glyphs.size() * sizeof(GlyphInstance));
+
+					if (!m_glyphBuffers[frameSlot] || m_glyphBufferCapacities[frameSlot] < static_cast<std::size_t>(glyphBytes))
+					{
+						m_glyphBuffers[frameSlot].Reset();
+
+						VkBufferCreateInfo bufferInfo{
+							.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+							.pNext = nullptr,
+							.flags = 0,
+							.size = glyphBytes,
+							.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+							.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+							.queueFamilyIndexCount = 0,
+							.pQueueFamilyIndices = nullptr,
+						};
+
+						VmaAllocationCreateInfo allocInfo{};
+						allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+						allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+							VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+						m_glyphBuffers[frameSlot] = UniqueBuffer::Create(
+							engine.GetVulkanContext().GetAllocator(),
+							engine.GetVulkanContext().GetDevice().device,
+							bufferInfo,
+							allocInfo);
+
+						m_glyphBufferCapacities[frameSlot] = static_cast<std::size_t>(glyphBytes);
+					}
+
+					void* mappedPtr = m_glyphBuffers[frameSlot].GetAllocationInfo().pMappedData;
+					if (mappedPtr == nullptr)
+					{
+						m_pendingLabels.clear();
+						return;
+					}
+
+					std::memcpy(mappedPtr, glyphs.data(), static_cast<std::size_t>(glyphBytes));
+
+					ctx.recorder.BindGraphicsPipeline(m_pipeline);
+
+					const VkDescriptorSet bindlessSet = engine.GetBindlessManager().GetSet();
+					vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+						m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+
+					const BatchPush push{
+						.screenSize = glm::vec4(
+							static_cast<float>(ext.width),
+							static_cast<float>(ext.height),
+							0.f,
+							0.f),
+						.atlasSlot = m_fontAtlas.GetBindlessSlot(),
+						._pad0 = 0,
+						.glyphDataAddr = m_glyphBuffers[frameSlot].GetDeviceAddress(),
+					};
+
+					vkCmdPushConstants(
+						cmd,
+						m_pipeline.GetLayout(),
+						VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+						0,
+						sizeof(BatchPush),
+						&push);
+
+					ctx.recorder.Draw(static_cast<std::uint32_t>(glyphs.size() * 6));
 					m_pendingLabels.clear();
 				});
 	}
@@ -156,7 +216,7 @@ namespace aether
 			.depthWriteEnable = false,
 			.blendEnable = true,
 			.noVertexInput = true,
-			.pushConstantSize = static_cast<uint32_t>(sizeof(GlyphPush)),
+			.pushConstantSize = static_cast<uint32_t>(sizeof(BatchPush)),
 			.pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			.setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
 			});
@@ -175,6 +235,11 @@ namespace aether
 			engine.GetRenderGraph().RemovePass(m_passName);
 			m_pipeline.Destroy();
 			m_fontAtlas.Destroy();
+			for (UniqueBuffer& buffer : m_glyphBuffers)
+			{
+				buffer.Reset();
+			}
+			m_glyphBufferCapacities.fill(0);
 			m_pendingLabels.clear();
 			m_engine = nullptr;
 			m_ready = false;

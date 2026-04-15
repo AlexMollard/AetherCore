@@ -2,12 +2,15 @@
 
 #include <string>
 #include <string_view>
+#include <array>
 #include <vector>
 
 #include <glm/glm.hpp>
 
 #include "FontAtlas.hpp"
 #include "GraphicsPipeline.hpp"
+#include "Swapchain.hpp"
+#include "UniqueBuffer.hpp"
 #include "UiLayout.hpp"
 
 namespace aether
@@ -54,19 +57,26 @@ namespace aether
 		[[nodiscard]] bool IsReady() const { return m_ready; }
 
 	private:
-		// Push constants for text_sdf.slang (72 bytes, matches shader layout exactly).
-		// screenSize is vec4 so float4 in SPIR-V is 16-byte aligned — no hidden padding.
-		struct GlyphPush
+		// Per-glyph data consumed by the vertex shader through a device-addressable buffer.
+		struct GlyphInstance
 		{
-			glm::vec4 screenSize;   // .xy = viewport pixels, .zw unused
 			glm::vec4 glyphRect;    // x, y, w, h in screen pixels (top-left origin)
 			glm::vec4 uvRect;       // u0, v0, u1, v1 in [0,1] atlas space
 			glm::vec4 color;        // RGBA tint (linear)
-			uint32_t  atlasSlot;    // bindless sampled-image index
-			uint32_t  _pad0 = 0;
 		};
-		static_assert(sizeof(GlyphPush) == 72,
-			"GlyphPush must match text_sdf.slang push constant block.");
+		static_assert(sizeof(GlyphInstance) == 48,
+			"GlyphInstance layout must match text_sdf.slang.");
+
+		// One push-constant block per text pass.
+		struct BatchPush
+		{
+			glm::vec4 screenSize;    // .xy = viewport pixels, .zw unused
+			uint32_t  atlasSlot;     // bindless sampled-image index
+			uint32_t  _pad0 = 0;
+			uint64_t  glyphDataAddr = 0;
+		};
+		static_assert(sizeof(BatchPush) == 32,
+			"BatchPush must match text_sdf.slang push constant block.");
 
 		struct PendingLabel
 		{
@@ -84,6 +94,8 @@ namespace aether
 		FontAtlas                 m_fontAtlas;
 		GraphicsPipeline          m_pipeline;
 		std::vector<PendingLabel> m_pendingLabels;
+		std::array<UniqueBuffer, Swapchain::kMaxFramesInFlight> m_glyphBuffers;
+		std::array<std::size_t, Swapchain::kMaxFramesInFlight>  m_glyphBufferCapacities{};
 		bool                      m_ready = false;
 	};
 }

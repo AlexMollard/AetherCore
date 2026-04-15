@@ -1,5 +1,7 @@
 #include "RenderQueue.hpp"
 
+#include <algorithm>
+
 #include "DrawPushConstants.hpp"
 #include "GraphicsPipeline.hpp"
 #include "CommandRecorder.hpp"
@@ -22,21 +24,50 @@ namespace aether
 			return;
 		}
 
+		const GraphicsPipeline* lastPipeline = nullptr;
+		const Mesh*             lastMesh = nullptr;
+		VkBuffer                lastVertexBuffer = VK_NULL_HANDLE;
+		VkBuffer                lastIndexBuffer = VK_NULL_HANDLE;
+		const GraphicsPipeline* lastSetPipeline = nullptr;
+
+		std::stable_sort(m_commands.begin(), m_commands.end(),
+			[](const DrawCommand& a, const DrawCommand& b)
+			{
+				if (a.pipeline != b.pipeline)
+				{
+					return a.pipeline < b.pipeline;
+				}
+				if (a.mesh != b.mesh)
+				{
+					return a.mesh < b.mesh;
+				}
+				return a.materialIndex < b.materialIndex;
+			});
+
 		for (const DrawCommand& cmd : m_commands)
 		{
 			if (cmd.pipeline != nullptr)
 			{
-				recorder.BindGraphicsPipeline(*cmd.pipeline);
+				if (cmd.pipeline != lastPipeline)
+				{
+					recorder.BindGraphicsPipeline(*cmd.pipeline);
+					lastPipeline = cmd.pipeline;
+				}
 
 				// Bind the bindless descriptor set (set 0) if supplied.
-				if (bindlessSet != VK_NULL_HANDLE)
+				if (bindlessSet != VK_NULL_HANDLE && cmd.pipeline == lastPipeline)
 				{
-					vkCmdBindDescriptorSets(
-						recorder.GetCommandBuffer(),
-						VK_PIPELINE_BIND_POINT_GRAPHICS,
-						cmd.pipeline->GetLayout(),
-						0, 1, &bindlessSet,
-						0, nullptr);
+					// Descriptor set 0 is tied to pipeline layout; rebind on pipeline switch.
+					if (cmd.pipeline != lastSetPipeline)
+					{
+						vkCmdBindDescriptorSets(
+							recorder.GetCommandBuffer(),
+							VK_PIPELINE_BIND_POINT_GRAPHICS,
+							cmd.pipeline->GetLayout(),
+							0, 1, &bindlessSet,
+							0, nullptr);
+						lastSetPipeline = cmd.pipeline;
+					}
 				}
 
 				const DrawPushConstants pc{
@@ -49,12 +80,22 @@ namespace aether
 
 			if (cmd.mesh != nullptr)
 			{
-				recorder.BindVertexBuffer(cmd.mesh->GetBuffer());
+				if (cmd.mesh != lastMesh || cmd.mesh->GetBuffer() != lastVertexBuffer)
+				{
+					recorder.BindVertexBuffer(cmd.mesh->GetBuffer());
+					lastVertexBuffer = cmd.mesh->GetBuffer();
+				}
 
 				if (cmd.mesh->IsIndexed())
 				{
-					recorder.BindIndexBuffer(cmd.mesh->GetIndexBuffer());
+					if (cmd.mesh != lastMesh || cmd.mesh->GetIndexBuffer() != lastIndexBuffer)
+					{
+						recorder.BindIndexBuffer(cmd.mesh->GetIndexBuffer());
+						lastIndexBuffer = cmd.mesh->GetIndexBuffer();
+					}
 				}
+
+				lastMesh = cmd.mesh;
 			}
 
 			if (cmd.mesh != nullptr && cmd.mesh->IsIndexed())
