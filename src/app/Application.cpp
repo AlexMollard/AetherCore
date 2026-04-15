@@ -5,6 +5,7 @@
 #include "FileSystem.hpp"
 #include "Logger.hpp"
 #include "AnimationSystem.hpp"
+#include "systems/DayNightSystem.hpp"
 
 namespace aether::app
 {
@@ -66,6 +67,7 @@ namespace aether::app
 		m_engine.WaitIdle();
 
 		// Unregister engine-level systems before detaching layers.
+		context.world->UnregisterSystem("DayNightSystem");
 		context.world->UnregisterSystem("AnimationSystem");
 
 		// OnExit:
@@ -127,6 +129,9 @@ namespace aether::app
 
 		// Register engine-level systems.
 		attachContext.world->RegisterSystem(std::make_unique<aether::AnimationSystem>());
+		auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
+		dayNightSystem->Init(*attachContext.renderer);
+		attachContext.world->RegisterSystem(std::move(dayNightSystem));
 
 		auto previousFrameTime = Clock::now();
 		while (!m_engine.ShouldClose())
