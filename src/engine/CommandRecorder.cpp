@@ -38,6 +38,37 @@ namespace aether
 		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawPushConstants), &pc);
 	}
 
+	void CommandRecorder::BeginDebugLabel(const char* name, float r, float g, float b, float a)
+	{
+		if (name == nullptr || m_cmd == VK_NULL_HANDLE || s_beginDebugLabelFn == nullptr)
+		{
+			return;
+		}
+
+		const VkDebugUtilsLabelEXT label{
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+			.pLabelName = name,
+			.color = { r, g, b, a },
+		};
+		s_beginDebugLabelFn(m_cmd, &label);
+	}
+
+	void CommandRecorder::EndDebugLabel()
+	{
+		if (m_cmd != VK_NULL_HANDLE && s_endDebugLabelFn != nullptr)
+		{
+			s_endDebugLabelFn(m_cmd);
+		}
+	}
+
+	void CommandRecorder::SetDebugLabelFunctions(
+		PFN_vkCmdBeginDebugUtilsLabelEXT beginFn,
+		PFN_vkCmdEndDebugUtilsLabelEXT endFn)
+	{
+		s_beginDebugLabelFn = beginFn;
+		s_endDebugLabelFn = endFn;
+	}
+
 	void CommandRecorder::DrawIndexed(
 		std::uint32_t indexCount,
 		std::uint32_t instanceCount,

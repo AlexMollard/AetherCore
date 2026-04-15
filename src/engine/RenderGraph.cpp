@@ -133,6 +133,7 @@ namespace aether
 		for (const CompiledPass& cp : m_compiled)
 		{
 			const PassRecord& pass = m_passes[cp.passIndex];
+			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
 			// ── Pre-pass image barriers ──────────────────────────────────────
 			for (const CompiledBarrier& b : cp.preBarriers)
@@ -227,6 +228,8 @@ namespace aether
 			{
 				vkCmdEndRendering(cmd);
 			}
+
+			recorder.EndDebugLabel();
 		}
 	}
 

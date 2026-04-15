@@ -35,7 +35,15 @@ namespace aether
 		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
 		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);
 		void PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc);
+		void BeginDebugLabel(const char* name, float r = 0.15f, float g = 0.55f, float b = 0.90f, float a = 1.0f);
+		void EndDebugLabel();
+
+		static void SetDebugLabelFunctions(
+			PFN_vkCmdBeginDebugUtilsLabelEXT beginFn,
+			PFN_vkCmdEndDebugUtilsLabelEXT endFn);
 	private:
+		static inline PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabelFn = nullptr;
+		static inline PFN_vkCmdEndDebugUtilsLabelEXT   s_endDebugLabelFn = nullptr;
 		VkCommandBuffer m_cmd = VK_NULL_HANDLE;
 	};
 }

@@ -1,6 +1,7 @@
 #include "TextRenderer.hpp"
 
 #include <cstring>
+#include <format>
 
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
@@ -90,6 +91,9 @@ namespace aether
 						return;
 					}
 
+					const std::string textLabel = std::format("Text.Batch ({} glyphs)", glyphs.size());
+					ctx.recorder.BeginDebugLabel(textLabel.c_str(), 0.85f, 0.35f, 0.70f, 1.0f);
+
 					const VkDeviceSize glyphBytes = static_cast<VkDeviceSize>(glyphs.size() * sizeof(GlyphInstance));
 
 					if (!m_glyphBuffers[frameSlot] || m_glyphBufferCapacities[frameSlot] < static_cast<std::size_t>(glyphBytes))
@@ -156,6 +160,7 @@ namespace aether
 						&push);
 
 					ctx.recorder.Draw(static_cast<std::uint32_t>(glyphs.size() * 6));
+					ctx.recorder.EndDebugLabel();
 					m_pendingLabels.clear();
 				});
 	}

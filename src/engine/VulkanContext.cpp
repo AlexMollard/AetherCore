@@ -8,6 +8,7 @@
 
 #include "Logger.hpp"
 #include "AetherExceptions.hpp"
+#include "CommandRecorder.hpp"
 #include "Window.hpp"
 
 namespace
@@ -140,6 +141,12 @@ namespace aether
 		}
 		m_presentQueue = presentQueueResult.value();
 
+		CommandRecorder::SetDebugLabelFunctions(
+			reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(
+				vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")),
+			reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
+				vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
+
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
@@ -165,6 +172,8 @@ namespace aether
 			vmaDestroyAllocator(m_allocator);
 			m_allocator = VK_NULL_HANDLE;
 		}
+
+		CommandRecorder::SetDebugLabelFunctions(nullptr, nullptr);
 
 		if (m_device.has_value())
 		{

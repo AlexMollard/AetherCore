@@ -174,11 +174,6 @@ namespace aether
 
 	void AetherCore::RegisterPasses()
 	{
-		for (auto& [id, rt] : m_rtCameras)
-		{
-			RegisterRttPassesFor(id);
-		}
-
 		// ── Pass 1: Forward ───────────────────────────────────────────────────
 		// Renders all scene objects into the HDR offscreen buffer.
 		m_renderGraph.AddPass("$EngineForward")
@@ -203,10 +198,16 @@ namespace aether
 					m_renderQueue.Clear();
 				});
 
-		// ── Passes 2–3: Tonemap + FXAA ────────────────────────────────────────
+		// ── Passes 2–4: Render-to-texture cameras ────────────────────────────
+		for (auto& [id, rt] : m_rtCameras)
+		{
+			RegisterRttPassesFor(id);
+		}
+
+		// ── Passes 5–6: Tonemap + FXAA ────────────────────────────────────────
 		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
 
-		// ── Pass 4: UI overlay ────────────────────────────────────────────────
+		// ── Pass 7: UI overlay ────────────────────────────────────────────────
 		// Loads the FXAA output and composites UI on top.
 		m_renderGraph.AddPass("$UIOverlay")
 			.WriteColor(
@@ -341,7 +342,9 @@ namespace aether
 				.extent = m_swapchain.GetExtent(),
 			};
 
+			m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
 			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr);
+			m_currentRecorder.EndDebugLabel();
 		}
 		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
 		++m_frameIndex;

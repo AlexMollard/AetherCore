@@ -1,6 +1,7 @@
 #include "RenderQueue.hpp"
 
 #include <algorithm>
+#include <format>
 
 #include "DrawPushConstants.hpp"
 #include "GraphicsPipeline.hpp"
@@ -44,8 +45,17 @@ namespace aether
 				return a.materialIndex < b.materialIndex;
 			});
 
+		recorder.BeginDebugLabel("RenderQueue.Flush", 0.85f, 0.60f, 0.18f, 1.0f);
+
 		for (const DrawCommand& cmd : m_commands)
 		{
+			const std::string drawLabel = std::format(
+				"Draw P={} M={} Mat={}{}",
+				reinterpret_cast<const void*>(cmd.pipeline),
+				reinterpret_cast<const void*>(cmd.mesh),
+				cmd.materialIndex,
+				(cmd.mesh != nullptr && cmd.mesh->IsIndexed()) ? " Indexed" : " NonIndexed");
+			recorder.BeginDebugLabel(drawLabel.c_str(), 0.95f, 0.40f, 0.25f, 1.0f);
 			if (cmd.pipeline != nullptr)
 			{
 				if (cmd.pipeline != lastPipeline)
@@ -110,7 +120,11 @@ namespace aether
 
 				recorder.Draw(count, cmd.instanceCount);
 			}
+
+			recorder.EndDebugLabel();
 		}
+
+		recorder.EndDebugLabel();
 	}
 
 	void RenderQueue::Clear()
