@@ -10,6 +10,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/geometric.hpp>
+#include <glm/common.hpp>
 
 #include "assets/GltfAsset.hpp"
 #include "FileSystem.hpp"
@@ -264,8 +266,11 @@ namespace aether
 					fc.view = cam->GetViewMatrix();
 					fc.proj = cam->GetProjectionMatrix(aspect);
 					fc.viewProj = fc.proj * fc.view;
+					fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 
 					fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
+					fc.sunDirectionIntensity = m_sunDirectionIntensity;
+					fc.ambientColor = m_ambientColor;
 
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 					rit->second.constants->Write(frameIdx, fc);
@@ -311,6 +316,7 @@ namespace aether
 				fc.view = cam->GetViewMatrix();
 				fc.proj = cam->GetProjectionMatrix(aspect);
 				fc.viewProj = fc.proj * fc.view;
+				fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 			}
 			else
 			{
@@ -319,6 +325,8 @@ namespace aether
 			}
 
 			fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
+			fc.sunDirectionIntensity = m_sunDirectionIntensity;
+			fc.ambientColor = m_ambientColor;
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
@@ -444,6 +452,42 @@ namespace aether
 	bool AetherCore::IsFxaaEnabled() const
 	{
 		return m_postProcessStack.IsFxaaEnabled();
+	}
+
+	void AetherCore::SetDirectionalLight(glm::vec3 direction, const float intensity)
+	{
+		const float len2 = glm::dot(direction, direction);
+		if (len2 < 1e-8f)
+		{
+			direction = glm::vec3(0.577f, 0.577f, 0.577f);
+		}
+		else
+		{
+			direction = glm::normalize(direction);
+		}
+
+		m_sunDirectionIntensity = glm::vec4(direction, glm::max(intensity, 0.0f));
+	}
+
+	glm::vec3 AetherCore::GetDirectionalLightDirection() const
+	{
+		return glm::vec3(m_sunDirectionIntensity);
+	}
+
+	float AetherCore::GetDirectionalLightIntensity() const
+	{
+		return m_sunDirectionIntensity.w;
+	}
+
+	void AetherCore::SetAmbientLight(glm::vec3 color)
+	{
+		color = glm::max(color, glm::vec3(0.0f));
+		m_ambientColor = glm::vec4(color, 1.0f);
+	}
+
+	glm::vec3 AetherCore::GetAmbientLight() const
+	{
+		return glm::vec3(m_ambientColor);
 	}
 
 	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(

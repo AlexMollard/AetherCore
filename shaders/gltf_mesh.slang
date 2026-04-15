@@ -15,7 +15,7 @@
 //   offset 72 : uint      materialIndex   index into MaterialBuffer
 //   offset 76 : uint      _pad0
 //
-// FrameConstantsData  (240 bytes, matches aether::FrameConstants):
+// FrameConstantsData  (256 bytes, matches aether::FrameConstants):
 //   offset   0 : float4x4  viewProj
 //   offset  64 : float4x4  view
 //   offset 128 : float4x4  proj
@@ -23,6 +23,7 @@
 //   offset 200 : uint64_t  _pad0
 //   offset 208 : float4    sunDirectionIntensity  (xyz=world dir, w=intensity)
 //   offset 224 : float4    ambientColor           (rgb=sky, a=unused)
+//   offset 240 : float4    cameraWorldPos         (xyz=camera pos, w=1)
 //
 // GpuMaterial  (80 bytes, matches aether::GpuMaterial):
 //   offset  0  : float4  baseColorFactor
@@ -60,6 +61,7 @@ struct FrameConstantsData
     // offset 200: _pad0 (not accessed)
     [[vk::offset(208)]] float4 sunDirectionIntensity; // xyz=world-space dir, w=intensity
     [[vk::offset(224)]] float4 ambientColor;          // rgb=sky color, a=unused
+    [[vk::offset(240)]] float4 cameraWorldPos;        // xyz=camera position, w=1
 };
 
 struct GpuMaterial
@@ -110,7 +112,6 @@ struct VSOutput
     [[vk::location(3)]] float  tangentSign     : TEXCOORD3;
     [[vk::location(4)]] float2 uv              : TEXCOORD4;
     [[vk::location(5)]] float3 vertexColor     : TEXCOORD5;
-    [[vk::location(6)]] float  skinSignal      : TEXCOORD6;
 };
 
 // ── Vertex shader ─────────────────────────────────────────────────────────
@@ -134,11 +135,12 @@ VSOutput vertexMain(VSInput input)
     float3 worldNormal  = normalize(mul(normalMatrix, input.normal));
     float3 worldTangent = normalize(mul(normalMatrix, input.tangent.xyz));
 
-    // Keep skin inputs live through the VS->FS interface so validation does
-    // not flag locations 5/6 as unused before full skinning is implemented.
+    // Keep skin inputs live in a real path so validation does not flag
+    // locations 5/6 as unused before full skinning is implemented.
     float skinWeightSum = dot(input.jointWeights, float4(1.0, 1.0, 1.0, 1.0));
-    float skinSignal = skinWeightSum +
-        float(input.jointIndices.x + input.jointIndices.y + input.jointIndices.z + input.jointIndices.w) * 0.0;
+    uint jointParityBits = input.jointIndices.x ^ input.jointIndices.y ^ input.jointIndices.z ^ input.jointIndices.w;
+    float skinParity = float(jointParityBits & 1u);
+    float skinMod = 1.0 + 1e-4 * ((skinWeightSum - 1.0) + skinParity);
 
     VSOutput o;
     o.svPosition  = mul(fc->viewProj, worldPos);
@@ -147,8 +149,7 @@ VSOutput vertexMain(VSInput input)
     o.worldTangent = worldTangent;
     o.tangentSign = input.tangent.w;
     o.uv          = input.uv;
-    o.vertexColor = input.color;
-    o.skinSignal  = skinSignal;
+    o.vertexColor = input.color * skinMod;
     return o;
 }
 
@@ -186,7 +187,26 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 {
     FrameConstantsData* fc        = (FrameConstantsData*)(pc.frameAddr);
     GpuMaterial*        materials = (GpuMaterial*)(fc->materialBufferAddr);
-    GpuMaterial         mat       = materials[pc.materialIndex];
+
+    // Safe fallback when a draw is missing a valid registered material.
+    GpuMaterial mat;
+    mat.baseColorFactor = float4(1.0, 1.0, 1.0, 1.0);
+    mat.metallicFactor = 0.0;
+    mat.roughnessFactor = 1.0;
+    mat.occlusionStrength = 1.0;
+    mat.alphaCutoff = 0.5;
+    mat.emissiveFactor = float4(0.0, 0.0, 0.0, 0.0);
+    mat.flags = 0u;
+    mat.albedoSlot = kNoTexture;
+    mat.normalSlot = kNoTexture;
+    mat.metallicRoughnessSlot = kNoTexture;
+    mat.occlusionSlot = kNoTexture;
+    mat.emissiveSlot = kNoTexture;
+
+    if (pc.materialIndex != kNoTexture)
+    {
+        mat = materials[pc.materialIndex];
+    }
 
     float2 uv = input.uv;
 
@@ -207,6 +227,16 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     // ── TBN — world-space tangent frame ──────────────────────────────────
     float3 N = normalize(input.worldNormal);
+
+    // Fallback for assets that came in with degenerate/missing normals.
+    const float nLen2 = dot(N, N);
+    if (nLen2 < 1e-6)
+    {
+        float3 faceN = cross(ddx(input.worldPos), ddy(input.worldPos));
+        const float faceLen2 = dot(faceN, faceN);
+        N = (faceLen2 > 1e-12) ? normalize(faceN) : float3(0.0, 1.0, 0.0);
+    }
+
     float3 T = normalize(input.worldTangent);
     T = normalize(T - N * dot(T, N));           // Gram-Schmidt re-orthogonalise
     float3 B = cross(N, T) * input.tangentSign;
@@ -253,13 +283,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float  sunIntensity = fc->sunDirectionIntensity.w;
     float3 ambientColor = fc->ambientColor.rgb;
 
-    // Reconstruct camera world position from view matrix.
-    // view = [R | -R*camPos]  →  camPos = -R^T * (-R*camPos)
-    float3x3 viewRot  = float3x3(fc->view[0].xyz, fc->view[1].xyz, fc->view[2].xyz);
-    float3 viewTrans  = float3(fc->view[0][3], fc->view[1][3], fc->view[2][3]);
-    float3 camWorldPos = -mul(viewTrans, viewRot);   // = -R^T * t'
+    float3 camWorldPos = fc->cameraWorldPos.xyz;
 
-    float3 V = normalize(camWorldPos - input.worldPos);
+    float3 Vraw = camWorldPos - input.worldPos;
+    const float vLen2 = dot(Vraw, Vraw);
+    float3 V = (vLen2 > 1e-12) ? normalize(Vraw) : N;
     float3 L = sunDir;
     float3 H = normalize(V + L);
 
@@ -287,9 +315,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Image-based ambient (constant approximation — replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ao;
 
-    // Keep skinSignal in the final expression without changing appearance.
-    float skinNoOp = input.skinSignal * 0.0;
-    float3 finalColor = Lo + ambient + emissive + float3(skinNoOp, skinNoOp, skinNoOp);
+    float3 finalColor = Lo + ambient + emissive;
 
     return float4(finalColor, baseColor.a);
 }

@@ -18,7 +18,8 @@ namespace aether
 	//   offset 200 : uint64   _pad0                   ( 8)
 	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world dir, w=intensity
 	//   offset 224 : vec4     ambientColor            (16)  rgb=sky color, a=unused
-	//   Total: 240 bytes
+	//   offset 240 : vec4     cameraWorldPos          (16)  xyz=camera position, w=1
+	//   Total: 256 bytes
 	struct FrameConstants
 	{
 		glm::mat4       viewProj              { 1.0f };
@@ -28,8 +29,9 @@ namespace aether
 		std::uint64_t   _pad0                 = 0;
 		glm::vec4       sunDirectionIntensity { 0.577f, 0.577f, 0.577f, 3.0f };
 		glm::vec4       ambientColor          { 0.03f, 0.04f, 0.06f, 1.0f };
+		glm::vec4       cameraWorldPos        { 0.0f, 0.0f, 0.0f, 1.0f };
 	};
 
-	static_assert(sizeof(FrameConstants) == 240,
+	static_assert(sizeof(FrameConstants) == 256,
 		"FrameConstants layout changed — update the Slang struct in gltf_mesh.slang.");
 }

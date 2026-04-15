@@ -469,6 +469,48 @@ namespace aether::assets
 					out.indices = BuildIdentityIndices(out.vertices.size());
 				}
 
+				// Some glTFs (including Fox) omit NORMAL attributes.
+				// In that case, generate smooth vertex normals from indexed triangles.
+				if (normal == nullptr)
+				{
+					for (auto& vtx : out.vertices)
+					{
+						vtx.normal = glm::vec3(0.0f);
+					}
+
+					for (std::size_t i = 0; i + 2 < out.indices.size(); i += 3)
+					{
+						const std::uint32_t ia = out.indices[i + 0];
+						const std::uint32_t ib = out.indices[i + 1];
+						const std::uint32_t ic = out.indices[i + 2];
+
+						if (ia >= out.vertices.size() || ib >= out.vertices.size() || ic >= out.vertices.size())
+						{
+							continue;
+						}
+
+						const glm::vec3& a = out.vertices[ia].position;
+						const glm::vec3& b = out.vertices[ib].position;
+						const glm::vec3& c = out.vertices[ic].position;
+						const glm::vec3 faceN = glm::cross(b - a, c - a);
+
+						if (glm::dot(faceN, faceN) > 1e-16f)
+						{
+							out.vertices[ia].normal += faceN;
+							out.vertices[ib].normal += faceN;
+							out.vertices[ic].normal += faceN;
+						}
+					}
+
+					for (auto& vtx : out.vertices)
+					{
+						const float len2 = glm::dot(vtx.normal, vtx.normal);
+						vtx.normal = (len2 > 1e-16f)
+							? glm::normalize(vtx.normal)
+							: glm::vec3(0.0f, 1.0f, 0.0f);
+					}
+				}
+
 				asset.primitives.push_back(std::move(out));
 			}
 		}

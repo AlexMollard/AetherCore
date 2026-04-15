@@ -17,6 +17,10 @@ namespace aether::app
 	{
 		INFO(LogCategory::App, "Sandbox layer attached.");
 
+		// Configure a visible default key light for PBR assets.
+		context.engine.SetDirectionalLight(glm::vec3(0.35f, 0.88f, 0.31f), 4.5f);
+		context.engine.SetAmbientLight(glm::vec3(0.12f, 0.13f, 0.15f));
+
 		// ── Shared pipeline ───────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout =
 			context.engine.GetBindlessManager().GetLayout();

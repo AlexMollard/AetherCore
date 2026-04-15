@@ -116,6 +116,13 @@ namespace aether
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 
+		// Directional light controls used by the forward PBR shader.
+		void SetDirectionalLight(glm::vec3 direction, float intensity);
+		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
+		[[nodiscard]] float GetDirectionalLightIntensity() const;
+		void SetAmbientLight(glm::vec3 color);
+		[[nodiscard]] glm::vec3 GetAmbientLight() const;
+
 		[[nodiscard]] Input& GetInput();
 		[[nodiscard]] const Input& GetInput() const;
 
@@ -168,6 +175,8 @@ namespace aether
 		Input m_input;
 		CameraManager m_cameraManager;
 		MaterialBuffer m_materialBuffer;
+		glm::vec4 m_sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
+		glm::vec4 m_ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };
 
 		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
 		uint32_t m_nextRtId = 1;
