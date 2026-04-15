@@ -30,6 +30,7 @@ namespace aether
 		void Set(Entity entity, MeshComponent     component);
 		void Set(Entity entity, MaterialComponent  component);
 		void Set(Entity entity, PipelineComponent  component);
+		void Set(Entity entity, SkinComponent      component);
 
 		// ── Component getters (return nullptr when component is absent) ───────
 
@@ -37,11 +38,13 @@ namespace aether
 		[[nodiscard]] MeshComponent*      GetMesh     (Entity entity);
 		[[nodiscard]] MaterialComponent*  GetMaterial (Entity entity);
 		[[nodiscard]] PipelineComponent*  GetPipeline (Entity entity);
+		[[nodiscard]] SkinComponent*      GetSkin     (Entity entity);
 
 		[[nodiscard]] const TransformComponent* GetTransform(Entity entity) const;
 		[[nodiscard]] const MeshComponent*      GetMesh     (Entity entity) const;
 		[[nodiscard]] const MaterialComponent*  GetMaterial (Entity entity) const;
 		[[nodiscard]] const PipelineComponent*  GetPipeline (Entity entity) const;
+		[[nodiscard]] const SkinComponent*      GetSkin     (Entity entity) const;
 
 		// ── Engine-internal ───────────────────────────────────────────────────
 
@@ -56,5 +59,6 @@ namespace aether
 		std::unordered_map<std::uint32_t, MeshComponent>      m_meshes;
 		std::unordered_map<std::uint32_t, MaterialComponent>  m_materials;
 		std::unordered_map<std::uint32_t, PipelineComponent>  m_pipelines;
+		std::unordered_map<std::uint32_t, SkinComponent>      m_skins;
 	};
 }

@@ -19,6 +19,7 @@ namespace aether
 		m_meshes.erase(id);
 		m_materials.erase(id);
 		m_pipelines.erase(id);
+		m_skins.erase(id);
 	}
 
 	// ── Component setters ─────────────────────────────────────────────────────
@@ -41,6 +42,11 @@ namespace aether
 	void World::Set(Entity entity, PipelineComponent component)
 	{
 		m_pipelines[entity.id] = component;
+	}
+
+	void World::Set(Entity entity, SkinComponent component)
+	{
+		m_skins[entity.id] = component;
 	}
 
 	// ── Component getters ─────────────────────────────────────────────────────
@@ -69,6 +75,12 @@ namespace aether
 		return it != m_pipelines.end() ? &it->second : nullptr;
 	}
 
+	SkinComponent* World::GetSkin(Entity entity)
+	{
+		auto it = m_skins.find(entity.id);
+		return it != m_skins.end() ? &it->second : nullptr;
+	}
+
 	const TransformComponent* World::GetTransform(Entity entity) const
 	{
 		auto it = m_transforms.find(entity.id);
@@ -93,6 +105,12 @@ namespace aether
 		return it != m_pipelines.end() ? &it->second : nullptr;
 	}
 
+	const SkinComponent* World::GetSkin(Entity entity) const
+	{
+		auto it = m_skins.find(entity.id);
+		return it != m_skins.end() ? &it->second : nullptr;
+	}
+
 	// ── Flush ─────────────────────────────────────────────────────────────────
 
 	void World::FlushToQueue(RenderQueue& queue) const
@@ -113,11 +131,18 @@ namespace aether
 				materialIndex = matIt->second.material.materialSlot;
 			}
 
+			VkDeviceAddress skinBufferAddr = 0;
+			if (const auto skinIt = m_skins.find(id); skinIt != m_skins.end())
+			{
+				skinBufferAddr = skinIt->second.skinBufferAddr;
+			}
+
 			queue.Submit({
 				.pipeline      = pipelineComp.pipeline,
 				.mesh          = meshIt->second.mesh,
 				.modelMatrix   = transformIt->second.localToWorld,
 				.materialIndex = materialIndex,
+				.skinBufferAddr = skinBufferAddr,
 			});
 		}
 	}

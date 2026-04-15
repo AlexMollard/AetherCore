@@ -133,14 +133,34 @@ namespace aether::app
 				context.world->Set(entity, PipelineComponent{ .pipeline = &m_pipeline });
 				context.world->Set(entity, MeshComponent{ .mesh = &primitive.mesh });
 				context.world->Set(entity, MaterialComponent{ .material = primitive.material });
-				
-				// Scale fox down to 0.05x and position it at (0, 0, 0)
-				glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
-				transform = glm::scale(transform, glm::vec3(0.05f, 0.05f, 0.05f));
-				transform = transform * primitive.localTransform;
-				
+
+				// Scale fox to 0.05x. For skinned prims localTransform is already
+				// identity; for static prims it carries the node's world transform.
+				const glm::mat4 transform =
+					glm::scale(glm::mat4(1.0f), glm::vec3(0.05f)) * primitive.localTransform;
 				context.world->Set(entity, TransformComponent{ .localToWorld = transform });
+
+				// Attach skin component so the renderer passes joint matrices.
+				if (m_loadedGltf->animator && primitive.skinIndex >= 0)
+				{
+					const VkDeviceAddress addr =
+						m_loadedGltf->animator->GetSkinBufferAddr(primitive.skinIndex);
+					if (addr != 0)
+						context.world->Set(entity, SkinComponent{ .skinBufferAddr = addr });
+				}
+
 				m_gltfEntities.push_back(entity);
+			}
+
+			// Log animation names.
+			if (m_loadedGltf->animator)
+			{
+				const std::uint32_t animCount = m_loadedGltf->animator->GetAnimationCount();
+				INFO(LogCategory::App, "glTF has {} animation(s):", animCount);
+				for (std::uint32_t i = 0; i < animCount; ++i)
+					INFO(LogCategory::App, "  [{}] {}", i, m_loadedGltf->animator->GetAnimationName(i));
+
+				m_loadedGltf->animator->SetAnimation(1);
 			}
 
 			INFO(LogCategory::App,
@@ -264,11 +284,23 @@ namespace aether::app
 			context.world->Set(e, TransformComponent{ .localToWorld = m });
 		}
 
-		// --- Fox rotation: slow spin to show off the loaded glTF asset's materials and textures ---
+		// --- Fox: advance skeleton animation each frame ---
+		if (m_loadedGltf && m_loadedGltf->animator)
+		{
+			m_loadedGltf->animator->Update(static_cast<float>(context.deltaTimeSeconds));
+		}
+
+		// --- Fox rotation: slow spin to show off the loaded glTF asset ---
+		if (!m_gltfEntities.empty())
 		{
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, t * glm::radians(15.0f), { 0.0f, 1.0f, 0.0f });
 			m = glm::scale(m, { 0.05f, 0.05f, 0.05f });
-			context.world->Set(m_gltfEntities.front(), TransformComponent{ .localToWorld = m });
+			// All skinned primitives share the same placement transform.
+			for (const aether::Entity e : m_gltfEntities)
+			{
+				if (const auto* skin = context.world->GetSkin(e); skin != nullptr)
+					context.world->Set(e, TransformComponent{ .localToWorld = m });
+			}
 		}
 
 		// ── Keyboard: T = cycle tonemap, F = toggle FXAA ─────────────────────

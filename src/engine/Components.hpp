@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <vulkan/vulkan.h>
 
 #include "Material.hpp"
 
@@ -34,5 +35,12 @@ namespace aether
 	struct PipelineComponent
 	{
 		const GraphicsPipeline* pipeline = nullptr;
+	};
+
+	// BDA of a joint-matrix palette for a skinned mesh.
+	// Absent on non-skinned entities — World falls back to skinBufferAddr = 0.
+	struct SkinComponent
+	{
+		VkDeviceAddress skinBufferAddr = 0;
 	};
 }

@@ -82,13 +82,14 @@ struct GpuMaterial
     [[vk::offset(76)]] uint   _pad1;
 };
 
-// Push constants — must match aether::DrawPushConstants (80 bytes).
+// Push constants — must match aether::DrawPushConstants (88 bytes).
 struct PushData
 {
     float4x4 model;
     uint64_t frameAddr;
     uint     materialIndex;
     uint     _pad0;
+    uint64_t skinBufferAddr;  // BDA of float4x4[jointCount]; 0 = not skinned
 };
 [[vk::push_constant]] PushData pc;
 
@@ -123,8 +124,6 @@ VSOutput vertexMain(VSInput input)
 {
     FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
 
-    float4 worldPos = mul(pc.model, float4(input.position, 1.0));
-
     // Upper-left 3x3 of the model matrix.
     // Correct for TRS matrices with uniform scale; note that columns in
     // column-major Slang/SPIR-V means model[i] = i-th column.
@@ -134,15 +133,36 @@ VSOutput vertexMain(VSInput input)
         pc.model[2].xyz
     );
 
-    float3 worldNormal  = normalize(mul(normalMatrix, input.normal));
-    float3 worldTangent = normalize(mul(normalMatrix, input.tangent.xyz));
+    float4 worldPos;
+    float3 worldNormal;
+    float3 worldTangent;
 
-    // Keep skin inputs live in a real path so validation does not flag
-    // locations 5/6 as unused before full skinning is implemented.
-    float skinWeightSum = dot(input.jointWeights, float4(1.0, 1.0, 1.0, 1.0));
-    uint jointParityBits = input.jointIndices.x ^ input.jointIndices.y ^ input.jointIndices.z ^ input.jointIndices.w;
-    float skinParity = float(jointParityBits & 1u);
-    float skinMod = 1.0 + 1e-4 * ((skinWeightSum - 1.0) + skinParity);
+    if (pc.skinBufferAddr != 0uL)
+    {
+        // GPU skinning: blend up to 4 joint matrices weighted by BLENDWEIGHT0.
+        float4x4* joints = (float4x4*)(pc.skinBufferAddr);
+        float4x4 skinMatrix =
+            input.jointWeights.x * joints[input.jointIndices.x] +
+            input.jointWeights.y * joints[input.jointIndices.y] +
+            input.jointWeights.z * joints[input.jointIndices.z] +
+            input.jointWeights.w * joints[input.jointIndices.w];
+
+        worldPos = mul(pc.model, mul(skinMatrix, float4(input.position, 1.0)));
+
+        float3x3 skin3 = float3x3(
+            skinMatrix[0].xyz,
+            skinMatrix[1].xyz,
+            skinMatrix[2].xyz
+        );
+        worldNormal  = normalize(mul(normalMatrix, mul(skin3, input.normal)));
+        worldTangent = normalize(mul(normalMatrix, mul(skin3, input.tangent.xyz)));
+    }
+    else
+    {
+        worldPos     = mul(pc.model, float4(input.position, 1.0));
+        worldNormal  = normalize(mul(normalMatrix, input.normal));
+        worldTangent = normalize(mul(normalMatrix, input.tangent.xyz));
+    }
 
     VSOutput o;
     o.svPosition  = mul(fc->viewProj, worldPos);
@@ -151,7 +171,7 @@ VSOutput vertexMain(VSInput input)
     o.worldTangent = worldTangent;
     o.tangentSign = input.tangent.w;
     o.uv          = input.uv;
-    o.vertexColor = input.color * skinMod;
+    o.vertexColor = input.color;
     return o;
 }
 

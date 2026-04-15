@@ -81,9 +81,10 @@ namespace aether
 				}
 
 				const DrawPushConstants pc{
-					.model         = cmd.modelMatrix,
-					.frameAddr     = frameConstantsAddr,
-					.materialIndex = cmd.materialIndex,
+					.model          = cmd.modelMatrix,
+					.frameAddr      = frameConstantsAddr,
+					.materialIndex  = cmd.materialIndex,
+					.skinBufferAddr = cmd.skinBufferAddr,
 				};
 				recorder.PushConstants(cmd.pipeline->GetLayout(), pc);
 			}

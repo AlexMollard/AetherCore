@@ -13,6 +13,7 @@
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
 #include "FrameConstantsBuffer.hpp"
+#include "GltfAnimator.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Input.hpp"
 #include "Material.hpp"
@@ -35,15 +36,17 @@ namespace aether
 {
 	struct LoadedGltfPrimitive
 	{
-		Mesh mesh;
-		Material material{};
-		glm::mat4 localTransform{ 1.0f };
+		Mesh      mesh;
+		Material  material{};
+		glm::mat4 localTransform{ 1.0f }; // identity for skinned primitives
+		std::int32_t skinIndex = -1;      // -1 = not skinned
 	};
 
 	struct LoadedGltfAsset
 	{
-		std::vector<Texture> textures;
+		std::vector<Texture>             textures;
 		std::vector<LoadedGltfPrimitive> primitives;
+		std::optional<GltfAnimator>      animator;
 	};
 
 	class AetherCore

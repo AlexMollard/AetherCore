@@ -22,6 +22,7 @@ namespace aether
 		std::uint32_t           instanceCount = 1;
 		glm::mat4               modelMatrix{ 1.0f };        // per-object world transform
 		std::uint32_t           materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
+		VkDeviceAddress         skinBufferAddr = 0;          // BDA of joint palette; 0 = not skinned
 	};
 
 	// Per-frame bucket that collects DrawCommands from app/scene code and flushes

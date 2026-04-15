@@ -759,7 +759,12 @@ namespace aether
 			LoadedGltfPrimitive loadedPrim;
 			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices);
 
-			if (primitive.nodeIndex < worldNodeTransforms.size())
+			loadedPrim.skinIndex = primitive.skinIndex;
+
+			// For skinned primitives the skin matrices handle node placement;
+			// leave localTransform as identity so the scene-level model matrix alone
+			// positions the mesh.
+			if (primitive.skinIndex < 0 && primitive.nodeIndex < worldNodeTransforms.size())
 			{
 				loadedPrim.localTransform = worldNodeTransforms[primitive.nodeIndex];
 			}
@@ -811,6 +816,15 @@ namespace aether
 			loaded.primitives.size(),
 			loaded.textures.size(),
 			source.animations.size());
+
+		// Build animator when the asset has skins.
+		if (!source.skins.empty())
+		{
+			loaded.animator = GltfAnimator::Create(
+				m_vulkanContext.GetDevice().device,
+				m_vulkanContext.GetAllocator(),
+				source);
+		}
 
 		return loaded;
 	}
