@@ -4,12 +4,14 @@
 
 #include "FileSystem.hpp"
 #include "Logger.hpp"
+#include "AnimationSystem.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
 		using Clock = std::chrono::steady_clock;
+		constexpr std::string_view kUiFontPath = "assets://fonts/Roboto-Regular.ttf";
 	}
 
 	void AppLayer::OnAttach(LayerContext& context)
@@ -56,17 +58,22 @@ namespace aether::app
 			.cameras = &m_engine.GetCameraManager(),
 			.renderer = &m_engine.GetRenderer(),
 			.assets = &m_engine.GetAssets(),
+			.ui = &m_uiRenderer,
 		};
 
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
 		// resources (pipelines, buffers, etc.) that may still be referenced by the GPU.
 		m_engine.WaitIdle();
 
+		// Unregister engine-level systems before detaching layers.
+		context.world->UnregisterSystem("AnimationSystem");
+
 		// OnExit:
 		// We call DetachAll() here to detach all layers before the application is destroyed,
 		// This can be thought of like the onDestroy() function in unity or something like that,
 		// where you can do cleanup of game objects and such, but the actual application is still running until this destructor returns and the application is destroyed
 		m_layers.DetachAll(context);
+		m_uiRenderer.Shutdown(m_engine);
 		INFO(LogCategory::App, "Application shutdown complete.");
 	}
 
@@ -96,6 +103,7 @@ namespace aether::app
 		}
 
 		Logger::SetFrameNumber(0);
+		m_uiRenderer.Init(m_engine, kUiFontPath, "AppUI");
 
 		LayerContext attachContext{
 			.engine = m_engine,
@@ -107,6 +115,7 @@ namespace aether::app
 			.cameras = &m_engine.GetCameraManager(),
 			.renderer = &m_engine.GetRenderer(),
 			.assets = &m_engine.GetAssets(),
+			.ui = &m_uiRenderer,
 		};
 
 		// Startup:
@@ -115,6 +124,9 @@ namespace aether::app
 		// where you can do initialization of game objects and such, but the actual game loop starts after this function returns and the main loop starts
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;
+
+		// Register engine-level systems.
+		attachContext.world->RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
 		auto previousFrameTime = Clock::now();
 		while (!m_engine.ShouldClose())
@@ -141,10 +153,14 @@ namespace aether::app
 				.cameras = &m_engine.GetCameraManager(),
 				.renderer = &m_engine.GetRenderer(),
 				.assets = &m_engine.GetAssets(),
+				.ui = &m_uiRenderer,
 			};
 
 			// Update engine-level per-frame systems before layers run.
 			m_engine.Tick(static_cast<float>(deltaTime));
+
+			// Update ECS systems (game logic).
+			frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
 
 			// Update:
 			// Game logic and such should be updated in the OnUpdate() function of the layers, so we call UpdateAll() here to update all layers

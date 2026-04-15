@@ -20,6 +20,7 @@ namespace aether
 		m_materials.erase(id);
 		m_pipelines.erase(id);
 		m_skins.erase(id);
+		m_animators.erase(id);
 	}
 
 	// ── Component setters ─────────────────────────────────────────────────────
@@ -47,6 +48,11 @@ namespace aether
 	void World::Set(Entity entity, SkinComponent component)
 	{
 		m_skins[entity.id] = component;
+	}
+
+	void World::Set(Entity entity, AnimatorComponent component)
+	{
+		m_animators[entity.id] = component;
 	}
 
 	// ── Convenience spawn ────────────────────────────────────────────────────
@@ -96,6 +102,12 @@ namespace aether
 		return it != m_skins.end() ? &it->second : nullptr;
 	}
 
+	AnimatorComponent* World::GetAnimator(Entity entity)
+	{
+		auto it = m_animators.find(entity.id);
+		return it != m_animators.end() ? &it->second : nullptr;
+	}
+
 	const TransformComponent* World::GetTransform(Entity entity) const
 	{
 		auto it = m_transforms.find(entity.id);
@@ -124,6 +136,12 @@ namespace aether
 	{
 		auto it = m_skins.find(entity.id);
 		return it != m_skins.end() ? &it->second : nullptr;
+	}
+
+	const AnimatorComponent* World::GetAnimator(Entity entity) const
+	{
+		auto it = m_animators.find(entity.id);
+		return it != m_animators.end() ? &it->second : nullptr;
 	}
 
 	// ── Flush ─────────────────────────────────────────────────────────────────
@@ -160,5 +178,26 @@ namespace aether
 				.skinBufferAddr = skinBufferAddr,
 			});
 		}
+	}
+
+	// ── Systems ───────────────────────────────────────────────────────────────
+
+	void World::RegisterSystem(std::unique_ptr<System> system)
+	{
+		if (system)
+		{
+			system->OnRegister(*this);
+			m_systems.Register(std::move(system));
+		}
+	}
+
+	void World::UnregisterSystem(const char* name)
+	{
+		m_systems.Unregister(name);
+	}
+
+	void World::UpdateSystems(float dt)
+	{
+		m_systems.UpdateAll(*this, dt);
 	}
 }

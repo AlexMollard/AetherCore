@@ -5,6 +5,7 @@
 
 #include "Components.hpp"
 #include "Entity.hpp"
+#include "System.hpp"
 
 namespace aether
 {
@@ -39,6 +40,7 @@ namespace aether
 		void Set(Entity entity, MaterialComponent  component);
 		void Set(Entity entity, PipelineComponent  component);
 		void Set(Entity entity, SkinComponent      component);
+		void Set(Entity entity, AnimatorComponent  component);
 
 		// ── Component getters (return nullptr when component is absent) ───────
 
@@ -47,12 +49,26 @@ namespace aether
 		[[nodiscard]] MaterialComponent*  GetMaterial (Entity entity);
 		[[nodiscard]] PipelineComponent*  GetPipeline (Entity entity);
 		[[nodiscard]] SkinComponent*      GetSkin     (Entity entity);
+		[[nodiscard]] AnimatorComponent*  GetAnimator (Entity entity);
 
 		[[nodiscard]] const TransformComponent* GetTransform(Entity entity) const;
 		[[nodiscard]] const MeshComponent*      GetMesh     (Entity entity) const;
 		[[nodiscard]] const MaterialComponent*  GetMaterial (Entity entity) const;
 		[[nodiscard]] const PipelineComponent*  GetPipeline (Entity entity) const;
 		[[nodiscard]] const SkinComponent*      GetSkin     (Entity entity) const;
+		[[nodiscard]] const AnimatorComponent*  GetAnimator (Entity entity) const;
+
+		// ── Entity iteration ──────────────────────────────────────────────────
+		// Calls the callback for each entity that has an animator component.
+		template<typename Func>
+		void ForEachAnimator(Func callback)
+		{
+			for (auto& [id, animator] : m_animators)
+			{
+				if (animator.animator)
+					callback(Entity{ id }, animator);
+			}
+		}
 
 		// ── Engine-internal ───────────────────────────────────────────────────
 
@@ -60,13 +76,24 @@ namespace aether
 		// MaterialComponent is used if present, otherwise albedoSlot = kNoTexture.
 		void FlushToQueue(RenderQueue& queue) const;
 
+		// ── Systems (game logic layers operating on the world) ──────────────────
+		// Register a system to be updated each frame.
+		void RegisterSystem(std::unique_ptr<System> system);
+		// Remove a system by name.
+		void UnregisterSystem(const char* name);
+		// Update all registered systems (called by the game loop).
+		void UpdateSystems(float dt);
+
 	private:
 		std::uint32_t m_nextId = 1;
+
+		SystemRegistry m_systems;
 
 		std::unordered_map<std::uint32_t, TransformComponent> m_transforms;
 		std::unordered_map<std::uint32_t, MeshComponent>      m_meshes;
 		std::unordered_map<std::uint32_t, MaterialComponent>  m_materials;
 		std::unordered_map<std::uint32_t, PipelineComponent>  m_pipelines;
 		std::unordered_map<std::uint32_t, SkinComponent>      m_skins;
+		std::unordered_map<std::uint32_t, AnimatorComponent>  m_animators;
 	};
 }

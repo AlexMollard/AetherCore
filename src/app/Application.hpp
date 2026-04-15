@@ -5,6 +5,7 @@
 #include "AppLayer.hpp"
 #include "LayerStack.hpp"
 #include "AetherCore.hpp"
+#include "UIRenderer.hpp"
 
 namespace aether::app
 {
@@ -25,6 +26,7 @@ namespace aether::app
 
 	private:
 		aether::AetherCore m_engine;
+		aether::UIRenderer m_uiRenderer;
 		LayerStack m_layers;
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;

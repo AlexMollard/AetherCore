@@ -43,4 +43,11 @@ namespace aether
 	{
 		VkDeviceAddress skinBufferAddr = 0;
 	};
+
+	// Skeleton animator for a skinned model.
+	// Absent on non-animated entities.
+	struct AnimatorComponent
+	{
+		class ModelAnimator* animator = nullptr;
+	};
 }

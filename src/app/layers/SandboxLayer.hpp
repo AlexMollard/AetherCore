@@ -1,24 +1,17 @@
 #pragma once
 
-#include <array>
-#include <optional>
-#include <vector>
+#include <string_view>
 
 #include "AppLayer.hpp"
 #include "CameraManager.hpp"
-#include "Entity.hpp"
-#include "GraphicsPipeline.hpp"
-#include "AetherCore.hpp"
-#include "Material.hpp"
-#include "Texture.hpp"
-
-namespace aether
-{
-	class Mesh;
-}
 
 namespace aether::app
 {
+	class SandboxGameSystem;
+
+	// Application layer for the sandbox scene.
+	// Coordinates with SandboxGameSystem for all actual game logic.
+	// Also handles debug UI rendering.
 	class SandboxLayer final : public AppLayer
 	{
 	public:
@@ -28,29 +21,9 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		static constexpr int kRingCount = 8;
+		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
+		void DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const;
 
-		aether::GraphicsPipeline m_pipeline;
-		const aether::Mesh* m_cubeMesh = nullptr;
-		const aether::Mesh* m_quadMesh = nullptr;
-		aether::Texture          m_debugTexture;
-
-		aether::Entity m_groundEntity;
-		aether::Entity m_centerEntity;
-		std::array<aether::Entity, kRingCount> m_ringEntities{};
-		aether::Entity m_orbitEntityA;
-		aether::Entity m_orbitEntityB;
-		aether::CameraHandle m_orbitCamera;
-		aether::CameraHandle m_freeCamera;
-		aether::CameraHandle m_rttCamera;
-		aether::AetherCore::CameraRenderTarget m_rttTarget;
-		std::optional<aether::LoadedModel> m_model;
-		std::vector<aether::Entity> m_modelEntities;
-		aether::Material m_debugTexturedMaterial{};
-		aether::Material m_untexturedMaterial{};
-		aether::Material m_rttFeedMaterial{};
-
-		float m_time = 0.0f;
-		float m_cameraAngle = 0.0f;
+		SandboxGameSystem* m_gameSystem = nullptr;
 	};
 }

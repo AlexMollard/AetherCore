@@ -11,6 +11,7 @@ namespace aether
 	class CameraManager;
 	class Renderer;
 	class AssetManager;
+	class UIRenderer;
 }
 
 namespace aether::app
@@ -26,6 +27,7 @@ namespace aether::app
 		aether::CameraManager* cameras = nullptr;
 		aether::Renderer* renderer = nullptr;
 		aether::AssetManager* assets = nullptr;
+		aether::UIRenderer* ui = nullptr;
 	};
 
 	class AppLayer

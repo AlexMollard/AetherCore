@@ -5,8 +5,8 @@
 #include "CrashHandler.hpp"
 #include "Logger.hpp"
 #include "AetherExceptions.hpp"
+#include "layers/DebugLayer.hpp"
 #include "layers/SandboxLayer.hpp"
-#include "layers/UILayer.hpp"
 
 namespace
 {
@@ -38,7 +38,7 @@ int main()
 
 		aether::app::Application application;
 		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
-		application.PushLayer(std::make_unique<aether::app::UILayer>());
+		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
 		// Add more layers here as needed, like a editor layer or some kind of background layer even
 		return application.Run();
 	}
