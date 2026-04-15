@@ -25,6 +25,10 @@ namespace aether::io
 		// Replaces any existing backend registered to that mount point.
 		static void Mount(std::string_view mountPoint, std::filesystem::path physicalPath);
 
+		// Register a compiled .pak file under a virtual mount point name.
+		// Replaces any existing backend registered to that mount point.
+		static void MountPak(std::string_view mountPoint, std::filesystem::path pakPath);
+
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
 		// Synchronous read — returns entire file contents. Fine for startup / shader loading.

@@ -10,6 +10,7 @@ include(Dependencies)
 include(TargetDefaults)
 include(SlangShaders)
 
+add_subdirectory(tools/assetpack)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 

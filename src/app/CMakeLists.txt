@@ -17,20 +17,16 @@ target_link_libraries(App PRIVATE Engine)
 aethercore_target_defaults(App)
 aethercore_enable_slang_shader_compilation(App)
 
-# Copy textures from resources/ into the build output so the VFS "assets://" mount can find them.
-add_custom_command(TARGET App POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/textures"
-        "${CMAKE_BINARY_DIR}/assets/textures"
-    COMMENT "Copying textures → build/assets/textures"
-)
+# ── Asset pipeline ─────────────────────────────────────────────────────────
+# AssetPacker must be built before App's post-build step can run it.
+add_dependencies(App AssetPacker)
 
-# Copy fonts from resources/fonts/ into the build output.
-# Place .ttf files in resources/fonts/ before building.
+# Pack every file under resources/ into a single binary file that the runtime
+# PakBackend mounts as "assets://".  The pak is regenerated on every build so
+# newly added or changed source assets are always in sync.
 add_custom_command(TARGET App POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets/fonts"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different
-        "${CMAKE_SOURCE_DIR}/resources/fonts"
-        "${CMAKE_BINARY_DIR}/assets/fonts"
-    COMMENT "Copying fonts → build/assets/fonts"
+    COMMAND "$<TARGET_FILE:AssetPacker>"
+        "${CMAKE_SOURCE_DIR}/resources"
+        "${CMAKE_BINARY_DIR}/data/assets.pak"
+    COMMENT "Packing assets → data/assets.pak"
 )

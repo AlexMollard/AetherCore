@@ -10,6 +10,7 @@
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp"
+#include "PakBackend.hpp"
 #include "LogCategory.hpp"
 #include "Logger.hpp"
 #include "AetherExceptions.hpp"
@@ -82,11 +83,38 @@ namespace aether::io
 		Initialize();
 
 		const auto workingDirectory = std::filesystem::current_path();
-		const auto assetsDirectory = ResolveMountedDirectory({
-			workingDirectory / "assets",
-			workingDirectory / "../assets",
-			workingDirectory / "../../assets",
+
+		// ── assets:// ─────────────────────────────────────────────────────────
+		// Prefer a compiled pak produced by AssetPacker at build time.
+		// Fall back to a loose assets/ directory if the pak does not yet exist
+		// (e.g., clean checkout before first build).
+		const std::filesystem::path pakCandidates[] = {
+			workingDirectory / "data" / "assets.pak",
+			workingDirectory / "../data/assets.pak",
+			workingDirectory / "../../data/assets.pak",
+		};
+		bool pakMounted = false;
+		for (const auto& candidate : pakCandidates)
+		{
+			std::error_code ec;
+			if (std::filesystem::exists(candidate, ec))
+			{
+				MountPak("assets", candidate);
+				pakMounted = true;
+				break;
+			}
+		}
+		if (!pakMounted)
+		{
+			const auto assetsDirectory = ResolveMountedDirectory({
+				workingDirectory / "assets",
+				workingDirectory / "../assets",
+				workingDirectory / "../../assets",
 			});
+			Mount("assets", assetsDirectory);
+		}
+
+		// ── shaders:// ────────────────────────────────────────────────────────
 		const auto shaderDirectory = ResolveMountedDirectory({
 			workingDirectory / "shaders",
 			workingDirectory / "build/shaders",
@@ -94,12 +122,11 @@ namespace aether::io
 			workingDirectory / "../../shaders",
 			workingDirectory / "../build/shaders",
 			workingDirectory / "../../build/shaders",
-			});
-		const auto logsDirectory = workingDirectory / "logs";
-
-		Mount("assets", assetsDirectory);
+		});
 		Mount("shaders", shaderDirectory);
-		Mount("logs", logsDirectory);
+
+		// ── logs:// ───────────────────────────────────────────────────────────
+		Mount("logs", workingDirectory / "logs");
 	}
 
 	void FileSystem::Shutdown()
@@ -130,6 +157,18 @@ namespace aether::io
 		INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
 		s_backend->mounts.insert_or_assign(std::string(mountPoint),
 			std::make_unique<DirectoryBackend>(std::move(physicalPath)));
+	}
+
+	void FileSystem::MountPak(std::string_view mountPoint, std::filesystem::path pakPath)
+	{
+		if (s_backend == nullptr)
+		{
+			throw FileSystemError("FileSystem::MountPak() called before Initialize().");
+		}
+
+		INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
+		s_backend->mounts.insert_or_assign(std::string(mountPoint),
+			std::make_unique<PakBackend>(std::move(pakPath)));
 	}
 
 	bool FileSystem::Exists(std::string_view virtualPath)
