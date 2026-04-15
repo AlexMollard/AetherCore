@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <glm/glm.hpp>
@@ -49,4 +50,17 @@ namespace aether
 
 	static_assert(sizeof(GpuMaterial) == 80,
 		"GpuMaterial size changed — update the Slang struct in gltf_mesh.slang.");
+	static_assert(offsetof(GpuMaterial, baseColorFactor) == 0);
+	static_assert(offsetof(GpuMaterial, metallicFactor) == 16);
+	static_assert(offsetof(GpuMaterial, roughnessFactor) == 20);
+	static_assert(offsetof(GpuMaterial, occlusionStrength) == 24);
+	static_assert(offsetof(GpuMaterial, alphaCutoff) == 28);
+	static_assert(offsetof(GpuMaterial, emissiveFactor) == 32);
+	static_assert(offsetof(GpuMaterial, flags) == 48);
+	static_assert(offsetof(GpuMaterial, albedoSlot) == 52);
+	static_assert(offsetof(GpuMaterial, normalSlot) == 56);
+	static_assert(offsetof(GpuMaterial, metallicRoughnessSlot) == 60);
+	static_assert(offsetof(GpuMaterial, occlusionSlot) == 64);
+	static_assert(offsetof(GpuMaterial, emissiveSlot) == 68);
+	static_assert(offsetof(GpuMaterial, _pad) == 72);
 }

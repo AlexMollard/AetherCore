@@ -78,6 +78,8 @@ struct GpuMaterial
     [[vk::offset(60)]] uint   metallicRoughnessSlot;
     [[vk::offset(64)]] uint   occlusionSlot;
     [[vk::offset(68)]] uint   emissiveSlot;
+    [[vk::offset(72)]] uint   _pad0;
+    [[vk::offset(76)]] uint   _pad1;
 };
 
 // Push constants — must match aether::DrawPushConstants (80 bytes).
@@ -216,8 +218,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     {
         baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv);
     }
-    // Modulate by per-vertex colour (typically float3(1,1,1) for glTF models).
-    baseColor.rgb *= input.vertexColor;
+    // COLOR_0 is optional in glTF and frequently abused by exporters.
+    // Do not tint base color by vertex color in the PBR path.
 
     // Alpha test.
     if ((mat.flags & kFlagAlphaMask) != 0u && baseColor.a < mat.alphaCutoff)
@@ -226,19 +228,39 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
 
     // ── TBN — world-space tangent frame ──────────────────────────────────
-    float3 N = normalize(input.worldNormal);
-
-    // Fallback for assets that came in with degenerate/missing normals.
-    const float nLen2 = dot(N, N);
-    if (nLen2 < 1e-6)
+    float3 Nraw = input.worldNormal;
+    const float nRawLen2 = dot(Nraw, Nraw);
+    float3 N;
+    if (nRawLen2 > 1e-12)
     {
+        N = normalize(Nraw);
+    }
+    else
+    {
+        // Fallback for assets that came in with degenerate/missing normals.
         float3 faceN = cross(ddx(input.worldPos), ddy(input.worldPos));
         const float faceLen2 = dot(faceN, faceN);
         N = (faceLen2 > 1e-12) ? normalize(faceN) : float3(0.0, 1.0, 0.0);
     }
 
-    float3 T = normalize(input.worldTangent);
-    T = normalize(T - N * dot(T, N));           // Gram-Schmidt re-orthogonalise
+    float3 Traw = input.worldTangent;
+    const float tRawLen2 = dot(Traw, Traw);
+    float3 T = (tRawLen2 > 1e-12) ? normalize(Traw) : float3(1.0, 0.0, 0.0);
+    T = T - N * dot(T, N);                      // Gram-Schmidt re-orthogonalise
+    const float tLen2 = dot(T, T);
+    if (tLen2 > 1e-12)
+    {
+        T = normalize(T);
+    }
+    else
+    {
+        float3 fallbackT = cross(float3(0.0, 1.0, 0.0), N);
+        if (dot(fallbackT, fallbackT) < 1e-12)
+        {
+            fallbackT = cross(float3(1.0, 0.0, 0.0), N);
+        }
+        T = normalize(fallbackT);
+    }
     float3 B = cross(N, T) * input.tangentSign;
     // Rows of TBN = T, B, N  →  mul(tangentVec, TBN) transforms to world space.
     float3x3 TBN = float3x3(T, B, N);
@@ -288,8 +310,18 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 Vraw = camWorldPos - input.worldPos;
     const float vLen2 = dot(Vraw, Vraw);
     float3 V = (vLen2 > 1e-12) ? normalize(Vraw) : N;
+
+    // Some imported assets carry flipped normals; orient toward the viewer
+    // to avoid fully black front faces when direct lighting is evaluated.
+    if (dot(N, V) < 0.0)
+    {
+        N = -N;
+    }
+
     float3 L = sunDir;
-    float3 H = normalize(V + L);
+    float3 Hraw = V + L;
+    const float hLen2 = dot(Hraw, Hraw);
+    float3 H = (hLen2 > 1e-12) ? normalize(Hraw) : N;
 
     float NdotL = max(dot(N, L), 0.0);
     float NdotV = max(dot(N, V), 0.0);

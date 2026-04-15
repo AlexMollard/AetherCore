@@ -133,7 +133,13 @@ namespace aether::app
 				context.world->Set(entity, PipelineComponent{ .pipeline = &m_pipeline });
 				context.world->Set(entity, MeshComponent{ .mesh = &primitive.mesh });
 				context.world->Set(entity, MaterialComponent{ .material = primitive.material });
-				context.world->Set(entity, TransformComponent{ .localToWorld = primitive.localTransform });
+				
+				// Scale fox down to 0.05x and position it at (0, 0, 0)
+				glm::mat4 transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f));
+				transform = glm::scale(transform, glm::vec3(0.05f, 0.05f, 0.05f));
+				transform = transform * primitive.localTransform;
+				
+				context.world->Set(entity, TransformComponent{ .localToWorld = transform });
 				m_gltfEntities.push_back(entity);
 			}
 

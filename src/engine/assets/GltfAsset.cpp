@@ -140,12 +140,12 @@ namespace aether::assets
 			}
 		}
 
-		const cgltf_accessor* FindAttribute(const cgltf_primitive& primitive, cgltf_attribute_type type)
+		const cgltf_accessor* FindAttribute(const cgltf_primitive& primitive, cgltf_attribute_type type, const cgltf_int semanticIndex = 0)
 		{
 			for (cgltf_size i = 0; i < primitive.attributes_count; ++i)
 			{
 				const cgltf_attribute& attr = primitive.attributes[i];
-				if (attr.type == type && attr.data != nullptr)
+				if (attr.type == type && attr.index == semanticIndex && attr.data != nullptr)
 				{
 					return attr.data;
 				}
@@ -378,18 +378,23 @@ namespace aether::assets
 					continue;
 				}
 
-				const cgltf_accessor* position = FindAttribute(primitive, cgltf_attribute_type_position);
+				const cgltf_accessor* position = FindAttribute(primitive, cgltf_attribute_type_position, 0);
 				if (position == nullptr)
 				{
 					continue;
 				}
 
-				const cgltf_accessor* normal = FindAttribute(primitive, cgltf_attribute_type_normal);
-				const cgltf_accessor* tangent = FindAttribute(primitive, cgltf_attribute_type_tangent);
-				const cgltf_accessor* texcoord0 = FindAttribute(primitive, cgltf_attribute_type_texcoord);
-				const cgltf_accessor* color0 = FindAttribute(primitive, cgltf_attribute_type_color);
-				const cgltf_accessor* joints0 = FindAttribute(primitive, cgltf_attribute_type_joints);
-				const cgltf_accessor* weights0 = FindAttribute(primitive, cgltf_attribute_type_weights);
+				const cgltf_accessor* normal = FindAttribute(primitive, cgltf_attribute_type_normal, 0);
+				const cgltf_accessor* tangent = FindAttribute(primitive, cgltf_attribute_type_tangent, 0);
+				const cgltf_accessor* texcoord0 = FindAttribute(primitive, cgltf_attribute_type_texcoord, 0);
+				if (texcoord0 == nullptr)
+				{
+					// Some assets place primary UVs in TEXCOORD_1.
+					texcoord0 = FindAttribute(primitive, cgltf_attribute_type_texcoord, 1);
+				}
+				const cgltf_accessor* color0 = FindAttribute(primitive, cgltf_attribute_type_color, 0);
+				const cgltf_accessor* joints0 = FindAttribute(primitive, cgltf_attribute_type_joints, 0);
+				const cgltf_accessor* weights0 = FindAttribute(primitive, cgltf_attribute_type_weights, 0);
 
 				GltfPrimitive out;
 				out.nodeIndex = static_cast<std::uint32_t>(nodeIndex);
@@ -454,6 +459,24 @@ namespace aether::assets
 					}
 
 					out.vertices[v] = vertex;
+				}
+
+				if (color0 != nullptr)
+				{
+					float maxColor = 0.0f;
+					for (const Mesh::Vertex& vtx : out.vertices)
+					{
+						maxColor = std::max(maxColor, std::max(vtx.color.r, std::max(vtx.color.g, vtx.color.b)));
+					}
+
+					// Treat near-black COLOR_0 streams as invalid tint data.
+					if (maxColor < 0.01f)
+					{
+						for (Mesh::Vertex& vtx : out.vertices)
+						{
+							vtx.color = glm::vec3(1.0f);
+						}
+					}
 				}
 
 				if (primitive.indices != nullptr)
