@@ -37,13 +37,26 @@ namespace aether
 		// device/allocator must outlive this object.
 		static ModelAnimator Create(VkDevice device, VmaAllocator allocator, const assets::GltfAsset& asset);
 
+		// Create an independent copy of this animator with its own GPU skin buffers.
+		// The clone shares no memory with the source; pose, animation index and time
+		// are copied so the caller can immediately diverge them with SetAnimTime().
+		[[nodiscard]] ModelAnimator Clone() const;
+
 		void Destroy();
 
 		// Advance the current animation by dt seconds (auto-loops).
+		// Speed is multiplied into the time step (0 = paused, 2 = double-speed).
 		void Update(float dt);
 
 		// Switch to a different animation clip (resets time to 0).
 		void SetAnimation(std::uint32_t index);
+
+		// Jump to an explicit time in the current animation (wraps to duration).
+		// Forces an immediate pose evaluation so the GPU buffer is up-to-date.
+		void SetAnimTime(float t);
+
+		// Scale the playback rate applied every Update().  Default is 1.0f (real-time).
+		void SetPlaybackSpeed(float speed);
 
 		[[nodiscard]] std::uint32_t GetAnimationCount() const;
 		[[nodiscard]] std::string_view GetAnimationName(std::uint32_t i) const;
@@ -51,6 +64,11 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetCurrentAnimation() const
 		{
 			return m_currentAnim;
+		}
+
+		[[nodiscard]] float GetDuration() const
+		{
+			return m_duration;
 		}
 
 		// BDA of the flat joint-matrix palette for the given skin.
@@ -102,6 +120,7 @@ namespace aether
 		std::uint32_t m_currentAnim = 0;
 		float m_time = 0.0f;
 		float m_duration = 0.0f;
+		float m_playbackSpeed = 1.0f;
 
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;

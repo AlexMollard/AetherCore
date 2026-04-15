@@ -104,7 +104,7 @@ namespace aether::app
 
 		if (m_gameSystem)
 		{
-			std::snprintf(line.data(), line.size(), "Scene: %zu ring, %zu model prims, %u anims", m_gameSystem->GetRingCount(), m_gameSystem->GetModelPrimitiveCount(), m_gameSystem->GetAnimationCount());
+			std::snprintf(line.data(), line.size(), "Foxes: %zu  |  prims/fox: %zu  |  anims: %u", m_gameSystem->GetFoxCount(), m_gameSystem->GetFoxPrimitiveCount(), m_gameSystem->GetAnimationCount());
 			DrawDebugLine(*context.ui, line.data(), 106.0f);
 		}
 

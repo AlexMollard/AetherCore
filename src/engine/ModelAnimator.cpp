@@ -2,9 +2,10 @@
 
 #include <algorithm>
 #include <cstring>
+#include <stdexcept>
+
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <stdexcept>
 
 #include "AetherExceptions.hpp"
 
@@ -197,7 +198,7 @@ namespace aether
 
 		if (m_duration > 0.0f)
 		{
-			m_time += dt;
+			m_time += dt * m_playbackSpeed;
 			// Wrap looping.
 			while (m_time > m_duration)
 				m_time -= m_duration;
@@ -290,6 +291,78 @@ namespace aether
 	}
 
 	// ── Public queries ────────────────────────────────────────────────────────
+
+	// ── Clone / per-instance helpers ──────────────────────────────────────────
+
+	ModelAnimator ModelAnimator::Clone() const
+	{
+		ModelAnimator clone;
+		clone.m_device        = m_device;
+		clone.m_allocator     = m_allocator;
+		clone.m_animations    = m_animations;   // copy clip data (read-only after load)
+		clone.m_nodes         = m_nodes;         // copy current node TRS state
+		clone.m_currentAnim   = m_currentAnim;
+		clone.m_time          = m_time;
+		clone.m_duration      = m_duration;
+		clone.m_playbackSpeed = m_playbackSpeed;
+
+		// Allocate independent GPU skin buffers for this clone.
+		clone.m_skins.resize(m_skins.size());
+		for (std::size_t i = 0; i < m_skins.size(); ++i)
+		{
+			const SkinData& src = m_skins[i];
+			SkinData& dst       = clone.m_skins[i];
+
+			dst.joints               = src.joints;
+			dst.inverseBindMatrices  = src.inverseBindMatrices;
+
+			if (!dst.joints.empty())
+			{
+				const VkDeviceSize bufSize = sizeof(glm::mat4) * dst.joints.size();
+				const VkBufferCreateInfo bufInfo{
+					.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+					.size  = bufSize,
+					.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+				};
+				const VmaAllocationCreateInfo allocInfo{
+					.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+					.usage = VMA_MEMORY_USAGE_AUTO,
+				};
+				dst.buffer    = UniqueBuffer::Create(clone.m_allocator, clone.m_device, bufInfo, allocInfo);
+				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
+
+				// Initialise the clone's GPU buffer with the source's current pose.
+				if (src.mappedPtr && dst.mappedPtr)
+					std::memcpy(dst.mappedPtr, src.mappedPtr, bufSize);
+				else if (dst.mappedPtr)
+					for (std::size_t j = 0; j < dst.joints.size(); ++j)
+						dst.mappedPtr[j] = glm::mat4(1.0f);
+			}
+		}
+
+		return clone;
+	}
+
+	void ModelAnimator::SetAnimTime(float t)
+	{
+		if (m_duration > 0.0f)
+		{
+			m_time = std::fmod(t, m_duration);
+			if (m_time < 0.0f)
+				m_time += m_duration;
+		}
+		else
+		{
+			m_time = 0.0f;
+		}
+		// Re-evaluate the pose at the new time without advancing the clock.
+		Update(0.0f);
+	}
+
+	void ModelAnimator::SetPlaybackSpeed(float speed)
+	{
+		m_playbackSpeed = speed;
+	}
 
 	std::uint32_t ModelAnimator::GetAnimationCount() const
 	{

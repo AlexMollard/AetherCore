@@ -1,7 +1,6 @@
 #include "RenderQueue.hpp"
 
 #include <algorithm>
-#include <format>
 
 #include "CommandRecorder.hpp"
 #include "DrawPushConstants.hpp"
@@ -48,8 +47,7 @@ namespace aether
 
 		for (const DrawCommand& cmd: m_commands)
 		{
-			const std::string drawLabel = std::format("Draw P={} M={} Mat={}{}", reinterpret_cast<const void*>(cmd.pipeline), reinterpret_cast<const void*>(cmd.mesh), cmd.materialIndex, (cmd.mesh != nullptr && cmd.mesh->IsIndexed()) ? " Indexed" : " NonIndexed");
-			recorder.BeginDebugLabel(drawLabel.c_str(), 0.95f, 0.40f, 0.25f, 1.0f);
+			recorder.BeginDebugLabel("Draw", 0.95f, 0.40f, 0.25f, 1.0f);
 			if (cmd.pipeline != nullptr)
 			{
 				if (cmd.pipeline != lastPipeline)
