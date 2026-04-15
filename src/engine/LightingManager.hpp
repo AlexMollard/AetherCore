@@ -39,7 +39,18 @@ namespace aether
 			const Camera& camera,
 			VkExtent2D extent,
 			FrameConstants& fc,
-			bool enableBinningForView) const;
+			bool enableBinningForView,
+			std::uint32_t computeQueueFamily = VK_QUEUE_FAMILY_IGNORED,
+			std::uint32_t graphicsQueueFamily = VK_QUEUE_FAMILY_IGNORED) const;
+
+		// Emits QFOT acquire barriers on the lighting buffers from computeQueueFamily
+		// to graphicsQueueFamily. Must be called on the graphics command buffer
+		// before any fragment shader reads lighting data, when families differ.
+		void EmitAcquireBarriers(
+			std::uint32_t frameSlot,
+			VkCommandBuffer graphicsCmd,
+			std::uint32_t srcFamily,
+			std::uint32_t dstFamily) const;
 
 	private:
 		struct GpuLight
@@ -82,7 +93,9 @@ namespace aether
 			VkCommandBuffer cmd,
 			const Camera& camera,
 			VkExtent2D extent,
-			FrameConstants& fc) const;
+			FrameConstants& fc,
+			std::uint32_t srcQueueFamily,
+			std::uint32_t dstQueueFamily) const;
 		void UpdateDescriptorSet(std::uint32_t frameSlot) const;
 		void DisableForView(FrameConstants& fc) const;
 

@@ -253,7 +253,12 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::EndFrame(VkQueue graphicsQueue, VkQueue presentQueue)
+	void Swapchain::EndFrame(
+		VkQueue graphicsQueue,
+		VkQueue presentQueue,
+		VkSemaphore extraWaitSemaphore,
+		VkPipelineStageFlags extraWaitStage,
+		std::uint64_t extraWaitValue)
 	{
 		if (!m_frameValid)
 		{
@@ -275,12 +280,36 @@ namespace aether
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
 
-		const VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+		VkSemaphore waitSemaphores[2] = { frame.imageAvailable, VK_NULL_HANDLE };
+		VkPipelineStageFlags waitStages[2] = {
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			extraWaitStage,
+		};
+		std::uint32_t waitCount = 1;
+		if (extraWaitSemaphore != VK_NULL_HANDLE)
+		{
+			waitSemaphores[1] = extraWaitSemaphore;
+			waitCount = 2;
+		}
+
+		// imageAvailable is a binary semaphore (wait value 0 is ignored by spec).
+		// extraWaitSemaphore is a timeline semaphore when extraWaitValue > 0.
+		const std::uint64_t waitValues[2] = { 0, extraWaitValue };
+		const std::uint64_t signalValue = 0; // renderFinished is a binary semaphore
+		const VkTimelineSemaphoreSubmitInfo timelineInfo{
+			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+			.waitSemaphoreValueCount = waitCount,
+			.pWaitSemaphoreValues = waitValues,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &signalValue,
+		};
+
 		const VkSubmitInfo submit{
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &frame.imageAvailable,
-			.pWaitDstStageMask = &waitStage,
+			.pNext = &timelineInfo,
+			.waitSemaphoreCount = waitCount,
+			.pWaitSemaphores = waitSemaphores,
+			.pWaitDstStageMask = waitStages,
 			.commandBufferCount = 1,
 			.pCommandBuffers = &cmd,
 			.signalSemaphoreCount = 1,

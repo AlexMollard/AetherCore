@@ -26,7 +26,12 @@ namespace aether
 		void BeginFrame(VkDevice device);
 
 		// Ends dynamic rendering, submits, and presents. No-op if !IsFrameValid().
-		void EndFrame(VkQueue graphicsQueue, VkQueue presentQueue);
+		void EndFrame(
+			VkQueue graphicsQueue,
+			VkQueue presentQueue,
+			VkSemaphore extraWaitSemaphore = VK_NULL_HANDLE,
+			VkPipelineStageFlags extraWaitStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			std::uint64_t extraWaitValue = 0);
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] VkExtent2D GetExtent() const;

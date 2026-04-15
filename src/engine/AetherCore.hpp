@@ -183,6 +183,13 @@ namespace aether
 			std::unique_ptr<FrameConstantsBuffer> constants;
 		};
 
+		struct AsyncComputeFrame
+		{
+			VkCommandPool commandPool = VK_NULL_HANDLE;
+			VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+			VkFence inFlight = VK_NULL_HANDLE;
+		};
+
 		Window m_window;
 		VulkanContext m_vulkanContext;
 		Swapchain m_swapchain;
@@ -198,6 +205,10 @@ namespace aether
 		std::uint64_t m_frameIndex = 0;
 		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 		LightingManager m_lightingManager;
+		std::array<AsyncComputeFrame, Swapchain::kMaxFramesInFlight> m_asyncComputeFrames{};
+		VkSemaphore m_computeTimelineSemaphore = VK_NULL_HANDLE;
+		std::uint64_t m_computeTimelineValue = 0;
+		bool m_asyncComputeEnabled = false;
 
 		// ── Services ─────────────────────────────────────────────────────────
 		Renderer m_renderer;

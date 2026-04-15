@@ -176,7 +176,9 @@ namespace aether
 		const Camera& camera,
 		const VkExtent2D extent,
 		FrameConstants& fc,
-		const bool enableBinningForView) const
+		const bool enableBinningForView,
+		const std::uint32_t computeQueueFamily,
+		const std::uint32_t graphicsQueueFamily) const
 	{
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
@@ -186,7 +188,7 @@ namespace aether
 
 		if (m_gpuBinningEnabled && cmd != VK_NULL_HANDLE)
 		{
-			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc);
+			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, computeQueueFamily, graphicsQueueFamily);
 			return;
 		}
 
@@ -198,7 +200,9 @@ namespace aether
 		VkCommandBuffer cmd,
 		const Camera& camera,
 		const VkExtent2D extent,
-		FrameConstants& fc) const
+		FrameConstants& fc,
+		const std::uint32_t srcQueueFamily,
+		const std::uint32_t dstQueueFamily) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
@@ -210,7 +214,7 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
 				.params = glm::vec4(0.0f),
-			});
+				});
 		}
 		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
 		{
@@ -219,7 +223,7 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
 				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-			});
+				});
 		}
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
@@ -296,22 +300,109 @@ namespace aether
 			vkCmdDispatch(cmd, lightGroups, 1, 1);
 		}
 
-		const VkMemoryBarrier2 computeToFragment{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-		};
-		const VkDependencyInfo computeToFragmentDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &computeToFragment,
-		};
-		vkCmdPipelineBarrier2(cmd, &computeToFragmentDep);
+		// When queue families differ, issue QFOT release barriers on each buffer so
+		// the graphics queue can acquire ownership before the fragment shader reads.
+		// When same family, a plain memory barrier from compute to fragment suffices.
+		//const auto& frame = m_buffers[frameSlot];
+		const bool crossFamily = srcQueueFamily != dstQueueFamily &&
+			srcQueueFamily != VK_QUEUE_FAMILY_IGNORED &&
+			dstQueueFamily != VK_QUEUE_FAMILY_IGNORED;
+
+		if (crossFamily)
+		{
+			const VkBuffer bufs[3] = {
+				frame.lights.Get(),
+				frame.tileHeaders.Get(),
+				frame.tileIndices.Get(),
+			};
+			VkBufferMemoryBarrier2 releases[3]{};
+			for (int i = 0; i < 3; ++i)
+			{
+				releases[i] = VkBufferMemoryBarrier2{
+					.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.dstAccessMask = 0,
+					.srcQueueFamilyIndex = srcQueueFamily,
+					.dstQueueFamilyIndex = dstQueueFamily,
+					.buffer = bufs[i],
+					.offset = 0,
+					.size = VK_WHOLE_SIZE,
+				};
+			}
+			const VkDependencyInfo releaseDep{
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.bufferMemoryBarrierCount = 3,
+				.pBufferMemoryBarriers = releases,
+			};
+			vkCmdPipelineBarrier2(cmd, &releaseDep);
+		}
+		else
+		{
+			const VkMemoryBarrier2 computeToFragment{
+				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			};
+			const VkDependencyInfo computeToFragmentDep{
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.memoryBarrierCount = 1,
+				.pMemoryBarriers = &computeToFragment,
+			};
+			vkCmdPipelineBarrier2(cmd, &computeToFragmentDep);
+		}
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
+	}
+
+	void LightingManager::EmitAcquireBarriers(
+		const std::uint32_t frameSlot,
+		VkCommandBuffer graphicsCmd,
+		const std::uint32_t srcFamily,
+		const std::uint32_t dstFamily) const
+	{
+		if (srcFamily == dstFamily || srcFamily == VK_QUEUE_FAMILY_IGNORED || dstFamily == VK_QUEUE_FAMILY_IGNORED)
+		{
+			return;
+		}
+
+		const auto& frame = m_buffers[frameSlot];
+		if (frame.lights.Get() == VK_NULL_HANDLE)
+		{
+			return; // buffers not yet allocated (no lights this frame)
+		}
+
+		const VkBuffer bufs[3] = {
+			frame.lights.Get(),
+			frame.tileHeaders.Get(),
+			frame.tileIndices.Get(),
+		};
+		VkBufferMemoryBarrier2 acquires[3]{};
+		for (int i = 0; i < 3; ++i)
+		{
+			acquires[i] = VkBufferMemoryBarrier2{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				.srcAccessMask = 0,
+				.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				.srcQueueFamilyIndex = srcFamily,
+				.dstQueueFamilyIndex = dstFamily,
+				.buffer = bufs[i],
+				.offset = 0,
+				.size = VK_WHOLE_SIZE,
+			};
+		}
+		const VkDependencyInfo acquireDep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.bufferMemoryBarrierCount = 3,
+			.pBufferMemoryBarriers = acquires,
+		};
+		vkCmdPipelineBarrier2(graphicsCmd, &acquireDep);
 	}
 
 	void LightingManager::UpdateForViewCpu(
@@ -330,7 +421,7 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
 				.params = glm::vec4(0.0f),
-			});
+				});
 		}
 		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
 		{
@@ -339,7 +430,7 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
 				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-			});
+				});
 		}
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;

@@ -87,6 +87,73 @@ namespace aether
 			throw std::runtime_error("AetherCore: failed to create upload command pool.");
 		}
 
+		m_asyncComputeEnabled = m_vulkanContext.GetComputeQueue() != VK_NULL_HANDLE;
+		if (!m_asyncComputeEnabled)
+		{
+			WARN(
+				LogCategory::Engine,
+				"Async compute disabled: no dedicated compute queue available.");
+		}
+
+		if (m_asyncComputeEnabled)
+		{
+			// Timeline semaphore — monotonically increasing value used to chain
+			// compute→graphics submissions across all frames in flight.
+			const VkSemaphoreTypeCreateInfo timelineTypeInfo{
+				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+				.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+				.initialValue = 0,
+			};
+			const VkSemaphoreCreateInfo semInfo{
+				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+				.pNext = &timelineTypeInfo,
+			};
+			if (vkCreateSemaphore(m_vulkanContext.GetDevice().device, &semInfo, nullptr, &m_computeTimelineSemaphore) != VK_SUCCESS)
+			{
+				throw std::runtime_error("AetherCore: failed to create compute timeline semaphore.");
+			}
+			VkFenceCreateInfo fenceInfo{};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+			for (auto& frame : m_asyncComputeFrames)
+			{
+				const VkCommandPoolCreateInfo poolInfo{
+					.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+					.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+						VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+					.queueFamilyIndex = m_vulkanContext.GetComputeQueueFamily(),
+				};
+				if (vkCreateCommandPool(
+					m_vulkanContext.GetDevice().device,
+					&poolInfo,
+					nullptr,
+					&frame.commandPool) != VK_SUCCESS)
+				{
+					throw std::runtime_error("AetherCore: failed to create async compute command pool.");
+				}
+
+				const VkCommandBufferAllocateInfo allocInfo{
+					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+					.commandPool = frame.commandPool,
+					.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+					.commandBufferCount = 1,
+				};
+				if (vkAllocateCommandBuffers(
+					m_vulkanContext.GetDevice().device,
+					&allocInfo,
+					&frame.commandBuffer) != VK_SUCCESS)
+				{
+					throw std::runtime_error("AetherCore: failed to allocate async compute command buffer.");
+				}
+
+			if (vkCreateFence(m_vulkanContext.GetDevice().device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
+			{
+				throw std::runtime_error("AetherCore: failed to create async compute fence.");
+			}
+			}
+		}
+
 		INFO(
 			LogCategory::Engine,
 			"Engine core initialized. Bindless sampled-image capacity: {}",
@@ -101,6 +168,27 @@ namespace aether
 	AetherCore::~AetherCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+		for (auto& frame : m_asyncComputeFrames)
+		{
+			if (frame.inFlight != VK_NULL_HANDLE)
+			{
+				vkDestroyFence(m_vulkanContext.GetDevice().device, frame.inFlight, nullptr);
+				frame.inFlight = VK_NULL_HANDLE;
+			}
+			if (frame.commandPool != VK_NULL_HANDLE)
+			{
+				vkDestroyCommandPool(m_vulkanContext.GetDevice().device, frame.commandPool, nullptr);
+				frame.commandPool = VK_NULL_HANDLE;
+				frame.commandBuffer = VK_NULL_HANDLE;
+			}
+		}
+		if (m_computeTimelineSemaphore != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(m_vulkanContext.GetDevice().device, m_computeTimelineSemaphore, nullptr);
+			m_computeTimelineSemaphore = VK_NULL_HANDLE;
+		}
+		m_asyncComputeEnabled = false;
+
 		m_postProcessStack.Destroy();
 		m_skyboxPass.Destroy();
 		m_frameConstantsBuffer.Shutdown();
@@ -318,6 +406,8 @@ namespace aether
 
 	void AetherCore::EndFrame()
 	{
+		VkSemaphore computeFinished = VK_NULL_HANDLE;
+
 		if (m_swapchain.IsFrameValid())
 		{
 			const auto frameIdx = static_cast<std::uint32_t>(
@@ -350,13 +440,75 @@ namespace aether
 
 			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
 			{
+				const std::uint32_t computeFamily  = m_vulkanContext.GetComputeQueueFamily();
+				const std::uint32_t graphicsFamily = m_vulkanContext.GetGraphicsQueueFamily();
+
+				VkCommandBuffer lightingCmd = m_swapchain.GetCurrentCommandBuffer();
+				if (m_asyncComputeEnabled)
+				{
+					auto& asyncFrame = m_asyncComputeFrames[frameIdx];
+					vkWaitForFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight, VK_TRUE, UINT64_MAX);
+					vkResetFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight);
+					vkResetCommandPool(m_vulkanContext.GetDevice().device, asyncFrame.commandPool, 0);
+
+					const VkCommandBufferBeginInfo beginInfo{
+						.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+						.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+					};
+					vkBeginCommandBuffer(asyncFrame.commandBuffer, &beginInfo);
+					lightingCmd = asyncFrame.commandBuffer;
+				}
+
 				m_lightingManager.UpdateForView(
 					frameIdx,
-					m_swapchain.GetCurrentCommandBuffer(),
+					lightingCmd,
 					*cam,
 					m_swapchain.GetExtent(),
 					fc,
-					true);
+					true,
+					computeFamily,
+					graphicsFamily);
+
+				if (m_asyncComputeEnabled)
+				{
+					auto& asyncFrame = m_asyncComputeFrames[frameIdx];
+					vkEndCommandBuffer(asyncFrame.commandBuffer);
+
+					// Advance the timeline value and signal it from the compute queue.
+					const std::uint64_t signalValue = ++m_computeTimelineValue;
+					const VkTimelineSemaphoreSubmitInfo timelineSubmit{
+						.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+						.waitSemaphoreValueCount = 0,
+						.pWaitSemaphoreValues = nullptr,
+						.signalSemaphoreValueCount = 1,
+						.pSignalSemaphoreValues = &signalValue,
+					};
+					const VkSubmitInfo submitInfo{
+						.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+						.pNext = &timelineSubmit,
+						.waitSemaphoreCount = 0,
+						.pWaitSemaphores = nullptr,
+						.pWaitDstStageMask = nullptr,
+						.commandBufferCount = 1,
+						.pCommandBuffers = &asyncFrame.commandBuffer,
+						.signalSemaphoreCount = 1,
+						.pSignalSemaphores = &m_computeTimelineSemaphore,
+					};
+					vkQueueSubmit(m_vulkanContext.GetComputeQueue(), 1, &submitInfo, asyncFrame.inFlight);
+					computeFinished = m_computeTimelineSemaphore;
+
+					// When the compute and graphics queue families differ, the lighting
+					// buffers need a QFOT acquire barrier on the graphics command buffer
+					// before the fragment shader reads them.
+					if (computeFamily != graphicsFamily)
+					{
+						m_lightingManager.EmitAcquireBarriers(
+							frameIdx,
+							m_swapchain.GetCurrentCommandBuffer(),
+							computeFamily,
+							graphicsFamily);
+					}
+				}
 			}
 			else
 			{
@@ -381,7 +533,12 @@ namespace aether
 			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr);
 			m_currentRecorder.EndDebugLabel();
 		}
-		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue());
+		m_swapchain.EndFrame(
+			m_vulkanContext.GetGraphicsQueue(),
+			m_vulkanContext.GetPresentQueue(),
+			computeFinished,
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			m_computeTimelineValue);
 		++m_frameIndex;
 		m_bindlessManager.AdvanceFrame(m_frameIndex);
 	}

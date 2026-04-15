@@ -94,6 +94,7 @@ namespace aether
 		requiredFeatures12.descriptorBindingVariableDescriptorCount = VK_TRUE;
 		requiredFeatures12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 		requiredFeatures12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+		requiredFeatures12.timelineSemaphore = VK_TRUE;
 
 		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
 		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -133,6 +134,18 @@ namespace aether
 		}
 		m_graphicsQueue = graphicsQueueResult.value();
 		m_graphicsQueueFamily = m_device->get_queue_index(vkb::QueueType::graphics).value();
+		m_computeQueue = m_graphicsQueue;
+		m_computeQueueFamily = m_graphicsQueueFamily;
+
+		const auto computeQueueResult = m_device->get_queue(vkb::QueueType::compute);
+		if (computeQueueResult)
+		{
+			m_computeQueue = computeQueueResult.value();
+			if (const auto computeIndex = m_device->get_queue_index(vkb::QueueType::compute))
+			{
+				m_computeQueueFamily = computeIndex.value();
+			}
+		}
 
 		const auto presentQueueResult = m_device->get_queue(vkb::QueueType::present);
 		if (!presentQueueResult)
@@ -216,6 +229,11 @@ namespace aether
 		return m_graphicsQueue;
 	}
 
+	VkQueue VulkanContext::GetComputeQueue() const
+	{
+		return m_computeQueue;
+	}
+
 	VkQueue VulkanContext::GetPresentQueue() const
 	{
 		return m_presentQueue;
@@ -224,5 +242,10 @@ namespace aether
 	std::uint32_t VulkanContext::GetGraphicsQueueFamily() const
 	{
 		return m_graphicsQueueFamily;
+	}
+
+	std::uint32_t VulkanContext::GetComputeQueueFamily() const
+	{
+		return m_computeQueueFamily;
 	}
 }
