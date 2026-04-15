@@ -264,6 +264,13 @@ namespace aether::app
 			context.world->Set(e, TransformComponent{ .localToWorld = m });
 		}
 
+		// --- Fox rotation: slow spin to show off the loaded glTF asset's materials and textures ---
+		{
+			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, t * glm::radians(15.0f), { 0.0f, 1.0f, 0.0f });
+			m = glm::scale(m, { 0.05f, 0.05f, 0.05f });
+			context.world->Set(m_gltfEntities.front(), TransformComponent{ .localToWorld = m });
+		}
+
 		// ── Keyboard: T = cycle tonemap, F = toggle FXAA ─────────────────────
 		{
 			const aether::Input& input = *context.input;

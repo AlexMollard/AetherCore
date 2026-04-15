@@ -218,8 +218,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     {
         baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv);
     }
-    // COLOR_0 is optional in glTF and frequently abused by exporters.
-    // Do not tint base color by vertex color in the PBR path.
+    // Apply optional vertex color tint, but ignore clearly invalid all-zero streams.
+    float3 vertexColor = input.vertexColor;
+    if (dot(vertexColor, vertexColor) < 1e-8)
+    {
+        vertexColor = float3(1.0, 1.0, 1.0);
+    }
+    baseColor.rgb *= vertexColor;
 
     // Alpha test.
     if ((mat.flags & kFlagAlphaMask) != 0u && baseColor.a < mat.alphaCutoff)
@@ -310,13 +315,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 Vraw = camWorldPos - input.worldPos;
     const float vLen2 = dot(Vraw, Vraw);
     float3 V = (vLen2 > 1e-12) ? normalize(Vraw) : N;
-
-    // Some imported assets carry flipped normals; orient toward the viewer
-    // to avoid fully black front faces when direct lighting is evaluated.
-    if (dot(N, V) < 0.0)
-    {
-        N = -N;
-    }
 
     float3 L = sunDir;
     float3 Hraw = V + L;
