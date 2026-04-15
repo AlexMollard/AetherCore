@@ -41,9 +41,15 @@ namespace aether
 		static void SetDebugLabelFunctions(
 			PFN_vkCmdBeginDebugUtilsLabelEXT beginFn,
 			PFN_vkCmdEndDebugUtilsLabelEXT endFn);
+
+		// Name any Vulkan handle for RenderDoc / validation layers.
+		// No-op if the extension was not loaded.
+		static void SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn);
+		static void SetObjectName(VkDevice device, std::uint64_t handle, VkObjectType type, const char* name);
 	private:
 		static inline PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabelFn = nullptr;
-		static inline PFN_vkCmdEndDebugUtilsLabelEXT   s_endDebugLabelFn = nullptr;
+		static inline PFN_vkCmdEndDebugUtilsLabelEXT   s_endDebugLabelFn   = nullptr;
+		static inline PFN_vkSetDebugUtilsObjectNameEXT s_setObjectNameFn   = nullptr;
 		VkCommandBuffer m_cmd = VK_NULL_HANDLE;
 	};
 }

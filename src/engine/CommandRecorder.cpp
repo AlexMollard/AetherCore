@@ -67,6 +67,27 @@ namespace aether
 	{
 		s_beginDebugLabelFn = beginFn;
 		s_endDebugLabelFn = endFn;
+
+	}
+
+	void CommandRecorder::SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn)
+	{
+		s_setObjectNameFn = fn;
+	}
+
+	void CommandRecorder::SetObjectName(VkDevice device, std::uint64_t handle, VkObjectType type, const char* name)
+	{
+		if (s_setObjectNameFn == nullptr || device == VK_NULL_HANDLE || handle == 0 || name == nullptr)
+		{
+			return;
+		}
+		const VkDebugUtilsObjectNameInfoEXT info{
+			.sType        = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType   = type,
+			.objectHandle = handle,
+			.pObjectName  = name,
+		};
+		s_setObjectNameFn(device, &info);
 	}
 
 	void CommandRecorder::DrawIndexed(

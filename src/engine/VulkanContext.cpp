@@ -160,6 +160,10 @@ namespace aether
 			reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(
 				vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
 
+		CommandRecorder::SetObjectNameFunction(
+			reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(
+				vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT")));
+
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
@@ -187,6 +191,7 @@ namespace aether
 		}
 
 		CommandRecorder::SetDebugLabelFunctions(nullptr, nullptr);
+		CommandRecorder::SetObjectNameFunction(nullptr);
 
 		if (m_device.has_value())
 		{

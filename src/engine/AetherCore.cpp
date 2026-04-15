@@ -112,12 +112,18 @@ namespace aether
 			{
 				throw std::runtime_error("AetherCore: failed to create compute timeline semaphore.");
 			}
+			CommandRecorder::SetObjectName(
+				m_vulkanContext.GetDevice().device,
+				reinterpret_cast<std::uint64_t>(m_computeTimelineSemaphore),
+				VK_OBJECT_TYPE_SEMAPHORE,
+				"AsyncCompute.Timeline");
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-			for (auto& frame : m_asyncComputeFrames)
+			for (std::size_t frameI = 0; frameI < m_asyncComputeFrames.size(); ++frameI)
 			{
+				auto& frame = m_asyncComputeFrames[frameI];
 				const VkCommandPoolCreateInfo poolInfo{
 					.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 					.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
@@ -147,10 +153,22 @@ namespace aether
 					throw std::runtime_error("AetherCore: failed to allocate async compute command buffer.");
 				}
 
-			if (vkCreateFence(m_vulkanContext.GetDevice().device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
-			{
-				throw std::runtime_error("AetherCore: failed to create async compute fence.");
-			}
+				if (vkCreateFence(m_vulkanContext.GetDevice().device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
+				{
+					throw std::runtime_error("AetherCore: failed to create async compute fence.");
+				}
+
+				const std::string suffix = "[" + std::to_string(frameI) + "]";
+				CommandRecorder::SetObjectName(
+					m_vulkanContext.GetDevice().device,
+					reinterpret_cast<std::uint64_t>(frame.commandBuffer),
+					VK_OBJECT_TYPE_COMMAND_BUFFER,
+					("AsyncCompute.Cmd" + suffix).c_str());
+				CommandRecorder::SetObjectName(
+					m_vulkanContext.GetDevice().device,
+					reinterpret_cast<std::uint64_t>(frame.inFlight),
+					VK_OBJECT_TYPE_FENCE,
+					("AsyncCompute.Fence" + suffix).c_str());
 			}
 		}
 
@@ -456,6 +474,7 @@ namespace aether
 						.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 					};
 					vkBeginCommandBuffer(asyncFrame.commandBuffer, &beginInfo);
+					CommandRecorder(asyncFrame.commandBuffer).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
 					lightingCmd = asyncFrame.commandBuffer;
 				}
 
@@ -472,6 +491,7 @@ namespace aether
 				if (m_asyncComputeEnabled)
 				{
 					auto& asyncFrame = m_asyncComputeFrames[frameIdx];
+					CommandRecorder(asyncFrame.commandBuffer).EndDebugLabel();
 					vkEndCommandBuffer(asyncFrame.commandBuffer);
 
 					// Advance the timeline value and signal it from the compute queue.

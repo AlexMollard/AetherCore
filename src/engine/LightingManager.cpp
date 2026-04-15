@@ -275,9 +275,11 @@ namespace aether
 		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, 1, &set, 0, nullptr);
 		vkCmdPushConstants(cmd, m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
 
+		CommandRecorder(cmd).BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_initPipeline);
 		const std::uint32_t tileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
 		vkCmdDispatch(cmd, tileGroups, 1, 1);
+		CommandRecorder(cmd).EndDebugLabel();
 
 		const VkMemoryBarrier2 computeToCompute{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -293,12 +295,14 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(cmd, &computeToComputeDep);
 
+		CommandRecorder(cmd).BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
 		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
 		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
 		if (lightGroups > 0u)
 		{
 			vkCmdDispatch(cmd, lightGroups, 1, 1);
 		}
+		CommandRecorder(cmd).EndDebugLabel();
 
 		// When queue families differ, issue QFOT release barriers on each buffer so
 		// the graphics queue can acquire ownership before the fragment shader reads.
@@ -664,6 +668,7 @@ namespace aether
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			throw std::runtime_error("LightingManager: failed to create initTiles compute pipeline.");
 		}
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
 
 		const VkPipelineShaderStageCreateInfo cullStage{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -681,6 +686,7 @@ namespace aether
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			throw std::runtime_error("LightingManager: failed to create binLights compute pipeline.");
 		}
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
