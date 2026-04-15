@@ -465,7 +465,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
         uint2 header = g_tileHeaders[tile];
         uint start = header.x;
-        uint count = min(header.y, 512u); // hard cap to keep worst-case bounded
+        uint count = header.y;
+        uint maxPerTile = fc->tiledLightBufferOffsets.w;
+        if (maxPerTile > 0u)
+        {
+            count = min(count, maxPerTile);
+        }
+        count = min(count, 512u); // hard cap to keep worst-case bounded
 
         for (uint i = 0u; i < count; ++i)
         {

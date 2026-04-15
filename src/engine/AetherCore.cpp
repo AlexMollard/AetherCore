@@ -280,6 +280,7 @@ namespace aether
 					const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 					m_lightingManager.UpdateForView(
 						frameIdx,
+						VK_NULL_HANDLE,
 						*cam,
 						rit->second.extent,
 						fc,
@@ -349,7 +350,13 @@ namespace aether
 
 			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
 			{
-				m_lightingManager.UpdateForView(frameIdx, *cam, m_swapchain.GetExtent(), fc, true);
+				m_lightingManager.UpdateForView(
+					frameIdx,
+					m_swapchain.GetCurrentCommandBuffer(),
+					*cam,
+					m_swapchain.GetExtent(),
+					fc,
+					true);
 			}
 			else
 			{
@@ -539,6 +546,16 @@ namespace aether
 	bool AetherCore::IsRttLightingBinningEnabled() const
 	{
 		return m_lightingManager.IsRttBinningEnabled();
+	}
+
+	void AetherCore::SetGpuLightingBinningEnabled(const bool enabled)
+	{
+		m_lightingManager.SetGpuBinningEnabled(enabled);
+	}
+
+	bool AetherCore::IsGpuLightingBinningEnabled() const
+	{
+		return m_lightingManager.IsGpuBinningEnabled();
 	}
 
 	AetherCore::CameraRenderTarget AetherCore::CreateCameraRenderTarget(

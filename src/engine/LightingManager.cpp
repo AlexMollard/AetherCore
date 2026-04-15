@@ -4,11 +4,40 @@
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
+#include <vector>
 
 #include <glm/common.hpp>
 
+#include "FileSystem.hpp"
+
+namespace
+{
+	VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
+	{
+		VkShaderModuleCreateInfo info{};
+		info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+		info.codeSize = spirv.size();
+		info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
+
+		VkShaderModule mod = VK_NULL_HANDLE;
+		if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
+		{
+			throw std::runtime_error("LightingManager: failed to create compute shader module.");
+		}
+		return mod;
+	}
+}
+
 namespace aether
 {
+	struct LightingComputePush
+	{
+		glm::mat4 viewProj{ 1.0f };
+		glm::vec4 params0{ 0.0f }; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
+		glm::uvec4 params1{ 0u };  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+		glm::uvec4 params2{ 0u };  // x=maxLightsPerTile
+	};
+
 	void LightingManager::Initialize(const VulkanContext& context, const Renderer& renderer)
 	{
 		m_context = &context;
@@ -100,6 +129,21 @@ namespace aether
 			frame.indicesCapacity = 0;
 		}
 
+		if (m_initPipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, m_initPipeline, nullptr);
+			m_initPipeline = VK_NULL_HANDLE;
+		}
+		if (m_cullPipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, m_cullPipeline, nullptr);
+			m_cullPipeline = VK_NULL_HANDLE;
+		}
+		if (m_computeLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, m_computeLayout, nullptr);
+			m_computeLayout = VK_NULL_HANDLE;
+		}
 		if (m_descriptorPool != VK_NULL_HANDLE)
 		{
 			vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
@@ -128,6 +172,7 @@ namespace aether
 
 	void LightingManager::UpdateForView(
 		const std::uint32_t frameSlot,
+		VkCommandBuffer cmd,
 		const Camera& camera,
 		const VkExtent2D extent,
 		FrameConstants& fc,
@@ -139,6 +184,22 @@ namespace aether
 			return;
 		}
 
+		if (m_gpuBinningEnabled && cmd != VK_NULL_HANDLE)
+		{
+			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc);
+			return;
+		}
+
+		UpdateForViewCpu(frameSlot, camera, extent, fc);
+	}
+
+	void LightingManager::UpdateForViewGpu(
+		const std::uint32_t frameSlot,
+		VkCommandBuffer cmd,
+		const Camera& camera,
+		const VkExtent2D extent,
+		FrameConstants& fc) const
+	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
@@ -149,7 +210,7 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
 				.params = glm::vec4(0.0f),
-				});
+			});
 		}
 		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
 		{
@@ -158,7 +219,127 @@ namespace aether
 				.colorIntensity = glm::vec4(src.color, src.intensity),
 				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
 				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-				});
+			});
+		}
+
+		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
+		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
+		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
+		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
+
+		EnsureBuffers(frameSlot, lights.size(), tileCount, indexCount);
+		auto& frame = m_buffers[frameSlot];
+		if (!lights.empty())
+		{
+			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
+		}
+		UpdateDescriptorSet(frameSlot);
+
+		EnsureComputePipeline();
+
+		const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
+		LightingComputePush push{};
+		push.viewProj = proj * camera.GetViewMatrix();
+		push.params0 = glm::vec4(
+			camera.GetNearPlane(),
+			0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]),
+			static_cast<float>(extent.width),
+			static_cast<float>(extent.height));
+		push.params1 = glm::uvec4(
+			kTileSizePx,
+			tilesX,
+			tilesY,
+			static_cast<std::uint32_t>(lights.size()));
+		push.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
+
+		const VkMemoryBarrier2 hostToCompute{
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+			.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		};
+		const VkDependencyInfo hostToComputeDep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.memoryBarrierCount = 1,
+			.pMemoryBarriers = &hostToCompute,
+		};
+		vkCmdPipelineBarrier2(cmd, &hostToComputeDep);
+
+		const VkDescriptorSet set = m_sets[frameSlot];
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, 1, &set, 0, nullptr);
+		vkCmdPushConstants(cmd, m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
+
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_initPipeline);
+		const std::uint32_t tileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
+		vkCmdDispatch(cmd, tileGroups, 1, 1);
+
+		const VkMemoryBarrier2 computeToCompute{
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		};
+		const VkDependencyInfo computeToComputeDep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.memoryBarrierCount = 1,
+			.pMemoryBarriers = &computeToCompute,
+		};
+		vkCmdPipelineBarrier2(cmd, &computeToComputeDep);
+
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
+		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
+		if (lightGroups > 0u)
+		{
+			vkCmdDispatch(cmd, lightGroups, 1, 1);
+		}
+
+		const VkMemoryBarrier2 computeToFragment{
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+		};
+		const VkDependencyInfo computeToFragmentDep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.memoryBarrierCount = 1,
+			.pMemoryBarriers = &computeToFragment,
+		};
+		vkCmdPipelineBarrier2(cmd, &computeToFragmentDep);
+
+		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
+		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
+	}
+
+	void LightingManager::UpdateForViewCpu(
+		const std::uint32_t frameSlot,
+		const Camera& camera,
+		const VkExtent2D extent,
+		FrameConstants& fc) const
+	{
+		std::vector<GpuLight> lights;
+		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
+
+		for (const Renderer::PointLight& src : m_renderer->GetPointLights())
+		{
+			lights.push_back(GpuLight{
+				.positionRadius = glm::vec4(src.position, src.radius),
+				.colorIntensity = glm::vec4(src.color, src.intensity),
+				.directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
+				.params = glm::vec4(0.0f),
+			});
+		}
+		for (const Renderer::SpotLight& src : m_renderer->GetSpotLights())
+		{
+			lights.push_back(GpuLight{
+				.positionRadius = glm::vec4(src.position, src.radius),
+				.colorIntensity = glm::vec4(src.color, src.intensity),
+				.directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
+				.params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
+			});
 		}
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
@@ -340,6 +521,77 @@ namespace aether
 		ensureBuffer(frame.lights, frame.lightsCapacity, lightCount, sizeof(GpuLight));
 		ensureBuffer(frame.tileHeaders, frame.headersCapacity, tileCount, sizeof(TileHeader));
 		ensureBuffer(frame.tileIndices, frame.indicesCapacity, indexCount, sizeof(std::uint32_t));
+	}
+
+	void LightingManager::EnsureComputePipeline() const
+	{
+		if (m_computeLayout != VK_NULL_HANDLE && m_initPipeline != VK_NULL_HANDLE && m_cullPipeline != VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		const VkDevice device = m_context->GetDevice().device;
+		const auto spirv = io::FileSystem::ReadFile("shaders://tiled_light_cull.slang.spv");
+		if (spirv.empty())
+		{
+			throw std::runtime_error("LightingManager: missing shader shaders://tiled_light_cull.slang.spv");
+		}
+
+		VkShaderModule shaderModule = CreateShaderModule(device, spirv);
+
+		const VkPushConstantRange pushRange{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0,
+			.size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
+		};
+		const VkPipelineLayoutCreateInfo layoutInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.setLayoutCount = 1,
+			.pSetLayouts = &m_setLayout,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushRange,
+		};
+		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computeLayout) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+			throw std::runtime_error("LightingManager: failed to create compute pipeline layout.");
+		}
+
+		const VkPipelineShaderStageCreateInfo initStage{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = shaderModule,
+			.pName = "initTiles",
+		};
+		const VkComputePipelineCreateInfo initInfo{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = initStage,
+			.layout = m_computeLayout,
+		};
+		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+			throw std::runtime_error("LightingManager: failed to create initTiles compute pipeline.");
+		}
+
+		const VkPipelineShaderStageCreateInfo cullStage{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = shaderModule,
+			.pName = "binLights",
+		};
+		const VkComputePipelineCreateInfo cullInfo{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = cullStage,
+			.layout = m_computeLayout,
+		};
+		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+			throw std::runtime_error("LightingManager: failed to create binLights compute pipeline.");
+		}
+
+		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
 
 	void LightingManager::UpdateDescriptorSet(const std::uint32_t frameSlot) const

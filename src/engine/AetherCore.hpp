@@ -124,6 +124,8 @@ namespace aether
 		[[nodiscard]] glm::vec3 GetAmbientLight() const;
 		void SetRttLightingBinningEnabled(bool enabled);
 		[[nodiscard]] bool IsRttLightingBinningEnabled() const;
+		void SetGpuLightingBinningEnabled(bool enabled);
+		[[nodiscard]] bool IsGpuLightingBinningEnabled() const;
 
 		// ── Format queries for app-layer pipeline creation ──────────────────
 		// Query the forward pass color format.
