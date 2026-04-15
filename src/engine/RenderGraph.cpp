@@ -51,13 +51,56 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadTexture(RGImage image)
 	{
-		m_graph.m_passes[m_passIndex].textureReads.push_back(image);
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+			.image = image,
+			.type = ImageAccessType::SampledRead,
+			});
+		m_graph.m_dirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadTextureCompute(RGImage image)
+	{
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+			.image = image,
+			.type = ImageAccessType::SampledRead,
+			});
+		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
+		m_graph.m_dirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadStorageImage(RGImage image)
+	{
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+			.image = image,
+			.type = ImageAccessType::StorageRead,
+			});
+		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
+		m_graph.m_dirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteStorageImage(RGImage image)
+	{
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+			.image = image,
+			.type = ImageAccessType::StorageWrite,
+			});
+		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		m_graph.m_dirty = true;
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::Execute(std::function<void(PassContext&)> fn)
 	{
+		m_graph.m_passes[m_passIndex].execute = std::move(fn);
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ExecuteCompute(std::function<void(PassContext&)> fn)
+	{
+		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
 		return *this;
 	}
@@ -75,6 +118,16 @@ namespace aether
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
 		m_passes.push_back(PassRecord{ .name = std::move(name) });
+		m_dirty = true;
+		return PassBuilder{ *this, m_passes.size() - 1 };
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name)
+	{
+		m_passes.push_back(PassRecord{
+			.name = std::move(name),
+			.kind = PassKind::Compute,
+			});
 		m_dirty = true;
 		return PassBuilder{ *this, m_passes.size() - 1 };
 	}
@@ -188,10 +241,9 @@ namespace aether
 			// Resolve the effective render extent for this pass.
 			const VkExtent2D passExtent = pass.extentOverride.value_or(target.extent);
 
-			// Barrier-only passes (ReadTexture declarations, no writes) skip the
-			// rendering block — barriers were already issued above.
-			const bool isBarrierOnly = colorInfos.empty() && !hasDepth;
-			if (!isBarrierOnly)
+			const bool useDynamicRendering =
+				pass.kind == PassKind::Graphics && (!colorInfos.empty() || hasDepth);
+			if (useDynamicRendering)
 			{
 				// ── Begin dynamic rendering ──────────────────────────────────────
 				const VkRenderingInfo renderInfo{
@@ -224,7 +276,7 @@ namespace aether
 				pass.execute(ctx);
 			}
 
-			if (!isBarrierOnly)
+			if (useDynamicRendering)
 			{
 				vkCmdEndRendering(cmd);
 			}
@@ -257,15 +309,22 @@ namespace aether
 				{
 					if (m_passes[idx].depthWrite->image.id == resId) { return true; }
 				}
+				for (const ImageAccessRef& a : m_passes[idx].imageAccesses)
+				{
+					if (a.image.id == resId && a.type == ImageAccessType::StorageWrite)
+					{
+						return true;
+					}
+				}
 				return false;
 			};
 
 		auto passAccesses = [&](std::size_t idx, uint32_t resId) -> bool
 			{
 				if (passWrites(idx, resId)) { return true; }
-				for (const RGImage& r : m_passes[idx].textureReads)
+				for (const ImageAccessRef& r : m_passes[idx].imageAccesses)
 				{
-					if (r.id == resId) { return true; }
+					if (r.image.id == resId) { return true; }
 				}
 				return false;
 			};
@@ -445,11 +504,35 @@ namespace aether
 				};
 			}
 
-			// --- Texture reads ---------------------------------------------
-			for (const RGImage& r : pass.textureReads)
+			// --- General image accesses (sampled + storage) -----------------
+			for (const ImageAccessRef& r : pass.imageAccesses)
 			{
-				const uint32_t resId = r.id;
-				constexpr VkImageLayout kTarget = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				const uint32_t resId = r.image.id;
+
+				VkImageLayout targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				VkPipelineStageFlags2 dstStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+				VkAccessFlags2 dstAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+
+				switch (r.type)
+				{
+				case ImageAccessType::SampledRead:
+					dstStage = (pass.kind == PassKind::Compute)
+						? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
+						: VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+					dstAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+					targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+					break;
+				case ImageAccessType::StorageRead:
+					dstStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+					dstAccess = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
+					targetLayout = VK_IMAGE_LAYOUT_GENERAL;
+					break;
+				case ImageAccessType::StorageWrite:
+					dstStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+					dstAccess = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+					targetLayout = VK_IMAGE_LAYOUT_GENERAL;
+					break;
+				}
 
 				const auto it = states.find(resId);
 				const VkPipelineStageFlags2 srcStage = (it != states.end())
@@ -462,13 +545,22 @@ namespace aether
 				cp.preBarriers.push_back({
 					.resourceId = resId,
 					.oldLayout = oldLayout,
-					.newLayout = kTarget,
+					.newLayout = targetLayout,
 					.srcStage = srcStage,
 					.srcAccess = srcAccess,
-					.dstStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					.dstAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT,
+					.dstStage = dstStage,
+					.dstAccess = dstAccess,
 					.aspect = ResolveAspect(resId),
 					});
+
+				if (r.type == ImageAccessType::StorageWrite)
+				{
+					states[resId] = {
+						targetLayout,
+						dstStage,
+						dstAccess,
+					};
+				}
 			}
 
 			m_compiled.push_back(std::move(cp));

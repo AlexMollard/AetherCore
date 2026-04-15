@@ -113,9 +113,25 @@ namespace aether
 			// Generates a layout transition to SHADER_READ_ONLY_OPTIMAL before the pass.
 			PassBuilder& ReadTexture(RGImage image);
 
+			// Declare a shader-sampled texture read used by compute.
+			// Generates a layout transition to SHADER_READ_ONLY_OPTIMAL before the pass.
+			PassBuilder& ReadTextureCompute(RGImage image);
+
+			// Declare a storage-image read used by compute.
+			// Generates a layout transition to GENERAL before the pass.
+			PassBuilder& ReadStorageImage(RGImage image);
+
+			// Declare a storage-image write used by compute.
+			// Generates a layout transition to GENERAL before the pass.
+			PassBuilder& WriteStorageImage(RGImage image);
+
 			// Set the GPU work callback for this pass.
 			// Called between vkCmdBeginRendering and vkCmdEndRendering.
 			PassBuilder& Execute(std::function<void(PassContext&)> fn);
+
+			// Set the GPU work callback for a compute pass.
+			// Called without opening dynamic rendering.
+			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
 			// Override the render area / viewport / scissor for this pass.
 			// When not set the pass renders at the swapchain extent.
@@ -148,6 +164,10 @@ namespace aether
 		// Registers a pass and returns a builder for declaring its resource accesses.
 		// The builder should be consumed immediately via method chaining.
 		[[nodiscard]] PassBuilder AddPass(std::string name);
+
+		// Registers a compute pass and returns a builder for declaring its resource
+		// accesses. Compute passes execute without dynamic rendering.
+		[[nodiscard]] PassBuilder AddComputePass(std::string name);
 
 		void RemovePass(const std::string& name);
 		[[nodiscard]] bool HasPass(std::string_view name) const;
@@ -183,12 +203,32 @@ namespace aether
 			VkClearValue        clearValue{};
 		};
 
+		enum class ImageAccessType
+		{
+			SampledRead,
+			StorageRead,
+			StorageWrite,
+		};
+
+		struct ImageAccessRef
+		{
+			RGImage          image{};
+			ImageAccessType  type = ImageAccessType::SampledRead;
+		};
+
+		enum class PassKind
+		{
+			Graphics,
+			Compute,
+		};
+
 		struct PassRecord
 		{
 			std::string                       name;
+			PassKind                          kind = PassKind::Graphics;
 			std::vector<AttachmentRef>        colorWrites;
 			std::optional<AttachmentRef>      depthWrite;
-			std::vector<RGImage>              textureReads;
+			std::vector<ImageAccessRef>       imageAccesses;
 			std::function<void(PassContext&)> execute;
 			std::optional<VkExtent2D>         extentOverride; // if set, overrides target.extent
 		};
