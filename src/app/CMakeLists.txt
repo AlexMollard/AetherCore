@@ -14,6 +14,13 @@ target_sources(App
 # Engine propagates Vulkan, GLFW, GLM, and cxx_std_20 automatically.
 target_link_libraries(App PRIVATE Engine)
 
+if(AETHERCORE_ENABLE_UNITY_BUILD)
+    set_target_properties(App PROPERTIES
+        UNITY_BUILD ON
+        UNITY_BUILD_BATCH_SIZE 16
+    )
+endif()
+
 aethercore_target_defaults(App)
 aethercore_enable_slang_shader_compilation(App)
 

@@ -22,6 +22,7 @@ function(aethercore_target_defaults target)
 
             # --- Code generation ---
             /MP                      # Multi-processor compilation
+            /FS                      # Serialized PDB writes; avoids contention with /MP in VS Debug
             /fp:fast                 # Allow FMA fusion and reciprocal approximations; standard for renderers
             /Gy                      # Function-level linking (COMDAT); required for /OPT:REF,ICF at link time
             /jumptablerdata          # Place jump tables in .rdata instead of .text; free CFG hardening (VS 17.9+)
@@ -40,6 +41,14 @@ function(aethercore_target_defaults target)
             # frames, making PIX / RenderDoc / Superluminal call stacks nearly useless.
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
         )
+
+        if(AETHERCORE_FAST_MSVC_DEBUG_INFO)
+            # Faster local edit-build-run iterations in Debug:
+            # - /Z7 stores debug info in .obj (reduces shared PDB contention during compile)
+            # - /DEBUG:FASTLINK reduces link-time debug merge cost
+            target_compile_options(${target} PRIVATE $<$<CONFIG:Debug>:/Z7>)
+            target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:/DEBUG:FASTLINK>)
+        endif()
 
         # Disable the buffer security cookie in Release — zero benefit in GPU-bound render code.
         target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/GS->)

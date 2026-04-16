@@ -3,6 +3,10 @@ project(AetherCore VERSION 0.1.0 LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
+# Build-speed knobs (especially useful with Visual Studio generator).
+option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
+option(AETHERCORE_ENABLE_UNITY_BUILD "Enable CMake unity build for first-party targets" ON)
+
 # Generate compile_commands.json for clangd / tooling (ignored by VS generator).
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

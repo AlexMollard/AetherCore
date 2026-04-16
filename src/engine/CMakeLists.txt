@@ -50,4 +50,19 @@ target_include_directories(Engine PRIVATE
     "${cgltf_SOURCE_DIR}"
 )
 
+if(AETHERCORE_ENABLE_UNITY_BUILD)
+    set_target_properties(Engine PROPERTIES
+        UNITY_BUILD ON
+        UNITY_BUILD_BATCH_SIZE 16
+    )
+
+    # Keep one-definition implementation units out of unity amalgamation.
+    set_source_files_properties(
+        "${CMAKE_CURRENT_SOURCE_DIR}/Texture.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/VmaImplementation.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/GltfAsset.cpp"
+        PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
+    )
+endif()
+
 aethercore_target_defaults(Engine)
