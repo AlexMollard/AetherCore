@@ -15,6 +15,7 @@
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
 #include "CullPass.hpp"
+#include "EngineSettings.hpp"
 #include "ForwardPass.hpp"
 #include "FrameConstants.hpp"
 #include "FrameConstantsBuffer.hpp"
@@ -67,6 +68,8 @@ namespace aether
 			const char* appName = "AetherCore";
 			int width = 1280;
 			int height = 720;
+			bool enableVsync = true;
+			const char* settingsFile = "engine.ini";
 		};
 
 		// Opaque handle to a render-to-texture camera target.
@@ -181,6 +184,7 @@ namespace aether
 		[[nodiscard]] Scene& GetScene();
 		[[nodiscard]] const Window& GetWindow() const;
 		[[nodiscard]] Window& GetWindow();
+		[[nodiscard]] const EngineSettings& GetSettings() const;
 
 	private:
 		// ── Frame graph and rendering ───────────────────────────────────────
@@ -230,6 +234,7 @@ namespace aether
 		VkSemaphore m_computeTimelineSemaphore = VK_NULL_HANDLE;
 		std::uint64_t m_computeTimelineValue = 0;
 		bool m_asyncComputeEnabled = false;
+		EngineSettings m_settings{};
 
 		// ── Services ─────────────────────────────────────────────────────────
 		Renderer m_renderer;

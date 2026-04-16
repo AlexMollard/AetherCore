@@ -13,6 +13,15 @@ namespace aether::app
 	namespace
 	{
 		constexpr std::string_view kUiFontPath = "assets://fonts/Roboto-Regular.ttf";
+
+		aether::AetherCore::Config BuildConfigFromSettings(const aether::AetherCore::Config& baseConfig, const aether::EngineSettings& settings)
+		{
+			aether::AetherCore::Config cfg = baseConfig;
+			cfg.width = settings.window.width;
+			cfg.height = settings.window.height;
+			cfg.enableVsync = settings.graphics.vsync;
+			return cfg;
+		}
 	} // namespace
 
 	void AppLayer::OnAttach(LayerContext& context)
@@ -36,7 +45,7 @@ namespace aether::app
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig)
-	      : m_engine(engineConfig)
+	      : m_settings(aether::EngineSettingsIO::LoadOrCreate(engineConfig.settingsFile)), m_engine(BuildConfigFromSettings(engineConfig, m_settings))
 	{
 		INFO(LogCategory::App, "Application created.");
 	}
@@ -143,16 +152,28 @@ namespace aether::app
 		// Start the dedicated render thread. All Vulkan submission work runs there.
 		m_renderThread.Start(m_engine);
 
-		// Match the frame pacer to the display the window is on.
-		const int refreshRate = m_engine.GetWindow().GetDisplayRefreshRate();
-		if (refreshRate > 0)
+		if (m_settings.app.targetFps > 0.0f)
 		{
-			INFO(LogCategory::App, "Display refresh rate: {} Hz — setting frame pacer target.", refreshRate);
-			m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
+			INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
+			m_framePacer.SetTargetFps(m_settings.app.targetFps);
+		}
+		else if (m_settings.graphics.vsync)
+		{
+			// Auto policy with VSync on: match the frame pacer to display refresh.
+			const int refreshRate = m_engine.GetWindow().GetDisplayRefreshRate();
+			if (refreshRate > 0)
+			{
+				INFO(LogCategory::App, "Display refresh rate: {} Hz — setting frame pacer target.", refreshRate);
+				m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
+			}
+			else
+			{
+				WARN(LogCategory::App, "Could not query display refresh rate — frame pacer running uncapped.");
+			}
 		}
 		else
 		{
-			WARN(LogCategory::App, "Could not query display refresh rate — frame pacer running uncapped.");
+			INFO(LogCategory::App, "VSync is off and TargetFPS is 0 — frame pacer running uncapped.");
 		}
 
 		auto previousFrameTime = std::chrono::steady_clock::now();

@@ -17,7 +17,7 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
-		void Initialize(const VulkanContext& ctx, const Window& window);
+		void Initialize(const VulkanContext& ctx, const Window& window, bool enableVsync);
 		void Shutdown(VkDevice device);
 
 		// Acquires next image and begins the command buffer + dynamic rendering.

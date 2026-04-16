@@ -27,7 +27,12 @@ namespace aether
 	AetherCore::AetherCore(const Config& config)
 	      : m_window(config.appName, config.width, config.height), m_vulkanContext(m_window, config.appName)
 	{
-		m_swapchain.Initialize(m_vulkanContext, m_window);
+		io::FileSystem::InitializeDefaultMounts();
+		m_settings = EngineSettingsIO::LoadOrCreate(config.settingsFile);
+		m_settings.window.width = config.width;
+		m_settings.window.height = config.height;
+
+		m_swapchain.Initialize(m_vulkanContext, m_window, m_settings.graphics.vsync);
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_materialBuffer.Initialize(m_vulkanContext);
@@ -55,7 +60,6 @@ namespace aether
 		}
 
 		m_primitiveMeshes.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool);
-		io::FileSystem::InitializeDefaultMounts();
 
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = m_vulkanContext.GetDevice().device,
@@ -65,7 +69,7 @@ namespace aether
 		        .bindlessManager = &m_bindlessManager,
 		        .renderGraph = &m_renderGraph,
 		});
-		m_postProcessStack.SetFxaaEnabled(false);
+		m_postProcessStack.SetFxaaEnabled(m_settings.graphics.fxaa);
 
 		// Initialize services.
 		m_renderer.Initialize(&m_postProcessStack);
@@ -85,7 +89,11 @@ namespace aether
 		const CameraHandle mainCam = m_cameraManager.Create(CameraDesc{});
 		m_cameraManager.SetMainCamera(mainCam);
 
-		m_asyncComputeEnabled = m_vulkanContext.GetComputeQueue() != VK_NULL_HANDLE;
+		m_asyncComputeEnabled = m_settings.graphics.asyncCompute && m_vulkanContext.GetComputeQueue() != VK_NULL_HANDLE;
+		if (!m_settings.graphics.asyncCompute)
+		{
+			INFO(LogCategory::Engine, "Async compute disabled by settings.");
+		}
 		if (!m_asyncComputeEnabled)
 		{
 			WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
@@ -222,7 +230,7 @@ namespace aether
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		m_swapchain.ClearRecreationFlag();
-		m_swapchain.Initialize(m_vulkanContext, m_window);
+		m_swapchain.Initialize(m_vulkanContext, m_window, m_settings.graphics.vsync);
 
 		// Preserve current post-process settings across recreation.
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
@@ -318,8 +326,8 @@ namespace aether
 		const VkExtent2D extent = it->second.extent;
 
 		// ── Compute cull pass ─────────────────────────────────────────────────
-		// Writes per-camera FrameConstants, flushes scene/world into the shared
-		// render queue, then dispatches the frustum-cull compute shader.
+		// Writes per-camera FrameConstants and dispatches frustum-cull compute.
+		// Draw queue population is done on the game thread in PrepareFrame.
 		const VkPipeline cullPipeline = m_cullPass.GetPipeline();
 		const VkPipelineLayout cullLayout = m_cullPass.GetPipelineLayout();
 
@@ -355,8 +363,6 @@ namespace aether
 			                rit->second.constants->Write(frameIdx, fc);
 			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                m_scene.FlushToQueue(rit->second.renderQueue);
-			                m_world.FlushToQueue(rit->second.renderQueue);
 			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
 		                });
 
@@ -408,6 +414,16 @@ namespace aether
 		m_renderQueue.SetWriteSlot(drawSlot);
 		m_scene.FlushToQueue(m_renderQueue);
 		m_world.FlushToQueue(m_renderQueue);
+
+		// Pre-populate each RTT queue on the game thread to avoid scene/world
+		// race conditions inside render-thread pass callbacks.
+		for (auto& [id, rt]: m_rtCameras)
+		{
+			(void) id;
+			rt.renderQueue.SetWriteSlot(drawSlot);
+			m_scene.FlushToQueue(rt.renderQueue);
+			m_world.FlushToQueue(rt.renderQueue);
+		}
 
 		// Snapshot per-frame render state so the render thread never reads live
 		// game-thread state after this function returns.
@@ -723,6 +739,11 @@ namespace aether
 	const Window& AetherCore::GetWindow() const
 	{
 		return m_window;
+	}
+
+	const EngineSettings& AetherCore::GetSettings() const
+	{
+		return m_settings;
 	}
 
 	AssetManager& AetherCore::GetAssets()

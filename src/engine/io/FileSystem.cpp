@@ -3,6 +3,8 @@
 #include <filesystem>
 #include <initializer_list>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
@@ -23,7 +25,8 @@ namespace aether::io
 		{
 			// std::less<> enables heterogeneous lookup so string_view keys work without
 			// allocation.
-			std::map<std::string, std::unique_ptr<IFileBackend>, std::less<>> mounts;
+			std::map<std::string, std::shared_ptr<IFileBackend>, std::less<>> mounts;
+			std::mutex mountsMutex;
 			std::unique_ptr<IOThread> ioThread;
 		};
 
@@ -41,14 +44,15 @@ namespace aether::io
 			return { virtualPath.substr(0, sep), virtualPath.substr(sep + separator.size()) };
 		}
 
-		IFileBackend& ResolveBackend(std::string_view mountPoint)
+		std::shared_ptr<IFileBackend> ResolveBackend(std::string_view mountPoint)
 		{
+			std::scoped_lock lock(s_backend->mountsMutex);
 			auto it = s_backend->mounts.find(mountPoint);
 			if (it == s_backend->mounts.end())
 			{
 				throw FileSystemError("No backend mounted at: " + std::string(mountPoint));
 			}
-			return *it->second;
+			return it->second;
 		}
 
 		std::filesystem::path ResolveMountedDirectory(const std::initializer_list<std::filesystem::path>& candidates)
@@ -77,6 +81,11 @@ namespace aether::io
 		s_backend = new FileSystemBackend();
 		s_backend->ioThread = std::make_unique<IOThread>();
 		INFO(LogCategory::FileSystem, "FileSystem initialized.");
+	}
+
+	bool FileSystem::IsInitialized()
+	{
+		return s_backend != nullptr;
 	}
 
 	void FileSystem::InitializeDefaultMounts()
@@ -126,6 +135,18 @@ namespace aether::io
 		});
 		Mount("shaders", shaderDirectory);
 
+		// ── config:// ─────────────────────────────────────────────────────────
+		// Settings/config files are deployed to data/config at build time.
+		const auto configDirectory = ResolveMountedDirectory({
+		        workingDirectory / "data/config",
+		        workingDirectory / "../data/config",
+		        workingDirectory / "../../data/config",
+		        workingDirectory / "config",
+		        workingDirectory / "../config",
+		        workingDirectory / "../../config",
+		});
+		Mount("config", configDirectory);
+
 		// ── logs:// ───────────────────────────────────────────────────────────
 		Mount("logs", workingDirectory / "logs");
 	}
@@ -140,7 +161,10 @@ namespace aether::io
 		// Drain all pending IO before tearing down.
 		s_backend->ioThread->Flush();
 		s_backend->ioThread.reset();
-		s_backend->mounts.clear();
+		{
+			std::scoped_lock lock(s_backend->mountsMutex);
+			s_backend->mounts.clear();
+		}
 
 		delete s_backend;
 		s_backend = nullptr;
@@ -156,7 +180,8 @@ namespace aether::io
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
-		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_unique<DirectoryBackend>(std::move(physicalPath)));
+		std::scoped_lock lock(s_backend->mountsMutex);
+		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
 	}
 
 	void FileSystem::MountPak(std::string_view mountPoint, std::filesystem::path pakPath)
@@ -167,7 +192,8 @@ namespace aether::io
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
-		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_unique<PakBackend>(std::move(pakPath)));
+		std::scoped_lock lock(s_backend->mountsMutex);
+		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
 	}
 
 	bool FileSystem::Exists(std::string_view virtualPath)
@@ -178,7 +204,8 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
-		return ResolveBackend(mountPoint).Exists(relativePath);
+		const auto backend = ResolveBackend(mountPoint);
+		return backend->Exists(relativePath);
 	}
 
 	std::vector<std::byte> FileSystem::ReadFile(std::string_view virtualPath)
@@ -190,7 +217,8 @@ namespace aether::io
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		VERBOSE(LogCategory::FileSystem, "ReadFile: {}", virtualPath);
-		return ResolveBackend(mountPoint).Read(relativePath);
+		const auto backend = ResolveBackend(mountPoint);
+		return backend->Read(relativePath);
 	}
 
 	std::unique_ptr<std::istream> FileSystem::OpenStream(std::string_view virtualPath)
@@ -202,7 +230,8 @@ namespace aether::io
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
 		VERBOSE(LogCategory::FileSystem, "OpenStream: {}", virtualPath);
-		return ResolveBackend(mountPoint).OpenStream(relativePath);
+		const auto backend = ResolveBackend(mountPoint);
+		return backend->OpenStream(relativePath);
 	}
 
 	std::vector<std::string> FileSystem::Glob(std::string_view virtualPattern, const FileGlobOptions& options)
@@ -213,7 +242,8 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePattern] = ParseVirtualPath(virtualPattern);
-		auto matches = ResolveBackend(mountPoint).Glob(relativePattern, options);
+		const auto backend = ResolveBackend(mountPoint);
+		auto matches = backend->Glob(relativePattern, options);
 		VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, matches.size());
 		return matches;
 	}

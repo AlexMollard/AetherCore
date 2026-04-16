@@ -4,6 +4,7 @@
 
 #include "AetherCore.hpp"
 #include "AppLayer.hpp"
+#include "EngineSettings.hpp"
 #include "FramePacer.hpp"
 #include "LayerStack.hpp"
 #include "RenderThread.hpp"
@@ -38,6 +39,7 @@ namespace aether::app
 		[[nodiscard]] const aether::AetherCore& GetEngine() const;
 
 	private:
+		aether::EngineSettings m_settings;
 		aether::AetherCore m_engine;
 		aether::RenderThread m_renderThread;
 		aether::FramePacer m_framePacer;

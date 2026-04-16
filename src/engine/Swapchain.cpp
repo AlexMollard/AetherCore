@@ -35,19 +35,29 @@ namespace aether
 		}
 	} // namespace
 
-	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window)
+	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window, const bool enableVsync)
 	{
 		int w = 0;
 		int h = 0;
 		glfwGetFramebufferSize(window.GetHandle(), &w, &h);
 
-		vkb::SwapchainBuilder builder{ ctx.GetDevice() };
-		auto result = builder.set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-		                      .add_fallback_format({ VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-		                      .set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
-		                      .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
-		                      .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
-		                      .build();
+		auto buildSwapchain = [&](const VkPresentModeKHR presentMode)
+		{
+			vkb::SwapchainBuilder builder{ ctx.GetDevice() };
+			return builder.set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			        .add_fallback_format({ VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			        .set_desired_present_mode(presentMode)
+			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
+			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+			        .build();
+		};
+
+		auto result = buildSwapchain(enableVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR);
+		if (!result && !enableVsync)
+		{
+			WARN(LogCategory::Engine, "Swapchain IMMEDIATE present mode unavailable; falling back to FIFO (VSync on).");
+			result = buildSwapchain(VK_PRESENT_MODE_FIFO_KHR);
+		}
 
 		if (!result)
 		{

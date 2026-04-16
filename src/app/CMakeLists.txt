@@ -28,5 +28,9 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "$<TARGET_FILE:AssetPacker>"
         "${CMAKE_SOURCE_DIR}/resources"
         "${CMAKE_BINARY_DIR}/data/assets.pak"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/engine.ini"
+        "${CMAKE_BINARY_DIR}/data/config/engine.ini"
     COMMENT "Packing assets → data/assets.pak"
 )
