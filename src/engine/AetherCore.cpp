@@ -19,6 +19,7 @@
 #include "FileSystem.hpp"
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
+#include "Profiler.hpp"
 
 namespace aether
 {
@@ -382,12 +383,14 @@ namespace aether
 
 	void AetherCore::Tick(const float dt)
 	{
+		AE_PROFILE_ZONE();
 		m_input.Update();
 		m_cameraManager.Update(m_input, dt);
 	}
 
 	void AetherCore::BeginFrame()
 	{
+		AE_PROFILE_ZONE();
 		if (m_swapchain.NeedsRecreation())
 		{
 			RecreateSwapchain();
@@ -399,6 +402,7 @@ namespace aether
 
 	void AetherCore::EndFrame()
 	{
+		AE_PROFILE_ZONE();
 		VkSemaphore computeFinished = VK_NULL_HANDLE;
 
 		if (m_swapchain.IsFrameValid())

@@ -14,6 +14,7 @@
 
 #include "BindlessManager.hpp"
 #include "FileSystem.hpp"
+#include "Profiler.hpp"
 #include "UniqueBuffer.hpp"
 
 namespace aether
@@ -151,6 +152,8 @@ namespace aether
 
 	Texture Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless)
 	{
+		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
+		AE_PROFILE_SET_ZONE_NAME(path.data());
 		// ── 1. Decode the image on the CPU ─────────────────────────────────
 		int width = 0;
 		int height = 0;

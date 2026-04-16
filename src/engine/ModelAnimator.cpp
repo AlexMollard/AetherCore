@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "AetherExceptions.hpp"
+#include "Profiler.hpp"
 
 namespace aether
 {
@@ -192,6 +193,7 @@ namespace aether
 
 	void ModelAnimator::Update(float dt)
 	{
+		AE_PROFILE_ZONE();
 		if (m_animations.empty())
 			return;
 

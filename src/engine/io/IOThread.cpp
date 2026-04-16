@@ -1,5 +1,7 @@
 #include "IOThread.hpp"
 
+#include "Profiler.hpp"
+
 namespace aether::io
 {
 	IOThread::IOThread()
@@ -35,6 +37,7 @@ namespace aether::io
 
 	void IOThread::WorkerLoop()
 	{
+		AE_PROFILE_THREAD("IOThread");
 		while (true)
 		{
 			std::function<void()> work;
@@ -52,7 +55,10 @@ namespace aether::io
 				m_queue.pop();
 			}
 
-			work();
+			{
+				AE_PROFILE_ZONE_N("IO::Job");
+				work();
+			}
 
 			{
 				std::scoped_lock lock(m_mutex);

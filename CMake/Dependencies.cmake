@@ -72,6 +72,14 @@ FetchContent_Declare(freetype
     EXCLUDE_FROM_ALL
 )
 
+FetchContent_Declare(tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.13.1
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+
 find_package(Vulkan REQUIRED)
 
 # Suppress GLFW's own build warnings — we don't own that code.
@@ -87,7 +95,15 @@ set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
 set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
 
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt)
+# Tracy profiler — opt-in via AETHERCORE_ENABLE_TRACY (default ON for shipping builds).
+option(AETHERCORE_ENABLE_TRACY "Enable Tracy profiler instrumentation" ON)
+if(AETHERCORE_ENABLE_TRACY)
+    set(TRACY_ENABLE   ON  CACHE BOOL "" FORCE)
+    set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
+else()
+    set(TRACY_ENABLE   OFF CACHE BOOL "" FORCE)
+endif()
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tracy)
 
 # ---------------------------------------------------------------------------
 # Solution folder organisation (Visual Studio only — ignored by other generators)
@@ -103,6 +119,7 @@ foreach(_dep IN ITEMS
         freetype
     cgltf
     EnTT
+    TracyClient
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")

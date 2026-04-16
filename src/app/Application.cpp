@@ -5,6 +5,7 @@
 #include "AnimationSystem.hpp"
 #include "FileSystem.hpp"
 #include "Logger.hpp"
+#include "Profiler.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app
@@ -142,6 +143,7 @@ namespace aether::app
 		auto previousFrameTime = Clock::now();
 		while (!m_engine.ShouldClose())
 		{
+			AE_PROFILE_ZONE_N("Frame");
 			Logger::SetFrameNumber(m_frameIndex);
 
 			// Pump event sounds funny but it just means we are polling for events and
@@ -174,21 +176,31 @@ namespace aether::app
 			m_engine.Tick(static_cast<float>(deltaTime));
 
 			// Update ECS systems (game logic).
-			frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
+			{
+				AE_PROFILE_ZONE_N("WorldSystems");
+				frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
+			}
 
 			// Update:
 			// Game logic and such should be updated in the OnUpdate() function of the
 			// layers, so we call UpdateAll() here to update all layers
-			m_layers.UpdateAll(frameContext);
+			{
+				AE_PROFILE_ZONE_N("LayerUpdate");
+				m_layers.UpdateAll(frameContext);
+			}
 
 			// Render:
 			// World rendering is handled implicitly by the engine's frame passes.
 			// GuiAll() is reserved for any explicit overlay/UI work layers want to
 			// submit.
 			m_engine.BeginFrame();
-			m_layers.GuiAll(frameContext);
+			{
+				AE_PROFILE_ZONE_N("LayerGui");
+				m_layers.GuiAll(frameContext);
+			}
 			m_engine.EndFrame();
 
+			AE_PROFILE_FRAME;
 			++m_frameIndex;
 		}
 

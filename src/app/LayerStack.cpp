@@ -1,6 +1,7 @@
 #include "LayerStack.hpp"
 
 #include "Logger.hpp"
+#include "Profiler.hpp"
 
 namespace aether::app
 {
@@ -31,6 +32,7 @@ namespace aether::app
 	{
 		for (const auto& layer: m_layers)
 		{
+			AE_PROFILE_ZONE_N("Layer::Update");
 			layer->OnUpdate(context);
 		}
 	}
@@ -39,6 +41,7 @@ namespace aether::app
 	{
 		for (const auto& layer: m_layers)
 		{
+			AE_PROFILE_ZONE_N("Layer::Gui");
 			layer->OnGui(context);
 		}
 	}

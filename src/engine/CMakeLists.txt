@@ -30,12 +30,14 @@ target_link_libraries(Engine
         vk-bootstrap
         # dbghelp is Windows-only; generator expression avoids the if(WIN32) block.
         $<$<PLATFORM_ID:Windows>:dbghelp>
+        Tracy::TracyClient
     PRIVATE
         freetype
 )
 
 target_compile_definitions(Engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
+    $<$<BOOL:${AETHERCORE_ENABLE_TRACY}>:TRACY_ENABLE>
 )
 
 # VMA is header-only from the consumer's perspective.

@@ -9,6 +9,7 @@
 #include "GraphicsPipeline.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
+#include "Profiler.hpp"
 
 namespace aether
 {
@@ -68,6 +69,7 @@ namespace aether
 
 	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		if (m_commands.empty())
 		{
 			m_batchRenderInfos.clear();
@@ -224,6 +226,7 @@ namespace aether
 
 	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet)
 	{
+		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
 			return;
 		if (m_batchRenderInfos.empty())

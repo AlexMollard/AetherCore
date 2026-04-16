@@ -9,6 +9,7 @@
 #include "AetherExceptions.hpp"
 #include "CommandRecorder.hpp"
 #include "Logger.hpp"
+#include "Profiler.hpp"
 #include "Window.hpp"
 
 namespace
@@ -142,12 +143,24 @@ namespace aether
 
 		CommandRecorder::SetObjectNameFunction(reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT")));
 
+		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
+		// so VRAM usage is visible alongside CPU heap allocations.
+#ifdef TRACY_ENABLE
+		static const VmaDeviceMemoryCallbacks kTracyVmaCallbacks{
+			.pfnAllocate = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize size, void*) { AE_PROFILE_ALLOC_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), static_cast<std::size_t>(size), "GPU"); },
+			.pfnFree = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize, void*) { AE_PROFILE_FREE_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), "GPU"); },
+		};
+#endif
+
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
 		allocatorCreateInfo.device = m_device->device;
 		allocatorCreateInfo.instance = m_instance->instance;
 		allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+#ifdef TRACY_ENABLE
+		allocatorCreateInfo.pDeviceMemoryCallbacks = &kTracyVmaCallbacks;
+#endif
 
 		const VkResult allocatorResult = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
 		if (allocatorResult != VK_SUCCESS)

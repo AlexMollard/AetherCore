@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "Logger.hpp"
+#include "Profiler.hpp"
 #include "VulkanUtils.hpp"
 
 namespace aether
@@ -175,6 +176,8 @@ namespace aether
 		for (const CompiledPass& cp: m_compiled)
 		{
 			const PassRecord& pass = m_passes[cp.passIndex];
+			AE_PROFILE_ZONE_N("RenderPass");
+			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
 			// ── Pre-pass image barriers ──────────────────────────────────────

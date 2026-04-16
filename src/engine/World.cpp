@@ -1,6 +1,7 @@
 #include "World.hpp"
 
 #include "Material.hpp"
+#include "Profiler.hpp"
 #include "RenderQueue.hpp"
 
 namespace aether
@@ -35,6 +36,7 @@ namespace aether
 
 	void World::FlushToQueue(RenderQueue& queue) const
 	{
+		AE_PROFILE_ZONE();
 		auto view = m_registry.view<const PipelineComponent, const MeshComponent, const TransformComponent>();
 		for (auto enttEntity: view)
 		{
@@ -82,6 +84,7 @@ namespace aether
 
 	void World::UpdateSystems(float dt)
 	{
+		AE_PROFILE_ZONE();
 		m_systems.UpdateAll(*this, dt);
 	}
 } // namespace aether

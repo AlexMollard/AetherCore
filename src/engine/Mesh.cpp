@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "AetherExceptions.hpp"
+#include "Profiler.hpp"
 #include "UniqueBuffer.hpp"
 
 namespace aether
@@ -75,6 +76,7 @@ namespace aether
 
 	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices)
 	{
+		AE_PROFILE_ZONE_N("Mesh::Upload");
 		Mesh mesh;
 		mesh.m_device = device;
 		mesh.m_allocator = allocator;

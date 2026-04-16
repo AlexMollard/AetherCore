@@ -15,6 +15,7 @@
 #include <cgltf.h>
 
 #include "FileSystem.hpp"
+#include "Profiler.hpp"
 
 namespace aether::assets
 {
@@ -187,6 +188,8 @@ namespace aether::assets
 
 	GltfAsset GltfAsset::LoadFromVfsPath(std::string_view path)
 	{
+		AE_PROFILE_ZONE_N("GltfAsset::Load");
+		AE_PROFILE_SET_ZONE_NAME(path.data());
 		const std::string vfsPath(path);
 		if (!io::FileSystem::Exists(vfsPath))
 		{
