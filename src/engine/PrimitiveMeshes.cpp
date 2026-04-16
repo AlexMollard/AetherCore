@@ -4,7 +4,7 @@
 
 namespace aether
 {
-	void PrimitiveMeshes::Initialize(VkDevice device, VmaAllocator allocator)
+	void PrimitiveMeshes::Initialize(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool)
 	{
 		// -----------------------------------------------------------------------
 		// Triangle  (CCW, facing +Z)
@@ -102,9 +102,9 @@ namespace aether
 			23, // -Y
 		};
 
-		m_triangle = Mesh::Create(device, allocator, kTriangleVerts, kTriangleIndices);
-		m_quad = Mesh::Create(device, allocator, kQuadVerts, kQuadIndices);
-		m_cube = Mesh::Create(device, allocator, kCubeVerts, kCubeIndices);
+		m_triangle = Mesh::Create(device, allocator, uploadQueue, uploadPool, kTriangleVerts, kTriangleIndices);
+		m_quad = Mesh::Create(device, allocator, uploadQueue, uploadPool, kQuadVerts, kQuadIndices);
+		m_cube = Mesh::Create(device, allocator, uploadQueue, uploadPool, kCubeVerts, kCubeIndices);
 	}
 
 	const Mesh& PrimitiveMeshes::Get(PrimitiveMesh primitive) const

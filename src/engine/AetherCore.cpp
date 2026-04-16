@@ -38,7 +38,21 @@ namespace aether
 		        .manager = &m_bindlessManager,
 		        .device = m_vulkanContext.GetDevice().device,
 		});
-		m_primitiveMeshes.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
+
+		// Upload pool — used for one-shot staging uploads (meshes, textures).
+		// TRANSIENT: hints that command buffers are short-lived.
+		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
+		const VkCommandPoolCreateInfo uploadPoolInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			.queueFamilyIndex = m_vulkanContext.GetGraphicsQueueFamily(),
+		};
+		if (vkCreateCommandPool(m_vulkanContext.GetDevice().device, &uploadPoolInfo, nullptr, &m_uploadPool) != VK_SUCCESS)
+		{
+			throw std::runtime_error("AetherCore: failed to create upload command pool.");
+		}
+
+		m_primitiveMeshes.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool);
 		io::FileSystem::InitializeDefaultMounts();
 
 		m_postProcessStack = PostProcessStack::Create({
@@ -68,19 +82,6 @@ namespace aether
 		// Create a default main camera so rendering works without app setup.
 		const CameraHandle mainCam = m_cameraManager.Create(CameraDesc{});
 		m_cameraManager.SetMainCamera(mainCam);
-
-		// Upload pool — used for immediate-submit texture uploads.
-		// TRANSIENT: hints that command buffers are short-lived.
-		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
-		const VkCommandPoolCreateInfo uploadPoolInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = m_vulkanContext.GetGraphicsQueueFamily(),
-		};
-		if (vkCreateCommandPool(m_vulkanContext.GetDevice().device, &uploadPoolInfo, nullptr, &m_uploadPool) != VK_SUCCESS)
-		{
-			throw std::runtime_error("AetherCore: failed to create upload command pool.");
-		}
 
 		m_asyncComputeEnabled = m_vulkanContext.GetComputeQueue() != VK_NULL_HANDLE;
 		if (!m_asyncComputeEnabled)
@@ -843,12 +844,12 @@ namespace aether
 
 	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices)
 	{
-		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), vertices);
+		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool, vertices);
 	}
 
 	Mesh AetherCore::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices)
 	{
-		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), vertices, indices);
+		return Mesh::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool, vertices, indices);
 	}
 
 	Texture AetherCore::CreateTexture(std::string_view path)

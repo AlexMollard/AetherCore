@@ -20,6 +20,13 @@ namespace aether
 
 		static UniqueBuffer Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
+		// Convenience factory: persistently-mapped, host-sequential-write, coherency-flushed.
+		// Use for per-frame CPU-written buffers (uniform/storage).
+		static UniqueBuffer CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+
+		// Convenience factory: device-local, GPU-optimal. Caller must upload via staging.
+		static UniqueBuffer CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+
 		void Reset();
 
 		[[nodiscard]] VkBuffer Get() const;

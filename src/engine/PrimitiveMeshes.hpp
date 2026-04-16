@@ -18,7 +18,7 @@ namespace aether
 	class PrimitiveMeshes
 	{
 	public:
-		void Initialize(VkDevice device, VmaAllocator allocator);
+		void Initialize(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool);
 		[[nodiscard]] const Mesh& Get(PrimitiveMesh primitive) const;
 
 	private:

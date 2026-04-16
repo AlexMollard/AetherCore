@@ -3,70 +3,95 @@
 #include <cstring>
 
 #include "AetherExceptions.hpp"
+#include "UniqueBuffer.hpp"
 
 namespace aether
 {
-	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices)
+	namespace
+	{
+		// Allocate + begin a one-time command buffer from the given pool.
+		VkCommandBuffer BeginOneTimeBuffer(VkDevice device, VkCommandPool pool)
+		{
+			const VkCommandBufferAllocateInfo allocInfo{
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+				.commandPool = pool,
+				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+				.commandBufferCount = 1,
+			};
+			VkCommandBuffer cmd = VK_NULL_HANDLE;
+			vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+
+			const VkCommandBufferBeginInfo beginInfo{
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			};
+			vkBeginCommandBuffer(cmd, &beginInfo);
+			return cmd;
+		}
+
+		// Submit and block until the queue is idle, then free the buffer.
+		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
+		{
+			vkEndCommandBuffer(cmd);
+			const VkSubmitInfo submitInfo{
+				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+				.commandBufferCount = 1,
+				.pCommandBuffers = &cmd,
+			};
+			vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			vkQueueWaitIdle(queue);
+			vkFreeCommandBuffers(device, pool, 1, &cmd);
+		}
+
+		// Upload arbitrary bytes to a new device-local buffer via a transient staging buffer.
+		// Returns the device-local buffer; the staging buffer is destroyed after the submit.
+		VkBuffer UploadToDeviceLocal(VkDevice device, VmaAllocator allocator, VkQueue queue, VkCommandPool pool, VkBufferUsageFlags usage, const void* data, VkDeviceSize size, VmaAllocation& outAllocation)
+		{
+			// Staging: mapped, host-sequential-write.
+			UniqueBuffer staging = UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+			std::memcpy(staging.GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
+			vmaFlushAllocation(allocator, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
+
+			// Destination: device-local.
+			const VkBufferCreateInfo destInfo{
+				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				.size = size,
+				.usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			};
+			const VmaAllocationCreateInfo destAllocInfo{
+				.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+			};
+			VkBuffer dest = VK_NULL_HANDLE;
+			vmaCreateBuffer(allocator, &destInfo, &destAllocInfo, &dest, &outAllocation, nullptr);
+
+			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
+			const VkBufferCopy region{ .size = size };
+			vkCmdCopyBuffer(cmd, staging.Get(), dest, 1, &region);
+			EndAndSubmitOneTimeBuffer(device, pool, queue, cmd);
+
+			return dest;
+		}
+	} // namespace
+
+	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices)
 	{
 		Mesh mesh;
 		mesh.m_device = device;
 		mesh.m_allocator = allocator;
 		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
 
-		const VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
-
-		VkBufferCreateInfo bufferInfo{};
-		bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		bufferInfo.size = bufferSize;
-		bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-
-		// Host-visible + mapped for simplicity. A staging-buffer upload path
-		// can be layered on top later without changing the Mesh API.
-		VmaAllocationCreateInfo allocInfo{};
-		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-		VmaAllocationInfo allocResult{};
-		const VkResult result = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &mesh.m_buffer, &mesh.m_allocation, &allocResult);
-
-		if (result != VK_SUCCESS)
-		{
-			throw VulkanError("Failed to create vertex buffer for Mesh.");
-		}
-
-		std::memcpy(allocResult.pMappedData, vertices.data(), static_cast<std::size_t>(bufferSize));
-		vmaFlushAllocation(allocator, mesh.m_allocation, 0, VK_WHOLE_SIZE);
-
+		const VkDeviceSize size = sizeof(Vertex) * vertices.size();
+		mesh.m_buffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertices.data(), size, mesh.m_allocation);
 		return mesh;
 	}
 
-	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
+	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
 	{
-		Mesh mesh = Create(device, allocator, vertices);
-
+		Mesh mesh = Create(device, allocator, uploadQueue, uploadPool, vertices);
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
-		const VkDeviceSize indexBufferSize = sizeof(std::uint32_t) * indices.size();
 
-		VkBufferCreateInfo indexBufferInfo{};
-		indexBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-		indexBufferInfo.size = indexBufferSize;
-		indexBufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-
-		VmaAllocationCreateInfo allocInfo{};
-		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
-		VmaAllocationInfo allocResult{};
-		const VkResult result = vmaCreateBuffer(allocator, &indexBufferInfo, &allocInfo, &mesh.m_indexBuffer, &mesh.m_indexAllocation, &allocResult);
-
-		if (result != VK_SUCCESS)
-		{
-			throw VulkanError("Failed to create index buffer for Mesh.");
-		}
-
-		std::memcpy(allocResult.pMappedData, indices.data(), static_cast<std::size_t>(indexBufferSize));
-		vmaFlushAllocation(allocator, mesh.m_indexAllocation, 0, VK_WHOLE_SIZE);
-
+		const VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
+		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation);
 		return mesh;
 	}
 

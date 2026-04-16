@@ -14,35 +14,7 @@ namespace aether
 {
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
-	namespace
-	{
-		UniqueBuffer MakeMappedBuffer(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
-		{
-			const VkBufferCreateInfo bufInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = size,
-				.usage = usage,
-			};
-			const VmaAllocationCreateInfo allocInfo{
-				.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-				.usage = VMA_MEMORY_USAGE_AUTO,
-			};
-			return UniqueBuffer::Create(allocator, device, bufInfo, allocInfo);
-		}
-
-		UniqueBuffer MakeDeviceBuffer(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
-		{
-			const VkBufferCreateInfo bufInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = size,
-				.usage = usage,
-			};
-			const VmaAllocationCreateInfo allocInfo{
-				.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-			};
-			return UniqueBuffer::Create(allocator, device, bufInfo, allocInfo);
-		}
-	} // namespace
+	// (Replaced by UniqueBuffer::CreateMapped / UniqueBuffer::CreateDeviceLocal)
 
 	// ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -57,17 +29,17 @@ namespace aether
 
 		// All CPU-mapped and GPU-side buffers are kFramesInFlight deep so that
 		// frame N's CPU writes never race with frame N-1's GPU reads.
-		m_instanceDataBuffer = MakeMappedBuffer(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags);
+		m_instanceDataBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags);
 		m_instanceDataMapped = static_cast<DrawInstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
 
-		m_cullInputBuffer = MakeMappedBuffer(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(CullDrawInput), kSsboFlags);
+		m_cullInputBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(CullDrawInput), kSsboFlags);
 		m_cullInputMapped = static_cast<CullDrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
 
-		m_batchDescBuffer = MakeMappedBuffer(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags);
+		m_batchDescBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags);
 		m_batchDescMapped = static_cast<CullBatch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
 
 		// Output indirect buffer: device-local, written by compute via BDA, read as indirect args.
-		m_outputIndirectBuffer = MakeDeviceBuffer(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		m_outputIndirectBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 	}
 
 	void RenderQueue::Shutdown()

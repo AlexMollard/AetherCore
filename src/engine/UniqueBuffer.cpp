@@ -86,6 +86,33 @@ namespace aether
 		return out;
 	}
 
+	UniqueBuffer UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	{
+		const VkBufferCreateInfo bufInfo{
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = size,
+			.usage = usage,
+		};
+		const VmaAllocationCreateInfo allocInfo{
+			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+			.usage = VMA_MEMORY_USAGE_AUTO,
+		};
+		return Create(allocator, device, bufInfo, allocInfo);
+	}
+
+	UniqueBuffer UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	{
+		const VkBufferCreateInfo bufInfo{
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = size,
+			.usage = usage,
+		};
+		const VmaAllocationCreateInfo allocInfo{
+			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		};
+		return Create(allocator, device, bufInfo, allocInfo);
+	}
+
 	void UniqueBuffer::Reset()
 	{
 		if (m_buffer != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE && m_allocator != VK_NULL_HANDLE)

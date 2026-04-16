@@ -34,8 +34,10 @@ namespace aether
 		Mesh& operator=(Mesh&&) noexcept;
 
 		// Engine-internal factory used by AetherCore::CreateMesh.
-		static Mesh Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices);
-		static Mesh Create(VkDevice device, VmaAllocator allocator, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices);
+		// Uploads via a staging buffer to device-local memory; call after the upload
+		// pool is created (blocks until the queue is idle).
+		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices);
+		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices);
 		void Destroy();
 
 		[[nodiscard]] bool IsValid() const
