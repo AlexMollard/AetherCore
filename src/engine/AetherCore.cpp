@@ -29,6 +29,10 @@ namespace aether
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_materialBuffer.Initialize(m_vulkanContext);
+		m_renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
+		m_renderQueue.SetDebugForceVisible(false);
+		m_renderQueue.SetDebugBypassIndirect(false);
+		m_cullPass.Initialize(m_vulkanContext.GetDevice().device);
 		m_lightingManager.Initialize(m_vulkanContext, m_renderer);
 		m_resourcePool.ConfigureBindlessImages({
 		        .manager = &m_bindlessManager,
@@ -175,7 +179,9 @@ namespace aether
 
 		m_postProcessStack.Destroy();
 		m_skyboxPass.Destroy();
+		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
+		m_renderQueue.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		if (m_uploadPool != VK_NULL_HANDLE)
 		{
@@ -265,14 +271,18 @@ namespace aether
 		// Forward geometry then loads this colour as its background.
 		m_skyboxPass.RegisterPass(m_renderGraph, m_postProcessStack.GetHdrColor());
 
-		// ── Pass 2: Forward ───────────────────────────────────────────────────
-		// Renders all scene objects into the HDR offscreen buffer.
-		// Loads the sky written by the previous pass instead of clearing.
+		// ── Pass 2: Cull (compute) ────────────────────────────────────────────
+		// Flushes scene + world into the render queue and dispatches the GPU
+		// frustum-cull compute shader. Surviving draws are written into the
+		// device-local output indirect buffer.
+		m_cullPass.RegisterPass(m_renderGraph, m_scene, m_world, m_renderQueue);
+
+		// ── Pass 3: Forward ───────────────────────────────────────────────────
+		// Issues DrawIndexedIndirect per batch using the GPU-written indirect
+		// buffer produced by the preceding cull pass.
 		m_forwardPass.RegisterPass(m_renderGraph,
 		        m_postProcessStack.GetHdrColor(),
 		        m_renderGraph.GetSwapchainDepth(),
-		        m_scene,
-		        m_world,
 		        m_renderQueue,
 		        m_bindlessManager.GetSet(),
 		        [this]()
@@ -281,7 +291,7 @@ namespace aether
 			        return m_lightingManager.GetSet(frameIdx);
 		        });
 
-		// ── Passes 3–5: Render-to-texture cameras ────────────────────────────
+		// ── Passes 4–5: Render-to-texture cameras ────────────────────────────
 		for (auto& [id, rt]: m_rtCameras)
 		{
 			RegisterRttPassesFor(id);
@@ -299,29 +309,28 @@ namespace aether
 			return;
 		}
 
-		const std::string passName = "$CameraRT_" + std::to_string(id);
+		const std::string idStr = std::to_string(id);
 		const RGImage color = it->second.rgColor;
 		const RGImage depth = it->second.rgDepth;
 		const VkExtent2D extent = it->second.extent;
 
-		m_renderGraph.AddPass(passName)
-		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
-		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
-		        .SetExtent(extent)
-		        .Execute(
-		                [this, id](PassContext& ctx)
+		// ── Compute cull pass ─────────────────────────────────────────────────
+		// Writes per-camera FrameConstants, flushes scene/world into the shared
+		// render queue, then dispatches the frustum-cull compute shader.
+		const VkPipeline cullPipeline = m_cullPass.GetPipeline();
+		const VkPipelineLayout cullLayout = m_cullPass.GetPipelineLayout();
+
+		m_renderGraph.AddComputePass("$CullDraws_RTT_" + idStr)
+		        .ExecuteCompute(
+		                [this, id, cullPipeline, cullLayout](PassContext& ctx)
 		                {
 			                auto rit = m_rtCameras.find(id);
 			                if (rit == m_rtCameras.end())
-			                {
 				                return;
-			                }
 
 			                Camera* cam = m_cameraManager.TryGet(rit->second.camera);
 			                if (cam == nullptr || !rit->second.constants)
-			                {
 				                return;
-			                }
 
 			                const float aspect = static_cast<float>(rit->second.extent.width) / static_cast<float>(rit->second.extent.height);
 
@@ -330,7 +339,6 @@ namespace aether
 			                fc.proj = cam->GetProjectionMatrix(aspect);
 			                fc.viewProj = fc.proj * fc.view;
 			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
-
 			                fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
 			                fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
 			                fc.ambientColor = m_renderer.GetAmbientLightVector();
@@ -344,10 +352,30 @@ namespace aether
 			                rit->second.constants->Write(frameIdx, fc);
 			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                m_scene.FlushToQueue(m_renderQueue);
-			                m_world.FlushToQueue(m_renderQueue);
-			                m_renderQueue.Flush(ctx.recorder, frameAddr, m_bindlessManager.GetSet(), m_lightingManager.GetSet(frameIdx));
-			                m_renderQueue.Clear();
+			                m_scene.FlushToQueue(rit->second.renderQueue);
+			                m_world.FlushToQueue(rit->second.renderQueue);
+			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
+		                });
+
+		// ── Graphics draw pass ────────────────────────────────────────────────
+		// Issues DrawIndexedIndirect per batch using the GPU-written indirect
+		// buffer produced by the preceding compute cull pass.
+		m_renderGraph.AddPass("$CameraRT_" + idStr)
+		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
+		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
+		        .SetExtent(extent)
+		        .Execute(
+		                [this, id](PassContext& ctx)
+		                {
+			                auto rit = m_rtCameras.find(id);
+			                if (rit == m_rtCameras.end())
+				                return;
+			                if (!rit->second.constants)
+				                return;
+
+			                const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+			                rit->second.renderQueue.FlushDraw(ctx.recorder, m_bindlessManager.GetSet(), m_lightingManager.GetSet(frameIdx));
+			                rit->second.renderQueue.Clear();
 		                });
 	}
 
@@ -472,6 +500,20 @@ namespace aether
 			m_frameConstantsBuffer.Write(frameIdx, fc);
 			const VkDeviceAddress frameAddr = m_frameConstantsBuffer.GetDeviceAddress(frameIdx);
 
+			const VkMemoryBarrier2 frameConstantsHostToShaders{
+				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+				.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			};
+			const VkDependencyInfo frameConstantsDep{
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.memoryBarrierCount = 1,
+				.pMemoryBarriers = &frameConstantsHostToShaders,
+			};
+			vkCmdPipelineBarrier2(m_swapchain.GetCurrentCommandBuffer(), &frameConstantsDep);
+
 			const FrameTarget frameTarget{
 				.colorImage = m_swapchain.GetCurrentImage(),
 				.colorView = m_swapchain.GetCurrentImageView(),
@@ -483,7 +525,7 @@ namespace aether
 			};
 
 			m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
-			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr);
+			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr, frameIdx);
 			m_currentRecorder.EndDebugLabel();
 		}
 		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, m_computeTimelineValue);
@@ -724,6 +766,7 @@ namespace aether
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(m_vulkanContext);
+		rt.renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
 
 		const uint32_t id = m_nextRtId++;
 		m_rtCameras.emplace(id, std::move(rt));
@@ -747,6 +790,7 @@ namespace aether
 
 		m_renderGraph.RemovePass("$CameraRT_" + std::to_string(rt.id));
 
+		it->second.renderQueue.Shutdown();
 		if (it->second.constants)
 		{
 			it->second.constants->Shutdown();

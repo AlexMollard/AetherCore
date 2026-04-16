@@ -72,6 +72,7 @@ namespace aether
 	void FrameConstantsBuffer::Write(std::uint32_t frameIndex, const FrameConstants& data)
 	{
 		std::memcpy(m_frames[frameIndex].mapped, &data, sizeof(FrameConstants));
+		vmaFlushAllocation(m_allocator, m_frames[frameIndex].allocation, 0, VK_WHOLE_SIZE);
 	}
 
 	VkDeviceAddress FrameConstantsBuffer::GetDeviceAddress(std::uint32_t frameIndex) const

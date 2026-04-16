@@ -50,6 +50,7 @@ namespace aether
 		CommandRecorder& recorder;
 		VkExtent2D extent;
 		VkDeviceAddress frameConstantsAddr;
+		std::uint32_t frameIndex = 0;
 	};
 
 	// Per-frame swapchain handles supplied to RenderGraph::Execute by AetherCore.
@@ -186,7 +187,7 @@ namespace aether
 		// ── Frame execution ───────────────────────────────────────────────────
 		// Compiles the graph (if dirty), issues pre-pass barriers, opens/closes
 		// dynamic rendering, and invokes each pass's Execute callback.
-		void Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr);
+		void Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex);
 
 	private:
 		static constexpr uint32_t kSwapchainColorId = 0u;

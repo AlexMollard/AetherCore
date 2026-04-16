@@ -31,6 +31,23 @@ namespace aether
 
 	// ── Direction helpers ─────────────────────────────────────────────────────
 
+	glm::vec3 Camera::GetPosition() const
+	{
+		if (m_mode == CameraMode::Orbit)
+		{
+			const float oy = glm::radians(m_orbitYaw);
+			const float op = glm::radians(m_orbitPitch);
+			const glm::vec3 offset = {
+				m_orbitDistance * std::cos(op) * std::sin(oy),
+				m_orbitDistance * std::sin(op),
+				m_orbitDistance * std::cos(op) * std::cos(oy),
+			};
+			return m_orbitTarget + offset;
+		}
+
+		return m_position;
+	}
+
 	glm::vec3 Camera::GetForward() const
 	{
 		// yaw=0, pitch=0  →  (0, 0, -1)  (looking along -Z, standard convention)

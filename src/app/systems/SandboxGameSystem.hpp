@@ -80,9 +80,9 @@ namespace aether::app
 		// Per-fox autonomous agent state.
 		struct FoxAgent
 		{
-			glm::vec3 pos{0.0f};
+			glm::vec3 pos{ 0.0f };
 			float heading = 0.0f; // radians, Y-axis rotation
-			glm::vec3 target{0.0f};
+			glm::vec3 target{ 0.0f };
 			float stateTimer = 0.0f;
 			bool idle = false;
 		};
@@ -97,7 +97,7 @@ namespace aether::app
 		std::vector<FoxAgent> m_foxAgents;
 		std::vector<std::vector<aether::Entity>> m_foxInstances;
 		std::vector<aether::ModelAnimator> m_foxAnimators;
-		std::mt19937 m_rng{42};
+		std::mt19937 m_rng{ 42 };
 
 		// Cameras
 		aether::CameraHandle m_orbitCamera;

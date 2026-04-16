@@ -158,7 +158,7 @@ namespace aether
 	// ──────────────────────────────────────────────────────────────────────────
 	//  RenderGraph — frame execution
 	// ──────────────────────────────────────────────────────────────────────────
-	void RenderGraph::Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr)
+	void RenderGraph::Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex)
 	{
 		if (m_passes.empty())
 		{
@@ -260,7 +260,7 @@ namespace aether
 			// ── Execute callback ─────────────────────────────────────────────
 			if (pass.execute)
 			{
-				PassContext ctx{ recorder, passExtent, frameConstantsAddr };
+				PassContext ctx{ recorder, passExtent, frameConstantsAddr, frameIndex };
 				pass.execute(ctx);
 			}
 

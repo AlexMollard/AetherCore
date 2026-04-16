@@ -8,17 +8,15 @@
 namespace aether
 {
 	class RenderQueue;
-	class Scene;
-	class World;
 
 	// Registers the engine's main forward scene pass.
 	//
-	// This pass does not own pipelines itself; it owns the render-graph policy
-	// for the main scene submission stage: which attachments are used, how they
-	// are loaded/cleared, and when scene/world draw queues are flushed.
+	// Draws the commands produced by the preceding CullPass compute pass using
+	// DrawIndexedIndirectCount. Scene and world flushing happens in CullPass — this
+	// pass only records draw calls and clears the queue.
 	class ForwardPass
 	{
 	public:
-		void RegisterPass(RenderGraph& graph, RGImage hdrColor, RGImage depth, Scene& scene, World& world, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<VkDescriptorSet()> getLightingSet);
+		void RegisterPass(RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<VkDescriptorSet()> getLightingSet);
 	};
 } // namespace aether

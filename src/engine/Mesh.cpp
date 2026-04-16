@@ -35,6 +35,7 @@ namespace aether
 		}
 
 		std::memcpy(allocResult.pMappedData, vertices.data(), static_cast<std::size_t>(bufferSize));
+		vmaFlushAllocation(allocator, mesh.m_allocation, 0, VK_WHOLE_SIZE);
 
 		return mesh;
 	}
@@ -64,6 +65,7 @@ namespace aether
 		}
 
 		std::memcpy(allocResult.pMappedData, indices.data(), static_cast<std::size_t>(indexBufferSize));
+		vmaFlushAllocation(allocator, mesh.m_indexAllocation, 0, VK_WHOLE_SIZE);
 
 		return mesh;
 	}

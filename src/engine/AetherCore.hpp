@@ -14,6 +14,7 @@
 #include "Camera.hpp"
 #include "CameraManager.hpp"
 #include "CommandRecorder.hpp"
+#include "CullPass.hpp"
 #include "ForwardPass.hpp"
 #include "FrameConstants.hpp"
 #include "FrameConstantsBuffer.hpp"
@@ -189,6 +190,7 @@ namespace aether
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
+			RenderQueue renderQueue; // own queue — isolated from main m_renderQueue
 		};
 
 		struct AsyncComputeFrame
@@ -226,6 +228,7 @@ namespace aether
 		// Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
 		SkyboxPass m_skyboxPass;
+		CullPass m_cullPass;
 		ForwardPass m_forwardPass;
 		Input m_input;
 		CameraManager m_cameraManager;

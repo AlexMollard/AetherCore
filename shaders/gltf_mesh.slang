@@ -9,11 +9,9 @@
 //   loc 5  JOINTS_0    uint4
 //   loc 6  WEIGHTS_0   float4
 //
-// Push constants  (80 bytes, matches aether::DrawPushConstants):
-//   offset  0 : float4x4  model
-//   offset 64 : uint64_t  frameAddr       BDA → FrameConstantsData
-//   offset 72 : uint      materialIndex   index into MaterialBuffer
-//   offset 76 : uint      _pad0
+// Push constants  (16 bytes, matches aether::DrawPushConstants):
+//   offset  0 : uint64_t  frameAddr         BDA → FrameConstantsData
+//   offset  8 : uint64_t  instanceDataAddr  BDA → DrawInstanceData[]
 //
 // FrameConstantsData  (320 bytes, matches aether::FrameConstants):
 //   offset   0 : float4x4  viewProj
@@ -84,13 +82,19 @@ struct GpuMaterial
 // Push constants — must match aether::DrawPushConstants (88 bytes).
 struct PushData
 {
-    float4x4 model;
     uint64_t frameAddr;
-    uint     materialIndex;
-    uint     _pad0;
-    uint64_t skinBufferAddr;  // BDA of float4x4[jointCount]; 0 = not skinned
+    uint64_t instanceDataAddr;
 };
 [[vk::push_constant]] PushData pc;
+
+struct DrawInstanceData
+{
+    [[vk::offset(0)]]  float4x4 model;
+    [[vk::offset(64)]] uint     materialIndex;
+    [[vk::offset(68)]] uint     _pad0;
+    [[vk::offset(72)]] uint64_t skinBufferAddr;
+    [[vk::offset(80)]] float4   worldBoundingSphere; // xyz=world center, w=radius — read by cull_draws.slang, not used here
+};
 
 // ── Vertex I/O ────────────────────────────────────────────────────────────
 
@@ -114,39 +118,46 @@ struct VSOutput
     [[vk::location(3)]] float  tangentSign     : TEXCOORD3;
     [[vk::location(4)]] float2 uv              : TEXCOORD4;
     [[vk::location(5)]] float3 vertexColor     : TEXCOORD5;
+    [[vk::location(6)]] nointerpolation uint materialIndex : TEXCOORD6;
 };
 
 // ── Vertex shader ─────────────────────────────────────────────────────────
 
+// Keep instance indexing explicit: combine the per-draw base instance with the
+// per-instance id so we always address DrawInstanceData correctly for both direct
+// and indirect draws, independent of backend semantic mapping details.
 [shader("vertex")]
-VSOutput vertexMain(VSInput input)
+VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
 {
     FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
+    const uint instanceIndex = startInstance + instanceId;
+    DrawInstanceData instance = instances[instanceIndex];
 
     // Upper-left 3x3 of the model matrix.
     // Correct for TRS matrices with uniform scale; note that columns in
     // column-major Slang/SPIR-V means model[i] = i-th column.
     float3x3 normalMatrix = float3x3(
-        pc.model[0].xyz,
-        pc.model[1].xyz,
-        pc.model[2].xyz
+        instance.model[0].xyz,
+        instance.model[1].xyz,
+        instance.model[2].xyz
     );
 
     float4 worldPos;
     float3 worldNormal;
     float3 worldTangent;
 
-    if (pc.skinBufferAddr != 0uL)
+    if (instance.skinBufferAddr != 0uL)
     {
         // GPU skinning: blend up to 4 joint matrices weighted by BLENDWEIGHT0.
-        float4x4* joints = (float4x4*)(pc.skinBufferAddr);
+        float4x4* joints = (float4x4*)(instance.skinBufferAddr);
         float4x4 skinMatrix =
             input.jointWeights.x * joints[input.jointIndices.x] +
             input.jointWeights.y * joints[input.jointIndices.y] +
             input.jointWeights.z * joints[input.jointIndices.z] +
             input.jointWeights.w * joints[input.jointIndices.w];
 
-        worldPos = mul(pc.model, mul(skinMatrix, float4(input.position, 1.0)));
+        worldPos = mul(instance.model, mul(skinMatrix, float4(input.position, 1.0)));
 
         float3x3 skin3 = float3x3(
             skinMatrix[0].xyz,
@@ -158,7 +169,7 @@ VSOutput vertexMain(VSInput input)
     }
     else
     {
-        worldPos     = mul(pc.model, float4(input.position, 1.0));
+        worldPos     = mul(instance.model, float4(input.position, 1.0));
         worldNormal  = normalize(mul(normalMatrix, input.normal));
         worldTangent = normalize(mul(normalMatrix, input.tangent.xyz));
     }
@@ -171,6 +182,7 @@ VSOutput vertexMain(VSInput input)
     o.tangentSign = input.tangent.w;
     o.uv          = input.uv;
     o.vertexColor = input.color;
+    o.materialIndex = instance.materialIndex;
     return o;
 }
 
@@ -316,9 +328,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     mat.occlusionSlot = kNoTexture;
     mat.emissiveSlot = kNoTexture;
 
-    if (pc.materialIndex != kNoTexture)
+    if (input.materialIndex != kNoTexture)
     {
-        mat = materials[pc.materialIndex];
+        mat = materials[input.materialIndex];
     }
 
     float2 uv = input.uv;

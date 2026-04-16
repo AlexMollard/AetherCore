@@ -32,6 +32,10 @@ namespace aether
 		void BindGraphicsPipeline(const GraphicsPipeline& pipeline);
 		void Draw(std::uint32_t vertexCount, std::uint32_t instanceCount = 1, std::uint32_t firstVertex = 0, std::uint32_t firstInstance = 0);
 		void DrawIndexed(std::uint32_t indexCount, std::uint32_t instanceCount = 1, std::uint32_t firstIndex = 0, std::int32_t vertexOffset = 0, std::uint32_t firstInstance = 0);
+		void DrawIndirect(VkBuffer indirectBuffer, VkDeviceSize offset, std::uint32_t drawCount, std::uint32_t stride = sizeof(VkDrawIndirectCommand));
+		void DrawIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride = sizeof(VkDrawIndirectCommand));
+		void DrawIndexedIndirect(VkBuffer indirectBuffer, VkDeviceSize offset, std::uint32_t drawCount, std::uint32_t stride = sizeof(VkDrawIndexedIndirectCommand));
+		void DrawIndexedIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride = sizeof(VkDrawIndexedIndirectCommand));
 		void BindVertexBuffer(VkBuffer buffer, VkDeviceSize offset = 0);
 		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
 		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);

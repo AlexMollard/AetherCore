@@ -14,6 +14,16 @@ namespace aether
 		vkCmdDraw(m_cmd, vertexCount, instanceCount, firstVertex, firstInstance);
 	}
 
+	void CommandRecorder::DrawIndirect(VkBuffer indirectBuffer, VkDeviceSize offset, std::uint32_t drawCount, std::uint32_t stride)
+	{
+		vkCmdDrawIndirect(m_cmd, indirectBuffer, offset, drawCount, stride);
+	}
+
+	void CommandRecorder::DrawIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride)
+	{
+		vkCmdDrawIndirectCount(m_cmd, indirectBuffer, indirectOffset, countBuffer, countOffset, maxDrawCount, stride);
+	}
+
 	void CommandRecorder::BindVertexBuffer(VkBuffer buffer, VkDeviceSize offset)
 	{
 		vkCmdBindVertexBuffers(m_cmd, 0, 1, &buffer, &offset);
@@ -86,5 +96,15 @@ namespace aether
 	void CommandRecorder::DrawIndexed(std::uint32_t indexCount, std::uint32_t instanceCount, std::uint32_t firstIndex, std::int32_t vertexOffset, std::uint32_t firstInstance)
 	{
 		vkCmdDrawIndexed(m_cmd, indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
+	}
+
+	void CommandRecorder::DrawIndexedIndirect(VkBuffer indirectBuffer, VkDeviceSize offset, std::uint32_t drawCount, std::uint32_t stride)
+	{
+		vkCmdDrawIndexedIndirect(m_cmd, indirectBuffer, offset, drawCount, stride);
+	}
+
+	void CommandRecorder::DrawIndexedIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride)
+	{
+		vkCmdDrawIndexedIndirectCount(m_cmd, indirectBuffer, indirectOffset, countBuffer, countOffset, maxDrawCount, stride);
 	}
 } // namespace aether

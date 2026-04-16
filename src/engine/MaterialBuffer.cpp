@@ -99,5 +99,6 @@ namespace aether
 			return;
 		}
 		m_mapped[slot] = material;
+		vmaFlushAllocation(m_allocator, m_allocation, static_cast<VkDeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial));
 	}
 } // namespace aether

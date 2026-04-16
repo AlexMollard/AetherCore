@@ -221,6 +221,7 @@ namespace aether
 		{
 			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
 		}
+		vmaFlushAllocation(m_context->GetAllocator(), frame.lights.GetAllocation(), 0, VK_WHOLE_SIZE);
 		UpdateDescriptorSet(frameSlot);
 
 		EnsureComputePipeline();
@@ -446,7 +447,7 @@ namespace aether
 
 			const glm::vec3 ndc = glm::vec3(clip) / clip.w;
 			const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
-			const float screenY = (1.0f - (ndc.y * 0.5f + 0.5f)) * static_cast<float>(extent.height);
+			const float screenY = (ndc.y * 0.5f + 0.5f) * static_cast<float>(extent.height);
 			const float radiusPx = (light.positionRadius.w * pixelScaleY) / std::max(depth, nearClip);
 			if (radiusPx <= 0.5f)
 			{
@@ -534,10 +535,13 @@ namespace aether
 		{
 			std::memcpy(frame.tileIndices.GetAllocationInfo().pMappedData, indices.data(), indices.size() * sizeof(std::uint32_t));
 		}
+		vmaFlushAllocation(m_context->GetAllocator(), frame.lights.GetAllocation(), 0, VK_WHOLE_SIZE);
+		vmaFlushAllocation(m_context->GetAllocator(), frame.tileHeaders.GetAllocation(), 0, VK_WHOLE_SIZE);
+		vmaFlushAllocation(m_context->GetAllocator(), frame.tileIndices.GetAllocation(), 0, VK_WHOLE_SIZE);
 		UpdateDescriptorSet(frameSlot);
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, 0u);
+		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const

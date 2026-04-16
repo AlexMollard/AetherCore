@@ -83,6 +83,7 @@ namespace aether
 		requiredFeatures12.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
 		requiredFeatures12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		requiredFeatures12.timelineSemaphore = VK_TRUE;
+		requiredFeatures12.drawIndirectCount = VK_TRUE;
 
 		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
 		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -91,6 +92,7 @@ namespace aether
 
 		VkPhysicalDeviceFeatures requiredFeatures10{};
 		requiredFeatures10.shaderInt64 = VK_TRUE;
+		requiredFeatures10.multiDrawIndirect = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
 		auto physicalDeviceResult = selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13).select();

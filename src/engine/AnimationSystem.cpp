@@ -1,8 +1,9 @@
 #include "AnimationSystem.hpp"
-#include "ModelAnimator.hpp"
-#include "World.hpp"
 
 #include <unordered_set>
+
+#include "ModelAnimator.hpp"
+#include "World.hpp"
 
 namespace aether
 {
@@ -19,7 +20,7 @@ namespace aether
 			auto& animator = view.get<AnimatorComponent>(entity);
 			if (animator.animator && updated.insert(animator.animator).second)
 			{
- 				animator.animator->Update(dt);
+				animator.animator->Update(dt);
 			}
 		}
 	}

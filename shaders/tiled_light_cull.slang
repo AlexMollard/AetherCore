@@ -59,7 +59,7 @@ void binLights(uint3 tid : SV_DispatchThreadID)
     float screenW = pc.params0.z;
     float screenH = pc.params0.w;
     float screenX = (ndc.x * 0.5 + 0.5) * screenW;
-    float screenY = (1.0 - (ndc.y * 0.5 + 0.5)) * screenH;
+    float screenY = (ndc.y * 0.5 + 0.5) * screenH;
     float radiusPx = (radius * pc.params0.y) / max(depth, pc.params0.x);
     if (radiusPx <= 0.5)
     {

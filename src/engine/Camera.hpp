@@ -52,10 +52,7 @@ namespace aether
 		[[nodiscard]] glm::mat4 GetViewProjectionMatrix(float aspect) const;
 
 		// ── Free mode pose ────────────────────────────────────────────────────
-		[[nodiscard]] glm::vec3 GetPosition() const
-		{
-			return m_position;
-		}
+		[[nodiscard]] glm::vec3 GetPosition() const;
 
 		[[nodiscard]] float GetYaw() const
 		{

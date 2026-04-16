@@ -91,7 +91,7 @@ namespace aether::app
 		// ── Shared pipeline ───────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout = m_engine->GetBindlessManager().GetLayout();
 		const VkDescriptorSetLayout lightingLayout = m_engine->GetLightingSetLayout();
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
 		m_pipeline = m_assets->CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
@@ -152,9 +152,9 @@ namespace aether::app
 				const std::vector<aether::Entity> foxEntities = m_assets->SpawnModel(*m_foxModel, m_pipeline, 0.05f);
 
 				FoxAgent agent;
-				agent.pos = {posDist(m_rng), 0.0f, posDist(m_rng)};
+				agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
 				agent.heading = angleDist(m_rng);
-				agent.target = {posDist(m_rng), 0.0f, posDist(m_rng)};
+				agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
 				agent.stateTimer = timerDist(m_rng);
 				agent.idle = false;
 				m_foxAgents.push_back(agent);
@@ -176,11 +176,11 @@ namespace aether::app
 
 				std::vector<aether::Entity> instances;
 				instances.reserve(foxEntities.size());
-				for (const aether::Entity e : foxEntities)
+				for (const aether::Entity e: foxEntities)
 				{
 					world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
 					world.EmplaceOrReplace<FoxTag>(e, FoxTag{});
-					world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{i});
+					world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
 					instances.push_back(e);
 				}
 
@@ -196,9 +196,9 @@ namespace aether::app
 						{
 							const VkDeviceAddress addr = foxAnim.GetSkinBufferAddr(skinIdx);
 							if (addr != 0)
-								world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{.skinBufferAddr = addr});
+								world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .skinBufferAddr = addr });
 						}
-						world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{.animator = &foxAnim});
+						world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &foxAnim });
 					}
 				}
 
@@ -224,25 +224,25 @@ namespace aether::app
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
 			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world.EmplaceOrReplace<RingTag>(e, RingTag{.index = i});
+			world.EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
 		}
 
 		// Wide-orbit pair — one textured, one RTT-fed
 		{
 			const aether::Entity eA = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
 			world.EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
-			world.EmplaceOrReplace<OrbitTag>(eA, OrbitTag{.phase = 0.0f, .isRttTarget = false});
+			world.EmplaceOrReplace<OrbitTag>(eA, OrbitTag{ .phase = 0.0f, .isRttTarget = false });
 
 			const aether::Entity eB = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
 			world.EmplaceOrReplace<SandboxEntityTag>(eB, SandboxEntityTag{});
-			world.EmplaceOrReplace<OrbitTag>(eB, OrbitTag{.phase = glm::radians(180.0f), .isRttTarget = true});
+			world.EmplaceOrReplace<OrbitTag>(eB, OrbitTag{ .phase = glm::radians(180.0f), .isRttTarget = true });
 		}
 
 		// ── Cameras ──────────────────────────────────────────────────────────
 		// Main orbit: pulled back far enough to see the entire fox field.
 		m_orbitCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Orbit,
-		        .orbitTarget = {0.0f, 0.0f, 0.0f},
+		        .orbitTarget = { 0.0f, 0.0f, 0.0f },
 		        .orbitDistance = 48.0f,
 		        .orbitYaw = 35.0f,
 		        .orbitPitch = 28.0f,
@@ -250,7 +250,7 @@ namespace aether::app
 
 		m_freeCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Free,
-		        .position = {0.0f, 5.0f, 46.0f},
+		        .position = { 0.0f, 5.0f, 46.0f },
 		        .yaw = 0.0f,
 		        .pitch = -8.0f,
 		        .moveSpeed = 12.0f,
@@ -260,14 +260,14 @@ namespace aether::app
 		// RTT camera: top-down-ish view orbiting above the fox field.
 		m_rttCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Orbit,
-		        .orbitTarget = {0.0f, 0.0f, 0.0f},
+		        .orbitTarget = { 0.0f, 0.0f, 0.0f },
 		        .orbitDistance = 40.0f,
 		        .orbitYaw = 0.0f,
 		        .orbitPitch = 68.0f,
 		});
 
 		m_cameras->SetMainCamera(m_orbitCamera);
-		m_rttTarget = m_engine->CreateCameraRenderTarget(m_rttCamera, {512, 512});
+		m_rttTarget = m_engine->CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
 
 		// ── Point lights scattered across the fox field ───────────────────────
 		{
@@ -280,10 +280,10 @@ namespace aether::app
 			for (int li = 0; li < 16; ++li)
 			{
 				aether::Renderer::PointLight l{};
-				l.position = {lightPosDist(lightRng), 1.5f, lightPosDist(lightRng)};
+				l.position = { lightPosDist(lightRng), 1.5f, lightPosDist(lightRng) };
 				l.radius = 14.0f;
 				l.intensity = 1.8f;
-				l.color = {colorDist(lightRng), colorDist(lightRng), colorDist(lightRng)};
+				l.color = { colorDist(lightRng), colorDist(lightRng), colorDist(lightRng) };
 				pointLights.push_back(l);
 			}
 			m_engine->GetRenderer().SetPointLights(std::move(pointLights));
@@ -301,10 +301,10 @@ namespace aether::app
 
 		// ── Ground: large flat quad, 56×56 units, lying at Y=0 ───────────────
 		{
-			glm::mat4 m = glm::rotate(glm::mat4{1.0f}, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f});
-			m = glm::scale(m, {56.0f, 56.0f, 1.0f});
+			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, glm::radians(-90.0f), { 1.0f, 0.0f, 0.0f });
+			m = glm::scale(m, { 56.0f, 56.0f, 1.0f });
 			auto gView = world.View<GroundTag, aether::TransformComponent>();
-			for (auto e : gView)
+			for (auto e: gView)
 				gView.get<aether::TransformComponent>(e).localToWorld = m;
 		}
 
@@ -317,7 +317,7 @@ namespace aether::app
 
 			int runningCount = 0;
 
-			for (FoxAgent& agent : m_foxAgents)
+			for (FoxAgent& agent: m_foxAgents)
 			{
 				if (agent.idle)
 				{
@@ -325,7 +325,7 @@ namespace aether::app
 					if (agent.stateTimer <= 0.0f)
 					{
 						// Done idling — pick a new target and start running.
-						agent.target = {posDist(m_rng), 0.0f, posDist(m_rng)};
+						agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
 						agent.idle = false;
 					}
 				}
@@ -345,7 +345,7 @@ namespace aether::app
 						}
 						else
 						{
-							agent.target = {posDist(m_rng), 0.0f, posDist(m_rng)};
+							agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
 						}
 					}
 					else
@@ -383,28 +383,28 @@ namespace aether::app
 					foxAnim.SetPlaybackSpeed(m_foxAgents[fi].idle ? 1.0f : kFoxAnimRunSpeed);
 				}
 			}
-			(void)runningCount;
+			(void) runningCount;
 
 			// Push the computed transform to every entity in each fox instance.
 			for (std::size_t i = 0; i < m_foxInstances.size(); ++i)
 			{
 				const FoxAgent& agent = m_foxAgents[i];
-				glm::mat4 foxMat = glm::translate(glm::mat4{1.0f}, agent.pos);
-				foxMat = glm::rotate(foxMat, agent.heading, {0.0f, 1.0f, 0.0f});
+				glm::mat4 foxMat = glm::translate(glm::mat4{ 1.0f }, agent.pos);
+				foxMat = glm::rotate(foxMat, agent.heading, { 0.0f, 1.0f, 0.0f });
 				foxMat = glm::scale(foxMat, glm::vec3(0.05f));
-				for (const aether::Entity e : m_foxInstances[i])
+				for (const aether::Entity e: m_foxInstances[i])
 					world.Get<aether::TransformComponent>(e).localToWorld = foxMat;
 			}
 		}
 
 		// ── Sky: centre cube spinning at kSkyHeight ───────────────────────────
 		{
-			glm::mat4 m = glm::translate(glm::mat4{1.0f}, {0.0f, kSkyHeight, 0.0f});
-			m = glm::rotate(m, m_time * glm::radians(22.0f), {0.0f, 1.0f, 0.0f});
-			m = glm::rotate(m, m_time * glm::radians(11.0f), {1.0f, 0.0f, 0.0f});
-			m = glm::scale(m, {1.4f, 1.4f, 1.4f});
+			glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, { 0.0f, kSkyHeight, 0.0f });
+			m = glm::rotate(m, m_time * glm::radians(22.0f), { 0.0f, 1.0f, 0.0f });
+			m = glm::rotate(m, m_time * glm::radians(11.0f), { 1.0f, 0.0f, 0.0f });
+			m = glm::scale(m, { 1.4f, 1.4f, 1.4f });
 			auto cView = world.View<CenterTag, aether::TransformComponent>();
-			for (auto e : cView)
+			for (auto e: cView)
 				cView.get<aether::TransformComponent>(e).localToWorld = m;
 		}
 
@@ -413,34 +413,34 @@ namespace aether::app
 			constexpr float kRingRadius = 10.0f;
 			const float kStep = glm::radians(360.0f / static_cast<float>(kRingCount));
 			auto rView = world.View<RingTag, aether::TransformComponent>();
-			for (auto e : rView)
+			for (auto e: rView)
 			{
 				const int i = rView.get<RingTag>(e).index;
 				const float angle = m_time * glm::radians(40.0f) + static_cast<float>(i) * kStep;
-				const glm::vec3 pos = {kRingRadius * std::cos(angle), kSkyHeight, kRingRadius * std::sin(angle)};
+				const glm::vec3 pos = { kRingRadius * std::cos(angle), kSkyHeight, kRingRadius * std::sin(angle) };
 				const float selfSpin = m_time * glm::radians(90.0f + static_cast<float>(i) * 15.0f);
 
-				glm::mat4 m = glm::translate(glm::mat4{1.0f}, pos);
-				m = glm::rotate(m, selfSpin, {0.0f, 1.0f, 0.0f});
-				m = glm::scale(m, {0.35f, 0.35f, 0.35f});
+				glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
+				m = glm::rotate(m, selfSpin, { 0.0f, 1.0f, 0.0f });
+				m = glm::scale(m, { 0.35f, 0.35f, 0.35f });
 				rView.get<aether::TransformComponent>(e).localToWorld = m;
 			}
 		}
 
 		// ── Sky: wide-orbit pair at kSkyHeight + 3 ────────────────────────────
 		{
-			const glm::vec3 diagAxis = glm::normalize(glm::vec3{1.0f, 1.0f, 0.3f});
+			const glm::vec3 diagAxis = glm::normalize(glm::vec3{ 1.0f, 1.0f, 0.3f });
 			auto oView = world.View<OrbitTag, aether::TransformComponent>();
-			for (auto e : oView)
+			for (auto e: oView)
 			{
 				const float phase = oView.get<OrbitTag>(e).phase;
 				const float orbAngle = m_time * glm::radians(18.0f) + phase;
 				const float bob = 0.8f * std::sin(m_time * 1.2f + phase);
-				const glm::vec3 pos = {17.0f * std::cos(orbAngle), kSkyHeight + 3.0f + bob, 17.0f * std::sin(orbAngle)};
+				const glm::vec3 pos = { 17.0f * std::cos(orbAngle), kSkyHeight + 3.0f + bob, 17.0f * std::sin(orbAngle) };
 
-				glm::mat4 m = glm::translate(glm::mat4{1.0f}, pos);
+				glm::mat4 m = glm::translate(glm::mat4{ 1.0f }, pos);
 				m = glm::rotate(m, m_time * glm::radians(55.0f), diagAxis);
-				m = glm::scale(m, {0.8f, 0.8f, 0.8f});
+				m = glm::scale(m, { 0.8f, 0.8f, 0.8f });
 				oView.get<aether::TransformComponent>(e).localToWorld = m;
 			}
 		}
@@ -451,7 +451,7 @@ namespace aether::app
 			{
 				const auto next = static_cast<aether::TonemapMode>((static_cast<int>(m_engine->GetTonemapMode()) + 1) % 3);
 				m_engine->GetRenderer().SetTonemapMode(next);
-				const char* names[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
+				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
 				INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 			}
 
@@ -484,7 +484,7 @@ namespace aether::app
 			m_rttFeedMaterial.albedoSlot = rtSlot;
 			m_assets->RegisterMaterial(m_rttFeedMaterial);
 			auto rttView = world.View<OrbitTag, aether::MaterialComponent>();
-			for (auto e : rttView)
+			for (auto e: rttView)
 			{
 				if (rttView.get<OrbitTag>(e).isRttTarget)
 				{
@@ -508,8 +508,8 @@ namespace aether::app
 			auto allView = world.View<SandboxEntityTag>();
 			toDestroy.assign(allView.begin(), allView.end());
 		}
-		for (const entt::entity e : toDestroy)
-			world.Destroy(aether::Entity{static_cast<std::uint32_t>(entt::to_integral(e))});
+		for (const entt::entity e: toDestroy)
+			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
 
 		m_foxAgents.clear();
 		m_foxInstances.clear();
@@ -518,7 +518,7 @@ namespace aether::app
 		// Unregister fox model materials.
 		if (m_foxModel)
 		{
-			for (aether::LoadedModelPrimitive& primitive : m_foxModel->primitives)
+			for (aether::LoadedModelPrimitive& primitive: m_foxModel->primitives)
 				m_assets->UnregisterMaterial(primitive.material);
 		}
 		m_foxModel.reset();
