@@ -1,11 +1,13 @@
 #pragma once
 
+#include <array>
 #include <glm/glm.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "GraphicsPipeline.hpp"
+#include "Swapchain.hpp"
 #include "UiLayout.hpp"
 
 namespace aether
@@ -23,6 +25,12 @@ namespace aether
 
 		void Init(AetherCore& engine, std::string_view passName);
 		void Shutdown(AetherCore& engine);
+
+		// Must be called by the game thread before DrawQuad() each frame.
+		void SetWriteSlot(std::uint32_t slot)
+		{
+			m_writeSlot = slot;
+		}
 
 		void DrawQuad(const UiRect& rect, glm::vec4 color = glm::vec4(1.f));
 
@@ -53,7 +61,10 @@ namespace aether
 		std::string m_passName;
 		AetherCore* m_engine = nullptr;
 		GraphicsPipeline m_pipeline;
-		std::vector<PendingQuad> m_pendingQuads;
+		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
+		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
+		std::array<std::vector<PendingQuad>, Swapchain::kMaxFramesInFlight> m_pendingQuads;
+		std::uint32_t m_writeSlot = 0;
 		bool m_ready = false;
 	};
 } // namespace aether

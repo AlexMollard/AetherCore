@@ -8,8 +8,6 @@
 #include "FileSystem.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
-#include "Scene.hpp"
-#include "World.hpp"
 
 namespace
 {
@@ -99,7 +97,7 @@ namespace aether
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}
 
-	void CullPass::RegisterPass(RenderGraph& graph, Scene& scene, World& world, RenderQueue& renderQueue, const std::string& namePrefix)
+	void CullPass::RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix)
 	{
 		EnsurePipeline();
 
@@ -108,10 +106,10 @@ namespace aether
 		const VkPipelineLayout layout = m_pipelineLayout;
 
 		graph.AddComputePass(passName).ExecuteCompute(
-		        [&scene, &world, &renderQueue, pipeline, layout](PassContext& ctx)
+		        [&renderQueue, pipeline, layout](PassContext& ctx)
 		        {
-			        scene.FlushToQueue(renderQueue);
-			        world.FlushToQueue(renderQueue);
+			        // Draw commands were pre-populated by the game thread via
+			        // AetherCore::GatherRenderDraws() before this frame was dispatched.
 			        renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, pipeline, layout, ctx.frameIndex);
 		        });
 	}

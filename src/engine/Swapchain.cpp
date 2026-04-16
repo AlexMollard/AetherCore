@@ -5,6 +5,7 @@
 
 #include "AetherExceptions.hpp"
 #include "Logger.hpp"
+#include "Profiler.hpp"
 #include "VulkanContext.hpp"
 #include "VulkanUtils.hpp"
 #include "Window.hpp"
@@ -204,9 +205,16 @@ namespace aether
 
 		FrameSync& frame = m_frames[m_currentFrame];
 
-		vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX);
+		{
+			AE_PROFILE_ZONE_N("WaitForFence");
+			vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX);
+		}
 
-		const VkResult acquireResult = vkAcquireNextImageKHR(device, m_swapchain.swapchain, UINT64_MAX, frame.imageAvailable, VK_NULL_HANDLE, &m_imageIndex);
+		VkResult acquireResult;
+		{
+			AE_PROFILE_ZONE_N("AcquireNextImage");
+			acquireResult = vkAcquireNextImageKHR(device, m_swapchain.swapchain, UINT64_MAX, frame.imageAvailable, VK_NULL_HANDLE, &m_imageIndex);
+		}
 
 		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
 		{

@@ -54,4 +54,15 @@ namespace aether
 	{
 		glfwPollEvents();
 	}
+
+	int Window::GetDisplayRefreshRate() const
+	{
+		GLFWmonitor* monitor = glfwGetWindowMonitor(m_window);
+		if (monitor == nullptr)
+			monitor = glfwGetPrimaryMonitor();
+		if (monitor == nullptr)
+			return 0;
+		const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+		return (mode != nullptr) ? mode->refreshRate : 0;
+	}
 } // namespace aether

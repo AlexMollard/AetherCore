@@ -20,6 +20,7 @@
 #include "FrameConstants.hpp"
 #include "Logger.hpp"
 #include "Profiler.hpp"
+#include "RenderThread.hpp"
 
 namespace aether
 {
@@ -277,7 +278,7 @@ namespace aether
 		// Flushes scene + world into the render queue and dispatches the GPU
 		// frustum-cull compute shader. Surviving draws are written into the
 		// device-local output indirect buffer.
-		m_cullPass.RegisterPass(m_renderGraph, m_scene, m_world, m_renderQueue);
+		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
 
 		// ── Pass 3: Forward ───────────────────────────────────────────────────
 		// Issues DrawIndexedIndirect per batch using the GPU-written indirect
@@ -377,7 +378,7 @@ namespace aether
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
 			                rit->second.renderQueue.FlushDraw(ctx.recorder, m_bindlessManager.GetSet(), m_lightingManager.GetSet(frameIdx));
-			                rit->second.renderQueue.Clear();
+			                rit->second.renderQueue.Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}
 
@@ -400,102 +401,153 @@ namespace aether
 		m_currentRecorder = CommandRecorder(m_swapchain.GetCurrentCommandBuffer());
 	}
 
-	void AetherCore::EndFrame()
+	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)
+	{
+		AE_PROFILE_ZONE();
+		// Pre-populate the render queue from ECS into the designated double-buffer slot.
+		m_renderQueue.SetWriteSlot(drawSlot);
+		m_scene.FlushToQueue(m_renderQueue);
+		m_world.FlushToQueue(m_renderQueue);
+
+		// Snapshot per-frame render state so the render thread never reads live
+		// game-thread state after this function returns.
+		RenderFramePacket packet;
+		packet.frameIndex = frameIndex;
+		packet.drawSlot = drawSlot;
+		packet.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
+
+		if (const Camera* cam = m_cameraManager.TryGetMainCamera())
+		{
+			packet.hasCameraData = true;
+			packet.view = cam->GetViewMatrix();
+			const float aspect = static_cast<float>(m_swapchain.GetExtent().width) / static_cast<float>(m_swapchain.GetExtent().height);
+			packet.proj = cam->GetProjectionMatrix(aspect);
+			packet.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
+		}
+
+		packet.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
+		packet.ambientColor = m_renderer.GetAmbientLightVector();
+		packet.sunColor = m_renderer.GetSunColorVector();
+		packet.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
+		packet.skyZenithColor = m_renderer.GetSkyZenithColorVector();
+		packet.skyVoidColor = m_renderer.GetSkyVoidColorVector();
+
+		return packet;
+	}
+
+	void AetherCore::ExecuteRenderFrame(const RenderFramePacket& packet)
+	{
+		AE_PROFILE_ZONE();
+		// Synchronise m_frameIndex with the packet so that RTT pass callbacks
+		// that capture 	his and read m_frameIndex see the correct value.
+		m_frameIndex = packet.frameIndex;
+		BeginFrame();
+		EndFrame(packet);
+	}
+
+	void AetherCore::EndFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
 		VkSemaphore computeFinished = VK_NULL_HANDLE;
 
 		if (m_swapchain.IsFrameValid())
 		{
-			const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
+			const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % Swapchain::kMaxFramesInFlight);
 
-			// Write per-frame camera data into the GPU buffer then get its BDA.
+			// Build FrameConstants from the snapshotted packet state.
 			FrameConstants fc{};
-			const float aspect = static_cast<float>(m_swapchain.GetExtent().width) / static_cast<float>(m_swapchain.GetExtent().height);
 
-			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
+			if (packet.hasCameraData)
 			{
-				fc.view = cam->GetViewMatrix();
-				fc.proj = cam->GetProjectionMatrix(aspect);
-				fc.viewProj = fc.proj * fc.view;
-				fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
+				fc.view = packet.view;
+				fc.proj = packet.proj;
+				fc.viewProj = packet.proj * packet.view;
+				fc.cameraWorldPos = packet.cameraWorldPos;
 			}
 			else
 			{
-				// Backward compatibility
+				// Backward compatibility path (no main camera).
 				fc.viewProj = m_scene.GetViewProjection();
 			}
 
-			fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
-			fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
-			fc.ambientColor = m_renderer.GetAmbientLightVector();
-			fc.sunColor = m_renderer.GetSunColorVector();
-			fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
-			fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
-			fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
+			fc.materialBufferAddr = packet.materialBufferAddr;
+			fc.sunDirectionIntensity = packet.sunDirectionIntensity;
+			fc.ambientColor = packet.ambientColor;
+			fc.sunColor = packet.sunColor;
+			fc.skyHorizonColor = packet.skyHorizonColor;
+			fc.skyZenithColor = packet.skyZenithColor;
+			fc.skyVoidColor = packet.skyVoidColor;
 
-			if (const Camera* cam = m_cameraManager.TryGetMainCamera())
+			// TODO: cam pointer is read on the render thread while the game thread
+			// may advance it for frame N+1. This race is benign in practice (1-frame
+			// lag for tiled-light frustum culling) and will be resolved when
+			// LightingManager accepts matrices instead of a Camera object.
+			if (packet.hasCameraData)
 			{
-				const std::uint32_t computeFamily = m_vulkanContext.GetComputeQueueFamily();
-				const std::uint32_t graphicsFamily = m_vulkanContext.GetGraphicsQueueFamily();
-
-				VkCommandBuffer lightingCmd = m_swapchain.GetCurrentCommandBuffer();
-				if (m_asyncComputeEnabled)
+				const Camera* cam = m_cameraManager.TryGetMainCamera();
+				if (cam)
 				{
-					auto& asyncFrame = m_asyncComputeFrames[frameIdx];
-					vkWaitForFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight, VK_TRUE, UINT64_MAX);
-					vkResetFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight);
-					vkResetCommandPool(m_vulkanContext.GetDevice().device, asyncFrame.commandPool, 0);
+					const std::uint32_t computeFamily = m_vulkanContext.GetComputeQueueFamily();
+					const std::uint32_t graphicsFamily = m_vulkanContext.GetGraphicsQueueFamily();
 
-					const VkCommandBufferBeginInfo beginInfo{
-						.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-						.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-					};
-					vkBeginCommandBuffer(asyncFrame.commandBuffer, &beginInfo);
-					CommandRecorder(asyncFrame.commandBuffer).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
-					lightingCmd = asyncFrame.commandBuffer;
-				}
-
-				m_lightingManager.UpdateForView(frameIdx, lightingCmd, *cam, m_swapchain.GetExtent(), fc, true, computeFamily, graphicsFamily);
-
-				if (m_asyncComputeEnabled)
-				{
-					auto& asyncFrame = m_asyncComputeFrames[frameIdx];
-					CommandRecorder(asyncFrame.commandBuffer).EndDebugLabel();
-					vkEndCommandBuffer(asyncFrame.commandBuffer);
-
-					// Advance the timeline value and signal it from the compute queue.
-					const std::uint64_t signalValue = ++m_computeTimelineValue;
-					const VkTimelineSemaphoreSubmitInfo timelineSubmit{
-						.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-						.waitSemaphoreValueCount = 0,
-						.pWaitSemaphoreValues = nullptr,
-						.signalSemaphoreValueCount = 1,
-						.pSignalSemaphoreValues = &signalValue,
-					};
-					const VkSubmitInfo submitInfo{
-						.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-						.pNext = &timelineSubmit,
-						.waitSemaphoreCount = 0,
-						.pWaitSemaphores = nullptr,
-						.pWaitDstStageMask = nullptr,
-						.commandBufferCount = 1,
-						.pCommandBuffers = &asyncFrame.commandBuffer,
-						.signalSemaphoreCount = 1,
-						.pSignalSemaphores = &m_computeTimelineSemaphore,
-					};
-					vkQueueSubmit(m_vulkanContext.GetComputeQueue(), 1, &submitInfo, asyncFrame.inFlight);
-					computeFinished = m_computeTimelineSemaphore;
-
-					// When the compute and graphics queue families differ, the lighting
-					// buffers need a QFOT acquire barrier on the graphics command buffer
-					// before the fragment shader reads them.
-					if (computeFamily != graphicsFamily)
+					VkCommandBuffer lightingCmd = m_swapchain.GetCurrentCommandBuffer();
+					if (m_asyncComputeEnabled)
 					{
-						m_lightingManager.EmitAcquireBarriers(frameIdx, m_swapchain.GetCurrentCommandBuffer(), computeFamily, graphicsFamily);
+						auto& asyncFrame = m_asyncComputeFrames[frameIdx];
+						vkWaitForFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight, VK_TRUE, UINT64_MAX);
+						vkResetFences(m_vulkanContext.GetDevice().device, 1, &asyncFrame.inFlight);
+						vkResetCommandPool(m_vulkanContext.GetDevice().device, asyncFrame.commandPool, 0);
+
+						const VkCommandBufferBeginInfo beginInfo{
+							.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+							.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+						};
+						vkBeginCommandBuffer(asyncFrame.commandBuffer, &beginInfo);
+						CommandRecorder(asyncFrame.commandBuffer).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
+						lightingCmd = asyncFrame.commandBuffer;
 					}
-				}
-			}
+
+					m_lightingManager.UpdateForView(frameIdx, lightingCmd, *cam, m_swapchain.GetExtent(), fc, true, computeFamily, graphicsFamily);
+
+					if (m_asyncComputeEnabled)
+					{
+						auto& asyncFrame = m_asyncComputeFrames[frameIdx];
+						CommandRecorder(asyncFrame.commandBuffer).EndDebugLabel();
+						vkEndCommandBuffer(asyncFrame.commandBuffer);
+
+						// Advance the timeline value and signal it from the compute queue.
+						const std::uint64_t signalValue = ++m_computeTimelineValue;
+						const VkTimelineSemaphoreSubmitInfo timelineSubmit{
+							.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+							.waitSemaphoreValueCount = 0,
+							.pWaitSemaphoreValues = nullptr,
+							.signalSemaphoreValueCount = 1,
+							.pSignalSemaphoreValues = &signalValue,
+						};
+						const VkSubmitInfo submitInfo{
+							.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+							.pNext = &timelineSubmit,
+							.waitSemaphoreCount = 0,
+							.pWaitSemaphores = nullptr,
+							.pWaitDstStageMask = nullptr,
+							.commandBufferCount = 1,
+							.pCommandBuffers = &asyncFrame.commandBuffer,
+							.signalSemaphoreCount = 1,
+							.pSignalSemaphores = &m_computeTimelineSemaphore,
+						};
+						vkQueueSubmit(m_vulkanContext.GetComputeQueue(), 1, &submitInfo, asyncFrame.inFlight);
+						computeFinished = m_computeTimelineSemaphore;
+
+						// When the compute and graphics queue families differ, the lighting
+						// buffers need a QFOT acquire barrier on the graphics command buffer
+						// before the fragment shader reads them.
+						if (computeFamily != graphicsFamily)
+						{
+							m_lightingManager.EmitAcquireBarriers(frameIdx, m_swapchain.GetCurrentCommandBuffer(), computeFamily, graphicsFamily);
+						}
+					} // if (m_asyncComputeEnabled)
+				} // if (cam)
+			} // if (packet.hasCameraData)
 			else
 			{
 				fc.tiledLightGridInfo = glm::uvec4(0u);
@@ -661,6 +713,16 @@ namespace aether
 	const Renderer& AetherCore::GetRenderer() const
 	{
 		return m_renderer;
+	}
+
+	Window& AetherCore::GetWindow()
+	{
+		return m_window;
+	}
+
+	const Window& AetherCore::GetWindow() const
+	{
+		return m_window;
 	}
 
 	AssetManager& AetherCore::GetAssets()

@@ -31,7 +31,10 @@ namespace aether
 			                if (m_engine == nullptr)
 				                return;
 
-			                if (m_pendingLabels.empty() || !m_fontAtlas.IsValid())
+			                // Read slot = render-thread frame index % kMaxFramesInFlight.
+			                // This is guaranteed to differ from the game thread's write slot.
+			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
+			                if (m_pendingLabels[readSlot].empty() || !m_fontAtlas.IsValid())
 			                {
 				                return;
 			                }
@@ -39,7 +42,7 @@ namespace aether
 			                AetherCore& engine = *m_engine;
 			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 			                const VkExtent2D ext = ctx.extent;
-			                const std::uint32_t frameSlot = static_cast<std::uint32_t>(engine.GetBindlessManager().GetCurrentFrame() % Swapchain::kMaxFramesInFlight);
+			                const std::uint32_t frameSlot = readSlot;
 
 			                const VkViewport viewport{
 				                .x = 0.f,
@@ -59,7 +62,7 @@ namespace aether
 			                std::vector<GlyphInstance> glyphs;
 			                glyphs.reserve(256);
 
-			                for (const PendingLabel& label: m_pendingLabels)
+			                for (const PendingLabel& label: m_pendingLabels[readSlot])
 			                {
 				                float cursorX = label.position.x;
 
@@ -85,7 +88,7 @@ namespace aether
 
 			                if (glyphs.empty())
 			                {
-				                m_pendingLabels.clear();
+				                m_pendingLabels[readSlot].clear();
 				                return;
 			                }
 
@@ -121,7 +124,7 @@ namespace aether
 			                void* mappedPtr = m_glyphBuffers[frameSlot].GetAllocationInfo().pMappedData;
 			                if (mappedPtr == nullptr)
 			                {
-				                m_pendingLabels.clear();
+				                m_pendingLabels[readSlot].clear();
 				                return;
 			                }
 
@@ -143,7 +146,7 @@ namespace aether
 
 			                ctx.recorder.Draw(static_cast<std::uint32_t>(glyphs.size() * 6));
 			                ctx.recorder.EndDebugLabel();
-			                m_pendingLabels.clear();
+			                m_pendingLabels[readSlot].clear();
 		                });
 	}
 
@@ -212,7 +215,10 @@ namespace aether
 				buffer.Reset();
 			}
 			m_glyphBufferCapacities.fill(0);
-			m_pendingLabels.clear();
+			for (auto& slot: m_pendingLabels)
+			{
+				slot.clear();
+			}
 			m_engine = nullptr;
 			m_ready = false;
 		}
@@ -233,7 +239,7 @@ namespace aether
 		}
 
 		const glm::vec2 px = ResolveUiPointPx(m_engine->GetSwapchainExtent(), point);
-		m_pendingLabels.push_back({ std::string(text), px, fontSize, color });
+		m_pendingLabels[m_writeSlot].push_back({ std::string(text), px, fontSize, color });
 	}
 
 } // namespace aether

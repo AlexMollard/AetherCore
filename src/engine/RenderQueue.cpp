@@ -62,7 +62,7 @@ namespace aether
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
-		m_commands.push_back(cmd);
+		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
 	// ── PrepareAndDispatch ────────────────────────────────────────────────────
@@ -70,6 +70,7 @@ namespace aether
 	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
+		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
 		if (m_commands.empty())
 		{
 			m_batchRenderInfos.clear();
@@ -307,14 +308,14 @@ namespace aether
 
 	// ── Clear / query ─────────────────────────────────────────────────────────
 
-	void RenderQueue::Clear()
+	void RenderQueue::Clear(std::uint32_t slot)
 	{
-		m_commands.clear();
+		m_commandSlots[slot % kFramesInFlight].clear();
 		m_batchRenderInfos.clear();
 	}
 
-	bool RenderQueue::IsEmpty() const
+	bool RenderQueue::IsEmpty(std::uint32_t slot) const
 	{
-		return m_commands.empty();
+		return m_commandSlots[slot % kFramesInFlight].empty();
 	}
 } // namespace aether

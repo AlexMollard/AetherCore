@@ -7,13 +7,15 @@ namespace aether
 {
 	class RenderGraph;
 	class RenderQueue;
-	class Scene;
-	class World;
 
 	// Registers a GPU compute pass that frustum-culls all DrawCommands submitted to a
 	// RenderQueue and writes VkDrawIndexedIndirectCommand + per-batch draw counts into
 	// device-local buffers. The paired ForwardPass then calls RenderQueue::FlushDraw to
 	// issue DrawIndexedIndirectCount for each surviving batch.
+	//
+	// DrawCommands must be pre-populated into the queue by the game thread before
+	// EndFrame (via AetherCore::GatherRenderDraws). This pass only dispatches the
+	// compute cull shader — it no longer reads ECS directly.
 	//
 	// Usage:
 	//   1. Initialize(device)          — once, at engine startup.
@@ -26,10 +28,10 @@ namespace aether
 		void Initialize(VkDevice device);
 		void Shutdown();
 
-		// Registers a "$CullDraws[_<namePrefix>]" compute pass that flushes scene + world
-		// into renderQueue, then dispatches the frustum-cull compute shader.
+		// Registers a "$CullDraws[_<namePrefix>]" compute pass that dispatches the
+		// frustum-cull compute shader against the pre-populated renderQueue.
 		// Must be registered before the matching ForwardPass in the RenderGraph.
-		void RegisterPass(RenderGraph& graph, Scene& scene, World& world, RenderQueue& renderQueue, const std::string& namePrefix = {});
+		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
 
 		[[nodiscard]] VkPipeline GetPipeline() const
 		{

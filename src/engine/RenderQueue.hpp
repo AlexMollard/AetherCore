@@ -1,11 +1,13 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
 #include <vulkan/vulkan.h>
 
 #include "DrawPushConstants.hpp"
+#include "Swapchain.hpp"
 #include "UniqueBuffer.hpp"
 
 namespace aether
@@ -38,10 +40,17 @@ namespace aether
 	class RenderQueue
 	{
 	public:
-		static constexpr std::uint32_t kFramesInFlight = 2;
+		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
 
 		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024);
 		void Shutdown();
+
+		// Set which double-buffer slot Submit() writes into.
+		// Call once per frame on the game thread before FlushToQueue.
+		void SetWriteSlot(std::uint32_t slot)
+		{
+			m_writeSlot = slot;
+		}
 
 		void Submit(const DrawCommand& cmd);
 
@@ -77,12 +86,17 @@ namespace aether
 		// Must be called after PrepareAndDispatch on the same frame's command buffer.
 		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE);
 
-		void Clear();
+		// Clear the CPU draw list for the given slot. Call from render thread after FlushDraw.
+		void Clear(std::uint32_t slot);
 
-		[[nodiscard]] bool IsEmpty() const;
+		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 
 	private:
-		std::vector<DrawCommand> m_commands;
+		// Double-buffered CPU draw list.
+		// Slot (frameIndex % kFramesInFlight) is written by the game thread and
+		// read by the render thread one frame later, so there is no data race.
+		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
+		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 

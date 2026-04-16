@@ -43,6 +43,12 @@ namespace aether
 		// Remove the render-graph pass, destroy the pipeline and atlas.
 		void Shutdown(AetherCore& engine);
 
+		// Must be called by the game thread before DrawText() each frame.
+		void SetWriteSlot(std::uint32_t slot)
+		{
+			m_writeSlot = slot;
+		}
+
 		// Queue anchor-based text for this frame.
 		// Call during a layer's OnGui(); labels are flushed by the registered
 		// pass inside EndFrame().
@@ -91,7 +97,10 @@ namespace aether
 		AetherCore* m_engine = nullptr;
 		FontAtlas m_fontAtlas;
 		GraphicsPipeline m_pipeline;
-		std::vector<PendingLabel> m_pendingLabels;
+		// Double-buffered pending label list. Game thread writes to m_writeSlot;
+		// render thread reads from ctx.frameIndex % kMaxFramesInFlight.
+		std::array<std::vector<PendingLabel>, Swapchain::kMaxFramesInFlight> m_pendingLabels;
+		std::uint32_t m_writeSlot = 0;
 		std::array<UniqueBuffer, Swapchain::kMaxFramesInFlight> m_glyphBuffers;
 		std::array<std::size_t, Swapchain::kMaxFramesInFlight> m_glyphBufferCapacities{};
 		bool m_ready = false;

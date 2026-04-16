@@ -18,6 +18,14 @@ namespace aether
 
 		void Shutdown(AetherCore& engine);
 
+		// Must be called once per frame on the game thread BEFORE any DrawText /
+		// DrawQuad calls. Routes pending submissions into the correct double-buffer slot.
+		void SetWriteSlot(std::uint32_t slot)
+		{
+			m_textRenderer.SetWriteSlot(slot);
+			m_quadRenderer.SetWriteSlot(slot);
+		}
+
 		void DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color = glm::vec4(1.f));
 
 		void DrawQuad(const UiRect& rect, glm::vec4 color = glm::vec4(1.f));

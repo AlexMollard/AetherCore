@@ -15,7 +15,7 @@ namespace aether
 	class Swapchain
 	{
 	public:
-		static constexpr std::uint32_t kMaxFramesInFlight = 2;
+		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
 		void Initialize(const VulkanContext& ctx, const Window& window);
 		void Shutdown(VkDevice device);

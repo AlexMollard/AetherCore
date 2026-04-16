@@ -12,7 +12,6 @@ namespace aether::app
 {
 	namespace
 	{
-		using Clock = std::chrono::steady_clock;
 		constexpr std::string_view kUiFontPath = "assets://fonts/Roboto-Regular.ttf";
 	} // namespace
 
@@ -66,6 +65,7 @@ namespace aether::app
 		// Wait for the GPU to finish all in-flight work before tearing down app-layer
 		// resources (pipelines, buffers, etc.) that may still be referenced by the
 		// GPU.
+		m_renderThread.Stop();
 		m_engine.WaitIdle();
 
 		// Unregister engine-level systems before detaching layers.
@@ -140,25 +140,43 @@ namespace aether::app
 		dayNightSystem->Init(*attachContext.renderer);
 		attachContext.world->RegisterSystem(std::move(dayNightSystem));
 
-		auto previousFrameTime = Clock::now();
+		// Start the dedicated render thread. All Vulkan submission work runs there.
+		m_renderThread.Start(m_engine);
+
+		// Match the frame pacer to the display the window is on.
+		const int refreshRate = m_engine.GetWindow().GetDisplayRefreshRate();
+		if (refreshRate > 0)
+		{
+			INFO(LogCategory::App, "Display refresh rate: {} Hz — setting frame pacer target.", refreshRate);
+			m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
+		}
+		else
+		{
+			WARN(LogCategory::App, "Could not query display refresh rate — frame pacer running uncapped.");
+		}
+
+		auto previousFrameTime = std::chrono::steady_clock::now();
+
 		while (!m_engine.ShouldClose())
 		{
 			AE_PROFILE_ZONE_N("Frame");
+
+			// Pace to the target FPS.  Sleeps the game thread (coarse) then spins (fine)
+			// until the next frame deadline.  Placing this at the top of the loop — before
+			// deltaTime is measured — means:
+			//   a) deltaTime is accurate (it includes the sleep).
+			//   b) SubmitFrame() below will not stall: the render thread has had ~targetDuration
+			//      to finish the previous frame before we ask it to accept the next one.
+			m_framePacer.Wait();
+
 			Logger::SetFrameNumber(m_frameIndex);
 
-			// Pump event sounds funny but it just means we are polling for events and
-			// such, so we call PumpEvents() here to poll for events and such before we
-			// do any updating or rendering So like input events or window events and
-			// such
 			m_engine.PumpEvents();
 
-			const auto currentFrameTime = Clock::now();
+			const auto currentFrameTime = std::chrono::steady_clock::now();
 			const auto deltaTime = std::chrono::duration<double>(currentFrameTime - previousFrameTime).count();
 			previousFrameTime = currentFrameTime;
 
-			// Per frame context:
-			// A helper struct with useful objects and info you can use in your layers
-			// for the current frame.
 			LayerContext frameContext{
 				.engine = m_engine,
 				.deltaTimeSeconds = deltaTime,
@@ -172,7 +190,7 @@ namespace aether::app
 				.ui = &m_uiRenderer,
 			};
 
-			// Update engine-level per-frame systems before layers run.
+			// Update engine-level per-frame systems (camera, input).
 			m_engine.Tick(static_cast<float>(deltaTime));
 
 			// Update ECS systems (game logic).
@@ -181,30 +199,37 @@ namespace aether::app
 				frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
 			}
 
-			// Update:
-			// Game logic and such should be updated in the OnUpdate() function of the
-			// layers, so we call UpdateAll() here to update all layers
+			// Layer game-logic update.
 			{
 				AE_PROFILE_ZONE_N("LayerUpdate");
 				m_layers.UpdateAll(frameContext);
 			}
 
-			// Render:
-			// World rendering is handled implicitly by the engine's frame passes.
-			// GuiAll() is reserved for any explicit overlay/UI work layers want to
-			// submit.
-			m_engine.BeginFrame();
+			// Compute the CPU double-buffer write slot for this frame and tell the
+			// UI renderers so DrawText / DrawQuad calls land in the correct slot.
+			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
+			m_uiRenderer.SetWriteSlot(drawSlot);
+
+			// Layer UI / overlay submission (writes into the double-buffered slot).
 			{
 				AE_PROFILE_ZONE_N("LayerGui");
 				m_layers.GuiAll(frameContext);
 			}
-			m_engine.EndFrame();
+
+			// Flush ECS draws into the render queue slot and build a frame packet
+			// from the current camera / lighting snapshot.
+			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
+
+			// Hand the packet to the render thread. Blocks for only ~microseconds
+			// (thread wake latency) until the render thread picks it up.
+			m_renderThread.SubmitFrame(std::move(packet));
 
 			AE_PROFILE_FRAME;
 			++m_frameIndex;
 		}
 
 		INFO(LogCategory::App, "Application run loop exited.");
+		m_renderThread.Stop();
 		Logger::ClearFrameNumber();
 
 		return 0;

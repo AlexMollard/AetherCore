@@ -22,7 +22,12 @@ namespace aether
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                if (m_engine == nullptr || m_pendingQuads.empty())
+			                if (m_engine == nullptr)
+			                {
+				                return;
+			                }
+			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
+			                if (m_pendingQuads[readSlot].empty())
 			                {
 				                return;
 			                }
@@ -54,7 +59,7 @@ namespace aether
 				                0.f,
 			                };
 
-			                for (const PendingQuad& quad: m_pendingQuads)
+			                for (const PendingQuad& quad: m_pendingQuads[readSlot])
 			                {
 				                const QuadPush push{
 					                .screenSize = screenSize,
@@ -67,7 +72,7 @@ namespace aether
 				                ctx.recorder.Draw(6);
 			                }
 
-			                m_pendingQuads.clear();
+			                m_pendingQuads[readSlot].clear();
 		                });
 	}
 
@@ -113,7 +118,9 @@ namespace aether
 		{
 			engine.GetRenderGraph().RemovePass(m_passName);
 			m_pipeline.Destroy();
-			m_pendingQuads.clear();
+			m_pendingQuads[0].clear();
+			m_pendingQuads[1].clear();
+			m_pendingQuads[2].clear();
 			m_engine = nullptr;
 			m_ready = false;
 		}
@@ -135,7 +142,7 @@ namespace aether
 			return;
 		}
 
-		m_pendingQuads.push_back({
+		m_pendingQuads[m_writeSlot].push_back({
 		        .rect = pxRect,
 		        .color = color,
 		});

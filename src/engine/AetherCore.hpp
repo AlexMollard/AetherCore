@@ -30,6 +30,7 @@
 #include "Renderer.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
+#include "RenderThread.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
 #include "SkyboxPass.hpp"
@@ -88,8 +89,16 @@ namespace aether
 		// Must be called once per frame BEFORE layer OnUpdate().
 		// Updates input state and advances all non-Manual cameras.
 		void Tick(float dt);
-		void BeginFrame();
-		void EndFrame();
+
+		// Game-thread: flush ECS draw commands into the double-buffered slot and
+		// snapshot per-frame render state into a packet for the render thread.
+		// Call AFTER LayerGui (so UI draw calls are captured), BEFORE SubmitFrame.
+		[[nodiscard]] RenderFramePacket PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex);
+
+		// Render-thread: perform all Vulkan work for a single frame.
+		// Called exclusively by RenderThread::ThreadLoop.
+		void ExecuteRenderFrame(const RenderFramePacket& packet);
+
 		void WaitIdle() const;
 
 		// ── Service accessors ────────────────────────────────────────────────
@@ -175,6 +184,8 @@ namespace aether
 
 	private:
 		// ── Frame graph and rendering ───────────────────────────────────────
+		void BeginFrame();                              // called from ExecuteRenderFrame on render thread
+		void EndFrame(const RenderFramePacket& packet); // called from ExecuteRenderFrame on render thread
 		void RecreateSwapchain();
 		void RegisterPasses();
 		void RegisterRttPassesFor(uint32_t id);

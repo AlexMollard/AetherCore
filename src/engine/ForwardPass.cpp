@@ -13,7 +13,7 @@ namespace aether
 		                [&renderQueue, bindlessSet, getLightingSet](PassContext& ctx)
 		                {
 			                renderQueue.FlushDraw(ctx.recorder, bindlessSet, getLightingSet ? getLightingSet() : VK_NULL_HANDLE);
-			                renderQueue.Clear();
+			                renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 		                });
 	}
 } // namespace aether
