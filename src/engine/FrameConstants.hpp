@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
@@ -47,4 +48,18 @@ namespace aether
 	static_assert(sizeof(FrameConstants) == 352,
 	        "FrameConstants layout changed — update the Slang structs in "
 	        "gltf_mesh.slang and skybox.slang.");
+	static_assert(offsetof(FrameConstants, viewProj) == 0);
+	static_assert(offsetof(FrameConstants, view) == 64);
+	static_assert(offsetof(FrameConstants, proj) == 128);
+	static_assert(offsetof(FrameConstants, materialBufferAddr) == 192);
+	static_assert(offsetof(FrameConstants, _pad0) == 200);
+	static_assert(offsetof(FrameConstants, sunDirectionIntensity) == 208);
+	static_assert(offsetof(FrameConstants, ambientColor) == 224);
+	static_assert(offsetof(FrameConstants, cameraWorldPos) == 240);
+	static_assert(offsetof(FrameConstants, sunColor) == 256);
+	static_assert(offsetof(FrameConstants, skyHorizonColor) == 272);
+	static_assert(offsetof(FrameConstants, skyZenithColor) == 288);
+	static_assert(offsetof(FrameConstants, skyVoidColor) == 304);
+	static_assert(offsetof(FrameConstants, tiledLightGridInfo) == 320);
+	static_assert(offsetof(FrameConstants, tiledLightBufferOffsets) == 336);
 } // namespace aether

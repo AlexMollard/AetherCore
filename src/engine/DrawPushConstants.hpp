@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
@@ -25,6 +26,11 @@ namespace aether
 	};
 
 	static_assert(sizeof(DrawInstanceData) == 96, "DrawInstanceData layout changed — update gltf_mesh.slang and cull_draws.slang.");
+	static_assert(offsetof(DrawInstanceData, model) == 0);
+	static_assert(offsetof(DrawInstanceData, materialIndex) == 64);
+	static_assert(offsetof(DrawInstanceData, _pad0) == 68);
+	static_assert(offsetof(DrawInstanceData, skinBufferAddr) == 72);
+	static_assert(offsetof(DrawInstanceData, worldBoundingSphere) == 80);
 
 	// Push constants for standard mesh draws (vertex + fragment shaders).
 	//
@@ -39,6 +45,8 @@ namespace aether
 	};
 
 	static_assert(sizeof(DrawPushConstants) == 16, "DrawPushConstants layout changed — update gltf_mesh.slang.");
+	static_assert(offsetof(DrawPushConstants, frameAddr) == 0);
+	static_assert(offsetof(DrawPushConstants, instanceDataAddr) == 8);
 
 	// Input to the cull compute shader — one entry per submitted draw.
 	// Contains the prototype VkDrawIndexedIndirectCommand fields plus the batch index.
@@ -62,6 +70,13 @@ namespace aether
 	};
 
 	static_assert(sizeof(CullDrawInput) == 32, "CullDrawInput layout changed — update cull_draws.slang.");
+	static_assert(offsetof(CullDrawInput, indexCount) == 0);
+	static_assert(offsetof(CullDrawInput, instanceCount) == 4);
+	static_assert(offsetof(CullDrawInput, firstIndex) == 8);
+	static_assert(offsetof(CullDrawInput, vertexOffset) == 12);
+	static_assert(offsetof(CullDrawInput, firstInstance) == 16);
+	static_assert(offsetof(CullDrawInput, batchIndex) == 20);
+	static_assert(offsetof(CullDrawInput, _pad) == 24);
 
 	// Per-batch descriptor written by CPU, read by the cull compute shader.
 	// Describes the input range and output range in the indirect command buffers.
@@ -79,6 +94,10 @@ namespace aether
 	};
 
 	static_assert(sizeof(CullBatch) == 16, "CullBatch layout changed — update cull_draws.slang.");
+	static_assert(offsetof(CullBatch, inputStart) == 0);
+	static_assert(offsetof(CullBatch, drawCount) == 4);
+	static_assert(offsetof(CullBatch, outputStart) == 8);
+	static_assert(offsetof(CullBatch, _pad) == 12);
 
 	// Push constants for the cull compute shader.
 	//
@@ -111,4 +130,14 @@ namespace aether
 	static constexpr std::uint32_t kCullDebugForceVisibleBit = 1u << 0;
 
 	static_assert(sizeof(CullPushConstants) == 64, "CullPushConstants layout changed — update cull_draws.slang.");
+	static_assert(offsetof(CullPushConstants, frameAddr) == 0);
+	static_assert(offsetof(CullPushConstants, instanceDataAddr) == 8);
+	static_assert(offsetof(CullPushConstants, inputCmdAddr) == 16);
+	static_assert(offsetof(CullPushConstants, outputCmdAddr) == 24);
+	static_assert(offsetof(CullPushConstants, batchDescAddr) == 32);
+	static_assert(offsetof(CullPushConstants, batchCountAddr) == 40);
+	static_assert(offsetof(CullPushConstants, totalDrawCount) == 48);
+	static_assert(offsetof(CullPushConstants, debugFlags) == 52);
+	static_assert(offsetof(CullPushConstants, _pad0) == 56);
+	static_assert(offsetof(CullPushConstants, _pad1) == 60);
 } // namespace aether
