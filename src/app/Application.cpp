@@ -227,7 +227,7 @@ namespace aether::app
 			}
 
 			// Compute the CPU double-buffer write slot for this frame and tell the
-			// UI renderers so DrawText / DrawQuad calls land in the correct slot.
+			// UI renderers so DrawText / DrawRect calls land in the correct slot.
 			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
 			m_uiRenderer.SetWriteSlot(drawSlot);
 

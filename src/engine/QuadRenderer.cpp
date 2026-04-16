@@ -1,19 +1,206 @@
 #include "QuadRenderer.hpp"
 
+#include <glm/geometric.hpp>
+#include <stdexcept>
+#include <vector>
+#include <vk_mem_alloc.h>
 #include <vulkan/vulkan.h>
 
 #include "AetherCore.hpp"
+#include "CommandRecorder.hpp"
+#include "FileSystem.hpp"
 #include "Logger.hpp"
 #include "RenderGraph.hpp"
+#include "VulkanContext.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
+		{
+			VkShaderModuleCreateInfo info{};
+			info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+			info.codeSize = spirv.size();
+			info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
+			VkShaderModule mod = VK_NULL_HANDLE;
+			if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
+				throw std::runtime_error("QuadRenderer: failed to create compute shader module.");
+			return mod;
+		}
+	} // namespace
+
+	void QuadRenderer::EnsureComputePipeline()
+	{
+		if (m_engine == nullptr || m_computePipeline != VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		const VkDevice device = m_engine->GetVulkanContext().GetDevice().device;
+		const auto spirv = io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv");
+		if (spirv.empty())
+		{
+			throw std::runtime_error("QuadRenderer: shader not found: shaders://ui_build_draws.slang.spv");
+		}
+
+		VkShaderModule module = CreateShaderModule(device, spirv);
+
+		const VkPushConstantRange pushRange{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0,
+			.size = sizeof(ComputePush),
+		};
+		const VkPipelineLayoutCreateInfo layoutInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushRange,
+		};
+		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computePipelineLayout) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(device, module, nullptr);
+			throw std::runtime_error("QuadRenderer: failed to create compute pipeline layout.");
+		}
+
+		const VkPipelineShaderStageCreateInfo stage{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = module,
+			.pName = "main",
+		};
+		const VkComputePipelineCreateInfo pipelineInfo{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = stage,
+			.layout = m_computePipelineLayout,
+		};
+		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(device, module, nullptr);
+			vkDestroyPipelineLayout(device, m_computePipelineLayout, nullptr);
+			m_computePipelineLayout = VK_NULL_HANDLE;
+			throw std::runtime_error("QuadRenderer: failed to create compute pipeline.");
+		}
+
+		vkDestroyShaderModule(device, module, nullptr);
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_computePipeline), VK_OBJECT_TYPE_PIPELINE, "UI.BuildDraws");
+	}
+
 	void QuadRenderer::RegisterPass()
 	{
 		if (m_engine == nullptr)
 		{
 			return;
 		}
+		EnsureComputePipeline();
+
+		m_buildPassName = m_passName + ".Build";
+		const VkPipeline computePipeline = m_computePipeline;
+		const VkPipelineLayout computeLayout = m_computePipelineLayout;
+		m_engine->GetRenderGraph()
+		        .AddComputePass(m_buildPassName)
+		        .ExecuteCompute(
+		                [this, computePipeline, computeLayout](PassContext& ctx)
+		                {
+			                if (m_engine == nullptr)
+			                {
+				                return;
+			                }
+
+			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
+			                const auto& pending = m_pendingQuads[readSlot];
+			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
+			                if (commandCount == 0)
+			                {
+				                return;
+			                }
+
+			                const std::uint32_t frameSlot = readSlot;
+			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
+			                if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
+			                {
+				                m_commandBuffers[frameSlot].Reset();
+
+				                VkBufferCreateInfo bufferInfo{
+					                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+					                .size = commandBytes,
+					                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+					                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+				                };
+
+				                VmaAllocationCreateInfo allocInfo{};
+				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+
+				                m_commandBuffers[frameSlot] = UniqueBuffer::Create(m_engine->GetVulkanContext().GetAllocator(), m_engine->GetVulkanContext().GetDevice().device, bufferInfo, allocInfo);
+				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(commandBytes);
+			                }
+
+			                if (!m_indirectBuffers[frameSlot])
+			                {
+				                const VkBufferCreateInfo indirectInfo{
+					                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+					                .size = sizeof(VkDrawIndirectCommand),
+					                .usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+					                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+				                };
+				                VmaAllocationCreateInfo allocInfo{};
+				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+				                m_indirectBuffers[frameSlot] = UniqueBuffer::Create(m_engine->GetVulkanContext().GetAllocator(), m_engine->GetVulkanContext().GetDevice().device, indirectInfo, allocInfo);
+			                }
+
+			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
+			                if (mappedCommands == nullptr)
+			                {
+				                return;
+			                }
+
+			                auto* cmdData = static_cast<DrawCommandData*>(mappedCommands);
+			                for (std::size_t i = 0; i < pending.size(); ++i)
+			                {
+				                cmdData[i] = pending[i].cmd;
+			                }
+
+			                const VkMemoryBarrier2 hostToCompute{
+				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				                .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+				                .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+				                .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				                .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+			                };
+			                const VkDependencyInfo hostToComputeDep{
+				                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				                .memoryBarrierCount = 1,
+				                .pMemoryBarriers = &hostToCompute,
+			                };
+			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &hostToComputeDep);
+
+			                const ComputePush push{
+				                .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
+				                .indirectCmdAddr = m_indirectBuffers[frameSlot].GetDeviceAddress(),
+				                .commandCount = commandCount,
+			                };
+
+			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePush), &push);
+			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), 1, 1, 1);
+
+			                // Barrier here (outside any render pass) — compute writes must be
+			                // visible to the subsequent indirect-draw and vertex-shader reads.
+			                const VkMemoryBarrier2 computeToGraphics{
+				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				                .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				                .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+				                .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+				                .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT,
+			                };
+			                const VkDependencyInfo computeToGraphicsDep{
+				                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				                .memoryBarrierCount = 1,
+				                .pMemoryBarriers = &computeToGraphics,
+			                };
+			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &computeToGraphicsDep);
+		                });
 
 		auto color = m_engine->GetRenderGraph().GetSwapchainColor();
 		m_engine->GetRenderGraph()
@@ -34,6 +221,7 @@ namespace aether
 
 			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 			                const VkExtent2D ext = ctx.extent;
+			                const std::uint32_t frameSlot = readSlot;
 
 			                const VkViewport viewport{
 				                .x = 0.f,
@@ -52,25 +240,13 @@ namespace aether
 
 			                ctx.recorder.BindGraphicsPipeline(m_pipeline);
 
-			                const glm::vec4 screenSize{
-				                static_cast<float>(ext.width),
-				                static_cast<float>(ext.height),
-				                0.f,
-				                0.f,
+			                const QuadPush push{
+				                .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
+				                .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
 			                };
+			                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &push);
 
-			                for (const PendingQuad& quad: m_pendingQuads[readSlot])
-			                {
-				                const QuadPush push{
-					                .screenSize = screenSize,
-					                .rect = quad.rect,
-					                .color = quad.color,
-				                };
-
-				                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &push);
-
-				                ctx.recorder.Draw(6);
-			                }
+			                ctx.recorder.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1);
 
 			                m_pendingQuads[readSlot].clear();
 		                });
@@ -96,7 +272,7 @@ namespace aether
 		m_passName = std::string(passName);
 
 		m_pipeline = engine.CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://ui_quad.slang.spv",
+		        .shaderVfsPath = "shaders://ui_shapes.slang.spv",
 		        .colorFormat = engine.GetSwapchainImageFormat(),
 		        .depthFormat = VK_FORMAT_UNDEFINED,
 		        .depthTestEnable = false,
@@ -116,17 +292,39 @@ namespace aether
 	{
 		if (m_ready)
 		{
+			engine.GetRenderGraph().RemovePass(m_buildPassName);
 			engine.GetRenderGraph().RemovePass(m_passName);
 			m_pipeline.Destroy();
-			m_pendingQuads[0].clear();
-			m_pendingQuads[1].clear();
-			m_pendingQuads[2].clear();
+			if (m_computePipeline != VK_NULL_HANDLE)
+			{
+				vkDestroyPipeline(engine.GetVulkanContext().GetDevice().device, m_computePipeline, nullptr);
+				m_computePipeline = VK_NULL_HANDLE;
+			}
+			if (m_computePipelineLayout != VK_NULL_HANDLE)
+			{
+				vkDestroyPipelineLayout(engine.GetVulkanContext().GetDevice().device, m_computePipelineLayout, nullptr);
+				m_computePipelineLayout = VK_NULL_HANDLE;
+			}
+			for (auto& slot: m_pendingQuads)
+			{
+				slot.clear();
+			}
+			for (auto& buffer: m_commandBuffers)
+			{
+				buffer.Reset();
+			}
+			for (auto& buffer: m_indirectBuffers)
+			{
+				buffer.Reset();
+			}
+			m_commandBufferCapacities.fill(0);
+			m_buildPassName.clear();
 			m_engine = nullptr;
 			m_ready = false;
 		}
 	}
 
-	void QuadRenderer::DrawQuad(const UiRect& rect, glm::vec4 color)
+	void QuadRenderer::DrawRect(const UiRect& rect, glm::vec4 color, std::int32_t layer, float cornerRadiusPx)
 	{
 		EnsurePassRegistered();
 
@@ -143,8 +341,62 @@ namespace aether
 		}
 
 		m_pendingQuads[m_writeSlot].push_back({
-		        .rect = pxRect,
-		        .color = color,
+		        .cmd =
+		                DrawCommandData{
+		                                .data0 = pxRect,
+		                                .data1 = glm::vec4(cornerRadiusPx, 0.f, 0.f, 0.f),
+		                                .color = color,
+		                                .type = static_cast<std::uint32_t>(ShapeType::Rect),
+		                                .layer = layer,
+		                                },
+		});
+	}
+
+	void QuadRenderer::DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color, std::int32_t layer)
+	{
+		EnsurePassRegistered();
+		if (m_engine == nullptr || !m_ready || thicknessPx <= 0.0f)
+		{
+			return;
+		}
+
+		const VkExtent2D ext = m_engine->GetSwapchainExtent();
+		const glm::vec2 p0 = ResolveUiPointPx(ext, start);
+		const glm::vec2 p1 = ResolveUiPointPx(ext, end);
+		if (glm::length(p1 - p0) <= 0.5f)
+		{
+			return;
+		}
+
+		m_pendingQuads[m_writeSlot].push_back({
+		        .cmd =
+		                DrawCommandData{
+		                                .data0 = glm::vec4(p0, p1),
+		                                .data1 = glm::vec4(thicknessPx, 0.f, 0.f, 0.f),
+		                                .color = color,
+		                                .type = static_cast<std::uint32_t>(ShapeType::Line),
+		                                .layer = layer,
+		                                },
+		});
+	}
+
+	void QuadRenderer::DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color, std::int32_t layer)
+	{
+		EnsurePassRegistered();
+		if (m_engine == nullptr || !m_ready || radiusPx <= 0.0f)
+		{
+			return;
+		}
+		const glm::vec2 c = ResolveUiPointPx(m_engine->GetSwapchainExtent(), center);
+		m_pendingQuads[m_writeSlot].push_back({
+		        .cmd =
+		                DrawCommandData{
+		                                .data0 = glm::vec4(c.x, c.y, radiusPx, 0.f),
+		                                .data1 = glm::vec4(0.f),
+		                                .color = color,
+		                                .type = static_cast<std::uint32_t>(ShapeType::Circle),
+		                                .layer = layer,
+		                                },
 		});
 	}
 } // namespace aether

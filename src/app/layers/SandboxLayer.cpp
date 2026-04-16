@@ -6,6 +6,7 @@
 #include <string_view>
 
 #include "Logger.hpp"
+#include "OverlayStyle.hpp"
 #include "systems/SandboxGameSystem.hpp"
 #include "UiLayout.hpp"
 #include "UIRenderer.hpp"
@@ -13,40 +14,34 @@
 
 namespace aether::app
 {
+	namespace
+	{
+		using namespace overlay;
+
+		// Panel geometry — left-anchored at (0,0)
+		constexpr glm::vec2 kAnchor{ 0.f, 0.f };
+		constexpr float kPanelL = 12.0f;
+		constexpr float kPanelR = 388.0f;
+		constexpr float kPanelTop = 12.0f;
+		constexpr float kPanelBot = 220.0f;
+		constexpr float kInnerL = kPanelL + kPad;
+		constexpr float kInnerR = kPanelR - kPad;
+
+		constexpr float kColKey = kInnerL;
+		constexpr float kColVal = kInnerL + 110.0f;
+	} // namespace
+
 	const char* SandboxLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
 		if (!m_gameSystem || !activeCamera.IsValid())
-		{
 			return "None";
-		}
-
 		if (activeCamera == m_gameSystem->GetOrbitCameraHandle())
-		{
 			return "Orbit";
-		}
-
 		if (activeCamera == m_gameSystem->GetFreeCameraHandle())
-		{
 			return "Free";
-		}
-
 		if (activeCamera == m_gameSystem->GetRttCameraHandle())
-		{
 			return "RTT";
-		}
-
 		return "Other";
-	}
-
-	void SandboxLayer::DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const
-	{
-		ui.DrawText(text,
-		        aether::UiPoint{
-		                .anchor = {  0.0f, 0.0f },
-		                .offsetPx = { 24.0f,    y },
-        },
-		        18.0f,
-		        glm::vec4(0.92f, 0.95f, 0.97f, 1.0f));
 	}
 
 	void SandboxLayer::OnAttach(LayerContext& context)
@@ -75,51 +70,53 @@ namespace aether::app
 	void SandboxLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr)
-		{
 			return;
-		}
 
-		context.ui->DrawQuad(
-		        aether::UiRect{
-		                .anchorMin = {   0.0f,   0.0f },
-		                .anchorMax = {   0.0f,   0.0f },
-		                .offsetMinPx = {  12.0f,  12.0f },
-		                .offsetMaxPx = { 410.0f, 248.0f },
-        },
-		        glm::vec4(0.08f, 0.11f, 0.14f, 0.82f));
+		aether::UIRenderer& ui = *context.ui;
+		std::array<char, 128> buf{};
 
-		context.ui->DrawText("Sandbox Debug",
+		DrawPanel(ui, kAnchor, kPanelL, kPanelR, kPanelTop, kPanelBot);
+
+		// Title
+		ui.DrawText("SANDBOX",
 		        aether::UiPoint{
-		                .anchor = {  0.0f,  0.0f },
-		                .offsetPx = { 24.0f, 42.0f },
+		                .anchor = kAnchor, .offsetPx = { kInnerL, kPanelTop + 26.0f }
         },
-		        28.0f,
-		        glm::vec4(0.95f, 0.90f, 0.68f, 1.0f));
+		        18.0f,
+		        kColorTitle);
 
-		std::array<char, 128> line{};
-		const char* activeCameraName = GetActiveCameraName(context.cameras->GetMainCamera());
+		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPanelTop + 54.0f);
 
-		std::snprintf(line.data(), line.size(), "Camera: %s", activeCameraName);
-		DrawDebugLine(*context.ui, line.data(), 82.0f);
+		// ==============================================================
+		// SCENE section
+		// ==============================================================
+		constexpr float kSceneY = kPanelTop + 66.0f;
+		DrawSectionHeader(ui, "SCENE", kAnchor, kPanelL, kInnerL, kSceneY);
+		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kSceneY + 13.0f);
+
+		constexpr float kR1 = kSceneY + 34.0f;
+		const char* camName = GetActiveCameraName(context.cameras->GetMainCamera());
+		DrawKV(ui, "Camera", camName, kAnchor, kColKey, kColVal, kR1);
 
 		if (m_gameSystem)
 		{
-			std::snprintf(line.data(), line.size(), "Foxes: %zu  |  prims/fox: %zu  |  anims: %u", m_gameSystem->GetFoxCount(), m_gameSystem->GetFoxPrimitiveCount(), m_gameSystem->GetAnimationCount());
-			DrawDebugLine(*context.ui, line.data(), 106.0f);
-		}
+			constexpr float kR2 = kR1 + kRowH;
+			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFoxCount());
+			DrawKV(ui, "Foxes", buf.data(), kAnchor, kColKey, kColVal, kR2);
 
-		if (m_gameSystem)
-		{
-			const std::string_view currentAnimation = m_gameSystem->GetCurrentAnimationName();
-			if (!currentAnimation.empty())
+			constexpr float kR3 = kR2 + kRowH;
+			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFoxPrimitiveCount());
+			DrawKV(ui, "Prims/fox", buf.data(), kAnchor, kColKey, kColVal, kR3);
+
+			constexpr float kR4 = kR3 + kRowH;
+			std::snprintf(buf.data(), buf.size(), "%u", m_gameSystem->GetAnimationCount());
+			DrawKV(ui, "Anims", buf.data(), kAnchor, kColKey, kColVal, kR4);
+
+			const std::string_view anim = m_gameSystem->GetCurrentAnimationName();
+			if (!anim.empty())
 			{
-				context.ui->DrawText(std::string("Anim: ") + std::string(currentAnimation),
-				        aether::UiPoint{
-				                .anchor = {  0.0f,   0.0f },
-				                .offsetPx = { 24.0f, 130.0f },
-                },
-				        18.0f,
-				        glm::vec4(0.74f, 0.86f, 0.76f, 1.0f));
+				constexpr float kR5 = kR4 + kRowH;
+				DrawKV(ui, "Playing", anim, kAnchor, kColKey, kColVal, kR5, kColorGood);
 			}
 		}
 	}

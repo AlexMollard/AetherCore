@@ -1,7 +1,5 @@
 #pragma once
 
-#include <string_view>
-
 #include "AppLayer.hpp"
 #include "CameraManager.hpp"
 
@@ -22,7 +20,6 @@ namespace aether::app
 
 	private:
 		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
-		void DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const;
 
 		SandboxGameSystem* m_gameSystem = nullptr;
 	};

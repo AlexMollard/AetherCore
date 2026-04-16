@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstddef>
-#include <string_view>
 
 #include "AppLayer.hpp"
 #include "Renderer.hpp"
@@ -18,15 +17,19 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		static constexpr std::size_t kFrameHistorySize = 64;
+		static constexpr std::size_t kFrameHistorySize = 128;
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
+
 		float GetAverageFrameTimeMs() const;
-		void DrawDebugLine(aether::UIRenderer& ui, std::string_view text, float y) const;
+		float GetMinFrameTimeMs() const;
+		float GetMaxFrameTimeMs() const;
+
 		void DrawFrameTimeGraph(aether::UIRenderer& ui, float x, float y, float width, float height) const;
 
 		std::array<float, kFrameHistorySize> m_frameTimesMs{};
 		std::size_t m_frameHistoryHead = 0;
 		std::size_t m_frameHistoryCount = 0;
+		bool m_visible = true;
 	};
 } // namespace aether::app
