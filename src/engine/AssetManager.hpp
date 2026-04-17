@@ -12,6 +12,12 @@
 namespace aether
 {
 	struct Material;
+	class VulkanContext;
+	class BindlessManager;
+	class MaterialBuffer;
+	class RenderQueue;
+	class ShadowService;
+	class RenderTargetService;
 	class World;
 	struct LoadedModel;
 	struct LoadedModelPrimitive;
@@ -43,11 +49,18 @@ namespace aether
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
 	private:
-		friend class AetherCore; // Only AetherCore initializes/owns the AssetManager
+		friend class AetherCore; // Only AetherCore initializes/owns the AssetManager.
 
-		// Initialize with dependencies (called by AetherCore).
-		void Initialize(class AetherCore* engine);
+		// Bind runtime dependencies once during engine startup.
+		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, RenderQueue& renderQueue, ShadowService& shadowService, RenderTargetService& renderTargetService, World& world, VkCommandPool uploadPool);
 
-		AetherCore* m_engine = nullptr;
+		VulkanContext* m_context = nullptr;
+		BindlessManager* m_bindlessManager = nullptr;
+		MaterialBuffer* m_materialBuffer = nullptr;
+		RenderQueue* m_renderQueue = nullptr;
+		ShadowService* m_shadowService = nullptr;
+		RenderTargetService* m_renderTargetService = nullptr;
+		World* m_world = nullptr;
+		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 	};
 } // namespace aether

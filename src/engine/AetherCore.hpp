@@ -3,10 +3,9 @@
 #include <array>
 #include <cstdint>
 #include <functional>
-#include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
-#include <unordered_map>
 #include <vector>
 
 #include "AnimationDatabase.hpp"
@@ -32,6 +31,7 @@
 #include "PrimitiveMeshes.hpp"
 #include "Renderer.hpp"
 #include "RenderGraph.hpp"
+#include "RenderPipelineCoordinator.hpp"
 #include "RenderQueue.hpp"
 #include "RenderTargetService.hpp"
 #include "RenderThread.hpp"
@@ -53,8 +53,8 @@ namespace aether
 	{
 		Mesh mesh;
 		Material material{};
-		glm::mat4 localTransform{ 1.0f }; // identity for skinned primitives
-		std::int32_t skinIndex = -1;      // -1 = not skinned
+		glm::mat4 localTransform{ 1.0f }; // Identity for skinned primitives.
+		std::int32_t skinIndex = -1;      // -1 means not skinned.
 	};
 
 	struct LoadedModel
@@ -62,7 +62,7 @@ namespace aether
 		std::vector<Texture> textures;
 		std::vector<LoadedModelPrimitive> primitives;
 		std::optional<ModelAnimator> animator;
-		AnimationDatabase animationDb; // GPU-friendly animation clip data (if model has animations)
+		AnimationDatabase animationDb; // GPU-friendly animation clip data.
 	};
 
 	class AetherCore
@@ -91,25 +91,23 @@ namespace aether
 		explicit AetherCore(const Config& config = {});
 		~AetherCore();
 
-		// ── Frame lifecycle ──────────────────────────────────────────────────
+		// Frame lifecycle.
 		[[nodiscard]] bool ShouldClose() const;
 		void PumpEvents() const;
-		// Must be called once per frame BEFORE layer OnUpdate().
-		// Updates input state and advances all non-Manual cameras.
+		// Call once per frame before layer updates.
+		// Updates input state and advances all non-manual cameras.
 		void Tick(float dt);
 
-		// Game-thread: flush ECS draw commands into the double-buffered slot and
-		// snapshot per-frame render state into a packet for the render thread.
-		// Call AFTER LayerGui (so UI draw calls are captured), BEFORE SubmitFrame.
+		// Game-thread stage: flushes ECS draw data and snapshots immutable
+		// render state for the render thread.
 		[[nodiscard]] RenderFramePacket PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex);
 
-		// Render-thread: perform all Vulkan work for a single frame.
-		// Called exclusively by RenderThread::ThreadLoop.
+		// Render-thread stage: records and submits Vulkan work for one frame.
 		void ExecuteRenderFrame(const RenderFramePacket& packet);
 
 		void WaitIdle() const;
 
-		// ── Service accessors ────────────────────────────────────────────────
+		// Service accessors.
 		[[nodiscard]] Renderer& GetRenderer();
 		[[nodiscard]] const Renderer& GetRenderer() const;
 		[[nodiscard]] AssetManager& GetAssets();
@@ -121,8 +119,7 @@ namespace aether
 		[[nodiscard]] CameraManager& GetCameraManager();
 		[[nodiscard]] const CameraManager& GetCameraManager() const;
 
-		// ── Asset creation (used by app layer or engine internals)
-		// ──────────────────
+		// Asset/resource creation.
 		[[nodiscard]] const Mesh& GetPrimitiveMesh(PrimitiveMesh primitive) const;
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices);
@@ -133,8 +130,7 @@ namespace aether
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
-		// ── Rendering controls (used by app layer or engine internals)
-		// ──────────────────
+		// Runtime rendering controls.
 		void SetTonemapMode(TonemapMode mode);
 		[[nodiscard]] TonemapMode GetTonemapMode() const;
 		void SetFxaaEnabled(bool enabled);
@@ -149,29 +145,28 @@ namespace aether
 		void SetGpuLightingBinningEnabled(bool enabled);
 		[[nodiscard]] bool IsGpuLightingBinningEnabled() const;
 
-		// ── Format queries for app-layer pipeline creation ──────────────────
-		// Query the forward pass color format.
+		// Format queries for app-side pipeline creation.
 		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat()
 		{
 			return PostProcessStack::GetForwardColorFormat();
 		}
 
-		// Query swapchain extent.
+		// Swapchain properties.
 		[[nodiscard]] VkExtent2D GetSwapchainExtent() const;
-		// Query swapchain depth format.
+		// Depth format.
 		[[nodiscard]] VkFormat GetSwapchainDepthFormat() const;
-		// Query swapchain image format.
+		// Color format.
 		[[nodiscard]] VkFormat GetSwapchainImageFormat() const;
-		// Get current swapchain command buffer (used by engine internals).
+		// Current frame command buffer.
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 
-		// ── Render target management ─────────────────────────────────────────
+		// Render target management.
 		[[nodiscard]] CameraRenderTarget CreateCameraRenderTarget(CameraHandle camera, VkExtent2D extent);
 		void DestroyCameraRenderTarget(CameraRenderTarget rt);
 		[[nodiscard]] RGImage GetRenderTargetColorImage(CameraRenderTarget rt) const;
 		[[nodiscard]] uint32_t GetRenderTargetBindlessSlot(CameraRenderTarget rt) const;
 
-		// ── Engine internals (used by engine subsystems, not app layer) ──────
+		// Engine internals for subsystems.
 		[[nodiscard]] const VulkanContext& GetVulkanContext() const;
 		[[nodiscard]] VulkanContext& GetVulkanContext();
 		[[nodiscard]] const Swapchain& GetSwapchain() const;
@@ -192,9 +187,9 @@ namespace aether
 		[[nodiscard]] const EngineSettings& GetSettings() const;
 
 	private:
-		// ── Frame graph and rendering ───────────────────────────────────────
-		void BeginFrame();                              // called from ExecuteRenderFrame on render thread
-		void EndFrame(const RenderFramePacket& packet); // called from ExecuteRenderFrame on render thread
+		// Frame graph and rendering.
+		void BeginFrame();
+		void EndFrame(const RenderFramePacket& packet);
 		void RecreateSwapchain();
 		void RegisterPasses();
 		void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn);
@@ -217,7 +212,7 @@ namespace aether
 		Scene m_scene;
 		World m_world;
 		PrimitiveMeshes m_primitiveMeshes;
-		CommandRecorder m_currentRecorder; // engine-internal, filled by BeginFrame
+		CommandRecorder m_currentRecorder; // Populated by BeginFrame.
 		std::uint64_t m_frameIndex = 0;
 		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
 		LightingManager m_lightingManager;
@@ -227,16 +222,16 @@ namespace aether
 		bool m_asyncComputeEnabled = false;
 		EngineSettings m_settings{};
 
-		// ── Services ─────────────────────────────────────────────────────────
+		// Core services.
 		Renderer m_renderer;
 		AssetManager m_assetManager;
 
-		// Manages all offscreen targets and post-processing pipelines.
-		// Recreated on swapchain resize.
+		// Offscreen/post-processing resources. Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;
 		SkyboxPass m_skyboxPass;
 		CullPass m_cullPass;
 		ForwardPass m_forwardPass;
+		RenderPipelineCoordinator m_renderPipelineCoordinator;
 		FrameComposer m_frameComposer;
 		ShadowService m_shadowService;
 		RenderTargetService m_renderTargetService;
