@@ -195,10 +195,11 @@ namespace aether::app
 						if (skinIdx >= 0)
 						{
 							const VkDeviceAddress addr = foxAnim.GetSkinBufferAddr(skinIdx);
-							if (addr != 0)
-								world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .skinBufferAddr = addr });
+							const std::uint32_t joints = foxAnim.GetSkinJointCount(skinIdx);
+							if (addr != 0 && joints > 0)
+								world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .sourceSkinBufferAddr = addr, .jointCount = joints });
 						}
-						world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &foxAnim });
+						world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &foxAnim, .heroCharacter = false, .lodTier = 2 });
 					}
 				}
 

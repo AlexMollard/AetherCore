@@ -8,21 +8,7 @@
 #include "FileSystem.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
-
-namespace
-{
-	VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
-	{
-		VkShaderModuleCreateInfo info{};
-		info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		info.codeSize = spirv.size();
-		info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
-		VkShaderModule mod = VK_NULL_HANDLE;
-		if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
-			throw std::runtime_error("CullPass: failed to create shader module.");
-		return mod;
-	}
-} // namespace
+#include "ShaderUtils.hpp"
 
 namespace aether
 {
@@ -57,7 +43,7 @@ namespace aether
 		if (spirv.empty())
 			throw std::runtime_error("CullPass: shader not found: shaders://cull_draws.slang.spv");
 
-		VkShaderModule shaderModule = CreateShaderModule(m_device, spirv);
+		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "CullPass");
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,

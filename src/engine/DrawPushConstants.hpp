@@ -13,40 +13,46 @@ namespace aether
 	//
 	//   offset  0 : mat4    model                (64 bytes)
 	//   offset 64 : uint32  materialIndex        ( 4 bytes)
-	//   offset 68 : uint32  _pad0                ( 4 bytes)
-	//   offset 72 : uint64  skinBufferAddr       ( 8 bytes)
+	//   offset 68 : uint32  skinPaletteOffset    ( 4 bytes) index into global palette mat4[]
+	//   offset 72 : uint32  skinJointCount       ( 4 bytes)
+	//   offset 76 : uint32  _pad0                ( 4 bytes)
 	//   offset 80 : vec4    worldBoundingSphere  (16 bytes) xyz=center, w=radius; w<=0 → skip culling
 	struct DrawInstanceData
 	{
 		glm::mat4 model{ 1.0f };
 		std::uint32_t materialIndex = 0xFFFFFFFFu;
+		std::uint32_t skinPaletteOffset = 0;
+		std::uint32_t skinJointCount = 0;
 		std::uint32_t _pad0 = 0;
-		VkDeviceAddress skinBufferAddr = 0;
 		glm::vec4 worldBoundingSphere{}; // xyz=world center, w=radius; w<=0 → skip frustum culling
 	};
 
 	static_assert(sizeof(DrawInstanceData) == 96, "DrawInstanceData layout changed — update gltf_mesh.slang and cull_draws.slang.");
 	static_assert(offsetof(DrawInstanceData, model) == 0);
 	static_assert(offsetof(DrawInstanceData, materialIndex) == 64);
-	static_assert(offsetof(DrawInstanceData, _pad0) == 68);
-	static_assert(offsetof(DrawInstanceData, skinBufferAddr) == 72);
+	static_assert(offsetof(DrawInstanceData, skinPaletteOffset) == 68);
+	static_assert(offsetof(DrawInstanceData, skinJointCount) == 72);
+	static_assert(offsetof(DrawInstanceData, _pad0) == 76);
 	static_assert(offsetof(DrawInstanceData, worldBoundingSphere) == 80);
 
 	// Push constants for standard mesh draws (vertex + fragment shaders).
 	//
 	//   offset  0 : uint64 frameAddr         (BDA of FrameConstants)
 	//   offset  8 : uint64 instanceDataAddr  (BDA of DrawInstanceData[])
+	//   offset 16 : uint64 skinPaletteAddr   (BDA of global skin palette mat4[])
 	//
-	// Total: 16 bytes.
+	// Total: 24 bytes.
 	struct DrawPushConstants
 	{
 		VkDeviceAddress frameAddr = 0;
 		VkDeviceAddress instanceDataAddr = 0;
+		VkDeviceAddress skinPaletteAddr = 0;
 	};
 
-	static_assert(sizeof(DrawPushConstants) == 16, "DrawPushConstants layout changed — update gltf_mesh.slang.");
+	static_assert(sizeof(DrawPushConstants) == 24, "DrawPushConstants layout changed — update gltf_mesh.slang.");
 	static_assert(offsetof(DrawPushConstants, frameAddr) == 0);
 	static_assert(offsetof(DrawPushConstants, instanceDataAddr) == 8);
+	static_assert(offsetof(DrawPushConstants, skinPaletteAddr) == 16);
 
 	// Input to the cull compute shader — one entry per submitted draw.
 	// Contains the prototype VkDrawIndexedIndirectCommand fields plus the batch index.

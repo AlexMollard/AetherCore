@@ -35,7 +35,7 @@ namespace aether::ecs
 		{
 			(world.EmplaceOrReplace<Tags>(e, tags), ...);
 			if (model.animator)
-				world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &*model.animator });
+				world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &*model.animator, .animationDb = model.animationDb.IsValid() ? &model.animationDb : nullptr, .heroCharacter = true, .lodTier = 0 });
 		}
 		return entities.size();
 	}

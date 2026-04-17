@@ -1,6 +1,7 @@
 #include "World.hpp"
 
 #include "Material.hpp"
+#include "ModelAnimator.hpp"
 #include "Profiler.hpp"
 #include "RenderQueue.hpp"
 
@@ -51,9 +52,28 @@ namespace aether
 			}
 
 			VkDeviceAddress skinBufferAddr = 0;
+			std::int32_t skinIndex = -1;
+			std::uint32_t skinJointCount = 0;
 			if (const auto* skin = m_registry.try_get<SkinComponent>(enttEntity))
 			{
-				skinBufferAddr = skin->skinBufferAddr;
+				skinBufferAddr = skin->sourceSkinBufferAddr;
+				skinIndex = skin->skinIndex;
+				skinJointCount = skin->jointCount;
+			}
+
+			bool nonHeroGpuBlend = false;
+			std::uint32_t animClipIndex = 0;
+			float animTime = 0.0f;
+			bool gpuSampleEligible = false;
+			if (const auto* anim = m_registry.try_get<AnimatorComponent>(enttEntity))
+			{
+				nonHeroGpuBlend = !anim->heroCharacter;
+				if (anim->animator != nullptr && anim->animationDb != nullptr && anim->animationDb->IsValid())
+				{
+					animClipIndex = anim->animator->GetCurrentAnimation();
+					animTime = anim->animator->GetAnimTime();
+					gpuSampleEligible = true;
+				}
 			}
 
 			queue.Submit({
@@ -61,7 +81,13 @@ namespace aether
 			        .mesh = meshComp.mesh,
 			        .modelMatrix = transformComp.localToWorld,
 			        .materialIndex = materialIndex,
-			        .skinBufferAddr = skinBufferAddr,
+			        .sourceSkinBufferAddr = skinBufferAddr,
+			        .skinIndex = skinIndex,
+			        .skinJointCount = skinJointCount,
+			        .animClipIndex = animClipIndex,
+			        .animTime = animTime,
+			        .gpuSampleEligible = gpuSampleEligible,
+			        .nonHeroGpuBlend = nonHeroGpuBlend,
 			});
 		}
 	}

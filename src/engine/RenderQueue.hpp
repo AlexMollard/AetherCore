@@ -6,7 +6,9 @@
 #include <vector>
 #include <vulkan/vulkan.h>
 
+#include "AnimationDatabase.hpp"
 #include "DrawPushConstants.hpp"
+#include "RenderQueueGpuContracts.hpp"
 #include "Swapchain.hpp"
 #include "UniqueBuffer.hpp"
 
@@ -25,7 +27,13 @@ namespace aether
 		std::uint32_t instanceCount = 1;
 		glm::mat4 modelMatrix{ 1.0f };             // per-object world transform
 		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
-		VkDeviceAddress skinBufferAddr = 0;        // BDA of joint palette; 0 = not skinned
+		VkDeviceAddress sourceSkinBufferAddr = 0;  // BDA of source joint palette; 0 = not skinned
+		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase
+		std::uint32_t skinJointCount = 0;          // number of joints in source palette
+		std::uint32_t animClipIndex = 0;           // active clip for GPU sampling
+		float animTime = 0.0f;                     // active clip time for GPU sampling
+		bool gpuSampleEligible = false;            // true when draw has valid animation metadata
+		bool nonHeroGpuBlend = false;              // enable compute-side temporal blend path
 		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
 	};
 
@@ -44,6 +52,12 @@ namespace aether
 
 		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024);
 		void Shutdown();
+
+		// Set the animation database for GPU clip sampling.
+		void SetAnimationDatabase(const AnimationDatabase* db)
+		{
+			m_animationDb = db;
+		}
 
 		// Set which double-buffer slot Submit() writes into.
 		// Call once per frame on the game thread before FlushToQueue.
@@ -72,6 +86,16 @@ namespace aether
 		[[nodiscard]] bool IsDebugBypassIndirect() const
 		{
 			return m_debugBypassIndirect;
+		}
+
+		void SetDebugForceCpuSkinFallback(bool enabled)
+		{
+			m_debugForceCpuSkinFallback = enabled;
+		}
+
+		[[nodiscard]] bool IsDebugForceCpuSkinFallback() const
+		{
+			return m_debugForceCpuSkinFallback;
 		}
 
 		// Phase 1 — Compute pass callback.
@@ -111,9 +135,16 @@ namespace aether
 
 		// ── GPU-side output (device-local, written by compute, read as indirect) ──
 		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] — INDIRECT + BDA
+		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
+		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
+
+		SkinCopyJob* m_skinCopyJobsMapped = nullptr;
+		AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
 
 		std::uint32_t m_maxDraws = 0;
 		std::uint32_t m_maxBatches = 0;
+		std::uint32_t m_maxSkinJoints = 0;
+		std::uint32_t m_maxSampledPoses = 0;
 
 		// ── Per-batch info for FlushDraw, built during PrepareAndDispatch ────────
 		struct BatchRenderInfo
@@ -129,9 +160,27 @@ namespace aether
 		// Values cached from PrepareAndDispatch — used by FlushDraw.
 		VkDeviceAddress m_cachedFrameAddr = 0;
 		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
+		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
 		std::uint32_t m_cachedDrawBase = 0;           // frameSlot * maxDraws
 		std::uint32_t m_cachedBatchBase = 0;          // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
+		bool m_debugForceCpuSkinFallback = false;
+
+		VkPipeline m_skinCopyPipeline = VK_NULL_HANDLE;
+		VkPipelineLayout m_skinCopyPipelineLayout = VK_NULL_HANDLE;
+
+		VkPipeline m_animationSamplePipeline = VK_NULL_HANDLE;
+		VkPipelineLayout m_animationSamplePipelineLayout = VK_NULL_HANDLE;
+
+		const AnimationDatabase* m_animationDb = nullptr;
+		UniqueBuffer m_animationSampleJobsBuffer; // AnimatorSampleJob[] CPU-mapped
+		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
+
+		std::uint32_t m_animationSampleJobCount = 0;
+		uint64_t m_tracyAnimationCtx = 0;
+
+		void EnsureSkinCopyPipeline();
+		void EnsureAnimationSamplePipeline();
 	};
 } // namespace aether

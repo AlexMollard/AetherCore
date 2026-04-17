@@ -1,0 +1,60 @@
+#ifndef AETHER_RENDER_CONTRACTS_SLANGH
+#define AETHER_RENDER_CONTRACTS_SLANGH
+
+// Shared CPU -> GPU render contracts.
+// Keep in sync with src/engine/DrawPushConstants.hpp.
+
+struct DrawInstanceData
+{
+    [[vk::offset(0)]]  float4x4 model;
+    [[vk::offset(64)]] uint materialIndex;
+    [[vk::offset(68)]] uint skinPaletteOffset;
+    [[vk::offset(72)]] uint skinJointCount;
+    [[vk::offset(76)]] uint _pad0;
+    [[vk::offset(80)]] float4 worldBoundingSphere;
+};
+
+struct DrawPushConstants
+{
+    [[vk::offset(0)]] uint64_t frameAddr;
+    [[vk::offset(8)]] uint64_t instanceDataAddr;
+    [[vk::offset(16)]] uint64_t skinPaletteAddr;
+};
+
+struct CullDrawInput
+{
+    [[vk::offset(0)]] uint indexCount;
+    [[vk::offset(4)]] uint instanceCount;
+    [[vk::offset(8)]] uint firstIndex;
+    [[vk::offset(12)]] int vertexOffset;
+    [[vk::offset(16)]] uint firstInstance;
+    [[vk::offset(20)]] uint batchIndex;
+    [[vk::offset(24)]] uint _pad0;
+    [[vk::offset(28)]] uint _pad1;
+};
+
+struct CullBatch
+{
+    [[vk::offset(0)]] uint inputStart;
+    [[vk::offset(4)]] uint drawCount;
+    [[vk::offset(8)]] uint outputStart;
+    [[vk::offset(12)]] uint _pad;
+};
+
+struct CullPushConstants
+{
+    [[vk::offset(0)]] uint64_t frameAddr;
+    [[vk::offset(8)]] uint64_t instanceDataAddr;
+    [[vk::offset(16)]] uint64_t inputCmdAddr;
+    [[vk::offset(24)]] uint64_t outputCmdAddr;
+    [[vk::offset(32)]] uint64_t batchDescAddr;
+    [[vk::offset(40)]] uint64_t batchCountAddr;
+    [[vk::offset(48)]] uint totalDrawCount;
+    [[vk::offset(52)]] uint debugFlags;
+    [[vk::offset(56)]] uint _pad0;
+    [[vk::offset(60)]] uint _pad1;
+};
+
+static const uint kCullDebugForceVisibleBit = 1u;
+
+#endif

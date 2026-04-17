@@ -386,4 +386,11 @@ namespace aether
 			return 0;
 		return skin.buffer.GetDeviceAddress();
 	}
+
+	std::uint32_t ModelAnimator::GetSkinJointCount(std::int32_t skinIndex) const
+	{
+		if (skinIndex < 0 || static_cast<std::size_t>(skinIndex) >= m_skins.size())
+			return 0;
+		return static_cast<std::uint32_t>(m_skins[static_cast<std::size_t>(skinIndex)].joints.size());
+	}
 } // namespace aether

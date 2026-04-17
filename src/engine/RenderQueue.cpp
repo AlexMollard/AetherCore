@@ -3,20 +3,21 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <stdexcept>
+#include <unordered_map>
 
 #include "CommandRecorder.hpp"
 #include "DrawPushConstants.hpp"
+#include "FileSystem.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
 #include "Profiler.hpp"
+#include "RenderQueueGpuContracts.hpp"
+#include "ShaderUtils.hpp"
 
 namespace aether
 {
-	// ── Helpers ───────────────────────────────────────────────────────────────
-
-	// (Replaced by UniqueBuffer::CreateMapped / UniqueBuffer::CreateDeviceLocal)
-
 	// ── Lifecycle ─────────────────────────────────────────────────────────────
 
 	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws, std::uint32_t maxBatches)
@@ -25,6 +26,8 @@ namespace aether
 		m_allocator = allocator;
 		m_maxDraws = maxDraws;
 		m_maxBatches = maxBatches;
+		m_maxSkinJoints = maxDraws * 128u;
+		m_maxSampledPoses = m_maxSkinJoints * 2u;
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
@@ -39,21 +42,60 @@ namespace aether
 		m_batchDescBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags);
 		m_batchDescMapped = static_cast<CullBatch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
 
+		m_skinCopyJobBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(SkinCopyJob), kSsboFlags);
+		m_skinCopyJobsMapped = static_cast<SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
+
+		m_animationSampleJobsBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(AnimatorSampleJob), kSsboFlags);
+		m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
+
+		m_skinPaletteBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		m_sampledPosesBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+
 		// Output indirect buffer: device-local, written by compute via BDA, read as indirect args.
 		m_outputIndirectBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		EnsureSkinCopyPipeline();
 	}
 
 	void RenderQueue::Shutdown()
 	{
+		if (m_skinCopyPipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_skinCopyPipeline, nullptr);
+			m_skinCopyPipeline = VK_NULL_HANDLE;
+		}
+		if (m_skinCopyPipelineLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(m_device, m_skinCopyPipelineLayout, nullptr);
+			m_skinCopyPipelineLayout = VK_NULL_HANDLE;
+		}
+		if (m_animationSamplePipeline != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_animationSamplePipeline, nullptr);
+			m_animationSamplePipeline = VK_NULL_HANDLE;
+		}
+		if (m_animationSamplePipelineLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(m_device, m_animationSamplePipelineLayout, nullptr);
+			m_animationSamplePipelineLayout = VK_NULL_HANDLE;
+		}
+
+		m_sampledPosesBuffer.Reset();
+		m_animationSampleJobsBuffer.Reset();
 		m_outputIndirectBuffer.Reset();
+		m_skinPaletteBuffer.Reset();
+		m_skinCopyJobBuffer.Reset();
 		m_batchDescBuffer.Reset();
 		m_cullInputBuffer.Reset();
 		m_instanceDataBuffer.Reset();
+		m_animationSampleJobsMapped = nullptr;
+		m_skinCopyJobsMapped = nullptr;
 		m_instanceDataMapped = nullptr;
 		m_cullInputMapped = nullptr;
 		m_batchDescMapped = nullptr;
 		m_maxDraws = 0;
 		m_maxBatches = 0;
+		m_maxSkinJoints = 0;
+		m_maxSampledPoses = 0;
 		m_allocator = VK_NULL_HANDLE;
 		m_device = VK_NULL_HANDLE;
 	}
@@ -79,6 +121,7 @@ namespace aether
 
 		m_cachedFrameAddr = frameAddr;
 		m_batchRenderInfos.clear();
+		m_animationSampleJobCount = 0;
 
 		// Compute per-frame ring offsets into the double-buffered arrays so that
 		// frame N's CPU writes never alias frame N-1's GPU reads.
@@ -88,6 +131,21 @@ namespace aether
 		m_cachedDrawBase = drawBase;
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);
+		const std::uint32_t prevFrameSlot = (frameSlot + kFramesInFlight - 1u) % kFramesInFlight;
+		const VkDeviceAddress currSkinPaletteAddr = m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
+		const VkDeviceAddress prevSkinPaletteAddr = m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(prevFrameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
+		const VkDeviceAddress currSampledPosesAddr = m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose);
+		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
+		const bool gpuSamplingEnabled = !m_debugForceCpuSkinFallback && m_animationDb != nullptr && m_animationDb->IsValid() && m_animationSampleJobsMapped != nullptr;
+		const std::uint32_t animClipCount = (m_animationDb != nullptr) ? m_animationDb->GetClipCount() : 0u;
+		const std::uint32_t animNodeCount = (m_animationDb != nullptr) ? m_animationDb->GetNodeCount() : 0u;
+		const std::uint32_t animSkinCount = (m_animationDb != nullptr) ? m_animationDb->GetSkinCount() : 0u;
+
+		std::unordered_map<VkDeviceAddress, std::uint32_t> paletteOffsets;
+		std::uint32_t skinJointCursor = 0;
+		std::uint32_t nodePoseCursor = 0;
+		std::uint32_t skinJobCount = 0;
+		std::uint32_t sampleJobsThisFrame = 0;
 
 		// Sort by pipeline then mesh to group draws into contiguous batches.
 		std::stable_sort(m_commands.begin(),
@@ -128,10 +186,100 @@ namespace aether
 			{
 				const DrawCommand& dc = m_commands[j];
 
+				std::uint32_t skinPaletteOffset = 0;
+				std::uint32_t skinJointCount = 0;
+				const bool wantsGpuSampling = gpuSamplingEnabled && dc.gpuSampleEligible && dc.skinJointCount > 0 && dc.animClipIndex < animClipCount && dc.skinIndex >= 0 && static_cast<std::uint32_t>(dc.skinIndex) < animSkinCount;
+				if (dc.skinJointCount > 0)
+				{
+					bool wroteSkinJob = false;
+
+					if (wantsGpuSampling)
+					{
+						if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
+						{
+							WARN(LogCategory::Engine, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) — dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+						}
+						else if (animNodeCount == 0u || nodePoseCursor + animNodeCount > m_maxSampledPoses)
+						{
+							WARN(LogCategory::Engine, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) — dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
+						}
+						else if (skinJobCount >= m_maxDraws || m_animationSampleJobCount >= m_maxDraws)
+						{
+							WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) — dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxDraws);
+						}
+						else
+						{
+							skinPaletteOffset = skinJointCursor;
+							skinJointCount = dc.skinJointCount;
+							m_animationSampleJobsMapped[drawBase + m_animationSampleJobCount] = AnimatorSampleJob{
+								.animClipIndex = dc.animClipIndex,
+								.animTime = dc.animTime,
+								.nodePoseOffset = nodePoseCursor,
+								.nodeCount = animNodeCount,
+							};
+							m_skinCopyJobsMapped[drawBase + skinJobCount] = SkinCopyJob{
+								.srcPaletteAddr = dc.sourceSkinBufferAddr,
+								.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(SampledNodePose),
+								.dstPaletteOffset = skinPaletteOffset,
+								.jointCount = dc.skinJointCount,
+								.skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
+								.nodeCount = animNodeCount,
+								.blendAlpha = dc.nonHeroGpuBlend ? 0.45f : 1.0f,
+								.useSampledPoses = 1u,
+							};
+							++m_animationSampleJobCount;
+							++sampleJobsThisFrame;
+							++skinJobCount;
+							skinJointCursor += dc.skinJointCount;
+							nodePoseCursor += animNodeCount;
+							wroteSkinJob = true;
+						}
+					}
+
+					if (!wroteSkinJob && dc.sourceSkinBufferAddr != 0)
+					{
+						auto it = paletteOffsets.find(dc.sourceSkinBufferAddr);
+						if (it == paletteOffsets.end())
+						{
+							if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
+							{
+								WARN(LogCategory::Engine, "RenderQueue: skin palette pool overflow (needed {}, cap {}) — dropping skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+							}
+							else
+							{
+								skinPaletteOffset = skinJointCursor;
+								skinJointCount = dc.skinJointCount;
+								paletteOffsets.emplace(dc.sourceSkinBufferAddr, skinPaletteOffset);
+								if (skinJobCount < m_maxDraws)
+								{
+									m_skinCopyJobsMapped[drawBase + skinJobCount] = SkinCopyJob{
+										.srcPaletteAddr = dc.sourceSkinBufferAddr,
+										.sampledPosesAddr = 0,
+										.dstPaletteOffset = skinPaletteOffset,
+										.jointCount = dc.skinJointCount,
+										.skinIndex = 0,
+										.nodeCount = 0,
+										.blendAlpha = dc.nonHeroGpuBlend ? 0.45f : 1.0f,
+										.useSampledPoses = 0u,
+									};
+									++skinJobCount;
+								}
+								skinJointCursor += dc.skinJointCount;
+							}
+						}
+						else
+						{
+							skinPaletteOffset = it->second;
+							skinJointCount = dc.skinJointCount;
+						}
+					}
+				}
+
 				m_instanceDataMapped[drawBase + globalDrawIdx] = DrawInstanceData{
 					.model = dc.modelMatrix,
 					.materialIndex = dc.materialIndex,
-					.skinBufferAddr = dc.skinBufferAddr,
+					.skinPaletteOffset = skinPaletteOffset,
+					.skinJointCount = skinJointCount,
 					.worldBoundingSphere = dc.worldBoundingSphere,
 				};
 
@@ -166,6 +314,12 @@ namespace aether
 		vmaFlushAllocation(m_allocator, m_instanceDataBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_cullInputBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_batchDescBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+		vmaFlushAllocation(m_allocator, m_skinCopyJobBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+
+		if (sampleJobsThisFrame > 0 && m_animationDb != nullptr && m_animationDb->IsValid())
+		{
+			vmaFlushAllocation(m_allocator, m_animationSampleJobsBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+		}
 
 		// HOST → SHADERS barrier: ensures all CPU buffer writes above are visible to
 		// both compute (cull input/desc) and graphics shaders (instance data).
@@ -183,6 +337,89 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(cmd, &hostToShaderDep);
 
+		if (sampleJobsThisFrame > 0 && m_animationDb != nullptr && m_animationDb->IsValid())
+		{
+			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
+
+			EnsureAnimationSamplePipeline();
+
+			if (m_animationSamplePipeline != VK_NULL_HANDLE)
+			{
+				const AnimationSamplePush animPc{
+					.animDbClipsAddr = m_animationDb->GetClipsAddr(),
+					.animDbChannelsAddr = m_animationDb->GetChannelsAddr(),
+					.animDbTimesAddr = m_animationDb->GetTimesAddr(),
+					.animDbValuesAddr = m_animationDb->GetValuesAddr(),
+					.bindTranslationsAddr = m_animationDb->GetBindTranslationsAddr(),
+					.bindRotationsAddr = m_animationDb->GetBindRotationsAddr(),
+					.bindScalesAddr = m_animationDb->GetBindScalesAddr(),
+					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(AnimatorSampleJob),
+					.sampledPosesAddr = currSampledPosesAddr,
+					.jobCount = sampleJobsThisFrame,
+					.clipCount = m_animationDb->GetClipCount(),
+				};
+
+				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_animationSamplePipeline);
+				vkCmdPushConstants(cmd, m_animationSamplePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
+				const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
+				vkCmdDispatch(cmd, groups, 1, 1);
+				CommandRecorder(cmd).EndDebugLabel();
+
+				const VkMemoryBarrier2 animToSkin{
+					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				};
+				const VkDependencyInfo animToSkinDep{
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.memoryBarrierCount = 1,
+					.pMemoryBarriers = &animToSkin,
+				};
+				vkCmdPipelineBarrier2(cmd, &animToSkinDep);
+			}
+
+			m_animationSampleJobCount = 0;
+		}
+
+		if (skinJobCount > 0)
+		{
+			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
+			const SkinPalettePush skinPc{
+				.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(SkinCopyJob),
+				.dstPaletteAddr = currSkinPaletteAddr,
+				.prevPaletteAddr = prevSkinPaletteAddr,
+				.nodeParentsAddr = m_animationDb != nullptr ? m_animationDb->GetNodeParentsAddr() : 0,
+				.skinMetasAddr = m_animationDb != nullptr ? m_animationDb->GetSkinMetasAddr() : 0,
+				.skinJointsAddr = m_animationDb != nullptr ? m_animationDb->GetSkinJointsAddr() : 0,
+				.skinInverseBindsAddr = m_animationDb != nullptr ? m_animationDb->GetSkinInverseBindsAddr() : 0,
+				.jobCount = skinJobCount,
+			};
+
+			CommandRecorder(cmd).BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinCopyPipeline);
+			vkCmdPushConstants(cmd, m_skinCopyPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
+			const std::uint32_t groups = (skinJobCount + 63u) / 64u;
+			vkCmdDispatch(cmd, groups, 1, 1);
+			CommandRecorder(cmd).EndDebugLabel();
+
+			const VkMemoryBarrier2 skinToShaders{
+				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			};
+			const VkDependencyInfo skinToShadersDep{
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.memoryBarrierCount = 1,
+				.pMemoryBarriers = &skinToShaders,
+			};
+			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
+		}
+
 		// All BDAs are offset to this frame's ring slot so the compute shader
 		// addresses frame-relative indices starting at 0.
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullDrawInput);
@@ -199,12 +436,15 @@ namespace aether
 			.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
 		};
 
-		CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-		vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
-		const std::uint32_t groups = (totalDraws + 63u) / 64u;
-		vkCmdDispatch(cmd, groups, 1, 1);
-		CommandRecorder(cmd).EndDebugLabel();
+		{
+			AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
+			CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+			vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+			const std::uint32_t groups = (totalDraws + 63u) / 64u;
+			vkCmdDispatch(cmd, groups, 1, 1);
+			CommandRecorder(cmd).EndDebugLabel();
+		}
 
 		// COMPUTE → DRAW_INDIRECT barrier: output indirect buffer must be
 		// fully written before the GPU reads it as indirect draw arguments.
@@ -221,6 +461,20 @@ namespace aether
 			.pMemoryBarriers = &computeToIndirect,
 		};
 		vkCmdPipelineBarrier2(cmd, &computeToIndirectDep);
+
+// Telemetry: plot animation pipeline metrics to Tracy.
+#ifdef TRACY_ENABLE
+		{
+			// Track animation sample jobs queued this frame.
+			TracyPlot("Animation/SampleJobs", static_cast<int64_t>(sampleJobsThisFrame));
+
+			// Track skin palette copy jobs (indicates complexity of skinning setup).
+			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
+
+			// Track total draws submitted (for correlation with animation overhead).
+			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
+		}
+#endif
 	}
 
 	// ── FlushDraw ─────────────────────────────────────────────────────────────
@@ -238,6 +492,7 @@ namespace aether
 		const DrawPushConstants sharedPc{
 			.frameAddr = m_cachedFrameAddr,
 			.instanceDataAddr = m_cachedInstanceDataAddr,
+			.skinPaletteAddr = m_cachedSkinPaletteAddr,
 		};
 
 		const GraphicsPipeline* lastPipeline = nullptr;
@@ -317,5 +572,102 @@ namespace aether
 	bool RenderQueue::IsEmpty(std::uint32_t slot) const
 	{
 		return m_commandSlots[slot % kFramesInFlight].empty();
+	}
+
+	void RenderQueue::EnsureSkinCopyPipeline()
+	{
+		if (m_skinCopyPipeline != VK_NULL_HANDLE)
+			return;
+
+		const auto spirv = io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv");
+		if (spirv.empty())
+			throw std::runtime_error("RenderQueue: shader not found: shaders://skin_palette_build.slang.spv");
+
+		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
+
+		const VkPushConstantRange pushRange{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0,
+			.size = sizeof(SkinPalettePush),
+		};
+		const VkPipelineLayoutCreateInfo layoutInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushRange,
+		};
+		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_skinCopyPipelineLayout) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(m_device, shaderModule, nullptr);
+			throw std::runtime_error("RenderQueue: failed to create skin copy pipeline layout.");
+		}
+
+		const VkPipelineShaderStageCreateInfo stage{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = shaderModule,
+			.pName = "main",
+		};
+		const VkComputePipelineCreateInfo pipelineInfo{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = stage,
+			.layout = m_skinCopyPipelineLayout,
+		};
+		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_skinCopyPipeline) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(m_device, shaderModule, nullptr);
+			throw std::runtime_error("RenderQueue: failed to create skin copy compute pipeline.");
+		}
+
+		vkDestroyShaderModule(m_device, shaderModule, nullptr);
+	}
+
+	void RenderQueue::EnsureAnimationSamplePipeline()
+	{
+		if (m_animationSamplePipeline != VK_NULL_HANDLE)
+			return;
+
+		if (m_animationDb == nullptr || !m_animationDb->IsValid())
+			return;
+
+		const auto spirv = io::FileSystem::ReadFile("shaders://animation_sample.slang.spv");
+		if (spirv.empty())
+			throw std::runtime_error("RenderQueue: shader not found: shaders://animation_sample.slang.spv");
+
+		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
+
+		const VkPushConstantRange pushRange{
+			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			.offset = 0,
+			.size = sizeof(AnimationSamplePush),
+		};
+		const VkPipelineLayoutCreateInfo layoutInfo{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			.pushConstantRangeCount = 1,
+			.pPushConstantRanges = &pushRange,
+		};
+		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_animationSamplePipelineLayout) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(m_device, shaderModule, nullptr);
+			throw std::runtime_error("RenderQueue: failed to create animation sample pipeline layout.");
+		}
+
+		const VkPipelineShaderStageCreateInfo stage{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			.module = shaderModule,
+			.pName = "main",
+		};
+		const VkComputePipelineCreateInfo pipelineInfo{
+			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			.stage = stage,
+			.layout = m_animationSamplePipelineLayout,
+		};
+		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_animationSamplePipeline) != VK_SUCCESS)
+		{
+			vkDestroyShaderModule(m_device, shaderModule, nullptr);
+			throw std::runtime_error("RenderQueue: failed to create animation sample compute pipeline.");
+		}
+
+		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}
 } // namespace aether

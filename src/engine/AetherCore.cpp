@@ -167,6 +167,20 @@ namespace aether
 	AetherCore::~AetherCore()
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
+
+		for (auto& [id, rt]: m_rtCameras)
+		{
+			(void) id;
+			rt.renderQueue.Shutdown();
+			if (rt.constants)
+			{
+				rt.constants->Shutdown();
+			}
+			rt.depthImage.Reset();
+			rt.colorImage.Reset();
+		}
+		m_rtCameras.clear();
+
 		for (auto& frame: m_asyncComputeFrames)
 		{
 			if (frame.inFlight != VK_NULL_HANDLE)
@@ -1118,10 +1132,16 @@ namespace aether
 
 		INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
 
-		// Build animator when the asset has skins.
+		// Build animator and GPU animation database when the asset has skins.
 		if (!source.skins.empty())
 		{
 			loaded.animator = ModelAnimator::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), source);
+
+			// Create GPU-friendly animation database for GPU clip sampling.
+			if (!source.animations.empty())
+			{
+				loaded.animationDb = AnimationDatabase::Create(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), source);
+			}
 		}
 
 		return loaded;
@@ -1132,6 +1152,15 @@ namespace aether
 		std::vector<Entity> entities;
 		entities.reserve(model.primitives.size());
 
+		if (model.animationDb.IsValid())
+		{
+			m_renderQueue.SetAnimationDatabase(&model.animationDb);
+			for (auto& [_, rt]: m_rtCameras)
+			{
+				rt.renderQueue.SetAnimationDatabase(&model.animationDb);
+			}
+		}
+
 		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
 
 		for (const LoadedModelPrimitive& primitive: model.primitives)
@@ -1141,8 +1170,9 @@ namespace aether
 			if (model.animator && primitive.skinIndex >= 0)
 			{
 				const VkDeviceAddress addr = model.animator->GetSkinBufferAddr(primitive.skinIndex);
-				if (addr != 0)
-					m_world.EmplaceOrReplace<SkinComponent>(entity, SkinComponent{ .skinBufferAddr = addr });
+				const std::uint32_t joints = model.animator->GetSkinJointCount(primitive.skinIndex);
+				if (addr != 0 && joints > 0)
+					m_world.EmplaceOrReplace<SkinComponent>(entity, SkinComponent{ .sourceSkinBufferAddr = addr, .skinIndex = primitive.skinIndex, .jointCount = joints });
 			}
 
 			entities.push_back(entity);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <glm/glm.hpp>
 #include <vulkan/vulkan.h>
 
@@ -41,7 +42,9 @@ namespace aether
 	// Absent on non-skinned entities — World falls back to skinBufferAddr = 0.
 	struct SkinComponent
 	{
-		VkDeviceAddress skinBufferAddr = 0;
+		VkDeviceAddress sourceSkinBufferAddr = 0;
+		std::int32_t skinIndex = -1;
+		std::uint32_t jointCount = 0;
 	};
 
 	// Skeleton animator for a skinned model.
@@ -49,5 +52,8 @@ namespace aether
 	struct AnimatorComponent
 	{
 		class ModelAnimator* animator = nullptr;
+		const class AnimationDatabase* animationDb = nullptr;
+		bool heroCharacter = false;
+		std::uint8_t lodTier = 0;
 	};
 } // namespace aether

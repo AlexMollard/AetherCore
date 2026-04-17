@@ -21,54 +21,9 @@
 //   offset 60 : uint32  _pad1
 
 #include "include/FrameConstants.slangh"
+#include "include/RenderContracts.slangh"
 
-// ── GPU structs (offsets must match their C++ counterparts) ──────────────────
-
-struct DrawInstanceData
-{
-    [[vk::offset(0)]]  float4x4 model;
-    [[vk::offset(64)]] uint     materialIndex;
-    [[vk::offset(68)]] uint     _pad0;
-    [[vk::offset(72)]] uint64_t skinBufferAddr;
-    [[vk::offset(80)]] float4   worldBoundingSphere; // xyz=world center, w=radius; w<=0 → skip cull
-};
-
-struct CullDrawInput
-{
-    [[vk::offset(0)]]  uint indexCount;
-    [[vk::offset(4)]]  uint instanceCount;
-    [[vk::offset(8)]]  uint firstIndex;
-    [[vk::offset(12)]] int  vertexOffset;
-    [[vk::offset(16)]] uint firstInstance;  // index into DrawInstanceData[]
-    [[vk::offset(20)]] uint batchIndex;     // which output batch this draw belongs to
-    [[vk::offset(24)]] uint _pad0;          // must match C++ CullDrawInput (sizeof == 32)
-    [[vk::offset(28)]] uint _pad1;
-};
-
-struct CullBatch
-{
-    [[vk::offset(0)]]  uint inputStart;   // first draw index in CullDrawInput[]
-    [[vk::offset(4)]]  uint drawCount;    // total draws = max output capacity
-    [[vk::offset(8)]]  uint outputStart;  // first slot in output VkDrawIndexedIndirectCommand[]
-    [[vk::offset(12)]] uint _pad;
-};
-
-struct CullPush
-{
-    uint64_t frameAddr;
-    uint64_t instanceDataAddr;
-    uint64_t inputCmdAddr;
-    uint64_t outputCmdAddr;
-    uint64_t batchDescAddr;
-    uint64_t batchCountAddr;
-    uint32_t totalDrawCount;
-    uint32_t debugFlags;
-    uint32_t _pad0;
-    uint32_t _pad1;
-};
-[[vk::push_constant]] CullPush pc;
-
-static const uint kCullDebugForceVisibleBit = 1u;
+[[vk::push_constant]] CullPushConstants pc;
 
 // ── Frustum culling ──────────────────────────────────────────────────────────
 

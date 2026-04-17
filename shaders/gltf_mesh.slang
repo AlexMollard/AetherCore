@@ -51,6 +51,7 @@
 [[vk::binding(2, 1)]] StructuredBuffer<uint>   g_tileLightIndices;
 
 #include "include/FrameConstants.slangh"
+#include "include/RenderContracts.slangh"
 
 // ── Shared constants ─────────────────────────────────────────────────────
 static const uint  kNoTexture     = 0xFFFFFFFFu;
@@ -79,22 +80,7 @@ struct GpuMaterial
     [[vk::offset(76)]] uint   _pad1;
 };
 
-// Push constants — must match aether::DrawPushConstants (88 bytes).
-struct PushData
-{
-    uint64_t frameAddr;
-    uint64_t instanceDataAddr;
-};
-[[vk::push_constant]] PushData pc;
-
-struct DrawInstanceData
-{
-    [[vk::offset(0)]]  float4x4 model;
-    [[vk::offset(64)]] uint     materialIndex;
-    [[vk::offset(68)]] uint     _pad0;
-    [[vk::offset(72)]] uint64_t skinBufferAddr;
-    [[vk::offset(80)]] float4   worldBoundingSphere; // xyz=world center, w=radius — read by cull_draws.slang, not used here
-};
+[[vk::push_constant]] DrawPushConstants pc;
 
 // ── Vertex I/O ────────────────────────────────────────────────────────────
 
@@ -147,15 +133,16 @@ VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startIn
     float3 worldNormal;
     float3 worldTangent;
 
-    if (instance.skinBufferAddr != 0uL)
+    if (pc.skinPaletteAddr != 0uL && instance.skinJointCount > 0u)
     {
         // GPU skinning: blend up to 4 joint matrices weighted by BLENDWEIGHT0.
-        float4x4* joints = (float4x4*)(instance.skinBufferAddr);
+        float4x4* joints = (float4x4*)(pc.skinPaletteAddr);
+        const uint base = instance.skinPaletteOffset;
         float4x4 skinMatrix =
-            input.jointWeights.x * joints[input.jointIndices.x] +
-            input.jointWeights.y * joints[input.jointIndices.y] +
-            input.jointWeights.z * joints[input.jointIndices.z] +
-            input.jointWeights.w * joints[input.jointIndices.w];
+            input.jointWeights.x * joints[base + input.jointIndices.x] +
+            input.jointWeights.y * joints[base + input.jointIndices.y] +
+            input.jointWeights.z * joints[base + input.jointIndices.z] +
+            input.jointWeights.w * joints[base + input.jointIndices.w];
 
         worldPos = mul(instance.model, mul(skinMatrix, float4(input.position, 1.0)));
 

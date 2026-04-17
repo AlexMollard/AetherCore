@@ -12,26 +12,10 @@
 #include "FileSystem.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
+#include "ShaderUtils.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
-		{
-			VkShaderModuleCreateInfo info{};
-			info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			info.codeSize = spirv.size();
-			info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
-
-			VkShaderModule mod = VK_NULL_HANDLE;
-			if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
-			{
-				throw std::runtime_error("Failed to create shader module.");
-			}
-			return mod;
-		}
-	} // namespace
 
 	GraphicsPipeline::~GraphicsPipeline()
 	{
@@ -84,7 +68,7 @@ namespace aether
 			throw std::runtime_error("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath));
 		}
 
-		VkShaderModule shaderModule = CreateShaderModule(device, spirv);
+		VkShaderModule shaderModule = vkutil::CreateShaderModule(device, spirv, "GraphicsPipeline");
 
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);

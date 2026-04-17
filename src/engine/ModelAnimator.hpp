@@ -71,9 +71,15 @@ namespace aether
 			return m_duration;
 		}
 
+		[[nodiscard]] float GetAnimTime() const
+		{
+			return m_time;
+		}
+
 		// BDA of the flat joint-matrix palette for the given skin.
 		// Returns 0 when skinIndex is -1, out of range, or the skin has no joints.
 		[[nodiscard]] VkDeviceAddress GetSkinBufferAddr(std::int32_t skinIndex) const;
+		[[nodiscard]] std::uint32_t GetSkinJointCount(std::int32_t skinIndex) const;
 
 		[[nodiscard]] bool IsValid() const
 		{

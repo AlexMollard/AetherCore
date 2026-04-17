@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "AnimationDatabase.hpp"
 #include "AssetManager.hpp"
 #include "BindlessManager.hpp"
 #include "Camera.hpp"
@@ -58,6 +59,7 @@ namespace aether
 		std::vector<Texture> textures;
 		std::vector<LoadedModelPrimitive> primitives;
 		std::optional<ModelAnimator> animator;
+		AnimationDatabase animationDb; // GPU-friendly animation clip data (if model has animations)
 	};
 
 	class AetherCore

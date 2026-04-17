@@ -1,0 +1,98 @@
+#ifndef AETHER_ANIMATION_CONTRACTS_SLANGH
+#define AETHER_ANIMATION_CONTRACTS_SLANGH
+
+// Shared CPU -> GPU animation contracts.
+// Keep in sync with src/engine/AnimationDatabase.hpp,
+// src/engine/RenderQueue.hpp, and src/engine/RenderQueueGpuContracts.hpp.
+
+struct GpuChannel
+{
+    [[vk::offset(0)]] uint nodeIndex;
+    [[vk::offset(4)]] uint8_t animPath;
+    [[vk::offset(5)]] uint8_t interpolation;
+    [[vk::offset(6)]] uint16_t padding0;
+    [[vk::offset(8)]] uint timesOffset;
+    [[vk::offset(12)]] uint timesCount;
+    [[vk::offset(16)]] uint valuesOffset;
+    [[vk::offset(20)]] uint valuesCount;
+    [[vk::offset(24)]] uint64_t padding1;
+};
+
+struct GpuClip
+{
+    [[vk::offset(0)]] uint nameOffset;
+    [[vk::offset(4)]] uint nameLength;
+    [[vk::offset(8)]] uint channelOffset;
+    [[vk::offset(12)]] uint channelCount;
+    [[vk::offset(16)]] float duration;
+    [[vk::offset(20)]] uint padding0;
+};
+
+struct AnimatorSampleJob
+{
+    [[vk::offset(0)]] uint animClipIndex;
+    [[vk::offset(4)]] float animTime;
+    [[vk::offset(8)]] uint nodePoseOffset;
+    [[vk::offset(12)]] uint nodeCount;
+};
+
+struct SampledNodePose
+{
+    [[vk::offset(0)]] float4 translation;
+    [[vk::offset(16)]] float4 rotation;
+    [[vk::offset(32)]] float4 scale;
+};
+
+struct GpuSkinMeta
+{
+    [[vk::offset(0)]] uint jointOffset;
+    [[vk::offset(4)]] uint jointCount;
+    [[vk::offset(8)]] uint inverseBindOffset;
+    [[vk::offset(12)]] uint _pad0;
+};
+
+struct SkinCopyJob
+{
+    [[vk::offset(0)]] uint64_t srcPaletteAddr;
+    [[vk::offset(8)]] uint64_t sampledPosesAddr;
+    [[vk::offset(16)]] uint dstPaletteOffset;
+    [[vk::offset(20)]] uint jointCount;
+    [[vk::offset(24)]] uint skinIndex;
+    [[vk::offset(28)]] uint nodeCount;
+    [[vk::offset(32)]] float blendAlpha;
+    [[vk::offset(36)]] uint useSampledPoses;
+    [[vk::offset(40)]] uint _pad0;
+    [[vk::offset(44)]] uint _pad1;
+};
+
+struct SkinPalettePush
+{
+    [[vk::offset(0)]] uint64_t jobsAddr;
+    [[vk::offset(8)]] uint64_t dstPaletteAddr;
+    [[vk::offset(16)]] uint64_t prevPaletteAddr;
+    [[vk::offset(24)]] uint64_t nodeParentsAddr;
+    [[vk::offset(32)]] uint64_t skinMetasAddr;
+    [[vk::offset(40)]] uint64_t skinJointsAddr;
+    [[vk::offset(48)]] uint64_t skinInverseBindsAddr;
+    [[vk::offset(56)]] uint jobCount;
+    [[vk::offset(60)]] uint _pad0;
+    [[vk::offset(64)]] uint _pad1;
+    [[vk::offset(68)]] uint _pad2;
+};
+
+struct AnimationSamplePush
+{
+    [[vk::offset(0)]] uint64_t animDbClipsAddr;
+    [[vk::offset(8)]] uint64_t animDbChannelsAddr;
+    [[vk::offset(16)]] uint64_t animDbTimesAddr;
+    [[vk::offset(24)]] uint64_t animDbValuesAddr;
+    [[vk::offset(32)]] uint64_t bindTranslationsAddr;
+    [[vk::offset(40)]] uint64_t bindRotationsAddr;
+    [[vk::offset(48)]] uint64_t bindScalesAddr;
+    [[vk::offset(56)]] uint64_t animatorJobsAddr;
+    [[vk::offset(64)]] uint64_t sampledPosesAddr;
+    [[vk::offset(72)]] uint jobCount;
+    [[vk::offset(76)]] uint clipCount;
+};
+
+#endif
