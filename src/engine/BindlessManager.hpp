@@ -50,6 +50,11 @@ namespace aether
 			return 1u;
 		}
 
+		[[nodiscard]] static constexpr std::uint32_t GetNearestClampSamplerBinding()
+		{
+			return 2u;
+		}
+
 		[[nodiscard]] std::uint32_t AllocateSampledImageSlot();
 		void FreeSampledImageSlot(std::uint32_t slot);
 		void FreeSampledImageSlotDeferred(std::uint32_t slot);
@@ -77,5 +82,6 @@ namespace aether
 		std::vector<bool> m_slotAllocated;
 		std::vector<PendingSlotFree> m_pendingSlotFrees;
 		VkSampler m_linearSampler = VK_NULL_HANDLE;
+		VkSampler m_nearestClampSampler = VK_NULL_HANDLE;
 	};
 } // namespace aether

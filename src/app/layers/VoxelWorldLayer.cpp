@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <glm/glm.hpp>
 
@@ -16,6 +17,19 @@
 
 namespace aether::app
 {
+	// ── Terrain generation constants ──────────────────────────────────────────
+
+	// More vertical range plus a slightly smaller footprint keeps the terrain
+	// interesting without exploding initial chunk cost.
+	static constexpr int kWorldRadius = 4;  // chunks in each direction on X/Z
+	static constexpr int kGroundChunks = 2; // more vertical range for caves / overhangs
+
+	static constexpr int kTotalHeight = voxel::kChunkSize * kGroundChunks;
+	static constexpr int kBaseHeight = 18;
+	static constexpr int kHillAmpA = 10;
+	static constexpr int kHillAmpB = 6;
+	static constexpr int kDirtDepth = 4;
+
 	namespace
 	{
 		using namespace overlay;
@@ -29,25 +43,63 @@ namespace aether::app
 		constexpr float kInnerR = kPanelR - kPad;
 		constexpr float kColKey = kInnerL;
 		constexpr float kColVal = kInnerL + 190.0f;
+
+		float SampleTerrain2D(int worldX, int worldZ)
+		{
+			const float x = static_cast<float>(worldX);
+			const float z = static_cast<float>(worldZ);
+
+			const float broad = std::sin(x * 0.035f) * static_cast<float>(kHillAmpA)
+			                  + std::cos(z * 0.028f) * static_cast<float>(kHillAmpB);
+			const float detail = std::sin((x + z) * 0.085f) * 3.5f
+			                   + std::cos((x - z) * 0.072f) * 2.0f;
+			const float ridges = std::abs(std::sin(x * 0.018f) + std::cos(z * 0.022f)) * 5.5f;
+
+			return static_cast<float>(kBaseHeight) + broad + detail + ridges;
+		}
+
+		int SurfaceHeightAt(int worldX, int worldZ)
+		{
+			const int surface = static_cast<int>(std::round(SampleTerrain2D(worldX, worldZ)));
+			return std::clamp(surface, 8, kTotalHeight - 10);
+		}
+
+		float CaveNoise3D(int worldX, int worldY, int worldZ)
+		{
+			const float x = static_cast<float>(worldX);
+			const float y = static_cast<float>(worldY);
+			const float z = static_cast<float>(worldZ);
+
+			return std::sin(x * 0.091f + y * 0.113f)
+			     + std::cos(z * 0.087f - y * 0.097f)
+			     + std::sin((x + z) * 0.043f + y * 0.067f)
+			     + std::cos((x - z) * 0.052f - y * 0.041f);
+		}
+
+		bool IsSolidVoxel(int worldX, int worldY, int worldZ)
+		{
+			const float baseSurface = SampleTerrain2D(worldX, worldZ);
+			float density = baseSurface - static_cast<float>(worldY);
+
+			// Cliff shelf / overhang layer that protrudes beyond the base column.
+			const float cliffMask = 0.5f + 0.5f * std::sin(static_cast<float>(worldX) * 0.024f + std::cos(static_cast<float>(worldZ) * 0.031f) * 1.7f);
+			const float shelfCenter = baseSurface + 5.5f
+			                        + std::sin(static_cast<float>(worldZ) * 0.079f) * 3.0f
+			                        + std::cos(static_cast<float>(worldX) * 0.063f) * 2.0f;
+			const float shelfThickness = 2.2f + 1.0f * std::sin(static_cast<float>(worldX + worldZ) * 0.05f);
+			const float shelfDensity = (shelfThickness - std::abs(static_cast<float>(worldY) - shelfCenter)) * std::max(0.0f, cliffMask - 0.35f) * 2.4f;
+			density = std::max(density, shelfDensity);
+
+			// Carve cave pockets in the interior but leave enough roof/floor thickness.
+			if (worldY > 6 && worldY < static_cast<int>(baseSurface) - 2)
+			{
+				if (CaveNoise3D(worldX, worldY, worldZ) > 2.15f)
+					density -= 7.0f;
+			}
+
+			return density > 0.0f;
+		}
 	} // namespace
-
-	// ── Terrain generation constants ──────────────────────────────────────────
-
-	// Small rolling terrain for the voxel showcase.
-	// World extends ±kWorldRadius chunks on X/Z and is meshed as a heightfield,
-	// not a fully solid prism, so the result reads as terrain instead of a box.
-	static constexpr int kWorldRadius = 6;  // chunks in each direction on X/Z
-	static constexpr int kGroundChunks = 1; // max terrain height fits in one chunk
-
-	// Layer heights within the terrain (in voxel Y coords, origin at world Y=0):
-	//   0 .. kStoneTop-1  → Stone
-	//   kStoneTop .. kDirtTop-1 → Dirt
-	//   kDirtTop  → Grass top face, Dirt sides+bottom
-	static constexpr int kTotalHeight = voxel::kChunkSize * kGroundChunks;
-	static constexpr int kBaseHeight = 10;
-	static constexpr int kHillAmpA = 5;
-	static constexpr int kHillAmpB = 3;
-	static constexpr int kDirtDepth = 4;
 
 	// ── UV helpers ────────────────────────────────────────────────────────────
 	//
@@ -57,13 +109,17 @@ namespace aether::app
 	// (Exact UVs are tuned to match whatever atlas you place at kAtlasPath.)
 
 	static constexpr int kAtlasTilesPerAxis = 4;
+	static constexpr int kAtlasPixelsPerTile = 16;
+	static constexpr float kAtlasInsetTexels = 1.0f;
 	static constexpr float kTile = 1.0f / static_cast<float>(kAtlasTilesPerAxis);
+	static constexpr float kAtlasTexel = 1.0f / static_cast<float>(kAtlasTilesPerAxis * kAtlasPixelsPerTile);
 
 	static constexpr voxel::FaceUV UV(int col, int row)
 	{
+		const float inset = kAtlasInsetTexels * kAtlasTexel;
 		return {
-			.uvMin = {       col * kTile,       row * kTile },
-              .uvMax = { (col + 1) * kTile, (row + 1) * kTile }
+			.uvMin = {       col * kTile + inset,       row * kTile + inset },
+			.uvMax = { (col + 1) * kTile - inset, (row + 1) * kTile - inset }
 		};
 	}
 
@@ -123,7 +179,7 @@ namespace aether::app
 		// ── Camera ────────────────────────────────────────────────────────────
 		m_camera = context.cameras->Create({
 		        .mode = aether::CameraMode::Free,
-		        .position = { 0.0f, 26.0f, 32.0f },
+		        .position = { 0.0f, static_cast<float>(kBaseHeight) + 24.0f, 48.0f },
 		        .yaw = 180.0f,
 		        .pitch = -20.0f,
 		        .moveSpeed = 20.0f,
@@ -245,15 +301,7 @@ namespace aether::app
 
 	void VoxelWorldLayer::GenerateTerrain()
 	{
-		auto heightAt = [](int worldX, int worldZ)
-		{
-			const float waveA = std::sin(static_cast<float>(worldX) * 0.08f) * static_cast<float>(kHillAmpA);
-			const float waveB = std::cos(static_cast<float>(worldZ) * 0.06f) * static_cast<float>(kHillAmpB);
-			const int height = kBaseHeight + static_cast<int>(waveA + waveB);
-			return std::clamp(height, 3, kTotalHeight - 2);
-		};
-
-		// Fill a simple heightfield with grass on top, dirt below, stone deeper down.
+		// Fill a 3D density field so caves and slight overhangs can appear.
 		for (int cx = -kWorldRadius; cx <= kWorldRadius; ++cx)
 			for (int cz = -kWorldRadius; cz <= kWorldRadius; ++cz)
 			{
@@ -262,12 +310,15 @@ namespace aether::app
 					{
 						const int worldX = cx * voxel::kChunkSize + localX;
 						const int worldZ = cz * voxel::kChunkSize + localZ;
-						const int surfaceY = heightAt(worldX, worldZ);
+						const int surfaceY = SurfaceHeightAt(worldX, worldZ);
 
-						for (int worldY = 0; worldY <= surfaceY; ++worldY)
+						for (int worldY = 0; worldY < kTotalHeight; ++worldY)
 						{
+							if (!IsSolidVoxel(worldX, worldY, worldZ))
+								continue;
+
 							voxel::BlockId id;
-							if (worldY == surfaceY)
+							if (worldY >= surfaceY)
 								id = voxel::BlockId::Grass;
 							else if (worldY >= surfaceY - (kDirtDepth - 1))
 								id = voxel::BlockId::Dirt;

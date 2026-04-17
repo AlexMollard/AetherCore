@@ -18,7 +18,7 @@
 // AO baked into vertex packed field.  No PBR (appropriate for stylized voxel look).
 
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
-[[vk::binding(1, 0)]] SamplerState g_linearSampler;
+[[vk::binding(2, 0)]] SamplerState g_voxelAtlasSampler;
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
@@ -105,7 +105,7 @@ float4 fragmentMain(VSOutput input) : SV_Target
     {
         GpuMaterial* mat = (GpuMaterial*)(fc->materialBufferAddr) + input.materialIndex;
         if (mat->albedoSlot != kNoTexture)
-            baseColor = g_textures[mat->albedoSlot].Sample(g_linearSampler, input.uv);
+            baseColor = g_textures[mat->albedoSlot].SampleLevel(g_voxelAtlasSampler, input.uv, 0.0f);
     }
 
     // Directional diffuse.
