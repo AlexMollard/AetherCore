@@ -18,6 +18,7 @@
 #include "CullPass.hpp"
 #include "EngineSettings.hpp"
 #include "ForwardPass.hpp"
+#include "FrameComposer.hpp"
 #include "FrameConstants.hpp"
 #include "FrameConstantsBuffer.hpp"
 #include "GraphicsPipeline.hpp"
@@ -236,6 +237,7 @@ namespace aether
 		SkyboxPass m_skyboxPass;
 		CullPass m_cullPass;
 		ForwardPass m_forwardPass;
+		FrameComposer m_frameComposer;
 		ShadowService m_shadowService;
 		RenderTargetService m_renderTargetService;
 		Input m_input;

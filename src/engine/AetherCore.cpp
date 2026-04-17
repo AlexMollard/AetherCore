@@ -375,29 +375,8 @@ namespace aether
 		{
 			const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % Swapchain::kMaxFramesInFlight);
 
-			// Build FrameConstants from the snapshotted packet state.
-			FrameConstants fc{};
-
-			if (packet.hasCameraData)
-			{
-				fc.view = packet.view;
-				fc.proj = packet.proj;
-				fc.viewProj = packet.proj * packet.view;
-				fc.cameraWorldPos = packet.cameraWorldPos;
-			}
-			else
-			{
-				// Backward compatibility path (no main camera).
-				fc.viewProj = m_scene.GetViewProjection();
-			}
-
-			fc.materialBufferAddr = packet.materialBufferAddr;
-			fc.sunDirectionIntensity = packet.sunDirectionIntensity;
-			fc.ambientColor = packet.ambientColor;
-			fc.sunColor = packet.sunColor;
-			fc.skyHorizonColor = packet.skyHorizonColor;
-			fc.skyZenithColor = packet.skyZenithColor;
-			fc.skyVoidColor = packet.skyVoidColor;
+			// Build base per-frame constants from the immutable frame packet.
+			FrameConstants fc = m_frameComposer.ComposeBaseFrameConstants(packet, m_scene.GetViewProjection());
 
 			m_shadowService.BuildFrameShadowData(packet, frameIdx, m_cameraManager, fc);
 
@@ -473,8 +452,7 @@ namespace aether
 			} // if (packet.hasCameraData)
 			else
 			{
-				fc.tiledLightGridInfo = glm::uvec4(0u);
-				fc.tiledLightBufferOffsets = glm::uvec4(0u);
+				m_frameComposer.ApplyNoCameraLightingFallback(fc);
 			}
 
 			m_frameConstantsBuffer.Write(frameIdx, fc);
