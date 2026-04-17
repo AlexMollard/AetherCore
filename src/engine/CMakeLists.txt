@@ -37,6 +37,7 @@ target_link_libraries(Engine
 
 target_compile_definitions(Engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
+    GLM_ENABLE_EXPERIMENTAL     # For glm::value_ptr() and other utilities in <glm/gtc/type_ptr.hpp>
     $<$<BOOL:${AETHERCORE_ENABLE_TRACY}>:TRACY_ENABLE>
 )
 

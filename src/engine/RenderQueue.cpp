@@ -469,6 +469,8 @@ namespace aether
 		const Mesh* lastMesh = nullptr;
 		VkBuffer lastVertexBuffer = VK_NULL_HANDLE;
 		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+		VkDeviceSize lastVertexOffset = ~0ull;
+		VkDeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
@@ -502,15 +504,22 @@ namespace aether
 
 			if (batch.mesh != nullptr)
 			{
-				if (batch.mesh->GetBuffer() != lastVertexBuffer)
+				const VkBuffer vertexBuffer = batch.mesh->GetBuffer();
+				const VkDeviceSize vertexOffset = batch.mesh->GetVertexByteOffset();
+				if (vertexBuffer != lastVertexBuffer || vertexOffset != lastVertexOffset)
 				{
-					recorder.BindVertexBuffer(batch.mesh->GetBuffer());
-					lastVertexBuffer = batch.mesh->GetBuffer();
+					recorder.BindVertexBuffer(vertexBuffer, vertexOffset);
+					lastVertexBuffer = vertexBuffer;
+					lastVertexOffset = vertexOffset;
 				}
-				if (batch.mesh->GetIndexBuffer() != lastIndexBuffer)
+
+				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
+				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
+				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)
 				{
-					recorder.BindIndexBuffer(batch.mesh->GetIndexBuffer());
-					lastIndexBuffer = batch.mesh->GetIndexBuffer();
+					recorder.BindIndexBuffer(indexBuffer, indexOffset);
+					lastIndexBuffer = indexBuffer;
+					lastIndexOffset = indexOffset;
 				}
 				lastMesh = batch.mesh;
 			}
@@ -535,7 +544,6 @@ namespace aether
 	void RenderQueue::Clear(std::uint32_t slot)
 	{
 		m_commandSlots[slot % kFramesInFlight].clear();
-		m_batchRenderInfos.clear();
 	}
 
 	bool RenderQueue::IsEmpty(std::uint32_t slot) const

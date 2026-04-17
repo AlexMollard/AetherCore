@@ -203,17 +203,21 @@ namespace aether::app
 				frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
 			}
 
+			// Compute the CPU double-buffer write slot for this frame.  Must be done
+			// BEFORE UpdateAll so that any layer that calls RenderQueue::Submit
+			// (e.g. ChunkManager::SubmitDraws) lands in the correct slot.
+			// We also clear the slot here so stale draws from two frames ago are
+			// discarded — PrepareFrame will append ECS draws on top of these.
+			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
+			m_engine.GetRenderQueue().SetWriteSlot(drawSlot);
+			m_engine.GetRenderQueue().Clear(drawSlot);
+			m_uiRenderer.SetWriteSlot(drawSlot);
+
 			// Layer game-logic update.
 			{
 				AE_PROFILE_ZONE_N("LayerUpdate");
 				m_layers.UpdateAll(frameContext);
 			}
-
-			// Compute the CPU double-buffer write slot for this frame and tell the
-			// UI renderers so DrawText / DrawRect calls land in the correct slot.
-			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
-			m_uiRenderer.SetWriteSlot(drawSlot);
-
 			// Layer UI / overlay submission (writes into the double-buffered slot).
 			{
 				AE_PROFILE_ZONE_N("LayerGui");

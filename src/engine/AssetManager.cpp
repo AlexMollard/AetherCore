@@ -276,9 +276,9 @@ namespace aether
 		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices);
 	}
 
-	Texture AssetManager::CreateTexture(std::string_view path)
+	Texture AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
 	{
-		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager);
+		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
 	}
 
 	GraphicsPipeline AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)

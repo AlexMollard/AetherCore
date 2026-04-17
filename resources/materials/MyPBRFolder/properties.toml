@@ -3,7 +3,7 @@
 [material]
 baseColorFactor = [1.0, 1.0, 1.0, 1.0]
 metallicFactor = 0.0
-roughnessFactor = 0.9
+roughnessFactor = 1.0
 occlusionStrength = 1.0
 doubleSided = false
 

@@ -90,7 +90,7 @@ namespace aether
 			vkCmdPipelineBarrier2(cmd, &depInfo);
 		}
 
-		UniqueImage UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless)
+		UniqueImage UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
 			const VkDeviceSize imageBytes = static_cast<VkDeviceSize>(width) * height * 4;
 
@@ -144,13 +144,13 @@ namespace aether
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
 
 			return image;
 		}
 	} // namespace
 
-	Texture Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless)
+	Texture Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
@@ -172,13 +172,13 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless);
+		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
 		stbi_image_free(pixels);
 
 		return texture;
 	}
 
-	Texture Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless)
+	Texture Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		int width = 0;
 		int height = 0;
@@ -192,7 +192,7 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless);
+		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
 
 		stbi_image_free(pixels);
 		return texture;

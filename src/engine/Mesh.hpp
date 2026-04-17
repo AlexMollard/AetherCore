@@ -38,6 +38,11 @@ namespace aether
 		// pool is created (blocks until the queue is idle).
 		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices);
 		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices);
+
+		// Create a non-owning view into an externally managed buffer (e.g. MeshArena).
+		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
+		static Mesh CreateView(VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset = 0, VkDeviceSize indexByteOffset = 0);
+
 		void Destroy();
 
 		[[nodiscard]] bool IsValid() const
@@ -70,6 +75,20 @@ namespace aether
 			return m_indexCount;
 		}
 
+		// Byte offset within the vertex buffer to pass to vkCmdBindVertexBuffers.
+		// Zero for standalone Mesh objects; non-zero for MeshArena views.
+		[[nodiscard]] VkDeviceSize GetVertexByteOffset() const
+		{
+			return m_vertexByteOffset;
+		}
+
+		// Byte offset within the index buffer to pass to vkCmdBindIndexBuffer.
+		// Zero for standalone Mesh objects; non-zero for MeshArena views.
+		[[nodiscard]] VkDeviceSize GetIndexByteOffset() const
+		{
+			return m_indexByteOffset;
+		}
+
 	private:
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = nullptr;
@@ -79,5 +98,7 @@ namespace aether
 		VkBuffer m_indexBuffer = VK_NULL_HANDLE;
 		VmaAllocation m_indexAllocation = nullptr;
 		std::uint32_t m_indexCount = 0;
+		VkDeviceSize m_vertexByteOffset = 0;
+		VkDeviceSize m_indexByteOffset = 0;
 	};
 } // namespace aether

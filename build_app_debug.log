@@ -1,0 +1,101 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  Checking File Globs
+  1>
+  Scanning sources for module dependencies...
+  TracyClient.vcxproj -> D:\AetherCore\build\vs2022\_deps\tracy-build\Debug\TracyClient.lib
+  AssetPacker.vcxproj -> D:\AetherCore\build\vs2022\tools\Debug\AssetPacker.exe
+  vk-bootstrap.vcxproj -> D:\AetherCore\build\vs2022\_deps\vk-bootstrap-build\Debug\vk-bootstrap.lib
+  glm.vcxproj -> D:\AetherCore\build\vs2022\_deps\glm-build\glm\Debug\glm.lib
+  glfw.vcxproj -> D:\AetherCore\build\vs2022\_deps\glfw-build\src\Debug\glfw3.lib
+  freetype.vcxproj -> D:\AetherCore\build\vs2022\_deps\freetype-build\Debug\freetyped.lib
+  Scanning sources for module dependencies...
+  Swapchain.cpp
+  AetherCore.cpp
+  Texture.cpp
+  RenderThread.cpp
+  PassResourceCompiler.cpp
+  RenderGraph.cpp
+  ShadowService.cpp
+  UIRenderer.cpp
+  SkyboxPass.cpp
+  ForwardPass.cpp
+  UniqueImage.cpp
+  TextRenderer.cpp
+  AssetManager.cpp
+  LightingManager.cpp
+  RenderTargetService.cpp
+  ResourcePool.cpp
+  QuadRenderer.cpp
+  RenderQueue.cpp
+  FrameConstantsBuffer.cpp
+  RenderPipelineCoordinator.cpp
+  CullPass.cpp
+  Scene.cpp
+  Renderer.cpp
+  PostProcessStack.cpp
+  World.cpp
+  Compiling...
+  ForwardPass.cpp
+  AssetManager.cpp
+  PassResourceCompiler.cpp
+  PostProcessStack.cpp
+  Renderer.cpp
+  LightingManager.cpp
+  RenderQueue.cpp
+  CullPass.cpp
+  AetherCore.cpp
+  ResourcePool.cpp
+  RenderPipelineCoordinator.cpp
+  RenderTargetService.cpp
+  RenderGraph.cpp
+  RenderThread.cpp
+  FrameConstantsBuffer.cpp
+  Texture.cpp
+  QuadRenderer.cpp
+  Swapchain.cpp
+  UIRenderer.cpp
+  SkyboxPass.cpp
+  ShadowService.cpp
+  UniqueImage.cpp
+  Scene.cpp
+  TextRenderer.cpp
+  World.cpp
+  Engine.vcxproj -> D:\AetherCore\build\vs2022\src\engine\Debug\Engine.lib
+  Scanning sources for module dependencies...
+  ChunkManager.cpp
+  SandboxLayer.cpp
+  Application.cpp
+  main.cpp
+  SandboxGameSystem.cpp
+  BlockRegistry.cpp
+  VoxelWorldLayer.cpp
+  DebugLayer.cpp
+  Compiling...
+  DebugLayer.cpp
+  SandboxLayer.cpp
+  ChunkManager.cpp
+  VoxelWorldLayer.cpp
+  SandboxGameSystem.cpp
+  Application.cpp
+  BlockRegistry.cpp
+  main.cpp
+  App.vcxproj -> D:\AetherCore\build\vs2022\src\app\Debug\App.exe
+  Packing assets  data/assets.pak
+    + wrote D:/AetherCore/resources/materials/MyPBRFolder/properties.toml
+  AssetPacker: wrote 1 properties.toml file(s)
+  AssetPacker: packing 13 file(s)
+    + fonts/Roboto-Regular.ttf (158604 B)
+    + materials/DebugUVTiles.toml (547 B)
+    + materials/MyPBRFolder/Grass004_1K-JPG_AmbientOcclusion.jpg (904824 B)
+    + materials/MyPBRFolder/Grass004_1K-JPG_Color.jpg (1985561 B)
+    + materials/MyPBRFolder/Grass004_1K-JPG_Displacement.jpg (918011 B)
+    + materials/MyPBRFolder/Grass004_1K-JPG_NormalGL.jpg (2339612 B)
+    + materials/MyPBRFolder/Grass004_1K-JPG_Roughness.jpg (851664 B)
+    + materials/MyPBRFolder/properties.toml (395 B)
+    + models/Fox/Fox.bin (119904 B)
+    + models/Fox/Fox.gltf (46841 B)
+    + models/Fox/Texture.png (26764 B)
+    + textures/blocks/atlas.png (1733 B)
+    + textures/tex_DebugUVTiles.png (1441751 B)
+  AssetPacker: wrote D:/AetherCore/build/vs2022/data/assets.pak (8797045 bytes total, 13 entries)

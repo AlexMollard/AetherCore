@@ -35,7 +35,7 @@ namespace aether
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 
 		// Texture creation.
-		[[nodiscard]] Texture CreateTexture(std::string_view path);
+		[[nodiscard]] Texture CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
 		// Pipeline creation.
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);

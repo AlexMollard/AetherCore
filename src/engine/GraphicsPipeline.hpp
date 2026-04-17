@@ -28,6 +28,9 @@ namespace aether
 			// Use a reduced mesh layout (POSITION + JOINTS_0 + WEIGHTS_0 only).
 			// Intended for depth-only shadow caster pipelines.
 			bool shadowVertexInput = false;
+			// Use the compact 24-byte VoxelVertex layout (POSITION + PACKED + UV).
+			// Intended for GPU-driven voxel chunk pipelines.
+			bool voxelVertexInput = false;
 			// Override the default DrawPushConstants block. If size is 0 the
 			// default model-matrix + BDA range is used instead.
 			uint32_t pushConstantSize = 0;

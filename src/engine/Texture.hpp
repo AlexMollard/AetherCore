@@ -36,9 +36,9 @@ namespace aether
 		// Load an image from disk and upload it to the GPU.
 		// uploadQueue + uploadPool are used for a one-time synchronous transfer.
 		// The call blocks until the GPU copy is complete.
-		[[nodiscard]] static Texture LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless);
+		[[nodiscard]] static Texture LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
-		[[nodiscard]] static Texture LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless);
+		[[nodiscard]] static Texture LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		void Destroy();
 

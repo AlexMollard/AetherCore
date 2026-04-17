@@ -26,6 +26,8 @@
 #include "Material.hpp"
 #include "MaterialBuffer.hpp"
 #include "Mesh.hpp"
+#include "MeshArena.hpp"
+#include "MeshUploadQueue.hpp"
 #include "ModelAnimator.hpp"
 #include "PostProcessStack.hpp"
 #include "PrimitiveMeshes.hpp"
@@ -124,11 +126,18 @@ namespace aether
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
-		[[nodiscard]] Texture CreateTexture(std::string_view path);
+		[[nodiscard]] Texture CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 		void RegisterMaterial(Material& mat);
 		void UnregisterMaterial(Material& mat);
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
+
+		// Voxel / chunk streaming support.
+		// FlushMeshUploads submits all pending MeshUploadQueue copies via an
+		// immediate submit before the next frame's draws run.
+		[[nodiscard]] MeshArena& GetMeshArena();
+		[[nodiscard]] MeshUploadQueue& GetMeshUploadQueue();
+		void FlushMeshUploads();
 
 		// Runtime rendering controls.
 		void SetTonemapMode(TonemapMode mode);
@@ -225,6 +234,8 @@ namespace aether
 		// Core services.
 		Renderer m_renderer;
 		AssetManager m_assetManager;
+		MeshArena m_meshArena;
+		MeshUploadQueue m_meshUploadQueue;
 
 		// Offscreen/post-processing resources. Recreated on swapchain resize.
 		PostProcessStack m_postProcessStack;

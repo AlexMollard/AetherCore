@@ -37,7 +37,7 @@ namespace aether
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_materialBuffer.Initialize(m_vulkanContext);
-		m_renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
+		m_renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), 65536);
 		m_shadowService.Initialize(m_vulkanContext, m_swapchain);
 		m_renderTargetService.Initialize(m_vulkanContext);
 		m_renderQueue.SetDebugForceVisible(false);
@@ -61,6 +61,8 @@ namespace aether
 		}
 
 		m_primitiveMeshes.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator(), m_vulkanContext.GetGraphicsQueue(), m_uploadPool);
+		m_meshArena.Initialize(m_vulkanContext);
+		m_meshUploadQueue.Initialize(m_vulkanContext);
 
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = m_vulkanContext.GetDevice().device,
@@ -198,6 +200,8 @@ namespace aether
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
+		m_meshUploadQueue.Shutdown();
+		m_meshArena.Shutdown();
 		m_renderGraph.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		if (m_uploadPool != VK_NULL_HANDLE)
@@ -751,9 +755,26 @@ namespace aether
 		return m_assetManager.CreateMesh(vertices, indices);
 	}
 
-	Texture AetherCore::CreateTexture(std::string_view path)
+	MeshArena& AetherCore::GetMeshArena()
 	{
-		return m_assetManager.CreateTexture(path);
+		return m_meshArena;
+	}
+
+	MeshUploadQueue& AetherCore::GetMeshUploadQueue()
+	{
+		return m_meshUploadQueue;
+	}
+
+	void AetherCore::FlushMeshUploads()
+	{
+		if (!m_meshUploadQueue.HasPendingUploads())
+			return;
+		ImmediateSubmit([this](VkCommandBuffer cmd) { m_meshUploadQueue.Flush(cmd); });
+	}
+
+	Texture AetherCore::CreateTexture(std::string_view path, TextureFilter filter)
+	{
+		return m_assetManager.CreateTexture(path, filter);
 	}
 
 	void AetherCore::RegisterMaterial(Material& mat)

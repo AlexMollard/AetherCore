@@ -30,9 +30,13 @@ namespace aether
 
 		{
 			std::unique_lock lock(m_mutex);
-			// Wait for the render thread to be idle (previous packet consumed + processed).
-			// With kMaxFramesInFlight >= 3 and a healthy GPU this wait is ~0.
-			m_cv.wait(lock, [this] { return !m_hasFrame; });
+			// Wait for the render thread to be fully idle before publishing the next
+			// packet.  We need both conditions:
+			//   - !m_hasFrame: no queued packet waiting to be picked up
+			//   - !m_executing: previous frame is no longer being executed
+			// This prevents the game thread from reusing/clearing a draw slot while
+			// the render thread may still be reading it.
+			m_cv.wait(lock, [this] { return !m_hasFrame && !m_executing; });
 
 			m_packet = std::move(packet);
 			m_hasFrame = true;

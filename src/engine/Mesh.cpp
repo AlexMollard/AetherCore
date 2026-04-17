@@ -74,6 +74,19 @@ namespace aether
 		}
 	} // namespace
 
+	Mesh Mesh::CreateView(VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset)
+	{
+		Mesh mesh;
+		// m_allocator intentionally left null — Destroy() skips vmaDestroyBuffer for views.
+		mesh.m_buffer = vertexBuffer;
+		mesh.m_vertexCount = vertexCount;
+		mesh.m_vertexByteOffset = vertexByteOffset;
+		mesh.m_indexBuffer = indexBuffer;
+		mesh.m_indexCount = indexCount;
+		mesh.m_indexByteOffset = indexByteOffset;
+		return mesh;
+	}
+
 	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices)
 	{
 		AE_PROFILE_ZONE_N("Mesh::Upload");
@@ -103,7 +116,16 @@ namespace aether
 	}
 
 	Mesh::Mesh(Mesh&& other) noexcept
-	      : m_device(other.m_device), m_allocator(other.m_allocator), m_buffer(other.m_buffer), m_allocation(other.m_allocation), m_vertexCount(other.m_vertexCount), m_indexBuffer(other.m_indexBuffer), m_indexAllocation(other.m_indexAllocation), m_indexCount(other.m_indexCount)
+	      : m_device(other.m_device),
+	        m_allocator(other.m_allocator),
+	        m_buffer(other.m_buffer),
+	        m_allocation(other.m_allocation),
+	        m_vertexCount(other.m_vertexCount),
+	        m_indexBuffer(other.m_indexBuffer),
+	        m_indexAllocation(other.m_indexAllocation),
+	        m_indexCount(other.m_indexCount),
+	        m_vertexByteOffset(other.m_vertexByteOffset),
+	        m_indexByteOffset(other.m_indexByteOffset)
 	{
 		other.m_device = VK_NULL_HANDLE;
 		other.m_allocator = nullptr;
@@ -113,6 +135,8 @@ namespace aether
 		other.m_indexBuffer = VK_NULL_HANDLE;
 		other.m_indexAllocation = nullptr;
 		other.m_indexCount = 0;
+		other.m_vertexByteOffset = 0;
+		other.m_indexByteOffset = 0;
 	}
 
 	Mesh& Mesh::operator=(Mesh&& other) noexcept
@@ -129,6 +153,8 @@ namespace aether
 			m_indexBuffer = other.m_indexBuffer;
 			m_indexAllocation = other.m_indexAllocation;
 			m_indexCount = other.m_indexCount;
+			m_vertexByteOffset = other.m_vertexByteOffset;
+			m_indexByteOffset = other.m_indexByteOffset;
 
 			other.m_device = VK_NULL_HANDLE;
 			other.m_allocator = nullptr;
@@ -138,6 +164,8 @@ namespace aether
 			other.m_indexBuffer = VK_NULL_HANDLE;
 			other.m_indexAllocation = nullptr;
 			other.m_indexCount = 0;
+			other.m_vertexByteOffset = 0;
+			other.m_indexByteOffset = 0;
 		}
 		return *this;
 	}
@@ -160,5 +188,7 @@ namespace aether
 		m_device = VK_NULL_HANDLE;
 		m_allocator = nullptr;
 		m_vertexCount = 0;
+		m_vertexByteOffset = 0;
+		m_indexByteOffset = 0;
 	}
 } // namespace aether

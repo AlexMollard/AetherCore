@@ -8,6 +8,12 @@ namespace aether
 {
 	class BindlessManager;
 
+	enum class TextureFilter
+	{
+		Linear,
+		Nearest,
+	};
+
 	class UniqueImage
 	{
 	public:
@@ -43,7 +49,7 @@ namespace aether
 		static UniqueImage Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		void Reset();
-		void EnsureBindlessSampled(BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		void EnsureBindlessSampled(BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, TextureFilter filter = TextureFilter::Linear);
 		void ReleaseBindlessSampled(bool deferSlotFree = true);
 
 		[[nodiscard]] VkImage Get() const;

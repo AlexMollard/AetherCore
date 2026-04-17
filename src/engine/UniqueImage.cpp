@@ -189,7 +189,7 @@ namespace aether
 		m_virtualResourceId = 0;
 	}
 
-	void UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout)
+	void UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout, const TextureFilter filter)
 	{
 		if (!(*this))
 		{
@@ -248,9 +248,9 @@ namespace aether
 			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 			.pNext = nullptr,
 			.flags = 0,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+			.magFilter = filter == TextureFilter::Nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
+			.minFilter = filter == TextureFilter::Nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
+			.mipmapMode = filter == TextureFilter::Nearest ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR,
 			.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
