@@ -202,8 +202,6 @@ namespace aether
 		{
 			CameraHandle camera;
 			VkExtent2D extent;
-			UniqueImage colorImage;
-			UniqueImage depthImage;
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;

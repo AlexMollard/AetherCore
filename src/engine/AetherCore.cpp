@@ -33,6 +33,7 @@ namespace aether
 		m_settings.window.height = config.height;
 
 		m_swapchain.Initialize(m_vulkanContext, m_window, m_settings.graphics.vsync);
+		m_renderGraph.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
 		m_bindlessManager.Initialize(m_vulkanContext);
 		m_frameConstantsBuffer.Initialize(m_vulkanContext);
 		m_materialBuffer.Initialize(m_vulkanContext);
@@ -172,8 +173,6 @@ namespace aether
 			{
 				rt.constants->Shutdown();
 			}
-			rt.depthImage.Reset();
-			rt.colorImage.Reset();
 		}
 		m_rtCameras.clear();
 
@@ -203,6 +202,7 @@ namespace aether
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
+		m_renderGraph.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext.GetDevice().device);
 		if (m_uploadPool != VK_NULL_HANDLE)
 		{
@@ -265,20 +265,13 @@ namespace aether
 		// Re-register existing RTT images after graph clear.
 		for (auto& [id, rt]: m_rtCameras)
 		{
-			if (rt.depthImage.GetFormat() != m_swapchain.GetDepthFormat())
+			rt.rgColor = m_renderGraph.CreateTransientColor(GetForwardColorFormat(), rt.extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+			const std::uint32_t slot = m_renderGraph.EnsureBindlessSampled(rt.rgColor, m_bindlessManager, m_vulkanContext.GetDevice().device);
+			if (slot == 0xFFFFFFFFu)
 			{
-				rt.depthImage.Reset();
-				rt.depthImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
-				        m_vulkanContext.GetAllocator(),
-				        {
-				                .extent = rt.extent,
-				                .format = m_swapchain.GetDepthFormat(),
-				                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-				        });
+				WARN(LogCategory::Engine, "Failed to bindless-register transient RTT color for target id={}", id);
 			}
-
-			rt.rgColor = m_renderGraph.RegisterImage(rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
-			rt.rgDepth = m_renderGraph.RegisterImage(rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
+			rt.rgDepth = m_renderGraph.CreateTransientDepth(m_swapchain.GetDepthFormat(), rt.extent);
 		}
 		RegisterPasses();
 
@@ -831,25 +824,13 @@ namespace aether
 		rt.camera = camera;
 		rt.extent = extent;
 
-		rt.colorImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
-		        m_vulkanContext.GetAllocator(),
-		        {
-		                .extent = extent,
-		                .format = GetForwardColorFormat(),
-		                .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		        });
-		rt.colorImage.EnsureBindlessSampled(m_bindlessManager, m_vulkanContext.GetDevice().device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-		rt.depthImage = UniqueImage::Create(m_vulkanContext.GetDevice().device,
-		        m_vulkanContext.GetAllocator(),
-		        {
-		                .extent = extent,
-		                .format = m_swapchain.GetDepthFormat(),
-		                .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-		        });
-
-		rt.rgColor = m_renderGraph.RegisterImage(rt.colorImage.Get(), rt.colorImage.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
-		rt.rgDepth = m_renderGraph.RegisterImage(rt.depthImage.Get(), rt.depthImage.GetDefaultView(), VK_IMAGE_ASPECT_DEPTH_BIT);
+		rt.rgColor = m_renderGraph.CreateTransientColor(GetForwardColorFormat(), extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+		const std::uint32_t slot = m_renderGraph.EnsureBindlessSampled(rt.rgColor, m_bindlessManager, m_vulkanContext.GetDevice().device);
+		if (slot == 0xFFFFFFFFu)
+		{
+			throw std::runtime_error("CreateCameraRenderTarget: failed to register transient color image as bindless sampled.");
+		}
+		rt.rgDepth = m_renderGraph.CreateTransientDepth(m_swapchain.GetDepthFormat(), extent);
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(m_vulkanContext);
@@ -876,14 +857,15 @@ namespace aether
 		}
 
 		m_renderGraph.RemovePass("$CameraRT_" + std::to_string(rt.id));
+		m_renderGraph.RemovePass("$CullDraws_RTT_" + std::to_string(rt.id));
+		m_renderGraph.ReleaseImage(it->second.rgColor);
+		m_renderGraph.ReleaseImage(it->second.rgDepth);
 
 		it->second.renderQueue.Shutdown();
 		if (it->second.constants)
 		{
 			it->second.constants->Shutdown();
 		}
-		it->second.depthImage.Reset();
-		it->second.colorImage.Reset();
 
 		m_rtCameras.erase(it);
 	}
@@ -901,11 +883,11 @@ namespace aether
 	uint32_t AetherCore::GetRenderTargetBindlessSlot(const CameraRenderTarget rt) const
 	{
 		auto it = m_rtCameras.find(rt.id);
-		if (it == m_rtCameras.end() || !it->second.colorImage.HasBindlessSampled())
+		if (it == m_rtCameras.end())
 		{
 			return 0xFFFFFFFFu;
 		}
-		return it->second.colorImage.GetBindlessSampledSlot();
+		return m_renderGraph.GetBindlessSampledSlot(it->second.rgColor);
 	}
 
 	World& AetherCore::GetWorld()
