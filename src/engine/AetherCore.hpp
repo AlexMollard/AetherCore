@@ -35,6 +35,7 @@
 #include "RenderThread.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
+#include "ShadowService.hpp"
 #include "SkyboxPass.hpp"
 #include "Swapchain.hpp"
 #include "Texture.hpp"
@@ -246,16 +247,7 @@ namespace aether
 		SkyboxPass m_skyboxPass;
 		CullPass m_cullPass;
 		ForwardPass m_forwardPass;
-		std::array<RenderQueue, kShadowCascadeCount> m_shadowRenderQueues;
-		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
-		GraphicsPipeline m_shadowPipeline;
-		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
-		std::array<VkExtent2D, kShadowCascadeCount> m_shadowMapExtents{
-			VkExtent2D{ 4096u, 4096u },
-			VkExtent2D{ 2048u, 2048u },
-			VkExtent2D{ 1024u, 1024u },
-		};
-		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{ 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu };
+		ShadowService m_shadowService;
 		Input m_input;
 		CameraManager m_cameraManager;
 		MaterialBuffer m_materialBuffer;
