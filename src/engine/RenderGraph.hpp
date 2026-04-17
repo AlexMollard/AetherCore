@@ -65,33 +65,11 @@ namespace aether
 		VkExtent2D extent{};
 	};
 
-	// A Frostbite-style frame graph.
-	//
-	// Passes declare resource reads and writes through a fluent PassBuilder;
-	// the graph derives image layouts and issues the minimum required pipeline
-	// barriers automatically.  Two resources are always pre-registered:
-	//   GetSwapchainColor() — the current swapchain color image
-	//   GetSwapchainDepth() — the swapchain depth image
-	//
-	// Example usage (setup, called once):
-	//   auto color = graph.GetSwapchainColor();
-	//   auto depth = graph.GetSwapchainDepth();
-	//
-	//   graph.AddPass("ForwardPass")
-	//       .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR,
-	//       VK_ATTACHMENT_STORE_OP_STORE,
-	//                   ClearColorValue(0.05f, 0.05f, 0.07f, 1.0f))
-	//       .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR,
-	//       VK_ATTACHMENT_STORE_OP_DONT_CARE,
-	//                   ClearDepthValue(1.0f))
-	//       .Execute([](PassContext& ctx) { /* record draw calls */ });
+	// Frame graph with pass/resource declarations and automatic image barriers.
 	class RenderGraph
 	{
 	public:
-		// ── Fluent builder returned by AddPass() ─────────────────────────────
-		// Chain calls to declare attachments, then call Execute() to set the
-		// callback. The builder references the graph — consume it immediately (do not
-		// store).
+		// Fluent pass builder; use immediately, do not store.
 		class PassBuilder
 		{
 		public:
@@ -100,43 +78,30 @@ namespace aether
 			PassBuilder& operator=(PassBuilder&&) = delete;
 
 			// Declare a color attachment write.
-			// clearValue is used only when loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR.
 			PassBuilder& WriteColor(RGImage image, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE, VkClearValue clearValue = {});
 
-			// Declare the depth/stencil attachment write.
-			// clearValue is used only when loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR.
+			// Declare a depth/stencil attachment write.
 			PassBuilder& WriteDepth(RGImage image, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, VkClearValue clearValue = {});
 
-			// Declare a shader-sampled texture read.
-			// Generates a layout transition to SHADER_READ_ONLY_OPTIMAL before the
-			// pass.
+			// Declare a sampled texture read.
 			PassBuilder& ReadTexture(RGImage image);
 
-			// Declare a shader-sampled texture read used by compute.
-			// Generates a layout transition to SHADER_READ_ONLY_OPTIMAL before the
-			// pass.
+			// Declare a sampled texture read in compute.
 			PassBuilder& ReadTextureCompute(RGImage image);
 
-			// Declare a storage-image read used by compute.
-			// Generates a layout transition to GENERAL before the pass.
+			// Declare a storage-image read in compute.
 			PassBuilder& ReadStorageImage(RGImage image);
 
-			// Declare a storage-image write used by compute.
-			// Generates a layout transition to GENERAL before the pass.
+			// Declare a storage-image write in compute.
 			PassBuilder& WriteStorageImage(RGImage image);
 
-			// Set the GPU work callback for this pass.
-			// Called between vkCmdBeginRendering and vkCmdEndRendering.
+			// Set graphics callback for this pass.
 			PassBuilder& Execute(std::function<void(PassContext&)> fn);
 
-			// Set the GPU work callback for a compute pass.
-			// Called without opening dynamic rendering.
+			// Set compute callback for this pass.
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
-			// Override the render area / viewport / scissor for this pass.
-			// When not set the pass renders at the swapchain extent.
-			// Required for render-to-texture passes whose target is not
-			// swapchain-sized.
+			// Override pass extent (for render-to-texture and non-swapchain targets).
 			PassBuilder& SetExtent(VkExtent2D extent);
 
 		private:
@@ -147,7 +112,6 @@ namespace aether
 			std::size_t m_passIndex;
 		};
 
-		// ── Pre-registered swapchain resource handles ─────────────────────────
 		[[nodiscard]] RGImage GetSwapchainColor() const
 		{
 			return RGImage{ kSwapchainColorId };
@@ -158,21 +122,13 @@ namespace aether
 			return RGImage{ kSwapchainDepthId };
 		}
 
-		// Register an externally-owned image (VkImage + VkImageView) with the graph.
-		// The caller is responsible for the lifetime of the Vulkan handles — they
-		// must remain valid for all Execute calls made while the registration is
-		// live. Returns an opaque handle for use with
-		// WriteColor/WriteDepth/ReadTexture. Pass VK_IMAGE_ASPECT_DEPTH_BIT for
-		// depth/stencil images.
+		// Register an externally-owned image and return an RGImage handle.
 		[[nodiscard]] RGImage RegisterImage(VkImage image, VkImageView view, VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
 
-		// ── Pass management ───────────────────────────────────────────────────
-		// Registers a pass and returns a builder for declaring its resource accesses.
-		// The builder should be consumed immediately via method chaining.
+		// Register a graphics pass.
 		[[nodiscard]] PassBuilder AddPass(std::string name);
 
-		// Registers a compute pass and returns a builder for declaring its resource
-		// accesses. Compute passes execute without dynamic rendering.
+		// Register a compute pass.
 		[[nodiscard]] PassBuilder AddComputePass(std::string name);
 
 		void RemovePass(const std::string& name);
@@ -184,9 +140,7 @@ namespace aether
 			return m_passes.empty();
 		}
 
-		// ── Frame execution ───────────────────────────────────────────────────
-		// Compiles the graph (if dirty), issues pre-pass barriers, opens/closes
-		// dynamic rendering, and invokes each pass's Execute callback.
+		// Execute the compiled frame graph for the current frame.
 		void Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex);
 
 	private:

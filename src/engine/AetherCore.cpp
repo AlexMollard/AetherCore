@@ -46,9 +46,7 @@ namespace aether
 		        .device = m_vulkanContext.GetDevice().device,
 		});
 
-		// Upload pool — used for one-shot staging uploads (meshes, textures).
-		// TRANSIENT: hints that command buffers are short-lived.
-		// RESET_COMMAND_BUFFER: allows individual buffer reset/reuse.
+		// Upload command pool — transient, per-buffer reset.
 		const VkCommandPoolCreateInfo uploadPoolInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -71,7 +69,6 @@ namespace aether
 		});
 		m_postProcessStack.SetFxaaEnabled(m_settings.graphics.fxaa);
 
-		// Initialize services.
 		m_renderer.Initialize(&m_postProcessStack);
 
 		m_skyboxPass = SkyboxPass::Create({
@@ -101,8 +98,7 @@ namespace aether
 
 		if (m_asyncComputeEnabled)
 		{
-			// Timeline semaphore — monotonically increasing value used to chain
-			// compute→graphics submissions across all frames in flight.
+			// Timeline semaphore for compute→graphics synchronisation across frames in flight.
 			const VkSemaphoreTypeCreateInfo timelineTypeInfo{
 				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 				.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -291,20 +287,13 @@ namespace aether
 
 	void AetherCore::RegisterPasses()
 	{
-		// ── Pass 1: Skybox ────────────────────────────────────────────────────
-		// Clears the HDR buffer with a procedural gradient sky.
-		// Forward geometry then loads this colour as its background.
+		// Pass 1: sky background.
 		m_skyboxPass.RegisterPass(m_renderGraph, m_postProcessStack.GetHdrColor());
 
-		// ── Pass 2: Cull (compute) ────────────────────────────────────────────
-		// Flushes scene + world into the render queue and dispatches the GPU
-		// frustum-cull compute shader. Surviving draws are written into the
-		// device-local output indirect buffer.
+		// Pass 2: compute cull and indirect command generation.
 		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
 
-		// ── Pass 3: Forward ───────────────────────────────────────────────────
-		// Issues DrawIndexedIndirect per batch using the GPU-written indirect
-		// buffer produced by the preceding cull pass.
+		// Pass 3: forward lighting from indirect commands.
 		m_forwardPass.RegisterPass(m_renderGraph,
 		        m_postProcessStack.GetHdrColor(),
 		        m_renderGraph.GetSwapchainDepth(),
@@ -316,13 +305,13 @@ namespace aether
 			        return m_lightingManager.GetSet(frameIdx);
 		        });
 
-		// ── Passes 4–5: Render-to-texture cameras ────────────────────────────
+		// Passes 4-5: render-to-texture cameras.
 		for (auto& [id, rt]: m_rtCameras)
 		{
 			RegisterRttPassesFor(id);
 		}
 
-		// ── Passes 6–7: Tonemap + FXAA ────────────────────────────────────────
+		// Passes 6-7: post processing.
 		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
 	}
 
@@ -339,9 +328,7 @@ namespace aether
 		const RGImage depth = it->second.rgDepth;
 		const VkExtent2D extent = it->second.extent;
 
-		// ── Compute cull pass ─────────────────────────────────────────────────
-		// Writes per-camera FrameConstants and dispatches frustum-cull compute.
-		// Draw queue population is done on the game thread in PrepareFrame.
+		// Per-camera compute cull pass.
 		const VkPipeline cullPipeline = m_cullPass.GetPipeline();
 		const VkPipelineLayout cullLayout = m_cullPass.GetPipelineLayout();
 
@@ -380,9 +367,7 @@ namespace aether
 			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
 		                });
 
-		// ── Graphics draw pass ────────────────────────────────────────────────
-		// Issues DrawIndexedIndirect per batch using the GPU-written indirect
-		// buffer produced by the preceding compute cull pass.
+		// Per-camera graphics draw pass.
 		m_renderGraph.AddPass("$CameraRT_" + idStr)
 		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
 		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))

@@ -17,8 +17,7 @@ namespace aether
 	class GraphicsPipeline;
 	class Mesh;
 
-	// A lightweight typed draw-call submission record.
-	// Submitted by game/app code; consumed by the engine during EndFrame.
+	// Per-draw submission payload.
 	struct DrawCommand
 	{
 		const GraphicsPipeline* pipeline = nullptr;
@@ -36,14 +35,7 @@ namespace aether
 		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
 	};
 
-	// Per-frame bucket that collects DrawCommands from app/scene code and flushes them
-	// via a GPU compute culling pass + indirect draw.
-	//
-	// Usage per frame:
-	//   1. Submit()  — called by scene/world code to enqueue draws.
-	//   2. PrepareAndDispatch()  — CPU writes input buffers, dispatches cull compute, inserts barrier.
-	//   3. FlushDraw()  — records DrawIndexedIndirect calls per batch using GPU output.
-	//   4. Clear()  — resets the queue for the next frame.
+	// Collects draws, runs cull/animation compute, then emits indirect draws.
 	class RenderQueue
 	{
 	public:
@@ -52,14 +44,13 @@ namespace aether
 		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024);
 		void Shutdown();
 
-		// Set the animation database for GPU clip sampling.
+		// Optional animation database for GPU sampling.
 		void SetAnimationDatabase(const AnimationDatabase* db)
 		{
 			m_animationDb = db;
 		}
 
-		// Set which double-buffer slot Submit() writes into.
-		// Call once per frame on the game thread before FlushToQueue.
+		// Select the frame slot used by Submit.
 		void SetWriteSlot(std::uint32_t slot)
 		{
 			m_writeSlot = slot;
@@ -97,33 +88,25 @@ namespace aether
 			return m_debugForceCpuSkinFallback;
 		}
 
-		// Phase 1 — Compute pass callback.
-		// Sorts commands, writes all CPU-side input buffers, dispatches the culling
-		// compute shader, and inserts a compute→indirect pipeline barrier.
-		// frameAddr is the BDA of the current FrameConstantsData (used for viewProj frustum cull).
+		// Write inputs and dispatch animation/cull compute.
 		void PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
 
-		// Phase 2 — Graphics pass callback.
-		// Records one DrawIndexedIndirect per batch (instanceCount=0 skips culled draws),
-		// reading the GPU-written output indirect buffer produced by PrepareAndDispatch.
-		// Must be called after PrepareAndDispatch on the same frame's command buffer.
+		// Emit graphics draws from indirect output.
 		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE);
 
-		// Clear the CPU draw list for the given slot. Call from render thread after FlushDraw.
+		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
 
 		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 
 	private:
-		// Double-buffered CPU draw list.
-		// Slot (frameIndex % kFramesInFlight) is written by the game thread and
-		// read by the render thread one frame later, so there is no data race.
+		// Per-frame queued draw commands.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 
-		// ── CPU-mapped input buffers (written each frame before compute dispatch) ──
+		// CPU-written per-frame inputs.
 		UniqueBuffer m_instanceDataBuffer; // DrawInstanceData[]  — SSBO + BDA
 		UniqueBuffer m_cullInputBuffer;    // CullDrawInput[]     — SSBO + BDA
 		UniqueBuffer m_batchDescBuffer;    // CullBatch[]         — SSBO + BDA
@@ -132,7 +115,7 @@ namespace aether
 		CullDrawInput* m_cullInputMapped = nullptr;
 		CullBatch* m_batchDescMapped = nullptr;
 
-		// ── GPU-side output (device-local, written by compute, read as indirect) ──
+		// Device-local outputs consumed by draw/compute.
 		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] — INDIRECT + BDA
 		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
 		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
@@ -145,7 +128,7 @@ namespace aether
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
 
-		// ── Per-batch info for FlushDraw, built during PrepareAndDispatch ────────
+		// Batch metadata consumed by FlushDraw.
 		struct BatchRenderInfo
 		{
 			const GraphicsPipeline* pipeline = nullptr;
@@ -156,7 +139,7 @@ namespace aether
 
 		std::vector<BatchRenderInfo> m_batchRenderInfos;
 
-		// Values cached from PrepareAndDispatch — used by FlushDraw.
+		// Cached per-frame addresses/state for FlushDraw.
 		VkDeviceAddress m_cachedFrameAddr = 0;
 		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot

@@ -11,9 +11,6 @@
 
 namespace aether
 {
-	// ──────────────────────────────────────────────────────────────────────────
-	//  PassBuilder
-	// ──────────────────────────────────────────────────────────────────────────
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
 	      : m_graph(graph), m_passIndex(passIndex)
 	{
@@ -106,9 +103,6 @@ namespace aether
 		return *this;
 	}
 
-	// ──────────────────────────────────────────────────────────────────────────
-	//  RenderGraph — pass management
-	// ──────────────────────────────────────────────────────────────────────────
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
 		m_passes.push_back(PassRecord{ .name = std::move(name) });
@@ -156,9 +150,6 @@ namespace aether
 		m_dirty = true;
 	}
 
-	// ──────────────────────────────────────────────────────────────────────────
-	//  RenderGraph — frame execution
-	// ──────────────────────────────────────────────────────────────────────────
 	void RenderGraph::Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex)
 	{
 		if (m_passes.empty())
@@ -180,7 +171,6 @@ namespace aether
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
-			// ── Pre-pass image barriers ──────────────────────────────────────
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
 				const VkImage image = ResolveImage(b.resourceId, target);
@@ -196,7 +186,6 @@ namespace aether
 				vkutil::TransitionImage(cmd, image, b.oldLayout, b.newLayout, b.srcStage, b.srcAccess, b.dstStage, b.dstAccess, b.aspect);
 			}
 
-			// ── Build VkRenderingAttachmentInfo arrays ───────────────────────
 			std::vector<VkRenderingAttachmentInfo> colorInfos;
 			colorInfos.reserve(pass.colorWrites.size());
 			for (const AttachmentRef& a: pass.colorWrites)

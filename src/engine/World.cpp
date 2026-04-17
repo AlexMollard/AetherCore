@@ -33,8 +33,6 @@ namespace aether
 		}
 	}
 
-	// ── Flush ─────────────────────────────────────────────────────────────────
-
 	void World::FlushToQueue(RenderQueue& queue) const
 	{
 		AE_PROFILE_ZONE();
@@ -91,8 +89,6 @@ namespace aether
 			});
 		}
 	}
-
-	// ── Systems ───────────────────────────────────────────────────────────────
 
 	void World::RegisterSystem(std::unique_ptr<System> system)
 	{

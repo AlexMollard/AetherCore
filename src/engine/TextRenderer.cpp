@@ -31,8 +31,6 @@ namespace aether
 			                if (m_engine == nullptr)
 				                return;
 
-			                // Read slot = render-thread frame index % kMaxFramesInFlight.
-			                // This is guaranteed to differ from the game thread's write slot.
 			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
 			                if (m_pendingLabels[readSlot].empty() || !m_fontAtlas.IsValid())
 			                {

@@ -17,8 +17,6 @@
 
 namespace aether
 {
-	// ── Lifecycle ─────────────────────────────────────────────────────────────
-
 	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws, std::uint32_t maxBatches)
 	{
 		m_device = device;
@@ -30,8 +28,6 @@ namespace aether
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-		// All CPU-mapped and GPU-side buffers are kFramesInFlight deep so that
-		// frame N's CPU writes never race with frame N-1's GPU reads.
 		m_instanceDataBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags);
 		m_instanceDataMapped = static_cast<DrawInstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
 
@@ -50,7 +46,6 @@ namespace aether
 		m_skinPaletteBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 		m_sampledPosesBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
-		// Output indirect buffer: device-local, written by compute via BDA, read as indirect args.
 		m_outputIndirectBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 		EnsureSkinCopyPipeline();
 	}
@@ -99,14 +94,10 @@ namespace aether
 		m_device = VK_NULL_HANDLE;
 	}
 
-	// ── Submit ────────────────────────────────────────────────────────────────
-
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
-
-	// ── PrepareAndDispatch ────────────────────────────────────────────────────
 
 	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
@@ -122,8 +113,6 @@ namespace aether
 		m_batchRenderInfos.clear();
 		m_animationSampleJobCount = 0;
 
-		// Compute per-frame ring offsets into the double-buffered arrays so that
-		// frame N's CPU writes never alias frame N-1's GPU reads.
 		const std::uint32_t frameSlot = frameIndex % kFramesInFlight;
 		const std::uint32_t drawBase = frameSlot * m_maxDraws;
 		const std::uint32_t batchBase = frameSlot * m_maxBatches;
@@ -146,7 +135,6 @@ namespace aether
 		std::uint32_t skinJobCount = 0;
 		std::uint32_t sampleJobsThisFrame = 0;
 
-		// Sort by pipeline then mesh to group draws into contiguous batches.
 		std::stable_sort(m_commands.begin(),
 		        m_commands.end(),
 		        [](const DrawCommand& a, const DrawCommand& b)
@@ -159,8 +147,7 @@ namespace aether
 		const std::uint32_t totalDraws = static_cast<std::uint32_t>(m_commands.size());
 		assert(totalDraws <= m_maxDraws && "RenderQueue: exceeded maxDraws — increase Initialize capacity.");
 
-		// Walk sorted commands, write per-draw instance data + cull input, and record batch boundaries.
-		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame's slot
+		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
 		std::uint32_t batchIdx = 0;
 
 		for (std::size_t i = 0; i < m_commands.size();)
@@ -170,7 +157,6 @@ namespace aether
 
 			const std::uint32_t batchOutputStart = globalDrawIdx;
 
-			// Find the end of this batch (contiguous same pipeline+mesh).
 			std::size_t batchEnd = i;
 			while (batchEnd < m_commands.size() && m_commands[batchEnd].pipeline == batchPipeline && m_commands[batchEnd].mesh == batchMesh)
 			{
@@ -180,7 +166,6 @@ namespace aether
 
 			assert(batchIdx < m_maxBatches && "RenderQueue: exceeded maxBatches — increase Initialize capacity.");
 
-			// Write per-draw data for this batch into the current frame's ring slot.
 			for (std::size_t j = i; j < batchEnd; ++j)
 			{
 				const DrawCommand& dc = m_commands[j];
@@ -294,7 +279,6 @@ namespace aether
 				++globalDrawIdx;
 			}
 
-			// Write batch descriptor into the current frame's ring slot.
 			m_batchDescMapped[batchBase + batchIdx] = CullBatch{ batchOutputStart, batchDrawCount, batchOutputStart };
 
 			m_batchRenderInfos.push_back(BatchRenderInfo{
@@ -308,8 +292,7 @@ namespace aether
 			i = batchEnd;
 		}
 
-		// Explicitly flush host writes for non-coherent mapped memory before GPU reads.
-		// Flush full allocations to avoid nonCoherentAtomSize alignment edge cases on subranges.
+		// Flush mapped writes before GPU reads.
 		vmaFlushAllocation(m_allocator, m_instanceDataBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_cullInputBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_batchDescBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
@@ -320,8 +303,7 @@ namespace aether
 			vmaFlushAllocation(m_allocator, m_animationSampleJobsBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		}
 
-		// HOST → SHADERS barrier: ensures all CPU buffer writes above are visible to
-		// both compute (cull input/desc) and graphics shaders (instance data).
+		// Ensure host writes are visible to compute/graphics shader reads.
 		const VkMemoryBarrier2 hostToShaders{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -419,8 +401,6 @@ namespace aether
 			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
 		}
 
-		// All BDAs are offset to this frame's ring slot so the compute shader
-		// addresses frame-relative indices starting at 0.
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullDrawInput);
 		const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
 		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullBatch);
@@ -445,8 +425,7 @@ namespace aether
 			CommandRecorder(cmd).EndDebugLabel();
 		}
 
-		// COMPUTE → DRAW_INDIRECT barrier: output indirect buffer must be
-		// fully written before the GPU reads it as indirect draw arguments.
+		// Ensure indirect args are visible before draw-indirect.
 		const VkMemoryBarrier2 computeToIndirect{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
@@ -461,22 +440,14 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(cmd, &computeToIndirectDep);
 
-// Telemetry: plot animation pipeline metrics to Tracy.
 #ifdef TRACY_ENABLE
 		{
-			// Track animation sample jobs queued this frame.
 			TracyPlot("Animation/SampleJobs", static_cast<int64_t>(sampleJobsThisFrame));
-
-			// Track skin palette copy jobs (indicates complexity of skinning setup).
 			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
-
-			// Track total draws submitted (for correlation with animation overhead).
 			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
 #endif
 	}
-
-	// ── FlushDraw ─────────────────────────────────────────────────────────────
 
 	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet)
 	{
@@ -559,8 +530,6 @@ namespace aether
 
 		recorder.EndDebugLabel();
 	}
-
-	// ── Clear / query ─────────────────────────────────────────────────────────
 
 	void RenderQueue::Clear(std::uint32_t slot)
 	{

@@ -4,7 +4,6 @@
 
 namespace aether
 {
-	// ── Camera lifecycle ──────────────────────────────────────────────────────
 
 	CameraHandle CameraManager::Create(const CameraDesc& desc)
 	{
@@ -23,8 +22,6 @@ namespace aether
 		if (m_mainCamera == handle)
 			m_mainCamera = {};
 	}
-
-	// ── Camera access ─────────────────────────────────────────────────────────
 
 	Camera& CameraManager::Get(CameraHandle handle)
 	{
@@ -54,8 +51,6 @@ namespace aether
 		return (it != m_cameras.end()) ? &it->second : nullptr;
 	}
 
-	// ── Main camera ───────────────────────────────────────────────────────────
-
 	void CameraManager::SetMainCamera(CameraHandle handle)
 	{
 		m_mainCamera = handle;
@@ -70,8 +65,6 @@ namespace aether
 	{
 		return TryGet(m_mainCamera);
 	}
-
-	// ── Matrix helpers ────────────────────────────────────────────────────────
 
 	glm::mat4 CameraManager::GetMainViewProjection(float aspect) const
 	{
@@ -93,8 +86,6 @@ namespace aether
 			return cam->GetProjectionMatrix(aspect);
 		return glm::mat4{ 1.0f };
 	}
-
-	// ── Per-frame update ──────────────────────────────────────────────────────
 
 	void CameraManager::Update(const Input& input, float dt)
 	{
