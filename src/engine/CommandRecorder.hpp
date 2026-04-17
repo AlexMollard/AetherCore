@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vulkan/vulkan.h>
 
-#include "DrawPushConstants.hpp"
+#include "GpuContracts.hpp"
 
 namespace aether
 {

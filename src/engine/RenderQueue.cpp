@@ -7,13 +7,12 @@
 #include <unordered_map>
 
 #include "CommandRecorder.hpp"
-#include "DrawPushConstants.hpp"
 #include "FileSystem.hpp"
+#include "GpuContracts.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
 #include "Profiler.hpp"
-#include "RenderQueueGpuContracts.hpp"
 #include "ShaderUtils.hpp"
 
 namespace aether

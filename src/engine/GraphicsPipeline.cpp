@@ -8,8 +8,8 @@
 #include <utility>
 #include <vector>
 
-#include "DrawPushConstants.hpp"
 #include "FileSystem.hpp"
+#include "GpuContracts.hpp"
 #include "Logger.hpp"
 #include "Mesh.hpp"
 #include "ShaderUtils.hpp"

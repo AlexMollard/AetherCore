@@ -7,8 +7,7 @@
 #include <vulkan/vulkan.h>
 
 #include "AnimationDatabase.hpp"
-#include "DrawPushConstants.hpp"
-#include "RenderQueueGpuContracts.hpp"
+#include "GpuContracts.hpp"
 #include "Swapchain.hpp"
 #include "UniqueBuffer.hpp"
 
