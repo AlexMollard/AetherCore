@@ -32,6 +32,7 @@
 #include "Renderer.hpp"
 #include "RenderGraph.hpp"
 #include "RenderQueue.hpp"
+#include "RenderTargetService.hpp"
 #include "RenderThread.hpp"
 #include "ResourcePool.hpp"
 #include "Scene.hpp"
@@ -195,19 +196,7 @@ namespace aether
 		void EndFrame(const RenderFramePacket& packet); // called from ExecuteRenderFrame on render thread
 		void RecreateSwapchain();
 		void RegisterPasses();
-		void RegisterRttPassesFor(uint32_t id);
 		void ImmediateSubmit(const std::function<void(VkCommandBuffer)>& fn);
-
-		// ── Per-camera render-to-texture entry ───────────────────────────────
-		struct CameraRtEntry
-		{
-			CameraHandle camera;
-			VkExtent2D extent;
-			RGImage rgColor{};
-			RGImage rgDepth{};
-			std::unique_ptr<FrameConstantsBuffer> constants;
-			RenderQueue renderQueue; // own queue — isolated from main m_renderQueue
-		};
 
 		struct AsyncComputeFrame
 		{
@@ -248,11 +237,9 @@ namespace aether
 		CullPass m_cullPass;
 		ForwardPass m_forwardPass;
 		ShadowService m_shadowService;
+		RenderTargetService m_renderTargetService;
 		Input m_input;
 		CameraManager m_cameraManager;
 		MaterialBuffer m_materialBuffer;
-
-		std::unordered_map<uint32_t, CameraRtEntry> m_rtCameras;
-		uint32_t m_nextRtId = 1;
 	};
 } // namespace aether

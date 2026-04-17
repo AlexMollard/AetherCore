@@ -39,6 +39,7 @@ namespace aether
 		m_materialBuffer.Initialize(m_vulkanContext);
 		m_renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
 		m_shadowService.Initialize(m_vulkanContext, m_swapchain);
+		m_renderTargetService.Initialize(m_vulkanContext);
 		m_renderQueue.SetDebugForceVisible(false);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_cullPass.Initialize(m_vulkanContext.GetDevice().device);
@@ -79,6 +80,8 @@ namespace aether
 		});
 
 		m_assetManager.Initialize(this);
+
+		m_renderTargetService.BindRuntime(m_renderGraph, m_bindlessManager, m_cameraManager, m_lightingManager, m_renderer, m_materialBuffer, m_cullPass, [this]() { return m_frameIndex; }, m_vulkanContext.GetDevice().device, m_swapchain.GetDepthFormat(), GetForwardColorFormat());
 
 		RegisterPasses();
 
@@ -166,16 +169,7 @@ namespace aether
 	{
 		vkDeviceWaitIdle(m_vulkanContext.GetDevice().device);
 
-		for (auto& [id, rt]: m_rtCameras)
-		{
-			(void) id;
-			rt.renderQueue.Shutdown();
-			if (rt.constants)
-			{
-				rt.constants->Shutdown();
-			}
-		}
-		m_rtCameras.clear();
+		m_renderTargetService.Shutdown();
 		m_shadowService.Shutdown(m_vulkanContext.GetDevice().device);
 
 		for (auto& frame: m_asyncComputeFrames)
@@ -266,17 +260,7 @@ namespace aether
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 
-		// Re-register existing RTT images after graph clear.
-		for (auto& [id, rt]: m_rtCameras)
-		{
-			rt.rgColor = m_renderGraph.CreateTransientColor(GetForwardColorFormat(), rt.extent, VK_IMAGE_USAGE_SAMPLED_BIT);
-			const std::uint32_t slot = m_renderGraph.EnsureBindlessSampled(rt.rgColor, m_bindlessManager, m_vulkanContext.GetDevice().device);
-			if (slot == 0xFFFFFFFFu)
-			{
-				WARN(LogCategory::Engine, "Failed to bindless-register transient RTT color for target id={}", id);
-			}
-			rt.rgDepth = m_renderGraph.CreateTransientDepth(m_swapchain.GetDepthFormat(), rt.extent);
-		}
+		m_renderTargetService.OnRenderGraphReset(m_vulkanContext.GetDevice().device, m_swapchain.GetDepthFormat(), GetForwardColorFormat());
 		RegisterPasses();
 
 		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
@@ -307,85 +291,10 @@ namespace aether
 		        m_shadowService.GetShadowDepthImages());
 
 		// Passes 4-5: render-to-texture cameras.
-		for (auto& [id, rt]: m_rtCameras)
-		{
-			RegisterRttPassesFor(id);
-		}
+		m_renderTargetService.RegisterPasses();
 
 		// Passes 6-7: post processing.
 		m_postProcessStack.RegisterPasses(m_renderGraph, m_bindlessManager);
-	}
-
-	void AetherCore::RegisterRttPassesFor(const uint32_t id)
-	{
-		auto it = m_rtCameras.find(id);
-		if (it == m_rtCameras.end())
-		{
-			return;
-		}
-
-		const std::string idStr = std::to_string(id);
-		const RGImage color = it->second.rgColor;
-		const RGImage depth = it->second.rgDepth;
-		const VkExtent2D extent = it->second.extent;
-
-		// Per-camera compute cull pass.
-		const VkPipeline cullPipeline = m_cullPass.GetPipeline();
-		const VkPipelineLayout cullLayout = m_cullPass.GetPipelineLayout();
-
-		m_renderGraph.AddComputePass("$CullDraws_RTT_" + idStr)
-		        .ExecuteCompute(
-		                [this, id, cullPipeline, cullLayout](PassContext& ctx)
-		                {
-			                auto rit = m_rtCameras.find(id);
-			                if (rit == m_rtCameras.end())
-				                return;
-
-			                Camera* cam = m_cameraManager.TryGet(rit->second.camera);
-			                if (cam == nullptr || !rit->second.constants)
-				                return;
-
-			                const float aspect = static_cast<float>(rit->second.extent.width) / static_cast<float>(rit->second.extent.height);
-
-			                FrameConstants fc{};
-			                fc.view = cam->GetViewMatrix();
-			                fc.proj = cam->GetProjectionMatrix(aspect);
-			                fc.viewProj = fc.proj * fc.view;
-			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
-			                fc.materialBufferAddr = m_materialBuffer.GetDeviceAddress();
-			                fc.sunDirectionIntensity = m_renderer.GetDirectionalLightVector();
-			                fc.ambientColor = m_renderer.GetAmbientLightVector();
-			                fc.sunColor = m_renderer.GetSunColorVector();
-			                fc.skyHorizonColor = m_renderer.GetSkyHorizonColorVector();
-			                fc.skyZenithColor = m_renderer.GetSkyZenithColorVector();
-			                fc.skyVoidColor = m_renderer.GetSkyVoidColorVector();
-
-			                const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
-			                m_lightingManager.UpdateForView(frameIdx, VK_NULL_HANDLE, *cam, rit->second.extent, fc, m_lightingManager.IsRttBinningEnabled());
-			                rit->second.constants->Write(frameIdx, fc);
-			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
-
-			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
-		                });
-
-		// Per-camera graphics draw pass.
-		m_renderGraph.AddPass("$CameraRT_" + idStr)
-		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
-		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
-		        .SetExtent(extent)
-		        .Execute(
-		                [this, id](PassContext& ctx)
-		                {
-			                auto rit = m_rtCameras.find(id);
-			                if (rit == m_rtCameras.end())
-				                return;
-			                if (!rit->second.constants)
-				                return;
-
-			                const auto frameIdx = static_cast<std::uint32_t>(m_frameIndex % Swapchain::kMaxFramesInFlight);
-			                rit->second.renderQueue.FlushDraw(ctx.recorder, m_bindlessManager.GetSet(), m_lightingManager.GetSet(frameIdx));
-			                rit->second.renderQueue.Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
-		                });
 	}
 
 	void AetherCore::Tick(const float dt)
@@ -417,13 +326,7 @@ namespace aether
 
 		// Pre-populate each RTT queue on the game thread to avoid scene/world
 		// race conditions inside render-thread pass callbacks.
-		for (auto& [id, rt]: m_rtCameras)
-		{
-			(void) id;
-			rt.renderQueue.SetWriteSlot(drawSlot);
-			m_scene.FlushToQueue(rt.renderQueue);
-			m_world.FlushToQueue(rt.renderQueue);
-		}
+		m_renderTargetService.PrepareQueues(drawSlot, m_scene, m_world);
 
 		m_shadowService.PrepareQueues(drawSlot, m_scene, m_world);
 
@@ -831,75 +734,23 @@ namespace aether
 		{
 			throw std::runtime_error("CreateCameraRenderTarget: invalid camera handle.");
 		}
-
-		CameraRtEntry rt{};
-		rt.camera = camera;
-		rt.extent = extent;
-
-		rt.rgColor = m_renderGraph.CreateTransientColor(GetForwardColorFormat(), extent, VK_IMAGE_USAGE_SAMPLED_BIT);
-		const std::uint32_t slot = m_renderGraph.EnsureBindlessSampled(rt.rgColor, m_bindlessManager, m_vulkanContext.GetDevice().device);
-		if (slot == 0xFFFFFFFFu)
-		{
-			throw std::runtime_error("CreateCameraRenderTarget: failed to register transient color image as bindless sampled.");
-		}
-		rt.rgDepth = m_renderGraph.CreateTransientDepth(m_swapchain.GetDepthFormat(), extent);
-
-		rt.constants = std::make_unique<FrameConstantsBuffer>();
-		rt.constants->Initialize(m_vulkanContext);
-		rt.renderQueue.Initialize(m_vulkanContext.GetDevice().device, m_vulkanContext.GetAllocator());
-
-		const uint32_t id = m_nextRtId++;
-		m_rtCameras.emplace(id, std::move(rt));
-		RegisterRttPassesFor(id);
-
+		const uint32_t id = m_renderTargetService.CreateCameraRenderTarget(camera.id, extent);
 		return CameraRenderTarget{ id };
 	}
 
 	void AetherCore::DestroyCameraRenderTarget(const CameraRenderTarget rt)
 	{
-		if (!rt.IsValid())
-		{
-			return;
-		}
-
-		auto it = m_rtCameras.find(rt.id);
-		if (it == m_rtCameras.end())
-		{
-			return;
-		}
-
-		m_renderGraph.RemovePass("$CameraRT_" + std::to_string(rt.id));
-		m_renderGraph.RemovePass("$CullDraws_RTT_" + std::to_string(rt.id));
-		m_renderGraph.ReleaseImage(it->second.rgColor);
-		m_renderGraph.ReleaseImage(it->second.rgDepth);
-
-		it->second.renderQueue.Shutdown();
-		if (it->second.constants)
-		{
-			it->second.constants->Shutdown();
-		}
-
-		m_rtCameras.erase(it);
+		m_renderTargetService.DestroyCameraRenderTarget(rt.id);
 	}
 
 	RGImage AetherCore::GetRenderTargetColorImage(const CameraRenderTarget rt) const
 	{
-		auto it = m_rtCameras.find(rt.id);
-		if (it == m_rtCameras.end())
-		{
-			return {};
-		}
-		return it->second.rgColor;
+		return m_renderTargetService.GetRenderTargetColorImage(rt.id);
 	}
 
 	uint32_t AetherCore::GetRenderTargetBindlessSlot(const CameraRenderTarget rt) const
 	{
-		auto it = m_rtCameras.find(rt.id);
-		if (it == m_rtCameras.end())
-		{
-			return 0xFFFFFFFFu;
-		}
-		return m_renderGraph.GetBindlessSampledSlot(it->second.rgColor);
+		return m_renderTargetService.GetRenderTargetBindlessSlot(rt.id);
 	}
 
 	World& AetherCore::GetWorld()
@@ -1135,10 +986,7 @@ namespace aether
 		{
 			m_renderQueue.SetAnimationDatabase(&model.animationDb);
 			m_shadowService.SetAnimationDatabase(&model.animationDb);
-			for (auto& [_, rt]: m_rtCameras)
-			{
-				rt.renderQueue.SetAnimationDatabase(&model.animationDb);
-			}
+			m_renderTargetService.SetAnimationDatabase(&model.animationDb);
 		}
 
 		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
