@@ -148,9 +148,6 @@ namespace aether::app
 
 			for (int i = 0; i < kFoxCount; ++i)
 			{
-				// Spawn all primitives of this fox instance (shared mesh/skin, independent transform).
-				const std::vector<aether::Entity> foxEntities = m_assets->SpawnModel(*m_foxModel, m_pipeline, 0.05f);
-
 				FoxAgent agent;
 				agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
 				agent.heading = angleDist(m_rng);
@@ -159,14 +156,13 @@ namespace aether::app
 				agent.idle = false;
 				m_foxAgents.push_back(agent);
 
-				// Clone a fully-independent animator for this fox instance.
-				if (m_foxModel->animator)
+				auto instances = aether::ecs::SpawnModelInstance(world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
+
+				if (!m_foxAnimators.empty())
 				{
-					m_foxAnimators.push_back(m_foxModel->animator->Clone());
 					aether::ModelAnimator& foxAnim = m_foxAnimators.back();
 					foxAnim.SetAnimation(kAnimRun);
 					foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
-					// Stagger each fox's animation phase so they don't move in lockstep.
 					if (foxAnim.GetDuration() > 0.0f)
 					{
 						std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
@@ -174,33 +170,11 @@ namespace aether::app
 					}
 				}
 
-				std::vector<aether::Entity> instances;
-				instances.reserve(foxEntities.size());
-				for (const aether::Entity e: foxEntities)
+				for (const aether::Entity e: instances)
 				{
 					world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
 					world.EmplaceOrReplace<FoxTag>(e, FoxTag{});
 					world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
-					instances.push_back(e);
-				}
-
-				// Link each primitive entity to this fox's own animator and skin buffer.
-				if (!m_foxAnimators.empty() && static_cast<int>(m_foxAnimators.size()) == i + 1)
-				{
-					aether::ModelAnimator& foxAnim = m_foxAnimators.back();
-					for (std::size_t p = 0; p < instances.size() && p < m_foxModel->primitives.size(); ++p)
-					{
-						const aether::Entity e = instances[p];
-						const std::int32_t skinIdx = m_foxModel->primitives[p].skinIndex;
-						if (skinIdx >= 0)
-						{
-							const VkDeviceAddress addr = foxAnim.GetSkinBufferAddr(skinIdx);
-							const std::uint32_t joints = foxAnim.GetSkinJointCount(skinIdx);
-							if (addr != 0 && joints > 0)
-								world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .sourceSkinBufferAddr = addr, .jointCount = joints });
-						}
-						world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &foxAnim, .heroCharacter = false, .lodTier = 2 });
-					}
 				}
 
 				m_foxInstances.push_back(std::move(instances));
