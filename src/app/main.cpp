@@ -10,9 +10,7 @@
 
 namespace
 {
-	// This is just a simple RAII guard to ensure that the logger and crashhandler
-	// are properly shutdown when the application exits, even if an exception is
-	// thrown.
+
 	class RuntimeSystemsGuard
 	{
 	public:
@@ -41,8 +39,6 @@ int main()
 		aether::app::Application application;
 		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
 		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
-		// Add more layers here as needed, like a editor layer or some kind of
-		// background layer even
 		return application.Run();
 	}
 	catch (const std::exception& exception)

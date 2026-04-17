@@ -87,9 +87,6 @@ namespace aether::app
 
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPanelTop + 54.0f);
 
-		// ==============================================================
-		// SCENE section
-		// ==============================================================
 		constexpr float kSceneY = kPanelTop + 66.0f;
 		DrawSectionHeader(ui, "SCENE", kAnchor, kPanelL, kInnerL, kSceneY);
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kSceneY + 13.0f);

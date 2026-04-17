@@ -71,9 +71,6 @@ namespace aether::app
 			.ui = &m_uiRenderer,
 		};
 
-		// Wait for the GPU to finish all in-flight work before tearing down app-layer
-		// resources (pipelines, buffers, etc.) that may still be referenced by the
-		// GPU.
 		m_renderThread.Stop();
 		m_engine.WaitIdle();
 
@@ -81,12 +78,6 @@ namespace aether::app
 		context.world->UnregisterSystem("DayNightSystem");
 		context.world->UnregisterSystem("AnimationSystem");
 
-		// OnExit:
-		// We call DetachAll() here to detach all layers before the application is
-		// destroyed, This can be thought of like the onDestroy() function in unity or
-		// something like that, where you can do cleanup of game objects and such, but
-		// the actual application is still running until this destructor returns and
-		// the application is destroyed
 		m_layers.DetachAll(context);
 		m_uiRenderer.Shutdown(m_engine);
 		INFO(LogCategory::App, "Application shutdown complete.");
@@ -102,8 +93,6 @@ namespace aether::app
 	{
 		INFO(LogCategory::App, "Application run loop starting.");
 
-		// Testing the VFS, normally loading shader files would be done in a pipeline
-		// creation inside a render graph but im not upto that yet
 		const auto shaderFiles = io::FileSystem::Glob("shaders://**/*.slang.spv");
 		if (shaderFiles.empty())
 		{
@@ -134,12 +123,6 @@ namespace aether::app
 			.ui = &m_uiRenderer,
 		};
 
-		// Startup:
-		// We call AttachAll() here to attach all layers before the main loop starts,
-		// This can be thought of like the onStart() function in unity or something
-		// like that, where you can do initialization of game objects and such, but
-		// the actual game loop starts after this function returns and the main loop
-		// starts
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;
 

@@ -60,8 +60,6 @@ namespace aether::app
 		}
 	} // namespace
 
-	// ---- Static helpers ----
-
 	const char* DebugLayer::GetTonemapModeName(aether::TonemapMode mode)
 	{
 		switch (mode)
@@ -76,8 +74,6 @@ namespace aether::app
 				return "Unknown";
 		}
 	}
-
-	// ---- Stats ----
 
 	float DebugLayer::GetAverageFrameTimeMs() const
 	{
@@ -108,8 +104,6 @@ namespace aether::app
 			v = std::max(v, m_frameTimesMs[i]);
 		return v;
 	}
-
-	// ---- Draw helpers ----
 
 	void DebugLayer::DrawFrameTimeGraph(aether::UIRenderer& ui, float x, float y, float width, float height) const
 	{
@@ -170,8 +164,6 @@ namespace aether::app
 		}
 	}
 
-	// ---- Lifecycle ----
-
 	void DebugLayer::OnAttach(LayerContext& context)
 	{
 		m_frameTimesMs.fill(0.0f);
@@ -198,8 +190,6 @@ namespace aether::app
 		m_frameHistoryCount = std::min(m_frameHistoryCount + 1, kFrameHistorySize);
 	}
 
-	// ---- GUI ----
-
 	void DebugLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr || context.renderer == nullptr || !m_visible)
@@ -209,7 +199,6 @@ namespace aether::app
 		std::array<char, 128> buf{};
 
 		DrawPanel(ui, kAnchor, kPanelL, kPanelR, kPanelTop, kPanelBot);
-		// DrawPanel ends at SetLayer(2) — all content draws below at layer 2
 
 		// Title
 		ui.DrawText("DEBUG OVERLAY",
@@ -221,9 +210,6 @@ namespace aether::app
 
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPanelTop + 54.0f);
 
-		// ==============================================================
-		// PERFORMANCE section
-		// ==============================================================
 		constexpr float kPerfY = kPanelTop + 66.0f;
 		DrawSectionHeader(ui, "PERFORMANCE", kAnchor, kPanelL, kInnerL, kPerfY);
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPerfY + 13.0f);
@@ -235,7 +221,6 @@ namespace aether::app
 		const float curFps = curMs > 0.f ? 1000.f / curMs : 0.f;
 		const float avgFps = avgMs > 0.f ? 1000.f / avgMs : 0.f;
 
-		// Row 1 — Frame #  |  Delta ms
 		constexpr float kR1 = kPerfY + 34.0f;
 		std::snprintf(buf.data(), buf.size(), "#%llu", static_cast<unsigned long long>(context.frameIndex));
 		DrawKV(ui, "Frame", buf.data(), kAnchor, kColLKey, kColLVal, kR1);
@@ -254,7 +239,6 @@ namespace aether::app
 		std::snprintf(buf.data(), buf.size(), "%.2f ms", maxMs);
 		DrawKV(ui, "Max", buf.data(), kAnchor, kColRKey, kColRVal, kR3, MsColor(maxMs));
 
-		// Graph label
 		constexpr float kGraphLabelY = kR3 + 22.0f;
 		ui.DrawText("Frame Time  (0 - 33 ms)  /  ref: 60fps 30fps",
 		        aether::UiPoint{
@@ -263,15 +247,11 @@ namespace aether::app
 		        11.0f,
 		        kColorLabel);
 
-		// Frame time graph
 		constexpr float kGraphY = kGraphLabelY + 14.0f;
 		constexpr float kGraphH = 72.0f;
 		constexpr float kGraphW = kPanelR - kPanelL - 2.0f * kPad; // 388 px
 		DrawFrameTimeGraph(ui, kInnerL, kGraphY, kGraphW, kGraphH);
 
-		// ==============================================================
-		// RENDERER section
-		// ==============================================================
 		constexpr float kRendY = kGraphY + kGraphH + 22.0f;
 		DrawSectionHeader(ui, "RENDERER", kAnchor, kPanelL, kInnerL, kRendY);
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kRendY + 13.0f);
@@ -285,9 +265,6 @@ namespace aether::app
 		std::snprintf(buf.data(), buf.size(), "%u x %u", ext.width, ext.height);
 		DrawKV(ui, "Resolution", buf.data(), kAnchor, kColLKey, kColLVal, kRR2);
 
-		// ==============================================================
-		// CAMERA section
-		// ==============================================================
 		constexpr float kCamY = kRR2 + 30.0f;
 		DrawSectionHeader(ui, "CAMERA", kAnchor, kPanelL, kInnerL, kCamY);
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kCamY + 13.0f);
@@ -316,9 +293,6 @@ namespace aether::app
 			DrawValue(ui, "No active camera", kAnchor, kInnerL, kCR1, kColorLabel);
 		}
 
-		// ==============================================================
-		// LIGHTING section
-		// ==============================================================
 		constexpr float kLightY = kCR2 + 30.0f;
 		DrawSectionHeader(ui, "LIGHTING", kAnchor, kPanelL, kInnerL, kLightY);
 		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kLightY + 13.0f);
