@@ -144,8 +144,38 @@ namespace aether
              .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
 			 },
 		};
+		constexpr VkVertexInputAttributeDescription kShadowVertexAttributes[] = {
+			{
+             // location 0 : position
+             .location = 0,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,     position)),
+			 },
+			{
+             // location 5 : JOINTS_0
+             .location = 5,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32A32_UINT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
+			 },
+			{
+             // location 6 : WEIGHTS_0
+             .location = 6,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
+			 },
+		};
 		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		};
+		const VkPipelineVertexInputStateCreateInfo kShadowVertexInput{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+			.vertexBindingDescriptionCount = 1,
+			.pVertexBindingDescriptions = &kVertexBinding,
+			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kShadowVertexAttributes)),
+			.pVertexAttributeDescriptions = kShadowVertexAttributes,
 		};
 		const VkPipelineVertexInputStateCreateInfo kMeshVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -154,7 +184,7 @@ namespace aether
 			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVertexAttributes)),
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
-		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : kMeshVertexInput;
+		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : (desc.shadowVertexInput ? kShadowVertexInput : kMeshVertexInput);
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -197,8 +227,8 @@ namespace aether
 		};
 		const VkPipelineColorBlendStateCreateInfo colorBlend{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlendAttach,
+			.attachmentCount = desc.colorFormat != VK_FORMAT_UNDEFINED ? 1u : 0u,
+			.pAttachments = desc.colorFormat != VK_FORMAT_UNDEFINED ? &colorBlendAttach : nullptr,
 		};
 		constexpr VkDynamicState kDynamicStates[] = {
 			VK_DYNAMIC_STATE_VIEWPORT,
@@ -231,10 +261,11 @@ namespace aether
 		};
 		vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout);
 
+		const bool hasColorAttachment = desc.colorFormat != VK_FORMAT_UNDEFINED;
 		const VkPipelineRenderingCreateInfo renderingInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-			.colorAttachmentCount = 1,
-			.pColorAttachmentFormats = &desc.colorFormat,
+			.colorAttachmentCount = hasColorAttachment ? 1u : 0u,
+			.pColorAttachmentFormats = hasColorAttachment ? &desc.colorFormat : nullptr,
 			.depthAttachmentFormat = desc.depthFormat,
 		};
 		const VkGraphicsPipelineCreateInfo pipelineInfo{

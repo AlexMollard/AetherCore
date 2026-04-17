@@ -113,6 +113,9 @@ namespace aether::app
 		m_assets->RegisterMaterial(m_debugTexturedMaterial);
 
 		m_untexturedMaterial = {};
+		m_untexturedMaterial.baseColorFactor = glm::vec4(0.56f, 0.60f, 0.64f, 1.0f);
+		m_untexturedMaterial.roughnessFactor = 0.95f;
+		m_untexturedMaterial.metallicFactor = 0.0f;
 		m_assets->RegisterMaterial(m_untexturedMaterial);
 
 		m_rttFeedMaterial = {};
@@ -277,7 +280,8 @@ namespace aether::app
 		// ── Ground: large flat quad, 56×56 units, lying at Y=0 ───────────────
 		{
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, glm::radians(-90.0f), { 1.0f, 0.0f, 0.0f });
-			m = glm::scale(m, { 56.0f, 56.0f, 1.0f });
+			const float groundSize = 2.0f * kGroundHalfExtent;
+			m = glm::scale(m, { groundSize, groundSize, 1.0f });
 			auto gView = world.View<GroundTag, aether::TransformComponent>();
 			for (auto e: gView)
 				gView.get<aether::TransformComponent>(e).localToWorld = m;

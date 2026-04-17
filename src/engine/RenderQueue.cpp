@@ -449,7 +449,7 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet)
+	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -475,29 +475,30 @@ namespace aether
 		for (std::uint32_t bi = 0; bi < static_cast<std::uint32_t>(m_batchRenderInfos.size()); ++bi)
 		{
 			const BatchRenderInfo& batch = m_batchRenderInfos[bi];
+			const GraphicsPipeline* activePipeline = overridePipeline != nullptr ? overridePipeline : batch.pipeline;
 
-			if (batch.pipeline != nullptr && batch.pipeline != lastPipeline)
+			if (activePipeline != nullptr && activePipeline != lastPipeline)
 			{
-				recorder.BindGraphicsPipeline(*batch.pipeline);
-				lastPipeline = batch.pipeline;
+				recorder.BindGraphicsPipeline(*activePipeline);
+				lastPipeline = activePipeline;
 				lastSetPipeline = nullptr;
 				lastLightingSetPipeline = nullptr;
 			}
 
-			if (bindlessSet != VK_NULL_HANDLE && batch.pipeline != nullptr && batch.pipeline != lastSetPipeline)
+			if (bindlessSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline != lastSetPipeline)
 			{
-				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, batch.pipeline->GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
-				lastSetPipeline = batch.pipeline;
+				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+				lastSetPipeline = activePipeline;
 			}
 
-			if (lightingSet != VK_NULL_HANDLE && batch.pipeline != nullptr && batch.pipeline->GetSetLayoutCount() > 1 && batch.pipeline != lastLightingSetPipeline)
+			if (lightingSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
 			{
-				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, batch.pipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
-				lastLightingSetPipeline = batch.pipeline;
+				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
+				lastLightingSetPipeline = activePipeline;
 			}
 
-			if (batch.pipeline != nullptr)
-				recorder.PushConstants(batch.pipeline->GetLayout(), sharedPc);
+			if (activePipeline != nullptr)
+				recorder.PushConstants(activePipeline->GetLayout(), sharedPc);
 
 			if (batch.mesh != nullptr)
 			{

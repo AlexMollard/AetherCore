@@ -25,6 +25,9 @@ namespace aether
 			                                                 // that generate vertices
 			// from SV_VertexID — no vertex buffer or attribute declarations needed.
 			bool noVertexInput = false;
+			// Use a reduced mesh layout (POSITION + JOINTS_0 + WEIGHTS_0 only).
+			// Intended for depth-only shadow caster pipelines.
+			bool shadowVertexInput = false;
 			// Override the default DrawPushConstants block. If size is 0 the
 			// default model-matrix + BDA range is used instead.
 			uint32_t pushConstantSize = 0;

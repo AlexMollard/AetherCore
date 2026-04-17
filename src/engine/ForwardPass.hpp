@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <span>
 #include <vulkan/vulkan.h>
 
 #include "RenderGraph.hpp"
@@ -17,6 +18,6 @@ namespace aether
 	class ForwardPass
 	{
 	public:
-		void RegisterPass(RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<VkDescriptorSet()> getLightingSet);
+		void RegisterPass(RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<VkDescriptorSet()> getLightingSet, std::span<const RGImage> shadowMaps = {});
 	};
 } // namespace aether

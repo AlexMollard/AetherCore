@@ -122,7 +122,7 @@ namespace aether::app
 
 		static constexpr int kRingCount = 8;
 		static constexpr int kFoxCount = 30;
-		static constexpr float kGroundHalfExtent = 28.0f;
+		static constexpr float kGroundHalfExtent = 80.0f;
 		static constexpr float kFoxRunSpeed = 4.5f;
 		// Animation playback speed for the run cycle.
 		// Tune this so the leg motion matches the ground speed visually.

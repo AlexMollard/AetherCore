@@ -18,4 +18,8 @@ struct FrameConstantsData
     [[vk::offset(304)]] float4 skyVoidColor;          // rgb=sky void color, a=unused
     [[vk::offset(320)]] uint4  tiledLightGridInfo;    // x=tilePx, y=tilesX, z=tilesY, w=lightCount
     [[vk::offset(336)]] uint4  tiledLightBufferOffsets; // x=lightBase, y=headerBase, z=indexBase
+    [[vk::offset(352)]] float4x4 shadowViewProjCascades[3]; // light clip transforms for CSM cascades
+    [[vk::offset(544)]] float4 shadowCascadeSplits;         // xyz=split far distances in view-space units
+    [[vk::offset(560)]] float4 shadowParams;                // x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
+    [[vk::offset(576)]] uint4 shadowCascadeInfo[3];         // x=bindless slot (0xFFFFFFFF=disabled), y=width, z=height
 };
