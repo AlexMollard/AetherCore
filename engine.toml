@@ -1,0 +1,14 @@
+# AetherCore settings (TOML)
+
+[window]
+width = 1920
+height = 1080
+
+[graphics]
+vsync = false
+fxaa = false
+asyncCompute = true
+
+[app]
+# 0 = auto policy (sync to display when VSync on, uncapped when off)
+targetFps = 0

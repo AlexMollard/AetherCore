@@ -74,7 +74,7 @@ namespace aether
 			int width = 1280;
 			int height = 720;
 			bool enableVsync = true;
-			const char* settingsFile = "engine.ini";
+			const char* settingsFile = "engine.toml";
 		};
 
 		// Opaque handle to a render-to-texture camera target.

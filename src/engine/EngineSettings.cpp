@@ -1,137 +1,77 @@
 #include "EngineSettings.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <fstream>
-#include <optional>
 #include <sstream>
 #include <string>
 
 #include "FileSystem.hpp"
 #include "Logger.hpp"
+#include "TextIni.hpp"
 
 namespace aether
 {
 	namespace
 	{
-		std::string TrimAscii(std::string value)
+		void ParseSettingsText(std::string_view text, EngineSettings& settings)
 		{
-			auto isSpace = [](const unsigned char c) { return std::isspace(c) != 0; };
-
-			while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
-				value.erase(value.begin());
-			while (!value.empty() && isSpace(static_cast<unsigned char>(value.back())))
-				value.pop_back();
-			return value;
-		}
-
-		std::string ToLowerAscii(std::string value)
-		{
-			std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
-			return value;
-		}
-
-		std::optional<bool> ParseBool(const std::string& value)
-		{
-			const std::string lower = ToLowerAscii(value);
-			if (lower == "1" || lower == "true" || lower == "yes" || lower == "on")
-				return true;
-			if (lower == "0" || lower == "false" || lower == "no" || lower == "off")
-				return false;
-			return std::nullopt;
-		}
-
-		std::optional<int> ParseInt(const std::string& value)
-		{
-			try
-			{
-				return std::stoi(value);
-			}
-			catch (...)
-			{
-				return std::nullopt;
-			}
-		}
-
-		std::optional<float> ParseFloat(const std::string& value)
-		{
-			try
-			{
-				return std::stof(value);
-			}
-			catch (...)
-			{
-				return std::nullopt;
-			}
+			text::ParseToml(text,
+			        [&settings](const text::IniEntry& entry)
+			        {
+				        if (entry.fullKey == "window.width")
+				        {
+					        if (const auto parsed = text::ParseInt(entry.value); parsed && *parsed > 0)
+					        {
+						        settings.window.width = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "window.height")
+				        {
+					        if (const auto parsed = text::ParseInt(entry.value); parsed && *parsed > 0)
+					        {
+						        settings.window.height = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "graphics.vsync" || entry.fullKey == "vsync")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        settings.graphics.vsync = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "graphics.fxaa")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        settings.graphics.fxaa = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "graphics.asynccompute")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        settings.graphics.asyncCompute = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "app.targetfps")
+				        {
+					        if (const auto parsed = text::ParseFloat(entry.value); parsed && *parsed >= 0.0f)
+					        {
+						        settings.app.targetFps = *parsed;
+					        }
+				        }
+			        });
 		}
 
 		void ParseSettingsStream(std::istream& in, EngineSettings& settings)
 		{
-			std::string section;
-			std::string line;
-			while (std::getline(in, line))
-			{
-				auto hashPos = line.find('#');
-				auto semicolonPos = line.find(';');
-				const auto commentPos = std::min(hashPos, semicolonPos);
-				if (commentPos != std::string::npos)
-					line = line.substr(0, commentPos);
-
-				line = TrimAscii(std::move(line));
-				if (line.empty())
-					continue;
-
-				if (line.front() == '[' && line.back() == ']')
-				{
-					section = ToLowerAscii(TrimAscii(line.substr(1, line.size() - 2)));
-					continue;
-				}
-
-				const auto eq = line.find('=');
-				if (eq == std::string::npos)
-					continue;
-
-				const std::string key = ToLowerAscii(TrimAscii(line.substr(0, eq)));
-				const std::string value = TrimAscii(line.substr(eq + 1));
-				const std::string full = section.empty() ? key : (section + "." + key);
-
-				if (full == "window.width")
-				{
-					if (const auto parsed = ParseInt(value); parsed && *parsed > 0)
-						settings.window.width = *parsed;
-					continue;
-				}
-				if (full == "window.height")
-				{
-					if (const auto parsed = ParseInt(value); parsed && *parsed > 0)
-						settings.window.height = *parsed;
-					continue;
-				}
-				if (full == "graphics.vsync" || full == "vsync")
-				{
-					if (const auto parsed = ParseBool(value))
-						settings.graphics.vsync = *parsed;
-					continue;
-				}
-				if (full == "graphics.fxaa")
-				{
-					if (const auto parsed = ParseBool(value))
-						settings.graphics.fxaa = *parsed;
-					continue;
-				}
-				if (full == "graphics.asynccompute")
-				{
-					if (const auto parsed = ParseBool(value))
-						settings.graphics.asyncCompute = *parsed;
-					continue;
-				}
-				if (full == "app.targetfps")
-				{
-					if (const auto parsed = ParseFloat(value); parsed && *parsed >= 0.0f)
-						settings.app.targetFps = *parsed;
-					continue;
-				}
-			}
+			std::stringstream buffer;
+			buffer << in.rdbuf();
+			ParseSettingsText(buffer.str(), settings);
 		}
 	} // namespace
 
@@ -174,24 +114,25 @@ namespace aether
 			return;
 		}
 
-		out << "# AetherCore settings\n";
-		out << "# Bool values: true/false, on/off, yes/no, 1/0\n\n";
-		out << "[Window]\n";
-		out << "Width=" << settings.window.width << "\n";
-		out << "Height=" << settings.window.height << "\n\n";
-		out << "[Graphics]\n";
-		out << "VSync=" << (settings.graphics.vsync ? "true" : "false") << "\n";
-		out << "FXAA=" << (settings.graphics.fxaa ? "true" : "false") << "\n";
-		out << "AsyncCompute=" << (settings.graphics.asyncCompute ? "true" : "false") << "\n\n";
-		out << "[App]\n";
+		out << "# AetherCore settings (TOML)\n\n";
+		out << "[window]\n";
+		out << "width = " << settings.window.width << "\n";
+		out << "height = " << settings.window.height << "\n\n";
+		out << "[graphics]\n";
+		out << "vsync = " << (settings.graphics.vsync ? "true" : "false") << "\n";
+		out << "fxaa = " << (settings.graphics.fxaa ? "true" : "false") << "\n";
+		out << "asyncCompute = " << (settings.graphics.asyncCompute ? "true" : "false") << "\n\n";
+		out << "[app]\n";
 		out << "# 0 = auto policy (sync to display when VSync on, uncapped when off)\n";
-		out << "TargetFPS=" << settings.app.targetFps << "\n";
+		out << "targetFps = " << settings.app.targetFps << "\n";
 	}
 
 	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view fileName)
 	{
 		EngineSettings settings;
-		const std::string virtualPath = "config://" + std::string(fileName);
+		const std::string requestedFile(fileName);
+		const std::string virtualPath = "config://" + requestedFile;
+
 		if (io::FileSystem::IsInitialized())
 		{
 			try
@@ -203,9 +144,7 @@ namespace aether
 					text.resize(bytes.size());
 					for (std::size_t i = 0; i < bytes.size(); ++i)
 						text[i] = static_cast<char>(bytes[i]);
-
-					std::istringstream in(text);
-					ParseSettingsStream(in, settings);
+					ParseSettingsText(text, settings);
 					INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", virtualPath, settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
 					return settings;
 				}

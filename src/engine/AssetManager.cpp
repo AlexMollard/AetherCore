@@ -1,18 +1,259 @@
 #include "AssetManager.hpp"
 
+#include <algorithm>
+#include <filesystem>
+#include <stdexcept>
+
 #include "assets/GltfAsset.hpp"
 #include "BindlessManager.hpp"
 #include "EcsHelpers.hpp"
+#include "FileSystem.hpp"
 #include "Logger.hpp"
+#include "Material.hpp"
 #include "MaterialBuffer.hpp"
 #include "RenderQueue.hpp"
 #include "RenderTargetService.hpp"
 #include "ShadowService.hpp"
+#include "TextIni.hpp"
 #include "VulkanContext.hpp"
 #include "World.hpp"
 
 namespace aether
 {
+	namespace
+	{
+		struct MaterialPresetSpec
+		{
+			Material material{};
+			std::string albedoPath;
+			std::string normalPath;
+			std::string metallicRoughnessPath; // glTF ORM: G=roughness, B=metallic
+			std::string occlusionPath;
+			std::string emissivePath;
+		};
+
+		std::string NormalizeVirtualFolder(std::string path)
+		{
+			while (!path.empty() && (path.back() == '/' || path.back() == '\\'))
+			{
+				path.pop_back();
+			}
+			return path;
+		}
+
+		std::string ResolvePathRelativeTo(std::string_view basePath, const std::string& resourcePath)
+		{
+			if (resourcePath.empty())
+			{
+				return {};
+			}
+
+			if (resourcePath.find("://") != std::string::npos)
+			{
+				return resourcePath;
+			}
+
+			const std::string base(basePath);
+			const std::size_t mountPos = base.find("://");
+			if (mountPos == std::string::npos)
+			{
+				return resourcePath;
+			}
+
+			const std::string mount = base.substr(0, mountPos);
+			const std::filesystem::path rel = base.substr(mountPos + 3);
+			const std::filesystem::path dir = rel.parent_path();
+			const std::filesystem::path resolved = (dir / resourcePath).lexically_normal();
+			return mount + "://" + resolved.generic_string();
+		}
+
+		std::string ResolvePathInFolder(std::string_view folderPath, const std::string& resourcePath)
+		{
+			if (resourcePath.empty())
+			{
+				return {};
+			}
+			if (resourcePath.find("://") != std::string::npos)
+			{
+				return resourcePath;
+			}
+			const std::string folder = NormalizeVirtualFolder(std::string(folderPath));
+			return folder + "/" + resourcePath;
+		}
+
+		std::string ResolveStemInFolder(std::string_view folderPath, std::string stem)
+		{
+			if (stem.empty())
+			{
+				return {};
+			}
+
+			if (stem.find("://") != std::string::npos)
+			{
+				return io::FileSystem::Exists(stem) ? stem : std::string();
+			}
+
+			const std::string direct = ResolvePathInFolder(folderPath, stem);
+			if (io::FileSystem::Exists(direct))
+			{
+				return direct;
+			}
+
+			const std::string noExt = std::filesystem::path(stem).extension().empty() ? stem : std::filesystem::path(stem).stem().string();
+			constexpr std::string_view kExts[] = { ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2" };
+			for (const std::string_view ext: kExts)
+			{
+				const std::string candidate = ResolvePathInFolder(folderPath, noExt + std::string(ext));
+				if (io::FileSystem::Exists(candidate))
+				{
+					return candidate;
+				}
+			}
+
+			return {};
+		}
+
+		std::string ResolveFirstAliasInFolder(std::string_view folderPath, std::initializer_list<std::string_view> aliases)
+		{
+			for (const std::string_view alias: aliases)
+			{
+				const std::string resolved = ResolveStemInFolder(folderPath, std::string(alias));
+				if (!resolved.empty())
+				{
+					return resolved;
+				}
+			}
+			return {};
+		}
+
+		std::string ResolvePresetPath(std::string_view presetPath, const std::string& texturePath)
+		{
+			return ResolvePathRelativeTo(presetPath, texturePath);
+		}
+
+		MaterialPresetSpec ParseMaterialPreset(std::string_view path, const std::string& text)
+		{
+			MaterialPresetSpec spec;
+
+			text::ParseToml(text,
+			        [&spec, path](const text::IniEntry& entry)
+			        {
+				        if (entry.fullKey == "material.basecolorfactor" || entry.fullKey == "basecolorfactor")
+				        {
+					        if (const auto parsed = text::ParseFloatArray<4>(entry.value))
+					        {
+						        spec.material.baseColorFactor = glm::vec4((*parsed)[0], (*parsed)[1], (*parsed)[2], (*parsed)[3]);
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.emissivefactor" || entry.fullKey == "emissivefactor")
+				        {
+					        if (const auto parsed = text::ParseFloatArray<3>(entry.value))
+					        {
+						        spec.material.emissiveFactor = glm::vec3((*parsed)[0], (*parsed)[1], (*parsed)[2]);
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.metallicfactor" || entry.fullKey == "metallicfactor")
+				        {
+					        if (const auto parsed = text::ParseFloat(entry.value))
+					        {
+						        spec.material.metallicFactor = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.roughnessfactor" || entry.fullKey == "roughnessfactor")
+				        {
+					        if (const auto parsed = text::ParseFloat(entry.value))
+					        {
+						        spec.material.roughnessFactor = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.occlusionstrength" || entry.fullKey == "occlusionstrength")
+				        {
+					        if (const auto parsed = text::ParseFloat(entry.value))
+					        {
+						        spec.material.occlusionStrength = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.alphacutoff" || entry.fullKey == "alphacutoff")
+				        {
+					        if (const auto parsed = text::ParseFloat(entry.value))
+					        {
+						        spec.material.alphaCutoff = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.doublesided" || entry.fullKey == "doublesided")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        spec.material.doubleSided = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.alphablend" || entry.fullKey == "alphablend")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        spec.material.alphaBlend = *parsed;
+					        }
+					        return;
+				        }
+				        if (entry.fullKey == "material.alphamask" || entry.fullKey == "alphamask")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        spec.material.alphaMask = *parsed;
+					        }
+					        return;
+				        }
+
+				        if (entry.fullKey == "textures.albedo" || entry.fullKey == "albedo" || entry.fullKey == "textures.basecolor")
+				        {
+					        spec.albedoPath = ResolvePresetPath(path, entry.value);
+					        return;
+				        }
+				        if (entry.fullKey == "textures.normal" || entry.fullKey == "normal")
+				        {
+					        spec.normalPath = ResolvePresetPath(path, entry.value);
+					        return;
+				        }
+				        if (entry.fullKey == "textures.metallicroughness" || entry.fullKey == "metallicroughness")
+				        {
+					        spec.metallicRoughnessPath = ResolvePresetPath(path, entry.value);
+					        return;
+				        }
+
+				        if (entry.fullKey == "textures.occlusion" || entry.fullKey == "occlusion" || entry.fullKey == "textures.ao")
+				        {
+					        spec.occlusionPath = ResolvePresetPath(path, entry.value);
+					        return;
+				        }
+				        if (entry.fullKey == "textures.emissive" || entry.fullKey == "emissive")
+				        {
+					        spec.emissivePath = ResolvePresetPath(path, entry.value);
+				        }
+			        });
+
+			return spec;
+		}
+
+		std::string ReadTextFile(std::string_view path)
+		{
+			const std::vector<std::byte> bytes = io::FileSystem::ReadFile(path);
+			std::string text;
+			text.resize(bytes.size());
+			for (std::size_t i = 0; i < bytes.size(); ++i)
+			{
+				text[i] = static_cast<char>(bytes[i]);
+			}
+			return text;
+		}
+	} // namespace
+
 	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, RenderQueue& renderQueue, ShadowService& shadowService, RenderTargetService& renderTargetService, World& world, const VkCommandPool uploadPool)
 	{
 		m_context = &context;
@@ -99,6 +340,85 @@ namespace aether
 		}
 		m_materialBuffer->FreeSlot(mat.materialSlot);
 		mat.materialSlot = Material::kNoTexture;
+	}
+
+	Material AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
+	{
+		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
+
+		std::string presetPath = requestedPath;
+		std::string folderPath;
+		const std::string folderTomlPath = requestedPath + "/properties.toml";
+		if (io::FileSystem::Exists(folderTomlPath))
+		{
+			presetPath = folderTomlPath;
+			folderPath = requestedPath;
+		}
+
+		if (!io::FileSystem::Exists(presetPath))
+		{
+			throw std::runtime_error("LoadMaterialPreset: file/folder not found: " + requestedPath);
+		}
+
+		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, ReadTextFile(presetPath));
+		Material material = spec.material;
+
+		auto loadTextureSlot = [this, &outTextures](std::string_view texturePath) -> std::uint32_t
+		{
+			if (texturePath.empty())
+			{
+				return Material::kNoTexture;
+			}
+
+			if (!io::FileSystem::Exists(texturePath))
+			{
+				WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
+				return Material::kNoTexture;
+			}
+
+			Texture tex = CreateTexture(texturePath);
+			const std::uint32_t slot = tex.GetBindlessSlot();
+			outTextures.push_back(std::move(tex));
+			return slot;
+		};
+
+		std::string autoAlbedo;
+		std::string autoNormal;
+		std::string autoMetallicRoughness;
+		std::string autoOcclusion;
+		std::string autoEmissive;
+		if (!folderPath.empty())
+		{
+			autoAlbedo = ResolveFirstAliasInFolder(folderPath, { "albedo", "basecolor", "base_color", "diffuse", "color" });
+			autoNormal = ResolveFirstAliasInFolder(folderPath, { "normal", "nrm" });
+			autoMetallicRoughness = ResolveFirstAliasInFolder(folderPath, { "metallicroughness", "metal_rough", "metalrough", "orm", "roughness", "metallic" });
+			autoOcclusion = ResolveFirstAliasInFolder(folderPath, { "occlusion", "ao", "ambientocclusion" });
+			autoEmissive = ResolveFirstAliasInFolder(folderPath, { "emissive", "emission" });
+		}
+
+		const std::string albedoPath = !spec.albedoPath.empty() ? spec.albedoPath : autoAlbedo;
+		const std::string normalPath = !spec.normalPath.empty() ? spec.normalPath : autoNormal;
+		const std::string metallicRoughnessPath = !spec.metallicRoughnessPath.empty() ? spec.metallicRoughnessPath : autoMetallicRoughness;
+		const std::string occlusionPath = !spec.occlusionPath.empty() ? spec.occlusionPath : autoOcclusion;
+		const std::string emissivePath = !spec.emissivePath.empty() ? spec.emissivePath : autoEmissive;
+
+		material.albedoSlot = loadTextureSlot(albedoPath);
+		material.normalSlot = loadTextureSlot(normalPath);
+		material.metallicRoughnessSlot = loadTextureSlot(metallicRoughnessPath);
+		material.occlusionSlot = loadTextureSlot(occlusionPath);
+		material.emissiveSlot = loadTextureSlot(emissivePath);
+
+		RegisterMaterial(material);
+		INFO(LogCategory::Engine,
+		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
+		        requestedPath,
+		        material.albedoSlot != Material::kNoTexture ? "yes" : "no",
+		        material.normalSlot != Material::kNoTexture ? "yes" : "no",
+		        material.metallicRoughnessSlot != Material::kNoTexture ? "yes" : "no",
+		        material.occlusionSlot != Material::kNoTexture ? "yes" : "no",
+		        material.emissiveSlot != Material::kNoTexture ? "yes" : "no");
+
+		return material;
 	}
 
 	LoadedModel AssetManager::LoadModel(std::string_view path)

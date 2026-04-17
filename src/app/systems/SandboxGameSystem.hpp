@@ -106,13 +106,14 @@ namespace aether::app
 
 		// Assets
 		aether::GraphicsPipeline m_pipeline;
-		aether::Texture m_debugTexture;
+		std::vector<aether::Texture> m_debugMaterialTextures;
 		aether::Material m_debugTexturedMaterial;
 		aether::Material m_untexturedMaterial;
 		aether::Material m_rttFeedMaterial;
 		std::optional<aether::LoadedModel> m_foxModel;
 		const aether::Mesh* m_cubeMesh = nullptr;
 		const aether::Mesh* m_quadMesh = nullptr;
+		const aether::Mesh* m_planeMesh = nullptr;
 
 		// Render target
 		aether::AetherCore::CameraRenderTarget m_rttTarget;

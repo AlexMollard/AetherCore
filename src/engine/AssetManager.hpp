@@ -44,6 +44,10 @@ namespace aether
 		void RegisterMaterial(Material& mat);
 		void UnregisterMaterial(Material& mat);
 
+		// Load a material preset file and keep referenced textures alive in
+		// outTextures. The returned material is already registered on GPU.
+		[[nodiscard]] Material LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
+
 		// Model loading and spawning.
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);

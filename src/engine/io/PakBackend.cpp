@@ -113,7 +113,23 @@ namespace aether::io
 
 	bool PakBackend::Exists(std::string_view relativePath) const
 	{
-		return m_index.contains(std::string(relativePath));
+		if (m_index.contains(std::string(relativePath)))
+		{
+			return true;
+		}
+
+		// Also return true if the path is a virtual folder, i.e. any entry starts
+		// with "<relativePath>/". This mirrors std::filesystem::exists on a real
+		// directory and lets callers probe folder paths against pak-backed mounts.
+		const std::string prefix = std::string(relativePath) + '/';
+		for (const auto& [key, _]: m_index)
+		{
+			if (key.starts_with(prefix))
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	std::vector<std::byte> PakBackend::Read(std::string_view relativePath) const

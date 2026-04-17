@@ -1,4 +1,10 @@
-add_executable(AssetPacker main.cpp)
+file(GLOB_RECURSE ASSETPACKER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+file(GLOB_RECURSE ASSETPACKER_HEADERS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+
+add_executable(AssetPacker
+    ${ASSETPACKER_SOURCES}
+    ${ASSETPACKER_HEADERS}
+)
 
 target_compile_features(AssetPacker PRIVATE cxx_std_20)
 

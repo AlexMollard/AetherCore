@@ -64,6 +64,14 @@ FetchContent_Declare(entt
     EXCLUDE_FROM_ALL
 )
 
+FetchContent_Declare(tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+
 FetchContent_Declare(freetype
     GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
     GIT_TAG        VER-2-14-3
@@ -103,7 +111,7 @@ if(AETHERCORE_ENABLE_TRACY)
 else()
     set(TRACY_ENABLE   OFF CACHE BOOL "" FORCE)
 endif()
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tracy)
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tomlplusplus tracy)
 
 # ---------------------------------------------------------------------------
 # Solution folder organisation (Visual Studio only — ignored by other generators)
@@ -119,6 +127,7 @@ foreach(_dep IN ITEMS
         freetype
     cgltf
     EnTT
+    tomlplusplus_tomlplusplus
     TracyClient
 )
     if(TARGET ${_dep})

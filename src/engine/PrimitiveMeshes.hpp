@@ -12,6 +12,7 @@ namespace aether
 		Triangle,
 		Quad,
 		Cube,
+		Plane, // 20×20 subdivided grid; UVs tile 20× per axis via REPEAT sampler
 	};
 
 	// Engine-owned cache of built-in primitive meshes.
@@ -25,5 +26,6 @@ namespace aether
 		Mesh m_triangle;
 		Mesh m_quad;
 		Mesh m_cube;
+		Mesh m_plane;
 	};
 } // namespace aether

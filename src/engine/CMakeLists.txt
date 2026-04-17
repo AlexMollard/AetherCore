@@ -50,6 +50,14 @@ target_include_directories(Engine PRIVATE
     "${cgltf_SOURCE_DIR}"
 )
 
+if(TARGET tomlplusplus::tomlplusplus)
+    target_link_libraries(Engine PUBLIC tomlplusplus::tomlplusplus)
+elseif(TARGET tomlplusplus_tomlplusplus)
+    target_link_libraries(Engine PUBLIC tomlplusplus_tomlplusplus)
+else()
+    target_include_directories(Engine PUBLIC "${tomlplusplus_SOURCE_DIR}/include")
+endif()
+
 if(AETHERCORE_ENABLE_UNITY_BUILD)
     set_target_properties(Engine PROPERTIES
         UNITY_BUILD ON

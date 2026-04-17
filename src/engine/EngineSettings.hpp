@@ -32,9 +32,9 @@ namespace aether
 	public:
 		// Resolves and loads settings from disk. If the file is missing, defaults are
 		// written to disk first and then returned.
-		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view fileName = "engine.ini");
+		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view fileName = "engine.toml");
 
-		[[nodiscard]] static std::filesystem::path ResolvePath(std::string_view fileName = "engine.ini");
+		[[nodiscard]] static std::filesystem::path ResolvePath(std::string_view fileName = "engine.toml");
 		static void Save(const EngineSettings& settings, const std::filesystem::path& path);
 	};
 } // namespace aether

@@ -104,13 +104,21 @@ namespace aether::app
 
 		m_cubeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
 		m_quadMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Quad);
+		m_planeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Plane);
 
-		m_debugTexture = m_assets->CreateTexture("assets://textures/tex_DebugUVTiles.png");
-		const uint32_t texSlot = m_debugTexture.GetBindlessSlot();
-
-		m_debugTexturedMaterial = {};
-		m_debugTexturedMaterial.albedoSlot = texSlot;
-		m_assets->RegisterMaterial(m_debugTexturedMaterial);
+		constexpr std::string_view kDebugMaterialPreset = "assets://materials/MyPBRFolder";
+		if (aether::io::FileSystem::Exists(kDebugMaterialPreset))
+		{
+			m_debugTexturedMaterial = m_assets->LoadMaterialPreset(kDebugMaterialPreset, m_debugMaterialTextures);
+		}
+		else
+		{
+			m_debugMaterialTextures.clear();
+			m_debugMaterialTextures.push_back(m_assets->CreateTexture("assets://textures/tex_DebugUVTiles.png"));
+			m_debugTexturedMaterial = {};
+			m_debugTexturedMaterial.albedoSlot = m_debugMaterialTextures.back().GetBindlessSlot();
+			m_assets->RegisterMaterial(m_debugTexturedMaterial);
+		}
 
 		m_untexturedMaterial = {};
 		m_untexturedMaterial.baseColorFactor = glm::vec4(0.56f, 0.60f, 0.64f, 1.0f);
@@ -121,9 +129,9 @@ namespace aether::app
 		m_rttFeedMaterial = {};
 		m_assets->RegisterMaterial(m_rttFeedMaterial);
 
-		// ── Ground: large untextured quad ─────────────────────────────────────
+		// ── Ground: large tiling plane ────────────────────────────────────────
 		{
-			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_quadMesh, m_untexturedMaterial);
+			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_planeMesh, m_debugTexturedMaterial);
 			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
 			world.EmplaceOrReplace<GroundTag>(e, GroundTag{});
 		}
@@ -528,9 +536,14 @@ namespace aether::app
 		m_engine->GetRenderer().ClearPointLights();
 		m_engine->GetRenderer().ClearSpotLights();
 
-		m_debugTexture.Destroy();
-		m_cubeMesh = nullptr;
+		for (aether::Texture& texture: m_debugMaterialTextures)
+		{
+			texture.Destroy();
+		}
+		m_debugMaterialTextures.clear();
+		m_planeMesh = nullptr;
 		m_quadMesh = nullptr;
+		m_cubeMesh = nullptr;
 		m_pipeline.Destroy();
 	}
 } // namespace aether::app

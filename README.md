@@ -22,6 +22,10 @@ The project is split into:
 	- target FPS is auto-set from the display refresh rate
 	- improves frame-time consistency and reduces game-thread submit stalls
 
+## Configuration
+
+- Engine settings default to `engine.toml`.
+
 ## Rendering Highlights
 
 - Vulkan + vk-bootstrap + VMA
@@ -37,6 +41,79 @@ The project is split into:
 - `App` post-build step packs everything under `resources/` into:
 	- `build/<preset>/data/assets.pak`
 - Runtime loads assets through virtual paths (for example `assets://...`, `shaders://...`)
+
+### Material Presets (TOML)
+
+You can define reusable PBR material presets as TOML files under `resources/materials/`.
+
+Example:
+
+```toml
+[material]
+baseColorFactor = [1.0, 1.0, 1.0, 1.0]
+metallicFactor = 0.0
+roughnessFactor = 0.9
+
+[textures]
+albedo = "assets://textures/your_basecolor.png"
+normal = "assets://textures/your_normal.png"
+metallicRoughness = "assets://textures/your_metalrough.png"
+occlusion = "assets://textures/your_ao.png"
+emissive = "assets://textures/your_emissive.png"
+```
+
+Usage from app/systems:
+
+```cpp
+std::vector<aether::Texture> keepAlive;
+aether::Material mat = assets.LoadMaterialPreset("assets://materials/YourMaterial.toml", keepAlive);
+```
+
+Keep the returned textures alive as long as the material is used.
+
+### Folder-Based Material Layout
+
+You can also package materials as folders (useful for downloaded PBR zip contents):
+
+```text
+resources/materials/MyPBRFolder/
+	properties.toml
+	albedo.png
+	normal.png
+	roughness.png
+```
+
+Load it by folder path:
+
+```cpp
+std::vector<aether::Texture> keepAlive;
+aether::Material mat = assets.LoadMaterialPreset("assets://materials/MyPBRFolder", keepAlive);
+```
+
+Notes:
+
+- `properties.toml` is required for explicit folder presets.
+- Texture values can be explicit file names (`albedo.png`), stems (`albedo`), or full virtual paths.
+
+### AssetPacker Material Import
+
+AssetPacker supports auto-generating `properties.toml` files from raw extracted texture folders:
+
+```powershell
+AssetPacker import-materials resources
+```
+
+or as part of packing:
+
+```powershell
+AssetPacker --import-materials resources build/vs2022/data/assets.pak
+```
+
+Importer behavior:
+
+- Detects common messy downloaded naming patterns (for example `*_Color`, `*_NormalGL`, `*_Roughness`, `*_AmbientOcclusion`).
+- Auto-refreshes previously auto-generated (or placeholder-template) `properties.toml` files during build.
+- Leaves custom hand-authored `properties.toml` files untouched.
 
 ## Dependencies
 

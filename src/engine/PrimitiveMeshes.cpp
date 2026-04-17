@@ -1,6 +1,9 @@
 #include "PrimitiveMeshes.hpp"
 
 #include <cstdint>
+#include <vector>
+
+#include "MeshGen.hpp"
 
 namespace aether
 {
@@ -20,10 +23,10 @@ namespace aether
 		// Quad  (CCW, facing +Z)  – 4 unique verts, 2 triangles
 		// -----------------------------------------------------------------------
 		constexpr Mesh::Vertex kQuadVerts[] = {
-			{ .position = { -0.5f, -0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 0.0f, 1.0f }, .color = { 1.0f, 0.0f, 0.0f } },
-			{  .position = { 0.5f, -0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 1.0f, 1.0f }, .color = { 0.0f, 1.0f, 0.0f } },
-			{   .position = { 0.5f, 0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 1.0f, 0.0f }, .color = { 0.0f, 0.0f, 1.0f } },
-			{  .position = { -0.5f, 0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 0.0f, 0.0f }, .color = { 1.0f, 1.0f, 0.0f } },
+			{ .position = { -0.5f, -0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 0.0f, 1.0f }, .color = { 1.0f, 1.0f, 1.0f } },
+			{  .position = { 0.5f, -0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 1.0f, 1.0f }, .color = { 1.0f, 1.0f, 1.0f } },
+			{   .position = { 0.5f, 0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 1.0f, 0.0f }, .color = { 1.0f, 1.0f, 1.0f } },
+			{  .position = { -0.5f, 0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 0.0f, 0.0f }, .color = { 1.0f, 1.0f, 1.0f } },
 		};
 		constexpr std::uint32_t kQuadIndices[] = { 0, 1, 2, 0, 2, 3 };
 
@@ -105,6 +108,15 @@ namespace aether
 		m_triangle = Mesh::Create(device, allocator, uploadQueue, uploadPool, kTriangleVerts, kTriangleIndices);
 		m_quad = Mesh::Create(device, allocator, uploadQueue, uploadPool, kQuadVerts, kQuadIndices);
 		m_cube = Mesh::Create(device, allocator, uploadQueue, uploadPool, kCubeVerts, kCubeIndices);
+
+		// -----------------------------------------------------------------------
+		// Plane  – default 20×20 subdivided grid via MeshGen.
+		// UVs tile 20× per axis (1 UV unit per segment).
+		// -----------------------------------------------------------------------
+		{
+			const MeshGen::MeshData plane = MeshGen::GeneratePlane({ .segmentsX = 20, .segmentsY = 20, .uvScale = 1.0f });
+			m_plane = Mesh::Create(device, allocator, uploadQueue, uploadPool, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices));
+		}
 	}
 
 	const Mesh& PrimitiveMeshes::Get(PrimitiveMesh primitive) const
@@ -117,6 +129,8 @@ namespace aether
 				return m_quad;
 			case PrimitiveMesh::Cube:
 				return m_cube;
+			case PrimitiveMesh::Plane:
+				return m_plane;
 			default:
 				return m_triangle;
 		}
