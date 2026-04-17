@@ -1,12 +1,13 @@
 MSBuild version 17.14.40+3e7442088 for .NET Framework
 
   Checking File Globs
-  1>Compiling Slang shader voxel_chunk.slang
+  1>Compiling Slang shader gltf_mesh.slang
+  2>Compiling Slang shader voxel_chunk.slang
   Scanning sources for module dependencies...
-  AssetPacker.vcxproj -> D:\AetherCore\build\vs2022\tools\Debug\AssetPacker.exe
-  TracyClient.vcxproj -> D:\AetherCore\build\vs2022\_deps\tracy-build\Debug\TracyClient.lib
-  vk-bootstrap.vcxproj -> D:\AetherCore\build\vs2022\_deps\vk-bootstrap-build\Debug\vk-bootstrap.lib
   glm.vcxproj -> D:\AetherCore\build\vs2022\_deps\glm-build\glm\Debug\glm.lib
+  AssetPacker.vcxproj -> D:\AetherCore\build\vs2022\tools\Debug\AssetPacker.exe
+  vk-bootstrap.vcxproj -> D:\AetherCore\build\vs2022\_deps\vk-bootstrap-build\Debug\vk-bootstrap.lib
+  TracyClient.vcxproj -> D:\AetherCore\build\vs2022\_deps\tracy-build\Debug\TracyClient.lib
   glfw.vcxproj -> D:\AetherCore\build\vs2022\_deps\glfw-build\src\Debug\glfw3.lib
   freetype.vcxproj -> D:\AetherCore\build\vs2022\_deps\freetype-build\Debug\freetyped.lib
   Scanning sources for module dependencies...

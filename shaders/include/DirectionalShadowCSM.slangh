@@ -1,0 +1,137 @@
+// Shared directional shadow helpers for cascaded shadow maps (CSM).
+//
+// Requirements in the including shader:
+// - g_textures[] bindless Texture2D array
+// - g_linearSampler sampler for shadow depth sampling
+// - FrameConstantsData from FrameConstants.slangh
+
+float ComputeDirectionalShadowCascade(
+    FrameConstantsData* fc,
+    uint cascadeIdx,
+    float3 worldPos,
+    float3 worldNormal,
+    float3 lightDir)
+{
+    const uint4 cascadeInfo = fc->shadowCascadeInfo[cascadeIdx];
+    const uint shadowSlot = cascadeInfo.x;
+    if (shadowSlot == 0xFFFFFFFFu)
+    {
+        return 1.0;
+    }
+
+    const float4 clip = mul(fc->shadowViewProjCascades[cascadeIdx], float4(worldPos, 1.0));
+    if (abs(clip.w) < 1e-6)
+    {
+        return 1.0;
+    }
+
+    float3 ndc = clip.xyz / clip.w;
+    float2 uv = ndc.xy * 0.5 + 0.5;
+    if (uv.x <= 0.0 || uv.x >= 1.0 || uv.y <= 0.0 || uv.y >= 1.0)
+    {
+        return 1.0;
+    }
+    if (ndc.z <= 0.0 || ndc.z >= 1.0)
+    {
+        return 1.0;
+    }
+
+    const float receiverDepth = saturate(ndc.z);
+    const float cascadeBiasScale = 1.0 + (float)cascadeIdx * 0.55;
+    const float depthBias = fc->shadowParams.x * cascadeBiasScale;
+    const float normalBias = fc->shadowParams.y * cascadeBiasScale;
+    const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(lightDir)));
+    const float bias = depthBias + normalBias * slope;
+
+    const uint shadowW = max(cascadeInfo.y, 1u);
+    const uint shadowH = max(cascadeInfo.z, 1u);
+    const float2 texel = 1.0 / float2((float)shadowW, (float)shadowH);
+    const float pcfRadiusTexels = max(fc->shadowParams.w, 0.5);
+
+    float visibility = 0.0;
+    float weightSum = 0.0;
+    [unroll]
+    for (int y = -2; y <= 2; ++y)
+    {
+        [unroll]
+        for (int x = -2; x <= 2; ++x)
+        {
+            const float2 offset = float2((float)x, (float)y) * texel * pcfRadiusTexels;
+            const float2 sampleUv = uv + offset;
+            if (sampleUv.x <= 0.0 || sampleUv.x >= 1.0 || sampleUv.y <= 0.0 || sampleUv.y >= 1.0)
+            {
+                continue;
+            }
+
+            const float2 dist = abs(float2((float)x, (float)y));
+            const float wx = max(0.0, 3.0 - dist.x);
+            const float wy = max(0.0, 3.0 - dist.y);
+            const float w = wx * wy;
+
+            const float shadowDepth = g_textures[shadowSlot].Sample(g_linearSampler, sampleUv).r;
+            visibility += ((receiverDepth - bias <= shadowDepth) ? 1.0 : 0.0) * w;
+            weightSum += w;
+        }
+    }
+
+    return (weightSum > 0.0) ? (visibility / weightSum) : 1.0;
+}
+
+float ComputeDirectionalShadow(FrameConstantsData* fc, float3 worldPos, float3 worldNormal, float3 lightDir)
+{
+    const float viewDepth = max(-mul(fc->view, float4(worldPos, 1.0)).z, 0.0);
+    const float split0 = fc->shadowCascadeSplits.x;
+    const float split1 = fc->shadowCascadeSplits.y;
+
+    uint cascade = 0u;
+    if (viewDepth > split0)
+    {
+        cascade = 1u;
+    }
+    if (viewDepth > split1)
+    {
+        cascade = 2u;
+    }
+
+    float shadow = ComputeDirectionalShadowCascade(fc, cascade, worldPos, worldNormal, lightDir);
+
+    const float blendWidth0 = max(split0 * 0.10, 4.0);
+    const float blendWidth1 = max((split1 - split0) * 0.10, 6.0);
+
+    if (cascade == 0u)
+    {
+        const float t = smoothstep(split0 - blendWidth0, split0, viewDepth);
+        if (t > 0.0)
+        {
+            const float shadow1 = ComputeDirectionalShadowCascade(fc, 1u, worldPos, worldNormal, lightDir);
+            shadow = lerp(shadow, shadow1, t);
+        }
+    }
+    else if (cascade == 1u)
+    {
+        const float t0 = 1.0 - smoothstep(split0, split0 + blendWidth0, viewDepth);
+        if (t0 > 0.0)
+        {
+            const float shadow0 = ComputeDirectionalShadowCascade(fc, 0u, worldPos, worldNormal, lightDir);
+            shadow = lerp(shadow, shadow0, t0);
+        }
+
+        const float t1 = smoothstep(split1 - blendWidth1, split1, viewDepth);
+        if (t1 > 0.0)
+        {
+            const float shadow2 = ComputeDirectionalShadowCascade(fc, 2u, worldPos, worldNormal, lightDir);
+            shadow = lerp(shadow, shadow2, t1);
+        }
+    }
+    else
+    {
+        const float t = 1.0 - smoothstep(split1, split1 + blendWidth1, viewDepth);
+        if (t > 0.0)
+        {
+            const float shadow1 = ComputeDirectionalShadowCascade(fc, 1u, worldPos, worldNormal, lightDir);
+            shadow = lerp(shadow, shadow1, t);
+        }
+    }
+
+    return shadow;
+}

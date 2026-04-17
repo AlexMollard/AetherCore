@@ -18,10 +18,12 @@
 // AO baked into vertex packed field.  No PBR (appropriate for stylized voxel look).
 
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
+[[vk::binding(1, 0)]] SamplerState g_linearSampler;
 [[vk::binding(2, 0)]] SamplerState g_voxelAtlasSampler;
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/DirectionalShadowCSM.slangh"
 
 static const uint    kNoTexture  = 0xFFFFFFFFu;
 static const float   kAOLevels[4] = { 1.0f, 0.75f, 0.55f, 0.35f };
@@ -70,6 +72,7 @@ struct VSOutput
     [[vk::location(1)]] float2          uv           : TEXCOORD1;
     [[vk::location(2)]] float           ao           : TEXCOORD2;
     [[vk::location(3)]] nointerpolation uint materialIndex : TEXCOORD3;
+    [[vk::location(4)]] float3          worldPos     : TEXCOORD4;
 };
 
 [shader("vertex")]
@@ -91,6 +94,7 @@ VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startIn
     o.uv           = input.uv;
     o.ao           = kAOLevels[aoLevel];
     o.materialIndex = instances[instanceIndex].materialIndex;
+    o.worldPos     = worldPos.xyz;
     return o;
 }
 
@@ -111,7 +115,9 @@ float4 fragmentMain(VSOutput input) : SV_Target
     // Directional diffuse.
     const float3 sunDir  = normalize(fc->sunDirectionIntensity.xyz);
     const float  NdotL   = max(dot(input.worldNormal, sunDir), 0.0f);
-    const float3 diffuse = baseColor.rgb * (fc->sunColor.rgb * NdotL * fc->sunDirectionIntensity.w);
+    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, input.worldNormal, sunDir);
+    const float sunVisibility = lerp(1.0, shadow, fc->shadowParams.z);
+    const float3 diffuse = baseColor.rgb * (fc->sunColor.rgb * NdotL * fc->sunDirectionIntensity.w * sunVisibility);
 
     // Ambient.
     const float3 ambient = baseColor.rgb * fc->ambientColor.rgb;
