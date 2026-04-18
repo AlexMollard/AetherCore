@@ -5,8 +5,8 @@
 #include "Application.hpp"
 #include "CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
-// #include "layers/SandboxLayer.hpp"
-#include "layers/VoxelWorldLayer.hpp"
+#include "layers/SandboxLayer.hpp"
+// #include "layers/VoxelWorldLayer.hpp"
 #include "Logger.hpp"
 
 namespace
@@ -38,8 +38,8 @@ int main()
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Verbose);
 
 		aether::app::Application application;
-		// application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
-		application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
+		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
+		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
 		return application.Run();
 	}

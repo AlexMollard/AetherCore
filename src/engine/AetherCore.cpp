@@ -25,10 +25,15 @@
 namespace aether
 {
 	AetherCore::AetherCore(const Config& config)
+	      : AetherCore(config, EngineSettingsIO::LoadOrCreate(config.settingsFile))
+	{
+	}
+
+	AetherCore::AetherCore(const Config& config, const EngineSettings& settings)
 	      : m_window(config.appName, config.width, config.height), m_vulkanContext(m_window, config.appName)
 	{
 		io::FileSystem::InitializeDefaultMounts();
-		m_settings = EngineSettingsIO::LoadOrCreate(config.settingsFile);
+		m_settings = settings;
 		m_settings.window.width = config.width;
 		m_settings.window.height = config.height;
 

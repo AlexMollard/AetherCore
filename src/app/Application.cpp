@@ -45,7 +45,12 @@ namespace aether::app
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig)
-	      : m_settings(aether::EngineSettingsIO::LoadOrCreate(engineConfig.settingsFile)), m_engine(BuildConfigFromSettings(engineConfig, m_settings))
+	      : Application(engineConfig, aether::EngineSettingsIO::LoadOrCreate(engineConfig.settingsFile))
+	{
+	}
+
+	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings)
+	      : m_settings(settings), m_engine(BuildConfigFromSettings(engineConfig, settings), settings)
 	{
 		INFO(LogCategory::App, "Application created.");
 	}

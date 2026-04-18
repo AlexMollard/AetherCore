@@ -39,6 +39,8 @@ namespace aether::app
 		[[nodiscard]] const aether::AetherCore& GetEngine() const;
 
 	private:
+		Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings);
+
 		aether::EngineSettings m_settings;
 		aether::AetherCore m_engine;
 		aether::RenderThread m_renderThread;
