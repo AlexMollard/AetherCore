@@ -31,6 +31,9 @@ namespace aether
 			// Use the compact 24-byte VoxelVertex layout (POSITION + PACKED + UV).
 			// Intended for GPU-driven voxel chunk pipelines.
 			bool voxelVertexInput = false;
+			// Use the compact 24-byte VoxelVertex layout with POSITION only.
+			// Intended for depth-only voxel shadow passes where packed/uv are unused.
+			bool voxelShadowVertexInput = false;
 			// Override the default DrawPushConstants block. If size is 0 the
 			// default model-matrix + BDA range is used instead.
 			uint32_t pushConstantSize = 0;

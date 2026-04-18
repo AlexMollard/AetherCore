@@ -40,8 +40,14 @@ namespace aether
 	{
 	public:
 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
+		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
-		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024);
+		// maxAnimationDraws controls the animation-related pool sizes separately
+		// from total draw capacity. Pass 0 to disable all animation/skin buffers
+		// (for queues that never process skinned draws, e.g. voxel shadow queues).
+		// UINT32_MAX (default) derives a sane cap from total draws using
+		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
+		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX);
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.
@@ -125,6 +131,7 @@ namespace aether
 
 		std::uint32_t m_maxDraws = 0;
 		std::uint32_t m_maxBatches = 0;
+		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
 

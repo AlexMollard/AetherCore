@@ -32,8 +32,17 @@ namespace aether
 
 		void RecreatePipeline(VkDevice device, VkFormat depthFormat);
 
+		// Set the double-buffer write slot and clear it on every cascade queue.
+		// Must be called before any SubmitShadowCaster calls for this frame
+		// (i.e. at the same point the main RenderQueue is set up and cleared).
+		void PrepareWriteSlot(std::uint32_t drawSlot);
+
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
+
+		// Submit a draw command as a shadow caster to every cascade queue.
+		// Call after PrepareQueues, before the render thread consumes the queues.
+		void SubmitShadowCaster(const DrawCommand& cmd);
 
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
@@ -45,8 +54,10 @@ namespace aether
 
 	private:
 		std::array<RenderQueue, kShadowCascadeCount> m_shadowRenderQueues;
+		std::array<RenderQueue, kShadowCascadeCount> m_voxelShadowRenderQueues;
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
+		GraphicsPipeline m_voxelShadowPipeline;
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
 		std::array<VkExtent2D, kShadowCascadeCount> m_shadowMapExtents{
 			VkExtent2D{ 4096u, 4096u },

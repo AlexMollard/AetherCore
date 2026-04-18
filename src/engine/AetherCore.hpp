@@ -187,6 +187,8 @@ namespace aether
 		[[nodiscard]] VkDescriptorSetLayout GetLightingSetLayout() const;
 		[[nodiscard]] const RenderQueue& GetRenderQueue() const;
 		[[nodiscard]] RenderQueue& GetRenderQueue();
+		[[nodiscard]] const ShadowService& GetShadowService() const;
+		[[nodiscard]] ShadowService& GetShadowService();
 		[[nodiscard]] const ResourcePool& GetResourcePool() const;
 		[[nodiscard]] ResourcePool& GetResourcePool();
 		[[nodiscard]] const Scene& GetScene() const;

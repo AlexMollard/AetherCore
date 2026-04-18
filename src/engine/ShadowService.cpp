@@ -28,6 +28,13 @@ namespace aether
 		{
 			shadowQueue.Initialize(context.GetDevice().device, context.GetAllocator());
 		}
+		for (auto& voxelQueue: m_voxelShadowRenderQueues)
+		{
+			// Voxel chunks: one batch per unique mesh, no skinning ever.
+			// 512 draws / 512 batches covers worlds up to ~170 chunks per cascade;
+			// maxAnimationDraws=0 skips all animation/skin buffer allocation entirely.
+			voxelQueue.Initialize(context.GetDevice().device, context.GetAllocator(), 512, 512, 0u);
+		}
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
 	}
@@ -38,11 +45,16 @@ namespace aether
 		{
 			shadowQueue.Shutdown();
 		}
+		for (auto& voxelQueue: m_voxelShadowRenderQueues)
+		{
+			voxelQueue.Shutdown();
+		}
 		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
+		m_voxelShadowPipeline.Destroy();
 		(void) device;
 	}
 
@@ -59,6 +71,31 @@ namespace aether
 		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		                .shadowVertexInput = true,
 		        });
+		m_voxelShadowPipeline.Destroy();
+		m_voxelShadowPipeline = GraphicsPipeline::Create(device,
+		        {
+		                .shaderVfsPath = "shaders://voxel_shadow_depth.slang.spv",
+		                .colorFormat = VK_FORMAT_UNDEFINED,
+		                .depthFormat = depthFormat,
+		                .depthTestEnable = true,
+		                .depthWriteEnable = true,
+		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		                .voxelShadowVertexInput = true,
+		        });
+	}
+
+	void ShadowService::PrepareWriteSlot(const std::uint32_t drawSlot)
+	{
+		for (auto& shadowQueue: m_shadowRenderQueues)
+		{
+			shadowQueue.SetWriteSlot(drawSlot);
+			shadowQueue.Clear(drawSlot);
+		}
+		for (auto& voxelQueue: m_voxelShadowRenderQueues)
+		{
+			voxelQueue.SetWriteSlot(drawSlot);
+			voxelQueue.Clear(drawSlot);
+		}
 	}
 
 	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
@@ -79,6 +116,14 @@ namespace aether
 		}
 	}
 
+	void ShadowService::SubmitShadowCaster(const DrawCommand& cmd)
+	{
+		for (auto& voxelQueue: m_voxelShadowRenderQueues)
+		{
+			voxelQueue.Submit(cmd);
+		}
+	}
+
 	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat)
 	{
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
@@ -94,6 +139,7 @@ namespace aether
 				                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
 				                const VkDeviceAddress shadowFrameAddr = m_shadowFrameConstants[cascade].GetDeviceAddress(frameIdx);
 				                m_shadowRenderQueues[cascade].PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), shadowFrameAddr, cullPass.GetPipeline(), cullPass.GetPipelineLayout(), ctx.frameIndex);
+				                m_voxelShadowRenderQueues[cascade].PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), shadowFrameAddr, cullPass.GetPipeline(), cullPass.GetPipelineLayout(), ctx.frameIndex);
 			                });
 
 			graph.AddPass("$DirectionalShadow_C" + idx)
@@ -104,6 +150,8 @@ namespace aether
 			                {
 				                m_shadowRenderQueues[cascade].FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline);
 				                m_shadowRenderQueues[cascade].Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+				                m_voxelShadowRenderQueues[cascade].FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_voxelShadowPipeline);
+				                m_voxelShadowRenderQueues[cascade].Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			                });
 		}
 	}

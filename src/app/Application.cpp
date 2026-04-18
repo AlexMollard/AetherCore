@@ -211,6 +211,7 @@ namespace aether::app
 			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
 			m_engine.GetRenderQueue().SetWriteSlot(drawSlot);
 			m_engine.GetRenderQueue().Clear(drawSlot);
+			m_engine.GetShadowService().PrepareWriteSlot(drawSlot);
 			m_uiRenderer.SetWriteSlot(drawSlot);
 
 			// Layer game-logic update.

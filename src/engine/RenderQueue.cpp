@@ -17,13 +17,14 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws, std::uint32_t maxBatches)
+	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws)
 	{
 		m_device = device;
 		m_allocator = allocator;
 		m_maxDraws = maxDraws;
 		m_maxBatches = maxBatches;
-		m_maxSkinJoints = maxDraws * 128u;
+		m_maxAnimationDraws = (maxAnimationDraws == UINT32_MAX) ? std::min(maxDraws, kDefaultMaxAnimationDraws) : maxAnimationDraws;
+		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
@@ -37,14 +38,17 @@ namespace aether
 		m_batchDescBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags);
 		m_batchDescMapped = static_cast<CullBatch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
 
-		m_skinCopyJobBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(SkinCopyJob), kSsboFlags);
-		m_skinCopyJobsMapped = static_cast<SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
+		if (m_maxAnimationDraws > 0u)
+		{
+			m_skinCopyJobBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(SkinCopyJob), kSsboFlags);
+			m_skinCopyJobsMapped = static_cast<SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
 
-		m_animationSampleJobsBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(AnimatorSampleJob), kSsboFlags);
-		m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
+			m_animationSampleJobsBuffer = UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimatorSampleJob), kSsboFlags);
+			m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
 
-		m_skinPaletteBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
-		m_sampledPosesBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+			m_skinPaletteBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+			m_sampledPosesBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+		}
 
 		m_outputIndirectBuffer = UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 		EnsureSkinCopyPipeline();
@@ -88,6 +92,7 @@ namespace aether
 		m_batchDescMapped = nullptr;
 		m_maxDraws = 0;
 		m_maxBatches = 0;
+		m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_allocator = VK_NULL_HANDLE;
@@ -116,15 +121,16 @@ namespace aether
 		const std::uint32_t frameSlot = frameIndex % kFramesInFlight;
 		const std::uint32_t drawBase = frameSlot * m_maxDraws;
 		const std::uint32_t batchBase = frameSlot * m_maxBatches;
+		const std::uint32_t animJobBase = frameSlot * m_maxAnimationDraws;
 		m_cachedDrawBase = drawBase;
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);
 		const std::uint32_t prevFrameSlot = (frameSlot + kFramesInFlight - 1u) % kFramesInFlight;
-		const VkDeviceAddress currSkinPaletteAddr = m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-		const VkDeviceAddress prevSkinPaletteAddr = m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(prevFrameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-		const VkDeviceAddress currSampledPosesAddr = m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose);
+		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		const VkDeviceAddress prevSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(prevFrameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		const VkDeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose) : 0;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
-		const bool gpuSamplingEnabled = !m_debugForceCpuSkinFallback && m_animationDb != nullptr && m_animationDb->IsValid() && m_animationSampleJobsMapped != nullptr;
+		const bool gpuSamplingEnabled = !m_debugForceCpuSkinFallback && m_animationDb != nullptr && m_animationDb->IsValid() && m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
 		const std::uint32_t animClipCount = (m_animationDb != nullptr) ? m_animationDb->GetClipCount() : 0u;
 		const std::uint32_t animNodeCount = (m_animationDb != nullptr) ? m_animationDb->GetNodeCount() : 0u;
 		const std::uint32_t animSkinCount = (m_animationDb != nullptr) ? m_animationDb->GetSkinCount() : 0u;
@@ -187,21 +193,21 @@ namespace aether
 						{
 							WARN(LogCategory::Engine, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) — dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
 						}
-						else if (skinJobCount >= m_maxDraws || m_animationSampleJobCount >= m_maxDraws)
+						else if (skinJobCount >= m_maxAnimationDraws || m_animationSampleJobCount >= m_maxAnimationDraws)
 						{
-							WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) — dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxDraws);
+							WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) — dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
 						}
 						else
 						{
 							skinPaletteOffset = skinJointCursor;
 							skinJointCount = dc.skinJointCount;
-							m_animationSampleJobsMapped[drawBase + m_animationSampleJobCount] = AnimatorSampleJob{
+							m_animationSampleJobsMapped[animJobBase + m_animationSampleJobCount] = AnimatorSampleJob{
 								.animClipIndex = dc.animClipIndex,
 								.animTime = dc.animTime,
 								.nodePoseOffset = nodePoseCursor,
 								.nodeCount = animNodeCount,
 							};
-							m_skinCopyJobsMapped[drawBase + skinJobCount] = SkinCopyJob{
+							m_skinCopyJobsMapped[animJobBase + skinJobCount] = SkinCopyJob{
 								.srcPaletteAddr = dc.sourceSkinBufferAddr,
 								.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(SampledNodePose),
 								.dstPaletteOffset = skinPaletteOffset,
@@ -234,9 +240,9 @@ namespace aether
 								skinPaletteOffset = skinJointCursor;
 								skinJointCount = dc.skinJointCount;
 								paletteOffsets.emplace(dc.sourceSkinBufferAddr, skinPaletteOffset);
-								if (skinJobCount < m_maxDraws)
+								if (skinJobCount < m_maxAnimationDraws)
 								{
-									m_skinCopyJobsMapped[drawBase + skinJobCount] = SkinCopyJob{
+									m_skinCopyJobsMapped[animJobBase + skinJobCount] = SkinCopyJob{
 										.srcPaletteAddr = dc.sourceSkinBufferAddr,
 										.sampledPosesAddr = 0,
 										.dstPaletteOffset = skinPaletteOffset,
@@ -296,7 +302,10 @@ namespace aether
 		vmaFlushAllocation(m_allocator, m_instanceDataBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_cullInputBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 		vmaFlushAllocation(m_allocator, m_batchDescBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
-		vmaFlushAllocation(m_allocator, m_skinCopyJobBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+		if (m_skinCopyJobsMapped != nullptr)
+		{
+			vmaFlushAllocation(m_allocator, m_skinCopyJobBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+		}
 
 		if (sampleJobsThisFrame > 0 && m_animationDb != nullptr && m_animationDb->IsValid())
 		{
@@ -334,7 +343,7 @@ namespace aether
 					.bindTranslationsAddr = m_animationDb->GetBindTranslationsAddr(),
 					.bindRotationsAddr = m_animationDb->GetBindRotationsAddr(),
 					.bindScalesAddr = m_animationDb->GetBindScalesAddr(),
-					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(AnimatorSampleJob),
+					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob),
 					.sampledPosesAddr = currSampledPosesAddr,
 					.jobCount = sampleJobsThisFrame,
 					.clipCount = m_animationDb->GetClipCount(),
@@ -369,7 +378,7 @@ namespace aether
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 			const SkinPalettePush skinPc{
-				.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(SkinCopyJob),
+				.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(SkinCopyJob),
 				.dstPaletteAddr = currSkinPaletteAddr,
 				.prevPaletteAddr = prevSkinPaletteAddr,
 				.nodeParentsAddr = m_animationDb != nullptr ? m_animationDb->GetNodeParentsAddr() : 0,

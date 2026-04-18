@@ -560,6 +560,16 @@ namespace aether
 		return m_renderQueue;
 	}
 
+	ShadowService& AetherCore::GetShadowService()
+	{
+		return m_shadowService;
+	}
+
+	const ShadowService& AetherCore::GetShadowService() const
+	{
+		return m_shadowService;
+	}
+
 	Scene& AetherCore::GetScene()
 	{
 		return m_scene;

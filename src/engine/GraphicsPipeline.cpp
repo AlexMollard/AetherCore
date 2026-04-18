@@ -203,6 +203,25 @@ namespace aether
 			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVoxelVertexAttributes)),
 			.pVertexAttributeDescriptions = kVoxelVertexAttributes,
 		};
+		// Position-only voxel vertex input — same stride as VoxelVertex so the
+		// GPU reads the right bytes, but only location 0 is declared, matching
+		// the voxel_shadow_depth.slang shader which doesn't read packed or uv.
+		constexpr VkVertexInputAttributeDescription kVoxelShadowVertexAttributes[] = {
+			{
+             // location 0 : position
+             .location = 0,
+             .binding = 0,
+             .format = VK_FORMAT_R32G32B32_SFLOAT,
+             .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex, position)),
+			 },
+		};
+		const VkPipelineVertexInputStateCreateInfo kVoxelShadowVertexInput{
+			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+			.vertexBindingDescriptionCount = 1,
+			.pVertexBindingDescriptions = &kVoxelVertexBinding,
+			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVoxelShadowVertexAttributes)),
+			.pVertexAttributeDescriptions = kVoxelShadowVertexAttributes,
+		};
 		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		};
@@ -220,7 +239,7 @@ namespace aether
 			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVertexAttributes)),
 			.pVertexAttributeDescriptions = kVertexAttributes,
 		};
-		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : desc.shadowVertexInput ? kShadowVertexInput : desc.voxelVertexInput ? kVoxelVertexInput : kMeshVertexInput;
+		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : desc.shadowVertexInput ? kShadowVertexInput : desc.voxelShadowVertexInput ? kVoxelShadowVertexInput : desc.voxelVertexInput ? kVoxelVertexInput : kMeshVertexInput;
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,

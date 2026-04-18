@@ -6,6 +6,7 @@
 #include "../AetherCore.hpp"
 #include "../GraphicsPipeline.hpp"
 #include "../RenderQueue.hpp"
+#include "../ShadowService.hpp"
 
 namespace voxel
 {
@@ -232,6 +233,7 @@ namespace voxel
 			cmd.worldBoundingSphere = glm::vec4(glm::vec3(ChunkOrigin(coord)) + glm::vec3(kChunkSize * 0.5f), glm::length(glm::vec3(kChunkSize * 0.5f)));
 
 			core.GetRenderQueue().Submit(cmd);
+			core.GetShadowService().SubmitShadowCaster(cmd);
 			++m_submittedDrawsLastFrame;
 		}
 	}
