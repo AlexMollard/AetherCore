@@ -110,6 +110,8 @@ namespace aether::app
 		aether::Material m_debugTexturedMaterial;
 		aether::Material m_untexturedMaterial;
 		aether::Material m_rttFeedMaterial;
+		std::vector<aether::Material> m_pointLightMarkerMaterials;
+		std::vector<aether::Renderer::PointLight> m_pointLights;
 		std::optional<aether::LoadedModel> m_foxModel;
 		const aether::Mesh* m_cubeMesh = nullptr;
 		const aether::Mesh* m_quadMesh = nullptr;

@@ -108,6 +108,22 @@ struct VSOutput
     [[vk::location(6)]] nointerpolation uint materialIndex : TEXCOORD6;
 };
 
+// Transform direction vectors (normal/tangent) through a world matrix basis,
+// correcting for non-uniform axis scale without requiring matrix inverse().
+float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
+{
+    // Slang matrix indexing is column-major: basis[i] = i-th column.
+    float3 c0 = basis[0];
+    float3 c1 = basis[1];
+    float3 c2 = basis[2];
+
+    const float d0 = max(dot(c0, c0), 1e-8);
+    const float d1 = max(dot(c1, c1), 1e-8);
+    const float d2 = max(dot(c2, c2), 1e-8);
+
+    return normalize(c0 * (v.x / d0) + c1 * (v.y / d1) + c2 * (v.z / d2));
+}
+
 // ── Vertex shader ─────────────────────────────────────────────────────────
 
 // Keep instance indexing explicit: combine the per-draw base instance with the
@@ -120,15 +136,6 @@ VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startIn
     DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
     const uint instanceIndex = startInstance + instanceId;
     DrawInstanceData instance = instances[instanceIndex];
-
-    // Upper-left 3x3 of the model matrix.
-    // Correct for TRS matrices with uniform scale; note that columns in
-    // column-major Slang/SPIR-V means model[i] = i-th column.
-    float3x3 normalMatrix = float3x3(
-        instance.model[0].xyz,
-        instance.model[1].xyz,
-        instance.model[2].xyz
-    );
 
     float4 worldPos;
     float3 worldNormal;
@@ -145,21 +152,30 @@ VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startIn
             input.jointWeights.z * joints[base + input.jointIndices.z] +
             input.jointWeights.w * joints[base + input.jointIndices.w];
 
-        worldPos = mul(instance.model, mul(skinMatrix, float4(input.position, 1.0)));
+        float4x4 worldMatrix = mul(instance.model, skinMatrix);
+        worldPos = mul(worldMatrix, float4(input.position, 1.0));
 
-        float3x3 skin3 = float3x3(
-            skinMatrix[0].xyz,
-            skinMatrix[1].xyz,
-            skinMatrix[2].xyz
+        // Scale-correct normal/tangent transform for non-uniform scaling.
+        float3x3 world3 = float3x3(
+            worldMatrix[0].xyz,
+            worldMatrix[1].xyz,
+            worldMatrix[2].xyz
         );
-        worldNormal  = normalize(mul(normalMatrix, mul(skin3, input.normal)));
-        worldTangent = normalize(mul(normalMatrix, mul(skin3, input.tangent.xyz)));
+        worldNormal  = TransformDirectionScaleCorrect(input.normal, world3);
+        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, world3);
     }
     else
     {
         worldPos     = mul(instance.model, float4(input.position, 1.0));
-        worldNormal  = normalize(mul(normalMatrix, input.normal));
-        worldTangent = normalize(mul(normalMatrix, input.tangent.xyz));
+
+        // Same scale-correct path for static meshes.
+        float3x3 model3 = float3x3(
+            instance.model[0].xyz,
+            instance.model[1].xyz,
+            instance.model[2].xyz
+        );
+        worldNormal  = TransformDirectionScaleCorrect(input.normal, model3);
+        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, model3);
     }
 
     VSOutput o;
@@ -273,10 +289,11 @@ void AccumulateLocalLight(
     float3 H = normalize(V + L);
     float NdotL = max(dot(N, L), 0.0);
     float NdotV = max(dot(N, V), 0.0);
-    if (NdotL <= 1e-5 || NdotV <= 1e-5)
+    if (NdotL <= 1e-5)
     {
         return;
     }
+    NdotV = max(NdotV, 1e-4);
 
     float NdotH = max(dot(N, H), 0.0);
     float VdotH = max(dot(V, H), 0.0);
@@ -290,7 +307,11 @@ void AccumulateLocalLight(
     float3 diffuse = kD * baseColor / kPI;
 
     float3 radiance = light.color * (light.intensity * rangeAtten * spotAtten);
-    sum += (diffuse + specular) * radiance * NdotL;
+
+    // Keep local highlights, but bias toward diffuse so point emitters do not
+    // read like directional "torch" beams on highly detailed normal maps.
+    const float localSpecularWeight = 0.28;
+    sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL;
 }
 
 // ── Fragment shader ───────────────────────────────────────────────────────
@@ -381,6 +402,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Rows of TBN = T, B, N  →  mul(tangentVec, TBN) transforms to world space.
     float3x3 TBN = float3x3(T, B, N);
 
+    // Preserve the geometric normal so local light response can be softened
+    // against tangent-space normal-map directionality.
+    float3 Ngeom = N;
+
     if (mat.normalSlot != kNoTexture)
     {
         float3 tn = g_textures[mat.normalSlot].Sample(g_linearSampler, uv).xyz;
@@ -454,6 +479,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadow, fc->shadowParams.z)));
 
     // Tiled local lights (point + spot).
+    // Blend toward geometric normal so local lights remain visibly radial on
+    // the ground while still retaining some normal-map detail.
+    const float localNormalMapInfluence = 0.35;
+    const float3 Nlocal = normalize(lerp(Ngeom, N, localNormalMapInfluence));
     uint tilePx = fc->tiledLightGridInfo.x;
     uint tilesX = fc->tiledLightGridInfo.y;
     uint tilesY = fc->tiledLightGridInfo.z;
@@ -481,7 +510,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             AccumulateLocalLight(
                 light,
                 input.worldPos,
-                N,
+                Nlocal,
                 V,
                 F0,
                 baseColor.rgb,

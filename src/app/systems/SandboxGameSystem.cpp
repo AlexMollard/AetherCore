@@ -44,6 +44,11 @@ namespace aether::app
 			bool isRttTarget = false;
 		};
 
+		struct PointLightMarkerTag
+		{
+			int index = 0;
+		};
+
 		struct FoxTag
 		{
 			bool value = true;
@@ -258,21 +263,45 @@ namespace aether::app
 		// ── Point lights scattered across the fox field ───────────────────────
 		{
 			std::mt19937 lightRng(7);
-			std::uniform_real_distribution<float> lightPosDist(-22.0f, 22.0f);
-			std::uniform_real_distribution<float> colorDist(0.35f, 1.0f);
-
-			std::vector<aether::Renderer::PointLight> pointLights;
-			pointLights.reserve(16);
-			for (int li = 0; li < 16; ++li)
+			std::uniform_real_distribution<float> lightPosDist(-80.0f, 80.0f);
+			const int lightCount = 128;
+			m_pointLights.clear();
+			m_pointLightMarkerMaterials.clear();
+			m_pointLights.reserve(lightCount);
+			m_pointLightMarkerMaterials.reserve(lightCount);
+			for (int li = 0; li < lightCount; ++li)
 			{
+				// Deterministic vivid palette around the hue wheel.
+				const float t = static_cast<float>(li) / static_cast<float>(lightCount);
+				const glm::vec3 lightColor = glm::vec3(
+					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.00f)),
+					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.33f)),
+					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.66f)));
+
 				aether::Renderer::PointLight l{};
-				l.position = { lightPosDist(lightRng), 1.5f, lightPosDist(lightRng) };
+				l.position = { lightPosDist(lightRng), 0.35f, lightPosDist(lightRng) };
 				l.radius = 14.0f;
 				l.intensity = 1.8f;
-				l.color = { colorDist(lightRng), colorDist(lightRng), colorDist(lightRng) };
-				pointLights.push_back(l);
+				l.color = lightColor;
+				m_pointLights.push_back(l);
+
+				aether::Material marker{};
+				// Keep base light response subdued and rely on emissive so marker hue
+				// stays obvious regardless of scene lighting or camera angle.
+				marker.baseColorFactor = glm::vec4(l.color * 0.20f, 1.0f);
+				marker.emissiveFactor = l.color * 3.0f;
+				marker.roughnessFactor = 0.9f;
+				marker.metallicFactor = 0.0f;
+				m_assets->RegisterMaterial(marker);
+				m_pointLightMarkerMaterials.push_back(marker);
+
+				const aether::Entity markerEntity = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_pointLightMarkerMaterials.back());
+				world.EmplaceOrReplace<SandboxEntityTag>(markerEntity, SandboxEntityTag{});
+				world.EmplaceOrReplace<PointLightMarkerTag>(markerEntity, PointLightMarkerTag{ .index = li });
 			}
-			m_engine->GetRenderer().SetPointLights(std::move(pointLights));
+			m_engine->GetRenderer().SetPointLights(m_pointLights);
+			const auto rendererLights = m_engine->GetRenderer().GetPointLights();
+			m_pointLights.assign(rendererLights.begin(), rendererLights.end());
 		}
 
 		INFO(aether::LogCategory::App, "Scene built: {} foxes on ground + {} ring + 1 center + 2 orbit sky cubes.", kFoxCount, kRingCount);
@@ -432,6 +461,37 @@ namespace aether::app
 			}
 		}
 
+		// ── Point-light markers: small cubes tinted to each light's color ────
+		{
+			auto markerView = world.View<PointLightMarkerTag, aether::TransformComponent>();
+			for (auto e: markerView)
+			{
+				const int idx = markerView.get<PointLightMarkerTag>(e).index;
+				if (idx < 0 || static_cast<std::size_t>(idx) >= m_pointLights.size())
+					continue;
+
+				// Test mode: drive both marker cubes and actual point-light sources
+				// from the same animated position so any mismatch is impossible.
+				const float fi = static_cast<float>(idx);
+				const float ring = 8.0f + static_cast<float>(idx % 16) * 4.0f;
+				const float phase = fi * 0.37f;
+				const float speed = 0.35f + static_cast<float>(idx % 5) * 0.09f;
+				const float a = m_time * speed + phase;
+				const glm::vec3 pos = {
+					ring * std::cos(a),
+					0.35f + 0.12f * std::sin(a * 1.7f + phase * 0.5f),
+					ring * std::sin(a),
+				};
+
+				m_pointLights[static_cast<std::size_t>(idx)].position = pos;
+				glm::mat4 marker = glm::translate(glm::mat4{ 1.0f }, pos);
+				marker = glm::scale(marker, glm::vec3(0.22f));
+				markerView.get<aether::TransformComponent>(e).localToWorld = marker;
+			}
+
+			m_engine->GetRenderer().SetPointLights(m_pointLights);
+		}
+
 		// ── Input: T = cycle tonemap, F = toggle FXAA, C = swap camera ────────
 		{
 			if (m_input->IsKeyPressed(aether::Key::T))
@@ -513,6 +573,12 @@ namespace aether::app
 		m_assets->UnregisterMaterial(m_rttFeedMaterial);
 		m_assets->UnregisterMaterial(m_untexturedMaterial);
 		m_assets->UnregisterMaterial(m_debugTexturedMaterial);
+		for (aether::Material& markerMaterial: m_pointLightMarkerMaterials)
+		{
+			m_assets->UnregisterMaterial(markerMaterial);
+		}
+		m_pointLightMarkerMaterials.clear();
+		m_pointLights.clear();
 
 		m_engine->DestroyCameraRenderTarget(m_rttTarget);
 		m_rttTarget = {};
