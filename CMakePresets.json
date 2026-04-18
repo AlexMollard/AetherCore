@@ -34,6 +34,20 @@
                 "lhs": "${hostSystemName}",
                 "rhs": "Windows"
             }
+        },
+        {
+            "name": "windows-vs2026",
+            "displayName": "Windows · Visual Studio 2026",
+            "description": "Using compilers for Visual Studio 18 2026 (x64 architecture)",
+            "generator": "Visual Studio 18 2026",
+            "toolset": "host=x64",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe"
+            }
         }
     ],
     "buildPresets": [
@@ -72,6 +86,25 @@
             "displayName": "Ninja · RelWithDebInfo",
             "configurePreset": "windows-ninja",
             "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "vs2026-debug",
+            "displayName": "Visual Studio Community 2026 Release - amd64 - Debug",
+            "configurePreset": "windows-vs2026",
+            "configuration": "Debug"
+        },
+        {
+            "name": "vs2026-release",
+            "displayName": "Visual Studio Community 2026 Release - amd64 - Release",
+            "configurePreset": "windows-vs2026",
+            "configuration": "Release"
+        },
+        {
+            "name": "vs2026-relwithdebinfo",
+            "displayName": "Visual Studio Community 2026 Release - amd64 - RelWithDebInfo",
+            "configurePreset": "windows-vs2026",
+            "configuration": "RelWithDebInfo"
         }
+
     ]
 }
