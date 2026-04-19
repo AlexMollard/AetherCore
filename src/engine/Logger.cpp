@@ -148,11 +148,13 @@ namespace aether
 				return { cachedTimestamp, 8 };
 			}
 
-			std::tm localTime{};
+			// Cross-platform time conversion: use thread-local storage on all platforms
+			std::tm localTime = {};
 #ifdef _WIN32
 			localtime_s(&localTime, &nowTime);
 #else
-			localTime = *std::localtime(&nowTime);
+			// On POSIX systems, use localtime_r which is thread-safe and doesn't use thread_local storage
+			::localtime_r(&nowTime, &localTime);
 #endif
 
 			std::snprintf(cachedTimestamp, sizeof(cachedTimestamp), "%02d:%02d:%02d", localTime.tm_hour, localTime.tm_min, localTime.tm_sec);

@@ -23,21 +23,26 @@ target_compile_features(Engine PUBLIC cxx_std_20)
 
 target_link_libraries(Engine
     PUBLIC
-        Vulkan::Vulkan
+        volk::volk_headers
         glfw
         glm::glm
         EnTT::EnTT
         vk-bootstrap
         # dbghelp is Windows-only; generator expression avoids the if(WIN32) block.
         $<$<PLATFORM_ID:Windows>:dbghelp>
+        # libdl provides dladdr for symbol resolution in crash handler on Linux
+        $<$<PLATFORM_ID:Linux>:dl>
         Tracy::TracyClient
     PRIVATE
         freetype
 )
 
 target_compile_definitions(Engine PUBLIC
+    VK_NO_PROTOTYPES
+    $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR>
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
     GLM_ENABLE_EXPERIMENTAL     # For glm::value_ptr() and other utilities in <glm/gtc/type_ptr.hpp>
+    VMA_DYNAMIC_VULKAN_FUNCTIONS=1
     $<$<BOOL:${AETHERCORE_ENABLE_TRACY}>:TRACY_ENABLE>
 )
 

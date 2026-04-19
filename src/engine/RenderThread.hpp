@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <mutex>
 #include <thread>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 namespace aether
 {

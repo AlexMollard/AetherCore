@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 #include <vk_mem_alloc.h>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "assets/GltfAsset.hpp"
 #include "UniqueBuffer.hpp"

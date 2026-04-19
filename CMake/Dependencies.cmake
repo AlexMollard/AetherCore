@@ -88,6 +88,18 @@ FetchContent_Declare(tracy
     EXCLUDE_FROM_ALL
 )
 
+FetchContent_Declare(volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        vulkan-sdk-1.4.341.0
+    GIT_SHALLOW    TRUE
+    SYSTEM
+    EXCLUDE_FROM_ALL
+)
+
+# Use volk in header-only mode so all loader globals and pointers are built
+# with the exact same compile-time configuration as the rest of the engine.
+set(VOLK_HEADERS_ONLY ON CACHE BOOL "Use volk headers only" FORCE)
+
 find_package(Vulkan REQUIRED)
 
 # Suppress GLFW's own build warnings — we don't own that code.
@@ -111,7 +123,8 @@ if(AETHERCORE_ENABLE_TRACY)
 else()
     set(TRACY_ENABLE   OFF CACHE BOOL "" FORCE)
 endif()
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tomlplusplus tracy)
+
+FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tomlplusplus tracy volk)
 
 # ---------------------------------------------------------------------------
 # Solution folder organisation (Visual Studio only — ignored by other generators)
@@ -122,7 +135,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 foreach(_dep IN ITEMS
         glfw update_mappings          # GLFW + its gamepad mappings helper
-        glm vk-bootstrap
+        glm vk-bootstrap volk
         VulkanMemoryAllocator
         freetype
     cgltf

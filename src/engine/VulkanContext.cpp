@@ -3,7 +3,7 @@
 
 #include <string>
 
-#define GLFW_INCLUDE_VULKAN
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
 #include "AetherExceptions.hpp"
@@ -45,25 +45,34 @@ namespace
 
 namespace aether
 {
-	VulkanContext::VulkanContext(const Window& window, const char* appName)
-	{
-		INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
+   VulkanContext::VulkanContext(const Window& window, const char* appName)
+   {
+	   INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
 
-		vkb::InstanceBuilder instanceBuilder;
-		auto instanceResult = instanceBuilder.set_app_name(appName)
-		                              .require_api_version(1, 4, 0)
-		                              .request_validation_layers()
-		                              .set_debug_callback(LogValidationMessage)
-		                              .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		                              .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-		                              .build();
+	   // Initialize volk loader (loads global Vulkan functions)
+	   if (volkInitialize() != VK_SUCCESS) {
+		   throw VulkanError("Failed to initialize volk Vulkan loader.");
+	   }
+
+	   vkb::InstanceBuilder instanceBuilder;
+	   auto instanceResult = instanceBuilder.set_app_name(appName)
+									  .require_api_version(1, 4, 0)
+									  .request_validation_layers()
+									  .set_debug_callback(LogValidationMessage)
+									  .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+									  .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+									  .build();
 
 		if (!instanceResult)
 		{
 			throw MakeVkBootstrapError("Failed to create Vulkan instance: ", instanceResult);
 		}
 
+
 		m_instance = instanceResult.value();
+
+		// Load instance-level Vulkan functions
+		volkLoadInstance(m_instance->instance);
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
 		{
@@ -110,7 +119,11 @@ namespace aether
 			throw VulkanError("Failed to create Vulkan logical device.");
 		}
 
+
 		m_device = deviceResult.value();
+
+		// Load device-level Vulkan functions
+		volkLoadDevice(m_device->device);
 
 		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);
 		if (!graphicsQueueResult)
@@ -152,12 +165,17 @@ namespace aether
 		};
 #endif
 
+		VmaVulkanFunctions vulkanFunctions{};
+		vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
 		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
 		allocatorCreateInfo.device = m_device->device;
 		allocatorCreateInfo.instance = m_instance->instance;
 		allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_4;
+		allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 #ifdef TRACY_ENABLE
 		allocatorCreateInfo.pDeviceMemoryCallbacks = &kTracyVmaCallbacks;
 #endif

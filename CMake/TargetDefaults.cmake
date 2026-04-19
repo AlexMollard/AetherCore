@@ -43,11 +43,14 @@ function(aethercore_target_defaults target)
         )
 
         if(AETHERCORE_FAST_MSVC_DEBUG_INFO)
-            # Faster local edit-build-run iterations in Debug:
-            # - /Z7 stores debug info in .obj (reduces shared PDB contention during compile)
-            # - /DEBUG:FASTLINK reduces link-time debug merge cost
-            target_compile_options(${target} PRIVATE $<$<CONFIG:Debug>:/Z7>)
-            target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:/DEBUG:FASTLINK>)
+            # Use /DEBUG:FASTLINK only for VS 2022 and earlier (not supported in VS 2026+)
+            if (MSVC_VERSION LESS 1940)
+                target_compile_options(${target} PRIVATE $<$<CONFIG:Debug>:/Z7>)
+                target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:/DEBUG:FASTLINK>)
+            else()
+                target_compile_options(${target} PRIVATE $<$<CONFIG:Debug>:/Z7>)
+                target_link_options(${target} PRIVATE $<$<CONFIG:Debug>:/DEBUG:FULL>)
+            endif()
         endif()
 
         # Disable the buffer security cookie in Release — zero benefit in GPU-bound render code.
@@ -69,18 +72,23 @@ function(aethercore_target_defaults target)
             target_compile_options(${target} PRIVATE /fsanitize=address)
         endif()
     else()
+        # GCC/Clang compiler options for cross-platform support (Linux, macOS, etc.)
         target_compile_options(${target} PRIVATE
             -Wall
             -Wextra
             -Wpedantic
+            -Werror=switch-enum      # Equivalent to /we4062 on MSVC — unhandled enumerators
+            -Werror=return-type      # Equivalent to /we4715 on MSVC — missing return statements
             -ffast-math              # Equivalent to /fp:fast on GCC/Clang
             -ffunction-sections      # Emit each function into its own section; enables --gc-sections
             -fdata-sections
+            $<$<CONFIG:Debug>:-g3>   # Maximum debug info in Debug builds
         )
 
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:-Wl,--gc-sections>      # Dead-strip unreferenced sections; equivalent to /OPT:REF
             $<$<CONFIG:Release>:-Wl,--icf=all>          # Identical code folding; equivalent to /OPT:ICF
+            $<$<CONFIG:RelWithDebInfo>:-Wl,--gc-sections,-Wl,--icf=all>
         )
 
         if(AETHERCORE_ENABLE_ASAN)

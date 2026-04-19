@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "BindlessContract.hpp"
 

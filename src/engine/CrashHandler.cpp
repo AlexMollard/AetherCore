@@ -25,6 +25,10 @@
 #	endif
 #	include <Windows.h>
 #	include <DbgHelp.h>
+#else
+#	include <execinfo.h>
+#	include <dlfcn.h>
+#	include <cxxabi.h>
 #endif
 // clang-format on
 
@@ -56,7 +60,8 @@ namespace aether
 #ifdef _WIN32
 			localtime_s(&localTime, &timePoint);
 #else
-			localTime = *std::localtime(&timePoint);
+			// On POSIX systems, use localtime_r which is thread-safe
+			::localtime_r(&timePoint, &localTime);
 #endif
 
 			return std::format("{:04d}{:02d}{:02d}_{:02d}{:02d}{:02d}", localTime.tm_year + 1900, localTime.tm_mon + 1, localTime.tm_mday, localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
@@ -403,19 +408,144 @@ namespace aether
 				output << std::format("AdditionalFramesOmitted: {}\n", filteredTotal - filteredIndex);
 			}
 
+
 			output.flush();
 		}
-#endif
+	#endif // _WIN32
+
+#ifndef _WIN32
+		// Linux/POSIX implementation for stack trace capture
+		bool IsNoiseFrame(const StackFrame& frame)
+		{
+			const std::string& name = frame.symbol;
+
+			// Filter out internal crash handler and signal handling frames
+			if (name.find("SignalHandlerThunk") != std::string::npos ||
+			    name.find("TerminateHandlerThunk") != std::string::npos ||
+			    name.find("CaptureCrashArtifacts") != std::string::npos ||
+			    name.find("WriteCallStack") != std::string::npos ||
+			    name.find("WriteTextCrashReport") != std::string::npos)
+			{
+				return true;
+			}
+
+			return false;
+		}
+
+		std::string DemangleSymbol(const std::string& mangled)
+		{
+			int status = 0;
+			char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
+			if (status == 0 && demangled != nullptr)
+			{
+				std::string result(demangled);
+				std::free(demangled);
+				return result;
+			}
+			return mangled;
+		}
+
+		std::vector<StackFrame> CaptureStackFrames(void*)
+		{
+			std::vector<StackFrame> framesOut;
+
+			// Capture up to 96 stack frames
+			std::array<void*, 96> addresses{};
+			int frameCount = backtrace(addresses.data(), static_cast<int>(addresses.size()));
+
+			if (frameCount <= 0)
+			{
+				return framesOut;
+			}
+
+			framesOut.reserve(frameCount);
+
+			for (int i = 0; i < frameCount; ++i)
+			{
+				StackFrame frame{};
+				frame.address = reinterpret_cast<std::uint64_t>(addresses[i]);
+
+				// Try to get symbol information using dladdr
+				Dl_info dlInfo{};
+				if (dladdr(addresses[i], &dlInfo) != 0)
+				{
+					if (dlInfo.dli_sname != nullptr)
+					{
+						frame.symbol = DemangleSymbol(dlInfo.dli_sname);
+					}
+					if (dlInfo.dli_fname != nullptr)
+					{
+						frame.module = dlInfo.dli_fname;
+					}
+				}
+
+				framesOut.push_back(frame);
+			}
+
+			return framesOut;
+		}
+
+		void WriteCallStack(std::ofstream& output, void*, const StackFrame*)
+		{
+			const auto frames = CaptureStackFrames(nullptr);
+			if (frames.empty())
+			{
+				output << "CallStack: <symbol capture failed>\n";
+				return;
+			}
+
+			output << "CallStack (filtered):\n";
+			std::size_t filteredIndex = 0;
+			std::size_t filteredTotal = 0;
+
+			for (const auto& frame : frames)
+			{
+				if (IsNoiseFrame(frame))
+				{
+					continue;
+				}
+
+				++filteredTotal;
+				if (filteredIndex >= 20)
+				{
+					continue;
+				}
+
+				if (!frame.symbol.empty())
+				{
+					output << std::format("  [{}] {} @ 0x{:X}\n", filteredIndex, frame.symbol, static_cast<unsigned long long>(frame.address));
+				}
+				else if (!frame.module.empty())
+				{
+					output << std::format("  [{}] <{}> @ 0x{:X}\n", filteredIndex, frame.module, static_cast<unsigned long long>(frame.address));
+				}
+				else
+				{
+					output << std::format("  [{}] 0x{:X}\n", filteredIndex, static_cast<unsigned long long>(frame.address));
+				}
+
+				++filteredIndex;
+			}
+
+			if (filteredTotal > filteredIndex)
+			{
+				output << std::format("AdditionalFramesOmitted: {}\n", filteredTotal - filteredIndex);
+			}
+
+			output.flush();
+		}
+
+#endif // !_WIN32
 
 		void WriteTextCrashReport(const std::filesystem::path& reportPath,
-		        const std::string_view reason,
-		        const std::string_view detail,
+							 const std::string_view reason,
+							 const std::string_view detail,
 #ifdef _WIN32
-		        EXCEPTION_POINTERS* exceptionPointers,
+							 EXCEPTION_POINTERS* exceptionPointers,
 #else
-		        void*,
+							 void* /*exceptionPointers*/,
 #endif
-		        int signalNumber)
+							 int signalNumber)
 		{
 			std::ofstream output(reportPath, std::ios::out | std::ios::trunc);
 			if (!output)
@@ -465,19 +595,21 @@ namespace aether
 			}
 
 			WriteCallStack(output, exceptionPointers, hasFaultFrame ? &faultFrame : nullptr);
+#else
+			WriteCallStack(output, nullptr, nullptr);
 #endif
 		}
 
 		void CaptureCrashArtifacts(const std::string_view reason,
-		        const std::string_view detail,
+						 const std::string_view detail,
 #ifdef _WIN32
-		        EXCEPTION_POINTERS* exceptionPointers,
+						 EXCEPTION_POINTERS* exceptionPointers,
 #else
-		        void* exceptionPointers,
+						 void* /*exceptionPointers*/,
 #endif
-		        int signalNumber)
+						 int signalNumber)
 		{
-			if (g_crashInProgress.test_and_set())
+			if (!g_installed.load())
 			{
 				return;
 			}

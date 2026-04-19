@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "AnimationDatabase.hpp"
 #include "GpuContracts.hpp"

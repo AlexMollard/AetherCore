@@ -1,7 +1,7 @@
 #pragma once
 
 #include <functional>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "RenderGraph.hpp"
 

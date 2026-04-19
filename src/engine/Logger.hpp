@@ -137,4 +137,7 @@ namespace aether
 
 #define WARN(category, formatText, ...) ::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 
+#ifdef ERROR
+#  undef ERROR
+#endif
 #define ERROR(category, formatText, ...) ::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)

@@ -4,7 +4,7 @@
 #include <functional>
 #include <optional>
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "UniqueBuffer.hpp"
 #include "UniqueImage.hpp"

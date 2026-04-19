@@ -130,6 +130,42 @@ Managed through CMake FetchContent:
 - FreeType
 - Tracy (optional instrumentation, enabled by default in this repo)
 
+
+## Build (Linux)
+
+Prerequisites:
+
+- GCC 11+ or Clang 13+
+- CMake 3.20+
+- Vulkan SDK (or system Vulkan development packages)
+- GLFW, GLM, FreeType, and other dependencies (see below)
+
+### Install dependencies (Ubuntu/Debian example)
+
+```bash
+sudo apt-get update
+sudo apt-get install build-essential cmake git libvulkan-dev vulkan-tools libglfw3-dev libglm-dev libfreetype6-dev
+```
+
+### Configure and build
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build -j$(nproc)
+```
+
+### Run
+
+```bash
+./build/src/app/App
+```
+
+### Notes
+- If you use a non-standard Vulkan SDK, set `VULKAN_SDK` in your environment before running CMake.
+- If you see missing symbols for `dladdr` or backtrace, ensure you are linking with `-ldl` (CMake handles this automatically).
+- Tracy is enabled by default; to disable: `-DAETHERCORE_ENABLE_TRACY=OFF`.
+- For other distros, install the equivalent development packages for Vulkan, GLFW, GLM, and FreeType.
+
 ## Build (Windows)
 
 Prerequisites:

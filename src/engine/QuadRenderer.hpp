@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "GraphicsPipeline.hpp"
 #include "Swapchain.hpp"

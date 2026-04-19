@@ -1,6 +1,6 @@
 #include "SkyboxPass.hpp"
 
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "CommandRecorder.hpp"
 #include "RenderGraph.hpp"

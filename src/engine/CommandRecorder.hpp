@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "GpuContracts.hpp"
 

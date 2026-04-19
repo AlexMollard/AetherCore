@@ -5,7 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 // stb_image — single-header image loader.
 // STB_IMAGE_IMPLEMENTATION must be defined in exactly one compilation unit.

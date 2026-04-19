@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <vk_mem_alloc.h>
-#include <vulkan/vulkan.h>
+#include "volk.hpp"
 
 #include "BindlessManager.hpp"
 #include "GraphicsPipeline.hpp"
