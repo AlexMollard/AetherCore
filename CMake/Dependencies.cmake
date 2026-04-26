@@ -1,147 +1,152 @@
-include(FetchContent)
+include(get_cpm)
 
-# After the initial clone, do not re-check remotes on every configure.
-set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
-
-# Silence CMake's own progress spam for dependency sub-builds.
-set(FETCHCONTENT_QUIET ON)
-
-FetchContent_Declare(glfw
-    GIT_REPOSITORY https://github.com/glfw/glfw
-    GIT_TAG        a74efa0d5628b74adc0426af4c5710e287fa7c2c # 3.4
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-    FIND_PACKAGE_ARGS NAMES glfw3
-)
-
-FetchContent_Declare(glm
-    GIT_REPOSITORY https://github.com/g-truc/glm
-    GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed # 1.0.3
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-    FIND_PACKAGE_ARGS
-)
-
-FetchContent_Declare(vk-bootstrap
-    GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap
-    GIT_TAG        29777173ac64752fe9ce3d2ff2821d1dd9c7f79b # v1.4.341
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(VMA
-    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-    GIT_TAG        1d8f600fd424278486eade7ed3e877c99f0846b1 # v3.3.0
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(stb
-    GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(cgltf
-    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
-    GIT_TAG        v1.15
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(entt
-    GIT_REPOSITORY https://github.com/skypjack/entt.git
-    GIT_TAG        v3.16.0
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(tomlplusplus
-    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    GIT_TAG        master
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(freetype
-    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
-    GIT_TAG        VER-2-14-3
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(tracy
-    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
-    GIT_TAG        v0.13.1
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-FetchContent_Declare(volk
-    GIT_REPOSITORY https://github.com/zeux/volk.git
-    GIT_TAG        vulkan-sdk-1.4.341.0
-    GIT_SHALLOW    TRUE
-    SYSTEM
-    EXCLUDE_FROM_ALL
-)
-
-# Use volk in header-only mode so all loader globals and pointers are built
-# with the exact same compile-time configuration as the rest of the engine.
-set(VOLK_HEADERS_ONLY ON CACHE BOOL "Use volk headers only" FORCE)
+# After the initial download, do not re-check remotes on every configure.
+set(CPM_SOURCE_CACHE_UPDATES_DISCONNECTED ON)
 
 find_package(Vulkan REQUIRED)
 
-# Suppress GLFW's own build warnings — we don't own that code.
-set(GLFW_BUILD_DOCS     OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(GLFW_INSTALL        OFF CACHE BOOL "" FORCE)
+# ── Window / input ────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME glfw
+    GIT_REPOSITORY https://github.com/glfw/glfw
+    GIT_TAG        a74efa0d5628b74adc0426af4c5710e287fa7c2c # 3.4
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "GLFW_BUILD_DOCS OFF"
+        "GLFW_BUILD_TESTS OFF"
+        "GLFW_BUILD_EXAMPLES OFF"
+        "GLFW_INSTALL OFF"
+)
 
-# Disable FreeType extras we don't need.
-set(FT_DISABLE_ZLIB     ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
-set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
+# ── Math ──────────────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME glm
+    GIT_REPOSITORY https://github.com/g-truc/glm
+    GIT_TAG        8d1fd52e5ab5590e2c81768ace50c72bae28f2ed # 1.0.3
+    GIT_SHALLOW    TRUE
+)
 
-# Tracy profiler — opt-in via AETHERCORE_ENABLE_TRACY (default ON for shipping builds).
+# ── Vulkan helpers ────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME vk-bootstrap
+    GIT_REPOSITORY https://github.com/charles-lunarg/vk-bootstrap
+    GIT_TAG        29777173ac64752fe9ce3d2ff2821d1dd9c7f79b # v1.4.341
+    GIT_SHALLOW    TRUE
+)
+
+# volk: header-only mode so all loader globals are built with the same config.
+CPMAddPackage(
+    NAME volk
+    GIT_REPOSITORY https://github.com/zeux/volk.git
+    GIT_TAG        vulkan-sdk-1.4.341.0
+    GIT_SHALLOW    TRUE
+    OPTIONS "VOLK_HEADERS_ONLY ON"
+)
+
+# ── GPU memory ────────────────────────────────────────────────────────────────
+# VMA is used header-only; DOWNLOAD_ONLY skips its own CMakeLists.
+CPMAddPackage(
+    NAME VMA
+    GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+    GIT_TAG        1d8f600fd424278486eade7ed3e877c99f0846b1 # v3.3.0
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+# ── Image / mesh loading (header-only, no CMakeLists) ─────────────────────────
+CPMAddPackage(
+    NAME stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+CPMAddPackage(
+    NAME cgltf
+    GIT_REPOSITORY https://github.com/jkuhlmann/cgltf.git
+    GIT_TAG        v1.15
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+# ── ECS ───────────────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME EnTT
+    GIT_REPOSITORY https://github.com/skypjack/entt.git
+    GIT_TAG        v3.16.0
+    GIT_SHALLOW    TRUE
+)
+
+# ── Config parsing ────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+)
+
+# ── Font rendering ────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME freetype
+    GIT_REPOSITORY https://gitlab.freedesktop.org/freetype/freetype.git
+    GIT_TAG        VER-2-14-3
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "FT_DISABLE_ZLIB ON"
+        "FT_DISABLE_BZIP2 ON"
+        "FT_DISABLE_PNG ON"
+        "FT_DISABLE_HARFBUZZ ON"
+        "FT_DISABLE_BROTLI ON"
+)
+
+# ── Profiler ──────────────────────────────────────────────────────────────────
 option(AETHERCORE_ENABLE_TRACY "Enable Tracy profiler instrumentation" ON)
 if(AETHERCORE_ENABLE_TRACY)
-    set(TRACY_ENABLE   ON  CACHE BOOL "" FORCE)
-    set(TRACY_ON_DEMAND ON CACHE BOOL "" FORCE)
+    set(_tracy_opts "TRACY_ENABLE ON" "TRACY_ON_DEMAND ON")
 else()
-    set(TRACY_ENABLE   OFF CACHE BOOL "" FORCE)
+    set(_tracy_opts "TRACY_ENABLE OFF")
 endif()
 
-FetchContent_MakeAvailable(glfw glm vk-bootstrap VMA stb freetype cgltf entt tomlplusplus tracy volk)
+CPMAddPackage(
+    NAME Tracy
+    GIT_REPOSITORY https://github.com/wolfpld/tracy.git
+    GIT_TAG        v0.13.1
+    GIT_SHALLOW    TRUE
+    OPTIONS        ${_tracy_opts}
+)
 
-# ---------------------------------------------------------------------------
-# Solution folder organisation (Visual Studio only — ignored by other generators)
-# Everything that isn't App or Engine goes into "Dependencies/".
-# CMake's own ZERO_CHECK and ALL_BUILD go into "CMake/".
-# ---------------------------------------------------------------------------
+# ── Physics ───────────────────────────────────────────────────────────────────
+# Cross-platform determinism is required for future lockstep / rollback networking.
+CPMAddPackage(
+    NAME JoltPhysics
+    GIT_REPOSITORY https://github.com/jrouwe/JoltPhysics.git
+    GIT_TAG        v5.5.0
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        "TARGET_HELLO_WORLD OFF"
+        "TARGET_PERFORMANCE_TEST OFF"
+        "TARGET_SAMPLES OFF"
+        "TARGET_UNIT_TESTS OFF"
+        "TARGET_VIEWER OFF"
+        "ENABLE_CROSS_PLATFORM_DETERMINISM ON"
+        "USE_AVX2 OFF"
+        "USE_AVX512 OFF"
+)
+
+# ── Solution folder organisation (Visual Studio only) ─────────────────────────
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 foreach(_dep IN ITEMS
-        glfw update_mappings          # GLFW + its gamepad mappings helper
-        glm vk-bootstrap volk
-        VulkanMemoryAllocator
-        freetype
+    glfw update_mappings
+    glm vk-bootstrap volk
+    VulkanMemoryAllocator
+    freetype
     cgltf
     EnTT
     tomlplusplus_tomlplusplus
     TracyClient
+    Jolt
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")
@@ -149,4 +154,3 @@ foreach(_dep IN ITEMS
 endforeach()
 
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
-

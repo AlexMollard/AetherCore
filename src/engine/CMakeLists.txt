@@ -28,6 +28,7 @@ target_link_libraries(Engine
         glm::glm
         EnTT::EnTT
         vk-bootstrap
+        Jolt
         # dbghelp is Windows-only; generator expression avoids the if(WIN32) block.
         $<$<PLATFORM_ID:Windows>:dbghelp>
         # libdl provides dladdr for symbol resolution in crash handler on Linux
@@ -48,6 +49,11 @@ target_compile_definitions(Engine PUBLIC
 
 # VMA is header-only from the consumer's perspective.
 target_include_directories(Engine PUBLIC "${vma_SOURCE_DIR}/include")
+
+# Jolt's EXCLUDE_FROM_ALL flag can prevent automatic include propagation through
+# target_link_libraries in some CMake generators, so we set it explicitly.
+# The headers live directly under joltphysics_SOURCE_DIR, so <Jolt/Jolt.h> resolves.
+target_include_directories(Engine PUBLIC "${joltphysics_SOURCE_DIR}")
 
 # stb is header-only: add its source directory as a private include path.
 # Texture.cpp defines STB_IMAGE_IMPLEMENTATION once to pull in the implementation.
@@ -75,6 +81,7 @@ if(AETHERCORE_ENABLE_UNITY_BUILD)
         "${CMAKE_CURRENT_SOURCE_DIR}/Texture.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/VmaImplementation.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/GltfAsset.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/physics/PhysicsSystem.cpp"
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
 endif()
