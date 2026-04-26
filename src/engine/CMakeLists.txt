@@ -48,7 +48,7 @@ target_compile_definitions(Engine PUBLIC
 )
 
 # VMA is header-only from the consumer's perspective.
-target_include_directories(Engine PUBLIC "${vma_SOURCE_DIR}/include")
+target_include_directories(Engine PUBLIC "${VMA_SOURCE_DIR}/include")
 
 # Jolt's EXCLUDE_FROM_ALL flag can prevent automatic include propagation through
 # target_link_libraries in some CMake generators, so we set it explicitly.
