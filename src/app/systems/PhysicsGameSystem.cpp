@@ -46,7 +46,7 @@ void PhysicsGameSystem::Init(
 void PhysicsGameSystem::BuildScene(aether::World& world)
 {
 	const aether::Mesh& cube   = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
-	const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
+	const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Sphere);
 
 	// ── Ground ────────────────────────────────────────────────────────────────
 	{
@@ -249,7 +249,7 @@ void PhysicsGameSystem::OnRegister(aether::World& world)
 
 void PhysicsGameSystem::FireProjectile(aether::World& world)
 {
-	const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
+	const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Sphere);
 
 	// Fire from slightly above and in front of the camera toward the target stack.
 	const glm::vec3 spawnPos = { 0.f, 3.f, kGroundHalfExtent - 1.f };

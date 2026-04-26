@@ -117,6 +117,11 @@ namespace aether
 			const MeshGen::MeshData plane = MeshGen::GeneratePlane({ .segmentsX = 20, .segmentsY = 20, .uvScale = 1.0f });
 			m_plane = Mesh::Create(device, allocator, uploadQueue, uploadPool, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices));
 		}
+
+		{
+			const MeshGen::MeshData sphere = MeshGen::GenerateUVSphere({ .stacks = 16, .slices = 32 });
+			m_sphere = Mesh::Create(device, allocator, uploadQueue, uploadPool, std::span<const Mesh::Vertex>(sphere.vertices), std::span<const std::uint32_t>(sphere.indices));
+		}
 	}
 
 	const Mesh& PrimitiveMeshes::Get(PrimitiveMesh primitive) const
@@ -131,6 +136,8 @@ namespace aether
 				return m_cube;
 			case PrimitiveMesh::Plane:
 				return m_plane;
+			case PrimitiveMesh::Sphere:
+				return m_sphere;
 			default:
 				return m_triangle;
 		}
