@@ -10,20 +10,7 @@
 
 namespace aether::app
 {
-    namespace
-    {
-        using namespace overlay;
-
-        constexpr glm::vec2 kAnchor{0.0f, 0.0f};
-        constexpr float kPanelL = 12.0f;
-        constexpr float kPanelR = 460.0f;
-        constexpr float kPanelTop = 12.0f;
-        constexpr float kPanelBot = 320.0f;
-        constexpr float kInnerL = kPanelL + kPad;
-        constexpr float kInnerR = kPanelR - kPad;
-        constexpr float kColKey = kInnerL;
-        constexpr float kColVal = kInnerL + 110.0f;
-    }
+    using namespace overlay;
 
     const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
     {
@@ -63,49 +50,25 @@ namespace aether::app
         aether::UIRenderer& ui = *context.ui;
         std::array<char, 128> buf{};
 
-        DrawPanel(ui, kAnchor, kPanelL, kPanelR, kPanelTop, kPanelBot);
-        ui.DrawText("FISHING DEMO",
-                    aether::UiPoint{.anchor = kAnchor, .offsetPx = {kInnerL, kPanelTop + 26.0f}},
-                    18.0f,
-                    kColorTitle);
-
-        DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPanelTop + 54.0f);
-
-        const float sceneY = kPanelTop + 66.0f;
-        DrawSectionHeader(ui, "GAME", kAnchor, kPanelL, kInnerL, sceneY);
-        DrawSeparator(ui, kAnchor, kInnerL, kInnerR, sceneY + 13.0f);
-
-        float rowY = sceneY + 34.0f;
-        const char* cameraName = GetActiveCameraName(context.cameras->GetMainCamera());
-        DrawKV(ui, "Camera", cameraName, kAnchor, kColKey, kColVal, rowY);
-        rowY += kRowH;
+        PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 460.f, 12.f, 110.f);
+        panel.Title("FISHING DEMO").Section("GAME");
+        panel.KV("Camera", GetActiveCameraName(context.cameras->GetMainCamera()));
 
         if (m_gameSystem)
         {
-            const auto fishCount = m_gameSystem->GetFishCount();
-            std::snprintf(buf.data(), buf.size(), "%zu", fishCount);
-            DrawKV(ui, "Fish", buf.data(), kAnchor, kColKey, kColVal, rowY);
-            rowY += kRowH;
+            std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFishCount());
+            panel.KV("Fish", buf.data());
 
             std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetScore());
-            DrawKV(ui, "Score", buf.data(), kAnchor, kColKey, kColVal, rowY);
-            rowY += kRowH;
+            panel.KV("Score", buf.data());
 
-            DrawKV(ui, "Bobber", m_gameSystem->GetBobberStateName(), kAnchor, kColKey, kColVal, rowY);
-            rowY += kRowH;
+            panel.KV("Bobber", m_gameSystem->GetBobberStateName());
         }
 
-        const float controlsY = rowY + kRowH;
-        DrawSectionHeader(ui, "CONTROLS", kAnchor, kPanelL, kInnerL, controlsY);
-        DrawSeparator(ui, kAnchor, kInnerL, kInnerR, controlsY + 13.0f);
-
-        float controlRow = controlsY + 34.0f;
-        DrawKV(ui, "LMB", "Cast to water", kAnchor, kColKey, kColVal, controlRow);
-        controlRow += kRowH;
-        DrawKV(ui, "Space", "Hook / Reel", kAnchor, kColKey, kColVal, controlRow);
-        controlRow += kRowH;
-        DrawKV(ui, "RMB", "Rotate camera", kAnchor, kColKey, kColVal, controlRow);
-        controlRow += kRowH;
-        DrawKV(ui, "WASD", "Move camera", kAnchor, kColKey, kColVal, controlRow);
+        panel.Section("CONTROLS");
+        panel.KV("LMB",   "Cast to water");
+        panel.KV("Space", "Hook / Reel");
+        panel.KV("RMB",   "Rotate camera");
+        panel.KV("WASD",  "Move camera");
     }
 } // namespace aether::app

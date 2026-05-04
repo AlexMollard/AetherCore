@@ -52,62 +52,27 @@ namespace aether::app
 		using namespace aether::app::overlay;
 
 		aether::UIRenderer& ui = *context.ui;
-
-		constexpr glm::vec2 kAnchor{ 0.f, 0.f };
-		constexpr float kL   = 12.f;
-		constexpr float kR   = 360.f;
-		constexpr float kTop = 12.f;
-		constexpr float kBot = 256.f;
-		constexpr float kIL  = kL + kPad;
-		constexpr float kIR  = kR - kPad;
-		constexpr float kKey = kIL;
-		constexpr float kVal = kIL + 120.f;
-
-		DrawPanel(ui, kAnchor, kL, kR, kTop, kBot);
-
-		// Title
-		ui.DrawText("PHYSICS",
-			aether::UiPoint{ .anchor = kAnchor, .offsetPx = { kIL, kTop + 26.f } },
-			18.f, kColorTitle);
-
-		DrawSeparator(ui, kAnchor, kIL, kIR, kTop + 54.f);
-
-		// Simulation section
-		constexpr float kS1 = kTop + 66.f;
-		DrawSectionHeader(ui, "SIMULATION", kAnchor, kL, kIL, kS1);
-		DrawSeparator    (ui, kAnchor, kIL, kIR, kS1 + 13.f);
-
 		std::array<char, 64> buf{};
 
-		constexpr float kR1 = kS1 + 34.f;
+		PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 360.f, 12.f, 120.f);
+		panel.Title("PHYSICS").Section("SIMULATION");
+
 		std::snprintf(buf.data(), buf.size(), "%d", m_gameSystem->GetActiveBodyCount());
-		DrawKV(ui, "Dynamic bodies", buf.data(), kAnchor, kKey, kVal, kR1);
+		panel.KV("Dynamic bodies", buf.data());
 
-		constexpr float kR2 = kR1 + kRowH;
 		std::snprintf(buf.data(), buf.size(), "%d", m_gameSystem->GetProjectileCount());
-		DrawKV(ui, "Projectiles", buf.data(), kAnchor, kKey, kVal, kR2);
+		panel.KV("Projectiles", buf.data());
 
-		constexpr float kR3 = kR2 + kRowH;
 		std::snprintf(buf.data(), buf.size(), "%.1f s", m_gameSystem->GetSimTime());
-		DrawKV(ui, "Sim time", buf.data(), kAnchor, kKey, kVal, kR3);
+		panel.KV("Sim time", buf.data());
 
-		constexpr float kR4 = kR3 + kRowH;
 		std::snprintf(buf.data(), buf.size(), "%.0f Hz (fixed)", 1.f / aether::PhysicsSystem::kFixedTimestep);
-		DrawKV(ui, "Step rate", buf.data(), kAnchor, kKey, kVal, kR4, kColorGood);
+		panel.KV("Step rate", buf.data(), kColorGood);
 
-		// Controls section
-		constexpr float kCS = kR4 + kRowH + 14.f;
-		DrawSectionHeader(ui, "CONTROLS", kAnchor, kL, kIL, kCS);
-		DrawSeparator    (ui, kAnchor, kIL, kIR, kCS + 13.f);
-
-		constexpr float kC1 = kCS + 34.f;
-		DrawKV(ui, "Space", "Fire projectile", kAnchor, kKey, kVal, kC1, kColorWarn);
-
-		constexpr float kC2 = kC1 + kRowH;
-		DrawKV(ui, "R", "Reset scene",     kAnchor, kKey, kVal, kC2);
-
-		constexpr float kC3 = kC2 + kRowH;
-		DrawKV(ui, "C", "Toggle camera",   kAnchor, kKey, kVal, kC3);
+		panel.Section("CONTROLS");
+		panel.KV("Space", "Fire projectile", kColorWarn);
+		panel.KV("R",     "Reset scene");
+		panel.KV("C",     "Toggle camera");
 	}
 
 } // namespace aether::app

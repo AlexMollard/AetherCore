@@ -34,16 +34,6 @@ namespace aether::app
 	{
 		using namespace overlay;
 
-		constexpr glm::vec2 kAnchor{ 0.f, 0.f };
-		constexpr float kPanelL = 12.0f;
-		constexpr float kPanelR = 430.0f;
-		constexpr float kPanelTop = 12.0f;
-		constexpr float kPanelBot = 408.0f;
-		constexpr float kInnerL = kPanelL + kPad;
-		constexpr float kInnerR = kPanelR - kPad;
-		constexpr float kColKey = kInnerL;
-		constexpr float kColVal = kInnerL + 190.0f;
-
 		float SampleTerrain2D(int worldX, int worldZ)
 		{
 			const float x = static_cast<float>(worldX);
@@ -223,78 +213,53 @@ namespace aether::app
 		aether::UIRenderer& ui = *context.ui;
 		std::array<char, 128> buf{};
 
-		DrawPanel(ui, kAnchor, kPanelL, kPanelR, kPanelTop, kPanelBot);
-		ui.DrawText("VOXEL WORLD",
-		        aether::UiPoint{
-		                .anchor = kAnchor, .offsetPx = { kInnerL, kPanelTop + 26.0f }
-        },
-		        18.0f,
-		        kColorTitle);
+		PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 430.f, 12.f, 190.f);
+		panel.Title("VOXEL WORLD").Section("WORLDGEN");
 
-		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kPanelTop + 54.0f);
-
-		constexpr float kWorldY = kPanelTop + 68.0f;
-		DrawSectionHeader(ui, "WORLDGEN", kAnchor, kPanelL, kInnerL, kWorldY);
-		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kWorldY + 13.0f);
-
-		float rowY = kWorldY + 34.0f;
 		std::snprintf(buf.data(), buf.size(), "%d", kWorldRadius);
-		DrawKV(ui, "Radius (chunks)", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Radius (chunks)", buf.data());
 
 		std::snprintf(buf.data(), buf.size(), "%d", (kWorldRadius * 2 + 1) * (kWorldRadius * 2 + 1));
-		DrawKV(ui, "Target XY chunks", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Target XY chunks", buf.data());
 
 		std::snprintf(buf.data(), buf.size(), "%d", voxel::kChunkSize);
-		DrawKV(ui, "Chunk size", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Chunk size", buf.data());
 
 		std::snprintf(buf.data(), buf.size(), "%d", kTotalHeight);
-		DrawKV(ui, "Max terrain Y", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Max terrain Y", buf.data());
 
 		const aether::Camera* cam = context.cameras ? context.cameras->TryGet(m_camera) : nullptr;
 		if (cam)
 		{
 			const glm::vec3 p = cam->GetPosition();
 			std::snprintf(buf.data(), buf.size(), "%.1f, %.1f, %.1f", p.x, p.y, p.z);
-			DrawKV(ui, "Camera pos", buf.data(), kAnchor, kColKey, kColVal, rowY);
-			rowY += kRowH;
+			panel.KV("Camera pos", buf.data());
 		}
 
-		constexpr float kChunkY = kPanelTop + 212.0f;
-		DrawSectionHeader(ui, "CHUNK RUNTIME", kAnchor, kPanelL, kInnerL, kChunkY);
-		DrawSeparator(ui, kAnchor, kInnerL, kInnerR, kChunkY + 13.0f);
-
+		panel.Section("CHUNK RUNTIME");
 		const voxel::ChunkManager::DebugStats stats = m_chunkManager.GetDebugStats();
-		rowY = kChunkY + 34.0f;
 
 		std::snprintf(buf.data(), buf.size(), "%zu", stats.totalChunks);
-		DrawKV(ui, "Total chunks", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Total chunks", buf.data());
 
 		std::snprintf(buf.data(), buf.size(), "%zu", stats.readyChunks);
-		DrawKV(ui, "Ready chunks", buf.data(), kAnchor, kColKey, kColVal, rowY, stats.readyChunks > 1 ? kColorGood : kColorWarn);
-		rowY += kRowH;
+		panel.KV("Ready chunks", buf.data(), stats.readyChunks > 1 ? kColorGood : kColorWarn);
 
 		std::snprintf(buf.data(), buf.size(), "%zu", stats.dirtyChunks);
-		DrawKV(ui, "Dirty chunks", buf.data(), kAnchor, kColKey, kColVal, rowY, stats.dirtyChunks == 0 ? kColorGood : kColorWarn);
-		rowY += kRowH;
+		panel.KV("Dirty chunks", buf.data(), stats.dirtyChunks == 0 ? kColorGood : kColorWarn);
 
 		std::snprintf(buf.data(), buf.size(), "%zu", stats.emptyChunks);
-		DrawKV(ui, "Empty chunks", buf.data(), kAnchor, kColKey, kColVal, rowY);
-		rowY += kRowH;
+		panel.KV("Empty chunks", buf.data());
 
 		std::snprintf(buf.data(), buf.size(), "%u", stats.submittedDrawsLastFrame);
-		DrawKV(ui, "Submitted draws", buf.data(), kAnchor, kColKey, kColVal, rowY, stats.submittedDrawsLastFrame > 1 ? kColorGood : kColorWarn);
-		rowY += kRowH;
+		panel.KV("Submitted draws", buf.data(), stats.submittedDrawsLastFrame > 1 ? kColorGood : kColorWarn);
 
-		DrawKV(ui, "Draw path", context.engine.GetRenderQueue().IsDebugBypassIndirect() ? "Bypass indirect" : "Indirect", kAnchor, kColKey, kColVal, rowY, context.engine.GetRenderQueue().IsDebugBypassIndirect() ? kColorWarn : kColorGood);
-		rowY += kRowH;
+		const bool bypass = context.engine.GetRenderQueue().IsDebugBypassIndirect();
+		panel.KV("Draw path", bypass ? "Bypass indirect" : "Indirect", bypass ? kColorWarn : kColorGood);
 
-		std::snprintf(buf.data(), buf.size(), "%u / %u / %u", stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
-		DrawKV(ui, "Rebuild A/U/F", buf.data(), kAnchor, kColKey, kColVal, rowY, stats.rebuildFailuresLastFrame == 0 ? kColorGood : kColorWarn);
+		std::snprintf(buf.data(), buf.size(), "%u / %u / %u",
+		        stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
+		panel.KV("Rebuild A/U/F", buf.data(), stats.rebuildFailuresLastFrame == 0 ? kColorGood : kColorWarn);
 	}
 
 	// ── Terrain generation ────────────────────────────────────────────────────
