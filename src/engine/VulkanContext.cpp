@@ -86,6 +86,7 @@ namespace aether
 		requiredFeatures12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
 		requiredFeatures12.bufferDeviceAddress = VK_TRUE;
 		requiredFeatures12.descriptorIndexing = VK_TRUE;
+		requiredFeatures12.scalarBlockLayout = VK_TRUE; // allows tight-packed structs in BDA/SSBO
 		requiredFeatures12.runtimeDescriptorArray = VK_TRUE;
 		requiredFeatures12.descriptorBindingPartiallyBound = VK_TRUE;
 		requiredFeatures12.descriptorBindingVariableDescriptorCount = VK_TRUE;

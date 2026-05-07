@@ -21,19 +21,7 @@ namespace aether
 			bool depthWriteEnable = false;
 			VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS; // Enable standard src-alpha / one-minus-src-alpha
 			                                                 // blending on color attachment 0.
-			bool blendEnable = false;                        // Set true for full-screen / procedural passes
-			                                                 // that generate vertices
-			// from SV_VertexID - no vertex buffer or attribute declarations needed.
-			bool noVertexInput = false;
-			// Use a reduced mesh layout (POSITION + JOINTS_0 + WEIGHTS_0 only).
-			// Intended for depth-only shadow caster pipelines.
-			bool shadowVertexInput = false;
-			// Use the compact 24-byte VoxelVertex layout (POSITION + PACKED + UV).
-			// Intended for GPU-driven voxel chunk pipelines.
-			bool voxelVertexInput = false;
-			// Use the compact 24-byte VoxelVertex layout with POSITION only.
-			// Intended for depth-only voxel shadow passes where packed/uv are unused.
-			bool voxelShadowVertexInput = false;
+			bool blendEnable = false;
 			// Override the default DrawPushConstants block. If size is 0 the
 			// default model-matrix + BDA range is used instead.
 			uint32_t pushConstantSize = 0;

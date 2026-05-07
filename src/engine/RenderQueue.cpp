@@ -273,6 +273,7 @@ namespace aether
 					.skinPaletteOffset = skinPaletteOffset,
 					.skinJointCount = skinJointCount,
 					.worldBoundingSphere = dc.worldBoundingSphere,
+					.vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
 				};
 
 				m_cullInputMapped[drawBase + globalDrawIdx] = CullDrawInput{
@@ -482,9 +483,7 @@ namespace aether
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		const Mesh* lastMesh = nullptr;
-		VkBuffer lastVertexBuffer = VK_NULL_HANDLE;
 		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
-		VkDeviceSize lastVertexOffset = ~0ull;
 		VkDeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
@@ -521,15 +520,8 @@ namespace aether
 
 			if (batch.mesh != nullptr)
 			{
-				const VkBuffer vertexBuffer = batch.mesh->GetBuffer();
-				const VkDeviceSize vertexOffset = batch.mesh->GetVertexByteOffset();
-				if (vertexBuffer != lastVertexBuffer || vertexOffset != lastVertexOffset)
-				{
-					recorder.BindVertexBuffer(vertexBuffer, vertexOffset);
-					lastVertexBuffer = vertexBuffer;
-					lastVertexOffset = vertexOffset;
-				}
-
+				// Vertex data is fetched via BDA in the vertex shader (DrawInstanceData.vertexBufferAddr).
+				// Only the index buffer needs binding to drive SV_VertexID via fixed-function fetch.
 				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
 				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
 				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)

@@ -1,30 +1,27 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
-#include <vk_mem_alloc.h>
 #include "volk.hpp"
 
+#include "GpuHeap.hpp"
 #include "Mesh.hpp"
-#include "UniqueBuffer.hpp"
 
 namespace aether
 {
 	class VulkanContext;
 
 	// A large pre-allocated pair of device-local buffers (vertex + index) that voxel
-	// chunk meshes suballocate from via a simple sorted free-list.
+	// chunk meshes suballocate from via a sorted free-list.
 	//
-	// Eliminates per-chunk VkBuffer create/destroy overhead and VMA fragmentation.
-	// The arena works in raw bytes - callers supply byteSize alongside counts so the
-	// arena stays vertex-format agnostic.
+	// Backed by two GpuHeap instances so the free-list logic lives in one place.
+	// The arena is vertex-format agnostic - callers supply byte sizes alongside counts.
 	//
 	// Usage:
-	//   1. Initialize(ctx)                     - once, at startup.
-	//   2. alloc = Allocate(vBytes, vCount, iBytes, iCount)  - per chunk spawn.
-	//   3. mesh  = CreateView(alloc)            - returns a non-owning Mesh* for DrawCommand.
-	//   4. Free(alloc)                          - when the chunk is unloaded.
-	//   5. Shutdown()                           - once, at teardown.
+	//   1. Initialize(ctx)                                            - once, at startup.
+	//   2. alloc = Allocate(vBytes, vCount, iBytes, iCount)          - per chunk spawn.
+	//   3. mesh  = CreateView(alloc)                                  - non-owning Mesh view.
+	//   4. Free(alloc)                                                - when chunk is unloaded.
+	//   5. Shutdown()                                                 - once, at teardown.
 	class MeshArena
 	{
 	public:
@@ -41,7 +38,7 @@ namespace aether
 			VkDeviceSize indexByteOffset = 0;
 			std::uint32_t indexCount = 0;
 
-			// Internal accounting - keep these to hand the bytes back to the free list.
+			// Internal accounting - keep these to hand the bytes back to the heap.
 			VkDeviceSize vertexByteSize = 0;
 			VkDeviceSize indexByteSize = 0;
 
@@ -61,33 +58,32 @@ namespace aether
 		// Return a sub-region to the free list and coalesce adjacent blocks.
 		void Free(Alloc& alloc);
 
-		// Create a non-owning Mesh view that points into the arena buffers at alloc's
-		// offsets.  The view is invalidated the moment Free(alloc) is called.
+		// Create a non-owning Mesh view that points into the arena buffers at alloc's offsets.
+		// The view is invalidated the moment Free(alloc) is called.
 		[[nodiscard]] Mesh CreateView(const Alloc& alloc) const;
 
 		[[nodiscard]] VkBuffer GetVertexBuffer() const
 		{
-			return m_vertexBuffer.Get();
+			return m_vertexHeap.GetBuffer();
 		}
 
 		[[nodiscard]] VkBuffer GetIndexBuffer() const
 		{
-			return m_indexBuffer.Get();
+			return m_indexHeap.GetBuffer();
+		}
+
+		[[nodiscard]] VkDeviceAddress GetVertexDeviceAddress() const
+		{
+			return m_vertexHeap.GetBaseAddress();
+		}
+
+		[[nodiscard]] VkDeviceAddress GetIndexDeviceAddress() const
+		{
+			return m_indexHeap.GetBaseAddress();
 		}
 
 	private:
-		struct FreeBlock
-		{
-			VkDeviceSize offset;
-			VkDeviceSize size;
-		};
-
-		[[nodiscard]] VkDeviceSize AllocFromList(std::vector<FreeBlock>& list, VkDeviceSize size);
-		void FreeToList(std::vector<FreeBlock>& list, VkDeviceSize offset, VkDeviceSize size);
-
-		UniqueBuffer m_vertexBuffer;
-		UniqueBuffer m_indexBuffer;
-		std::vector<FreeBlock> m_vertexFreeList;
-		std::vector<FreeBlock> m_indexFreeList;
+		GpuHeap m_vertexHeap;
+		GpuHeap m_indexHeap;
 	};
 } // namespace aether

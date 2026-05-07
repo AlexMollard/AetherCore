@@ -1,19 +1,13 @@
 #include "GraphicsPipeline.hpp"
 
-#include <cstddef>
-#include <glm/glm.hpp>
-#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <utility>
-#include <vector>
 
 #include "FileSystem.hpp"
 #include "GpuContracts.hpp"
 #include "Logger.hpp"
-#include "Mesh.hpp"
 #include "ShaderUtils.hpp"
-#include "VoxelVertex.hpp"
 
 namespace aether
 {
@@ -89,157 +83,10 @@ namespace aether
 			 },
 		};
 
-		constexpr VkVertexInputBindingDescription kVertexBinding{
-			.binding = 0,
-			.stride = sizeof(Mesh::Vertex),
-			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-		};
-		constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
-			{
-             // location 0 : position
-             .location = 0,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,     position)),
-			 },
-			{
-             // location 1 : normal
-             .location = 1,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,       normal)),
-			 },
-			{
-             // location 2 : tangent (xyz + bitangent sign in w)
-             .location = 2,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,      tangent)),
-			 },
-			{
-             // location 3 : uv
-             .location = 3,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,           uv)),
-			 },
-			{
-             // location 4 : color
-             .location = 4,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,        color)),
-			 },
-			{
-             // location 5 : JOINTS_0
-             .location = 5,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32A32_UINT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
-			 },
-			{
-             // location 6 : WEIGHTS_0
-             .location = 6,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
-			 },
-		};
-		constexpr VkVertexInputAttributeDescription kShadowVertexAttributes[] = {
-			{
-             // location 0 : position
-             .location = 0,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex,     position)),
-			 },
-			{
-             // location 5 : JOINTS_0
-             .location = 5,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32A32_UINT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointIndices)),
-			 },
-			{
-             // location 6 : WEIGHTS_0
-             .location = 6,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32A32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(Mesh::Vertex, jointWeights)),
-			 },
-		};
-		constexpr VkVertexInputBindingDescription kVoxelVertexBinding{
-			.binding = 0,
-			.stride = sizeof(VoxelVertex),
-			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-		};
-		constexpr VkVertexInputAttributeDescription kVoxelVertexAttributes[] = {
-			{
-             // location 0 : position
-             .location = 0,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex, position)),
-			 },
-			{
-             // location 1 : packed (faceIndex + aoLevel)
-             .location = 1,
-             .binding = 0,
-             .format = VK_FORMAT_R32_UINT,
-             .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex,   packed)),
-			 },
-			{
-             // location 2 : uv (atlas UV)
-             .location = 2,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex,       uv)),
-			 },
-		};
-		const VkPipelineVertexInputStateCreateInfo kVoxelVertexInput{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &kVoxelVertexBinding,
-			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVoxelVertexAttributes)),
-			.pVertexAttributeDescriptions = kVoxelVertexAttributes,
-		};
-		// Position-only voxel vertex input - same stride as VoxelVertex so the
-		// GPU reads the right bytes, but only location 0 is declared, matching
-		// the voxel_shadow_depth.slang shader which doesn't read packed or uv.
-		constexpr VkVertexInputAttributeDescription kVoxelShadowVertexAttributes[] = {
-			{
-             // location 0 : position
-			        .location = 0,
-             .binding = 0,
-             .format = VK_FORMAT_R32G32B32_SFLOAT,
-             .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex, position)),
-			 },
-		};
-		const VkPipelineVertexInputStateCreateInfo kVoxelShadowVertexInput{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &kVoxelVertexBinding,
-			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVoxelShadowVertexAttributes)),
-			.pVertexAttributeDescriptions = kVoxelShadowVertexAttributes,
-		};
-		const VkPipelineVertexInputStateCreateInfo kEmptyVertexInput{
+		// All shader paths fetch vertex data via buffer device address - no vertex input bindings needed.
+		const VkPipelineVertexInputStateCreateInfo vertexInput{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
 		};
-		const VkPipelineVertexInputStateCreateInfo kShadowVertexInput{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &kVertexBinding,
-			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kShadowVertexAttributes)),
-			.pVertexAttributeDescriptions = kShadowVertexAttributes,
-		};
-		const VkPipelineVertexInputStateCreateInfo kMeshVertexInput{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &kVertexBinding,
-			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVertexAttributes)),
-			.pVertexAttributeDescriptions = kVertexAttributes,
-		};
-		const VkPipelineVertexInputStateCreateInfo& vertexInput = desc.noVertexInput ? kEmptyVertexInput : desc.shadowVertexInput ? kShadowVertexInput : desc.voxelShadowVertexInput ? kVoxelShadowVertexInput : desc.voxelVertexInput ? kVoxelVertexInput : kMeshVertexInput;
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
 			.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,

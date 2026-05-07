@@ -17,15 +17,17 @@ namespace aether
 		std::uint32_t skinJointCount = 0;
 		std::uint32_t _pad0 = 0;
 		glm::vec4 worldBoundingSphere{};
+		VkDeviceAddress vertexBufferAddr = 0; // BDA of the vertex data for this draw
 	};
 
-	static_assert(sizeof(DrawInstanceData) == 96, "DrawInstanceData layout changed - update shaders/include/RenderContracts.slangh.");
+	static_assert(sizeof(DrawInstanceData) == 104, "DrawInstanceData layout changed - update shaders/include/RenderContracts.slangh.");
 	static_assert(offsetof(DrawInstanceData, model) == 0);
 	static_assert(offsetof(DrawInstanceData, materialIndex) == 64);
 	static_assert(offsetof(DrawInstanceData, skinPaletteOffset) == 68);
 	static_assert(offsetof(DrawInstanceData, skinJointCount) == 72);
 	static_assert(offsetof(DrawInstanceData, _pad0) == 76);
 	static_assert(offsetof(DrawInstanceData, worldBoundingSphere) == 80);
+	static_assert(offsetof(DrawInstanceData, vertexBufferAddr) == 96);
 
 	struct DrawPushConstants
 	{

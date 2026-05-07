@@ -1,15 +1,9 @@
 // gltf_mesh.slang — Full PBR forward shader for all standard geometry.
 //
-// Vertex ABI:
-//   loc 0  POSITION    float3
-//   loc 1  NORMAL      float3
-//   loc 2  TANGENT     float4  (xyz = tangent, w = bitangent sign)
-//   loc 3  TEXCOORD_0  float2
-//   loc 4  COLOR_0     float3
-//   loc 5  JOINTS_0    uint4
-//   loc 6  WEIGHTS_0   float4
+// Vertex data is fetched via buffer device address stored in DrawInstanceData.vertexBufferAddr.
+// No vertex input bindings — the pipeline uses an empty vertex input state.
 //
-// Push constants  (16 bytes, matches aether::DrawPushConstants):
+// Push constants  (24 bytes, matches aether::DrawPushConstants):
 //   offset  0 : uint64_t  frameAddr         BDA → FrameConstantsData
 //   offset  8 : uint64_t  instanceDataAddr  BDA → DrawInstanceData[]
 //
@@ -83,17 +77,17 @@ struct GpuMaterial
 
 [[vk::push_constant]] DrawPushConstants pc;
 
-// ── Vertex I/O ────────────────────────────────────────────────────────────
+// ── Vertex layout (must match aether::Mesh::Vertex, 92 bytes) ─────────────
 
-struct VSInput
+struct Vertex
 {
-    [[vk::location(0)]] float3 position     : POSITION;
-    [[vk::location(1)]] float3 normal       : NORMAL;
-    [[vk::location(2)]] float4 tangent      : TANGENT;   // w = bitangent sign
-    [[vk::location(3)]] float2 uv           : TEXCOORD0;
-    [[vk::location(4)]] float3 color        : COLOR0;
-    [[vk::location(5)]] uint4  jointIndices : BLENDINDICES0;
-    [[vk::location(6)]] float4 jointWeights : BLENDWEIGHT0;
+    [[vk::offset(0)]]  float3 position;
+    [[vk::offset(12)]] float3 normal;
+    [[vk::offset(24)]] float4 tangent;      // w = bitangent sign
+    [[vk::offset(40)]] float2 uv;
+    [[vk::offset(48)]] float3 color;
+    [[vk::offset(60)]] uint4  jointIndices;
+    [[vk::offset(76)]] float4 jointWeights;
 };
 
 struct VSOutput
@@ -130,12 +124,15 @@ float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
 // per-instance id so we always address DrawInstanceData correctly for both direct
 // and indirect draws, independent of backend semantic mapping details.
 [shader("vertex")]
-VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
 {
     FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
     DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
     const uint instanceIndex = startInstance + instanceId;
     DrawInstanceData instance = instances[instanceIndex];
+
+    Vertex* verts = (Vertex*)(instance.vertexBufferAddr);
+    Vertex input = verts[vertexId];
 
     float4 worldPos;
     float3 worldNormal;

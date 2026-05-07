@@ -280,7 +280,6 @@ namespace aether
 		        .depthTestEnable = false,
 		        .depthWriteEnable = false,
 		        .blendEnable = true,
-		        .noVertexInput = true,
 		        .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
 		        .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		});

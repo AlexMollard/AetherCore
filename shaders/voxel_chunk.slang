@@ -58,11 +58,12 @@ struct GpuMaterial
 
 [[vk::push_constant]] DrawPushConstants pc;
 
-struct VSInput
+// Must match aether::VoxelVertex (24 bytes).
+struct VoxelVertex
 {
-    [[vk::location(0)]] float3 position : POSITION;
-    [[vk::location(1)]] uint   packed   : TEXCOORD1;
-    [[vk::location(2)]] float2 uv       : TEXCOORD0;
+    [[vk::offset(0)]]  float3 position;
+    [[vk::offset(12)]] uint   packed;
+    [[vk::offset(16)]] float2 uv;
 };
 
 struct VSOutput
@@ -76,11 +77,14 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(VSInput input, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
 {
     FrameConstantsData* fc        = (FrameConstantsData*)(pc.frameAddr);
     DrawInstanceData*   instances = (DrawInstanceData*)(pc.instanceDataAddr);
     const uint instanceIndex = startInstance + instanceId;
+
+    VoxelVertex* verts = (VoxelVertex*)(instances[instanceIndex].vertexBufferAddr);
+    VoxelVertex input = verts[vertexId];
 
     const float4x4 model    = instances[instanceIndex].model;
     const float4   worldPos = mul(model, float4(input.position, 1.0));

@@ -24,11 +24,6 @@ namespace aether
 		vkCmdDrawIndirectCount(m_cmd, indirectBuffer, indirectOffset, countBuffer, countOffset, maxDrawCount, stride);
 	}
 
-	void CommandRecorder::BindVertexBuffer(VkBuffer buffer, VkDeviceSize offset)
-	{
-		vkCmdBindVertexBuffers(m_cmd, 0, 1, &buffer, &offset);
-	}
-
 	void CommandRecorder::BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset, VkIndexType indexType)
 	{
 		vkCmdBindIndexBuffer(m_cmd, buffer, offset, indexType);

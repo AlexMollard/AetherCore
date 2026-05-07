@@ -69,7 +69,6 @@ namespace aether
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
 		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		                .shadowVertexInput = true,
 		        });
 		m_voxelShadowPipeline.Destroy();
 		m_voxelShadowPipeline = GraphicsPipeline::Create(device,
@@ -80,7 +79,6 @@ namespace aether
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
 		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		                .voxelShadowVertexInput = true,
 		        });
 	}
 

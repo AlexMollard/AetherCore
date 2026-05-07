@@ -2,28 +2,23 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <memory>
 #include <string_view>
 #include <vector>
-#include <vk_mem_alloc.h>
 #include "volk.hpp"
 
 #include "assets/GltfAsset.hpp"
-#include "UniqueBuffer.hpp"
+#include "GpuHeap.hpp"
 
 namespace aether
 {
+	class VulkanContext;
+
 	// GPU-friendly animation database.
 	// Flattens all animation clip data (keyframes, times, channels) into dense GPU buffers
 	// and maintains lookup tables for efficient per-frame sampling on compute shader.
 	//
-	// Data layout (all on GPU):
-	//   - Times buffer: flat array of all keyframe times (float)
-	//   - Values buffer: flat array of all keyframe values (vec4)
-	//   - Channels buffer: per-channel metadata with offsets into times/values
-	//   - Clips buffer: per-clip metadata (name, channel range, duration)
-	//   - Strings buffer: animation clip names (stored as UTF-8 with offsets)
-	//
+	// All data lives in a single device-local GpuHeap (one VkBuffer per database).
+	// Individual array addresses are exposed as VkDeviceAddress for push-constant use.
 	class AnimationDatabase
 	{
 	public:
@@ -74,24 +69,71 @@ namespace aether
 		AnimationDatabase& operator=(AnimationDatabase&&) noexcept = default;
 
 		// Build database from a glTF asset's animation collection.
-		// device/allocator must outlive this object.
-		static AnimationDatabase Create(VkDevice device, VmaAllocator allocator, const assets::GltfAsset& asset);
+		// ctx / uploadPool must outlive the Create call (not stored).
+		static AnimationDatabase Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset);
 
 		void Destroy();
 
 		// GPU buffer addresses (device addressable).
-		[[nodiscard]] VkDeviceAddress GetClipsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetChannelsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetTimesAddr() const;
-		[[nodiscard]] VkDeviceAddress GetValuesAddr() const;
-		[[nodiscard]] VkDeviceAddress GetStringsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetNodeParentsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetBindTranslationsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetBindRotationsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetBindScalesAddr() const;
-		[[nodiscard]] VkDeviceAddress GetSkinMetasAddr() const;
-		[[nodiscard]] VkDeviceAddress GetSkinJointsAddr() const;
-		[[nodiscard]] VkDeviceAddress GetSkinInverseBindsAddr() const;
+		[[nodiscard]] VkDeviceAddress GetClipsAddr() const
+		{
+			return m_clipsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetChannelsAddr() const
+		{
+			return m_channelsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetTimesAddr() const
+		{
+			return m_timesAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetValuesAddr() const
+		{
+			return m_valuesAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetStringsAddr() const
+		{
+			return m_stringsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetNodeParentsAddr() const
+		{
+			return m_nodeParentsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetBindTranslationsAddr() const
+		{
+			return m_bindTranslationsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetBindRotationsAddr() const
+		{
+			return m_bindRotationsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetBindScalesAddr() const
+		{
+			return m_bindScalesAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetSkinMetasAddr() const
+		{
+			return m_skinMetasAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetSkinJointsAddr() const
+		{
+			return m_skinJointsAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetSkinInverseBindsAddr() const
+		{
+			return m_skinInverseBindsAddr;
+		}
 
 		// CPU accessors for validation/debugging.
 		[[nodiscard]] std::uint32_t GetClipCount() const
@@ -117,25 +159,24 @@ namespace aether
 		}
 
 	private:
-		UniqueBuffer m_clipsBuffer;
-		UniqueBuffer m_channelsBuffer;
-		UniqueBuffer m_timesBuffer;
-		UniqueBuffer m_valuesBuffer;
-		UniqueBuffer m_stringsBuffer;
-		UniqueBuffer m_nodeParentsBuffer;
-		UniqueBuffer m_bindTranslationsBuffer;
-		UniqueBuffer m_bindRotationsBuffer;
-		UniqueBuffer m_bindScalesBuffer;
-		UniqueBuffer m_skinMetasBuffer;
-		UniqueBuffer m_skinJointsBuffer;
-		UniqueBuffer m_skinInverseBindsBuffer;
+		GpuHeap m_heap;
 
-		std::vector<GpuClip> m_clips; // CPU-side copy for debugging
-		std::string m_clipNames;      // Concatenated clip name strings
+		VkDeviceAddress m_clipsAddr = 0;
+		VkDeviceAddress m_channelsAddr = 0;
+		VkDeviceAddress m_timesAddr = 0;
+		VkDeviceAddress m_valuesAddr = 0;
+		VkDeviceAddress m_stringsAddr = 0;
+		VkDeviceAddress m_nodeParentsAddr = 0;
+		VkDeviceAddress m_bindTranslationsAddr = 0;
+		VkDeviceAddress m_bindRotationsAddr = 0;
+		VkDeviceAddress m_bindScalesAddr = 0;
+		VkDeviceAddress m_skinMetasAddr = 0;
+		VkDeviceAddress m_skinJointsAddr = 0;
+		VkDeviceAddress m_skinInverseBindsAddr = 0;
+
+		std::vector<GpuClip> m_clips; // CPU-side copy for GetClipName()
+		std::string m_clipNames;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_skinCount = 0;
-
-		VkDevice m_device = VK_NULL_HANDLE;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
 	};
 } // namespace aether

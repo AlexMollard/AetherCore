@@ -139,7 +139,6 @@ namespace aether::app
 		        .depthFormat = engine.GetSwapchainDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
-		        .voxelVertexInput = true,
 		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 

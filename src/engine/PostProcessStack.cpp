@@ -37,7 +37,6 @@ namespace aether
 		        {
 		                .shaderVfsPath = "shaders://tonemap.slang.spv",
 		                .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
-		                .noVertexInput = true,
 		                .pushConstantSize = 3 * sizeof(uint32_t),
 		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
 		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
@@ -47,7 +46,6 @@ namespace aether
 		        {
 		                .shaderVfsPath = "shaders://fxaa.slang.spv",
 		                .colorFormat = desc.swapchainFormat,
-		                .noVertexInput = true,
 		                .pushConstantSize = sizeof(uint32_t),
 		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
 		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
@@ -57,7 +55,6 @@ namespace aether
 		        {
 		                .shaderVfsPath = "shaders://tonemap.slang.spv",
 		                .colorFormat = desc.swapchainFormat,
-		                .noVertexInput = true,
 		                .pushConstantSize = 3 * sizeof(uint32_t),
 		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
 		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),

@@ -19,7 +19,6 @@ namespace aether
 		                .colorFormat = desc.hdrColorFormat,
 		                .depthTestEnable = false,
 		                .depthWriteEnable = false,
-		                .noVertexInput = true,
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
 		                .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 		        });

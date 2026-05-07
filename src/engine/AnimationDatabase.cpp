@@ -1,32 +1,41 @@
 #include "AnimationDatabase.hpp"
 
 #include <algorithm>
-#include <cstring>
 
-#include "AetherExceptions.hpp"
+#include "VulkanContext.hpp"
 
 namespace aether
 {
-	AnimationDatabase AnimationDatabase::Create(VkDevice device, VmaAllocator allocator, const assets::GltfAsset& asset)
+	// Helper: upload a non-empty CPU array into the heap and return its device address.
+	// Returns 0 when the input span is empty (no allocation made).
+	template<typename T>
+	static VkDeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, VkCommandPool pool)
+	{
+		if (data.empty())
+		{
+			return 0;
+		}
+		GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
+		heap.Upload(span, std::span<const T>(data), device, queue, pool);
+		return span.address;
+	}
+
+	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset)
 	{
 		AnimationDatabase db;
-		db.m_device = device;
-		db.m_allocator = allocator;
 		db.m_nodeCount = static_cast<std::uint32_t>(asset.nodes.size());
 		db.m_skinCount = static_cast<std::uint32_t>(asset.skins.size());
 
 		if (asset.animations.empty())
 		{
-			// Return empty but valid database.
 			return db;
 		}
 
-		// First pass: compute sizes and offsets.
+		// ── Build CPU arrays ─────────────────────────────────────────────────
 		std::vector<GpuClip> gpuClips;
 		std::vector<GpuChannel> gpuChannels;
 		std::vector<float> allTimes;
 		std::vector<glm::vec4> allValues;
-		std::string allStrings;
 		std::vector<std::int32_t> nodeParents;
 		std::vector<glm::vec4> bindTranslations;
 		std::vector<glm::vec4> bindRotations;
@@ -34,6 +43,7 @@ namespace aether
 		std::vector<GpuSkinMeta> skinMetas;
 		std::vector<std::uint32_t> skinJoints;
 		std::vector<glm::mat4> skinInverseBinds;
+		std::string allStrings; // last - may have non-4-multiple byte count
 
 		std::uint32_t currentChannelOffset = 0;
 
@@ -114,230 +124,46 @@ namespace aether
 			skinMetas.push_back(meta);
 		}
 
-		const VmaAllocationCreateInfo uploadAllocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO,
-		};
+		// ── Size the heap and upload all arrays ──────────────────────────────
+		// All element types below are multiples of 4 bytes, so sequential allocations
+		// stay 4-byte aligned (required by scalarBlockLayout). Strings go last since
+		// their byte count may not be a multiple of 4.
+		VkDeviceSize totalBytes = gpuClips.size() * sizeof(GpuClip);
+		totalBytes += gpuChannels.size() * sizeof(GpuChannel);
+		totalBytes += allTimes.size() * sizeof(float);
+		totalBytes += allValues.size() * sizeof(glm::vec4);
+		totalBytes += nodeParents.size() * sizeof(std::int32_t);
+		totalBytes += bindTranslations.size() * sizeof(glm::vec4);
+		totalBytes += bindRotations.size() * sizeof(glm::vec4);
+		totalBytes += bindScales.size() * sizeof(glm::vec4);
+		totalBytes += skinMetas.size() * sizeof(GpuSkinMeta);
+		totalBytes += skinJoints.size() * sizeof(std::uint32_t);
+		totalBytes += skinInverseBinds.size() * sizeof(glm::mat4);
+		totalBytes += allStrings.size();
 
-		if (!gpuClips.empty())
-		{
-			const VkBufferCreateInfo clipsInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = gpuClips.size() * sizeof(GpuClip),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_clipsBuffer = UniqueBuffer::Create(allocator, device, clipsInfo, uploadAllocInfo);
+		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes });
 
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_clipsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation clips buffer");
-			}
-			std::memcpy(mapped, gpuClips.data(), static_cast<size_t>(clipsInfo.size));
-			vmaUnmapMemory(allocator, db.m_clipsBuffer.GetAllocation());
-		}
+		VkDevice device = ctx.GetDevice().device;
+		VkQueue queue = ctx.GetGraphicsQueue();
 
-		if (!gpuChannels.empty())
-		{
-			const VkBufferCreateInfo channelsInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = gpuChannels.size() * sizeof(GpuChannel),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_channelsBuffer = UniqueBuffer::Create(allocator, device, channelsInfo, uploadAllocInfo);
+		db.m_clipsAddr = UploadArray(db.m_heap, gpuClips, device, queue, uploadPool);
+		db.m_channelsAddr = UploadArray(db.m_heap, gpuChannels, device, queue, uploadPool);
+		db.m_timesAddr = UploadArray(db.m_heap, allTimes, device, queue, uploadPool);
+		db.m_valuesAddr = UploadArray(db.m_heap, allValues, device, queue, uploadPool);
+		db.m_nodeParentsAddr = UploadArray(db.m_heap, nodeParents, device, queue, uploadPool);
+		db.m_bindTranslationsAddr = UploadArray(db.m_heap, bindTranslations, device, queue, uploadPool);
+		db.m_bindRotationsAddr = UploadArray(db.m_heap, bindRotations, device, queue, uploadPool);
+		db.m_bindScalesAddr = UploadArray(db.m_heap, bindScales, device, queue, uploadPool);
+		db.m_skinMetasAddr = UploadArray(db.m_heap, skinMetas, device, queue, uploadPool);
+		db.m_skinJointsAddr = UploadArray(db.m_heap, skinJoints, device, queue, uploadPool);
+		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, skinInverseBinds, device, queue, uploadPool);
 
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_channelsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation channels buffer");
-			}
-			std::memcpy(mapped, gpuChannels.data(), static_cast<size_t>(channelsInfo.size));
-			vmaUnmapMemory(allocator, db.m_channelsBuffer.GetAllocation());
-		}
-
-		if (!allTimes.empty())
-		{
-			const VkBufferCreateInfo timesInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = allTimes.size() * sizeof(float),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_timesBuffer = UniqueBuffer::Create(allocator, device, timesInfo, uploadAllocInfo);
-
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_timesBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation times buffer");
-			}
-			std::memcpy(mapped, allTimes.data(), static_cast<size_t>(timesInfo.size));
-			vmaUnmapMemory(allocator, db.m_timesBuffer.GetAllocation());
-		}
-
-		if (!allValues.empty())
-		{
-			const VkBufferCreateInfo valuesInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = allValues.size() * sizeof(glm::vec4),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_valuesBuffer = UniqueBuffer::Create(allocator, device, valuesInfo, uploadAllocInfo);
-
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_valuesBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation values buffer");
-			}
-			std::memcpy(mapped, allValues.data(), static_cast<size_t>(valuesInfo.size));
-			vmaUnmapMemory(allocator, db.m_valuesBuffer.GetAllocation());
-		}
-
+		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())
 		{
-			const VkBufferCreateInfo stringsInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = allStrings.size(),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_stringsBuffer = UniqueBuffer::Create(allocator, device, stringsInfo, uploadAllocInfo);
-
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_stringsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation strings buffer");
-			}
-			std::memcpy(mapped, allStrings.data(), allStrings.size());
-			vmaUnmapMemory(allocator, db.m_stringsBuffer.GetAllocation());
-		}
-
-		if (!nodeParents.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = nodeParents.size() * sizeof(std::int32_t),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_nodeParentsBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_nodeParentsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation node-parents buffer");
-			}
-			std::memcpy(mapped, nodeParents.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_nodeParentsBuffer.GetAllocation());
-		}
-
-		if (!bindTranslations.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = bindTranslations.size() * sizeof(glm::vec4),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_bindTranslationsBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_bindTranslationsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation bind-translation buffer");
-			}
-			std::memcpy(mapped, bindTranslations.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_bindTranslationsBuffer.GetAllocation());
-		}
-
-		if (!bindRotations.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = bindRotations.size() * sizeof(glm::vec4),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_bindRotationsBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_bindRotationsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation bind-rotation buffer");
-			}
-			std::memcpy(mapped, bindRotations.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_bindRotationsBuffer.GetAllocation());
-		}
-
-		if (!bindScales.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = bindScales.size() * sizeof(glm::vec4),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_bindScalesBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_bindScalesBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation bind-scale buffer");
-			}
-			std::memcpy(mapped, bindScales.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_bindScalesBuffer.GetAllocation());
-		}
-
-		if (!skinMetas.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = skinMetas.size() * sizeof(GpuSkinMeta),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_skinMetasBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_skinMetasBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation skin-meta buffer");
-			}
-			std::memcpy(mapped, skinMetas.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_skinMetasBuffer.GetAllocation());
-		}
-
-		if (!skinJoints.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = skinJoints.size() * sizeof(std::uint32_t),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_skinJointsBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_skinJointsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation skin-joints buffer");
-			}
-			std::memcpy(mapped, skinJoints.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_skinJointsBuffer.GetAllocation());
-		}
-
-		if (!skinInverseBinds.empty())
-		{
-			const VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = skinInverseBinds.size() * sizeof(glm::mat4),
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			};
-			db.m_skinInverseBindsBuffer = UniqueBuffer::Create(allocator, device, info, uploadAllocInfo);
-			void* mapped = nullptr;
-			const VkResult mapResult = vmaMapMemory(allocator, db.m_skinInverseBindsBuffer.GetAllocation(), &mapped);
-			if (mapResult != VK_SUCCESS || mapped == nullptr)
-			{
-				throw VulkanError("Failed to map animation inverse-bind buffer");
-			}
-			std::memcpy(mapped, skinInverseBinds.data(), static_cast<size_t>(info.size));
-			vmaUnmapMemory(allocator, db.m_skinInverseBindsBuffer.GetAllocation());
+			GpuSpan<char> span = db.m_heap.Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
+			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
+			db.m_stringsAddr = span.address;
 		}
 
 		return db;
@@ -345,84 +171,23 @@ namespace aether
 
 	void AnimationDatabase::Destroy()
 	{
-		m_skinInverseBindsBuffer.Reset();
-		m_skinJointsBuffer.Reset();
-		m_skinMetasBuffer.Reset();
-		m_bindScalesBuffer.Reset();
-		m_bindRotationsBuffer.Reset();
-		m_bindTranslationsBuffer.Reset();
-		m_nodeParentsBuffer.Reset();
-		m_stringsBuffer.Reset();
-		m_valuesBuffer.Reset();
-		m_timesBuffer.Reset();
-		m_channelsBuffer.Reset();
-		m_clipsBuffer.Reset();
+		m_heap.Shutdown();
+		m_clipsAddr = 0;
+		m_channelsAddr = 0;
+		m_timesAddr = 0;
+		m_valuesAddr = 0;
+		m_stringsAddr = 0;
+		m_nodeParentsAddr = 0;
+		m_bindTranslationsAddr = 0;
+		m_bindRotationsAddr = 0;
+		m_bindScalesAddr = 0;
+		m_skinMetasAddr = 0;
+		m_skinJointsAddr = 0;
+		m_skinInverseBindsAddr = 0;
 		m_clips.clear();
 		m_clipNames.clear();
 		m_nodeCount = 0;
 		m_skinCount = 0;
-		m_device = VK_NULL_HANDLE;
-		m_allocator = VK_NULL_HANDLE;
-	}
-
-	VkDeviceAddress AnimationDatabase::GetClipsAddr() const
-	{
-		return m_clipsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetChannelsAddr() const
-	{
-		return m_channelsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetTimesAddr() const
-	{
-		return m_timesBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetValuesAddr() const
-	{
-		return m_valuesBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetStringsAddr() const
-	{
-		return m_stringsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetNodeParentsAddr() const
-	{
-		return m_nodeParentsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetBindTranslationsAddr() const
-	{
-		return m_bindTranslationsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetBindRotationsAddr() const
-	{
-		return m_bindRotationsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetBindScalesAddr() const
-	{
-		return m_bindScalesBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetSkinMetasAddr() const
-	{
-		return m_skinMetasBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetSkinJointsAddr() const
-	{
-		return m_skinJointsBuffer.GetDeviceAddress();
-	}
-
-	VkDeviceAddress AnimationDatabase::GetSkinInverseBindsAddr() const
-	{
-		return m_skinInverseBindsBuffer.GetDeviceAddress();
 	}
 
 	std::string_view AnimationDatabase::GetClipName(std::uint32_t clipIndex) const

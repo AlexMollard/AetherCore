@@ -534,7 +534,7 @@ namespace aether
 			loaded.animator = ModelAnimator::Create(m_context->GetDevice().device, m_context->GetAllocator(), source);
 			if (!source.animations.empty())
 			{
-				loaded.animationDb = AnimationDatabase::Create(m_context->GetDevice().device, m_context->GetAllocator(), source);
+				loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
 			}
 		}
 
