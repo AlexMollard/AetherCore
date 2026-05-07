@@ -82,6 +82,10 @@ if(AETHERCORE_ENABLE_UNITY_BUILD)
         "${CMAKE_CURRENT_SOURCE_DIR}/VmaImplementation.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/GltfAsset.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/physics/PhysicsSystem.cpp"
+        # DirectoryBackend and PakBackend both define GlobToRegex in an anonymous
+        # namespace; unity merges them into one TU causing an ODR collision.
+        "${CMAKE_CURRENT_SOURCE_DIR}/io/DirectoryBackend.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/io/PakBackend.cpp"
         PROPERTIES SKIP_UNITY_BUILD_INCLUSION ON
     )
 endif()

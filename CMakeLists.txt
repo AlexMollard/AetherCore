@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 4.0)
 project(AetherCore VERSION 0.1.0 LANGUAGES CXX)
 
+# Explicitly enforce C++20 globally so GCC doesn't silently fall back to C++17.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
 # Build-speed knobs (especially useful with Visual Studio generator).

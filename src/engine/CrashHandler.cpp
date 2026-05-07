@@ -605,7 +605,7 @@ namespace aether
 #ifdef _WIN32
 						 EXCEPTION_POINTERS* exceptionPointers,
 #else
-						 void* /*exceptionPointers*/,
+						 void* exceptionPointers,
 #endif
 						 int signalNumber)
 		{
