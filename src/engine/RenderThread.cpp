@@ -45,7 +45,7 @@ namespace aether
 		m_cv.notify_one(); // wake the render thread
 
 		// Wait for the render thread to pick up the packet ("consumed").
-		// This is just thread scheduling latency — the render thread signals consumed
+		// This is just thread scheduling latency - the render thread signals consumed
 		// immediately on waking, before doing any fence wait or recording.
 		{
 			std::unique_lock lock(m_mutex);
@@ -81,7 +81,7 @@ namespace aether
 				m_consumed = true;
 				m_executing = true;
 			}
-			// Unblock the game thread as early as possible — before the fence wait.
+			// Unblock the game thread as early as possible - before the fence wait.
 			// The game thread can now start the next simulation frame while the render
 			// thread blocks on the GPU fence in the background.
 			m_cv.notify_all();

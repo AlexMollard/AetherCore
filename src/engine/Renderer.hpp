@@ -12,7 +12,7 @@ namespace aether
 	class CameraManager;
 	enum class TonemapMode : std::uint32_t;
 
-	// Renderer service — owns all rendering configuration and post-processing.
+	// Renderer service - owns all rendering configuration and post-processing.
 	class Renderer
 	{
 	public:

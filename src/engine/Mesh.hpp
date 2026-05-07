@@ -8,7 +8,7 @@
 
 namespace aether
 {
-	// GPU-resident vertex buffer. Created via AetherCore::CreateMesh — app code
+	// GPU-resident vertex buffer. Created via AetherCore::CreateMesh - app code
 	// never touches VMA or VkBuffer directly.
 	class Mesh
 	{

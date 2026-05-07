@@ -54,7 +54,7 @@ namespace aether
 		        .device = m_vulkanContext.GetDevice().device,
 		});
 
-		// Upload command pool — transient, per-buffer reset.
+		// Upload command pool - transient, per-buffer reset.
 		const VkCommandPoolCreateInfo uploadPoolInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
@@ -110,7 +110,7 @@ namespace aether
 
 		if (m_asyncComputeEnabled)
 		{
-			// Timeline semaphore for compute→graphics synchronisation across frames in flight.
+			// Timeline semaphore for compute->graphics synchronisation across frames in flight.
 			const VkSemaphoreTypeCreateInfo timelineTypeInfo{
 				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
 				.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,

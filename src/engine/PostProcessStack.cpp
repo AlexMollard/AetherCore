@@ -122,7 +122,7 @@ namespace aether
 			return;
 		}
 
-		// FXAA: tonemap → LDR intermediate, then FXAA → swapchain.
+		// FXAA: tonemap -> LDR intermediate, then FXAA -> swapchain.
 		graph.AddPass("$PostProcess")
 		        .ReadTexture(m_hdrColor)
 		        .WriteColor(m_ldrColor, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, {})

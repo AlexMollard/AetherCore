@@ -18,9 +18,9 @@ namespace aether
 	// again each time the render graph is rebuilt.
 	//
 	// Lifetime contract:
-	//   1. Create()        — allocates the Vulkan pipeline
-	//   2. RegisterPass()  — adds "$Skybox" to the graph; called every rebuild
-	//   3. Destroy()       — releases the pipeline; call before device shutdown
+	//   1. Create()        - allocates the Vulkan pipeline
+	//   2. RegisterPass()  - adds "$Skybox" to the graph; called every rebuild
+	//   3. Destroy()       - releases the pipeline; call before device shutdown
 	class SkyboxPass
 	{
 	public:
@@ -43,7 +43,7 @@ namespace aether
 
 		// Add the "$Skybox" pass to the render graph.
 		// Must be called each time the graph is rebuilt, before "$EngineForward".
-		// hdrColor — the HDR offscreen buffer this pass will clear and fill.
+		// hdrColor - the HDR offscreen buffer this pass will clear and fill.
 		void RegisterPass(RenderGraph& graph, RGImage hdrColor);
 
 	private:

@@ -151,17 +151,17 @@ namespace aether::app
 			const int refreshRate = m_engine.GetWindow().GetDisplayRefreshRate();
 			if (refreshRate > 0)
 			{
-				INFO(LogCategory::App, "Display refresh rate: {} Hz — setting frame pacer target.", refreshRate);
+				INFO(LogCategory::App, "Display refresh rate: {} Hz - setting frame pacer target.", refreshRate);
 				m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
 			}
 			else
 			{
-				WARN(LogCategory::App, "Could not query display refresh rate — frame pacer running uncapped.");
+				WARN(LogCategory::App, "Could not query display refresh rate - frame pacer running uncapped.");
 			}
 		}
 		else
 		{
-			INFO(LogCategory::App, "VSync is off and TargetFPS is 0 — frame pacer running uncapped.");
+			INFO(LogCategory::App, "VSync is off and TargetFPS is 0 - frame pacer running uncapped.");
 		}
 
 		auto previousFrameTime = std::chrono::steady_clock::now();
@@ -171,8 +171,8 @@ namespace aether::app
 			AE_PROFILE_ZONE_N("Frame");
 
 			// Pace to the target FPS.  Sleeps the game thread (coarse) then spins (fine)
-			// until the next frame deadline.  Placing this at the top of the loop — before
-			// deltaTime is measured — means:
+			// until the next frame deadline.  Placing this at the top of the loop - before
+			// deltaTime is measured - means:
 			//   a) deltaTime is accurate (it includes the sleep).
 			//   b) SubmitFrame() below will not stall: the render thread has had ~targetDuration
 			//      to finish the previous frame before we ask it to accept the next one.
@@ -212,7 +212,7 @@ namespace aether::app
 			// BEFORE UpdateAll so that any layer that calls RenderQueue::Submit
 			// (e.g. ChunkManager::SubmitDraws) lands in the correct slot.
 			// We also clear the slot here so stale draws from two frames ago are
-			// discarded — PrepareFrame will append ECS draws on top of these.
+			// discarded - PrepareFrame will append ECS draws on top of these.
 			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
 			m_engine.GetRenderQueue().SetWriteSlot(drawSlot);
 			m_engine.GetRenderQueue().Clear(drawSlot);

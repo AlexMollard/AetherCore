@@ -28,7 +28,7 @@ namespace aether::app
 	//   - R resets the scene, C swaps camera
 	//
 	// All bodies use fixed-step Jolt simulation (60 Hz) with render interpolation,
-	// so the scene is frame-rate-independent and deterministic — ready for networking.
+	// so the scene is frame-rate-independent and deterministic - ready for networking.
 	class PhysicsGameSystem final : public aether::System
 	{
 	public:

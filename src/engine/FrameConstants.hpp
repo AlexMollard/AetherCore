@@ -63,7 +63,7 @@ namespace aether
 	};
 
 	static_assert(sizeof(FrameConstants) == 624,
-	        "FrameConstants layout changed — update the Slang structs in "
+	        "FrameConstants layout changed - update the Slang structs in "
 	        "gltf_mesh.slang and skybox.slang.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);

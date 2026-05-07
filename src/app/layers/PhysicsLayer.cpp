@@ -16,7 +16,7 @@ namespace aether::app
 	{
 		INFO(aether::LogCategory::App, "PhysicsLayer attached.");
 
-		// Register the physics system first — the game system's OnRegister
+		// Register the physics system first - the game system's OnRegister
 		// calls AddBoxBody / AddSphereBody, so physics must already be alive.
 		auto physics = std::make_unique<aether::PhysicsSystem>();
 		m_physics = physics.get();

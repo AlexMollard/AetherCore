@@ -24,7 +24,7 @@ namespace voxel
 		return x + kPaddedSize * (y + kPaddedSize * z);
 	}
 
-	// ChunkMesher — builds a simple face-culling mesh for a single chunk.
+	// ChunkMesher - builds a simple face-culling mesh for a single chunk.
 	//
 	// Algorithm: for every voxel face that borders a transparent/air block, emit
 	// two triangles.  Greedy merging may be added later; the current approach is

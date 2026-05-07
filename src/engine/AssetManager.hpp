@@ -23,7 +23,7 @@ namespace aether
 	struct LoadedModelPrimitive;
 	struct Entity;
 
-	// Asset manager service — owns GPU resource creation and loading.
+	// Asset manager service - owns GPU resource creation and loading.
 	class AssetManager
 	{
 	public:

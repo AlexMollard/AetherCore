@@ -14,7 +14,7 @@ namespace aether
 
 namespace voxel
 {
-	// Block registry — holds the definition and atlas UV data for every block type.
+	// Block registry - holds the definition and atlas UV data for every block type.
 	//
 	// At startup, call:
 	//   BlockRegistry reg;

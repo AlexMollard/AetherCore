@@ -203,7 +203,7 @@ namespace aether
 			.vertexAttributeDescriptionCount = static_cast<std::uint32_t>(std::size(kVoxelVertexAttributes)),
 			.pVertexAttributeDescriptions = kVoxelVertexAttributes,
 		};
-		// Position-only voxel vertex input — same stride as VoxelVertex so the
+		// Position-only voxel vertex input - same stride as VoxelVertex so the
 		// GPU reads the right bytes, but only location 0 is declared, matching
 		// the voxel_shadow_depth.slang shader which doesn't read packed or uv.
 		constexpr VkVertexInputAttributeDescription kVoxelShadowVertexAttributes[] = {

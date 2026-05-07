@@ -111,7 +111,7 @@ namespace aether
 		void SetPosition(JPH::BodyID id, glm::vec3 position);
 		void SetRotation(JPH::BodyID id, glm::quat rotation);
 
-		// Raw Jolt system — for advanced use (raycasts, queries, etc.).
+		// Raw Jolt system - for advanced use (raycasts, queries, etc.).
 		[[nodiscard]] JPH::PhysicsSystem& GetJoltSystem() { return *m_physics; }
 		[[nodiscard]] const JPH::PhysicsSystem& GetJoltSystem() const { return *m_physics; }
 
@@ -122,7 +122,7 @@ namespace aether
 		void StepPhysics();
 		void SyncTransforms(World& world, float alpha);
 
-		// Jolt internal implementations — defined in .cpp to keep header light.
+		// Jolt internal implementations - defined in .cpp to keep header light.
 		struct BPLayerInterface;
 		struct ObjVsBPLayerFilter;
 		struct ObjVsObjLayerFilter;

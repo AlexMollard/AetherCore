@@ -24,7 +24,7 @@ namespace aether
 	{
 		const VkDeviceSize totalBytes = vertexBytes + indexBytes;
 		if (m_ringHead + totalBytes > kStagingCapacity)
-			return false; // staging full — retry next frame
+			return false; // staging full - retry next frame
 
 		auto* mapped = static_cast<std::uint8_t*>(m_staging.GetAllocationInfo().pMappedData);
 
@@ -57,7 +57,7 @@ namespace aether
 			vkCmdCopyBuffer(cmd, copy.srcBuffer, copy.dstBuffer, 1, &region);
 		}
 
-		// Barrier: transfer-write → vertex-attribute-read and index-read.
+		// Barrier: transfer-write -> vertex-attribute-read and index-read.
 		const VkMemoryBarrier2 barrier{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 			.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,

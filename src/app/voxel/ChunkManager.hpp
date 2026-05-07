@@ -49,14 +49,14 @@ namespace voxel
 		// Index 0 = (-1,-1,-1) corner; visible voxels at [1, kChunkSize].
 		std::vector<std::uint16_t> paddedBlocks;
 
-		// Renderable GPU mesh — empty until first build.
+		// Renderable GPU mesh - empty until first build.
 		aether::DynamicMesh mesh;
 
 		bool needsRebuild = true;
 		bool isEmpty = false; // true once meshing confirms all-air
 	};
 
-	// ChunkManager — owns all loaded chunks and drives mesh rebuilds + draw submission.
+	// ChunkManager - owns all loaded chunks and drives mesh rebuilds + draw submission.
 	//
 	// Usage (one-time setup):
 	//   ChunkManager mgr;
@@ -107,10 +107,10 @@ namespace voxel
 		[[nodiscard]] DebugStats GetDebugStats() const;
 
 	private:
-		// Convert world block coord → chunk coord.
+		// Convert world block coord -> chunk coord.
 		static glm::ivec3 ChunkCoord(const glm::ivec3& worldPos);
 
-		// Convert world block coord → local coord within chunk [0, kChunkSize).
+		// Convert world block coord -> local coord within chunk [0, kChunkSize).
 		static glm::ivec3 LocalCoord(const glm::ivec3& worldPos);
 
 		// Get or create a chunk, returning a pointer to it.
@@ -125,7 +125,7 @@ namespace voxel
 		static constexpr int kMaxUploadsPerFrame = 8;
 
 		// Rebuild the mesh for a single chunk.
-		// Returns false if the staging ring was full/failed — chunk stays dirty for next frame.
+		// Returns false if the staging ring was full/failed - chunk stays dirty for next frame.
 		bool RebuildChunk(const glm::ivec3& chunkCoord, Chunk& chunk);
 
 		std::unordered_map<glm::ivec3, std::unique_ptr<Chunk>, ChunkCoordHash, ChunkCoordEq> m_chunks;

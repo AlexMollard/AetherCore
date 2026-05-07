@@ -16,7 +16,7 @@ namespace aether
 	//
 	// Entities must have at minimum a PipelineComponent + MeshComponent +
 	// TransformComponent to be emitted by FlushToQueue().  MaterialComponent is
-	// optional — entities without it fall back to vertex colour in the shader.
+	// optional - entities without it fall back to vertex colour in the shader.
 	class World
 	{
 	public:

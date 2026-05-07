@@ -77,7 +77,7 @@ namespace aether
 	Mesh Mesh::CreateView(VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset)
 	{
 		Mesh mesh;
-		// m_allocator intentionally left null — Destroy() skips vmaDestroyBuffer for views.
+		// m_allocator intentionally left null - Destroy() skips vmaDestroyBuffer for views.
 		mesh.m_buffer = vertexBuffer;
 		mesh.m_vertexCount = vertexCount;
 		mesh.m_vertexByteOffset = vertexByteOffset;

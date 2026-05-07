@@ -29,7 +29,7 @@ namespace aether
 		m_prevKeys = m_currKeys;
 		m_prevMouseButtons = m_currMouseButtons;
 
-		// Snapshot keyboard — glfwGetKey returns GLFW_RELEASE for any
+		// Snapshot keyboard - glfwGetKey returns GLFW_RELEASE for any
 		// key code that is not currently pressed (including unmapped codes).
 		for (int i = 0; i < kMaxKeys; ++i)
 			m_currKeys[i] = (glfwGetKey(m_window, i) == GLFW_PRESS);

@@ -32,7 +32,7 @@ namespace aether::io
 
 		FileSystemBackend* s_backend = nullptr;
 
-		// Splits "mountpoint://relative/path" → { "mountpoint", "relative/path" }
+		// Splits "mountpoint://relative/path" -> { "mountpoint", "relative/path" }
 		std::pair<std::string_view, std::string_view> ParseVirtualPath(std::string_view virtualPath)
 		{
 			constexpr std::string_view separator = "://";
@@ -74,7 +74,7 @@ namespace aether::io
 	{
 		if (s_backend != nullptr)
 		{
-			WARN(LogCategory::FileSystem, "FileSystem::Initialize() called more than once — ignoring.");
+			WARN(LogCategory::FileSystem, "FileSystem::Initialize() called more than once - ignoring.");
 			return;
 		}
 

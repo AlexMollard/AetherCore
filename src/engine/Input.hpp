@@ -130,7 +130,7 @@ namespace aether
 		B8 = 7,
 	};
 
-	// Input manager — updated once per frame by AetherCore::BeginFrame().
+	// Input manager - updated once per frame by AetherCore::BeginFrame().
 	// Provides edge-triggered pressed/released queries so callers do not
 	// need to track previous-frame state themselves.
 	class Input
@@ -182,9 +182,9 @@ namespace aether
 	private:
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 
-		// GLFW_KEY_LAST = 348  →  349 slots cover every defined key code.
+		// GLFW_KEY_LAST = 348  ->  349 slots cover every defined key code.
 		static constexpr int kMaxKeys = 349;
-		// GLFW_MOUSE_BUTTON_LAST = 7  →  8 buttons.
+		// GLFW_MOUSE_BUTTON_LAST = 7  ->  8 buttons.
 		static constexpr int kMaxMouseButtons = 8;
 
 		GLFWwindow* m_window = nullptr;

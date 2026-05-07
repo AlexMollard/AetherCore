@@ -704,7 +704,7 @@ namespace aether
 
 		if (sortedIndices.size() != N)
 		{
-			WARN(LogCategory::Engine, "RenderGraph: cycle detected — falling back to declaration order.");
+			WARN(LogCategory::Engine, "RenderGraph: cycle detected - falling back to declaration order.");
 			sortedIndices.resize(N);
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}

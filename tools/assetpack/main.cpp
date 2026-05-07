@@ -1,4 +1,4 @@
-// AssetPacker — build-time tool that bundles a source-asset directory into a
+// AssetPacker - build-time tool that bundles a source-asset directory into a
 // single binary (.pak) file consumed by the runtime PakBackend.
 //
 // Usage:

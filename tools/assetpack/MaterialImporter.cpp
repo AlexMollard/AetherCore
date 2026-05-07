@@ -36,7 +36,7 @@ int MaterialImporter::ImportDirectory(const fs::path& sourceDir)
 }
 
 // ---------------------------------------------------------------------------
-// Private — file-write helpers
+// Private - file-write helpers
 // ---------------------------------------------------------------------------
 
 bool MaterialImporter::ShouldWrite(const fs::path& outPath)
@@ -138,7 +138,7 @@ bool MaterialImporter::GeneratePropertiesForFolder(const fs::path& folder)
 	}
 	else if (roughness)
 	{
-		// No combined ORM map found — promote the roughness-only map to the
+		// No combined ORM map found - promote the roughness-only map to the
 		// metallicRoughness slot and zero out metallic via the scalar factor so
 		// the shader doesn't read junk from the blue channel.
 		out << "metallicRoughness = \"" << *roughness << "\"\n";
@@ -158,7 +158,7 @@ bool MaterialImporter::GeneratePropertiesForFolder(const fs::path& folder)
 }
 
 // ---------------------------------------------------------------------------
-// Private — string / texture-matching helpers
+// Private - string / texture-matching helpers
 // ---------------------------------------------------------------------------
 
 std::string MaterialImporter::ToLowerAscii(std::string s)

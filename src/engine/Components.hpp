@@ -39,7 +39,7 @@ namespace aether
 	};
 
 	// BDA of a joint-matrix palette for a skinned mesh.
-	// Absent on non-skinned entities — World falls back to skinBufferAddr = 0.
+	// Absent on non-skinned entities - World falls back to skinBufferAddr = 0.
 	struct SkinComponent
 	{
 		VkDeviceAddress sourceSkinBufferAddr = 0;

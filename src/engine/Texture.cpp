@@ -7,7 +7,7 @@
 #include <vector>
 #include "volk.hpp"
 
-// stb_image — single-header image loader.
+// stb_image - single-header image loader.
 // STB_IMAGE_IMPLEMENTATION must be defined in exactly one compilation unit.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>

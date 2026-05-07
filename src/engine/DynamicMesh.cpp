@@ -53,7 +53,7 @@ namespace aether
 		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, arena.GetVertexBuffer(), m_alloc.vertexByteOffset, indices, indexBytes, arena.GetIndexBuffer(), m_alloc.indexByteOffset);
 		if (!queued)
 		{
-			// Staging ring full this frame — release the arena slot immediately so
+			// Staging ring full this frame - release the arena slot immediately so
 			// no stale / uninitialised geometry is submitted, and signal the caller
 			// to retry next frame.
 			arena.Free(m_alloc);

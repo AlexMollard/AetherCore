@@ -15,21 +15,21 @@ namespace aether
 	// Tonemap operator applied in the $PostProcess pass.
 	enum class TonemapMode : uint32_t
 	{
-		Reinhard = 0,   // x / (x + 1) — simple, cheap
-		AcesFilmic = 1, // Narkowicz 2015 fit — filmic toe + shoulder
-		Uncharted2 = 2, // John Hable curve — warm filmic look
+		Reinhard = 0,   // x / (x + 1) - simple, cheap
+		AcesFilmic = 1, // Narkowicz 2015 fit - filmic toe + shoulder
+		Uncharted2 = 2, // John Hable curve - warm filmic look
 	};
 
 	// Owns the offscreen images and pipelines for the engine's post-processing
-	// chain: forward HDR buffer → tonemap → FXAA → swapchain.
+	// chain: forward HDR buffer -> tonemap -> FXAA -> swapchain.
 	//
 	// Lifetime contract
 	// -----------------
-	//  1. Create()         — allocates GPU resources, registers images with the
+	//  1. Create()         - allocates GPU resources, registers images with the
 	//  graph
-	//  2. RegisterPasses() — adds $PostProcess and $FXAA passes to the graph;
+	//  2. RegisterPasses() - adds $PostProcess and $FXAA passes to the graph;
 	//                        must be called every time the graph is rebuilt
-	//  3. Destroy()        — releases all GPU resources; call before or during
+	//  3. Destroy()        - releases all GPU resources; call before or during
 	//                        swapchain recreation
 	//
 	// The stack is non-copyable and move-only.  After a move it is in a valid
@@ -65,8 +65,8 @@ namespace aether
 			return VK_FORMAT_R16G16B16A16_SFLOAT;
 		}
 
-		// RenderGraph handle for the HDR buffer — pass to the forward pass's
-		// WriteColor() so the graph tracks the write→read dependency.
+		// RenderGraph handle for the HDR buffer - pass to the forward pass's
+		// WriteColor() so the graph tracks the write->read dependency.
 		[[nodiscard]] RGImage GetHdrColor() const
 		{
 			return m_hdrColor;
@@ -111,14 +111,14 @@ namespace aether
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
 
 	private:
-		UniqueImage m_hdrColorImage; // R16G16B16A16_SFLOAT — forward output
+		UniqueImage m_hdrColorImage; // R16G16B16A16_SFLOAT - forward output
 		RGImage m_hdrColor{};
-		GraphicsPipeline m_tonemapPipeline; // HDR → LDR
+		GraphicsPipeline m_tonemapPipeline; // HDR -> LDR
 
-		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM — tonemap output
+		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM - tonemap output
 		RGImage m_ldrColor{};
-		GraphicsPipeline m_fxaaPipeline;             // LDR → swapchain (FXAA)
-		GraphicsPipeline m_tonemapPipelineSwapchain; // HDR → swapchain (no FXAA path)
+		GraphicsPipeline m_fxaaPipeline;             // LDR -> swapchain (FXAA)
+		GraphicsPipeline m_tonemapPipelineSwapchain; // HDR -> swapchain (no FXAA path)
 		VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;

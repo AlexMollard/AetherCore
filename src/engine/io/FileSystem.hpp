@@ -32,11 +32,11 @@ namespace aether::io
 
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
-		// Synchronous read — returns entire file contents. Fine for startup / shader
+		// Synchronous read - returns entire file contents. Fine for startup / shader
 		// loading.
 		[[nodiscard]] static std::vector<std::byte> ReadFile(std::string_view virtualPath);
 
-		// Synchronous stream — caller owns the returned stream.
+		// Synchronous stream - caller owns the returned stream.
 		[[nodiscard]] static std::unique_ptr<std::istream> OpenStream(std::string_view virtualPath);
 
 		// Glob files under a mount point using wildcards.
@@ -46,7 +46,7 @@ namespace aether::io
 		//   ** matches across directory boundaries
 		[[nodiscard]] static std::vector<std::string> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
 
-		// Asynchronous read — returns immediately with a handle.
+		// Asynchronous read - returns immediately with a handle.
 		// Poll FileRequestHandle::GetState() or call FileSystem::WaitFor() to
 		// synchronise.
 		[[nodiscard]] static FileRequestHandle RequestAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);

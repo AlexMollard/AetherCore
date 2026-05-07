@@ -23,7 +23,7 @@ namespace aether
 			                                                 // blending on color attachment 0.
 			bool blendEnable = false;                        // Set true for full-screen / procedural passes
 			                                                 // that generate vertices
-			// from SV_VertexID — no vertex buffer or attribute declarations needed.
+			// from SV_VertexID - no vertex buffer or attribute declarations needed.
 			bool noVertexInput = false;
 			// Use a reduced mesh layout (POSITION + JOINTS_0 + WEIGHTS_0 only).
 			// Intended for depth-only shadow caster pipelines.

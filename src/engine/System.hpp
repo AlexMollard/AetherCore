@@ -38,7 +38,7 @@ namespace aether
 	class SystemRegistry
 	{
 	public:
-		// Register a system. Order matters — systems update in registration order.
+		// Register a system. Order matters - systems update in registration order.
 		void Register(std::unique_ptr<System> system);
 
 		// Unregister a system by name (if found).

@@ -13,7 +13,7 @@ namespace aether
 	// Registers the engine's main forward scene pass.
 	//
 	// Draws the commands produced by the preceding CullPass compute pass using
-	// DrawIndexedIndirectCount. Scene and world flushing happens in CullPass — this
+	// DrawIndexedIndirectCount. Scene and world flushing happens in CullPass - this
 	// pass only records draw calls and clears the queue.
 	class ForwardPass
 	{

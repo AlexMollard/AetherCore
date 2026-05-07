@@ -151,7 +151,7 @@ namespace aether
 		        });
 
 		const std::uint32_t totalDraws = static_cast<std::uint32_t>(m_commands.size());
-		assert(totalDraws <= m_maxDraws && "RenderQueue: exceeded maxDraws — increase Initialize capacity.");
+		assert(totalDraws <= m_maxDraws && "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
 		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
 		std::uint32_t batchIdx = 0;
@@ -170,7 +170,7 @@ namespace aether
 			}
 			const std::uint32_t batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
 
-			assert(batchIdx < m_maxBatches && "RenderQueue: exceeded maxBatches — increase Initialize capacity.");
+			assert(batchIdx < m_maxBatches && "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
 
 			for (std::size_t j = i; j < batchEnd; ++j)
 			{
@@ -187,15 +187,15 @@ namespace aether
 					{
 						if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
 						{
-							WARN(LogCategory::Engine, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) — dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+							WARN(LogCategory::Engine, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
 						}
 						else if (animNodeCount == 0u || nodePoseCursor + animNodeCount > m_maxSampledPoses)
 						{
-							WARN(LogCategory::Engine, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) — dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
+							WARN(LogCategory::Engine, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
 						}
 						else if (skinJobCount >= m_maxAnimationDraws || m_animationSampleJobCount >= m_maxAnimationDraws)
 						{
-							WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) — dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
+							WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
 						}
 						else
 						{
@@ -233,7 +233,7 @@ namespace aether
 						{
 							if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
 							{
-								WARN(LogCategory::Engine, "RenderQueue: skin palette pool overflow (needed {}, cap {}) — dropping skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+								WARN(LogCategory::Engine, "RenderQueue: skin palette pool overflow (needed {}, cap {}) - dropping skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
 							}
 							else
 							{

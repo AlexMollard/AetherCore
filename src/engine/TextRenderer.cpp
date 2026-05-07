@@ -183,7 +183,7 @@ namespace aether
 
 		m_pipeline = engine.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://text_sdf.slang.spv",
-		        // Target the swapchain image — UIPass runs after tonemapping.
+		        // Target the swapchain image - UIPass runs after tonemapping.
 		        .colorFormat = engine.GetSwapchainImageFormat(),
 		        .depthFormat = VK_FORMAT_UNDEFINED,
 		        .depthTestEnable = false,

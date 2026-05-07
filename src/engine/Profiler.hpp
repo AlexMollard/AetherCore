@@ -1,24 +1,24 @@
 #pragma once
 
 // ---------------------------------------------------------------------------
-// AetherCore profiling macros — thin wrappers around Tracy.
+// AetherCore profiling macros - thin wrappers around Tracy.
 //
 // Enable at configure time:  cmake -DAETHERCORE_ENABLE_TRACY=ON ...
 //
 // CPU zones:
-//   AE_PROFILE_ZONE()                  — auto-named zone (function + file + line)
-//   AE_PROFILE_ZONE_N("name")          — compile-time named zone
-//   AE_PROFILE_SET_ZONE_NAME(cstr)     — override zone name with a runtime string
+//   AE_PROFILE_ZONE()                  - auto-named zone (function + file + line)
+//   AE_PROFILE_ZONE_N("name")          - compile-time named zone
+//   AE_PROFILE_SET_ZONE_NAME(cstr)     - override zone name with a runtime string
 //                                        (must follow AE_PROFILE_ZONE or AE_PROFILE_ZONE_N
 //                                        in the same scope)
-//   AE_PROFILE_FRAME                   — mark the end of a rendered frame
+//   AE_PROFILE_FRAME                   - mark the end of a rendered frame
 //
 // Thread naming:
-//   AE_PROFILE_THREAD("IOThread")      — name the calling thread in the profiler
+//   AE_PROFILE_THREAD("IOThread")      - name the calling thread in the profiler
 //
 // Memory tracking (CPU heap):
-//   AE_PROFILE_ALLOC(ptr, size)        — report an allocation to Tracy
-//   AE_PROFILE_FREE(ptr)               — report a deallocation to Tracy
+//   AE_PROFILE_ALLOC(ptr, size)        - report an allocation to Tracy
+//   AE_PROFILE_FREE(ptr)               - report a deallocation to Tracy
 //
 // Named memory pools (e.g. "GPU"):
 //   AE_PROFILE_ALLOC_N(ptr, size, pool)

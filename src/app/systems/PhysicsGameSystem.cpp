@@ -172,7 +172,7 @@ void PhysicsGameSystem::OnRegister(aether::World& world)
 	INFO(aether::LogCategory::App, "PhysicsGameSystem registered.");
 	if (!m_engine || !m_assets || !m_cameras || !m_input || !m_physics)
 	{
-		WARN(aether::LogCategory::App, "PhysicsGameSystem not fully initialised — aborting.");
+		WARN(aether::LogCategory::App, "PhysicsGameSystem not fully initialised - aborting.");
 		return;
 	}
 

@@ -14,7 +14,7 @@ namespace aether
 	// GPU texture loaded from a file (PNG, JPG, BMP, TGA, HDR, …).
 	//
 	// The image is stored as R8G8B8A8_SRGB so the hardware automatically
-	// converts from sRGB storage to linear colour when sampled — which is
+	// converts from sRGB storage to linear colour when sampled - which is
 	// what we want for albedo textures fed into a linear-light render.
 	//
 	// After loading, the texture is registered in the BindlessManager and

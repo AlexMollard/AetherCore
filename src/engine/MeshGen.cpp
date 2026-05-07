@@ -24,7 +24,7 @@ namespace aether::MeshGen
 			{
 				const float x = static_cast<float>(col) / static_cast<float>(nx) - 0.5f;
 				const float y = static_cast<float>(row) / static_cast<float>(ny) - 0.5f;
-				// V is flipped: row 0 (bottom, y=-0.5) → high V; row ny (top) → V=0.
+				// V is flipped: row 0 (bottom, y=-0.5) -> high V; row ny (top) -> V=0.
 				const float u = static_cast<float>(col) * desc.uvScale;
 				const float v = static_cast<float>(ny - row) * desc.uvScale;
 
@@ -69,7 +69,7 @@ namespace aether::MeshGen
 		const int slices = std::max(desc.slices, 3);
 
 		// One extra column of verts per row for the seam (left and right share
-		// the same position but different UVs — required for correct wrapping).
+		// the same position but different UVs - required for correct wrapping).
 		MeshData data;
 		data.vertices.reserve(static_cast<std::size_t>((stacks + 1) * (slices + 1)));
 
@@ -87,7 +87,7 @@ namespace aether::MeshGen
 				const float sinTheta = std::sin(theta);
 				const float cosTheta = std::cos(theta);
 
-				// Radius 0.5 → diameter 1.0 matches other unit primitives.
+				// Radius 0.5 -> diameter 1.0 matches other unit primitives.
 				const float x = 0.5f * sinPhi * cosTheta;
 				const float y = 0.5f * cosPhi;
 				const float z = 0.5f * sinPhi * sinTheta;
@@ -95,7 +95,7 @@ namespace aether::MeshGen
 				// Normal = outward radial direction.
 				const glm::vec3 normal = (sinPhi > 1e-6f) ? glm::vec3(sinPhi * cosTheta, cosPhi, sinPhi * sinTheta) : glm::vec3(0.0f, cosPhi, 0.0f);
 
-				// Tangent = dposition/dtheta, normalized.  Degenerate at poles →
+				// Tangent = dposition/dtheta, normalized.  Degenerate at poles ->
 				// fallback to (1,0,0).
 				const glm::vec3 tangentXYZ = (sinPhi > 1e-6f) ? glm::vec3(-sinTheta, 0.0f, cosTheta) : glm::vec3(1.0f, 0.0f, 0.0f);
 
@@ -220,7 +220,7 @@ namespace aether::MeshGen
 				        .color = { 1.0f, 1.0f, 1.0f },
 				});
 
-				// Rim vertices — separate from the side-wall ring so normals point up/down.
+				// Rim vertices - separate from the side-wall ring so normals point up/down.
 				const auto rimStart = static_cast<std::uint32_t>(data.vertices.size());
 				for (int i = 0; i <= n; ++i)
 				{
@@ -230,7 +230,7 @@ namespace aether::MeshGen
 
 					const float x = 0.5f * cosTheta;
 					const float z = 0.5f * sinTheta;
-					// UV: map disc to [0,1] square via polar → Cartesian rescaled to ±0.5.
+					// UV: map disc to [0,1] square via polar -> Cartesian rescaled to +-0.5.
 					const float u = cosTheta * 0.5f + 0.5f;
 					const float v = sinTheta * 0.5f + 0.5f;
 
@@ -243,7 +243,7 @@ namespace aether::MeshGen
 					});
 				}
 
-				// Fan triangles — winding depends on which face we're looking at.
+				// Fan triangles - winding depends on which face we're looking at.
 				for (int i = 0; i < n; ++i)
 				{
 					const auto a = rimStart + static_cast<std::uint32_t>(i);
@@ -254,7 +254,7 @@ namespace aether::MeshGen
 						data.indices.push_back(a);
 						data.indices.push_back(b);
 					}
-					else // bottom cap: CCW viewed from below (-Y) → reverse
+					else // bottom cap: CCW viewed from below (-Y) -> reverse
 					{
 						data.indices.push_back(centerIdx);
 						data.indices.push_back(b);

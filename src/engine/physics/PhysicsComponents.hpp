@@ -8,7 +8,7 @@
 
 namespace aether
 {
-	// Collision object layer — controls what a body collides with.
+	// Collision object layer - controls what a body collides with.
 	// Designed with networking in mind: static geometry never needs net sync,
 	// moving bodies need regular position/velocity replication.
 	enum class PhysicsLayer : uint8_t
@@ -27,7 +27,7 @@ namespace aether
 	};
 
 	// Attached to any entity that participates in physics simulation.
-	// bodyId is a stable 32-bit handle — safe to use as a network replication key.
+	// bodyId is a stable 32-bit handle - safe to use as a network replication key.
 	struct RigidBodyComponent
 	{
 		JPH::BodyID       bodyId{};

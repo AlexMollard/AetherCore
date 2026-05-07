@@ -23,7 +23,7 @@ namespace voxel
 		}
 		else
 		{
-			//WARN(LogCategory::App, "Block atlas not found: {} — using fallback colour.", atlasPath);
+			//WARN(LogCategory::App, "Block atlas not found: {} - using fallback colour.", atlasPath);
 		}
 
 		core.RegisterMaterial(mat);

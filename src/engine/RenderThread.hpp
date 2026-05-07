@@ -33,7 +33,7 @@ namespace aether
 		// Stable GPU resource addresses.
 		VkDeviceAddress materialBufferAddr = 0;
 
-		// Frame identity — render thread uses these for GPU buffer slot selection.
+		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;
 		// CPU-side double-buffer slot (frameIndex % kMaxFramesInFlight).
 		// The game thread wrote draw commands and UI lists into this slot.
@@ -45,9 +45,9 @@ namespace aether
 	// Dedicated render thread that owns all Vulkan submission work.
 	//
 	// Frame pipeline:
-	//   Game thread  : Sim N → SetWriteSlot(N) → LayerGui → GatherDraws → PreparePacket → SubmitFrame(N)
-	//   Render thread:                                                                   ← wake, "consumed" →
-	//                                                                                      WaitFence → Record → Submit → Present
+	//   Game thread  : Sim N -> SetWriteSlot(N) -> LayerGui -> GatherDraws -> PreparePacket -> SubmitFrame(N)
+	//   Render thread:                                                                   <- wake, "consumed" ->
+	//                                                                                      WaitFence -> Record -> Submit -> Present
 	//
 	// The game thread blocks at SubmitFrame only until the render thread signals
 	// "consumed" (it has picked up the packet), which happens before the fence wait.

@@ -207,7 +207,7 @@ void PhysicsSystem::Update(World& world, float dt)
 
 	while (m_accumulator >= kFixedTimestep)
 	{
-		// Save previous state before stepping — used by SyncTransforms for interpolation.
+		// Save previous state before stepping - used by SyncTransforms for interpolation.
 		for (auto [entity, state] : world.View<PhysicsStateComponent>().each())
 		{
 			state.prevPosition = state.currPosition;
@@ -280,7 +280,7 @@ static void AddBodyToEntity(
 	const JPH::Body* body = bodyInterface.CreateBody(settings);
 	if (!body)
 	{
-		WARN(LogCategory::Engine, "PhysicsSystem: failed to create body — max body limit reached");
+		WARN(LogCategory::Engine, "PhysicsSystem: failed to create body - max body limit reached");
 		return;
 	}
 

@@ -50,7 +50,7 @@ namespace aether
 
 	glm::vec3 Camera::GetForward() const
 	{
-		// yaw=0, pitch=0  →  (0, 0, -1)  (looking along -Z, standard convention)
+		// yaw=0, pitch=0  ->  (0, 0, -1)  (looking along -Z, standard convention)
 		const float yr = glm::radians(m_yaw);
 		const float pr = glm::radians(m_pitch);
 		return glm::normalize(glm::vec3{
@@ -131,7 +131,7 @@ namespace aether
 
 		if (m_mode == CameraMode::Free)
 		{
-			// Hold RMB to look around (delta mouse → yaw/pitch).
+			// Hold RMB to look around (delta mouse -> yaw/pitch).
 			if (input.IsMouseButtonDown(MouseButton::Right))
 			{
 				const glm::vec2 delta = input.GetMouseDelta();

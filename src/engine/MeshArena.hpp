@@ -16,15 +16,15 @@ namespace aether
 	// chunk meshes suballocate from via a simple sorted free-list.
 	//
 	// Eliminates per-chunk VkBuffer create/destroy overhead and VMA fragmentation.
-	// The arena works in raw bytes — callers supply byteSize alongside counts so the
+	// The arena works in raw bytes - callers supply byteSize alongside counts so the
 	// arena stays vertex-format agnostic.
 	//
 	// Usage:
-	//   1. Initialize(ctx)                     — once, at startup.
-	//   2. alloc = Allocate(vBytes, vCount, iBytes, iCount)  — per chunk spawn.
-	//   3. mesh  = CreateView(alloc)            — returns a non-owning Mesh* for DrawCommand.
-	//   4. Free(alloc)                          — when the chunk is unloaded.
-	//   5. Shutdown()                           — once, at teardown.
+	//   1. Initialize(ctx)                     - once, at startup.
+	//   2. alloc = Allocate(vBytes, vCount, iBytes, iCount)  - per chunk spawn.
+	//   3. mesh  = CreateView(alloc)            - returns a non-owning Mesh* for DrawCommand.
+	//   4. Free(alloc)                          - when the chunk is unloaded.
+	//   5. Shutdown()                           - once, at teardown.
 	class MeshArena
 	{
 	public:
@@ -41,7 +41,7 @@ namespace aether
 			VkDeviceSize indexByteOffset = 0;
 			std::uint32_t indexCount = 0;
 
-			// Internal accounting — keep these to hand the bytes back to the free list.
+			// Internal accounting - keep these to hand the bytes back to the free list.
 			VkDeviceSize vertexByteSize = 0;
 			VkDeviceSize indexByteSize = 0;
 

@@ -14,7 +14,7 @@ namespace aether
 	//   m_framePacer.SetTargetFps(60.0f);
 	//   while (running)
 	//   {
-	//       m_framePacer.Wait();                               // top of loop — sleep/spin to deadline
+	//       m_framePacer.Wait();                               // top of loop - sleep/spin to deadline
 	//       const auto now = Clock::now();
 	//       const double dt = duration<double>(now - prev).count(); prev = now;
 	//       ... sim, PrepareFrame, SubmitFrame ...
@@ -29,7 +29,7 @@ namespace aether
 	//      the previous submission before it is asked to accept the next one.
 	//
 	// If a frame runs over-budget (GPU or CPU spike) the pacer clamps debt to one frame
-	// — it will not try to compensate with a burst of back-to-back fast frames.
+	// - it will not try to compensate with a burst of back-to-back fast frames.
 	//
 	// Pass fps = 0 (the default) to run uncapped.
 	class FramePacer
@@ -37,7 +37,7 @@ namespace aether
 	public:
 		using Clock = std::chrono::steady_clock;
 		using TimePoint = Clock::time_point;
-		using Duration = Clock::duration; // nanoseconds — same rep as time_point arithmetic
+		using Duration = Clock::duration; // nanoseconds - same rep as time_point arithmetic
 
 		// Set target frame rate. Call before the game loop or at any time.
 		// fps <= 0 disables pacing (uncapped).

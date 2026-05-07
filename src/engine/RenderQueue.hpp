@@ -113,16 +113,16 @@ namespace aether
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 
 		// CPU-written per-frame inputs.
-		UniqueBuffer m_instanceDataBuffer; // DrawInstanceData[]  — SSBO + BDA
-		UniqueBuffer m_cullInputBuffer;    // CullDrawInput[]     — SSBO + BDA
-		UniqueBuffer m_batchDescBuffer;    // CullBatch[]         — SSBO + BDA
+		UniqueBuffer m_instanceDataBuffer; // DrawInstanceData[]  - SSBO + BDA
+		UniqueBuffer m_cullInputBuffer;    // CullDrawInput[]     - SSBO + BDA
+		UniqueBuffer m_batchDescBuffer;    // CullBatch[]         - SSBO + BDA
 
 		DrawInstanceData* m_instanceDataMapped = nullptr;
 		CullDrawInput* m_cullInputMapped = nullptr;
 		CullBatch* m_batchDescMapped = nullptr;
 
 		// Device-local outputs consumed by draw/compute.
-		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] — INDIRECT + BDA
+		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
 		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
 		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
 

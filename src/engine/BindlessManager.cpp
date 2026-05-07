@@ -99,9 +99,9 @@ namespace aether
 		}
 
 		// ── Descriptor set layout ─────────────────────────────────────────────
-		// binding 0 — COMBINED_IMAGE_SAMPLER array (bindless image array)
-		// binding 1 — SAMPLER (immutable linear sampler, shared by most draws)
-		// binding 2 — SAMPLER (immutable nearest+clamp sampler, voxel atlas)
+		// binding 0 - COMBINED_IMAGE_SAMPLER array (bindless image array)
+		// binding 1 - SAMPLER (immutable linear sampler, shared by most draws)
+		// binding 2 - SAMPLER (immutable nearest+clamp sampler, voxel atlas)
 		const VkDescriptorSetLayoutBinding bindings[3] = {
 			{
              .binding = bindless::kSampledImageBinding, // 0

@@ -14,7 +14,7 @@ namespace aether
 
 	// Manages a per-frame uniform buffer for FrameConstants (double-buffered to
 	// match kMaxFramesInFlight). Accessed exclusively via Buffer Device Address
-	// pushed in the per-draw push constants — no descriptor set required.
+	// pushed in the per-draw push constants - no descriptor set required.
 	class FrameConstantsBuffer
 	{
 	public:

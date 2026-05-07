@@ -218,7 +218,7 @@ namespace aether::app
 			world.EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
 		}
 
-		// Wide-orbit pair — one textured, one RTT-fed
+		// Wide-orbit pair - one textured, one RTT-fed
 		{
 			const aether::Entity eA = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
 			world.EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
@@ -340,7 +340,7 @@ namespace aether::app
 					agent.stateTimer -= dt;
 					if (agent.stateTimer <= 0.0f)
 					{
-						// Done idling — pick a new target and start running.
+						// Done idling - pick a new target and start running.
 						agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
 						agent.idle = false;
 					}
@@ -353,7 +353,7 @@ namespace aether::app
 
 					if (dist < 0.8f)
 					{
-						// Arrived — randomly decide to pause or immediately pick a new target.
+						// Arrived - randomly decide to pause or immediately pick a new target.
 						if (decisionDist(m_rng) < 2)
 						{
 							agent.idle = true;

@@ -6,12 +6,12 @@
 #include "Mesh.hpp"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MeshGen — procedural CPU-side geometry generation.
+// MeshGen - procedural CPU-side geometry generation.
 //
 // Each function returns a MeshData (vertices + indices) that can be uploaded
 // directly via AssetManager::CreateMesh or AetherCore::CreateMesh.
 //
-// All primitives are unit-sized (extent ±0.5 along each relevant axis) and
+// All primitives are unit-sized (extent +-0.5 along each relevant axis) and
 // centered at the origin.  Scale via the entity transform.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ namespace aether::MeshGen
 	//
 	//   stacks  – latitude bands (≥ 2).
 	//   slices  – longitude segments (≥ 3).
-	//   uvScale – UV scale applied to both axes (1.0 = full 0→1 wrap).
+	//   uvScale – UV scale applied to both axes (1.0 = full 0->1 wrap).
 	struct UVSphereDesc
 	{
 		int stacks = 16;
@@ -61,8 +61,8 @@ namespace aether::MeshGen
 	//
 	//   segments      – circumference divisions (≥ 3).
 	//   caps          – whether to generate top and bottom disc caps.
-	//   uvScaleRadial – U scale along the circumference (1.0 = 0→1 once around).
-	//   uvScaleAxial  – V scale along the height    (1.0 = 0→1 bottom to top).
+	//   uvScaleRadial – U scale along the circumference (1.0 = 0->1 once around).
+	//   uvScaleAxial  – V scale along the height    (1.0 = 0->1 bottom to top).
 	struct CylinderDesc
 	{
 		int segments = 32;

@@ -44,7 +44,7 @@ namespace aether
 		std::uint32_t _pad[2]{ 0, 0 };
 	};
 
-	static_assert(sizeof(GpuMaterial) == 80, "GpuMaterial size changed — update the Slang struct in gltf_mesh.slang.");
+	static_assert(sizeof(GpuMaterial) == 80, "GpuMaterial size changed - update the Slang struct in gltf_mesh.slang.");
 	static_assert(offsetof(GpuMaterial, baseColorFactor) == 0);
 	static_assert(offsetof(GpuMaterial, metallicFactor) == 16);
 	static_assert(offsetof(GpuMaterial, roughnessFactor) == 20);

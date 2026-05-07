@@ -15,13 +15,13 @@ namespace aether
 	//
 	// DrawCommands must be pre-populated into the queue by the game thread before
 	// EndFrame (via AetherCore::GatherRenderDraws). This pass only dispatches the
-	// compute cull shader — it no longer reads ECS directly.
+	// compute cull shader - it no longer reads ECS directly.
 	//
 	// Usage:
-	//   1. Initialize(device)          — once, at engine startup.
-	//   2. RegisterPass(graph, …)      — once per render graph registration (main camera).
+	//   1. Initialize(device)          - once, at engine startup.
+	//   2. RegisterPass(graph, …)      - once per render graph registration (main camera).
 	//      Use namePrefix to disambiguate RTT variants, e.g. "RTT_0".
-	//   3. Shutdown()                  — once, at engine shutdown.
+	//   3. Shutdown()                  - once, at engine shutdown.
 	class CullPass
 	{
 	public:

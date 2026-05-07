@@ -1,6 +1,6 @@
 #pragma once
 
-// OverlayStyle.hpp — shared constants, drawing helpers, and PanelBuilder for debug overlay panels.
+// OverlayStyle.hpp - shared constants, drawing helpers, and PanelBuilder for debug overlay panels.
 
 #include <array>
 #include <initializer_list>
@@ -110,7 +110,7 @@ namespace aether::app::overlay
 
 	// ── PanelBuilder ─────────────────────────────────────────────────────────
 	// RAII helper that tracks cursor Y and draws the background panel on destruction
-	// with the correct auto-computed height — no more hand-tuned kPanelBot constants.
+	// with the correct auto-computed height - no more hand-tuned kPanelBot constants.
 	//
 	// Single-column (val offset relative to inner-left edge):
 	//   PanelBuilder panel(ui, anchor, panelL, panelR, panelTop, valColOffset);
@@ -172,7 +172,7 @@ namespace aether::app::overlay
 			ui.SetLayer(2);
 		}
 
-		// Background is drawn on destruction — content layers are already queued with
+		// Background is drawn on destruction - content layers are already queued with
 		// layer 2; DrawPanel submits layers 0+1 which the renderer sorts to the back.
 		~PanelBuilder() { Finish(); }
 

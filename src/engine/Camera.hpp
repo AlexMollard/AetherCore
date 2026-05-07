@@ -10,7 +10,7 @@ namespace aether
 	{
 		Free,   // WASD + right-mouse-drag to look (Unreal/Unity editor style)
 		Orbit,  // Left-mouse-drag to orbit a target; scroll wheel to zoom
-		Manual, // No automatic input processing — caller sets pose each frame
+		Manual, // No automatic input processing - caller sets pose each frame
 	};
 
 	// Initial configuration for a Camera.
@@ -24,7 +24,7 @@ namespace aether
 		// ── Free mode starting pose ───────────────────────────────────────────
 		glm::vec3 position = { 0.0f, 3.0f, 7.0f };
 		float yaw = 0.0f;     // degrees, rotation around world Y axis
-		float pitch = -20.0f; // degrees, up/down tilt (±89 clamped)
+		float pitch = -20.0f; // degrees, up/down tilt (+-89 clamped)
 
 		// ── Orbit mode starting pose ──────────────────────────────────────────
 		glm::vec3 orbitTarget = { 0.0f, 0.0f, 0.0f };
@@ -40,7 +40,7 @@ namespace aether
 	};
 
 	// Controllable camera supporting Free (FPS) and Orbit modes.
-	// Call Update() once per frame — done automatically by CameraManager.
+	// Call Update() once per frame - done automatically by CameraManager.
 	class Camera
 	{
 	public:

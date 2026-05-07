@@ -10,9 +10,9 @@ namespace aether::app
 	// Demonstration layer for Jolt physics integration.
 	// Owns the PhysicsSystem (registered into the World) and the PhysicsGameSystem.
 	// Controls:
-	//   Space  — fire a projectile at the box stack
-	//   R      — reset the scene
-	//   C      — toggle orbit / free camera
+	//   Space  - fire a projectile at the box stack
+	//   R      - reset the scene
+	//   C      - toggle orbit / free camera
 	class PhysicsLayer final : public AppLayer
 	{
 	public:

@@ -21,7 +21,7 @@ namespace aether::app
 	{
 		using namespace overlay;
 
-		// Panel geometry — all x offsets from the top-right anchor (1, 0).
+		// Panel geometry - all x offsets from the top-right anchor (1, 0).
 		constexpr glm::vec2 kAnchor{ 1.f, 0.f };
 		constexpr float kPanelL = -432.0f;
 		constexpr float kPanelR = -12.0f;

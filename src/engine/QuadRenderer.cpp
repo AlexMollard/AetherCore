@@ -185,7 +185,7 @@ namespace aether
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePush), &push);
 			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), 1, 1, 1);
 
-			                // Barrier here (outside any render pass) — compute writes must be
+			                // Barrier here (outside any render pass) - compute writes must be
 			                // visible to the subsequent indirect-draw and vertex-shader reads.
 			                const VkMemoryBarrier2 computeToGraphics{
 				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
