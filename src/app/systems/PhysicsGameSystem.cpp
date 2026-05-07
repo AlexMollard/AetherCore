@@ -50,16 +50,13 @@ void PhysicsGameSystem::BuildScene(aether::World& world)
 
 	// ── Ground ────────────────────────────────────────────────────────────────
 	{
-		const glm::mat4 t = glm::scale(
-			glm::translate(glm::mat4(1.f), { 0.f, -kGroundThickness, 0.f }),
-			{ kGroundHalfExtent * 2.f, kGroundThickness, kGroundHalfExtent * 2.f });
-
 		const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_groundMaterial);
-		world.Get<aether::TransformComponent>(e).localToWorld = t;
+		world.Get<aether::TransformComponent>(e).localToWorld =
+			glm::translate(glm::mat4(1.f), { 0.f, -kGroundThickness, 0.f });
 		world.Emplace<PhysicsSceneTag>(e);
 		m_sceneEntities.push_back(e);
 
-		m_physics->AddBoxBody(world, e, {
+		world.Emplace<aether::BoxBodyDesc>(e, aether::BoxBodyDesc{
 			.halfExtents = { kGroundHalfExtent, kGroundThickness, kGroundHalfExtent },
 			.motionType  = PhysicsMotionType::Static,
 			.layer       = PhysicsLayer::NonMoving,
@@ -81,24 +78,18 @@ void PhysicsGameSystem::BuildScene(aether::World& world)
 
 	for (const auto& w : walls)
 	{
-		const glm::mat4 t = glm::scale(
-			glm::translate(glm::mat4(1.f), w.pos),
-			w.half * 2.f);
-
 		const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_wallMaterial);
-		world.Get<aether::TransformComponent>(e).localToWorld = t;
+		world.Get<aether::TransformComponent>(e).localToWorld =
+			glm::translate(glm::mat4(1.f), w.pos);
 		world.Emplace<PhysicsSceneTag>(e);
 		m_sceneEntities.push_back(e);
 
-		m_physics->AddBoxBody(world, e, {
+		world.Emplace<aether::BoxBodyDesc>(e, aether::BoxBodyDesc{
 			.halfExtents = w.half,
 			.motionType  = PhysicsMotionType::Static,
 			.layer       = PhysicsLayer::NonMoving,
 		});
 	}
-
-	// Optimise broadphase once all static geometry is in.
-	m_physics->OptimizeBroadPhase();
 
 	// ── Stacked boxes ─────────────────────────────────────────────────────────
 	const float boxHalf = 0.5f;
@@ -109,16 +100,13 @@ void PhysicsGameSystem::BuildScene(aether::World& world)
 			const float x = (col - (kStackWidth - 1) * 0.5f) * (boxHalf * 2.f + 0.02f);
 			const float y = boxHalf + row * (boxHalf * 2.f + 0.01f) + kGroundThickness * 0.f;
 
-			const glm::mat4 t = glm::scale(
-				glm::translate(glm::mat4(1.f), { x, y, 0.f }),
-				glm::vec3(boxHalf * 2.f));
-
 			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_boxMaterial);
-			world.Get<aether::TransformComponent>(e).localToWorld = t;
+			world.Get<aether::TransformComponent>(e).localToWorld =
+				glm::translate(glm::mat4(1.f), { x, y, 0.f });
 			world.Emplace<PhysicsSceneTag>(e);
 			m_sceneEntities.push_back(e);
 
-			m_physics->AddBoxBody(world, e, {
+			world.Emplace<aether::BoxBodyDesc>(e, aether::BoxBodyDesc{
 				.halfExtents = glm::vec3(boxHalf),
 				.motionType  = PhysicsMotionType::Dynamic,
 				.restitution = 0.3f,
@@ -136,16 +124,13 @@ void PhysicsGameSystem::BuildScene(aether::World& world)
 		const float r   = radiusDist(m_rng);
 		const glm::vec3 pos = { posDist(m_rng), heightDist(m_rng), posDist(m_rng) };
 
-		const glm::mat4 t = glm::scale(
-			glm::translate(glm::mat4(1.f), pos),
-			glm::vec3(r * 2.f));
-
 		const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, sphere, m_roundBodyMaterial);
-		world.Get<aether::TransformComponent>(e).localToWorld = t;
+		world.Get<aether::TransformComponent>(e).localToWorld =
+			glm::translate(glm::mat4(1.f), pos);
 		world.Emplace<PhysicsSceneTag>(e);
 		m_sceneEntities.push_back(e);
 
-		m_physics->AddSphereBody(world, e, {
+		world.Emplace<aether::SphereBodyDesc>(e, aether::SphereBodyDesc{
 			.radius      = r,
 			.motionType  = PhysicsMotionType::Dynamic,
 			.restitution = 0.5f,
@@ -255,25 +240,20 @@ void PhysicsGameSystem::FireProjectile(aether::World& world)
 	const glm::vec3 spawnPos = { 0.f, 3.f, kGroundHalfExtent - 1.f };
 	const glm::vec3 direction = glm::normalize(glm::vec3{ 0.f, 0.2f, -1.f });
 
-	const glm::mat4 t = glm::scale(
-		glm::translate(glm::mat4(1.f), spawnPos),
-		glm::vec3(kProjectileRadius * 2.f));
-
 	const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, sphere, m_projectileMaterial);
-	world.Get<aether::TransformComponent>(e).localToWorld = t;
+	world.Get<aether::TransformComponent>(e).localToWorld =
+		glm::translate(glm::mat4(1.f), spawnPos);
 	world.Emplace<PhysicsSceneTag>(e);
 	world.Emplace<ProjectileTag>(e);
 	m_sceneEntities.push_back(e);
 
-	m_physics->AddSphereBody(world, e, {
-		.radius      = kProjectileRadius,
-		.motionType  = PhysicsMotionType::Dynamic,
-		.friction    = 0.2f,
-		.restitution = 0.4f,
+	world.Emplace<aether::SphereBodyDesc>(e, aether::SphereBodyDesc{
+		.radius          = kProjectileRadius,
+		.motionType      = PhysicsMotionType::Dynamic,
+		.friction        = 0.2f,
+		.restitution     = 0.4f,
+		.initialVelocity = direction * kProjectileSpeed,
 	});
-
-	if (const auto* rigid = world.TryGet<aether::RigidBodyComponent>(e))
-		m_physics->SetLinearVelocity(rigid->bodyId, direction * kProjectileSpeed);
 
 	++m_projectileCount;
 }

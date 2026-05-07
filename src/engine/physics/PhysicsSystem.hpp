@@ -22,39 +22,6 @@ namespace aether
 {
 	class World;
 
-	// ── Shape descriptors ─────────────────────────────────────────────────────
-
-	struct BoxBodySettings
-	{
-		glm::vec3         halfExtents{ 0.5f, 0.5f, 0.5f };
-		PhysicsMotionType motionType  = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer       = PhysicsLayer::Moving;
-		float             friction    = 0.5f;
-		float             restitution = 0.0f;
-		bool              startActive = true;
-	};
-
-	struct SphereBodySettings
-	{
-		float             radius      = 0.5f;
-		PhysicsMotionType motionType  = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer       = PhysicsLayer::Moving;
-		float             friction    = 0.5f;
-		float             restitution = 0.0f;
-		bool              startActive = true;
-	};
-
-	struct CapsuleBodySettings
-	{
-		float             halfHeight  = 0.5f;
-		float             radius      = 0.25f;
-		PhysicsMotionType motionType  = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer       = PhysicsLayer::Moving;
-		float             friction    = 0.5f;
-		float             restitution = 0.0f;
-		bool              startActive = true;
-	};
-
 	// ── PhysicsSystem ─────────────────────────────────────────────────────────
 	//
 	// Owns the Jolt physics world and drives it with a fixed timestep.
@@ -63,11 +30,18 @@ namespace aether
 	//   - stable simulation regardless of render framerate
 	//
 	// Usage:
-	//   auto physics = std::make_unique<PhysicsSystem>();
-	//   PhysicsSystem* physicsPtr = physics.get();
-	//   world.RegisterSystem(std::move(physics));
-	//   physicsPtr->AddBoxBody(world, entity, { .halfExtents = {1,1,1} });
-	//   physicsPtr->OptimizeBroadPhase(); // call once after adding static bodies
+	//   world.RegisterSystem(std::make_unique<PhysicsSystem>());
+	//
+	//   // Spawn a physics-backed entity by emplacing a descriptor + transform:
+	//   auto e = world.Create();
+	//   world.Emplace<TransformComponent>(e, ...);       // position only, no scale
+	//   world.Emplace<BoxBodyDesc>(e, BoxBodyDesc{       // engine handles the rest
+	//       .halfExtents = {1, 1, 1},
+	//       .motionType  = PhysicsMotionType::Static,
+	//   });
+	//
+	//   // PhysicsSystem processes the descriptor on the next Update, creates the
+	//   // Jolt body, sets the correct scaled transform, and removes the descriptor.
 	//
 	class PhysicsSystem final : public System
 	{
@@ -76,23 +50,10 @@ namespace aether
 		~PhysicsSystem() override;
 
 		// System interface
-		void       OnRegister(World& world) override;
-		void       Update(World& world, float dt) override;
-		void       OnUnregister(World& world) override;
-		const char* GetName() const override { return "PhysicsSystem"; }
-
-		// Call once after all static (NonMoving) bodies are added to accelerate
-		// broadphase queries. Optional but recommended.
-		void OptimizeBroadPhase();
-
-		// ── Body factory ──────────────────────────────────────────────────────
-		// Each function creates a Jolt body from the entity's current
-		// TransformComponent position and adds RigidBodyComponent +
-		// PhysicsStateComponent to the entity.
-
-		void AddBoxBody   (World& world, Entity entity, BoxBodySettings    settings = {});
-		void AddSphereBody(World& world, Entity entity, SphereBodySettings settings = {});
-		void AddCapsuleBody(World& world, Entity entity, CapsuleBodySettings settings = {});
+		void        OnRegister  (World& world) override;
+		void        Update      (World& world, float dt) override;
+		void        OnUnregister(World& world) override;
+		const char* GetName     () const override { return "PhysicsSystem"; }
 
 		// Remove the physics body associated with an entity and strip the
 		// RigidBodyComponent / PhysicsStateComponent from it.
@@ -112,13 +73,16 @@ namespace aether
 		void SetRotation(JPH::BodyID id, glm::quat rotation);
 
 		// Raw Jolt system - for advanced use (raycasts, queries, etc.).
-		[[nodiscard]] JPH::PhysicsSystem& GetJoltSystem() { return *m_physics; }
+		[[nodiscard]] JPH::PhysicsSystem&       GetJoltSystem()       { return *m_physics; }
 		[[nodiscard]] const JPH::PhysicsSystem& GetJoltSystem() const { return *m_physics; }
 
-		// Physics timestep used for fixed-step integration.
 		static constexpr float kFixedTimestep = 1.0f / 60.0f;
 
 	private:
+		// Consume pending *BodyDesc components and create Jolt bodies for them.
+		// Called at the top of every Update before the physics step.
+		void FlushPendingBodies(World& world);
+
 		void StepPhysics();
 		void SyncTransforms(World& world, float alpha);
 
@@ -127,14 +91,15 @@ namespace aether
 		struct ObjVsBPLayerFilter;
 		struct ObjVsObjLayerFilter;
 
-		std::unique_ptr<BPLayerInterface>      m_bpLayerInterface;
-		std::unique_ptr<ObjVsBPLayerFilter>    m_objVsBPFilter;
-		std::unique_ptr<ObjVsObjLayerFilter>   m_objVsObjFilter;
+		std::unique_ptr<BPLayerInterface>         m_bpLayerInterface;
+		std::unique_ptr<ObjVsBPLayerFilter>        m_objVsBPFilter;
+		std::unique_ptr<ObjVsObjLayerFilter>       m_objVsObjFilter;
 		std::unique_ptr<JPH::TempAllocatorImpl>    m_tempAllocator;
 		std::unique_ptr<JPH::JobSystemThreadPool>  m_jobSystem;
 		std::unique_ptr<JPH::PhysicsSystem>        m_physics;
 
-		float m_accumulator = 0.0f;
+		float m_accumulator           = 0.0f;
+		bool  m_needsBroadPhaseOptimize = false;
 	};
 
 } // namespace aether

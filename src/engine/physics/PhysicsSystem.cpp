@@ -135,9 +135,9 @@ static glm::quat FromJolt(JPH::QuatArg  q)  { return { q.GetW(), q.GetX(), q.Get
 static JPH::Vec3 ToJolt(glm::vec3 v)        { return { v.x, v.y, v.z }; }
 static JPH::Quat ToJolt(glm::quat q)        { return { q.x, q.y, q.z, q.w }; }
 
-static glm::mat4 ToTransform(glm::vec3 pos, glm::quat rot)
+static glm::mat4 ToTransform(glm::vec3 pos, glm::quat rot, glm::vec3 scale = glm::vec3(1.f))
 {
-	return glm::translate(glm::mat4(1.f), pos) * glm::mat4_cast(rot);
+	return glm::scale(glm::translate(glm::mat4(1.f), pos) * glm::mat4_cast(rot), scale);
 }
 
 // ── PhysicsSystem ─────────────────────────────────────────────────────────────
@@ -194,15 +194,12 @@ void PhysicsSystem::OnUnregister([[maybe_unused]] World& world)
 	JPH::Factory::sInstance = nullptr;
 }
 
-void PhysicsSystem::OptimizeBroadPhase()
-{
-	m_physics->OptimizeBroadPhase();
-}
-
 // ── Fixed-step update ─────────────────────────────────────────────────────────
 
 void PhysicsSystem::Update(World& world, float dt)
 {
+	FlushPendingBodies(world);
+
 	m_accumulator += dt;
 
 	while (m_accumulator >= kFixedTimestep)
@@ -236,7 +233,7 @@ void PhysicsSystem::SyncTransforms(World& world, float alpha)
 	for (auto [entity, rigid, state, transform] :
 		world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 	{
-		if (rigid.bodyId.IsInvalid())
+		if (rigid.bodyId.IsInvalid() || rigid.motionType == PhysicsMotionType::Static)
 			continue;
 
 		// Read current physics state.
@@ -249,7 +246,7 @@ void PhysicsSystem::SyncTransforms(World& world, float alpha)
 		const glm::vec3 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
 		const glm::quat renderRot = glm::slerp(state.prevRotation, state.currRotation, alpha);
 
-		transform.localToWorld = ToTransform(renderPos, renderRot);
+		transform.localToWorld = ToTransform(renderPos, renderRot, state.scale);
 	}
 }
 
@@ -275,6 +272,7 @@ static void AddBodyToEntity(
 	JPH::BodyInterface& bodyInterface,
 	JPH::BodyCreationSettings& settings,
 	PhysicsMotionType motionType,
+	glm::vec3 visualScale,
 	bool startActive)
 {
 	const JPH::Body* body = bodyInterface.CreateBody(settings);
@@ -292,95 +290,122 @@ static void AddBodyToEntity(
 	// Seed both prev and curr to current position so there's no initial interpolation pop.
 	const glm::vec3 pos = FromJolt(bodyInterface.GetCenterOfMassPosition(id));
 	const glm::quat rot = FromJolt(bodyInterface.GetRotation(id));
-	world.Emplace<PhysicsStateComponent>(entity, pos, rot, pos, rot);
+	world.Emplace<PhysicsStateComponent>(entity, pos, rot, pos, rot, visualScale);
+
+	// Set the initial transform so the app never needs to bake scale manually.
+	if (auto* tc = world.TryGet<TransformComponent>(entity))
+		tc->localToWorld = ToTransform(pos, rot, visualScale);
 }
 
-void PhysicsSystem::AddBoxBody(World& world, Entity entity, BoxBodySettings s)
+void PhysicsSystem::FlushPendingBodies(World& world)
 {
-	auto& bodyInterface = m_physics->GetBodyInterface();
-	const auto* tc = world.TryGet<TransformComponent>(entity);
+	auto& bi  = m_physics->GetBodyInterface();
+	auto& reg = world.GetRegistry();
+	bool  addedStatic = false;
 
-	JPH::BoxShapeSettings shapeSettings{ ToJolt(s.halfExtents) };
-	shapeSettings.mMaterial = nullptr;
-	auto shapeResult = shapeSettings.Create();
-	if (shapeResult.HasError())
+	// World::View returns raw entt views; entities come back as entt::entity.
+	// aether::Entity and entt::entity share the same bit representation, so we
+	// can reconstruct one from the other inline wherever World's typed API is needed.
+	auto toAether = [](entt::entity e) -> Entity
 	{
-		WARN(LogCategory::Engine, "PhysicsSystem::AddBoxBody: shape error: {}", shapeResult.GetError().c_str());
-		return;
-	}
-
-	const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
-	const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
-
-	JPH::BodyCreationSettings bcs{
-		shapeResult.Get(),
-		JPH::RVec3(pos.x, pos.y, pos.z),
-		ToJolt(rot),
-		ToJoltMotionType(s.motionType),
-		ToJoltLayer(s.layer)
+		return Entity{ static_cast<uint32_t>(entt::to_integral(e)) };
 	};
-	bcs.mFriction    = s.friction;
-	bcs.mRestitution = s.restitution;
 
-	AddBodyToEntity(world, entity, bodyInterface, bcs, s.motionType, s.startActive);
-}
-
-void PhysicsSystem::AddSphereBody(World& world, Entity entity, SphereBodySettings s)
-{
-	auto& bodyInterface = m_physics->GetBodyInterface();
-	const auto* tc = world.TryGet<TransformComponent>(entity);
-
-	JPH::SphereShapeSettings shapeSettings{ s.radius };
-	auto shapeResult = shapeSettings.Create();
-	if (shapeResult.HasError())
+	auto applyVelocity = [&](entt::entity e, glm::vec3 v)
 	{
-		WARN(LogCategory::Engine, "PhysicsSystem::AddSphereBody: shape error: {}", shapeResult.GetError().c_str());
-		return;
-	}
-
-	const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
-	const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
-
-	JPH::BodyCreationSettings bcs{
-		shapeResult.Get(),
-		JPH::RVec3(pos.x, pos.y, pos.z),
-		ToJolt(rot),
-		ToJoltMotionType(s.motionType),
-		ToJoltLayer(s.layer)
+		if (glm::length(v) > 0.f)
+			if (const auto* r = reg.try_get<RigidBodyComponent>(e))
+				bi.SetLinearVelocity(r->bodyId, ToJolt(v));
 	};
-	bcs.mFriction    = s.friction;
-	bcs.mRestitution = s.restitution;
 
-	AddBodyToEntity(world, entity, bodyInterface, bcs, s.motionType, s.startActive);
-}
-
-void PhysicsSystem::AddCapsuleBody(World& world, Entity entity, CapsuleBodySettings s)
-{
-	auto& bodyInterface = m_physics->GetBodyInterface();
-	const auto* tc = world.TryGet<TransformComponent>(entity);
-
-	JPH::CapsuleShapeSettings shapeSettings{ s.halfHeight, s.radius };
-	auto shapeResult = shapeSettings.Create();
-	if (shapeResult.HasError())
+	// ── Box ───────────────────────────────────────────────────────────────────
+	for (auto [entity, desc] : world.View<BoxBodyDesc>().each())
 	{
-		WARN(LogCategory::Engine, "PhysicsSystem::AddCapsuleBody: shape error: {}", shapeResult.GetError().c_str());
-		return;
+		if (reg.any_of<RigidBodyComponent>(entity))
+			continue;
+
+		const auto* tc = reg.try_get<TransformComponent>(entity);
+		JPH::BoxShapeSettings ss{ ToJolt(desc.halfExtents) };
+		ss.mMaterial = nullptr;
+		auto result = ss.Create();
+		if (result.HasError())
+		{
+			WARN(LogCategory::Engine, "PhysicsSystem: box shape error: {}", result.GetError().c_str());
+			continue;
+		}
+
+		const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
+		const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
+		JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot),
+			ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+		bcs.mFriction = desc.friction; bcs.mRestitution = desc.restitution;
+
+		AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, desc.halfExtents * 2.f, desc.startActive);
+		if (desc.motionType == PhysicsMotionType::Static) addedStatic = true;
+		applyVelocity(entity, desc.initialVelocity);
 	}
+	for (auto entity : world.View<BoxBodyDesc>())
+		if (reg.any_of<RigidBodyComponent>(entity)) reg.remove<BoxBodyDesc>(entity);
 
-	const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
-	const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
+	// ── Sphere ────────────────────────────────────────────────────────────────
+	for (auto [entity, desc] : world.View<SphereBodyDesc>().each())
+	{
+		if (reg.any_of<RigidBodyComponent>(entity))
+			continue;
 
-	JPH::BodyCreationSettings bcs{
-		shapeResult.Get(),
-		JPH::RVec3(pos.x, pos.y, pos.z),
-		ToJolt(rot),
-		ToJoltMotionType(s.motionType),
-		ToJoltLayer(s.layer)
-	};
-	bcs.mFriction    = s.friction;
-	bcs.mRestitution = s.restitution;
+		const auto* tc = reg.try_get<TransformComponent>(entity);
+		JPH::SphereShapeSettings ss{ desc.radius };
+		auto result = ss.Create();
+		if (result.HasError())
+		{
+			WARN(LogCategory::Engine, "PhysicsSystem: sphere shape error: {}", result.GetError().c_str());
+			continue;
+		}
 
-	AddBodyToEntity(world, entity, bodyInterface, bcs, s.motionType, s.startActive);
+		const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
+		const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
+		JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot),
+			ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+		bcs.mFriction = desc.friction; bcs.mRestitution = desc.restitution;
+
+		AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, glm::vec3(desc.radius * 2.f), desc.startActive);
+		if (desc.motionType == PhysicsMotionType::Static) addedStatic = true;
+		applyVelocity(entity, desc.initialVelocity);
+	}
+	for (auto entity : world.View<SphereBodyDesc>())
+		if (reg.any_of<RigidBodyComponent>(entity)) reg.remove<SphereBodyDesc>(entity);
+
+	// ── Capsule ───────────────────────────────────────────────────────────────
+	for (auto [entity, desc] : world.View<CapsuleBodyDesc>().each())
+	{
+		if (reg.any_of<RigidBodyComponent>(entity))
+			continue;
+
+		const auto* tc = reg.try_get<TransformComponent>(entity);
+		JPH::CapsuleShapeSettings ss{ desc.halfHeight, desc.radius };
+		auto result = ss.Create();
+		if (result.HasError())
+		{
+			WARN(LogCategory::Engine, "PhysicsSystem: capsule shape error: {}", result.GetError().c_str());
+			continue;
+		}
+
+		const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
+		const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
+		JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot),
+			ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+		bcs.mFriction = desc.friction; bcs.mRestitution = desc.restitution;
+
+		const glm::vec3 capsuleScale{ desc.radius * 2.f, desc.halfHeight * 2.f + desc.radius * 2.f, desc.radius * 2.f };
+		AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, capsuleScale, desc.startActive);
+		if (desc.motionType == PhysicsMotionType::Static) addedStatic = true;
+		applyVelocity(entity, desc.initialVelocity);
+	}
+	for (auto entity : world.View<CapsuleBodyDesc>())
+		if (reg.any_of<RigidBodyComponent>(entity)) reg.remove<CapsuleBodyDesc>(entity);
+
+	if (addedStatic)
+		m_physics->OptimizeBroadPhase();
 }
 
 void PhysicsSystem::RemoveBody(World& world, Entity entity)
