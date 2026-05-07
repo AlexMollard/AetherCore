@@ -26,16 +26,15 @@ namespace aether::app::overlay
 	inline constexpr glm::vec4 kColorBad{ 0.80f, 0.33f, 0.30f, 0.95f };
 
 	// ── Layout constants ─────────────────────────────────────────────────────
-	inline constexpr float kPad    = 16.0f; // inner padding from panel edges
-	inline constexpr float kRowH   = 20.0f; // vertical step between value rows
-	inline constexpr float kHdrH   = 48.0f; // title block height
-	inline constexpr float kCorner = 6.0f;  // panel corner radius
+	inline constexpr float kPad = 16.0f;   // inner padding from panel edges
+	inline constexpr float kRowH = 20.0f;  // vertical step between value rows
+	inline constexpr float kHdrH = 48.0f;  // title block height
+	inline constexpr float kCorner = 6.0f; // panel corner radius
 
 	// ── Low-level panel helpers ──────────────────────────────────────────────
 	// These remain available for callers with custom layouts (e.g. DebugLayer graph).
 
-	inline void DrawPanel(aether::UIRenderer& ui, glm::vec2 anchor,
-	                      float panelL, float panelR, float panelTop, float panelBot)
+	inline void DrawPanel(aether::UIRenderer& ui, glm::vec2 anchor, float panelL, float panelR, float panelTop, float panelBot)
 	{
 		ui.SetLayer(0);
 		ui.DrawRect(
@@ -44,8 +43,9 @@ namespace aether::app::overlay
 		                .anchorMax = anchor,
 		                .offsetMinPx = { panelL, panelTop },
 		                .offsetMaxPx = { panelR, panelBot },
-		        },
-		        kColorBg, kCorner);
+        },
+		        kColorBg,
+		        kCorner);
 
 		ui.SetLayer(1);
 		ui.DrawRect(
@@ -54,23 +54,25 @@ namespace aether::app::overlay
 		                .anchorMax = anchor,
 		                .offsetMinPx = { panelL,         panelTop },
 		                .offsetMaxPx = { panelR, panelTop + kHdrH },
-		        },
-		        kColorHeaderBg, kCorner);
+        },
+		        kColorHeaderBg,
+		        kCorner);
 
 		ui.SetLayer(2);
 	}
 
-	inline void DrawSeparator(aether::UIRenderer& ui, glm::vec2 anchor,
-	                          float innerL, float innerR, float y)
+	inline void DrawSeparator(aether::UIRenderer& ui, glm::vec2 anchor, float innerL, float innerR, float y)
 	{
 		ui.DrawLine(
-		        aether::UiPoint{ .anchor = anchor, .offsetPx = { innerL, y } },
+		        aether::UiPoint{
+		                .anchor = anchor, .offsetPx = { innerL, y }
+        },
 		        aether::UiPoint{ .anchor = anchor, .offsetPx = { innerR, y } },
-		        1.0f, kColorSep);
+		        1.0f,
+		        kColorSep);
 	}
 
-	inline void DrawSectionHeader(aether::UIRenderer& ui, std::string_view label,
-	                              glm::vec2 anchor, float panelL, float innerL, float y)
+	inline void DrawSectionHeader(aether::UIRenderer& ui, std::string_view label, glm::vec2 anchor, float panelL, float innerL, float y)
 	{
 		ui.DrawRect(
 		        aether::UiRect{
@@ -78,34 +80,40 @@ namespace aether::app::overlay
 		                .anchorMax = anchor,
 		                .offsetMinPx = { panelL + 2.f, y - 11.f },
 		                .offsetMaxPx = { panelL + 5.f,  y + 2.f },
-		        },
+        },
 		        kColorAccent);
 		ui.DrawText(label,
-		        aether::UiPoint{ .anchor = anchor, .offsetPx = { innerL, y } },
-		        12.0f, kColorSection);
+		        aether::UiPoint{
+		                .anchor = anchor, .offsetPx = { innerL, y }
+        },
+		        12.0f,
+		        kColorSection);
 	}
 
-	inline void DrawKV(aether::UIRenderer& ui,
-	                   std::string_view key, std::string_view val,
-	                   glm::vec2 anchor,
-	                   float xKey, float xVal, float y,
-	                   glm::vec4 valColor = kColorText)
+	inline void DrawKV(aether::UIRenderer& ui, std::string_view key, std::string_view val, glm::vec2 anchor, float xKey, float xVal, float y, glm::vec4 valColor = kColorText)
 	{
 		ui.DrawText(key,
-		        aether::UiPoint{ .anchor = anchor, .offsetPx = { xKey, y } },
-		        14.0f, kColorLabel);
+		        aether::UiPoint{
+		                .anchor = anchor, .offsetPx = { xKey, y }
+        },
+		        14.0f,
+		        kColorLabel);
 		ui.DrawText(val,
-		        aether::UiPoint{ .anchor = anchor, .offsetPx = { xVal, y } },
-		        14.0f, valColor);
+		        aether::UiPoint{
+		                .anchor = anchor, .offsetPx = { xVal, y }
+        },
+		        14.0f,
+		        valColor);
 	}
 
-	inline void DrawValue(aether::UIRenderer& ui, std::string_view val,
-	                      glm::vec2 anchor, float x, float y,
-	                      glm::vec4 color = kColorText)
+	inline void DrawValue(aether::UIRenderer& ui, std::string_view val, glm::vec2 anchor, float x, float y, glm::vec4 color = kColorText)
 	{
 		ui.DrawText(val,
-		        aether::UiPoint{ .anchor = anchor, .offsetPx = { x, y } },
-		        14.0f, color);
+		        aether::UiPoint{
+		                .anchor = anchor, .offsetPx = { x, y }
+        },
+		        14.0f,
+		        color);
 	}
 
 	// ── PanelBuilder ─────────────────────────────────────────────────────────
@@ -140,31 +148,21 @@ namespace aether::app::overlay
 		};
 
 		// Single-column: val positioned at innerL + valColOffset.
-		PanelBuilder(aether::UIRenderer& ui, glm::vec2 anchor,
-		             float panelL, float panelR, float panelTop,
-		             float valColOffset = 110.f)
-		    : m_ui(ui), m_anchor(anchor)
-		    , m_panelL(panelL), m_panelR(panelR), m_panelTop(panelTop)
-		    , m_innerL(panelL + kPad), m_innerR(panelR - kPad)
-		    , m_y(panelTop)
+		PanelBuilder(aether::UIRenderer& ui, glm::vec2 anchor, float panelL, float panelR, float panelTop, float valColOffset = 110.f)
+		      : m_ui(ui), m_anchor(anchor), m_panelL(panelL), m_panelR(panelR), m_panelTop(panelTop), m_innerL(panelL + kPad), m_innerR(panelR - kPad), m_y(panelTop)
 		{
 			const float il = panelL + kPad;
-			m_columns[0]   = { il, il + valColOffset };
-			m_columnCount  = 1;
+			m_columns[0] = { il, il + valColOffset };
+			m_columnCount = 1;
 			ui.SetLayer(2);
 		}
 
 		// Multi-column: explicit key/val x offsets from anchor (up to 4 columns).
-		PanelBuilder(aether::UIRenderer& ui, glm::vec2 anchor,
-		             float panelL, float panelR, float panelTop,
-		             std::initializer_list<ColumnDef> columns)
-		    : m_ui(ui), m_anchor(anchor)
-		    , m_panelL(panelL), m_panelR(panelR), m_panelTop(panelTop)
-		    , m_innerL(panelL + kPad), m_innerR(panelR - kPad)
-		    , m_y(panelTop)
+		PanelBuilder(aether::UIRenderer& ui, glm::vec2 anchor, float panelL, float panelR, float panelTop, std::initializer_list<ColumnDef> columns)
+		      : m_ui(ui), m_anchor(anchor), m_panelL(panelL), m_panelR(panelR), m_panelTop(panelTop), m_innerL(panelL + kPad), m_innerR(panelR - kPad), m_y(panelTop)
 		{
 			m_columnCount = 0;
-			for (const ColumnDef& c : columns)
+			for (const ColumnDef& c: columns)
 			{
 				if (m_columnCount < static_cast<int>(m_columns.size()))
 					m_columns[m_columnCount++] = c;
@@ -174,17 +172,23 @@ namespace aether::app::overlay
 
 		// Background is drawn on destruction - content layers are already queued with
 		// layer 2; DrawPanel submits layers 0+1 which the renderer sorts to the back.
-		~PanelBuilder() { Finish(); }
+		~PanelBuilder()
+		{
+			Finish();
+		}
 
-		PanelBuilder(const PanelBuilder&)            = delete;
+		PanelBuilder(const PanelBuilder&) = delete;
 		PanelBuilder& operator=(const PanelBuilder&) = delete;
 
 		// Draws the title text and first separator; advances cursor to first section y.
 		PanelBuilder& Title(std::string_view text)
 		{
 			m_ui.DrawText(text,
-			        aether::UiPoint{ .anchor = m_anchor, .offsetPx = { m_innerL, m_panelTop + 26.f } },
-			        18.f, kColorTitle);
+			        aether::UiPoint{
+			                .anchor = m_anchor, .offsetPx = { m_innerL, m_panelTop + 26.f }
+            },
+			        18.f,
+			        kColorTitle);
 			DrawSeparator(m_ui, m_anchor, m_innerL, m_innerR, m_panelTop + 54.f);
 			m_y = m_panelTop + 66.f;
 			return *this;
@@ -204,24 +208,20 @@ namespace aether::app::overlay
 		}
 
 		// Draws a key-value row in column 0 then advances to the next row.
-		PanelBuilder& KV(std::string_view key, std::string_view val,
-		                 glm::vec4 valColor = kColorText)
+		PanelBuilder& KV(std::string_view key, std::string_view val, glm::vec4 valColor = kColorText)
 		{
 			if (m_columnCount > 0)
-				DrawKV(m_ui, key, val, m_anchor,
-				       m_columns[0].keyX, m_columns[0].valX, m_y, valColor);
+				DrawKV(m_ui, key, val, m_anchor, m_columns[0].keyX, m_columns[0].valX, m_y, valColor);
 			m_y += kRowH;
 			return *this;
 		}
 
 		// Draws a key-value row in the specified column WITHOUT advancing the cursor.
 		// Call NextRow() after all columns for this row are filled.
-		PanelBuilder& KVCol(int col, std::string_view key, std::string_view val,
-		                    glm::vec4 valColor = kColorText)
+		PanelBuilder& KVCol(int col, std::string_view key, std::string_view val, glm::vec4 valColor = kColorText)
 		{
 			if (col >= 0 && col < m_columnCount)
-				DrawKV(m_ui, key, val, m_anchor,
-				       m_columns[col].keyX, m_columns[col].valX, m_y, valColor);
+				DrawKV(m_ui, key, val, m_anchor, m_columns[col].keyX, m_columns[col].valX, m_y, valColor);
 			return *this;
 		}
 
@@ -260,12 +260,35 @@ namespace aether::app::overlay
 		}
 
 		// Accessors for callers that need to issue manual draw calls.
-		float     CurrentY() const { return m_y; }
-		glm::vec2 Anchor()   const { return m_anchor; }
-		float     InnerL()   const { return m_innerL; }
-		float     InnerR()   const { return m_innerR; }
-		float     PanelL()   const { return m_panelL; }
-		float     PanelR()   const { return m_panelR; }
+		float CurrentY() const
+		{
+			return m_y;
+		}
+
+		glm::vec2 Anchor() const
+		{
+			return m_anchor;
+		}
+
+		float InnerL() const
+		{
+			return m_innerL;
+		}
+
+		float InnerR() const
+		{
+			return m_innerR;
+		}
+
+		float PanelL() const
+		{
+			return m_panelL;
+		}
+
+		float PanelR() const
+		{
+			return m_panelR;
+		}
 
 	private:
 		void Finish()
@@ -276,15 +299,15 @@ namespace aether::app::overlay
 			DrawPanel(m_ui, m_anchor, m_panelL, m_panelR, m_panelTop, m_y + kPad);
 		}
 
-		aether::UIRenderer&      m_ui;
-		glm::vec2                m_anchor;
-		float                    m_panelL, m_panelR, m_panelTop;
-		float                    m_innerL, m_innerR;
+		aether::UIRenderer& m_ui;
+		glm::vec2 m_anchor;
+		float m_panelL, m_panelR, m_panelTop;
+		float m_innerL, m_innerR;
 		std::array<ColumnDef, 4> m_columns{};
-		int                      m_columnCount  = 0;
-		float                    m_y            = 0.f;
-		bool                     m_firstSection = true;
-		bool                     m_finished     = false;
+		int m_columnCount = 0;
+		float m_y = 0.f;
+		bool m_firstSection = true;
+		bool m_finished = false;
 	};
 
 } // namespace aether::app::overlay

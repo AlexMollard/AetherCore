@@ -408,10 +408,9 @@ namespace aether
 				output << std::format("AdditionalFramesOmitted: {}\n", filteredTotal - filteredIndex);
 			}
 
-
 			output.flush();
 		}
-	#endif // _WIN32
+#endif // _WIN32
 
 #ifndef _WIN32
 		// Linux/POSIX implementation for stack trace capture
@@ -420,11 +419,7 @@ namespace aether
 			const std::string& name = frame.symbol;
 
 			// Filter out internal crash handler and signal handling frames
-			if (name.find("SignalHandlerThunk") != std::string::npos ||
-			    name.find("TerminateHandlerThunk") != std::string::npos ||
-			    name.find("CaptureCrashArtifacts") != std::string::npos ||
-			    name.find("WriteCallStack") != std::string::npos ||
-			    name.find("WriteTextCrashReport") != std::string::npos)
+			if (name.find("SignalHandlerThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos)
 			{
 				return true;
 			}
@@ -498,7 +493,7 @@ namespace aether
 			std::size_t filteredIndex = 0;
 			std::size_t filteredTotal = 0;
 
-			for (const auto& frame : frames)
+			for (const auto& frame: frames)
 			{
 				if (IsNoiseFrame(frame))
 				{
@@ -538,14 +533,14 @@ namespace aether
 #endif // !_WIN32
 
 		void WriteTextCrashReport(const std::filesystem::path& reportPath,
-							 const std::string_view reason,
-							 const std::string_view detail,
+		        const std::string_view reason,
+		        const std::string_view detail,
 #ifdef _WIN32
-							 EXCEPTION_POINTERS* exceptionPointers,
+		        EXCEPTION_POINTERS* exceptionPointers,
 #else
-							 void* /*exceptionPointers*/,
+		        void* /*exceptionPointers*/,
 #endif
-							 int signalNumber)
+		        int signalNumber)
 		{
 			std::ofstream output(reportPath, std::ios::out | std::ios::trunc);
 			if (!output)
@@ -601,13 +596,13 @@ namespace aether
 		}
 
 		void CaptureCrashArtifacts(const std::string_view reason,
-						 const std::string_view detail,
+		        const std::string_view detail,
 #ifdef _WIN32
-						 EXCEPTION_POINTERS* exceptionPointers,
+		        EXCEPTION_POINTERS* exceptionPointers,
 #else
-						 void* exceptionPointers,
+		        void* exceptionPointers,
 #endif
-						 int signalNumber)
+		        int signalNumber)
 		{
 			if (!g_installed.load())
 			{

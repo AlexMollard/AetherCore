@@ -32,21 +32,41 @@ namespace aether::app
 	class PhysicsGameSystem final : public aether::System
 	{
 	public:
-		void Init(aether::AetherCore& engine, aether::AssetManager& assets,
-		          aether::CameraManager& cameras, aether::Input& input,
-		          aether::PhysicsSystem& physics);
+		void Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics);
 
-		const char* GetName() const override { return "PhysicsGameSystem"; }
+		const char* GetName() const override
+		{
+			return "PhysicsGameSystem";
+		}
 
-		void OnRegister  (aether::World& world) override;
-		void Update      (aether::World& world, float dt) override;
+		void OnRegister(aether::World& world) override;
+		void Update(aether::World& world, float dt) override;
 		void OnUnregister(aether::World& world) override;
 
-		[[nodiscard]] int  GetActiveBodyCount()  const { return m_activeBodyCount; }
-		[[nodiscard]] int  GetProjectileCount()  const { return m_projectileCount; }
-		[[nodiscard]] float GetSimTime()         const { return m_simTime; }
-		[[nodiscard]] aether::CameraHandle GetOrbitCamera() const { return m_orbitCamera; }
-		[[nodiscard]] aether::CameraHandle GetFreeCamera()  const { return m_freeCamera; }
+		[[nodiscard]] int GetActiveBodyCount() const
+		{
+			return m_activeBodyCount;
+		}
+
+		[[nodiscard]] int GetProjectileCount() const
+		{
+			return m_projectileCount;
+		}
+
+		[[nodiscard]] float GetSimTime() const
+		{
+			return m_simTime;
+		}
+
+		[[nodiscard]] aether::CameraHandle GetOrbitCamera() const
+		{
+			return m_orbitCamera;
+		}
+
+		[[nodiscard]] aether::CameraHandle GetFreeCamera() const
+		{
+			return m_freeCamera;
+		}
 
 	private:
 		void BuildScene(aether::World& world);
@@ -54,10 +74,10 @@ namespace aether::app
 		void FireProjectile(aether::World& world);
 
 		// Dependencies
-		aether::AetherCore*    m_engine  = nullptr;
-		aether::AssetManager*  m_assets  = nullptr;
+		aether::AetherCore* m_engine = nullptr;
+		aether::AssetManager* m_assets = nullptr;
 		aether::CameraManager* m_cameras = nullptr;
-		aether::Input*         m_input   = nullptr;
+		aether::Input* m_input = nullptr;
 		aether::PhysicsSystem* m_physics = nullptr;
 
 		// Cameras
@@ -65,32 +85,32 @@ namespace aether::app
 		aether::CameraHandle m_freeCamera;
 
 		// Rendering
-		aether::GraphicsPipeline       m_pipeline;
-		aether::Material               m_groundMaterial;
-		aether::Material               m_boxMaterial;
-		aether::Material               m_roundBodyMaterial;  // cubes used for round bodies
-		aether::Material               m_projectileMaterial;
-		aether::Material               m_wallMaterial;
+		aether::GraphicsPipeline m_pipeline;
+		aether::Material m_groundMaterial;
+		aether::Material m_boxMaterial;
+		aether::Material m_roundBodyMaterial; // cubes used for round bodies
+		aether::Material m_projectileMaterial;
+		aether::Material m_wallMaterial;
 
 		// Entity tracking for scene reset
-		std::vector<aether::Entity>    m_sceneEntities;
+		std::vector<aether::Entity> m_sceneEntities;
 
 		// Per-frame stats
-		float m_simTime        = 0.0f;
-		int   m_activeBodyCount = 0;
-		int   m_projectileCount = 0;
+		float m_simTime = 0.0f;
+		int m_activeBodyCount = 0;
+		int m_projectileCount = 0;
 		float m_projectileCooldown = 0.0f;
 
 		std::mt19937 m_rng{ 1337 };
 
-		static constexpr float  kGroundHalfExtent = 20.0f;
-		static constexpr float  kGroundThickness  = 0.5f;
-		static constexpr int    kStackWidth       = 4;
-		static constexpr int    kStackHeight      = 6;
-		static constexpr int    kScatterCount     = 20;
-		static constexpr float  kProjectileRadius = 0.6f;
-		static constexpr float  kProjectileSpeed  = 28.0f;
-		static constexpr float  kProjectileCooldownTime = 0.3f;
+		static constexpr float kGroundHalfExtent = 20.0f;
+		static constexpr float kGroundThickness = 0.5f;
+		static constexpr int kStackWidth = 4;
+		static constexpr int kStackHeight = 6;
+		static constexpr int kScatterCount = 20;
+		static constexpr float kProjectileRadius = 0.6f;
+		static constexpr float kProjectileSpeed = 28.0f;
+		static constexpr float kProjectileCooldownTime = 0.3f;
 	};
 
 } // namespace aether::app

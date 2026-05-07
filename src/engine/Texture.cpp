@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+
 #include "volk.hpp"
 
 // stb_image - single-header image loader.

@@ -16,14 +16,14 @@
 namespace aether::ecs
 {
 	// Creates a single entity from an explicit mesh + material.
-	inline aether::Entity SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::Material material, const glm::mat4& transform = glm::mat4(1.0f))
+	// Returns an EntityHandle - implicitly converts to Entity for backward compat.
+	inline aether::EntityHandle SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::Material material, const glm::mat4& transform = glm::mat4(1.0f))
 	{
-		const aether::Entity entity = world.Create();
-		world.EmplaceOrReplace<aether::PipelineComponent>(entity, aether::PipelineComponent{ .pipeline = &pipeline });
-		world.EmplaceOrReplace<aether::MeshComponent>(entity, aether::MeshComponent{ .mesh = &mesh });
-		world.EmplaceOrReplace<aether::MaterialComponent>(entity, aether::MaterialComponent{ .material = material });
-		world.EmplaceOrReplace<aether::TransformComponent>(entity, aether::TransformComponent{ .localToWorld = transform });
-		return entity;
+		return world.Spawn()
+		        .AddOrReplace<aether::PipelineComponent>(aether::PipelineComponent{ .pipeline = &pipeline })
+		        .AddOrReplace<aether::MeshComponent>(aether::MeshComponent{ .mesh = &mesh })
+		        .AddOrReplace<aether::MaterialComponent>(aether::MaterialComponent{ .material = material })
+		        .AddOrReplace<aether::TransformComponent>(aether::TransformComponent{ .localToWorld = transform });
 	}
 
 	// Spawns all primitives of a LoadedModel, tags every entity with the provided

@@ -45,29 +45,29 @@ namespace
 
 namespace aether
 {
-   VulkanContext::VulkanContext(const Window& window, const char* appName)
-   {
-	   INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
+	VulkanContext::VulkanContext(const Window& window, const char* appName)
+	{
+		INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
 
-	   // Initialize volk loader (loads global Vulkan functions)
-	   if (volkInitialize() != VK_SUCCESS) {
-		   throw VulkanError("Failed to initialize volk Vulkan loader.");
-	   }
+		// Initialize volk loader (loads global Vulkan functions)
+		if (volkInitialize() != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to initialize volk Vulkan loader.");
+		}
 
-	   vkb::InstanceBuilder instanceBuilder;
-	   auto instanceResult = instanceBuilder.set_app_name(appName)
-									  .require_api_version(1, 4, 0)
-									  .request_validation_layers()
-									  .set_debug_callback(LogValidationMessage)
-									  .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-									  .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-									  .build();
+		vkb::InstanceBuilder instanceBuilder;
+		auto instanceResult = instanceBuilder.set_app_name(appName)
+		                              .require_api_version(1, 4, 0)
+		                              .request_validation_layers()
+		                              .set_debug_callback(LogValidationMessage)
+		                              .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		                              .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+		                              .build();
 
 		if (!instanceResult)
 		{
 			throw MakeVkBootstrapError("Failed to create Vulkan instance: ", instanceResult);
 		}
-
 
 		m_instance = instanceResult.value();
 
@@ -118,7 +118,6 @@ namespace aether
 		{
 			throw VulkanError("Failed to create Vulkan logical device.");
 		}
-
 
 		m_device = deviceResult.value();
 

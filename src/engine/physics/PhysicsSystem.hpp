@@ -50,10 +50,14 @@ namespace aether
 		~PhysicsSystem() override;
 
 		// System interface
-		void        OnRegister  (World& world) override;
-		void        Update      (World& world, float dt) override;
-		void        OnUnregister(World& world) override;
-		const char* GetName     () const override { return "PhysicsSystem"; }
+		void OnRegister(World& world) override;
+		void Update(World& world, float dt) override;
+		void OnUnregister(World& world) override;
+
+		const char* GetName() const override
+		{
+			return "PhysicsSystem";
+		}
 
 		// Remove the physics body associated with an entity and strip the
 		// RigidBodyComponent / PhysicsStateComponent from it.
@@ -61,20 +65,27 @@ namespace aether
 
 		// ── Body control ──────────────────────────────────────────────────────
 
-		void      SetLinearVelocity (JPH::BodyID id, glm::vec3 velocity);
-		glm::vec3 GetLinearVelocity (JPH::BodyID id) const;
-		void      SetAngularVelocity(JPH::BodyID id, glm::vec3 velocity);
+		void SetLinearVelocity(JPH::BodyID id, glm::vec3 velocity);
+		glm::vec3 GetLinearVelocity(JPH::BodyID id) const;
+		void SetAngularVelocity(JPH::BodyID id, glm::vec3 velocity);
 		glm::vec3 GetAngularVelocity(JPH::BodyID id) const;
-		void      AddImpulse        (JPH::BodyID id, glm::vec3 impulse);
-		void      AddForce          (JPH::BodyID id, glm::vec3 force);
+		void AddImpulse(JPH::BodyID id, glm::vec3 impulse);
+		void AddForce(JPH::BodyID id, glm::vec3 force);
 
 		// Teleport a body (does not generate contacts for the move).
 		void SetPosition(JPH::BodyID id, glm::vec3 position);
 		void SetRotation(JPH::BodyID id, glm::quat rotation);
 
 		// Raw Jolt system - for advanced use (raycasts, queries, etc.).
-		[[nodiscard]] JPH::PhysicsSystem&       GetJoltSystem()       { return *m_physics; }
-		[[nodiscard]] const JPH::PhysicsSystem& GetJoltSystem() const { return *m_physics; }
+		[[nodiscard]] JPH::PhysicsSystem& GetJoltSystem()
+		{
+			return *m_physics;
+		}
+
+		[[nodiscard]] const JPH::PhysicsSystem& GetJoltSystem() const
+		{
+			return *m_physics;
+		}
 
 		static constexpr float kFixedTimestep = 1.0f / 60.0f;
 
@@ -91,15 +102,15 @@ namespace aether
 		struct ObjVsBPLayerFilter;
 		struct ObjVsObjLayerFilter;
 
-		std::unique_ptr<BPLayerInterface>         m_bpLayerInterface;
-		std::unique_ptr<ObjVsBPLayerFilter>        m_objVsBPFilter;
-		std::unique_ptr<ObjVsObjLayerFilter>       m_objVsObjFilter;
-		std::unique_ptr<JPH::TempAllocatorImpl>    m_tempAllocator;
-		std::unique_ptr<JPH::JobSystemThreadPool>  m_jobSystem;
-		std::unique_ptr<JPH::PhysicsSystem>        m_physics;
+		std::unique_ptr<BPLayerInterface> m_bpLayerInterface;
+		std::unique_ptr<ObjVsBPLayerFilter> m_objVsBPFilter;
+		std::unique_ptr<ObjVsObjLayerFilter> m_objVsObjFilter;
+		std::unique_ptr<JPH::TempAllocatorImpl> m_tempAllocator;
+		std::unique_ptr<JPH::JobSystemThreadPool> m_jobSystem;
+		std::unique_ptr<JPH::PhysicsSystem> m_physics;
 
-		float m_accumulator           = 0.0f;
-		bool  m_needsBroadPhaseOptimize = false;
+		float m_accumulator = 0.0f;
+		bool m_needsBroadPhaseOptimize = false;
 	};
 
 } // namespace aether

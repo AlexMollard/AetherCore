@@ -24,8 +24,7 @@ namespace aether::app
 
 		// Now register the game system (will call OptimizeBroadPhase internally).
 		auto gameSystem = std::make_unique<PhysicsGameSystem>();
-		gameSystem->Init(context.engine, *context.assets,
-		                 *context.cameras, *context.input, *m_physics);
+		gameSystem->Init(context.engine, *context.assets, *context.cameras, *context.input, *m_physics);
 		m_gameSystem = gameSystem.get();
 		context.world->RegisterSystem(std::move(gameSystem));
 	}
@@ -37,7 +36,7 @@ namespace aether::app
 		context.world->UnregisterSystem("PhysicsGameSystem");
 		context.world->UnregisterSystem("PhysicsSystem");
 		m_gameSystem = nullptr;
-		m_physics    = nullptr;
+		m_physics = nullptr;
 	}
 
 	void PhysicsLayer::OnUpdate([[maybe_unused]] LayerContext& context)
@@ -71,8 +70,8 @@ namespace aether::app
 
 		panel.Section("CONTROLS");
 		panel.KV("Space", "Fire projectile", kColorWarn);
-		panel.KV("R",     "Reset scene");
-		panel.KV("C",     "Toggle camera");
+		panel.KV("R", "Reset scene");
+		panel.KV("C", "Toggle camera");
 	}
 
 } // namespace aether::app

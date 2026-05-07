@@ -12,8 +12,8 @@ namespace aether
 		Triangle,
 		Quad,
 		Cube,
-		Plane,   // 20×20 subdivided grid; UVs tile 20× per axis via REPEAT sampler
-		Sphere,  // UV sphere, radius 0.5, 32 slices × 16 stacks
+		Plane,  // 20×20 subdivided grid; UVs tile 20× per axis via REPEAT sampler
+		Sphere, // UV sphere, radius 0.5, 32 slices × 16 stacks
 	};
 
 	// Engine-owned cache of built-in primitive meshes.

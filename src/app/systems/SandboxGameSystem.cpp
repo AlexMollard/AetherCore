@@ -273,10 +273,7 @@ namespace aether::app
 			{
 				// Deterministic vivid palette around the hue wheel.
 				const float t = static_cast<float>(li) / static_cast<float>(lightCount);
-				const glm::vec3 lightColor = glm::vec3(
-					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.00f)),
-					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.33f)),
-					0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.66f)));
+				const glm::vec3 lightColor = glm::vec3(0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.00f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.33f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.66f)));
 
 				aether::Renderer::PointLight l{};
 				l.position = { lightPosDist(lightRng), 0.35f, lightPosDist(lightRng) };

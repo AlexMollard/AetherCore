@@ -209,7 +209,7 @@ namespace aether
 		constexpr VkVertexInputAttributeDescription kVoxelShadowVertexAttributes[] = {
 			{
              // location 0 : position
-             .location = 0,
+			        .location = 0,
              .binding = 0,
              .format = VK_FORMAT_R32G32B32_SFLOAT,
              .offset = static_cast<std::uint32_t>(offsetof(VoxelVertex, position)),

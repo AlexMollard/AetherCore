@@ -19,11 +19,11 @@ namespace aether::app
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
 		void OnUpdate(LayerContext& context) override;
-		void OnGui  (LayerContext& context) override;
+		void OnGui(LayerContext& context) override;
 
 	private:
-		aether::PhysicsSystem* m_physics    = nullptr;
-		PhysicsGameSystem*     m_gameSystem = nullptr;
+		aether::PhysicsSystem* m_physics = nullptr;
+		PhysicsGameSystem* m_gameSystem = nullptr;
 	};
 
 } // namespace aether::app

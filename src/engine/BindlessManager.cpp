@@ -80,7 +80,7 @@ namespace aether
 		// ── Descriptor pool ───────────────────────────────────────────────────
 		const VkDescriptorPoolSize poolSizes[2] = {
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity },
-			{ 			    VK_DESCRIPTOR_TYPE_SAMPLER,          2 },
+			{			    VK_DESCRIPTOR_TYPE_SAMPLER,          2 },
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
@@ -118,11 +118,11 @@ namespace aether
              .pImmutableSamplers = &m_linearSampler, // embedded in the layout
 			},
 			{
-			 .binding = 2,
-			 .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-			 .descriptorCount = 1,
-			 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-			 .pImmutableSamplers = &m_nearestClampSampler, // embedded in the layout
+             .binding = 2,
+             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+             .descriptorCount = 1,
+             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+             .pImmutableSamplers = &m_nearestClampSampler, // embedded in the layout
 			},
 		};
 

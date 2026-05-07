@@ -5,19 +5,19 @@
 
 namespace aether::app
 {
-    class FishingGameSystem;
+	class FishingGameSystem;
 
-    class FishingLayer final : public AppLayer
-    {
-    public:
-        void OnAttach(LayerContext& context) override;
-        void OnDetach(LayerContext& context) override;
-        void OnUpdate(LayerContext& context) override;
-        void OnGui(LayerContext& context) override;
+	class FishingLayer final : public AppLayer
+	{
+	public:
+		void OnAttach(LayerContext& context) override;
+		void OnDetach(LayerContext& context) override;
+		void OnUpdate(LayerContext& context) override;
+		void OnGui(LayerContext& context) override;
 
-    private:
-        const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
+	private:
+		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
 
-        FishingGameSystem* m_gameSystem = nullptr;
-    };
+		FishingGameSystem* m_gameSystem = nullptr;
+	};
 } // namespace aether::app

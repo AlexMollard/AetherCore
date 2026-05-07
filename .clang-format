@@ -78,7 +78,7 @@ BinPackArguments: false
 BinPackParameters: false
 UseTab: ForIndentation
 FixNamespaceComments: true
-IncludeBlocks: Regroup
-SortIncludes: CaseInsensitive
+IncludeBlocks: Preserve
+SortIncludes: Never
 Standard: Latest
 IndentPPDirectives: AfterHash

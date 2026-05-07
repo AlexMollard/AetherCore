@@ -14,8 +14,8 @@ namespace aether
 	enum class PhysicsLayer : uint8_t
 	{
 		NonMoving = 0, // Static world geometry
-		Moving    = 1, // Dynamic and kinematic bodies (players, objects)
-		Sensor    = 2, // Trigger volumes (no collision response)
+		Moving = 1,    // Dynamic and kinematic bodies (players, objects)
+		Sensor = 2,    // Trigger volumes (no collision response)
 	};
 
 	// How the physics engine drives a body's position.
@@ -36,36 +36,36 @@ namespace aether
 
 	struct BoxBodyDesc
 	{
-		glm::vec3         halfExtents     { 0.5f, 0.5f, 0.5f };
-		PhysicsMotionType motionType      = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer           = PhysicsLayer::Moving;
-		float             friction        = 0.5f;
-		float             restitution     = 0.0f;
-		bool              startActive     = true;
-		glm::vec3         initialVelocity { 0.f, 0.f, 0.f };
+		glm::vec3 halfExtents{ 0.5f, 0.5f, 0.5f };
+		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
+		PhysicsLayer layer = PhysicsLayer::Moving;
+		float friction = 0.5f;
+		float restitution = 0.0f;
+		bool startActive = true;
+		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
 	};
 
 	struct SphereBodyDesc
 	{
-		float             radius          = 0.5f;
-		PhysicsMotionType motionType      = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer           = PhysicsLayer::Moving;
-		float             friction        = 0.5f;
-		float             restitution     = 0.0f;
-		bool              startActive     = true;
-		glm::vec3         initialVelocity { 0.f, 0.f, 0.f };
+		float radius = 0.5f;
+		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
+		PhysicsLayer layer = PhysicsLayer::Moving;
+		float friction = 0.5f;
+		float restitution = 0.0f;
+		bool startActive = true;
+		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
 	};
 
 	struct CapsuleBodyDesc
 	{
-		float             halfHeight      = 0.5f;
-		float             radius         = 0.25f;
-		PhysicsMotionType motionType      = PhysicsMotionType::Dynamic;
-		PhysicsLayer      layer           = PhysicsLayer::Moving;
-		float             friction        = 0.5f;
-		float             restitution     = 0.0f;
-		bool              startActive     = true;
-		glm::vec3         initialVelocity { 0.f, 0.f, 0.f };
+		float halfHeight = 0.5f;
+		float radius = 0.25f;
+		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
+		PhysicsLayer layer = PhysicsLayer::Moving;
+		float friction = 0.5f;
+		float restitution = 0.0f;
+		bool startActive = true;
+		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
 	};
 
 	// ── Runtime components (managed by PhysicsSystem) ─────────────────────────
@@ -74,7 +74,7 @@ namespace aether
 	// bodyId is a stable 32-bit handle - safe to use as a network replication key.
 	struct RigidBodyComponent
 	{
-		JPH::BodyID       bodyId{};
+		JPH::BodyID bodyId{};
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
 	};
 

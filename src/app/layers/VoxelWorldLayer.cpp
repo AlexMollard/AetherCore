@@ -39,10 +39,8 @@ namespace aether::app
 			const float x = static_cast<float>(worldX);
 			const float z = static_cast<float>(worldZ);
 
-			const float broad = std::sin(x * 0.035f) * static_cast<float>(kHillAmpA)
-			                  + std::cos(z * 0.028f) * static_cast<float>(kHillAmpB);
-			const float detail = std::sin((x + z) * 0.085f) * 3.5f
-			                   + std::cos((x - z) * 0.072f) * 2.0f;
+			const float broad = std::sin(x * 0.035f) * static_cast<float>(kHillAmpA) + std::cos(z * 0.028f) * static_cast<float>(kHillAmpB);
+			const float detail = std::sin((x + z) * 0.085f) * 3.5f + std::cos((x - z) * 0.072f) * 2.0f;
 			const float ridges = std::abs(std::sin(x * 0.018f) + std::cos(z * 0.022f)) * 5.5f;
 
 			return static_cast<float>(kBaseHeight) + broad + detail + ridges;
@@ -60,10 +58,7 @@ namespace aether::app
 			const float y = static_cast<float>(worldY);
 			const float z = static_cast<float>(worldZ);
 
-			return std::sin(x * 0.091f + y * 0.113f)
-			     + std::cos(z * 0.087f - y * 0.097f)
-			     + std::sin((x + z) * 0.043f + y * 0.067f)
-			     + std::cos((x - z) * 0.052f - y * 0.041f);
+			return std::sin(x * 0.091f + y * 0.113f) + std::cos(z * 0.087f - y * 0.097f) + std::sin((x + z) * 0.043f + y * 0.067f) + std::cos((x - z) * 0.052f - y * 0.041f);
 		}
 
 		bool IsSolidVoxel(int worldX, int worldY, int worldZ)
@@ -73,9 +68,7 @@ namespace aether::app
 
 			// Cliff shelf / overhang layer that protrudes beyond the base column.
 			const float cliffMask = 0.5f + 0.5f * std::sin(static_cast<float>(worldX) * 0.024f + std::cos(static_cast<float>(worldZ) * 0.031f) * 1.7f);
-			const float shelfCenter = baseSurface + 5.5f
-			                        + std::sin(static_cast<float>(worldZ) * 0.079f) * 3.0f
-			                        + std::cos(static_cast<float>(worldX) * 0.063f) * 2.0f;
+			const float shelfCenter = baseSurface + 5.5f + std::sin(static_cast<float>(worldZ) * 0.079f) * 3.0f + std::cos(static_cast<float>(worldX) * 0.063f) * 2.0f;
 			const float shelfThickness = 2.2f + 1.0f * std::sin(static_cast<float>(worldX + worldZ) * 0.05f);
 			const float shelfDensity = (shelfThickness - std::abs(static_cast<float>(worldY) - shelfCenter)) * std::max(0.0f, cliffMask - 0.35f) * 2.4f;
 			density = std::max(density, shelfDensity);
@@ -109,7 +102,7 @@ namespace aether::app
 		const float inset = kAtlasInsetTexels * kAtlasTexel;
 		return {
 			.uvMin = {       col * kTile + inset,       row * kTile + inset },
-			.uvMax = { (col + 1) * kTile - inset, (row + 1) * kTile - inset }
+              .uvMax = { (col + 1) * kTile - inset, (row + 1) * kTile - inset }
 		};
 	}
 
@@ -257,8 +250,7 @@ namespace aether::app
 		const bool bypass = context.engine.GetRenderQueue().IsDebugBypassIndirect();
 		panel.KV("Draw path", bypass ? "Bypass indirect" : "Indirect", bypass ? kColorWarn : kColorGood);
 
-		std::snprintf(buf.data(), buf.size(), "%u / %u / %u",
-		        stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
+		std::snprintf(buf.data(), buf.size(), "%u / %u / %u", stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
 		panel.KV("Rebuild A/U/F", buf.data(), stats.rebuildFailuresLastFrame == 0 ? kColorGood : kColorWarn);
 	}
 
