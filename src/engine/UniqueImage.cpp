@@ -270,7 +270,9 @@ namespace aether
 		if (samplerResult != VK_SUCCESS)
 		{
 			if (ownView)
+			{
 				vkDestroyImageView(device, view, nullptr);
+			}
 			throw VulkanError(std::format("Failed to create sampler for bindless registration. VkResult={}", static_cast<int>(samplerResult)));
 		}
 
@@ -288,7 +290,9 @@ namespace aether
 			}
 			vkDestroySampler(device, sampler, nullptr);
 			if (ownView)
+			{
 				vkDestroyImageView(device, view, nullptr);
+			}
 			throw;
 		}
 

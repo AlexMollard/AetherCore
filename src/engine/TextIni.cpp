@@ -74,7 +74,10 @@ namespace aether::text
 
 	std::string TrimAscii(std::string value)
 	{
-		auto isSpace = [](const unsigned char c) { return std::isspace(c) != 0; };
+		auto isSpace = [](const unsigned char c)
+		{
+			return std::isspace(c) != 0;
+		};
 
 		while (!value.empty() && isSpace(static_cast<unsigned char>(value.front())))
 		{

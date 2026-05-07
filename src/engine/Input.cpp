@@ -32,11 +32,15 @@ namespace aether
 		// Snapshot keyboard - glfwGetKey returns GLFW_RELEASE for any
 		// key code that is not currently pressed (including unmapped codes).
 		for (int i = 0; i < kMaxKeys; ++i)
+		{
 			m_currKeys[i] = (glfwGetKey(m_window, i) == GLFW_PRESS);
+		}
 
 		// Snapshot mouse buttons.
 		for (int i = 0; i < kMaxMouseButtons; ++i)
+		{
 			m_currMouseButtons[i] = (glfwGetMouseButton(m_window, i) == GLFW_PRESS);
+		}
 
 		// Capture cursor position.
 		m_prevMousePos = m_mousePos;
@@ -64,7 +68,9 @@ namespace aether
 	{
 		const int k = static_cast<int>(key);
 		if (k < 0 || k >= kMaxKeys)
+		{
 			return false;
+		}
 		return m_currKeys[k];
 	}
 
@@ -72,7 +78,9 @@ namespace aether
 	{
 		const int k = static_cast<int>(key);
 		if (k < 0 || k >= kMaxKeys)
+		{
 			return false;
+		}
 		return m_currKeys[k] && !m_prevKeys[k];
 	}
 
@@ -80,7 +88,9 @@ namespace aether
 	{
 		const int k = static_cast<int>(key);
 		if (k < 0 || k >= kMaxKeys)
+		{
 			return false;
+		}
 		return !m_currKeys[k] && m_prevKeys[k];
 	}
 
@@ -90,7 +100,9 @@ namespace aether
 	{
 		const int b = static_cast<int>(btn);
 		if (b < 0 || b >= kMaxMouseButtons)
+		{
 			return false;
+		}
 		return m_currMouseButtons[b];
 	}
 
@@ -98,7 +110,9 @@ namespace aether
 	{
 		const int b = static_cast<int>(btn);
 		if (b < 0 || b >= kMaxMouseButtons)
+		{
 			return false;
+		}
 		return m_currMouseButtons[b] && !m_prevMouseButtons[b];
 	}
 
@@ -106,7 +120,9 @@ namespace aether
 	{
 		const int b = static_cast<int>(btn);
 		if (b < 0 || b >= kMaxMouseButtons)
+		{
 			return false;
+		}
 		return !m_currMouseButtons[b] && m_prevMouseButtons[b];
 	}
 
@@ -133,6 +149,8 @@ namespace aether
 	{
 		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (self)
+		{
 			self->m_pendingScroll += glm::vec2{ static_cast<float>(xOffset), static_cast<float>(yOffset) };
+		}
 	}
 } // namespace aether

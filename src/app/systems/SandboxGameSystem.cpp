@@ -64,14 +64,18 @@ namespace aether::app
 	std::uint32_t SandboxGameSystem::GetAnimationCount() const
 	{
 		if (m_foxAnimators.empty())
+		{
 			return 0;
+		}
 		return m_foxAnimators.front().GetAnimationCount();
 	}
 
 	std::string_view SandboxGameSystem::GetCurrentAnimationName() const
 	{
 		if (m_foxAnimators.empty())
+		{
 			return {};
+		}
 		const aether::ModelAnimator& first = m_foxAnimators.front();
 		return first.GetAnimationName(first.GetCurrentAnimation());
 	}
@@ -151,7 +155,9 @@ namespace aether::app
 				const std::uint32_t animCount = m_foxModel->animator->GetAnimationCount();
 				INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
 				for (std::uint32_t i = 0; i < animCount; ++i)
+				{
 					INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animator->GetAnimationName(i));
+				}
 			}
 
 			std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
@@ -307,7 +313,9 @@ namespace aether::app
 	void SandboxGameSystem::Update(aether::World& world, float dt)
 	{
 		if (!m_engine || !m_cameras || !m_input)
+		{
 			return;
+		}
 
 		m_time += dt;
 
@@ -318,7 +326,9 @@ namespace aether::app
 			m = glm::scale(m, { groundSize, groundSize, 1.0f });
 			auto gView = world.View<GroundTag, aether::TransformComponent>();
 			for (auto e: gView)
+			{
 				gView.get<aether::TransformComponent>(e).localToWorld = m;
+			}
 		}
 
 		// ── Fox autonomous wander ─────────────────────────────────────────────
@@ -367,9 +377,13 @@ namespace aether::app
 						const float desiredHeading = std::atan2(dx, dz);
 						float diff = desiredHeading - agent.heading;
 						while (diff > glm::pi<float>())
+						{
 							diff -= glm::two_pi<float>();
+						}
 						while (diff < -glm::pi<float>())
+						{
 							diff += glm::two_pi<float>();
+						}
 
 						const float turnSpeed = glm::radians(270.0f);
 						agent.heading += std::clamp(diff, -turnSpeed * dt, turnSpeed * dt);
@@ -406,7 +420,9 @@ namespace aether::app
 				foxMat = glm::rotate(foxMat, agent.heading, { 0.0f, 1.0f, 0.0f });
 				foxMat = glm::scale(foxMat, glm::vec3(0.05f));
 				for (const aether::Entity e: m_foxInstances[i])
+				{
 					world.Get<aether::TransformComponent>(e).localToWorld = foxMat;
+				}
 			}
 		}
 
@@ -418,7 +434,9 @@ namespace aether::app
 			m = glm::scale(m, { 1.4f, 1.4f, 1.4f });
 			auto cView = world.View<CenterTag, aether::TransformComponent>();
 			for (auto e: cView)
+			{
 				cView.get<aether::TransformComponent>(e).localToWorld = m;
+			}
 		}
 
 		// ── Sky: ring of cubes revolving at kSkyHeight ────────────────────────
@@ -465,7 +483,9 @@ namespace aether::app
 			{
 				const int idx = markerView.get<PointLightMarkerTag>(e).index;
 				if (idx < 0 || static_cast<std::size_t>(idx) >= m_pointLights.size())
+				{
 					continue;
+				}
 
 				// Test mode: drive both marker cubes and actual point-light sources
 				// from the same animated position so any mismatch is impossible.
@@ -542,7 +562,9 @@ namespace aether::app
 	void SandboxGameSystem::OnUnregister(aether::World& world)
 	{
 		if (!m_engine || !m_assets || !m_cameras)
+		{
 			return;
+		}
 
 		INFO(aether::LogCategory::App, "SandboxGameSystem unregistered.");
 
@@ -553,7 +575,9 @@ namespace aether::app
 			toDestroy.assign(allView.begin(), allView.end());
 		}
 		for (const entt::entity e: toDestroy)
+		{
 			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
+		}
 
 		m_foxAgents.clear();
 		m_foxInstances.clear();
@@ -563,7 +587,9 @@ namespace aether::app
 		if (m_foxModel)
 		{
 			for (aether::LoadedModelPrimitive& primitive: m_foxModel->primitives)
+			{
 				m_assets->UnregisterMaterial(primitive.material);
+			}
 		}
 		m_foxModel.reset();
 

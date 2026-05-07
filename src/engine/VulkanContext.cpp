@@ -1,4 +1,3 @@
-
 #include "VulkanContext.hpp"
 
 #include <string>

@@ -17,7 +17,10 @@ namespace voxel
 		glm::ivec3 WorldToChunk(const glm::ivec3& worldPos)
 		{
 			// Integer floor-divide.
-			auto fd = [](int v, int d) -> int { return (v / d) - (v % d != 0 && (v ^ d) < 0 ? 1 : 0); };
+			auto fd = [](int v, int d) -> int
+			{
+				return (v / d) - (v % d != 0 && (v ^ d) < 0 ? 1 : 0);
+			};
 			return { fd(worldPos.x, kChunkSize), fd(worldPos.y, kChunkSize), fd(worldPos.z, kChunkSize) };
 		}
 
@@ -57,7 +60,9 @@ namespace voxel
 		for (auto& [coord, chunk]: m_chunks)
 		{
 			if (chunk)
+			{
 				chunk->mesh.Reset(core.GetMeshArena());
+			}
 		}
 		m_chunks.clear();
 	}
@@ -79,7 +84,9 @@ namespace voxel
 	{
 		auto it = m_chunks.find(chunkCoord);
 		if (it != m_chunks.end())
+		{
 			return *it->second;
+		}
 
 		auto& ptr = m_chunks.emplace(chunkCoord, std::make_unique<Chunk>()).first->second;
 		ptr->paddedBlocks.assign(kPaddedSize * kPaddedSize * kPaddedSize, 0u);
@@ -105,7 +112,9 @@ namespace voxel
 			const int localVal = local[axis];
 			const int boundary = (sign > 0) ? (kChunkSize - 1) : 0;
 			if (localVal != boundary)
+			{
 				continue;
+			}
 
 			// Determine neighbour chunk.
 			glm::ivec3 nbCC = cc;
@@ -114,7 +123,9 @@ namespace voxel
 			// Only update if neighbour already exists (don't force-create).
 			auto it = m_chunks.find(nbCC);
 			if (it == m_chunks.end())
+			{
 				continue;
+			}
 
 			Chunk& nb = *it->second;
 			// Ghost position in neighbour padded space:
@@ -138,7 +149,9 @@ namespace voxel
 
 		auto it = m_chunks.find(cc);
 		if (it == m_chunks.end())
+		{
 			return BlockId::Air;
+		}
 
 		const Chunk& chunk = *it->second;
 		return static_cast<BlockId>(chunk.paddedBlocks[LocalToPaddedIndex(local)]);
@@ -162,7 +175,9 @@ namespace voxel
 		const bool uploaded = chunk.mesh.Rebuild(m_mesher.Vertices(), m_mesher.VertexCount(), sizeof(aether::VoxelVertex), m_mesher.Indices(), m_mesher.IndexCount(), m_core->GetMeshArena(), m_core->GetMeshUploadQueue());
 
 		if (uploaded)
+		{
 			chunk.needsRebuild = false;
+		}
 		// else: leave needsRebuild = true so we retry next frame
 
 		return uploaded;
@@ -186,13 +201,19 @@ namespace voxel
 		for (auto& [coord, chunk]: m_chunks)
 		{
 			if (!chunk || !chunk->needsRebuild)
+			{
 				continue;
+			}
 
 			if (attemptsThisFrame >= kMaxAttemptsPerFrame)
+			{
 				break;
+			}
 
 			if (uploadsThisFrame >= kMaxUploadsPerFrame)
+			{
 				break;
+			}
 
 			++attemptsThisFrame;
 			++m_rebuildAttemptsLastFrame;
@@ -210,7 +231,9 @@ namespace voxel
 		}
 
 		if (m_core->GetMeshUploadQueue().HasPendingUploads())
+		{
 			m_core->FlushMeshUploads();
+		}
 	}
 
 	void ChunkManager::SubmitDraws(aether::AetherCore& core)
@@ -221,7 +244,9 @@ namespace voxel
 		for (const auto& [coord, chunk]: m_chunks)
 		{
 			if (!chunk || chunk->isEmpty || chunk->needsRebuild)
+			{
 				continue;
+			}
 
 			const aether::Mesh& mesh = chunk->mesh.GetMesh();
 
@@ -251,14 +276,22 @@ namespace voxel
 		{
 			(void) coord;
 			if (!chunk)
+			{
 				continue;
+			}
 
 			if (chunk->needsRebuild)
+			{
 				++stats.dirtyChunks;
+			}
 			if (chunk->isEmpty)
+			{
 				++stats.emptyChunks;
+			}
 			if (!chunk->needsRebuild && !chunk->isEmpty && chunk->mesh.IsValid())
+			{
 				++stats.readyChunks;
+			}
 		}
 
 		return stats;

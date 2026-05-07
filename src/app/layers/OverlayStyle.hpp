@@ -165,7 +165,9 @@ namespace aether::app::overlay
 			for (const ColumnDef& c: columns)
 			{
 				if (m_columnCount < static_cast<int>(m_columns.size()))
+				{
 					m_columns[m_columnCount++] = c;
+				}
 			}
 			ui.SetLayer(2);
 		}
@@ -199,7 +201,9 @@ namespace aether::app::overlay
 		PanelBuilder& Section(std::string_view label)
 		{
 			if (!m_firstSection)
+			{
 				m_y += kRowH;
+			}
 			m_firstSection = false;
 			DrawSectionHeader(m_ui, label, m_anchor, m_panelL, m_innerL, m_y);
 			DrawSeparator(m_ui, m_anchor, m_innerL, m_innerR, m_y + 13.f);
@@ -211,7 +215,9 @@ namespace aether::app::overlay
 		PanelBuilder& KV(std::string_view key, std::string_view val, glm::vec4 valColor = kColorText)
 		{
 			if (m_columnCount > 0)
+			{
 				DrawKV(m_ui, key, val, m_anchor, m_columns[0].keyX, m_columns[0].valX, m_y, valColor);
+			}
 			m_y += kRowH;
 			return *this;
 		}
@@ -221,7 +227,9 @@ namespace aether::app::overlay
 		PanelBuilder& KVCol(int col, std::string_view key, std::string_view val, glm::vec4 valColor = kColorText)
 		{
 			if (col >= 0 && col < m_columnCount)
+			{
 				DrawKV(m_ui, key, val, m_anchor, m_columns[col].keyX, m_columns[col].valX, m_y, valColor);
+			}
 			return *this;
 		}
 
@@ -229,7 +237,9 @@ namespace aether::app::overlay
 		PanelBuilder& Value(std::string_view val, glm::vec4 color = kColorText)
 		{
 			if (m_columnCount > 0)
+			{
 				DrawValue(m_ui, val, m_anchor, m_columns[0].keyX, m_y, color);
+			}
 			m_y += kRowH;
 			return *this;
 		}
@@ -294,7 +304,9 @@ namespace aether::app::overlay
 		void Finish()
 		{
 			if (m_finished)
+			{
 				return;
+			}
 			m_finished = true;
 			DrawPanel(m_ui, m_anchor, m_panelL, m_panelR, m_panelTop, m_y + kPad);
 		}

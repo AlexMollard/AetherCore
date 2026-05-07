@@ -80,7 +80,9 @@ namespace aether
 		const auto cwd = std::filesystem::current_path();
 		const std::filesystem::path requested(fileName);
 		if (requested.is_absolute())
+		{
 			return requested;
+		}
 
 		const std::filesystem::path candidates[] = {
 			cwd / "data" / "config" / requested,
@@ -97,7 +99,9 @@ namespace aether
 		for (const auto& candidate: candidates)
 		{
 			if (std::filesystem::exists(candidate))
+			{
 				return candidate;
+			}
 		}
 		return candidates[0];
 	}
@@ -143,7 +147,9 @@ namespace aether
 					std::string text;
 					text.resize(bytes.size());
 					for (std::size_t i = 0; i < bytes.size(); ++i)
+					{
 						text[i] = static_cast<char>(bytes[i]);
+					}
 					ParseSettingsText(text, settings);
 					INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", virtualPath, settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
 					return settings;

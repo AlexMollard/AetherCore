@@ -783,7 +783,9 @@ namespace aether
 	void AetherCore::FlushMeshUploads()
 	{
 		if (!m_meshUploadQueue.HasPendingUploads())
+		{
 			return;
+		}
 		ImmediateSubmit([this](VkCommandBuffer cmd) { m_meshUploadQueue.Flush(cmd); });
 	}
 

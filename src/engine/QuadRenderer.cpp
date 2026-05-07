@@ -25,7 +25,9 @@ namespace aether
 			info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
 			VkShaderModule mod = VK_NULL_HANDLE;
 			if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
+			{
 				throw std::runtime_error("QuadRenderer: failed to create compute shader module.");
+			}
 			return mod;
 		}
 	} // namespace

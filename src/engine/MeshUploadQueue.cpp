@@ -24,7 +24,9 @@ namespace aether
 	{
 		const VkDeviceSize totalBytes = vertexBytes + indexBytes;
 		if (m_ringHead + totalBytes > kStagingCapacity)
+		{
 			return false; // staging full - retry next frame
+		}
 
 		auto* mapped = static_cast<std::uint8_t*>(m_staging.GetAllocationInfo().pMappedData);
 
@@ -42,7 +44,9 @@ namespace aether
 	void MeshUploadQueue::Flush(VkCommandBuffer cmd)
 	{
 		if (m_pendingCopies.empty())
+		{
 			return;
+		}
 
 		// Flush the host-written staging bytes before the GPU reads them.
 		vmaFlushAllocation(m_staging.GetAllocator(), m_staging.GetAllocation(), 0, m_ringHead);

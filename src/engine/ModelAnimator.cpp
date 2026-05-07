@@ -24,11 +24,17 @@ namespace aether
 		Bracket FindBracket(const std::vector<float>& times, float t)
 		{
 			if (times.empty())
+			{
 				return { 0, 0, 0.0f };
+			}
 			if (times.size() == 1 || t <= times.front())
+			{
 				return { 0, 0, 0.0f };
+			}
 			if (t >= times.back())
+			{
 				return { times.size() - 1, times.size() - 1, 0.0f };
+			}
 			for (std::size_t i = 0; i + 1 < times.size(); ++i)
 			{
 				if (t < times[i + 1])
@@ -44,7 +50,9 @@ namespace aether
 		glm::vec3 SampleVec3(const assets::GltfAnimationChannel& ch, float t)
 		{
 			if (ch.values.empty())
+			{
 				return glm::vec3(0.0f);
+			}
 			if (ch.interpolation == assets::GltfInterpolation::Step || ch.values.size() == 1)
 			{
 				const auto [lo, hi, a] = FindBracket(ch.times, t);
@@ -57,9 +65,14 @@ namespace aether
 		glm::quat SampleQuat(const assets::GltfAnimationChannel& ch, float t)
 		{
 			if (ch.values.empty())
+			{
 				return glm::quat(1.0f, 0.0f, 0.0f, 0.0f);
+			}
 			// glTF stores quaternion as (x, y, z, w) packed into values[i].xyzw.
-			auto toQuat = [](const glm::vec4& v) { return glm::quat(v.w, v.x, v.y, v.z); };
+			auto toQuat = [](const glm::vec4& v)
+			{
+				return glm::quat(v.w, v.x, v.y, v.z);
+			};
 			if (ch.interpolation == assets::GltfInterpolation::Step || ch.values.size() == 1)
 			{
 				const auto [lo, hi, a] = FindBracket(ch.times, t);
@@ -110,7 +123,9 @@ namespace aether
 
 			// Pad inverse bind matrices to joint count if the accessor was missing.
 			if (dst.inverseBindMatrices.size() < dst.joints.size())
+			{
 				dst.inverseBindMatrices.resize(dst.joints.size(), glm::mat4(1.0f));
+			}
 
 			if (!dst.joints.empty())
 			{
@@ -129,7 +144,9 @@ namespace aether
 
 				// Prime with identity so the mesh renders in bind pose before Update().
 				for (std::size_t j = 0; j < dst.joints.size(); ++j)
+				{
 					dst.mappedPtr[j] = glm::mat4(1.0f);
+				}
 			}
 		}
 
@@ -160,12 +177,16 @@ namespace aether
 	float ModelAnimator::ComputeDuration(std::uint32_t animIndex) const
 	{
 		if (animIndex >= m_animations.size())
+		{
 			return 0.0f;
+		}
 		float d = 0.0f;
 		for (const assets::GltfAnimationChannel& ch: m_animations[animIndex].channels)
 		{
 			if (!ch.times.empty())
+			{
 				d = std::max(d, ch.times.back());
+			}
 		}
 		return d;
 	}
@@ -173,7 +194,9 @@ namespace aether
 	void ModelAnimator::SetAnimation(std::uint32_t index)
 	{
 		if (index >= m_animations.size())
+		{
 			return;
+		}
 		m_currentAnim = index;
 		m_time = 0.0f;
 		m_duration = ComputeDuration(index);
@@ -195,16 +218,22 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		if (m_animations.empty())
+		{
 			return;
+		}
 
 		if (m_duration > 0.0f)
 		{
 			m_time += dt * m_playbackSpeed;
 			// Wrap looping.
 			while (m_time > m_duration)
+			{
 				m_time -= m_duration;
+			}
 			while (m_time < 0.0f)
+			{
 				m_time += m_duration;
+			}
 		}
 
 		// Reset all nodes to their bind-pose TRS so un-animated nodes stay correct.
@@ -215,7 +244,9 @@ namespace aether
 			for (const assets::GltfAnimationChannel& ch: m_animations[m_currentAnim].channels)
 			{
 				if (ch.nodeIndex >= m_nodes.size())
+				{
 					continue;
+				}
 
 				NodeState& node = m_nodes[ch.nodeIndex];
 				switch (ch.path)
@@ -277,7 +308,9 @@ namespace aether
 		for (SkinData& skin: m_skins)
 		{
 			if (skin.mappedPtr == nullptr)
+			{
 				continue;
+			}
 			for (std::size_t j = 0; j < skin.joints.size(); ++j)
 			{
 				const std::uint32_t nodeIdx = skin.joints[j];
@@ -334,10 +367,16 @@ namespace aether
 
 				// Initialise the clone's GPU buffer with the source's current pose.
 				if (src.mappedPtr && dst.mappedPtr)
+				{
 					std::memcpy(dst.mappedPtr, src.mappedPtr, bufSize);
+				}
 				else if (dst.mappedPtr)
+				{
 					for (std::size_t j = 0; j < dst.joints.size(); ++j)
+					{
 						dst.mappedPtr[j] = glm::mat4(1.0f);
+					}
+				}
 			}
 		}
 
@@ -350,7 +389,9 @@ namespace aether
 		{
 			m_time = std::fmod(t, m_duration);
 			if (m_time < 0.0f)
+			{
 				m_time += m_duration;
+			}
 		}
 		else
 		{
@@ -373,24 +414,32 @@ namespace aether
 	std::string_view ModelAnimator::GetAnimationName(std::uint32_t index) const
 	{
 		if (index >= m_animations.size())
+		{
 			return {};
+		}
 		return m_animations[index].name;
 	}
 
 	VkDeviceAddress ModelAnimator::GetSkinBufferAddr(std::int32_t skinIndex) const
 	{
 		if (skinIndex < 0 || static_cast<std::size_t>(skinIndex) >= m_skins.size())
+		{
 			return 0;
+		}
 		const SkinData& skin = m_skins[static_cast<std::size_t>(skinIndex)];
 		if (!skin.buffer)
+		{
 			return 0;
+		}
 		return skin.buffer.GetDeviceAddress();
 	}
 
 	std::uint32_t ModelAnimator::GetSkinJointCount(std::int32_t skinIndex) const
 	{
 		if (skinIndex < 0 || static_cast<std::size_t>(skinIndex) >= m_skins.size())
+		{
 			return 0;
+		}
 		return static_cast<std::uint32_t>(m_skins[static_cast<std::size_t>(skinIndex)].joints.size());
 	}
 } // namespace aether

@@ -127,7 +127,9 @@ namespace aether
 	void Camera::Update(const Input& input, float dt)
 	{
 		if (m_mode == CameraMode::Manual)
+		{
 			return;
+		}
 
 		if (m_mode == CameraMode::Free)
 		{
@@ -145,22 +147,36 @@ namespace aether
 			const glm::vec3 right = GetRight();
 
 			if (input.IsKeyDown(Key::W))
+			{
 				m_position += fwd * m_moveSpeed * dt;
+			}
 			if (input.IsKeyDown(Key::S))
+			{
 				m_position -= fwd * m_moveSpeed * dt;
+			}
 			if (input.IsKeyDown(Key::D))
+			{
 				m_position += right * m_moveSpeed * dt;
+			}
 			if (input.IsKeyDown(Key::A))
+			{
 				m_position -= right * m_moveSpeed * dt;
+			}
 			if (input.IsKeyDown(Key::E))
+			{
 				m_position.y += m_moveSpeed * dt;
+			}
 			if (input.IsKeyDown(Key::Q))
+			{
 				m_position.y -= m_moveSpeed * dt;
+			}
 
 			// Scroll wheel: scale move speed (min 0.5).
 			const float scroll = input.GetScrollDelta().y;
 			if (scroll != 0.0f)
+			{
 				m_moveSpeed = std::max(0.5f, m_moveSpeed + scroll * 0.5f);
+			}
 		}
 		else if (m_mode == CameraMode::Orbit)
 		{
@@ -176,7 +192,9 @@ namespace aether
 			// Scroll wheel: zoom in / out.
 			const float scroll = input.GetScrollDelta().y;
 			if (scroll != 0.0f)
+			{
 				m_orbitDistance = std::max(0.1f, m_orbitDistance - scroll * m_zoomSpeed);
+			}
 		}
 	}
 } // namespace aether

@@ -213,11 +213,15 @@ namespace aether
 		                {
 			                auto rit = m_targets.find(id);
 			                if (rit == m_targets.end())
+			                {
 				                return;
+			                }
 
 			                Camera* cam = m_cameraManager->TryGet(CameraHandle{ rit->second.cameraHandleRaw });
 			                if (cam == nullptr || !rit->second.constants)
+			                {
 				                return;
+			                }
 
 			                const float aspect = static_cast<float>(rit->second.extent.width) / static_cast<float>(rit->second.extent.height);
 
@@ -251,9 +255,13 @@ namespace aether
 		                {
 			                auto rit = m_targets.find(id);
 			                if (rit == m_targets.end())
+			                {
 				                return;
+			                }
 			                if (!rit->second.constants)
+			                {
 				                return;
+			                }
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
 			                rit->second.renderQueue.FlushDraw(ctx.recorder, m_bindlessManager->GetSet(), m_lightingManager->GetSet(frameIdx));

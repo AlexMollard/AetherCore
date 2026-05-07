@@ -46,7 +46,9 @@ namespace aether::app
 	void PhysicsLayer::OnGui(LayerContext& context)
 	{
 		if (!context.ui || !m_gameSystem)
+		{
 			return;
+		}
 
 		using namespace aether::app::overlay;
 

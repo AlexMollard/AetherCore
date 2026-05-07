@@ -25,7 +25,10 @@ namespace voxel
 		[[nodiscard]] std::size_t operator()(const glm::ivec3& value) const noexcept
 		{
 			std::size_t h = 0;
-			auto hashCombine = [&h](std::size_t v) { h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2); };
+			auto hashCombine = [&h](std::size_t v)
+			{
+				h ^= v + 0x9e3779b97f4a7c15ull + (h << 6) + (h >> 2);
+			};
 
 			hashCombine(std::hash<int>{}(value.x));
 			hashCombine(std::hash<int>{}(value.y));

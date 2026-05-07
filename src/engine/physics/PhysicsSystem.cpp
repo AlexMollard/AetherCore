@@ -268,7 +268,9 @@ namespace aether
 		for (auto [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 		{
 			if (rigid.bodyId.IsInvalid() || rigid.motionType == PhysicsMotionType::Static)
+			{
 				continue;
+			}
 
 			// Read current physics state.
 			const auto pos = bodyInterface.GetCenterOfMassPosition(rigid.bodyId);
@@ -322,7 +324,9 @@ namespace aether
 
 		// Set the initial transform so the app never needs to bake scale manually.
 		if (auto* tc = world.TryGet<TransformComponent>(entity))
+		{
 			tc->localToWorld = ToTransform(pos, rot, visualScale);
+		}
 	}
 
 	void PhysicsSystem::FlushPendingBodies(World& world)
@@ -334,20 +338,29 @@ namespace aether
 		// World::View returns raw entt views; entities come back as entt::entity.
 		// aether::Entity and entt::entity share the same bit representation, so we
 		// can reconstruct one from the other inline wherever World's typed API is needed.
-		auto toAether = [](entt::entity e) -> Entity { return Entity{ static_cast<uint32_t>(entt::to_integral(e)) }; };
+		auto toAether = [](entt::entity e) -> Entity
+		{
+			return Entity{ static_cast<uint32_t>(entt::to_integral(e)) };
+		};
 
 		auto applyVelocity = [&](entt::entity e, glm::vec3 v)
 		{
 			if (glm::length(v) > 0.f)
+			{
 				if (const auto* r = reg.try_get<RigidBodyComponent>(e))
+				{
 					bi.SetLinearVelocity(r->bodyId, ToJolt(v));
+				}
+			}
 		};
 
 		// ── Box ───────────────────────────────────────────────────────────────────
 		for (auto [entity, desc]: world.View<BoxBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				continue;
+			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
 			JPH::BoxShapeSettings ss{ ToJolt(desc.halfExtents) };
@@ -367,18 +380,26 @@ namespace aether
 
 			AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, desc.halfExtents * 2.f, desc.startActive);
 			if (desc.motionType == PhysicsMotionType::Static)
+			{
 				addedStatic = true;
+			}
 			applyVelocity(entity, desc.initialVelocity);
 		}
 		for (auto entity: world.View<BoxBodyDesc>())
+		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				reg.remove<BoxBodyDesc>(entity);
+			}
+		}
 
 		// ── Sphere ────────────────────────────────────────────────────────────────
 		for (auto [entity, desc]: world.View<SphereBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				continue;
+			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
 			JPH::SphereShapeSettings ss{ desc.radius };
@@ -397,18 +418,26 @@ namespace aether
 
 			AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, glm::vec3(desc.radius * 2.f), desc.startActive);
 			if (desc.motionType == PhysicsMotionType::Static)
+			{
 				addedStatic = true;
+			}
 			applyVelocity(entity, desc.initialVelocity);
 		}
 		for (auto entity: world.View<SphereBodyDesc>())
+		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				reg.remove<SphereBodyDesc>(entity);
+			}
+		}
 
 		// ── Capsule ───────────────────────────────────────────────────────────────
 		for (auto [entity, desc]: world.View<CapsuleBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				continue;
+			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
 			JPH::CapsuleShapeSettings ss{ desc.halfHeight, desc.radius };
@@ -428,22 +457,32 @@ namespace aether
 			const glm::vec3 capsuleScale{ desc.radius * 2.f, desc.halfHeight * 2.f + desc.radius * 2.f, desc.radius * 2.f };
 			AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, capsuleScale, desc.startActive);
 			if (desc.motionType == PhysicsMotionType::Static)
+			{
 				addedStatic = true;
+			}
 			applyVelocity(entity, desc.initialVelocity);
 		}
 		for (auto entity: world.View<CapsuleBodyDesc>())
+		{
 			if (reg.any_of<RigidBodyComponent>(entity))
+			{
 				reg.remove<CapsuleBodyDesc>(entity);
+			}
+		}
 
 		if (addedStatic)
+		{
 			m_physics->OptimizeBroadPhase();
+		}
 	}
 
 	void PhysicsSystem::RemoveBody(World& world, Entity entity)
 	{
 		auto* rigid = world.TryGet<RigidBodyComponent>(entity);
 		if (!rigid || rigid->bodyId.IsInvalid())
+		{
 			return;
+		}
 
 		auto& bodyInterface = m_physics->GetBodyInterface();
 		bodyInterface.RemoveBody(rigid->bodyId);

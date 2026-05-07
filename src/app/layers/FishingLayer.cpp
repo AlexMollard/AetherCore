@@ -15,7 +15,9 @@ namespace aether::app
 	const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
 		if (!activeCamera.IsValid())
+		{
 			return "None";
+		}
 
 		return "Fishing";
 	}
@@ -45,7 +47,9 @@ namespace aether::app
 	void FishingLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr)
+		{
 			return;
+		}
 
 		aether::UIRenderer& ui = *context.ui;
 		std::array<char, 128> buf{};

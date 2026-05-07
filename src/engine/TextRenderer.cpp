@@ -29,7 +29,9 @@ namespace aether
 		                [this](PassContext& ctx)
 		                {
 			                if (m_engine == nullptr)
+			                {
 				                return;
+			                }
 
 			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
 			                if (m_pendingLabels[readSlot].empty() || !m_fontAtlas.IsValid())

@@ -63,16 +63,22 @@ namespace voxel
 
 		// Iterate over visible voxels (padded coords [1, kChunkSize]).
 		for (int z = 1; z <= kChunkSize; ++z)
+		{
 			for (int y = 1; y <= kChunkSize; ++y)
+			{
 				for (int x = 1; x <= kChunkSize; ++x)
 				{
 					const std::uint16_t rawId = blocks[PaddedIndex(x, y, z)];
 					if (rawId == 0u)
+					{
 						continue; // air
+					}
 
 					const BlockId blockId = static_cast<BlockId>(rawId);
 					if (!registry.IsOpaque(blockId))
+					{
 						continue; // skip transparent / partial blocks (handled separately later)
+					}
 
 					const BlockDef& def = registry.Get(blockId);
 
@@ -90,11 +96,15 @@ namespace voxel
 
 						// Only emit this face if the neighbour is non-opaque.
 						if (nbRaw != 0u && registry.IsOpaque(nbId))
+						{
 							continue;
+						}
 
 						EmitFace(voxelWorld, face, def.faces[fi], 0u /* aoLevel unused for now */);
 					}
 				}
+			}
+		}
 	}
 
 	void ChunkMesher::Clear()
@@ -124,6 +134,8 @@ namespace voxel
 		}
 
 		for (std::uint32_t i = 0; i < 6; ++i)
+		{
 			m_indices.push_back(baseVertex + kQuadIndices[i]);
+		}
 	}
 } // namespace voxel

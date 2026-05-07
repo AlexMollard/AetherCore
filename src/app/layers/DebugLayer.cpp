@@ -41,18 +41,26 @@ namespace aether::app
 		glm::vec4 FpsColor(float fps) noexcept
 		{
 			if (fps >= 55.0f)
+			{
 				return kColorGood;
+			}
 			if (fps >= 30.0f)
+			{
 				return kColorWarn;
+			}
 			return kColorBad;
 		}
 
 		glm::vec4 MsColor(float ms) noexcept
 		{
 			if (ms <= 16.667f)
+			{
 				return kColorGood;
+			}
 			if (ms <= 25.0f)
+			{
 				return kColorWarn;
+			}
 			return kColorBad;
 		}
 	} // namespace
@@ -75,30 +83,42 @@ namespace aether::app
 	float DebugLayer::GetAverageFrameTimeMs() const
 	{
 		if (m_frameHistoryCount == 0)
+		{
 			return 0.0f;
+		}
 		float total = 0.0f;
 		for (std::size_t i = 0; i < m_frameHistoryCount; ++i)
+		{
 			total += m_frameTimesMs[i];
+		}
 		return total / static_cast<float>(m_frameHistoryCount);
 	}
 
 	float DebugLayer::GetMinFrameTimeMs() const
 	{
 		if (m_frameHistoryCount == 0)
+		{
 			return 0.0f;
+		}
 		float v = m_frameTimesMs[0];
 		for (std::size_t i = 1; i < m_frameHistoryCount; ++i)
+		{
 			v = std::min(v, m_frameTimesMs[i]);
+		}
 		return v;
 	}
 
 	float DebugLayer::GetMaxFrameTimeMs() const
 	{
 		if (m_frameHistoryCount == 0)
+		{
 			return 0.0f;
+		}
 		float v = m_frameTimesMs[0];
 		for (std::size_t i = 1; i < m_frameHistoryCount; ++i)
+		{
 			v = std::max(v, m_frameTimesMs[i]);
+		}
 		return v;
 	}
 
@@ -137,7 +157,9 @@ namespace aether::app
 		        kColorRef60);
 
 		if (m_frameHistoryCount == 0)
+		{
 			return;
+		}
 
 		const float barWidth = std::max(1.0f, width / static_cast<float>(kFrameHistorySize));
 		for (std::size_t i = 0; i < m_frameHistoryCount; ++i)
@@ -176,7 +198,9 @@ namespace aether::app
 	void DebugLayer::OnUpdate(LayerContext& context)
 	{
 		if (context.input && context.input->IsKeyPressed(aether::Key::F1))
+		{
 			m_visible = !m_visible;
+		}
 
 		const float frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
 		m_frameTimesMs[m_frameHistoryHead] = frameMs;
@@ -187,7 +211,9 @@ namespace aether::app
 	void DebugLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr || context.renderer == nullptr || !m_visible)
+		{
 			return;
+		}
 
 		aether::UIRenderer& ui = *context.ui;
 		std::array<char, 128> buf{};

@@ -133,7 +133,9 @@ namespace aether
 		// ── 1. Initialise FreeType ────────────────────────────────────────────
 		FT_Library ft{};
 		if (FT_Init_FreeType(&ft) != 0)
+		{
 			throw std::runtime_error("FontAtlas: FT_Init_FreeType failed.");
+		}
 
 		const std::vector<std::byte> fontData = io::FileSystem::ReadFile(fontVfsPath);
 		if (fontData.empty())
@@ -164,7 +166,9 @@ namespace aether
 		{
 			int p = 1;
 			while (p < v)
+			{
 				p <<= 1;
+			}
 			return p;
 		};
 
@@ -199,7 +203,9 @@ namespace aether
 
 			FT_Error renderErr = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_SDF);
 			if (renderErr != 0)
+			{
 				renderErr = FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL);
+			}
 			if (renderErr != 0)
 			{
 				info = {};
@@ -217,13 +223,17 @@ namespace aether
 			{
 				const int dstY = origY + static_cast<int>(by);
 				if (dstY < 0 || dstY >= static_cast<int>(atlasH))
+				{
 					continue;
+				}
 
 				for (unsigned int bx = 0; bx < bm.width; ++bx)
 				{
 					const int dstX = origX + static_cast<int>(bx);
 					if (dstX < 0 || dstX >= static_cast<int>(atlasW))
+					{
 						continue;
+					}
 
 					atlasPixels[static_cast<std::size_t>(dstY) * atlasW + dstX] = bm.buffer[by * static_cast<unsigned>(std::abs(bm.pitch)) + bx];
 				}
@@ -357,7 +367,9 @@ namespace aether
 	void FontAtlas::Destroy()
 	{
 		if (m_device == VK_NULL_HANDLE)
+		{
 			return;
+		}
 
 		if (m_sampler != VK_NULL_HANDLE)
 		{
@@ -396,7 +408,9 @@ namespace aether
 	{
 		const int idx = static_cast<unsigned char>(cp) - kFirstChar;
 		if (idx < 0 || idx >= kGlyphCount)
+		{
 			return m_fallbackGlyph;
+		}
 		return m_glyphs[idx];
 	}
 } // namespace aether

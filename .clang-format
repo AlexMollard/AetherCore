@@ -4,14 +4,27 @@ BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
 AlignArrayOfStructures: Right
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
+AlignConsecutiveAssignments:
+  Enabled: false
+AlignConsecutiveDeclarations:
+  Enabled: false
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: true
 AlignEscapedNewlines: Left
-AlignOperands: true
-AlignTrailingComments: true
-AlwaysBreakTemplateDeclarations: Yes
-AllowAllConstructorInitializersOnNextLine: true
+AlignOperands: Align
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
+BreakTemplateDeclarations: Yes
 AllowShortFunctionsOnASingleLine: None
+AllowShortLambdasOnASingleLine: Inline
+BreakAdjacentStringLiterals: true
 BreakArrays: false
 BraceWrapping:
   AfterCaseLabel: true
@@ -33,13 +46,11 @@ BraceWrapping:
 BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeBraces: Custom
 BreakConstructorInitializers: BeforeColon
-BreakConstructorInitializersBeforeComma: false
 ColumnLimit: 350
-ConstructorInitializerAllOnOneLineOrOnePerLine: true
 ConstructorInitializerIndentWidth: 6
 ContinuationIndentWidth: 8
 Cpp11BracedListStyle: false
-DeriveLineEnding: true
+LineEnding: DeriveLF
 EmptyLineBeforeAccessModifier: Always
 IncludeCategories:
   - Regex: '^"pch\.hpp"'
@@ -53,32 +64,33 @@ IncludeCategories:
 IncludeIsMainRegex: '([-_](test|unittest))?$'
 IndentCaseLabels: true
 IndentWidth: 4
+InsertBraces: true
 InsertNewlineAtEOF: true
-KeepEmptyLinesAtTheStartOfBlocks: false
-MacroBlockBegin: ''
-MacroBlockEnd: ''
+KeepEmptyLines:
+  AtStartOfBlock: false
+  AtStartOfFile: false
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: All
 PackConstructorInitializers: NextLineOnly
 PenaltyReturnTypeOnItsOwnLine: 10000000
 PointerAlignment: Left
+QualifierAlignment: Left
 ReflowComments: false
+RemoveParentheses: ReturnStatement
 SeparateDefinitionBlocks: Always
-SortUsingDeclarations: true
+SortUsingDeclarations: Lexicographic
 SpaceAfterCStyleCast: true
 SpaceAfterTemplateKeyword: false
 SpaceBeforeRangeBasedForLoopColon: false
-SpaceInEmptyParentheses: false
-SpacesInAngles: false
-SpacesInConditionalStatement: false
-SpacesInCStyleCastParentheses: false
-SpacesInParentheses: false
+SpacesInAngles: Never
+SpacesInParens: Never
 TabWidth: 4
 BinPackArguments: false
 BinPackParameters: false
 UseTab: ForIndentation
 FixNamespaceComments: true
 IncludeBlocks: Preserve
+SkipMacroDefinitionBody: true
 SortIncludes: Never
 Standard: Latest
 IndentPPDirectives: AfterHash

@@ -30,7 +30,9 @@ namespace aether
 	{
 		const VkDeviceSize vOffset = AllocFromList(m_vertexFreeList, vertexBytes);
 		if (vOffset == ~0ull)
+		{
 			return {};
+		}
 
 		const VkDeviceSize iOffset = AllocFromList(m_indexFreeList, indexBytes);
 		if (iOffset == ~0ull)
@@ -46,7 +48,9 @@ namespace aether
 	void MeshArena::Free(Alloc& alloc)
 	{
 		if (!alloc.IsValid())
+		{
 			return;
+		}
 
 		FreeToList(m_vertexFreeList, alloc.vertexByteOffset, alloc.vertexByteSize);
 		FreeToList(m_indexFreeList, alloc.indexByteOffset, alloc.indexByteSize);
@@ -66,7 +70,9 @@ namespace aether
 			{
 				const VkDeviceSize offset = it->offset;
 				if (it->size == size)
+				{
 					list.erase(it);
+				}
 				else
 				{
 					it->offset += size;

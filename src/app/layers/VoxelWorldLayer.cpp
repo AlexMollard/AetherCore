@@ -77,7 +77,9 @@ namespace aether::app
 			if (worldY > 6 && worldY < static_cast<int>(baseSurface) - 2)
 			{
 				if (CaveNoise3D(worldX, worldY, worldZ) > 2.15f)
+				{
 					density -= 7.0f;
+				}
 			}
 
 			return density > 0.0f;
@@ -184,7 +186,9 @@ namespace aether::app
 		m_pipeline.Destroy();
 
 		if (m_camera.IsValid())
+		{
 			context.cameras->Destroy(m_camera);
+		}
 
 		INFO(LogCategory::App, "VoxelWorldLayer detached.");
 	}
@@ -201,7 +205,9 @@ namespace aether::app
 	void VoxelWorldLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr)
+		{
 			return;
+		}
 
 		aether::UIRenderer& ui = *context.ui;
 		std::array<char, 128> buf{};
@@ -260,9 +266,11 @@ namespace aether::app
 	{
 		// Fill a 3D density field so caves and slight overhangs can appear.
 		for (int cx = -kWorldRadius; cx <= kWorldRadius; ++cx)
+		{
 			for (int cz = -kWorldRadius; cz <= kWorldRadius; ++cz)
 			{
 				for (int localZ = 0; localZ < voxel::kChunkSize; ++localZ)
+				{
 					for (int localX = 0; localX < voxel::kChunkSize; ++localX)
 					{
 						const int worldX = cx * voxel::kChunkSize + localX;
@@ -272,19 +280,29 @@ namespace aether::app
 						for (int worldY = 0; worldY < kTotalHeight; ++worldY)
 						{
 							if (!IsSolidVoxel(worldX, worldY, worldZ))
+							{
 								continue;
+							}
 
 							voxel::BlockId id;
 							if (worldY >= surfaceY)
+							{
 								id = voxel::BlockId::Grass;
+							}
 							else if (worldY >= surfaceY - (kDirtDepth - 1))
+							{
 								id = voxel::BlockId::Dirt;
+							}
 							else
+							{
 								id = voxel::BlockId::Stone;
+							}
 
 							m_chunkManager.SetBlock({ worldX, worldY, worldZ }, id);
 						}
 					}
+				}
 			}
+		}
 	}
 } // namespace aether::app

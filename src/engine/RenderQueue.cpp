@@ -146,7 +146,9 @@ namespace aether
 		        [](const DrawCommand& a, const DrawCommand& b)
 		        {
 			        if (a.pipeline != b.pipeline)
+			        {
 				        return a.pipeline < b.pipeline;
+			        }
 			        return a.mesh < b.mesh;
 		        });
 
@@ -462,9 +464,13 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
+		{
 			return;
+		}
 		if (m_batchRenderInfos.empty())
+		{
 			return;
+		}
 
 		recorder.BeginDebugLabel("RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, 1.0f);
 
@@ -509,7 +515,9 @@ namespace aether
 			}
 
 			if (activePipeline != nullptr)
+			{
 				recorder.PushConstants(activePipeline->GetLayout(), sharedPc);
+			}
 
 			if (batch.mesh != nullptr)
 			{
@@ -563,11 +571,15 @@ namespace aether
 	void RenderQueue::EnsureSkinCopyPipeline()
 	{
 		if (m_skinCopyPipeline != VK_NULL_HANDLE)
+		{
 			return;
+		}
 
 		const auto spirv = io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv");
 		if (spirv.empty())
+		{
 			throw std::runtime_error("RenderQueue: shader not found: shaders://skin_palette_build.slang.spv");
+		}
 
 		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
 
@@ -610,14 +622,20 @@ namespace aether
 	void RenderQueue::EnsureAnimationSamplePipeline()
 	{
 		if (m_animationSamplePipeline != VK_NULL_HANDLE)
+		{
 			return;
+		}
 
 		if (m_animationDb == nullptr || !m_animationDb->IsValid())
+		{
 			return;
+		}
 
 		const auto spirv = io::FileSystem::ReadFile("shaders://animation_sample.slang.spv");
 		if (spirv.empty())
+		{
 			throw std::runtime_error("RenderQueue: shader not found: shaders://animation_sample.slang.spv");
+		}
 
 		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
 

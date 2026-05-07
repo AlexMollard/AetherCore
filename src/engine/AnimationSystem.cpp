@@ -47,11 +47,17 @@ namespace aether
 			const glm::vec3 p = glm::vec3(localToWorld[3]);
 			const float dist = std::sqrt(glm::dot(p, p));
 			if (dist < 8.0f)
+			{
 				return 0;
+			}
 			if (dist < 18.0f)
+			{
 				return 1;
+			}
 			if (dist < 35.0f)
+			{
 				return 2;
+			}
 			return 3;
 		}
 
@@ -91,7 +97,9 @@ namespace aether
 			auto& animatorComp = view.get<AnimatorComponent>(entity);
 			const auto& transform = view.get<TransformComponent>(entity);
 			if (animatorComp.animator == nullptr)
+			{
 				continue;
+			}
 
 			auto it = g_animatorToPacked.find(animatorComp.animator);
 			std::uint32_t packedIndex = 0;
@@ -130,9 +138,13 @@ namespace aether
 
 			// Track LOD distribution for telemetry.
 			if (packed.hero)
+			{
 				++heroCount;
+			}
 			else if (packed.lodTier < 4)
+			{
 				++animatorCountByLod[packed.lodTier];
+			}
 		}
 
 		std::uint32_t updatedThisFrame = 0;
@@ -142,9 +154,13 @@ namespace aether
 		{
 			PackedAnimatorState& packed = g_packedAnimators[i];
 			if (!packed.active || packed.animator == nullptr)
+			{
 				continue;
+			}
 			if (packed.pendingDt <= 0.0f)
+			{
 				continue;
+			}
 
 			if (packed.hero)
 			{
@@ -162,7 +178,9 @@ namespace aether
 		{
 			auto& bucket = lodBuckets[lod];
 			if (bucket.empty())
+			{
 				continue;
+			}
 
 			const std::uint32_t interval = std::max<std::uint32_t>(1u, IntervalForLod(static_cast<std::uint8_t>(lod)));
 			if (interval <= 1u)
@@ -181,7 +199,9 @@ namespace aether
 			const float quotaF = targetPerFrame + g_lodUpdateCarry[lod];
 			std::uint32_t quota = static_cast<std::uint32_t>(quotaF);
 			if (quota > bucket.size())
+			{
 				quota = static_cast<std::uint32_t>(bucket.size());
+			}
 			g_lodUpdateCarry[lod] = quotaF - static_cast<float>(quota);
 
 			const std::uint32_t n = static_cast<std::uint32_t>(bucket.size());
@@ -206,7 +226,9 @@ namespace aether
 			for (const PackedAnimatorState& p: g_packedAnimators)
 			{
 				if (!p.active || p.animator == nullptr)
+				{
 					continue;
+				}
 				const std::uint32_t idx = static_cast<std::uint32_t>(compact.size());
 				g_animatorToPacked.emplace(p.animator, idx);
 				compact.push_back(p);

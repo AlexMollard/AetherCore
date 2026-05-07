@@ -20,7 +20,9 @@ namespace aether
 	void CullPass::Shutdown()
 	{
 		if (m_device == VK_NULL_HANDLE)
+		{
 			return;
+		}
 		if (m_pipeline != VK_NULL_HANDLE)
 		{
 			vkDestroyPipeline(m_device, m_pipeline, nullptr);
@@ -37,11 +39,15 @@ namespace aether
 	void CullPass::EnsurePipeline()
 	{
 		if (m_pipeline != VK_NULL_HANDLE)
+		{
 			return;
+		}
 
 		const auto spirv = io::FileSystem::ReadFile("shaders://cull_draws.slang.spv");
 		if (spirv.empty())
+		{
 			throw std::runtime_error("CullPass: shader not found: shaders://cull_draws.slang.spv");
+		}
 
 		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "CullPass");
 

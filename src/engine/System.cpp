@@ -7,7 +7,9 @@ namespace aether
 	void SystemRegistry::Register(std::unique_ptr<System> system)
 	{
 		if (!system)
+		{
 			return;
+		}
 
 		VERBOSE(LogCategory::Engine, "Registering system: {}", system->GetName());
 		m_systems.push_back(std::move(system));
@@ -30,7 +32,9 @@ namespace aether
 		for (auto& system: m_systems)
 		{
 			if (system)
+			{
 				system->Update(world, dt);
+			}
 		}
 	}
 

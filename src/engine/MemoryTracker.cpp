@@ -17,7 +17,9 @@ void* operator new(std::size_t size)
 {
 	void* ptr = std::malloc(size);
 	if (!ptr)
+	{
 		throw std::bad_alloc{};
+	}
 	AE_PROFILE_ALLOC(ptr, size);
 	return ptr;
 }
@@ -26,7 +28,9 @@ void* operator new[](std::size_t size)
 {
 	void* ptr = std::malloc(size);
 	if (!ptr)
+	{
 		throw std::bad_alloc{};
+	}
 	AE_PROFILE_ALLOC(ptr, size);
 	return ptr;
 }
@@ -35,7 +39,9 @@ void* operator new(std::size_t size, const std::nothrow_t&) noexcept
 {
 	void* ptr = std::malloc(size);
 	if (ptr)
+	{
 		AE_PROFILE_ALLOC(ptr, size);
+	}
 	return ptr;
 }
 
@@ -43,7 +49,9 @@ void* operator new[](std::size_t size, const std::nothrow_t&) noexcept
 {
 	void* ptr = std::malloc(size);
 	if (ptr)
+	{
 		AE_PROFILE_ALLOC(ptr, size);
+	}
 	return ptr;
 }
 

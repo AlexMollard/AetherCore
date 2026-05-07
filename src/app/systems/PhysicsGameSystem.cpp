@@ -142,7 +142,9 @@ namespace aether::app
 		for (const aether::Entity e: m_sceneEntities)
 		{
 			if (world.Has<aether::RigidBodyComponent>(e))
+			{
 				m_physics->RemoveBody(world, e);
+			}
 			world.Destroy(e);
 		}
 		m_sceneEntities.clear();
@@ -259,7 +261,9 @@ namespace aether::app
 	void PhysicsGameSystem::Update(aether::World& world, float dt)
 	{
 		if (!m_engine || !m_cameras || !m_input || !m_physics)
+		{
 			return;
+		}
 
 		m_simTime += dt;
 		m_projectileCooldown = std::max(0.f, m_projectileCooldown - dt);
@@ -269,7 +273,9 @@ namespace aether::app
 		for (auto [entity, rigid]: world.View<aether::RigidBodyComponent>().each())
 		{
 			if (rigid.motionType == PhysicsMotionType::Dynamic)
+			{
 				++m_activeBodyCount;
+			}
 		}
 
 		// ── Input ─────────────────────────────────────────────────────────────────

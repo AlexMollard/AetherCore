@@ -36,7 +36,9 @@ namespace aether::app
 		bool ScreenPointToWorldRay(const Camera& cam, const glm::vec2& mousePx, const glm::vec2& frameSize, glm::vec3& outOrigin, glm::vec3& outDirection)
 		{
 			if (frameSize.x <= 0.0f || frameSize.y <= 0.0f)
+			{
 				return false;
+			}
 
 			const float aspect = frameSize.x / frameSize.y;
 			const glm::mat4 invViewProj = glm::inverse(cam.GetViewProjectionMatrix(aspect));
@@ -51,11 +53,15 @@ namespace aether::app
 		bool RayPlaneIntersect(const glm::vec3& origin, const glm::vec3& direction, float planeY, glm::vec3& outPoint)
 		{
 			if (std::abs(direction.y) < 1e-5f)
+			{
 				return false;
+			}
 
 			const float t = (planeY - origin.y) / direction.y;
 			if (t <= 0.0f)
+			{
 				return false;
+			}
 
 			outPoint = origin + direction * t;
 			return true;
@@ -66,7 +72,9 @@ namespace aether::app
 			const glm::vec3 delta = end - start;
 			const float length = glm::length(delta);
 			if (length < 1e-5f)
+			{
 				return glm::translate(glm::mat4{ 1.0f }, start);
+			}
 
 			const glm::vec3 direction = delta / length;
 			const glm::vec3 zAxis = glm::vec3{ 0.0f, 0.0f, 1.0f };
@@ -126,13 +134,21 @@ namespace aether::app
 		const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3{ 0.0f, 1.0f, 0.0f }));
 
 		if (m_input->IsKeyDown(aether::Key::W))
+		{
 			m_player.position += forward * m_player.moveSpeed * dt;
+		}
 		if (m_input->IsKeyDown(aether::Key::S))
+		{
 			m_player.position -= forward * m_player.moveSpeed * dt;
+		}
 		if (m_input->IsKeyDown(aether::Key::D))
+		{
 			m_player.position += right * m_player.moveSpeed * dt;
+		}
 		if (m_input->IsKeyDown(aether::Key::A))
+		{
 			m_player.position -= right * m_player.moveSpeed * dt;
+		}
 
 		if (aether::Camera* camera = m_cameras->TryGet(m_playerCamera))
 		{
@@ -144,11 +160,15 @@ namespace aether::app
 	bool FishingGameSystem::TryGetWaterHitPoint(glm::vec3& outTarget) const
 	{
 		if (!m_engine || !m_input)
+		{
 			return false;
+		}
 
 		aether::Camera* camera = m_cameras->TryGet(m_playerCamera);
 		if (!camera)
+		{
 			return false;
+		}
 
 		GLFWwindow* handle = m_engine->GetWindow().GetHandle();
 		int width = 0;
@@ -160,10 +180,14 @@ namespace aether::app
 		glm::vec3 rayOrigin;
 		glm::vec3 rayDirection;
 		if (!ScreenPointToWorldRay(*camera, mousePos, frameSize, rayOrigin, rayDirection))
+		{
 			return false;
+		}
 
 		if (!RayPlaneIntersect(rayOrigin, rayDirection, kWaterLevel, outTarget))
+		{
 			return false;
+		}
 
 		const glm::vec2 flat = glm::vec2(outTarget.x, outTarget.z);
 		if (glm::length(flat) > kLakeRadius)
@@ -179,7 +203,9 @@ namespace aether::app
 	{
 		aether::Camera* camera = m_cameras->TryGet(m_playerCamera);
 		if (!camera)
+		{
 			return m_player.position + glm::vec3{ 0.0f, m_player.headHeight, 0.0f };
+		}
 
 		const glm::vec3 forward = glm::normalize(camera->GetForward());
 		return camera->GetPosition() + forward * 0.5f + glm::vec3{ 0.0f, -0.18f, 0.0f };
@@ -313,13 +339,17 @@ namespace aether::app
 	void FishingGameSystem::Update(aether::World& world, float dt)
 	{
 		if (!m_engine || !m_cameras || !m_input)
+		{
 			return;
+		}
 
 		m_time += dt;
 		UpdatePlayer(dt);
 		aether::Camera* camera = m_cameras->TryGet(m_playerCamera);
 		if (!camera)
+		{
 			return;
+		}
 
 		const glm::vec3 cameraPos = camera->GetPosition();
 		const glm::vec3 cameraForward = glm::normalize(camera->GetForward());
@@ -384,7 +414,9 @@ namespace aether::app
 			{
 				m_bobberState = BobberState::Hooked;
 				if (m_hookedFishIndex >= 0 && m_hookedFishIndex < static_cast<int>(m_fishAgents.size()))
+				{
 					m_fishAgents[m_hookedFishIndex].hooked = true;
+				}
 			}
 			else if (m_biteTimer <= 0.0f)
 			{
@@ -452,9 +484,13 @@ namespace aether::app
 					const float desiredHeading = std::atan2(desired.x, desired.z);
 					float diff = desiredHeading - agent.heading;
 					while (diff > glm::pi<float>())
+					{
 						diff -= glm::two_pi<float>();
+					}
 					while (diff < -glm::pi<float>())
+					{
 						diff += glm::two_pi<float>();
+					}
 					agent.heading += std::clamp(diff, -kFishTurnSpeed * dt, kFishTurnSpeed * dt);
 					agent.pos += glm::vec3(std::sin(agent.heading), 0.0f, std::cos(agent.heading)) * agent.speed * dt;
 					if (glm::length(agent.pos) > kFishWanderRadius)
@@ -471,7 +507,9 @@ namespace aether::app
 		{
 			const aether::Entity entity = m_fishEntities[i];
 			if (!entity.IsValid())
+			{
 				continue;
+			}
 
 			const FishAgent& agent = m_fishAgents[i];
 			glm::mat4 xf = glm::translate(glm::mat4{ 1.0f }, agent.pos + glm::vec3{ 0.0f, std::sin(agent.bobPhase) * 0.08f, 0.0f });
@@ -508,7 +546,9 @@ namespace aether::app
 	void FishingGameSystem::OnUnregister(aether::World& world)
 	{
 		if (!m_engine || !m_assets || !m_cameras)
+		{
 			return;
+		}
 
 		INFO(aether::LogCategory::App, "FishingGameSystem unregistered.");
 
@@ -519,7 +559,9 @@ namespace aether::app
 		}
 
 		for (const entt::entity e: toDestroy)
+		{
 			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
+		}
 
 		m_fishAgents.clear();
 		m_fishEntities.clear();

@@ -16,7 +16,9 @@ namespace aether
 	void Renderer::SetTonemapMode(TonemapMode mode)
 	{
 		if (m_postProcessStack)
+		{
 			m_postProcessStack->SetTonemapMode(mode);
+		}
 	}
 
 	TonemapMode Renderer::GetTonemapMode() const
@@ -27,7 +29,9 @@ namespace aether
 	void Renderer::SetFxaaEnabled(bool enabled)
 	{
 		if (m_postProcessStack)
+		{
 			m_postProcessStack->SetFxaaEnabled(enabled);
+		}
 	}
 
 	bool Renderer::IsFxaaEnabled() const

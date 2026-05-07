@@ -19,13 +19,21 @@ namespace aether::app
 	const char* SandboxLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
 		if (!m_gameSystem || !activeCamera.IsValid())
+		{
 			return "None";
+		}
 		if (activeCamera == m_gameSystem->GetOrbitCameraHandle())
+		{
 			return "Orbit";
+		}
 		if (activeCamera == m_gameSystem->GetFreeCameraHandle())
+		{
 			return "Free";
+		}
 		if (activeCamera == m_gameSystem->GetRttCameraHandle())
+		{
 			return "RTT";
+		}
 		return "Other";
 	}
 
@@ -54,7 +62,9 @@ namespace aether::app
 	void SandboxLayer::OnGui(LayerContext& context)
 	{
 		if (context.ui == nullptr)
+		{
 			return;
+		}
 
 		aether::UIRenderer& ui = *context.ui;
 		std::array<char, 128> buf{};
@@ -76,7 +86,9 @@ namespace aether::app
 
 			const std::string_view anim = m_gameSystem->GetCurrentAnimationName();
 			if (!anim.empty())
+			{
 				panel.KV("Playing", anim, kColorGood);
+			}
 		}
 	}
 } // namespace aether::app

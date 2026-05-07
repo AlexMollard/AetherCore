@@ -15,19 +15,25 @@ namespace aether
 	void CameraManager::Destroy(CameraHandle handle)
 	{
 		if (!handle.IsValid())
+		{
 			return;
+		}
 
 		m_cameras.erase(handle.id);
 
 		if (m_mainCamera == handle)
+		{
 			m_mainCamera = {};
+		}
 	}
 
 	Camera& CameraManager::Get(CameraHandle handle)
 	{
 		auto it = m_cameras.find(handle.id);
 		if (it == m_cameras.end())
+		{
 			throw std::out_of_range("CameraManager::Get: invalid camera handle.");
+		}
 		return it->second;
 	}
 
@@ -35,7 +41,9 @@ namespace aether
 	{
 		auto it = m_cameras.find(handle.id);
 		if (it == m_cameras.end())
+		{
 			throw std::out_of_range("CameraManager::Get: invalid camera handle.");
+		}
 		return it->second;
 	}
 
@@ -69,27 +77,35 @@ namespace aether
 	glm::mat4 CameraManager::GetMainViewProjection(float aspect) const
 	{
 		if (const Camera* cam = TryGetMainCamera())
+		{
 			return cam->GetViewProjectionMatrix(aspect);
+		}
 		return glm::mat4{ 1.0f };
 	}
 
 	glm::mat4 CameraManager::GetMainView() const
 	{
 		if (const Camera* cam = TryGetMainCamera())
+		{
 			return cam->GetViewMatrix();
+		}
 		return glm::mat4{ 1.0f };
 	}
 
 	glm::mat4 CameraManager::GetMainProjection(float aspect) const
 	{
 		if (const Camera* cam = TryGetMainCamera())
+		{
 			return cam->GetProjectionMatrix(aspect);
+		}
 		return glm::mat4{ 1.0f };
 	}
 
 	void CameraManager::Update(const Input& input, float dt)
 	{
 		for (auto& [id, cam]: m_cameras)
+		{
 			cam.Update(input, dt);
+		}
 	}
 } // namespace aether

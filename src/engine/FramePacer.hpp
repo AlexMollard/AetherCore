@@ -44,9 +44,13 @@ namespace aether
 		void SetTargetFps(float fps)
 		{
 			if (fps > 0.0f)
+			{
 				m_targetDuration = std::chrono::duration_cast<Duration>(std::chrono::duration<double>(1.0 / static_cast<double>(fps)));
+			}
 			else
+			{
 				m_targetDuration = Duration{ 0 };
+			}
 			// Reset so the first Wait() after a rate change re-anchors the deadline
 			// rather than trying to hit a deadline that may now be in the distant past.
 			m_initialised = false;
@@ -65,7 +69,9 @@ namespace aether
 		void Wait()
 		{
 			if (m_targetDuration.count() <= 0)
+			{
 				return;
+			}
 
 			if (!m_initialised)
 			{
@@ -98,7 +104,9 @@ namespace aether
 			// of uncapped frames trying to "catch up".
 			m_nextFrameTime = deadline + m_targetDuration;
 			if (m_nextFrameTime < Clock::now())
+			{
 				m_nextFrameTime = Clock::now() + m_targetDuration;
+			}
 		}
 
 	private:
