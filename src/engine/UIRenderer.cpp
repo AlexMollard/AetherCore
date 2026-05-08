@@ -32,6 +32,7 @@ namespace aether
 
 	void UIRenderer::DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color)
 	{
+		m_quadRenderer.EnsurePassRegistered();
 		m_textRenderer.DrawText(text, point, fontSize, color);
 	}
 
