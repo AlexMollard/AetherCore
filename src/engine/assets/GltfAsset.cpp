@@ -1,18 +1,14 @@
 #include "assets/GltfAsset.hpp"
 
-#include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <vector>
 
-#define CGLTF_IMPLEMENTATION
-#include <cgltf.h>
+#include <AeBnFormat.hpp>
 
 #include "FileSystem.hpp"
 #include "Profiler.hpp"
@@ -21,8 +17,6 @@ namespace aether::assets
 {
 	namespace
 	{
-		constexpr std::int32_t kInvalidIndex = -1;
-
 		std::pair<std::string_view, std::string_view> SplitVfsPath(std::string_view vfsPath)
 		{
 			constexpr std::string_view kSeparator = "://";
@@ -36,12 +30,7 @@ namespace aether::assets
 
 		std::string ResolveRelativeVfsPath(std::string_view baseFilePath, std::string_view relativePath)
 		{
-			if (relativePath.starts_with("data:"))
-			{
-				return std::string(relativePath);
-			}
-
-			if (relativePath.find("://") != std::string_view::npos)
+			if (relativePath.starts_with("data:") || relativePath.find("://") != std::string_view::npos)
 			{
 				return std::string(relativePath);
 			}
@@ -52,137 +41,249 @@ namespace aether::assets
 			return std::string(mount) + "://" + resolved.generic_string();
 		}
 
-		std::int32_t ToIndex(const cgltf_node* value, const cgltf_data& data)
+		// Derive the .mesh sibling of a GLTF/GLB VFS path.
+		// "mount://path/model.gltf" -> "mount://path/model.mesh"
+		std::string DeriveAebnPath(std::string_view vfsPath)
 		{
-			if (value == nullptr || data.nodes == nullptr)
+			const std::size_t ss = vfsPath.find("://");
+			if (ss == std::string_view::npos)
 			{
-				return kInvalidIndex;
+				return {};
 			}
-			return static_cast<std::int32_t>(value - data.nodes);
+			const std::string mount(vfsPath.substr(0, ss));
+			const std::filesystem::path rel(vfsPath.substr(ss + 3));
+			return mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".mesh";
 		}
 
-		std::int32_t ToIndex(const cgltf_mesh* value, const cgltf_data& data)
+		// -------------------------------------------------------------------------
+		// AEBN binary deserialiser
+		// -------------------------------------------------------------------------
+
+		GltfAsset LoadFromAebn(const std::vector<std::byte>& data, std::string_view meshVfsPath)
 		{
-			if (value == nullptr || data.meshes == nullptr)
+			const std::byte* p = data.data();
+			const std::byte* end = data.data() + data.size();
+
+			auto CheckSpace = [&](std::size_t n)
 			{
-				return kInvalidIndex;
-			}
-			return static_cast<std::int32_t>(value - data.meshes);
-		}
-
-		std::int32_t ToIndex(const cgltf_skin* value, const cgltf_data& data)
-		{
-			if (value == nullptr || data.skins == nullptr)
-			{
-				return kInvalidIndex;
-			}
-			return static_cast<std::int32_t>(value - data.skins);
-		}
-
-		std::int32_t ToIndex(const cgltf_material* value, const cgltf_data& data)
-		{
-			if (value == nullptr || data.materials == nullptr)
-			{
-				return kInvalidIndex;
-			}
-			return static_cast<std::int32_t>(value - data.materials);
-		}
-
-		std::int32_t ToIndex(const cgltf_image* value, const cgltf_data& data)
-		{
-			if (value == nullptr || data.images == nullptr)
-			{
-				return kInvalidIndex;
-			}
-			return static_cast<std::int32_t>(value - data.images);
-		}
-
-		std::int32_t ToIndex(const cgltf_texture* value, const cgltf_data& data)
-		{
-			if (value == nullptr || data.textures == nullptr)
-			{
-				return kInvalidIndex;
-			}
-			return static_cast<std::int32_t>(value - data.textures);
-		}
-
-		std::string ToString(const char* text)
-		{
-			return text != nullptr ? std::string(text) : std::string();
-		}
-
-		GltfInterpolation ToInterpolation(cgltf_interpolation_type interpolation)
-		{
-			switch (interpolation)
-			{
-				case cgltf_interpolation_type_step:
-					return GltfInterpolation::Step;
-				case cgltf_interpolation_type_cubic_spline:
-					return GltfInterpolation::CubicSpline;
-				case cgltf_interpolation_type_linear:
-				default:
-					return GltfInterpolation::Linear;
-			}
-		}
-
-		GltfAnimationPath ToPath(cgltf_animation_path_type path)
-		{
-			switch (path)
-			{
-				case cgltf_animation_path_type_rotation:
-					return GltfAnimationPath::Rotation;
-				case cgltf_animation_path_type_scale:
-					return GltfAnimationPath::Scale;
-				case cgltf_animation_path_type_weights:
-					return GltfAnimationPath::Weights;
-				case cgltf_animation_path_type_translation:
-				default:
-					return GltfAnimationPath::Translation;
-			}
-		}
-
-		const cgltf_accessor* FindAttribute(const cgltf_primitive& primitive, cgltf_attribute_type type, const cgltf_int semanticIndex = 0)
-		{
-			for (cgltf_size i = 0; i < primitive.attributes_count; ++i)
-			{
-				const cgltf_attribute& attr = primitive.attributes[i];
-				if (attr.type == type && attr.index == semanticIndex && attr.data != nullptr)
+				if (static_cast<std::size_t>(end - p) < n)
 				{
-					return attr.data;
+					throw std::runtime_error("AEBN: truncated data in " + std::string(meshVfsPath));
 				}
-			}
-			return nullptr;
-		}
+			};
 
-		void ReadTransform(const cgltf_node& source, GltfNode& destination)
-		{
-			if (source.has_translation)
+			auto ReadT = [&]<typename T>() -> T
 			{
-				destination.translation = glm::vec3(static_cast<float>(source.translation[0]), static_cast<float>(source.translation[1]), static_cast<float>(source.translation[2]));
-			}
-			if (source.has_rotation)
-			{
-				destination.rotation = glm::quat(static_cast<float>(source.rotation[3]), static_cast<float>(source.rotation[0]), static_cast<float>(source.rotation[1]), static_cast<float>(source.rotation[2]));
-			}
-			if (source.has_scale)
-			{
-				destination.scale = glm::vec3(static_cast<float>(source.scale[0]), static_cast<float>(source.scale[1]), static_cast<float>(source.scale[2]));
-			}
-			if (source.has_matrix)
-			{
-				destination.hasMatrix = true;
-				std::memcpy(&destination.matrix[0][0], source.matrix, sizeof(source.matrix));
-			}
-		}
+				CheckSpace(sizeof(T));
+				T val;
+				std::memcpy(&val, p, sizeof(T));
+				p += sizeof(T);
+				return val;
+			};
 
-		std::vector<std::uint32_t> BuildIdentityIndices(std::size_t count)
-		{
-			std::vector<std::uint32_t> out(count);
-			for (std::size_t i = 0; i < count; ++i)
+			auto ReadStr = [&](std::uint16_t len) -> std::string
 			{
-				out[i] = static_cast<std::uint32_t>(i);
+				CheckSpace(len);
+				std::string s(reinterpret_cast<const char*>(p), len);
+				p += len;
+				return s;
+			};
+
+			const AeBnHeader hdr = ReadT.template operator()<AeBnHeader>();
+			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) != 0 || hdr.version != AEBN_VERSION)
+			{
+				throw std::runtime_error("AEBN: invalid magic or version: " + std::string(meshVfsPath));
 			}
-			return out;
+
+			GltfAsset asset;
+
+			// Images
+			asset.images.reserve(hdr.imageCount);
+			for (std::uint32_t i = 0; i < hdr.imageCount; ++i)
+			{
+				const auto ih = ReadT.template operator()<AeBnImageHeader>();
+				std::string name = ReadStr(ih.nameLen);
+				const std::string relUri = ReadStr(ih.uriLen);
+				asset.images.push_back({
+				        .name = std::move(name),
+				        .uri = relUri.empty() ? std::string() : ResolveRelativeVfsPath(meshVfsPath, relUri),
+				});
+			}
+
+			// Textures
+			asset.textures.reserve(hdr.textureCount);
+			for (std::uint32_t i = 0; i < hdr.textureCount; ++i)
+			{
+				const auto th = ReadT.template operator()<AeBnTextureHeader>();
+				asset.textures.push_back({
+				        .name = ReadStr(th.nameLen),
+				        .imageIndex = th.imageIndex,
+				});
+			}
+
+			// Materials
+			asset.materials.reserve(hdr.materialCount);
+			for (std::uint32_t i = 0; i < hdr.materialCount; ++i)
+			{
+				const auto mh = ReadT.template operator()<AeBnMaterialHeader>();
+				GltfMaterial mat;
+				mat.name = ReadStr(mh.nameLen);
+				mat.baseColorFactor = glm::vec4(mh.baseColorFactor[0], mh.baseColorFactor[1], mh.baseColorFactor[2], mh.baseColorFactor[3]);
+				mat.metallicFactor = mh.metallicFactor;
+				mat.roughnessFactor = mh.roughnessFactor;
+				mat.emissiveFactor = glm::vec3(mh.emissiveFactor[0], mh.emissiveFactor[1], mh.emissiveFactor[2]);
+				mat.alphaCutoff = mh.alphaCutoff;
+				mat.baseColorTexture = mh.baseColorTexture;
+				mat.metallicRoughnessTexture = mh.metallicRoughnessTexture;
+				mat.normalTexture = mh.normalTexture;
+				mat.occlusionTexture = mh.occlusionTexture;
+				mat.emissiveTexture = mh.emissiveTexture;
+				mat.doubleSided = mh.doubleSided != 0;
+				mat.alphaBlend = mh.alphaBlend != 0;
+				mat.alphaMask = mh.alphaMask != 0;
+				asset.materials.push_back(std::move(mat));
+			}
+
+			// Nodes
+			asset.nodes.resize(hdr.nodeCount);
+			for (std::uint32_t i = 0; i < hdr.nodeCount; ++i)
+			{
+				const auto nh = ReadT.template operator()<AeBnNodeHeader>();
+				GltfNode& node = asset.nodes[i];
+				node.parentIndex = nh.parentIndex;
+				node.meshIndex = nh.meshIndex;
+				node.skinIndex = nh.skinIndex;
+				node.translation = glm::vec3(nh.translation[0], nh.translation[1], nh.translation[2]);
+				// AEBN stores xyzw; GLM quat ctor is (w,x,y,z)
+				node.rotation = glm::quat(nh.rotation[3], nh.rotation[0], nh.rotation[1], nh.rotation[2]);
+				node.scale = glm::vec3(nh.scale[0], nh.scale[1], nh.scale[2]);
+				node.hasMatrix = nh.hasMatrix != 0;
+				if (node.hasMatrix)
+				{
+					std::memcpy(&node.matrix[0][0], nh.matrix, sizeof(nh.matrix));
+				}
+				node.children.resize(nh.childCount);
+				for (std::uint32_t c = 0; c < nh.childCount; ++c)
+				{
+					node.children[c] = ReadT.template operator()<std::uint32_t>();
+				}
+				node.name = ReadStr(nh.nameLen);
+			}
+
+			// Skins
+			asset.skins.reserve(hdr.skinCount);
+			for (std::uint32_t i = 0; i < hdr.skinCount; ++i)
+			{
+				const auto sh = ReadT.template operator()<AeBnSkinHeader>();
+				GltfSkin skin;
+				skin.skeletonRoot = sh.skeletonRoot;
+				skin.name = ReadStr(sh.nameLen);
+				skin.joints.resize(sh.jointCount);
+				for (std::uint32_t j = 0; j < sh.jointCount; ++j)
+				{
+					skin.joints[j] = ReadT.template operator()<std::uint32_t>();
+				}
+				skin.inverseBindMatrices.resize(sh.jointCount);
+				for (std::uint32_t j = 0; j < sh.jointCount; ++j)
+				{
+					CheckSpace(64);
+					std::memcpy(&skin.inverseBindMatrices[j][0][0], p, 64);
+					p += 64;
+				}
+				asset.skins.push_back(std::move(skin));
+			}
+
+			// Primitives
+			asset.primitives.reserve(hdr.primitiveCount);
+			for (std::uint32_t i = 0; i < hdr.primitiveCount; ++i)
+			{
+				const auto ph = ReadT.template operator()<AeBnPrimitiveHeader>();
+				GltfPrimitive prim;
+				prim.nodeIndex = ph.nodeIndex;
+				prim.materialIndex = ph.materialIndex;
+				prim.skinIndex = ph.skinIndex;
+				prim.vertices.resize(ph.vertexCount);
+				CheckSpace(ph.vertexCount * sizeof(AeBnVertex));
+				for (std::uint32_t v = 0; v < ph.vertexCount; ++v)
+				{
+					AeBnVertex src;
+					std::memcpy(&src, p, sizeof(AeBnVertex));
+					p += sizeof(AeBnVertex);
+					Mesh::Vertex& dst = prim.vertices[v];
+					dst.position = glm::vec3(src.position[0], src.position[1], src.position[2]);
+					dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
+					dst.tangent = glm::vec4(src.tangent[0], src.tangent[1], src.tangent[2], src.tangent[3]);
+					dst.uv = glm::vec2(src.uv[0], src.uv[1]);
+					dst.color = glm::vec3(src.color[0], src.color[1], src.color[2]);
+					dst.jointIndices = glm::uvec4(src.jointIndices[0], src.jointIndices[1], src.jointIndices[2], src.jointIndices[3]);
+					dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
+				}
+				prim.indices.resize(ph.indexCount);
+				CheckSpace(ph.indexCount * sizeof(std::uint32_t));
+				std::memcpy(prim.indices.data(), p, ph.indexCount * sizeof(std::uint32_t));
+				p += ph.indexCount * sizeof(std::uint32_t);
+				asset.primitives.push_back(std::move(prim));
+			}
+
+			// Animations
+			asset.animations.reserve(hdr.animCount);
+			for (std::uint32_t ai = 0; ai < hdr.animCount; ++ai)
+			{
+				const auto ah = ReadT.template operator()<AeBnAnimHeader>();
+				GltfAnimation anim;
+				anim.name = ReadStr(ah.nameLen);
+				anim.channels.reserve(ah.channelCount);
+				for (std::uint32_t ci = 0; ci < ah.channelCount; ++ci)
+				{
+					const auto ch = ReadT.template operator()<AeBnChannelHeader>();
+					GltfAnimationChannel channel;
+					channel.nodeIndex = ch.nodeIndex;
+					switch (static_cast<AeBnAnimPath>(ch.path))
+					{
+						case AeBnAnimPath::Rotation:
+							channel.path = GltfAnimationPath::Rotation;
+							break;
+						case AeBnAnimPath::Scale:
+							channel.path = GltfAnimationPath::Scale;
+							break;
+						case AeBnAnimPath::Weights:
+							channel.path = GltfAnimationPath::Weights;
+							break;
+						default:
+							channel.path = GltfAnimationPath::Translation;
+							break;
+					}
+					switch (static_cast<AeBnInterp>(ch.interp))
+					{
+						case AeBnInterp::Step:
+							channel.interpolation = GltfInterpolation::Step;
+							break;
+						case AeBnInterp::CubicSpline:
+							channel.interpolation = GltfInterpolation::CubicSpline;
+							break;
+						default:
+							channel.interpolation = GltfInterpolation::Linear;
+							break;
+					}
+					channel.times.resize(ch.keyCount);
+					CheckSpace(ch.keyCount * sizeof(float));
+					std::memcpy(channel.times.data(), p, ch.keyCount * sizeof(float));
+					p += ch.keyCount * sizeof(float);
+					channel.values.resize(ch.keyCount);
+					CheckSpace(ch.keyCount * 4 * sizeof(float));
+					for (std::uint32_t k = 0; k < ch.keyCount; ++k)
+					{
+						float v4[4];
+						std::memcpy(v4, p, sizeof(v4));
+						p += sizeof(v4);
+						channel.values[k] = glm::vec4(v4[0], v4[1], v4[2], v4[3]);
+					}
+					anim.channels.push_back(std::move(channel));
+				}
+				asset.animations.push_back(std::move(anim));
+			}
+
+			return asset;
 		}
 	} // namespace
 
@@ -190,386 +291,43 @@ namespace aether::assets
 	{
 		AE_PROFILE_ZONE_N("GltfAsset::Load");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
+
 		const std::string vfsPath(path);
-		if (!io::FileSystem::Exists(vfsPath))
+
+		// Derive the .mesh path - try the exact path given first (caller may already
+		// pass a .mesh path), then fall back to replacing the extension.
+		auto TryAebn = [&](const std::string& meshPath) -> bool
 		{
-			throw std::runtime_error("glTF file not found in VFS: " + vfsPath);
+			return !meshPath.empty() && io::FileSystem::Exists(meshPath);
+		};
+
+		// Accept .mesh directly, or derive from .gltf / .glb / any extension.
+		std::string meshPath = vfsPath;
+		if (!TryAebn(meshPath))
+		{
+			meshPath = DeriveAebnPath(vfsPath);
 		}
 
-		const std::vector<std::byte> sourceBytes = io::FileSystem::ReadFile(vfsPath);
-		if (sourceBytes.empty())
+		if (!TryAebn(meshPath))
 		{
-			throw std::runtime_error("glTF file is empty: " + vfsPath);
+			throw std::runtime_error("GltfAsset: packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it.");
 		}
 
-		cgltf_options options{};
-		cgltf_data* data = nullptr;
-		const cgltf_result parseResult = cgltf_parse(&options, sourceBytes.data(), sourceBytes.size(), &data);
-		if (parseResult != cgltf_result_success || data == nullptr)
+		std::vector<std::byte> meshData;
 		{
-			throw std::runtime_error("Failed to parse glTF file: " + vfsPath);
-		}
+			AE_PROFILE_ZONE_N("GltfAsset::LoadAebn");
+			meshData = io::FileSystem::ReadFile(meshPath);
 
-		std::vector<std::vector<std::byte>> loadedBuffers;
-		loadedBuffers.reserve(data->buffers_count);
-		for (cgltf_size i = 0; i < data->buffers_count; ++i)
-		{
-			cgltf_buffer& buffer = data->buffers[i];
-			if (buffer.data != nullptr || buffer.uri == nullptr)
+			if (meshData.size() >= sizeof(AeBnHeader))
 			{
-				continue;
-			}
-
-			const std::string resolvedBufferPath = ResolveRelativeVfsPath(vfsPath, buffer.uri);
-			std::vector<std::byte> bufferBytes = io::FileSystem::ReadFile(resolvedBufferPath);
-			if (bufferBytes.empty())
-			{
-				cgltf_free(data);
-				throw std::runtime_error("Failed to load glTF buffer via VFS: " + resolvedBufferPath);
-			}
-
-			buffer.size = static_cast<cgltf_size>(bufferBytes.size());
-			buffer.data = bufferBytes.data();
-			loadedBuffers.push_back(std::move(bufferBytes));
-			data->buffers[i].data = loadedBuffers.back().data();
-		}
-
-		const cgltf_result validateResult = cgltf_validate(data);
-		if (validateResult != cgltf_result_success)
-		{
-			cgltf_free(data);
-			throw std::runtime_error("glTF validation failed: " + vfsPath);
-		}
-
-		GltfAsset asset;
-
-		asset.images.reserve(data->images_count);
-		for (cgltf_size i = 0; i < data->images_count; ++i)
-		{
-			const cgltf_image& image = data->images[i];
-			const std::string imageUri = ToString(image.uri);
-			asset.images.push_back({
-			        .name = ToString(image.name),
-			        .uri = imageUri.empty() ? std::string() : ResolveRelativeVfsPath(vfsPath, imageUri),
-			});
-		}
-
-		asset.textures.reserve(data->textures_count);
-		for (cgltf_size i = 0; i < data->textures_count; ++i)
-		{
-			const cgltf_texture& texture = data->textures[i];
-			asset.textures.push_back({
-			        .name = ToString(texture.name),
-			        .imageIndex = ToIndex(texture.image, *data),
-			});
-		}
-
-		asset.materials.reserve(data->materials_count);
-		for (cgltf_size i = 0; i < data->materials_count; ++i)
-		{
-			const cgltf_material& material = data->materials[i];
-			GltfMaterial out;
-			out.name = ToString(material.name);
-			out.baseColorFactor = glm::vec4(static_cast<float>(material.pbr_metallic_roughness.base_color_factor[0]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[1]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[2]), static_cast<float>(material.pbr_metallic_roughness.base_color_factor[3]));
-			out.metallicFactor = static_cast<float>(material.pbr_metallic_roughness.metallic_factor);
-			out.roughnessFactor = static_cast<float>(material.pbr_metallic_roughness.roughness_factor);
-			out.emissiveFactor = glm::vec3(static_cast<float>(material.emissive_factor[0]), static_cast<float>(material.emissive_factor[1]), static_cast<float>(material.emissive_factor[2]));
-			out.alphaCutoff = static_cast<float>(material.alpha_cutoff);
-			out.doubleSided = material.double_sided;
-			out.alphaBlend = material.alpha_mode == cgltf_alpha_mode_blend;
-			out.alphaMask = material.alpha_mode == cgltf_alpha_mode_mask;
-			out.baseColorTexture = ToIndex(material.pbr_metallic_roughness.base_color_texture.texture, *data);
-			out.metallicRoughnessTexture = ToIndex(material.pbr_metallic_roughness.metallic_roughness_texture.texture, *data);
-			out.normalTexture = ToIndex(material.normal_texture.texture, *data);
-			out.occlusionTexture = ToIndex(material.occlusion_texture.texture, *data);
-			out.emissiveTexture = ToIndex(material.emissive_texture.texture, *data);
-			asset.materials.push_back(std::move(out));
-		}
-
-		asset.nodes.resize(data->nodes_count);
-		for (cgltf_size i = 0; i < data->nodes_count; ++i)
-		{
-			const cgltf_node& node = data->nodes[i];
-			GltfNode& out = asset.nodes[i];
-			out.name = ToString(node.name);
-			out.meshIndex = ToIndex(node.mesh, *data);
-			out.skinIndex = ToIndex(node.skin, *data);
-			ReadTransform(node, out);
-			out.children.reserve(node.children_count);
-			for (cgltf_size c = 0; c < node.children_count; ++c)
-			{
-				const std::int32_t childIndex = ToIndex(node.children[c], *data);
-				if (childIndex >= 0)
+				AeBnHeader hdr{};
+				std::memcpy(&hdr, meshData.data(), sizeof(hdr));
+				if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
 				{
-					out.children.push_back(static_cast<std::uint32_t>(childIndex));
+					throw std::runtime_error("GltfAsset: stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + meshPath + "'. Re-run AssetPacker.");
 				}
 			}
 		}
-
-		for (cgltf_size i = 0; i < data->nodes_count; ++i)
-		{
-			const cgltf_node& node = data->nodes[i];
-			if (node.parent != nullptr)
-			{
-				asset.nodes[i].parentIndex = ToIndex(node.parent, *data);
-			}
-		}
-
-		asset.skins.reserve(data->skins_count);
-		for (cgltf_size i = 0; i < data->skins_count; ++i)
-		{
-			const cgltf_skin& skin = data->skins[i];
-			GltfSkin out;
-			out.name = ToString(skin.name);
-			out.skeletonRoot = ToIndex(skin.skeleton, *data);
-			out.joints.reserve(skin.joints_count);
-			for (cgltf_size joint = 0; joint < skin.joints_count; ++joint)
-			{
-				out.joints.push_back(static_cast<std::uint32_t>(ToIndex(skin.joints[joint], *data)));
-			}
-
-			if (skin.inverse_bind_matrices != nullptr)
-			{
-				out.inverseBindMatrices.resize(skin.inverse_bind_matrices->count);
-				std::array<float, 16> matrix{};
-				for (cgltf_size m = 0; m < skin.inverse_bind_matrices->count; ++m)
-				{
-					if (!cgltf_accessor_read_float(skin.inverse_bind_matrices, m, matrix.data(), matrix.size()))
-					{
-						continue;
-					}
-					std::memcpy(&out.inverseBindMatrices[m][0][0], matrix.data(), sizeof(float) * matrix.size());
-				}
-			}
-			asset.skins.push_back(std::move(out));
-		}
-
-		for (cgltf_size nodeIndex = 0; nodeIndex < data->nodes_count; ++nodeIndex)
-		{
-			const cgltf_node& node = data->nodes[nodeIndex];
-			if (node.mesh == nullptr)
-			{
-				continue;
-			}
-
-			for (cgltf_size primIndex = 0; primIndex < node.mesh->primitives_count; ++primIndex)
-			{
-				const cgltf_primitive& primitive = node.mesh->primitives[primIndex];
-				if (primitive.type != cgltf_primitive_type_triangles)
-				{
-					continue;
-				}
-
-				const cgltf_accessor* position = FindAttribute(primitive, cgltf_attribute_type_position, 0);
-				if (position == nullptr)
-				{
-					continue;
-				}
-
-				const cgltf_accessor* normal = FindAttribute(primitive, cgltf_attribute_type_normal, 0);
-				const cgltf_accessor* tangent = FindAttribute(primitive, cgltf_attribute_type_tangent, 0);
-				const cgltf_accessor* texcoord0 = FindAttribute(primitive, cgltf_attribute_type_texcoord, 0);
-				if (texcoord0 == nullptr)
-				{
-					// Some assets place primary UVs in TEXCOORD_1.
-					texcoord0 = FindAttribute(primitive, cgltf_attribute_type_texcoord, 1);
-				}
-				const cgltf_accessor* color0 = FindAttribute(primitive, cgltf_attribute_type_color, 0);
-				const cgltf_accessor* joints0 = FindAttribute(primitive, cgltf_attribute_type_joints, 0);
-				const cgltf_accessor* weights0 = FindAttribute(primitive, cgltf_attribute_type_weights, 0);
-
-				GltfPrimitive out;
-				out.nodeIndex = static_cast<std::uint32_t>(nodeIndex);
-				out.materialIndex = ToIndex(primitive.material, *data);
-				out.skinIndex = ToIndex(node.skin, *data);
-				out.vertices.resize(position->count);
-
-				std::array<float, 4> floatValues{};
-				std::array<cgltf_uint, 4> uintValues{};
-				for (cgltf_size v = 0; v < position->count; ++v)
-				{
-					Mesh::Vertex vertex{};
-
-					cgltf_accessor_read_float(position, v, floatValues.data(), 3);
-					vertex.position = glm::vec3(floatValues[0], floatValues[1], floatValues[2]);
-
-					if (normal != nullptr)
-					{
-						cgltf_accessor_read_float(normal, v, floatValues.data(), 3);
-						vertex.normal = glm::vec3(floatValues[0], floatValues[1], floatValues[2]);
-					}
-					if (tangent != nullptr)
-					{
-						cgltf_accessor_read_float(tangent, v, floatValues.data(), 4);
-						vertex.tangent = glm::vec4(floatValues[0], floatValues[1], floatValues[2], floatValues[3]);
-					}
-					else
-					{
-						vertex.tangent = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
-					}
-					if (texcoord0 != nullptr)
-					{
-						cgltf_accessor_read_float(texcoord0, v, floatValues.data(), 2);
-						vertex.uv = glm::vec2(floatValues[0], floatValues[1]);
-					}
-					if (color0 != nullptr)
-					{
-						cgltf_accessor_read_float(color0, v, floatValues.data(), 4);
-						vertex.color = glm::vec3(floatValues[0], floatValues[1], floatValues[2]);
-					}
-					else
-					{
-						vertex.color = glm::vec3(1.0f);
-					}
-					if (joints0 != nullptr)
-					{
-						cgltf_accessor_read_uint(joints0, v, uintValues.data(), 4);
-						vertex.jointIndices = glm::uvec4(static_cast<std::uint32_t>(uintValues[0]), static_cast<std::uint32_t>(uintValues[1]), static_cast<std::uint32_t>(uintValues[2]), static_cast<std::uint32_t>(uintValues[3]));
-					}
-					if (weights0 != nullptr)
-					{
-						cgltf_accessor_read_float(weights0, v, floatValues.data(), 4);
-						vertex.jointWeights = glm::vec4(floatValues[0], floatValues[1], floatValues[2], floatValues[3]);
-					}
-					else
-					{
-						vertex.jointWeights = glm::vec4(1.0f, 0.0f, 0.0f, 0.0f);
-					}
-
-					out.vertices[v] = vertex;
-				}
-
-				if (color0 != nullptr)
-				{
-					float maxColor = 0.0f;
-					for (const Mesh::Vertex& vtx: out.vertices)
-					{
-						maxColor = std::max(maxColor, std::max(vtx.color.r, std::max(vtx.color.g, vtx.color.b)));
-					}
-
-					// Treat near-black COLOR_0 streams as invalid tint data.
-					if (maxColor < 0.01f)
-					{
-						for (Mesh::Vertex& vtx: out.vertices)
-						{
-							vtx.color = glm::vec3(1.0f);
-						}
-					}
-				}
-
-				if (primitive.indices != nullptr)
-				{
-					out.indices.resize(primitive.indices->count);
-					for (cgltf_size i = 0; i < primitive.indices->count; ++i)
-					{
-						out.indices[i] = static_cast<std::uint32_t>(cgltf_accessor_read_index(primitive.indices, i));
-					}
-				}
-				else
-				{
-					out.indices = BuildIdentityIndices(out.vertices.size());
-				}
-
-				// Some glTFs (including Fox) omit NORMAL attributes.
-				// In that case, generate smooth vertex normals from indexed triangles.
-				if (normal == nullptr)
-				{
-					for (auto& vtx: out.vertices)
-					{
-						vtx.normal = glm::vec3(0.0f);
-					}
-
-					for (std::size_t i = 0; i + 2 < out.indices.size(); i += 3)
-					{
-						const std::uint32_t ia = out.indices[i + 0];
-						const std::uint32_t ib = out.indices[i + 1];
-						const std::uint32_t ic = out.indices[i + 2];
-
-						if (ia >= out.vertices.size() || ib >= out.vertices.size() || ic >= out.vertices.size())
-						{
-							continue;
-						}
-
-						const glm::vec3& a = out.vertices[ia].position;
-						const glm::vec3& b = out.vertices[ib].position;
-						const glm::vec3& c = out.vertices[ic].position;
-						const glm::vec3 faceN = glm::cross(b - a, c - a);
-
-						if (glm::dot(faceN, faceN) > 1e-16f)
-						{
-							out.vertices[ia].normal += faceN;
-							out.vertices[ib].normal += faceN;
-							out.vertices[ic].normal += faceN;
-						}
-					}
-
-					for (auto& vtx: out.vertices)
-					{
-						const float len2 = glm::dot(vtx.normal, vtx.normal);
-						vtx.normal = (len2 > 1e-16f) ? glm::normalize(vtx.normal) : glm::vec3(0.0f, 1.0f, 0.0f);
-					}
-				}
-
-				asset.primitives.push_back(std::move(out));
-			}
-		}
-
-		asset.animations.reserve(data->animations_count);
-		for (cgltf_size animIndex = 0; animIndex < data->animations_count; ++animIndex)
-		{
-			const cgltf_animation& animation = data->animations[animIndex];
-			GltfAnimation outAnim;
-			outAnim.name = ToString(animation.name);
-			outAnim.channels.reserve(animation.channels_count);
-
-			for (cgltf_size channelIndex = 0; channelIndex < animation.channels_count; ++channelIndex)
-			{
-				const cgltf_animation_channel& channel = animation.channels[channelIndex];
-				if (channel.sampler == nullptr || channel.target_node == nullptr)
-				{
-					continue;
-				}
-
-				const cgltf_accessor* input = channel.sampler->input;
-				const cgltf_accessor* output = channel.sampler->output;
-				if (input == nullptr || output == nullptr)
-				{
-					continue;
-				}
-
-				GltfAnimationChannel outChannel;
-				const std::int32_t targetNodeIndex = ToIndex(channel.target_node, *data);
-				if (targetNodeIndex < 0)
-				{
-					continue;
-				}
-
-				outChannel.nodeIndex = static_cast<std::uint32_t>(targetNodeIndex);
-				outChannel.path = ToPath(channel.target_path);
-				outChannel.interpolation = ToInterpolation(channel.sampler->interpolation);
-
-				std::array<float, 4> value{};
-				const bool isRotation = outChannel.path == GltfAnimationPath::Rotation;
-				const cgltf_size componentCount = isRotation ? 4 : 3;
-				const cgltf_size keyCount = std::min(input->count, output->count);
-				outChannel.times.resize(keyCount);
-				outChannel.values.resize(keyCount);
-				for (cgltf_size i = 0; i < keyCount; ++i)
-				{
-					cgltf_accessor_read_float(input, i, value.data(), 1);
-					outChannel.times[i] = value[0];
-
-					cgltf_accessor_read_float(output, i, value.data(), componentCount);
-					outChannel.values[i] = glm::vec4(value[0], value[1], value[2], isRotation ? value[3] : 0.0f);
-				}
-
-				outAnim.channels.push_back(std::move(outChannel));
-			}
-
-			asset.animations.push_back(std::move(outAnim));
-		}
-
-		cgltf_free(data);
-		return asset;
+		return LoadFromAebn(meshData, meshPath);
 	}
 } // namespace aether::assets

@@ -10,10 +10,10 @@
 // Anti-aliasing: screen-space derivative (fwidth) of the SDF value is used
 // to set a per-pixel smooth transition width so edges stay crisp at any size.
 
-// Bindless texture array — set 0, binding 0.
+// Bindless texture array - set 0, binding 0.
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 
-// Immutable linear sampler — set 0, binding 1.
+// Immutable linear sampler - set 0, binding 1.
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
 struct GlyphInstance

@@ -448,7 +448,9 @@ namespace aether
 			const glm::vec3 ndc = glm::vec3(clip) / clip.w;
 			const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
 			const float screenY = (ndc.y * 0.5f + 0.5f) * static_cast<float>(extent.height);
-			const float radiusPx = (light.positionRadius.w * pixelScaleY) / std::max(depth, nearClip);
+			const float r = light.positionRadius.w;
+			const float effectiveDepth = std::max(std::sqrt(std::max(depth * depth - r * r, 0.0f)), nearClip);
+			const float radiusPx = r * pixelScaleY / effectiveDepth;
 			if (radiusPx <= 0.5f)
 			{
 				out.visible = false;

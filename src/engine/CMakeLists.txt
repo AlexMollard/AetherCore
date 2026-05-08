@@ -68,7 +68,6 @@ target_include_directories(Engine PUBLIC "${joltphysics_SOURCE_DIR}")
 # Texture.cpp defines STB_IMAGE_IMPLEMENTATION once to pull in the implementation.
 target_include_directories(Engine PRIVATE
     "${stb_SOURCE_DIR}"
-    "${cgltf_SOURCE_DIR}"
 )
 
 if(TARGET tomlplusplus::tomlplusplus)
@@ -89,7 +88,6 @@ if(AETHERCORE_ENABLE_UNITY_BUILD)
     set_source_files_properties(
         "${CMAKE_CURRENT_SOURCE_DIR}/Texture.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/VmaImplementation.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/assets/GltfAsset.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/physics/PhysicsSystem.cpp"
         # DirectoryBackend and PakBackend both define GlobToRegex in an anonymous
         # namespace; unity merges them into one TU causing an ODR collision.

@@ -40,5 +40,5 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/engine.toml"
         "${CMAKE_BINARY_DIR}/data/config/engine.toml"
-    COMMENT "Packing assets → data/assets.pak"
+    COMMENT "Packing assets -> data/assets.pak"
 )

@@ -1,17 +1,17 @@
-// gltf_mesh.slang — Full PBR forward shader for all standard geometry.
+// gltf_mesh.slang - Full PBR forward shader for all standard geometry.
 //
 // Vertex data is fetched via buffer device address stored in DrawInstanceData.vertexBufferAddr.
-// No vertex input bindings — the pipeline uses an empty vertex input state.
+// No vertex input bindings - the pipeline uses an empty vertex input state.
 //
 // Push constants  (24 bytes, matches aether::DrawPushConstants):
-//   offset  0 : uint64_t  frameAddr         BDA → FrameConstantsData
-//   offset  8 : uint64_t  instanceDataAddr  BDA → DrawInstanceData[]
+//   offset  0 : uint64_t  frameAddr         BDA -> FrameConstantsData
+//   offset  8 : uint64_t  instanceDataAddr  BDA -> DrawInstanceData[]
 //
 // FrameConstantsData  (320 bytes, matches aether::FrameConstants):
 //   offset   0 : float4x4  viewProj
 //   offset  64 : float4x4  view
 //   offset 128 : float4x4  proj
-//   offset 192 : uint64_t  materialBufferAddr   BDA → GpuMaterial[]
+//   offset 192 : uint64_t  materialBufferAddr   BDA -> GpuMaterial[]
 //   offset 200 : uint64_t  _pad0
 //   offset 208 : float4    sunDirectionIntensity  (xyz=world dir, w=intensity)
 //   offset 224 : float4    ambientColor           (rgb=ambient, a=unused)
@@ -104,9 +104,10 @@ struct VSOutput
 
 // Transform direction vectors (normal/tangent) through a world matrix basis,
 // correcting for non-uniform axis scale without requiring matrix inverse().
+// basis must be the TRANSPOSED float3x3 of the model matrix so that basis[i]
+// is the i-th column of the model matrix (= world-space basis vector i).
 float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
 {
-    // Slang matrix indexing is column-major: basis[i] = i-th column.
     float3 c0 = basis[0];
     float3 c1 = basis[1];
     float3 c2 = basis[2];
@@ -153,11 +154,13 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
         worldPos = mul(worldMatrix, float4(input.position, 1.0));
 
         // Scale-correct normal/tangent transform for non-uniform scaling.
-        float3x3 world3 = float3x3(
+        // float3x3(row0, row1, row2) gives HLSL rows; transpose so that basis[i]
+        // is column i of the world matrix, as TransformDirectionScaleCorrect expects.
+        float3x3 world3 = transpose(float3x3(
             worldMatrix[0].xyz,
             worldMatrix[1].xyz,
             worldMatrix[2].xyz
-        );
+        ));
         worldNormal  = TransformDirectionScaleCorrect(input.normal, world3);
         worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, world3);
     }
@@ -166,11 +169,11 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
         worldPos     = mul(instance.model, float4(input.position, 1.0));
 
         // Same scale-correct path for static meshes.
-        float3x3 model3 = float3x3(
+        float3x3 model3 = transpose(float3x3(
             instance.model[0].xyz,
             instance.model[1].xyz,
             instance.model[2].xyz
-        );
+        ));
         worldNormal  = TransformDirectionScaleCorrect(input.normal, model3);
         worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, model3);
     }
@@ -361,7 +364,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         discard;
     }
 
-    // ── TBN — world-space tangent frame ──────────────────────────────────
+    // ── TBN - world-space tangent frame ──────────────────────────────────
     float3 Nraw = input.worldNormal;
     const float nRawLen2 = dot(Nraw, Nraw);
     float3 N;
@@ -396,7 +399,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         T = normalize(fallbackT);
     }
     float3 B = cross(N, T) * input.tangentSign;
-    // Rows of TBN = T, B, N  →  mul(tangentVec, TBN) transforms to world space.
+    // Rows of TBN = T, B, N  ->  mul(tangentVec, TBN) transforms to world space.
     float3x3 TBN = float3x3(T, B, N);
 
     // Preserve the geometric normal so local light response can be softened
@@ -517,7 +520,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         }
     }
 
-    // Image-based ambient (constant approximation — replace with IBL later).
+    // Image-based ambient (constant approximation - replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ao;
 
     float3 finalColor = Lo + ambient + emissive;

@@ -1,13 +1,13 @@
-// skybox.slang — Procedural gradient sky, rendered as a full-screen pass
+// skybox.slang - Procedural gradient sky, rendered as a full-screen pass
 // that runs before the forward pass so all opaque geometry draws on top.
 //
 // Designed to grow: future passes can layer volumetric clouds, atmospheric
 // scattering, stars, and a moon by extending EvalSky() or adding passes.
 //
 // Push constant  (8 bytes):
-//   offset 0 : uint64_t  frameAddr   BDA → FrameConstantsData
+//   offset 0 : uint64_t  frameAddr   BDA -> FrameConstantsData
 //
-// No descriptor sets — all data comes from the push-constant BDA pointer.
+// No descriptor sets - all data comes from the push-constant BDA pointer.
 
 #include "include/FrameConstants.slangh"
 
@@ -26,10 +26,10 @@ struct VSOut
 };
 
 // ── Vertex shader ──────────────────────────────────────────────────────────
-// Produces a full-screen CCW triangle from SV_VertexID — no vertex buffer.
-//   ID 0 → NDC (-1, -1)   top-left  (Vulkan: top-left since Y is down)
-//   ID 1 → NDC ( 3, -1)   right overshoot
-//   ID 2 → NDC (-1,  3)   bottom overshoot
+// Produces a full-screen CCW triangle from SV_VertexID - no vertex buffer.
+//   ID 0 -> NDC (-1, -1)   top-left  (Vulkan: top-left since Y is down)
+//   ID 1 -> NDC ( 3, -1)   right overshoot
+//   ID 2 -> NDC (-1,  3)   bottom overshoot
 // Rasteriser clips the overshoots to the viewport.
 
 [shader("vertex")]
@@ -46,10 +46,10 @@ VSOut vertexMain(uint vertexID : SV_VertexID)
 // ── Sky evaluation ────────────────────────────────────────────────────────
 // Returns a linear-HDR sky colour for a given world-space view direction.
 //
-// horizonColor  — base colour near the horizon (typically a brightened
+// horizonColor  - base colour near the horizon (typically a brightened
 //                 sky-horizon tint supplied by the app.
-// sunDir        — normalised world-space direction TOWARDS the sun.
-// sunIntensity  — directional light intensity scalar.
+// sunDir        - normalised world-space direction TOWARDS the sun.
+// sunIntensity  - directional light intensity scalar.
 
 float Hash31(float3 p)
 {
@@ -89,7 +89,7 @@ float3 EvalSky(
     const float dayAmount   = 1.0f - nightAmount;
     const float lowSunAmount = 1.0f - smoothstep(0.08f, 0.55f, sunAltitude);
 
-    // Smooth horizon → zenith gradient to avoid visible daytime band seams.
+    // Smooth horizon -> zenith gradient to avoid visible daytime band seams.
     const float t       = saturate(worldDir.y * 0.5f + 0.5f);
     const float3 warmHorizon = horizonColor + float3(0.20f, 0.08f, 0.02f) * lowSunAmount;
     const float3 zenith = zenithColor * lerp(1.0f, 0.45f, nightAmount);
@@ -177,22 +177,22 @@ float4 fragmentMain(VSOut input) : SV_Target0
 {
     FrameConstantsData* fc = (FrameConstantsData*)pc.frameAddr;
 
-    // ── Step 1: NDC → view-space direction ──────────────────────────────
+    // ── Step 1: NDC -> view-space direction ──────────────────────────────
     // GLM perspective (Vulkan variant) column-major layout:
-    //   proj[0][0]  = 1 / (aspect * tan(fovY/2))   — col 0, row 0
-    //   proj[1][1]  = -1 / tan(fovY/2)              — col 1, row 1  (Y-flip)
-    //   proj[2][3]  = -1                             — col 2, row 3  (w = -viewZ)
+    //   proj[0][0]  = 1 / (aspect * tan(fovY/2))   - col 0, row 0
+    //   proj[1][1]  = -1 / tan(fovY/2)              - col 1, row 1  (Y-flip)
+    //   proj[2][3]  = -1                             - col 2, row 3  (w = -viewZ)
     //
     // Inverting the perspective divide:
-    //   ndc.x = proj[0][0] * viewX  →  viewX = ndc.x / proj[0][0]
-    //   ndc.y = proj[1][1] * viewY  →  viewY = ndc.y / proj[1][1]
+    //   ndc.x = proj[0][0] * viewX  ->  viewX = ndc.x / proj[0][0]
+    //   ndc.y = proj[1][1] * viewY  ->  viewY = ndc.y / proj[1][1]
     //   viewZ = -1  (ray shoots into the scene)
     const float viewX = input.ndc.x / fc->proj[0][0];
     const float viewY = input.ndc.y / fc->proj[1][1];
     const float3 viewDir = normalize(float3(viewX, viewY, -1.0f));
 
-    // ── Step 2: view-space → world-space ────────────────────────────────
-    // fc->view is the world→view rotation R (column-major, same convention
+    // ── Step 2: view-space -> world-space ────────────────────────────────
+    // fc->view is the world->view rotation R (column-major, same convention
     // as model matrix). The inverse of an orthogonal rotation is its
     // transpose, which is equivalent to multiplying the view-space row
     // vector by R directly.

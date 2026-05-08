@@ -100,7 +100,7 @@ namespace aether
 			}
 
 			const std::string noExt = std::filesystem::path(stem).extension().empty() ? stem : std::filesystem::path(stem).stem().string();
-			constexpr std::string_view kExts[] = { ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2" };
+			constexpr std::string_view kExts[] = { ".texture", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2" };
 			for (const std::string_view ext: kExts)
 			{
 				const std::string candidate = ResolvePathInFolder(folderPath, noExt + std::string(ext));
@@ -370,13 +370,29 @@ namespace aether
 				return Material::kNoTexture;
 			}
 
-			if (!io::FileSystem::Exists(texturePath))
+			// If the original path doesn't exist, try the pre-transcoded .texture sibling.
+			std::string resolvedPath(texturePath);
+			if (!io::FileSystem::Exists(resolvedPath))
+			{
+				const std::size_t ss = resolvedPath.find("://");
+				if (ss != std::string::npos)
+				{
+					const std::filesystem::path rel(resolvedPath.substr(ss + 3));
+					const std::string candidate = resolvedPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
+					if (io::FileSystem::Exists(candidate))
+					{
+						resolvedPath = candidate;
+					}
+				}
+			}
+
+			if (!io::FileSystem::Exists(resolvedPath))
 			{
 				WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
 				return Material::kNoTexture;
 			}
 
-			Texture tex = CreateTexture(texturePath);
+			Texture tex = CreateTexture(resolvedPath);
 			const std::uint32_t slot = tex.GetBindlessSlot();
 			outTextures.push_back(std::move(tex));
 			return slot;

@@ -15,7 +15,7 @@ function(aethercore_target_defaults target)
             /Zc:inline               # Strip unreferenced functions/data at compile time; reduces link time
             /Zc:templateScope        # Fix template parameter shadowing conformance; hits bugs in generic wrappers
 
-            # --- Promoted warnings → errors ---
+            # --- Promoted warnings -> errors ---
             /we4062                  # Switch on enum: unhandled enumerator — critical for VkResult switches
             /we4063                  # Switch on enum: value not a valid enumerator
             /we4715                  # Not all control paths return a value

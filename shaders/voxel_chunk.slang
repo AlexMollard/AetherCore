@@ -1,18 +1,18 @@
-// voxel_chunk.slang — Forward shader for GPU-driven voxel chunk geometry.
+// voxel_chunk.slang - Forward shader for GPU-driven voxel chunk geometry.
 //
 // Vertex ABI (matches aether::VoxelVertex, 24 bytes):
-//   loc 0  POSITION    float3   — world-space vertex position
-//   loc 1  PACKED      uint     — bits[0-2]=faceIndex(0-5), bits[3-4]=aoLevel(0-3)
-//   loc 2  TEXCOORD_0  float2   — atlas UV coordinates
+//   loc 0  POSITION    float3   - world-space vertex position
+//   loc 1  PACKED      uint     - bits[0-2]=faceIndex(0-5), bits[3-4]=aoLevel(0-3)
+//   loc 2  TEXCOORD_0  float2   - atlas UV coordinates
 //
 // Push constants (24 bytes, matches aether::DrawPushConstants):
-//   offset  0 : uint64_t  frameAddr         BDA → FrameConstantsData
-//   offset  8 : uint64_t  instanceDataAddr  BDA → DrawInstanceData[]
+//   offset  0 : uint64_t  frameAddr         BDA -> FrameConstantsData
+//   offset  8 : uint64_t  instanceDataAddr  BDA -> DrawInstanceData[]
 //   offset 16 : uint64_t  skinPaletteAddr   (unused for voxel draws)
 //
 // Material convention:
-//   DrawInstanceData.materialIndex → GpuMaterial[] (via materialBufferAddr BDA)
-//   GpuMaterial.albedoSlot         → bindless atlas texture
+//   DrawInstanceData.materialIndex -> GpuMaterial[] (via materialBufferAddr BDA)
+//   GpuMaterial.albedoSlot         -> bindless atlas texture
 //
 // Lighting model: Lambertian diffuse + ambient + directional sun.
 // AO baked into vertex packed field.  No PBR (appropriate for stylized voxel look).
@@ -38,7 +38,7 @@ static const float3 kFaceNormals[6] = {
     float3( 0,  0, -1),
 };
 
-// Minimal GpuMaterial subset — only the fields we use.
+// Minimal GpuMaterial subset - only the fields we use.
 // Must stay in sync with GpuMaterial in gltf_mesh.slang / src/engine/GpuMaterial.hpp.
 struct GpuMaterial
 {

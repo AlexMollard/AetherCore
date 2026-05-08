@@ -16,6 +16,10 @@
 #include <xxhash.h>
 #include <zstd.h>
 
+#include "MeshProcessor.hpp"
+#include "SpirvProcessor.hpp"
+#include "TextureProcessor.hpp"
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -82,8 +86,12 @@ namespace
 	}
 
 	// -------------------------------------------------------------------------
-	// Manifest — persists per-file mtime + hash so unchanged assets are skipped
+	// Manifest - persists per-file mtime + hash so unchanged assets are skipped
 	// -------------------------------------------------------------------------
+
+	// Bump when the output format for any processed asset type changes so that
+	// stale cached files are automatically regenerated on the next pack.
+	constexpr int kPackerVersion = 2;
 
 	struct ManifestEntry
 	{
@@ -101,6 +109,18 @@ namespace
 			return map;
 
 		std::string line;
+		// First non-empty line must be the version header.
+		while (std::getline(in, line))
+		{
+			if (line.empty())
+				continue;
+			// Expected: "# AetherPak manifest vN"
+			const std::string expected = "# AetherPak manifest v" + std::to_string(kPackerVersion);
+			if (line != expected)
+				return {}; // version mismatch - force full repack
+			break;
+		}
+
 		while (std::getline(in, line))
 		{
 			if (line.empty() || line[0] == '#')
@@ -130,7 +150,7 @@ namespace
 		if (!out)
 			return;
 
-		out << "# AetherPak manifest\n";
+		out << "# AetherPak manifest v" << kPackerVersion << "\n";
 		for (const auto& [vpath, e] : map)
 			out << vpath << '\t' << e.mtimeTicks << '\t' << std::hex << e.contentHash << '\n';
 	}
@@ -165,7 +185,7 @@ namespace
 	}
 
 	// -------------------------------------------------------------------------
-	// Log — human-readable build record written to <output>.pak.log
+	// Log - human-readable build record written to <output>.pak.log
 	// -------------------------------------------------------------------------
 
 	struct LogEntry
@@ -257,6 +277,52 @@ namespace
 	}
 
 	// -------------------------------------------------------------------------
+	// Asset processing dispatch - runs before compression
+	// -------------------------------------------------------------------------
+
+	// Returns processed bytes (or empty = skip processing) and sets outExt to
+	// the replacement extension for the virtual path (e.g. ".texture"), or
+	// leaves it empty if the path should not change.
+	std::vector<std::byte> ProcessAsset(
+	    const std::vector<std::byte>& raw,
+	    const fs::path&               diskPath,
+	    std::string&                  outExt)
+	{
+		outExt.clear();
+
+		const auto ext = [&] {
+			std::string e = diskPath.extension().string();
+			for (char& c : e)
+				c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+			return e;
+		}();
+
+		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
+		    ext == ".tga" || ext == ".bmp")
+		{
+			auto result = TextureProcessor::ToDDS(raw, diskPath);
+			if (!result.empty())
+				outExt = ".texture";
+			return result;
+		}
+
+		if (ext == ".spv")
+		{
+			return SpirvProcessor::Strip(raw); // extension unchanged
+		}
+
+		if (ext == ".gltf" || ext == ".glb")
+		{
+			auto result = MeshProcessor::ToBinary(raw, diskPath);
+			if (!result.empty())
+				outExt = ".mesh";
+			return result;
+		}
+
+		return {};
+	}
+
+	// -------------------------------------------------------------------------
 	// Per-file read + compress task (runs on a worker thread)
 	// -------------------------------------------------------------------------
 
@@ -295,16 +361,39 @@ namespace
 			return result;
 		}
 
+		// Asset processing: transcode textures -> BCn DDS, strip SPIR-V debug info,
+		// convert GLTF -> flat AEBN binary.  On success the virtual path extension
+		// is replaced so the engine sees a consistent type regardless of source format.
+		std::string newExt;
+		auto processed = ProcessAsset(rawData, diskPath, newExt);
+		if (!processed.empty())
+		{
+			rawData = std::move(processed);
+			if (!newExt.empty())
+			{
+				const auto stem = fs::path(virtualPath).stem().string();
+				const auto parent = fs::path(virtualPath).parent_path().generic_string();
+				result.virtualPath = parent.empty()
+				    ? stem + newExt
+				    : parent + "/" + stem + newExt;
+			}
+		}
+
 		result.contentHash = XXH3_64bits(rawData.data(), rawData.size());
 
-		if (compressionLevel > 0 && rawSize >= kMinCompressSize && !IsAlreadyCompressed(diskPath))
+		// Use the post-processing size for compression - rawSize holds the original
+		// on-disk file size which may differ greatly after asset transcoding.
+		const std::size_t processedSize = rawData.size();
+		result.rawSize = static_cast<uint64_t>(processedSize);
+
+		if (compressionLevel > 0 && processedSize >= kMinCompressSize && !IsAlreadyCompressed(diskPath))
 		{
-			const std::size_t      bound = ZSTD_compressBound(rawSize);
+			const std::size_t      bound = ZSTD_compressBound(processedSize);
 			std::vector<std::byte> compressed(bound);
 
 			const std::size_t compressedSize = ZSTD_compress(
 			    compressed.data(), bound,
-			    rawData.data(),    rawSize,
+			    rawData.data(),    processedSize,
 			    compressionLevel);
 
 			if (!ZSTD_isError(compressedSize) && compressedSize < rawSize)

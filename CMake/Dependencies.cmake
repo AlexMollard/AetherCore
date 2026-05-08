@@ -142,6 +142,16 @@ CPMAddPackage(
     DOWNLOAD_ONLY  YES
 )
 
+# ── BCn texture compression (packer only) ─────────────────────────────────────
+# bc7enc.cpp is compiled directly into AssetPacker; rgbcx.h is header-only.
+CPMAddPackage(
+    NAME bc7enc_rdo
+    GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
+    GIT_TAG        master
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
 # ── Compression ───────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME zstd

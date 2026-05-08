@@ -12,8 +12,8 @@
 // the bilinear-filter version because the final blend is always between the
 // centre pixel and exactly one adjacent pixel in the perpendicular direction.
 //
-// Binding layout (identical to tonemap.slang — no sampler needed):
-//   set 0, binding 0 — bindless combined image samplers (Load() ignores sampler)
+// Binding layout (identical to tonemap.slang - no sampler needed):
+//   set 0, binding 0 - bindless combined image samplers (Load() ignores sampler)
 
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
@@ -138,7 +138,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     const float distMin = min(dist1, dist2);
     const float edgeLen = dist1 + dist2;
 
-    // How far along the edge are we?  0 at centre, 0.5 at endpoint → blend 0..1.
+    // How far along the edge are we?  0 at centre, 0.5 at endpoint -> blend 0..1.
     float blendFactor = max(0.0f, 0.5f - distMin / edgeLen);
 
     // ── Sub-pixel blend (3×3 box filter) ──────────────────────────────────

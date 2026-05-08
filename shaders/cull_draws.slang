@@ -1,4 +1,4 @@
-// cull_draws.slang — GPU-driven indirect draw culling pass.
+// cull_draws.slang - GPU-driven indirect draw culling pass.
 //
 // Reads per-draw CullDrawInput prototype commands and DrawInstanceData (with world-space
 // bounding spheres) from CPU-written BDA-addressed SSBOs. Frustum-culls each draw against
@@ -9,12 +9,12 @@
 //   - Thread globalId == draw index in [0, totalDrawCount).
 //
 // Push constants (CullPushConstants, 64 bytes):
-//   offset  0 : uint64  frameAddr        BDA → FrameConstantsData
-//   offset  8 : uint64  instanceDataAddr BDA → DrawInstanceData[]
-//   offset 16 : uint64  inputCmdAddr     BDA → CullDrawInput[] (prototype commands)
-//   offset 24 : uint64  outputCmdAddr    BDA → uint32[] (VkDrawIndexedIndirectCommand array)
-//   offset 32 : uint64  batchDescAddr    BDA → CullBatch[]
-//   offset 40 : uint64  batchCountAddr   BDA → (unused, reserved)
+//   offset  0 : uint64  frameAddr        BDA -> FrameConstantsData
+//   offset  8 : uint64  instanceDataAddr BDA -> DrawInstanceData[]
+//   offset 16 : uint64  inputCmdAddr     BDA -> CullDrawInput[] (prototype commands)
+//   offset 24 : uint64  outputCmdAddr    BDA -> uint32[] (VkDrawIndexedIndirectCommand array)
+//   offset 32 : uint64  batchDescAddr    BDA -> CullBatch[]
+//   offset 40 : uint64  batchCountAddr   BDA -> (unused, reserved)
 //   offset 48 : uint32  totalDrawCount
 //   offset 52 : uint32  debugFlags bit0=force all draws visible
 //   offset 56 : uint32  _pad0
@@ -30,7 +30,7 @@
 // Test a world-space bounding sphere against the 6 frustum planes derived from viewProj.
 // Uses the Gribb-Hartmann method for Vulkan (column-major matrix, depth range [0, 1]).
 // Returns true if the sphere is potentially visible (not fully outside any plane).
-// sphere.w <= 0 means no valid bounds — always returns true.
+// sphere.w <= 0 means no valid bounds - always returns true.
 bool TestSphereFrustum(float4 sphere, float4x4 viewProj)
 {
     if (sphere.w <= 0.0)
@@ -103,6 +103,6 @@ void cullDraws(uint3 tid : SV_DispatchThreadID)
     out[base + 0u] = cmd.indexCount;
     out[base + 1u] = visible ? cmd.instanceCount : 0u;
     out[base + 2u] = cmd.firstIndex;
-    out[base + 3u] = asuint(cmd.vertexOffset); // int → uint bit-cast, matches VkDrawIndexedIndirectCommand
+    out[base + 3u] = asuint(cmd.vertexOffset); // int -> uint bit-cast, matches VkDrawIndexedIndirectCommand
     out[base + 4u] = cmd.firstInstance;
 }

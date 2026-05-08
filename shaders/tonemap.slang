@@ -6,7 +6,7 @@
 // needing a sampler, then applies the selected tonemap operator.
 //
 // Binding layout for this standalone pass (no per-draw set 0):
-//   set 0, binding 0 — bindless sampled images
+//   set 0, binding 0 - bindless sampled images
 // This differs from the forward-pass contract (which uses set 1) because
 // there is no per-draw descriptor set in a full-screen post-process pass.
 
@@ -25,9 +25,9 @@ struct TonemapPush
 
 // ── Vertex shader ──────────────────────────────────────────────────────────
 // Produces a CCW triangle that covers the entire NDC clip-space:
-//   VertexID 0 → (-1, -1, 0, 1)   top-left  (NDC)
-//   VertexID 1 → ( 3, -1, 0, 1)   bottom-right overshoot
-//   VertexID 2 → (-1,  3, 0, 1)   top-right overshoot
+//   VertexID 0 -> (-1, -1, 0, 1)   top-left  (NDC)
+//   VertexID 1 -> ( 3, -1, 0, 1)   bottom-right overshoot
+//   VertexID 2 -> (-1,  3, 0, 1)   top-right overshoot
 // The rasteriser clips the overshoot, giving a full viewport triangle with
 // no vertex buffer and no wasted fill from two-triangle quads.
 [shader("vertex")]
@@ -45,7 +45,7 @@ float3 Reinhard(float3 x)
     return x / (x + float3(1.0f));
 }
 
-// ACES Filmic — Narkowicz 2015 curve fit to the Academy RRT+ODT.
+// ACES Filmic - Narkowicz 2015 curve fit to the Academy RRT+ODT.
 // Clipped to [0,1]; slight toe and shoulder, pleasant saturation.
 float3 AcesFilmic(float3 x)
 {
@@ -53,7 +53,7 @@ float3 AcesFilmic(float3 x)
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0f, 1.0f);
 }
 
-// Uncharted 2 / John Hable — popular "filmic" curve with tunable constants.
+// Uncharted 2 / John Hable - popular "filmic" curve with tunable constants.
 float3 Uncharted2Partial(float3 x)
 {
     const float A = 0.15f, B = 0.50f, C = 0.10f, D = 0.20f, E = 0.02f, F = 0.30f;
@@ -79,7 +79,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
         (pc.mode == 2u) ? Uncharted2(hdr) :
                           Reinhard(hdr);
 
-    // Approximate sRGB gamma (linear → display).
+    // Approximate sRGB gamma (linear -> display).
     const float3 gamma = pow(max(mapped, float3(0.0f)), float3(1.0f / 2.2f));
     return float4(gamma, 1.0f);
 }

@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cmath>
+#include <exception>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -146,62 +147,69 @@ namespace aether::app
 		}
 
 		// ── Foxes ─────────────────────────────────────────────────────────────
-		constexpr std::string_view kFoxPath = "assets://models/Fox/Fox.gltf";
+		constexpr std::string_view kFoxPath = "assets://models/Fox/Fox.mesh";
 		if (aether::io::FileSystem::Exists(kFoxPath))
 		{
-			m_foxModel = m_assets->LoadModel(kFoxPath);
-			if (m_foxModel->animator)
+			try
 			{
-				const std::uint32_t animCount = m_foxModel->animator->GetAnimationCount();
-				INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
-				for (std::uint32_t i = 0; i < animCount; ++i)
+				m_foxModel = m_assets->LoadModel(kFoxPath);
+				if (m_foxModel->animator)
 				{
-					INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animator->GetAnimationName(i));
-				}
-			}
-
-			std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
-			std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
-			std::uniform_real_distribution<float> timerDist(0.2f, 2.0f);
-
-			m_foxAgents.reserve(kFoxCount);
-			m_foxInstances.reserve(kFoxCount);
-			m_foxAnimators.reserve(kFoxCount);
-
-			for (int i = 0; i < kFoxCount; ++i)
-			{
-				FoxAgent agent;
-				agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
-				agent.heading = angleDist(m_rng);
-				agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
-				agent.stateTimer = timerDist(m_rng);
-				agent.idle = false;
-				m_foxAgents.push_back(agent);
-
-				auto instances = aether::ecs::SpawnModelInstance(world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
-
-				if (!m_foxAnimators.empty())
-				{
-					aether::ModelAnimator& foxAnim = m_foxAnimators.back();
-					foxAnim.SetAnimation(kAnimRun);
-					foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
-					if (foxAnim.GetDuration() > 0.0f)
+					const std::uint32_t animCount = m_foxModel->animator->GetAnimationCount();
+					INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
+					for (std::uint32_t i = 0; i < animCount; ++i)
 					{
-						std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
-						foxAnim.SetAnimTime(phaseDist(m_rng));
+						INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animator->GetAnimationName(i));
 					}
 				}
 
-				for (const aether::Entity e: instances)
-				{
-					world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-					world.EmplaceOrReplace<FoxTag>(e, FoxTag{});
-					world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
-				}
+				std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
+				std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
+				std::uniform_real_distribution<float> timerDist(0.2f, 2.0f);
 
-				m_foxInstances.push_back(std::move(instances));
+				m_foxAgents.reserve(kFoxCount);
+				m_foxInstances.reserve(kFoxCount);
+				m_foxAnimators.reserve(kFoxCount);
+
+				for (int i = 0; i < kFoxCount; ++i)
+				{
+					FoxAgent agent;
+					agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
+					agent.heading = angleDist(m_rng);
+					agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
+					agent.stateTimer = timerDist(m_rng);
+					agent.idle = false;
+					m_foxAgents.push_back(agent);
+
+					auto instances = aether::ecs::SpawnModelInstance(world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
+
+					if (!m_foxAnimators.empty())
+					{
+						aether::ModelAnimator& foxAnim = m_foxAnimators.back();
+						foxAnim.SetAnimation(kAnimRun);
+						foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
+						if (foxAnim.GetDuration() > 0.0f)
+						{
+							std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
+							foxAnim.SetAnimTime(phaseDist(m_rng));
+						}
+					}
+
+					for (const aether::Entity e: instances)
+					{
+						world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+						world.EmplaceOrReplace<FoxTag>(e, FoxTag{});
+						world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
+					}
+
+					m_foxInstances.push_back(std::move(instances));
+				}
+				INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 			}
-			INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
+			catch (const std::exception& e)
+			{
+				WARN(aether::LogCategory::App, "Fox model load failed (re-run AssetPacker to regenerate): {}", e.what());
+			}
 		}
 		else
 		{

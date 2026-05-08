@@ -25,10 +25,10 @@ namespace aether::io
 		// Throws FileSystemError if the file is missing or has an invalid header.
 		explicit PakBackend(std::filesystem::path pakPath);
 
-		[[nodiscard]] bool                            Exists(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::byte>          Read(std::string_view relativePath) const override;
-		[[nodiscard]] std::unique_ptr<std::istream>   OpenStream(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::string>        Glob(std::string_view pattern, const FileGlobOptions& options) const override;
+		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
+		[[nodiscard]] std::vector<std::byte> Read(std::string_view relativePath) const override;
+		[[nodiscard]] std::unique_ptr<std::istream> OpenStream(std::string_view relativePath) const override;
+		[[nodiscard]] std::vector<std::string> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
 
 	private:
 		struct EntryInfo
@@ -39,8 +39,8 @@ namespace aether::io
 			uint32_t flags;
 		};
 
-		std::filesystem::path                    m_pakPath;
-		uint64_t                                 m_assetDataBase{ 0 };
+		std::filesystem::path m_pakPath;
+		uint64_t m_assetDataBase{ 0 };
 		std::unordered_map<std::string, EntryInfo> m_index;
 	};
 } // namespace aether::io
