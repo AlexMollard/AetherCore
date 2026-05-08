@@ -2,7 +2,7 @@
 // single binary (.pak) file consumed by the runtime PakBackend.
 //
 // Usage:
-//   AssetPacker [--import-materials] <source-dir> <output.pak>
+//   AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>
 //   AssetPacker import-materials <source-dir>
 
 #include <filesystem>
@@ -16,32 +16,49 @@ namespace fs = std::filesystem;
 
 int main(int argc, char* argv[])
 {
-	bool importMaterials = false;
-	int argOffset = 1;
+	bool importMaterials  = false;
+	int  compressionLevel = 3; // zstd default; 0 = disabled
+	int  argOffset        = 1;
 
-	if (argc >= 2)
+	// Parse flags before positional arguments.
+	while (argOffset < argc)
 	{
-		const std::string firstArg = argv[1];
-		if (firstArg == "--import-materials")
+		const std::string arg = argv[argOffset];
+
+		if (arg == "--import-materials")
 		{
 			importMaterials = true;
-			argOffset = 2;
+			++argOffset;
 		}
-		else if (firstArg == "import-materials")
+		else if (arg == "--compress-level")
 		{
-			if (argc < 3)
+			if (argOffset + 1 >= argc)
+			{
+				std::cerr << "AssetPacker: --compress-level requires a value (0-22)\n";
+				return 1;
+			}
+			compressionLevel = std::stoi(argv[argOffset + 1]);
+			argOffset += 2;
+		}
+		else if (arg == "import-materials")
+		{
+			if (argc < argOffset + 2)
 			{
 				std::cerr << "Usage: AssetPacker import-materials <source-dir>\n";
 				return 1;
 			}
-			const int result = MaterialImporter::ImportDirectory(fs::path(argv[2]));
+			const int result = MaterialImporter::ImportDirectory(fs::path(argv[argOffset + 1]));
 			return (result < 0) ? 1 : 0;
+		}
+		else
+		{
+			break; // positional args start here
 		}
 	}
 
 	if (argc < argOffset + 2)
 	{
-		std::cerr << "Usage: AssetPacker [--import-materials] <source-dir> <output.pak>\n";
+		std::cerr << "Usage: AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
 		return 1;
 	}
@@ -58,12 +75,10 @@ int main(int argc, char* argv[])
 	if (importMaterials)
 	{
 		if (MaterialImporter::ImportDirectory(sourceDir) < 0)
-		{
 			return 1;
-		}
 	}
 
-	PakWriter writer;
+	PakWriter writer(compressionLevel);
 	writer.AddDirectory(sourceDir);
 	return writer.Write(outPath) ? 0 : 1;
 }

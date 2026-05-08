@@ -47,6 +47,15 @@ target_compile_definitions(Engine PUBLIC
     $<$<BOOL:${AETHERCORE_ENABLE_TRACY}>:TRACY_ENABLE>
 )
 
+# Shared pak format header lives at <repo>/include/ - included by PakBackend
+# and the AssetPacker tool so the on-disk layout stays in sync automatically.
+target_include_directories(Engine PUBLIC
+    "${CMAKE_SOURCE_DIR}/include"
+    "${xxHash_SOURCE_DIR}"
+)
+
+target_link_libraries(Engine PUBLIC libzstd_static)
+
 # VMA is header-only from the consumer's perspective.
 target_include_directories(Engine PUBLIC "${VMA_SOURCE_DIR}/include")
 

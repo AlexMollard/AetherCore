@@ -23,5 +23,5 @@ add_subdirectory(tools/assetpack)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 
-# App is the thing you actually run — make it the default F5 target.
+# App is the thing you actually run - make it the default F5 target.
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT App)

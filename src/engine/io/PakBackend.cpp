@@ -8,6 +8,11 @@
 #include <string_view>
 #include <vector>
 
+#include <zstd.h>
+
+#define XXH_INLINE_ALL
+#include <xxhash.h>
+
 #include "AetherExceptions.hpp"
 
 namespace aether::io
@@ -71,25 +76,25 @@ namespace aether::io
 	{
 		std::ifstream pak(m_pakPath, std::ios::binary);
 		if (!pak)
-		{
 			throw FileSystemError("Cannot open pak file: " + m_pakPath.string());
-		}
 
 		PakHeader header{};
 		pak.read(reinterpret_cast<char*>(&header), sizeof(header));
 
 		if (!pak || std::string_view(header.magic, 4) != "AEPK")
-		{
 			throw FileSystemError("Invalid pak magic in: " + m_pakPath.string());
-		}
-		if (header.version != 1)
+
+		if (header.version != PAK_VERSION)
 		{
-			throw FileSystemError("Unsupported pak version (" + std::to_string(header.version) + ") in: " + m_pakPath.string());
+			throw FileSystemError(
+			    "Unsupported pak version (" + std::to_string(header.version) +
+			    ", expected " + std::to_string(PAK_VERSION) + ") in: " + m_pakPath.string());
 		}
 
 		// Read entry table.
 		std::vector<PakEntry> entries(header.numEntries);
-		pak.read(reinterpret_cast<char*>(entries.data()), static_cast<std::streamsize>(header.numEntries * sizeof(PakEntry)));
+		pak.read(reinterpret_cast<char*>(entries.data()),
+		    static_cast<std::streamsize>(header.numEntries * sizeof(PakEntry)));
 
 		// Read path-data section.
 		std::vector<char> pathData(static_cast<std::size_t>(header.pathDataSize));
@@ -97,9 +102,7 @@ namespace aether::io
 		pak.read(pathData.data(), static_cast<std::streamsize>(header.pathDataSize));
 
 		if (!pak)
-		{
 			throw FileSystemError("Failed to read pak index from: " + m_pakPath.string());
-		}
 
 		m_assetDataBase = header.assetDataOffset;
 		m_index.reserve(header.numEntries);
@@ -107,27 +110,21 @@ namespace aether::io
 		for (const auto& e: entries)
 		{
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
-			m_index.emplace(std::move(path), EntryInfo{ e.dataOffset, e.dataSize });
+			m_index.emplace(std::move(path), EntryInfo{ e.dataOffset, e.dataSize, e.contentHash, e.flags });
 		}
 	}
 
 	bool PakBackend::Exists(std::string_view relativePath) const
 	{
 		if (m_index.contains(std::string(relativePath)))
-		{
 			return true;
-		}
 
-		// Also return true if the path is a virtual folder, i.e. any entry starts
-		// with "<relativePath>/". This mirrors std::filesystem::exists on a real
-		// directory and lets callers probe folder paths against pak-backed mounts.
+		// Also return true if the path is a virtual folder prefix.
 		const std::string prefix = std::string(relativePath) + '/';
 		for (const auto& [key, _]: m_index)
 		{
 			if (key.starts_with(prefix))
-			{
 				return true;
-			}
 		}
 		return false;
 	}
@@ -136,42 +133,72 @@ namespace aether::io
 	{
 		const auto it = m_index.find(std::string(relativePath));
 		if (it == m_index.end())
-		{
 			throw FileSystemError("Asset not found in pak: " + std::string(relativePath));
-		}
 
 		const auto& info = it->second;
 
 		std::ifstream pak(m_pakPath, std::ios::binary);
 		if (!pak)
-		{
 			throw FileSystemError("Cannot open pak file for read: " + m_pakPath.string());
-		}
 
 		pak.seekg(static_cast<std::streamoff>(m_assetDataBase + info.offset));
 
-		std::vector<std::byte> buffer(static_cast<std::size_t>(info.size));
-		pak.read(reinterpret_cast<char*>(buffer.data()), static_cast<std::streamsize>(info.size));
+		std::vector<std::byte> onDisk(static_cast<std::size_t>(info.size));
+		pak.read(reinterpret_cast<char*>(onDisk.data()), static_cast<std::streamsize>(info.size));
 
 		if (!pak)
-		{
 			throw FileSystemError("Read error for asset: " + std::string(relativePath));
+
+		if (!(info.flags & PAK_FLAG_ZSTD))
+		{
+			const uint64_t actual = XXH3_64bits(onDisk.data(), onDisk.size());
+			if (actual != info.hash)
+			{
+				throw FileSystemError(
+				    "Hash mismatch (corrupt pak data) for asset: " + std::string(relativePath));
+			}
+			return onDisk;
 		}
 
-		return buffer;
+		// Decompress: ask the zstd frame header for the original content size.
+		const unsigned long long decompSize = ZSTD_getFrameContentSize(onDisk.data(), onDisk.size());
+		if (decompSize == ZSTD_CONTENTSIZE_ERROR || decompSize == ZSTD_CONTENTSIZE_UNKNOWN)
+			throw FileSystemError("Corrupt zstd frame for asset: " + std::string(relativePath));
+
+		std::vector<std::byte> result(static_cast<std::size_t>(decompSize));
+		const std::size_t written = ZSTD_decompress(
+		    result.data(), result.size(),
+		    onDisk.data(), onDisk.size());
+
+		if (ZSTD_isError(written))
+		{
+			throw FileSystemError(
+			    std::string("zstd decompress failed for '") + std::string(relativePath) +
+			    "': " + ZSTD_getErrorName(written));
+		}
+
+		const uint64_t actual = XXH3_64bits(result.data(), result.size());
+		if (actual != info.hash)
+		{
+			throw FileSystemError(
+			    "Hash mismatch (corrupt pak data) for asset: " + std::string(relativePath));
+		}
+
+		return result;
 	}
 
 	std::unique_ptr<std::istream> PakBackend::OpenStream(std::string_view relativePath) const
 	{
 		auto bytes = Read(relativePath);
-		// Copy into a string so istringstream owns the buffer.
 		std::string buf(reinterpret_cast<const char*>(bytes.data()), bytes.size());
 		return std::make_unique<std::istringstream>(std::move(buf), std::ios::binary);
 	}
 
 	std::vector<std::string> PakBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
 	{
-		const auto regexFlags = options.caseSensitive ? std::regex::ECMAScript : std::regex::ECMAScript | std::regex::icase;
+		const auto regexFlags = options.caseSensitive
+		    ? std::regex::ECMAScript
+		    : std::regex::ECMAScript | std::regex::icase;
 
 		const std::regex re(GlobToRegex(pattern), regexFlags);
 
@@ -179,9 +206,7 @@ namespace aether::io
 		for (const auto& [path, info]: m_index)
 		{
 			if (std::regex_search(path, re))
-			{
 				results.push_back(path);
-			}
 		}
 		std::sort(results.begin(), results.end());
 		return results;

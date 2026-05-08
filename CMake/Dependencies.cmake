@@ -133,6 +133,29 @@ CPMAddPackage(
         "USE_AVX512 OFF"
 )
 
+# ── Hashing ───────────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME xxHash
+    GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+    GIT_TAG        v0.8.2
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+# ── Compression ───────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME zstd
+    GIT_REPOSITORY https://github.com/facebook/zstd.git
+    GIT_TAG        v1.5.6
+    GIT_SHALLOW    TRUE
+    SOURCE_SUBDIR  build/cmake
+    OPTIONS
+        "ZSTD_BUILD_PROGRAMS OFF"
+        "ZSTD_BUILD_TESTS OFF"
+        "ZSTD_BUILD_CONTRIB OFF"
+        "ZSTD_BUILD_SHARED OFF"
+)
+
 # ── Solution folder organisation (Visual Studio only) ─────────────────────────
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -146,6 +169,7 @@ foreach(_dep IN ITEMS
     tomlplusplus_tomlplusplus
     TracyClient
     Jolt
+    libzstd_static
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")
