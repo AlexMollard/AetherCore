@@ -6,7 +6,7 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 
-#include <imgui.h>
+#include "DebugGui.hpp"
 
 #include "AetherCore.hpp"
 #include "Camera.hpp"

@@ -4,7 +4,7 @@
 #include <array>
 #include <cstdio>
 
-#include <imgui.h>
+#include "DebugGui.hpp"
 
 #include "AetherCore.hpp"
 #include "Camera.hpp"

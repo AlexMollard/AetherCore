@@ -38,12 +38,13 @@ target_link_libraries(Engine
         freetype
 )
 
-if(TARGET imgui)
+if(AETHERCORE_ENABLE_IMGUI AND TARGET imgui)
     target_link_libraries(Engine PUBLIC imgui)
 endif()
 
 target_compile_definitions(Engine PUBLIC
     VK_NO_PROTOTYPES
+    $<$<BOOL:${AETHERCORE_ENABLE_IMGUI}>:AETHER_IMGUI>
     $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR>
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
     GLM_ENABLE_EXPERIMENTAL     # For glm::value_ptr() and other utilities in <glm/gtc/type_ptr.hpp>

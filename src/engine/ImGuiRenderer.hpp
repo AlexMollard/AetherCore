@@ -1,13 +1,15 @@
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <memory>
-#include <vector>
+#ifdef AETHER_IMGUI
 
-#include <imgui.h>
+#	include <array>
+#	include <cstdint>
+#	include <memory>
+#	include <vector>
 
-#include "Swapchain.hpp"
+#	include <imgui.h>
+
+#	include "Swapchain.hpp"
 
 struct GLFWwindow;
 
@@ -91,3 +93,49 @@ namespace aether
 	};
 
 } // namespace aether
+
+#else // AETHER_IMGUI not defined - no-op stub, zero ImGui dependency
+
+#	include <cstdint>
+
+struct GLFWwindow;
+
+namespace aether
+{
+	class AetherCore;
+
+	class ImGuiRenderer
+	{
+	public:
+		void Init(AetherCore&, GLFWwindow*)
+		{
+		}
+
+		void Shutdown(AetherCore&)
+		{
+		}
+
+		void SetWriteSlot(uint32_t)
+		{
+		}
+
+		void BeginFrame()
+		{
+		}
+
+		void SnapshotFrame()
+		{
+		}
+
+		void RenderPlatformWindows()
+		{
+		}
+
+		void ReregisterPass(AetherCore&)
+		{
+		}
+	};
+
+} // namespace aether
+
+#endif // AETHER_IMGUI

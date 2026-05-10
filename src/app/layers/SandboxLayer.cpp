@@ -2,7 +2,7 @@
 
 #include <string_view>
 
-#include <imgui.h>
+#include "DebugGui.hpp"
 
 #include "Logger.hpp"
 #include "systems/SandboxGameSystem.hpp"

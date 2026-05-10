@@ -1,16 +1,18 @@
 #include "ImGuiRenderer.hpp"
 
-#include <cstring>
-#include <mutex>
+#ifdef AETHER_IMGUI
 
-#include <backends/imgui_impl_glfw.h>
-#include <backends/imgui_impl_vulkan.h>
-#include <GLFW/glfw3.h>
+#	include <cstring>
+#	include <mutex>
 
-#include "AetherCore.hpp"
-#include "RenderGraph.hpp"
-#include "Swapchain.hpp"
-#include "VulkanContext.hpp"
+#	include <backends/imgui_impl_glfw.h>
+#	include <backends/imgui_impl_vulkan.h>
+#	include <GLFW/glfw3.h>
+
+#	include "AetherCore.hpp"
+#	include "RenderGraph.hpp"
+#	include "Swapchain.hpp"
+#	include "VulkanContext.hpp"
 
 namespace aether
 {
@@ -43,120 +45,120 @@ namespace aether
 			ImGuiStyle& style = ImGui::GetStyle();
 
 			// ── Shape ──────────────────────────────────────────────────────────────
-			style.WindowRounding    = 8.0f; // Doesnt do anything with multiu-viewports enabled
-			style.ChildRounding     = 6.0f;
-			style.PopupRounding     = 6.0f;
-			style.FrameRounding     = 4.0f;
+			style.WindowRounding = 8.0f; // Doesnt do anything with multiu-viewports enabled
+			style.ChildRounding = 6.0f;
+			style.PopupRounding = 6.0f;
+			style.FrameRounding = 4.0f;
 			style.ScrollbarRounding = 4.0f;
-			style.GrabRounding      = 4.0f;
-			style.TabRounding       = 4.0f;
-			style.WindowBorderSize  = 1.0f;
-			style.FrameBorderSize   = 0.0f;
-			style.PopupBorderSize   = 1.0f;
-			style.TabBarBorderSize  = 1.0f;
+			style.GrabRounding = 4.0f;
+			style.TabRounding = 4.0f;
+			style.WindowBorderSize = 1.0f;
+			style.FrameBorderSize = 0.0f;
+			style.PopupBorderSize = 1.0f;
+			style.TabBarBorderSize = 1.0f;
 
 			// ── Spacing ────────────────────────────────────────────────────────────
-			style.WindowPadding     = ImVec2(10.0f,  8.0f);
-			style.FramePadding      = ImVec2( 6.0f,  4.0f);
-			style.CellPadding       = ImVec2( 6.0f,  4.0f);
-			style.ItemSpacing       = ImVec2( 8.0f,  6.0f);
-			style.ItemInnerSpacing  = ImVec2( 4.0f,  4.0f);
-			style.IndentSpacing     = 20.0f;
-			style.ScrollbarSize     = 12.0f;
-			style.GrabMinSize       = 10.0f;
+			style.WindowPadding = ImVec2(10.0f, 8.0f);
+			style.FramePadding = ImVec2(6.0f, 4.0f);
+			style.CellPadding = ImVec2(6.0f, 4.0f);
+			style.ItemSpacing = ImVec2(8.0f, 6.0f);
+			style.ItemInnerSpacing = ImVec2(4.0f, 4.0f);
+			style.IndentSpacing = 20.0f;
+			style.ScrollbarSize = 12.0f;
+			style.GrabMinSize = 10.0f;
 
 			// ── Colours ────────────────────────────────────────────────────────────
 			ImVec4* c = style.Colors;
 
 			// Backgrounds - deep midnight navy
-			c[ImGuiCol_WindowBg]            = ImVec4(0.06f, 0.08f, 0.11f, 0.97f);
-			c[ImGuiCol_ChildBg]             = ImVec4(0.04f, 0.06f, 0.09f, 0.95f);
-			c[ImGuiCol_PopupBg]             = ImVec4(0.07f, 0.09f, 0.13f, 0.98f);
-			c[ImGuiCol_ModalWindowDimBg]    = ImVec4(0.00f, 0.00f, 0.03f, 0.55f);
+			c[ImGuiCol_WindowBg] = ImVec4(0.06f, 0.08f, 0.11f, 0.97f);
+			c[ImGuiCol_ChildBg] = ImVec4(0.04f, 0.06f, 0.09f, 0.95f);
+			c[ImGuiCol_PopupBg] = ImVec4(0.07f, 0.09f, 0.13f, 0.98f);
+			c[ImGuiCol_ModalWindowDimBg] = ImVec4(0.00f, 0.00f, 0.03f, 0.55f);
 
 			// Borders
-			c[ImGuiCol_Border]              = ImVec4(0.18f, 0.23f, 0.30f, 0.80f);
-			c[ImGuiCol_BorderShadow]        = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+			c[ImGuiCol_Border] = ImVec4(0.18f, 0.23f, 0.30f, 0.80f);
+			c[ImGuiCol_BorderShadow] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
 
 			// Text
-			c[ImGuiCol_Text]                = ImVec4(0.88f, 0.91f, 0.93f, 1.00f);
-			c[ImGuiCol_TextDisabled]        = ImVec4(0.38f, 0.46f, 0.54f, 1.00f);
-			c[ImGuiCol_TextSelectedBg]      = ImVec4(0.42f, 0.62f, 0.74f, 0.35f);
+			c[ImGuiCol_Text] = ImVec4(0.88f, 0.91f, 0.93f, 1.00f);
+			c[ImGuiCol_TextDisabled] = ImVec4(0.38f, 0.46f, 0.54f, 1.00f);
+			c[ImGuiCol_TextSelectedBg] = ImVec4(0.42f, 0.62f, 0.74f, 0.35f);
 
 			// Title bar
-			c[ImGuiCol_TitleBg]             = ImVec4(0.07f, 0.09f, 0.13f, 1.00f);
-			c[ImGuiCol_TitleBgActive]       = ImVec4(0.10f, 0.13f, 0.18f, 1.00f);
-			c[ImGuiCol_TitleBgCollapsed]    = ImVec4(0.05f, 0.06f, 0.09f, 0.80f);
+			c[ImGuiCol_TitleBg] = ImVec4(0.07f, 0.09f, 0.13f, 1.00f);
+			c[ImGuiCol_TitleBgActive] = ImVec4(0.10f, 0.13f, 0.18f, 1.00f);
+			c[ImGuiCol_TitleBgCollapsed] = ImVec4(0.05f, 0.06f, 0.09f, 0.80f);
 
 			// Menu bar
-			c[ImGuiCol_MenuBarBg]           = ImVec4(0.08f, 0.10f, 0.14f, 1.00f);
+			c[ImGuiCol_MenuBarBg] = ImVec4(0.08f, 0.10f, 0.14f, 1.00f);
 
 			// Scrollbar
-			c[ImGuiCol_ScrollbarBg]         = ImVec4(0.04f, 0.05f, 0.08f, 0.70f);
-			c[ImGuiCol_ScrollbarGrab]       = ImVec4(0.20f, 0.26f, 0.34f, 1.00f);
-			c[ImGuiCol_ScrollbarGrabHovered]= ImVec4(0.28f, 0.36f, 0.46f, 1.00f);
+			c[ImGuiCol_ScrollbarBg] = ImVec4(0.04f, 0.05f, 0.08f, 0.70f);
+			c[ImGuiCol_ScrollbarGrab] = ImVec4(0.20f, 0.26f, 0.34f, 1.00f);
+			c[ImGuiCol_ScrollbarGrabHovered] = ImVec4(0.28f, 0.36f, 0.46f, 1.00f);
 			c[ImGuiCol_ScrollbarGrabActive] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
 
 			// Frame (input fields, sliders, checkboxes)
-			c[ImGuiCol_FrameBg]             = ImVec4(0.11f, 0.14f, 0.19f, 1.00f);
-			c[ImGuiCol_FrameBgHovered]      = ImVec4(0.16f, 0.21f, 0.28f, 1.00f);
-			c[ImGuiCol_FrameBgActive]       = ImVec4(0.20f, 0.26f, 0.34f, 1.00f);
+			c[ImGuiCol_FrameBg] = ImVec4(0.11f, 0.14f, 0.19f, 1.00f);
+			c[ImGuiCol_FrameBgHovered] = ImVec4(0.16f, 0.21f, 0.28f, 1.00f);
+			c[ImGuiCol_FrameBgActive] = ImVec4(0.20f, 0.26f, 0.34f, 1.00f);
 
 			// Buttons - steel blue family
-			c[ImGuiCol_Button]              = ImVec4(0.18f, 0.24f, 0.32f, 1.00f);
-			c[ImGuiCol_ButtonHovered]       = ImVec4(0.28f, 0.38f, 0.50f, 1.00f);
-			c[ImGuiCol_ButtonActive]        = ImVec4(0.14f, 0.19f, 0.26f, 1.00f);
+			c[ImGuiCol_Button] = ImVec4(0.18f, 0.24f, 0.32f, 1.00f);
+			c[ImGuiCol_ButtonHovered] = ImVec4(0.28f, 0.38f, 0.50f, 1.00f);
+			c[ImGuiCol_ButtonActive] = ImVec4(0.14f, 0.19f, 0.26f, 1.00f);
 
 			// Header (collapsibles, selectables, table rows)
-			c[ImGuiCol_Header]              = ImVec4(0.18f, 0.24f, 0.32f, 0.80f);
-			c[ImGuiCol_HeaderHovered]       = ImVec4(0.28f, 0.38f, 0.50f, 0.90f);
-			c[ImGuiCol_HeaderActive]        = ImVec4(0.35f, 0.48f, 0.62f, 1.00f);
+			c[ImGuiCol_Header] = ImVec4(0.18f, 0.24f, 0.32f, 0.80f);
+			c[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.38f, 0.50f, 0.90f);
+			c[ImGuiCol_HeaderActive] = ImVec4(0.35f, 0.48f, 0.62f, 1.00f);
 
 			// Checkmark / slider grab / grab active - cyan accent
-			c[ImGuiCol_CheckMark]           = ImVec4(0.72f, 0.85f, 0.92f, 1.00f);
-			c[ImGuiCol_SliderGrab]          = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
-			c[ImGuiCol_SliderGrabActive]    = ImVec4(0.58f, 0.76f, 0.88f, 1.00f);
+			c[ImGuiCol_CheckMark] = ImVec4(0.72f, 0.85f, 0.92f, 1.00f);
+			c[ImGuiCol_SliderGrab] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
+			c[ImGuiCol_SliderGrabActive] = ImVec4(0.58f, 0.76f, 0.88f, 1.00f);
 
 			// Separator
-			c[ImGuiCol_Separator]           = ImVec4(0.18f, 0.23f, 0.30f, 0.90f);
-			c[ImGuiCol_SeparatorHovered]    = ImVec4(0.42f, 0.62f, 0.74f, 0.78f);
-			c[ImGuiCol_SeparatorActive]     = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
+			c[ImGuiCol_Separator] = ImVec4(0.18f, 0.23f, 0.30f, 0.90f);
+			c[ImGuiCol_SeparatorHovered] = ImVec4(0.42f, 0.62f, 0.74f, 0.78f);
+			c[ImGuiCol_SeparatorActive] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
 
 			// Resize grip
-			c[ImGuiCol_ResizeGrip]          = ImVec4(0.42f, 0.62f, 0.74f, 0.18f);
-			c[ImGuiCol_ResizeGripHovered]   = ImVec4(0.42f, 0.62f, 0.74f, 0.60f);
-			c[ImGuiCol_ResizeGripActive]    = ImVec4(0.58f, 0.76f, 0.88f, 0.95f);
+			c[ImGuiCol_ResizeGrip] = ImVec4(0.42f, 0.62f, 0.74f, 0.18f);
+			c[ImGuiCol_ResizeGripHovered] = ImVec4(0.42f, 0.62f, 0.74f, 0.60f);
+			c[ImGuiCol_ResizeGripActive] = ImVec4(0.58f, 0.76f, 0.88f, 0.95f);
 
 			// Tabs
-			c[ImGuiCol_Tab]                 = ImVec4(0.09f, 0.12f, 0.17f, 0.90f);
-			c[ImGuiCol_TabHovered]          = ImVec4(0.28f, 0.38f, 0.50f, 1.00f);
-			c[ImGuiCol_TabSelected]         = ImVec4(0.18f, 0.26f, 0.36f, 1.00f);
+			c[ImGuiCol_Tab] = ImVec4(0.09f, 0.12f, 0.17f, 0.90f);
+			c[ImGuiCol_TabHovered] = ImVec4(0.28f, 0.38f, 0.50f, 1.00f);
+			c[ImGuiCol_TabSelected] = ImVec4(0.18f, 0.26f, 0.36f, 1.00f);
 			c[ImGuiCol_TabSelectedOverline] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
-			c[ImGuiCol_TabDimmed]           = ImVec4(0.06f, 0.08f, 0.11f, 0.80f);
-			c[ImGuiCol_TabDimmedSelected]   = ImVec4(0.11f, 0.14f, 0.19f, 0.90f);
+			c[ImGuiCol_TabDimmed] = ImVec4(0.06f, 0.08f, 0.11f, 0.80f);
+			c[ImGuiCol_TabDimmedSelected] = ImVec4(0.11f, 0.14f, 0.19f, 0.90f);
 			c[ImGuiCol_TabDimmedSelectedOverline] = ImVec4(0.26f, 0.36f, 0.46f, 0.80f);
 
 			// Docking
-			c[ImGuiCol_DockingPreview]      = ImVec4(0.42f, 0.62f, 0.74f, 0.45f);
-			c[ImGuiCol_DockingEmptyBg]      = ImVec4(0.04f, 0.05f, 0.08f, 1.00f);
+			c[ImGuiCol_DockingPreview] = ImVec4(0.42f, 0.62f, 0.74f, 0.45f);
+			c[ImGuiCol_DockingEmptyBg] = ImVec4(0.04f, 0.05f, 0.08f, 1.00f);
 
 			// Plot
-			c[ImGuiCol_PlotLines]           = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
-			c[ImGuiCol_PlotLinesHovered]    = ImVec4(0.58f, 0.76f, 0.88f, 1.00f);
-			c[ImGuiCol_PlotHistogram]       = ImVec4(0.32f, 0.52f, 0.68f, 1.00f);
-			c[ImGuiCol_PlotHistogramHovered]= ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
+			c[ImGuiCol_PlotLines] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
+			c[ImGuiCol_PlotLinesHovered] = ImVec4(0.58f, 0.76f, 0.88f, 1.00f);
+			c[ImGuiCol_PlotHistogram] = ImVec4(0.32f, 0.52f, 0.68f, 1.00f);
+			c[ImGuiCol_PlotHistogramHovered] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
 
 			// Table
-			c[ImGuiCol_TableHeaderBg]       = ImVec4(0.09f, 0.12f, 0.17f, 1.00f);
-			c[ImGuiCol_TableBorderStrong]   = ImVec4(0.18f, 0.23f, 0.30f, 1.00f);
-			c[ImGuiCol_TableBorderLight]    = ImVec4(0.12f, 0.15f, 0.20f, 1.00f);
-			c[ImGuiCol_TableRowBg]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-			c[ImGuiCol_TableRowBgAlt]       = ImVec4(0.07f, 0.09f, 0.12f, 0.40f);
+			c[ImGuiCol_TableHeaderBg] = ImVec4(0.09f, 0.12f, 0.17f, 1.00f);
+			c[ImGuiCol_TableBorderStrong] = ImVec4(0.18f, 0.23f, 0.30f, 1.00f);
+			c[ImGuiCol_TableBorderLight] = ImVec4(0.12f, 0.15f, 0.20f, 1.00f);
+			c[ImGuiCol_TableRowBg] = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+			c[ImGuiCol_TableRowBgAlt] = ImVec4(0.07f, 0.09f, 0.12f, 0.40f);
 
 			// Navigation cursor
-			c[ImGuiCol_NavCursor]           = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
+			c[ImGuiCol_NavCursor] = ImVec4(0.42f, 0.62f, 0.74f, 1.00f);
 			c[ImGuiCol_NavWindowingHighlight] = ImVec4(0.42f, 0.62f, 0.74f, 0.70f);
-			c[ImGuiCol_NavWindowingDimBg]   = ImVec4(0.00f, 0.00f, 0.04f, 0.20f);
+			c[ImGuiCol_NavWindowingDimBg] = ImVec4(0.00f, 0.00f, 0.04f, 0.20f);
 
 			// Multi-viewport OS windows need square corners and opaque bg to avoid
 			// a visible seam between the OS window border and the rounded inner frame.
@@ -259,7 +261,7 @@ namespace aether
 				        return fn;
 			        };
 
-#define INTERCEPT(vkName, realPtr, wrapper)                          \
+#	define INTERCEPT(vkName, realPtr, wrapper)                          \
     if (std::strcmp(fname, #vkName) == 0) {                          \
         realPtr = reinterpret_cast<decltype(realPtr)>(resolve(fname)); \
         return reinterpret_cast<PFN_vkVoidFunction>(wrapper);        \
@@ -268,7 +270,7 @@ namespace aether
 			        INTERCEPT(vkQueueWaitIdle, g_realVkQueueWaitIdle, WrappedVkQueueWaitIdle)
 			        INTERCEPT(vkQueuePresentKHR, g_realVkQueuePresentKHR, WrappedVkQueuePresentKHR)
 			        INTERCEPT(vkDeviceWaitIdle, g_realVkDeviceWaitIdle, WrappedVkDeviceWaitIdle)
-#undef INTERCEPT
+#	undef INTERCEPT
 
 			        return resolve(fname);
 		        },
@@ -450,3 +452,5 @@ namespace aether
 	}
 
 } // namespace aether
+
+#endif // AETHER_IMGUI

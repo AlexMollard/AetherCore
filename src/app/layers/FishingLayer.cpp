@@ -1,6 +1,6 @@
 #include "FishingLayer.hpp"
 
-#include <imgui.h>
+#include "DebugGui.hpp"
 
 #include "Logger.hpp"
 #include "systems/FishingGameSystem.hpp"
