@@ -214,7 +214,7 @@ namespace aether::app
 		ImGui::Columns(1);
 
 		ImGui::Spacing();
-		ImGui::TextDisabled("Frame Time (0 – 33 ms)  /  ref: 60fps 30fps");
+		ImGui::TextDisabled("Frame Time (0 - 33 ms)  /  ref: 60fps 30fps");
 		DrawFrameTimeGraph();
 
 		// ── RENDERER ──────────────────────────────────────────────────────────

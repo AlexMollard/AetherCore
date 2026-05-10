@@ -27,8 +27,8 @@ namespace aether::MeshGen
 	// ── Plane ─────────────────────────────────────────────────────────────────
 	// Faces +Z.  UV origin is at the bottom-left corner of the mesh.
 	//
-	//   segmentsX / segmentsY  – number of quads along each axis (≥ 1).
-	//   uvScale                – UV units per segment.
+	//   segmentsX / segmentsY  - number of quads along each axis (≥ 1).
+	//   uvScale                - UV units per segment.
 	//                            1.0 = one texture tile per segment quad.
 	//                            With REPEAT addressing the texture tiles across
 	//                            the full plane segmentsX × segmentsY times.
@@ -44,9 +44,9 @@ namespace aether::MeshGen
 	// ── UV Sphere ─────────────────────────────────────────────────────────────
 	// Latitude/longitude sphere, radius 0.5, +Y = north pole.
 	//
-	//   stacks  – latitude bands (≥ 2).
-	//   slices  – longitude segments (≥ 3).
-	//   uvScale – UV scale applied to both axes (1.0 = full 0->1 wrap).
+	//   stacks  - latitude bands (≥ 2).
+	//   slices  - longitude segments (≥ 3).
+	//   uvScale - UV scale applied to both axes (1.0 = full 0->1 wrap).
 	struct UVSphereDesc
 	{
 		int stacks = 16;
@@ -59,10 +59,10 @@ namespace aether::MeshGen
 	// ── Cylinder ─────────────────────────────────────────────────────────────
 	// Aligned along Y.  Radius 0.5, height 1.0 (Y = -0.5 to +0.5).
 	//
-	//   segments      – circumference divisions (≥ 3).
-	//   caps          – whether to generate top and bottom disc caps.
-	//   uvScaleRadial – U scale along the circumference (1.0 = 0->1 once around).
-	//   uvScaleAxial  – V scale along the height    (1.0 = 0->1 bottom to top).
+	//   segments      - circumference divisions (≥ 3).
+	//   caps          - whether to generate top and bottom disc caps.
+	//   uvScaleRadial - U scale along the circumference (1.0 = 0->1 once around).
+	//   uvScaleAxial  - V scale along the height    (1.0 = 0->1 bottom to top).
 	struct CylinderDesc
 	{
 		int segments = 32;

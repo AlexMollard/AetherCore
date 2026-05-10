@@ -20,7 +20,7 @@ namespace aether
 		constexpr std::uint32_t kTriangleIndices[] = { 0, 1, 2 };
 
 		// -----------------------------------------------------------------------
-		// Quad  (CCW, facing +Z)  – 4 unique verts, 2 triangles
+		// Quad  (CCW, facing +Z)  - 4 unique verts, 2 triangles
 		// -----------------------------------------------------------------------
 		constexpr Mesh::Vertex kQuadVerts[] = {
 			{ .position = { -0.5f, -0.5f, 0.0f }, .normal = { 0.0f, 0.0f, 1.0f }, .tangent = { 1.0f, 0.0f, 0.0f, 1.0f }, .uv = { 0.0f, 1.0f }, .color = { 1.0f, 1.0f, 1.0f } },
@@ -31,7 +31,7 @@ namespace aether
 		constexpr std::uint32_t kQuadIndices[] = { 0, 1, 2, 0, 2, 3 };
 
 		// -----------------------------------------------------------------------
-		// Cube  – 24 unique verts (4 per face), 36 indices (2 tris per face × 6)
+		// Cube  - 24 unique verts (4 per face), 36 indices (2 tris per face × 6)
 		// Each face has its own normal and tangent.
 		// -----------------------------------------------------------------------
 		constexpr Mesh::Vertex kCubeVerts[] = {
@@ -110,7 +110,7 @@ namespace aether
 		m_cube = Mesh::Create(device, allocator, uploadQueue, uploadPool, kCubeVerts, kCubeIndices);
 
 		// -----------------------------------------------------------------------
-		// Plane  – default 20×20 subdivided grid via MeshGen.
+		// Plane  - default 20×20 subdivided grid via MeshGen.
 		// UVs tile 20× per axis (1 UV unit per segment).
 		// -----------------------------------------------------------------------
 		{
