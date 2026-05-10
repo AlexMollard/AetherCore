@@ -51,6 +51,8 @@ namespace aether
 			return m_ready;
 		}
 
+		void EnsurePassRegistered();
+
 	private:
 		struct QuadPush
 		{
@@ -90,7 +92,6 @@ namespace aether
 			DrawCommandData cmd;
 		};
 
-		void EnsurePassRegistered();
 		void EnsureComputePipeline();
 		void RegisterPass();
 
