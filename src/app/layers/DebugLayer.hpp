@@ -11,8 +11,6 @@ namespace aether::app
 	class DebugLayer final : public AppLayer
 	{
 	public:
-		void OnAttach(LayerContext& context) override;
-		void OnDetach(LayerContext& context) override;
 		void OnUpdate(LayerContext& context) override;
 		void OnGui(LayerContext& context) override;
 
@@ -25,11 +23,11 @@ namespace aether::app
 		float GetMinFrameTimeMs() const;
 		float GetMaxFrameTimeMs() const;
 
-		void DrawFrameTimeGraph(aether::UIRenderer& ui, float x, float y, float width, float height) const;
+		void DrawFrameTimeGraph() const;
 
 		std::array<float, kFrameHistorySize> m_frameTimesMs{};
-		std::size_t m_frameHistoryHead = 0;
+		std::size_t m_frameHistoryHead  = 0;
 		std::size_t m_frameHistoryCount = 0;
-		bool m_visible = true;
+		bool        m_visible           = true;
 	};
 } // namespace aether::app

@@ -1,40 +1,47 @@
 // Batched UI shape shader.
-// One indirect-instanced draw emits rectangles/circles/lines from a
+// One indirect-instanced draw emits rectangles/circles/lines/textured-rects from a
 // device-addressable command buffer.
 
-static const uint kShapeRect = 0;
-static const uint kShapeCircle = 1;
-static const uint kShapeLine = 2;
+static const uint kShapeRect        = 0;
+static const uint kShapeCircle      = 1;
+static const uint kShapeLine        = 2;
+static const uint kShapeTexturedRect = 3;
+
+// Bindless resources (set 0).
+[[vk::binding(0, 0)]] Texture2D g_textures[];
+[[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
 struct DrawCommandData
 {
-    float4 data0;
-    float4 data1;
-    float4 color;
-    uint type;
-    int layer;
-    uint _pad0;
-    uint _pad1;
+    float4 data0;        // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
+    float4 data1;        // Rect/Line: cornerRadius/thickness | TexturedRect: u0,v0,u1,v1
+    float4 color;        // RGBA tint
+    uint   type;
+    int    layer;
+    uint   textureSlot;  // bindless slot (TexturedRect only)
+    uint   _pad1;
 };
 
 struct ShapesPush
 {
-    float4 screenSize; // .xy = viewport dimensions
+    float4   screenSize; // .xy = viewport dimensions
     uint64_t commandDataAddr;
-    uint _pad0;
-    uint _pad1;
+    uint     _pad0;
+    uint     _pad1;
 };
 
 [[vk::push_constant]] ShapesPush pc;
 
 struct VSOutput
 {
-    float4 position : SV_Position;
-    float4 color : TEXCOORD0;
-    float2 local : TEXCOORD1;
-    float2 localScale : TEXCOORD2;
-    float cornerRadius : TEXCOORD3;
-    nointerpolation uint type : TEXCOORD4;
+    float4 position      : SV_Position;
+    float4 color         : TEXCOORD0;
+    float2 local         : TEXCOORD1; // [-1,1] for SDF corner/circle tests
+    float2 localScale    : TEXCOORD2; // rect pixel size (for corner radius)
+    float  cornerRadius  : TEXCOORD3;
+    nointerpolation uint type        : TEXCOORD4;
+    float2 texUV         : TEXCOORD5; // UV for TexturedRect
+    nointerpolation uint textureSlot : TEXCOORD6;
 };
 
 [shader("vertex")]
@@ -54,27 +61,37 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
 
     float2 sp = float2(0.0, 0.0);
     const float2 uv = uvRect[vertexId % 6u];
+    float2 outTexUV = float2(0.0, 0.0);
 
-    if (cmd.type == kShapeRect)
+    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect)
     {
         const float2 minPt = cmd.data0.xy;
-        const float2 size = cmd.data0.zw;
+        const float2 size  = cmd.data0.zw;
         sp = minPt + uv * size;
+
+        if (cmd.type == kShapeTexturedRect)
+        {
+            // data1 = u0, v0, u1, v1
+            outTexUV = float2(
+                lerp(cmd.data1.x, cmd.data1.z, uv.x),
+                lerp(cmd.data1.y, cmd.data1.w, uv.y)
+            );
+        }
     }
     else if (cmd.type == kShapeCircle)
     {
         const float2 center = cmd.data0.xy;
-        const float radius = cmd.data0.z;
+        const float radius  = cmd.data0.z;
         sp = center + (uv * 2.0 - 1.0) * radius;
     }
-    else // line
+    else // kShapeLine
     {
-        const float2 a = cmd.data0.xy;
-        const float2 b = cmd.data0.zw;
+        const float2 a  = cmd.data0.xy;
+        const float2 b  = cmd.data0.zw;
         const float2 ab = b - a;
-        const float len = max(length(ab), 0.0001);
+        const float  len = max(length(ab), 0.0001);
         const float2 dir = ab / len;
-        const float2 n = float2(-dir.y, dir.x);
+        const float2 n   = float2(-dir.y, dir.x);
         const float thickness = max(cmd.data1.x, 1.0);
 
         const float2 local = float2(uv.x * len, (uv.y - 0.5) * thickness);
@@ -85,12 +102,14 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     const float ndcY = (sp.y / pc.screenSize.y) * 2.0f - 1.0f;
 
     VSOutput output;
-    output.position = float4(ndcX, ndcY, 0.0, 1.0);
-    output.color = cmd.color;
-    output.local = uv * 2.0 - 1.0;
-    output.localScale = cmd.data0.zw;
-    output.cornerRadius = cmd.data1.x;
-    output.type = cmd.type;
+    output.position    = float4(ndcX, ndcY, 0.0, 1.0);
+    output.color       = cmd.color;
+    output.local       = uv * 2.0 - 1.0;
+    output.localScale  = cmd.data0.zw;
+    output.cornerRadius = (cmd.type == kShapeTexturedRect) ? 0.0 : cmd.data1.x;
+    output.type        = cmd.type;
+    output.texUV       = outTexUV;
+    output.textureSlot = cmd.textureSlot;
     return output;
 }
 
@@ -104,12 +123,18 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         return input.color;
     }
 
+    if (input.type == kShapeTexturedRect)
+    {
+        const float4 texColor = g_textures[input.textureSlot].Sample(g_linearSampler, input.texUV);
+        return texColor * input.color;
+    }
+
     if (input.type == kShapeRect && input.cornerRadius > 0.5)
     {
         const float2 halfSize = max(input.localScale * 0.5, float2(0.001, 0.001));
-        const float radius = min(input.cornerRadius, min(halfSize.x, halfSize.y));
-        const float2 p = abs(input.local * halfSize);
-        const float2 q = p - (halfSize - radius);
+        const float radius    = min(input.cornerRadius, min(halfSize.x, halfSize.y));
+        const float2 p        = abs(input.local * halfSize);
+        const float2 q        = p - (halfSize - radius);
         const float signedDist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radius;
         const float aa = max(fwidth(signedDist), 0.001);
         const float alpha = saturate(0.5 - signedDist / aa);

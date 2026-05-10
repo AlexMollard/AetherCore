@@ -16,7 +16,7 @@ function(aethercore_target_defaults target)
             /Zc:templateScope        # Fix template parameter shadowing conformance; hits bugs in generic wrappers
 
             # --- Promoted warnings -> errors ---
-            /we4062                  # Switch on enum: unhandled enumerator — critical for VkResult switches
+            /we4062                  # Switch on enum: unhandled enumerator - critical for VkResult switches
             /we4063                  # Switch on enum: value not a valid enumerator
             /we4715                  # Not all control paths return a value
 
@@ -37,7 +37,7 @@ function(aethercore_target_defaults target)
         # Hits real size/speed wins in template-heavy Vulkan dispatch code.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
-            # Full PDB with inlined frame info in RelWithDebInfo — default /DEBUG omits inlined
+            # Full PDB with inlined frame info in RelWithDebInfo - default /DEBUG omits inlined
             # frames, making PIX / RenderDoc / Superluminal call stacks nearly useless.
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
         )
@@ -53,10 +53,10 @@ function(aethercore_target_defaults target)
             endif()
         endif()
 
-        # Disable the buffer security cookie in Release — zero benefit in GPU-bound render code.
+        # Disable the buffer security cookie in Release - zero benefit in GPU-bound render code.
         target_compile_options(${target} PRIVATE $<$<CONFIG:Release>:/GS->)
 
-        # Control Flow Guard — enforces valid indirect call targets (Vulkan function pointer tables).
+        # Control Flow Guard - enforces valid indirect call targets (Vulkan function pointer tables).
         # /CETCOMPAT marks the binary as CET shadow-stack compatible (required for signed executables on Win11).
         target_compile_options(${target} PRIVATE /guard:cf)
         target_link_options(${target} PRIVATE /guard:cf /CETCOMPAT)
@@ -77,8 +77,8 @@ function(aethercore_target_defaults target)
             -Wall
             -Wextra
             -Wpedantic
-            -Werror=switch-enum      # Equivalent to /we4062 on MSVC — unhandled enumerators
-            -Werror=return-type      # Equivalent to /we4715 on MSVC — missing return statements
+            -Werror=switch-enum      # Equivalent to /we4062 on MSVC - unhandled enumerators
+            -Werror=return-type      # Equivalent to /we4715 on MSVC - missing return statements
             -ffast-math              # Equivalent to /fp:fast on GCC/Clang
             -ffunction-sections      # Emit each function into its own section; enables --gc-sections
             -fdata-sections

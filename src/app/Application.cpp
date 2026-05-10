@@ -74,6 +74,8 @@ namespace aether::app
 			.renderer = &m_engine.GetRenderer(),
 			.assets = &m_engine.GetAssets(),
 			.ui = &m_uiRenderer,
+			.uiWorld = &m_uiWorld,
+			.uiContext = &m_uiContext,
 		};
 
 		m_renderThread.Stop();
@@ -84,6 +86,7 @@ namespace aether::app
 		context.world->UnregisterSystem("AnimationSystem");
 
 		m_layers.DetachAll(context);
+		m_imguiRenderer.Shutdown(m_engine);
 		m_uiRenderer.Shutdown(m_engine);
 		INFO(LogCategory::App, "Application shutdown complete.");
 	}
@@ -114,6 +117,11 @@ namespace aether::app
 
 		Logger::SetFrameNumber(0);
 		m_uiRenderer.Init(m_engine, kUiFontPath, "AppUI");
+		m_imguiRenderer.Init(m_engine, m_engine.GetWindow().GetHandle());
+		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e)
+		{
+			m_imguiRenderer.ReregisterPass(e);
+		});
 
 		LayerContext attachContext{
 			.engine = m_engine,
@@ -126,6 +134,8 @@ namespace aether::app
 			.renderer = &m_engine.GetRenderer(),
 			.assets = &m_engine.GetAssets(),
 			.ui = &m_uiRenderer,
+			.uiWorld = &m_uiWorld,
+			.uiContext = &m_uiContext,
 		};
 
 		m_layers.AttachAll(attachContext);
@@ -197,6 +207,8 @@ namespace aether::app
 				.renderer = &m_engine.GetRenderer(),
 				.assets = &m_engine.GetAssets(),
 				.ui = &m_uiRenderer,
+				.uiWorld = &m_uiWorld,
+				.uiContext = &m_uiContext,
 			};
 
 			// Update engine-level per-frame systems (camera, input).
@@ -218,6 +230,14 @@ namespace aether::app
 			m_engine.GetRenderQueue().Clear(drawSlot);
 			m_engine.GetShadowService().PrepareWriteSlot(drawSlot);
 			m_uiRenderer.SetWriteSlot(drawSlot);
+			m_imguiRenderer.SetWriteSlot(drawSlot);
+
+			// ECS UI system: hit-test, drag, widget state (runs before OnGui so
+			// layers see up-to-date hover/clicked state when they draw).
+			m_uiSystem.BeginFrame(m_uiWorld, m_engine.GetInput(), m_uiContext, m_engine.GetSwapchainExtent());
+
+			// ImGui new frame - must be before any layer OnGui calls.
+			m_imguiRenderer.BeginFrame();
 
 			// Layer game-logic update.
 			{
@@ -229,6 +249,15 @@ namespace aether::app
 				AE_PROFILE_ZONE_N("LayerGui");
 				m_layers.GuiAll(frameContext);
 			}
+
+			m_uiSystem.EndFrame(m_uiWorld, m_uiContext);
+
+			// Snapshot ImGui draw data into the current slot for the render thread.
+			m_imguiRenderer.SnapshotFrame();
+
+			// Render secondary OS windows (docked panels torn off into viewports).
+			// Must happen after Render() but before NewFrame() - draw data is valid here.
+			m_imguiRenderer.RenderPlatformWindows();
 
 			// Flush ECS draws into the render queue slot and build a frame packet
 			// from the current camera / lighting snapshot.

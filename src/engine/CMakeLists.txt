@@ -38,6 +38,10 @@ target_link_libraries(Engine
         freetype
 )
 
+if(TARGET imgui)
+    target_link_libraries(Engine PUBLIC imgui)
+endif()
+
 target_compile_definitions(Engine PUBLIC
     VK_NO_PROTOTYPES
     $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR>

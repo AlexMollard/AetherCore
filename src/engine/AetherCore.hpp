@@ -198,6 +198,13 @@ namespace aether
 		[[nodiscard]] Window& GetWindow();
 		[[nodiscard]] const EngineSettings& GetSettings() const;
 
+		// Invoked on the render thread after every swapchain recreation so callers
+		// can re-register render graph passes that were cleared.
+		void SetSwapchainRecreatedCallback(std::function<void(AetherCore&)> cb)
+		{
+			m_swapchainRecreatedCallback = std::move(cb);
+		}
+
 	private:
 		// Frame graph and rendering.
 		void BeginFrame();
@@ -233,6 +240,7 @@ namespace aether
 		std::uint64_t m_computeTimelineValue = 0;
 		bool m_asyncComputeEnabled = false;
 		EngineSettings m_settings{};
+		std::function<void(AetherCore&)> m_swapchainRecreatedCallback;
 
 		// Core services.
 		Renderer m_renderer;

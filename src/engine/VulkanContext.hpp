@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <optional>
 #include "volk.hpp"
 #include <vk_mem_alloc.h>
@@ -27,6 +28,7 @@ namespace aether
 		[[nodiscard]] VkQueue GetPresentQueue() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
+		[[nodiscard]] std::mutex& GetGraphicsQueueMutex() const { return m_graphicsQueueMutex; }
 
 	private:
 		std::optional<vkb::Instance> m_instance;
@@ -38,5 +40,6 @@ namespace aether
 		VkQueue m_presentQueue = VK_NULL_HANDLE;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
+		mutable std::mutex m_graphicsQueueMutex;
 	};
 } // namespace aether

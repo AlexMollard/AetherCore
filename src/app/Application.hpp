@@ -8,7 +8,11 @@
 #include "FramePacer.hpp"
 #include "LayerStack.hpp"
 #include "RenderThread.hpp"
+#include "ImGuiRenderer.hpp"
 #include "UIRenderer.hpp"
+#include "ui/UiContext.hpp"
+#include "ui/UiSystem.hpp"
+#include "ui/UiWorld.hpp"
 
 namespace aether::app
 {
@@ -46,6 +50,10 @@ namespace aether::app
 		aether::RenderThread m_renderThread;
 		aether::FramePacer m_framePacer;
 		aether::UIRenderer m_uiRenderer;
+		aether::ImGuiRenderer m_imguiRenderer;
+		aether::ui::UiWorld m_uiWorld;
+		aether::ui::UiContext m_uiContext;
+		aether::ui::UiSystem m_uiSystem;
 		LayerStack m_layers;
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;

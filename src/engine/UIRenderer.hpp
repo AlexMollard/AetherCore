@@ -35,6 +35,14 @@ namespace aether
 		void DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color = glm::vec4(1.f));
 		void DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color = glm::vec4(1.f));
 
+		// Draws a bindless-sampled texture. uvRect = (u0, v0, u1, v1).
+		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), float cornerRadiusPx = 0.f);
+
+		// Clip rect stack - draw calls that fall entirely outside the active clip
+		// are discarded on the CPU before reaching the GPU.
+		void PushClipRect(const UiRect& rect);
+		void PopClipRect();
+
 		void SetLayer(std::int32_t layer)
 		{
 			m_currentLayer = layer;
@@ -59,6 +67,7 @@ namespace aether
 		AetherCore* m_engine = nullptr;
 		std::int32_t m_currentLayer = 0;
 		std::vector<std::int32_t> m_layerStack{ 0 };
+		std::vector<glm::vec4> m_clipStack; // resolved pixel rects (x,y,w,h)
 		TextRenderer m_textRenderer;
 		QuadRenderer m_quadRenderer;
 	};

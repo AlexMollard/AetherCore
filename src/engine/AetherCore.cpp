@@ -272,6 +272,9 @@ namespace aether
 		m_renderTargetService.OnRenderGraphReset(m_vulkanContext.GetDevice().device, m_swapchain.GetDepthFormat(), GetForwardColorFormat());
 		RegisterPasses();
 
+		if (m_swapchainRecreatedCallback)
+			m_swapchainRecreatedCallback(*this);
+
 		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
 	}
 
@@ -485,7 +488,10 @@ namespace aether
 			m_renderGraph.Execute(m_swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr, frameIdx);
 			m_currentRecorder.EndDebugLabel();
 		}
-		m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, m_computeTimelineValue);
+		{
+			std::lock_guard lock(m_vulkanContext.GetGraphicsQueueMutex());
+			m_swapchain.EndFrame(m_vulkanContext.GetGraphicsQueue(), m_vulkanContext.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, m_computeTimelineValue);
+		}
 		++m_frameIndex;
 		m_bindlessManager.AdvanceFrame(m_frameIndex);
 	}

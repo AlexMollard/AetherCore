@@ -14,6 +14,12 @@ namespace aether
 	class UIRenderer;
 } // namespace aether
 
+namespace aether::ui
+{
+	class UiWorld;
+	struct UiContext;
+} // namespace aether::ui
+
 namespace aether::app
 {
 	struct LayerContext
@@ -28,6 +34,10 @@ namespace aether::app
 		aether::Renderer* renderer = nullptr;
 		aether::AssetManager* assets = nullptr;
 		aether::UIRenderer* ui = nullptr;
+
+		// ECS-based UI world and per-frame interaction context.
+		aether::ui::UiWorld* uiWorld = nullptr;
+		aether::ui::UiContext* uiContext = nullptr;
 	};
 
 	class AppLayer

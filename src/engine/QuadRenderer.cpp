@@ -242,6 +242,13 @@ namespace aether
 
 			                ctx.recorder.BindGraphicsPipeline(m_pipeline);
 
+			                // Bind the global bindless descriptor set so textured
+			                // rect draws can sample textures. Always bound even
+			                // for non-textured shapes since the pipeline layout
+			                // declares the set.
+			                const VkDescriptorSet bindlessSet = m_engine->GetBindlessManager().GetSet();
+			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+
 			                const QuadPush push{
 				                .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
 				                .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
@@ -273,6 +280,9 @@ namespace aether
 		m_engine = &engine;
 		m_passName = std::string(passName);
 
+		// Include the global bindless layout so textured rects can sample textures.
+		const VkDescriptorSetLayout bindlessLayout = engine.GetBindlessManager().GetLayout();
+
 		m_pipeline = engine.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://ui_shapes.slang.spv",
 		        .colorFormat = engine.GetSwapchainImageFormat(),
@@ -282,6 +292,7 @@ namespace aether
 		        .blendEnable = true,
 		        .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
 		        .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
 		});
 
 		RegisterPass();
@@ -336,7 +347,7 @@ namespace aether
 
 		const glm::vec4 pxRect = ResolveUiRectPx(m_engine->GetSwapchainExtent(), rect);
 
-		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f)
+		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f || IsClipped(pxRect))
 		{
 			return;
 		}
@@ -399,5 +410,53 @@ namespace aether
 		                                .layer = layer,
 		                                },
 		});
+	}
+
+	void QuadRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint, std::int32_t layer, float cornerRadiusPx)
+	{
+		EnsurePassRegistered();
+		if (m_engine == nullptr || !m_ready)
+		{
+			return;
+		}
+
+		const glm::vec4 pxRect = ResolveUiRectPx(m_engine->GetSwapchainExtent(), rect);
+		if (pxRect.z <= 0.f || pxRect.w <= 0.f || IsClipped(pxRect))
+		{
+			return;
+		}
+
+		m_pendingQuads[m_writeSlot].push_back({
+		        .cmd =
+		                DrawCommandData{
+		                                .data0 = pxRect,
+		                                .data1 = uvRect, // u0, v0, u1, v1
+		                                .color = tint,
+		                                .type = static_cast<std::uint32_t>(ShapeType::TexturedRect),
+		                                .layer = layer,
+		                                .textureSlot = textureSlot,
+		                                },
+		});
+	}
+
+	void QuadRenderer::SetClipRect(glm::vec4 pixelRect)
+	{
+		m_clipState = { .active = true, .pixelRect = pixelRect };
+	}
+
+	void QuadRenderer::ClearClipRect()
+	{
+		m_clipState = {};
+	}
+
+	bool QuadRenderer::IsClipped(glm::vec4 pxRect) const
+	{
+		if (!m_clipState.active)
+		{
+			return false;
+		}
+		const glm::vec4& c = m_clipState.pixelRect;
+		// Entirely outside if one rect is to the left/right/above/below the other.
+		return (pxRect.x + pxRect.z <= c.x) || (pxRect.x >= c.x + c.z) || (pxRect.y + pxRect.w <= c.y) || (pxRect.y >= c.y + c.w);
 	}
 } // namespace aether

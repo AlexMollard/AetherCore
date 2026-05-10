@@ -7,8 +7,8 @@ struct DrawCommandData
     float4 data1;
     float4 color;
     uint type;
-    int layer;
-    uint _pad0;
+    int  layer;
+    uint textureSlot; // was _pad0; not used by the sort but must match the C++ layout
     uint _pad1;
 };
 

@@ -25,6 +25,7 @@ namespace aether
 			Rect = 0,
 			Circle = 1,
 			Line = 2,
+			TexturedRect = 3,
 		};
 
 		QuadRenderer() = default;
@@ -45,6 +46,13 @@ namespace aether
 		void DrawRect(const UiRect& rect, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0, float cornerRadiusPx = 0.0f);
 		void DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
 		void DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
+		// Draws a bindless-sampled texture on a quad. uvRect = (u0, v0, u1, v1).
+		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), std::int32_t layer = 0, float cornerRadiusPx = 0.f);
+
+		// Clip rect: any draw call whose resolved pixel rect lies entirely outside
+		// the active clip is discarded on the CPU before reaching the GPU.
+		void SetClipRect(glm::vec4 pixelRect); // x, y, w, h
+		void ClearClipRect();
 
 		[[nodiscard]] bool IsReady() const
 		{
@@ -76,12 +84,12 @@ namespace aether
 
 		struct DrawCommandData
 		{
-			glm::vec4 data0{}; // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
-			glm::vec4 data1{}; // x = cornerRadius (rect) or thickness (line), others reserved
-			glm::vec4 color{}; // RGBA
-			uint32_t type = 0; // ShapeType
-			int32_t layer = 0; // painter's order key
-			uint32_t _pad0 = 0;
+			glm::vec4 data0{};        // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
+			glm::vec4 data1{};        // Rect/Line: cornerRadius/thickness | TexturedRect: u0,v0,u1,v1
+			glm::vec4 color{};        // RGBA tint
+			uint32_t type = 0;        // ShapeType
+			int32_t layer = 0;        // painter's order key
+			uint32_t textureSlot = 0; // bindless slot (TexturedRect only)
 			uint32_t _pad1 = 0;
 		};
 
@@ -94,6 +102,15 @@ namespace aether
 
 		void EnsureComputePipeline();
 		void RegisterPass();
+
+		struct ClipState
+		{
+			bool active = false;
+			glm::vec4 pixelRect{}; // x, y, w, h
+		};
+
+		// Returns true if the pixel rect is entirely outside the active clip.
+		[[nodiscard]] bool IsClipped(glm::vec4 pxRect) const;
 
 		std::string m_passName;
 		std::string m_buildPassName;
@@ -108,6 +125,7 @@ namespace aether
 		std::array<std::size_t, Swapchain::kMaxFramesInFlight> m_commandBufferCapacities{};
 		std::array<UniqueBuffer, Swapchain::kMaxFramesInFlight> m_indirectBuffers;
 		std::uint32_t m_writeSlot = 0;
+		ClipState m_clipState{};
 		bool m_ready = false;
 	};
 } // namespace aether
