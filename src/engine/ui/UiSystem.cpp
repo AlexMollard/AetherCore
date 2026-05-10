@@ -9,15 +9,15 @@
 
 namespace aether::ui
 {
-	static constexpr float kTitleBarHeight = 48.f; // must match OverlayStyle kHdrH
+	static constexpr float kTitleBarHeight = 48.f;
 
 	void UiSystem::BeginFrame(UiWorld& world, const Input& input, UiContext& ctx, VkExtent2D extent)
 	{
 		// ── Mouse state ────────────────────────────────────────────────────────
-		ctx.mousePos     = input.GetMousePos();
-		ctx.mouseDelta   = input.GetMouseDelta();
-		ctx.mousePressed  = input.IsMouseButtonPressed(MouseButton::Left);
-		ctx.mouseDown     = input.IsMouseButtonDown(MouseButton::Left);
+		ctx.mousePos = input.GetMousePos();
+		ctx.mouseDelta = input.GetMouseDelta();
+		ctx.mousePressed = input.IsMouseButtonPressed(MouseButton::Left);
+		ctx.mouseDown = input.IsMouseButtonDown(MouseButton::Left);
 		ctx.mouseReleased = input.IsMouseButtonReleased(MouseButton::Left);
 
 		// ── Clear per-frame transient flags ───────────────────────────────────

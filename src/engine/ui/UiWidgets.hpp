@@ -11,7 +11,7 @@ namespace aether
 {
 	class UIRenderer;
 	class Input;
-}
+} // namespace aether
 
 namespace aether::ui
 {

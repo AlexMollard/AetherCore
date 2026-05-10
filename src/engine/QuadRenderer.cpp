@@ -431,7 +431,7 @@ namespace aether
 		                DrawCommandData{
 		                                .data0 = pxRect,
 		                                .data1 = uvRect, // u0, v0, u1, v1
-		                                .color = tint,
+		                        .color = tint,
 		                                .type = static_cast<std::uint32_t>(ShapeType::TexturedRect),
 		                                .layer = layer,
 		                                .textureSlot = textureSlot,

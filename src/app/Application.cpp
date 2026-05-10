@@ -118,10 +118,7 @@ namespace aether::app
 		Logger::SetFrameNumber(0);
 		m_uiRenderer.Init(m_engine, kUiFontPath, "AppUI");
 		m_imguiRenderer.Init(m_engine, m_engine.GetWindow().GetHandle());
-		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e)
-		{
-			m_imguiRenderer.ReregisterPass(e);
-		});
+		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e) { m_imguiRenderer.ReregisterPass(e); });
 
 		LayerContext attachContext{
 			.engine = m_engine,

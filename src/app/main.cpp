@@ -6,7 +6,7 @@
 #include "CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
 // #include "layers/FishingLayer.hpp"
- #include "layers/SandboxLayer.hpp"
+#include "layers/SandboxLayer.hpp"
 // #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
 #include "Logger.hpp"

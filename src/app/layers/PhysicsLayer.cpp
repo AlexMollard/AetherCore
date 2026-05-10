@@ -1,13 +1,9 @@
 #include "PhysicsLayer.hpp"
 
-#include <array>
-#include <cstdio>
+#include <imgui.h>
 
-#include "layers/OverlayStyle.hpp"
 #include "Logger.hpp"
 #include "systems/PhysicsGameSystem.hpp"
-#include "UiLayout.hpp"
-#include "UIRenderer.hpp"
 #include "World.hpp"
 
 namespace aether::app
@@ -43,37 +39,65 @@ namespace aether::app
 	{
 	}
 
-	void PhysicsLayer::OnGui(LayerContext& context)
+	void PhysicsLayer::OnGui([[maybe_unused]] LayerContext& context)
 	{
-		if (!context.ui || !m_gameSystem)
+		if (!m_gameSystem)
 		{
 			return;
 		}
 
-		using namespace aether::app::overlay;
+		static constexpr ImVec4 kGood{ 0.40f, 0.72f, 0.46f, 1.f };
+		static constexpr ImVec4 kWarn{ 0.86f, 0.71f, 0.30f, 1.f };
 
-		aether::UIRenderer& ui = *context.ui;
-		std::array<char, 64> buf{};
+		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
+		if (!ImGui::Begin("PHYSICS", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
+		{
+			ImGui::End();
+			return;
+		}
 
-		PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 360.f, 12.f, 120.f);
-		panel.Title("PHYSICS").Section("SIMULATION");
+		ImGui::SeparatorText("SIMULATION");
+		ImGui::Columns(2, "##sim", false);
 
-		std::snprintf(buf.data(), buf.size(), "%d", m_gameSystem->GetActiveBodyCount());
-		panel.KV("Dynamic bodies", buf.data());
+		ImGui::Text("Dynamic bodies");
+		ImGui::NextColumn();
+		ImGui::Text("%d", m_gameSystem->GetActiveBodyCount());
+		ImGui::NextColumn();
 
-		std::snprintf(buf.data(), buf.size(), "%d", m_gameSystem->GetProjectileCount());
-		panel.KV("Projectiles", buf.data());
+		ImGui::Text("Projectiles");
+		ImGui::NextColumn();
+		ImGui::Text("%d", m_gameSystem->GetProjectileCount());
+		ImGui::NextColumn();
 
-		std::snprintf(buf.data(), buf.size(), "%.1f s", m_gameSystem->GetSimTime());
-		panel.KV("Sim time", buf.data());
+		ImGui::Text("Sim time");
+		ImGui::NextColumn();
+		ImGui::Text("%.1f s", m_gameSystem->GetSimTime());
+		ImGui::NextColumn();
 
-		std::snprintf(buf.data(), buf.size(), "%.0f Hz (fixed)", 1.f / aether::PhysicsSystem::kFixedTimestep);
-		panel.KV("Step rate", buf.data(), kColorGood);
+		ImGui::Text("Step rate");
+		ImGui::NextColumn();
+		ImGui::TextColored(kGood, "%.0f Hz (fixed)", 1.f / aether::PhysicsSystem::kFixedTimestep);
+		ImGui::NextColumn();
 
-		panel.Section("CONTROLS");
-		panel.KV("Space", "Fire projectile", kColorWarn);
-		panel.KV("R", "Reset scene");
-		panel.KV("C", "Toggle camera");
+		ImGui::Columns(1);
+		ImGui::SeparatorText("CONTROLS");
+		ImGui::Columns(2, "##ctrl", false);
+
+		ImGui::Text("Space");
+		ImGui::NextColumn();
+		ImGui::TextColored(kWarn, "Fire projectile");
+		ImGui::NextColumn();
+		ImGui::Text("R");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Reset scene");
+		ImGui::NextColumn();
+		ImGui::Text("C");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Toggle camera");
+		ImGui::NextColumn();
+
+		ImGui::Columns(1);
+		ImGui::End();
 	}
 
 } // namespace aether::app

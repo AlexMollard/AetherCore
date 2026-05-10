@@ -273,7 +273,9 @@ namespace aether
 		RegisterPasses();
 
 		if (m_swapchainRecreatedCallback)
+		{
 			m_swapchainRecreatedCallback(*this);
+		}
 
 		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
 	}

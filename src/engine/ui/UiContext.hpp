@@ -11,16 +11,16 @@ namespace aether::ui
 	struct UiContext
 	{
 		// Hit-test results (reset each BeginFrame).
-		Entity hotEntity;    // entity whose rect contains the cursor (highest z wins)
-		Entity activeEntity; // entity being held / dragged (persists across frames)
+		Entity hotEntity;     // entity whose rect contains the cursor (highest z wins)
+		Entity activeEntity;  // entity being held / dragged (persists across frames)
 		Entity focusedEntity; // entity that has keyboard focus
 
 		// Mouse state for this frame.
 		glm::vec2 mousePos{};
 		glm::vec2 mouseDelta{};
-		bool mousePressed = false;   // left button just went down
-		bool mouseDown = false;      // left button held
-		bool mouseReleased = false;  // left button just went up
+		bool mousePressed = false;  // left button just went down
+		bool mouseDown = false;     // left button held
+		bool mouseReleased = false; // left button just went up
 
 		// Drag state (for draggable panels).
 		Entity draggedEntity;

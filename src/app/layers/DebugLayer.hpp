@@ -26,8 +26,8 @@ namespace aether::app
 		void DrawFrameTimeGraph() const;
 
 		std::array<float, kFrameHistorySize> m_frameTimesMs{};
-		std::size_t m_frameHistoryHead  = 0;
+		std::size_t m_frameHistoryHead = 0;
 		std::size_t m_frameHistoryCount = 0;
-		bool        m_visible           = true;
+		bool m_visible = true;
 	};
 } // namespace aether::app

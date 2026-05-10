@@ -28,7 +28,11 @@ namespace aether
 		[[nodiscard]] VkQueue GetPresentQueue() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
-		[[nodiscard]] std::mutex& GetGraphicsQueueMutex() const { return m_graphicsQueueMutex; }
+
+		[[nodiscard]] std::mutex& GetGraphicsQueueMutex() const
+		{
+			return m_graphicsQueueMutex;
+		}
 
 	private:
 		std::optional<vkb::Instance> m_instance;

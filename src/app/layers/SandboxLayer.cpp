@@ -1,20 +1,15 @@
 #include "SandboxLayer.hpp"
 
-#include <cstdio>
-#include <glm/gtc/matrix_transform.hpp>
-#include <string>
 #include <string_view>
 
+#include <imgui.h>
+
 #include "Logger.hpp"
-#include "OverlayStyle.hpp"
 #include "systems/SandboxGameSystem.hpp"
-#include "UiLayout.hpp"
-#include "UIRenderer.hpp"
 #include "World.hpp"
 
 namespace aether::app
 {
-	using namespace overlay;
 
 	const char* SandboxLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
@@ -61,34 +56,49 @@ namespace aether::app
 
 	void SandboxLayer::OnGui(LayerContext& context)
 	{
-		if (context.ui == nullptr)
+		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
+		if (!ImGui::Begin("SANDBOX", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
 		{
+			ImGui::End();
 			return;
 		}
 
-		aether::UIRenderer& ui = *context.ui;
-		std::array<char, 128> buf{};
+		ImGui::SeparatorText("SCENE");
+		ImGui::Columns(2, "##sc", false);
 
-		PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 388.f, 12.f, 110.f);
-		panel.Title("SANDBOX").Section("SCENE");
-		panel.KV("Camera", GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::Text("Camera");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted(GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::NextColumn();
 
 		if (m_gameSystem)
 		{
-			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFoxCount());
-			panel.KV("Foxes", buf.data());
+			ImGui::Text("Foxes");
+			ImGui::NextColumn();
+			ImGui::Text("%zu", m_gameSystem->GetFoxCount());
+			ImGui::NextColumn();
 
-			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFoxPrimitiveCount());
-			panel.KV("Prims/fox", buf.data());
+			ImGui::Text("Prims/fox");
+			ImGui::NextColumn();
+			ImGui::Text("%zu", m_gameSystem->GetFoxPrimitiveCount());
+			ImGui::NextColumn();
 
-			std::snprintf(buf.data(), buf.size(), "%u", m_gameSystem->GetAnimationCount());
-			panel.KV("Anims", buf.data());
+			ImGui::Text("Anims");
+			ImGui::NextColumn();
+			ImGui::Text("%u", m_gameSystem->GetAnimationCount());
+			ImGui::NextColumn();
 
 			const std::string_view anim = m_gameSystem->GetCurrentAnimationName();
 			if (!anim.empty())
 			{
-				panel.KV("Playing", anim, kColorGood);
+				ImGui::Text("Playing");
+				ImGui::NextColumn();
+				ImGui::TextColored(ImVec4(0.40f, 0.72f, 0.46f, 1.f), "%.*s", static_cast<int>(anim.size()), anim.data());
+				ImGui::NextColumn();
 			}
 		}
+
+		ImGui::Columns(1);
+		ImGui::End();
 	}
 } // namespace aether::app

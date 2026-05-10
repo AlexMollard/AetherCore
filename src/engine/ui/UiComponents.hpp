@@ -42,11 +42,11 @@ namespace aether::ui
 	// here every frame; widgets read it in OnGui to drive visual changes.
 	struct UiInputComponent
 	{
-		bool hovered = false;    // cursor is over this entity's rect
-		bool pressed = false;    // left button held while this is the active entity
-		bool clicked = false;    // true for ONE frame when released over this entity
-		bool focused = false;    // keyboard focus
-		bool blockInput = true;  // stops hit-testing from passing through to entities below
+		bool hovered = false;   // cursor is over this entity's rect
+		bool pressed = false;   // left button held while this is the active entity
+		bool clicked = false;   // true for ONE frame when released over this entity
+		bool focused = false;   // keyboard focus
+		bool blockInput = true; // stops hit-testing from passing through to entities below
 	};
 
 	// ── Panel ──────────────────────────────────────────────────────────────────
@@ -112,7 +112,11 @@ namespace aether::ui
 	// Drives automatic child positioning within a container.
 	struct UiLayoutComponent
 	{
-		enum class Direction { Vertical, Horizontal } direction = Direction::Vertical;
+		enum class Direction
+		{
+			Vertical,
+			Horizontal
+		} direction = Direction::Vertical;
 		float spacing = 4.f;
 		float padding = 8.f;
 	};

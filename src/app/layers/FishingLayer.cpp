@@ -1,16 +1,12 @@
 #include "FishingLayer.hpp"
 
-#include <cstdio>
+#include <imgui.h>
 
 #include "Logger.hpp"
-#include "OverlayStyle.hpp"
 #include "systems/FishingGameSystem.hpp"
-#include "UiLayout.hpp"
-#include "UIRenderer.hpp"
 
 namespace aether::app
 {
-	using namespace overlay;
 
 	const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
@@ -46,33 +42,61 @@ namespace aether::app
 
 	void FishingLayer::OnGui(LayerContext& context)
 	{
-		if (context.ui == nullptr)
+		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
+		if (!ImGui::Begin("FISHING DEMO", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
 		{
+			ImGui::End();
 			return;
 		}
 
-		aether::UIRenderer& ui = *context.ui;
-		std::array<char, 128> buf{};
+		ImGui::SeparatorText("GAME");
+		ImGui::Columns(2, "##gm", false);
 
-		PanelBuilder panel(ui, { 0.f, 0.f }, 12.f, 460.f, 12.f, 110.f);
-		panel.Title("FISHING DEMO").Section("GAME");
-		panel.KV("Camera", GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::Text("Camera");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted(GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::NextColumn();
 
 		if (m_gameSystem)
 		{
-			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetFishCount());
-			panel.KV("Fish", buf.data());
+			ImGui::Text("Fish");
+			ImGui::NextColumn();
+			ImGui::Text("%zu", m_gameSystem->GetFishCount());
+			ImGui::NextColumn();
 
-			std::snprintf(buf.data(), buf.size(), "%zu", m_gameSystem->GetScore());
-			panel.KV("Score", buf.data());
+			ImGui::Text("Score");
+			ImGui::NextColumn();
+			ImGui::Text("%zu", m_gameSystem->GetScore());
+			ImGui::NextColumn();
 
-			panel.KV("Bobber", m_gameSystem->GetBobberStateName());
+			ImGui::Text("Bobber");
+			ImGui::NextColumn();
+			ImGui::TextUnformatted(m_gameSystem->GetBobberStateName());
+			ImGui::NextColumn();
 		}
 
-		panel.Section("CONTROLS");
-		panel.KV("LMB", "Cast to water");
-		panel.KV("Space", "Hook / Reel");
-		panel.KV("RMB", "Rotate camera");
-		panel.KV("WASD", "Move camera");
+		ImGui::Columns(1);
+		ImGui::SeparatorText("CONTROLS");
+		ImGui::Columns(2, "##ctrl", false);
+
+		ImGui::Text("LMB");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Cast to water");
+		ImGui::NextColumn();
+		ImGui::Text("Space");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Hook / Reel");
+		ImGui::NextColumn();
+		ImGui::Text("RMB");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Rotate camera");
+		ImGui::NextColumn();
+		ImGui::Text("WASD");
+		ImGui::NextColumn();
+		ImGui::TextUnformatted("Move camera");
+		ImGui::NextColumn();
+
+		ImGui::Columns(1);
+		ImGui::End();
 	}
 } // namespace aether::app
