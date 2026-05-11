@@ -6,8 +6,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "System.hpp"
-#include "Entity.hpp"
+#include "scene/System.hpp"
+#include "scene/Entity.hpp"
 #include "physics/PhysicsComponents.hpp"
 
 // Forward-declare heavy Jolt internals so this header stays light.

@@ -4,7 +4,7 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
-#include "Renderer.hpp"
+#include "rendering/Renderer.hpp"
 
 namespace aether::app
 {

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "../VoxelVertex.hpp"
+#include "mesh/VoxelVertex.hpp"
 #include "BlockDef.hpp"
 
 namespace voxel

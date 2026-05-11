@@ -1,8 +1,8 @@
 #include "FishingLayer.hpp"
 
-#include "DebugGui.hpp"
+#include "utils/DebugGui.hpp"
 
-#include "Logger.hpp"
+#include "utils/Logger.hpp"
 #include "systems/FishingGameSystem.hpp"
 
 namespace aether::app

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "AppLayer.hpp"
-#include "CameraManager.hpp"
-#include "GraphicsPipeline.hpp"
+#include "camera/CameraManager.hpp"
+#include "rendering/GraphicsPipeline.hpp"
 #include "voxel/BlockRegistry.hpp"
 #include "voxel/ChunkManager.hpp"
 

@@ -5,7 +5,7 @@
 #include <regex>
 #include <system_error>
 
-#include "AetherExceptions.hpp"
+#include "utils/AetherExceptions.hpp"
 
 namespace aether::io
 {

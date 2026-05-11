@@ -6,14 +6,14 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "AetherCore.hpp"
-#include "AssetManager.hpp"
-#include "Camera.hpp"
-#include "EcsHelpers.hpp"
+#include "scene/AetherCore.hpp"
+#include "utils/AssetManager.hpp"
+#include "camera/Camera.hpp"
+#include "scene/EcsHelpers.hpp"
 #include "FileSystem.hpp"
-#include "Input.hpp"
-#include "Logger.hpp"
-#include "World.hpp"
+#include "platform/Input.hpp"
+#include "utils/Logger.hpp"
+#include "scene/World.hpp"
 
 namespace aether::app
 {

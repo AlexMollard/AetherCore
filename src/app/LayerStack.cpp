@@ -1,7 +1,7 @@
 #include "LayerStack.hpp"
 
-#include "Logger.hpp"
-#include "Profiler.hpp"
+#include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::app
 {

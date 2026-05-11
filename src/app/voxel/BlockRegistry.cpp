@@ -2,11 +2,11 @@
 
 #include <cassert>
 
-#include "../AetherCore.hpp"
-#include "../io/FileSystem.hpp"
-#include "../Material.hpp"
-#include "../Texture.hpp"
-#include "Logger.hpp"
+#include "scene/AetherCore.hpp"
+#include "io/FileSystem.hpp"
+#include "material/Material.hpp"
+#include "material/Texture.hpp"
+#include "utils/Logger.hpp"
 
 namespace voxel
 {

@@ -6,13 +6,13 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 
-#include "DebugGui.hpp"
+#include "utils/DebugGui.hpp"
 
-#include "AetherCore.hpp"
-#include "Camera.hpp"
-#include "CameraManager.hpp"
-#include "Logger.hpp"
-#include "RenderQueue.hpp"
+#include "scene/AetherCore.hpp"
+#include "camera/Camera.hpp"
+#include "camera/CameraManager.hpp"
+#include "utils/Logger.hpp"
+#include "rendering/RenderQueue.hpp"
 
 namespace aether::app
 {

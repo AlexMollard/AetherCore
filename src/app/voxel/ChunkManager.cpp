@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <cassert>
 
-#include "../AetherCore.hpp"
-#include "../GraphicsPipeline.hpp"
-#include "../RenderQueue.hpp"
-#include "../ShadowService.hpp"
+#include "scene/AetherCore.hpp"
+#include "rendering/GraphicsPipeline.hpp"
+#include "rendering/RenderQueue.hpp"
+#include "passes/ShadowService.hpp"
 
 namespace voxel
 {

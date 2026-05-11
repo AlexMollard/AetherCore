@@ -4,15 +4,15 @@
 #include <array>
 #include <cmath>
 
-#include "AetherCore.hpp"
-#include "AssetManager.hpp"
-#include "Camera.hpp"
-#include "EcsHelpers.hpp"
+#include "scene/AetherCore.hpp"
+#include "utils/AssetManager.hpp"
+#include "camera/Camera.hpp"
+#include "scene/EcsHelpers.hpp"
 #include "FileSystem.hpp"
-#include "Input.hpp"
-#include "Logger.hpp"
-#include "Window.hpp"
-#include "World.hpp"
+#include "platform/Input.hpp"
+#include "utils/Logger.hpp"
+#include "platform/Window.hpp"
+#include "scene/World.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/gtx/quaternion.hpp>
 

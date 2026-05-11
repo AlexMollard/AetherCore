@@ -5,8 +5,8 @@
 #include <vector>
 #include <glm/glm.hpp>
 
-#include "Entity.hpp"
-#include "UiLayout.hpp"
+#include "scene/Entity.hpp"
+#include "ui/UiLayout.hpp"
 
 namespace aether::ui
 {

@@ -4,11 +4,11 @@
 #include <cmath>
 #include <string>
 
-#include "Input.hpp"
-#include "UIRenderer.hpp"
+#include "platform/Input.hpp"
+#include "ui/UIRenderer.hpp"
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
-#include "UiLayout.hpp"
+#include "ui/UiLayout.hpp"
 #include "UiWorld.hpp"
 
 namespace aether::ui

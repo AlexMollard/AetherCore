@@ -2,14 +2,14 @@
 
 #include <memory>
 
-#include "AetherCore.hpp"
+#include "scene/AetherCore.hpp"
 #include "AppLayer.hpp"
-#include "EngineSettings.hpp"
-#include "FramePacer.hpp"
+#include "utils/EngineSettings.hpp"
+#include "utils/FramePacer.hpp"
 #include "LayerStack.hpp"
-#include "RenderThread.hpp"
-#include "ImGuiRenderer.hpp"
-#include "UIRenderer.hpp"
+#include "rendering/RenderThread.hpp"
+#include "ui/ImGuiRenderer.hpp"
+#include "ui/UIRenderer.hpp"
 #include "ui/UiContext.hpp"
 #include "ui/UiSystem.hpp"
 #include "ui/UiWorld.hpp"

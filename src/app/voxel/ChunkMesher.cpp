@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-#include "../VoxelVertex.hpp"
+#include "mesh/VoxelVertex.hpp"
 #include "BlockRegistry.hpp"
 
 namespace voxel

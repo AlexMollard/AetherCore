@@ -1,10 +1,10 @@
 #pragma once
 
 #include <string_view>
-#include "volk.hpp"
+#include "vulkan/volk.hpp"
 
-#include "Entity.hpp"
-#include "UiLayout.hpp"
+#include "scene/Entity.hpp"
+#include "ui/UiLayout.hpp"
 #include "UiTheme.hpp"
 
 namespace aether

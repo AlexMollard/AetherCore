@@ -1,6 +1,6 @@
 #include "IOThread.hpp"
 
-#include "Profiler.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::io
 {

@@ -1,9 +1,9 @@
 #include "UiSystem.hpp"
 
-#include "Input.hpp"
+#include "platform/Input.hpp"
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
-#include "UiLayout.hpp"
+#include "ui/UiLayout.hpp"
 #include "UiWorld.hpp"
 #include "UiWidgets.hpp"
 

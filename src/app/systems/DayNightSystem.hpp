@@ -1,6 +1,6 @@
 #pragma once
 
-#include "System.hpp"
+#include "scene/System.hpp"
 
 namespace aether
 {

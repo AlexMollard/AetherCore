@@ -6,14 +6,14 @@
 #include <string_view>
 #include <vector>
 
-#include "AetherCore.hpp"
-#include "Camera.hpp"
-#include "CameraManager.hpp"
-#include "Entity.hpp"
-#include "GraphicsPipeline.hpp"
-#include "Material.hpp"
-#include "ModelAnimator.hpp"
-#include "System.hpp"
+#include "scene/AetherCore.hpp"
+#include "camera/Camera.hpp"
+#include "camera/CameraManager.hpp"
+#include "scene/Entity.hpp"
+#include "rendering/GraphicsPipeline.hpp"
+#include "material/Material.hpp"
+#include "animation/ModelAnimator.hpp"
+#include "scene/System.hpp"
 
 namespace aether
 {

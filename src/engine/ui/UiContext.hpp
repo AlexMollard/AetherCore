@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-#include "Entity.hpp"
+#include "scene/Entity.hpp"
 
 namespace aether::ui
 {

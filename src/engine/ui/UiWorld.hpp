@@ -3,7 +3,7 @@
 #include <entt/entt.hpp>
 #include <utility>
 
-#include "Entity.hpp"
+#include "scene/Entity.hpp"
 #include "UiComponents.hpp"
 
 namespace aether::ui

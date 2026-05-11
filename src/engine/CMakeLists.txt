@@ -91,8 +91,8 @@ if(AETHERCORE_ENABLE_UNITY_BUILD)
 
     # Keep one-definition implementation units out of unity amalgamation.
     set_source_files_properties(
-        "${CMAKE_CURRENT_SOURCE_DIR}/Texture.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/VmaImplementation.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/material/Texture.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/vulkan/VmaImplementation.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/physics/PhysicsSystem.cpp"
         # DirectoryBackend and PakBackend both define GlobToRegex in an anonymous
         # namespace; unity merges them into one TU causing an ODR collision.

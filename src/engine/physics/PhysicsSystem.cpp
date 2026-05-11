@@ -21,9 +21,9 @@
 #include <thread>
 
 #include "physics/PhysicsSystem.hpp"
-#include "Components.hpp"
-#include "World.hpp"
-#include "Logger.hpp"
+#include "scene/Components.hpp"
+#include "scene/World.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether
 {

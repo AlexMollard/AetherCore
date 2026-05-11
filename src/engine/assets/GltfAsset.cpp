@@ -11,7 +11,7 @@
 #include <AeBnFormat.hpp>
 
 #include "FileSystem.hpp"
-#include "Profiler.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::assets
 {

@@ -1,10 +1,10 @@
 #include "PhysicsLayer.hpp"
 
-#include "DebugGui.hpp"
+#include "utils/DebugGui.hpp"
 
-#include "Logger.hpp"
+#include "utils/Logger.hpp"
 #include "systems/PhysicsGameSystem.hpp"
-#include "World.hpp"
+#include "scene/World.hpp"
 
 namespace aether::app
 {

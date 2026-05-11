@@ -2,10 +2,10 @@
 
 #include <chrono>
 
-#include "AnimationSystem.hpp"
+#include "animation/AnimationSystem.hpp"
 #include "FileSystem.hpp"
-#include "Logger.hpp"
-#include "Profiler.hpp"
+#include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app

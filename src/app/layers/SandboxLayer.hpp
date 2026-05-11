@@ -1,7 +1,7 @@
 #pragma once
 
 #include "AppLayer.hpp"
-#include "CameraManager.hpp"
+#include "camera/CameraManager.hpp"
 
 namespace aether::app
 {

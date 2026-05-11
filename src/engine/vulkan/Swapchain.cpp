@@ -1,0 +1,393 @@
+#include "vulkan/Swapchain.hpp"
+
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
+
+#include "utils/AetherExceptions.hpp"
+#include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
+#include "vulkan/VulkanContext.hpp"
+#include "vulkan/VulkanUtils.hpp"
+#include "platform/Window.hpp"
+
+namespace aether
+{
+	namespace
+	{
+		VkFormat PickDepthFormat(const VkPhysicalDevice physicalDevice)
+		{
+			constexpr VkFormat kCandidates[] = {
+				VK_FORMAT_D32_SFLOAT,
+				VK_FORMAT_D16_UNORM,
+			};
+
+			for (const VkFormat format: kCandidates)
+			{
+				VkFormatProperties props{};
+				vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
+				if ((props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
+				{
+					return format;
+				}
+			}
+
+			throw VulkanError("Failed to find a supported depth format.");
+		}
+	} // namespace
+
+	void Swapchain::Initialize(const VulkanContext& ctx, const Window& window, const bool enableVsync)
+	{
+		int w = 0;
+		int h = 0;
+		glfwGetFramebufferSize(window.GetHandle(), &w, &h);
+
+		auto buildSwapchain = [&](const VkPresentModeKHR presentMode)
+		{
+			vkb::SwapchainBuilder builder{ ctx.GetDevice() };
+			return builder.set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			        .add_fallback_format({ VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			        .set_desired_present_mode(presentMode)
+			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
+			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
+			        .build();
+		};
+
+		auto result = buildSwapchain(enableVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR);
+		if (!result && !enableVsync)
+		{
+			WARN(LogCategory::Engine, "Swapchain IMMEDIATE present mode unavailable; falling back to FIFO (VSync on).");
+			result = buildSwapchain(VK_PRESENT_MODE_FIFO_KHR);
+		}
+
+		if (!result)
+		{
+			throw VulkanError("Failed to create swapchain: " + result.error().message());
+		}
+
+		m_swapchain = result.value();
+		m_images = m_swapchain.get_images().value();
+		m_imageViews = m_swapchain.get_image_views().value();
+		m_depthFormat = PickDepthFormat(ctx.GetDevice().physical_device);
+		m_graphicsQueueFamily = ctx.GetGraphicsQueueFamily();
+
+		VkDevice device = ctx.GetDevice().device;
+
+		const VkImageCreateInfo depthImageInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = m_depthFormat,
+      .extent =
+          {
+              .width = m_swapchain.extent.width,
+              .height = m_swapchain.extent.height,
+              .depth = 1,
+          },
+      .mipLevels = 1,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+      .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+  };
+		const VmaAllocationCreateInfo depthAllocInfo{
+			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		};
+		m_depthImage = UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo);
+
+		const VkImageViewCreateInfo depthViewInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .image = m_depthImage.Get(),
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = m_depthFormat,
+      .subresourceRange =
+          {
+              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+              .baseMipLevel = 0,
+              .levelCount = 1,
+              .baseArrayLayer = 0,
+              .layerCount = 1,
+          },
+  };
+		if (vkCreateImageView(device, &depthViewInfo, nullptr, &m_depthView) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to create depth image view.");
+		}
+
+		for (auto& frame: m_frames)
+		{
+			VkCommandPoolCreateInfo poolInfo{};
+			poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+			poolInfo.queueFamilyIndex = m_graphicsQueueFamily;
+
+			if (vkCreateCommandPool(device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to create swapchain command pool.");
+			}
+
+			VkCommandBufferAllocateInfo allocInfo{};
+			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			allocInfo.commandPool = frame.commandPool;
+			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			allocInfo.commandBufferCount = 1;
+
+			if (vkAllocateCommandBuffers(device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to allocate swapchain command buffer.");
+			}
+
+			const VkSemaphoreCreateInfo semInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+			vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable);
+
+			VkFenceCreateInfo fenceInfo{};
+			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+			vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight);
+		}
+
+		// One renderFinished semaphore per swapchain image.
+		const VkSemaphoreCreateInfo semInfo2{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		m_renderFinishedSemaphores.resize(m_images.size(), VK_NULL_HANDLE);
+		for (auto& sem: m_renderFinishedSemaphores)
+		{
+			vkCreateSemaphore(device, &semInfo2, nullptr, &sem);
+		}
+
+		INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));
+	}
+
+	void Swapchain::Shutdown(VkDevice device)
+	{
+		if (device == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		if (m_depthView != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(device, m_depthView, nullptr);
+			m_depthView = VK_NULL_HANDLE;
+		}
+		m_depthImage.Reset();
+		m_depthFormat = VK_FORMAT_UNDEFINED;
+
+		for (auto& frame: m_frames)
+		{
+			if (frame.inFlight != VK_NULL_HANDLE)
+			{
+				vkDestroyFence(device, frame.inFlight, nullptr);
+				frame.inFlight = VK_NULL_HANDLE;
+			}
+			if (frame.imageAvailable != VK_NULL_HANDLE)
+			{
+				vkDestroySemaphore(device, frame.imageAvailable, nullptr);
+				frame.imageAvailable = VK_NULL_HANDLE;
+			}
+			if (frame.commandPool != VK_NULL_HANDLE)
+			{
+				vkDestroyCommandPool(device, frame.commandPool, nullptr);
+				frame.commandPool = VK_NULL_HANDLE;
+				frame.commandBuffer = VK_NULL_HANDLE;
+			}
+		}
+
+		for (auto& sem: m_renderFinishedSemaphores)
+		{
+			if (sem != VK_NULL_HANDLE)
+			{
+				vkDestroySemaphore(device, sem, nullptr);
+			}
+		}
+		m_renderFinishedSemaphores.clear();
+
+		for (auto view: m_imageViews)
+		{
+			vkDestroyImageView(device, view, nullptr);
+		}
+		m_imageViews.clear();
+		m_images.clear();
+
+		vkb::destroy_swapchain(m_swapchain);
+	}
+
+	void Swapchain::BeginFrame(VkDevice device)
+	{
+		m_frameValid = false;
+
+		FrameSync& frame = m_frames[m_currentFrame];
+
+		{
+			AE_PROFILE_ZONE_N("WaitForFence");
+			vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX);
+		}
+
+		VkResult acquireResult;
+		{
+			AE_PROFILE_ZONE_N("AcquireNextImage");
+			acquireResult = vkAcquireNextImageKHR(device, m_swapchain.swapchain, UINT64_MAX, frame.imageAvailable, VK_NULL_HANDLE, &m_imageIndex);
+		}
+
+		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
+		{
+			WARN(LogCategory::Vulkan, "Swapchain out of date - recreation needed.");
+			m_needsRecreation = true;
+			return;
+		}
+
+		if (acquireResult == VK_SUBOPTIMAL_KHR)
+		{
+			// Suboptimal: we can still present this frame, but request recreation
+			// afterwards.
+			WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
+			m_needsRecreation = true;
+		}
+
+		vkResetFences(device, 1, &frame.inFlight);
+		vkResetCommandPool(device, frame.commandPool, 0);
+
+		const VkCommandBufferBeginInfo beginInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		};
+		vkBeginCommandBuffer(frame.commandBuffer, &beginInfo);
+
+		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
+		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+
+		// Transition: UNDEFINED -> DEPTH_ATTACHMENT_OPTIMAL
+		vkutil::TransitionImage(
+		        frame.commandBuffer, m_depthImage.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+		m_frameValid = true;
+	}
+
+	void Swapchain::EndFrame(VkQueue graphicsQueue, VkQueue presentQueue, VkSemaphore extraWaitSemaphore, VkPipelineStageFlags extraWaitStage, std::uint64_t extraWaitValue)
+	{
+		if (!m_frameValid)
+		{
+			m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
+			return;
+		}
+
+		FrameSync& frame = m_frames[m_currentFrame];
+		VkCommandBuffer cmd = frame.commandBuffer;
+
+		// Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR
+		vkutil::TransitionImage(cmd, m_images[m_imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE);
+
+		vkEndCommandBuffer(cmd);
+
+		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
+
+		VkSemaphore waitSemaphores[2] = { frame.imageAvailable, VK_NULL_HANDLE };
+		VkPipelineStageFlags waitStages[2] = {
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			extraWaitStage,
+		};
+		std::uint32_t waitCount = 1;
+		if (extraWaitSemaphore != VK_NULL_HANDLE)
+		{
+			waitSemaphores[1] = extraWaitSemaphore;
+			waitCount = 2;
+		}
+
+		// imageAvailable is a binary semaphore (wait value 0 is ignored by spec).
+		// extraWaitSemaphore is a timeline semaphore when extraWaitValue > 0.
+		const std::uint64_t waitValues[2] = { 0, extraWaitValue };
+		const std::uint64_t signalValue = 0; // renderFinished is a binary semaphore
+		const VkTimelineSemaphoreSubmitInfo timelineInfo{
+			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+			.waitSemaphoreValueCount = waitCount,
+			.pWaitSemaphoreValues = waitValues,
+			.signalSemaphoreValueCount = 1,
+			.pSignalSemaphoreValues = &signalValue,
+		};
+
+		const VkSubmitInfo submit{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = &timelineInfo,
+			.waitSemaphoreCount = waitCount,
+			.pWaitSemaphores = waitSemaphores,
+			.pWaitDstStageMask = waitStages,
+			.commandBufferCount = 1,
+			.pCommandBuffers = &cmd,
+			.signalSemaphoreCount = 1,
+			.pSignalSemaphores = &renderFinished,
+		};
+		vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight);
+
+		const VkPresentInfoKHR presentInfo{
+			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = &renderFinished,
+			.swapchainCount = 1,
+			.pSwapchains = &m_swapchain.swapchain,
+			.pImageIndices = &m_imageIndex,
+		};
+		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
+		if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
+		{
+			m_needsRecreation = true;
+		}
+
+		m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
+	}
+
+	VkCommandBuffer Swapchain::GetCurrentCommandBuffer() const
+	{
+		if (!m_frameValid)
+		{
+			return VK_NULL_HANDLE;
+		}
+		return m_frames[m_currentFrame].commandBuffer;
+	}
+
+	VkExtent2D Swapchain::GetExtent() const
+	{
+		return m_swapchain.extent;
+	}
+
+	VkFormat Swapchain::GetImageFormat() const
+	{
+		return m_swapchain.image_format;
+	}
+
+	VkFormat Swapchain::GetDepthFormat() const
+	{
+		return m_depthFormat;
+	}
+
+	VkImage Swapchain::GetCurrentImage() const
+	{
+		return m_frameValid ? m_images[m_imageIndex] : VK_NULL_HANDLE;
+	}
+
+	VkImageView Swapchain::GetCurrentImageView() const
+	{
+		return m_frameValid ? m_imageViews[m_imageIndex] : VK_NULL_HANDLE;
+	}
+
+	VkImage Swapchain::GetDepthImage() const
+	{
+		return m_depthImage.Get();
+	}
+
+	VkImageView Swapchain::GetDepthImageView() const
+	{
+		return m_depthView;
+	}
+
+	bool Swapchain::IsFrameValid() const
+	{
+		return m_frameValid;
+	}
+
+	bool Swapchain::NeedsRecreation() const
+	{
+		return m_needsRecreation;
+	}
+
+	void Swapchain::ClearRecreationFlag()
+	{
+		m_needsRecreation = false;
+	}
+} // namespace aether

@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../DynamicMesh.hpp"
+#include "mesh/DynamicMesh.hpp"
 #include "BlockRegistry.hpp"
 #include "ChunkMesher.hpp"
 

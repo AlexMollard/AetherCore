@@ -4,15 +4,15 @@
 #include <array>
 #include <cstdio>
 
-#include "DebugGui.hpp"
+#include "utils/DebugGui.hpp"
 
-#include "AetherCore.hpp"
-#include "Camera.hpp"
-#include "CameraManager.hpp"
-#include "Input.hpp"
-#include "Logger.hpp"
-#include "PostProcessStack.hpp"
-#include "Renderer.hpp"
+#include "scene/AetherCore.hpp"
+#include "camera/Camera.hpp"
+#include "camera/CameraManager.hpp"
+#include "platform/Input.hpp"
+#include "utils/Logger.hpp"
+#include "passes/PostProcessStack.hpp"
+#include "rendering/Renderer.hpp"
 
 namespace aether::app
 {

@@ -9,12 +9,12 @@
 #include <thread>
 #include <utility>
 
-#include "AetherExceptions.hpp"
+#include "utils/AetherExceptions.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp"
-#include "LogCategory.hpp"
-#include "Logger.hpp"
+#include "utils/LogCategory.hpp"
+#include "utils/Logger.hpp"
 #include "PakBackend.hpp"
 
 namespace aether::io

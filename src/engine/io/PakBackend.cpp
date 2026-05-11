@@ -13,7 +13,7 @@
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 
-#include "AetherExceptions.hpp"
+#include "utils/AetherExceptions.hpp"
 
 namespace aether::io
 {

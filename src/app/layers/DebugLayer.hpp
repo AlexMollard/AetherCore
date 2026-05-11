@@ -4,7 +4,7 @@
 #include <cstddef>
 
 #include "AppLayer.hpp"
-#include "Renderer.hpp"
+#include "rendering/Renderer.hpp"
 
 namespace aether::app
 {

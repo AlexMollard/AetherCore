@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include "Mesh.hpp"
+#include "mesh/Mesh.hpp"
 
 namespace aether::assets
 {
