@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 #include <glm/glm.hpp>
 
 struct GLFWwindow;
@@ -179,8 +180,16 @@ namespace aether
 		// x = horizontal, y = vertical.
 		[[nodiscard]] glm::vec2 GetScrollDelta() const;
 
+		// ── Text input ────────────────────────────────────────────────────────
+
+		// Returns printable Unicode characters typed this frame as a UTF-8 string.
+		// Populated by GLFW's character callback, which correctly handles keyboard
+		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
+		[[nodiscard]] const std::string& GetTypedChars() const;
+
 	private:
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
+		static void OnChar(GLFWwindow* window, unsigned int codepoint);
 
 		// GLFW_KEY_LAST = 348  ->  349 slots cover every defined key code.
 		static constexpr int kMaxKeys = 349;
@@ -199,6 +208,9 @@ namespace aether
 
 		glm::vec2 m_scrollDelta{};   // exposed to callers this frame
 		glm::vec2 m_pendingScroll{}; // accumulated from GLFW callback
+
+		std::string m_typedChars;   // exposed to callers this frame
+		std::string m_pendingChars; // accumulated from char callback before frame boundary
 
 		bool m_firstUpdate = true;
 	};

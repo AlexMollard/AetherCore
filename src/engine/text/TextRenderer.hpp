@@ -54,6 +54,10 @@ namespace aether
 		// pass inside EndFrame().
 		void DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color = glm::vec4(1.f));
 
+		// Returns the pixel width of `text` rendered at `fontSize`.
+		// Uses glyph advance metrics; does not include any trailing bearing.
+		[[nodiscard]] float MeasureText(std::string_view text, float fontSize) const;
+
 		[[nodiscard]] bool IsReady() const
 		{
 			return m_ready;

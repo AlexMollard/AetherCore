@@ -43,22 +43,35 @@
 
 ## TODO - ECS UI (game UI features)
 
-- [ ] Panel collapse: suppress input for children when parent is collapsed
+- [x] Panel collapse: suppress input for children when parent is collapsed
+  - `InsideCollapsedPanel` helper walks `UiParentComponent` chain in `UiSystem::HitTest`
 - [ ] Panel resize: drag corner handle
 - [ ] GPU scissor rects for scrollable panel content
 - [ ] Scrollable panel body (scroll offset + clip rect + GPU scissor)
-- [ ] Text input widget
+- [x] Text input widget
+  - `UiTextInputComponent` - text buffer, cursor, blink, submitted flag
+  - `Input::GetTypedChars()` - GLFW `glfwSetCharCallback` with full UTF-8 encoding
+  - `UIRenderer::MeasureText` / `TextRenderer::MeasureText` - glyph-advance cursor placement
+  - `UiSystem::ProcessTextInput` - backspace, delete, arrows, home/end, enter/escape; cursor blink
+  - `DrawTextInput` / `SpawnTextInput` in `UiWidgets`; focus accent bar + clip rect
 - [ ] Dropdown / combo box (popup layer)
 - [ ] Nine-slice rendering for scalable backgrounds
-- [ ] Hover/press/focus color transitions (~80 ms lerp)
-- [ ] Anchor presets (TopLeft, Center, BottomRight helpers)
+- [x] Hover/press/focus color transitions (~80 ms lerp)
+  - `hoverT` / `pressT` fields on `UiInputComponent`; `UiSystem::UpdateTransitions` lerps at 12.5/s; `DrawButton` uses `glm::mix`
+- [x] Anchor presets (TopLeft, Center, BottomRight helpers)
+  - `UiAnchors` namespace in `UiLayout.hpp`: 9 fixed + 3 stretch presets
 
 ## TODO - MMO Style UI Features
-- [ ] UI layout system: auto-arrange children in rows/columns with padding
-- [ ] UI layout system: auto-size panels to fit children (with optional max size + scrollbars)
-- [ ] UI layout system: support for nested layouts (e.g. row of 3 columns, each with vertical stacks inside)
-- [ ] UI layout system: support for dynamic content (e.g. inventory panel with variable number of item slots)
-- [ ] UI layout system: support for flexible spacers (e.g. horizontal spacer that pushes siblings apart to fill available space)
+- [x] UI layout system: auto-arrange children in rows/columns with padding
+  - Existing `UiLayoutComponent` + `ApplyLayout`/`RunLayouts` (Vertical/Horizontal stacks)
+- [x] UI layout system: auto-size panels to fit children (with optional max size + scrollbars)
+  - `UiLayoutComponent::autoSize = true` - `ApplyLayout` resizes the container to wrap content
+- [x] UI layout system: support for nested layouts (e.g. row of 3 columns, each with vertical stacks inside)
+  - `RunLayouts` calls `ApplyLayout` on every entity that has both components; nesting works because each container is independent
+- [x] UI layout system: support for dynamic content (e.g. inventory panel with variable number of item slots)
+  - Children are stored in `UiChildrenComponent::children` - add/remove entities at runtime, call `RunLayouts` each frame
+- [x] UI layout system: support for flexible spacers (e.g. horizontal spacer that pushes siblings apart to fill available space)
+  - `UiTransformComponent::flexGrow > 0` - `ApplyLayout` distributes remaining space proportionally (two-pass)
 - [ ] Think like inventory grids, skill bars, chat windows, etc. - what layout features would make building these easier?
 
 ## TODO - ImGui Enhancements
@@ -67,5 +80,5 @@
 - [x] Upgraded to v1.92.7-docking branch
 - [x] Scissor rect clamped correctly (imgui_impl_vulkan handles this natively)
 - [ ] Per-window font scaling
-- [ ] Custom ImGui style matching engine's dark theme
+- [x] Custom ImGui style matching engine's dark theme
 - [x] Multi-viewport OS window tearoff - needs a dedicated VkQueue (second graphics queue from VulkanContext) to avoid concurrent vkQueueSubmit from game thread + render thread on the same handle. Docking works fully without it.

@@ -12,6 +12,7 @@ namespace aether
 			// Remove our user pointer and scroll callback so GLFW doesn't call
 			// back into a destroyed object if the window outlives this instance.
 			glfwSetScrollCallback(m_window, nullptr);
+			glfwSetCharCallback(m_window, nullptr);
 			glfwSetWindowUserPointer(m_window, nullptr);
 		}
 	}
@@ -21,6 +22,7 @@ namespace aether
 		m_window = window;
 		glfwSetWindowUserPointer(window, this);
 		glfwSetScrollCallback(window, &Input::OnScroll);
+		glfwSetCharCallback(window, &Input::OnChar);
 	}
 
 	void Input::Update()
@@ -60,6 +62,10 @@ namespace aether
 		// frame, then clear the accumulator for the next frame.
 		m_scrollDelta = m_pendingScroll;
 		m_pendingScroll = {};
+
+		// Expose typed characters and reset the accumulator.
+		m_typedChars = std::move(m_pendingChars);
+		m_pendingChars.clear();
 	}
 
 	// ── Keyboard ─────────────────────────────────────────────────────────────
@@ -143,7 +149,12 @@ namespace aether
 		return m_scrollDelta;
 	}
 
-	// ── GLFW scroll callback ──────────────────────────────────────────────────
+	const std::string& Input::GetTypedChars() const
+	{
+		return m_typedChars;
+	}
+
+	// ── GLFW callbacks ────────────────────────────────────────────────────────
 
 	void Input::OnScroll(GLFWwindow* window, double xOffset, double yOffset)
 	{
@@ -151,6 +162,39 @@ namespace aether
 		if (self)
 		{
 			self->m_pendingScroll += glm::vec2{ static_cast<float>(xOffset), static_cast<float>(yOffset) };
+		}
+	}
+
+	void Input::OnChar(GLFWwindow* window, unsigned int codepoint)
+	{
+		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+		if (!self)
+		{
+			return;
+		}
+
+		// Encode codepoint to UTF-8 and append to the pending buffer.
+		if (codepoint < 0x80u)
+		{
+			self->m_pendingChars += static_cast<char>(codepoint);
+		}
+		else if (codepoint < 0x800u)
+		{
+			self->m_pendingChars += static_cast<char>(0xC0u | (codepoint >> 6u));
+			self->m_pendingChars += static_cast<char>(0x80u | (codepoint & 0x3Fu));
+		}
+		else if (codepoint < 0x10000u)
+		{
+			self->m_pendingChars += static_cast<char>(0xE0u | (codepoint >> 12u));
+			self->m_pendingChars += static_cast<char>(0x80u | ((codepoint >> 6u) & 0x3Fu));
+			self->m_pendingChars += static_cast<char>(0x80u | (codepoint & 0x3Fu));
+		}
+		else
+		{
+			self->m_pendingChars += static_cast<char>(0xF0u | (codepoint >> 18u));
+			self->m_pendingChars += static_cast<char>(0x80u | ((codepoint >> 12u) & 0x3Fu));
+			self->m_pendingChars += static_cast<char>(0x80u | ((codepoint >> 6u) & 0x3Fu));
+			self->m_pendingChars += static_cast<char>(0x80u | (codepoint & 0x3Fu));
 		}
 	}
 } // namespace aether

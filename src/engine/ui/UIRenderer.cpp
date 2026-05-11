@@ -38,6 +38,11 @@ namespace aether
 		m_textRenderer.DrawText(text, point, fontSize, color);
 	}
 
+	float UIRenderer::MeasureText(std::string_view text, float fontSize) const
+	{
+		return m_textRenderer.MeasureText(text, fontSize);
+	}
+
 	void UIRenderer::DrawRect(const UiRect& rect, glm::vec4 color, float cornerRadiusPx)
 	{
 		m_quadRenderer.DrawRect(rect, color, m_currentLayer, cornerRadiusPx);

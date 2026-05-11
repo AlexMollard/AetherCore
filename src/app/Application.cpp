@@ -231,7 +231,7 @@ namespace aether::app
 
 			// ECS UI system: hit-test, drag, widget state (runs before OnGui so
 			// layers see up-to-date hover/clicked state when they draw).
-			m_uiSystem.BeginFrame(m_uiWorld, m_engine.GetInput(), m_uiContext, m_engine.GetSwapchainExtent());
+			m_uiSystem.BeginFrame(m_uiWorld, m_engine.GetInput(), m_uiContext, m_engine.GetSwapchainExtent(), static_cast<float>(deltaTime));
 
 			// ImGui new frame - must be before any layer OnGui calls.
 			m_imguiRenderer.BeginFrame();

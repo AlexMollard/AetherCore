@@ -36,6 +36,11 @@ namespace aether::ui
 		glm::vec4 checkboxOn{ 0.42f, 0.62f, 0.74f, 1.f };
 		glm::vec4 checkboxBorder{ 0.30f, 0.38f, 0.48f, 1.f };
 
+		glm::vec4 inputBg{ 0.09f, 0.11f, 0.15f, 1.f };
+		glm::vec4 inputHoverBg{ 0.11f, 0.14f, 0.19f, 1.f };
+		glm::vec4 inputFocusBg{ 0.07f, 0.10f, 0.16f, 1.f };
+		glm::vec4 placeholder{ 0.42f, 0.51f, 0.59f, 0.70f };
+
 		// ── Layout metrics ─────────────────────────────────────────────────────
 		float cornerRadius = 6.f;
 		float headerHeight = 48.f;

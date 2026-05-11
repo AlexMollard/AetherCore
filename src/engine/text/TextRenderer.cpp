@@ -223,6 +223,20 @@ namespace aether
 		}
 	}
 
+	float TextRenderer::MeasureText(std::string_view text, float fontSize) const
+	{
+		if (!m_ready)
+		{
+			return 0.f;
+		}
+		float width = 0.f;
+		for (char c: text)
+		{
+			width += m_fontAtlas.GetGlyph(c).advanceX * fontSize;
+		}
+		return width;
+	}
+
 	void TextRenderer::DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color)
 	{
 		EnsurePassRegistered();

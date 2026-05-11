@@ -47,6 +47,11 @@ namespace aether::ui
 	// Returns true if the panel body should be rendered (false when collapsed).
 	bool DrawPanel(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
 
+	// Text input: draws background, text/placeholder, and a blinking cursor when focused.
+	// UiSystem feeds typed characters when this entity has keyboard focus.
+	// Returns true for ONE frame when the user submits with Enter.
+	bool DrawTextInput(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
 	// ── Z-order management ────────────────────────────────────────────────────
 
 	// Raises entity to the highest z-order in the world so it renders and
@@ -78,5 +83,8 @@ namespace aether::ui
 
 	// Panel entity with UiTransformComponent + UiInputComponent + UiPanelComponent.
 	Entity SpawnPanel(UiWorld& world, UiRect rect, std::string_view title, bool draggable = true, bool collapsible = false, float zOrder = 0.f);
+
+	// Single-line text input entity.
+	Entity SpawnTextInput(UiWorld& world, UiRect rect, std::string_view placeholder = {}, float zOrder = 0.f);
 
 } // namespace aether::ui

@@ -77,16 +77,9 @@ namespace aether::ui
 			return false;
 		}
 
-		// Choose background colour from interaction state.
-		glm::vec4 bgColor = btn->normalColor;
-		if (inp->pressed)
-		{
-			bgColor = btn->pressColor;
-		}
-		else if (inp->hovered)
-		{
-			bgColor = btn->hoverColor;
-		}
+		// Smooth colour blend: mix normal->hover, then normal->press using animated weights.
+		// pressT takes priority over hoverT (press is the innermost state).
+		glm::vec4 bgColor = glm::mix(glm::mix(btn->normalColor, btn->hoverColor, inp->hoverT), btn->pressColor, inp->pressT);
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		ui.DrawRect(t->rect, bgColor, theme.cornerRadius);
@@ -240,27 +233,41 @@ namespace aether::ui
 			return true;
 		}
 
-		// Toggle collapse on click of the header area.
-		if (inp && inp->clicked)
+		// Toggle collapse on header click: save/restore full rect so the body
+		// disappears when collapsed and reappears at the original size on expand.
+		if (inp && inp->clicked && panel->collapsible)
 		{
-			const glm::vec4 px = PixelRect(*t, extent);
-			const glm::vec2 mp = inp->hovered ? glm::vec2{} : glm::vec2{};
-			// Collapse handled by UiSystem's drag-start check; click anywhere in header toggles.
-			if (panel->collapsible)
+			const glm::vec4 px0 = PixelRect(*t, extent);
+			const bool inHeader = (inp->clickPos.y >= px0.y && inp->clickPos.y < px0.y + theme.headerHeight);
+			if (inHeader)
 			{
+				if (!panel->collapsed)
+				{
+					panel->expandedRect = t->rect;
+					t->rect = PixelToUiRect(*t, { px0.x, px0.y, px0.z, theme.headerHeight }, extent);
+				}
+				else
+				{
+					t->rect = panel->expandedRect;
+				}
 				panel->collapsed = !panel->collapsed;
 			}
 		}
 
 		const glm::vec4 px = PixelRect(*t, extent);
-
-		// Panel background.
-		ui.SetLayer(0);
-		ui.DrawRect(t->rect, theme.panelBg, theme.cornerRadius);
-
-		// Header background.
-		ui.SetLayer(1);
 		const float hdrH = theme.headerHeight;
+		const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+		const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
+
+		// Panel background - only drawn when expanded.
+		ui.SetLayer(0);
+		if (!panel->collapsed)
+		{
+			ui.DrawRect(t->rect, theme.panelBg, theme.cornerRadius);
+		}
+
+		// Header background (always drawn; covers the full rect when collapsed).
+		ui.SetLayer(1);
 		const glm::vec4 hdrPx = { px.x, px.y, px.z, hdrH };
 		ui.DrawRect(PixelToUiRect(*t, hdrPx, extent), theme.panelHeaderBg, theme.cornerRadius);
 
@@ -269,8 +276,6 @@ namespace aether::ui
 		ui.DrawRect(PixelToUiRect(*t, accentPx, extent), theme.accent);
 
 		// Title text.
-		const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
-		const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 		if (!panel->title.empty())
 		{
 			ui.DrawText(panel->title,
@@ -301,21 +306,41 @@ namespace aether::ui
 			}
 		}
 
-		// Separator line below header.
-		ui.SetLayer(2);
-		const float sepY = px.y + hdrH;
-		ui.DrawLine(
-		        UiPoint{
-		                .anchor = t->rect.anchorMin, .offsetPx = { px.x + theme.padding - anchorPx.x, sepY - anchorPx.y }
-        },
-		        UiPoint{ .anchor = t->rect.anchorMin, .offsetPx = { px.x + px.z - theme.padding - anchorPx.x, sepY - anchorPx.y } },
-		        1.f,
-		        theme.separator);
+		// Separator line below header - only when expanded.
+		if (!panel->collapsed)
+		{
+			ui.SetLayer(2);
+			const float sepY = px.y + hdrH;
+			ui.DrawLine(
+			        UiPoint{
+			                .anchor = t->rect.anchorMin, .offsetPx = { px.x + theme.padding - anchorPx.x, sepY - anchorPx.y }
+            },
+			        UiPoint{ .anchor = t->rect.anchorMin, .offsetPx = { px.x + px.z - theme.padding - anchorPx.x, sepY - anchorPx.y } },
+			        1.f,
+			        theme.separator);
+		}
 
 		return !panel->collapsed;
 	}
 
 	// ── Z-order management ────────────────────────────────────────────────────
+
+	// Recursively adds `delta` to the z-order of `entity` and every descendant
+	// reachable through UiChildrenComponent.
+	static void RaiseSubtree(UiWorld& world, Entity entity, float delta)
+	{
+		if (auto* t = world.TryGet<UiTransformComponent>(entity))
+		{
+			t->zOrder += delta;
+		}
+		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		{
+			for (const Entity child: ch->children)
+			{
+				RaiseSubtree(world, child, delta);
+			}
+		}
+	}
 
 	void BringToFront(UiWorld& world, Entity entity)
 	{
@@ -324,11 +349,24 @@ namespace aether::ui
 		{
 			maxZ = std::max(maxZ, t.zOrder);
 		}
-		if (auto* t = world.TryGet<UiTransformComponent>(entity))
+
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		if (!t || t->zOrder > maxZ)
 		{
-			if (t->zOrder < maxZ)
+			return;
+		}
+
+		// Raise by enough to land one step above the current maximum.
+		// The same delta is applied to every descendant so children always remain
+		// above their parent panel, preserving their relative z ordering.
+		const float delta = maxZ + 1.f - t->zOrder;
+		t->zOrder = maxZ + 1.f;
+
+		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		{
+			for (const Entity child: ch->children)
 			{
-				t->zOrder = maxZ + 1.f;
+				RaiseSubtree(world, child, delta);
 			}
 		}
 	}
@@ -350,6 +388,38 @@ namespace aether::ui
 		const float spacing = layout->spacing;
 		const bool isVertical = (layout->direction == UiLayoutComponent::Direction::Vertical);
 
+		// ── Pass 1: measure fixed children, sum flex weights ─────────────────
+		float fixedTotal = 0.f;
+		float flexWeightTotal = 0.f;
+		int childCount = 0;
+
+		for (const Entity child: children->children)
+		{
+			const auto* ct = world.TryGet<UiTransformComponent>(child);
+			if (!ct)
+			{
+				continue;
+			}
+			++childCount;
+
+			if (ct->flexGrow > 0.f)
+			{
+				flexWeightTotal += ct->flexGrow;
+			}
+			else
+			{
+				const glm::vec4 childPx = PixelRect(*ct, extent);
+				fixedTotal += isVertical ? childPx.w : childPx.z;
+			}
+		}
+
+		// Space remaining after fixed children and inter-item gaps.
+		const float totalGaps = childCount > 1 ? static_cast<float>(childCount - 1) * spacing : 0.f;
+		const float available = isVertical ? (parentPx.w - 2.f * pad) : (parentPx.z - 2.f * pad);
+		const float flexPool = std::max(0.f, available - fixedTotal - totalGaps);
+
+		// ── Pass 2: position all children ────────────────────────────────────
+		const float crossSize = isVertical ? (parentPx.z - 2.f * pad) : (parentPx.w - 2.f * pad);
 		float cursor = isVertical ? (parentPx.y + pad) : (parentPx.x + pad);
 
 		for (const Entity child: children->children)
@@ -361,21 +431,36 @@ namespace aether::ui
 			}
 
 			const glm::vec4 childPx = PixelRect(*ct, extent);
+			const float mainSize = (ct->flexGrow > 0.f && flexWeightTotal > 0.f) ? flexPool * (ct->flexGrow / flexWeightTotal) : (isVertical ? childPx.w : childPx.z);
 
 			if (isVertical)
 			{
-				// Stack top-to-bottom: preserve child width/height, move Y.
-				const float newY = cursor;
-				ct->rect = PixelToUiRect(*ct, { parentPx.x + pad, newY, parentPx.z - 2.f * pad, childPx.w }, extent);
-				cursor += childPx.w + spacing;
+				ct->rect = PixelToUiRect(*ct, { parentPx.x + pad, cursor, crossSize, mainSize }, extent);
 			}
 			else
 			{
-				// Stack left-to-right: preserve child width/height, move X.
-				const float newX = cursor;
-				ct->rect = PixelToUiRect(*ct, { newX, parentPx.y + pad, childPx.z, parentPx.w - 2.f * pad }, extent);
-				cursor += childPx.z + spacing;
+				ct->rect = PixelToUiRect(*ct, { cursor, parentPx.y + pad, mainSize, crossSize }, extent);
 			}
+			cursor += mainSize + spacing;
+		}
+
+		// ── Auto-size: shrink/grow container to wrap content ──────────────────
+		// cursor is now: start + pad + sum(sizes) + N*spacing.
+		// Desired container size: 2*pad + sum(sizes) + (N-1)*spacing = cursor - start - spacing + pad.
+		if (layout->autoSize && childCount > 0)
+		{
+			const float start = isVertical ? parentPx.y : parentPx.x;
+			const float newMainSize = cursor - start - spacing + pad;
+			glm::vec4 newPx = parentPx;
+			if (isVertical)
+			{
+				newPx.w = newMainSize;
+			}
+			else
+			{
+				newPx.z = newMainSize;
+			}
+			parent->rect = PixelToUiRect(*parent, newPx, extent);
 		}
 	}
 
@@ -420,6 +505,67 @@ namespace aether::ui
 		                .collapsible = collapsible,
 		        })
 		        .entity();
+	}
+
+	// ── Text Input ────────────────────────────────────────────────────────────
+
+	bool DrawTextInput(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		auto* ti = world.TryGet<UiTextInputComponent>(entity);
+		auto* inp = world.TryGet<UiInputComponent>(entity);
+		if (!t || !ti || !inp)
+		{
+			return false;
+		}
+
+		const glm::vec4 px = PixelRect(*t, extent);
+
+		// Background: blend normal->hover when not focused, snap to focus color when focused.
+		const glm::vec4 bgColor = inp->focused ? theme.inputFocusBg : glm::mix(theme.inputBg, theme.inputHoverBg, inp->hoverT);
+		ui.DrawRect(t->rect, bgColor, theme.cornerRadius);
+
+		// Accent bar on left edge indicates keyboard focus.
+		if (inp->focused)
+		{
+			const glm::vec4 accentPx = { px.x, px.y + 3.f, 2.f, px.w - 6.f };
+			ui.DrawRect(PixelToUiRect(*t, accentPx, extent), theme.accent);
+		}
+
+		// Clip all text/cursor drawing to the input box.
+		ui.PushClipRect(t->rect);
+
+		const float textX = px.x + theme.padding * 0.5f;
+		const float textY = px.y + (px.w - theme.bodyFontSize) * 0.5f;
+
+		if (ti->text.empty() && !ti->placeholder.empty())
+		{
+			ui.DrawText(ti->placeholder, PixelPoint(*t, { textX, textY }, extent), theme.bodyFontSize, theme.placeholder);
+		}
+		else if (!ti->text.empty())
+		{
+			ui.DrawText(ti->text, PixelPoint(*t, { textX, textY }, extent), theme.bodyFontSize, theme.text);
+		}
+
+		// Blinking cursor - only when focused.
+		if (inp->focused && ti->cursorVisible)
+		{
+			const std::string_view prefix(ti->text.data(), static_cast<std::size_t>(ti->cursorPos));
+			const float cursorX = textX + ui.MeasureText(prefix, theme.bodyFontSize);
+			ui.DrawLine(PixelPoint(*t, { cursorX, px.y + 3.f }, extent), PixelPoint(*t, { cursorX, px.y + px.w - 3.f }, extent), 1.5f, theme.accent);
+		}
+
+		ui.PopClipRect();
+
+		// submitted is set by UiSystem::ProcessTextInput for one frame on Enter.
+		const bool wasSubmitted = ti->submitted;
+		ti->submitted = false;
+		return wasSubmitted;
+	}
+
+	Entity SpawnTextInput(UiWorld& world, UiRect rect, std::string_view placeholder, float zOrder)
+	{
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{ .placeholder = std::string(placeholder) }).entity();
 	}
 
 } // namespace aether::ui
