@@ -133,7 +133,7 @@ namespace aether::ui
 			}
 		}
 
-		// Continue drag: apply mouse delta to the panel's pixel offsets.
+		// Continue drag: apply mouse delta to the panel's pixel offsets and keep it on top.
 		if (ctx.isDragging && ctx.mouseDown && ctx.draggedEntity.IsValid())
 		{
 			if (auto* transform = world.TryGet<UiTransformComponent>(ctx.draggedEntity))
@@ -142,6 +142,7 @@ namespace aether::ui
 				transform->rect.offsetMinPx = ctx.dragStartRectMin + delta;
 				transform->rect.offsetMaxPx = ctx.dragStartRectMax + delta;
 			}
+			BringToFront(world, ctx.draggedEntity);
 		}
 
 		// End drag.  Only suppress the click if the mouse actually moved;

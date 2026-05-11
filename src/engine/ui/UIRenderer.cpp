@@ -15,14 +15,13 @@ namespace aether
 
 		const std::string prefix(passNamePrefix);
 
-		// Keep quads behind text by registering quad pass first.
 		m_quadRenderer.Init(engine, prefix + ".Quad");
-		m_textRenderer.Init(engine, fontVfsPath, prefix + ".Text", glyphSize);
+		m_textRenderer.Init(engine, fontVfsPath, glyphSize);
 	}
 
 	void UIRenderer::Shutdown(AetherCore& engine)
 	{
-		m_textRenderer.Shutdown(engine);
+		m_textRenderer.Shutdown();
 		m_quadRenderer.Shutdown(engine);
 		m_engine = nullptr;
 		m_currentLayer = 0;
@@ -35,7 +34,7 @@ namespace aether
 	void UIRenderer::DrawText(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color)
 	{
 		m_quadRenderer.EnsurePassRegistered();
-		m_textRenderer.DrawText(text, point, fontSize, color);
+		m_textRenderer.DrawTextLayered(text, point, fontSize, color, m_currentLayer, m_quadRenderer);
 	}
 
 	float UIRenderer::MeasureText(std::string_view text, float fontSize) const

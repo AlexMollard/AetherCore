@@ -26,6 +26,7 @@ namespace aether
 			Circle = 1,
 			Line = 2,
 			TexturedRect = 3,
+			SdfGlyph = 4,
 		};
 
 		QuadRenderer() = default;
@@ -48,6 +49,9 @@ namespace aether
 		void DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
 		// Draws a bindless-sampled texture on a quad. uvRect = (u0, v0, u1, v1).
 		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), std::int32_t layer = 0, float cornerRadiusPx = 0.f);
+		// Draws one SDF font glyph. glyphRectPx is pixel-space (x,y,w,h); uvRect is atlas UVs.
+		// Routes through the quad sort pass so text and quads share the same layer ordering.
+		void DrawGlyph(glm::vec4 glyphRectPx, glm::vec4 uvRect, glm::vec4 color, std::uint32_t atlasSlot, std::int32_t layer);
 
 		// Clip rect: any draw call whose resolved pixel rect lies entirely outside
 		// the active clip is discarded on the CPU before reaching the GPU.

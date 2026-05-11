@@ -44,7 +44,7 @@ namespace aether::app
 		// ── Widget Gallery ─────────────────────────────────────────────────────
 		// padding=58 clears the 48px panel header and adds an 10px inner margin.
 		// For a 300px-wide panel the content area is 300 - 2*58 = 184px wide.
-		m_galleryPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 20.f, 20.f }, { 300.f, 355.f }), "Widget Gallery", /*draggable=*/true, /*collapsible=*/true, 1.f));
+		m_galleryPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 120.f, 20.f }, { 300.f, 355.f }), "Widget Gallery", /*draggable=*/true, /*collapsible=*/true, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_galleryPanel,
 		        ui::UiLayoutComponent{
@@ -67,7 +67,7 @@ namespace aether::app
 		ui::AddChild(world, m_galleryPanel, m_progressBar);
 
 		// ── Text Input ─────────────────────────────────────────────────────────
-		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 20.f, 395.f }, { 300.f, 120.f }), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
+		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 120.f, 395.f }, { 300.f, 120.f }), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_inputPanel,
 		        ui::UiLayoutComponent{
@@ -93,8 +93,8 @@ namespace aether::app
 		                        UiRect{
                                        .anchorMin = { 0.f, 1.f },
                                        .anchorMax = { 1.f, 1.f },
-                                       .offsetMinPx = { 20.f, -68.f },
-                                       .offsetMaxPx = { -20.f, -12.f },
+                                       .offsetMinPx = { 20.f, -98.f },
+                                       .offsetMaxPx = { -20.f, -52.f },
 		                               },
 		                .zOrder = 1.f,
         });
@@ -106,8 +106,8 @@ namespace aether::app
 		        });
 		world.Emplace<ui::UiChildrenComponent>(m_flexContainer);
 
-		m_flexLeft = reg(ui::SpawnButton(world, HeightRect(40.f), "◀  Left", 2.f));
-		m_flexRight = reg(ui::SpawnButton(world, HeightRect(40.f), "Right  ▶", 2.f));
+		m_flexLeft = reg(ui::SpawnButton(world, HeightRect(40.f), "Left", 2.f));
+		m_flexRight = reg(ui::SpawnButton(world, HeightRect(40.f), "Right", 2.f));
 
 		// Give the buttons a fixed width. The layout overrides their X/Y but
 		// preserves width when flexGrow is 0 (the default).
@@ -134,7 +134,7 @@ namespace aether::app
 		// The initial height (80px) is a placeholder.  Each frame RunLayouts runs
 		// ApplyLayout with autoSize=true, which shrinks/grows the panel to exactly
 		// wrap its three children plus padding.
-		m_autoPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 340.f, 20.f }, { 280.f, 80.f }), "Auto-Size", /*draggable=*/true, /*collapsible=*/true, 1.f));
+		m_autoPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 440.f, 20.f }, { 280.f, 80.f }), "Auto-Size", /*draggable=*/true, /*collapsible=*/true, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_autoPanel,
 		        ui::UiLayoutComponent{

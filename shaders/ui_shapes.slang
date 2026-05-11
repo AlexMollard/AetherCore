@@ -1,11 +1,14 @@
 // Batched UI shape shader.
-// One indirect-instanced draw emits rectangles/circles/lines/textured-rects from a
-// device-addressable command buffer.
+// One indirect-instanced draw emits rectangles/circles/lines/textured-rects/SDF-glyphs
+// from a device-addressable command buffer.
+
+#include "text_sdf.slangh"
 
 static const uint kShapeRect        = 0;
 static const uint kShapeCircle      = 1;
 static const uint kShapeLine        = 2;
 static const uint kShapeTexturedRect = 3;
+static const uint kShapeSdfGlyph    = 4;
 
 // Bindless resources (set 0).
 [[vk::binding(0, 0)]] Texture2D g_textures[];
@@ -63,13 +66,13 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     const float2 uv = uvRect[vertexId % 6u];
     float2 outTexUV = float2(0.0, 0.0);
 
-    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect)
+    if (cmd.type == kShapeRect || cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph)
     {
         const float2 minPt = cmd.data0.xy;
         const float2 size  = cmd.data0.zw;
         sp = minPt + uv * size;
 
-        if (cmd.type == kShapeTexturedRect)
+        if (cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph)
         {
             // data1 = u0, v0, u1, v1
             outTexUV = float2(
@@ -106,7 +109,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID
     output.color       = cmd.color;
     output.local       = uv * 2.0 - 1.0;
     output.localScale  = cmd.data0.zw;
-    output.cornerRadius = (cmd.type == kShapeTexturedRect) ? 0.0 : cmd.data1.x;
+    output.cornerRadius = (cmd.type == kShapeTexturedRect || cmd.type == kShapeSdfGlyph) ? 0.0 : cmd.data1.x;
     output.type        = cmd.type;
     output.texUV       = outTexUV;
     output.textureSlot = cmd.textureSlot;
@@ -121,6 +124,14 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         if (dot(input.local, input.local) > 1.0)
             discard;
         return input.color;
+    }
+
+    if (input.type == kShapeSdfGlyph)
+    {
+        const float alpha = SdfGlyphAlpha(g_textures[input.textureSlot], g_linearSampler, input.texUV);
+        if (alpha <= 0.001)
+            discard;
+        return float4(input.color.rgb, input.color.a * alpha);
     }
 
     if (input.type == kShapeTexturedRect)

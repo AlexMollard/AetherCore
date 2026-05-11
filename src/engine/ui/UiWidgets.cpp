@@ -65,6 +65,10 @@ namespace aether::ui
 		};
 	}
 
+	// Z-order to GPU sort-layer scale.  100 sub-layers between each integer z-step
+	// gives room for bg/header/separator without bleeding into adjacent entities.
+	static constexpr float kZLayerScale = 100.f;
+
 	// ── Button ────────────────────────────────────────────────────────────────
 
 	bool DrawButton(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
@@ -76,6 +80,9 @@ namespace aether::ui
 		{
 			return false;
 		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
 
 		// Smooth colour blend: mix normal->hover, then normal->press using animated weights.
 		// pressT takes priority over hoverT (press is the innermost state).
@@ -102,6 +109,7 @@ namespace aether::ui
 			        btn->textColor);
 		}
 
+		ui.SetLayer(prevLayer);
 		return inp->clicked;
 	}
 
@@ -116,6 +124,9 @@ namespace aether::ui
 		{
 			return 0.f;
 		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float trackH = px.w;
@@ -153,6 +164,7 @@ namespace aether::ui
 		const float knobCY = px.y + trackH * 0.5f;
 		ui.DrawCircle(PixelPoint(*t, { knobCX, knobCY }, extent), theme.knobRadius, slider->isDragging ? theme.accent : theme.sliderKnob);
 
+		ui.SetLayer(prevLayer);
 		return slider->value;
 	}
 
@@ -167,6 +179,9 @@ namespace aether::ui
 		{
 			return false;
 		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
 
 		if (inp->clicked)
 		{
@@ -201,6 +216,7 @@ namespace aether::ui
 			ui.DrawText(cb->label, PixelPoint(*t, { labelX, labelY }, extent), theme.bodyFontSize, theme.text);
 		}
 
+		ui.SetLayer(prevLayer);
 		return cb->checked;
 	}
 
@@ -215,6 +231,9 @@ namespace aether::ui
 			return;
 		}
 
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float range = std::max(slider->max - slider->min, 1e-6f);
 		const float fillFraction = std::clamp((slider->value - slider->min) / range, 0.f, 1.f);
@@ -225,6 +244,7 @@ namespace aether::ui
 		{
 			ui.DrawRect(PixelToUiRect(*t, { px.x, px.y, fillW, px.w }, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
 		}
+		ui.SetLayer(prevLayer);
 	}
 
 	// ── Panel ─────────────────────────────────────────────────────────────────
@@ -254,11 +274,20 @@ namespace aether::ui
 				}
 				else
 				{
-					t->rect = panel->expandedRect;
+					// Restore size from the saved rect but keep the current offsetMinPx so
+					// dragging while collapsed does not teleport the panel back on expand.
+					const glm::vec2 size = panel->expandedRect.offsetMaxPx - panel->expandedRect.offsetMinPx;
+					UiRect restored = panel->expandedRect;
+					restored.offsetMinPx = t->rect.offsetMinPx;
+					restored.offsetMaxPx = t->rect.offsetMinPx + size;
+					t->rect = restored;
 				}
 				panel->collapsed = !panel->collapsed;
 			}
 		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		const std::int32_t baseLayer = static_cast<std::int32_t>(t->zOrder * kZLayerScale);
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float hdrH = theme.headerHeight;
@@ -266,14 +295,14 @@ namespace aether::ui
 		const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 
 		// Panel background - only drawn when expanded.
-		ui.SetLayer(0);
+		ui.SetLayer(baseLayer);
 		if (!panel->collapsed)
 		{
 			ui.DrawRect(t->rect, theme.panelBg, theme.cornerRadius);
 		}
 
 		// Header background (always drawn; covers the full rect when collapsed).
-		ui.SetLayer(1);
+		ui.SetLayer(baseLayer + 1);
 		const glm::vec4 hdrPx = { px.x, px.y, px.z, hdrH };
 		ui.DrawRect(PixelToUiRect(*t, hdrPx, extent), theme.panelHeaderBg, theme.cornerRadius);
 
@@ -315,7 +344,7 @@ namespace aether::ui
 		// Separator line below header - only when expanded.
 		if (!panel->collapsed)
 		{
-			ui.SetLayer(2);
+			ui.SetLayer(baseLayer + 2);
 			const float sepY = px.y + hdrH;
 			ui.DrawLine(
 			        UiPoint{
@@ -326,6 +355,7 @@ namespace aether::ui
 			        theme.separator);
 		}
 
+		ui.SetLayer(prevLayer);
 		return !panel->collapsed;
 	}
 
@@ -575,6 +605,9 @@ namespace aether::ui
 			return false;
 		}
 
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+
 		const glm::vec4 px = PixelRect(*t, extent);
 
 		// Background: blend normal->hover when not focused, snap to focus color when focused.
@@ -616,6 +649,7 @@ namespace aether::ui
 		// submitted is set by UiSystem::ProcessTextInput for one frame on Enter.
 		const bool wasSubmitted = ti->submitted;
 		ti->submitted = false;
+		ui.SetLayer(prevLayer);
 		return wasSubmitted;
 	}
 
@@ -643,6 +677,9 @@ namespace aether::ui
 		{
 			return false;
 		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		static constexpr float kBorderW = 2.f;
@@ -723,6 +760,7 @@ namespace aether::ui
 			ui.DrawRect(t->rect, overlay, theme.slotCornerRadius);
 		}
 
+		ui.SetLayer(prevLayer);
 		return inp->clicked;
 	}
 

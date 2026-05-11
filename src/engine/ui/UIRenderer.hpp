@@ -25,7 +25,6 @@ namespace aether
 		// DrawRect calls. Routes pending submissions into the correct double-buffer slot.
 		void SetWriteSlot(std::uint32_t slot)
 		{
-			m_textRenderer.SetWriteSlot(slot);
 			m_quadRenderer.SetWriteSlot(slot);
 		}
 
@@ -49,6 +48,11 @@ namespace aether
 		void SetLayer(std::int32_t layer)
 		{
 			m_currentLayer = layer;
+		}
+
+		[[nodiscard]] std::int32_t GetLayer() const
+		{
+			return m_currentLayer;
 		}
 
 		void PushLayer(std::int32_t delta = 1)

@@ -439,6 +439,27 @@ namespace aether
 		});
 	}
 
+	void QuadRenderer::DrawGlyph(glm::vec4 glyphRectPx, glm::vec4 uvRect, glm::vec4 color, std::uint32_t atlasSlot, std::int32_t layer)
+	{
+		EnsurePassRegistered();
+		if (!m_ready || glyphRectPx.z <= 0.f || glyphRectPx.w <= 0.f || IsClipped(glyphRectPx))
+		{
+			return;
+		}
+
+		m_pendingQuads[m_writeSlot].push_back({
+		        .cmd =
+		                DrawCommandData{
+		                                .data0 = glyphRectPx,
+		                                .data1 = uvRect,
+		                                .color = color,
+		                                .type = static_cast<std::uint32_t>(ShapeType::SdfGlyph),
+		                                .layer = layer,
+		                                .textureSlot = atlasSlot,
+		                                },
+		});
+	}
+
 	void QuadRenderer::SetClipRect(glm::vec4 pixelRect)
 	{
 		m_clipState = { .active = true, .pixelRect = pixelRect };
