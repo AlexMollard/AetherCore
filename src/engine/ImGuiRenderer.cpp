@@ -2,7 +2,6 @@
 
 #ifdef AETHER_IMGUI
 
-#	include <cstring>
 #	include <mutex>
 
 #	include <backends/imgui_impl_glfw.h>
@@ -28,7 +27,7 @@ namespace aether
 	//                              ImGui_ImplVulkanH_DestroyWindow (first viewport
 	//                              open / close), imgui_impl_vulkan.cpp:1667, 1915
 	//
-	//   Render thread (inside RenderDrawData → UpdateTexture, first frame only):
+	//   Render thread (inside RenderDrawData -> UpdateTexture, first frame only):
 	//     vkQueueSubmit          - font-atlas upload
 	//     vkQueueWaitIdle        - wait for font-atlas upload, imgui_impl_vulkan.cpp:922
 	//
@@ -220,11 +219,6 @@ namespace aether
 		ApplyAetherTheme();
 		ImGui_ImplGlfw_InitForVulkan(window, /*installCallbacks=*/true);
 
-		// Save stable context pointers used on the render thread.
-		// Both are valid until ImGui::DestroyContext().
-		m_sharedData = ImGui::GetDrawListSharedData();
-		m_mainViewport = ImGui::GetMainViewport();
-
 		const VulkanContext& ctx = engine.GetVulkanContext();
 		const VkDevice dev = ctx.GetDevice().device;
 
@@ -316,17 +310,9 @@ namespace aether
 	void ImGuiRenderer::Shutdown(AetherCore& engine)
 	{
 		engine.WaitIdle();
-
-		for (auto& slot: m_slots)
-		{
-			slot.tempLists.clear();
-		}
-
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
-
-		m_sharedData = nullptr;
 		m_engine = nullptr;
 	}
 
@@ -343,38 +329,19 @@ namespace aether
 	{
 		ImGui::Render();
 
-		const ImDrawData* src = ImGui::GetDrawData();
+		ImDrawData* src = ImGui::GetDrawData();
 		auto& s = m_slots[m_writeSlot];
-		s.lists.clear();
-		s.hasData = false;
+		s.valid = false;
 
 		if (!src || !src->Valid || src->CmdListsCount == 0 || src->DisplaySize.x <= 0.f || src->DisplaySize.y <= 0.f)
 		{
 			return;
 		}
 
-		s.displayPos = src->DisplayPos;
-		s.displaySize = src->DisplaySize;
-		s.fbScale = src->FramebufferScale;
-		// Textures is a stable pointer into ImGui::GetPlatformIO().Textures - valid
-		// for the lifetime of the context. RenderDrawData iterates it to upload any
-		// pending ImTextureData (e.g. the font atlas on first frame).
-		s.textures = src->Textures;
-
-		// Deep-copy each draw list so the render thread can safely read them
-		// after the game thread has called ImGui::NewFrame() for the next frame.
-		s.lists.resize(src->CmdListsCount);
-		for (int i = 0; i < src->CmdListsCount; ++i)
-		{
-			const ImDrawList* srcList = src->CmdLists[i];
-			ListCopy& lc = s.lists[i];
-			lc.vtx = srcList->VtxBuffer;
-			lc.idx = srcList->IdxBuffer;
-			lc.cmds = srcList->CmdBuffer;
-			lc.flags = srcList->Flags;
-		}
-
-		s.hasData = true;
+		// Store pointer directly-valid until next ImGui::NewFrame(), which the
+		// game thread cannot reach until the render thread has consumed this slot.
+		s.drawData = src;
+		s.valid = true;
 	}
 
 	void ImGuiRenderer::RenderPlatformWindows()
@@ -409,44 +376,12 @@ namespace aether
 	void ImGuiRenderer::RenderSlot(PassContext& ctx, uint32_t slot)
 	{
 		auto& s = m_slots[slot];
-		if (!s.hasData)
+		if (!s.valid)
 		{
 			return;
 		}
 
-		const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
-
-		// Reconstruct temporary ImDrawList objects from the deep-copied data.
-		// imgui_impl_vulkan reads VtxBuffer / IdxBuffer / CmdBuffer from each list.
-		s.tempLists.clear();
-		s.tempLists.reserve(s.lists.size());
-
-		ImDrawData drawData{};
-		drawData.Valid = true;
-		drawData.DisplayPos = s.displayPos;
-		drawData.DisplaySize = s.displaySize;
-		drawData.FramebufferScale = s.fbScale;
-		// imgui_impl_vulkan dereferences OwnerViewport to find per-viewport render buffers.
-		drawData.OwnerViewport = m_mainViewport;
-		// imgui_impl_vulkan iterates Textures to upload any pending ImTextureData
-		// (font atlas on first frame, dynamic atlas updates thereafter).
-		drawData.Textures = s.textures;
-
-		for (const ListCopy& lc: s.lists)
-		{
-			auto& tl = s.tempLists.emplace_back(std::make_unique<ImDrawList>(m_sharedData));
-			tl->VtxBuffer = lc.vtx;
-			tl->IdxBuffer = lc.idx;
-			tl->CmdBuffer = lc.cmds;
-			tl->Flags = lc.flags;
-
-			drawData.CmdLists.push_back(tl.get());
-			drawData.CmdListsCount++;
-			drawData.TotalVtxCount += lc.vtx.Size;
-			drawData.TotalIdxCount += lc.idx.Size;
-		}
-
-		ImGui_ImplVulkan_RenderDrawData(&drawData, cmd);
+		ImGui_ImplVulkan_RenderDrawData(s.drawData, ctx.recorder.GetCommandBuffer());
 	}
 
 } // namespace aether
