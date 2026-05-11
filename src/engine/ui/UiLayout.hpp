@@ -57,14 +57,14 @@ namespace aether
 	//   MiddleLeft / Center / MiddleRight
 	//   BottomLeft / BottomCenter / BottomRight
 	//
-	//   marginPx  – pixel gap between the named screen corner/edge and the widget.
+	//   marginPx  - pixel gap between the named screen corner/edge and the widget.
 	//               For Center, this is an additional offset from the screen midpoint.
-	//   sizePx    – widget dimensions in pixels.
+	//   sizePx    - widget dimensions in pixels.
 	//
 	// Stretch presets (anchorMin != anchorMax -> widget scales with the screen):
-	//   StretchFull        – fills the entire screen with an optional uniform inset.
-	//   StretchHorizontal  – full-width band; caller supplies the Y position and height.
-	//   StretchVertical    – full-height column; caller supplies the X position and width.
+	//   StretchFull        - fills the entire screen with an optional uniform inset.
+	//   StretchHorizontal  - full-width band; caller supplies the Y position and height.
+	//   StretchVertical    - full-height column; caller supplies the X position and width.
 
 	namespace UiAnchors
 	{

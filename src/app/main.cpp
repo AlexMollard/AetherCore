@@ -10,6 +10,7 @@
 // #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
 #include "layers/UiSandboxLayer.hpp"
+// #include "layers/InventoryLayer.hpp"
 #include "utils/Logger.hpp"
 
 namespace
@@ -46,6 +47,7 @@ int main()
 		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
 		application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());
+		// application.PushLayer(std::make_unique<aether::app::InventoryLayer>());
 		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
 		return application.Run();
 	}

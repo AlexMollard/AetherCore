@@ -52,6 +52,10 @@ namespace aether::ui
 	// Returns true for ONE frame when the user submits with Enter.
 	bool DrawTextInput(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
 
+	// Item slot: draws rarity border, hover/press overlay, icon placeholder,
+	// and a quantity badge.  Returns true the frame the slot is clicked.
+	bool DrawItemSlot(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
 	// ── Z-order management ────────────────────────────────────────────────────
 
 	// Raises entity to the highest z-order in the world so it renders and
@@ -65,9 +69,17 @@ namespace aether::ui
 	// children so their UiTransformComponent rects are up to date.
 	void ApplyLayout(UiWorld& world, Entity container, VkExtent2D extent);
 
-	// Convenience: calls ApplyLayout on every entity that has both
-	// UiLayoutComponent and UiChildrenComponent.
+	// Positions UiChildrenComponent children of `container` into a uniform
+	// column grid and auto-sizes the container height to wrap all rows.
+	void ApplyGridLayout(UiWorld& world, Entity container, VkExtent2D extent);
+
+	// Convenience: runs both ApplyLayout and ApplyGridLayout on every
+	// eligible entity in the world.
 	void RunLayouts(UiWorld& world, VkExtent2D extent);
+
+	// Wires `child` into `parent`'s UiChildrenComponent and stamps a
+	// UiParentComponent on `child`.  parent must already have UiChildrenComponent.
+	void AddChild(UiWorld& world, Entity parent, Entity child);
 
 	// ── Spawn helpers ─────────────────────────────────────────────────────────
 	// Create a fully-configured widget entity in one call.
@@ -86,5 +98,13 @@ namespace aether::ui
 
 	// Single-line text input entity.
 	Entity SpawnTextInput(UiWorld& world, UiRect rect, std::string_view placeholder = {}, float zOrder = 0.f);
+
+	// Single item slot entity (UiTransform + UiInput + UiItemSlot).
+	Entity SpawnItemSlot(UiWorld& world, UiRect rect = {}, float zOrder = 0.f);
+
+	// Spawns a grid container entity + slotCount item slot children in one call.
+	// slotsOut must point to an array of at least slotCount Entities.
+	// Returns the grid container entity.
+	Entity SpawnItemGrid(UiWorld& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder = 1.f);
 
 } // namespace aether::ui

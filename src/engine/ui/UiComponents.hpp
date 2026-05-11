@@ -153,6 +153,29 @@ namespace aether::ui
 		bool submitted = false; // true for ONE frame when Enter is pressed; DrawTextInput clears it
 	};
 
+	// ── Grid Layout ────────────────────────────────────────────────────────────
+	// Positions UiChildrenComponent children in a uniform cell grid and
+	// auto-sizes the container height to wrap all rows.
+	struct UiGridLayoutComponent
+	{
+		int columns = 8;
+		float slotSize = 50.f; // both width and height of each cell
+		float spacing = 4.f;   // gap between cells (horizontal and vertical)
+		float padding = 8.f;   // inset from the container edge on all sides
+	};
+
+	// ── Item Slot ───────────────────────────────────────────────────────────────
+	// Represents one inventory cell drawn by DrawItemSlot.
+	// quantity == 0 means the slot is empty.
+	// rarityColor.a == 0 means no rarity tint (use the default slot border instead).
+	struct UiItemSlotComponent
+	{
+		std::uint32_t textureSlot = 0; // 0 = no icon texture
+		int quantity = 0;              // 0 = empty
+		bool selected = false;
+		glm::vec4 rarityColor{ 0.f, 0.f, 0.f, 0.f };
+	};
+
 	// ── Hierarchy ──────────────────────────────────────────────────────────────
 	struct UiChildrenComponent
 	{

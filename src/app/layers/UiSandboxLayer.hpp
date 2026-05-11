@@ -60,7 +60,7 @@ namespace aether::app
 		Entity m_cornerBL;
 		Entity m_cornerBR;
 
-		// All owned entities – destroyed en-masse in OnDetach.
+		// All owned entities - destroyed en-masse in OnDetach.
 		std::vector<Entity> m_entities;
 	};
 } // namespace aether::app

@@ -85,15 +85,21 @@ namespace aether::ui
 		ui.DrawRect(t->rect, bgColor, theme.cornerRadius);
 
 		// Centred label.
+		// label.position is the baseline in screen space; the glyph cap-height sits
+		// at baseline - bearingY*fontSize (≈ baseline - 0.7*fs).  Visual centre of
+		// caps ≈ baseline - 0.35*fs, so baseline = widgetCentreY + 0.35*fontSize.
+		// Horizontally: MeasureText gives total advance; shift left by half so the
+		// string is centred rather than starting at the widget centre.
 		if (!btn->label.empty())
 		{
 			const UiPoint centre = CentrePoint(*t, px, extent);
-			// Offset slightly up from the visual centre to account for glyph baseline.
-			const UiPoint labelPos{
-				.anchor = centre.anchor,
-				.offsetPx = { centre.offsetPx.x, centre.offsetPx.y - theme.buttonFontSize * 0.35f },
-			};
-			ui.DrawText(btn->label, labelPos, theme.buttonFontSize, btn->textColor);
+			const float textW = ui.MeasureText(btn->label, theme.buttonFontSize);
+			ui.DrawText(btn->label,
+			        UiPoint{
+			                centre.anchor, { centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f }
+            },
+			        theme.buttonFontSize,
+			        btn->textColor);
 		}
 
 		return inp->clicked;
@@ -191,7 +197,7 @@ namespace aether::ui
 		if (!cb->label.empty())
 		{
 			const float labelX = boxPx.x + boxSize + 6.f;
-			const float labelY = px.y + (px.w - theme.bodyFontSize) * 0.5f;
+			const float labelY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
 			ui.DrawText(cb->label, PixelPoint(*t, { labelX, labelY }, extent), theme.bodyFontSize, theme.text);
 		}
 
@@ -281,7 +287,7 @@ namespace aether::ui
 			ui.DrawText(panel->title,
 			        UiPoint{
 			                .anchor = t->rect.anchorMin,
-			                .offsetPx = { px.x + theme.padding - anchorPx.x, px.y + hdrH * 0.5f - theme.titleFontSize * 0.35f - anchorPx.y },
+			                .offsetPx = { px.x + theme.padding - anchorPx.x, px.y + hdrH * 0.5f + theme.titleFontSize * 0.35f - anchorPx.y },
             },
 			        theme.titleFontSize,
 			        theme.textTitle);
@@ -464,11 +470,61 @@ namespace aether::ui
 		}
 	}
 
+	void ApplyGridLayout(UiWorld& world, Entity container, VkExtent2D extent)
+	{
+		auto* grid = world.TryGet<UiGridLayoutComponent>(container);
+		auto* children = world.TryGet<UiChildrenComponent>(container);
+		auto* parent = world.TryGet<UiTransformComponent>(container);
+		if (!grid || !children || !parent)
+		{
+			return;
+		}
+
+		const glm::vec4 parentPx = PixelRect(*parent, extent);
+		const float pad = grid->padding;
+		const float slot = grid->slotSize;
+		const float sp = grid->spacing;
+		const int cols = grid->columns;
+
+		int i = 0;
+		for (const Entity child: children->children)
+		{
+			auto* ct = world.TryGet<UiTransformComponent>(child);
+			if (!ct)
+			{
+				++i;
+				continue;
+			}
+
+			const int col = i % cols;
+			const int row = i / cols;
+			const float x = parentPx.x + pad + static_cast<float>(col) * (slot + sp);
+			const float y = parentPx.y + pad + static_cast<float>(row) * (slot + sp);
+			ct->rect = PixelToUiRect(*ct, { x, y, slot, slot }, extent);
+			++i;
+		}
+
+		// Auto-size container height to wrap all rows.
+		const int childCount = static_cast<int>(children->children.size());
+		if (childCount > 0)
+		{
+			const int rows = (childCount + cols - 1) / cols;
+			const float newH = 2.f * pad + static_cast<float>(rows) * slot + static_cast<float>(std::max(0, rows - 1)) * sp;
+			glm::vec4 newPx = parentPx;
+			newPx.w = newH;
+			parent->rect = PixelToUiRect(*parent, newPx, extent);
+		}
+	}
+
 	void RunLayouts(UiWorld& world, VkExtent2D extent)
 	{
 		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
 			ApplyLayout(world, UiWorld::FromEntt(e), extent);
+		}
+		for (auto [e, grid, children]: world.View<UiGridLayoutComponent, UiChildrenComponent>().each())
+		{
+			ApplyGridLayout(world, UiWorld::FromEntt(e), extent);
 		}
 	}
 
@@ -536,7 +592,7 @@ namespace aether::ui
 		ui.PushClipRect(t->rect);
 
 		const float textX = px.x + theme.padding * 0.5f;
-		const float textY = px.y + (px.w - theme.bodyFontSize) * 0.5f;
+		const float textY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
 
 		if (ti->text.empty() && !ti->placeholder.empty())
 		{
@@ -566,6 +622,139 @@ namespace aether::ui
 	Entity SpawnTextInput(UiWorld& world, UiRect rect, std::string_view placeholder, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{ .placeholder = std::string(placeholder) }).entity();
+	}
+
+	// ── Hierarchy helper ──────────────────────────────────────────────────────
+
+	void AddChild(UiWorld& world, Entity parent, Entity child)
+	{
+		world.TryGet<UiChildrenComponent>(parent)->children.push_back(child);
+		world.Emplace<UiParentComponent>(child, UiParentComponent{ parent });
+	}
+
+	// ── Item Slot ─────────────────────────────────────────────────────────────
+
+	bool DrawItemSlot(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		auto* slot = world.TryGet<UiItemSlotComponent>(entity);
+		auto* inp = world.TryGet<UiInputComponent>(entity);
+		if (!t || !slot || !inp)
+		{
+			return false;
+		}
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		static constexpr float kBorderW = 2.f;
+
+		// Border colour: selected > rarity (when filled) > hover blend > default.
+		glm::vec4 borderColor = theme.slotBorder;
+		if (slot->quantity > 0 && slot->rarityColor.a > 0.f)
+		{
+			borderColor = slot->rarityColor;
+		}
+		if (inp->hoverT > 0.f)
+		{
+			borderColor = glm::mix(borderColor, theme.slotHoverBorder, inp->hoverT);
+		}
+		if (slot->selected)
+		{
+			borderColor = theme.slotSelectedBorder;
+		}
+
+		// Outer border rect.
+		ui.DrawRect(t->rect, borderColor, theme.slotCornerRadius);
+
+		// Inner background.
+		const glm::vec4 innerPx = { px.x + kBorderW, px.y + kBorderW, px.z - 2.f * kBorderW, px.w - 2.f * kBorderW };
+		ui.DrawRect(PixelToUiRect(*t, innerPx, extent), theme.slotBg, theme.slotCornerRadius - kBorderW);
+
+		// Item contents when the slot is not empty.
+		if (slot->quantity > 0)
+		{
+			const float iconInset = kBorderW + 2.f;
+			const glm::vec4 iconPx = { px.x + iconInset, px.y + iconInset, px.z - 2.f * iconInset, px.w - 2.f * iconInset };
+			const UiRect iconRect = PixelToUiRect(*t, iconPx, extent);
+
+			if (slot->textureSlot > 0)
+			{
+				ui.DrawTexturedRect(iconRect, slot->textureSlot, { 0.f, 0.f, 1.f, 1.f }, glm::vec4(1.f), theme.slotCornerRadius - iconInset);
+			}
+			else if (slot->rarityColor.a > 0.f)
+			{
+				// No texture loaded: draw a tinted placeholder so the item is visible.
+				glm::vec4 tint = slot->rarityColor;
+				tint.a *= 0.30f;
+				ui.DrawRect(iconRect, tint, theme.slotCornerRadius - iconInset);
+			}
+
+			// Quantity badge (bottom-right, only when more than one).
+			if (slot->quantity > 1)
+			{
+				const std::string qty = std::to_string(slot->quantity);
+				const float tw = ui.MeasureText(qty, theme.slotFontSize);
+				const float tx = px.x + px.z - tw - 3.f;
+				const float ty = px.y + px.w - theme.slotFontSize - 2.f;
+
+				const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+				const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
+
+				// Drop shadow for readability.
+				ui.DrawText(qty,
+				        UiPoint{
+				                t->rect.anchorMin, { tx - anchorPx.x + 1.f, ty - anchorPx.y + 1.f }
+                },
+				        theme.slotFontSize,
+				        { 0.f, 0.f, 0.f, 0.75f });
+				ui.DrawText(qty,
+				        UiPoint{
+				                t->rect.anchorMin, { tx - anchorPx.x, ty - anchorPx.y }
+                },
+				        theme.slotFontSize,
+				        theme.quantityText);
+			}
+		}
+
+		// Hover overlay on top of everything.
+		if (inp->hoverT > 0.f)
+		{
+			glm::vec4 overlay = theme.slotHoverOverlay;
+			overlay.a *= inp->hoverT;
+			ui.DrawRect(t->rect, overlay, theme.slotCornerRadius);
+		}
+
+		return inp->clicked;
+	}
+
+	Entity SpawnItemSlot(UiWorld& world, UiRect rect, float zOrder)
+	{
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiItemSlotComponent>().entity();
+	}
+
+	Entity SpawnItemGrid(UiWorld& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder)
+	{
+		Entity container = world.Spawn()
+		                           .Add<UiTransformComponent>(UiTransformComponent{ .rect = containerRect, .zOrder = containerZOrder })
+		                           .Add<UiGridLayoutComponent>(UiGridLayoutComponent{
+		                                   .columns = columns,
+		                                   .slotSize = slotSize,
+		                                   .spacing = spacing,
+		                                   .padding = padding,
+		                           })
+		                           .Add<UiChildrenComponent>()
+		                           .entity();
+
+		for (int i = 0; i < slotCount; ++i)
+		{
+			Entity slot = SpawnItemSlot(world, {}, slotZOrder);
+			AddChild(world, container, slot);
+			if (slotsOut)
+			{
+				slotsOut[i] = slot;
+			}
+		}
+
+		return container;
 	}
 
 } // namespace aether::ui

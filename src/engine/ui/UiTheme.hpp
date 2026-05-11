@@ -41,6 +41,16 @@ namespace aether::ui
 		glm::vec4 inputFocusBg{ 0.07f, 0.10f, 0.16f, 1.f };
 		glm::vec4 placeholder{ 0.42f, 0.51f, 0.59f, 0.70f };
 
+		// ── Inventory slot colours ──────────────────────────────────────────────
+		glm::vec4 slotBg{ 0.08f, 0.10f, 0.14f, 0.95f };
+		glm::vec4 slotBorder{ 0.22f, 0.27f, 0.35f, 1.f };
+		glm::vec4 slotHoverBorder{ 0.55f, 0.68f, 0.82f, 1.f };
+		glm::vec4 slotSelectedBorder{ 0.82f, 0.92f, 1.00f, 1.f };
+		glm::vec4 slotHoverOverlay{ 1.f, 1.f, 1.f, 0.09f };
+		glm::vec4 quantityText{ 0.92f, 0.90f, 0.78f, 1.f };
+		float slotCornerRadius = 4.f;
+		float slotFontSize = 10.f;
+
 		// ── Layout metrics ─────────────────────────────────────────────────────
 		float cornerRadius = 6.f;
 		float headerHeight = 48.f;

@@ -26,13 +26,6 @@ namespace aether::app
 			return r;
 		}
 
-		// Appends `child` to `parent`'s UiChildrenComponent and stamps a
-		// UiParentComponent onto `child`. Both components must already exist on parent.
-		void AddChild(ui::UiWorld& world, Entity parent, Entity child)
-		{
-			world.TryGet<ui::UiChildrenComponent>(parent)->children.push_back(child);
-			world.Emplace<ui::UiParentComponent>(child, ui::UiParentComponent{ parent });
-		}
 	} // namespace
 
 	// ── OnAttach ─────────────────────────────────────────────────────────────────
@@ -67,11 +60,11 @@ namespace aether::app
 		m_checkB = reg(ui::SpawnCheckbox(world, HeightRect(22.f), "Bloom effect", false, 2.f));
 		m_progressBar = reg(ui::SpawnProgressBar(world, HeightRect(16.f), 0.f, 1.f, 0.f, 2.f));
 
-		AddChild(world, m_galleryPanel, m_clickButton);
-		AddChild(world, m_galleryPanel, m_slider);
-		AddChild(world, m_galleryPanel, m_checkA);
-		AddChild(world, m_galleryPanel, m_checkB);
-		AddChild(world, m_galleryPanel, m_progressBar);
+		ui::AddChild(world, m_galleryPanel, m_clickButton);
+		ui::AddChild(world, m_galleryPanel, m_slider);
+		ui::AddChild(world, m_galleryPanel, m_checkA);
+		ui::AddChild(world, m_galleryPanel, m_checkB);
+		ui::AddChild(world, m_galleryPanel, m_progressBar);
 
 		// ── Text Input ─────────────────────────────────────────────────────────
 		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 20.f, 395.f }, { 300.f, 120.f }), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
@@ -85,11 +78,11 @@ namespace aether::app
 		world.Emplace<ui::UiChildrenComponent>(m_inputPanel);
 
 		m_textInput = reg(ui::SpawnTextInput(world, HeightRect(32.f), "Type and press Enter...", 2.f));
-		AddChild(world, m_inputPanel, m_textInput);
+		ui::AddChild(world, m_inputPanel, m_textInput);
 
 		// ── Flex Toolbar ───────────────────────────────────────────────────────
 		// A standalone full-width horizontal strip near the bottom of the screen.
-		// No panel header – a plain background rect is drawn in OnGui.
+		// No panel header - a plain background rect is drawn in OnGui.
 		// anchorMin/Max = {0,1}/{1,1} -> anchors both horizontal edges to the
 		// bottom of the screen so the toolbar scales with the window width.
 		// Padding=8 leaves crossSize = (56 - 16) = 40px for button height.
@@ -133,9 +126,9 @@ namespace aether::app
 		        });
 		// UiParentComponent is added by AddChild below - do not emplace here.
 
-		AddChild(world, m_flexContainer, m_flexLeft);
-		AddChild(world, m_flexContainer, m_flexSpacer);
-		AddChild(world, m_flexContainer, m_flexRight);
+		ui::AddChild(world, m_flexContainer, m_flexLeft);
+		ui::AddChild(world, m_flexContainer, m_flexSpacer);
+		ui::AddChild(world, m_flexContainer, m_flexRight);
 
 		// ── Auto-size panel ────────────────────────────────────────────────────
 		// The initial height (80px) is a placeholder.  Each frame RunLayouts runs
@@ -156,9 +149,9 @@ namespace aether::app
 		m_autoItem2 = reg(ui::SpawnButton(world, HeightRect(28.f), "Button Beta", 2.f));
 		m_autoItem3 = reg(ui::SpawnCheckbox(world, HeightRect(22.f), "Auto checkbox", true, 2.f));
 
-		AddChild(world, m_autoPanel, m_autoItem1);
-		AddChild(world, m_autoPanel, m_autoItem2);
-		AddChild(world, m_autoPanel, m_autoItem3);
+		ui::AddChild(world, m_autoPanel, m_autoItem1);
+		ui::AddChild(world, m_autoPanel, m_autoItem2);
+		ui::AddChild(world, m_autoPanel, m_autoItem3);
 
 		// ── Corner anchor mini-panels ──────────────────────────────────────────
 		// Each one demonstrates a different UiAnchors preset.
@@ -240,7 +233,7 @@ namespace aether::app
 			panel->title = std::format("Text Input  \xC2\xB7  last: {}", m_lastSubmitted);
 		}
 
-		// Always open (not collapsible) – DrawPanel return value is ignored.
+		// Always open (not collapsible) - DrawPanel return value is ignored.
 		ui::DrawPanel(world, m_inputPanel, ui, extent, theme);
 		if (ui::DrawTextInput(world, m_textInput, ui, extent, theme))
 		{
@@ -271,7 +264,7 @@ namespace aether::app
 			        theme.separator);
 		}
 
-		// The spacer has no widget to draw – just render the two buttons.
+		// The spacer has no widget to draw - just render the two buttons.
 		ui::DrawButton(world, m_flexLeft, ui, extent, theme);
 		ui::DrawButton(world, m_flexRight, ui, extent, theme);
 

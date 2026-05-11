@@ -20,7 +20,20 @@ namespace aether::ui
 		ctx.mouseDown = input.IsMouseButtonDown(MouseButton::Left);
 		ctx.mouseReleased = input.IsMouseButtonReleased(MouseButton::Left);
 
+		// ── Feed keyboard events into focused text input ───────────────────────
+		// Must run before hit-test so Enter/Escape can clear focusedEntity before
+		// the new hot entity is resolved.
+		ProcessTextInput(world, ctx, input, deltaTime);
+
+		// ── Drag ──────────────────────────────────────────────────────────────
+		// UpdateDrag runs BEFORE we clear hotEntity so it can see the previous
+		// frame's hot entity for drag-start detection.  It must also run before
+		// HitTest so the dragged rect is at its new position when hit-tested.
+		UpdateDrag(world, ctx, extent);
+
 		// ── Clear per-frame transient flags ───────────────────────────────────
+		// Cleared AFTER UpdateDrag (which needs last frame's hotEntity) and
+		// BEFORE HitTest (which will repopulate hotEntity for this frame).
 		ctx.hotEntity = {};
 
 		for (auto [e, inp]: world.View<UiInputComponent>().each())
@@ -33,13 +46,6 @@ namespace aether::ui
 			inp.focused = (UiWorld::FromEntt(e) == ctx.focusedEntity);
 		}
 
-		// ── Feed keyboard events into focused text input ───────────────────────
-		// Must run before hit-test so Enter/Escape can clear focusedEntity before
-		// the new hot entity is resolved.
-		ProcessTextInput(world, ctx, input, deltaTime);
-
-		// ── Drag must be updated before hit-test so the rect is current ───────
-		UpdateDrag(world, ctx, extent);
 		HitTest(world, ctx, extent);
 		FlushWidgetStates(world, ctx);
 		UpdateTransitions(world, deltaTime);
@@ -138,9 +144,18 @@ namespace aether::ui
 			}
 		}
 
-		// End drag.
+		// End drag.  Only suppress the click if the mouse actually moved;
+		// a press-and-release in place is a genuine click (e.g. collapse toggle).
 		if (ctx.mouseReleased)
 		{
+			if (ctx.isDragging)
+			{
+				const glm::vec2 d = ctx.mousePos - ctx.dragStartMousePos;
+				if (d.x * d.x + d.y * d.y > 4.f) // moved more than 2 px
+				{
+					ctx.activeEntity = {};
+				}
+			}
 			ctx.isDragging = false;
 			ctx.draggedEntity = {};
 		}

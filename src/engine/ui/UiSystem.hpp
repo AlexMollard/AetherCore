@@ -25,7 +25,7 @@ namespace aether::ui
 	class UiSystem
 	{
 	public:
-		// deltaTime – seconds since last frame; used for hover/press animation lerp.
+		// deltaTime - seconds since last frame; used for hover/press animation lerp.
 		void BeginFrame(UiWorld& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
 		void EndFrame(UiWorld& world, UiContext& ctx);
 
