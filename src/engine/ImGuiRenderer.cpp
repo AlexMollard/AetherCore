@@ -1,4 +1,4 @@
-#include "ImGuiRenderer.hpp"
+﻿#include "ImGuiRenderer.hpp"
 
 #ifdef AETHER_IMGUI
 
@@ -249,14 +249,12 @@ namespace aether
 		        [](const char* fname, void* udata) -> PFN_vkVoidFunction
 		        {
 			        auto* c = static_cast<LoaderCtx*>(udata);
-
-			        // Helper: resolve a name through the device→instance chain.
 			        auto resolve = [&](const char* name) -> PFN_vkVoidFunction
 			        {
-				        PFN_vkVoidFunction fn = vkGetDeviceProcAddr(c->device, name);
+				        PFN_vkVoidFunction fn = vkGetInstanceProcAddr(c->instance, name);
 				        if (!fn)
 				        {
-					        fn = vkGetInstanceProcAddr(c->instance, name);
+					        fn = vkGetDeviceProcAddr(c->device, name);
 				        }
 				        return fn;
 			        };
