@@ -4,6 +4,9 @@
 
 #include "animation/AnimationSystem.hpp"
 #include "FileSystem.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiSystem.hpp"
+#include "ui/UiWorld.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "systems/DayNightSystem.hpp"
@@ -20,6 +23,10 @@ namespace aether::app
 			cfg.width = settings.window.width;
 			cfg.height = settings.window.height;
 			cfg.enableVsync = settings.graphics.vsync;
+			if (cfg.uiFontPath == nullptr || cfg.uiFontPath[0] == '\0')
+			{
+				cfg.uiFontPath = kUiFontPath.data();
+			}
 			return cfg;
 		}
 	} // namespace
@@ -64,30 +71,21 @@ namespace aether::app
 		}
 
 		LayerContext context{
-			.engine = m_engine,
+			.services = m_engine.GetServiceContainer(),
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = m_frameIndex,
-			.scene = &m_engine.GetScene(),
-			.world = &m_engine.GetWorld(),
-			.input = &m_engine.GetInput(),
-			.cameras = &m_engine.GetCameraManager(),
-			.renderer = &m_engine.GetRenderer(),
-			.assets = &m_engine.GetAssets(),
-			.ui = &m_uiRenderer,
-			.uiWorld = &m_uiWorld,
-			.uiContext = &m_uiContext,
 		};
 
 		m_renderThread.Stop();
 		m_engine.WaitIdle();
 
 		// Unregister engine-level systems before detaching layers.
-		context.world->UnregisterSystem("DayNightSystem");
-		context.world->UnregisterSystem("AnimationSystem");
+		context.Get<World>().UnregisterSystem("DayNightSystem");
+		context.Get<World>().UnregisterSystem("AnimationSystem");
 
 		m_layers.DetachAll(context);
-		m_imguiRenderer.Shutdown(m_engine);
-		m_uiRenderer.Shutdown(m_engine);
+		m_imguiRenderer.Shutdown(m_engine.GetServiceContainer());
+		// Engine UIRenderer shutdown is handled by AetherCore.
 		INFO(LogCategory::App, "Application shutdown complete.");
 	}
 
@@ -116,35 +114,25 @@ namespace aether::app
 		}
 
 		Logger::SetFrameNumber(0);
-		m_uiRenderer.Init(m_engine, kUiFontPath, "AppUI");
-		m_imguiRenderer.Init(m_engine, m_engine.GetWindow().GetHandle());
-		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e) { m_imguiRenderer.ReregisterPass(e); });
+		m_imguiRenderer.Init(m_engine.GetServiceContainer(), m_engine.GetServiceContainer().Get<Window>().GetHandle());
+		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e) { m_imguiRenderer.ReregisterPass(e.GetServiceContainer()); });
 
 		LayerContext attachContext{
-			.engine = m_engine,
+			.services = m_engine.GetServiceContainer(),
 			.deltaTimeSeconds = 0.0,
 			.frameIndex = 0,
-			.scene = &m_engine.GetScene(),
-			.world = &m_engine.GetWorld(),
-			.input = &m_engine.GetInput(),
-			.cameras = &m_engine.GetCameraManager(),
-			.renderer = &m_engine.GetRenderer(),
-			.assets = &m_engine.GetAssets(),
-			.ui = &m_uiRenderer,
-			.uiWorld = &m_uiWorld,
-			.uiContext = &m_uiContext,
 		};
 
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;
 
 		// Register engine-level systems.
-		attachContext.world->RegisterSystem(std::make_unique<aether::AnimationSystem>());
+		attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 		auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
-		dayNightSystem->Init(*attachContext.renderer);
-		attachContext.world->RegisterSystem(std::move(dayNightSystem));
+		dayNightSystem->Init(*attachContext.TryGet<Renderer>());
+		attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
 
-		// Start the dedicated render thread. All Vulkan submission work runs there.
+		// Start the dedicated render thread.
 		m_renderThread.Start(m_engine);
 
 		if (m_settings.app.targetFps > 0.0f)
@@ -154,8 +142,7 @@ namespace aether::app
 		}
 		else if (m_settings.graphics.vsync)
 		{
-			// Auto policy with VSync on: match the frame pacer to display refresh.
-			const int refreshRate = m_engine.GetWindow().GetDisplayRefreshRate();
+			const int refreshRate = m_engine.GetServiceContainer().Get<Window>().GetDisplayRefreshRate();
 			if (refreshRate > 0)
 			{
 				INFO(LogCategory::App, "Display refresh rate: {} Hz - setting frame pacer target.", refreshRate);
@@ -177,12 +164,6 @@ namespace aether::app
 		{
 			AE_PROFILE_ZONE_N("Frame");
 
-			// Pace to the target FPS.  Sleeps the game thread (coarse) then spins (fine)
-			// until the next frame deadline.  Placing this at the top of the loop - before
-			// deltaTime is measured - means:
-			//   a) deltaTime is accurate (it includes the sleep).
-			//   b) SubmitFrame() below will not stall: the render thread has had ~targetDuration
-			//      to finish the previous frame before we ask it to accept the next one.
 			m_framePacer.Wait();
 
 			Logger::SetFrameNumber(m_frameIndex);
@@ -194,18 +175,9 @@ namespace aether::app
 			previousFrameTime = currentFrameTime;
 
 			LayerContext frameContext{
-				.engine = m_engine,
+				.services = m_engine.GetServiceContainer(),
 				.deltaTimeSeconds = deltaTime,
 				.frameIndex = m_frameIndex,
-				.scene = &m_engine.GetScene(),
-				.world = &m_engine.GetWorld(),
-				.input = &m_engine.GetInput(),
-				.cameras = &m_engine.GetCameraManager(),
-				.renderer = &m_engine.GetRenderer(),
-				.assets = &m_engine.GetAssets(),
-				.ui = &m_uiRenderer,
-				.uiWorld = &m_uiWorld,
-				.uiContext = &m_uiContext,
 			};
 
 			// Update engine-level per-frame systems (camera, input).
@@ -214,26 +186,29 @@ namespace aether::app
 			// Update ECS systems (game logic).
 			{
 				AE_PROFILE_ZONE_N("WorldSystems");
-				frameContext.world->UpdateSystems(static_cast<float>(deltaTime));
+				frameContext.Get<World>().UpdateSystems(static_cast<float>(deltaTime));
 			}
 
-			// Compute the CPU double-buffer write slot for this frame.  Must be done
-			// BEFORE UpdateAll so that any layer that calls RenderQueue::Submit
-			// (e.g. ChunkManager::SubmitDraws) lands in the correct slot.
-			// We also clear the slot here so stale draws from two frames ago are
-			// discarded - PrepareFrame will append ECS draws on top of these.
+			// Compute the CPU double-buffer write slot for this frame.
 			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
-			m_engine.GetRenderQueue().SetWriteSlot(drawSlot);
-			m_engine.GetRenderQueue().Clear(drawSlot);
-			m_engine.GetShadowService().PrepareWriteSlot(drawSlot);
-			m_uiRenderer.SetWriteSlot(drawSlot);
+			m_engine.GetServiceContainer().Get<RenderQueue>().SetWriteSlot(drawSlot);
+			m_engine.GetServiceContainer().Get<RenderQueue>().Clear(drawSlot);
+			m_engine.GetServiceContainer().Get<ShadowService>().PrepareWriteSlot(drawSlot);
+			if (auto* uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
+			{
+				uiRenderer->SetWriteSlot(drawSlot);
+			}
 			m_imguiRenderer.SetWriteSlot(drawSlot);
 
-			// ECS UI system: hit-test, drag, widget state (runs before OnGui so
-			// layers see up-to-date hover/clicked state when they draw).
-			m_uiSystem.BeginFrame(m_uiWorld, m_engine.GetInput(), m_uiContext, m_engine.GetSwapchainExtent(), static_cast<float>(deltaTime));
+			// ECS UI system: hit-test, drag, widget state (runs before OnGui).
+			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
+			{
+				auto& uiWorld = m_engine.GetServiceContainer().Get<ui::UiWorld>();
+				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
+				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, m_engine.GetServiceContainer().Get<Swapchain>().GetExtent(), static_cast<float>(deltaTime));
+			}
 
-			// ImGui new frame - must be before any layer OnGui calls.
+			// ImGui new frame.
 			m_imguiRenderer.BeginFrame();
 
 			// Layer game-logic update.
@@ -241,27 +216,29 @@ namespace aether::app
 				AE_PROFILE_ZONE_N("LayerUpdate");
 				m_layers.UpdateAll(frameContext);
 			}
-			// Layer UI / overlay submission (writes into the double-buffered slot).
+			// Layer UI / overlay submission.
 			{
 				AE_PROFILE_ZONE_N("LayerGui");
 				m_layers.GuiAll(frameContext);
 			}
 
-			m_uiSystem.EndFrame(m_uiWorld, m_uiContext);
+			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
+			{
+				auto& uiWorld = m_engine.GetServiceContainer().Get<ui::UiWorld>();
+				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
+				uiSystem->EndFrame(uiWorld, uiCtx);
+			}
 
-			// Snapshot ImGui draw data into the current slot for the render thread.
+			// Snapshot ImGui draw data.
 			m_imguiRenderer.SnapshotFrame();
 
-			// Render secondary OS windows (docked panels torn off into viewports).
-			// Must happen after Render() but before NewFrame() - draw data is valid here.
+			// Render secondary OS windows.
 			m_imguiRenderer.RenderPlatformWindows();
 
-			// Flush ECS draws into the render queue slot and build a frame packet
-			// from the current camera / lighting snapshot.
+			// Flush ECS draws and build a frame packet.
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
 
-			// Hand the packet to the render thread. Blocks for only ~microseconds
-			// (thread wake latency) until the render thread picks it up.
+			// Hand the packet to the render thread.
 			m_renderThread.SubmitFrame(std::move(packet));
 
 			AE_PROFILE_FRAME;

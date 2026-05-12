@@ -2,23 +2,24 @@
 
 #include <cassert>
 
-#include "scene/AetherCore.hpp"
+#include "ServiceContainer.hpp"
 #include "io/FileSystem.hpp"
 #include "material/Material.hpp"
 #include "material/Texture.hpp"
+#include "utils/AssetManager.hpp"
 #include "utils/Logger.hpp"
 
 namespace voxel
 {
-	std::uint32_t BlockRegistry::Initialize(aether::AetherCore& core, std::string_view atlasPath)
+	std::uint32_t BlockRegistry::Initialize(ServiceContainer& services, std::string_view atlasPath)
 	{
-		// Register a material; load the atlas if the file exists, otherwise fall back
-		// to kNoTexture so the shader uses its built-in pink fallback colour.
+		aether::AssetManager& assetManager = services.Get<aether::AssetManager>();
+
 		aether::Material mat{};
 
 		if (aether::io::FileSystem::Exists(atlasPath))
 		{
-			m_atlasTexture = new aether::Texture(core.CreateTexture(atlasPath, aether::TextureFilter::Nearest));
+			m_atlasTexture = new aether::Texture(assetManager.CreateTexture(atlasPath, aether::TextureFilter::Nearest));
 			mat.albedoSlot = m_atlasTexture->GetBindlessSlot();
 		}
 		else
@@ -26,14 +27,14 @@ namespace voxel
 			//WARN(LogCategory::App, "Block atlas not found: {} - using fallback colour.", atlasPath);
 		}
 
-		core.RegisterMaterial(mat);
+		assetManager.RegisterMaterial(mat);
 		m_atlasSlot = mat.materialSlot;
 		return m_atlasSlot;
 	}
 
-	void BlockRegistry::Shutdown(aether::AetherCore& core)
+	void BlockRegistry::Shutdown(ServiceContainer& services)
 	{
-		(void) core;
+		(void) services;
 		if (m_atlasTexture)
 		{
 			delete m_atlasTexture;

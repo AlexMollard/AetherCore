@@ -23,14 +23,14 @@ namespace aether::app
 		INFO(LogCategory::App, "Fishing layer attached.");
 
 		auto gameSystem = std::make_unique<FishingGameSystem>();
-		gameSystem->Init(context.engine, *context.assets, *context.cameras, *context.input);
+		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());
 		m_gameSystem = gameSystem.get();
-		context.world->RegisterSystem(std::move(gameSystem));
+		context.Get<World>().RegisterSystem(std::move(gameSystem));
 	}
 
 	void FishingLayer::OnDetach(LayerContext& context)
 	{
-		context.world->UnregisterSystem("FishingGameSystem");
+		context.Get<World>().UnregisterSystem("FishingGameSystem");
 		m_gameSystem = nullptr;
 		(void) context;
 	}
@@ -54,7 +54,7 @@ namespace aether::app
 
 		ImGui::Text("Camera");
 		ImGui::NextColumn();
-		ImGui::TextUnformatted(GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::TextUnformatted(GetActiveCameraName(context.Get<CameraManager>().GetMainCamera()));
 		ImGui::NextColumn();
 
 		if (m_gameSystem)

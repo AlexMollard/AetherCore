@@ -8,13 +8,13 @@
 #include <unordered_map>
 #include <vector>
 
+#include "ServiceContainer.hpp"
 #include "mesh/DynamicMesh.hpp"
 #include "BlockRegistry.hpp"
 #include "ChunkMesher.hpp"
 
 namespace aether
 {
-	class AetherCore;
 	class GraphicsPipeline;
 } // namespace aether
 
@@ -63,14 +63,14 @@ namespace voxel
 	//
 	// Usage (one-time setup):
 	//   ChunkManager mgr;
-	//   mgr.Initialize(core, registry, voxelPipeline);
+	//   mgr.Initialize(services, registry, voxelPipeline);
 	//   // populate chunks:
 	//   mgr.SetBlock({0,0,0}, BlockId::Grass);
 	//
-	// Per-frame (inside the app update loop before AetherCore::BeginFrame):
+	// Per-frame (inside the app update loop):
 	//   mgr.Update(playerPos);
 	//   // Then in render:
-	//   mgr.SubmitDraws(queue, frameIndex);
+	//   mgr.SubmitDraws(services);
 	class ChunkManager
 	{
 	public:
@@ -89,9 +89,9 @@ namespace voxel
 		ChunkManager() = default;
 
 		// renderRadius: how many chunks around the player to keep loaded (Manhattan-ish distance in chunk units).
-		void Initialize(aether::AetherCore& core, BlockRegistry& registry, const aether::GraphicsPipeline* pipeline, int renderRadius = 8);
+		void Initialize(ServiceContainer& services, BlockRegistry& registry, const aether::GraphicsPipeline* pipeline, int renderRadius = 8);
 
-		void Shutdown(aether::AetherCore& core);
+		void Shutdown(ServiceContainer& services);
 
 		// Place or remove a single block at world integer coordinates.
 		// Marks the affected chunk (and any bordering chunks) dirty.
@@ -105,7 +105,7 @@ namespace voxel
 		void Update(const glm::vec3& playerWorldPos);
 
 		// Submit all non-empty chunks to the RenderQueue.
-		void SubmitDraws(aether::AetherCore& core);
+		void SubmitDraws(ServiceContainer& services);
 
 		[[nodiscard]] DebugStats GetDebugStats() const;
 
@@ -133,7 +133,7 @@ namespace voxel
 
 		std::unordered_map<glm::ivec3, std::unique_ptr<Chunk>, ChunkCoordHash, ChunkCoordEq> m_chunks;
 
-		aether::AetherCore* m_core = nullptr;
+		ServiceContainer* m_services = nullptr;
 		BlockRegistry* m_registry = nullptr;
 		const aether::GraphicsPipeline* m_pipeline = nullptr;
 

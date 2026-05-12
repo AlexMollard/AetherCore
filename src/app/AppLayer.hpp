@@ -2,42 +2,32 @@
 
 #include <cstdint>
 
+#include "ServiceContainer.hpp"
+
 namespace aether
 {
 	class AetherCore;
-	class Scene;
-	class World;
-	class Input;
-	class CameraManager;
-	class Renderer;
-	class AssetManager;
-	class UIRenderer;
 } // namespace aether
-
-namespace aether::ui
-{
-	class UiWorld;
-	struct UiContext;
-} // namespace aether::ui
 
 namespace aether::app
 {
 	struct LayerContext
 	{
-		aether::AetherCore& engine;
+		ServiceContainer& services;
 		double deltaTimeSeconds = 0.0;
 		std::uint64_t frameIndex = 0;
-		aether::Scene* scene = nullptr;
-		aether::World* world = nullptr;
-		aether::Input* input = nullptr;
-		aether::CameraManager* cameras = nullptr;
-		aether::Renderer* renderer = nullptr;
-		aether::AssetManager* assets = nullptr;
-		aether::UIRenderer* ui = nullptr;
 
-		// ECS-based UI world and per-frame interaction context.
-		aether::ui::UiWorld* uiWorld = nullptr;
-		aether::ui::UiContext* uiContext = nullptr;
+		template<typename T>
+		[[nodiscard]] T& Get() const
+		{
+			return services.Get<T>();
+		}
+
+		template<typename T>
+		[[nodiscard]] T* TryGet() const
+		{
+			return services.TryGet<T>();
+		}
 	};
 
 	class AppLayer

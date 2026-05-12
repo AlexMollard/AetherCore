@@ -6,12 +6,14 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/constants.hpp>
 
-#include "scene/AetherCore.hpp"
-#include "utils/AssetManager.hpp"
 #include "camera/Camera.hpp"
+#include "camera/LightingManager.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
+#include "utils/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsComponents.hpp"
@@ -36,9 +38,9 @@ namespace aether::app
 
 	// ── Init ──────────────────────────────────────────────────────────────────────
 
-	void PhysicsGameSystem::Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics)
+	void PhysicsGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics)
 	{
-		m_engine = &engine;
+		m_services = &services;
 		m_assets = &assets;
 		m_cameras = &cameras;
 		m_input = &input;
@@ -49,8 +51,8 @@ namespace aether::app
 
 	void PhysicsGameSystem::BuildScene(aether::World& world)
 	{
-		const aether::Mesh& cube = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
-		const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Sphere);
+		const aether::Mesh& cube = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
+		const aether::Mesh& sphere = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Sphere);
 
 		// ── Ground ────────────────────────────────────────────────────────────────
 		{
@@ -156,21 +158,21 @@ namespace aether::app
 	void PhysicsGameSystem::OnRegister(aether::World& world)
 	{
 		INFO(aether::LogCategory::App, "PhysicsGameSystem registered.");
-		if (!m_engine || !m_assets || !m_cameras || !m_input || !m_physics)
+		if (!m_services || !m_assets || !m_cameras || !m_input || !m_physics)
 		{
 			WARN(aether::LogCategory::App, "PhysicsGameSystem not fully initialised - aborting.");
 			return;
 		}
 
 		// ── Pipeline ──────────────────────────────────────────────────────────────
-		const VkDescriptorSetLayout bindlessLayout = m_engine->GetBindlessManager().GetLayout();
-		const VkDescriptorSetLayout lightingLayout = m_engine->GetLightingSetLayout();
+		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
+		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
 		m_pipeline = m_assets->CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
-		        .colorFormat = aether::AetherCore::GetForwardColorFormat(),
-		        .depthFormat = m_engine->GetSwapchainDepthFormat(),
+		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		        .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
@@ -235,7 +237,7 @@ namespace aether::app
 
 	void PhysicsGameSystem::FireProjectile(aether::World& world)
 	{
-		const aether::Mesh& sphere = m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Sphere);
+		const aether::Mesh& sphere = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Sphere);
 
 		// Fire from slightly above and in front of the camera toward the target stack.
 		const glm::vec3 spawnPos = { 0.f, 3.f, kGroundHalfExtent - 1.f };
@@ -260,7 +262,7 @@ namespace aether::app
 
 	void PhysicsGameSystem::Update(aether::World& world, float dt)
 	{
-		if (!m_engine || !m_cameras || !m_input || !m_physics)
+		if (!m_services || !m_cameras || !m_input || !m_physics)
 		{
 			return;
 		}

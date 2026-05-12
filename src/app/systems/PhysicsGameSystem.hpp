@@ -32,7 +32,7 @@ namespace aether::app
 	class PhysicsGameSystem final : public aether::System
 	{
 	public:
-		void Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics);
+		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics);
 
 		const char* GetName() const override
 		{
@@ -74,7 +74,7 @@ namespace aether::app
 		void FireProjectile(aether::World& world);
 
 		// Dependencies
-		aether::AetherCore* m_engine = nullptr;
+		ServiceContainer* m_services = nullptr;
 		aether::AssetManager* m_assets = nullptr;
 		aether::CameraManager* m_cameras = nullptr;
 		aether::Input* m_input = nullptr;

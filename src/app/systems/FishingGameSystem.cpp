@@ -4,12 +4,13 @@
 #include <array>
 #include <cmath>
 
-#include "scene/AetherCore.hpp"
-#include "utils/AssetManager.hpp"
 #include "camera/Camera.hpp"
+#include "camera/LightingManager.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "FileSystem.hpp"
 #include "platform/Input.hpp"
+#include "utils/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "platform/Window.hpp"
 #include "scene/World.hpp"
@@ -110,9 +111,9 @@ namespace aether::app
 		return BobberStateName(m_bobberState);
 	}
 
-	void FishingGameSystem::Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
+	void FishingGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
 	{
-		m_engine = &engine;
+		m_services = &services;
 		m_assets = &assets;
 		m_cameras = &cameras;
 		m_input = &input;
@@ -159,7 +160,7 @@ namespace aether::app
 
 	bool FishingGameSystem::TryGetWaterHitPoint(glm::vec3& outTarget) const
 	{
-		if (!m_engine || !m_input)
+		if (!m_services || !m_input)
 		{
 			return false;
 		}
@@ -170,7 +171,7 @@ namespace aether::app
 			return false;
 		}
 
-		GLFWwindow* handle = m_engine->GetWindow().GetHandle();
+		GLFWwindow* handle = m_services->Get<Window>().GetHandle();
 		int width = 0;
 		int height = 0;
 		glfwGetFramebufferSize(handle, &width, &height);
@@ -214,27 +215,27 @@ namespace aether::app
 	void FishingGameSystem::OnRegister(aether::World& world)
 	{
 		INFO(aether::LogCategory::App, "FishingGameSystem registered.");
-		if (!m_engine || !m_assets || !m_cameras || !m_input)
+		if (!m_services || !m_assets || !m_cameras || !m_input)
 		{
 			WARN(aether::LogCategory::App, "FishingGameSystem not initialized with dependencies!");
 			return;
 		}
 
-		const VkDescriptorSetLayout bindlessLayout = m_engine->GetBindlessManager().GetLayout();
-		const VkDescriptorSetLayout lightingLayout = m_engine->GetLightingSetLayout();
+		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
+		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
-		m_pipeline = m_engine->CreateGraphicsPipeline({
+		m_pipeline = m_services->Get<AssetManager>().CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
-		        .colorFormat = aether::AetherCore::GetForwardColorFormat(),
-		        .depthFormat = m_engine->GetSwapchainDepthFormat(),
+		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		        .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 
-		m_planeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Plane);
-		m_cubeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
+		m_planeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Plane);
+		m_cubeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
 
 		m_waterMaterial = {};
 		m_waterMaterial.baseColorFactor = glm::vec4(0.14f, 0.42f, 0.72f, 0.90f);
@@ -332,13 +333,13 @@ namespace aether::app
 
 		m_bobberPos = GetRodWorldOrigin();
 
-		m_engine->SetDirectionalLight(glm::normalize(glm::vec3{ 0.4f, -1.0f, 0.25f }), 2.2f);
-		m_engine->SetAmbientLight(glm::vec3{ 0.22f, 0.28f, 0.35f });
+		m_services->Get<Renderer>().SetDirectionalLight(glm::normalize(glm::vec3{ 0.4f, -1.0f, 0.25f }), 2.2f);
+		m_services->Get<Renderer>().SetAmbientLight(glm::vec3{ 0.22f, 0.28f, 0.35f });
 	}
 
 	void FishingGameSystem::Update(aether::World& world, float dt)
 	{
-		if (!m_engine || !m_cameras || !m_input)
+		if (!m_services || !m_cameras || !m_input)
 		{
 			return;
 		}
@@ -545,7 +546,7 @@ namespace aether::app
 
 	void FishingGameSystem::OnUnregister(aether::World& world)
 	{
-		if (!m_engine || !m_assets || !m_cameras)
+		if (!m_services || !m_assets || !m_cameras)
 		{
 			return;
 		}

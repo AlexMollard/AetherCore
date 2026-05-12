@@ -136,7 +136,7 @@ namespace aether::app
 
 	void DebugLayer::OnUpdate(LayerContext& context)
 	{
-		if (context.input && context.input->IsKeyPressed(aether::Key::F1))
+		if (context.Get<Input>().IsKeyPressed(aether::Key::F1))
 		{
 			m_visible = !m_visible;
 		}
@@ -223,16 +223,16 @@ namespace aether::app
 
 		ImGui::Text("Tonemap");
 		ImGui::NextColumn();
-		ImGui::TextUnformatted(GetTonemapModeName(context.engine.GetTonemapMode()));
+		ImGui::TextUnformatted(GetTonemapModeName(context.Get<Renderer>().GetTonemapMode()));
 		ImGui::NextColumn();
 
-		const bool fxaa = context.renderer && context.renderer->IsFxaaEnabled();
+		const bool fxaa = context.Get<Renderer>().IsFxaaEnabled();
 		ImGui::Text("FXAA");
 		ImGui::NextColumn();
 		ImGui::TextColored(fxaa ? ImVec4(0.4f, 0.72f, 0.46f, 1.f) : ImVec4(0.5f, 0.6f, 0.69f, 1.f), fxaa ? "On" : "Off");
 		ImGui::NextColumn();
 
-		const VkExtent2D ext = context.engine.GetSwapchainExtent();
+		const VkExtent2D ext = context.Get<Swapchain>().GetExtent();
 		std::snprintf(buf.data(), buf.size(), "%u x %u", ext.width, ext.height);
 		ImGui::Text("Resolution");
 		ImGui::NextColumn();
@@ -244,7 +244,7 @@ namespace aether::app
 		// ── CAMERA ────────────────────────────────────────────────────────────
 		ImGui::SeparatorText("CAMERA");
 
-		const aether::Camera* cam = context.cameras ? context.cameras->TryGetMainCamera() : nullptr;
+		const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera();
 		if (cam)
 		{
 			ImGui::Columns(2, "cam", false);
@@ -282,23 +282,22 @@ namespace aether::app
 		// ── LIGHTING ──────────────────────────────────────────────────────────
 		ImGui::SeparatorText("LIGHTING");
 
-		if (context.renderer)
 		{
 			ImGui::Columns(2, "light", false);
 
-			std::snprintf(buf.data(), buf.size(), "%zu", context.renderer->GetPointLights().size());
+			std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetPointLights().size());
 			ImGui::Text("Point Lights");
 			ImGui::NextColumn();
 			ImGui::TextUnformatted(buf.data());
 			ImGui::NextColumn();
 
-			std::snprintf(buf.data(), buf.size(), "%zu", context.renderer->GetSpotLights().size());
+			std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetSpotLights().size());
 			ImGui::Text("Spot Lights");
 			ImGui::NextColumn();
 			ImGui::TextUnformatted(buf.data());
 			ImGui::NextColumn();
 
-			std::snprintf(buf.data(), buf.size(), "%.2f", context.renderer->GetDirectionalLightIntensity());
+			std::snprintf(buf.data(), buf.size(), "%.2f", context.Get<Renderer>().GetDirectionalLightIntensity());
 			ImGui::Text("Sun Intensity");
 			ImGui::NextColumn();
 			ImGui::TextUnformatted(buf.data());

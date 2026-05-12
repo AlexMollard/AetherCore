@@ -6,10 +6,10 @@
 #include "platform/CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
 // #include "layers/FishingLayer.hpp"
-// #include "layers/SandboxLayer.hpp"
+#include "layers/SandboxLayer.hpp"
 // #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
-#include "layers/UiSandboxLayer.hpp"
+// #include "layers/UiSandboxLayer.hpp"
 // #include "layers/InventoryLayer.hpp"
 #include "utils/Logger.hpp"
 
@@ -43,10 +43,10 @@ int main()
 
 		aether::app::Application application;
 		// application.PushLayer(std::make_unique<aether::app::FishingLayer>());
-		// application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
+		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
 		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
-		application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());
+		// application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());
 		// application.PushLayer(std::make_unique<aether::app::InventoryLayer>());
 		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
 		return application.Run();

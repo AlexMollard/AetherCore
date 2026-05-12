@@ -107,7 +107,7 @@ namespace aether::app
 
 	void InventoryLayer::OnAttach(LayerContext& context)
 	{
-		auto& world = *context.uiWorld;
+		auto& world = context.Get<ui::UiWorld>();
 
 		auto reg = [this](Entity e) -> Entity
 		{
@@ -168,7 +168,7 @@ namespace aether::app
 
 	void InventoryLayer::OnDetach(LayerContext& context)
 	{
-		auto& world = *context.uiWorld;
+		auto& world = context.Get<ui::UiWorld>();
 		for (const Entity e: m_entities)
 		{
 			world.Destroy(e);
@@ -181,9 +181,9 @@ namespace aether::app
 
 	void InventoryLayer::OnGui(LayerContext& context)
 	{
-		auto& world = *context.uiWorld;
-		UIRenderer& ui = *context.ui;
-		const VkExtent2D extent = context.engine.GetSwapchainExtent();
+		auto& world = context.Get<ui::UiWorld>();
+		UIRenderer& ui = context.Get<UIRenderer>();
+		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();
 
 		// ── Anchor grid container below the panel header ───────────────────────

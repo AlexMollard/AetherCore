@@ -6,14 +6,17 @@
 #include <string_view>
 #include <vector>
 
-#include "scene/AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/Entity.hpp"
 #include "rendering/GraphicsPipeline.hpp"
+#include "rendering/Renderer.hpp"
 #include "material/Material.hpp"
 #include "animation/ModelAnimator.hpp"
+#include "scene/AetherCore.hpp"
 #include "scene/System.hpp"
+
+class ServiceContainer;
 
 namespace aether
 {
@@ -27,7 +30,7 @@ namespace aether::app
 	class SandboxGameSystem : public aether::System
 	{
 	public:
-		void Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
+		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
 
 		const char* GetName() const override
 		{
@@ -88,7 +91,7 @@ namespace aether::app
 		};
 
 		// Dependencies (set by Init)
-		aether::AetherCore* m_engine = nullptr;
+		ServiceContainer* m_services = nullptr;
 		aether::AssetManager* m_assets = nullptr;
 		aether::CameraManager* m_cameras = nullptr;
 		aether::Input* m_input = nullptr;
@@ -118,7 +121,7 @@ namespace aether::app
 		const aether::Mesh* m_planeMesh = nullptr;
 
 		// Render target
-		aether::AetherCore::CameraRenderTarget m_rttTarget;
+		std::uint32_t m_rttTargetId = 0;
 
 		// Game time
 		float m_time = 0.0f;

@@ -25,7 +25,7 @@ namespace aether::app
 	class FishingGameSystem : public aether::System
 	{
 	public:
-		void Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
+		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
 
 		[[nodiscard]] const char* GetName() const override
 		{
@@ -95,7 +95,7 @@ namespace aether::app
 		};
 
 		// Dependencies (set by Init)
-		aether::AetherCore* m_engine = nullptr;
+		ServiceContainer* m_services = nullptr;
 		aether::AssetManager* m_assets = nullptr;
 		aether::CameraManager* m_cameras = nullptr;
 		aether::Input* m_input = nullptr;

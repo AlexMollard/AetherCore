@@ -8,11 +8,13 @@
 
 #include "utils/DebugGui.hpp"
 
-#include "scene/AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
-#include "utils/Logger.hpp"
+#include "passes/PostProcessStack.hpp"
+#include "rendering/Renderer.hpp"
 #include "rendering/RenderQueue.hpp"
+#include "utils/AssetManager.hpp"
+#include "utils/Logger.hpp"
 
 namespace aether::app
 {
@@ -119,28 +121,28 @@ namespace aether::app
 	{
 		INFO(LogCategory::App, "VoxelWorldLayer attached.");
 
-		aether::AetherCore& engine = context.engine;
-		m_prevForceVisible = engine.GetRenderQueue().IsDebugForceVisible();
-		m_prevBypassIndirect = engine.GetRenderQueue().IsDebugBypassIndirect();
-		engine.GetRenderQueue().SetDebugForceVisible(true);
-		engine.GetRenderQueue().SetDebugBypassIndirect(false);
+		ServiceContainer& s = context.services;
+
+		m_prevForceVisible = s.Get<RenderQueue>().IsDebugForceVisible();
+		m_prevBypassIndirect = s.Get<RenderQueue>().IsDebugBypassIndirect();
+		s.Get<RenderQueue>().SetDebugForceVisible(true);
+		s.Get<RenderQueue>().SetDebugBypassIndirect(false);
 
 		// ── Pipeline ──────────────────────────────────────────────────────────
-		const VkDescriptorSetLayout bindlessLayout = engine.GetBindlessManager().GetLayout();
-		// Voxel shader only uses bindless set 0; no tiled-light set needed.
+		const VkDescriptorSetLayout bindlessLayout = s.Get<BindlessManager>().GetLayout();
 		const std::array<VkDescriptorSetLayout, 1> setLayouts{ bindlessLayout };
 
-		m_pipeline = engine.CreateGraphicsPipeline({
+		m_pipeline = s.Get<AssetManager>().CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://voxel_chunk.slang.spv",
-		        .colorFormat = aether::AetherCore::GetForwardColorFormat(),
-		        .depthFormat = engine.GetSwapchainDepthFormat(),
+		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		        .depthFormat = s.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 
 		// ── Block registry ────────────────────────────────────────────────────
-		m_blockRegistry.Initialize(engine, kAtlasPath);
+		m_blockRegistry.Initialize(s, kAtlasPath);
 
 		m_blockRegistry.Register(voxel::BlockId::Stone, kUVStone);
 		m_blockRegistry.Register(voxel::BlockId::Dirt, kUVDirt);
@@ -150,15 +152,13 @@ namespace aether::app
 		        /* bottom */ kUVDirt);
 
 		// ── Chunk manager ─────────────────────────────────────────────────────
-		m_chunkManager.Initialize(engine, m_blockRegistry, &m_pipeline);
+		m_chunkManager.Initialize(s, m_blockRegistry, &m_pipeline);
 
 		// ── Terrain ───────────────────────────────────────────────────────────
 		GenerateTerrain();
-		// Mesh uploads are throttled by ChunkManager::kMaxUploadsPerFrame.
-		// The first few frames of OnUpdate will progressively upload all chunks.
 
 		// ── Camera ────────────────────────────────────────────────────────────
-		m_camera = context.cameras->Create({
+		m_camera = s.Get<CameraManager>().Create({
 		        .mode = aether::CameraMode::Free,
 		        .position = { 0.0f, static_cast<float>(kBaseHeight) + 24.0f, 48.0f },
 		        .yaw = 180.0f,
@@ -166,24 +166,25 @@ namespace aether::app
 		        .moveSpeed = 20.0f,
 		        .lookSpeed = 0.14f,
 		});
-		context.cameras->SetMainCamera(m_camera);
+		s.Get<CameraManager>().SetMainCamera(m_camera);
 
 		// ── Lighting: bright directional, gentle ambient ───────────────────────
-		engine.SetDirectionalLight(glm::normalize(glm::vec3(0.4f, -1.0f, 0.3f)), 2.2f);
-		engine.SetAmbientLight(glm::vec3(0.25f, 0.32f, 0.40f));
+		s.Get<Renderer>().SetDirectionalLight(glm::normalize(glm::vec3(0.4f, -1.0f, 0.3f)), 2.2f);
+		s.Get<Renderer>().SetAmbientLight(glm::vec3(0.25f, 0.32f, 0.40f));
 	}
 
 	void VoxelWorldLayer::OnDetach(LayerContext& context)
 	{
-		context.engine.GetRenderQueue().SetDebugForceVisible(m_prevForceVisible);
-		context.engine.GetRenderQueue().SetDebugBypassIndirect(m_prevBypassIndirect);
-		m_chunkManager.Shutdown(context.engine);
-		m_blockRegistry.Shutdown(context.engine);
+		ServiceContainer& s = context.services;
+		s.Get<RenderQueue>().SetDebugForceVisible(m_prevForceVisible);
+		s.Get<RenderQueue>().SetDebugBypassIndirect(m_prevBypassIndirect);
+		m_chunkManager.Shutdown(s);
+		m_blockRegistry.Shutdown(s);
 		m_pipeline.Destroy();
 
 		if (m_camera.IsValid())
 		{
-			context.cameras->Destroy(m_camera);
+			s.Get<CameraManager>().Destroy(m_camera);
 		}
 
 		INFO(LogCategory::App, "VoxelWorldLayer detached.");
@@ -191,11 +192,11 @@ namespace aether::app
 
 	void VoxelWorldLayer::OnUpdate(LayerContext& context)
 	{
-		const aether::Camera* cam = context.cameras->TryGet(m_camera);
+		const aether::Camera* cam = context.Get<CameraManager>().TryGet(m_camera);
 		const glm::vec3 playerPos = cam ? cam->GetPosition() : glm::vec3(0.0f);
 
 		m_chunkManager.Update(playerPos);
-		m_chunkManager.SubmitDraws(context.engine);
+		m_chunkManager.SubmitDraws(context.services);
 	}
 
 	void VoxelWorldLayer::OnGui(LayerContext& context)
@@ -230,7 +231,7 @@ namespace aether::app
 		ImGui::Text("%d", kTotalHeight);
 		ImGui::NextColumn();
 
-		const aether::Camera* cam = context.cameras ? context.cameras->TryGet(m_camera) : nullptr;
+		const aether::Camera* cam = context.Get<CameraManager>().TryGet(m_camera);
 		if (cam)
 		{
 			const glm::vec3 p = cam->GetPosition();
@@ -271,7 +272,7 @@ namespace aether::app
 		ImGui::TextColored(stats.submittedDrawsLastFrame > 1 ? kGood : kWarn, "%u", stats.submittedDrawsLastFrame);
 		ImGui::NextColumn();
 
-		const bool bypass = context.engine.GetRenderQueue().IsDebugBypassIndirect();
+		const bool bypass = context.Get<RenderQueue>().IsDebugBypassIndirect();
 		ImGui::Text("Draw path");
 		ImGui::NextColumn();
 		ImGui::TextColored(bypass ? kWarn : kGood, bypass ? "Bypass indirect" : "Indirect");

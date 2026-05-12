@@ -3,10 +3,14 @@
 #include <algorithm>
 #include <cassert>
 
-#include "scene/AetherCore.hpp"
+#include "assets/AssetSubsystem.hpp"
+#include "mesh/MeshArena.hpp"
+#include "mesh/MeshUploadQueue.hpp"
+#include "passes/ShadowService.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderQueue.hpp"
-#include "passes/ShadowService.hpp"
+
+using namespace aether;
 
 namespace voxel
 {
@@ -47,21 +51,22 @@ namespace voxel
 
 	// ── Lifecycle ─────────────────────────────────────────────────────────────
 
-	void ChunkManager::Initialize(aether::AetherCore& core, BlockRegistry& registry, const aether::GraphicsPipeline* pipeline, int renderRadius)
+	void ChunkManager::Initialize(ServiceContainer& services, BlockRegistry& registry, const aether::GraphicsPipeline* pipeline, int renderRadius)
 	{
-		m_core = &core;
+		m_services = &services;
 		m_registry = &registry;
 		m_pipeline = pipeline;
 		m_renderRadius = renderRadius;
 	}
 
-	void ChunkManager::Shutdown(aether::AetherCore& core)
+	void ChunkManager::Shutdown(ServiceContainer& services)
 	{
+		MeshArena& arena = services.Get<MeshArena>();
 		for (auto& [coord, chunk]: m_chunks)
 		{
 			if (chunk)
 			{
-				chunk->mesh.Reset(core.GetMeshArena());
+				chunk->mesh.Reset(arena);
 			}
 		}
 		m_chunks.clear();
@@ -161,18 +166,21 @@ namespace voxel
 
 	bool ChunkManager::RebuildChunk(const glm::ivec3& chunkCoord, Chunk& chunk)
 	{
+		MeshArena& arena = m_services->Get<MeshArena>();
+		MeshUploadQueue& uploadQueue = m_services->Get<MeshUploadQueue>();
+
 		m_mesher.Build(chunk.paddedBlocks.data(), *m_registry, ChunkOrigin(chunkCoord));
 
 		if (m_mesher.VertexCount() == 0)
 		{
 			chunk.isEmpty = true;
-			chunk.mesh.Reset(m_core->GetMeshArena());
+			chunk.mesh.Reset(arena);
 			chunk.needsRebuild = false;
 			return true;
 		}
 
 		chunk.isEmpty = false;
-		const bool uploaded = chunk.mesh.Rebuild(m_mesher.Vertices(), m_mesher.VertexCount(), sizeof(aether::VoxelVertex), m_mesher.Indices(), m_mesher.IndexCount(), m_core->GetMeshArena(), m_core->GetMeshUploadQueue());
+		const bool uploaded = chunk.mesh.Rebuild(m_mesher.Vertices(), m_mesher.VertexCount(), sizeof(aether::VoxelVertex), m_mesher.Indices(), m_mesher.IndexCount(), arena, uploadQueue);
 
 		if (uploaded)
 		{
@@ -186,7 +194,7 @@ namespace voxel
 	void ChunkManager::Update(const glm::vec3& playerWorldPos)
 	{
 		(void) playerWorldPos;
-		assert(m_core && m_registry && m_pipeline);
+		assert(m_services && m_registry && m_pipeline);
 		m_rebuildAttemptsLastFrame = 0;
 		m_rebuildUploadsLastFrame = 0;
 		m_rebuildFailuresLastFrame = 0;
@@ -230,16 +238,19 @@ namespace voxel
 			// permanently starving all later entries in unordered_map iteration.
 		}
 
-		if (m_core->GetMeshUploadQueue().HasPendingUploads())
+		if (m_services->Get<MeshUploadQueue>().HasPendingUploads())
 		{
-			m_core->FlushMeshUploads();
+			m_services->Get<AssetSubsystem>().FlushMeshUploads();
 		}
 	}
 
-	void ChunkManager::SubmitDraws(aether::AetherCore& core)
+	void ChunkManager::SubmitDraws(ServiceContainer& services)
 	{
 		assert(m_pipeline);
 		m_submittedDrawsLastFrame = 0;
+
+		RenderQueue& renderQueue = services.Get<RenderQueue>();
+		ShadowService& shadowService = services.Get<ShadowService>();
 
 		for (const auto& [coord, chunk]: m_chunks)
 		{
@@ -257,8 +268,8 @@ namespace voxel
 			cmd.modelMatrix = glm::mat4(1.0f); // vertices already in world space
 			cmd.worldBoundingSphere = glm::vec4(glm::vec3(ChunkOrigin(coord)) + glm::vec3(kChunkSize * 0.5f), glm::length(glm::vec3(kChunkSize * 0.5f)));
 
-			core.GetRenderQueue().Submit(cmd);
-			core.GetShadowService().SubmitShadowCaster(cmd);
+			renderQueue.Submit(cmd);
+			shadowService.SubmitShadowCaster(cmd);
 			++m_submittedDrawsLastFrame;
 		}
 	}

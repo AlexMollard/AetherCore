@@ -6,9 +6,10 @@
 
 #include "BlockDef.hpp"
 
+class ServiceContainer;
+
 namespace aether
 {
-	class AetherCore;
 	class Texture;
 } // namespace aether
 
@@ -18,7 +19,7 @@ namespace voxel
 	//
 	// At startup, call:
 	//   BlockRegistry reg;
-	//   reg.Initialize(core, "assets://textures/blocks/atlas.png");
+	//   reg.Initialize(services, "assets://textures/blocks/atlas.png");
 	//   reg.Register(BlockId::Dirt,  { .uvMin={0,0}, .uvMax={0.125f,0.125f} }, ...);
 	//
 	// The atlas texture is loaded once and registered with the engine bindless system.
@@ -30,8 +31,8 @@ namespace voxel
 
 		// Initialize and load the atlas texture.
 		// Returns the bindless slot of the atlas for use in DrawCommand.materialIndex.
-		std::uint32_t Initialize(aether::AetherCore& core, std::string_view atlasPath);
-		void Shutdown(aether::AetherCore& core);
+		std::uint32_t Initialize(ServiceContainer& services, std::string_view atlasPath);
+		void Shutdown(ServiceContainer& services);
 
 		// Register a block type with per-face UV rects.
 		void Register(BlockId id, const BlockDef& def);

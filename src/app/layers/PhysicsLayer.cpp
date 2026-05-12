@@ -16,21 +16,21 @@ namespace aether::app
 		// calls AddBoxBody / AddSphereBody, so physics must already be alive.
 		auto physics = std::make_unique<aether::PhysicsSystem>();
 		m_physics = physics.get();
-		context.world->RegisterSystem(std::move(physics));
+		context.Get<World>().RegisterSystem(std::move(physics));
 
 		// Now register the game system (will call OptimizeBroadPhase internally).
 		auto gameSystem = std::make_unique<PhysicsGameSystem>();
-		gameSystem->Init(context.engine, *context.assets, *context.cameras, *context.input, *m_physics);
+		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>(), *m_physics);
 		m_gameSystem = gameSystem.get();
-		context.world->RegisterSystem(std::move(gameSystem));
+		context.Get<World>().RegisterSystem(std::move(gameSystem));
 	}
 
 	void PhysicsLayer::OnDetach(LayerContext& context)
 	{
 		// Game system must be removed before physics system so its
 		// OnUnregister can still call RemoveBody.
-		context.world->UnregisterSystem("PhysicsGameSystem");
-		context.world->UnregisterSystem("PhysicsSystem");
+		context.Get<World>().UnregisterSystem("PhysicsGameSystem");
+		context.Get<World>().UnregisterSystem("PhysicsSystem");
 		m_gameSystem = nullptr;
 		m_physics = nullptr;
 	}

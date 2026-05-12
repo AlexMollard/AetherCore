@@ -6,12 +6,15 @@
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "scene/AetherCore.hpp"
-#include "utils/AssetManager.hpp"
 #include "camera/Camera.hpp"
+#include "camera/LightingManager.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
+#include "passes/PostProcessStack.hpp"
+#include "rendering/RenderTargetService.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "FileSystem.hpp"
 #include "platform/Input.hpp"
+#include "utils/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
 
@@ -81,9 +84,9 @@ namespace aether::app
 		return first.GetAnimationName(first.GetCurrentAnimation());
 	}
 
-	void SandboxGameSystem::Init(aether::AetherCore& engine, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
+	void SandboxGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
 	{
-		m_engine = &engine;
+		m_services = &services;
 		m_assets = &assets;
 		m_cameras = &cameras;
 		m_input = &input;
@@ -92,29 +95,29 @@ namespace aether::app
 	void SandboxGameSystem::OnRegister(aether::World& world)
 	{
 		INFO(aether::LogCategory::App, "SandboxGameSystem registered.");
-		if (!m_engine || !m_assets || !m_cameras || !m_input)
+		if (!m_services || !m_assets || !m_cameras || !m_input)
 		{
 			WARN(aether::LogCategory::App, "SandboxGameSystem not initialized with dependencies!");
 			return;
 		}
 
 		// ── Shared pipeline ───────────────────────────────────────────────────
-		const VkDescriptorSetLayout bindlessLayout = m_engine->GetBindlessManager().GetLayout();
-		const VkDescriptorSetLayout lightingLayout = m_engine->GetLightingSetLayout();
+		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
+		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
 		m_pipeline = m_assets->CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
-		        .colorFormat = aether::AetherCore::GetForwardColorFormat(),
-		        .depthFormat = m_engine->GetSwapchainDepthFormat(),
+		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		        .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 
-		m_cubeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Cube);
-		m_quadMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Quad);
-		m_planeMesh = &m_engine->GetPrimitiveMesh(aether::PrimitiveMesh::Plane);
+		m_cubeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
+		m_quadMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Quad);
+		m_planeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Plane);
 
 		constexpr std::string_view kDebugMaterialPreset = "assets://materials/MyPBRFolder";
 		if (aether::io::FileSystem::Exists(kDebugMaterialPreset))
@@ -272,7 +275,7 @@ namespace aether::app
 		});
 
 		m_cameras->SetMainCamera(m_orbitCamera);
-		m_rttTarget = m_engine->CreateCameraRenderTarget(m_rttCamera, { 512, 512 });
+		m_rttTargetId = m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, { 512, 512 });
 
 		// ── Point lights scattered across the fox field ───────────────────────
 		{
@@ -310,8 +313,8 @@ namespace aether::app
 				world.EmplaceOrReplace<SandboxEntityTag>(markerEntity, SandboxEntityTag{});
 				world.EmplaceOrReplace<PointLightMarkerTag>(markerEntity, PointLightMarkerTag{ .index = li });
 			}
-			m_engine->GetRenderer().SetPointLights(m_pointLights);
-			const auto rendererLights = m_engine->GetRenderer().GetPointLights();
+			m_services->Get<Renderer>().SetPointLights(m_pointLights);
+			const auto rendererLights = m_services->Get<Renderer>().GetPointLights();
 			m_pointLights.assign(rendererLights.begin(), rendererLights.end());
 		}
 
@@ -320,7 +323,7 @@ namespace aether::app
 
 	void SandboxGameSystem::Update(aether::World& world, float dt)
 	{
-		if (!m_engine || !m_cameras || !m_input)
+		if (!m_services || !m_cameras || !m_input)
 		{
 			return;
 		}
@@ -514,23 +517,23 @@ namespace aether::app
 				markerView.get<aether::TransformComponent>(e).localToWorld = marker;
 			}
 
-			m_engine->GetRenderer().SetPointLights(m_pointLights);
+			m_services->Get<Renderer>().SetPointLights(m_pointLights);
 		}
 
 		// ── Input: T = cycle tonemap, F = toggle FXAA, C = swap camera ────────
 		{
 			if (m_input->IsKeyPressed(aether::Key::T))
 			{
-				const auto next = static_cast<aether::TonemapMode>((static_cast<int>(m_engine->GetTonemapMode()) + 1) % 3);
-				m_engine->GetRenderer().SetTonemapMode(next);
+				const auto next = static_cast<aether::TonemapMode>((static_cast<int>(m_services->Get<Renderer>().GetTonemapMode()) + 1) % 3);
+				m_services->Get<Renderer>().SetTonemapMode(next);
 				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
 				INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 			}
 
 			if (m_input->IsKeyPressed(aether::Key::F))
 			{
-				const bool enabled = !m_engine->GetRenderer().IsFxaaEnabled();
-				m_engine->GetRenderer().SetFxaaEnabled(enabled);
+				const bool enabled = !m_services->Get<Renderer>().IsFxaaEnabled();
+				m_services->Get<Renderer>().SetFxaaEnabled(enabled);
 				INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
 			}
 
@@ -550,7 +553,7 @@ namespace aether::app
 		}
 
 		// ── Feed RTT output into the orbit cube ───────────────────────────────
-		const uint32_t rtSlot = m_engine->GetRenderTargetBindlessSlot(m_rttTarget);
+		const uint32_t rtSlot = m_services->Get<RenderTargetService>().GetRenderTargetBindlessSlot(m_rttTargetId);
 		if (rtSlot != aether::Material::kNoTexture)
 		{
 			m_rttFeedMaterial.albedoSlot = rtSlot;
@@ -569,7 +572,7 @@ namespace aether::app
 
 	void SandboxGameSystem::OnUnregister(aether::World& world)
 	{
-		if (!m_engine || !m_assets || !m_cameras)
+		if (!m_services || !m_assets || !m_cameras)
 		{
 			return;
 		}
@@ -611,8 +614,8 @@ namespace aether::app
 		m_pointLightMarkerMaterials.clear();
 		m_pointLights.clear();
 
-		m_engine->DestroyCameraRenderTarget(m_rttTarget);
-		m_rttTarget = {};
+		m_services->Get<RenderTargetService>().DestroyCameraRenderTarget(m_rttTargetId);
+		m_rttTargetId = 0;
 
 		if (m_orbitCamera.IsValid())
 		{
@@ -630,8 +633,8 @@ namespace aether::app
 			m_rttCamera = {};
 		}
 
-		m_engine->GetRenderer().ClearPointLights();
-		m_engine->GetRenderer().ClearSpotLights();
+		m_services->Get<Renderer>().ClearPointLights();
+		m_services->Get<Renderer>().ClearSpotLights();
 
 		for (aether::Texture& texture: m_debugMaterialTextures)
 		{

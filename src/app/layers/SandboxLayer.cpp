@@ -37,14 +37,14 @@ namespace aether::app
 		INFO(LogCategory::App, "Sandbox layer attached.");
 
 		auto gameSystem = std::make_unique<SandboxGameSystem>();
-		gameSystem->Init(context.engine, *context.assets, *context.cameras, *context.input);
+		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());
 		m_gameSystem = gameSystem.get();
-		context.world->RegisterSystem(std::move(gameSystem));
+		context.Get<World>().RegisterSystem(std::move(gameSystem));
 	}
 
 	void SandboxLayer::OnDetach(LayerContext& context)
 	{
-		context.world->UnregisterSystem("SandboxGameSystem");
+		context.Get<World>().UnregisterSystem("SandboxGameSystem");
 		m_gameSystem = nullptr;
 		(void) context;
 	}
@@ -68,7 +68,7 @@ namespace aether::app
 
 		ImGui::Text("Camera");
 		ImGui::NextColumn();
-		ImGui::TextUnformatted(GetActiveCameraName(context.cameras->GetMainCamera()));
+		ImGui::TextUnformatted(GetActiveCameraName(context.Get<CameraManager>().GetMainCamera()));
 		ImGui::NextColumn();
 
 		if (m_gameSystem)
