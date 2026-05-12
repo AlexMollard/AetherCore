@@ -583,4 +583,12 @@ namespace aether
 
 		return (requested.usage & ~existing.GetUsage()) == 0;
 	}
+
+	void ResourcePool::Shutdown()
+	{
+		m_physicalBuffers.clear();
+		m_physicalImages.clear();
+		m_virtualBuffers.clear();
+		m_virtualImages.clear();
+	}
 } // namespace aether

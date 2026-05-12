@@ -21,6 +21,7 @@ namespace aether
 	{
 	public:
 		void Initialize(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool);
+		void Destroy();
 		[[nodiscard]] const Mesh& Get(PrimitiveMesh primitive) const;
 
 	private:

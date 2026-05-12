@@ -124,6 +124,15 @@ namespace aether
 		}
 	}
 
+	void PrimitiveMeshes::Destroy()
+	{
+		m_triangle.Destroy();
+		m_quad.Destroy();
+		m_cube.Destroy();
+		m_plane.Destroy();
+		m_sphere.Destroy();
+	}
+
 	const Mesh& PrimitiveMeshes::Get(PrimitiveMesh primitive) const
 	{
 		switch (primitive)

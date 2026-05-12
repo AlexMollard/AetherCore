@@ -97,6 +97,8 @@ namespace aether
 	class ResourcePool
 	{
 	public:
+		void Shutdown();
+
 		struct BindlessImageConfig
 		{
 			BindlessManager* manager = nullptr;

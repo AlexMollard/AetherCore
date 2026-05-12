@@ -1,0 +1,132 @@
+#include "rendering/RenderingSubsystem.hpp"
+
+#include "ServiceContainer.hpp"
+#include "camera/CameraManager.hpp"
+#include "camera/LightingManager.hpp"
+#include "material/BindlessManager.hpp"
+#include "material/MaterialBuffer.hpp"
+#include "vulkan/Swapchain.hpp"
+#include "vulkan/VulkanContext.hpp"
+
+namespace aether
+{
+	void RenderingSubsystem::Init(ServiceContainer& services)
+	{
+		VulkanContext& vk = services.Get<VulkanContext>();
+		Swapchain& swapchain = services.Get<Swapchain>();
+		BindlessManager& bindless = services.Get<BindlessManager>();
+		CameraManager& cameras = services.Get<CameraManager>();
+		LightingManager& lighting = services.Get<LightingManager>();
+		MaterialBuffer& materials = services.Get<MaterialBuffer>();
+
+		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
+		m_frameConstantsBuffer.Initialize(vk);
+
+		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), 65536);
+		m_renderQueue.SetDebugForceVisible(false);
+		m_renderQueue.SetDebugBypassIndirect(false);
+
+		m_shadowService.Initialize(vk, swapchain);
+		m_renderTargetService.Initialize(vk);
+		m_cullPass.Initialize(vk.GetDevice().device);
+
+		m_postProcessStack = PostProcessStack::Create({
+		        .device = vk.GetDevice().device,
+		        .allocator = vk.GetAllocator(),
+		        .extent = swapchain.GetExtent(),
+		        .swapchainFormat = swapchain.GetImageFormat(),
+		        .bindlessManager = &bindless,
+		        .renderGraph = &m_renderGraph,
+		});
+
+		m_renderer.Initialize(&m_postProcessStack);
+
+		m_skyboxPass = SkyboxPass::Create({
+		        .device = vk.GetDevice().device,
+		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
+		});
+
+		m_renderTargetService.BindRuntime(
+		        m_renderGraph,
+		        bindless,
+		        cameras,
+		        lighting,
+		        m_renderer,
+		        materials,
+		        m_cullPass,
+		        /*frameIndexCallback=*/[this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
+		        vk.GetDevice().device,
+		        swapchain.GetDepthFormat(),
+		        PostProcessStack::GetForwardColorFormat());
+
+		RegisterPasses(services);
+	}
+
+	void RenderingSubsystem::Shutdown(ServiceContainer& services)
+	{
+		VulkanContext& vk = services.Get<VulkanContext>();
+
+		m_postProcessStack.Destroy();
+		m_skyboxPass.Destroy();
+		m_cullPass.Shutdown();
+		m_frameConstantsBuffer.Shutdown();
+		m_renderQueue.Shutdown();
+		m_shadowService.Shutdown(vk.GetDevice().device);
+		m_renderTargetService.Shutdown();
+		m_renderGraph.Shutdown();
+	}
+
+	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)
+	{
+		VulkanContext& vk = services.Get<VulkanContext>();
+		Swapchain& swapchain = services.Get<Swapchain>();
+		BindlessManager& bindless = services.Get<BindlessManager>();
+
+		m_shadowService.RecreatePipeline(vk.GetDevice().device, swapchain.GetDepthFormat());
+
+		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
+		const float exposure = m_postProcessStack.GetExposure();
+		const bool fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
+
+		m_postProcessStack.Destroy();
+		m_renderGraph.Clear();
+		m_postProcessStack = PostProcessStack::Create({
+		        .device = vk.GetDevice().device,
+		        .allocator = vk.GetAllocator(),
+		        .extent = swapchain.GetExtent(),
+		        .swapchainFormat = swapchain.GetImageFormat(),
+		        .bindlessManager = &bindless,
+		        .renderGraph = &m_renderGraph,
+		});
+		m_postProcessStack.SetTonemapMode(tonemapMode);
+		m_postProcessStack.SetExposure(exposure);
+		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
+
+		m_renderTargetService.OnRenderGraphReset(vk.GetDevice().device, swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
+
+		RegisterPasses(services);
+	}
+
+	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
+	{
+		LightingManager& lighting = services.Get<LightingManager>();
+
+		m_renderPipelineCoordinator.RegisterPasses(
+		        m_renderGraph,
+		        m_skyboxPass,
+		        m_postProcessStack,
+		        m_shadowService,
+		        services.Get<BindlessManager>(),
+		        services.Get<VulkanContext>().GetDevice().device,
+		        services.Get<Swapchain>().GetDepthFormat(),
+		        m_cullPass,
+		        m_renderQueue,
+		        m_forwardPass,
+		        [this, &lighting]()
+		        {
+			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
+			        return lighting.GetSet(frameIdx);
+		        },
+		        m_renderTargetService);
+	}
+} // namespace aether
