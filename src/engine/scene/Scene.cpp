@@ -1,7 +1,6 @@
 #include "scene/Scene.hpp"
 
 #include "mesh/Mesh.hpp"
-#include "rendering/RenderQueue.hpp"
 
 namespace aether
 {
@@ -31,19 +30,5 @@ namespace aether
 	void Scene::SetViewProjection(const glm::mat4& viewProjection)
 	{
 		m_viewProjection = viewProjection;
-	}
-
-	void Scene::FlushToQueue(RenderQueue& queue) const
-	{
-		for (const auto& [id, obj]: m_objects)
-		{
-			queue.Submit({
-			        .pipeline = obj.desc.pipeline,
-			        .mesh = obj.desc.mesh,
-			        .instanceCount = 1,
-			        .modelMatrix = obj.transform,
-			        .materialIndex = obj.desc.materialIndex,
-			});
-		}
 	}
 } // namespace aether

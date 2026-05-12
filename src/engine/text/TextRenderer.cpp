@@ -1,17 +1,20 @@
 #include "text/TextRenderer.hpp"
 
-#include "scene/AetherCore.hpp"
+#include "ServiceContainer.hpp"
+#include "vulkan/VulkanContext.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "material/BindlessManager.hpp"
 #include "FileSystem.hpp"
 #include "utils/Logger.hpp"
-#include "vulkan/VulkanContext.hpp"
 #include "ui/QuadRenderer.hpp"
 
 namespace aether
 {
-	void TextRenderer::Init(AetherCore& engine, std::string_view fontVfsPath, int glyphSize)
+	void TextRenderer::Init(ServiceContainer& services, std::string_view fontVfsPath, int glyphSize)
 	{
-		m_engine = &engine;
+		m_vkCtx = &services.Get<VulkanContext>();
+		m_bindlessMgr = &services.Get<BindlessManager>();
+		m_swapchain = &services.Get<Swapchain>();
 
 		if (!io::FileSystem::Exists(fontVfsPath))
 		{
@@ -22,8 +25,8 @@ namespace aether
 			return;
 		}
 
-		const VulkanContext& vk = engine.GetVulkanContext();
-		m_fontAtlas.Build(fontVfsPath, glyphSize, vk.GetDevice().device, vk.GetAllocator(), vk.GetGraphicsQueue(), vk.GetGraphicsQueueFamily(), engine.GetBindlessManager());
+		const VulkanContext& vk = *m_vkCtx;
+		m_fontAtlas.Build(fontVfsPath, glyphSize, vk.GetDevice().device, vk.GetAllocator(), vk.GetGraphicsQueue(), vk.GetGraphicsQueueFamily(), *m_bindlessMgr);
 
 		m_ready = true;
 		INFO(LogCategory::Engine, "TextRenderer: font atlas ready.");
@@ -32,18 +35,20 @@ namespace aether
 	void TextRenderer::Shutdown()
 	{
 		m_fontAtlas.Destroy();
-		m_engine = nullptr;
+		m_vkCtx = nullptr;
+		m_bindlessMgr = nullptr;
+		m_swapchain = nullptr;
 		m_ready = false;
 	}
 
 	void TextRenderer::DrawTextLayered(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color, std::int32_t layer, QuadRenderer& qr)
 	{
-		if (m_engine == nullptr || !m_ready || !m_fontAtlas.IsValid() || text.empty())
+		if (m_vkCtx == nullptr || !m_ready || !m_fontAtlas.IsValid() || text.empty())
 		{
 			return;
 		}
 
-		const glm::vec2 origin = ResolveUiPointPx(m_engine->GetSwapchainExtent(), point);
+		const glm::vec2 origin = ResolveUiPointPx(m_swapchain->GetExtent(), point);
 		float cursorX = origin.x;
 		const std::uint32_t atlasSlot = m_fontAtlas.GetBindlessSlot();
 

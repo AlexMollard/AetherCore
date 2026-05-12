@@ -52,12 +52,26 @@ namespace aether
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
-	private:
-		friend class AetherCore; // Only AetherCore initializes/owns the AssetManager.
-
 		// Bind runtime dependencies once during engine startup.
-		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, RenderQueue& renderQueue, ShadowService& shadowService, RenderTargetService& renderTargetService, World& world, VkCommandPool uploadPool);
+		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, VkCommandPool uploadPool);
 
+		// Set rendering dependencies after the rendering subsystem initializes.
+		void SetRenderQueue(RenderQueue& renderQueue)
+		{
+			m_renderQueue = &renderQueue;
+		}
+
+		void SetShadowService(ShadowService& shadowService)
+		{
+			m_shadowService = &shadowService;
+		}
+
+		void SetRenderTargetService(RenderTargetService& renderTargetService)
+		{
+			m_renderTargetService = &renderTargetService;
+		}
+
+	private:
 		VulkanContext* m_context = nullptr;
 		BindlessManager* m_bindlessManager = nullptr;
 		MaterialBuffer* m_materialBuffer = nullptr;

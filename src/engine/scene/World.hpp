@@ -16,8 +16,8 @@ namespace aether
 	// Lightweight ECS world backed by entt::registry.
 	//
 	// Entities must have at minimum a PipelineComponent + MeshComponent +
-	// TransformComponent to be emitted by FlushToQueue().  MaterialComponent is
-	// optional - entities without it fall back to vertex colour in the shader.
+	// TransformComponent to be emitted by the world renderer.  MaterialComponent
+	// is optional - entities without it fall back to vertex colour in the shader.
 	class World
 	{
 	public:
@@ -103,12 +103,6 @@ namespace aether
 		{
 			return m_registry;
 		}
-
-		// ── Engine-internal ───────────────────────────────────────────────────
-
-		// Emits a DrawCommand for every entity that has Pipeline + Mesh + Transform.
-		// MaterialComponent is used if present, otherwise albedoSlot = kNoTexture.
-		void FlushToQueue(RenderQueue& queue) const;
 
 		// ── Systems (game logic layers operating on the world) ──────────────────
 		// Register a system to be updated each frame.

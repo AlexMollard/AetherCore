@@ -13,9 +13,14 @@
 #include "ui/UiLayout.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
+class ServiceContainer;
+
 namespace aether
 {
-	class AetherCore;
+	class RenderGraph;
+	class VulkanContext;
+	class BindlessManager;
+	class Swapchain;
 
 	class QuadRenderer
 	{
@@ -35,8 +40,8 @@ namespace aether
 		QuadRenderer(const QuadRenderer&) = delete;
 		QuadRenderer& operator=(const QuadRenderer&) = delete;
 
-		void Init(AetherCore& engine, std::string_view passName);
-		void Shutdown(AetherCore& engine);
+		void Init(ServiceContainer& services, std::string_view passName);
+		void Shutdown(ServiceContainer& services);
 
 		// Must be called by the game thread before DrawRect() each frame.
 		void SetWriteSlot(std::uint32_t slot)
@@ -48,7 +53,7 @@ namespace aether
 		void DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
 		void DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
 		// Draws a bindless-sampled texture on a quad. uvRect = (u0, v0, u1, v1).
-		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), std::int32_t layer = 0, float cornerRadiusPx = 0.f);
+		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), std::int32_t layer = 0);
 		// Draws one SDF font glyph. glyphRectPx is pixel-space (x,y,w,h); uvRect is atlas UVs.
 		// Routes through the quad sort pass so text and quads share the same layer ordering.
 		void DrawGlyph(glm::vec4 glyphRectPx, glm::vec4 uvRect, glm::vec4 color, std::uint32_t atlasSlot, std::int32_t layer);
@@ -118,7 +123,10 @@ namespace aether
 
 		std::string m_passName;
 		std::string m_buildPassName;
-		AetherCore* m_engine = nullptr;
+		VulkanContext* m_vkCtx = nullptr;
+		RenderGraph* m_renderGraph = nullptr;
+		BindlessManager* m_bindlessMgr = nullptr;
+		Swapchain* m_swapchain = nullptr;
 		GraphicsPipeline m_pipeline;
 		VkPipeline m_computePipeline = VK_NULL_HANDLE;
 		VkPipelineLayout m_computePipelineLayout = VK_NULL_HANDLE;

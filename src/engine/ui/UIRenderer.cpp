@@ -2,28 +2,29 @@
 
 #include <string>
 
-#include "scene/AetherCore.hpp"
+#include "ServiceContainer.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether
 {
-	void UIRenderer::Init(AetherCore& engine, std::string_view fontVfsPath, std::string_view passNamePrefix, int glyphSize)
+	void UIRenderer::Init(ServiceContainer& services, std::string_view fontVfsPath, std::string_view passNamePrefix, int glyphSize)
 	{
-		m_engine = &engine;
+		m_swapchain = &services.Get<Swapchain>();
 		m_currentLayer = 0;
 		m_layerStack.clear();
 		m_layerStack.push_back(0);
 
 		const std::string prefix(passNamePrefix);
 
-		m_quadRenderer.Init(engine, prefix + ".Quad");
-		m_textRenderer.Init(engine, fontVfsPath, glyphSize);
+		m_quadRenderer.Init(services, prefix + ".Quad");
+		m_textRenderer.Init(services, fontVfsPath, glyphSize);
 	}
 
-	void UIRenderer::Shutdown(AetherCore& engine)
+	void UIRenderer::Shutdown(ServiceContainer& services)
 	{
 		m_textRenderer.Shutdown();
-		m_quadRenderer.Shutdown(engine);
-		m_engine = nullptr;
+		m_quadRenderer.Shutdown(services);
+		m_swapchain = nullptr;
 		m_currentLayer = 0;
 		m_layerStack.clear();
 		m_layerStack.push_back(0);
@@ -57,18 +58,18 @@ namespace aether
 		m_quadRenderer.DrawCircle(center, radiusPx, color, m_currentLayer);
 	}
 
-	void UIRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint, float cornerRadiusPx)
+	void UIRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint)
 	{
-		m_quadRenderer.DrawTexturedRect(rect, textureSlot, uvRect, tint, m_currentLayer, cornerRadiusPx);
+		m_quadRenderer.DrawTexturedRect(rect, textureSlot, uvRect, tint, m_currentLayer);
 	}
 
 	void UIRenderer::PushClipRect(const UiRect& rect)
 	{
-		if (m_engine == nullptr)
+		if (m_swapchain == nullptr)
 		{
 			return;
 		}
-		const glm::vec4 px = ResolveUiRectPx(m_engine->GetSwapchainExtent(), rect);
+		const glm::vec4 px = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
 		m_clipStack.push_back(px);
 		m_quadRenderer.SetClipRect(px);
 	}

@@ -20,7 +20,8 @@ namespace aether
 	class LightingManager
 	{
 	public:
-		void Initialize(const VulkanContext& context, const Renderer& renderer);
+		void Initialize(const VulkanContext& context);
+		void LinkRenderer(const Renderer& renderer);
 		void Shutdown();
 
 		void SetRttBinningEnabled(bool enabled)

@@ -9,17 +9,17 @@
 #include "ui/QuadRenderer.hpp"
 #include "text/TextRenderer.hpp"
 
+class ServiceContainer;
+
 namespace aether
 {
-	class AetherCore;
-
 	// High-level UI renderer that composes dedicated text and quad renderers.
 	class UIRenderer
 	{
 	public:
-		void Init(AetherCore& engine, std::string_view fontVfsPath, std::string_view passNamePrefix = "UIPass", int glyphSize = 48);
+		void Init(ServiceContainer& services, std::string_view fontVfsPath, std::string_view passNamePrefix = "UIPass", int glyphSize = 48);
 
-		void Shutdown(AetherCore& engine);
+		void Shutdown(ServiceContainer& services);
 
 		// Must be called once per frame on the game thread BEFORE any DrawText /
 		// DrawRect calls. Routes pending submissions into the correct double-buffer slot.
@@ -38,7 +38,7 @@ namespace aether
 		void DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color = glm::vec4(1.f));
 
 		// Draws a bindless-sampled texture. uvRect = (u0, v0, u1, v1).
-		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f), float cornerRadiusPx = 0.f);
+		void DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect = glm::vec4(0.f, 0.f, 1.f, 1.f), glm::vec4 tint = glm::vec4(1.f));
 
 		// Clip rect stack - draw calls that fall entirely outside the active clip
 		// are discarded on the CPU before reaching the GPU.
@@ -71,7 +71,7 @@ namespace aether
 		}
 
 	private:
-		AetherCore* m_engine = nullptr;
+		Swapchain* m_swapchain = nullptr;
 		std::int32_t m_currentLayer = 0;
 		std::vector<std::int32_t> m_layerStack{ 0 };
 		std::vector<glm::vec4> m_clipStack; // resolved pixel rects (x,y,w,h)

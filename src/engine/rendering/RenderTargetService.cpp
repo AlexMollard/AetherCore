@@ -10,6 +10,7 @@
 #include "camera/LightingManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/WorldRenderer.hpp"
 #include "scene/Scene.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -89,8 +90,8 @@ namespace aether
 		for (auto& [_, rt]: m_targets)
 		{
 			rt.renderQueue.SetWriteSlot(drawSlot);
-			scene.FlushToQueue(rt.renderQueue);
-			world.FlushToQueue(rt.renderQueue);
+			WorldRenderer::Flush(scene, rt.renderQueue);
+			WorldRenderer::Flush(world, rt.renderQueue);
 		}
 	}
 

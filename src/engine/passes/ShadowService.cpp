@@ -11,6 +11,7 @@
 #include "material/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
+#include "rendering/WorldRenderer.hpp"
 #include "scene/Scene.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -101,8 +102,8 @@ namespace aether
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
 			shadowQueue.SetWriteSlot(drawSlot);
-			scene.FlushToQueue(shadowQueue);
-			world.FlushToQueue(shadowQueue);
+			WorldRenderer::Flush(scene, shadowQueue);
+			WorldRenderer::Flush(world, shadowQueue);
 		}
 	}
 

@@ -9,6 +9,12 @@ namespace aether
 	class GraphicsPipeline;
 	class Mesh;
 	class RenderQueue;
+	class Scene;
+
+	namespace WorldRenderer
+	{
+		void Flush(const Scene& scene, RenderQueue& queue);
+	}
 
 	// Describes a renderable object when registering it with the Scene.
 	struct RenderObjectDesc
@@ -45,11 +51,9 @@ namespace aether
 			return m_viewProjection;
 		}
 
-		// Engine-internal: write all registered objects as DrawCommands into the
-		// queue.
-		void FlushToQueue(RenderQueue& queue) const;
-
 	private:
+		friend void WorldRenderer::Flush(const Scene& scene, RenderQueue& queue);
+
 		struct RenderObject
 		{
 			RenderObjectDesc desc;

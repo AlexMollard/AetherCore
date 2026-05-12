@@ -254,14 +254,11 @@ namespace aether
 		}
 	} // namespace
 
-	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, RenderQueue& renderQueue, ShadowService& shadowService, RenderTargetService& renderTargetService, World& world, const VkCommandPool uploadPool)
+	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, const VkCommandPool uploadPool)
 	{
 		m_context = &context;
 		m_bindlessManager = &bindlessManager;
 		m_materialBuffer = &materialBuffer;
-		m_renderQueue = &renderQueue;
-		m_shadowService = &shadowService;
-		m_renderTargetService = &renderTargetService;
 		m_world = &world;
 		m_uploadPool = uploadPool;
 	}

@@ -37,10 +37,10 @@ namespace aether
 		glm::uvec4 params2{ 0u };  // x=maxLightsPerTile
 	};
 
-	void LightingManager::Initialize(const VulkanContext& context, const Renderer& renderer)
+	void LightingManager::Initialize(const VulkanContext& context)
 	{
 		m_context = &context;
-		m_renderer = &renderer;
+		m_renderer = nullptr;
 
 		const VkDevice device = m_context->GetDevice().device;
 
@@ -108,6 +108,11 @@ namespace aether
 			EnsureBuffers(i, 1, 1, 1);
 			UpdateDescriptorSet(i);
 		}
+	}
+
+	void LightingManager::LinkRenderer(const Renderer& renderer)
+	{
+		m_renderer = &renderer;
 	}
 
 	void LightingManager::Shutdown()

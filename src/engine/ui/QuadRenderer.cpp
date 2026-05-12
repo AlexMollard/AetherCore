@@ -6,11 +6,14 @@
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
 
-#include "scene/AetherCore.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "FileSystem.hpp"
-#include "utils/Logger.hpp"
+#include "ServiceContainer.hpp"
+#include "material/BindlessManager.hpp"
 #include "rendering/RenderGraph.hpp"
+#include "utils/AssetManager.hpp"
+#include "utils/Logger.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -34,12 +37,12 @@ namespace aether
 
 	void QuadRenderer::EnsureComputePipeline()
 	{
-		if (m_engine == nullptr || m_computePipeline != VK_NULL_HANDLE)
+		if (m_vkCtx == nullptr || m_computePipeline != VK_NULL_HANDLE)
 		{
 			return;
 		}
 
-		const VkDevice device = m_engine->GetVulkanContext().GetDevice().device;
+		const VkDevice device = m_vkCtx->GetDevice().device;
 		const auto spirv = io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv");
 		if (spirv.empty())
 		{
@@ -89,7 +92,7 @@ namespace aether
 
 	void QuadRenderer::RegisterPass()
 	{
-		if (m_engine == nullptr)
+		if (m_vkCtx == nullptr)
 		{
 			return;
 		}
@@ -98,12 +101,11 @@ namespace aether
 		m_buildPassName = m_passName + ".Build";
 		const VkPipeline computePipeline = m_computePipeline;
 		const VkPipelineLayout computeLayout = m_computePipelineLayout;
-		m_engine->GetRenderGraph()
-		        .AddComputePass(m_buildPassName)
+		m_renderGraph->AddComputePass(m_buildPassName)
 		        .ExecuteCompute(
 		                [this, computePipeline, computeLayout](PassContext& ctx)
 		                {
-			                if (m_engine == nullptr)
+			                if (m_vkCtx == nullptr)
 			                {
 				                return;
 			                }
@@ -133,7 +135,7 @@ namespace aether
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-				                m_commandBuffers[frameSlot] = UniqueBuffer::Create(m_engine->GetVulkanContext().GetAllocator(), m_engine->GetVulkanContext().GetDevice().device, bufferInfo, allocInfo);
+				                m_commandBuffers[frameSlot] = UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo);
 				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(commandBytes);
 			                }
 
@@ -148,7 +150,7 @@ namespace aether
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-				                m_indirectBuffers[frameSlot] = UniqueBuffer::Create(m_engine->GetVulkanContext().GetAllocator(), m_engine->GetVulkanContext().GetDevice().device, indirectInfo, allocInfo);
+				                m_indirectBuffers[frameSlot] = UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, indirectInfo, allocInfo);
 			                }
 
 			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
@@ -204,14 +206,13 @@ namespace aether
 			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &computeToGraphicsDep);
 		                });
 
-		auto color = m_engine->GetRenderGraph().GetSwapchainColor();
-		m_engine->GetRenderGraph()
-		        .AddPass(m_passName)
+		auto color = m_renderGraph->GetSwapchainColor();
+		m_renderGraph->AddPass(m_passName)
 		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                if (m_engine == nullptr)
+			                if (m_vkCtx == nullptr)
 			                {
 				                return;
 			                }
@@ -246,7 +247,7 @@ namespace aether
 			                // rect draws can sample textures. Always bound even
 			                // for non-textured shapes since the pipeline layout
 			                // declares the set.
-			                const VkDescriptorSet bindlessSet = m_engine->GetBindlessManager().GetSet();
+			                const VkDescriptorSet bindlessSet = m_bindlessMgr->GetSet();
 			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
 
 			                const QuadPush push{
@@ -263,29 +264,31 @@ namespace aether
 
 	void QuadRenderer::EnsurePassRegistered()
 	{
-		if (!m_ready || m_engine == nullptr)
+		if (!m_ready || m_vkCtx == nullptr)
 		{
 			return;
 		}
 
-		if (!m_engine->GetRenderGraph().HasPass(m_passName))
+		if (!m_renderGraph->HasPass(m_passName))
 		{
 			RegisterPass();
 			INFO(LogCategory::Engine, "QuadRenderer: pass '{}' re-registered after graph reset.", m_passName);
 		}
 	}
 
-	void QuadRenderer::Init(AetherCore& engine, std::string_view passName)
+	void QuadRenderer::Init(ServiceContainer& services, std::string_view passName)
 	{
-		m_engine = &engine;
+		m_vkCtx = &services.Get<VulkanContext>();
+		m_renderGraph = &services.Get<RenderGraph>();
+		m_bindlessMgr = &services.Get<BindlessManager>();
+		m_swapchain = &services.Get<Swapchain>();
 		m_passName = std::string(passName);
 
-		// Include the global bindless layout so textured rects can sample textures.
-		const VkDescriptorSetLayout bindlessLayout = engine.GetBindlessManager().GetLayout();
+		const VkDescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
 
-		m_pipeline = engine.CreateGraphicsPipeline({
+		m_pipeline = services.Get<AssetManager>().CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://ui_shapes.slang.spv",
-		        .colorFormat = engine.GetSwapchainImageFormat(),
+		        .colorFormat = m_swapchain->GetImageFormat(),
 		        .depthFormat = VK_FORMAT_UNDEFINED,
 		        .depthTestEnable = false,
 		        .depthWriteEnable = false,
@@ -300,21 +303,21 @@ namespace aether
 		INFO(LogCategory::Engine, "QuadRenderer: pass '{}' registered.", m_passName);
 	}
 
-	void QuadRenderer::Shutdown(AetherCore& engine)
+	void QuadRenderer::Shutdown(ServiceContainer& services)
 	{
 		if (m_ready)
 		{
-			engine.GetRenderGraph().RemovePass(m_buildPassName);
-			engine.GetRenderGraph().RemovePass(m_passName);
+			services.Get<RenderGraph>().RemovePass(m_buildPassName);
+			services.Get<RenderGraph>().RemovePass(m_passName);
 			m_pipeline.Destroy();
 			if (m_computePipeline != VK_NULL_HANDLE)
 			{
-				vkDestroyPipeline(engine.GetVulkanContext().GetDevice().device, m_computePipeline, nullptr);
+				vkDestroyPipeline(services.Get<VulkanContext>().GetDevice().device, m_computePipeline, nullptr);
 				m_computePipeline = VK_NULL_HANDLE;
 			}
 			if (m_computePipelineLayout != VK_NULL_HANDLE)
 			{
-				vkDestroyPipelineLayout(engine.GetVulkanContext().GetDevice().device, m_computePipelineLayout, nullptr);
+				vkDestroyPipelineLayout(services.Get<VulkanContext>().GetDevice().device, m_computePipelineLayout, nullptr);
 				m_computePipelineLayout = VK_NULL_HANDLE;
 			}
 			for (auto& slot: m_pendingQuads)
@@ -331,7 +334,10 @@ namespace aether
 			}
 			m_commandBufferCapacities.fill(0);
 			m_buildPassName.clear();
-			m_engine = nullptr;
+			m_vkCtx = nullptr;
+			m_renderGraph = nullptr;
+			m_bindlessMgr = nullptr;
+			m_swapchain = nullptr;
 			m_ready = false;
 		}
 	}
@@ -340,12 +346,12 @@ namespace aether
 	{
 		EnsurePassRegistered();
 
-		if (m_engine == nullptr)
+		if (m_vkCtx == nullptr)
 		{
 			return;
 		}
 
-		const glm::vec4 pxRect = ResolveUiRectPx(m_engine->GetSwapchainExtent(), rect);
+		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
 
 		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f || IsClipped(pxRect))
 		{
@@ -367,12 +373,12 @@ namespace aether
 	void QuadRenderer::DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color, std::int32_t layer)
 	{
 		EnsurePassRegistered();
-		if (m_engine == nullptr || !m_ready || thicknessPx <= 0.0f)
+		if (m_vkCtx == nullptr || !m_ready || thicknessPx <= 0.0f)
 		{
 			return;
 		}
 
-		const VkExtent2D ext = m_engine->GetSwapchainExtent();
+		const VkExtent2D ext = m_swapchain->GetExtent();
 		const glm::vec2 p0 = ResolveUiPointPx(ext, start);
 		const glm::vec2 p1 = ResolveUiPointPx(ext, end);
 		if (glm::length(p1 - p0) <= 0.5f)
@@ -395,11 +401,11 @@ namespace aether
 	void QuadRenderer::DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color, std::int32_t layer)
 	{
 		EnsurePassRegistered();
-		if (m_engine == nullptr || !m_ready || radiusPx <= 0.0f)
+		if (m_vkCtx == nullptr || !m_ready || radiusPx <= 0.0f)
 		{
 			return;
 		}
-		const glm::vec2 c = ResolveUiPointPx(m_engine->GetSwapchainExtent(), center);
+		const glm::vec2 c = ResolveUiPointPx(m_swapchain->GetExtent(), center);
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
@@ -412,15 +418,15 @@ namespace aether
 		});
 	}
 
-	void QuadRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint, std::int32_t layer, float cornerRadiusPx)
+	void QuadRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint, std::int32_t layer)
 	{
 		EnsurePassRegistered();
-		if (m_engine == nullptr || !m_ready)
+		if (m_vkCtx == nullptr || !m_ready)
 		{
 			return;
 		}
 
-		const glm::vec4 pxRect = ResolveUiRectPx(m_engine->GetSwapchainExtent(), rect);
+		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
 		if (pxRect.z <= 0.f || pxRect.w <= 0.f || IsClipped(pxRect))
 		{
 			return;

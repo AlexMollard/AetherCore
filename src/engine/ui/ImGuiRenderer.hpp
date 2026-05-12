@@ -9,11 +9,11 @@
 
 #	include "vulkan/Swapchain.hpp"
 
+class ServiceContainer;
 struct GLFWwindow;
 
 namespace aether
 {
-	class AetherCore;
 	struct PassContext;
 
 	// Integrates Dear ImGui (docking branch) with AetherCore's render graph.
@@ -30,8 +30,8 @@ namespace aether
 	class ImGuiRenderer
 	{
 	public:
-		void Init(AetherCore& engine, GLFWwindow* window);
-		void Shutdown(AetherCore& engine);
+		void Init(ServiceContainer& services, GLFWwindow* window);
+		void Shutdown(ServiceContainer& services);
 
 		void SetWriteSlot(uint32_t slot)
 		{
@@ -51,7 +51,7 @@ namespace aether
 
 		// Called from the swapchain-recreated callback to re-register the render
 		// graph pass (the graph is cleared on every swapchain resize).
-		void ReregisterPass(AetherCore& engine);
+		void ReregisterPass(ServiceContainer& services);
 
 	private:
 		struct FrameSlot
@@ -66,7 +66,7 @@ namespace aether
 		std::array<FrameSlot, Swapchain::kMaxFramesInFlight> m_slots;
 		uint32_t m_writeSlot = 0;
 
-		AetherCore* m_engine = nullptr;
+		ServiceContainer* m_services = nullptr;
 	};
 
 } // namespace aether
@@ -77,18 +77,18 @@ namespace aether
 
 struct GLFWwindow;
 
+class ServiceContainer;
+
 namespace aether
 {
-	class AetherCore;
-
 	class ImGuiRenderer
 	{
 	public:
-		void Init(AetherCore&, GLFWwindow*)
+		void Init(ServiceContainer&, GLFWwindow*)
 		{
 		}
 
-		void Shutdown(AetherCore&)
+		void Shutdown(ServiceContainer&)
 		{
 		}
 
@@ -108,7 +108,7 @@ namespace aether
 		{
 		}
 
-		void ReregisterPass(AetherCore&)
+		void ReregisterPass(ServiceContainer&)
 		{
 		}
 	};

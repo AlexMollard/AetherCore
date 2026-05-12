@@ -715,7 +715,7 @@ namespace aether::ui
 
 			if (slot->textureSlot > 0)
 			{
-				ui.DrawTexturedRect(iconRect, slot->textureSlot, { 0.f, 0.f, 1.f, 1.f }, glm::vec4(1.f), theme.slotCornerRadius - iconInset);
+				ui.DrawTexturedRect(iconRect, slot->textureSlot, { 0.f, 0.f, 1.f, 1.f }, glm::vec4(1.f));
 			}
 			else if (slot->rarityColor.a > 0.f)
 			{

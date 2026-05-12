@@ -8,7 +8,7 @@
 #	include <backends/imgui_impl_vulkan.h>
 #	include <GLFW/glfw3.h>
 
-#	include "scene/AetherCore.hpp"
+#	include "ServiceContainer.hpp"
 #	include "rendering/RenderGraph.hpp"
 #	include "vulkan/Swapchain.hpp"
 #	include "vulkan/VulkanContext.hpp"
@@ -201,9 +201,9 @@ namespace aether
 
 	// ── Init / Shutdown ───────────────────────────────────────────────────────
 
-	void ImGuiRenderer::Init(AetherCore& engine, GLFWwindow* window)
+	void ImGuiRenderer::Init(ServiceContainer& services, GLFWwindow* window)
 	{
-		m_engine = &engine;
+		m_services = &services;
 
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
@@ -219,18 +219,13 @@ namespace aether
 		ApplyAetherTheme();
 		ImGui_ImplGlfw_InitForVulkan(window, /*installCallbacks=*/true);
 
-		const VulkanContext& ctx = engine.GetVulkanContext();
+		const VulkanContext& ctx = services.Get<VulkanContext>();
 		const VkDevice dev = ctx.GetDevice().device;
 
 		// Point the module-level mutex pointer at VulkanContext's mutex so that
 		// WrappedVkQueueSubmit can lock it without capturing anything.
 		g_queueMutex = &ctx.GetGraphicsQueueMutex();
 
-		// With VK_NO_PROTOTYPES, imgui_impl_vulkan cannot call Vulkan directly.
-		// Supply volk's already-resolved function pointers via the loader callback.
-		// LoadFunctions() invokes the callback immediately to populate an internal
-		// dispatch table; passing a stack-allocated LoaderCtx is safe.
-		// We also intercept vkQueueSubmit here to inject our mutex wrapper.
 		struct LoaderCtx
 		{
 			VkInstance instance;
@@ -269,7 +264,7 @@ namespace aether
 		        &loaderCtx);
 
 		// Dynamic rendering setup (no VkRenderPass needed).
-		const VkFormat swapFmt = engine.GetSwapchainImageFormat();
+		const VkFormat swapFmt = services.Get<Swapchain>().GetImageFormat();
 		VkPipelineRenderingCreateInfoKHR pipelineRenderCI{ VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR };
 		pipelineRenderCI.colorAttachmentCount = 1;
 		pipelineRenderCI.pColorAttachmentFormats = &swapFmt;
@@ -281,23 +276,18 @@ namespace aether
 		vulkanInfo.Device = dev;
 		vulkanInfo.QueueFamily = ctx.GetGraphicsQueueFamily();
 		vulkanInfo.Queue = ctx.GetGraphicsQueue();
-		// DescriptorPoolSize > 0 tells imgui_impl_vulkan to create and own its pool.
 		vulkanInfo.DescriptorPoolSize = 256;
 		vulkanInfo.MinImageCount = Swapchain::kMaxFramesInFlight;
 		vulkanInfo.ImageCount = Swapchain::kMaxFramesInFlight;
 		vulkanInfo.UseDynamicRendering = true;
-		// Pipeline info for main viewport (and secondary viewports share the same format).
 		vulkanInfo.PipelineInfoMain.PipelineRenderingCreateInfo = pipelineRenderCI;
 		vulkanInfo.PipelineInfoForViewports.PipelineRenderingCreateInfo = pipelineRenderCI;
 
 		ImGui_ImplVulkan_Init(&vulkanInfo);
-		// Font texture upload is handled automatically by imgui_impl_vulkan 1.92+
-		// (ImGuiBackendFlags_RendererHasTextures - no manual CreateFontsTexture needed).
 
-		// Register the ImGui pass - composites on top of all other passes.
-		auto swapColor = engine.GetRenderGraph().GetSwapchainColor();
-		engine.GetRenderGraph()
-		        .AddPass("ImGui")
+		RenderGraph& renderGraph = services.Get<RenderGraph>();
+		auto swapColor = renderGraph.GetSwapchainColor();
+		renderGraph.AddPass("ImGui")
 		        .WriteColor(swapColor, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
 		        .Execute(
 		                [this](PassContext& ctx)
@@ -307,13 +297,13 @@ namespace aether
 		                });
 	}
 
-	void ImGuiRenderer::Shutdown(AetherCore& engine)
+	void ImGuiRenderer::Shutdown(ServiceContainer& services)
 	{
-		engine.WaitIdle();
+		vkDeviceWaitIdle(services.Get<VulkanContext>().GetDevice().device);
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();
-		m_engine = nullptr;
+		m_services = nullptr;
 	}
 
 	// ── Game-thread API ───────────────────────────────────────────────────────
@@ -357,11 +347,11 @@ namespace aether
 		}
 	}
 
-	void ImGuiRenderer::ReregisterPass(AetherCore& engine)
+	void ImGuiRenderer::ReregisterPass(ServiceContainer& services)
 	{
-		auto swapColor = engine.GetRenderGraph().GetSwapchainColor();
-		engine.GetRenderGraph()
-		        .AddPass("ImGui")
+		RenderGraph& renderGraph = services.Get<RenderGraph>();
+		auto swapColor = renderGraph.GetSwapchainColor();
+		renderGraph.AddPass("ImGui")
 		        .WriteColor(swapColor, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
 		        .Execute(
 		                [this](PassContext& ctx)
