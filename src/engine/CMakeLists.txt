@@ -18,8 +18,6 @@ target_sources(Engine
         FILES ${IO_HEADERS}
 )
 
-# Propagate C++20 to any target that links Engine.
-target_compile_features(Engine PUBLIC cxx_std_20)
 
 target_link_libraries(Engine
     PUBLIC

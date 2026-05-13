@@ -7,6 +7,9 @@ option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party target
 function(aethercore_target_defaults target)
     if(MSVC)
         target_compile_options(${target} PRIVATE
+            # --- Language standard (C++26 preview) ---
+            /std:c++latest           # Latest C++ draft features; overrides any /std:c++20 from CMAKE_CXX_STANDARD
+
             # --- Warning level & conformance ---
             /W4                      # High warning level
             /permissive-             # Strict standards conformance
@@ -74,6 +77,9 @@ function(aethercore_target_defaults target)
     else()
         # GCC/Clang compiler options for cross-platform support (Linux, macOS, etc.)
         target_compile_options(${target} PRIVATE
+            # --- Language standard (C++26 preview) ---
+            -std=c++26               # C++26 draft features; overrides any -std=c++20 from CMAKE_CXX_STANDARD
+
             -Wall
             -Wextra
             -Wpedantic

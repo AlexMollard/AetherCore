@@ -8,8 +8,6 @@ add_executable(AssetPacker
     "${bc7enc_rdo_SOURCE_DIR}/rgbcx.cpp"
 )
 
-target_compile_features(AssetPacker PRIVATE cxx_std_20)
-
 target_include_directories(AssetPacker PRIVATE
     "${CMAKE_SOURCE_DIR}/include"   # PakFormat.hpp, AeBnFormat.hpp
     "${xxHash_SOURCE_DIR}"

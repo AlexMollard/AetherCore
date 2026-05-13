@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 4.0)
 project(AetherCore VERSION 0.1.0 LANGUAGES CXX)
 
-# Explicitly enforce C++20 globally so GCC doesn't silently fall back to C++17.
+# Baseline C++20 for CMake's dialect check; C++26 preview is enabled via
+# explicit /std:c++latest / -std=c++26 in TargetDefaults.cmake.
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
