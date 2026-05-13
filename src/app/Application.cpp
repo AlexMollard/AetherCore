@@ -194,19 +194,26 @@ namespace aether::app
 			const auto deltaTime = std::chrono::duration<double>(currentFrameTime - previousFrameTime).count();
 			previousFrameTime = currentFrameTime;
 
+			// Update engine-level per-frame systems (input + camera).
+			// Camera uses unscaled dt so it stays controllable during fast-forward.
+			m_engine.Tick(static_cast<float>(deltaTime));
+
+			// Fast-forward: hold GraveAccent (` / ~) to multiply game speed.
+			constexpr double kFastForwardScale = 10.0;
+			const auto& input = m_engine.GetServiceContainer().Get<Input>();
+			const double timeScale = input.IsKeyDown(Key::GraveAccent) ? kFastForwardScale : 1.0;
+			const double scaledDt = deltaTime * timeScale;
+
 			LayerContext frameContext{
 				.services = m_engine.GetServiceContainer(),
-				.deltaTimeSeconds = deltaTime,
+				.deltaTimeSeconds = scaledDt,
 				.frameIndex = m_frameIndex,
 			};
 
-			// Update engine-level per-frame systems (camera, input).
-			m_engine.Tick(static_cast<float>(deltaTime));
-
-			// Update ECS systems (game logic).
+			// Update ECS systems (game logic) with scaled dt.
 			{
 				AE_PROFILE_ZONE_N("WorldSystems");
-				frameContext.Get<World>().UpdateSystems(static_cast<float>(deltaTime));
+				frameContext.Get<World>().UpdateSystems(static_cast<float>(scaledDt));
 			}
 
 			// Compute the CPU double-buffer write slot for this frame.
@@ -225,7 +232,7 @@ namespace aether::app
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<ui::UiWorld>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
-				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, m_engine.GetServiceContainer().Get<Swapchain>().GetExtent(), static_cast<float>(deltaTime));
+				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, m_engine.GetServiceContainer().Get<Swapchain>().GetExtent(), static_cast<float>(scaledDt));
 			}
 
 			// ImGui new frame.
