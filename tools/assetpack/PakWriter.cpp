@@ -152,7 +152,7 @@ namespace
 
 		out << "# AetherPak manifest v" << kPackerVersion << "\n";
 		for (const auto& [vpath, e] : map)
-			out << vpath << '\t' << e.mtimeTicks << '\t' << std::hex << e.contentHash << '\n';
+			out << vpath << '\t' << std::dec << e.mtimeTicks << '\t' << std::hex << e.contentHash << '\n';
 	}
 
 	// Returns true if the pak file exists and every source file's mtime matches
@@ -507,7 +507,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 		std::error_code ec;
 		const auto      mtime  = fs::last_write_time(m_files[fileIdx].diskPath, ec);
 		const int64_t   ticks  = ec ? 0 : mtime.time_since_epoch().count();
-		newManifest[res.virtualPath] = { ticks, res.contentHash };
+		newManifest[m_files[fileIdx].virtualPath] = { ticks, res.contentHash };
 
 		// Console line
 		const bool compressed = (res.flags & PAK_FLAG_ZSTD) != 0;
