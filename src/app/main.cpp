@@ -6,6 +6,7 @@
 #include "platform/CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
 // #include "layers/FishingLayer.hpp"
+#include "layers/LoadingLayer.hpp"
 #include "layers/SandboxLayer.hpp"
 // #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
@@ -43,6 +44,7 @@ int main()
 
 		aether::app::Application application;
 		// application.PushLayer(std::make_unique<aether::app::FishingLayer>());
+		application.PushLayer(std::make_unique<aether::app::LoadingLayer>());
 		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
 		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());

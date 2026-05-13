@@ -6,6 +6,7 @@
 #include "AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
+#include "utils/LoadingManager.hpp"
 #include "utils/coro/Executor.hpp"
 #include "LayerStack.hpp"
 #include "rendering/RenderThread.hpp"
@@ -47,6 +48,7 @@ namespace aether::app
 		aether::FramePacer m_framePacer;
 		aether::ImGuiRenderer m_imguiRenderer;
 		aether::coro::queued_executor m_coroExecutor;
+		aether::LoadingManager m_loadingManager;
 		LayerStack m_layers;
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;

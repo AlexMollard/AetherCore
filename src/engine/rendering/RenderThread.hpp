@@ -61,8 +61,8 @@ namespace aether
 	// is unblocked before GPU work begins.
 	//
 	// The consumed-acknowledgment prevents the game thread from starting
-	// the next frame's BeginFrame() — which may call ImGui's texture update
-	// checks — while the render thread is still processing texture uploads
+	// the next frame's BeginFrame() - which may call ImGui's texture update
+	// checks - while the render thread is still processing texture uploads
 	// from the previous frame.
 	class RenderThread
 	{

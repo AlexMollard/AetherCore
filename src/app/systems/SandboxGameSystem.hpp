@@ -6,6 +6,8 @@
 #include <string_view>
 #include <vector>
 
+#include "utils/LoadingManager.hpp"
+
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/Entity.hpp"
@@ -79,7 +81,29 @@ namespace aether::app
 			return m_rttCamera;
 		}
 
+		[[nodiscard]] bool IsReady() const
+		{
+			return !m_loadingManager || m_loadingManager->IsComplete();
+		}
+
+		[[nodiscard]] float GetLoadProgress() const
+		{
+			return m_loadingManager ? m_loadingManager->GetProgress() : 1.0f;
+		}
+
+		[[nodiscard]] std::string_view GetCurrentLoadTask() const
+		{
+			return m_loadingManager ? m_loadingManager->GetCurrentTask() : std::string_view{};
+		}
+
 	private:
+		// Loading helpers (invoked one-per-frame from Update)
+		void LoadMaterials();
+		void LoadFoxModel();
+		void SpawnSceneEntities();
+		void CreateCameras();
+		void CreatePointLights();
+
 		// Per-fox autonomous agent state.
 		struct FoxAgent
 		{
@@ -95,6 +119,7 @@ namespace aether::app
 		aether::AssetManager* m_assets = nullptr;
 		aether::CameraManager* m_cameras = nullptr;
 		aether::Input* m_input = nullptr;
+		aether::World* m_world = nullptr;
 
 		// Per-fox state and entity handles (parallel arrays, indexed by fox index)
 		std::vector<FoxAgent> m_foxAgents;
@@ -119,6 +144,9 @@ namespace aether::app
 		const aether::Mesh* m_cubeMesh = nullptr;
 		const aether::Mesh* m_quadMesh = nullptr;
 		const aether::Mesh* m_planeMesh = nullptr;
+
+		// Shared LoadingManager (registered by Application in ServiceContainer)
+		aether::LoadingManager* m_loadingManager = nullptr;
 
 		// Render target
 		std::uint32_t m_rttTargetId = 0;

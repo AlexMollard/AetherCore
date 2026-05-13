@@ -15,7 +15,7 @@
 namespace aether::io
 {
 	// -----------------------------------------------------------------------
-	// IoExecutor — dedicated background I/O thread that runs both plain jobs
+	// IoExecutor - dedicated background I/O thread that runs both plain jobs
 	// (for backward compatibility) and coroutine tasks.  It also implements
 	// the coro::executor interface so coroutines can be scheduled onto the
 	// I/O thread directly.

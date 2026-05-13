@@ -10,7 +10,7 @@ namespace aether::coro
 {
 
 	// ---------------------------------------------------------------------------
-	// awaitable sleep_for — suspends the current coroutine for at least the given
+	// awaitable sleep_for - suspends the current coroutine for at least the given
 	// duration, then resumes via the default executor.
 	//
 	// Uses a dedicated timer thread.  For high-frequency game-loop pacing prefer

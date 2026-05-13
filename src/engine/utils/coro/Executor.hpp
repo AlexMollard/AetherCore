@@ -19,7 +19,7 @@ namespace aether::coro
 		virtual void schedule(std::coroutine_handle<> h) = 0;
 		virtual const char* name() const noexcept = 0;
 
-		// Drain all pending coroutines — returns how many were resumed.
+		// Drain all pending coroutines - returns how many were resumed.
 		virtual std::size_t drain()
 		{
 			return 0;
@@ -90,7 +90,7 @@ namespace aether::coro
 	};
 
 	// ---------------------------------------------------------------------------
-	// Global default executor — set during application startup.
+	// Global default executor - set during application startup.
 	// All cross-thread continuation resumptions go through this.
 	// ---------------------------------------------------------------------------
 	namespace detail

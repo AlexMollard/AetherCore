@@ -43,7 +43,7 @@ namespace aether
 		// Texture creation.
 		[[nodiscard]] Texture CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
-		// Async texture creation — co_await the file read on the I/O thread,
+		// Async texture creation - co_await the file read on the I/O thread,
 		// then decode and upload to GPU on the calling (game) thread.
 		[[nodiscard]] coro::async<Texture> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
@@ -61,7 +61,7 @@ namespace aether
 		// Model loading and spawning.
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
 
-		// Async model loading — co_await the .mesh file read on the I/O thread,
+		// Async model loading - co_await the .mesh file read on the I/O thread,
 		// then parse and upload textures on the game thread.
 		[[nodiscard]] coro::async<LoadedModel> LoadModelAsync(std::string_view path);
 

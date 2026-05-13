@@ -88,7 +88,7 @@ namespace aether
 			}
 			catch (const std::runtime_error&)
 			{
-				// Channel closed — time to shut down.
+				// Channel closed - time to shut down.
 				break;
 			}
 

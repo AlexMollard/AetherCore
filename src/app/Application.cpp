@@ -120,6 +120,22 @@ namespace aether::app
 		m_imguiRenderer.Init(m_engine.GetServiceContainer(), m_engine.GetServiceContainer().Get<Window>().GetHandle());
 		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e) { m_imguiRenderer.ReregisterPass(e.GetServiceContainer()); });
 
+		// Set the coroutine default executor - all cross-thread continuation
+		// resumptions (e.g. I/O thread → game thread) go through this queue
+		// and are drained at the top of each frame.
+		// This is set up early so that any async operations during loading
+		// dispatch correctly.
+		aether::coro::set_default_executor(&m_coroExecutor);
+
+		// Register the shared LoadingManager so that the LoadingLayer,
+		// SandboxGameSystem, and any other loading participant can read
+		// progress or push tasks through the same instance.
+		m_engine.GetServiceContainer().Register<LoadingManager>(m_loadingManager);
+
+		// Start the dedicated render thread early so that loading-screen
+		// frames can be submitted while assets load incrementally.
+		m_renderThread.Start(m_engine);
+
 		LayerContext attachContext{
 			.services = m_engine.GetServiceContainer(),
 			.deltaTimeSeconds = 0.0,
@@ -134,14 +150,6 @@ namespace aether::app
 		auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
 		dayNightSystem->Init(*attachContext.TryGet<Renderer>());
 		attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
-
-		// Start the dedicated render thread.
-		m_renderThread.Start(m_engine);
-
-		// Set the coroutine default executor — all cross-thread continuation
-		// resumptions (e.g. I/O thread → game thread) go through this queue
-		// and are drained at the top of each frame.
-		aether::coro::set_default_executor(&m_coroExecutor);
 
 		if (m_settings.app.targetFps > 0.0f)
 		{

@@ -14,7 +14,7 @@ namespace aether::coro
 {
 
 	// ---------------------------------------------------------------------------
-	// async<T> — a lazy coroutine return type.
+	// async<T> - a lazy coroutine return type.
 	//
 	// Functions returning async<T> use co_await / co_return.  Execution is lazy:
 	// the coroutine does NOT start until someone co_awaits the returned async
@@ -134,7 +134,7 @@ namespace aether::coro
 
 			bool await_ready() const noexcept
 			{
-				return false; // always suspend — the coroutine hasn't started yet
+				return false; // always suspend - the coroutine hasn't started yet
 			}
 
 			std::coroutine_handle<> await_suspend(std::coroutine_handle<> caller) noexcept
@@ -176,7 +176,7 @@ namespace aether::coro
 	};
 
 	// ---------------------------------------------------------------------------
-	// task<T> / task_source<T> — manual async future (NOT a coroutine return type)
+	// task<T> / task_source<T> - manual async future (NOT a coroutine return type)
 	//
 	// Used when you want to create a future and fulfill it at a later time from
 	// a different thread.  The task is created via task<T>::create(), which

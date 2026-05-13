@@ -1,10 +1,12 @@
 #include "SandboxGameSystem.hpp"
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <exception>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <thread>
 
 #include "camera/Camera.hpp"
 #include "rendering/LightingManager.hpp"
@@ -20,6 +22,10 @@
 
 namespace aether::app
 {
+	// Debug: artificial delay per loading step so the loading screen is visible.
+	// Remove or set to 0ms for production.
+	inline constexpr auto kDebugLoadDelay = std::chrono::milliseconds(100);
+
 	namespace
 	{
 		struct SandboxEntityTag
@@ -101,7 +107,9 @@ namespace aether::app
 			return;
 		}
 
-		// ── Shared pipeline ───────────────────────────────────────────────────
+		m_world = &world;
+
+		// ── Shared pipeline (fast, do synchronously) ──────────────────────────
 		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
 		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
@@ -119,6 +127,27 @@ namespace aether::app
 		m_quadMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Quad);
 		m_planeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Plane);
 
+		// ── Deferred loading tasks ────────────────────────────────────────────
+		// Obtain the shared LoadingManager registered by Application.
+		m_loadingManager = &m_services->Get<LoadingManager>();
+
+		m_loadingManager->AddTask([this] { LoadMaterials(); }, "Loading materials");
+
+		m_loadingManager->AddTask([this] { LoadFoxModel(); }, "Loading models");
+
+		m_loadingManager->AddTask([this] { SpawnSceneEntities(); }, "Spawning scene");
+
+		m_loadingManager->AddTask([this] { CreateCameras(); }, "Creating cameras");
+
+		m_loadingManager->AddTask([this] { CreatePointLights(); }, "Creating lights");
+	}
+
+	// ── Deferred loading helpers ─────────────────────────────────────────────
+	// These are invoked one-per-frame by LoadingManager from Update().
+
+	void SandboxGameSystem::LoadMaterials()
+	{
+		std::this_thread::sleep_for(kDebugLoadDelay);
 		constexpr std::string_view kDebugMaterialPreset = "assets://materials/MyPBRFolder";
 		if (aether::io::FileSystem::Exists(kDebugMaterialPreset))
 		{
@@ -141,15 +170,11 @@ namespace aether::app
 
 		m_rttFeedMaterial = {};
 		m_assets->RegisterMaterial(m_rttFeedMaterial);
+	}
 
-		// ── Ground: large tiling plane ────────────────────────────────────────
-		{
-			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_planeMesh, m_debugTexturedMaterial);
-			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world.EmplaceOrReplace<GroundTag>(e, GroundTag{});
-		}
-
-		// ── Foxes ─────────────────────────────────────────────────────────────
+	void SandboxGameSystem::LoadFoxModel()
+	{
+		std::this_thread::sleep_for(kDebugLoadDelay);
 		constexpr std::string_view kFoxPath = "assets://models/Fox/Fox.mesh";
 		if (aether::io::FileSystem::Exists(kFoxPath))
 		{
@@ -165,49 +190,6 @@ namespace aether::app
 						INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animator->GetAnimationName(i));
 					}
 				}
-
-				std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
-				std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
-				std::uniform_real_distribution<float> timerDist(0.2f, 2.0f);
-
-				m_foxAgents.reserve(kFoxCount);
-				m_foxInstances.reserve(kFoxCount);
-				m_foxAnimators.reserve(kFoxCount);
-
-				for (int i = 0; i < kFoxCount; ++i)
-				{
-					FoxAgent agent;
-					agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
-					agent.heading = angleDist(m_rng);
-					agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
-					agent.stateTimer = timerDist(m_rng);
-					agent.idle = false;
-					m_foxAgents.push_back(agent);
-
-					auto instances = aether::ecs::SpawnModelInstance(world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
-
-					if (!m_foxAnimators.empty())
-					{
-						aether::ModelAnimator& foxAnim = m_foxAnimators.back();
-						foxAnim.SetAnimation(kAnimRun);
-						foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
-						if (foxAnim.GetDuration() > 0.0f)
-						{
-							std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
-							foxAnim.SetAnimTime(phaseDist(m_rng));
-						}
-					}
-
-					for (const aether::Entity e: instances)
-					{
-						world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-						world.EmplaceOrReplace<FoxTag>(e, FoxTag{});
-						world.EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
-					}
-
-					m_foxInstances.push_back(std::move(instances));
-				}
-				INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 			}
 			catch (const std::exception& e)
 			{
@@ -218,35 +200,102 @@ namespace aether::app
 		{
 			INFO(aether::LogCategory::App, "Fox model not found at '{}'; skipping.", kFoxPath);
 		}
+	}
+
+	void SandboxGameSystem::SpawnSceneEntities()
+	{
+		std::this_thread::sleep_for(kDebugLoadDelay);
+		World* world = m_world;
+		if (!world)
+		{
+			return;
+		}
+
+		// ── Ground: large tiling plane ────────────────────────────────────────
+		{
+			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_planeMesh, m_debugTexturedMaterial);
+			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world->EmplaceOrReplace<GroundTag>(e, GroundTag{});
+		}
+
+		// ── Foxes ─────────────────────────────────────────────────────────────
+		if (m_foxModel.has_value())
+		{
+			std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
+			std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
+			std::uniform_real_distribution<float> timerDist(0.2f, 2.0f);
+
+			m_foxAgents.reserve(kFoxCount);
+			m_foxInstances.reserve(kFoxCount);
+			m_foxAnimators.reserve(kFoxCount);
+
+			for (int i = 0; i < kFoxCount; ++i)
+			{
+				FoxAgent agent;
+				agent.pos = { posDist(m_rng), 0.0f, posDist(m_rng) };
+				agent.heading = angleDist(m_rng);
+				agent.target = { posDist(m_rng), 0.0f, posDist(m_rng) };
+				agent.stateTimer = timerDist(m_rng);
+				agent.idle = false;
+				m_foxAgents.push_back(agent);
+
+				auto instances = aether::ecs::SpawnModelInstance(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
+
+				if (!m_foxAnimators.empty())
+				{
+					aether::ModelAnimator& foxAnim = m_foxAnimators.back();
+					foxAnim.SetAnimation(kAnimRun);
+					foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
+					if (foxAnim.GetDuration() > 0.0f)
+					{
+						std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
+						foxAnim.SetAnimTime(phaseDist(m_rng));
+					}
+				}
+
+				for (const aether::Entity e: instances)
+				{
+					world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+					world->EmplaceOrReplace<FoxTag>(e, FoxTag{});
+					world->EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
+				}
+
+				m_foxInstances.push_back(std::move(instances));
+			}
+			INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
+		}
 
 		// ── Sky cubes ─────────────────────────────────────────────────────────
 		// Centre spinning cube
 		{
-			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
-			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world.EmplaceOrReplace<CenterTag>(e, CenterTag{});
+			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world->EmplaceOrReplace<CenterTag>(e, CenterTag{});
 		}
 
 		// Ring of 8 small cubes
 		for (int i = 0; i < kRingCount; ++i)
 		{
-			const aether::Entity e = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
-			world.EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world.EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
+			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+			world->EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
 		}
 
 		// Wide-orbit pair - one textured, one RTT-fed
 		{
-			const aether::Entity eA = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
-			world.EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
-			world.EmplaceOrReplace<OrbitTag>(eA, OrbitTag{ .phase = 0.0f, .isRttTarget = false });
+			const aether::Entity eA = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
+			world->EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
+			world->EmplaceOrReplace<OrbitTag>(eA, OrbitTag{ .phase = 0.0f, .isRttTarget = false });
 
-			const aether::Entity eB = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
-			world.EmplaceOrReplace<SandboxEntityTag>(eB, SandboxEntityTag{});
-			world.EmplaceOrReplace<OrbitTag>(eB, OrbitTag{ .phase = glm::radians(180.0f), .isRttTarget = true });
+			const aether::Entity eB = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
+			world->EmplaceOrReplace<SandboxEntityTag>(eB, SandboxEntityTag{});
+			world->EmplaceOrReplace<OrbitTag>(eB, OrbitTag{ .phase = glm::radians(180.0f), .isRttTarget = true });
 		}
+	}
 
-		// ── Cameras ──────────────────────────────────────────────────────────
+	void SandboxGameSystem::CreateCameras()
+	{
+		std::this_thread::sleep_for(kDebugLoadDelay);
 		// Main orbit: pulled back far enough to see the entire fox field.
 		m_orbitCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Orbit,
@@ -276,47 +325,51 @@ namespace aether::app
 
 		m_cameras->SetMainCamera(m_orbitCamera);
 		m_rttTargetId = m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, { 512, 512 });
+	}
 
-		// ── Point lights scattered across the fox field ───────────────────────
+	void SandboxGameSystem::CreatePointLights()
+	{
+		std::this_thread::sleep_for(kDebugLoadDelay);
+		World* world = m_world;
+		if (!world)
 		{
-			std::mt19937 lightRng(7);
-			std::uniform_real_distribution<float> lightPosDist(-80.0f, 80.0f);
-			const int lightCount = 128;
-			m_pointLights.clear();
-			m_pointLightMarkerMaterials.clear();
-			m_pointLights.reserve(lightCount);
-			m_pointLightMarkerMaterials.reserve(lightCount);
-			for (int li = 0; li < lightCount; ++li)
-			{
-				// Deterministic vivid palette around the hue wheel.
-				const float t = static_cast<float>(li) / static_cast<float>(lightCount);
-				const glm::vec3 lightColor = glm::vec3(0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.00f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.33f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.66f)));
-
-				aether::Renderer::PointLight l{};
-				l.position = { lightPosDist(lightRng), 0.35f, lightPosDist(lightRng) };
-				l.radius = 14.0f;
-				l.intensity = 1.8f;
-				l.color = lightColor;
-				m_pointLights.push_back(l);
-
-				aether::Material marker{};
-				// Keep base light response subdued and rely on emissive so marker hue
-				// stays obvious regardless of scene lighting or camera angle.
-				marker.baseColorFactor = glm::vec4(l.color * 0.20f, 1.0f);
-				marker.emissiveFactor = l.color * 3.0f;
-				marker.roughnessFactor = 0.9f;
-				marker.metallicFactor = 0.0f;
-				m_assets->RegisterMaterial(marker);
-				m_pointLightMarkerMaterials.push_back(marker);
-
-				const aether::Entity markerEntity = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_pointLightMarkerMaterials.back());
-				world.EmplaceOrReplace<SandboxEntityTag>(markerEntity, SandboxEntityTag{});
-				world.EmplaceOrReplace<PointLightMarkerTag>(markerEntity, PointLightMarkerTag{ .index = li });
-			}
-			m_services->Get<Renderer>().SetPointLights(m_pointLights);
-			const auto rendererLights = m_services->Get<Renderer>().GetPointLights();
-			m_pointLights.assign(rendererLights.begin(), rendererLights.end());
+			return;
 		}
+
+		std::mt19937 lightRng(7);
+		std::uniform_real_distribution<float> lightPosDist(-80.0f, 80.0f);
+		const int lightCount = 128;
+		m_pointLights.clear();
+		m_pointLightMarkerMaterials.clear();
+		m_pointLights.reserve(lightCount);
+		m_pointLightMarkerMaterials.reserve(lightCount);
+		for (int li = 0; li < lightCount; ++li)
+		{
+			const float t = static_cast<float>(li) / static_cast<float>(lightCount);
+			const glm::vec3 lightColor = glm::vec3(0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.00f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.33f)), 0.55f + 0.45f * std::cos(glm::two_pi<float>() * (t + 0.66f)));
+
+			aether::Renderer::PointLight l{};
+			l.position = { lightPosDist(lightRng), 0.35f, lightPosDist(lightRng) };
+			l.radius = 14.0f;
+			l.intensity = 1.8f;
+			l.color = lightColor;
+			m_pointLights.push_back(l);
+
+			aether::Material marker{};
+			marker.baseColorFactor = glm::vec4(l.color * 0.20f, 1.0f);
+			marker.emissiveFactor = l.color * 3.0f;
+			marker.roughnessFactor = 0.9f;
+			marker.metallicFactor = 0.0f;
+			m_assets->RegisterMaterial(marker);
+			m_pointLightMarkerMaterials.push_back(marker);
+
+			const aether::Entity markerEntity = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_pointLightMarkerMaterials.back());
+			world->EmplaceOrReplace<SandboxEntityTag>(markerEntity, SandboxEntityTag{});
+			world->EmplaceOrReplace<PointLightMarkerTag>(markerEntity, PointLightMarkerTag{ .index = li });
+		}
+		m_services->Get<Renderer>().SetPointLights(m_pointLights);
+		const auto rendererLights = m_services->Get<Renderer>().GetPointLights();
+		m_pointLights.assign(rendererLights.begin(), rendererLights.end());
 
 		INFO(aether::LogCategory::App, "Scene built: {} foxes on ground + {} ring + 1 center + 2 orbit sky cubes.", kFoxCount, kRingCount);
 	}
@@ -325,6 +378,14 @@ namespace aether::app
 	{
 		if (!m_services || !m_cameras || !m_input)
 		{
+			return;
+		}
+
+		// While loading tasks remain, process one per frame so the render
+		// thread can display a loading screen between task steps.
+		if (m_loadingManager && !m_loadingManager->IsComplete())
+		{
+			m_loadingManager->Update();
 			return;
 		}
 

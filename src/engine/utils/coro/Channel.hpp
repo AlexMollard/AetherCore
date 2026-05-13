@@ -120,7 +120,7 @@ namespace aether::coro
 				if (m_channel->m_buffer.size() < m_channel->m_capacity || m_channel->m_closed)
 				{
 					lock.unlock();
-					// Already have space — resume inline.
+					// Already have space - resume inline.
 					if (!m_channel->m_closed)
 					{
 						std::scoped_lock l2(m_channel->m_mutex);
@@ -198,7 +198,7 @@ namespace aether::coro
 		}
 
 		// -- Write-side notification (for the producer to notify the consumer) --
-		// Called from the write side after producing data — resumes any awaiting
+		// Called from the write side after producing data - resumes any awaiting
 		// read coroutine directly.
 		void notify_read_waiter()
 		{

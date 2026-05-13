@@ -40,7 +40,7 @@ namespace aether
 		[[nodiscard]] static Texture LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		// Load a texture from raw file bytes (already read from disk).
-		// Useful after an async I/O operation — the GPU upload still happens
+		// Useful after an async I/O operation - the GPU upload still happens
 		// synchronously on the calling thread (requires a valid Vulkan context).
 		[[nodiscard]] static Texture LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
