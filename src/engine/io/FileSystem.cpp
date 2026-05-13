@@ -12,7 +12,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
-#include "IOThread.hpp"
+#include "IOThread.hpp" // IoExecutor
 #include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
 #include "PakBackend.hpp"
@@ -27,7 +27,7 @@ namespace aether::io
 			// allocation.
 			std::map<std::string, std::shared_ptr<IFileBackend>, std::less<>> mounts;
 			std::mutex mountsMutex;
-			std::unique_ptr<IOThread> ioThread;
+			std::unique_ptr<IoExecutor> ioThread;
 		};
 
 		FileSystemBackend* s_backend = nullptr;
@@ -79,7 +79,7 @@ namespace aether::io
 		}
 
 		s_backend = new FileSystemBackend();
-		s_backend->ioThread = std::make_unique<IOThread>();
+		s_backend->ioThread = std::make_unique<IoExecutor>();
 		INFO(LogCategory::FileSystem, "FileSystem initialized.");
 	}
 
@@ -284,6 +284,32 @@ namespace aether::io
 			// Yield to avoid spinning at 100% on one core.
 			std::this_thread::yield();
 		}
+	}
+
+	coro::task<std::vector<std::byte>> FileSystem::ReadFileAsync(std::string_view virtualPath, IOPriority priority)
+	{
+		if (s_backend == nullptr)
+		{
+			throw FileSystemError("FileSystem::ReadFileAsync() called before Initialize().");
+		}
+
+		auto pair = coro::task<std::vector<std::byte>>::create();
+		const std::string pathStr(virtualPath);
+
+		s_backend->ioThread->Submit(priority,
+		        [pathStr, source = std::move(pair.second)]() mutable
+		        {
+			        try
+			        {
+				        source.set_value(FileSystem::ReadFile(pathStr));
+			        }
+			        catch (...)
+			        {
+				        source.set_exception(std::current_exception());
+			        }
+		        });
+
+		return std::move(pair.first);
 	}
 
 	void FileSystem::Flush()

@@ -79,6 +79,9 @@ namespace aether::app
 		m_renderThread.Stop();
 		m_engine.WaitIdle();
 
+		// Reset the default executor so no more continuations are dispatched.
+		aether::coro::set_default_executor(nullptr);
+
 		// Unregister engine-level systems before detaching layers.
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
@@ -135,6 +138,11 @@ namespace aether::app
 		// Start the dedicated render thread.
 		m_renderThread.Start(m_engine);
 
+		// Set the coroutine default executor — all cross-thread continuation
+		// resumptions (e.g. I/O thread → game thread) go through this queue
+		// and are drained at the top of each frame.
+		aether::coro::set_default_executor(&m_coroExecutor);
+
 		if (m_settings.app.targetFps > 0.0f)
 		{
 			INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
@@ -165,6 +173,10 @@ namespace aether::app
 			AE_PROFILE_ZONE_N("Frame");
 
 			m_framePacer.Wait();
+
+			// Resume any coroutines whose async I/O completed on the background
+			// thread since the last frame.
+			m_coroExecutor.drain();
 
 			Logger::SetFrameNumber(m_frameIndex);
 

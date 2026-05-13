@@ -43,6 +43,7 @@ namespace aether::assets
 
 		// Derive the .mesh sibling of a GLTF/GLB VFS path.
 		// "mount://path/model.gltf" -> "mount://path/model.mesh"
+		// This is the public ResolveMeshPath implementation.
 		std::string DeriveAebnPath(std::string_view vfsPath)
 		{
 			const std::size_t ss = vfsPath.find("://");
@@ -329,5 +330,31 @@ namespace aether::assets
 			}
 		}
 		return LoadFromAebn(meshData, meshPath);
+	}
+
+	GltfAsset GltfAsset::LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath)
+	{
+		if (meshData.size() >= sizeof(AeBnHeader))
+		{
+			AeBnHeader hdr{};
+			std::memcpy(&hdr, meshData.data(), sizeof(hdr));
+			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
+			{
+				throw std::runtime_error("GltfAsset: stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + std::string(debugPath) + "'. Re-run AssetPacker.");
+			}
+		}
+		return LoadFromAebn(meshData, debugPath);
+	}
+
+	std::string GltfAsset::ResolveMeshPath(std::string_view vfsPath)
+	{
+		const std::size_t ss = vfsPath.find("://");
+		if (ss == std::string_view::npos)
+		{
+			return {};
+		}
+		const std::string mount(vfsPath.substr(0, ss));
+		const std::filesystem::path rel(vfsPath.substr(ss + 3));
+		return mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".mesh";
 	}
 } // namespace aether::assets

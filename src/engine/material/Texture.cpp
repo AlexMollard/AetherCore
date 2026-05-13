@@ -200,7 +200,7 @@ namespace aether
 			}
 		}
 
-		UniqueImage UploadBcnDds(const std::vector<std::byte>& fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+		UniqueImage UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
@@ -275,6 +275,44 @@ namespace aether
 		}
 	} // namespace
 
+	Texture Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	{
+		if (fileData.size() < 4)
+		{
+			int width = 0, height = 0, channels = 0;
+			stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
+			if (!pixels)
+			{
+				throw std::runtime_error("Texture::LoadFromFileData: failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason());
+			}
+			Texture texture;
+			texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
+			stbi_image_free(pixels);
+			return texture;
+		}
+
+		uint32_t magic = 0;
+		std::memcpy(&magic, fileData.data(), 4);
+		if (magic == DDS_MAGIC)
+		{
+			Texture texture;
+			texture.m_image = UploadBcnDds(fileData, debugPath, device, allocator, uploadQueue, uploadPool, bindless, filter);
+			return texture;
+		}
+
+		int width = 0, height = 0, channels = 0;
+		stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
+		if (!pixels)
+		{
+			throw std::runtime_error("Texture::LoadFromFileData: failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason());
+		}
+
+		Texture texture;
+		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
+		stbi_image_free(pixels);
+		return texture;
+	}
+
 	Texture Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
@@ -299,8 +337,6 @@ namespace aether
 			const std::filesystem::path stem = fp.parent_path() / fp.stem();
 			texturePath = stem.generic_string() + ".texture";
 			// Preserve the VFS mount (everything before the first '/')
-			// ResolveRelativeVfsPath is not available here, so reconstruct manually.
-			// pathStr format: "mount://rel/path/file.ext"
 			const std::size_t slashSlash = pathStr.find("://");
 			if (slashSlash != std::string::npos)
 			{
@@ -311,39 +347,12 @@ namespace aether
 		}
 
 		std::vector<std::byte> fileData = TryLoad(texturePath);
-		bool isDds = false;
-		if (fileData.size() >= 4)
-		{
-			uint32_t magic = 0;
-			std::memcpy(&magic, fileData.data(), 4);
-			isDds = (magic == DDS_MAGIC);
-		}
-
-		if (isDds)
-		{
-			Texture texture;
-			texture.m_image = UploadBcnDds(fileData, texturePath, device, allocator, uploadQueue, uploadPool, bindless, filter);
-			return texture;
-		}
-
-		// Fall back: load original path with stb_image
 		if (fileData.empty())
 		{
 			fileData = io::FileSystem::ReadFile(path);
 		}
 
-		int width = 0, height = 0, channels = 0;
-		stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
-
-		if (!pixels)
-		{
-			throw std::runtime_error("Texture::LoadFromFile: failed to load '" + pathStr + "': " + stbi_failure_reason());
-		}
-
-		Texture texture;
-		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
-		stbi_image_free(pixels);
-		return texture;
+		return LoadFromFileData(fileData, pathStr, device, allocator, uploadQueue, uploadPool, bindless, filter);
 	}
 
 	Texture Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)

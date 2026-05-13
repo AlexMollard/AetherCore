@@ -9,6 +9,7 @@
 
 #include "FileGlobOptions.hpp"
 #include "FileRequest.hpp"
+#include "utils/coro/Task.hpp"
 
 namespace aether::io
 {
@@ -53,6 +54,11 @@ namespace aether::io
 
 		// Block until the given async request has completed.
 		static void WaitFor(const FileRequestHandle& handle);
+
+		// Coroutine async read - returns a task that becomes ready when the
+		// file has been read on the background I/O thread.  The calling
+		// coroutine suspends without blocking the game thread.
+		[[nodiscard]] static coro::task<std::vector<std::byte>> ReadFileAsync(std::string_view virtualPath, IOPriority priority = IOPriority::Normal);
 
 		// Block until all outstanding async requests have completed.
 		static void Flush();

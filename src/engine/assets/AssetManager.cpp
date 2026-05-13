@@ -278,6 +278,18 @@ namespace aether
 		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
 	}
 
+	coro::async<Texture> AssetManager::CreateTextureAsync(std::string_view path, TextureFilter filter)
+	{
+		// Read file data on the I/O thread (suspends the calling coroutine).
+		const std::string pathStr(path);
+		auto fileData = co_await io::FileSystem::ReadFileAsync(pathStr);
+
+		// GPU upload must happen on the game thread (owns the Vulkan context).
+		// After co_await resumes, we're back on the game thread via the default
+		// executor, so this is safe.
+		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
+	}
+
 	GraphicsPipeline AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
 	{
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
@@ -454,6 +466,50 @@ namespace aether
 			loaded.textures.push_back(std::move(texture));
 		}
 
+		FinaliseModelLoad(loaded, source, imageSlots, path);
+		return loaded;
+	}
+
+	coro::async<LoadedModel> AssetManager::LoadModelAsync(std::string_view path)
+	{
+		const std::string pathStr(path);
+
+		// Resolve the .mesh path (same logic as GltfAsset::LoadFromVfsPath).
+		std::string meshPath = assets::GltfAsset::ResolveMeshPath(pathStr);
+		if (meshPath.empty() || !io::FileSystem::Exists(meshPath))
+		{
+			meshPath = std::string(path);
+		}
+
+		// Read the .mesh file on the I/O thread.
+		auto meshData = co_await io::FileSystem::ReadFileAsync(meshPath);
+
+		// Parse from memory on the game thread (after resumption).
+		const assets::GltfAsset source = assets::GltfAsset::LoadFromMemory(std::move(meshData), meshPath);
+		LoadedModel loaded;
+
+		// Load textures asynchronously.
+		std::vector<std::uint32_t> imageSlots(source.images.size(), Material::kNoTexture);
+		loaded.textures.reserve(source.images.size());
+		for (std::size_t imageIndex = 0; imageIndex < source.images.size(); ++imageIndex)
+		{
+			const assets::GltfImage& image = source.images[imageIndex];
+			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
+			{
+				continue;
+			}
+
+			Texture texture = co_await CreateTextureAsync(image.uri);
+			imageSlots[imageIndex] = texture.GetBindlessSlot();
+			loaded.textures.push_back(std::move(texture));
+		}
+
+		FinaliseModelLoad(loaded, source, imageSlots, pathStr);
+		co_return loaded;
+	}
+
+	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path)
+	{
 		std::vector<glm::mat4> localNodeTransforms(source.nodes.size(), glm::mat4(1.0f));
 		for (std::size_t nodeIndex = 0; nodeIndex < source.nodes.size(); ++nodeIndex)
 		{
@@ -550,8 +606,6 @@ namespace aether
 				loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
 			}
 		}
-
-		return loaded;
 	}
 
 	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale)

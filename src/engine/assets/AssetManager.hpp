@@ -8,11 +8,17 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "mesh/Mesh.hpp"
 #include "material/Texture.hpp"
+#include "utils/coro/Task.hpp"
 
 namespace aether
 {
 	struct Material;
 	class VulkanContext;
+
+	namespace assets
+	{
+		struct GltfAsset;
+	}
 	class BindlessManager;
 	class MaterialBuffer;
 	class RenderQueue;
@@ -37,6 +43,10 @@ namespace aether
 		// Texture creation.
 		[[nodiscard]] Texture CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
+		// Async texture creation — co_await the file read on the I/O thread,
+		// then decode and upload to GPU on the calling (game) thread.
+		[[nodiscard]] coro::async<Texture> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
+
 		// Pipeline creation.
 		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 
@@ -50,10 +60,18 @@ namespace aether
 
 		// Model loading and spawning.
 		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
+
+		// Async model loading — co_await the .mesh file read on the I/O thread,
+		// then parse and upload textures on the game thread.
+		[[nodiscard]] coro::async<LoadedModel> LoadModelAsync(std::string_view path);
+
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 
 		// Bind runtime dependencies once during engine startup.
 		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, VkCommandPool uploadPool);
+
+		// Shared finalisation step for both synchronous and async model loading.
+		void FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path);
 
 		// Set rendering dependencies after the rendering subsystem initializes.
 		void SetRenderQueue(RenderQueue& renderQueue)

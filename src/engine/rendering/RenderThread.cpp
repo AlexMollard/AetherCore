@@ -5,6 +5,12 @@
 
 namespace aether
 {
+	RenderThread::RenderThread()
+	      : m_channel(2) // double-buffered: game thread writes one slot while
+	                     // render thread reads the other
+	{
+	}
+
 	void RenderThread::Start(AetherCore& engine)
 	{
 		m_engine = &engine;
@@ -13,11 +19,18 @@ namespace aether
 
 	void RenderThread::Stop()
 	{
+		m_shutdown = true;
+		m_channel.close();
+
+		// Unblock the game thread if it's waiting on the consumed ack
+		// (should not normally happen since Stop is called after the
+		// game loop exits, but guard against edge cases).
 		{
-			std::unique_lock lock(m_mutex);
-			m_shutdown = true;
+			std::lock_guard lock(m_ackMutex);
+			m_consumed = true;
 		}
-		m_cv.notify_all();
+		m_ackCv.notify_one();
+
 		if (m_thread.joinable())
 		{
 			m_thread.join();
@@ -28,71 +41,68 @@ namespace aether
 	{
 		AE_PROFILE_ZONE_N("RenderThread::Submit");
 
-		{
-			std::unique_lock lock(m_mutex);
-			// Wait for the render thread to be fully idle before publishing the next
-			// packet.  We need both conditions:
-			//   - !m_hasFrame: no queued packet waiting to be picked up
-			//   - !m_executing: previous frame is no longer being executed
-			// This prevents the game thread from reusing/clearing a draw slot while
-			// the render thread may still be reading it.
-			m_cv.wait(lock, [this] { return !m_hasFrame && !m_executing; });
+		// Block until a slot is available in the channel.
+		m_channel.write(std::move(packet));
 
-			m_packet = std::move(packet);
-			m_hasFrame = true;
+		// Wait for the render thread to consume the packet before returning.
+		// This prevents the game thread from calling BeginFrame() (which runs
+		// ImGui's UpdateTexturesNewFrame) while the render thread is still
+		// processing texture uploads from the current frame.
+		{
+			std::unique_lock lock(m_ackMutex);
+			m_ackCv.wait(lock, [this] { return m_consumed; });
 			m_consumed = false;
-		}
-		m_cv.notify_one(); // wake the render thread
-
-		// Wait for the render thread to pick up the packet ("consumed").
-		// This is just thread scheduling latency - the render thread signals consumed
-		// immediately on waking, before doing any fence wait or recording.
-		{
-			std::unique_lock lock(m_mutex);
-			m_cv.wait(lock, [this] { return m_consumed || m_shutdown; });
 		}
 	}
 
 	void RenderThread::WaitIdle()
 	{
-		std::unique_lock lock(m_mutex);
-		m_cv.wait(lock, [this] { return !m_hasFrame && !m_executing; });
+		// The channel is empty when the render thread has consumed everything.
+		// However, the render thread may still be executing the last frame.
+		// Close the channel so the render thread's read() returns an error,
+		// then join the thread to wait for full completion.
+		// (Callers should call Stop() first; this is a safety fallback.)
+		if (!m_shutdown)
+		{
+			m_shutdown = true;
+			m_channel.close();
+			{
+				std::lock_guard lock(m_ackMutex);
+				m_consumed = true;
+			}
+			m_ackCv.notify_one();
+		}
 	}
 
 	void RenderThread::ThreadLoop()
 	{
 		AE_PROFILE_THREAD("RenderThread");
 
-		while (true)
+		while (!m_shutdown)
 		{
 			RenderFramePacket packet;
 
+			try
 			{
-				std::unique_lock lock(m_mutex);
-				m_cv.wait(lock, [this] { return m_hasFrame || m_shutdown; });
+				packet = m_channel.read();
+			}
+			catch (const std::runtime_error&)
+			{
+				// Channel closed — time to shut down.
+				break;
+			}
 
-				if (m_shutdown && !m_hasFrame)
-				{
-					break;
-				}
-
-				packet = m_packet;
-				m_hasFrame = false;
+			// Signal the game thread that we've consumed the packet.
+			// This unblocks SubmitFrame BEFORE the GPU fence wait, so the
+			// game thread can start BeginFrame() while we wait for the GPU.
+			{
+				std::lock_guard lock(m_ackMutex);
 				m_consumed = true;
-				m_executing = true;
 			}
-			// Unblock the game thread as early as possible - before the fence wait.
-			// The game thread can now start the next simulation frame while the render
-			// thread blocks on the GPU fence in the background.
-			m_cv.notify_all();
+			m_ackCv.notify_one();
 
+			// Execute the frame.  This blocks on the GPU fence internally.
 			m_engine->ExecuteRenderFrame(packet);
-
-			{
-				std::unique_lock lock(m_mutex);
-				m_executing = false;
-			}
-			m_cv.notify_all();
 		}
 	}
 

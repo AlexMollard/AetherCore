@@ -113,5 +113,13 @@ namespace aether::assets
 		std::vector<GltfAnimation> animations;
 
 		static GltfAsset LoadFromVfsPath(std::string_view path);
+
+		// Load from raw .mesh file data (already read from disk).
+		// Useful after an async I/O operation.
+		static GltfAsset LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath);
+
+		// Resolve the VFS path of the .mesh file for a given model path.
+		// Returns an empty string if the path has no VFS mount.
+		[[nodiscard]] static std::string ResolveMeshPath(std::string_view vfsPath);
 	};
 } // namespace aether::assets

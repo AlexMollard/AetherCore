@@ -1,10 +1,14 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
-#include <glm/glm.hpp>
 #include <mutex>
 #include <thread>
+
+#include <glm/glm.hpp>
+
+#include "utils/coro/Channel.hpp"
 
 namespace aether
 {
@@ -45,28 +49,32 @@ namespace aether
 	//
 	// Frame pipeline:
 	//   Game thread  : Sim N -> SetWriteSlot(N) -> LayerGui -> GatherDraws -> PreparePacket -> SubmitFrame(N)
-	//   Render thread:                                                                   <- wake, "consumed" ->
+	//   Render thread:                                                                   <- wake, read ->
 	//                                                                                      WaitFence -> Record -> Submit -> Present
 	//
-	// The game thread blocks at SubmitFrame only until the render thread signals
-	// "consumed" (it has picked up the packet), which happens before the fence wait.
-	// This means the game thread is stalled for microseconds (thread wake latency)
-	// rather than milliseconds (GPU frame time), giving the GPU the full sim frame
-	// budget to finish before the render thread reaches the fence.
+	// Synchronisation uses a bounded channel (capacity = 2 = double-buffered)
+	// plus a consumed-acknowledgment condvar.
+	//
+	// The game thread blocks at SubmitFrame only until the render thread has
+	// consumed the packet from the channel (microsecond latency).  The render
+	// thread reads from the channel BEFORE the fence wait, so the game thread
+	// is unblocked before GPU work begins.
+	//
+	// The consumed-acknowledgment prevents the game thread from starting
+	// the next frame's BeginFrame() — which may call ImGui's texture update
+	// checks — while the render thread is still processing texture uploads
+	// from the previous frame.
 	class RenderThread
 	{
 	public:
+		RenderThread();
+
 		void Start(AetherCore& engine);
 		void Stop();
 
 		// Hand off a completed render packet to the render thread.
-		// Blocks until:
-		//   1. The render thread is idle (has consumed its previous packet), AND
-		//   2. The render thread signals "consumed" for this new packet.
-		// Condition 1 prevents the game thread from racing more than one frame ahead.
-		// Condition 2 ensures the render thread has picked up this packet before the
-		// game thread overwrites the double-buffered CPU state for the next frame.
-		// Both waits are expected to be near-zero (thread scheduling latency only).
+		// Blocks until the render thread has consumed the packet
+		// (microsecond latency, not GPU-frame latency).
 		void SubmitFrame(RenderFramePacket packet);
 
 		// Block until the render thread has no pending work.
@@ -78,13 +86,14 @@ namespace aether
 
 		AetherCore* m_engine = nullptr;
 		std::thread m_thread;
-		std::mutex m_mutex;
-		std::condition_variable m_cv;
+		coro::channel<RenderFramePacket> m_channel;
 
-		RenderFramePacket m_packet{};
-		bool m_hasFrame = false;  // render thread has a packet waiting
-		bool m_consumed = false;  // render thread picked up the current packet
-		bool m_executing = false; // render thread is executing a frame
+		// Consumed-acknowledgment: protects game-thread operations that must
+		// not run concurrently with the render thread's ExecuteRenderFrame
+		// (e.g. ImGui's UpdateTexturesNewFrame check during BeginFrame).
+		std::mutex m_ackMutex;
+		std::condition_variable m_ackCv;
+		bool m_consumed = false;
 		bool m_shutdown = false;
 	};
 
