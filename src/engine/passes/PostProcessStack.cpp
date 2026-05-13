@@ -46,16 +46,7 @@ namespace aether
 		        {
 		                .shaderVfsPath = "shaders://fxaa.slang.spv",
 		                .colorFormat = desc.swapchainFormat,
-		                .pushConstantSize = sizeof(uint32_t),
-		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		        });
-
-		stack.m_tonemapPipelineSwapchain = GraphicsPipeline::Create(desc.device,
-		        {
-		                .shaderVfsPath = "shaders://tonemap.slang.spv",
-		                .colorFormat = desc.swapchainFormat,
-		                .pushConstantSize = 3 * sizeof(uint32_t),
+		                .pushConstantSize = 2u * sizeof(uint32_t),
 		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
 		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
 		        });
@@ -67,7 +58,6 @@ namespace aether
 
 	void PostProcessStack::Destroy()
 	{
-		m_tonemapPipelineSwapchain.Destroy();
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
 		m_ldrColorImage.Reset();
@@ -78,48 +68,9 @@ namespace aether
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
 	{
-		if (!m_fxaaEnabled)
-		{
-			graph.AddPass("$PostProcess")
-			        .ReadTexture(m_hdrColor)
-			        .WriteColor(graph.GetSwapchainColor(), VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, {})
-			        .Execute(
-			                [this, &bindless](PassContext& ctx)
-			                {
-				                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
-				                const VkViewport vp{
-					                .x = 0.0f,
-					                .y = 0.0f,
-					                .width = static_cast<float>(ctx.extent.width),
-					                .height = static_cast<float>(ctx.extent.height),
-					                .minDepth = 0.0f,
-					                .maxDepth = 1.0f,
-				                };
-				                const VkRect2D scissor{
-					                { 0, 0 },
-                                    ctx.extent
-				                };
-				                vkCmdSetViewport(cmd, 0, 1, &vp);
-				                vkCmdSetScissor(cmd, 0, 1, &scissor);
-				                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tonemapPipelineSwapchain.GetPipeline());
-				                const VkDescriptorSet set = bindless.GetSet();
-				                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tonemapPipelineSwapchain.GetLayout(), 0, 1, &set, 0, nullptr);
-				                struct
-				                {
-					                uint32_t hdrSlot;
-					                uint32_t mode;
-					                float exposure;
-				                } push;
-				                push.hdrSlot = m_hdrColorImage.GetBindlessSampledSlot();
-				                push.mode = static_cast<uint32_t>(m_tonemapMode);
-				                push.exposure = m_exposure;
-				                vkCmdPushConstants(cmd, m_tonemapPipelineSwapchain.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
-				                vkCmdDraw(cmd, 3, 1, 0, 0);
-			                });
-			return;
-		}
-
-		// FXAA: tonemap -> LDR intermediate, then FXAA -> swapchain.
+		// Tonemap -> LDR intermediate (always), then FXAA -> swapchain.
+		// FXAA toggling is handled at runtime via a push constant so the graph
+		// topology stays stable and toggles don't require a graph rebuild.
 		graph.AddPass("$PostProcess")
 		        .ReadTexture(m_hdrColor)
 		        .WriteColor(m_ldrColor, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, {})
@@ -190,8 +141,14 @@ namespace aether
 			                const VkDescriptorSet set = bindless.GetSet();
 			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fxaaPipeline.GetLayout(), 0, 1, &set, 0, nullptr);
 
-			                const uint32_t ldrSlot = m_ldrColorImage.GetBindlessSampledSlot();
-			                vkCmdPushConstants(cmd, m_fxaaPipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t), &ldrSlot);
+			                struct
+			                {
+				                uint32_t ldrSlot;
+				                uint32_t fxaaEnabled;
+			                } push;
+			                push.ldrSlot = m_ldrColorImage.GetBindlessSampledSlot();
+			                push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
+			                vkCmdPushConstants(cmd, m_fxaaPipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
 
 			                vkCmdDraw(cmd, 3, 1, 0, 0);
 		                });

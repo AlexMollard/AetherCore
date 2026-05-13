@@ -18,8 +18,8 @@
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
 
-// Push constant: bindless slot index of the LDR source image.
-struct FxaaPush { uint ldrSlot; };
+// Push constant: bindless slot, FXAA toggle
+struct FxaaPush { uint ldrSlot; uint fxaaEnabled; };
 [[vk::push_constant]] FxaaPush pc;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -49,6 +49,12 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 {
     const int2 coord = int2(svPos.xy);
     Texture2D  tex   = g_textures[pc.ldrSlot];
+
+    // Skip FXAA when toggled off — passthrough avoids graph rebuilds.
+    if (pc.fxaaEnabled == 0u)
+    {
+        return float4(LoadRGB(tex, coord), 1.0f);
+    }
 
     // ── 5-tap cross ────────────────────────────────────────────────────────
     const float3 rgbM  = LoadRGB(tex, coord);
@@ -146,8 +152,8 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
                           + rgbNW + rgbNE + rgbSW + rgbSE) * (1.0f / 8.0f);
     const float  lumaBox = Luma(rgbBox);
     const float  subBlend   = clamp(abs(lumaBox - lumaM) / lumaRange, 0.0f, 1.0f);
-    const float  subBlendSq = subBlend * subBlend * 0.75f;
-    blendFactor = max(blendFactor, subBlendSq);
+    const float  subBlendCu = subBlend * subBlend * subBlend * 0.5f;
+    blendFactor = max(blendFactor, subBlendCu);
 
     // ── Final blend between centre and perpendicular neighbour ─────────────
     // blendFactor is in [0, 0.5], scale to [0, 1] for the lerp.

@@ -94,8 +94,8 @@ namespace aether
 			return m_exposure;
 		}
 
-		// FXAA toggle.  When disabled the tonemap pass writes directly to the
-		// swapchain, saving one full-screen pass and avoiding any blurring.
+		// FXAA toggle.  When disabled the $FXAA pass becomes a passthrough
+		// (no blurring) so graph topology stays stable across toggles.
 		void SetFxaaEnabled(bool enabled)
 		{
 			m_fxaaEnabled = enabled;
@@ -117,8 +117,7 @@ namespace aether
 
 		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM - tonemap output
 		RGImage m_ldrColor{};
-		GraphicsPipeline m_fxaaPipeline;             // LDR -> swapchain (FXAA)
-		GraphicsPipeline m_tonemapPipelineSwapchain; // HDR -> swapchain (no FXAA path)
+		GraphicsPipeline m_fxaaPipeline; // LDR -> swapchain (FXAA, can passthrough when disabled)
 		VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
