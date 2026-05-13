@@ -1,4 +1,4 @@
-#include "material/PassResourceCompiler.hpp"
+#include "rendering/PassResourceCompiler.hpp"
 
 #include <algorithm>
 #include <numeric>

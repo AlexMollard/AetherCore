@@ -5,8 +5,8 @@
 #include <span>
 #include <vector>
 
-#include "scene/AetherCore.hpp"
-#include "utils/AssetManager.hpp"
+#include "AetherCore.hpp"
+#include "assets/AssetManager.hpp"
 #include "scene/Components.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "material/Material.hpp"

@@ -3,7 +3,7 @@
 #include <cstdint>
 #include "vulkan/volk.hpp"
 
-#include "material/GpuContracts.hpp"
+#include "rendering/GpuContracts.hpp"
 
 namespace aether
 {

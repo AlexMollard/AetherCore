@@ -6,7 +6,7 @@
 #include <queue>
 #include <unordered_map>
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanUtils.hpp"

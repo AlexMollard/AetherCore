@@ -1,4 +1,4 @@
-#include "passes/ShadowService.hpp"
+#include "rendering/ShadowService.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -8,7 +8,7 @@
 #include <string>
 
 #include "animation/AnimationDatabase.hpp"
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/WorldRenderer.hpp"

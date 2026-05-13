@@ -2,7 +2,7 @@
 
 #include <memory>
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"

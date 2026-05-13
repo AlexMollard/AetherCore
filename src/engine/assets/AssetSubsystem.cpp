@@ -2,9 +2,9 @@
 
 #include <stdexcept>
 
-#include "ServiceContainer.hpp"
-#include "material/BindlessManager.hpp"
-#include "passes/ShadowService.hpp"
+#include "utils/ServiceContainer.hpp"
+#include "gpu/BindlessManager.hpp"
+#include "rendering/ShadowService.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "scene/World.hpp"

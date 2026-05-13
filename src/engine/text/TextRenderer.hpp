@@ -16,7 +16,7 @@ namespace aether
 	class Swapchain;
 
 	// Manages an SDF font atlas and provides glyph decomposition for layer-sorted
-	// text rendering via QuadRenderer.  No dedicated render pass or pipeline —
+	// text rendering via QuadRenderer.  No dedicated render pass or pipeline -
 	// glyphs are submitted as ShapeType::SdfGlyph commands so they sort correctly
 	// with all other UI quads in a single draw call.
 	class TextRenderer

@@ -13,7 +13,7 @@
 #include "rendering/Renderer.hpp"
 #include "material/Material.hpp"
 #include "animation/ModelAnimator.hpp"
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "scene/System.hpp"
 
 class ServiceContainer;

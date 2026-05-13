@@ -5,7 +5,7 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 
-#include "material/GpuSpan.hpp"
+#include "vulkan/GpuSpan.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/volk.hpp"
 

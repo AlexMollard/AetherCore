@@ -1,6 +1,6 @@
 #include "rendering/RenderThread.hpp"
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether

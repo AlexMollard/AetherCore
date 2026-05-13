@@ -1,9 +1,9 @@
 #include "rendering/RenderingSubsystem.hpp"
 
-#include "ServiceContainer.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "camera/CameraManager.hpp"
-#include "camera/LightingManager.hpp"
-#include "material/BindlessManager.hpp"
+#include "rendering/LightingManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"

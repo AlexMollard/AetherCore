@@ -1,4 +1,4 @@
-#include "utils/ShaderUtils.hpp"
+#include "vulkan/ShaderUtils.hpp"
 
 #include <stdexcept>
 #include <string>

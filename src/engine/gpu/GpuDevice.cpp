@@ -2,8 +2,8 @@
 
 #include <mutex>
 
-#include "ServiceContainer.hpp"
-#include "material/BindlessManager.hpp"
+#include "utils/ServiceContainer.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "platform/Window.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "rendering/RenderGraph.hpp"

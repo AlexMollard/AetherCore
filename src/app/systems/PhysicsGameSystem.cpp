@@ -7,13 +7,13 @@
 #include <glm/gtc/constants.hpp>
 
 #include "camera/Camera.hpp"
-#include "camera/LightingManager.hpp"
+#include "rendering/LightingManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsComponents.hpp"

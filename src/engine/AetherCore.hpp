@@ -6,7 +6,7 @@
 #include <optional>
 #include <vector>
 
-#include "ServiceContainer.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "animation/ModelAnimator.hpp"
 #include "assets/AssetSubsystem.hpp"

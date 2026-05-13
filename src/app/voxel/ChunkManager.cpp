@@ -6,7 +6,7 @@
 #include "assets/AssetSubsystem.hpp"
 #include "mesh/MeshArena.hpp"
 #include "mesh/MeshUploadQueue.hpp"
-#include "passes/ShadowService.hpp"
+#include "rendering/ShadowService.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderQueue.hpp"
 

@@ -13,7 +13,7 @@
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "FileSystem.hpp"
 #include "utils/Logger.hpp"
 

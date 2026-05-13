@@ -8,12 +8,12 @@
 
 #include "rendering/CommandRecorder.hpp"
 #include "FileSystem.hpp"
-#include "material/GpuContracts.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "utils/Logger.hpp"
 #include "mesh/Mesh.hpp"
 #include "utils/Profiler.hpp"
-#include "utils/ShaderUtils.hpp"
+#include "vulkan/ShaderUtils.hpp"
 
 namespace aether
 {

@@ -3,10 +3,10 @@
 #include <stdexcept>
 #include <string>
 #include "gpu/GpuTypes.hpp"
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
-#include "camera/LightingManager.hpp"
+#include "rendering/LightingManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"

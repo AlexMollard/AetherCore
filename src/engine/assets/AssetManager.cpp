@@ -1,11 +1,11 @@
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 
 #include <algorithm>
 #include <filesystem>
 #include <stdexcept>
 
 #include "assets/GltfAsset.hpp"
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "FileSystem.hpp"
 #include "utils/Logger.hpp"
@@ -13,8 +13,8 @@
 #include "material/MaterialBuffer.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
-#include "passes/ShadowService.hpp"
-#include "text/TextIni.hpp"
+#include "rendering/ShadowService.hpp"
+#include "utils/TextIni.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
 

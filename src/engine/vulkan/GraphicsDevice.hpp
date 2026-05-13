@@ -2,7 +2,7 @@
 
 #include <optional>
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "vulkan/ResourcePool.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"

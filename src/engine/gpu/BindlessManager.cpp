@@ -1,4 +1,4 @@
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 
 #include <algorithm>
 #include <format>

@@ -1,12 +1,12 @@
 #include "rendering/RenderPipelineCoordinator.hpp"
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "passes/CullPass.hpp"
 #include "passes/ForwardPass.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
-#include "passes/ShadowService.hpp"
+#include "rendering/ShadowService.hpp"
 #include "passes/SkyboxPass.hpp"
 
 namespace aether

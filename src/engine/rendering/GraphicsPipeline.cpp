@@ -5,9 +5,9 @@
 #include <utility>
 
 #include "FileSystem.hpp"
-#include "material/GpuContracts.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "utils/Logger.hpp"
-#include "utils/ShaderUtils.hpp"
+#include "vulkan/ShaderUtils.hpp"
 
 namespace aether
 {

@@ -5,7 +5,7 @@
 #include <string_view>
 #include <vector>
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "scene/Entity.hpp"

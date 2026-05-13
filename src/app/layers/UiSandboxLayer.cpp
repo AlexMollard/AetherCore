@@ -3,7 +3,7 @@
 #include <cmath>
 #include <format>
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "platform/Input.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiComponents.hpp"

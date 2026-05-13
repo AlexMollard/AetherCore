@@ -1,7 +1,7 @@
 #pragma once
 
 #include "camera/CameraManager.hpp"
-#include "camera/LightingManager.hpp"
+#include "rendering/LightingManager.hpp"
 
 class ServiceContainer;
 

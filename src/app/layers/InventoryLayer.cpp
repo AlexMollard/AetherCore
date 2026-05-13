@@ -3,7 +3,7 @@
 #include <format>
 #include <glm/glm.hpp>
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayout.hpp"
@@ -31,7 +31,7 @@ namespace aether::app
 
 	// 48 fake items - some slots intentionally empty (quantity 0).
 	static constexpr FakeItem kItems[kInventorySlots] = {
-		// Row 1 — assorted loot
+		// Row 1 - assorted loot
 		{  kRarityLegendary,   1 },
 		{   kRarityAscended,   1 },
 		{     kRarityExotic,   1 },
@@ -81,7 +81,7 @@ namespace aether::app
 		{		        {},   0 },
 		{		        {},   0 },
 
-		// Row 6 — mostly empty (end of bag)
+		// Row 6 - mostly empty (end of bag)
 		{       kRarityRare,   1 },
 		{       kRarityFine,   9 },
 		{		        {},   0 },

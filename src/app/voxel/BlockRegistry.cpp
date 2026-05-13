@@ -2,11 +2,11 @@
 
 #include <cassert>
 
-#include "ServiceContainer.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "io/FileSystem.hpp"
 #include "material/Material.hpp"
 #include "material/Texture.hpp"
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
 
 namespace voxel

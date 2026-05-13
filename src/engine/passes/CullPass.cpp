@@ -5,10 +5,10 @@
 
 #include "rendering/CommandRecorder.hpp"
 #include "FileSystem.hpp"
-#include "material/GpuContracts.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
-#include "utils/ShaderUtils.hpp"
+#include "vulkan/ShaderUtils.hpp"
 
 namespace aether
 {

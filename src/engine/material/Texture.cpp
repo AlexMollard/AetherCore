@@ -13,7 +13,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "FileSystem.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/UniqueBuffer.hpp"

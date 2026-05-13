@@ -1,4 +1,4 @@
-#include "passes/FrameComposer.hpp"
+#include "rendering/FrameComposer.hpp"
 
 namespace aether
 {

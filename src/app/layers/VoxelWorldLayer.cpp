@@ -13,7 +13,7 @@
 #include "passes/PostProcessStack.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderQueue.hpp"
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::app

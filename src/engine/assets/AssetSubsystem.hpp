@@ -7,7 +7,7 @@
 #include "mesh/MeshUploadQueue.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 
 class ServiceContainer;
 

@@ -1,4 +1,4 @@
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -18,7 +18,7 @@
 #include "scene/EcsHelpers.hpp"
 #include "scene/World.hpp"
 #include "FileSystem.hpp"
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "rendering/RenderThread.hpp"
 #include "utils/Logger.hpp"

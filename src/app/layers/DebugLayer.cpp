@@ -6,7 +6,7 @@
 
 #include "utils/DebugGui.hpp"
 
-#include "scene/AetherCore.hpp"
+#include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "platform/Input.hpp"

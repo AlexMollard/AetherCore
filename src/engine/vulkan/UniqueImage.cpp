@@ -4,7 +4,7 @@
 #include <utility>
 
 #include "utils/AetherExceptions.hpp"
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 
 namespace aether
 {

@@ -8,10 +8,10 @@
 
 #include "rendering/CommandRecorder.hpp"
 #include "FileSystem.hpp"
-#include "ServiceContainer.hpp"
-#include "material/BindlessManager.hpp"
+#include "utils/ServiceContainer.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "rendering/RenderGraph.hpp"
-#include "utils/AssetManager.hpp"
+#include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"

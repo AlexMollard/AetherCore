@@ -5,7 +5,7 @@
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
 
-#include "material/BindlessManager.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "vulkan/UniqueImage.hpp"

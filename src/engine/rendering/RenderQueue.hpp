@@ -7,7 +7,7 @@
 #include "vulkan/volk.hpp"
 
 #include "animation/AnimationDatabase.hpp"
-#include "material/GpuContracts.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 

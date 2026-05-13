@@ -1,4 +1,4 @@
-#include "camera/LightingManager.hpp"
+#include "rendering/LightingManager.hpp"
 
 #include <algorithm>
 #include <cmath>
