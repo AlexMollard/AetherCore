@@ -39,6 +39,9 @@ namespace aether
 		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
 		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);
 		void PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc);
+		void MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess);
+
+		void HostToShaderBarrier();
 		void BeginDebugLabel(const char* name, float r = 0.15f, float g = 0.55f, float b = 0.90f, float a = 1.0f);
 		void EndDebugLabel();
 

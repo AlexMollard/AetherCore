@@ -7,8 +7,6 @@
 #include <string>
 #include <unordered_map>
 
-#define GLFW_INCLUDE_NONE
-#include <GLFW/glfw3.h>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -46,11 +44,7 @@ namespace aether
 		m_services.Register<Input>(m_platform.GetInput());
 
 		// ── 2. Graphics device ──────────────────────────────────────────────
-		m_gfx.Init(m_services, { .appName = config.appName, .enableVsync = config.enableVsync });
-		m_services.Register<VulkanContext>(m_gfx.GetVulkanContext());
-		m_services.Register<Swapchain>(m_gfx.GetSwapchain());
-		m_services.Register<ResourcePool>(m_gfx.GetResourcePool());
-		m_services.Register<BindlessManager>(m_gfx.GetBindlessManager());
+		m_gpu.Init(m_services, { .appName = config.appName, .enableVsync = config.enableVsync });
 
 		// ── 3. Scene (ECS + legacy) ─────────────────────────────────────────
 		m_sceneSub.Init();
@@ -99,103 +93,40 @@ namespace aether
 		cameras.SetMainCamera(mainCam);
 
 		// ── 9. Async compute (optional) ─────────────────────────────────────
-		VulkanContext& vk = m_gfx.GetVulkanContext();
-		m_asyncComputeEnabled = m_settings.graphics.asyncCompute && vk.GetComputeQueue() != VK_NULL_HANDLE;
+		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu.HasDedicatedComputeQueue();
 		if (!m_settings.graphics.asyncCompute)
 		{
 			INFO(LogCategory::Engine, "Async compute disabled by settings.");
 		}
-		if (!m_asyncComputeEnabled)
+		if (!enableAsyncCompute)
 		{
 			WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
 		}
 
-		if (m_asyncComputeEnabled)
+		if (enableAsyncCompute)
 		{
-			const VkSemaphoreTypeCreateInfo timelineTypeInfo{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-				.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-				.initialValue = 0,
-			};
-			const VkSemaphoreCreateInfo semInfo{
-				.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-				.pNext = &timelineTypeInfo,
-			};
-			if (vkCreateSemaphore(vk.GetDevice().device, &semInfo, nullptr, &m_computeTimelineSemaphore) != VK_SUCCESS)
-			{
-				throw std::runtime_error("AetherCore: failed to create compute timeline semaphore.");
-			}
-			CommandRecorder::SetObjectName(vk.GetDevice().device, reinterpret_cast<std::uint64_t>(m_computeTimelineSemaphore), VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
-
-			VkFenceCreateInfo fenceInfo{};
-			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-
-			for (std::size_t frameI = 0; frameI < m_asyncComputeFrames.size(); ++frameI)
-			{
-				auto& frame = m_asyncComputeFrames[frameI];
-				const VkCommandPoolCreateInfo poolInfo{
-					.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-					.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-					.queueFamilyIndex = vk.GetComputeQueueFamily(),
-				};
-				if (vkCreateCommandPool(vk.GetDevice().device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
-				{
-					throw std::runtime_error("AetherCore: failed to create async compute command pool.");
-				}
-
-				const VkCommandBufferAllocateInfo allocInfo{
-					.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-					.commandPool = frame.commandPool,
-					.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-					.commandBufferCount = 1,
-				};
-				if (vkAllocateCommandBuffers(vk.GetDevice().device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
-				{
-					throw std::runtime_error("AetherCore: failed to allocate async compute command buffer.");
-				}
-
-				if (vkCreateFence(vk.GetDevice().device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
-				{
-					throw std::runtime_error("AetherCore: failed to create async compute fence.");
-				}
-
-				const std::string suffix = "[" + std::to_string(frameI) + "]";
-				CommandRecorder::SetObjectName(vk.GetDevice().device, reinterpret_cast<std::uint64_t>(frame.commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, ("AsyncCompute.Cmd" + suffix).c_str());
-				CommandRecorder::SetObjectName(vk.GetDevice().device, reinterpret_cast<std::uint64_t>(frame.inFlight), VK_OBJECT_TYPE_FENCE, ("AsyncCompute.Fence" + suffix).c_str());
-			}
+			m_asyncCompute.Init(m_gpu);
 		}
 
-		INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gfx.GetBindlessManager().GetCapacity());
+		// ── 10. Swapchain recreation callback ──────────────────────────────
+		m_gpu.SetSwapchainRecreatedCallback(
+		        [this]()
+		        {
+			        m_rendering.RecreateSwapchainResources(m_services);
+			        if (m_swapchainRecreatedCallback)
+			        {
+				        m_swapchainRecreatedCallback(*this);
+			        }
+		        });
+
+		INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu.GetBindlessManager().GetCapacity());
 	}
 
 	AetherCore::~AetherCore()
 	{
-		VulkanContext& vk = m_gfx.GetVulkanContext();
-		VkDevice device = vk.GetDevice().device;
-		vkDeviceWaitIdle(device);
+		m_gpu.WaitIdle();
 
-		// Async compute resources freed first (VkDevice is still alive).
-		for (auto& frame: m_asyncComputeFrames)
-		{
-			if (frame.inFlight != VK_NULL_HANDLE)
-			{
-				vkDestroyFence(device, frame.inFlight, nullptr);
-				frame.inFlight = VK_NULL_HANDLE;
-			}
-			if (frame.commandPool != VK_NULL_HANDLE)
-			{
-				vkDestroyCommandPool(device, frame.commandPool, nullptr);
-				frame.commandPool = VK_NULL_HANDLE;
-				frame.commandBuffer = VK_NULL_HANDLE;
-			}
-		}
-		if (m_computeTimelineSemaphore != VK_NULL_HANDLE)
-		{
-			vkDestroySemaphore(device, m_computeTimelineSemaphore, nullptr);
-			m_computeTimelineSemaphore = VK_NULL_HANDLE;
-		}
-		m_asyncComputeEnabled = false;
+		m_asyncCompute.Shutdown(m_gpu);
 
 		// Subsystems free their VMA-backed allocations (VMA still alive).
 		m_rendering.Shutdown(m_services);
@@ -204,8 +135,8 @@ namespace aether
 		m_assetsSub.Shutdown();
 		// SceneSubsystem has no shutdown work.
 
-		// Graphics device shutdown destroys VMA, VkDevice.
-		m_gfx.Shutdown();
+		// GPU shutdown destroys internal Vulkan resources.
+		m_gpu.Shutdown();
 		m_platform.Shutdown();
 
 		m_services.Clear();
@@ -214,7 +145,7 @@ namespace aether
 
 	void AetherCore::WaitIdle()
 	{
-		vkDeviceWaitIdle(m_gfx.GetVulkanContext().GetDevice().device);
+		m_gpu.WaitIdle();
 	}
 
 	bool AetherCore::ShouldClose()
@@ -237,49 +168,27 @@ namespace aether
 	void AetherCore::BeginFrame()
 	{
 		AE_PROFILE_ZONE();
-		Swapchain& swapchain = m_gfx.GetSwapchain();
-		if (swapchain.NeedsRecreation())
+		if (m_gpu.SwapchainNeedsRecreation())
 		{
 			RecreateSwapchain();
 		}
 
-		swapchain.BeginFrame(m_gfx.GetVulkanContext().GetDevice().device);
-		m_currentRecorder = CommandRecorder(swapchain.GetCurrentCommandBuffer());
+		m_gpu.BeginSwapchainFrame();
+		m_currentRecorder = m_gpu.GetCurrentCommandRecorder();
 	}
 
 	void AetherCore::RecreateSwapchain()
 	{
-		Swapchain& swapchain = m_gfx.GetSwapchain();
-		VulkanContext& vk = m_gfx.GetVulkanContext();
+		auto size = m_platform.GetWindow().WaitForValidFramebufferSize();
+		m_gpu.RecreateSwapchain(m_platform.GetWindow(), m_settings.graphics.vsync);
 
-		int w = 0;
-		int h = 0;
-		glfwGetFramebufferSize(m_platform.GetWindow().GetHandle(), &w, &h);
-		while (w == 0 || h == 0)
-		{
-			glfwWaitEvents();
-			glfwGetFramebufferSize(m_platform.GetWindow().GetHandle(), &w, &h);
-		}
-
-		vkDeviceWaitIdle(vk.GetDevice().device);
-		swapchain.Shutdown(vk.GetDevice().device);
-		swapchain.ClearRecreationFlag();
-		swapchain.Initialize(vk, m_platform.GetWindow(), m_settings.graphics.vsync);
-
-		m_rendering.RecreateSwapchainResources(m_services);
-
-		if (m_swapchainRecreatedCallback)
-		{
-			m_swapchainRecreatedCallback(*this);
-		}
-
-		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", w, h);
+		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", size.width, size.height);
 	}
 
 	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		Swapchain& swapchain = m_gfx.GetSwapchain();
+		GpuExtent2D extent = m_gpu.GetSwapchainExtent();
 		RenderQueue& renderQueue = m_rendering.GetRenderQueue();
 		Scene& scene = m_sceneSub.GetScene();
 		World& world = m_sceneSub.GetWorld();
@@ -299,13 +208,13 @@ namespace aether
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
 		packet.drawSlot = drawSlot;
-		packet.materialBufferAddr = materialBuffer.GetDeviceAddress();
+		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 
 		if (const Camera* cam = cameras.TryGetMainCamera())
 		{
 			packet.hasCameraData = true;
 			packet.view = cam->GetViewMatrix();
-			const float aspect = static_cast<float>(swapchain.GetExtent().width) / static_cast<float>(swapchain.GetExtent().height);
+			const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 			packet.proj = cam->GetProjectionMatrix(aspect);
 			packet.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 		}
@@ -331,123 +240,76 @@ namespace aether
 	void AetherCore::EndFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
-		VkSemaphore computeFinished = VK_NULL_HANDLE;
 
-		Swapchain& swapchain = m_gfx.GetSwapchain();
-		VulkanContext& vk = m_gfx.GetVulkanContext();
-
-		if (swapchain.IsFrameValid())
+		if (!m_gpu.IsSwapchainFrameValid())
 		{
-			const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % Swapchain::kMaxFramesInFlight);
+			m_gpu.SubmitAndPresent();
+			++m_frameIndex;
+			m_gpu.GetBindlessManager().AdvanceFrame(m_frameIndex);
+			return;
+		}
 
-			FrameConstants fc = m_rendering.GetFrameComposer().ComposeBaseFrameConstants(packet, m_sceneSub.GetScene().GetViewProjection());
+		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
-			m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
+		FrameConstants fc = m_rendering.GetFrameComposer().ComposeBaseFrameConstants(packet, m_sceneSub.GetScene().GetViewProjection());
 
-			if (packet.hasCameraData)
+		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
+
+		if (packet.hasCameraData)
+		{
+			const Camera* cam = m_cameras.GetCameraManager().TryGetMainCamera();
+			if (cam)
 			{
-				const Camera* cam = m_cameras.GetCameraManager().TryGetMainCamera();
-				if (cam)
+				if (m_asyncCompute.IsEnabled())
 				{
-					const std::uint32_t computeFamily = vk.GetComputeQueueFamily();
-					const std::uint32_t graphicsFamily = vk.GetGraphicsQueueFamily();
+					const std::uint32_t computeFamily = m_gpu.GetVulkanContext().GetComputeQueueFamily();
+					const std::uint32_t graphicsFamily = m_gpu.GetVulkanContext().GetGraphicsQueueFamily();
 
-					VkCommandBuffer lightingCmd = swapchain.GetCurrentCommandBuffer();
-					if (m_asyncComputeEnabled)
+					m_asyncCompute.BeginFrame(m_gpu, frameIdx);
+					CommandRecorder lightingCmd = m_asyncCompute.GetCommandRecorder(frameIdx);
+					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, computeFamily, graphicsFamily);
+					m_asyncCompute.EndCommandBuffer(frameIdx);
+
+					auto result = m_asyncCompute.Submit(m_gpu, frameIdx);
+
+					if (computeFamily != graphicsFamily)
 					{
-						auto& asyncFrame = m_asyncComputeFrames[frameIdx];
-						vkWaitForFences(vk.GetDevice().device, 1, &asyncFrame.inFlight, VK_TRUE, UINT64_MAX);
-						vkResetFences(vk.GetDevice().device, 1, &asyncFrame.inFlight);
-						vkResetCommandPool(vk.GetDevice().device, asyncFrame.commandPool, 0);
-
-						const VkCommandBufferBeginInfo beginInfo{
-							.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-							.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-						};
-						vkBeginCommandBuffer(asyncFrame.commandBuffer, &beginInfo);
-						CommandRecorder(asyncFrame.commandBuffer).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
-						lightingCmd = asyncFrame.commandBuffer;
-					}
-
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, swapchain.GetExtent(), fc, true, computeFamily, graphicsFamily);
-
-					if (m_asyncComputeEnabled)
-					{
-						auto& asyncFrame = m_asyncComputeFrames[frameIdx];
-						CommandRecorder(asyncFrame.commandBuffer).EndDebugLabel();
-						vkEndCommandBuffer(asyncFrame.commandBuffer);
-
-						const std::uint64_t signalValue = ++m_computeTimelineValue;
-						const VkTimelineSemaphoreSubmitInfo timelineSubmit{
-							.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-							.waitSemaphoreValueCount = 0,
-							.pWaitSemaphoreValues = nullptr,
-							.signalSemaphoreValueCount = 1,
-							.pSignalSemaphoreValues = &signalValue,
-						};
-						const VkSubmitInfo submitInfo{
-							.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-							.pNext = &timelineSubmit,
-							.waitSemaphoreCount = 0,
-							.pWaitSemaphores = nullptr,
-							.pWaitDstStageMask = nullptr,
-							.commandBufferCount = 1,
-							.pCommandBuffers = &asyncFrame.commandBuffer,
-							.signalSemaphoreCount = 1,
-							.pSignalSemaphores = &m_computeTimelineSemaphore,
-						};
-						vkQueueSubmit(vk.GetComputeQueue(), 1, &submitInfo, asyncFrame.inFlight);
-						computeFinished = m_computeTimelineSemaphore;
-
-						if (computeFamily != graphicsFamily)
-						{
-							m_cameras.GetLightingManager().EmitAcquireBarriers(frameIdx, swapchain.GetCurrentCommandBuffer(), computeFamily, graphicsFamily);
-						}
+						m_cameras.GetLightingManager().EmitAcquireBarriers(frameIdx, m_currentRecorder, computeFamily, graphicsFamily);
 					}
 				}
+				else
+				{
+					m_cameras.GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu.GetSwapchainExtent(), fc, true);
+				}
 			}
-			else
-			{
-				m_rendering.GetFrameComposer().ApplyNoCameraLightingFallback(fc);
-			}
-
-			m_rendering.GetFrameConstantsBuffer().Write(frameIdx, fc);
-			const VkDeviceAddress frameAddr = m_rendering.GetFrameConstantsBuffer().GetDeviceAddress(frameIdx);
-
-			const VkMemoryBarrier2 frameConstantsHostToShaders{
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-				.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			};
-			const VkDependencyInfo frameConstantsDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.memoryBarrierCount = 1,
-				.pMemoryBarriers = &frameConstantsHostToShaders,
-			};
-			vkCmdPipelineBarrier2(swapchain.GetCurrentCommandBuffer(), &frameConstantsDep);
-
-			const FrameTarget frameTarget{
-				.colorImage = swapchain.GetCurrentImage(),
-				.colorView = swapchain.GetCurrentImageView(),
-				.depthImage = swapchain.GetDepthImage(),
-				.depthView = swapchain.GetDepthImageView(),
-				.colorFormat = swapchain.GetImageFormat(),
-				.depthFormat = swapchain.GetDepthFormat(),
-				.extent = swapchain.GetExtent(),
-			};
-
-			m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
-			m_rendering.GetRenderGraph().Execute(swapchain.GetCurrentCommandBuffer(), frameTarget, frameAddr, frameIdx);
-			m_currentRecorder.EndDebugLabel();
 		}
+		else
 		{
-			std::lock_guard lock(vk.GetGraphicsQueueMutex());
-			swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, m_computeTimelineValue);
+			m_rendering.GetFrameComposer().ApplyNoCameraLightingFallback(fc);
 		}
+
+		m_rendering.GetFrameConstantsBuffer().Write(frameIdx, fc);
+		const std::uint64_t frameAddr = m_rendering.GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
+
+		m_currentRecorder.HostToShaderBarrier();
+
+		const FrameTarget frameTarget = m_gpu.BuildFrameTarget();
+
+		m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
+		m_rendering.GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
+		m_currentRecorder.EndDebugLabel();
+
+		if (m_asyncCompute.IsEnabled())
+		{
+			m_gpu.SubmitAndPresent(m_asyncCompute.GetTimelineSemaphoreHandle(), m_asyncCompute.GetCurrentTimelineValue());
+		}
+		else
+		{
+			m_gpu.SubmitAndPresent();
+		}
+
 		++m_frameIndex;
-		m_gfx.GetBindlessManager().AdvanceFrame(m_frameIndex);
+		m_gpu.GetBindlessManager().AdvanceFrame(m_frameIndex);
 	}
 
 } // namespace aether

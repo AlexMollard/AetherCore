@@ -4,7 +4,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include "vulkan/volk.hpp"
 
 namespace aether
 {
@@ -41,7 +40,7 @@ namespace aether
 		glm::mat4 viewProj{ 1.0f };
 		glm::mat4 view{ 1.0f };
 		glm::mat4 proj{ 1.0f };
-		VkDeviceAddress materialBufferAddr = 0;
+		std::uint64_t materialBufferAddr = 0;
 		std::uint64_t _pad0 = 0;
 		glm::vec4 sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
 		glm::vec4 ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };

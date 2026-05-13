@@ -79,4 +79,9 @@ namespace aether
 	{
 		return m_frames[frameIndex].address;
 	}
+
+	std::uint64_t FrameConstantsBuffer::GetDeviceAddressU64(std::uint32_t frameIndex) const
+	{
+		return static_cast<std::uint64_t>(m_frames[frameIndex].address);
+	}
 } // namespace aether

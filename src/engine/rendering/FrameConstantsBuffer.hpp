@@ -3,10 +3,10 @@
 #include <array>
 #include <cstdint>
 #include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
+#include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
-#include "vulkan/Swapchain.hpp"
+#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
@@ -35,9 +35,10 @@ namespace aether
 		// Push this directly into the push constant block; shaders dereference it via
 		// [[vk::buffer_reference]].
 		[[nodiscard]] VkDeviceAddress GetDeviceAddress(std::uint32_t frameIndex) const;
+		[[nodiscard]] std::uint64_t GetDeviceAddressU64(std::uint32_t frameIndex) const;
 
 	private:
-		static constexpr std::uint32_t kFrameCount = Swapchain::kMaxFramesInFlight;
+		static constexpr std::uint32_t kFrameCount = kMaxFramesInFlight;
 
 		struct PerFrame
 		{

@@ -4,6 +4,12 @@ struct GLFWwindow;
 
 namespace aether
 {
+	struct FramebufferSize
+	{
+		int width = 0;
+		int height = 0;
+	};
+
 	class Window
 	{
 	public:
@@ -17,9 +23,9 @@ namespace aether
 		[[nodiscard]] bool ShouldClose() const;
 		void PollEvents() const;
 
-		// Returns the refresh rate (Hz) of the monitor the window currently occupies.
-		// Falls back to the primary monitor for windowed mode.
-		// Returns 0 if the refresh rate cannot be determined.
+		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
+		FramebufferSize WaitForValidFramebufferSize();
+
 		[[nodiscard]] int GetDisplayRefreshRate() const;
 
 	private:

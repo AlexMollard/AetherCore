@@ -495,7 +495,7 @@ namespace aether
 		}
 	}
 
-	void RenderGraph::Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex)
+	void RenderGraph::Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
 	{
 		if (m_passes.empty())
 		{
@@ -509,7 +509,7 @@ namespace aether
 
 		EnsureTransientImages(target);
 
-		CommandRecorder recorder{ cmd };
+		VkDeviceAddress frameAddr = static_cast<VkDeviceAddress>(frameConstantsAddr);
 
 		for (const CompiledPass& cp: m_compiled)
 		{
@@ -526,7 +526,7 @@ namespace aether
 					WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
 					continue;
 				}
-				vkutil::TransitionImage(cmd, image, b.oldLayout, b.newLayout, b.srcStage, b.srcAccess, b.dstStage, b.dstAccess, b.aspect);
+				vkutil::TransitionImage(recorder.GetCommandBuffer(), image, b.oldLayout, b.newLayout, b.srcStage, b.srcAccess, b.dstStage, b.dstAccess, b.aspect);
 			}
 
 			std::vector<VkRenderingAttachmentInfo> colorInfos;
@@ -571,7 +571,7 @@ namespace aether
 					.pColorAttachments = colorInfos.data(),
 					.pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
-				vkCmdBeginRendering(cmd, &renderInfo);
+				vkCmdBeginRendering(recorder.GetCommandBuffer(), &renderInfo);
 
 				const VkViewport viewport{
 					.x = 0.0f,
@@ -585,19 +585,19 @@ namespace aether
 					{ 0, 0 },
 					passExtent,
 				};
-				vkCmdSetViewport(cmd, 0, 1, &viewport);
-				vkCmdSetScissor(cmd, 0, 1, &scissor);
+				vkCmdSetViewport(recorder.GetCommandBuffer(), 0, 1, &viewport);
+				vkCmdSetScissor(recorder.GetCommandBuffer(), 0, 1, &scissor);
 			}
 
 			if (pass.execute)
 			{
-				PassContext ctx{ recorder, passExtent, frameConstantsAddr, frameIndex };
+				PassContext ctx{ recorder, passExtent, frameAddr, frameIndex };
 				pass.execute(ctx);
 			}
 
 			if (useDynamicRendering)
 			{
-				vkCmdEndRendering(cmd);
+				vkCmdEndRendering(recorder.GetCommandBuffer());
 			}
 
 			recorder.EndDebugLabel();

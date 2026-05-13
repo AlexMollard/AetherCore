@@ -39,6 +39,33 @@ namespace aether
 		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawPushConstants), &pc);
 	}
 
+	void CommandRecorder::MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
+	{
+		if (m_cmd == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		const VkMemoryBarrier2 barrier{
+			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			.srcStageMask = srcStage,
+			.srcAccessMask = srcAccess,
+			.dstStageMask = dstStage,
+			.dstAccessMask = dstAccess,
+		};
+		const VkDependencyInfo dep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.memoryBarrierCount = 1,
+			.pMemoryBarriers = &barrier,
+		};
+		vkCmdPipelineBarrier2(m_cmd, &dep);
+	}
+
+	void CommandRecorder::HostToShaderBarrier()
+	{
+		MemoryBarrier2(VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+	}
+
 	void CommandRecorder::BeginDebugLabel(const char* name, float r, float g, float b, float a)
 	{
 		if (name == nullptr || m_cmd == VK_NULL_HANDLE || s_beginDebugLabelFn == nullptr)

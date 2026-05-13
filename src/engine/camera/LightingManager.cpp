@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "FileSystem.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace
 {
@@ -77,11 +78,11 @@ namespace aether
 
 		const VkDescriptorPoolSize poolSize{
 			.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			.descriptorCount = 3u * Swapchain::kMaxFramesInFlight,
+			.descriptorCount = 3u * kMaxFramesInFlight,
 		};
 		const VkDescriptorPoolCreateInfo poolInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-			.maxSets = Swapchain::kMaxFramesInFlight,
+			.maxSets = kMaxFramesInFlight,
 			.poolSizeCount = 1,
 			.pPoolSizes = &poolSize,
 		};
@@ -90,12 +91,12 @@ namespace aether
 			throw std::runtime_error("LightingManager: failed to create lighting descriptor pool.");
 		}
 
-		std::array<VkDescriptorSetLayout, Swapchain::kMaxFramesInFlight> layouts{};
+		std::array<VkDescriptorSetLayout, kMaxFramesInFlight> layouts{};
 		layouts.fill(m_setLayout);
 		const VkDescriptorSetAllocateInfo allocInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 			.descriptorPool = m_descriptorPool,
-			.descriptorSetCount = Swapchain::kMaxFramesInFlight,
+			.descriptorSetCount = kMaxFramesInFlight,
 			.pSetLayouts = layouts.data(),
 		};
 		if (vkAllocateDescriptorSets(device, &allocInfo, m_sets.data()) != VK_SUCCESS)
@@ -103,7 +104,7 @@ namespace aether
 			throw std::runtime_error("LightingManager: failed to allocate lighting descriptor sets.");
 		}
 
-		for (std::uint32_t i = 0; i < Swapchain::kMaxFramesInFlight; ++i)
+		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			EnsureBuffers(i, 1, 1, 1);
 			UpdateDescriptorSet(i);
@@ -174,7 +175,7 @@ namespace aether
 		return m_sets[frameSlot];
 	}
 
-	void LightingManager::UpdateForView(const std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, const VkExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const std::uint32_t computeQueueFamily, const std::uint32_t graphicsQueueFamily) const
+	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const std::uint32_t computeQueueFamily, const std::uint32_t graphicsQueueFamily) const
 	{
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
@@ -182,7 +183,7 @@ namespace aether
 			return;
 		}
 
-		if (m_gpuBinningEnabled && cmd != VK_NULL_HANDLE)
+		if (m_gpuBinningEnabled && cmd.IsValid())
 		{
 			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, computeQueueFamily, graphicsQueueFamily);
 			return;
@@ -191,7 +192,7 @@ namespace aether
 		UpdateForViewCpu(frameSlot, camera, extent, fc);
 	}
 
-	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, VkCommandBuffer cmd, const Camera& camera, const VkExtent2D extent, FrameConstants& fc, const std::uint32_t srcQueueFamily, const std::uint32_t dstQueueFamily) const
+	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::uint32_t srcQueueFamily, const std::uint32_t dstQueueFamily) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
@@ -251,17 +252,17 @@ namespace aether
 			.memoryBarrierCount = 1,
 			.pMemoryBarriers = &hostToCompute,
 		};
-		vkCmdPipelineBarrier2(cmd, &hostToComputeDep);
+		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &hostToComputeDep);
 
 		const VkDescriptorSet set = m_sets[frameSlot];
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, 1, &set, 0, nullptr);
-		vkCmdPushConstants(cmd, m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
+		vkCmdBindDescriptorSets(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, 1, &set, 0, nullptr);
+		vkCmdPushConstants(cmd.GetCommandBuffer(), m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
 
-		CommandRecorder(cmd).BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_initPipeline);
+		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
+		vkCmdBindPipeline(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_initPipeline);
 		const std::uint32_t tileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
-		vkCmdDispatch(cmd, tileGroups, 1, 1);
-		CommandRecorder(cmd).EndDebugLabel();
+		vkCmdDispatch(cmd.GetCommandBuffer(), tileGroups, 1, 1);
+		cmd.EndDebugLabel();
 
 		const VkMemoryBarrier2 computeToCompute{
 			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -275,22 +276,22 @@ namespace aether
 			.memoryBarrierCount = 1,
 			.pMemoryBarriers = &computeToCompute,
 		};
-		vkCmdPipelineBarrier2(cmd, &computeToComputeDep);
+		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &computeToComputeDep);
 
-		CommandRecorder(cmd).BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
+		cmd.BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
+		vkCmdBindPipeline(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
 		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
 		if (lightGroups > 0u)
 		{
-			vkCmdDispatch(cmd, lightGroups, 1, 1);
+			vkCmdDispatch(cmd.GetCommandBuffer(), lightGroups, 1, 1);
 		}
-		CommandRecorder(cmd).EndDebugLabel();
+		cmd.EndDebugLabel();
 
 		// When queue families differ, issue QFOT release barriers on each buffer so
 		// the graphics queue can acquire ownership before the fragment shader reads.
 		// When same family, a plain memory barrier from compute to fragment suffices.
 		// const auto& frame = m_buffers[frameSlot];
-		const bool crossFamily = srcQueueFamily != dstQueueFamily && srcQueueFamily != VK_QUEUE_FAMILY_IGNORED && dstQueueFamily != VK_QUEUE_FAMILY_IGNORED;
+		const bool crossFamily = srcQueueFamily != dstQueueFamily && srcQueueFamily != 0xFFFFFFFF && dstQueueFamily != 0xFFFFFFFF;
 
 		if (crossFamily)
 		{
@@ -320,7 +321,7 @@ namespace aether
 				.bufferMemoryBarrierCount = 3,
 				.pBufferMemoryBarriers = releases,
 			};
-			vkCmdPipelineBarrier2(cmd, &releaseDep);
+			vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &releaseDep);
 		}
 		else
 		{
@@ -336,16 +337,16 @@ namespace aether
 				.memoryBarrierCount = 1,
 				.pMemoryBarriers = &computeToFragment,
 			};
-			vkCmdPipelineBarrier2(cmd, &computeToFragmentDep);
+			vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &computeToFragmentDep);
 		}
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	void LightingManager::EmitAcquireBarriers(const std::uint32_t frameSlot, VkCommandBuffer graphicsCmd, const std::uint32_t srcFamily, const std::uint32_t dstFamily) const
+	void LightingManager::EmitAcquireBarriers(const std::uint32_t frameSlot, CommandRecorder& graphicsCmd, const std::uint32_t srcFamily, const std::uint32_t dstFamily) const
 	{
-		if (srcFamily == dstFamily || srcFamily == VK_QUEUE_FAMILY_IGNORED || dstFamily == VK_QUEUE_FAMILY_IGNORED)
+		if (srcFamily == dstFamily || srcFamily == 0xFFFFFFFF || dstFamily == 0xFFFFFFFF)
 		{
 			return;
 		}
@@ -382,10 +383,10 @@ namespace aether
 			.bufferMemoryBarrierCount = 3,
 			.pBufferMemoryBarriers = acquires,
 		};
-		vkCmdPipelineBarrier2(graphicsCmd, &acquireDep);
+		vkCmdPipelineBarrier2(graphicsCmd.GetCommandBuffer(), &acquireDep);
 	}
 
-	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const VkExtent2D extent, FrameConstants& fc) const
+	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());

@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 #include <mutex>
 #include <thread>
-#include "vulkan/volk.hpp"
 
 namespace aether
 {
@@ -31,7 +30,7 @@ namespace aether
 		glm::vec4 skyVoidColor{ 0.0f };
 
 		// Stable GPU resource addresses.
-		VkDeviceAddress materialBufferAddr = 0;
+		std::uint64_t materialBufferAddr = 0;
 
 		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;

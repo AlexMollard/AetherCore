@@ -57,6 +57,11 @@ namespace aether
 			return m_address;
 		}
 
+		[[nodiscard]] std::uint64_t GetDeviceAddressU64() const
+		{
+			return static_cast<std::uint64_t>(m_address);
+		}
+
 	private:
 		mutable std::mutex m_mutex;
 		VkDevice m_device = VK_NULL_HANDLE;

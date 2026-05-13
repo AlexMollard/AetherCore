@@ -53,7 +53,7 @@ namespace aether
 	{
 		CommandRecorder& recorder;
 		VkExtent2D extent;
-		VkDeviceAddress frameConstantsAddr;
+		std::uint64_t frameConstantsAddr = 0;
 		std::uint32_t frameIndex = 0;
 	};
 
@@ -174,7 +174,7 @@ namespace aether
 		}
 
 		// Execute the compiled frame graph for the current frame.
-		void Execute(VkCommandBuffer cmd, const FrameTarget& target, VkDeviceAddress frameConstantsAddr, std::uint32_t frameIndex);
+		void Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
 	private:
 		static constexpr uint32_t kSwapchainColorId = 0u;

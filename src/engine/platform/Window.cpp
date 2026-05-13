@@ -55,6 +55,25 @@ namespace aether
 		glfwPollEvents();
 	}
 
+	FramebufferSize Window::GetFramebufferSize() const
+	{
+		int w = 0;
+		int h = 0;
+		glfwGetFramebufferSize(m_window, &w, &h);
+		return { w, h };
+	}
+
+	FramebufferSize Window::WaitForValidFramebufferSize()
+	{
+		auto size = GetFramebufferSize();
+		while (size.width == 0 || size.height == 0)
+		{
+			glfwWaitEvents();
+			size = GetFramebufferSize();
+		}
+		return size;
+	}
+
 	int Window::GetDisplayRefreshRate() const
 	{
 		GLFWmonitor* monitor = glfwGetWindowMonitor(m_window);

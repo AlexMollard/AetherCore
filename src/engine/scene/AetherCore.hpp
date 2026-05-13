@@ -10,8 +10,11 @@
 #include "animation/AnimationDatabase.hpp"
 #include "animation/ModelAnimator.hpp"
 #include "assets/AssetSubsystem.hpp"
-#include "material/Material.hpp"
 #include "camera/CameraSubsystem.hpp"
+#include "gpu/AsyncComputeContext.hpp"
+#include "gpu/GpuDevice.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "material/Material.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/PlatformSubsystem.hpp"
 #include "rendering/CommandRecorder.hpp"
@@ -20,8 +23,6 @@
 #include "scene/SceneSubsystem.hpp"
 #include "ui/UISubsystem.hpp"
 #include "utils/EngineSettings.hpp"
-#include "vulkan/GraphicsDevice.hpp"
-#include "vulkan/Swapchain.hpp"
 
 namespace aether
 {
@@ -83,9 +84,9 @@ namespace aether
 		void ExecuteRenderFrame(const RenderFramePacket& packet);
 		void WaitIdle();
 
-		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat()
+		[[nodiscard]] static constexpr GpuFormat GetForwardColorFormat()
 		{
-			return PostProcessStack::GetForwardColorFormat();
+			return GpuDevice::GetForwardColorFormat();
 		}
 
 		void SetSwapchainRecreatedCallback(std::function<void(AetherCore&)> cb)
@@ -98,27 +99,16 @@ namespace aether
 		void EndFrame(const RenderFramePacket& packet);
 		void RecreateSwapchain();
 
-		struct AsyncComputeFrame
-		{
-			VkCommandPool commandPool = VK_NULL_HANDLE;
-			VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-			VkFence inFlight = VK_NULL_HANDLE;
-		};
-
 		ServiceContainer m_services;
 		PlatformSubsystem m_platform;
-		GraphicsDevice m_gfx;
+		GpuDevice m_gpu;
+		AsyncComputeContext m_asyncCompute;
 		SceneSubsystem m_sceneSub;
 		AssetSubsystem m_assetsSub;
 		CameraSubsystem m_cameras;
 		UISubsystem m_ui;
 		RenderingSubsystem m_rendering;
 
-		// Frame-lifecycle state still owned by AetherCore.
-		std::array<AsyncComputeFrame, Swapchain::kMaxFramesInFlight> m_asyncComputeFrames{};
-		VkSemaphore m_computeTimelineSemaphore = VK_NULL_HANDLE;
-		std::uint64_t m_computeTimelineValue = 0;
-		bool m_asyncComputeEnabled = false;
 		CommandRecorder m_currentRecorder;
 		std::uint64_t m_frameIndex = 0;
 		EngineSettings m_settings{};

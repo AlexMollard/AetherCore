@@ -1,9 +1,8 @@
 #include "RenderTargetService.hpp"
-
 #include <glm/glm.hpp>
 #include <stdexcept>
 #include <string>
-
+#include "gpu/GpuTypes.hpp"
 #include "material/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
@@ -231,7 +230,7 @@ namespace aether
 			                fc.proj = cam->GetProjectionMatrix(aspect);
 			                fc.viewProj = fc.proj * fc.view;
 			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
-			                fc.materialBufferAddr = m_materialBuffer->GetDeviceAddress();
+			                fc.materialBufferAddr = m_materialBuffer->GetDeviceAddressU64();
 			                fc.sunDirectionIntensity = m_renderer->GetDirectionalLightVector();
 			                fc.ambientColor = m_renderer->GetAmbientLightVector();
 			                fc.sunColor = m_renderer->GetSunColorVector();
@@ -239,8 +238,9 @@ namespace aether
 			                fc.skyZenithColor = m_renderer->GetSkyZenithColorVector();
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
-			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
-			                m_lightingManager->UpdateForView(frameIdx, VK_NULL_HANDLE, *cam, rit->second.extent, fc, m_lightingManager->IsRttBinningEnabled());
+			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % aether::kMaxFramesInFlight);
+			                CommandRecorder nullRecorder;
+			                m_lightingManager->UpdateForView(frameIdx, nullRecorder, *cam, GpuExtent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
 			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
