@@ -1,6 +1,6 @@
 # ⚡ AetherCore
 
-A C++20 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, and a custom asset pipeline.
+A C++26 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, coroutines, and a custom asset pipeline.
 
 ---
 
@@ -11,7 +11,7 @@ A C++20 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer,
 - **Bindless resources** - materials, textures, and vertex data accessed via bindless descriptors and BDA (buffer device address)
 - **GPU heap allocator** - device-local memory arena with typed `GpuSpan<T>` suballocations (GPU malloc/free), used by `MeshArena` and animation database
 - **Render graph** - GPU culling, forward pass, tiled lighting, CSM shadows, post-processing, triple buffering
-- **Async compute** - dedicated async compute context for overlapping GPU work
+- **Async Compute** - dedicated async compute context for overlapping GPU work
 - **ECS world** - EnTT-based entity/component system with typed entity handles
 - **Jolt physics** - component-based rigid body and shape authoring
 - **Animation system** - skeletal animation with GPU skinning pipeline
@@ -23,7 +23,10 @@ A C++20 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer,
 - **Asset processor** - mesh processing, texture compression, SPIR-V optimization in the asset packer
 - **Tracy profiling** - integrated instrumentation via engine macros
 - **Day/night cycle** - time-of-day driven lighting system
-- **Async I/O** - background file loading with PAK and directory backends
+- **Coroutine system** - `async<T>`, `executor`, `queued_executor`, `channel<T>`, `sleep_for` under `aether::coro`; enables lazy async coroutines for asset I/O and render thread sync
+- **Error handling** - `Expected<T>` wrapping C++26 `std::expected`, `AetherError` with typed log categories, `AE_ASSERT`/`AE_ASSERT_ALWAYS`, `AE_TRY`/`AE_EXPECT_OR_THROW` macros; all Vulkan calls, asset loads, and I/O operations are error-checked
+- **Loading manager** - `LoadingManager` tracks async load progress; `LoadingLayer` renders a full-screen loading overlay with progress bar
+- **Frame pacer** - `FramePacer` regulates game-thread cadence to a fixed target FPS with coarse-sleep + fine-spin timing
 
 ---
 
@@ -37,30 +40,34 @@ src/engine/
   assets/                  Asset subsystem, glTF loader, asset manager
   camera/                  Camera objects, camera manager, camera subsystem
   gpu/                     GPU abstraction (GpuDevice, AsyncComputeContext, BindlessManager)
-  io/                      Virtual file system, PAK/directory backends
+  io/                      Virtual file system, PAK/directory backends, coroutine-based async I/O
   material/                Material presets, texture loading, bindless descriptor management
   mesh/                    Mesh types, mesh arena, upload queue, primitive meshes
   passes/                  Render passes (cull, forward, post-process, skybox)
   physics/                 Jolt physics integration
   platform/                Window, input, crash handler, platform subsystem
   rendering/               Render graph, render queue, pipelines, shadow service,
-                           lighting manager, frame composer, render thread
+                           lighting manager, frame composer, render thread (channel-based sync)
   scene/                   Scene graph, ECS helpers, world, scene subsystem
   text/                    Font atlas, text renderer
   ui/                      In-engine UI system (widgets, layout, theme),
                            ImGui integration, quad/text renderers
   utils/                   Logger, profiler, settings, text/ini parser,
-                           debug GUI helpers
+                           debug GUI helpers, frame pacer, loading manager,
+                           Expected<T>, AetherError, AE_ASSERT macros,
+                           coroutine system (coro/)
+  utils/coro/              Coroutine primitives: Task (async<T>), Channel,
+                           Executor (inline/queued), Sleep
   vulkan/                  Vulkan context, swapchain, resource pools,
                            GPU heap, buffer/image wrappers, shader utils
 
 src/app/
-  Application.hpp/cpp      Main application loop
-  AppLayer.hpp             Layer interface with service container access
-  LayerStack.hpp/cpp       Layer stack management
+  Application.hpp/cpp      Main application loop with coroutine executor and loading manager
   main.cpp                 Entry point
-  layers/                  Sandbox, debug, voxel world, fishing, inventory,
-                           UI sandbox layers
+  layers/                  AppLayer interface, LayerStack, LoadingLayer,
+                           SandboxLayer, DebugLayer, VoxelWorldLayer,
+                           FishingLayer, InventoryLayer, UiSandboxLayer,
+                           PhysicsLayer
   systems/                 Game systems (day/night, fishing, physics, sandbox)
   voxel/                   Block registry, chunk manager, chunk mesher
 
@@ -83,19 +90,17 @@ include/                   Shared format headers (PakFormat, AeBnFormat)
 
 **Prerequisites:** Visual Studio 2022, CMake 4.0+, Vulkan SDK
 
-```powershell
-cmake --preset windows-vs2022
-cmake --build --preset vs2022-debug
-```
-
-For faster incremental builds with Ninja:
+Clang-cl is the default compiler. MSVC is available as a fallback.
 
 ```powershell
-cmake --preset windows-ninja
-cmake --build --preset ninja-debug
-```
+# Default (Clang-cl)
+cmake --preset default
+cmake --build --preset default --config Debug
 
-`App` is set as the startup project in Visual Studio generators.
+# MSVC fallback
+cmake --preset msvc
+cmake --build --preset msvc --config Debug
+```
 
 ### Linux
 
@@ -128,14 +133,14 @@ Run:
 | Option | Default | Description |
 |---|---|---|
 | `AETHERCORE_ENABLE_IMGUI` | `ON` | Include Dear ImGui debug UI (disable for shipping builds) |
-| `AETHERCORE_ENABLE_UNITY_BUILD` | `ON` | Enable CMake unity builds for faster compilation |
-| `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | Use `/Z7` + `/DEBUG:FASTLINK` in Debug for faster MSVC iteration |
+| `AETHERCORE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer on all first-party targets |
+| `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | Use `/Z7` + `/DEBUG:FASTLINK` in Debug for faster MSVC iteration (VS 2022 and earlier) |
 
 ---
 
 ## 📦 Asset Pipeline
 
-Assets under `resources/` are packed into `build/<preset>/data/assets.pak` as a post-build step. At runtime, assets are accessed via virtual paths: `assets://...`, `shaders://...`, etc.
+Assets under `resources/` are packed into `build/data/assets.pak` as a post-build step. At runtime, assets are accessed via virtual paths: `assets://...`, `shaders://...`, etc.
 
 The asset packer (`tools/assetpack/`) now includes dedicated processors for:
 - **Mesh processing** - optimizes vertex/index data for GPU upload
@@ -179,7 +184,7 @@ AssetPacker import-materials resources
 or combined with packing:
 
 ```powershell
-AssetPacker --import-materials resources build/vs2022/data/assets.pak
+AssetPacker --import-materials resources build/data/assets.pak
 ```
 
 The importer detects common naming patterns (`*_Color`, `*_NormalGL`, `*_Roughness`, etc.) and auto-generates `properties.toml` files, leaving any hand-authored ones untouched.
@@ -191,7 +196,7 @@ The importer detects common naming patterns (`*_Color`, `*_NormalGL`, `*_Roughne
 Tracy is enabled by default. To disable at configure time:
 
 ```powershell
-cmake --preset windows-vs2022 -DAETHERCORE_ENABLE_TRACY=OFF
+cmake --preset default -DAETHERCORE_ENABLE_TRACY=OFF
 ```
 
 ---
