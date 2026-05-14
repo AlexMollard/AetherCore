@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vk_mem_alloc.h>
 
-#include "utils/Expected.hpp"
+#include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -35,8 +35,8 @@ namespace aether
 		UniqueImage() = default;
 		~UniqueImage();
 
-		UniqueImage(const UniqueImage&) = delete;
-		UniqueImage& operator=(const UniqueImage&) = delete;
+		UniqueImage(const UniqueImage&) = AE_DELETE_MSG("UniqueImage owns a VkImage - use std::move");
+		UniqueImage& operator=(const UniqueImage&) = AE_DELETE_MSG("UniqueImage owns a VkImage - use std::move");
 
 		UniqueImage(UniqueImage&& other) noexcept;
 		UniqueImage& operator=(UniqueImage&& other) noexcept;

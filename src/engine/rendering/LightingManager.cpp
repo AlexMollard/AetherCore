@@ -583,7 +583,7 @@ namespace aether
 			// Create new buffer BEFORE resetting the old one - avoids use-after-Reset on failure.
 			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::Create(allocator, device, info, allocInfo));
 			buffer.Reset();
-			buffer = std::move(*newBuf);
+			buffer = std::move(newBuf);
 		};
 
 		ensureBuffer(frame.lights, frame.lightsCapacity, lightCount, sizeof(GpuLight));

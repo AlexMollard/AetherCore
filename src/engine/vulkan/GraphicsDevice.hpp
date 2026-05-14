@@ -22,7 +22,7 @@ namespace aether
 			bool enableVsync = true;
 		};
 
-		void Init(ServiceContainer& services, const Config& config = {});
+		void Init(ServiceContainer& services, const Config& config);
 		void Shutdown();
 
 		[[nodiscard]] VulkanContext& GetVulkanContext()

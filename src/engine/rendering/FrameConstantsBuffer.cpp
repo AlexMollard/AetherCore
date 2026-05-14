@@ -3,7 +3,7 @@
 #include <cstring>
 #include <format>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Assert.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -18,7 +18,6 @@ namespace aether
 		m_device = ctx.GetDevice().device;
 		m_allocator = ctx.GetAllocator();
 
-		// Create persistently-mapped host-visible buffers with BDA support.
 		const VkBufferCreateInfo bufferInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 			.size = sizeof(FrameConstants),
@@ -31,16 +30,13 @@ namespace aether
 
 		for (std::uint32_t i = 0; i < kFrameCount; ++i)
 		{
-			VmaAllocationInfo outInfo{};
-			if (vmaCreateBuffer(m_allocator, &bufferInfo, &allocInfo, &m_frames[i].buffer, &m_frames[i].allocation, &outInfo) != VK_SUCCESS)
-			{
-				throw VulkanError(std::format("Failed to create FrameConstants buffer (frame {}).", i));
-			}
-			m_frames[i].mapped = outInfo.pMappedData;
+			AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_allocator, m_device, bufferInfo, allocInfo));
+			m_frames[i].buffer = std::move(buf);
+			m_frames[i].mapped = m_frames[i].buffer.GetAllocationInfo().pMappedData;
 
 			const VkBufferDeviceAddressInfo addrInfo{
 				.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-				.buffer = m_frames[i].buffer,
+				.buffer = m_frames[i].buffer.Get(),
 			};
 			m_frames[i].address = vkGetBufferDeviceAddress(m_device, &addrInfo);
 		}
@@ -55,14 +51,9 @@ namespace aether
 
 		for (auto& frame: m_frames)
 		{
-			if (frame.buffer != VK_NULL_HANDLE)
-			{
-				vmaDestroyBuffer(m_allocator, frame.buffer, frame.allocation);
-				frame.buffer = VK_NULL_HANDLE;
-				frame.allocation = VK_NULL_HANDLE;
-				frame.mapped = nullptr;
-				frame.address = 0;
-			}
+			frame.buffer.Reset();
+			frame.mapped = nullptr;
+			frame.address = 0;
 		}
 
 		m_device = VK_NULL_HANDLE;
@@ -72,7 +63,7 @@ namespace aether
 	void FrameConstantsBuffer::Write(std::uint32_t frameIndex, const FrameConstants& data)
 	{
 		std::memcpy(m_frames[frameIndex].mapped, &data, sizeof(FrameConstants));
-		vmaFlushAllocation(m_allocator, m_frames[frameIndex].allocation, 0, VK_WHOLE_SIZE);
+		vmaFlushAllocation(m_allocator, m_frames[frameIndex].buffer.GetAllocation(), 0, VK_WHOLE_SIZE);
 	}
 
 	VkDeviceAddress FrameConstantsBuffer::GetDeviceAddress(std::uint32_t frameIndex) const

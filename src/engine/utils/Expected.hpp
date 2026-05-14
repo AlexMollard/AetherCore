@@ -95,7 +95,11 @@ namespace aether
 				throw FileSystemError(err.message);
 			case LogCategory::Window:
 				throw WindowError(err.message);
-			default:
+			case LogCategory::Engine:
+			case LogCategory::Validation:
+			case LogCategory::App:
+			case LogCategory::Std:
+			case LogCategory::Unknown:
 				throw EngineError(err.message);
 		}
 	}
@@ -106,12 +110,22 @@ namespace aether
 	if (!var.has_value()) \
 		return std::unexpected(std::move(var.error()))
 
-// Assigns expr to var. On failure, calls Throw() (fatal). On success, var holds the value.
+// Assigns expr to var. On failure, calls Throw() (fatal). On success, var holds the unwrapped value.
 // Use at init-time call sites where failure is unrecoverable.
 #define AE_EXPECT_OR_THROW(var, expr) \
-	auto var = (expr); \
-	if (!var.has_value()) \
-		Throw(var.error())
+	auto var##_expected = (expr); \
+	if (!var##_expected.has_value()) \
+		Throw(var##_expected.error()); \
+	auto var = std::move(*var##_expected)
+
+// Same as AE_EXPECT_OR_THROW but for functions returning Expected<void>.
+// No value to unwrap - just checks for errors.
+#define AE_EXPECT_OR_THROW_VOID(expr) \
+	{ \
+		auto ae_result = (expr); \
+		if (!ae_result.has_value()) \
+			Throw(ae_result.error()); \
+	}
 
 template<>
 struct std::formatter<aether::AetherError> : std::formatter<std::string>

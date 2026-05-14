@@ -60,7 +60,8 @@ target_include_directories(Engine PUBLIC
 target_link_libraries(Engine PUBLIC libzstd_static)
 
 # VMA is header-only from the consumer's perspective.
-target_include_directories(Engine PUBLIC "${VMA_SOURCE_DIR}/include")
+# Mark as SYSTEM so clang suppresses warnings from its headers.
+target_include_directories(Engine SYSTEM PUBLIC "${VMA_SOURCE_DIR}/include")
 
 # Jolt's EXCLUDE_FROM_ALL flag can prevent automatic include propagation through
 # target_link_libraries in some CMake generators, so we set it explicitly.

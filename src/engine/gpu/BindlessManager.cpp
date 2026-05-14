@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <format>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Assert.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -13,18 +13,15 @@ namespace aether
 		Shutdown();
 	}
 
-	void BindlessManager::Initialize(const VulkanContext& context, const Config& config)
+	Expected<void> BindlessManager::Initialize(const VulkanContext& context, const Config& config)
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device != VK_NULL_HANDLE)
 		{
-			return;
+			return {};
 		}
 
-		if (config.maxSampledImages == 0)
-		{
-			throw VulkanError("BindlessManager requires at least one sampled-image slot.");
-		}
+		AE_ASSERT(config.maxSampledImages > 0, "BindlessManager requires at least one sampled-image slot.");
 
 		m_device = context.GetDevice().device;
 		m_capacity = config.maxSampledImages;
@@ -52,7 +49,8 @@ namespace aether
 		};
 		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler) != VK_SUCCESS)
 		{
-			throw VulkanError("BindlessManager: failed to create linear sampler.");
+			m_device = VK_NULL_HANDLE;
+			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.") };
 		}
 
 		// ── Immutable nearest+clamp sampler (binding 2; voxel atlas) ──────────
@@ -74,7 +72,10 @@ namespace aether
 		};
 		if (vkCreateSampler(m_device, &nearestClampSamplerInfo, nullptr, &m_nearestClampSampler) != VK_SUCCESS)
 		{
-			throw VulkanError("BindlessManager: failed to create nearest-clamp sampler.");
+			vkDestroySampler(m_device, m_linearSampler, nullptr);
+			m_linearSampler = VK_NULL_HANDLE;
+			m_device = VK_NULL_HANDLE;
+			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create nearest-clamp sampler.") };
 		}
 
 		// ── Descriptor pool ───────────────────────────────────────────────────
@@ -95,7 +96,12 @@ namespace aether
 		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
 		if (poolResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create bindless descriptor pool. VkResult={}", static_cast<int>(poolResult)));
+			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
+			vkDestroySampler(m_device, m_linearSampler, nullptr);
+			m_linearSampler = VK_NULL_HANDLE;
+			m_nearestClampSampler = VK_NULL_HANDLE;
+			m_device = VK_NULL_HANDLE;
+			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.") };
 		}
 
 		// ── Descriptor set layout ─────────────────────────────────────────────
@@ -153,7 +159,14 @@ namespace aether
 		const VkResult layoutResult = vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_layout);
 		if (layoutResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create bindless descriptor layout. VkResult={}", static_cast<int>(layoutResult)));
+			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
+			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
+			vkDestroySampler(m_device, m_linearSampler, nullptr);
+			m_pool = VK_NULL_HANDLE;
+			m_linearSampler = VK_NULL_HANDLE;
+			m_nearestClampSampler = VK_NULL_HANDLE;
+			m_device = VK_NULL_HANDLE;
+			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(layoutResult), "Failed to create bindless descriptor layout.") };
 		}
 
 		const VkDescriptorSetAllocateInfo allocateInfo{
@@ -167,7 +180,16 @@ namespace aether
 		const VkResult setResult = vkAllocateDescriptorSets(m_device, &allocateInfo, &m_set);
 		if (setResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to allocate bindless descriptor set. VkResult={}", static_cast<int>(setResult)));
+			vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
+			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
+			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
+			vkDestroySampler(m_device, m_linearSampler, nullptr);
+			m_layout = VK_NULL_HANDLE;
+			m_pool = VK_NULL_HANDLE;
+			m_linearSampler = VK_NULL_HANDLE;
+			m_nearestClampSampler = VK_NULL_HANDLE;
+			m_device = VK_NULL_HANDLE;
+			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(setResult), "Failed to allocate bindless descriptor set.") };
 		}
 
 		m_slotAllocated.assign(m_capacity, false);
@@ -176,6 +198,8 @@ namespace aether
 		{
 			m_freeSlots.push_back(m_capacity - 1 - slot);
 		}
+
+		return {};
 	}
 
 	void BindlessManager::Shutdown()
@@ -290,10 +314,7 @@ namespace aether
 			return;
 		}
 
-		if (slot >= m_capacity)
-		{
-			throw VulkanError("BindlessManager slot index out of range.");
-		}
+		AE_ASSERT_ALWAYS(slot < m_capacity, "BindlessManager slot index out of range.");
 
 		if (!m_slotAllocated[slot])
 		{
@@ -372,10 +393,7 @@ namespace aether
 
 	void BindlessManager::FreeSlotImmediateUnlocked(const std::uint32_t slot)
 	{
-		if (slot >= m_capacity)
-		{
-			throw VulkanError("BindlessManager slot index out of range.");
-		}
+		AE_ASSERT_ALWAYS(slot < m_capacity, "BindlessManager slot index out of range.");
 
 		if (!m_slotAllocated[slot])
 		{

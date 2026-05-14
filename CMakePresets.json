@@ -1,110 +1,34 @@
 {
-    "version": 9,
-    "configurePresets": [
-        {
-            "name": "base",
-            "hidden": true,
-            "cacheVariables": {
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
-            }
-        },
-        {
-            "name": "windows-vs2022",
-            "displayName": "Windows · Visual Studio 2022",
-            "inherits": "base",
-            "generator": "Visual Studio 17 2022",
-            "architecture": "x64",
-            "binaryDir": "${sourceDir}/build/vs2022",
-            "installDir": "${sourceDir}/install",
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
-            }
-        },
-        {
-            "name": "windows-ninja",
-            "displayName": "Windows · Ninja Multi-Config (faster builds)",
-            "inherits": "base",
-            "generator": "Ninja Multi-Config",
-            "binaryDir": "${sourceDir}/build/ninja",
-            "installDir": "${sourceDir}/install",
-            "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Windows"
-            }
-        },
-        {
-            "name": "windows-vs2026",
-            "displayName": "Windows · Visual Studio 2026",
-            "description": "Using compilers for Visual Studio 18 2026 (x64 architecture)",
-            "generator": "Visual Studio 18 2026",
-            "toolset": "host=x64",
-            "architecture": "x64",
-            "binaryDir": "${sourceDir}/out/build/${presetName}",
-            "cacheVariables": {
-                "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
-                "CMAKE_C_COMPILER": "cl.exe",
-                "CMAKE_CXX_COMPILER": "cl.exe"
-            }
-        }
-    ],
-    "buildPresets": [
-        {
-            "name": "vs2022-debug",
-            "displayName": "VS2022 · Debug",
-            "configurePreset": "windows-vs2022",
-            "configuration": "Debug"
-        },
-        {
-            "name": "vs2022-release",
-            "displayName": "VS2022 · Release",
-            "configurePreset": "windows-vs2022",
-            "configuration": "Release"
-        },
-        {
-            "name": "vs2022-relwithdebinfo",
-            "displayName": "VS2022 · RelWithDebInfo",
-            "configurePreset": "windows-vs2022",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "ninja-debug",
-            "displayName": "Ninja · Debug",
-            "configurePreset": "windows-ninja",
-            "configuration": "Debug"
-        },
-        {
-            "name": "ninja-release",
-            "displayName": "Ninja · Release",
-            "configurePreset": "windows-ninja",
-            "configuration": "Release"
-        },
-        {
-            "name": "ninja-relwithdebinfo",
-            "displayName": "Ninja · RelWithDebInfo",
-            "configurePreset": "windows-ninja",
-            "configuration": "RelWithDebInfo"
-        },
-        {
-            "name": "vs2026-debug",
-            "displayName": "Visual Studio Community 2026 Release - amd64 - Debug",
-            "configurePreset": "windows-vs2026",
-            "configuration": "Debug"
-        },
-        {
-            "name": "vs2026-release",
-            "displayName": "Visual Studio Community 2026 Release - amd64 - Release",
-            "configurePreset": "windows-vs2026",
-            "configuration": "Release"
-        },
-        {
-            "name": "vs2026-relwithdebinfo",
-            "displayName": "Visual Studio Community 2026 Release - amd64 - RelWithDebInfo",
-            "configurePreset": "windows-vs2026",
-            "configuration": "RelWithDebInfo"
-        }
-
-    ]
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (ClangCL on Windows)",
+      "description": "Uses clang-cl with Visual Studio generator. Falls back to system compiler on Linux/macOS.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "toolset": {
+        "value": "ClangCL",
+        "strategy": "set"
+      }
+    },
+    {
+      "name": "msvc",
+      "displayName": "MSVC Fallback",
+      "description": "Uses the default MSVC compiler with Visual Studio generator.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build-msvc",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    }
+  ]
 }

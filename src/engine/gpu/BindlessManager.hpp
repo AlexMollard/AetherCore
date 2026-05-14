@@ -6,7 +6,7 @@
 #include "vulkan/volk.hpp"
 
 #include "material/BindlessContract.hpp"
-#include "utils/Expected.hpp"
+#include "utils/Assert.hpp"
 
 namespace aether
 {
@@ -24,10 +24,10 @@ namespace aether
 		BindlessManager() = default;
 		~BindlessManager();
 
-		BindlessManager(const BindlessManager&) = delete;
-		BindlessManager& operator=(const BindlessManager&) = delete;
+		BindlessManager(const BindlessManager&) = AE_DELETE_MSG("BindlessManager manages GPU descriptor resources - use reference");
+		BindlessManager& operator=(const BindlessManager&) = AE_DELETE_MSG("BindlessManager manages GPU descriptor resources - use reference");
 
-		void Initialize(const VulkanContext& context, const Config& config = {});
+		Expected<void> Initialize(const VulkanContext& context, const Config& config);
 		void Shutdown();
 
 		[[nodiscard]] bool IsInitialized() const;

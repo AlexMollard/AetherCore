@@ -48,7 +48,7 @@ namespace aether
 			}
 		};
 
-		void Initialize(const VulkanContext& ctx, const Desc& desc = {});
+		void Initialize(const VulkanContext& ctx, const Desc& desc);
 		void Shutdown();
 
 		// Allocate a contiguous sub-region from both pools.

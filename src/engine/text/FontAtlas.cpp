@@ -297,7 +297,11 @@ namespace aether
 		VkBuffer stagingBuf{};
 		VmaAllocation stagingAlloc{};
 		VmaAllocationInfo stagingInfo{};
-		vmaCreateBuffer(allocator, &stagingBufInfo, &stagingAllocInfo, &stagingBuf, &stagingAlloc, &stagingInfo);
+		const VkResult stagingResult = vmaCreateBuffer(allocator, &stagingBufInfo, &stagingAllocInfo, &stagingBuf, &stagingAlloc, &stagingInfo);
+		if (stagingResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format("FontAtlas: vmaCreateBuffer failed for staging buffer. VkResult={}", static_cast<int>(stagingResult)));
+		}
 
 		std::memcpy(stagingInfo.pMappedData, atlasPixels.data(), imageBytes);
 
@@ -315,7 +319,12 @@ namespace aether
 			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
 		const VmaAllocationCreateInfo imgAllocInfo{ .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE };
-		vmaCreateImage(allocator, &imgInfo, &imgAllocInfo, &m_image, &m_allocation, nullptr);
+		const VkResult imageResult = vmaCreateImage(allocator, &imgInfo, &imgAllocInfo, &m_image, &m_allocation, nullptr);
+		if (imageResult != VK_SUCCESS)
+		{
+			vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
+			throw VulkanError(std::format("FontAtlas: vmaCreateImage failed for atlas image. VkResult={}", static_cast<int>(imageResult)));
+		}
 
 		const VkImageViewCreateInfo viewInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -394,7 +403,7 @@ namespace aether
 
 		// ── 4. Register in the bindless descriptor set ────────────────────────
 		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());
-		m_bindlessSlot = *slotResult;
+		m_bindlessSlot = slotResult;
 		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler);
 		if (!updateResult)
 		{

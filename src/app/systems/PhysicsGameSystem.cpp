@@ -61,7 +61,7 @@ namespace aether::app
 			ground.Add<aether::BoxBodyDesc>(aether::BoxBodyDesc{
 			        .halfExtents = { kGroundHalfExtent, kGroundThickness, kGroundHalfExtent },
 			        .motionType = PhysicsMotionType::Static,
-			        .layer = PhysicsLayer::NonMoving,
+			        .layer = aether::PhysicsLayer::NonMoving,
 			});
 			m_sceneEntities.push_back(ground);
 		}
@@ -93,7 +93,7 @@ namespace aether::app
 			wall.Add<aether::BoxBodyDesc>(aether::BoxBodyDesc{
 			        .halfExtents = wallDesc.half,
 			        .motionType = PhysicsMotionType::Static,
-			        .layer = PhysicsLayer::NonMoving,
+			        .layer = aether::PhysicsLayer::NonMoving,
 			});
 			m_sceneEntities.push_back(wall);
 		}

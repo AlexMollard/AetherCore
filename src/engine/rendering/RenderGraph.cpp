@@ -232,12 +232,11 @@ namespace aether
 			                        .format = entry.desc.format,
 			                        .usage = entry.desc.usage,
 			                }));
-			entry.image = std::move(*newImage);
+			entry.image = std::move(newImage);
 			entry.allocatedExtent = entry.desc.extent;
 		}
 
-		AE_EXPECT_OR_THROW(bindlessResult, entry.image.EnsureBindlessSampled(bindlessManager, device, entry.desc.aspect, descriptorLayout));
-		(void) bindlessResult;
+		AE_EXPECT_OR_THROW_VOID(entry.image.EnsureBindlessSampled(bindlessManager, device, entry.desc.aspect, descriptorLayout));
 		return entry.image.GetBindlessSampledSlot();
 	}
 
@@ -461,7 +460,7 @@ namespace aether
 				                        .format = entry.desc.format,
 				                        .usage = entry.desc.usage,
 				                }));
-				phys.image = std::move(*newImage);
+				phys.image = std::move(newImage);
 				phys.allocatedExtent = requestedExtent;
 				phys.desc = entry.desc;
 			}
@@ -498,7 +497,7 @@ namespace aether
 			                        .format = entry.desc.format,
 			                        .usage = entry.desc.usage,
 			                }));
-			entry.image = std::move(*newImage);
+			entry.image = std::move(newImage);
 			entry.allocatedExtent = requestedExtent;
 		}
 	}

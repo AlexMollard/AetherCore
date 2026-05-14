@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vk_mem_alloc.h>
 
-#include "utils/Expected.hpp"
+#include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -14,8 +14,8 @@ namespace aether
 		UniqueBuffer() = default;
 		~UniqueBuffer();
 
-		UniqueBuffer(const UniqueBuffer&) = delete;
-		UniqueBuffer& operator=(const UniqueBuffer&) = delete;
+		UniqueBuffer(const UniqueBuffer&) = AE_DELETE_MSG("UniqueBuffer owns a VkBuffer - use std::move");
+		UniqueBuffer& operator=(const UniqueBuffer&) = AE_DELETE_MSG("UniqueBuffer owns a VkBuffer - use std::move");
 
 		UniqueBuffer(UniqueBuffer&& other) noexcept;
 		UniqueBuffer& operator=(UniqueBuffer&& other) noexcept;

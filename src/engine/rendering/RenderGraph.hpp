@@ -89,8 +89,8 @@ namespace aether
 		{
 		public:
 			PassBuilder(PassBuilder&&) = default;
-			PassBuilder(const PassBuilder&) = delete;
-			PassBuilder& operator=(PassBuilder&&) = delete;
+			PassBuilder(const PassBuilder&) = AE_DELETE_MSG("PassBuilder is move-only - use std::move");
+			PassBuilder& operator=(PassBuilder&&) = AE_DELETE_MSG("PassBuilder is move-only - use std::move");
 
 			// Declare a color attachment write.
 			PassBuilder& WriteColor(RGImage image, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE, VkClearValue clearValue = {});

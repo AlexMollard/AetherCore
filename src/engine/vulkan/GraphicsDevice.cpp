@@ -1,5 +1,6 @@
 #include "vulkan/GraphicsDevice.hpp"
 
+#include "utils/Assert.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "platform/Window.hpp"
 
@@ -11,7 +12,7 @@ namespace aether
 
 		m_vulkanContext.emplace(window, config.appName);
 		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
-		m_bindlessManager.Initialize(*m_vulkanContext);
+		AE_EXPECT_OR_THROW_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourcePool.ConfigureBindlessImages({
 		        .manager = &m_bindlessManager,
 		        .device = m_vulkanContext->GetDevice().device,

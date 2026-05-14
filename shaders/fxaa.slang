@@ -50,7 +50,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     const int2 coord = int2(svPos.xy);
     Texture2D  tex   = g_textures[pc.ldrSlot];
 
-    // Skip FXAA when toggled off — passthrough avoids graph rebuilds.
+    // Skip FXAA when toggled off - passthrough avoids graph rebuilds.
     if (pc.fxaaEnabled == 0u)
     {
         return float4(LoadRGB(tex, coord), 1.0f);

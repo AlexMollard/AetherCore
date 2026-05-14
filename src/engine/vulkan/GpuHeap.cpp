@@ -17,7 +17,7 @@ namespace aether
 		constexpr VkBufferUsageFlags kBaseUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
 		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage));
-		m_buffer = std::move(*buffer);
+		m_buffer = std::move(buffer);
 		m_freeList.push_back({ 0, desc.capacityBytes });
 	}
 
@@ -80,8 +80,8 @@ namespace aether
 
 		// Transient host-visible staging buffer.
 		AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(m_allocatorRef, device, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-		std::memcpy(staging->GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
-		vmaFlushAllocation(m_allocatorRef, staging->GetAllocation(), 0, VK_WHOLE_SIZE);
+		std::memcpy(staging.GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
+		vmaFlushAllocation(m_allocatorRef, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
 
 		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{
@@ -109,7 +109,7 @@ namespace aether
 		}
 
 		const VkBufferCopy region{ .srcOffset = 0, .dstOffset = dstOffset, .size = bytes };
-		vkCmdCopyBuffer(cmd, staging->Get(), m_buffer.Get(), 1, &region);
+		vkCmdCopyBuffer(cmd, staging.Get(), m_buffer.Get(), 1, &region);
 
 		const VkResult endResult = vkEndCommandBuffer(cmd);
 		if (endResult != VK_SUCCESS)

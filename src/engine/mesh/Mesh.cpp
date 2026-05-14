@@ -73,8 +73,8 @@ namespace aether
 		{
 			// Staging: mapped, host-sequential-write.
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-			std::memcpy(staging->GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
-			vmaFlushAllocation(allocator, staging->GetAllocation(), 0, VK_WHOLE_SIZE);
+			std::memcpy(staging.GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
+			vmaFlushAllocation(allocator, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
 
 			// Destination: device-local with shader device address support.
 			const VkBufferCreateInfo destInfo{
@@ -94,7 +94,7 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
 			const VkBufferCopy region{ .size = size };
-			vkCmdCopyBuffer(cmd, staging->Get(), dest, 1, &region);
+			vkCmdCopyBuffer(cmd, staging.Get(), dest, 1, &region);
 			EndAndSubmitOneTimeBuffer(device, pool, queue, cmd);
 
 			const VkBufferDeviceAddressInfo addrInfo{

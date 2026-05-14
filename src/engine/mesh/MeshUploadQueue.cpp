@@ -11,7 +11,7 @@ namespace aether
 	void MeshUploadQueue::Initialize(const VulkanContext& ctx)
 	{
 		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(ctx.GetAllocator(), ctx.GetDevice().device, kStagingCapacity, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-		m_staging = std::move(*buf);
+		m_staging = std::move(buf);
 		m_ringHead = 0;
 	}
 

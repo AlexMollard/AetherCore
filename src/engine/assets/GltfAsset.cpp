@@ -241,6 +241,9 @@ namespace aether::assets
 					channel.nodeIndex = ch.nodeIndex;
 					switch (static_cast<AeBnAnimPath>(ch.path))
 					{
+						case AeBnAnimPath::Translation:
+							channel.path = GltfAnimationPath::Translation;
+							break;
 						case AeBnAnimPath::Rotation:
 							channel.path = GltfAnimationPath::Rotation;
 							break;
@@ -250,20 +253,17 @@ namespace aether::assets
 						case AeBnAnimPath::Weights:
 							channel.path = GltfAnimationPath::Weights;
 							break;
-						default:
-							channel.path = GltfAnimationPath::Translation;
-							break;
 					}
 					switch (static_cast<AeBnInterp>(ch.interp))
 					{
+						case AeBnInterp::Linear:
+							channel.interpolation = GltfInterpolation::Linear;
+							break;
 						case AeBnInterp::Step:
 							channel.interpolation = GltfInterpolation::Step;
 							break;
 						case AeBnInterp::CubicSpline:
 							channel.interpolation = GltfInterpolation::CubicSpline;
-							break;
-						default:
-							channel.interpolation = GltfInterpolation::Linear;
 							break;
 					}
 					channel.times.resize(ch.keyCount);

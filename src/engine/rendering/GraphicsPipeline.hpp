@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -33,8 +34,8 @@ namespace aether
 		GraphicsPipeline() = default;
 		~GraphicsPipeline();
 
-		GraphicsPipeline(const GraphicsPipeline&) = delete;
-		GraphicsPipeline& operator=(const GraphicsPipeline&) = delete;
+		GraphicsPipeline(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline owns a VkPipeline - use std::move");
+		GraphicsPipeline& operator=(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline owns a VkPipeline - use std::move");
 
 		GraphicsPipeline(GraphicsPipeline&&) noexcept;
 		GraphicsPipeline& operator=(GraphicsPipeline&&) noexcept;

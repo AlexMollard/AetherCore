@@ -2,8 +2,8 @@
 
 #include <algorithm>
 
-#include "utils/AetherExceptions.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "utils/Assert.hpp"
 
 namespace aether
 {
@@ -47,10 +47,7 @@ namespace aether
 
 	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(const BufferResourceDesc& desc, const ResourceContract& contract)
 	{
-		if (!contract.lifetime.IsValid())
-		{
-			throw VulkanError("Invalid buffer lifetime window. firstPass must be <= lastPass.");
-		}
+		AE_ASSERT(contract.lifetime.IsValid(), "Invalid buffer lifetime window. firstPass must be <= lastPass.");
 
 		m_virtualBuffers.push_back(BufferVirtualRecord{
 		        .desc = desc,
@@ -65,10 +62,7 @@ namespace aether
 
 	VirtualImageHandle ResourcePool::CreateVirtualImage(const ImageResourceDesc& desc, const ResourceContract& contract)
 	{
-		if (!contract.lifetime.IsValid())
-		{
-			throw VulkanError("Invalid image lifetime window. firstPass must be <= lastPass.");
-		}
+		AE_ASSERT(contract.lifetime.IsValid(), "Invalid image lifetime window. firstPass must be <= lastPass.");
 
 		m_virtualImages.push_back(ImageVirtualRecord{
 		        .desc = desc,
@@ -238,7 +232,7 @@ namespace aether
 
 			if (record.contract.lifetime.Overlaps(sourceRecord.contract.lifetime))
 			{
-				throw VulkanError("Aliased buffer resources have overlapping lifetime windows.");
+				AE_ASSERT_ALWAYS(false, "Aliased buffer resources have overlapping lifetime windows.");
 			}
 
 			auto& sourceResource = MaterializeBuffer(sourceHandle, factory);
@@ -316,7 +310,7 @@ namespace aether
 
 			if (record.contract.lifetime.Overlaps(sourceRecord.contract.lifetime))
 			{
-				throw VulkanError("Aliased image resources have overlapping lifetime windows.");
+				AE_ASSERT_ALWAYS(false, "Aliased image resources have overlapping lifetime windows.");
 			}
 
 			auto& sourceResource = MaterializeImage(sourceHandle, factory);
@@ -409,64 +403,40 @@ namespace aether
 
 	ResourcePool::BufferVirtualRecord& ResourcePool::RequireBufferRecord(const VirtualBufferHandle handle)
 	{
-		if (!handle.IsValid() || handle.id > m_virtualBuffers.size())
-		{
-			throw VulkanError("Invalid virtual buffer handle.");
-		}
+		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualBuffers.size(), "Invalid virtual buffer handle.");
 
 		auto& record = m_virtualBuffers[handle.id - 1];
-		if (record.generation != handle.generation)
-		{
-			throw VulkanError("Stale virtual buffer handle generation.");
-		}
+		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual buffer handle generation.");
 
 		return record;
 	}
 
 	const ResourcePool::BufferVirtualRecord& ResourcePool::RequireBufferRecord(const VirtualBufferHandle handle) const
 	{
-		if (!handle.IsValid() || handle.id > m_virtualBuffers.size())
-		{
-			throw VulkanError("Invalid virtual buffer handle.");
-		}
+		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualBuffers.size(), "Invalid virtual buffer handle.");
 
 		const auto& record = m_virtualBuffers[handle.id - 1];
-		if (record.generation != handle.generation)
-		{
-			throw VulkanError("Stale virtual buffer handle generation.");
-		}
+		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual buffer handle generation.");
 
 		return record;
 	}
 
 	ResourcePool::ImageVirtualRecord& ResourcePool::RequireImageRecord(const VirtualImageHandle handle)
 	{
-		if (!handle.IsValid() || handle.id > m_virtualImages.size())
-		{
-			throw VulkanError("Invalid virtual image handle.");
-		}
+		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualImages.size(), "Invalid virtual image handle.");
 
 		auto& record = m_virtualImages[handle.id - 1];
-		if (record.generation != handle.generation)
-		{
-			throw VulkanError("Stale virtual image handle generation.");
-		}
+		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual image handle generation.");
 
 		return record;
 	}
 
 	const ResourcePool::ImageVirtualRecord& ResourcePool::RequireImageRecord(const VirtualImageHandle handle) const
 	{
-		if (!handle.IsValid() || handle.id > m_virtualImages.size())
-		{
-			throw VulkanError("Invalid virtual image handle.");
-		}
+		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualImages.size(), "Invalid virtual image handle.");
 
 		const auto& record = m_virtualImages[handle.id - 1];
-		if (record.generation != handle.generation)
-		{
-			throw VulkanError("Stale virtual image handle generation.");
-		}
+		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual image handle generation.");
 
 		return record;
 	}
@@ -533,13 +503,9 @@ namespace aether
 	{
 		if (contract.visibility == ResourceVisibility::BindlessSampled)
 		{
-			if (m_bindlessImageConfig.manager == nullptr || m_bindlessImageConfig.device == VK_NULL_HANDLE)
-			{
-				throw VulkanError("Bindless sampled image requested, but ResourcePool "
-				                  "bindless image config is not set.");
-			}
+			AE_ASSERT_ALWAYS(m_bindlessImageConfig.manager != nullptr && m_bindlessImageConfig.device != VK_NULL_HANDLE, "Bindless sampled image requested, but ResourcePool bindless image config is not set.");
 
-			image.EnsureBindlessSampled(*m_bindlessImageConfig.manager, m_bindlessImageConfig.device, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout);
+			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(*m_bindlessImageConfig.manager, m_bindlessImageConfig.device, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout));
 		}
 	}
 

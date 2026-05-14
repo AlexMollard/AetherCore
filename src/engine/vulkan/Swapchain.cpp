@@ -94,7 +94,7 @@ namespace aether
 			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		AE_EXPECT_OR_THROW(depthImage, UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo));
-		m_depthImage = std::move(*depthImage);
+		m_depthImage = std::move(depthImage);
 
 		const VkImageViewCreateInfo depthViewInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,

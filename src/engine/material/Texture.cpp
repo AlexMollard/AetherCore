@@ -129,7 +129,7 @@ namespace aether
 			};
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
 
-			std::memcpy(staging->GetAllocationInfo().pMappedData, pixels, imageBytes);
+			std::memcpy(staging.GetAllocationInfo().pMappedData, pixels, imageBytes);
 
 			AE_EXPECT_OR_THROW(image,
 			        UniqueImage::Create(device,
@@ -142,7 +142,7 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 			const VkBufferImageCopy copyRegion{
       .bufferOffset = 0,
@@ -163,15 +163,15 @@ namespace aether
               1,
           },
   };
-			vkCmdCopyBufferToImage(cmd, staging->Get(), image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, staging.Get(), image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
+			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
 
-			return std::move(*image);
+			return std::move(image);
 		}
 	} // namespace
 
@@ -266,7 +266,7 @@ namespace aether
 				.usage = VMA_MEMORY_USAGE_AUTO,
 			};
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
-			std::memcpy(staging->GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
+			std::memcpy(staging.GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
 
 			AE_EXPECT_OR_THROW(image,
 			        UniqueImage::Create(device,
@@ -279,7 +279,7 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 			const VkBufferImageCopy copyRegion{
 				.bufferOffset = 0,
@@ -289,14 +289,14 @@ namespace aether
 				.imageOffset = { 0, 0, 0 },
 				.imageExtent = { width, height, 1 },
 			};
-			vkCmdCopyBufferToImage(cmd, staging->Get(), image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, staging.Get(), image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
-			return std::move(*image);
+			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			return std::move(image);
 		}
 	} // namespace
 

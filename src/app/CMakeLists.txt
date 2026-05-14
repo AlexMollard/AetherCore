@@ -11,7 +11,6 @@ target_sources(App
         FILES ${APP_HEADERS}
 )
 
-# Engine propagates Vulkan, GLFW, and GLM automatically (C++26 preview is set via /std:c++latest / -std=c++26 in TargetDefaults.cmake).
 target_link_libraries(App PRIVATE Engine)
 
 if(AETHERCORE_ENABLE_UNITY_BUILD)

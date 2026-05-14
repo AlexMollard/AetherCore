@@ -2,6 +2,7 @@
 
 #include <mutex>
 #include <optional>
+#include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
@@ -16,8 +17,8 @@ namespace aether
 		VulkanContext(const Window& window, const char* appName);
 		~VulkanContext();
 
-		VulkanContext(const VulkanContext&) = delete;
-		VulkanContext& operator=(const VulkanContext&) = delete;
+		VulkanContext(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
+		VulkanContext& operator=(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
 
 		[[nodiscard]] const vkb::Instance& GetInstance() const;
 		[[nodiscard]] const vkb::Device& GetDevice() const;

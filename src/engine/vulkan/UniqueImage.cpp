@@ -89,6 +89,10 @@ namespace aether
 		// Depth/stencil combinations set both bits; everything else is COLOR.
 		VkImageAspectFlags DeduceAspect(VkFormat format)
 		{
+#ifdef __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
 			switch (format)
 			{
 				case VK_FORMAT_D16_UNORM:
@@ -102,6 +106,9 @@ namespace aether
 				default:
 					return VK_IMAGE_ASPECT_COLOR_BIT;
 			}
+#ifdef __clang__
+#	pragma clang diagnostic pop
+#endif
 		}
 	} // anonymous namespace
 

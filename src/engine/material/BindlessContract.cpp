@@ -2,16 +2,13 @@
 
 #include <format>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Assert.hpp"
 
 namespace aether::bindless
 {
 	std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, const std::uint32_t bindlessSetIndex)
 	{
-		if (bindlessLayout == VK_NULL_HANDLE)
-		{
-			throw VulkanError("Bindless descriptor set layout is null.");
-		}
+		AE_ASSERT_ALWAYS(bindlessLayout != VK_NULL_HANDLE, "Bindless descriptor set layout is null.");
 
 		const std::size_t requiredCount = static_cast<std::size_t>(bindlessSetIndex) + 1;
 		const std::size_t outputCount = std::max(requiredCount, pipelineLayouts.size());
@@ -26,12 +23,9 @@ namespace aether::bindless
 		return out;
 	}
 
-	VkPipelineLayout CreatePipelineLayoutWithBindless(VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
+	Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
 	{
-		if (device == VK_NULL_HANDLE)
-		{
-			throw VulkanError("Cannot create pipeline layout: VkDevice is null.");
-		}
+		AE_ASSERT_ALWAYS(device != VK_NULL_HANDLE, "Cannot create pipeline layout: VkDevice is null.");
 
 		const auto setLayouts = ComposePipelineSetLayouts(pipelineLayouts, bindlessLayout, bindlessSetIndex);
 		const VkPipelineLayoutCreateInfo createInfo{
@@ -48,7 +42,7 @@ namespace aether::bindless
 		const VkResult result = vkCreatePipelineLayout(device, &createInfo, nullptr, &layout);
 		if (result != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create bindless-aware pipeline layout. VkResult={}", static_cast<int>(result)));
+			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create bindless-aware pipeline layout.") };
 		}
 
 		return layout;

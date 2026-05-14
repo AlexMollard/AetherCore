@@ -20,10 +20,9 @@ namespace aether
 		                        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		                }));
-		stack.m_hdrColorImage = std::move(*hdrImage);
+		stack.m_hdrColorImage = std::move(hdrImage);
 		stack.m_hdrColor = desc.renderGraph->RegisterImage(stack.m_hdrColorImage.Get(), stack.m_hdrColorImage.GetDefaultView());
-		AE_EXPECT_OR_THROW(hdrBindless, stack.m_hdrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
-		(void) hdrBindless;
+		AE_EXPECT_OR_THROW_VOID(stack.m_hdrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
 		AE_EXPECT_OR_THROW(ldrImage,
 		        UniqueImage::Create(desc.device,
@@ -33,10 +32,9 @@ namespace aether
 		                        .format = VK_FORMAT_R8G8B8A8_UNORM,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		                }));
-		stack.m_ldrColorImage = std::move(*ldrImage);
+		stack.m_ldrColorImage = std::move(ldrImage);
 		stack.m_ldrColor = desc.renderGraph->RegisterImage(stack.m_ldrColorImage.Get(), stack.m_ldrColorImage.GetDefaultView());
-		AE_EXPECT_OR_THROW(ldrBindless, stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
-		(void) ldrBindless;
+		AE_EXPECT_OR_THROW_VOID(stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
 		const VkDescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 

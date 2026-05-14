@@ -32,7 +32,7 @@ namespace aether
 		GpuDevice(const GpuDevice&) = delete;
 		GpuDevice& operator=(const GpuDevice&) = delete;
 
-		void Init(ServiceContainer& services, const Config& config = {});
+		void Init(ServiceContainer& services, const Config& config);
 		void Shutdown();
 
 		void WaitIdle();

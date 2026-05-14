@@ -38,7 +38,7 @@ namespace aether
 			VkBufferUsageFlags additionalUsage = 0;
 		};
 
-		void Initialize(const VulkanContext& ctx, Desc desc = {});
+		void Initialize(const VulkanContext& ctx, Desc desc);
 		void Shutdown();
 
 		template<typename T>

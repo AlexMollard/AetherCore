@@ -34,7 +34,7 @@ namespace aether
 		}
 
 		m_materialBuffer.Initialize(vk);
-		m_meshArena.Initialize(vk);
+		m_meshArena.Initialize(vk, {});
 		m_meshUploadQueue.Initialize(vk);
 		m_primitiveMeshes.Initialize(vk.GetDevice().device, vk.GetAllocator(), vk.GetGraphicsQueue(), m_uploadPool);
 		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadPool);

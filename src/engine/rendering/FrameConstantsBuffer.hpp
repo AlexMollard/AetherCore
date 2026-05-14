@@ -12,28 +12,20 @@ namespace aether
 {
 	class VulkanContext;
 
-	// Manages a per-frame uniform buffer for FrameConstants (double-buffered to
-	// match kMaxFramesInFlight). Accessed exclusively via Buffer Device Address
-	// pushed in the per-draw push constants - no descriptor set required.
 	class FrameConstantsBuffer
 	{
 	public:
 		FrameConstantsBuffer() = default;
 		~FrameConstantsBuffer();
 
-		FrameConstantsBuffer(const FrameConstantsBuffer&) = delete;
-		FrameConstantsBuffer& operator=(const FrameConstantsBuffer&) = delete;
+		FrameConstantsBuffer(const FrameConstantsBuffer&) = AE_DELETE_MSG("use std::move");
+		FrameConstantsBuffer& operator=(const FrameConstantsBuffer&) = AE_DELETE_MSG("use std::move");
 
 		void Initialize(const VulkanContext& ctx);
 		void Shutdown();
 
-		// Write per-frame data into the mapped host-visible buffer for the given
-		// frame slot.
 		void Write(std::uint32_t frameIndex, const FrameConstants& data);
 
-		// Returns the Vulkan Buffer Device Address for the given frame slot.
-		// Push this directly into the push constant block; shaders dereference it via
-		// [[vk::buffer_reference]].
 		[[nodiscard]] VkDeviceAddress GetDeviceAddress(std::uint32_t frameIndex) const;
 		[[nodiscard]] std::uint64_t GetDeviceAddressU64(std::uint32_t frameIndex) const;
 
@@ -42,8 +34,7 @@ namespace aether
 
 		struct PerFrame
 		{
-			VkBuffer buffer = VK_NULL_HANDLE;
-			VmaAllocation allocation = VK_NULL_HANDLE;
+			UniqueBuffer buffer;
 			void* mapped = nullptr;
 			VkDeviceAddress address = 0;
 		};

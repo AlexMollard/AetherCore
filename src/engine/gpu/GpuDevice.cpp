@@ -64,6 +64,10 @@ namespace aether
 
 	GpuFormat GpuDevice::GetSwapchainColorFormat() const
 	{
+#ifdef __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
 		switch (m_gfx->GetSwapchain().GetImageFormat())
 		{
 			case VK_FORMAT_R8G8B8A8_UNORM:
@@ -79,10 +83,17 @@ namespace aether
 			default:
 				return GpuFormat::Undefined;
 		}
+#ifdef __clang__
+#	pragma clang diagnostic pop
+#endif
 	}
 
 	GpuFormat GpuDevice::GetSwapchainDepthFormat() const
 	{
+#ifdef __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
 		switch (m_gfx->GetSwapchain().GetDepthFormat())
 		{
 			case VK_FORMAT_D32_SFLOAT:
@@ -92,6 +103,9 @@ namespace aether
 			default:
 				return GpuFormat::Undefined;
 		}
+#ifdef __clang__
+#	pragma clang diagnostic pop
+#endif
 	}
 
 	GpuExtent2D GpuDevice::GetSwapchainExtent() const

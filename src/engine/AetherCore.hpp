@@ -67,7 +67,7 @@ namespace aether
 			}
 		};
 
-		explicit AetherCore(const Config& config = {});
+		explicit AetherCore(const Config& config);
 		AetherCore(const Config& config, const EngineSettings& settings);
 		~AetherCore();
 

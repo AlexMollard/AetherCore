@@ -140,7 +140,7 @@ namespace aether
 					.usage = VMA_MEMORY_USAGE_AUTO,
 				};
 				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(allocator, device, bufInfo, allocInfo));
-				dst.buffer = std::move(*buf);
+				dst.buffer = std::move(buf);
 				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
 
 				// Prime with identity so the mesh renders in bind pose before Update().
@@ -261,7 +261,7 @@ namespace aether
 					case assets::GltfAnimationPath::Scale:
 						node.scale = SampleVec3(ch, m_time);
 						break;
-					default:
+					case assets::GltfAnimationPath::Weights:
 						break;
 				}
 			}
@@ -364,7 +364,7 @@ namespace aether
 					.usage = VMA_MEMORY_USAGE_AUTO,
 				};
 				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(clone.m_allocator, clone.m_device, bufInfo, allocInfo));
-				dst.buffer = std::move(*buf);
+				dst.buffer = std::move(buf);
 				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
 
 				// Initialise the clone's GPU buffer with the source's current pose.
