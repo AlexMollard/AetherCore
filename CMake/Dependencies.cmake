@@ -1,7 +1,7 @@
 include(get_cpm)
 
 # After the initial download, do not re-check remotes on every configure.
-set(CPM_SOURCE_CACHE_UPDATES_DISCONNECTED ON)
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
 find_package(Vulkan REQUIRED)
 
@@ -57,7 +57,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG        master
+    GIT_TAG        31c1ad37456438565541f4919958214b6e762fb4 # 2026-04-15
     GIT_SHALLOW    TRUE
     DOWNLOAD_ONLY  YES
 )
@@ -82,7 +82,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME tomlplusplus
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
-    GIT_TAG        master
+    GIT_TAG        v3.4.0
     GIT_SHALLOW    TRUE
 )
 
@@ -147,7 +147,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME bc7enc_rdo
     GIT_REPOSITORY https://github.com/richgel999/bc7enc_rdo.git
-    GIT_TAG        master
+    GIT_TAG        dbe416d28a5530b4e8cc45b14bf034dc6b96bbde # 2026-02-27
     GIT_SHALLOW    TRUE
     DOWNLOAD_ONLY  YES
 )
@@ -165,6 +165,11 @@ CPMAddPackage(
         "ZSTD_BUILD_CONTRIB OFF"
         "ZSTD_BUILD_SHARED OFF"
 )
+
+# Alias the fragile internal target name so consumers use a stable interface.
+if(TARGET libzstd_static AND NOT TARGET zstd::libzstd_static)
+    add_library(zstd::libzstd_static ALIAS libzstd_static)
+endif()
 
 # ── Dear ImGui (docking branch) ───────────────────────────────────────────────
 if(AETHERCORE_ENABLE_IMGUI)

@@ -21,7 +21,7 @@ target_include_directories(AssetPacker SYSTEM PRIVATE
     "${cgltf_SOURCE_DIR}"           # cgltf.h
 )
 
-target_link_libraries(AssetPacker PRIVATE libzstd_static)
+target_link_libraries(AssetPacker PRIVATE zstd::libzstd_static)
 
 set_target_properties(AssetPacker PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools"

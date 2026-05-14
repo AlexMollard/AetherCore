@@ -8,7 +8,7 @@
 #include "rendering/LightingManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/EcsHelpers.hpp"
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"

@@ -6,7 +6,7 @@
 #include <glm/common.hpp>
 #include <vector>
 
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/ShaderUtils.hpp"

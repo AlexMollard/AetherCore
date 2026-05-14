@@ -17,7 +17,7 @@
 #include "rendering/WorldRenderer.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "scene/World.hpp"
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "rendering/RenderThread.hpp"

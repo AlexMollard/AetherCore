@@ -3,12 +3,12 @@
 #include <memory>
 
 #include "AetherCore.hpp"
-#include "AppLayer.hpp"
+#include "layers/AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
 #include "utils/LoadingManager.hpp"
 #include "utils/coro/Executor.hpp"
-#include "LayerStack.hpp"
+#include "layers/LayerStack.hpp"
 #include "rendering/RenderThread.hpp"
 #include "ui/ImGuiRenderer.hpp"
 

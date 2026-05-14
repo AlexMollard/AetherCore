@@ -5,11 +5,15 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE "RelWithDebInfo" CACHE STRING "Build type" FORCE)
+    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 
 # Build-speed knobs (especially useful with Visual Studio generator).
 option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
-# option(AETHERCORE_ENABLE_UNITY_BUILD "Enable CMake unity build for first-party targets" ON)
 option(AETHERCORE_ENABLE_IMGUI "Include Dear ImGui debug UI (disable for release/shipping builds)" ON)
 
 # Generate compile_commands.json for clangd / tooling (ignored by VS generator).

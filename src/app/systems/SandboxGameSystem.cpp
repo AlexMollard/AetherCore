@@ -14,7 +14,7 @@
 #include "passes/PostProcessStack.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "scene/EcsHelpers.hpp"
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"

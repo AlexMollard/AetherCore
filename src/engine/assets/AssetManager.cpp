@@ -7,7 +7,7 @@
 #include "assets/GltfAsset.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "scene/EcsHelpers.hpp"
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "utils/Logger.hpp"
 #include "material/Material.hpp"
 #include "material/MaterialBuffer.hpp"

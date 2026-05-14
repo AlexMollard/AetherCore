@@ -3,7 +3,7 @@
 #include <vector>
 
 #include "rendering/CommandRecorder.hpp"
-#include "FileSystem.hpp"
+#include "io/FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
