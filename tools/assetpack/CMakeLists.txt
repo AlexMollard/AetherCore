@@ -11,6 +11,11 @@ add_executable(AssetPacker
 target_include_directories(AssetPacker PRIVATE
     "${CMAKE_SOURCE_DIR}/include"   # PakFormat.hpp, AeBnFormat.hpp
     "${xxHash_SOURCE_DIR}"
+)
+
+# External libraries use deprecated CRT functions / have unused internals on Windows;
+# mark as SYSTEM to suppress warnings.
+target_include_directories(AssetPacker SYSTEM PRIVATE
     "${bc7enc_rdo_SOURCE_DIR}"      # bc7enc.h, rgbcx.h
     "${stb_SOURCE_DIR}"             # stb_image.h
     "${cgltf_SOURCE_DIR}"           # cgltf.h

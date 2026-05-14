@@ -16,6 +16,9 @@ function(aethercore_target_defaults target)
             -Wno-c++98-compat-pedantic
             -Werror=switch-enum
             -Werror=return-type
+            -Wno-unused-command-line-argument
+            -Wno-missing-designated-field-initializers
+            -Wno-missing-field-initializers
 
             # --- Code generation ---
             -fms-compatibility-version=19.40

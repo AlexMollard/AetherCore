@@ -48,7 +48,7 @@ namespace aether::io
 
 		// Convenience: wrap a job as a coroutine task.
 		template<typename F>
-		coro::task<std::invoke_result_t<F>> Run(IOPriority priority, F&& fn)
+		coro::task<std::invoke_result_t<F>> Run([[maybe_unused]] IOPriority priority, F&& fn)
 		{
 			co_return std::invoke(std::forward<F>(fn));
 		}

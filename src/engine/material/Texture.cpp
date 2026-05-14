@@ -171,7 +171,7 @@ namespace aether
 
 			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
 
-			return std::move(image);
+			return image;
 		}
 	} // namespace
 
@@ -296,7 +296,7 @@ namespace aether
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
 			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
-			return std::move(image);
+			return image;
 		}
 	} // namespace
 
