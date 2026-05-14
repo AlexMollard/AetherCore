@@ -1,5 +1,6 @@
 #pragma once
 
+#include <expected>
 #include <filesystem>
 #include <istream>
 #include <memory>
@@ -9,6 +10,7 @@
 
 #include "FileGlobOptions.hpp"
 #include "FileRequest.hpp"
+#include "utils/Expected.hpp"
 #include "utils/coro/Task.hpp"
 
 namespace aether::io
@@ -33,19 +35,18 @@ namespace aether::io
 
 		[[nodiscard]] static bool Exists(std::string_view virtualPath);
 
-		// Synchronous read - returns entire file contents. Fine for startup / shader
-		// loading.
-		[[nodiscard]] static std::vector<std::byte> ReadFile(std::string_view virtualPath);
+		// Synchronous read - returns entire file contents.
+		[[nodiscard]] static Expected<std::vector<std::byte>> ReadFile(std::string_view virtualPath);
 
 		// Synchronous stream - caller owns the returned stream.
-		[[nodiscard]] static std::unique_ptr<std::istream> OpenStream(std::string_view virtualPath);
+		[[nodiscard]] static Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view virtualPath);
 
 		// Glob files under a mount point using wildcards.
 		// Supported wildcards:
 		//   *  matches within one path segment
 		//   ?  matches one character within one segment
 		//   ** matches across directory boundaries
-		[[nodiscard]] static std::vector<std::string> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
+		[[nodiscard]] static Expected<std::vector<std::string>> Glob(std::string_view virtualPattern, const FileGlobOptions& options = {});
 
 		// Asynchronous read - returns immediately with a handle.
 		// Poll FileRequestHandle::GetState() or call FileSystem::WaitFor() to

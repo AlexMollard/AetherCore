@@ -1,8 +1,10 @@
 #pragma once
 
+#include <expected>
 #include <filesystem>
 
 #include "IFileBackend.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether::io
 {
@@ -12,9 +14,9 @@ namespace aether::io
 		explicit DirectoryBackend(std::filesystem::path rootPath);
 
 		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::byte> Read(std::string_view relativePath) const override;
-		[[nodiscard]] std::unique_ptr<std::istream> OpenStream(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::string> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
+		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view relativePath) const override;
+		[[nodiscard]] Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view relativePath) const override;
+		[[nodiscard]] Expected<std::vector<std::string>> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
 
 	private:
 		[[nodiscard]] std::filesystem::path Resolve(std::string_view relativePath) const;

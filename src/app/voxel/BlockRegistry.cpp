@@ -19,7 +19,8 @@ namespace voxel
 
 		if (aether::io::FileSystem::Exists(atlasPath))
 		{
-			m_atlasTexture = new aether::Texture(assetManager.CreateTexture(atlasPath, aether::TextureFilter::Nearest));
+			AE_EXPECT_OR_THROW(tex, assetManager.CreateTexture(atlasPath, aether::TextureFilter::Nearest));
+			m_atlasTexture = new aether::Texture(std::move(tex));
 			mat.albedoSlot = m_atlasTexture->GetBindlessSlot();
 		}
 		else

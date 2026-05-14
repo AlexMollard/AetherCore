@@ -577,11 +577,7 @@ namespace aether
 			return;
 		}
 
-		const auto spirv = io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv");
-		if (spirv.empty())
-		{
-			Throw(AetherError::Asset("RenderQueue: shader not found: shaders://skin_palette_build.slang.spv"));
-		}
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv"));
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
 
@@ -633,11 +629,7 @@ namespace aether
 			return;
 		}
 
-		const auto spirv = io::FileSystem::ReadFile("shaders://animation_sample.slang.spv");
-		if (spirv.empty())
-		{
-			Throw(AetherError::Asset("RenderQueue: shader not found: shaders://animation_sample.slang.spv"));
-		}
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.slang.spv"));
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
 

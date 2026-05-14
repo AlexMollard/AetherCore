@@ -102,15 +102,19 @@ namespace aether::app
 	{
 		INFO(LogCategory::App, "Application run loop starting.");
 
-		const auto shaderFiles = io::FileSystem::Glob("shaders://**/*.slang.spv");
-		if (shaderFiles.empty())
+		const auto shaderFilesResult = io::FileSystem::Glob("shaders://**/*.slang.spv");
+		if (!shaderFilesResult.has_value())
+		{
+			WARN(LogCategory::FileSystem, "Shader glob failed: {}", shaderFilesResult.error().ToString());
+		}
+		else if (shaderFilesResult->empty())
 		{
 			WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.slang.spv");
 		}
 		else
 		{
-			INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFiles.size());
-			for (const auto& shaderFile: shaderFiles)
+			INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
+			for (const auto& shaderFile: *shaderFilesResult)
 			{
 				VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
 			}

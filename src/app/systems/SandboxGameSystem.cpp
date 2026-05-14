@@ -153,12 +153,14 @@ namespace aether::app
 		constexpr std::string_view kDebugMaterialPreset = "assets://materials/MyPBRFolder";
 		if (aether::io::FileSystem::Exists(kDebugMaterialPreset))
 		{
-			m_debugTexturedMaterial = m_assets->LoadMaterialPreset(kDebugMaterialPreset, m_debugMaterialTextures);
+			AE_EXPECT_OR_THROW(mat, m_assets->LoadMaterialPreset(kDebugMaterialPreset, m_debugMaterialTextures));
+			m_debugTexturedMaterial = mat;
 		}
 		else
 		{
 			m_debugMaterialTextures.clear();
-			m_debugMaterialTextures.push_back(m_assets->CreateTexture("assets://textures/tex_DebugUVTiles.png"));
+			AE_EXPECT_OR_THROW(tex, m_assets->CreateTexture("assets://textures/tex_DebugUVTiles.png"));
+			m_debugMaterialTextures.push_back(std::move(tex));
 			m_debugTexturedMaterial = {};
 			m_debugTexturedMaterial.albedoSlot = m_debugMaterialTextures.back().GetBindlessSlot();
 			m_assets->RegisterMaterial(m_debugTexturedMaterial);
@@ -182,7 +184,8 @@ namespace aether::app
 		{
 			try
 			{
-				m_foxModel = m_assets->LoadModel(kFoxPath);
+				AE_EXPECT_OR_THROW(model, m_assets->LoadModel(kFoxPath));
+				m_foxModel = std::move(model);
 				if (m_foxModel->animator)
 				{
 					const std::uint32_t animCount = m_foxModel->animator->GetAnimationCount();
@@ -326,7 +329,8 @@ namespace aether::app
 		});
 
 		m_cameras->SetMainCamera(m_orbitCamera);
-		m_rttTargetId = m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, { 512, 512 });
+		AE_EXPECT_OR_THROW(targetId, m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, { 512, 512 }));
+		m_rttTargetId = targetId;
 	}
 
 	void SandboxGameSystem::CreatePointLights()

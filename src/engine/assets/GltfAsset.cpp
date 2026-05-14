@@ -11,6 +11,8 @@
 #include <AeBnFormat.hpp>
 
 #include "FileSystem.hpp"
+#include "utils/Assert.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::assets
@@ -23,7 +25,7 @@ namespace aether::assets
 			const std::size_t sep = vfsPath.find(kSeparator);
 			if (sep == std::string_view::npos)
 			{
-				throw std::runtime_error("Invalid VFS path (missing ://): " + std::string(vfsPath));
+				AE_ASSERT_ALWAYS(false, "Invalid VFS path (missing ://): " + std::string(vfsPath));
 			}
 			return { vfsPath.substr(0, sep), vfsPath.substr(sep + kSeparator.size()) };
 		}
@@ -60,22 +62,26 @@ namespace aether::assets
 		// AEBN binary deserialiser
 		// -------------------------------------------------------------------------
 
-		GltfAsset LoadFromAebn(const std::vector<std::byte>& data, std::string_view meshVfsPath)
+		Expected<GltfAsset> LoadFromAebn(const std::vector<std::byte>& data, std::string_view meshVfsPath)
 		{
 			const std::byte* p = data.data();
 			const std::byte* end = data.data() + data.size();
 
-			auto CheckSpace = [&](std::size_t n)
+			auto CheckSpace = [&](std::size_t n) -> bool
 			{
 				if (static_cast<std::size_t>(end - p) < n)
 				{
-					throw std::runtime_error("AEBN: truncated data in " + std::string(meshVfsPath));
+					return false;
 				}
+				return true;
 			};
 
 			auto ReadT = [&]<typename T>() -> T
 			{
-				CheckSpace(sizeof(T));
+				if (!CheckSpace(sizeof(T)))
+				{
+					return T{};
+				}
 				T val;
 				std::memcpy(&val, p, sizeof(T));
 				p += sizeof(T);
@@ -84,7 +90,10 @@ namespace aether::assets
 
 			auto ReadStr = [&](std::uint16_t len) -> std::string
 			{
-				CheckSpace(len);
+				if (!CheckSpace(len))
+				{
+					return {};
+				}
 				std::string s(reinterpret_cast<const char*>(p), len);
 				p += len;
 				return s;
@@ -93,7 +102,7 @@ namespace aether::assets
 			const AeBnHeader hdr = ReadT.template operator()<AeBnHeader>();
 			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) != 0 || hdr.version != AEBN_VERSION)
 			{
-				throw std::runtime_error("AEBN: invalid magic or version: " + std::string(meshVfsPath));
+				AE_UNEXPECTED(AetherError::Asset("invalid magic or version: " + std::string(meshVfsPath)));
 			}
 
 			GltfAsset asset;
@@ -187,7 +196,10 @@ namespace aether::assets
 				skin.inverseBindMatrices.resize(sh.jointCount);
 				for (std::uint32_t j = 0; j < sh.jointCount; ++j)
 				{
-					CheckSpace(64);
+					if (!CheckSpace(64))
+					{
+						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+					}
 					std::memcpy(&skin.inverseBindMatrices[j][0][0], p, 64);
 					p += 64;
 				}
@@ -204,7 +216,10 @@ namespace aether::assets
 				prim.materialIndex = ph.materialIndex;
 				prim.skinIndex = ph.skinIndex;
 				prim.vertices.resize(ph.vertexCount);
-				CheckSpace(ph.vertexCount * sizeof(AeBnVertex));
+				if (!CheckSpace(ph.vertexCount * sizeof(AeBnVertex)))
+				{
+					AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+				}
 				for (std::uint32_t v = 0; v < ph.vertexCount; ++v)
 				{
 					AeBnVertex src;
@@ -220,7 +235,10 @@ namespace aether::assets
 					dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
 				}
 				prim.indices.resize(ph.indexCount);
-				CheckSpace(ph.indexCount * sizeof(std::uint32_t));
+				if (!CheckSpace(ph.indexCount * sizeof(std::uint32_t)))
+				{
+					AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+				}
 				std::memcpy(prim.indices.data(), p, ph.indexCount * sizeof(std::uint32_t));
 				p += ph.indexCount * sizeof(std::uint32_t);
 				asset.primitives.push_back(std::move(prim));
@@ -267,11 +285,17 @@ namespace aether::assets
 							break;
 					}
 					channel.times.resize(ch.keyCount);
-					CheckSpace(ch.keyCount * sizeof(float));
+					if (!CheckSpace(ch.keyCount * sizeof(float)))
+					{
+						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+					}
 					std::memcpy(channel.times.data(), p, ch.keyCount * sizeof(float));
 					p += ch.keyCount * sizeof(float);
 					channel.values.resize(ch.keyCount);
-					CheckSpace(ch.keyCount * 4 * sizeof(float));
+					if (!CheckSpace(ch.keyCount * 4 * sizeof(float)))
+					{
+						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+					}
 					for (std::uint32_t k = 0; k < ch.keyCount; ++k)
 					{
 						float v4[4];
@@ -288,7 +312,7 @@ namespace aether::assets
 		}
 	} // namespace
 
-	GltfAsset GltfAsset::LoadFromVfsPath(std::string_view path)
+	Expected<GltfAsset> GltfAsset::LoadFromVfsPath(std::string_view path)
 	{
 		AE_PROFILE_ZONE_N("GltfAsset::Load");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
@@ -311,13 +335,14 @@ namespace aether::assets
 
 		if (!TryAebn(meshPath))
 		{
-			throw std::runtime_error("GltfAsset: packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it.");
+			AE_UNEXPECTED(AetherError::Asset("packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it."));
 		}
 
 		std::vector<std::byte> meshData;
 		{
 			AE_PROFILE_ZONE_N("GltfAsset::LoadAebn");
-			meshData = io::FileSystem::ReadFile(meshPath);
+			AE_EXPECT_OR_THROW(data, io::FileSystem::ReadFile(meshPath));
+			meshData = std::move(data);
 
 			if (meshData.size() >= sizeof(AeBnHeader))
 			{
@@ -325,14 +350,14 @@ namespace aether::assets
 				std::memcpy(&hdr, meshData.data(), sizeof(hdr));
 				if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
 				{
-					throw std::runtime_error("GltfAsset: stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + meshPath + "'. Re-run AssetPacker.");
+					AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + meshPath + "'. Re-run AssetPacker."));
 				}
 			}
 		}
 		return LoadFromAebn(meshData, meshPath);
 	}
 
-	GltfAsset GltfAsset::LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath)
+	Expected<GltfAsset> GltfAsset::LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath)
 	{
 		if (meshData.size() >= sizeof(AeBnHeader))
 		{
@@ -340,7 +365,7 @@ namespace aether::assets
 			std::memcpy(&hdr, meshData.data(), sizeof(hdr));
 			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
 			{
-				throw std::runtime_error("GltfAsset: stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + std::string(debugPath) + "'. Re-run AssetPacker.");
+				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + std::string(debugPath) + "'. Re-run AssetPacker."));
 			}
 		}
 		return LoadFromAebn(meshData, debugPath);

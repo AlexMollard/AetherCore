@@ -27,13 +27,9 @@ namespace aether
 		}
 
 		const VkDevice device = m_vkCtx->GetDevice().device;
-		const auto spirv = io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv");
-		if (spirv.empty())
-		{
-			Throw(AetherError::Asset("QuadRenderer: shader not found: shaders://ui_build_draws.slang.spv"));
-		}
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv"));
 
-		AE_EXPECT_OR_THROW(module, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -47,14 +43,14 @@ namespace aether
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computePipelineLayout) != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, module, nullptr);
+			vkDestroyShaderModule(device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = module,
+			.module = shaderModule,
 			.pName = "main",
 		};
 		const VkComputePipelineCreateInfo pipelineInfo{
@@ -64,13 +60,13 @@ namespace aether
 		};
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, module, nullptr);
+			vkDestroyShaderModule(device, shaderModule, nullptr);
 			vkDestroyPipelineLayout(device, m_computePipelineLayout, nullptr);
 			m_computePipelineLayout = VK_NULL_HANDLE;
 			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline."));
 		}
 
-		vkDestroyShaderModule(device, module, nullptr);
+		vkDestroyShaderModule(device, shaderModule, nullptr);
 		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_computePipeline), VK_OBJECT_TYPE_PIPELINE, "UI.BuildDraws");
 	}
 

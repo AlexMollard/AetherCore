@@ -133,7 +133,7 @@ namespace aether
 		Expected<UniqueImage> out = Create(allocator, imageInfo, allocInfo);
 		if (!out)
 		{
-			return std::unexpected(out.error());
+			AE_UNEXPECTED(out.error());
 		}
 
 		// Create the default view so callers can use GetDefaultView() immediately
@@ -150,7 +150,7 @@ namespace aether
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out->m_defaultView);
 		if (viewResult != VK_SUCCESS)
 		{
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(viewResult), "UniqueImage::Create: failed to create default view"));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "UniqueImage::Create: failed to create default view"));
 		}
 		out->m_bindlessDevice = device; // allows Reset() to destroy the view
 		return out;
@@ -171,7 +171,7 @@ namespace aether
 
 		if (createResult != VK_SUCCESS)
 		{
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA image"));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA image"));
 		}
 
 		return out;
@@ -204,12 +204,12 @@ namespace aether
 	{
 		if (!(*this))
 		{
-			return std::unexpected(AetherError::Vulkan(0, "Cannot bindless-register an invalid image handle"));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "Cannot bindless-register an invalid image handle"));
 		}
 
 		if (device == VK_NULL_HANDLE)
 		{
-			return std::unexpected(AetherError::Vulkan(0, "Cannot bindless-register image: VkDevice is null"));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "Cannot bindless-register image: VkDevice is null"));
 		}
 
 		if (m_bindlessSlot != kInvalidBindlessSlot)
@@ -251,7 +251,7 @@ namespace aether
 			const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
 			if (viewResult != VK_SUCCESS)
 			{
-				return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(viewResult), "Failed to create image view for bindless registration"));
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "Failed to create image view for bindless registration"));
 			}
 		}
 
@@ -284,7 +284,7 @@ namespace aether
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(samplerResult), "Failed to create sampler for bindless registration"));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(samplerResult), "Failed to create sampler for bindless registration"));
 		}
 
 		// Allocate bindless slot - if this fails, clean up sampler and view.
@@ -296,7 +296,7 @@ namespace aether
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			return std::unexpected(slotResult.error());
+			AE_UNEXPECTED(slotResult.error());
 		}
 
 		// Update descriptor - if this fails, free the slot and clean up.
@@ -309,7 +309,7 @@ namespace aether
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			return std::unexpected(updateResult.error());
+			AE_UNEXPECTED(updateResult.error());
 		}
 
 		m_bindlessManager = &bindlessManager;

@@ -270,7 +270,7 @@ namespace aether
 					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, computeFamily, graphicsFamily);
 					m_asyncCompute.EndCommandBuffer(frameIdx);
 
-					auto result = m_asyncCompute.Submit(m_gpu, frameIdx);
+					(void) m_asyncCompute.Submit(m_gpu, frameIdx);
 
 					if (computeFamily != graphicsFamily)
 					{

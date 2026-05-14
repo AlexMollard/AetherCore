@@ -16,7 +16,7 @@ namespace aether::vkutil
 		const VkResult result = vkCreateShaderModule(device, &info, nullptr, &mod);
 		if (result != VK_SUCCESS)
 		{
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(result), std::string(owner) + ": failed to create shader module."));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), std::string(owner) + ": failed to create shader module."));
 		}
 
 		return mod;

@@ -143,7 +143,7 @@ namespace aether
 			{
 				if (io::FileSystem::Exists(virtualPath))
 				{
-					const auto bytes = io::FileSystem::ReadFile(virtualPath);
+					AE_EXPECT_OR_THROW(bytes, io::FileSystem::ReadFile(virtualPath));
 					std::string text;
 					text.resize(bytes.size());
 					for (std::size_t i = 0; i < bytes.size(); ++i)

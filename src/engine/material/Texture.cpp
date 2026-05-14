@@ -224,12 +224,12 @@ namespace aether
 			}
 		}
 
-		UniqueImage UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+		Expected<UniqueImage> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
 			{
-				throw std::runtime_error("Texture: DDS file too small: " + std::string(debugPath));
+				AE_UNEXPECTED(AetherError::Asset("DDS file too small: " + std::string(debugPath)));
 			}
 
 			const std::byte* p = fileData.data();
@@ -242,13 +242,13 @@ namespace aether
 
 			if (hdr.ddspf.fourCC != FOURCC_DX10)
 			{
-				throw std::runtime_error("Texture: only DX10-extended DDS files are supported: " + std::string(debugPath));
+				AE_UNEXPECTED(AetherError::Asset("only DX10-extended DDS files are supported: " + std::string(debugPath)));
 			}
 
 			const VkFormat vkFmt = DxgiToVkFormat(dx10.dxgiFormat);
 			if (vkFmt == VK_FORMAT_UNDEFINED)
 			{
-				throw std::runtime_error("Texture: unsupported DXGI format " + std::to_string(dx10.dxgiFormat) + " in: " + std::string(debugPath));
+				AE_UNEXPECTED(AetherError::Vulkan(0, "unsupported DXGI format " + std::to_string(dx10.dxgiFormat) + " in: " + std::string(debugPath)));
 			}
 
 			const uint32_t width = hdr.width;
@@ -265,10 +265,10 @@ namespace aether
 				.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 				.usage = VMA_MEMORY_USAGE_AUTO,
 			};
-			AE_EXPECT_OR_THROW(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
-			std::memcpy(staging.GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
+			AE_TRY(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
+			std::memcpy(staging->GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
 
-			AE_EXPECT_OR_THROW(image,
+			AE_TRY(image,
 			        UniqueImage::Create(device,
 			                allocator,
 			                {
@@ -279,7 +279,7 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 			const VkBufferImageCopy copyRegion{
 				.bufferOffset = 0,
@@ -289,18 +289,18 @@ namespace aether
 				.imageOffset = { 0, 0, 0 },
 				.imageExtent = { width, height, 1 },
 			};
-			vkCmdCopyBufferToImage(cmd, staging.Get(), image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, staging->Get(), image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			AE_EXPECT_OR_THROW_VOID(image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
 			return image;
 		}
 	} // namespace
 
-	Texture Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		if (fileData.size() < 4)
 		{
@@ -308,7 +308,7 @@ namespace aether
 			stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
 			if (!pixels)
 			{
-				throw std::runtime_error("Texture::LoadFromFileData: failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason());
+				AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason()));
 			}
 			Texture texture;
 			texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
@@ -321,7 +321,8 @@ namespace aether
 		if (magic == DDS_MAGIC)
 		{
 			Texture texture;
-			texture.m_image = UploadBcnDds(fileData, debugPath, device, allocator, uploadQueue, uploadPool, bindless, filter);
+			AE_TRY(image, UploadBcnDds(fileData, debugPath, device, allocator, uploadQueue, uploadPool, bindless, filter));
+			texture.m_image = std::move(*image);
 			return texture;
 		}
 
@@ -329,7 +330,7 @@ namespace aether
 		stbi_uc* const pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(fileData.data()), static_cast<int>(fileData.size()), &width, &height, &channels, STBI_rgb_alpha);
 		if (!pixels)
 		{
-			throw std::runtime_error("Texture::LoadFromFileData: failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason());
+			AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason()));
 		}
 
 		Texture texture;
@@ -338,7 +339,7 @@ namespace aether
 		return texture;
 	}
 
-	Texture Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
@@ -349,7 +350,10 @@ namespace aether
 		{
 			if (io::FileSystem::Exists(tryPath))
 			{
-				return io::FileSystem::ReadFile(tryPath);
+				if (auto result = io::FileSystem::ReadFile(tryPath); result.has_value())
+				{
+					return std::move(*result);
+				}
 			}
 			return {};
 		};
@@ -374,13 +378,14 @@ namespace aether
 		std::vector<std::byte> fileData = TryLoad(texturePath);
 		if (fileData.empty())
 		{
-			fileData = io::FileSystem::ReadFile(path);
+			AE_TRY(data, io::FileSystem::ReadFile(path));
+			fileData = std::move(*data);
 		}
 
 		return LoadFromFileData(fileData, pathStr, device, allocator, uploadQueue, uploadPool, bindless, filter);
 	}
 
-	Texture Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		int width = 0;
 		int height = 0;
@@ -390,7 +395,7 @@ namespace aether
 
 		if (pixels == nullptr)
 		{
-			throw std::runtime_error("Texture::LoadFromDiskPath: failed to load '" + path.string() + "': " + stbi_failure_reason());
+			AE_UNEXPECTED(AetherError::Asset("failed to load '" + path.string() + "': " + stbi_failure_reason()));
 		}
 
 		Texture texture;

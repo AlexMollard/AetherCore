@@ -6,6 +6,7 @@
 #include <system_error>
 
 #include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether::io
 {
@@ -80,14 +81,14 @@ namespace aether::io
 		return std::filesystem::exists(Resolve(relativePath));
 	}
 
-	std::vector<std::byte> DirectoryBackend::Read(std::string_view relativePath) const
+	Expected<std::vector<std::byte>> DirectoryBackend::Read(std::string_view relativePath) const
 	{
 		const auto fullPath = Resolve(relativePath);
 
 		std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
 		if (!file)
 		{
-			throw FileSystemError("Failed to open file: " + fullPath.string());
+			AE_UNEXPECTED(AetherError::FileSystem("failed to open file: " + fullPath.string()));
 		}
 
 		const auto size = file.tellg();
@@ -96,26 +97,26 @@ namespace aether::io
 		std::vector<std::byte> buffer(static_cast<std::size_t>(size));
 		if (!file.read(reinterpret_cast<char*>(buffer.data()), size))
 		{
-			throw FileSystemError("Failed to read file: " + fullPath.string());
+			AE_UNEXPECTED(AetherError::FileSystem("failed to read file: " + fullPath.string()));
 		}
 
 		return buffer;
 	}
 
-	std::unique_ptr<std::istream> DirectoryBackend::OpenStream(std::string_view relativePath) const
+	Expected<std::unique_ptr<std::istream>> DirectoryBackend::OpenStream(std::string_view relativePath) const
 	{
 		const auto fullPath = Resolve(relativePath);
 
 		auto stream = std::make_unique<std::ifstream>(fullPath, std::ios::binary);
 		if (!*stream)
 		{
-			throw FileSystemError("Failed to open stream for file: " + fullPath.string());
+			AE_UNEXPECTED(AetherError::FileSystem("failed to open stream for file: " + fullPath.string()));
 		}
 
 		return stream;
 	}
 
-	std::vector<std::string> DirectoryBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
+	Expected<std::vector<std::string>> DirectoryBackend::Glob(std::string_view pattern, const FileGlobOptions& options) const
 	{
 		std::vector<std::string> matches;
 

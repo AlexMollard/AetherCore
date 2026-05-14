@@ -127,6 +127,9 @@ namespace aether
 			Throw(ae_result.error()); \
 	}
 
+// Returns unexpected(err) from inside an Expected-returning function.
+#define AE_UNEXPECTED(err) return std::unexpected(err)
+
 template<>
 struct std::formatter<aether::AetherError> : std::formatter<std::string>
 {

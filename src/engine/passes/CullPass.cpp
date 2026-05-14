@@ -42,13 +42,13 @@ namespace aether
 			return {};
 		}
 
-		const auto spirv = io::FileSystem::ReadFile("shaders://cull_draws.slang.spv");
-		if (spirv.empty())
+		AE_TRY(spirv, io::FileSystem::ReadFile("shaders://cull_draws.slang.spv"));
+		if (spirv->empty())
 		{
-			return std::unexpected(AetherError::Asset("CullPass: shader not found: shaders://cull_draws.slang.spv"));
+			AE_UNEXPECTED(AetherError::Asset("CullPass: shader not found: shaders://cull_draws.slang.spv"));
 		}
 
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "CullPass"));
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, *spirv, "CullPass"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -63,7 +63,7 @@ namespace aether
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			return std::unexpected(AetherError::Vulkan(0, "CullPass: failed to create pipeline layout."));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "CullPass: failed to create pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
@@ -82,7 +82,7 @@ namespace aether
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
 			vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
 			m_pipelineLayout = VK_NULL_HANDLE;
-			return std::unexpected(AetherError::Vulkan(0, "CullPass: failed to create compute pipeline."));
+			AE_UNEXPECTED(AetherError::Vulkan(0, "CullPass: failed to create compute pipeline."));
 		}
 
 		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_pipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDraws");

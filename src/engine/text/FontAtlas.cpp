@@ -162,12 +162,7 @@ namespace aether
 			Throw(AetherError::Engine("FontAtlas: FT_Init_FreeType failed."));
 		}
 
-		const std::vector<std::byte> fontData = io::FileSystem::ReadFile(fontVfsPath);
-		if (fontData.empty())
-		{
-			FT_Done_FreeType(ft);
-			Throw(AetherError::Asset(std::string("FontAtlas: font not found at '") + std::string(fontVfsPath) + "'."));
-		}
+		AE_EXPECT_OR_THROW(fontData, io::FileSystem::ReadFile(fontVfsPath));
 
 		FT_Face face{};
 		if (FT_New_Memory_Face(ft, reinterpret_cast<const FT_Byte*>(fontData.data()), static_cast<FT_Long>(fontData.size()), 0, &face) != 0)

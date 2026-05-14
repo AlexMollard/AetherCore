@@ -17,6 +17,7 @@
 #include "utils/TextIni.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -241,14 +242,14 @@ namespace aether
 			return spec;
 		}
 
-		std::string ReadTextFile(std::string_view path)
+		Expected<std::string> ReadTextFile(std::string_view path)
 		{
-			const std::vector<std::byte> bytes = io::FileSystem::ReadFile(path);
+			AE_TRY(bytes, io::FileSystem::ReadFile(path));
 			std::string text;
-			text.resize(bytes.size());
-			for (std::size_t i = 0; i < bytes.size(); ++i)
+			text.resize(bytes->size());
+			for (std::size_t i = 0; i < bytes->size(); ++i)
 			{
-				text[i] = static_cast<char>(bytes[i]);
+				text[i] = static_cast<char>((*bytes)[i]);
 			}
 			return text;
 		}
@@ -273,12 +274,12 @@ namespace aether
 		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices);
 	}
 
-	Texture AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
+	Expected<Texture> AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
 	{
 		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
 	}
 
-	coro::async<Texture> AssetManager::CreateTextureAsync(std::string_view path, TextureFilter filter)
+	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path, TextureFilter filter)
 	{
 		// Read file data on the I/O thread (suspends the calling coroutine).
 		const std::string pathStr(path);
@@ -351,7 +352,7 @@ namespace aether
 		mat.materialSlot = Material::kNoTexture;
 	}
 
-	Material AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
+	Expected<Material> AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
 	{
 		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
 
@@ -366,13 +367,14 @@ namespace aether
 
 		if (!io::FileSystem::Exists(presetPath))
 		{
-			throw std::runtime_error("LoadMaterialPreset: file/folder not found: " + requestedPath);
+			AE_UNEXPECTED(AetherError::Asset("file/folder not found: " + requestedPath));
 		}
 
-		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, ReadTextFile(presetPath));
+		AE_TRY(text, ReadTextFile(presetPath));
+		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
 		Material material = spec.material;
 
-		auto loadTextureSlot = [this, &outTextures](std::string_view texturePath) -> std::uint32_t
+		auto loadTextureSlot = [this, &outTextures](std::string_view texturePath) -> Expected<std::uint32_t>
 		{
 			if (texturePath.empty())
 			{
@@ -401,9 +403,9 @@ namespace aether
 				return Material::kNoTexture;
 			}
 
-			Texture tex = CreateTexture(resolvedPath);
-			const std::uint32_t slot = tex.GetBindlessSlot();
-			outTextures.push_back(std::move(tex));
+			AE_TRY(tex, CreateTexture(resolvedPath));
+			const std::uint32_t slot = tex->GetBindlessSlot();
+			outTextures.push_back(std::move(*tex));
 			return slot;
 		};
 
@@ -427,11 +429,16 @@ namespace aether
 		const std::string occlusionPath = !spec.occlusionPath.empty() ? spec.occlusionPath : autoOcclusion;
 		const std::string emissivePath = !spec.emissivePath.empty() ? spec.emissivePath : autoEmissive;
 
-		material.albedoSlot = loadTextureSlot(albedoPath);
-		material.normalSlot = loadTextureSlot(normalPath);
-		material.metallicRoughnessSlot = loadTextureSlot(metallicRoughnessPath);
-		material.occlusionSlot = loadTextureSlot(occlusionPath);
-		material.emissiveSlot = loadTextureSlot(emissivePath);
+		AE_TRY(albedoSlot, loadTextureSlot(albedoPath));
+		material.albedoSlot = *albedoSlot;
+		AE_TRY(normalSlot, loadTextureSlot(normalPath));
+		material.normalSlot = *normalSlot;
+		AE_TRY(metallicRoughnessSlot, loadTextureSlot(metallicRoughnessPath));
+		material.metallicRoughnessSlot = *metallicRoughnessSlot;
+		AE_TRY(occlusionSlot, loadTextureSlot(occlusionPath));
+		material.occlusionSlot = *occlusionSlot;
+		AE_TRY(emissiveSlot, loadTextureSlot(emissivePath));
+		material.emissiveSlot = *emissiveSlot;
 
 		RegisterMaterial(material);
 		INFO(LogCategory::Engine,
@@ -446,31 +453,31 @@ namespace aether
 		return material;
 	}
 
-	LoadedModel AssetManager::LoadModel(std::string_view path)
+	Expected<LoadedModel> AssetManager::LoadModel(std::string_view path)
 	{
-		const assets::GltfAsset source = assets::GltfAsset::LoadFromVfsPath(path);
+		AE_TRY(source, assets::GltfAsset::LoadFromVfsPath(path));
 		LoadedModel loaded;
 
-		std::vector<std::uint32_t> imageSlots(source.images.size(), Material::kNoTexture);
-		loaded.textures.reserve(source.images.size());
-		for (std::size_t imageIndex = 0; imageIndex < source.images.size(); ++imageIndex)
+		std::vector<std::uint32_t> imageSlots(source->images.size(), Material::kNoTexture);
+		loaded.textures.reserve(source->images.size());
+		for (std::size_t imageIndex = 0; imageIndex < source->images.size(); ++imageIndex)
 		{
-			const assets::GltfImage& image = source.images[imageIndex];
+			const assets::GltfImage& image = source->images[imageIndex];
 			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
 			{
 				continue;
 			}
 
-			Texture texture = CreateTexture(image.uri);
-			imageSlots[imageIndex] = texture.GetBindlessSlot();
-			loaded.textures.push_back(std::move(texture));
+			AE_TRY(texture, CreateTexture(image.uri));
+			imageSlots[imageIndex] = texture->GetBindlessSlot();
+			loaded.textures.push_back(std::move(*texture));
 		}
 
-		FinaliseModelLoad(loaded, source, imageSlots, path);
+		FinaliseModelLoad(loaded, *source, imageSlots, path);
 		return loaded;
 	}
 
-	coro::async<LoadedModel> AssetManager::LoadModelAsync(std::string_view path)
+	coro::async<Expected<LoadedModel>> AssetManager::LoadModelAsync(std::string_view path)
 	{
 		const std::string pathStr(path);
 
@@ -485,26 +492,35 @@ namespace aether
 		auto meshData = co_await io::FileSystem::ReadFileAsync(meshPath);
 
 		// Parse from memory on the game thread (after resumption).
-		const assets::GltfAsset source = assets::GltfAsset::LoadFromMemory(std::move(meshData), meshPath);
+		auto source = assets::GltfAsset::LoadFromMemory(std::move(meshData), meshPath);
+		if (!source.has_value())
+		{
+			co_return std::unexpected(source.error());
+		}
 		LoadedModel loaded;
 
 		// Load textures asynchronously.
-		std::vector<std::uint32_t> imageSlots(source.images.size(), Material::kNoTexture);
-		loaded.textures.reserve(source.images.size());
-		for (std::size_t imageIndex = 0; imageIndex < source.images.size(); ++imageIndex)
+		std::vector<std::uint32_t> imageSlots(source->images.size(), Material::kNoTexture);
+		loaded.textures.reserve(source->images.size());
+		for (std::size_t imageIndex = 0; imageIndex < source->images.size(); ++imageIndex)
 		{
-			const assets::GltfImage& image = source.images[imageIndex];
+			const assets::GltfImage& image = source->images[imageIndex];
 			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
 			{
 				continue;
 			}
 
-			Texture texture = co_await CreateTextureAsync(image.uri);
-			imageSlots[imageIndex] = texture.GetBindlessSlot();
-			loaded.textures.push_back(std::move(texture));
+			auto texResult = co_await CreateTextureAsync(image.uri);
+			if (!texResult.has_value())
+			{
+				WARN(LogCategory::Engine, "LoadModelAsync: texture load failed for '{}', skipping.", image.uri);
+				continue;
+			}
+			imageSlots[imageIndex] = texResult->GetBindlessSlot();
+			loaded.textures.push_back(std::move(*texResult));
 		}
 
-		FinaliseModelLoad(loaded, source, imageSlots, pathStr);
+		FinaliseModelLoad(loaded, *source, imageSlots, pathStr);
 		co_return loaded;
 	}
 

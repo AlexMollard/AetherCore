@@ -41,11 +41,11 @@ namespace aether
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
 
 		// Texture creation.
-		[[nodiscard]] Texture CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] Expected<Texture> CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
 		// Async texture creation - co_await the file read on the I/O thread,
 		// then decode and upload to GPU on the calling (game) thread.
-		[[nodiscard]] coro::async<Texture> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] coro::async<Expected<Texture>> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
 		// Pipeline creation.
 		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
@@ -56,14 +56,14 @@ namespace aether
 
 		// Load a material preset file and keep referenced textures alive in
 		// outTextures. The returned material is already registered on GPU.
-		[[nodiscard]] Material LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
+		[[nodiscard]] Expected<Material> LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
 
 		// Model loading and spawning.
-		[[nodiscard]] LoadedModel LoadModel(std::string_view path);
+		[[nodiscard]] Expected<LoadedModel> LoadModel(std::string_view path);
 
 		// Async model loading - co_await the .mesh file read on the I/O thread,
 		// then parse and upload textures on the game thread.
-		[[nodiscard]] coro::async<LoadedModel> LoadModelAsync(std::string_view path);
+		[[nodiscard]] coro::async<Expected<LoadedModel>> LoadModelAsync(std::string_view path);
 
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
 

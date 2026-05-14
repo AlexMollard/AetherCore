@@ -70,7 +70,7 @@ namespace aether
 
 		if (createResult != VK_SUCCESS)
 		{
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA buffer"));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA buffer"));
 		}
 
 		if ((out.m_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
@@ -136,7 +136,7 @@ namespace aether
 		const VkResult result = vmaFlushAllocation(m_allocator, m_allocation, offset, size);
 		if (result != VK_SUCCESS)
 		{
-			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(result), "vmaFlushAllocation failed"));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "vmaFlushAllocation failed"));
 		}
 		return {};
 	}

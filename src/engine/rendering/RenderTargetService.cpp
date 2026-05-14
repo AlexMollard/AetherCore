@@ -11,6 +11,8 @@
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/Scene.hpp"
+#include "utils/Assert.hpp"
+#include "utils/Expected.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
@@ -102,12 +104,9 @@ namespace aether
 		}
 	}
 
-	std::uint32_t RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const VkExtent2D extent)
+	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const VkExtent2D extent)
 	{
-		if (m_context == nullptr || m_graph == nullptr || m_bindlessManager == nullptr)
-		{
-			throw std::runtime_error("RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
-		}
+		AE_ASSERT_ALWAYS(m_context != nullptr && m_graph != nullptr && m_bindlessManager != nullptr, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
 
 		Entry rt{};
 		rt.cameraHandleRaw = cameraHandleRaw;
@@ -117,7 +116,7 @@ namespace aether
 		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 		if (slot == 0xFFFFFFFFu)
 		{
-			throw std::runtime_error("CreateCameraRenderTarget: failed to register transient color image as bindless sampled.");
+			AE_UNEXPECTED(AetherError::Engine("failed to register transient color image as bindless sampled"));
 		}
 		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, extent);
 

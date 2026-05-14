@@ -26,9 +26,9 @@ namespace aether::io
 		explicit PakBackend(std::filesystem::path pakPath);
 
 		[[nodiscard]] bool Exists(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::byte> Read(std::string_view relativePath) const override;
-		[[nodiscard]] std::unique_ptr<std::istream> OpenStream(std::string_view relativePath) const override;
-		[[nodiscard]] std::vector<std::string> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
+		[[nodiscard]] Expected<std::vector<std::byte>> Read(std::string_view relativePath) const override;
+		[[nodiscard]] Expected<std::unique_ptr<std::istream>> OpenStream(std::string_view relativePath) const override;
+		[[nodiscard]] Expected<std::vector<std::string>> Glob(std::string_view pattern, const FileGlobOptions& options) const override;
 
 	private:
 		struct EntryInfo

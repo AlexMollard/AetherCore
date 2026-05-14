@@ -582,11 +582,7 @@ namespace aether
 		}
 
 		const VkDevice device = m_context->GetDevice().device;
-		const auto spirv = io::FileSystem::ReadFile("shaders://tiled_light_cull.slang.spv");
-		if (spirv.empty())
-		{
-			Throw(AetherError::Asset("LightingManager: missing shader shaders://tiled_light_cull.slang.spv"));
-		}
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://tiled_light_cull.slang.spv"));
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "LightingManager"));
 

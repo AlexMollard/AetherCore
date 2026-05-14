@@ -11,6 +11,7 @@
 
 #include "utils/AetherExceptions.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Expected.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp" // IoExecutor
@@ -40,7 +41,7 @@ namespace aether::io
 			const auto sep = virtualPath.find(separator);
 			if (sep == std::string_view::npos)
 			{
-				throw FileSystemError("Invalid virtual path (missing ://): " + std::string(virtualPath));
+				AE_ASSERT_ALWAYS(false, "Invalid virtual path (missing ://): " + std::string(virtualPath));
 			}
 			return { virtualPath.substr(0, sep), virtualPath.substr(sep + separator.size()) };
 		}
@@ -51,7 +52,7 @@ namespace aether::io
 			auto it = s_backend->mounts.find(mountPoint);
 			if (it == s_backend->mounts.end())
 			{
-				throw FileSystemError("No backend mounted at: " + std::string(mountPoint));
+				AE_ASSERT_ALWAYS(false, "No backend mounted at: " + std::string(mountPoint));
 			}
 			return it->second;
 		}
@@ -209,7 +210,7 @@ namespace aether::io
 		return backend->Exists(relativePath);
 	}
 
-	std::vector<std::byte> FileSystem::ReadFile(std::string_view virtualPath)
+	Expected<std::vector<std::byte>> FileSystem::ReadFile(std::string_view virtualPath)
 	{
 		if (s_backend == nullptr)
 		{
@@ -222,7 +223,7 @@ namespace aether::io
 		return backend->Read(relativePath);
 	}
 
-	std::unique_ptr<std::istream> FileSystem::OpenStream(std::string_view virtualPath)
+	Expected<std::unique_ptr<std::istream>> FileSystem::OpenStream(std::string_view virtualPath)
 	{
 		if (s_backend == nullptr)
 		{
@@ -235,7 +236,7 @@ namespace aether::io
 		return backend->OpenStream(relativePath);
 	}
 
-	std::vector<std::string> FileSystem::Glob(std::string_view virtualPattern, const FileGlobOptions& options)
+	Expected<std::vector<std::string>> FileSystem::Glob(std::string_view virtualPattern, const FileGlobOptions& options)
 	{
 		if (s_backend == nullptr)
 		{
@@ -244,9 +245,13 @@ namespace aether::io
 
 		const auto [mountPoint, relativePattern] = ParseVirtualPath(virtualPattern);
 		const auto backend = ResolveBackend(mountPoint);
-		auto matches = backend->Glob(relativePattern, options);
-		VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, matches.size());
-		return matches;
+		auto result = backend->Glob(relativePattern, options);
+		if (!result.has_value())
+		{
+			return result;
+		}
+		VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, result->size());
+		return result;
 	}
 
 	FileRequestHandle FileSystem::RequestAsync(std::string_view virtualPath, IOPriority priority)
@@ -263,14 +268,15 @@ namespace aether::io
 		s_backend->ioThread->Submit(priority,
 		        [handle, virtualPathString]()
 		        {
-			        try
+			        auto result = FileSystem::ReadFile(virtualPathString);
+			        if (result.has_value())
 			        {
-				        handle->m_data = FileSystem::ReadFile(virtualPathString);
+				        handle->m_data = std::move(*result);
 				        handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
 			        }
-			        catch (const std::exception& e)
+			        else
 			        {
-				        handle->m_error = e.what();
+				        handle->m_error = result.error().ToString();
 				        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
 			        }
 		        });
@@ -300,13 +306,14 @@ namespace aether::io
 		s_backend->ioThread->Submit(priority,
 		        [pathStr, source = std::move(pair.second)]() mutable
 		        {
-			        try
+			        auto result = FileSystem::ReadFile(pathStr);
+			        if (result.has_value())
 			        {
-				        source.set_value(FileSystem::ReadFile(pathStr));
+				        source.set_value(std::move(*result));
 			        }
-			        catch (...)
+			        else
 			        {
-				        source.set_exception(std::current_exception());
+				        source.set_exception(std::make_exception_ptr(AssetError(result.error().ToString())));
 			        }
 		        });
 

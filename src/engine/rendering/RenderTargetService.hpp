@@ -37,7 +37,7 @@ namespace aether
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
-		[[nodiscard]] std::uint32_t CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, VkExtent2D extent);
+		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, VkExtent2D extent);
 		void DestroyCameraRenderTarget(std::uint32_t id);
 		[[nodiscard]] RGImage GetRenderTargetColorImage(std::uint32_t id) const;
 		[[nodiscard]] std::uint32_t GetRenderTargetBindlessSlot(std::uint32_t id) const;
