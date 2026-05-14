@@ -30,7 +30,7 @@ namespace aether
 		};
 		if (vkCreateCommandPool(vk.GetDevice().device, &uploadPoolInfo, nullptr, &m_uploadPool) != VK_SUCCESS)
 		{
-			throw std::runtime_error("AssetSubsystem: failed to create upload command pool.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to create upload command pool."));
 		}
 
 		m_materialBuffer.Initialize(vk);
@@ -64,7 +64,7 @@ namespace aether
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		if (vkAllocateCommandBuffers(vk.GetDevice().device, &allocInfo, &cmd) != VK_SUCCESS)
 		{
-			throw VulkanError("AssetSubsystem: failed to allocate command buffer.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to allocate command buffer."));
 		}
 
 		const VkCommandBufferBeginInfo beginInfo{
@@ -73,12 +73,12 @@ namespace aether
 		};
 		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
 		{
-			throw VulkanError("AssetSubsystem: failed to begin command buffer.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to begin command buffer."));
 		}
 		m_meshUploadQueue.Flush(cmd);
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
-			throw VulkanError("AssetSubsystem: failed to end command buffer.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to end command buffer."));
 		}
 
 		const VkSubmitInfo submitInfo{
@@ -88,11 +88,11 @@ namespace aether
 		};
 		if (vkQueueSubmit(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 		{
-			throw VulkanError("AssetSubsystem: failed to submit queue.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to submit queue."));
 		}
 		if (vkQueueWaitIdle(vk.GetGraphicsQueue()) != VK_SUCCESS)
 		{
-			throw VulkanError("AssetSubsystem: failed to wait for queue idle.");
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to wait for queue idle."));
 		}
 
 		vkFreeCommandBuffers(vk.GetDevice().device, m_uploadPool, 1, &cmd);

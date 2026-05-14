@@ -131,6 +131,16 @@ namespace aether
 		m_virtualResourceId = 0;
 	}
 
+	Expected<void> UniqueBuffer::FlushMapped(VkDeviceSize offset, VkDeviceSize size) const
+	{
+		const VkResult result = vmaFlushAllocation(m_allocator, m_allocation, offset, size);
+		if (result != VK_SUCCESS)
+		{
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(result), "vmaFlushAllocation failed"));
+		}
+		return {};
+	}
+
 	VkBuffer UniqueBuffer::Get() const
 	{
 		return m_buffer;

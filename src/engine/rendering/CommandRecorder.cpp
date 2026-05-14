@@ -112,7 +112,8 @@ namespace aether
 			.objectHandle = handle,
 			.pObjectName = name,
 		};
-		s_setObjectNameFn(device, &info);
+		// Best-effort debug naming - failure is non-critical.
+		[[maybe_unused]] const VkResult nameResult = s_setObjectNameFn(device, &info);
 	}
 
 	void CommandRecorder::DrawIndexed(std::uint32_t indexCount, std::uint32_t instanceCount, std::uint32_t firstIndex, std::int32_t vertexOffset, std::uint32_t firstInstance)

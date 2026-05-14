@@ -290,7 +290,7 @@ namespace aether
 		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
 	}
 
-	GraphicsPipeline AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
+	Expected<GraphicsPipeline> AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
 	{
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}

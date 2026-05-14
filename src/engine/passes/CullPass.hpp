@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "utils/Expected.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -44,7 +45,7 @@ namespace aether
 		}
 
 	private:
-		void EnsurePipeline();
+		Expected<void> EnsurePipeline();
 
 		VkDevice m_device = VK_NULL_HANDLE;
 		VkPipeline m_pipeline = VK_NULL_HANDLE;

@@ -34,7 +34,7 @@ namespace aether
 		VkSemaphore semaphore = VK_NULL_HANDLE;
 		if (vkCreateSemaphore(device, &semInfo, nullptr, &semaphore) != VK_SUCCESS)
 		{
-			throw std::runtime_error("AsyncComputeContext: failed to create compute timeline semaphore.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create compute timeline semaphore."));
 		}
 		m_timelineSemaphoreHandle = reinterpret_cast<std::uint64_t>(semaphore);
 		CommandRecorder::SetObjectName(device, m_timelineSemaphoreHandle, VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
@@ -55,7 +55,7 @@ namespace aether
 			VkCommandPool pool = VK_NULL_HANDLE;
 			if (vkCreateCommandPool(device, &poolInfo, nullptr, &pool) != VK_SUCCESS)
 			{
-				throw std::runtime_error("AsyncComputeContext: failed to create async compute command pool.");
+				Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create async compute command pool."));
 			}
 			frame.commandPool = reinterpret_cast<std::uint64_t>(pool);
 
@@ -68,14 +68,14 @@ namespace aether
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
 			if (vkAllocateCommandBuffers(device, &allocInfo, &cmd) != VK_SUCCESS)
 			{
-				throw std::runtime_error("AsyncComputeContext: failed to allocate async compute command buffer.");
+				Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to allocate async compute command buffer."));
 			}
 			frame.commandBuffer = reinterpret_cast<std::uint64_t>(cmd);
 
 			VkFence fence = VK_NULL_HANDLE;
 			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
 			{
-				throw std::runtime_error("AsyncComputeContext: failed to create async compute fence.");
+				Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create async compute fence."));
 			}
 			frame.fence = reinterpret_cast<std::uint64_t>(fence);
 
@@ -131,15 +131,15 @@ namespace aether
 
 		if (vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to wait for fence.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to wait for fence."));
 		}
 		if (vkResetFences(device, 1, &fence) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to reset fence.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to reset fence."));
 		}
 		if (vkResetCommandPool(device, pool, 0) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to reset command pool.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to reset command pool."));
 		}
 
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
@@ -149,7 +149,7 @@ namespace aether
 		};
 		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to begin command buffer.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to begin command buffer."));
 		}
 		CommandRecorder(cmd).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
 	}
@@ -165,7 +165,7 @@ namespace aether
 		CommandRecorder(cmd).EndDebugLabel();
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to end command buffer.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to end command buffer."));
 		}
 	}
 
@@ -200,7 +200,7 @@ namespace aether
 
 		if (vkQueueSubmit(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
 		{
-			throw VulkanError("AsyncComputeContext: failed to submit queue.");
+			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to submit queue."));
 		}
 
 		return {

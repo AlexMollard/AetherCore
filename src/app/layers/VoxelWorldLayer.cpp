@@ -132,14 +132,16 @@ namespace aether::app
 		const VkDescriptorSetLayout bindlessLayout = s.Get<BindlessManager>().GetLayout();
 		const std::array<VkDescriptorSetLayout, 1> setLayouts{ bindlessLayout };
 
-		m_pipeline = s.Get<AssetManager>().CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://voxel_chunk.slang.spv",
-		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		        .depthFormat = s.Get<Swapchain>().GetDepthFormat(),
-		        .depthTestEnable = true,
-		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
-		});
+		AE_EXPECT_OR_THROW(pipeline,
+		        s.Get<AssetManager>().CreateGraphicsPipeline({
+		                .shaderVfsPath = "shaders://voxel_chunk.slang.spv",
+		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		                .depthFormat = s.Get<Swapchain>().GetDepthFormat(),
+		                .depthTestEnable = true,
+		                .depthWriteEnable = true,
+		                .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        }));
+		m_pipeline = std::move(pipeline);
 
 		// ── Block registry ────────────────────────────────────────────────────
 		m_blockRegistry.Initialize(s, kAtlasPath);

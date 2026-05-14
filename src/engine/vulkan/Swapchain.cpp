@@ -32,7 +32,7 @@ namespace aether
 				}
 			}
 
-			throw VulkanError("Failed to find a supported depth format.");
+			Throw(AetherError::Vulkan(0, "Failed to find a supported depth format."));
 		}
 	} // namespace
 
@@ -62,7 +62,7 @@ namespace aether
 
 		if (!result)
 		{
-			throw VulkanError("Failed to create swapchain: " + result.error().message());
+			Throw(AetherError::Vulkan(0, "Failed to create swapchain: " + result.error().message()));
 		}
 
 		m_swapchain = result.value();
@@ -112,7 +112,7 @@ namespace aether
   };
 		if (vkCreateImageView(device, &depthViewInfo, nullptr, &m_depthView) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to create depth image view.");
+			Throw(AetherError::Vulkan(0, "Failed to create depth image view."));
 		}
 
 		for (auto& frame: m_frames)
@@ -123,7 +123,7 @@ namespace aether
 
 			if (vkCreateCommandPool(device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to create swapchain command pool.");
+				Throw(AetherError::Vulkan(0, "Failed to create swapchain command pool."));
 			}
 
 			VkCommandBufferAllocateInfo allocInfo{};
@@ -134,13 +134,13 @@ namespace aether
 
 			if (vkAllocateCommandBuffers(device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to allocate swapchain command buffer.");
+				Throw(AetherError::Vulkan(0, "Failed to allocate swapchain command buffer."));
 			}
 
 			const VkSemaphoreCreateInfo semInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 			if (vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to create image available semaphore.");
+				Throw(AetherError::Vulkan(0, "Failed to create image available semaphore."));
 			}
 
 			VkFenceCreateInfo fenceInfo{};
@@ -148,7 +148,7 @@ namespace aether
 			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 			if (vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to create in-flight fence.");
+				Throw(AetherError::Vulkan(0, "Failed to create in-flight fence."));
 			}
 		}
 
@@ -159,7 +159,7 @@ namespace aether
 		{
 			if (vkCreateSemaphore(device, &semInfo2, nullptr, &sem) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to create render finished semaphore.");
+				Throw(AetherError::Vulkan(0, "Failed to create render finished semaphore."));
 			}
 		}
 
@@ -230,7 +230,7 @@ namespace aether
 			AE_PROFILE_ZONE_N("WaitForFence");
 			if (vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 			{
-				throw VulkanError("Failed to wait for fence.");
+				Throw(AetherError::Vulkan(0, "Failed to wait for fence."));
 			}
 		}
 
@@ -257,11 +257,11 @@ namespace aether
 
 		if (vkResetFences(device, 1, &frame.inFlight) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to reset in-flight fence.");
+			Throw(AetherError::Vulkan(0, "Failed to reset in-flight fence."));
 		}
 		if (vkResetCommandPool(device, frame.commandPool, 0) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to reset command pool.");
+			Throw(AetherError::Vulkan(0, "Failed to reset command pool."));
 		}
 
 		const VkCommandBufferBeginInfo beginInfo{
@@ -270,7 +270,7 @@ namespace aether
 		};
 		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to begin command buffer.");
+			Throw(AetherError::Vulkan(0, "Failed to begin commands buffer."));
 		}
 
 		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
@@ -299,7 +299,7 @@ namespace aether
 
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to end command buffer.");
+			Throw(AetherError::Vulkan(0, "Failed to end command buffer."));
 		}
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
@@ -341,7 +341,7 @@ namespace aether
 		};
 		if (vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to submit queue.");
+			Throw(AetherError::Vulkan(0, "Failed to submit queue."));
 		}
 
 		const VkPresentInfoKHR presentInfo{

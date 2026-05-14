@@ -62,25 +62,29 @@ namespace aether
 	void ShadowService::RecreatePipeline(VkDevice device, VkFormat depthFormat)
 	{
 		m_shadowPipeline.Destroy();
-		m_shadowPipeline = GraphicsPipeline::Create(device,
-		        {
-		                .shaderVfsPath = "shaders://shadow_depth.slang.spv",
-		                .colorFormat = VK_FORMAT_UNDEFINED,
-		                .depthFormat = depthFormat,
-		                .depthTestEnable = true,
-		                .depthWriteEnable = true,
-		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		        });
+		AE_EXPECT_OR_THROW(shadowPipeline,
+		        GraphicsPipeline::Create(device,
+		                {
+		                        .shaderVfsPath = "shaders://shadow_depth.slang.spv",
+		                        .colorFormat = VK_FORMAT_UNDEFINED,
+		                        .depthFormat = depthFormat,
+		                        .depthTestEnable = true,
+		                        .depthWriteEnable = true,
+		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		                }));
+		m_shadowPipeline = std::move(shadowPipeline);
 		m_voxelShadowPipeline.Destroy();
-		m_voxelShadowPipeline = GraphicsPipeline::Create(device,
-		        {
-		                .shaderVfsPath = "shaders://voxel_shadow_depth.slang.spv",
-		                .colorFormat = VK_FORMAT_UNDEFINED,
-		                .depthFormat = depthFormat,
-		                .depthTestEnable = true,
-		                .depthWriteEnable = true,
-		                .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		        });
+		AE_EXPECT_OR_THROW(voxelShadowPipeline,
+		        GraphicsPipeline::Create(device,
+		                {
+		                        .shaderVfsPath = "shaders://voxel_shadow_depth.slang.spv",
+		                        .colorFormat = VK_FORMAT_UNDEFINED,
+		                        .depthFormat = depthFormat,
+		                        .depthTestEnable = true,
+		                        .depthWriteEnable = true,
+		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		                }));
+		m_voxelShadowPipeline = std::move(voxelShadowPipeline);
 	}
 
 	void ShadowService::PrepareWriteSlot(const std::uint32_t drawSlot)

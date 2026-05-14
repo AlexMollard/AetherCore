@@ -51,7 +51,7 @@ namespace aether
 		}
 
 		// Flush the host-written staging bytes before the GPU reads them.
-		vmaFlushAllocation(m_staging.GetAllocator(), m_staging.GetAllocation(), 0, m_ringHead);
+		AE_EXPECT_OR_THROW_VOID(m_staging.FlushMapped(0, m_ringHead));
 
 		for (const PendingCopy& copy: m_pendingCopies)
 		{

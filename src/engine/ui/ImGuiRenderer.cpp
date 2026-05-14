@@ -9,6 +9,7 @@
 #	include <GLFW/glfw3.h>
 
 #	include "utils/ServiceContainer.hpp"
+#	include "utils/Assert.hpp"
 #	include "rendering/RenderGraph.hpp"
 #	include "vulkan/Swapchain.hpp"
 #	include "vulkan/VulkanContext.hpp"
@@ -283,7 +284,8 @@ namespace aether
 		vulkanInfo.PipelineInfoMain.PipelineRenderingCreateInfo = pipelineRenderCI;
 		vulkanInfo.PipelineInfoForViewports.PipelineRenderingCreateInfo = pipelineRenderCI;
 
-		ImGui_ImplVulkan_Init(&vulkanInfo);
+		const bool imguiInitOk = ImGui_ImplVulkan_Init(&vulkanInfo);
+		AE_ASSERT_ALWAYS(imguiInitOk, "ImGui_ImplVulkan_Init failed");
 
 		RenderGraph& renderGraph = services.Get<RenderGraph>();
 		auto swapColor = renderGraph.GetSwapchainColor();
@@ -301,7 +303,7 @@ namespace aether
 	{
 		if (vkDeviceWaitIdle(services.Get<VulkanContext>().GetDevice().device) != VK_SUCCESS)
 		{
-			throw VulkanError("ImGuiRenderer: failed to wait for device idle.");
+			Throw(AetherError::Vulkan(0, "ImGuiRenderer: failed to wait for device idle."));
 		}
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();

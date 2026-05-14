@@ -40,7 +40,7 @@ namespace aether
 		GraphicsPipeline(GraphicsPipeline&&) noexcept;
 		GraphicsPipeline& operator=(GraphicsPipeline&&) noexcept;
 
-		static GraphicsPipeline Create(VkDevice device, const Desc& desc);
+		static Expected<GraphicsPipeline> Create(VkDevice device, const Desc& desc);
 		void Destroy();
 
 		[[nodiscard]] bool IsValid() const

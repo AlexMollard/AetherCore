@@ -74,7 +74,7 @@ namespace aether
 			// Staging: mapped, host-sequential-write.
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
 			std::memcpy(staging.GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
-			vmaFlushAllocation(allocator, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
+			AE_EXPECT_OR_THROW_VOID(staging.FlushMapped());
 
 			// Destination: device-local with shader device address support.
 			const VkBufferCreateInfo destInfo{

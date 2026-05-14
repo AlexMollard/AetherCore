@@ -114,14 +114,16 @@ namespace aether::app
 		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
 
-		m_pipeline = m_assets->CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
-		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		        .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
-		        .depthTestEnable = true,
-		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
-		});
+		AE_EXPECT_OR_THROW(pipeline,
+		        m_assets->CreateGraphicsPipeline({
+		                .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
+		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
+		                .depthTestEnable = true,
+		                .depthWriteEnable = true,
+		                .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        }));
+		m_pipeline = std::move(pipeline);
 
 		m_cubeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
 		m_quadMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Quad);

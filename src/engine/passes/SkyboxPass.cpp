@@ -13,15 +13,17 @@ namespace aether
 
 		// Full-screen pass: no vertex input, no depth attachment.
 		// Push constant: a single uint64_t BDA pointer to FrameConstantsData.
-		pass.m_pipeline = GraphicsPipeline::Create(desc.device,
-		        {
-		                .shaderVfsPath = "shaders://skybox.slang.spv",
-		                .colorFormat = desc.hdrColorFormat,
-		                .depthTestEnable = false,
-		                .depthWriteEnable = false,
-		                .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
-		                .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		        });
+		AE_EXPECT_OR_THROW(pipeline,
+		        GraphicsPipeline::Create(desc.device,
+		                {
+		                        .shaderVfsPath = "shaders://skybox.slang.spv",
+		                        .colorFormat = desc.hdrColorFormat,
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
+		                        .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		                }));
+		pass.m_pipeline = std::move(pipeline);
 
 		return pass;
 	}

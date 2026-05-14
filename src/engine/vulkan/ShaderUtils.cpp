@@ -1,11 +1,10 @@
 #include "vulkan/ShaderUtils.hpp"
 
-#include <stdexcept>
-#include <string>
+#include <format>
 
 namespace aether::vkutil
 {
-	VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
+	Expected<VkShaderModule> CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
 	{
 		const VkShaderModuleCreateInfo info{
 			.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -14,9 +13,10 @@ namespace aether::vkutil
 		};
 
 		VkShaderModule mod = VK_NULL_HANDLE;
-		if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
+		const VkResult result = vkCreateShaderModule(device, &info, nullptr, &mod);
+		if (result != VK_SUCCESS)
 		{
-			throw std::runtime_error(std::string(owner) + ": failed to create shader module.");
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(result), std::string(owner) + ": failed to create shader module."));
 		}
 
 		return mod;

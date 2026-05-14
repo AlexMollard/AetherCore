@@ -48,7 +48,7 @@ namespace aether
 		[[nodiscard]] coro::async<Texture> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
 
 		// Pipeline creation.
-		[[nodiscard]] GraphicsPipeline CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
+		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 
 		// Material management.
 		void RegisterMaterial(Material& mat);

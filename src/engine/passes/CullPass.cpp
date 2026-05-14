@@ -1,6 +1,5 @@
 #include "passes/CullPass.hpp"
 
-#include <stdexcept>
 #include <vector>
 
 #include "rendering/CommandRecorder.hpp"
@@ -36,20 +35,20 @@ namespace aether
 		m_device = VK_NULL_HANDLE;
 	}
 
-	void CullPass::EnsurePipeline()
+	Expected<void> CullPass::EnsurePipeline()
 	{
 		if (m_pipeline != VK_NULL_HANDLE)
 		{
-			return;
+			return {};
 		}
 
 		const auto spirv = io::FileSystem::ReadFile("shaders://cull_draws.slang.spv");
 		if (spirv.empty())
 		{
-			throw std::runtime_error("CullPass: shader not found: shaders://cull_draws.slang.spv");
+			return std::unexpected(AetherError::Asset("CullPass: shader not found: shaders://cull_draws.slang.spv"));
 		}
 
-		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "CullPass");
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "CullPass"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -64,7 +63,7 @@ namespace aether
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("CullPass: failed to create pipeline layout.");
+			return std::unexpected(AetherError::Vulkan(0, "CullPass: failed to create pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
@@ -81,17 +80,20 @@ namespace aether
 		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("CullPass: failed to create compute pipeline.");
+			vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+			m_pipelineLayout = VK_NULL_HANDLE;
+			return std::unexpected(AetherError::Vulkan(0, "CullPass: failed to create compute pipeline."));
 		}
 
 		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_pipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDraws");
 
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);
+		return {};
 	}
 
 	void CullPass::RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix)
 	{
-		EnsurePipeline();
+		AE_EXPECT_OR_THROW_VOID(EnsurePipeline());
 
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);
 		const VkPipeline pipeline = m_pipeline;

@@ -69,7 +69,7 @@ namespace aether
 			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 			if (slot == 0xFFFFFFFFu)
 			{
-				throw std::runtime_error("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id));
+				Throw(AetherError::Engine("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id)));
 			}
 			rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, rt.extent);
 		}

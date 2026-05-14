@@ -312,17 +312,17 @@ namespace aether
 		}
 
 		// Flush mapped writes before GPU reads.
-		vmaFlushAllocation(m_allocator, m_instanceDataBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
-		vmaFlushAllocation(m_allocator, m_cullInputBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
-		vmaFlushAllocation(m_allocator, m_batchDescBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+		AE_EXPECT_OR_THROW_VOID(m_instanceDataBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_cullInputBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_batchDescBuffer.FlushMapped());
 		if (m_skinCopyJobsMapped != nullptr)
 		{
-			vmaFlushAllocation(m_allocator, m_skinCopyJobBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+			AE_EXPECT_OR_THROW_VOID(m_skinCopyJobBuffer.FlushMapped());
 		}
 
 		if (sampleJobsThisFrame > 0 && m_animationDb != nullptr && m_animationDb->IsValid())
 		{
-			vmaFlushAllocation(m_allocator, m_animationSampleJobsBuffer.GetAllocation(), 0, VK_WHOLE_SIZE);
+			AE_EXPECT_OR_THROW_VOID(m_animationSampleJobsBuffer.FlushMapped());
 		}
 
 		// Ensure host writes are visible to compute/graphics shader reads.
@@ -580,10 +580,10 @@ namespace aether
 		const auto spirv = io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv");
 		if (spirv.empty())
 		{
-			throw std::runtime_error("RenderQueue: shader not found: shaders://skin_palette_build.slang.spv");
+			Throw(AetherError::Asset("RenderQueue: shader not found: shaders://skin_palette_build.slang.spv"));
 		}
 
-		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -598,7 +598,7 @@ namespace aether
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_skinCopyPipelineLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("RenderQueue: failed to create skin copy pipeline layout.");
+			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create skin copy pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
@@ -615,7 +615,7 @@ namespace aether
 		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_skinCopyPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("RenderQueue: failed to create skin copy compute pipeline.");
+			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create skin copy compute pipeline."));
 		}
 
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);
@@ -636,10 +636,10 @@ namespace aether
 		const auto spirv = io::FileSystem::ReadFile("shaders://animation_sample.slang.spv");
 		if (spirv.empty())
 		{
-			throw std::runtime_error("RenderQueue: shader not found: shaders://animation_sample.slang.spv");
+			Throw(AetherError::Asset("RenderQueue: shader not found: shaders://animation_sample.slang.spv"));
 		}
 
-		VkShaderModule shaderModule = vkutil::CreateShaderModule(m_device, spirv, "RenderQueue");
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -654,7 +654,7 @@ namespace aether
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_animationSamplePipelineLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("RenderQueue: failed to create animation sample pipeline layout.");
+			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create animation sample pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
@@ -671,7 +671,7 @@ namespace aether
 		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_animationSamplePipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			throw std::runtime_error("RenderQueue: failed to create animation sample compute pipeline.");
+			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create animation sample compute pipeline."));
 		}
 
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);

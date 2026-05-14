@@ -9,24 +9,7 @@
 #include "FileSystem.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
-
-namespace
-{
-	VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
-	{
-		VkShaderModuleCreateInfo info{};
-		info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-		info.codeSize = spirv.size();
-		info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
-
-		VkShaderModule mod = VK_NULL_HANDLE;
-		if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
-		{
-			throw std::runtime_error("LightingManager: failed to create compute shader module.");
-		}
-		return mod;
-	}
-} // namespace
+#include "vulkan/ShaderUtils.hpp"
 
 namespace aether
 {
@@ -73,7 +56,7 @@ namespace aether
 		};
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_setLayout) != VK_SUCCESS)
 		{
-			throw std::runtime_error("LightingManager: failed to create lighting descriptor set layout.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor set layout."));
 		}
 
 		const VkDescriptorPoolSize poolSize{
@@ -88,7 +71,7 @@ namespace aether
 		};
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
-			throw std::runtime_error("LightingManager: failed to create lighting descriptor pool.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor pool."));
 		}
 
 		std::array<VkDescriptorSetLayout, kMaxFramesInFlight> layouts{};
@@ -101,7 +84,7 @@ namespace aether
 		};
 		if (vkAllocateDescriptorSets(device, &allocInfo, m_sets.data()) != VK_SUCCESS)
 		{
-			throw std::runtime_error("LightingManager: failed to allocate lighting descriptor sets.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to allocate lighting descriptor sets."));
 		}
 
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
@@ -227,7 +210,7 @@ namespace aether
 		{
 			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
 		}
-		vmaFlushAllocation(m_context->GetAllocator(), frame.lights.GetAllocation(), 0, VK_WHOLE_SIZE);
+		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
 		UpdateDescriptorSet(frameSlot);
 
 		EnsureComputePipeline();
@@ -543,9 +526,9 @@ namespace aether
 		{
 			std::memcpy(frame.tileIndices.GetAllocationInfo().pMappedData, indices.data(), indices.size() * sizeof(std::uint32_t));
 		}
-		vmaFlushAllocation(m_context->GetAllocator(), frame.lights.GetAllocation(), 0, VK_WHOLE_SIZE);
-		vmaFlushAllocation(m_context->GetAllocator(), frame.tileHeaders.GetAllocation(), 0, VK_WHOLE_SIZE);
-		vmaFlushAllocation(m_context->GetAllocator(), frame.tileIndices.GetAllocation(), 0, VK_WHOLE_SIZE);
+		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(frame.tileHeaders.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(frame.tileIndices.FlushMapped());
 		UpdateDescriptorSet(frameSlot);
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
@@ -602,10 +585,10 @@ namespace aether
 		const auto spirv = io::FileSystem::ReadFile("shaders://tiled_light_cull.slang.spv");
 		if (spirv.empty())
 		{
-			throw std::runtime_error("LightingManager: missing shader shaders://tiled_light_cull.slang.spv");
+			Throw(AetherError::Asset("LightingManager: missing shader shaders://tiled_light_cull.slang.spv"));
 		}
 
-		VkShaderModule shaderModule = CreateShaderModule(device, spirv);
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "LightingManager"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -622,7 +605,7 @@ namespace aether
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computeLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
-			throw std::runtime_error("LightingManager: failed to create compute pipeline layout.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create compute pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo initStage{
@@ -639,7 +622,7 @@ namespace aether
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
-			throw std::runtime_error("LightingManager: failed to create initTiles compute pipeline.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
 		}
 		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
 
@@ -657,7 +640,7 @@ namespace aether
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
-			throw std::runtime_error("LightingManager: failed to create binLights compute pipeline.");
+			Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
 		}
 		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
 

@@ -38,23 +38,27 @@ namespace aether
 
 		const VkDescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 
-		stack.m_tonemapPipeline = GraphicsPipeline::Create(desc.device,
-		        {
-		                .shaderVfsPath = "shaders://tonemap.slang.spv",
-		                .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
-		                .pushConstantSize = 3 * sizeof(uint32_t),
-		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		        });
+		AE_EXPECT_OR_THROW(tonemapPipeline,
+		        GraphicsPipeline::Create(desc.device,
+		                {
+		                        .shaderVfsPath = "shaders://tonemap.slang.spv",
+		                        .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
+		                        .pushConstantSize = 3 * sizeof(uint32_t),
+		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		                }));
+		stack.m_tonemapPipeline = std::move(tonemapPipeline);
 
-		stack.m_fxaaPipeline = GraphicsPipeline::Create(desc.device,
-		        {
-		                .shaderVfsPath = "shaders://fxaa.slang.spv",
-		                .colorFormat = desc.swapchainFormat,
-		                .pushConstantSize = 2u * sizeof(uint32_t),
-		                .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		        });
+		AE_EXPECT_OR_THROW(fxaaPipeline,
+		        GraphicsPipeline::Create(desc.device,
+		                {
+		                        .shaderVfsPath = "shaders://fxaa.slang.spv",
+		                        .colorFormat = desc.swapchainFormat,
+		                        .pushConstantSize = 2u * sizeof(uint32_t),
+		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		                }));
+		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 
 		stack.m_swapchainFormat = desc.swapchainFormat;
 

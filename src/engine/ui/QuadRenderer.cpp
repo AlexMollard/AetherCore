@@ -1,7 +1,6 @@
 #include "ui/QuadRenderer.hpp"
 
 #include <glm/geometric.hpp>
-#include <stdexcept>
 #include <vector>
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
@@ -14,28 +13,12 @@
 #include "rendering/RenderGraph.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/ShaderUtils.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		VkShaderModule CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv)
-		{
-			VkShaderModuleCreateInfo info{};
-			info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-			info.codeSize = spirv.size();
-			info.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data());
-			VkShaderModule mod = VK_NULL_HANDLE;
-			if (vkCreateShaderModule(device, &info, nullptr, &mod) != VK_SUCCESS)
-			{
-				throw std::runtime_error("QuadRenderer: failed to create compute shader module.");
-			}
-			return mod;
-		}
-	} // namespace
-
 	void QuadRenderer::EnsureComputePipeline()
 	{
 		if (m_vkCtx == nullptr || m_computePipeline != VK_NULL_HANDLE)
@@ -47,10 +30,10 @@ namespace aether
 		const auto spirv = io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv");
 		if (spirv.empty())
 		{
-			throw std::runtime_error("QuadRenderer: shader not found: shaders://ui_build_draws.slang.spv");
+			Throw(AetherError::Asset("QuadRenderer: shader not found: shaders://ui_build_draws.slang.spv"));
 		}
 
-		VkShaderModule module = CreateShaderModule(device, spirv);
+		AE_EXPECT_OR_THROW(module, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
 
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
@@ -65,7 +48,7 @@ namespace aether
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computePipelineLayout) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, module, nullptr);
-			throw std::runtime_error("QuadRenderer: failed to create compute pipeline layout.");
+			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
@@ -84,7 +67,7 @@ namespace aether
 			vkDestroyShaderModule(device, module, nullptr);
 			vkDestroyPipelineLayout(device, m_computePipelineLayout, nullptr);
 			m_computePipelineLayout = VK_NULL_HANDLE;
-			throw std::runtime_error("QuadRenderer: failed to create compute pipeline.");
+			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline."));
 		}
 
 		vkDestroyShaderModule(device, module, nullptr);
@@ -289,17 +272,19 @@ namespace aether
 
 		const VkDescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
 
-		m_pipeline = services.Get<AssetManager>().CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://ui_shapes.slang.spv",
-		        .colorFormat = m_swapchain->GetImageFormat(),
-		        .depthFormat = VK_FORMAT_UNDEFINED,
-		        .depthTestEnable = false,
-		        .depthWriteEnable = false,
-		        .blendEnable = true,
-		        .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
-		        .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
-		});
+		AE_EXPECT_OR_THROW(pipeline,
+		        services.Get<AssetManager>().CreateGraphicsPipeline({
+		                .shaderVfsPath = "shaders://ui_shapes.slang.spv",
+		                .colorFormat = m_swapchain->GetImageFormat(),
+		                .depthFormat = VK_FORMAT_UNDEFINED,
+		                .depthTestEnable = false,
+		                .depthWriteEnable = false,
+		                .blendEnable = true,
+		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
+		                .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		        }));
+		m_pipeline = std::move(pipeline);
 
 		RegisterPass();
 		m_ready = true;

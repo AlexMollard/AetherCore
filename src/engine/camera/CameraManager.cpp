@@ -1,6 +1,6 @@
 #include "camera/CameraManager.hpp"
 
-#include <stdexcept>
+#include "utils/Assert.hpp"
 
 namespace aether
 {
@@ -30,20 +30,14 @@ namespace aether
 	Camera& CameraManager::Get(CameraHandle handle)
 	{
 		auto it = m_cameras.find(handle.id);
-		if (it == m_cameras.end())
-		{
-			throw std::out_of_range("CameraManager::Get: invalid camera handle.");
-		}
+		AE_ASSERT_ALWAYS(it != m_cameras.end(), "CameraManager::Get: invalid camera handle.");
 		return it->second;
 	}
 
 	const Camera& CameraManager::Get(CameraHandle handle) const
 	{
 		auto it = m_cameras.find(handle.id);
-		if (it == m_cameras.end())
-		{
-			throw std::out_of_range("CameraManager::Get: invalid camera handle.");
-		}
+		AE_ASSERT_ALWAYS(it != m_cameras.end(), "CameraManager::Get: invalid camera handle.");
 		return it->second;
 	}
 

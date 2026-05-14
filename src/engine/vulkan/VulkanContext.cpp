@@ -13,11 +13,6 @@
 
 namespace
 {
-	aether::VulkanError MakeVkBootstrapError(const char* message, const vkb::Result<vkb::Instance>& result)
-	{
-		return aether::VulkanError(std::string(message) + result.error().message());
-	}
-
 	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
 	{
 		(void) userData;
@@ -51,7 +46,7 @@ namespace aether
 		// Initialize volk loader (loads global Vulkan functions)
 		if (volkInitialize() != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to initialize volk Vulkan loader.");
+			Throw(AetherError::Vulkan(0, "Failed to initialize volk Vulkan loader."));
 		}
 
 		vkb::InstanceBuilder instanceBuilder;
@@ -65,7 +60,7 @@ namespace aether
 
 		if (!instanceResult)
 		{
-			throw MakeVkBootstrapError("Failed to create Vulkan instance: ", instanceResult);
+			Throw(AetherError::Vulkan(0, std::string("Failed to create Vulkan instance: ") + instanceResult.error().message()));
 		}
 
 		m_instance = instanceResult.value();
@@ -75,7 +70,7 @@ namespace aether
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to create Vulkan surface.");
+			Throw(AetherError::Vulkan(0, "Failed to create Vulkan surface."));
 		}
 
 		VkPhysicalDeviceVulkan11Features requiredFeatures11{};
@@ -109,14 +104,14 @@ namespace aether
 
 		if (!physicalDeviceResult)
 		{
-			throw VulkanError("Failed to select a suitable Vulkan physical device.");
+			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
 		}
 
 		vkb::DeviceBuilder deviceBuilder{ physicalDeviceResult.value() };
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
-			throw VulkanError("Failed to create Vulkan logical device.");
+			Throw(AetherError::Vulkan(0, "Failed to create Vulkan logical device."));
 		}
 
 		m_device = deviceResult.value();
@@ -127,7 +122,7 @@ namespace aether
 		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);
 		if (!graphicsQueueResult)
 		{
-			throw VulkanError("Failed to get graphics queue.");
+			Throw(AetherError::Vulkan(0, "Failed to get graphics queue."));
 		}
 		m_graphicsQueue = graphicsQueueResult.value();
 		m_graphicsQueueFamily = m_device->get_queue_index(vkb::QueueType::graphics).value();
@@ -147,7 +142,7 @@ namespace aether
 		const auto presentQueueResult = m_device->get_queue(vkb::QueueType::present);
 		if (!presentQueueResult)
 		{
-			throw VulkanError("Failed to get present queue.");
+			Throw(AetherError::Vulkan(0, "Failed to get present queue."));
 		}
 		m_presentQueue = presentQueueResult.value();
 
@@ -182,7 +177,7 @@ namespace aether
 		const VkResult allocatorResult = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
 		if (allocatorResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create VMA allocator. VkResult={}", static_cast<int>(allocatorResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(allocatorResult), std::format("Failed to create VMA allocator. VkResult={}", static_cast<int>(allocatorResult))));
 		}
 
 		INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");

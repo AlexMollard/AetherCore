@@ -43,7 +43,7 @@ namespace aether
 	{
 		if (vkDeviceWaitIdle(m_gfx->GetVulkanContext().GetDevice().device) != VK_SUCCESS)
 		{
-			throw VulkanError("GpuDevice: failed to wait for device idle.");
+			Throw(AetherError::Vulkan(0, "GpuDevice: failed to wait for device idle."));
 		}
 	}
 
@@ -141,7 +141,7 @@ namespace aether
 
 		if (vkDeviceWaitIdle(vk.GetDevice().device) != VK_SUCCESS)
 		{
-			throw VulkanError("GpuDevice: failed to wait for device idle during swapchain recreation.");
+			Throw(AetherError::Vulkan(0, "GpuDevice: failed to wait for device idle during swapchain recreation."));
 		}
 		swapchain.Shutdown(vk.GetDevice().device);
 		swapchain.ClearRecreationFlag();

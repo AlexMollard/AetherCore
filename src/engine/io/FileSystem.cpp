@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "utils/AetherExceptions.hpp"
+#include "utils/Assert.hpp"
 #include "DirectoryBackend.hpp"
 #include "IFileBackend.hpp"
 #include "IOThread.hpp" // IoExecutor
@@ -176,7 +177,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::Mount() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::Mount() called before Initialize().");
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
@@ -188,7 +189,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::MountPak() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::MountPak() called before Initialize().");
 		}
 
 		INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
@@ -200,7 +201,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::Exists() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::Exists() called before Initialize().");
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
@@ -212,7 +213,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::ReadFile() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFile() called before Initialize().");
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
@@ -225,7 +226,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::OpenStream() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::OpenStream() called before Initialize().");
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
@@ -238,7 +239,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::Glob() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::Glob() called before Initialize().");
 		}
 
 		const auto [mountPoint, relativePattern] = ParseVirtualPath(virtualPattern);
@@ -252,7 +253,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::RequestAsync() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::RequestAsync() called before Initialize().");
 		}
 
 		const std::string virtualPathString(virtualPath);
@@ -290,7 +291,7 @@ namespace aether::io
 	{
 		if (s_backend == nullptr)
 		{
-			throw FileSystemError("FileSystem::ReadFileAsync() called before Initialize().");
+			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFileAsync() called before Initialize().");
 		}
 
 		auto pair = coro::task<std::vector<std::byte>>::create();

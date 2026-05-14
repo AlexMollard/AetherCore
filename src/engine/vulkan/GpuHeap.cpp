@@ -81,7 +81,7 @@ namespace aether
 		// Transient host-visible staging buffer.
 		AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(m_allocatorRef, device, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
 		std::memcpy(staging.GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
-		vmaFlushAllocation(m_allocatorRef, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
+		AE_EXPECT_OR_THROW_VOID(staging.FlushMapped());
 
 		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{

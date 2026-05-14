@@ -31,6 +31,10 @@ namespace aether
 
 		void Reset();
 
+		// Flushes host-visible memory to the device.
+		// Returns Expected<void> - errors if the flush fails.
+		Expected<void> FlushMapped(VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE) const;
+
 		[[nodiscard]] VkBuffer Get() const;
 		[[nodiscard]] VmaAllocation GetAllocation() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;

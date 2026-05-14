@@ -56,15 +56,15 @@ namespace aether
 		m_setLayoutCount = 0;
 	}
 
-	GraphicsPipeline GraphicsPipeline::Create(VkDevice device, const Desc& desc)
+	Expected<GraphicsPipeline> GraphicsPipeline::Create(VkDevice device, const Desc& desc)
 	{
 		const auto spirv = io::FileSystem::ReadFile(desc.shaderVfsPath);
 		if (spirv.empty())
 		{
-			throw std::runtime_error("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath));
+			return std::unexpected(AetherError::Asset("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath)));
 		}
 
-		VkShaderModule shaderModule = vkutil::CreateShaderModule(device, spirv, "GraphicsPipeline");
+		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "GraphicsPipeline"));
 
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);
@@ -164,7 +164,8 @@ namespace aether
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
 		{
-			throw VulkanError("Failed to create pipeline layout.");
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+			return std::unexpected(AetherError::Vulkan(0, "Failed to create pipeline layout."));
 		}
 
 		const bool hasColorAttachment = desc.colorFormat != VK_FORMAT_UNDEFINED;
@@ -198,7 +199,7 @@ namespace aether
 		if (result != VK_SUCCESS)
 		{
 			vkDestroyPipelineLayout(device, layout, nullptr);
-			throw std::runtime_error("Failed to create graphics pipeline.");
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create graphics pipeline."));
 		}
 
 		GraphicsPipeline out;

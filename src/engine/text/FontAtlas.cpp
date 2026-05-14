@@ -65,7 +65,7 @@ namespace aether
 			const VkResult allocResult = vkAllocateCommandBuffers(device, &ai, &cmd);
 			if (allocResult != VK_SUCCESS)
 			{
-				throw VulkanError(std::format("FontAtlas: vkAllocateCommandBuffers failed. VkResult={}", static_cast<int>(allocResult)));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), std::format("FontAtlas: vkAllocateCommandBuffers failed. VkResult={}", static_cast<int>(allocResult))));
 			}
 
 			const VkCommandBufferBeginInfo bi{
@@ -76,7 +76,7 @@ namespace aether
 			if (beginResult != VK_SUCCESS)
 			{
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				throw VulkanError(std::format("FontAtlas: vkBeginCommandBuffer failed. VkResult={}", static_cast<int>(beginResult)));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), std::format("FontAtlas: vkBeginCommandBuffer failed. VkResult={}", static_cast<int>(beginResult))));
 			}
 			return cmd;
 		}
@@ -87,7 +87,7 @@ namespace aether
 			if (endResult != VK_SUCCESS)
 			{
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				throw VulkanError(std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult)));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult))));
 			}
 			const VkSubmitInfo si{
 				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -98,12 +98,12 @@ namespace aether
 			if (submitResult != VK_SUCCESS)
 			{
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				throw VulkanError(std::format("FontAtlas: vkQueueSubmit failed. VkResult={}", static_cast<int>(submitResult)));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit failed. VkResult={}", static_cast<int>(submitResult))));
 			}
 			const VkResult idleResult = vkQueueWaitIdle(queue);
 			if (idleResult != VK_SUCCESS)
 			{
-				throw VulkanError(std::format("FontAtlas: vkQueueWaitIdle failed. VkResult={}", static_cast<int>(idleResult)));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), std::format("FontAtlas: vkQueueWaitIdle failed. VkResult={}", static_cast<int>(idleResult))));
 			}
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
@@ -159,21 +159,21 @@ namespace aether
 		FT_Library ft{};
 		if (FT_Init_FreeType(&ft) != 0)
 		{
-			throw std::runtime_error("FontAtlas: FT_Init_FreeType failed.");
+			Throw(AetherError::Engine("FontAtlas: FT_Init_FreeType failed."));
 		}
 
 		const std::vector<std::byte> fontData = io::FileSystem::ReadFile(fontVfsPath);
 		if (fontData.empty())
 		{
 			FT_Done_FreeType(ft);
-			throw std::runtime_error(std::string("FontAtlas: font not found at '") + std::string(fontVfsPath) + "'.");
+			Throw(AetherError::Asset(std::string("FontAtlas: font not found at '") + std::string(fontVfsPath) + "'."));
 		}
 
 		FT_Face face{};
 		if (FT_New_Memory_Face(ft, reinterpret_cast<const FT_Byte*>(fontData.data()), static_cast<FT_Long>(fontData.size()), 0, &face) != 0)
 		{
 			FT_Done_FreeType(ft);
-			throw std::runtime_error(std::string("FontAtlas: FT_New_Memory_Face failed for '") + std::string(fontVfsPath) + "'.");
+			Throw(AetherError::Asset(std::string("FontAtlas: FT_New_Memory_Face failed for '") + std::string(fontVfsPath) + "'."));
 		}
 
 		FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(atlasGlyphSize));
@@ -300,7 +300,7 @@ namespace aether
 		const VkResult stagingResult = vmaCreateBuffer(allocator, &stagingBufInfo, &stagingAllocInfo, &stagingBuf, &stagingAlloc, &stagingInfo);
 		if (stagingResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("FontAtlas: vmaCreateBuffer failed for staging buffer. VkResult={}", static_cast<int>(stagingResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(stagingResult), std::format("FontAtlas: vmaCreateBuffer failed for staging buffer. VkResult={}", static_cast<int>(stagingResult))));
 		}
 
 		std::memcpy(stagingInfo.pMappedData, atlasPixels.data(), imageBytes);
@@ -323,7 +323,7 @@ namespace aether
 		if (imageResult != VK_SUCCESS)
 		{
 			vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
-			throw VulkanError(std::format("FontAtlas: vmaCreateImage failed for atlas image. VkResult={}", static_cast<int>(imageResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(imageResult), std::format("FontAtlas: vmaCreateImage failed for atlas image. VkResult={}", static_cast<int>(imageResult))));
 		}
 
 		const VkImageViewCreateInfo viewInfo{
@@ -350,7 +350,7 @@ namespace aether
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &m_view);
 		if (viewResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("FontAtlas: vkCreateImageView failed. VkResult={}", static_cast<int>(viewResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(viewResult), std::format("FontAtlas: vkCreateImageView failed. VkResult={}", static_cast<int>(viewResult))));
 		}
 
 		const VkSamplerCreateInfo samplerInfo{
@@ -366,7 +366,7 @@ namespace aether
 		const VkResult samplerResult = vkCreateSampler(device, &samplerInfo, nullptr, &m_sampler);
 		if (samplerResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("FontAtlas: vkCreateSampler failed. VkResult={}", static_cast<int>(samplerResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(samplerResult), std::format("FontAtlas: vkCreateSampler failed. VkResult={}", static_cast<int>(samplerResult))));
 		}
 
 		const VkCommandPoolCreateInfo poolInfo{
@@ -378,7 +378,7 @@ namespace aether
 		const VkResult poolResult = vkCreateCommandPool(device, &poolInfo, nullptr, &uploadPool);
 		if (poolResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("FontAtlas: vkCreateCommandPool failed. VkResult={}", static_cast<int>(poolResult)));
+			Throw(AetherError::Vulkan(static_cast<int32_t>(poolResult), std::format("FontAtlas: vkCreateCommandPool failed. VkResult={}", static_cast<int>(poolResult))));
 		}
 
 		VkCommandBuffer cmd = BeginOneShot(device, uploadPool);

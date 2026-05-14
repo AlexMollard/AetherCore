@@ -82,6 +82,6 @@ namespace aether
 			return;
 		}
 		m_mapped[slot] = material;
-		vmaFlushAllocation(m_allocator, m_buffer.GetAllocation(), static_cast<VkDeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial));
+		AE_EXPECT_OR_THROW_VOID(m_buffer.FlushMapped(static_cast<VkDeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial)));
 	}
 } // namespace aether
