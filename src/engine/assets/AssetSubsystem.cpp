@@ -62,23 +62,38 @@ namespace aether
 			.commandBufferCount = 1,
 		};
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
-		vkAllocateCommandBuffers(vk.GetDevice().device, &allocInfo, &cmd);
+		if (vkAllocateCommandBuffers(vk.GetDevice().device, &allocInfo, &cmd) != VK_SUCCESS)
+		{
+			throw VulkanError("AssetSubsystem: failed to allocate command buffer.");
+		}
 
 		const VkCommandBufferBeginInfo beginInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
-		vkBeginCommandBuffer(cmd, &beginInfo);
+		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
+		{
+			throw VulkanError("AssetSubsystem: failed to begin command buffer.");
+		}
 		m_meshUploadQueue.Flush(cmd);
-		vkEndCommandBuffer(cmd);
+		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+		{
+			throw VulkanError("AssetSubsystem: failed to end command buffer.");
+		}
 
 		const VkSubmitInfo submitInfo{
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			.commandBufferCount = 1,
 			.pCommandBuffers = &cmd,
 		};
-		vkQueueSubmit(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(vk.GetGraphicsQueue());
+		if (vkQueueSubmit(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+		{
+			throw VulkanError("AssetSubsystem: failed to submit queue.");
+		}
+		if (vkQueueWaitIdle(vk.GetGraphicsQueue()) != VK_SUCCESS)
+		{
+			throw VulkanError("AssetSubsystem: failed to wait for queue idle.");
+		}
 
 		vkFreeCommandBuffers(vk.GetDevice().device, m_uploadPool, 1, &cmd);
 	}

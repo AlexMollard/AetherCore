@@ -5,6 +5,7 @@
 
 #include "gpu/GpuDevice.hpp"
 #include "rendering/CommandRecorder.hpp"
+#include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 #include <vulkan/vk_platform.h>
@@ -128,16 +129,28 @@ namespace aether
 		VkFence fence = reinterpret_cast<VkFence>(frame.fence);
 		VkCommandPool pool = reinterpret_cast<VkCommandPool>(frame.commandPool);
 
-		vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-		vkResetFences(device, 1, &fence);
-		vkResetCommandPool(device, pool, 0);
+		if (vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to wait for fence.");
+		}
+		if (vkResetFences(device, 1, &fence) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to reset fence.");
+		}
+		if (vkResetCommandPool(device, pool, 0) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to reset command pool.");
+		}
 
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
 		const VkCommandBufferBeginInfo beginInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
-		vkBeginCommandBuffer(cmd, &beginInfo);
+		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to begin command buffer.");
+		}
 		CommandRecorder(cmd).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
 	}
 
@@ -150,7 +163,10 @@ namespace aether
 	{
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer);
 		CommandRecorder(cmd).EndDebugLabel();
-		vkEndCommandBuffer(cmd);
+		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to end command buffer.");
+		}
 	}
 
 	AsyncComputeContext::SubmitResult AsyncComputeContext::Submit(GpuDevice& gpu, std::uint32_t frameIndex)
@@ -182,7 +198,10 @@ namespace aether
 			.pSignalSemaphores = &timelineSem,
 		};
 
-		vkQueueSubmit(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence);
+		if (vkQueueSubmit(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
+		{
+			throw VulkanError("AsyncComputeContext: failed to submit queue.");
+		}
 
 		return {
 			.semaphoreHandle = m_timelineSemaphoreHandle,

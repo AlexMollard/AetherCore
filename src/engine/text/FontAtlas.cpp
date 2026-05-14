@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <format>
 #include <ft2build.h>
 #include <stdexcept>
 #include <string>
@@ -15,6 +16,7 @@
 
 #include "gpu/BindlessManager.hpp"
 #include "FileSystem.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether
@@ -60,26 +62,49 @@ namespace aether
 				.commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			vkAllocateCommandBuffers(device, &ai, &cmd);
+			const VkResult allocResult = vkAllocateCommandBuffers(device, &ai, &cmd);
+			if (allocResult != VK_SUCCESS)
+			{
+				throw VulkanError(std::format("FontAtlas: vkAllocateCommandBuffers failed. VkResult={}", static_cast<int>(allocResult)));
+			}
 
 			const VkCommandBufferBeginInfo bi{
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 			};
-			vkBeginCommandBuffer(cmd, &bi);
+			const VkResult beginResult = vkBeginCommandBuffer(cmd, &bi);
+			if (beginResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				throw VulkanError(std::format("FontAtlas: vkBeginCommandBuffer failed. VkResult={}", static_cast<int>(beginResult)));
+			}
 			return cmd;
 		}
 
 		void EndAndSubmit(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
 		{
-			vkEndCommandBuffer(cmd);
+			const VkResult endResult = vkEndCommandBuffer(cmd);
+			if (endResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				throw VulkanError(std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult)));
+			}
 			const VkSubmitInfo si{
 				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 				.commandBufferCount = 1,
 				.pCommandBuffers = &cmd,
 			};
-			vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
-			vkQueueWaitIdle(queue);
+			const VkResult submitResult = vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
+			if (submitResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				throw VulkanError(std::format("FontAtlas: vkQueueSubmit failed. VkResult={}", static_cast<int>(submitResult)));
+			}
+			const VkResult idleResult = vkQueueWaitIdle(queue);
+			if (idleResult != VK_SUCCESS)
+			{
+				throw VulkanError(std::format("FontAtlas: vkQueueWaitIdle failed. VkResult={}", static_cast<int>(idleResult)));
+			}
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
 	} // namespace
@@ -313,7 +338,11 @@ namespace aether
               .layerCount = 1,
           },
   };
-		vkCreateImageView(device, &viewInfo, nullptr, &m_view);
+		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &m_view);
+		if (viewResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format("FontAtlas: vkCreateImageView failed. VkResult={}", static_cast<int>(viewResult)));
+		}
 
 		const VkSamplerCreateInfo samplerInfo{
 			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -325,7 +354,11 @@ namespace aether
 			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
 			.maxLod = VK_LOD_CLAMP_NONE,
 		};
-		vkCreateSampler(device, &samplerInfo, nullptr, &m_sampler);
+		const VkResult samplerResult = vkCreateSampler(device, &samplerInfo, nullptr, &m_sampler);
+		if (samplerResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format("FontAtlas: vkCreateSampler failed. VkResult={}", static_cast<int>(samplerResult)));
+		}
 
 		const VkCommandPoolCreateInfo poolInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
@@ -333,7 +366,11 @@ namespace aether
 			.queueFamilyIndex = uploadQueueFamily,
 		};
 		VkCommandPool uploadPool{};
-		vkCreateCommandPool(device, &poolInfo, nullptr, &uploadPool);
+		const VkResult poolResult = vkCreateCommandPool(device, &poolInfo, nullptr, &uploadPool);
+		if (poolResult != VK_SUCCESS)
+		{
+			throw VulkanError(std::format("FontAtlas: vkCreateCommandPool failed. VkResult={}", static_cast<int>(poolResult)));
+		}
 
 		VkCommandBuffer cmd = BeginOneShot(device, uploadPool);
 
@@ -356,8 +393,15 @@ namespace aether
 		vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
 
 		// ── 4. Register in the bindless descriptor set ────────────────────────
-		m_bindlessSlot = bindless.AllocateSampledImageSlot();
-		bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler);
+		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());
+		m_bindlessSlot = *slotResult;
+		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler);
+		if (!updateResult)
+		{
+			bindless.FreeSampledImageSlot(m_bindlessSlot);
+			m_bindlessSlot = 0xFFFFFFFFu;
+			Throw(updateResult.error());
+		}
 
 		INFO(LogCategory::Asset, "FontAtlas built: {} glyphs, atlas {}x{}, bindless slot {}.", kGlyphCount, atlasW, atlasH, m_bindlessSlot);
 	}

@@ -3,13 +3,15 @@
 #include <cassert>
 #include <cstring>
 
+#include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
 	void MeshUploadQueue::Initialize(const VulkanContext& ctx)
 	{
-		m_staging = UniqueBuffer::CreateMapped(ctx.GetAllocator(), ctx.GetDevice().device, kStagingCapacity, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(ctx.GetAllocator(), ctx.GetDevice().device, kStagingCapacity, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+		m_staging = std::move(*buf);
 		m_ringHead = 0;
 	}
 

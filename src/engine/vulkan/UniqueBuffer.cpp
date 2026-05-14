@@ -3,7 +3,7 @@
 #include <format>
 #include <utility>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -58,7 +58,7 @@ namespace aether
 		return *this;
 	}
 
-	UniqueBuffer UniqueBuffer::Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
+	Expected<UniqueBuffer> UniqueBuffer::Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
 	{
 		UniqueBuffer out;
 		out.m_allocator = allocator;
@@ -70,7 +70,7 @@ namespace aether
 
 		if (createResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create VMA buffer. VkResult={}", static_cast<int>(createResult)));
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA buffer"));
 		}
 
 		if ((out.m_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
@@ -86,7 +86,7 @@ namespace aether
 		return out;
 	}
 
-	UniqueBuffer UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
 	{
 		const VkBufferCreateInfo bufInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -100,7 +100,7 @@ namespace aether
 		return Create(allocator, device, bufInfo, allocInfo);
 	}
 
-	UniqueBuffer UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
 	{
 		const VkBufferCreateInfo bufInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,

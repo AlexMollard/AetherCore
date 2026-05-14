@@ -299,7 +299,10 @@ namespace aether
 
 	void ImGuiRenderer::Shutdown(ServiceContainer& services)
 	{
-		vkDeviceWaitIdle(services.Get<VulkanContext>().GetDevice().device);
+		if (vkDeviceWaitIdle(services.Get<VulkanContext>().GetDevice().device) != VK_SUCCESS)
+		{
+			throw VulkanError("ImGuiRenderer: failed to wait for device idle.");
+		}
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		ImGui::DestroyContext();

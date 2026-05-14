@@ -6,7 +6,7 @@
 #include <glm/gtc/quaternion.hpp>
 #include <stdexcept>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -139,7 +139,8 @@ namespace aether
 					.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 					.usage = VMA_MEMORY_USAGE_AUTO,
 				};
-				dst.buffer = UniqueBuffer::Create(allocator, device, bufInfo, allocInfo);
+				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(allocator, device, bufInfo, allocInfo));
+				dst.buffer = std::move(*buf);
 				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
 
 				// Prime with identity so the mesh renders in bind pose before Update().
@@ -362,7 +363,8 @@ namespace aether
 					.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 					.usage = VMA_MEMORY_USAGE_AUTO,
 				};
-				dst.buffer = UniqueBuffer::Create(clone.m_allocator, clone.m_device, bufInfo, allocInfo);
+				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(clone.m_allocator, clone.m_device, bufInfo, allocInfo));
+				dst.buffer = std::move(*buf);
 				dst.mappedPtr = static_cast<glm::mat4*>(dst.buffer.GetAllocationInfo().pMappedData);
 
 				// Initialise the clone's GPU buffer with the source's current pose.

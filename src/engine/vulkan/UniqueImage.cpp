@@ -3,7 +3,7 @@
 #include <format>
 #include <utility>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 #include "gpu/BindlessManager.hpp"
 
 namespace aether
@@ -105,7 +105,7 @@ namespace aether
 		}
 	} // anonymous namespace
 
-	UniqueImage UniqueImage::Create(VkDevice device, VmaAllocator allocator, const Desc& desc)
+	Expected<UniqueImage> UniqueImage::Create(VkDevice device, VmaAllocator allocator, const Desc& desc)
 	{
 		const VkImageCreateInfo imageInfo{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -123,7 +123,11 @@ namespace aether
 		const VmaAllocationCreateInfo allocInfo{
 			.usage = desc.memoryUsage,
 		};
-		UniqueImage out = Create(allocator, imageInfo, allocInfo);
+		Expected<UniqueImage> out = Create(allocator, imageInfo, allocInfo);
+		if (!out)
+		{
+			return std::unexpected(out.error());
+		}
 
 		// Create the default view so callers can use GetDefaultView() immediately
 		// without a separate vkCreateImageView call. The device is stored so
@@ -131,21 +135,21 @@ namespace aether
 		const VkImageAspectFlags aspect = DeduceAspect(desc.format);
 		const VkImageViewCreateInfo viewInfo{
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = out.m_image,
+			.image = out->m_image,
 			.viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 			.format = desc.format,
 			.subresourceRange = { aspect, 0, desc.mipLevels, 0, desc.arrayLayers },
 		};
-		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out.m_defaultView);
+		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out->m_defaultView);
 		if (viewResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("UniqueImage::Create: failed to create default view. VkResult={}", static_cast<int>(viewResult)));
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(viewResult), "UniqueImage::Create: failed to create default view"));
 		}
-		out.m_bindlessDevice = device; // allows Reset() to destroy the view
+		out->m_bindlessDevice = device; // allows Reset() to destroy the view
 		return out;
 	}
 
-	UniqueImage UniqueImage::Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
+	Expected<UniqueImage> UniqueImage::Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo)
 	{
 		UniqueImage out;
 		out.m_allocator = allocator;
@@ -160,7 +164,7 @@ namespace aether
 
 		if (createResult != VK_SUCCESS)
 		{
-			throw VulkanError(std::format("Failed to create VMA image. VkResult={}", static_cast<int>(createResult)));
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(createResult), "Failed to create VMA image"));
 		}
 
 		return out;
@@ -189,21 +193,21 @@ namespace aether
 		m_virtualResourceId = 0;
 	}
 
-	void UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout, const TextureFilter filter)
+	Expected<void> UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout, const TextureFilter filter)
 	{
 		if (!(*this))
 		{
-			throw VulkanError("Cannot bindless-register an invalid image handle.");
+			return std::unexpected(AetherError::Vulkan(0, "Cannot bindless-register an invalid image handle"));
 		}
 
 		if (device == VK_NULL_HANDLE)
 		{
-			throw VulkanError("Cannot bindless-register image: VkDevice is null.");
+			return std::unexpected(AetherError::Vulkan(0, "Cannot bindless-register image: VkDevice is null"));
 		}
 
 		if (m_bindlessSlot != kInvalidBindlessSlot)
 		{
-			return;
+			return {};
 		}
 
 		// Reuse the view created by the high-level Create() overload if available,
@@ -240,7 +244,7 @@ namespace aether
 			const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
 			if (viewResult != VK_SUCCESS)
 			{
-				throw VulkanError(std::format("Failed to create image view for bindless registration. VkResult={}", static_cast<int>(viewResult)));
+				return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(viewResult), "Failed to create image view for bindless registration"));
 			}
 		}
 
@@ -273,34 +277,40 @@ namespace aether
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			throw VulkanError(std::format("Failed to create sampler for bindless registration. VkResult={}", static_cast<int>(samplerResult)));
+			return std::unexpected(AetherError::Vulkan(static_cast<int32_t>(samplerResult), "Failed to create sampler for bindless registration"));
 		}
 
-		std::uint32_t slot = kInvalidBindlessSlot;
-		try
+		// Allocate bindless slot - if this fails, clean up sampler and view.
+		Expected<std::uint32_t> slotResult = bindlessManager.AllocateSampledImageSlot();
+		if (!slotResult)
 		{
-			slot = bindlessManager.AllocateSampledImageSlot();
-			bindlessManager.UpdateSampledImage(slot, view, sampler, descriptorLayout);
-		}
-		catch (...)
-		{
-			if (slot != kInvalidBindlessSlot)
-			{
-				bindlessManager.FreeSampledImageSlot(slot);
-			}
 			vkDestroySampler(device, sampler, nullptr);
 			if (ownView)
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			throw;
+			return std::unexpected(slotResult.error());
+		}
+
+		// Update descriptor - if this fails, free the slot and clean up.
+		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, view, sampler, descriptorLayout);
+		if (!updateResult)
+		{
+			bindlessManager.FreeSampledImageSlot(*slotResult);
+			vkDestroySampler(device, sampler, nullptr);
+			if (ownView)
+			{
+				vkDestroyImageView(device, view, nullptr);
+			}
+			return std::unexpected(updateResult.error());
 		}
 
 		m_bindlessManager = &bindlessManager;
 		m_bindlessDevice = device;
 		m_defaultView = view;
 		m_defaultSampler = sampler;
-		m_bindlessSlot = slot;
+		m_bindlessSlot = *slotResult;
+		return {};
 	}
 
 	void UniqueImage::ReleaseBindlessSampled(const bool deferSlotFree)

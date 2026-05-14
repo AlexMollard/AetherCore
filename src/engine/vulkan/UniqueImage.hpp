@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vk_mem_alloc.h>
 
+#include "utils/Expected.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -43,14 +44,14 @@ namespace aether
 		// High-level overload: builds VkImageCreateInfo from Desc, allocates via VMA,
 		// and creates the default VkImageView automatically.  Aspect is deduced from
 		// the format; device is stored so Reset() can destroy the view.
-		static UniqueImage Create(VkDevice device, VmaAllocator allocator, const Desc& desc);
+		static Expected<UniqueImage> Create(VkDevice device, VmaAllocator allocator, const Desc& desc);
 
 		// Low-level overload: caller supplies the full Vulkan structs directly.
 		// No default view is created; callers manage their own VkImageViews.
-		static UniqueImage Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
+		static Expected<UniqueImage> Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		void Reset();
-		void EnsureBindlessSampled(BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, TextureFilter filter = TextureFilter::Linear);
+		Expected<void> EnsureBindlessSampled(BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, TextureFilter filter = TextureFilter::Linear);
 		void ReleaseBindlessSampled(bool deferSlotFree = true);
 
 		[[nodiscard]] VkImage Get() const;

@@ -6,6 +6,7 @@
 #include "vulkan/volk.hpp"
 
 #include "material/BindlessContract.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -55,11 +56,11 @@ namespace aether
 			return 2u;
 		}
 
-		[[nodiscard]] std::uint32_t AllocateSampledImageSlot();
+		[[nodiscard]] Expected<std::uint32_t> AllocateSampledImageSlot();
 		void FreeSampledImageSlot(std::uint32_t slot);
 		void FreeSampledImageSlotDeferred(std::uint32_t slot);
 		void AdvanceFrame(std::uint64_t frameIndex);
-		void UpdateSampledImage(std::uint32_t slot, VkImageView imageView, VkSampler sampler, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		[[nodiscard]] Expected<void> UpdateSampledImage(std::uint32_t slot, VkImageView imageView, VkSampler sampler, VkImageLayout imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
 	private:
 		struct PendingSlotFree

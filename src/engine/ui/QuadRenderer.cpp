@@ -8,6 +8,7 @@
 
 #include "rendering/CommandRecorder.hpp"
 #include "FileSystem.hpp"
+#include "utils/Expected.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "rendering/RenderGraph.hpp"
@@ -135,7 +136,8 @@ namespace aether
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-				                m_commandBuffers[frameSlot] = UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo);
+				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
+				                m_commandBuffers[frameSlot] = std::move(*buf);
 				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(commandBytes);
 			                }
 
@@ -150,7 +152,8 @@ namespace aether
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-				                m_indirectBuffers[frameSlot] = UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, indirectInfo, allocInfo);
+				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, indirectInfo, allocInfo));
+				                m_indirectBuffers[frameSlot] = std::move(*buf);
 			                }
 
 			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;

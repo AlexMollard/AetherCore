@@ -3,8 +3,8 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
-#include <stdexcept>
 
+#include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -16,7 +16,8 @@ namespace aether
 
 		constexpr VkBufferUsageFlags kBaseUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-		m_buffer = UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage);
+		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage));
+		m_buffer = std::move(*buffer);
 		m_freeList.push_back({ 0, desc.capacityBytes });
 	}
 
@@ -78,9 +79,9 @@ namespace aether
 		const VkDeviceSize dstOffset = dstAddr - m_buffer.GetDeviceAddress();
 
 		// Transient host-visible staging buffer.
-		UniqueBuffer staging = UniqueBuffer::CreateMapped(m_allocatorRef, device, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-		std::memcpy(staging.GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
-		vmaFlushAllocation(m_allocatorRef, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
+		AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(m_allocatorRef, device, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+		std::memcpy(staging->GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
+		vmaFlushAllocation(m_allocatorRef, staging->GetAllocation(), 0, VK_WHOLE_SIZE);
 
 		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{
@@ -90,26 +91,49 @@ namespace aether
 			.commandBufferCount = 1,
 		};
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
-		vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+		const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+		if (allocResult != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "GpuHeap: failed to allocate upload command buffer"));
+		}
 
 		const VkCommandBufferBeginInfo beginInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
-		vkBeginCommandBuffer(cmd, &beginInfo);
+		const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
+		if (beginResult != VK_SUCCESS)
+		{
+			vkFreeCommandBuffers(device, pool, 1, &cmd);
+			Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "GpuHeap: failed to begin upload command buffer"));
+		}
 
 		const VkBufferCopy region{ .srcOffset = 0, .dstOffset = dstOffset, .size = bytes };
-		vkCmdCopyBuffer(cmd, staging.Get(), m_buffer.Get(), 1, &region);
+		vkCmdCopyBuffer(cmd, staging->Get(), m_buffer.Get(), 1, &region);
 
-		vkEndCommandBuffer(cmd);
+		const VkResult endResult = vkEndCommandBuffer(cmd);
+		if (endResult != VK_SUCCESS)
+		{
+			vkFreeCommandBuffers(device, pool, 1, &cmd);
+			Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "GpuHeap: failed to end upload command buffer"));
+		}
 
 		const VkSubmitInfo submitInfo{
 			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 			.commandBufferCount = 1,
 			.pCommandBuffers = &cmd,
 		};
-		vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-		vkQueueWaitIdle(queue);
+		const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+		if (submitResult != VK_SUCCESS)
+		{
+			vkFreeCommandBuffers(device, pool, 1, &cmd);
+			Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "GpuHeap: failed to submit upload command buffer"));
+		}
+		const VkResult idleResult = vkQueueWaitIdle(queue);
+		if (idleResult != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), "GpuHeap: failed to wait idle after upload"));
+		}
 		vkFreeCommandBuffers(device, pool, 1, &cmd);
 	}
 } // namespace aether

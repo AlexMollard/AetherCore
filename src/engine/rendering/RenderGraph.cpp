@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "gpu/BindlessManager.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -223,17 +224,20 @@ namespace aether
 				return 0xFFFFFFFFu;
 			}
 
-			entry.image = UniqueImage::Create(m_device,
-			        m_allocator,
-			        {
-			                .extent = entry.desc.extent,
-			                .format = entry.desc.format,
-			                .usage = entry.desc.usage,
-			        });
+			AE_EXPECT_OR_THROW(newImage,
+			        UniqueImage::Create(m_device,
+			                m_allocator,
+			                {
+			                        .extent = entry.desc.extent,
+			                        .format = entry.desc.format,
+			                        .usage = entry.desc.usage,
+			                }));
+			entry.image = std::move(*newImage);
 			entry.allocatedExtent = entry.desc.extent;
 		}
 
-		entry.image.EnsureBindlessSampled(bindlessManager, device, entry.desc.aspect, descriptorLayout);
+		AE_EXPECT_OR_THROW(bindlessResult, entry.image.EnsureBindlessSampled(bindlessManager, device, entry.desc.aspect, descriptorLayout));
+		(void) bindlessResult;
 		return entry.image.GetBindlessSampledSlot();
 	}
 
@@ -449,13 +453,15 @@ namespace aether
 			if (needsCreate)
 			{
 				phys.image.Reset();
-				phys.image = UniqueImage::Create(m_device,
-				        m_allocator,
-				        {
-				                .extent = requestedExtent,
-				                .format = entry.desc.format,
-				                .usage = entry.desc.usage,
-				        });
+				AE_EXPECT_OR_THROW(newImage,
+				        UniqueImage::Create(m_device,
+				                m_allocator,
+				                {
+				                        .extent = requestedExtent,
+				                        .format = entry.desc.format,
+				                        .usage = entry.desc.usage,
+				                }));
+				phys.image = std::move(*newImage);
 				phys.allocatedExtent = requestedExtent;
 				phys.desc = entry.desc;
 			}
@@ -484,13 +490,15 @@ namespace aether
 			}
 
 			entry.image.Reset();
-			entry.image = UniqueImage::Create(m_device,
-			        m_allocator,
-			        {
-			                .extent = requestedExtent,
-			                .format = entry.desc.format,
-			                .usage = entry.desc.usage,
-			        });
+			AE_EXPECT_OR_THROW(newImage,
+			        UniqueImage::Create(m_device,
+			                m_allocator,
+			                {
+			                        .extent = requestedExtent,
+			                        .format = entry.desc.format,
+			                        .usage = entry.desc.usage,
+			                }));
+			entry.image = std::move(*newImage);
 			entry.allocatedExtent = requestedExtent;
 		}
 	}

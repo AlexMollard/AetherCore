@@ -4,11 +4,11 @@
 #include <cmath>
 #include <cstring>
 #include <glm/common.hpp>
-#include <stdexcept>
 #include <vector>
 
 #include "FileSystem.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "utils/Expected.hpp"
 
 namespace
 {
@@ -572,7 +572,6 @@ namespace aether
 				capacity = safeRequired;
 			}
 
-			buffer.Reset();
 			VkBufferCreateInfo info{
 				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 				.size = stride * capacity,
@@ -581,7 +580,10 @@ namespace aether
 			VmaAllocationCreateInfo allocInfo{};
 			allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-			buffer = UniqueBuffer::Create(allocator, device, info, allocInfo);
+			// Create new buffer BEFORE resetting the old one - avoids use-after-Reset on failure.
+			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::Create(allocator, device, info, allocInfo));
+			buffer.Reset();
+			buffer = std::move(*newBuf);
 		};
 
 		ensureBuffer(frame.lights, frame.lightsCapacity, lightCount, sizeof(GpuLight));

@@ -252,17 +252,17 @@ namespace aether
 		return m_currentFrame;
 	}
 
-	std::uint32_t BindlessManager::AllocateSampledImageSlot()
+	Expected<std::uint32_t> BindlessManager::AllocateSampledImageSlot()
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
 		{
-			throw VulkanError("BindlessManager is not initialized.");
+			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
 		}
 
 		if (m_freeSlots.empty())
 		{
-			throw VulkanError("BindlessManager is out of sampled-image slots.");
+			return Unexpected{ AetherError::Engine("BindlessManager is out of sampled-image slots.") };
 		}
 
 		const std::uint32_t slot = m_freeSlots.back();
@@ -329,22 +329,22 @@ namespace aether
 		        });
 	}
 
-	void BindlessManager::UpdateSampledImage(const std::uint32_t slot, VkImageView imageView, VkSampler sampler, const VkImageLayout imageLayout)
+	Expected<void> BindlessManager::UpdateSampledImage(const std::uint32_t slot, VkImageView imageView, VkSampler sampler, const VkImageLayout imageLayout)
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
 		{
-			throw VulkanError("BindlessManager is not initialized.");
+			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
 		}
 
 		if (slot >= m_capacity)
 		{
-			throw VulkanError("BindlessManager slot index out of range.");
+			return Unexpected{ AetherError::Engine("BindlessManager slot index out of range.") };
 		}
 
 		if (!m_slotAllocated[slot])
 		{
-			throw VulkanError("BindlessManager slot must be allocated before update.");
+			return Unexpected{ AetherError::Engine("BindlessManager slot must be allocated before update.") };
 		}
 
 		const VkDescriptorImageInfo imageInfo{
@@ -367,6 +367,7 @@ namespace aether
 		};
 
 		vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+		return {};
 	}
 
 	void BindlessManager::FreeSlotImmediateUnlocked(const std::uint32_t slot)

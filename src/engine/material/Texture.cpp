@@ -15,6 +15,7 @@
 
 #include "gpu/BindlessManager.hpp"
 #include "FileSystem.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
@@ -32,29 +33,51 @@ namespace aether
 				.commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+			const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+			if (allocResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "Texture: failed to allocate upload command buffer"));
+			}
 
 			const VkCommandBufferBeginInfo beginInfo{
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 			};
-			vkBeginCommandBuffer(cmd, &beginInfo);
+			const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
+			if (beginResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "Texture: failed to begin upload command buffer"));
+			}
 			return cmd;
 		}
 
-		// Submit a command buffer and block until the queue is idle, then free the
-		// buffer.
+		// Submit a command buffer and block until the queue is idle, then free the buffer.
 		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
 		{
-			vkEndCommandBuffer(cmd);
+			const VkResult endResult = vkEndCommandBuffer(cmd);
+			if (endResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Texture: failed to end upload command buffer"));
+			}
 
 			const VkSubmitInfo submitInfo{
 				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 				.commandBufferCount = 1,
 				.pCommandBuffers = &cmd,
 			};
-			vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-			vkQueueWaitIdle(queue);
+			const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			if (submitResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Texture: failed to submit upload command buffer"));
+			}
+			const VkResult idleResult = vkQueueWaitIdle(queue);
+			if (idleResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), "Texture: failed to wait idle after texture upload"));
+			}
 
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
@@ -104,21 +127,22 @@ namespace aether
 				.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 				.usage = VMA_MEMORY_USAGE_AUTO,
 			};
-			UniqueBuffer staging = UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo);
+			AE_EXPECT_OR_THROW(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
 
-			std::memcpy(staging.GetAllocationInfo().pMappedData, pixels, imageBytes);
+			std::memcpy(staging->GetAllocationInfo().pMappedData, pixels, imageBytes);
 
-			UniqueImage image = UniqueImage::Create(device,
-			        allocator,
-			        {
-			                .extent = { static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height) },
-			                .format = VK_FORMAT_R8G8B8A8_SRGB,
-			                .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            });
+			AE_EXPECT_OR_THROW(image,
+			        UniqueImage::Create(device,
+			                allocator,
+			                {
+			                        .extent = { static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height) },
+			                        .format = VK_FORMAT_R8G8B8A8_SRGB,
+			                        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            }));
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 			const VkBufferImageCopy copyRegion{
       .bufferOffset = 0,
@@ -139,15 +163,15 @@ namespace aether
               1,
           },
   };
-			vkCmdCopyBufferToImage(cmd, staging.Get(), image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, staging->Get(), image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
+			image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
 
-			return image;
+			return std::move(*image);
 		}
 	} // namespace
 
@@ -241,20 +265,21 @@ namespace aether
 				.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 				.usage = VMA_MEMORY_USAGE_AUTO,
 			};
-			UniqueBuffer staging = UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo);
-			std::memcpy(staging.GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
+			AE_EXPECT_OR_THROW(staging, UniqueBuffer::Create(allocator, device, stagingBufInfo, stagingAllocInfo));
+			std::memcpy(staging->GetAllocationInfo().pMappedData, p, static_cast<std::size_t>(blockDataSize));
 
-			UniqueImage image = UniqueImage::Create(device,
-			        allocator,
-			        {
-			                .extent = { width, height },
-			                .format = vkFmt,
-			                .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            });
+			AE_EXPECT_OR_THROW(image,
+			        UniqueImage::Create(device,
+			                allocator,
+			                {
+			                        .extent = { width, height },
+			                        .format = vkFmt,
+			                        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            }));
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 			const VkBufferImageCopy copyRegion{
 				.bufferOffset = 0,
@@ -264,14 +289,14 @@ namespace aether
 				.imageOffset = { 0, 0, 0 },
 				.imageExtent = { width, height, 1 },
 			};
-			vkCmdCopyBufferToImage(cmd, staging.Get(), image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+			vkCmdCopyBufferToImage(cmd, staging->Get(), image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
-			image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
-			return image;
+			image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter);
+			return std::move(*image);
 		}
 	} // namespace
 

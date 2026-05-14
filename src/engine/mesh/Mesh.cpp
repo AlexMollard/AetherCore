@@ -2,7 +2,7 @@
 
 #include <cstring>
 
-#include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
@@ -20,27 +20,50 @@ namespace aether
 				.commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+			const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
+			if (allocResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "Mesh: failed to allocate one-time command buffer"));
+			}
 
 			const VkCommandBufferBeginInfo beginInfo{
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 			};
-			vkBeginCommandBuffer(cmd, &beginInfo);
+			const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
+			if (beginResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "Mesh: failed to begin one-time command buffer"));
+			}
 			return cmd;
 		}
 
 		// Submit and block until the queue is idle, then free the buffer.
 		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
 		{
-			vkEndCommandBuffer(cmd);
+			const VkResult endResult = vkEndCommandBuffer(cmd);
+			if (endResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Mesh: failed to end one-time command buffer"));
+			}
 			const VkSubmitInfo submitInfo{
 				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 				.commandBufferCount = 1,
 				.pCommandBuffers = &cmd,
 			};
-			vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
-			vkQueueWaitIdle(queue);
+			const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			if (submitResult != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Mesh: failed to submit one-time command buffer"));
+			}
+			const VkResult idleResult = vkQueueWaitIdle(queue);
+			if (idleResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), "Mesh: failed to wait idle after mesh upload"));
+			}
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
 
@@ -49,9 +72,9 @@ namespace aether
 		VkBuffer UploadToDeviceLocal(VkDevice device, VmaAllocator allocator, VkQueue queue, VkCommandPool pool, VkBufferUsageFlags usage, const void* data, VkDeviceSize size, VmaAllocation& outAllocation, VkDeviceAddress& outDeviceAddress)
 		{
 			// Staging: mapped, host-sequential-write.
-			UniqueBuffer staging = UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-			std::memcpy(staging.GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
-			vmaFlushAllocation(allocator, staging.GetAllocation(), 0, VK_WHOLE_SIZE);
+			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
+			std::memcpy(staging->GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
+			vmaFlushAllocation(allocator, staging->GetAllocation(), 0, VK_WHOLE_SIZE);
 
 			// Destination: device-local with shader device address support.
 			const VkBufferCreateInfo destInfo{
@@ -63,11 +86,15 @@ namespace aether
 				.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 			};
 			VkBuffer dest = VK_NULL_HANDLE;
-			vmaCreateBuffer(allocator, &destInfo, &destAllocInfo, &dest, &outAllocation, nullptr);
+			const VkResult createResult = vmaCreateBuffer(allocator, &destInfo, &destAllocInfo, &dest, &outAllocation, nullptr);
+			if (createResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(createResult), "Mesh: failed to create device-local vertex buffer"));
+			}
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
 			const VkBufferCopy region{ .size = size };
-			vkCmdCopyBuffer(cmd, staging.Get(), dest, 1, &region);
+			vkCmdCopyBuffer(cmd, staging->Get(), dest, 1, &region);
 			EndAndSubmitOneTimeBuffer(device, pool, queue, cmd);
 
 			const VkBufferDeviceAddressInfo addrInfo{

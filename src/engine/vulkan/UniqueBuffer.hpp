@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vk_mem_alloc.h>
 
+#include "utils/Expected.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -19,14 +20,14 @@ namespace aether
 		UniqueBuffer(UniqueBuffer&& other) noexcept;
 		UniqueBuffer& operator=(UniqueBuffer&& other) noexcept;
 
-		static UniqueBuffer Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
+		static Expected<UniqueBuffer> Create(VmaAllocator allocator, VkDevice device, const VkBufferCreateInfo& bufferCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
 		// Convenience factory: persistently-mapped, host-sequential-write, coherency-flushed.
 		// Use for per-frame CPU-written buffers (uniform/storage).
-		static UniqueBuffer CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+		static Expected<UniqueBuffer> CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
 
 		// Convenience factory: device-local, GPU-optimal. Caller must upload via staging.
-		static UniqueBuffer CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+		static Expected<UniqueBuffer> CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
 
 		void Reset();
 

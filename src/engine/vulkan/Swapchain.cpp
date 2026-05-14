@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include "utils/AetherExceptions.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -92,7 +93,8 @@ namespace aether
 		const VmaAllocationCreateInfo depthAllocInfo{
 			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
-		m_depthImage = UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo);
+		AE_EXPECT_OR_THROW(depthImage, UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo));
+		m_depthImage = std::move(*depthImage);
 
 		const VkImageViewCreateInfo depthViewInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -136,12 +138,18 @@ namespace aether
 			}
 
 			const VkSemaphoreCreateInfo semInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-			vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable);
+			if (vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to create image available semaphore.");
+			}
 
 			VkFenceCreateInfo fenceInfo{};
 			fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 			fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-			vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight);
+			if (vkCreateFence(device, &fenceInfo, nullptr, &frame.inFlight) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to create in-flight fence.");
+			}
 		}
 
 		// One renderFinished semaphore per swapchain image.
@@ -149,7 +157,10 @@ namespace aether
 		m_renderFinishedSemaphores.resize(m_images.size(), VK_NULL_HANDLE);
 		for (auto& sem: m_renderFinishedSemaphores)
 		{
-			vkCreateSemaphore(device, &semInfo2, nullptr, &sem);
+			if (vkCreateSemaphore(device, &semInfo2, nullptr, &sem) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to create render finished semaphore.");
+			}
 		}
 
 		INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));
@@ -217,7 +228,10 @@ namespace aether
 
 		{
 			AE_PROFILE_ZONE_N("WaitForFence");
-			vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX);
+			if (vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+			{
+				throw VulkanError("Failed to wait for fence.");
+			}
 		}
 
 		VkResult acquireResult;
@@ -241,14 +255,23 @@ namespace aether
 			m_needsRecreation = true;
 		}
 
-		vkResetFences(device, 1, &frame.inFlight);
-		vkResetCommandPool(device, frame.commandPool, 0);
+		if (vkResetFences(device, 1, &frame.inFlight) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to reset in-flight fence.");
+		}
+		if (vkResetCommandPool(device, frame.commandPool, 0) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to reset command pool.");
+		}
 
 		const VkCommandBufferBeginInfo beginInfo{
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
-		vkBeginCommandBuffer(frame.commandBuffer, &beginInfo);
+		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to begin command buffer.");
+		}
 
 		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
 		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
@@ -274,7 +297,10 @@ namespace aether
 		// Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR
 		vkutil::TransitionImage(cmd, m_images[m_imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE);
 
-		vkEndCommandBuffer(cmd);
+		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to end command buffer.");
+		}
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
 
@@ -313,7 +339,10 @@ namespace aether
 			.signalSemaphoreCount = 1,
 			.pSignalSemaphores = &renderFinished,
 		};
-		vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight);
+		if (vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to submit queue.");
+		}
 
 		const VkPresentInfoKHR presentInfo{
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,

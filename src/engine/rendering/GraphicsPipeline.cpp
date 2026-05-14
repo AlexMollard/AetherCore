@@ -6,6 +6,7 @@
 
 #include "FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/ShaderUtils.hpp"
 
@@ -161,7 +162,10 @@ namespace aether
 			.pushConstantRangeCount = 1,
 			.pPushConstantRanges = useCustomPush ? &kCustomRange : &kModelRange,
 		};
-		vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout);
+		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
+		{
+			throw VulkanError("Failed to create pipeline layout.");
+		}
 
 		const bool hasColorAttachment = desc.colorFormat != VK_FORMAT_UNDEFINED;
 		const VkPipelineRenderingCreateInfo renderingInfo{
