@@ -3,9 +3,25 @@
   "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
   "configurePresets": [
     {
+      "name": "vs2026-clangcl",
+      "displayName": "VS 2026 ClangCL",
+      "description": "Uses clang-cl with Visual Studio 2026 generator.",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "toolset": {
+        "value": "ClangCL",
+        "strategy": "set"
+      }
+    },
+    {
       "name": "default",
-      "displayName": "Default (ClangCL on Windows)",
-      "description": "Uses clang-cl with Visual Studio generator. Falls back to system compiler on Linux/macOS.",
+      "displayName": "VS 2022 ClangCL",
+      "description": "Uses clang-cl with Visual Studio 2022 generator. Falls back to system compiler on Linux/macOS.",
       "generator": "Visual Studio 17 2022",
       "binaryDir": "${sourceDir}/build",
       "condition": {
