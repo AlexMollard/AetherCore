@@ -25,6 +25,7 @@ namespace aether
 		m_gfx = new GraphicsDevice();
 		m_gfx->Init(services, { .appName = config.appName, .enableVsync = config.enableVsync });
 
+		services.Register<GpuDevice>(*this);
 		services.Register<VulkanContext>(m_gfx->GetVulkanContext());
 		services.Register<Swapchain>(m_gfx->GetSwapchain());
 		services.Register<ResourcePool>(m_gfx->GetResourcePool());

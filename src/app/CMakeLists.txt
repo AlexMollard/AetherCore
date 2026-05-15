@@ -13,8 +13,28 @@ target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(App PRIVATE Engine)
 
+if(TARGET libDaScript)
+    target_link_libraries(App PRIVATE libDaScript)
+    # daScript headers are C++17; suppress warnings from them in our C++26 project.
+    target_include_directories(App SYSTEM PRIVATE "${daScript_SOURCE_DIR}/include")
+    # /bigobj needed for daScript's heavy template instantiation on MSVC / clang-cl.
+    if(MSVC OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32))
+        target_compile_options(App PRIVATE /bigobj)
+    endif()
+endif()
+
 aethercore_target_defaults(App)
 aethercore_enable_slang_shader_compilation(App)
+
+set_target_properties(App PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+)
+
+# In dev builds, let the scripting subsystem find .das files in the source tree
+# so hot-reload (F5) picks up edits without a C++ rebuild.
+target_compile_definitions(App PRIVATE
+    AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
+)
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
 # Pack every file under resources/ into a single binary file that the runtime
@@ -32,5 +52,16 @@ add_custom_command(TARGET App POST_BUILD
         "${CMAKE_SOURCE_DIR}/engine.toml"
         "${CMAKE_BINARY_DIR}/data/config/engine.toml"
     COMMENT "Packing assets to data/assets.pak"
+    VERBATIM
+)
+
+# Copy scene scripts (*.das) directly to data/scenes/ so hot-reload can read
+# them from the filesystem without unpacking the pak.
+add_custom_command(TARGET App POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scenes"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/scenes"
+        "${CMAKE_BINARY_DIR}/data/scenes"
+    COMMENT "Copying scene scripts to data/scenes"
     VERBATIM
 )

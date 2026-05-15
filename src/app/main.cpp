@@ -7,11 +7,14 @@
 #include "layers/DebugLayer.hpp"
 // #include "layers/FishingLayer.hpp"
 #include "layers/LoadingLayer.hpp"
-#include "layers/SandboxLayer.hpp"
+#include "layers/ScriptedSceneLayer.hpp"
+// #include "layers/SandboxLayer.hpp"
 // #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
 // #include "layers/UiSandboxLayer.hpp"
 // #include "layers/InventoryLayer.hpp"
+#include "scripting/ScriptingSubsystem.hpp"
+#include "scripting/SystemFactory.hpp"
 #include "utils/Logger.hpp"
 
 namespace
@@ -42,10 +45,16 @@ int main()
 	{
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Verbose);
 
+		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
+
+		aether::app::SystemFactory systemFactory;
+
 		aether::app::Application application;
+		application.GetEngine().GetServiceContainer().Register<aether::app::scripting::ScriptingSubsystem>(scriptingSubsystem);
+
 		// application.PushLayer(std::make_unique<aether::app::FishingLayer>());
 		application.PushLayer(std::make_unique<aether::app::LoadingLayer>());
-		application.PushLayer(std::make_unique<aether::app::SandboxLayer>());
+		application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("sandbox.das", std::move(systemFactory)));
 		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
 		// application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());

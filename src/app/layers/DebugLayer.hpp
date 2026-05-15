@@ -2,9 +2,15 @@
 
 #include <array>
 #include <cstddef>
+#include <string>
 
 #include "AppLayer.hpp"
 #include "rendering/Renderer.hpp"
+
+namespace aether::app::scripting
+{
+	class ScriptingSubsystem;
+}
 
 namespace aether::app
 {
@@ -29,5 +35,6 @@ namespace aether::app
 		std::size_t m_frameHistoryHead = 0;
 		std::size_t m_frameHistoryCount = 0;
 		bool m_visible = true;
+		std::string m_lastScriptError;
 	};
 } // namespace aether::app

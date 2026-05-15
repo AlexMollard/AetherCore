@@ -204,6 +204,79 @@ if(AETHERCORE_ENABLE_IMGUI)
     endif()
 endif()
 
+# ── Scripting ─────────────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME daScript
+    GITHUB_REPOSITORY GaijinEntertainment/daScript
+    GIT_TAG        v0.6.0
+    GIT_SHALLOW    TRUE
+    OPTIONS
+        # Disable daScript's own tutorial / test / example / tool projects.
+        "DAS_TUTORIAL_DISABLED ON"
+        "DAS_TESTS_DISABLED ON"
+        "DAS_AOT_EXAMPLES_DISABLED ON"
+        "DAS_TOOLS_DISABLED ON"
+        # Disable all optional integration modules (each has its own guard name).
+        "DAS_GLFW_DISABLED ON"
+        "DAS_OPENGL_INCLUDED ON"
+        "DAS_GLSL_INCLUDED ON"
+        "DAS_PEG_INCLUDED ON"
+        "DAS_STBIMAGE_DISABLED ON"
+        "DAS_STBTRUETYPE_DISABLED ON"
+        "DAS_STDDLG_DISABLED ON"
+        "DAS_UNIT_TEST_DISABLED ON"
+)
+
+if(TARGET libDaScriptDyn_xxd AND TARGET libDaScript_xxd)
+    add_dependencies(libDaScriptDyn_xxd libDaScript_xxd)
+endif()
+
+# ── daScript ABI / layout defines (consumer-side ODR fix) ─────────────────────
+if(TARGET libDaScript)
+    target_compile_definitions(libDaScript INTERFACE
+        $<$<CONFIG:Debug>:DAS_SMART_PTR_DEBUG=1>
+        $<$<CONFIG:Release>:DAS_FUSION=2 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
+        $<$<CONFIG:MinSizeRel>:DAS_FUSION=1 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
+        $<$<CONFIG:RelWithDebInfo>:DAS_FUSION=1 DAS_RELWITHDEBINFO=1 DAS_SMART_PTR_DEBUG=1>
+    )
+endif()
+if(TARGET libDaScriptDyn)
+    target_compile_definitions(libDaScriptDyn INTERFACE
+        $<$<CONFIG:Debug>:DAS_SMART_PTR_DEBUG=1>
+        $<$<CONFIG:Release>:DAS_FUSION=2 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
+        $<$<CONFIG:MinSizeRel>:DAS_FUSION=1 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
+        $<$<CONFIG:RelWithDebInfo>:DAS_FUSION=1 DAS_RELWITHDEBINFO=1 DAS_SMART_PTR_DEBUG=1>
+    )
+endif()
+
+# ── Silence warnings from third-party daScript build targets ─────────────────
+# daScript and its bundled deps emit hundreds of clang/MSVC warnings that we
+# can't fix upstream. Suppress them on every target the daScript package adds.
+if(MSVC OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32))
+    set(_das_warning_flag /w)
+else()
+    set(_das_warning_flag -w)
+endif()
+foreach(_das_target IN ITEMS
+    libDaScript libDaScriptDyn
+    libDaScript_xxd libDaScriptDyn_xxd
+    libUriParser libUriParserDyn
+    daslang need_and_resolve)
+    if(TARGET ${_das_target})
+        get_target_property(_t_type ${_das_target} TYPE)
+        if(NOT _t_type STREQUAL "UTILITY" AND NOT _t_type STREQUAL "INTERFACE_LIBRARY")
+            target_compile_options(${_das_target} PRIVATE ${_das_warning_flag})
+        endif()
+        # daScript's xxd codegen rules declare .inc outputs but skip writing
+        # them on no-op runs ("has not been modified"). MSBuild flags that as
+        # MSB8065. Demote it to a message so the build log stays quiet.
+        if(MSVC)
+            set_property(TARGET ${_das_target} PROPERTY
+                VS_GLOBAL_MSBuildWarningsAsMessages "MSB8065")
+        endif()
+    endif()
+endforeach()
+
 # ── Solution folder organisation (Visual Studio only) ─────────────────────────
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -218,6 +291,10 @@ foreach(_dep IN ITEMS
     TracyClient
     Jolt
     libzstd_static
+    libDaScript daslang
+    libDaScriptDyn libDaScript_xxd libDaScriptDyn_xxd
+    libUriParser libUriParserDyn
+    need_and_resolve
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")

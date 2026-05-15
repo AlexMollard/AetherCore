@@ -13,6 +13,7 @@
 #include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/Renderer.hpp"
+#include "scripting/ScriptingSubsystem.hpp"
 
 namespace aether::app
 {
@@ -49,12 +50,6 @@ namespace aether::app
 			return { c.r, c.g, c.b, c.a };
 		}
 
-		void ColoredText(const char* label, const char* value, glm::vec4 valColor)
-		{
-			ImGui::TextUnformatted(label);
-			ImGui::SameLine();
-			ImGui::TextColored(ToImVec4(valColor), "%s", value);
-		}
 	} // namespace
 
 	// ── Stat helpers ──────────────────────────────────────────────────────────
@@ -139,6 +134,22 @@ namespace aether::app
 		if (context.Get<Input>().IsKeyPressed(aether::Key::F1))
 		{
 			m_visible = !m_visible;
+		}
+
+		if (context.Get<Input>().IsKeyPressed(aether::Key::F5))
+		{
+			if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
+			{
+				scripting->RequestReload();
+			}
+		}
+
+		if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
+		{
+			if (scripting->HasError())
+			{
+				m_lastScriptError = scripting->GetLastError();
+			}
 		}
 
 		const float frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
@@ -304,6 +315,40 @@ namespace aether::app
 			ImGui::NextColumn();
 
 			ImGui::Columns(1);
+		}
+
+		// ── SCRIPTING ─────────────────────────────────────────────────────────
+		if (context.TryGet<scripting::ScriptingSubsystem>())
+		{
+			ImGui::SeparatorText("SCRIPTING");
+
+			if (ImGui::Button("Reload Script [F5]"))
+			{
+				context.TryGet<scripting::ScriptingSubsystem>()->RequestReload();
+			}
+
+			if (!m_lastScriptError.empty())
+			{
+				ImGui::Spacing();
+				ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.55f, 0.15f, 0.15f, 1.f));
+				ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.65f, 0.20f, 0.20f, 1.f));
+				if (ImGui::CollapsingHeader("SCRIPT ERROR"))
+				{
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.45f, 0.45f, 1.f));
+					ImGui::TextWrapped("%s", m_lastScriptError.c_str());
+					ImGui::PopStyleColor();
+
+					if (ImGui::SmallButton("Clear"))
+					{
+						m_lastScriptError.clear();
+						if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
+						{
+							scripting->ClearError();
+						}
+					}
+				}
+				ImGui::PopStyleColor(2);
+			}
 		}
 
 		ImGui::End();
