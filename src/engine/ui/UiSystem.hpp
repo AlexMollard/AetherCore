@@ -5,11 +5,11 @@
 namespace aether
 {
 	class Input;
-}
+	class World;
+} // namespace aether
 
 namespace aether::ui
 {
-	class UiWorld;
 	struct UiContext;
 
 	// Runs once per frame before layers call OnGui().
@@ -26,18 +26,18 @@ namespace aether::ui
 	{
 	public:
 		// deltaTime - seconds since last frame; used for hover/press animation lerp.
-		void BeginFrame(UiWorld& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
-		void EndFrame(UiWorld& world, UiContext& ctx);
+		void BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
+		void EndFrame(aether::World& world, UiContext& ctx);
 
 	private:
-		void HitTest(UiWorld& world, UiContext& ctx, VkExtent2D extent);
-		void UpdateDrag(UiWorld& world, UiContext& ctx, VkExtent2D extent);
-		void FlushWidgetStates(UiWorld& world, UiContext& ctx);
+		void HitTest(aether::World& world, UiContext& ctx, VkExtent2D extent);
+		void UpdateDrag(aether::World& world, UiContext& ctx, VkExtent2D extent);
+		void FlushWidgetStates(aether::World& world, UiContext& ctx);
 		// Lerps hoverT/pressT on every UiInputComponent toward their target [0..1].
-		void UpdateTransitions(UiWorld& world, float deltaTime);
+		void UpdateTransitions(aether::World& world, float deltaTime);
 		// Feeds keyboard events (typed chars, Backspace, arrows, Enter/Escape) into the
 		// focused UiTextInputComponent and drives cursor blink.
-		void ProcessTextInput(UiWorld& world, UiContext& ctx, const Input& input, float deltaTime);
+		void ProcessTextInput(aether::World& world, UiContext& ctx, const Input& input, float deltaTime);
 	};
 
 } // namespace aether::ui

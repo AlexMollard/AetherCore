@@ -60,10 +60,8 @@ namespace aether::app
 			world.Destroy(e);
 		}
 		m_sceneCtx.sceneEntities.clear();
-		m_sceneCtx.pendingEntities.clear();
 		m_sceneCtx.loadedModels.clear();
 
-		// Unregister any C++ systems that the script registered via register_system().
 		for (const auto& name: m_sceneCtx.registeredSystems)
 		{
 			world.UnregisterSystem(name.c_str());

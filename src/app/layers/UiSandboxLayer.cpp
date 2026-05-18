@@ -10,7 +10,6 @@
 #include "ui/UiLayout.hpp"
 #include "ui/UiTheme.hpp"
 #include "ui/UiWidgets.hpp"
-#include "ui/UiWorld.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::app
@@ -32,7 +31,7 @@ namespace aether::app
 
 	void UiSandboxLayer::OnAttach(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 
 		// Helper: register every spawned entity for cleanup in OnDetach.
 		auto reg = [this](Entity e) -> Entity
@@ -168,7 +167,7 @@ namespace aether::app
 
 	void UiSandboxLayer::OnDetach(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 		for (const Entity e: m_entities)
 		{
 			world.Destroy(e);
@@ -185,7 +184,7 @@ namespace aether::app
 
 		// Animate the progress bar with a smooth sine wave so all values [0..1] are
 		// exercised over time.
-		if (auto* s = context.Get<ui::UiWorld>().TryGet<ui::UiSliderComponent>(m_progressBar))
+		if (auto* s = context.Get<World>().TryGet<ui::UiSliderComponent>(m_progressBar))
 		{
 			s->value = std::sin(m_progressTime * 0.8f) * 0.5f + 0.5f;
 		}
@@ -195,7 +194,7 @@ namespace aether::app
 
 	void UiSandboxLayer::OnGui(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 		UIRenderer& ui = context.Get<UIRenderer>();
 		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();

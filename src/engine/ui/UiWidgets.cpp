@@ -9,7 +9,6 @@
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
 #include "ui/UiLayout.hpp"
-#include "UiWorld.hpp"
 
 namespace aether::ui
 {
@@ -71,7 +70,7 @@ namespace aether::ui
 
 	// ── Button ────────────────────────────────────────────────────────────────
 
-	bool DrawButton(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* btn = world.TryGet<UiButtonComponent>(entity);
@@ -115,7 +114,7 @@ namespace aether::ui
 
 	// ── Slider ────────────────────────────────────────────────────────────────
 
-	float DrawSlider(UiWorld& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slider = world.TryGet<UiSliderComponent>(entity);
@@ -170,7 +169,7 @@ namespace aether::ui
 
 	// ── Checkbox ─────────────────────────────────────────────────────────────
 
-	bool DrawCheckbox(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* cb = world.TryGet<UiCheckboxComponent>(entity);
@@ -222,7 +221,7 @@ namespace aether::ui
 
 	// ── Progress bar ──────────────────────────────────────────────────────────
 
-	void DrawProgressBar(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slider = world.TryGet<UiSliderComponent>(entity);
@@ -249,7 +248,7 @@ namespace aether::ui
 
 	// ── Panel ─────────────────────────────────────────────────────────────────
 
-	bool DrawPanel(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* panel = world.TryGet<UiPanelComponent>(entity);
@@ -363,7 +362,7 @@ namespace aether::ui
 
 	// Recursively adds `delta` to the z-order of `entity` and every descendant
 	// reachable through UiChildrenComponent.
-	static void RaiseSubtree(UiWorld& world, Entity entity, float delta)
+	static void RaiseSubtree(aether::World& world, Entity entity, float delta)
 	{
 		if (auto* t = world.TryGet<UiTransformComponent>(entity))
 		{
@@ -378,7 +377,7 @@ namespace aether::ui
 		}
 	}
 
-	void BringToFront(UiWorld& world, Entity entity)
+	void BringToFront(aether::World& world, Entity entity)
 	{
 		float maxZ = 0.f;
 		for (auto [e, t]: world.View<UiTransformComponent>().each())
@@ -409,7 +408,7 @@ namespace aether::ui
 
 	// ── Layout ───────────────────────────────────────────────────────────────
 
-	void ApplyLayout(UiWorld& world, Entity container, VkExtent2D extent)
+	void ApplyLayout(aether::World& world, Entity container, VkExtent2D extent)
 	{
 		auto* layout = world.TryGet<UiLayoutComponent>(container);
 		auto* children = world.TryGet<UiChildrenComponent>(container);
@@ -500,7 +499,7 @@ namespace aether::ui
 		}
 	}
 
-	void ApplyGridLayout(UiWorld& world, Entity container, VkExtent2D extent)
+	void ApplyGridLayout(aether::World& world, Entity container, VkExtent2D extent)
 	{
 		auto* grid = world.TryGet<UiGridLayoutComponent>(container);
 		auto* children = world.TryGet<UiChildrenComponent>(container);
@@ -546,41 +545,41 @@ namespace aether::ui
 		}
 	}
 
-	void RunLayouts(UiWorld& world, VkExtent2D extent)
+	void RunLayouts(aether::World& world, VkExtent2D extent)
 	{
 		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
-			ApplyLayout(world, UiWorld::FromEntt(e), extent);
+			ApplyLayout(world, aether::World::FromEntt(e), extent);
 		}
 		for (auto [e, grid, children]: world.View<UiGridLayoutComponent, UiChildrenComponent>().each())
 		{
-			ApplyGridLayout(world, UiWorld::FromEntt(e), extent);
+			ApplyGridLayout(world, aether::World::FromEntt(e), extent);
 		}
 	}
 
 	// ── Spawn helpers ─────────────────────────────────────────────────────────
 
-	Entity SpawnButton(UiWorld& world, UiRect rect, std::string_view label, float zOrder)
+	Entity SpawnButton(aether::World& world, UiRect rect, std::string_view label, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiButtonComponent>(UiButtonComponent{ .label = std::string(label) }).entity();
 	}
 
-	Entity SpawnSlider(UiWorld& world, UiRect rect, float min, float max, float value, float zOrder)
+	Entity SpawnSlider(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiSliderComponent>(UiSliderComponent{ .min = min, .max = max, .value = value }).entity();
 	}
 
-	Entity SpawnCheckbox(UiWorld& world, UiRect rect, std::string_view label, bool checked, float zOrder)
+	Entity SpawnCheckbox(aether::World& world, UiRect rect, std::string_view label, bool checked, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiCheckboxComponent>(UiCheckboxComponent{ .checked = checked, .label = std::string(label) }).entity();
 	}
 
-	Entity SpawnProgressBar(UiWorld& world, UiRect rect, float min, float max, float value, float zOrder)
+	Entity SpawnProgressBar(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiSliderComponent>(UiSliderComponent{ .min = min, .max = max, .value = value }).entity();
 	}
 
-	Entity SpawnPanel(UiWorld& world, UiRect rect, std::string_view title, bool draggable, bool collapsible, float zOrder)
+	Entity SpawnPanel(aether::World& world, UiRect rect, std::string_view title, bool draggable, bool collapsible, float zOrder)
 	{
 		return world.Spawn()
 		        .Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder })
@@ -595,7 +594,7 @@ namespace aether::ui
 
 	// ── Text Input ────────────────────────────────────────────────────────────
 
-	bool DrawTextInput(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* ti = world.TryGet<UiTextInputComponent>(entity);
@@ -653,14 +652,14 @@ namespace aether::ui
 		return wasSubmitted;
 	}
 
-	Entity SpawnTextInput(UiWorld& world, UiRect rect, std::string_view placeholder, float zOrder)
+	Entity SpawnTextInput(aether::World& world, UiRect rect, std::string_view placeholder, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{ .placeholder = std::string(placeholder) }).entity();
 	}
 
 	// ── Hierarchy helper ──────────────────────────────────────────────────────
 
-	void AddChild(UiWorld& world, Entity parent, Entity child)
+	void AddChild(aether::World& world, Entity parent, Entity child)
 	{
 		world.TryGet<UiChildrenComponent>(parent)->children.push_back(child);
 		world.Emplace<UiParentComponent>(child, UiParentComponent{ parent });
@@ -668,7 +667,7 @@ namespace aether::ui
 
 	// ── Item Slot ─────────────────────────────────────────────────────────────
 
-	bool DrawItemSlot(UiWorld& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slot = world.TryGet<UiItemSlotComponent>(entity);
@@ -764,12 +763,12 @@ namespace aether::ui
 		return inp->clicked;
 	}
 
-	Entity SpawnItemSlot(UiWorld& world, UiRect rect, float zOrder)
+	Entity SpawnItemSlot(aether::World& world, UiRect rect, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiItemSlotComponent>().entity();
 	}
 
-	Entity SpawnItemGrid(UiWorld& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder)
+	Entity SpawnItemGrid(aether::World& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder)
 	{
 		Entity container = world.Spawn()
 		                           .Add<UiTransformComponent>(UiTransformComponent{ .rect = containerRect, .zOrder = containerZOrder })

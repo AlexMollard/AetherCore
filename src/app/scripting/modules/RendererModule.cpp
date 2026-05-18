@@ -1,9 +1,9 @@
-#include "RendererModule.hpp"
-#include "DasHelpers.hpp"
+#include "scripting/DasModuleBase.hpp"
 
 #include "daScript/daScript.h"
 
 #include "rendering/Renderer.hpp"
+#include "scripting/SceneContext.hpp"
 
 namespace
 {
@@ -43,27 +43,21 @@ namespace
 
 namespace aether::app::scripting
 {
-	struct RendererModule : das::Module
+	struct RendererModule : DasModuleBase
 	{
 		RendererModule()
-		      : das::Module("renderer")
+		      : DasModuleBase("renderer")
 		{
 			das::ModuleLibrary lib(this);
 
-			addExtern<DAS_BIND_FUN(das_set_ambient)>(*this, lib, "set_ambient", das::SideEffects::modifyExternal, "das_set_ambient");
-			addExtern<DAS_BIND_FUN(das_set_sun)>(*this, lib, "set_sun", das::SideEffects::modifyExternal, "das_set_sun");
-			addExtern<DAS_BIND_FUN(das_add_point_light)>(*this, lib, "add_point_light", das::SideEffects::modifyExternal, "das_add_point_light");
-			addExtern<DAS_BIND_FUN(das_set_sky)>(*this, lib, "set_sky", das::SideEffects::modifyExternal, "das_set_sky");
+			Bind<das_set_ambient>(lib, "set_ambient", SE::modifyExternal);
+			Bind<das_set_sun>(lib, "set_sun", SE::modifyExternal);
+			Bind<das_add_point_light>(lib, "add_point_light", SE::modifyExternal);
+			Bind<das_set_sky>(lib, "set_sky", SE::modifyExternal);
 
 			verifyAotReady();
 		}
 	};
-
 } // namespace aether::app::scripting
 
-REGISTER_MODULE_IN_NAMESPACE(RendererModule, aether::app::scripting);
-
-void RegisterRendererModule()
-{
-	NEED_MODULE(RendererModule);
-}
+AETHER_DAS_MODULE(RendererModule, aether::app::scripting)

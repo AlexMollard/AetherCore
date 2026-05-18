@@ -9,7 +9,6 @@
 #include "ui/UiLayout.hpp"
 #include "ui/UiTheme.hpp"
 #include "ui/UiWidgets.hpp"
-#include "ui/UiWorld.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether::app
@@ -107,7 +106,7 @@ namespace aether::app
 
 	void InventoryLayer::OnAttach(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 
 		auto reg = [this](Entity e) -> Entity
 		{
@@ -168,7 +167,7 @@ namespace aether::app
 
 	void InventoryLayer::OnDetach(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 		for (const Entity e: m_entities)
 		{
 			world.Destroy(e);
@@ -181,7 +180,7 @@ namespace aether::app
 
 	void InventoryLayer::OnGui(LayerContext& context)
 	{
-		auto& world = context.Get<ui::UiWorld>();
+		auto& world = context.Get<World>();
 		UIRenderer& ui = context.Get<UIRenderer>();
 		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();

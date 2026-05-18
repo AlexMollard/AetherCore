@@ -6,7 +6,6 @@
 #include "io/FileSystem.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiSystem.hpp"
-#include "ui/UiWorld.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "systems/DayNightSystem.hpp"
@@ -234,7 +233,7 @@ namespace aether::app
 			// ECS UI system: hit-test, drag, widget state (runs before OnGui).
 			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
-				auto& uiWorld = m_engine.GetServiceContainer().Get<ui::UiWorld>();
+				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
 				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, m_engine.GetServiceContainer().Get<Swapchain>().GetExtent(), static_cast<float>(scaledDt));
 			}
@@ -255,7 +254,7 @@ namespace aether::app
 
 			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
-				auto& uiWorld = m_engine.GetServiceContainer().Get<ui::UiWorld>();
+				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
 				uiSystem->EndFrame(uiWorld, uiCtx);
 			}

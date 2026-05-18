@@ -1,34 +1,33 @@
 #include "ScriptingSubsystem.hpp"
 #include "ScriptHandle.hpp"
 #include "SceneContext.hpp"
-
-#include "modules/WorldModule.hpp"
-#include "modules/RendererModule.hpp"
-#include "modules/CameraModule.hpp"
-#include "modules/InputModule.hpp"
-#include "modules/SystemsModule.hpp"
+#include "DasModuleBase.hpp" // GetModuleRegistrars()
 
 // Pull in the full daScript API after our own headers (heavy include).
 #include "daScript/daScript.h"
 #include "daScript/simulate/fs_file_info.h"
 
+#include "scene/World.hpp"
 #include "utils/Logger.hpp"
 
 #include <filesystem>
 
 // ── Module registration ────────────────────────────────────────────────────────
-// NEED_MODULE and REGISTER_MODULE use ## token-pasting so they must be called at
-// global scope with unqualified class names.  All RegisterXModule() functions are
-// defined at global scope in their respective .cpp files.
+// Modules self-register via AETHER_DAS_MODULE in their own .cpp files.
+// Adding a new module requires zero changes here.
+
+// WorldModule defines the World type annotation; it must be registered before
+// any other module whose addExtern calls reference aether::World*.
+DECLARE_MODULE(WorldModule);
 
 static void EnsureModulesRegistered()
 {
 	NEED_ALL_DEFAULT_MODULES;
-	RegisterWorldModule();
-	RegisterRendererModule();
-	RegisterCameraModule();
-	RegisterInputModule();
-	RegisterSystemsModule();
+	PULL_MODULE(WorldModule); // first - others depend on World type annotation
+	for (auto reg: GetModuleRegistrars())
+	{
+		reg();
+	}
 	das::Module::Initialize();
 }
 
@@ -58,8 +57,6 @@ namespace aether::app::scripting
 	}
 
 	// Walk candidate roots to find the script file.
-	// In dev builds AETHER_SCRIPTS_SOURCE_DIR is defined to the source resources/scenes
-	// directory, so hot-reload (F5) reads from the source tree without a C++ rebuild.
 	static std::string ResolveScriptPath(const std::string& path)
 	{
 		const std::filesystem::path rel(path);
@@ -70,7 +67,6 @@ namespace aether::app::scripting
 
 		const auto cwd = std::filesystem::current_path();
 
-		// Build candidate list.  Source dir is tried first so live edits are picked up.
 		std::vector<std::filesystem::path> roots;
 #ifdef AETHER_SCRIPTS_SOURCE_DIR
 		roots.emplace_back(AETHER_SCRIPTS_SOURCE_DIR);
@@ -78,7 +74,6 @@ namespace aether::app::scripting
 		roots.emplace_back(cwd / "data" / "scenes");
 		roots.emplace_back(cwd / "../data/scenes");
 		roots.emplace_back(cwd / "../../data/scenes");
-		// Also try the full relative path as-given from cwd and parents.
 		roots.emplace_back(cwd);
 		roots.emplace_back(cwd / "..");
 		roots.emplace_back(cwd / "../..");
@@ -92,7 +87,7 @@ namespace aether::app::scripting
 				return candidate.string();
 			}
 		}
-		return path; // fall back to as-given; let daScript report the error
+		return path;
 	}
 
 	ScriptHandle ScriptingSubsystem::Compile(const std::string& path)
@@ -148,14 +143,21 @@ namespace aether::app::scripting
 		return handle;
 	}
 
-	static void InvokeNoArgs(das::Context* ctx, das::SimFunction* fn, SceneContext& activeCtx)
+	// Invoke a script function with World as the first argument.
+	static void InvokeWithWorld(das::Context* ctx, das::SimFunction* fn, SceneContext& activeCtx)
 	{
 		if (!fn || !ctx)
 		{
 			return;
 		}
+
 		g_activeContext = &activeCtx;
-		ctx->evalWithCatch(fn, nullptr, nullptr);
+
+		// Pass World* as the first (and only) script argument.
+		// Scripts declare: def on_attach(world : World) { ... }
+		vec4f worldArg = das::cast<aether::World*>::from(activeCtx.world);
+		ctx->evalWithCatch(fn, &worldArg, nullptr);
+
 		g_activeContext = nullptr;
 
 		if (const char* ex = ctx->getException())
@@ -166,16 +168,16 @@ namespace aether::app::scripting
 
 	void ScriptingSubsystem::CallOnAttach(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeNoArgs(handle.ctx, handle.onAttach, ctx);
+		InvokeWithWorld(handle.ctx, handle.onAttach, ctx);
 	}
 
 	void ScriptingSubsystem::CallOnUpdate(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeNoArgs(handle.ctx, handle.onUpdate, ctx);
+		InvokeWithWorld(handle.ctx, handle.onUpdate, ctx);
 	}
 
 	void ScriptingSubsystem::CallOnDetach(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeNoArgs(handle.ctx, handle.onDetach, ctx);
+		InvokeWithWorld(handle.ctx, handle.onDetach, ctx);
 	}
 } // namespace aether::app::scripting

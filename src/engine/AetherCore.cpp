@@ -78,7 +78,6 @@ namespace aether
 		{
 			m_ui.Init(m_services, config.uiFontPath, config.uiPassNamePrefix, config.uiGlyphSize);
 			m_services.Register<UIRenderer>(m_ui.GetUiRenderer());
-			m_services.Register<ui::UiWorld>(m_ui.GetUiWorld());
 			m_services.Register<ui::UiContext>(m_ui.GetUiContext());
 			m_services.Register<ui::UiSystem>(m_ui.GetUiSystem());
 		}

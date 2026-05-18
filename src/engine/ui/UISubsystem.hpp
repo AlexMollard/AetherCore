@@ -5,13 +5,12 @@
 #include "ui/UIRenderer.hpp"
 #include "ui/UiContext.hpp"
 #include "ui/UiSystem.hpp"
-#include "ui/UiWorld.hpp"
 
 class ServiceContainer;
 
 namespace aether
 {
-	// Owns the engine UI systems (UIRenderer, UiWorld, UiContext, UiSystem).
+	// Owns the engine UI systems (UIRenderer, UiContext, UiSystem).
 	// Initialized after the rendering subsystem so that Vulkan resources
 	// are available for UI pipeline creation.
 	class UISubsystem
@@ -23,11 +22,6 @@ namespace aether
 		[[nodiscard]] UIRenderer& GetUiRenderer()
 		{
 			return m_uiRenderer;
-		}
-
-		[[nodiscard]] ui::UiWorld& GetUiWorld()
-		{
-			return m_uiWorld;
 		}
 
 		[[nodiscard]] ui::UiContext& GetUiContext()
@@ -42,7 +36,6 @@ namespace aether
 
 	private:
 		UIRenderer m_uiRenderer;
-		ui::UiWorld m_uiWorld;
 		ui::UiContext m_uiContext;
 		ui::UiSystem m_uiSystem;
 	};

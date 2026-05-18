@@ -112,10 +112,10 @@ namespace aether
 		// Update all registered systems (called by the game loop).
 		void UpdateSystems(float dt);
 
-	private:
 		[[nodiscard]] static entt::entity ToEntt(Entity entity) noexcept;
 		[[nodiscard]] static Entity FromEntt(entt::entity entity) noexcept;
 
+	private:
 		SystemRegistry m_systems;
 		Registry m_registry;
 	};

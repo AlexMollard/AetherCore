@@ -4,14 +4,14 @@
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
 #include "ui/UiLayout.hpp"
-#include "UiWorld.hpp"
+#include "scene/World.hpp"
 #include "UiWidgets.hpp"
 
 namespace aether::ui
 {
 	static constexpr float kTitleBarHeight = 48.f;
 
-	void UiSystem::BeginFrame(UiWorld& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
+	void UiSystem::BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
 	{
 		// ── Mouse state ────────────────────────────────────────────────────────
 		ctx.mousePos = input.GetMousePos();
@@ -43,7 +43,7 @@ namespace aether::ui
 			inp.pressed = false;
 			// Refresh focused from the persistent context entity so widgets always see
 			// the current keyboard focus state without an extra loop later.
-			inp.focused = (UiWorld::FromEntt(e) == ctx.focusedEntity);
+			inp.focused = (aether::World::FromEntt(e) == ctx.focusedEntity);
 		}
 
 		HitTest(world, ctx, extent);
@@ -51,7 +51,7 @@ namespace aether::ui
 		UpdateTransitions(world, deltaTime);
 	}
 
-	void UiSystem::EndFrame(UiWorld& world, UiContext& ctx)
+	void UiSystem::EndFrame(aether::World& world, UiContext& ctx)
 	{
 		(void) world;
 		(void) ctx;
@@ -61,7 +61,7 @@ namespace aether::ui
 
 	// Returns true if any ancestor panel of `entity` is collapsed, meaning the
 	// entity is in the hidden body of that panel and should not receive input.
-	static bool InsideCollapsedPanel(const UiWorld& world, Entity entity)
+	static bool InsideCollapsedPanel(const aether::World& world, Entity entity)
 	{
 		const UiParentComponent* link = world.TryGet<UiParentComponent>(entity);
 		while (link && link->parent.IsValid())
@@ -76,7 +76,7 @@ namespace aether::ui
 		return false;
 	}
 
-	void UiSystem::HitTest(UiWorld& world, UiContext& ctx, VkExtent2D extent)
+	void UiSystem::HitTest(aether::World& world, UiContext& ctx, VkExtent2D extent)
 	{
 		const glm::vec2 mp = ctx.mousePos;
 		Entity bestEntity;
@@ -90,7 +90,7 @@ namespace aether::ui
 			}
 
 			// Skip widgets that live inside a collapsed panel's body.
-			if (InsideCollapsedPanel(world, UiWorld::FromEntt(e)))
+			if (InsideCollapsedPanel(world, aether::World::FromEntt(e)))
 			{
 				continue;
 			}
@@ -101,7 +101,7 @@ namespace aether::ui
 				if (transform.zOrder > bestZ)
 				{
 					bestZ = transform.zOrder;
-					bestEntity = UiWorld::FromEntt(e);
+					bestEntity = aether::World::FromEntt(e);
 				}
 			}
 		}
@@ -109,7 +109,7 @@ namespace aether::ui
 		ctx.hotEntity = bestEntity;
 	}
 
-	void UiSystem::UpdateDrag(UiWorld& world, UiContext& ctx, VkExtent2D extent)
+	void UiSystem::UpdateDrag(aether::World& world, UiContext& ctx, VkExtent2D extent)
 	{
 		// Start drag: left button just pressed over a draggable panel's title bar.
 		if (ctx.mousePressed && ctx.hotEntity.IsValid())
@@ -162,7 +162,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::FlushWidgetStates(UiWorld& world, UiContext& ctx)
+	void UiSystem::FlushWidgetStates(aether::World& world, UiContext& ctx)
 	{
 		if (!ctx.hotEntity.IsValid())
 		{
@@ -225,7 +225,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::ProcessTextInput(UiWorld& world, UiContext& ctx, const Input& input, float deltaTime)
+	void UiSystem::ProcessTextInput(aether::World& world, UiContext& ctx, const Input& input, float deltaTime)
 	{
 		if (!ctx.focusedEntity.IsValid())
 		{
@@ -305,7 +305,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::UpdateTransitions(UiWorld& world, float deltaTime)
+	void UiSystem::UpdateTransitions(aether::World& world, float deltaTime)
 	{
 		// 80 ms target: rate = 1 / 0.08 = 12.5 per second.
 		static constexpr float kTransRate = 12.5f;
