@@ -29,28 +29,59 @@ namespace aether
 
 	VkDeviceSize GpuHeap::AllocBytes(VkDeviceSize bytes)
 	{
-		for (auto it = m_freeList.begin(); it != m_freeList.end(); ++it)
+		constexpr VkDeviceSize kMinAlignment = 16;
+		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
+
+		for (std::size_t idx = 0; idx < m_freeList.size(); ++idx)
 		{
-			if (it->size >= bytes)
+			FreeBlock& blk = m_freeList[idx];
+
+			const VkDeviceSize alignedOffset = (blk.offset + kMinAlignment - 1) & ~(kMinAlignment - 1);
+			const VkDeviceSize waste = alignedOffset - blk.offset;
+			if (waste >= blk.size)
 			{
-				const VkDeviceSize offset = it->offset;
-				if (it->size == bytes)
-				{
-					m_freeList.erase(it);
-				}
-				else
-				{
-					it->offset += bytes;
-					it->size -= bytes;
-				}
-				return offset;
+				continue;
 			}
+			const VkDeviceSize effectiveSize = blk.size - waste;
+
+			if (effectiveSize < bytes)
+			{
+				continue;
+			}
+
+			// Split off alignment waste as a separate free block (reuse current slot).
+			if (waste > 0)
+			{
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{ alignedOffset, effectiveSize });
+				m_freeList[idx].size = waste;
+				++idx;
+			}
+
+			// Split off remaining free space after the allocation.
+			if (effectiveSize > bytes)
+			{
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{ alignedOffset + bytes, effectiveSize - bytes });
+				// Block at idx now represents the allocated region: {alignedOffset, bytes}
+				// Replace it with the remainder since we only split once — keep it simple:
+				// erase the usable slot (idx) since we'll let the normal free-list manage leftovers.
+				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
+			}
+			else
+			{
+				// Exact fit: just erase the usable block.
+				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
+			}
+
+			return alignedOffset;
 		}
 		return kInvalidOffset;
 	}
 
 	void GpuHeap::FreeBytes(VkDeviceSize offset, VkDeviceSize bytes)
 	{
+		// Round up to match the alignment applied by AllocBytes.
+		constexpr VkDeviceSize kMinAlignment = 16;
+		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 		auto it = std::lower_bound(m_freeList.begin(), m_freeList.end(), offset, [](const FreeBlock& b, VkDeviceSize o) { return b.offset < o; });
 		it = m_freeList.insert(it, { offset, bytes });
 

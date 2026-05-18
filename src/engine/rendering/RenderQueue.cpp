@@ -52,10 +52,12 @@ namespace aether
 			m_animationSampleJobsBuffer = std::move(b4);
 			m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
 
-			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+			constexpr VkBufferUsageFlags kAnimationSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags));
 			m_skinPaletteBuffer = std::move(b5);
 
-			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags));
 			m_sampledPosesBuffer = std::move(b6);
 		}
 
@@ -132,6 +134,20 @@ namespace aether
 		const std::uint32_t drawBase = frameSlot * m_maxDraws;
 		const std::uint32_t batchBase = frameSlot * m_maxBatches;
 		const std::uint32_t animJobBase = frameSlot * m_maxAnimationDraws;
+
+		// Clear device-local animation buffers on first call to prevent garbage on first frame.
+		if (!m_animationBuffersCleared)
+		{
+			m_animationBuffersCleared = true;
+			if (m_skinPaletteBuffer)
+			{
+				vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), 0, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), 0);
+			}
+			if (m_sampledPosesBuffer)
+			{
+				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), 0, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), 0);
+			}
+		}
 		m_cachedDrawBase = drawBase;
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);

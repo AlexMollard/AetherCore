@@ -322,6 +322,7 @@ namespace aether
 				}
 				skin.mappedPtr[j] = m_nodes[nodeIdx].globalTransform * skin.inverseBindMatrices[j];
 			}
+			skin.buffer.FlushMapped();
 		}
 	}
 
@@ -371,6 +372,7 @@ namespace aether
 				if (src.mappedPtr && dst.mappedPtr)
 				{
 					std::memcpy(dst.mappedPtr, src.mappedPtr, bufSize);
+					dst.buffer.FlushMapped();
 				}
 				else if (dst.mappedPtr)
 				{
@@ -378,6 +380,7 @@ namespace aether
 					{
 						dst.mappedPtr[j] = glm::mat4(1.0f);
 					}
+					dst.buffer.FlushMapped();
 				}
 			}
 		}

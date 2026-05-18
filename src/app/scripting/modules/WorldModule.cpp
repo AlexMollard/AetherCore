@@ -178,6 +178,28 @@ namespace
 		aether::LoadedModel& model = ctx.loadedModels.back();
 
 		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(model, *ctx.defaultPipeline);
+
+		// Wire up AnimatorComponent so the AnimationSystem drives skinning and
+		// animation-control functions (set_animation etc.) work from scripts.
+		if (model.animator)
+		{
+			const aether::AnimatorComponent ac{
+				.animator = &*model.animator,
+				.animationDb = model.animationDb.IsValid() ? &model.animationDb : nullptr,
+				.heroCharacter = false,
+				.lodTier = 2,
+			};
+			// Each mesh primitive needs an animator so the AnimationSystem
+			// updates its skin palette and the renderer emits draw commands.
+			for (aether::Entity meshEntity: meshEntities)
+			{
+				w->EmplaceOrReplace<aether::AnimatorComponent>(meshEntity, ac);
+			}
+			// Also attach to the caller's entity so scripts can call
+			// set_animation / set_playback_speed / etc. on the entity they own.
+			w->EmplaceOrReplace<aether::AnimatorComponent>(aether::Entity{ id }, ac);
+		}
+
 		for (aether::Entity meshEntity: meshEntities)
 		{
 			if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))

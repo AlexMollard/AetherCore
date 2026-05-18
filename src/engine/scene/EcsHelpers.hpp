@@ -59,10 +59,10 @@ namespace aether::ecs
 				const std::uint32_t joints = animator.GetSkinJointCount(skinIdx);
 				if (addr != 0 && joints > 0)
 				{
-					world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .sourceSkinBufferAddr = addr, .jointCount = joints });
+					world.EmplaceOrReplace<aether::SkinComponent>(e, aether::SkinComponent{ .sourceSkinBufferAddr = addr, .skinIndex = skinIdx, .jointCount = joints });
 				}
 			}
-			world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &animator, .heroCharacter = heroCharacter, .lodTier = lodTier });
+			world.EmplaceOrReplace<aether::AnimatorComponent>(e, aether::AnimatorComponent{ .animator = &animator, .animationDb = model.animationDb.IsValid() ? &model.animationDb : nullptr, .heroCharacter = heroCharacter, .lodTier = lodTier });
 		}
 	}
 

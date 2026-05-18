@@ -76,6 +76,11 @@ namespace aether
 			return m_time;
 		}
 
+		[[nodiscard]] float GetPlaybackSpeed() const
+		{
+			return m_playbackSpeed;
+		}
+
 		// BDA of the flat joint-matrix palette for the given skin.
 		// Returns 0 when skinIndex is -1, out of range, or the skin has no joints.
 		[[nodiscard]] VkDeviceAddress GetSkinBufferAddr(std::int32_t skinIndex) const;

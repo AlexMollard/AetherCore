@@ -16,6 +16,7 @@ namespace aether
 			return 0;
 		}
 		GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
+		assert(span.IsValid() && "GpuHeap allocation failed - heap capacity insufficient");
 		heap.Upload(span, std::span<const T>(data), device, queue, pool);
 		return span.address;
 	}
@@ -125,21 +126,24 @@ namespace aether
 		}
 
 		// ── Size the heap and upload all arrays ──────────────────────────────
-		// All element types below are multiples of 4 bytes, so sequential allocations
-		// stay 4-byte aligned (required by scalarBlockLayout). Strings go last since
-		// their byte count may not be a multiple of 4.
-		VkDeviceSize totalBytes = gpuClips.size() * sizeof(GpuClip);
-		totalBytes += gpuChannels.size() * sizeof(GpuChannel);
-		totalBytes += allTimes.size() * sizeof(float);
-		totalBytes += allValues.size() * sizeof(glm::vec4);
-		totalBytes += nodeParents.size() * sizeof(std::int32_t);
-		totalBytes += bindTranslations.size() * sizeof(glm::vec4);
-		totalBytes += bindRotations.size() * sizeof(glm::vec4);
-		totalBytes += bindScales.size() * sizeof(glm::vec4);
-		totalBytes += skinMetas.size() * sizeof(GpuSkinMeta);
-		totalBytes += skinJoints.size() * sizeof(std::uint32_t);
-		totalBytes += skinInverseBinds.size() * sizeof(glm::mat4);
-		totalBytes += allStrings.size();
+		// GpuHeap::AllocBytes enforces a 16-byte minimum alignment, so each term
+		// must be rounded up to a 16-byte boundary to guarantee enough capacity.
+		const auto align16 = [](VkDeviceSize v) -> VkDeviceSize
+		{
+			return (v + 15) & ~VkDeviceSize(15);
+		};
+		VkDeviceSize totalBytes = align16(gpuClips.size() * sizeof(GpuClip));
+		totalBytes += align16(gpuChannels.size() * sizeof(GpuChannel));
+		totalBytes += align16(allTimes.size() * sizeof(float));
+		totalBytes += align16(allValues.size() * sizeof(glm::vec4));
+		totalBytes += align16(nodeParents.size() * sizeof(std::int32_t));
+		totalBytes += align16(bindTranslations.size() * sizeof(glm::vec4));
+		totalBytes += align16(bindRotations.size() * sizeof(glm::vec4));
+		totalBytes += align16(bindScales.size() * sizeof(glm::vec4));
+		totalBytes += align16(skinMetas.size() * sizeof(GpuSkinMeta));
+		totalBytes += align16(skinJoints.size() * sizeof(std::uint32_t));
+		totalBytes += align16(skinInverseBinds.size() * sizeof(glm::mat4));
+		totalBytes += align16(allStrings.size());
 
 		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes });
 

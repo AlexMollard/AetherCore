@@ -5,6 +5,7 @@
 #include <Jolt/Physics/Body/BodyID.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <entt/entt.hpp>
 
 #include "scene/System.hpp"
 #include "scene/Entity.hpp"
@@ -63,6 +64,11 @@ namespace aether
 		// RigidBodyComponent / PhysicsStateComponent from it.
 		void RemoveBody(World& world, Entity entity);
 
+		// Called via entt sink when a RigidBodyComponent is destroyed.
+		// Removes and destroys the backing Jolt body so we never leak physics
+		// bodies when entities are destroyed outside of RemoveBody().
+		void OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity);
+
 		// ── Body control ──────────────────────────────────────────────────────
 
 		void SetLinearVelocity(JPH::BodyID id, glm::vec3 velocity);
@@ -111,6 +117,10 @@ namespace aether
 
 		float m_accumulator = 0.0f;
 		bool m_needsBroadPhaseOptimize = false;
+
+		// Auto-disconnects in the destructor (declared last so it disconnects
+		// before m_physics is destroyed — reverse member destruction order).
+		entt::scoped_connection m_rigidBodyDestroyConn;
 	};
 
 } // namespace aether

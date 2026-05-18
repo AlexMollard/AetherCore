@@ -89,6 +89,7 @@ namespace aether
 		requiredFeatures12.shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
 		requiredFeatures12.timelineSemaphore = VK_TRUE;
 		requiredFeatures12.drawIndirectCount = VK_TRUE;
+		requiredFeatures12.shaderInt8 = VK_TRUE;
 
 		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
 		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -97,6 +98,7 @@ namespace aether
 
 		VkPhysicalDeviceFeatures requiredFeatures10{};
 		requiredFeatures10.shaderInt64 = VK_TRUE;
+		requiredFeatures10.shaderInt16 = VK_TRUE;
 		requiredFeatures10.multiDrawIndirect = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{ *m_instance };

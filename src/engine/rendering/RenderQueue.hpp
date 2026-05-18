@@ -167,6 +167,7 @@ namespace aether
 		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
 
 		std::uint32_t m_animationSampleJobCount = 0;
+		bool m_animationBuffersCleared = false;
 		uint64_t m_tracyAnimationCtx = 0;
 
 		void EnsureSkinCopyPipeline();

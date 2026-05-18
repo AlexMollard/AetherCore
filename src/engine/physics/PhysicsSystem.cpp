@@ -182,7 +182,7 @@ namespace aether
 	PhysicsSystem::PhysicsSystem() = default;
 	PhysicsSystem::~PhysicsSystem() = default;
 
-	void PhysicsSystem::OnRegister([[maybe_unused]] World& world)
+	void PhysicsSystem::OnRegister(World& world)
 	{
 		JPH::RegisterDefaultAllocator();
 
@@ -211,6 +211,12 @@ namespace aether
 		        *m_objVsObjFilter);
 
 		m_physics->SetGravity(JPH::Vec3(0.f, -9.81f, 0.f));
+
+		// Auto-cleanup: when an entity with RigidBodyComponent is destroyed, the
+		// backing Jolt body is removed and freed so it doesn't leak into the next
+		// scene load. This fires for every destruction path (world.Destroy(),
+		// registry.remove<RigidBodyComponent>(), etc.).
+		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBodyComponent>().connect<&PhysicsSystem::OnRigidBodyDestroyed>(this);
 
 		INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s)", workerThreads, kFixedTimestep);
 	}
@@ -490,6 +496,24 @@ namespace aether
 
 		world.Remove<RigidBodyComponent>(entity);
 		world.Remove<PhysicsStateComponent>(entity);
+	}
+
+	void PhysicsSystem::OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity)
+	{
+		if (!m_physics)
+		{
+			return;
+		}
+
+		auto* rigid = registry.try_get<RigidBodyComponent>(enttEntity);
+		if (!rigid || rigid->bodyId.IsInvalid())
+		{
+			return;
+		}
+
+		auto& bodyInterface = m_physics->GetBodyInterface();
+		bodyInterface.RemoveBody(rigid->bodyId);
+		bodyInterface.DestroyBody(rigid->bodyId);
 	}
 
 	// ── Body control ──────────────────────────────────────────────────────────────
