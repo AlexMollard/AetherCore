@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "animation/AnimationSystem.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "io/FileSystem.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiSystem.hpp"
@@ -84,6 +85,7 @@ namespace aether::app
 		// Unregister engine-level systems before detaching layers.
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
+		context.Get<World>().UnregisterSystem("PhysicsSystem");
 
 		m_layers.DetachAll(context);
 		m_imguiRenderer.Shutdown(m_engine.GetServiceContainer());
@@ -145,14 +147,24 @@ namespace aether::app
 			.frameIndex = 0,
 		};
 
-		m_layers.AttachAll(attachContext);
-		m_layersAttached = true;
+		// Register engine-level systems before layers so any layer's OnRegister
+		// can already find them (via ServiceContainer or World system lookup).
+		{
+			auto& services = attachContext.services;
+			attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
-		// Register engine-level systems.
-		attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
+			auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
+			auto* physicsPtr = physicsSystem.get();
+			attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
+			services.Register<aether::PhysicsSystem>(*physicsPtr);
+		}
+
 		auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
 		dayNightSystem->Init(*attachContext.TryGet<Renderer>());
 		attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
+
+		m_layers.AttachAll(attachContext);
+		m_layersAttached = true;
 
 		if (m_settings.app.targetFps > 0.0f)
 		{

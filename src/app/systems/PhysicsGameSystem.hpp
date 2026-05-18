@@ -32,7 +32,7 @@ namespace aether::app
 	class PhysicsGameSystem final : public aether::System
 	{
 	public:
-		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics);
+		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
 
 		const char* GetName() const override
 		{

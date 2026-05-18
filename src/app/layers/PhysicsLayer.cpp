@@ -12,27 +12,20 @@ namespace aether::app
 	{
 		INFO(aether::LogCategory::App, "PhysicsLayer attached.");
 
-		// Register the physics system first - the game system's OnRegister
-		// calls AddBoxBody / AddSphereBody, so physics must already be alive.
-		auto physics = std::make_unique<aether::PhysicsSystem>();
-		m_physics = physics.get();
-		context.Get<World>().RegisterSystem(std::move(physics));
+		// PhysicsSystem is engine-owned (registered in Application::Run).
+		// PhysicsGameSystem retrieves it from the ServiceContainer during OnRegister.
 
-		// Now register the game system (will call OptimizeBroadPhase internally).
 		auto gameSystem = std::make_unique<PhysicsGameSystem>();
-		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>(), *m_physics);
+		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());
 		m_gameSystem = gameSystem.get();
 		context.Get<World>().RegisterSystem(std::move(gameSystem));
 	}
 
 	void PhysicsLayer::OnDetach(LayerContext& context)
 	{
-		// Game system must be removed before physics system so its
-		// OnUnregister can still call RemoveBody.
+		// PhysicsSystem is engine-owned and stays alive — only the game system goes.
 		context.Get<World>().UnregisterSystem("PhysicsGameSystem");
-		context.Get<World>().UnregisterSystem("PhysicsSystem");
 		m_gameSystem = nullptr;
-		m_physics = nullptr;
 	}
 
 	void PhysicsLayer::OnUpdate([[maybe_unused]] LayerContext& context)

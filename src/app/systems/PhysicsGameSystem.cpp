@@ -38,13 +38,12 @@ namespace aether::app
 
 	// ── Init ──────────────────────────────────────────────────────────────────────
 
-	void PhysicsGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input, aether::PhysicsSystem& physics)
+	void PhysicsGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
 	{
 		m_services = &services;
 		m_assets = &assets;
 		m_cameras = &cameras;
 		m_input = &input;
-		m_physics = &physics;
 	}
 
 	// ── Scene construction ────────────────────────────────────────────────────────
@@ -157,6 +156,11 @@ namespace aether::app
 
 	void PhysicsGameSystem::OnRegister(aether::World& world)
 	{
+		if (m_services)
+		{
+			m_physics = &m_services->Get<aether::PhysicsSystem>();
+		}
+
 		INFO(aether::LogCategory::App, "PhysicsGameSystem registered.");
 		if (!m_services || !m_assets || !m_cameras || !m_input || !m_physics)
 		{

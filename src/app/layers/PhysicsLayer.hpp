@@ -1,14 +1,14 @@
 #pragma once
 
 #include "AppLayer.hpp"
-#include "physics/PhysicsSystem.hpp"
 
 namespace aether::app
 {
 	class PhysicsGameSystem;
 
 	// Demonstration layer for Jolt physics integration.
-	// Owns the PhysicsSystem (registered into the World) and the PhysicsGameSystem.
+	// PhysicsSystem is engine-owned (registered in Application::Run); this layer
+	// only drives the PhysicsGameSystem (scene creation, input, HUD).
 	// Controls:
 	//   Space  - fire a projectile at the box stack
 	//   R      - reset the scene
@@ -22,7 +22,6 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		aether::PhysicsSystem* m_physics = nullptr;
 		PhysicsGameSystem* m_gameSystem = nullptr;
 	};
 
