@@ -61,6 +61,7 @@ namespace aether::app
 		}
 		m_sceneCtx.sceneEntities.clear();
 		m_sceneCtx.loadedModels.clear();
+		m_sceneCtx.meshCache.clear();
 
 		for (const auto& name: m_sceneCtx.registeredSystems)
 		{
@@ -119,7 +120,19 @@ namespace aether::app
 		m_sceneCtx.input = &context.Get<Input>();
 		m_sceneCtx.systemFactory = &m_systemFactory;
 		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
+		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();
 		m_sceneCtx.scriptPath = m_scriptPath;
+
+		// Register a default white material for primitive meshes.
+		if (!m_sceneCtx.defaultMaterialRegistered)
+		{
+			m_sceneCtx.defaultMaterial = {};
+			m_sceneCtx.defaultMaterial.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.f);
+			m_sceneCtx.defaultMaterial.roughnessFactor = 0.6f;
+			m_sceneCtx.defaultMaterial.metallicFactor = 0.0f;
+			context.Get<AssetManager>().RegisterMaterial(m_sceneCtx.defaultMaterial);
+			m_sceneCtx.defaultMaterialRegistered = true;
+		}
 
 		m_handle = m_scripting->Compile(m_scriptPath);
 		if (!m_handle.IsValid())
@@ -139,6 +152,15 @@ namespace aether::app
 		}
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
+
+		if (m_sceneCtx.defaultMaterialRegistered)
+		{
+			context.Get<AssetManager>().UnregisterMaterial(m_sceneCtx.defaultMaterial);
+			m_sceneCtx.defaultMaterialRegistered = false;
+			m_sceneCtx.defaultMaterial = {};
+		}
+		m_sceneCtx.meshCache.clear();
+
 		m_scripting->FreeHandle(m_handle);
 	}
 

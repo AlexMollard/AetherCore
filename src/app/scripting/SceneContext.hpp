@@ -6,6 +6,7 @@
 
 #include "scene/Entity.hpp"
 #include "AetherCore.hpp" // for LoadedModel
+#include "material/Material.hpp"
 
 namespace aether
 {
@@ -15,6 +16,7 @@ namespace aether
 	class Renderer;
 	class Input;
 	class GraphicsPipeline;
+	class PrimitiveMeshes;
 } // namespace aether
 
 namespace aether::app
@@ -47,6 +49,19 @@ namespace aether::app::scripting
 		// Names of C++ systems registered via register_system().
 		// Unregistered from World on scene unload/reload.
 		std::vector<std::string> registeredSystems;
+
+		// ── Primitive mesh cache (for create_mesh / add_mesh) ─────────────────
+		struct CachedMesh
+		{
+			const aether::Mesh* mesh = nullptr;
+			const aether::GraphicsPipeline* pipeline = nullptr;
+			aether::Material material{};
+		};
+
+		aether::PrimitiveMeshes* primitives = nullptr;
+		std::vector<CachedMesh> meshCache;
+		aether::Material defaultMaterial{};
+		bool defaultMaterialRegistered = false;
 	};
 
 	// The active SceneContext for the current script call.

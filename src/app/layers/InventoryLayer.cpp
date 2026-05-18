@@ -4,10 +4,8 @@
 #include <glm/glm.hpp>
 
 #include "AetherCore.hpp"
-#include "ui/UIRenderer.hpp"
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayout.hpp"
-#include "ui/UiTheme.hpp"
 #include "ui/UiWidgets.hpp"
 #include "utils/Logger.hpp"
 
@@ -176,14 +174,12 @@ namespace aether::app
 		INFO(LogCategory::App, "InventoryLayer detached.");
 	}
 
-	// ── OnGui ─────────────────────────────────────────────────────────────────
+	// ── OnUpdate ───────────────────────────────────────────────────────────────
 
-	void InventoryLayer::OnGui(LayerContext& context)
+	void InventoryLayer::OnUpdate(LayerContext& context)
 	{
 		auto& world = context.Get<World>();
-		UIRenderer& ui = context.Get<UIRenderer>();
 		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
-		const ui::UiTheme& theme = ui::UiTheme::Default();
 
 		// ── Anchor grid container below the panel header ───────────────────────
 		// The panel can be dragged, so we re-derive the grid position from the
@@ -196,7 +192,6 @@ namespace aether::app
 
 			if (auto* gt = world.TryGet<ui::UiTransformComponent>(m_gridContainer))
 			{
-				// Use anchor {0,0} so offsetMinPx/offsetMaxPx are plain pixel coords.
 				gt->rect = UiRect{
 					.anchorMin = {            0.f,            0.f },
 					.anchorMax = {            0.f,            0.f },
@@ -206,27 +201,30 @@ namespace aether::app
 			}
 		}
 
-		// ── Layout pass ───────────────────────────────────────────────────────
-		// ApplyGridLayout positions each slot inside the grid container.
-		ui::RunLayouts(world, extent);
-
-		// ── Draw ─────────────────────────────────────────────────────────────
-		if (ui::DrawPanel(world, m_panel, ui, extent, theme))
+		// ── Slot interaction ──────────────────────────────────────────────────
+		// Detect clicks and sync selected state (UiItemSlotComponent::selected
+		// is read by DrawItemSlot during auto-rendering).
+		for (int i = 0; i < kInventorySlots; ++i)
 		{
-			for (int i = 0; i < kInventorySlots; ++i)
+			if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_slots[i]))
 			{
-				if (ui::DrawItemSlot(world, m_slots[i], ui, extent, theme))
+				if (inp->clicked)
 				{
 					m_selectedSlot = (m_selectedSlot == i) ? -1 : i;
 				}
-
-				// Sync selected state to component so DrawItemSlot can read it.
-				if (auto* s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
-				{
-					s->selected = (m_selectedSlot == i);
-				}
+			}
+			if (auto* s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
+			{
+				s->selected = (m_selectedSlot == i);
 			}
 		}
+	}
+
+	// ── OnGui (no manual ECS UI drawing needed - handled by UiSystem::RenderAll)
+
+	void InventoryLayer::OnGui(LayerContext& context)
+	{
+		(void) context;
 	}
 
 } // namespace aether::app

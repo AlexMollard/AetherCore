@@ -646,8 +646,8 @@ namespace aether::ui
 		ui.PopClipRect();
 
 		// submitted is set by UiSystem::ProcessTextInput for one frame on Enter.
+		// Cleared in UiSystem::EndFrame so layer code can read it during OnGui/OnUpdate.
 		const bool wasSubmitted = ti->submitted;
-		ti->submitted = false;
 		ui.SetLayer(prevLayer);
 		return wasSubmitted;
 	}

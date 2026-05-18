@@ -20,11 +20,18 @@ var g_speed_slider : uint  = 0u
 var g_rotate_cb    : uint  = 0u
 var g_fps_label    : uint  = 0u
 
+var g_cube_mesh   : uint  = 0u
+var g_sphere_mesh : uint  = 0u
+
 // ── on_attach ─────────────────────────────────────────────────────────────────
 
 [export]
 def on_attach(world : World?)
 {
+	// Cache primitive mesh handles for reuse across entities.
+	g_cube_mesh   = create_mesh(world, "cube")
+	g_sphere_mesh = create_mesh(world, "sphere")
+
 	// ── Lighting ──────────────────────────────────────────────────────────────
 	set_ambient(float3(0.06, 0.07, 0.10))
 	set_sun(float3(-0.4, -1.0, -0.5), 2.2, float3(1.0, 0.96, 0.88))
@@ -43,6 +50,7 @@ def on_attach(world : World?)
 		float3(0.0, -0.5, 0.0),
 		float3(0.0, 0.0, 0.0),
 		float3(24.0, 1.0, 24.0))
+	add_mesh(world, floor, g_cube_mesh)
 	add_box_body(world, floor, float3(12.0, 0.5, 12.0), false)
 
 	// ── Physics stack - boxes drop onto the floor ─────────────────────────────
@@ -56,6 +64,7 @@ def on_attach(world : World?)
 				float3(float(col - 1) * 2.2, 3.0 + float(row) * 2.4, float(row - 1) * 2.2),
 				float3(0.0, 0.0, 0.0),
 				float3(1.0, 1.0, 1.0))
+			add_mesh(world, box, g_cube_mesh)
 			add_box_body(world, box, float3(0.5, 0.5, 0.5), true)
 		}
 	}
@@ -67,6 +76,7 @@ def on_attach(world : World?)
 		float3(4.0, 8.0, -2.0),
 		float3(0.0, 0.0, 0.0),
 		float3(1.0, 1.0, 1.0))
+	add_mesh(world, sphere, g_sphere_mesh)
 	add_sphere_body(world, sphere, 0.6, true)
 
 	// ── Physics capsule ───────────────────────────────────────────────────────
@@ -76,6 +86,7 @@ def on_attach(world : World?)
 		float3(-4.0, 10.0, 2.0),
 		float3(0.0, 0.0, 0.0),
 		float3(1.0, 1.0, 1.0))
+	add_mesh(world, capsule, g_cube_mesh)
 	add_capsule_body(world, capsule, 0.6, 0.3, true)
 
 	// ── Foxes in a circle ─────────────────────────────────────────────────────

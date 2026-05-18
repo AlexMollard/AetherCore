@@ -4,6 +4,8 @@
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
 #include "ui/UiLayout.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiTheme.hpp"
 #include "scene/World.hpp"
 #include "UiWidgets.hpp"
 
@@ -51,13 +53,7 @@ namespace aether::ui
 		UpdateTransitions(world, deltaTime);
 	}
 
-	void UiSystem::EndFrame(aether::World& world, UiContext& ctx)
-	{
-		(void) world;
-		(void) ctx;
-	}
-
-	// ── Private ───────────────────────────────────────────────────────────────
+	// ── Private helpers used by BeginFrame and RenderAll ─────────────────────
 
 	// Returns true if any ancestor panel of `entity` is collapsed, meaning the
 	// entity is in the hidden body of that panel and should not receive input.
@@ -74,6 +70,122 @@ namespace aether::ui
 			link = world.TryGet<UiParentComponent>(link->parent);
 		}
 		return false;
+	}
+
+	namespace
+	{
+		// Dispatch drawing of a non-panel widget by its component type.
+		void DrawWidget(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+		{
+			if (world.Has<UiPanelComponent>(entity))
+			{
+				return;
+			}
+			if (InsideCollapsedPanel(world, entity))
+			{
+				return;
+			}
+
+			if (world.Has<UiButtonComponent>(entity) && world.Has<UiInputComponent>(entity))
+			{
+				DrawButton(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiCheckboxComponent>(entity))
+			{
+				DrawCheckbox(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiSliderComponent>(entity))
+			{
+				if (world.Has<UiInputComponent>(entity))
+				{
+					DrawSlider(world, entity, ui, input, extent, theme);
+				}
+				else
+				{
+					DrawProgressBar(world, entity, ui, extent, theme);
+				}
+			}
+			else if (world.Has<UiTextInputComponent>(entity) && world.Has<UiInputComponent>(entity))
+			{
+				DrawTextInput(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiItemSlotComponent>(entity))
+			{
+				DrawItemSlot(world, entity, ui, extent, theme);
+			}
+		}
+
+		// Recursively draw all children of a parent entity.
+		void DrawChildren(aether::World& world, Entity parent, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+		{
+			const auto* children = world.TryGet<UiChildrenComponent>(parent);
+			if (!children)
+			{
+				return;
+			}
+			for (Entity child: children->children)
+			{
+				if (world.Has<UiPanelComponent>(child))
+				{
+					const bool bodyVisible = DrawPanel(world, child, ui, extent, theme);
+					if (bodyVisible)
+					{
+						DrawChildren(world, child, ui, input, extent, theme);
+					}
+				}
+				else
+				{
+					DrawWidget(world, child, ui, input, extent, theme);
+				}
+			}
+		}
+	} // namespace
+
+	void UiSystem::RenderAll(aether::World& world, UIRenderer& ui, const Input& input, VkExtent2D extent)
+	{
+		const UiTheme& theme = UiTheme::Default();
+
+		// 1. Position all children of layout containers.
+		RunLayouts(world, extent);
+
+		// 2. Draw root-level panels (no parent) and their children.
+		for (auto [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
+		{
+			const Entity entity = aether::World::FromEntt(e);
+			if (world.Has<UiParentComponent>(entity))
+			{
+				continue;
+			}
+			const bool bodyVisible = DrawPanel(world, entity, ui, extent, theme);
+			if (bodyVisible)
+			{
+				DrawChildren(world, entity, ui, input, extent, theme);
+			}
+		}
+
+		// 3. Draw root-level standalone widgets (no parent, no panel).
+		for (auto [e, transform]: world.View<UiTransformComponent>().each())
+		{
+			const Entity entity = aether::World::FromEntt(e);
+			if (world.Has<UiPanelComponent>(entity) || world.Has<UiParentComponent>(entity))
+			{
+				continue;
+			}
+			DrawWidget(world, entity, ui, input, extent, theme);
+		}
+	}
+
+	void UiSystem::EndFrame(aether::World& world, UiContext& ctx)
+	{
+		(void) ctx;
+
+		// Clear per-frame submitted flag on all text inputs (was previously done
+		// inside DrawTextInput but is now deferred so layers can read it during
+		// OnUpdate / OnGui before the flag is consumed).
+		for (auto [e, ti]: world.View<UiTextInputComponent>().each())
+		{
+			ti.submitted = false;
+		}
 	}
 
 	void UiSystem::HitTest(aether::World& world, UiContext& ctx, VkExtent2D extent)

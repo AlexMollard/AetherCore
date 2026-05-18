@@ -1,4 +1,3 @@
-#include "DasComponentTypes.hpp"
 #include "scripting/DasModuleBase.hpp"
 
 #include <cmath>
@@ -10,6 +9,7 @@
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "assets/AssetManager.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/Logger.hpp"
 
@@ -202,6 +202,87 @@ namespace
 		}
 	}
 
+	// ── Primitive mesh caching ───────────────────────────────────────────────
+	// create_mesh(world, type_string) -> uint
+	// Caches a primitive mesh by type ("cube", "sphere", "plane", "quad", "triangle")
+	// and returns a handle that can be passed to add_mesh.
+	uint32_t das_create_mesh(aether::World* w, const char* type)
+	{
+		auto& ctx = ActiveContext();
+		if (!ctx.primitives || !ctx.defaultPipeline)
+		{
+			return 0u;
+		}
+
+		aether::PrimitiveMesh primType{};
+		const std::string_view sv(type ? type : "");
+		if (sv == "cube")
+		{
+			primType = aether::PrimitiveMesh::Cube;
+		}
+		else if (sv == "sphere")
+		{
+			primType = aether::PrimitiveMesh::Sphere;
+		}
+		else if (sv == "plane")
+		{
+			primType = aether::PrimitiveMesh::Plane;
+		}
+		else if (sv == "quad")
+		{
+			primType = aether::PrimitiveMesh::Quad;
+		}
+		else if (sv == "triangle")
+		{
+			primType = aether::PrimitiveMesh::Triangle;
+		}
+		else
+		{
+			return 0u;
+		}
+
+		// Register default material on first use.
+		if (!ctx.defaultMaterialRegistered && ctx.assets)
+		{
+			ctx.defaultMaterial = {};
+			ctx.defaultMaterial.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.f);
+			ctx.defaultMaterial.roughnessFactor = 0.6f;
+			ctx.defaultMaterial.metallicFactor = 0.0f;
+			ctx.assets->RegisterMaterial(ctx.defaultMaterial);
+			ctx.defaultMaterialRegistered = true;
+		}
+
+		SceneContext::CachedMesh entry;
+		entry.mesh = &ctx.primitives->Get(primType);
+		entry.pipeline = ctx.defaultPipeline;
+		entry.material = ctx.defaultMaterial;
+		ctx.meshCache.push_back(std::move(entry));
+		return static_cast<uint32_t>(ctx.meshCache.size() - 1u);
+	}
+
+	// add_mesh(world, entity_id, mesh_handle)
+	// Attaches PipelineComponent + MeshComponent + MaterialComponent to an existing
+	// entity using a cached mesh handle returned by create_mesh.
+	void das_add_mesh(aether::World* w, uint32_t entityId, uint32_t meshHandle)
+	{
+		auto& ctx = ActiveContext();
+		if (meshHandle >= ctx.meshCache.size())
+		{
+			return;
+		}
+
+		const auto& entry = ctx.meshCache[meshHandle];
+		if (!entry.mesh || !entry.pipeline)
+		{
+			return;
+		}
+
+		const aether::Entity e{ entityId };
+		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{ .pipeline = entry.pipeline });
+		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{ .mesh = entry.mesh });
+		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{ .material = entry.material });
+	}
+
 } // namespace
 
 // ── Module ────────────────────────────────────────────────────────────────────
@@ -243,6 +324,10 @@ namespace aether::app::scripting
 
 			// Model loading convenience
 			Bind<das_load_model>(lib, "load_model", SE::modifyExternal);
+
+			// Primitive mesh cache
+			Bind<das_create_mesh>(lib, "create_mesh", SE::modifyExternal);
+			Bind<das_add_mesh>(lib, "add_mesh", SE::modifyExternal);
 
 			// Entity iteration
 			Bind<das_for_each_with_transform>(lib, "for_each_with_transform", SE::modifyExternal);

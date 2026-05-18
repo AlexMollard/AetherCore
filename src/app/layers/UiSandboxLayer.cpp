@@ -180,13 +180,46 @@ namespace aether::app
 
 	void UiSandboxLayer::OnUpdate(LayerContext& context)
 	{
+		auto& world = context.Get<World>();
+
 		m_progressTime += static_cast<float>(context.deltaTimeSeconds);
 
 		// Animate the progress bar with a smooth sine wave so all values [0..1] are
 		// exercised over time.
-		if (auto* s = context.Get<World>().TryGet<ui::UiSliderComponent>(m_progressBar))
+		if (auto* s = world.TryGet<ui::UiSliderComponent>(m_progressBar))
 		{
 			s->value = std::sin(m_progressTime * 0.8f) * 0.5f + 0.5f;
+		}
+
+		// Detect button click (UiInputComponent::clicked set by UiSystem::BeginFrame).
+		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_clickButton))
+		{
+			if (inp->clicked)
+			{
+				++m_clickCount;
+			}
+		}
+
+		// Update button label each frame to reflect current click count.
+		if (auto* btn = world.TryGet<ui::UiButtonComponent>(m_clickButton))
+		{
+			btn->label = std::format("Click Me!  ({})", m_clickCount);
+		}
+
+		// Embed the last submitted string in the input panel title.
+		if (auto* panel = world.TryGet<ui::UiPanelComponent>(m_inputPanel))
+		{
+			panel->title = std::format("Text Input  \xC2\xB7  last: {}", m_lastSubmitted);
+		}
+
+		// Detect text input submission (UiTextInputComponent::submitted set by
+		// UiSystem::ProcessTextInput, cleared in UiSystem::EndFrame).
+		if (const auto* ti = world.TryGet<ui::UiTextInputComponent>(m_textInput))
+		{
+			if (ti->submitted)
+			{
+				m_lastSubmitted = ti->text.empty() ? "(empty)" : ti->text;
+			}
 		}
 	}
 
@@ -198,50 +231,6 @@ namespace aether::app
 		UIRenderer& ui = context.Get<UIRenderer>();
 		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();
-
-		// ── Layout pass ───────────────────────────────────────────────────────
-		// Positions every child of every UiLayoutComponent + UiChildrenComponent
-		// entity. Also auto-sizes the Auto-Size panel to wrap its children.
-		ui::RunLayouts(world, extent);
-
-		// ── Widget Gallery ────────────────────────────────────────────────────
-		// Update the button label each frame to reflect the current click count.
-		if (auto* btn = world.TryGet<ui::UiButtonComponent>(m_clickButton))
-		{
-			btn->label = std::format("Click Me!  ({})", m_clickCount);
-		}
-
-		if (ui::DrawPanel(world, m_galleryPanel, ui, extent, theme))
-		{
-			if (ui::DrawButton(world, m_clickButton, ui, extent, theme))
-			{
-				++m_clickCount;
-			}
-
-			m_sliderValue = ui::DrawSlider(world, m_slider, ui, context.Get<Input>(), extent, theme);
-			ui::DrawCheckbox(world, m_checkA, ui, extent, theme);
-			ui::DrawCheckbox(world, m_checkB, ui, extent, theme);
-			ui::DrawProgressBar(world, m_progressBar, ui, extent, theme);
-		}
-
-		// ── Text Input ────────────────────────────────────────────────────────
-		// Embed the last submitted string in the panel title so it's visible even
-		// when the field is currently empty.
-		if (auto* panel = world.TryGet<ui::UiPanelComponent>(m_inputPanel))
-		{
-			panel->title = std::format("Text Input  \xC2\xB7  last: {}", m_lastSubmitted);
-		}
-
-		// Always open (not collapsible) - DrawPanel return value is ignored.
-		ui::DrawPanel(world, m_inputPanel, ui, extent, theme);
-		if (ui::DrawTextInput(world, m_textInput, ui, extent, theme))
-		{
-			// DrawTextInput returns true for one frame when Enter is pressed.
-			if (const auto* ti = world.TryGet<ui::UiTextInputComponent>(m_textInput))
-			{
-				m_lastSubmitted = ti->text.empty() ? "(empty)" : ti->text;
-			}
-		}
 
 		// ── Flex Toolbar ──────────────────────────────────────────────────────
 		// The toolbar has no panel entity, so we draw its background manually.
@@ -262,25 +251,6 @@ namespace aether::app
 			        1.f,
 			        theme.separator);
 		}
-
-		// The spacer has no widget to draw - just render the two buttons.
-		ui::DrawButton(world, m_flexLeft, ui, extent, theme);
-		ui::DrawButton(world, m_flexRight, ui, extent, theme);
-
-		// ── Auto-size panel ───────────────────────────────────────────────────
-		if (ui::DrawPanel(world, m_autoPanel, ui, extent, theme))
-		{
-			ui::DrawButton(world, m_autoItem1, ui, extent, theme);
-			ui::DrawButton(world, m_autoItem2, ui, extent, theme);
-			ui::DrawCheckbox(world, m_autoItem3, ui, extent, theme);
-		}
-
-		// ── Corner anchor mini-panels ─────────────────────────────────────────
-		// Each panel header label names its own UiAnchors preset.
-		ui::DrawPanel(world, m_cornerTL, ui, extent, theme);
-		ui::DrawPanel(world, m_cornerTR, ui, extent, theme);
-		ui::DrawPanel(world, m_cornerBL, ui, extent, theme);
-		ui::DrawPanel(world, m_cornerBR, ui, extent, theme);
 	}
 
 } // namespace aether::app

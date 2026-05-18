@@ -8,7 +8,11 @@
 
 namespace aether::app
 {
-	// Sandbox layer that exercises every ECS UI feature:
+	// Sandbox layer that exercises every ECS UI feature.
+	// ECS UI rendering is now automatic via UiSystem::RenderAll;
+	// this layer only draws the custom flex toolbar background.
+	//
+	// Features exercised:
 	//   - Draggable / collapsible panels
 	//   - Button, slider, checkbox, progress bar (with hover/press transitions)
 	//   - Text input (GLFW char callback, cursor, blink, Enter/Escape)
@@ -32,7 +36,6 @@ namespace aether::app
 		Entity m_checkB;
 		Entity m_progressBar;
 		int m_clickCount = 0;
-		float m_sliderValue = 50.f;
 		float m_progressTime = 0.f;
 
 		// ── Text Input panel ──────────────────────────────────────────────────

@@ -17,6 +17,7 @@ namespace aether::app
 	public:
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
+		void OnUpdate(LayerContext& context) override;
 		void OnGui(LayerContext& context) override;
 
 	private:

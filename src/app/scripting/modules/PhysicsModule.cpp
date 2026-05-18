@@ -1,4 +1,3 @@
-#include "DasComponentTypes.hpp"
 #include "scripting/DasModuleBase.hpp"
 
 #include "daScript/daScript.h"

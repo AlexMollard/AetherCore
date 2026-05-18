@@ -235,7 +235,15 @@ namespace aether::app
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
-				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, m_engine.GetServiceContainer().Get<Swapchain>().GetExtent(), static_cast<float>(scaledDt));
+				const auto extent = m_engine.GetServiceContainer().Get<Swapchain>().GetExtent();
+				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, extent, static_cast<float>(scaledDt));
+
+				// Auto-render all ECS UI entities (panels, buttons, sliders, etc.).
+				// Replaces explicit per-layer OnGui manual Draw* calls for ECS UI.
+				if (auto* uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
+				{
+					uiSystem->RenderAll(uiWorld, *uiRenderer, m_engine.GetServiceContainer().Get<Input>(), extent);
+				}
 			}
 
 			// ImGui new frame.
