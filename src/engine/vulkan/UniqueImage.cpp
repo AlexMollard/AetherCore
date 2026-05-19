@@ -5,6 +5,7 @@
 
 #include "utils/Expected.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "rendering/CommandRecorder.hpp"
 
 namespace aether
 {
@@ -449,5 +450,19 @@ namespace aether
 	UniqueImage::operator bool() const
 	{
 		return m_image != VK_NULL_HANDLE;
+	}
+
+	void UniqueImage::SetName(VkDevice device, const char* name) const
+	{
+		if (m_image == VK_NULL_HANDLE || name == nullptr)
+		{
+			return;
+		}
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_image), VK_OBJECT_TYPE_IMAGE, name);
+		if (m_defaultView != VK_NULL_HANDLE)
+		{
+			const std::string viewName = std::string(name) + ".View";
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_defaultView), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
+		}
 	}
 } // namespace aether

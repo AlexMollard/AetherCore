@@ -75,6 +75,10 @@ namespace aether
 		void SetQueueFamilyOwner(std::uint32_t queueFamilyIndex);
 		void SetVirtualResourceId(std::uint64_t virtualResourceId);
 
+		// Name this image (and its default view, if present) for RenderDoc / validation layers.
+		// No-op when the debug-utils extension was not loaded.
+		void SetName(VkDevice device, const char* name) const;
+
 		explicit operator bool() const;
 
 	private:

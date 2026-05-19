@@ -175,6 +175,18 @@ namespace aether
 		CommandRecorder::SetObjectNameFunction(setObjectNameFn);
 		UniqueBuffer::SetObjectNameFunction(setObjectNameFn);
 
+		// Name queues immediately so they appear correctly in RenderDoc and validation output.
+		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
+		CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_graphicsQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
+		if (m_computeQueue != m_graphicsQueue)
+		{
+			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_computeQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Compute");
+		}
+		if (m_presentQueue != m_graphicsQueue && m_presentQueue != m_computeQueue)
+		{
+			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_presentQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
+		}
+
 		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
 		// so VRAM usage is visible alongside CPU heap allocations.
 #ifdef TRACY_ENABLE

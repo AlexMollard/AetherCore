@@ -1,5 +1,7 @@
 #include "vulkan/Swapchain.hpp"
 
+#include <format>
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -7,6 +9,7 @@
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "rendering/CommandRecorder.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "platform/Window.hpp"
@@ -163,6 +166,22 @@ namespace aether
 			}
 		}
 
+		// Name swapchain images and per-frame command buffers for RenderDoc / validation.
+		for (std::size_t i = 0; i < m_images.size(); ++i)
+		{
+			const std::string imgName = std::format("Swapchain.Color[{}]", i);
+			const std::string viewName = std::format("Swapchain.Color[{}].View", i);
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_images[i]), VK_OBJECT_TYPE_IMAGE, imgName.c_str());
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_imageViews[i]), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
+		}
+		m_depthImage.SetName(device, "Swapchain.Depth");
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_depthView), VK_OBJECT_TYPE_IMAGE_VIEW, "Swapchain.Depth.View");
+		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
+			const std::string cbName = std::format("Swapchain.CmdBuf[{}]", i);
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_frames[i].commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, cbName.c_str());
+		}
+
 		INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));
 	}
 
@@ -274,11 +293,22 @@ namespace aether
 		}
 
 		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
-		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		// srcStage = COLOR_ATTACHMENT_OUTPUT: synchronizes with the imageAvailable semaphore
+		// wait (also at COLOR_ATTACHMENT_OUTPUT) and with the prior frame's present read.
+		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 		// Transition: UNDEFINED -> DEPTH_ATTACHMENT_OPTIMAL
-		vkutil::TransitionImage(
-		        frame.commandBuffer, m_depthImage.Get(), VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT, VK_IMAGE_ASPECT_DEPTH_BIT);
+		// srcStage includes LATE_FRAGMENT_TESTS to synchronize with the previous frame's
+		// depth writes. Content is discarded (UNDEFINED) so srcAccess = NONE.
+		vkutil::TransitionImage(frame.commandBuffer,
+		        m_depthImage.Get(),
+		        VK_IMAGE_LAYOUT_UNDEFINED,
+		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		        VK_ACCESS_2_NONE,
+		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
+		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		        VK_IMAGE_ASPECT_DEPTH_BIT);
 
 		m_frameValid = true;
 	}

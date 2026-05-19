@@ -1,12 +1,14 @@
 #include "rendering/RenderGraph.hpp"
 
 #include <algorithm>
+#include <format>
 #include <limits>
 #include <numeric>
 #include <queue>
 #include <unordered_map>
 
 #include "gpu/BindlessManager.hpp"
+#include "rendering/CommandRecorder.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -463,14 +465,17 @@ namespace aether
 				phys.image = std::move(newImage);
 				phys.allocatedExtent = requestedExtent;
 				phys.desc = entry.desc;
+				const std::string physName = std::format("RenderGraph.Transient.Physical[{}]", chosen);
+				phys.image.SetName(m_device, physName.c_str());
 			}
 
 			entry.aliasPhysicalIndex = chosen;
 			physicalLastUse[chosen] = lastUse;
 		}
 
-		for (TransientImageEntry& entry: m_transientImages)
+		for (std::uint32_t entryIdx = 0; entryIdx < m_transientImages.size(); ++entryIdx)
 		{
+			TransientImageEntry& entry = m_transientImages[entryIdx];
 			if (!entry.bindlessRequested)
 			{
 				continue;
@@ -499,6 +504,8 @@ namespace aether
 			                }));
 			entry.image = std::move(newImage);
 			entry.allocatedExtent = requestedExtent;
+			const std::string entryName = std::format("RenderGraph.Transient.Bindless[{}]", entryIdx);
+			entry.image.SetName(m_device, entryName.c_str());
 		}
 	}
 
