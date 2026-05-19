@@ -4,6 +4,7 @@
 
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
+#include "rendering/CommandRecorder.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
@@ -69,7 +70,7 @@ namespace aether
 
 		// Upload arbitrary bytes to a new device-local buffer via a transient staging buffer.
 		// Returns the device-local buffer and its BDA; the staging buffer is destroyed after submit.
-		VkBuffer UploadToDeviceLocal(VkDevice device, VmaAllocator allocator, VkQueue queue, VkCommandPool pool, VkBufferUsageFlags usage, const void* data, VkDeviceSize size, VmaAllocation& outAllocation, VkDeviceAddress& outDeviceAddress)
+		VkBuffer UploadToDeviceLocal(VkDevice device, VmaAllocator allocator, VkQueue queue, VkCommandPool pool, VkBufferUsageFlags usage, const void* data, VkDeviceSize size, VmaAllocation& outAllocation, VkDeviceAddress& outDeviceAddress, const char* debugName = nullptr)
 		{
 			// Staging: mapped, host-sequential-write.
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
@@ -91,6 +92,7 @@ namespace aether
 			{
 				Throw(AetherError::Vulkan(static_cast<int32_t>(createResult), "Mesh: failed to create device-local vertex buffer"));
 			}
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(dest), VK_OBJECT_TYPE_BUFFER, debugName ? debugName : "Mesh.Buffer");
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
 			const VkBufferCopy region{ .size = size };
@@ -131,7 +133,7 @@ namespace aether
 		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
 
 		const VkDeviceSize size = sizeof(Vertex) * vertices.size();
-		mesh.m_buffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertices.data(), size, mesh.m_allocation, mesh.m_vertexDeviceAddress);
+		mesh.m_buffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertices.data(), size, mesh.m_allocation, mesh.m_vertexDeviceAddress, "Mesh.Vertex");
 		return mesh;
 	}
 
@@ -141,7 +143,7 @@ namespace aether
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
 
 		const VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
-		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation, mesh.m_indexDeviceAddress);
+		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation, mesh.m_indexDeviceAddress, "Mesh.Index");
 		return mesh;
 	}
 

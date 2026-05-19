@@ -154,6 +154,10 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "UniqueImage::Create: failed to create default view"));
 		}
 		out->m_bindlessDevice = device; // allows Reset() to destroy the view
+		if (desc.debugName)
+		{
+			out->SetName(device, desc.debugName);
+		}
 		return out;
 	}
 

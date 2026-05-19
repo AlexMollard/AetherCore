@@ -30,6 +30,7 @@ namespace aether
 			std::uint32_t arrayLayers = 1;
 			VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
 			VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+			const char* debugName = nullptr;
 		};
 
 		UniqueImage() = default;

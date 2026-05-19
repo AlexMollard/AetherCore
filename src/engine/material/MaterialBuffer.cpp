@@ -18,7 +18,7 @@ namespace aether
 		m_device = ctx.GetDevice().device;
 		m_allocator = ctx.GetAllocator();
 
-		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(m_allocator, m_device, sizeof(GpuMaterial) * kMaxMaterials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(m_allocator, m_device, sizeof(GpuMaterial) * kMaxMaterials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "MaterialBuffer"));
 		m_buffer = std::move(buf);
 
 		const VmaAllocationInfo& allocInfo = m_buffer.GetAllocationInfo();

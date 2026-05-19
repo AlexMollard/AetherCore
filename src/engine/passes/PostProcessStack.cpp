@@ -19,6 +19,7 @@ namespace aether
 		                        .extent = desc.extent,
 		                        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .debugName = "PostProcess.HdrColor",
 		                }));
 		stack.m_hdrColorImage = std::move(hdrImage);
 		stack.m_hdrColor = desc.renderGraph->RegisterImage(stack.m_hdrColorImage.Get(), stack.m_hdrColorImage.GetDefaultView());
@@ -31,6 +32,7 @@ namespace aether
 		                        .extent = desc.extent,
 		                        .format = VK_FORMAT_R8G8B8A8_UNORM,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .debugName = "PostProcess.LdrColor",
 		                }));
 		stack.m_ldrColorImage = std::move(ldrImage);
 		stack.m_ldrColor = desc.renderGraph->RegisterImage(stack.m_ldrColorImage.Get(), stack.m_ldrColorImage.GetDefaultView());

@@ -298,14 +298,15 @@ namespace aether
 		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 		// Transition: UNDEFINED -> DEPTH_ATTACHMENT_OPTIMAL
-		// srcStage includes LATE_FRAGMENT_TESTS to synchronize with the previous frame's
-		// depth writes. Content is discarded (UNDEFINED) so srcAccess = NONE.
+		// srcStage/srcAccess cover the previous frame's depth write even though we discard
+		// content (UNDEFINED old layout). The memory dependency is still required to avoid
+		// WRITE_AFTER_WRITE hazards reported by sync validation.
 		vkutil::TransitionImage(frame.commandBuffer,
 		        m_depthImage.Get(),
 		        VK_IMAGE_LAYOUT_UNDEFINED,
 		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		        VK_ACCESS_2_NONE,
+		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		        VK_IMAGE_ASPECT_DEPTH_BIT);

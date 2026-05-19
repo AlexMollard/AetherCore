@@ -114,7 +114,7 @@ namespace aether
 			vkCmdPipelineBarrier2(cmd, &depInfo);
 		}
 
-		UniqueImage UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+		UniqueImage UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter, const char* debugName = nullptr)
 		{
 			const VkDeviceSize imageBytes = static_cast<VkDeviceSize>(width) * height * 4;
 
@@ -138,6 +138,7 @@ namespace aether
 			                        .extent = { static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height) },
 			                        .format = VK_FORMAT_R8G8B8A8_SRGB,
 			                        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			                        .debugName = debugName,
             }));
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
@@ -311,7 +312,7 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason()));
 			}
 			Texture texture;
-			texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
+			texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter, std::string(debugPath).c_str());
 			stbi_image_free(pixels);
 			return texture;
 		}
@@ -334,7 +335,7 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
+		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter, std::string(debugPath).c_str());
 		stbi_image_free(pixels);
 		return texture;
 	}
@@ -399,7 +400,7 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter);
+		texture.m_image = UploadRgbaToGpuImage(pixels, width, height, device, allocator, uploadQueue, uploadPool, bindless, filter, path.string().c_str());
 
 		stbi_image_free(pixels);
 		return texture;
