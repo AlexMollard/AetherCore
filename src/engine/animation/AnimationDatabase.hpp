@@ -153,6 +153,24 @@ namespace aether
 
 		[[nodiscard]] std::string_view GetClipName(std::uint32_t clipIndex) const;
 
+		[[nodiscard]] float GetClipDuration(std::uint32_t clipIndex) const
+		{
+			if (clipIndex >= m_clips.size())
+			{
+				return 0.f;
+			}
+			return m_clips[clipIndex].duration;
+		}
+
+		[[nodiscard]] std::uint32_t GetSkinJointCount(std::uint32_t skinIndex) const
+		{
+			if (skinIndex >= m_skinMetas.size())
+			{
+				return 0u;
+			}
+			return m_skinMetas[skinIndex].jointCount;
+		}
+
 		[[nodiscard]] bool IsValid() const
 		{
 			return !m_clips.empty();
@@ -174,7 +192,8 @@ namespace aether
 		VkDeviceAddress m_skinJointsAddr = 0;
 		VkDeviceAddress m_skinInverseBindsAddr = 0;
 
-		std::vector<GpuClip> m_clips; // CPU-side copy for GetClipName()
+		std::vector<GpuClip> m_clips;         // CPU-side copy for GetClipName()/GetClipDuration()
+		std::vector<GpuSkinMeta> m_skinMetas; // CPU-side copy for GetSkinJointCount()
 		std::string m_clipNames;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_skinCount = 0;

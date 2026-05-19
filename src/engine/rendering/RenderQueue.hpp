@@ -25,13 +25,10 @@ namespace aether
 		std::uint32_t instanceCount = 1;
 		glm::mat4 modelMatrix{ 1.0f };             // per-object world transform
 		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
-		VkDeviceAddress sourceSkinBufferAddr = 0;  // BDA of source joint palette; 0 = not skinned
-		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase
-		std::uint32_t skinJointCount = 0;          // number of joints in source palette
+		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase; -1 = not skinned
+		std::uint32_t skinJointCount = 0;          // number of joints in the skin
 		std::uint32_t animClipIndex = 0;           // active clip for GPU sampling
 		float animTime = 0.0f;                     // active clip time for GPU sampling
-		bool gpuSampleEligible = false;            // true when draw has valid animation metadata
-		bool nonHeroGpuBlend = false;              // enable compute-side temporal blend path
 		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
 	};
 
@@ -84,14 +81,11 @@ namespace aether
 			return m_debugBypassIndirect;
 		}
 
-		void SetDebugForceCpuSkinFallback(bool enabled)
+		// Log all skin/animation job parameters for the next N frames to the engine log.
+		// Use to verify addresses, counts, and indices are sane before they hit the GPU.
+		void SetDebugLogSkinJobs(std::uint32_t frameCount)
 		{
-			m_debugForceCpuSkinFallback = enabled;
-		}
-
-		[[nodiscard]] bool IsDebugForceCpuSkinFallback() const
-		{
-			return m_debugForceCpuSkinFallback;
+			m_debugLogSkinJobsFramesLeft = frameCount;
 		}
 
 		// Write inputs and dispatch animation/cull compute.
@@ -154,7 +148,7 @@ namespace aether
 		std::uint32_t m_cachedBatchBase = 0;          // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
-		bool m_debugForceCpuSkinFallback = false;
+		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
 		VkPipeline m_skinCopyPipeline = VK_NULL_HANDLE;
 		VkPipelineLayout m_skinCopyPipelineLayout = VK_NULL_HANDLE;
@@ -167,6 +161,7 @@ namespace aether
 		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
 
 		std::uint32_t m_animationSampleJobCount = 0;
+		std::uint32_t m_animationFrameCount = 0;
 		bool m_animationBuffersCleared = false;
 		uint64_t m_tracyAnimationCtx = 0;
 

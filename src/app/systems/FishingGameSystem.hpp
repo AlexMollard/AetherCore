@@ -11,7 +11,6 @@
 #include "scene/Entity.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "material/Material.hpp"
-#include "animation/ModelAnimator.hpp"
 #include "scene/System.hpp"
 
 namespace aether

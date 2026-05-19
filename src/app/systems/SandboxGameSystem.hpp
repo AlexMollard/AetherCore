@@ -14,7 +14,6 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/Renderer.hpp"
 #include "material/Material.hpp"
-#include "animation/ModelAnimator.hpp"
 #include "AetherCore.hpp"
 #include "scene/System.hpp"
 
@@ -124,7 +123,6 @@ namespace aether::app
 		// Per-fox state and entity handles (parallel arrays, indexed by fox index)
 		std::vector<FoxAgent> m_foxAgents;
 		std::vector<std::vector<aether::Entity>> m_foxInstances;
-		std::vector<aether::ModelAnimator> m_foxAnimators;
 		std::mt19937 m_rng{ 42 };
 
 		// Cameras

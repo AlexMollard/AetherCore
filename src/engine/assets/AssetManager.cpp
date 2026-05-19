@@ -614,13 +614,9 @@ namespace aether
 
 		INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
 
-		if (!source.skins.empty())
+		if (!source.skins.empty() && !source.animations.empty())
 		{
-			loaded.animator = ModelAnimator::Create(m_context->GetDevice().device, m_context->GetAllocator(), source);
-			if (!source.animations.empty())
-			{
-				loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
-			}
+			loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
 		}
 	}
 
@@ -642,16 +638,16 @@ namespace aether
 		{
 			const Entity entity = aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, primitive.material, scaleMat * primitive.localTransform);
 
-			if (model.animator && primitive.skinIndex >= 0)
+			if (model.animationDb.IsValid() && primitive.skinIndex >= 0)
 			{
-				const VkDeviceAddress addr = model.animator->GetSkinBufferAddr(primitive.skinIndex);
-				const std::uint32_t joints = model.animator->GetSkinJointCount(primitive.skinIndex);
-				if (addr != 0 && joints > 0)
+				const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);
+				const std::uint32_t joints = model.animationDb.GetSkinJointCount(skinIdx);
+				if (joints > 0)
 				{
-					m_world->EmplaceOrReplace<SkinComponent>(entity,
-					        SkinComponent{
-					                .sourceSkinBufferAddr = addr,
-					                .skinIndex = primitive.skinIndex,
+					m_world->EmplaceOrReplace<SkinnedMeshComponent>(entity,
+					        SkinnedMeshComponent{
+					                .animDb = &model.animationDb,
+					                .skinIndex = skinIdx,
 					                .jointCount = joints,
 					        });
 				}

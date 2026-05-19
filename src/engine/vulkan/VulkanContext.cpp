@@ -50,13 +50,24 @@ namespace aether
 		}
 
 		vkb::InstanceBuilder instanceBuilder;
-		auto instanceResult = instanceBuilder.set_app_name(appName)
-		                              .require_api_version(1, 4, 0)
-		                              .request_validation_layers()
-		                              .set_debug_callback(LogValidationMessage)
-		                              .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		                              .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
-		                              .build();
+		instanceBuilder.set_app_name(appName)
+		        .require_api_version(1, 4, 0)
+		        .request_validation_layers()
+		        .set_debug_callback(LogValidationMessage)
+		        .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		        .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
+
+#ifndef NDEBUG
+		// GPU-Assisted Validation: catches out-of-bounds BDA accesses, descriptor errors,
+		// and other GPU-side issues that CPU validation layers cannot see.
+		// NOTE: Do NOT add RESERVE_BINDING_SLOT — binding 0 of set 0 is occupied by the
+		// bindless texture array. GPU-AV will inject its descriptor into set 2 instead
+		// (pipelines only use sets 0 and 1, so set 2 is free for the validation layer).
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
+		INFO(LogCategory::Vulkan, "GPU-Assisted Validation enabled (debug build).");
+#endif
+
+		auto instanceResult = instanceBuilder.build();
 
 		if (!instanceResult)
 		{
@@ -100,6 +111,7 @@ namespace aether
 		requiredFeatures10.shaderInt64 = VK_TRUE;
 		requiredFeatures10.shaderInt16 = VK_TRUE;
 		requiredFeatures10.multiDrawIndirect = VK_TRUE;
+		requiredFeatures10.drawIndirectFirstInstance = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
 		auto physicalDeviceResult = selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13).select();

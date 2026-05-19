@@ -158,6 +158,7 @@ namespace aether
 		db.m_bindTranslationsAddr = UploadArray(db.m_heap, bindTranslations, device, queue, uploadPool);
 		db.m_bindRotationsAddr = UploadArray(db.m_heap, bindRotations, device, queue, uploadPool);
 		db.m_bindScalesAddr = UploadArray(db.m_heap, bindScales, device, queue, uploadPool);
+		db.m_skinMetas = skinMetas;
 		db.m_skinMetasAddr = UploadArray(db.m_heap, skinMetas, device, queue, uploadPool);
 		db.m_skinJointsAddr = UploadArray(db.m_heap, skinJoints, device, queue, uploadPool);
 		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, skinInverseBinds, device, queue, uploadPool);
@@ -189,6 +190,7 @@ namespace aether
 		m_skinJointsAddr = 0;
 		m_skinInverseBindsAddr = 0;
 		m_clips.clear();
+		m_skinMetas.clear();
 		m_clipNames.clear();
 		m_nodeCount = 0;
 		m_skinCount = 0;

@@ -1,6 +1,5 @@
 #include "rendering/WorldRenderer.hpp"
 
-#include "animation/ModelAnimator.hpp"
 #include "material/Material.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
@@ -27,28 +26,18 @@ namespace aether
 				materialIndex = material->material.materialSlot;
 			}
 
-			VkDeviceAddress skinBufferAddr = 0;
 			std::int32_t skinIndex = -1;
 			std::uint32_t skinJointCount = 0;
-			if (const auto* skin = world.GetRegistry().try_get<SkinComponent>(enttEntity))
-			{
-				skinBufferAddr = skin->sourceSkinBufferAddr;
-				skinIndex = skin->skinIndex;
-				skinJointCount = skin->jointCount;
-			}
-
-			bool nonHeroGpuBlend = false;
 			std::uint32_t animClipIndex = 0;
-			float animTime = 0.0f;
-			bool gpuSampleEligible = false;
-			if (const auto* anim = world.GetRegistry().try_get<AnimatorComponent>(enttEntity))
+			float animTime = 0.f;
+			if (const auto* smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
-				nonHeroGpuBlend = !anim->heroCharacter;
-				if (anim->animator != nullptr && anim->animationDb != nullptr && anim->animationDb->IsValid())
+				if (smc->animDb && smc->animDb->IsValid())
 				{
-					animClipIndex = anim->animator->GetCurrentAnimation();
-					animTime = anim->animator->GetAnimTime();
-					gpuSampleEligible = true;
+					skinIndex = static_cast<std::int32_t>(smc->skinIndex);
+					skinJointCount = smc->jointCount;
+					animClipIndex = std::min(smc->clipIndex, smc->animDb->GetClipCount() - 1u);
+					animTime = smc->animTime;
 				}
 			}
 
@@ -57,13 +46,10 @@ namespace aether
 			        .mesh = meshComp.mesh,
 			        .modelMatrix = transformComp.localToWorld,
 			        .materialIndex = materialIndex,
-			        .sourceSkinBufferAddr = skinBufferAddr,
 			        .skinIndex = skinIndex,
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
-			        .gpuSampleEligible = gpuSampleEligible,
-			        .nonHeroGpuBlend = nonHeroGpuBlend,
 			});
 		}
 	}

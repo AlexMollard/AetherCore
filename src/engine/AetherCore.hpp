@@ -8,7 +8,6 @@
 
 #include "utils/ServiceContainer.hpp"
 #include "animation/AnimationDatabase.hpp"
-#include "animation/ModelAnimator.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraSubsystem.hpp"
 #include "gpu/AsyncComputeContext.hpp"
@@ -38,7 +37,6 @@ namespace aether
 	{
 		std::vector<Texture> textures;
 		std::vector<LoadedModelPrimitive> primitives;
-		std::optional<ModelAnimator> animator;
 		AnimationDatabase animationDb;
 	};
 

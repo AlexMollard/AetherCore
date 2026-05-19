@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include "vulkan/volk.hpp"
 
+#include "animation/AnimationDatabase.hpp"
 #include "material/Material.hpp"
 
 namespace aether
@@ -38,22 +39,15 @@ namespace aether
 		const GraphicsPipeline* pipeline = nullptr;
 	};
 
-	// BDA of a joint-matrix palette for a skinned mesh.
-	// Absent on non-skinned entities - World falls back to skinBufferAddr = 0.
-	struct SkinComponent
+	// Drives GPU-based skeletal animation for a skinned mesh entity.
+	struct SkinnedMeshComponent
 	{
-		VkDeviceAddress sourceSkinBufferAddr = 0;
-		std::int32_t skinIndex = -1;
-		std::uint32_t jointCount = 0;
-	};
-
-	// Skeleton animator for a skinned model.
-	// Absent on non-animated entities.
-	struct AnimatorComponent
-	{
-		class ModelAnimator* animator = nullptr;
-		const class AnimationDatabase* animationDb = nullptr;
-		bool heroCharacter = false;
-		std::uint8_t lodTier = 0;
+		const AnimationDatabase* animDb = nullptr;
+		std::uint32_t skinIndex = 0;
+		std::uint32_t jointCount = 0; // cached from animDb at spawn time
+		std::uint32_t clipIndex = 0;
+		float animTime = 0.f;
+		float playbackSpeed = 1.f;
+		bool looping = true;
 	};
 } // namespace aether

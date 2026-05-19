@@ -73,21 +73,25 @@ namespace aether::app
 
 	std::uint32_t SandboxGameSystem::GetAnimationCount() const
 	{
-		if (m_foxAnimators.empty())
-		{
-			return 0;
-		}
-		return m_foxAnimators.front().GetAnimationCount();
+		return (m_foxModel && m_foxModel->animationDb.IsValid()) ? m_foxModel->animationDb.GetClipCount() : 0u;
 	}
 
 	std::string_view SandboxGameSystem::GetCurrentAnimationName() const
 	{
-		if (m_foxAnimators.empty())
+		if (!m_foxModel || !m_foxModel->animationDb.IsValid())
 		{
 			return {};
 		}
-		const aether::ModelAnimator& first = m_foxAnimators.front();
-		return first.GetAnimationName(first.GetCurrentAnimation());
+		if (!m_world || m_foxInstances.empty() || m_foxInstances[0].empty())
+		{
+			return {};
+		}
+		const auto* smc = m_world->TryGet<aether::SkinnedMeshComponent>(m_foxInstances[0][0]);
+		if (!smc)
+		{
+			return {};
+		}
+		return m_foxModel->animationDb.GetClipName(smc->clipIndex);
 	}
 
 	void SandboxGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
@@ -186,13 +190,13 @@ namespace aether::app
 			{
 				AE_EXPECT_OR_THROW(model, m_assets->LoadModel(kFoxPath));
 				m_foxModel = std::move(model);
-				if (m_foxModel->animator)
+				if (m_foxModel->animationDb.IsValid())
 				{
-					const std::uint32_t animCount = m_foxModel->animator->GetAnimationCount();
+					const std::uint32_t animCount = m_foxModel->animationDb.GetClipCount();
 					INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
 					for (std::uint32_t i = 0; i < animCount; ++i)
 					{
-						INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animator->GetAnimationName(i));
+						INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animationDb.GetClipName(i));
 					}
 				}
 			}
@@ -232,7 +236,8 @@ namespace aether::app
 
 			m_foxAgents.reserve(kFoxCount);
 			m_foxInstances.reserve(kFoxCount);
-			m_foxAnimators.reserve(kFoxCount);
+
+			const float runDur = m_foxModel->animationDb.IsValid() ? m_foxModel->animationDb.GetClipDuration(kAnimRun) : 0.f;
 
 			for (int i = 0; i < kFoxCount; ++i)
 			{
@@ -244,17 +249,21 @@ namespace aether::app
 				agent.idle = false;
 				m_foxAgents.push_back(agent);
 
-				auto instances = aether::ecs::SpawnModelInstance(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f, m_foxAnimators);
+				auto instances = aether::ecs::SpawnModel(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f);
 
-				if (!m_foxAnimators.empty())
+				// Set initial animation state on each spawned SkinnedMeshComponent.
+				if (m_foxModel->animationDb.IsValid())
 				{
-					aether::ModelAnimator& foxAnim = m_foxAnimators.back();
-					foxAnim.SetAnimation(kAnimRun);
-					foxAnim.SetPlaybackSpeed(kFoxAnimRunSpeed);
-					if (foxAnim.GetDuration() > 0.0f)
+					std::uniform_real_distribution<float> phaseDist(0.0f, runDur > 0.f ? runDur : 1.0f);
+					const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
+					for (const aether::Entity e: instances)
 					{
-						std::uniform_real_distribution<float> phaseDist(0.0f, foxAnim.GetDuration());
-						foxAnim.SetAnimTime(phaseDist(m_rng));
+						if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
+						{
+							smc->clipIndex = kAnimRun;
+							smc->playbackSpeed = kFoxAnimRunSpeed;
+							smc->animTime = phase;
+						}
 					}
 				}
 
@@ -478,14 +487,21 @@ namespace aether::app
 
 			// Per-fox animation switch: each fox independently transitions between
 			// Survey (idle) and Run based on its own state.
-			for (std::size_t fi = 0; fi < m_foxAgents.size() && fi < m_foxAnimators.size(); ++fi)
+			for (std::size_t fi = 0; fi < m_foxAgents.size() && fi < m_foxInstances.size(); ++fi)
 			{
-				aether::ModelAnimator& foxAnim = m_foxAnimators[fi];
 				const std::uint32_t desired = m_foxAgents[fi].idle ? kAnimSurvey : kAnimRun;
-				if (foxAnim.GetCurrentAnimation() != desired)
+				const float speed = m_foxAgents[fi].idle ? 1.0f : kFoxAnimRunSpeed;
+				for (const aether::Entity e: m_foxInstances[fi])
 				{
-					foxAnim.SetAnimation(desired);
-					foxAnim.SetPlaybackSpeed(m_foxAgents[fi].idle ? 1.0f : kFoxAnimRunSpeed);
+					if (auto* smc = world.TryGet<aether::SkinnedMeshComponent>(e))
+					{
+						if (smc->clipIndex != desired)
+						{
+							smc->clipIndex = desired;
+							smc->playbackSpeed = speed;
+							smc->animTime = 0.f;
+						}
+					}
 				}
 			}
 			(void) runningCount;
@@ -659,7 +675,6 @@ namespace aether::app
 
 		m_foxAgents.clear();
 		m_foxInstances.clear();
-		m_foxAnimators.clear();
 
 		// Unregister fox model materials.
 		if (m_foxModel)

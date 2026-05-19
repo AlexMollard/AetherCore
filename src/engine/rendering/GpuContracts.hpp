@@ -105,29 +105,23 @@ namespace aether
 
 	struct SkinCopyJob
 	{
-		VkDeviceAddress srcPaletteAddr = 0;
 		VkDeviceAddress sampledPosesAddr = 0;
 		std::uint32_t dstPaletteOffset = 0;
 		std::uint32_t jointCount = 0;
 		std::uint32_t skinIndex = 0;
 		std::uint32_t nodeCount = 0;
-		float blendAlpha = 1.0f;
-		std::uint32_t useSampledPoses = 0;
 		std::uint32_t _pad0 = 0;
 		std::uint32_t _pad1 = 0;
 	};
 
-	static_assert(sizeof(SkinCopyJob) == 48, "SkinCopyJob layout changed - update shaders/include/AnimationContracts.slangh.");
-	static_assert(offsetof(SkinCopyJob, srcPaletteAddr) == 0);
-	static_assert(offsetof(SkinCopyJob, sampledPosesAddr) == 8);
-	static_assert(offsetof(SkinCopyJob, dstPaletteOffset) == 16);
-	static_assert(offsetof(SkinCopyJob, jointCount) == 20);
-	static_assert(offsetof(SkinCopyJob, skinIndex) == 24);
-	static_assert(offsetof(SkinCopyJob, nodeCount) == 28);
-	static_assert(offsetof(SkinCopyJob, blendAlpha) == 32);
-	static_assert(offsetof(SkinCopyJob, useSampledPoses) == 36);
-	static_assert(offsetof(SkinCopyJob, _pad0) == 40);
-	static_assert(offsetof(SkinCopyJob, _pad1) == 44);
+	static_assert(sizeof(SkinCopyJob) == 32, "SkinCopyJob layout changed - update shaders/include/AnimationContracts.slangh.");
+	static_assert(offsetof(SkinCopyJob, sampledPosesAddr) == 0);
+	static_assert(offsetof(SkinCopyJob, dstPaletteOffset) == 8);
+	static_assert(offsetof(SkinCopyJob, jointCount) == 12);
+	static_assert(offsetof(SkinCopyJob, skinIndex) == 16);
+	static_assert(offsetof(SkinCopyJob, nodeCount) == 20);
+	static_assert(offsetof(SkinCopyJob, _pad0) == 24);
+	static_assert(offsetof(SkinCopyJob, _pad1) == 28);
 
 	struct AnimatorSampleJob
 	{
@@ -159,7 +153,6 @@ namespace aether
 	{
 		VkDeviceAddress jobsAddr = 0;
 		VkDeviceAddress dstPaletteAddr = 0;
-		VkDeviceAddress prevPaletteAddr = 0;
 		VkDeviceAddress nodeParentsAddr = 0;
 		VkDeviceAddress skinMetasAddr = 0;
 		VkDeviceAddress skinJointsAddr = 0;
@@ -170,18 +163,17 @@ namespace aether
 		std::uint32_t _pad2 = 0;
 	};
 
-	static_assert(sizeof(SkinPalettePush) == 72, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
+	static_assert(sizeof(SkinPalettePush) == 64, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
 	static_assert(offsetof(SkinPalettePush, jobsAddr) == 0);
 	static_assert(offsetof(SkinPalettePush, dstPaletteAddr) == 8);
-	static_assert(offsetof(SkinPalettePush, prevPaletteAddr) == 16);
-	static_assert(offsetof(SkinPalettePush, nodeParentsAddr) == 24);
-	static_assert(offsetof(SkinPalettePush, skinMetasAddr) == 32);
-	static_assert(offsetof(SkinPalettePush, skinJointsAddr) == 40);
-	static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 48);
-	static_assert(offsetof(SkinPalettePush, jobCount) == 56);
-	static_assert(offsetof(SkinPalettePush, _pad0) == 60);
-	static_assert(offsetof(SkinPalettePush, _pad1) == 64);
-	static_assert(offsetof(SkinPalettePush, _pad2) == 68);
+	static_assert(offsetof(SkinPalettePush, nodeParentsAddr) == 16);
+	static_assert(offsetof(SkinPalettePush, skinMetasAddr) == 24);
+	static_assert(offsetof(SkinPalettePush, skinJointsAddr) == 32);
+	static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 40);
+	static_assert(offsetof(SkinPalettePush, jobCount) == 48);
+	static_assert(offsetof(SkinPalettePush, _pad0) == 52);
+	static_assert(offsetof(SkinPalettePush, _pad1) == 56);
+	static_assert(offsetof(SkinPalettePush, _pad2) == 60);
 
 	struct AnimationSamplePush
 	{

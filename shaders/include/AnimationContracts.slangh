@@ -53,31 +53,27 @@ struct GpuSkinMeta
 
 struct SkinCopyJob
 {
-    [[vk::offset(0)]] uint64_t srcPaletteAddr;
-    [[vk::offset(8)]] uint64_t sampledPosesAddr;
-    [[vk::offset(16)]] uint dstPaletteOffset;
-    [[vk::offset(20)]] uint jointCount;
-    [[vk::offset(24)]] uint skinIndex;
-    [[vk::offset(28)]] uint nodeCount;
-    [[vk::offset(32)]] float blendAlpha;
-    [[vk::offset(36)]] uint useSampledPoses;
-    [[vk::offset(40)]] uint _pad0;
-    [[vk::offset(44)]] uint _pad1;
+    [[vk::offset(0)]]  uint64_t sampledPosesAddr;
+    [[vk::offset(8)]]  uint dstPaletteOffset;
+    [[vk::offset(12)]] uint jointCount;
+    [[vk::offset(16)]] uint skinIndex;
+    [[vk::offset(20)]] uint nodeCount;
+    [[vk::offset(24)]] uint _pad0;
+    [[vk::offset(28)]] uint _pad1;
 };
 
 struct SkinPalettePush
 {
-    [[vk::offset(0)]] uint64_t jobsAddr;
-    [[vk::offset(8)]] uint64_t dstPaletteAddr;
-    [[vk::offset(16)]] uint64_t prevPaletteAddr;
-    [[vk::offset(24)]] uint64_t nodeParentsAddr;
-    [[vk::offset(32)]] uint64_t skinMetasAddr;
-    [[vk::offset(40)]] uint64_t skinJointsAddr;
-    [[vk::offset(48)]] uint64_t skinInverseBindsAddr;
-    [[vk::offset(56)]] uint jobCount;
-    [[vk::offset(60)]] uint _pad0;
-    [[vk::offset(64)]] uint _pad1;
-    [[vk::offset(68)]] uint _pad2;
+    [[vk::offset(0)]]  uint64_t jobsAddr;
+    [[vk::offset(8)]]  uint64_t dstPaletteAddr;
+    [[vk::offset(16)]] uint64_t nodeParentsAddr;
+    [[vk::offset(24)]] uint64_t skinMetasAddr;
+    [[vk::offset(32)]] uint64_t skinJointsAddr;
+    [[vk::offset(40)]] uint64_t skinInverseBindsAddr;
+    [[vk::offset(48)]] uint jobCount;
+    [[vk::offset(52)]] uint _pad0;
+    [[vk::offset(56)]] uint _pad1;
+    [[vk::offset(60)]] uint _pad2;
 };
 
 struct AnimationSamplePush
