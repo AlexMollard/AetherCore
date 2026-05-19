@@ -20,8 +20,8 @@ def spawn_foxes(world : World?; count : int; radius : float)
 		load_model(world, fox, "assets://models/Fox/Fox.mesh");
 
 		// Play the Run animation, desynchronised per fox.
-		set_animation(world, fox, 2);
-		set_playback_speed(world, fox, 0.7);
-		set_anim_time(world, fox, float(i) * 0.3);
+		// set_animation(world, fox, 2);
+		// set_playback_speed(world, fox, 0.7);
+		// set_anim_time(world, fox, float(i) * 0.3);
 	}
 }

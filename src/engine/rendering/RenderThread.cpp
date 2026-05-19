@@ -44,10 +44,11 @@ namespace aether
 		// Block until a slot is available in the channel.
 		m_channel.write(std::move(packet));
 
-		// Wait for the render thread to consume the packet before returning.
-		// This prevents the game thread from calling BeginFrame() (which runs
-		// ImGui's UpdateTexturesNewFrame) while the render thread is still
-		// processing texture uploads from the current frame.
+		// Wait for the render thread to finish the full frame before returning.
+		// This prevents the game thread from calling ImGui::NewFrame() (which
+		// runs UpdateTexturesNewFrame) while the render thread is still inside
+		// ImGui_ImplVulkan_UpdateTexture, where tex->TexID is set before
+		// tex->Status is updated to OK - an invariant the assert checks.
 		{
 			std::unique_lock lock(m_ackMutex);
 			m_ackCv.wait(lock, [this] { return m_consumed; });
@@ -92,17 +93,19 @@ namespace aether
 				break;
 			}
 
-			// Signal the game thread that we've consumed the packet.
-			// This unblocks SubmitFrame BEFORE the GPU fence wait, so the
-			// game thread can start BeginFrame() while we wait for the GPU.
+			// Execute the frame. This blocks on the GPU fence internally and
+			// includes ImGui texture uploads (RenderDrawData -> UpdateTexture).
+			m_engine->ExecuteRenderFrame(packet);
+
+			// Signal the game thread only after the full frame is done.
+			// Unblocking earlier would let the game thread call ImGui::NewFrame()
+			// while UpdateTexture still has tex->TexID set but Status != OK,
+			// triggering the ImFontAtlasUpdateNewFrame assertion.
 			{
 				std::lock_guard lock(m_ackMutex);
 				m_consumed = true;
 			}
 			m_ackCv.notify_one();
-
-			// Execute the frame.  This blocks on the GPU fence internally.
-			m_engine->ExecuteRenderFrame(packet);
 		}
 	}
 
