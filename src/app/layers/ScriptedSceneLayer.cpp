@@ -61,6 +61,7 @@ namespace aether::app
 		}
 		m_sceneCtx.sceneEntities.clear();
 		m_sceneCtx.loadedModels.clear();
+		m_sceneCtx.loadedModelMap.clear();
 		m_sceneCtx.meshCache.clear();
 
 		for (const auto& name: m_sceneCtx.registeredSystems)

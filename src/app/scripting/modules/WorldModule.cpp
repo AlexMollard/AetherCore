@@ -155,6 +155,7 @@ namespace
 	void das_load_model(aether::World* w, uint32_t id, const char* path)
 	{
 		auto& ctx = ActiveContext();
+
 		if (!ctx.defaultPipeline)
 		{
 			WARN(aether::LogCategory::App, "load_model: no default pipeline set");
@@ -162,22 +163,48 @@ namespace
 		}
 
 		glm::mat4 xform{ 1.0f };
+
 		if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
 		{
 			xform = tc->localToWorld;
 		}
 
-		auto result = ctx.assets->LoadModel(path);
-		if (!result)
+		// -------------------------------------------------------------------------
+		// Try reuse existing model
+		// -------------------------------------------------------------------------
+
+		aether::LoadedModel* modelPtr = nullptr;
+
+		auto it = ctx.loadedModelMap.find(path);
+
+		if (it != ctx.loadedModelMap.end())
 		{
-			WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
-			return;
+			modelPtr = &ctx.loadedModels[it->second];
+		}
+		else
+		{
+			auto result = ctx.assets->LoadModel(path);
+
+			if (!result)
+			{
+				WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
+				return;
+			}
+
+			ctx.loadedModels.push_back(std::move(result.value()));
+
+			const size_t index = ctx.loadedModels.size() - 1;
+
+			ctx.loadedModelMap[path] = index;
+
+			modelPtr = &ctx.loadedModels[index];
 		}
 
-		ctx.loadedModels.push_back(std::move(result.value()));
-		aether::LoadedModel& model = ctx.loadedModels.back();
+		// -------------------------------------------------------------------------
+		// Spawn instance
+		// -------------------------------------------------------------------------
 
-		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(model, *ctx.defaultPipeline);
+		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline);
 
 		for (aether::Entity meshEntity: meshEntities)
 		{
@@ -185,6 +212,7 @@ namespace
 			{
 				tc->localToWorld = xform * tc->localToWorld;
 			}
+
 			ctx.sceneEntities.push_back(meshEntity);
 		}
 	}

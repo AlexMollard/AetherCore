@@ -45,6 +45,7 @@ namespace aether::app::scripting
 		// Loaded model data.  Must outlive the mesh entities that reference it.
 		// std::deque does not invalidate references on push_back.
 		std::deque<aether::LoadedModel> loadedModels;
+		std::unordered_map<std::string, size_t> loadedModelMap;
 
 		// Names of C++ systems registered via register_system().
 		// Unregistered from World on scene unload/reload.
