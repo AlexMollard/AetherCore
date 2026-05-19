@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <csignal>
 #include <cstdio>
 #include <ctime>
 #include <filesystem>
@@ -44,6 +45,7 @@ namespace aether
 		struct LoggerBackend
 		{
 			std::mutex mutex;
+			std::mutex outputMutex;
 			std::condition_variable condition;
 			std::condition_variable drainedCondition;
 			std::vector<LogEntry> pendingEntries;
@@ -54,7 +56,14 @@ namespace aether
 			std::uint64_t completedSequence = 0;
 			std::atomic<bool> initialized{ false };
 			bool stopRequested = false;
+			std::terminate_handler previousTerminateHandler = nullptr;
+			void (*previousAbortHandler)(int) = nullptr;
+#ifdef _WIN32
+			LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
+#endif
 		};
+
+		std::atomic<bool> g_crashHandlerActive{ false };
 
 		LoggerBackend& GetBackend()
 		{
@@ -66,6 +75,11 @@ namespace aether
 		constexpr const char* kAnsiGray = "\x1b[90m";
 		constexpr const char* kAnsiYellow = "\x1b[33m";
 		constexpr const char* kAnsiRed = "\x1b[31m";
+		constexpr const char* kAnsiCyan = "\x1b[96m";
+		constexpr const char* kAnsiGreen = "\x1b[92m";
+		constexpr const char* kAnsiBoldYellow = "\x1b[1;33m";
+		constexpr const char* kAnsiBoldRed = "\x1b[1;31m";
+		constexpr const char* kAnsiBright = "\x1b[97m";
 
 		const char* ToLevelName(const LogLevel level)
 		{
@@ -120,7 +134,24 @@ namespace aether
 				case LogLevel::Verbose:
 					return kAnsiGray;
 				case LogLevel::Info:
+					return kAnsiCyan;
+				case LogLevel::Warn:
+					return kAnsiBoldYellow;
+				case LogLevel::Error:
+					return kAnsiBoldRed;
+				default:
 					return kAnsiReset;
+			}
+		}
+
+		const char* ToMessageColor(const LogLevel level)
+		{
+			switch (level)
+			{
+				case LogLevel::Verbose:
+					return kAnsiGray;
+				case LogLevel::Info:
+					return kAnsiCyan;
 				case LogLevel::Warn:
 					return kAnsiYellow;
 				case LogLevel::Error:
@@ -129,6 +160,39 @@ namespace aether
 					return kAnsiReset;
 			}
 		}
+
+#ifdef _WIN32
+		const char* ExceptionCodeToString(const DWORD code)
+		{
+			switch (code)
+			{
+				case EXCEPTION_ACCESS_VIOLATION:
+					return "ACCESS_VIOLATION";
+				case EXCEPTION_STACK_OVERFLOW:
+					return "STACK_OVERFLOW";
+				case EXCEPTION_ILLEGAL_INSTRUCTION:
+					return "ILLEGAL_INSTRUCTION";
+				case EXCEPTION_BREAKPOINT:
+					return "BREAKPOINT";
+				case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+					return "ARRAY_BOUNDS_EXCEEDED";
+				case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+					return "FLT_DIVIDE_BY_ZERO";
+				case EXCEPTION_INT_DIVIDE_BY_ZERO:
+					return "INT_DIVIDE_BY_ZERO";
+				case EXCEPTION_INT_OVERFLOW:
+					return "INT_OVERFLOW";
+				case EXCEPTION_PRIV_INSTRUCTION:
+					return "PRIV_INSTRUCTION";
+				case EXCEPTION_IN_PAGE_ERROR:
+					return "IN_PAGE_ERROR";
+				case 0xC0000374:
+					return "HEAP_CORRUPTION";
+				default:
+					return "UNKNOWN";
+			}
+		}
+#endif
 
 		bool ShouldShowFrame(const LogLevel level)
 		{
@@ -187,10 +251,10 @@ namespace aether
 
 			if (!entry.category.empty())
 			{
-				std::cerr << " " << kAnsiGray << entry.category << kAnsiReset << ":";
+				std::cerr << " " << kAnsiBright << entry.category << kAnsiReset << ":";
 			}
 
-			std::cerr << " " << entry.message;
+			std::cerr << " " << ToMessageColor(entry.level) << entry.message << kAnsiReset;
 
 			if (entry.showFrame || entry.showSourceLocation)
 			{
@@ -257,6 +321,55 @@ namespace aether
 			}
 		}
 
+		void TerminateHandler()
+		{
+			bool expected = false;
+			if (g_crashHandlerActive.compare_exchange_strong(expected, true))
+			{
+				Logger::Log(LogLevel::Error, LogCategory::Engine, "std::terminate called -- unhandled C++ exception", std::source_location::current());
+				Logger::Shutdown();
+			}
+			LoggerBackend& backend = GetBackend();
+			if (backend.previousTerminateHandler)
+			{
+				backend.previousTerminateHandler();
+			}
+			std::abort();
+		}
+
+		void AbortHandler(int /*signal*/)
+		{
+			bool expected = false;
+			if (g_crashHandlerActive.compare_exchange_strong(expected, true))
+			{
+				Logger::Log(LogLevel::Error, LogCategory::Engine, "Abort signal -- CRT assert or explicit abort()", std::source_location::current());
+				Logger::Shutdown();
+			}
+			LoggerBackend& backend = GetBackend();
+			std::signal(SIGABRT, backend.previousAbortHandler ? backend.previousAbortHandler : SIG_DFL);
+			std::raise(SIGABRT);
+		}
+
+#ifdef _WIN32
+		LONG WINAPI UnhandledExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo)
+		{
+			bool expected = false;
+			if (g_crashHandlerActive.compare_exchange_strong(expected, true))
+			{
+				const DWORD code = pExceptionInfo->ExceptionRecord->ExceptionCode;
+				const void* address = pExceptionInfo->ExceptionRecord->ExceptionAddress;
+				Logger::Log(LogLevel::Error, LogCategory::Engine, std::format("Unhandled exception 0x{:08X} ({}) at 0x{:016X}", code, ExceptionCodeToString(code), reinterpret_cast<std::uintptr_t>(address)), std::source_location::current());
+				Logger::Shutdown();
+			}
+			LoggerBackend& backend = GetBackend();
+			if (backend.previousExceptionFilter)
+			{
+				return backend.previousExceptionFilter(pExceptionInfo);
+			}
+			return EXCEPTION_CONTINUE_SEARCH;
+		}
+#endif
+
 		void ProcessLogQueue(LoggerBackend& backend)
 		{
 			EnableVirtualTerminalProcessing();
@@ -281,15 +394,17 @@ namespace aether
 					processedSequence = backend.nextSequence;
 				}
 
-				for (const LogEntry& entry: batch)
 				{
-					WriteEntry(entry, backend.fileStream);
-				}
-
-				std::cerr.flush();
-				if (backend.fileStream.is_open())
-				{
-					backend.fileStream.flush();
+					std::scoped_lock writeLock(backend.outputMutex);
+					for (const LogEntry& entry: batch)
+					{
+						WriteEntry(entry, backend.fileStream);
+					}
+					std::cerr.flush();
+					if (backend.fileStream.is_open())
+					{
+						backend.fileStream.flush();
+					}
 				}
 
 				{
@@ -375,6 +490,11 @@ namespace aether
 		backend.stopRequested = false;
 		backend.completedSequence = 0;
 		backend.nextSequence = 0;
+		backend.previousTerminateHandler = std::set_terminate(TerminateHandler);
+		backend.previousAbortHandler = std::signal(SIGABRT, AbortHandler);
+#ifdef _WIN32
+		backend.previousExceptionFilter = SetUnhandledExceptionFilter(UnhandledExceptionHandler);
+#endif
 		backend.initialized.store(true, std::memory_order_release);
 		backend.worker = std::thread(ProcessLogQueue, std::ref(backend));
 	}
@@ -394,9 +514,13 @@ namespace aether
 		}
 
 		backend.condition.notify_one();
-		if (backend.worker.joinable())
+		if (backend.worker.joinable() && backend.worker.get_id() != std::this_thread::get_id())
 		{
 			backend.worker.join();
+		}
+		else if (backend.worker.joinable())
+		{
+			backend.worker.detach();
 		}
 
 		std::scoped_lock lock(backend.mutex);
@@ -404,6 +528,17 @@ namespace aether
 		{
 			backend.fileStream.close();
 		}
+
+		std::set_terminate(backend.previousTerminateHandler);
+		std::signal(SIGABRT, backend.previousAbortHandler ? backend.previousAbortHandler : SIG_DFL);
+#ifdef _WIN32
+		SetUnhandledExceptionFilter(backend.previousExceptionFilter);
+#endif
+		backend.previousTerminateHandler = nullptr;
+		backend.previousAbortHandler = nullptr;
+#ifdef _WIN32
+		backend.previousExceptionFilter = nullptr;
+#endif
 
 		backend.pendingEntries.clear();
 		backend.initialized.store(false, std::memory_order_release);
@@ -479,6 +614,18 @@ namespace aether
 		entry.frameNumber = frameNumber;
 		entry.showFrame = shouldShowFrame;
 		entry.showSourceLocation = shouldShowSourceLocation;
+
+		if (level == LogLevel::Error)
+		{
+			std::scoped_lock writeLock(backend.outputMutex);
+			WriteEntry(entry, backend.fileStream);
+			std::cerr.flush();
+			if (backend.fileStream.is_open())
+			{
+				backend.fileStream.flush();
+			}
+			return;
+		}
 
 		{
 			std::scoped_lock lock(backend.mutex);

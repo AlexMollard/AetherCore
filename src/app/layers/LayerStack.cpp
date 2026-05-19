@@ -12,7 +12,7 @@ namespace aether::app
 
 	void LayerStack::AttachAll(LayerContext& context)
 	{
-		INFO(LogCategory::App, "Attaching layers.");
+		AE_INFO(LogCategory::App, "Attaching layers.");
 		for (const auto& layer: m_layers)
 		{
 			layer->OnAttach(context);
@@ -21,7 +21,7 @@ namespace aether::app
 
 	void LayerStack::DetachAll(LayerContext& context)
 	{
-		INFO(LogCategory::App, "Detaching layers.");
+		AE_INFO(LogCategory::App, "Detaching layers.");
 		for (auto it = m_layers.rbegin(); it != m_layers.rend(); ++it)
 		{
 			(*it)->OnDetach(context);

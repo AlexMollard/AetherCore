@@ -10,7 +10,7 @@ namespace aether::app
 {
 	void PhysicsLayer::OnAttach(LayerContext& context)
 	{
-		INFO(aether::LogCategory::App, "PhysicsLayer attached.");
+		AE_INFO(aether::LogCategory::App, "PhysicsLayer attached.");
 
 		// PhysicsSystem is engine-owned (registered in Application::Run).
 		// PhysicsGameSystem retrieves it from the ServiceContainer during OnRegister.

@@ -214,10 +214,10 @@ namespace aether::app
 
 	void FishingGameSystem::OnRegister(aether::World& world)
 	{
-		INFO(aether::LogCategory::App, "FishingGameSystem registered.");
+		AE_INFO(aether::LogCategory::App, "FishingGameSystem registered.");
 		if (!m_services || !m_assets || !m_cameras || !m_input)
 		{
-			WARN(aether::LogCategory::App, "FishingGameSystem not initialized with dependencies!");
+			AE_WARN(aether::LogCategory::App, "FishingGameSystem not initialized with dependencies!");
 			return;
 		}
 
@@ -553,7 +553,7 @@ namespace aether::app
 			return;
 		}
 
-		INFO(aether::LogCategory::App, "FishingGameSystem unregistered.");
+		AE_INFO(aether::LogCategory::App, "FishingGameSystem unregistered.");
 
 		std::vector<entt::entity> toDestroy;
 		{

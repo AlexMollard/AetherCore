@@ -131,13 +131,7 @@ namespace aether
 	};
 } // namespace aether
 
-#define VERBOSE(category, formatText, ...) ::aether::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
-
-#define INFO(category, formatText, ...) ::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
-
-#define WARN(category, formatText, ...) ::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
-
-#ifdef ERROR
-#	undef ERROR
-#endif
-#define ERROR(category, formatText, ...) ::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_VERBOSE(category, formatText, ...) ::aether::Logger::VerboseAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_INFO(category, formatText, ...) ::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_WARN(category, formatText, ...) ::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_ERROR(category, formatText, ...) ::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)

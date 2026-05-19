@@ -46,7 +46,7 @@ namespace aether::app
 
 		if (!result)
 		{
-			ERROR(LogCategory::App, "ScriptedSceneLayer: failed to create default pipeline");
+			AE_ERROR(LogCategory::App, "ScriptedSceneLayer: failed to create default pipeline");
 			return;
 		}
 		m_defaultPipeline = std::move(result.value());
@@ -73,7 +73,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
 	{
-		INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath);
+		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath);
 
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 
@@ -87,7 +87,7 @@ namespace aether::app
 		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
 		if (!newHandle.IsValid())
 		{
-			WARN(LogCategory::App, "ScriptedSceneLayer: reload failed - keeping old scene");
+			AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed - keeping old scene");
 			// Reattach old scene
 			m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 			return;
@@ -98,7 +98,7 @@ namespace aether::app
 		m_handle = std::move(newHandle);
 		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 
-		INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
+		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
 	}
 
 	// ── AppLayer overrides ────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ namespace aether::app
 		m_scripting = context.TryGet<scripting::ScriptingSubsystem>();
 		if (!m_scripting)
 		{
-			ERROR(LogCategory::App, "ScriptedSceneLayer: ScriptingSubsystem not in ServiceContainer");
+			AE_ERROR(LogCategory::App, "ScriptedSceneLayer: ScriptingSubsystem not in ServiceContainer");
 			return;
 		}
 
@@ -138,7 +138,7 @@ namespace aether::app
 		m_handle = m_scripting->Compile(m_scriptPath);
 		if (!m_handle.IsValid())
 		{
-			WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
+			AE_WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
 			return;
 		}
 

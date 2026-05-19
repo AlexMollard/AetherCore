@@ -18,7 +18,7 @@ namespace aether
 
 		if (!io::FileSystem::Exists(fontVfsPath))
 		{
-			WARN(LogCategory::Asset,
+			AE_WARN(LogCategory::Asset,
 			        "TextRenderer: font not found at '{}'. Text rendering disabled. "
 			        "Place a .ttf file at that VFS path.",
 			        fontVfsPath);
@@ -29,7 +29,7 @@ namespace aether
 		m_fontAtlas.Build(fontVfsPath, glyphSize, vk.GetDevice().device, vk.GetAllocator(), vk.GetGraphicsQueue(), vk.GetGraphicsQueueFamily(), *m_bindlessMgr);
 
 		m_ready = true;
-		INFO(LogCategory::Engine, "TextRenderer: font atlas ready.");
+		AE_INFO(LogCategory::Engine, "TextRenderer: font atlas ready.");
 	}
 
 	void TextRenderer::Shutdown()

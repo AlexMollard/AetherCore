@@ -158,7 +158,7 @@ namespace
 
 		if (!ctx.defaultPipeline)
 		{
-			WARN(aether::LogCategory::App, "load_model: no default pipeline set");
+			AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
 			return;
 		}
 
@@ -187,7 +187,7 @@ namespace
 
 			if (!result)
 			{
-				WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
+				AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
 				return;
 			}
 

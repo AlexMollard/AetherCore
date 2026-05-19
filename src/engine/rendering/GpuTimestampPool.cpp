@@ -14,7 +14,7 @@ namespace aether
 
 		if (props.limits.timestampComputeAndGraphics == VK_FALSE)
 		{
-			WARN(LogCategory::Vulkan, "GpuTimestampPool: device does not support timestamps on all queues - pool disabled.");
+			AE_WARN(LogCategory::Vulkan, "GpuTimestampPool: device does not support timestamps on all queues - pool disabled.");
 			m_device = VK_NULL_HANDLE;
 			return;
 		}
@@ -31,7 +31,7 @@ namespace aether
 		{
 			if (vkCreateQueryPool(device, &createInfo, nullptr, &m_pools[i]) != VK_SUCCESS)
 			{
-				WARN(LogCategory::Vulkan, "GpuTimestampPool: failed to create query pool [{}] - pool disabled.", i);
+				AE_WARN(LogCategory::Vulkan, "GpuTimestampPool: failed to create query pool [{}] - pool disabled.", i);
 				Shutdown();
 				return;
 			}

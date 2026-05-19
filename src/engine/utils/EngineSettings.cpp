@@ -114,7 +114,7 @@ namespace aether
 		std::ofstream out(path, std::ios::trunc);
 		if (!out.is_open())
 		{
-			WARN(LogCategory::Engine, "Failed to write settings file: {}", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to write settings file: {}", path.string());
 			return;
 		}
 
@@ -151,13 +151,13 @@ namespace aether
 						text[i] = static_cast<char>(bytes[i]);
 					}
 					ParseSettingsText(text, settings);
-					INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", virtualPath, settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
+					AE_INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", virtualPath, settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
 					return settings;
 				}
 			}
 			catch (const std::exception& e)
 			{
-				WARN(LogCategory::Engine, "VFS settings read failed ({}): {}", virtualPath, e.what());
+				AE_WARN(LogCategory::Engine, "VFS settings read failed ({}): {}", virtualPath, e.what());
 			}
 		}
 
@@ -165,7 +165,7 @@ namespace aether
 
 		if (!std::filesystem::exists(path))
 		{
-			INFO(LogCategory::Engine, "Settings file missing; writing defaults to {}", path.string());
+			AE_INFO(LogCategory::Engine, "Settings file missing; writing defaults to {}", path.string());
 			Save(settings, path);
 			return settings;
 		}
@@ -173,13 +173,13 @@ namespace aether
 		std::ifstream in(path);
 		if (!in.is_open())
 		{
-			WARN(LogCategory::Engine, "Failed to open settings file: {}. Using defaults.", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to open settings file: {}. Using defaults.", path.string());
 			return settings;
 		}
 
 		ParseSettingsStream(in, settings);
 
-		INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", path.string(), settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
+		AE_INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", path.string(), settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
 		return settings;
 	}
 } // namespace aether

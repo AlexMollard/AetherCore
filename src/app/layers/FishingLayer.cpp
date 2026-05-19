@@ -20,7 +20,7 @@ namespace aether::app
 
 	void FishingLayer::OnAttach(LayerContext& context)
 	{
-		INFO(LogCategory::App, "Fishing layer attached.");
+		AE_INFO(LogCategory::App, "Fishing layer attached.");
 
 		auto gameSystem = std::make_unique<FishingGameSystem>();
 		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());

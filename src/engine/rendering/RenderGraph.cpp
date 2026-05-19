@@ -166,7 +166,7 @@ namespace aether
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
-			WARN(LogCategory::Engine, "RenderGraph: CreateTransientImage called before Initialize().");
+			AE_WARN(LogCategory::Engine, "RenderGraph: CreateTransientImage called before Initialize().");
 		}
 
 		TransientImageEntry entry{};
@@ -334,7 +334,7 @@ namespace aether
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
-			WARN(LogCategory::Engine, "RenderGraph: transient images require Initialize(device, allocator).");
+			AE_WARN(LogCategory::Engine, "RenderGraph: transient images require Initialize(device, allocator).");
 			return;
 		}
 
@@ -412,7 +412,7 @@ namespace aether
 
 			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || requestedExtent.width == 0 || requestedExtent.height == 0)
 			{
-				WARN(LogCategory::Engine, "RenderGraph: skipping invalid transient image desc (format={}, usage=0x{:X}, extent={}x{}).", static_cast<int>(entry.desc.format), entry.desc.usage, requestedExtent.width, requestedExtent.height);
+				AE_WARN(LogCategory::Engine, "RenderGraph: skipping invalid transient image desc (format={}, usage=0x{:X}, extent={}x{}).", static_cast<int>(entry.desc.format), entry.desc.usage, requestedExtent.width, requestedExtent.height);
 				continue;
 			}
 
@@ -537,7 +537,7 @@ namespace aether
 				const VkImage image = ResolveImage(b.resourceId, target);
 				if (image == VK_NULL_HANDLE)
 				{
-					WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
+					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
 					continue;
 				}
 				vkutil::TransitionImage(recorder.GetCommandBuffer(), image, b.oldLayout, b.newLayout, b.srcStage, b.srcAccess, b.dstStage, b.dstAccess, b.aspect);
@@ -718,7 +718,7 @@ namespace aether
 
 		if (sortedIndices.size() != N)
 		{
-			WARN(LogCategory::Engine, "RenderGraph: cycle detected - falling back to declaration order.");
+			AE_WARN(LogCategory::Engine, "RenderGraph: cycle detected - falling back to declaration order.");
 			sortedIndices.resize(N);
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}
@@ -898,7 +898,7 @@ namespace aether
 			m_compiled.push_back(std::move(cp));
 		}
 
-		INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
+		AE_INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
 		m_dirty = false;
 	}
 

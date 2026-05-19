@@ -158,7 +158,7 @@ namespace aether::app
 			}
 		}
 
-		INFO(LogCategory::App, "InventoryLayer attached ({} entities).", m_entities.size());
+		AE_INFO(LogCategory::App, "InventoryLayer attached ({} entities).", m_entities.size());
 	}
 
 	// ── OnDetach ─────────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ namespace aether::app
 			world.Destroy(e);
 		}
 		m_entities.clear();
-		INFO(LogCategory::App, "InventoryLayer detached.");
+		AE_INFO(LogCategory::App, "InventoryLayer detached.");
 	}
 
 	// ── OnUpdate ───────────────────────────────────────────────────────────────

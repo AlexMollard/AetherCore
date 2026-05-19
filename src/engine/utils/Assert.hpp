@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/Expected.hpp"
+#include "utils/Logger.hpp"
 
 // AE_DELETE_MSG: Compiler-portable delete("reason") for C++26.
 // Clang supports = delete("message") (P2518R2); MSVC does not yet.
@@ -21,11 +22,11 @@ namespace aether
 #ifdef NDEBUG
 #	define AE_ASSERT(expr, msg) ((void)0)
 #else
-#	define AE_ASSERT(expr, msg) do { if (!(expr)) Throw(AetherError::Engine(msg)); } while(0)
+#	define AE_ASSERT(expr, msg) do { if (!(expr)) { ::aether::Logger::ErrorAt(::aether::LogCategory::Engine, std::source_location::current(), "Assert failed: {}", msg); Throw(AetherError::Engine(msg)); } } while(0)
 #endif
 
 // AE_ASSERT_ALWAYS: Invariant check that runs in all builds.
 // Use for conditions where continuing would cause undefined behavior
 // (e.g., null device, stale handle, out-of-bounds index).
-#define AE_ASSERT_ALWAYS(expr, msg) do { if (!(expr)) Throw(AetherError::Engine(msg)); } while(0)
+#define AE_ASSERT_ALWAYS(expr, msg) do { if (!(expr)) { ::aether::Logger::ErrorAt(::aether::LogCategory::Engine, std::source_location::current(), "Assert failed: {}", msg); Throw(AetherError::Engine(msg)); } } while(0)
 } // namespace aether

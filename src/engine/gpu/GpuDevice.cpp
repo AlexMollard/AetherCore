@@ -153,7 +153,7 @@ namespace aether
 			m_swapchainRecreatedCallback();
 		}
 
-		INFO(LogCategory::Engine, "Swapchain recreated.");
+		AE_INFO(LogCategory::Engine, "Swapchain recreated.");
 	}
 
 	void GpuDevice::SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue)

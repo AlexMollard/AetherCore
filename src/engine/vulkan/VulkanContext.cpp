@@ -42,7 +42,7 @@ namespace aether
 {
 	VulkanContext::VulkanContext(const Window& window, const char* appName)
 	{
-		INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
+		AE_INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
 
 		// Initialize volk loader (loads global Vulkan functions)
 		if (volkInitialize() != VK_SUCCESS)
@@ -65,7 +65,7 @@ namespace aether
 		// bindless texture array. GPU-AV will inject its descriptor into set 2 instead
 		// (pipelines only use sets 0 and 1, so set 2 is free for the validation layer).
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
-		INFO(LogCategory::Vulkan, "GPU-Assisted Validation + Synchronization Validation enabled (debug build).");
+		AE_INFO(LogCategory::Vulkan, "GPU-Assisted Validation + Synchronization Validation enabled (debug build).");
 #endif
 
 		auto instanceResult = instanceBuilder.build();
@@ -243,12 +243,12 @@ namespace aether
 		}
 #endif
 
-		INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");
+		AE_INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");
 	}
 
 	VulkanContext::~VulkanContext()
 	{
-		VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
+		AE_VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
 
 		if (m_allocator != VK_NULL_HANDLE)
 		{

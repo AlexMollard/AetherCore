@@ -218,7 +218,7 @@ namespace aether
 		// registry.remove<RigidBodyComponent>(), etc.).
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBodyComponent>().connect<&PhysicsSystem::OnRigidBodyDestroyed>(this);
 
-		INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s)", workerThreads, kFixedTimestep);
+		AE_INFO(LogCategory::Engine, "PhysicsSystem initialised (Jolt, {} worker threads, fixed dt = {:.4f} s)", workerThreads, kFixedTimestep);
 	}
 
 	void PhysicsSystem::OnUnregister([[maybe_unused]] World& world)
@@ -314,7 +314,7 @@ namespace aether
 		const JPH::Body* body = bodyInterface.CreateBody(settings);
 		if (!body)
 		{
-			WARN(LogCategory::Engine, "PhysicsSystem: failed to create body - max body limit reached");
+			AE_WARN(LogCategory::Engine, "PhysicsSystem: failed to create body - max body limit reached");
 			return;
 		}
 
@@ -374,7 +374,7 @@ namespace aether
 			auto result = ss.Create();
 			if (result.HasError())
 			{
-				WARN(LogCategory::Engine, "PhysicsSystem: box shape error: {}", result.GetError().c_str());
+				AE_WARN(LogCategory::Engine, "PhysicsSystem: box shape error: {}", result.GetError().c_str());
 				continue;
 			}
 
@@ -412,7 +412,7 @@ namespace aether
 			auto result = ss.Create();
 			if (result.HasError())
 			{
-				WARN(LogCategory::Engine, "PhysicsSystem: sphere shape error: {}", result.GetError().c_str());
+				AE_WARN(LogCategory::Engine, "PhysicsSystem: sphere shape error: {}", result.GetError().c_str());
 				continue;
 			}
 
@@ -450,7 +450,7 @@ namespace aether
 			auto result = ss.Create();
 			if (result.HasError())
 			{
-				WARN(LogCategory::Engine, "PhysicsSystem: capsule shape error: {}", result.GetError().c_str());
+				AE_WARN(LogCategory::Engine, "PhysicsSystem: capsule shape error: {}", result.GetError().c_str());
 				continue;
 			}
 

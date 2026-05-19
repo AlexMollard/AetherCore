@@ -161,10 +161,10 @@ namespace aether::app
 			m_physics = &m_services->Get<aether::PhysicsSystem>();
 		}
 
-		INFO(aether::LogCategory::App, "PhysicsGameSystem registered.");
+		AE_INFO(aether::LogCategory::App, "PhysicsGameSystem registered.");
 		if (!m_services || !m_assets || !m_cameras || !m_input || !m_physics)
 		{
-			WARN(aether::LogCategory::App, "PhysicsGameSystem not fully initialised - aborting.");
+			AE_WARN(aether::LogCategory::App, "PhysicsGameSystem not fully initialised - aborting.");
 			return;
 		}
 
@@ -302,7 +302,7 @@ namespace aether::app
 			m_rng = std::mt19937{ 1337 };
 			m_simTime = 0.f;
 			BuildScene(world);
-			INFO(aether::LogCategory::App, "Physics scene reset.");
+			AE_INFO(aether::LogCategory::App, "Physics scene reset.");
 		}
 
 		// C = swap camera
@@ -338,7 +338,7 @@ namespace aether::app
 		}
 
 		m_pipeline.Destroy();
-		INFO(aether::LogCategory::App, "PhysicsGameSystem unregistered.");
+		AE_INFO(aether::LogCategory::App, "PhysicsGameSystem unregistered.");
 	}
 
 } // namespace aether::app

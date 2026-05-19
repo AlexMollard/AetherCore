@@ -42,7 +42,7 @@ namespace aether::app::scripting
 			EnsureModulesRegistered();
 			m_modulesRegistered = true;
 		}
-		INFO(LogCategory::App, "ScriptingSubsystem initialised.");
+		AE_INFO(LogCategory::App, "ScriptingSubsystem initialised.");
 	}
 
 	ScriptingSubsystem::~ScriptingSubsystem()
@@ -112,7 +112,7 @@ namespace aether::app::scripting
 			{
 				m_lastError += "(unknown compile error)";
 			}
-			ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
+			AE_ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
 			return {};
 		}
 
@@ -126,7 +126,7 @@ namespace aether::app::scripting
 				m_lastError += das::reportError(err.at, err.what, err.extra, err.fixme, err.cerr);
 				m_lastError += '\n';
 			}
-			ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
+			AE_ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
 			delete ctx;
 			return {};
 		}
@@ -138,7 +138,7 @@ namespace aether::app::scripting
 		handle.onUpdate = ctx->findFunction("on_update");
 		handle.onDetach = ctx->findFunction("on_detach");
 
-		INFO(LogCategory::App, "Script compiled: '{}' (attach={} update={} detach={})", resolvedPath, handle.onAttach != nullptr, handle.onUpdate != nullptr, handle.onDetach != nullptr);
+		AE_INFO(LogCategory::App, "Script compiled: '{}' (attach={} update={} detach={})", resolvedPath, handle.onAttach != nullptr, handle.onUpdate != nullptr, handle.onDetach != nullptr);
 
 		return handle;
 	}
@@ -162,7 +162,7 @@ namespace aether::app::scripting
 
 		if (const char* ex = ctx->getException())
 		{
-			ERROR(LogCategory::App, "daScript exception: {}", ex);
+			AE_ERROR(LogCategory::App, "daScript exception: {}", ex);
 		}
 	}
 

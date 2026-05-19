@@ -18,7 +18,7 @@ namespace
 		auto& ctx = ActiveContext();
 		if (!ctx.systemFactory)
 		{
-			WARN(aether::LogCategory::App, "register_system: no SystemFactory available");
+			AE_WARN(aether::LogCategory::App, "register_system: no SystemFactory available");
 			return;
 		}
 		auto system = ctx.systemFactory->Create(name);

@@ -689,7 +689,7 @@ namespace aether
 		SetUnhandledExceptionFilter(UnhandledExceptionFilterThunk);
 #endif
 
-		INFO(LogCategory::Engine, "Crash handler installed for application '{}'.", g_appName);
+		AE_INFO(LogCategory::Engine, "Crash handler installed for application '{}'.", g_appName);
 	}
 
 	void CrashHandler::Uninstall()

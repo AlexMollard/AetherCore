@@ -59,14 +59,14 @@ namespace aether::app
 	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings)
 	      : m_settings(settings), m_engine(BuildConfigFromSettings(engineConfig, settings), settings)
 	{
-		INFO(LogCategory::App, "Application created.");
+		AE_INFO(LogCategory::App, "Application created.");
 	}
 
 	Application::~Application()
 	{
 		if (!m_layersAttached)
 		{
-			VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
+			AE_VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
 			return;
 		}
 
@@ -90,34 +90,34 @@ namespace aether::app
 		m_layers.DetachAll(context);
 		m_imguiRenderer.Shutdown(m_engine.GetServiceContainer());
 		// Engine UIRenderer shutdown is handled by AetherCore.
-		INFO(LogCategory::App, "Application shutdown complete.");
+		AE_INFO(LogCategory::App, "Application shutdown complete.");
 	}
 
 	void Application::PushLayer(std::unique_ptr<AppLayer> layer)
 	{
 		m_layers.Push(std::move(layer));
-		VERBOSE(LogCategory::App, "Layer pushed to stack.");
+		AE_VERBOSE(LogCategory::App, "Layer pushed to stack.");
 	}
 
 	int Application::Run()
 	{
-		INFO(LogCategory::App, "Application run loop starting.");
+		AE_INFO(LogCategory::App, "Application run loop starting.");
 
 		const auto shaderFilesResult = io::FileSystem::Glob("shaders://**/*.slang.spv");
 		if (!shaderFilesResult.has_value())
 		{
-			WARN(LogCategory::FileSystem, "Shader glob failed: {}", shaderFilesResult.error().ToString());
+			AE_WARN(LogCategory::FileSystem, "Shader glob failed: {}", shaderFilesResult.error().ToString());
 		}
 		else if (shaderFilesResult->empty())
 		{
-			WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.slang.spv");
+			AE_WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.slang.spv");
 		}
 		else
 		{
-			INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
+			AE_INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
 			for (const auto& shaderFile: *shaderFilesResult)
 			{
-				VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
+				AE_VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
 			}
 		}
 
@@ -168,7 +168,7 @@ namespace aether::app
 
 		if (m_settings.app.targetFps > 0.0f)
 		{
-			INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
+			AE_INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
 			m_framePacer.SetTargetFps(m_settings.app.targetFps);
 		}
 		else if (m_settings.graphics.vsync)
@@ -176,17 +176,17 @@ namespace aether::app
 			const int refreshRate = m_engine.GetServiceContainer().Get<Window>().GetDisplayRefreshRate();
 			if (refreshRate > 0)
 			{
-				INFO(LogCategory::App, "Display refresh rate: {} Hz - setting frame pacer target.", refreshRate);
+				AE_INFO(LogCategory::App, "Display refresh rate: {} Hz - setting frame pacer target.", refreshRate);
 				m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
 			}
 			else
 			{
-				WARN(LogCategory::App, "Could not query display refresh rate - frame pacer running uncapped.");
+				AE_WARN(LogCategory::App, "Could not query display refresh rate - frame pacer running uncapped.");
 			}
 		}
 		else
 		{
-			INFO(LogCategory::App, "VSync is off and TargetFPS is 0 - frame pacer running uncapped.");
+			AE_INFO(LogCategory::App, "VSync is off and TargetFPS is 0 - frame pacer running uncapped.");
 		}
 
 		auto previousFrameTime = std::chrono::steady_clock::now();
@@ -295,7 +295,7 @@ namespace aether::app
 			++m_frameIndex;
 		}
 
-		INFO(LogCategory::App, "Application run loop exited.");
+		AE_INFO(LogCategory::App, "Application run loop exited.");
 		m_renderThread.Stop();
 		Logger::ClearFrameNumber();
 

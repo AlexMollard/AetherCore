@@ -320,7 +320,7 @@ namespace aether
 		const std::uint32_t slot = m_materialBuffer->AllocateSlot();
 		if (slot == MaterialBuffer::kInvalidSlot)
 		{
-			WARN(LogCategory::Engine, "RegisterMaterial: MaterialBuffer is full - material will render as default.");
+			AE_WARN(LogCategory::Engine, "RegisterMaterial: MaterialBuffer is full - material will render as default.");
 			return;
 		}
 
@@ -399,7 +399,7 @@ namespace aether
 
 			if (!io::FileSystem::Exists(resolvedPath))
 			{
-				WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
+				AE_WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
 				return Material::kNoTexture;
 			}
 
@@ -441,7 +441,7 @@ namespace aether
 		material.emissiveSlot = *emissiveSlot;
 
 		RegisterMaterial(material);
-		INFO(LogCategory::Engine,
+		AE_INFO(LogCategory::Engine,
 		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
 		        requestedPath,
 		        material.albedoSlot != Material::kNoTexture ? "yes" : "no",
@@ -513,7 +513,7 @@ namespace aether
 			auto texResult = co_await CreateTextureAsync(image.uri);
 			if (!texResult.has_value())
 			{
-				WARN(LogCategory::Engine, "LoadModelAsync: texture load failed for '{}', skipping.", image.uri);
+				AE_WARN(LogCategory::Engine, "LoadModelAsync: texture load failed for '{}', skipping.", image.uri);
 				continue;
 			}
 			imageSlots[imageIndex] = texResult->GetBindlessSlot();
@@ -612,7 +612,7 @@ namespace aether
 			loaded.primitives.push_back(std::move(loadedPrim));
 		}
 
-		INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
+		AE_INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
 
 		if (!source.skins.empty() && !source.animations.empty())
 		{

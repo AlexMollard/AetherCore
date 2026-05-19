@@ -104,10 +104,10 @@ namespace aether::app
 
 	void SandboxGameSystem::OnRegister(aether::World& world)
 	{
-		INFO(aether::LogCategory::App, "SandboxGameSystem registered.");
+		AE_INFO(aether::LogCategory::App, "SandboxGameSystem registered.");
 		if (!m_services || !m_assets || !m_cameras || !m_input)
 		{
-			WARN(aether::LogCategory::App, "SandboxGameSystem not initialized with dependencies!");
+			AE_WARN(aether::LogCategory::App, "SandboxGameSystem not initialized with dependencies!");
 			return;
 		}
 
@@ -193,21 +193,21 @@ namespace aether::app
 				if (m_foxModel->animationDb.IsValid())
 				{
 					const std::uint32_t animCount = m_foxModel->animationDb.GetClipCount();
-					INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
+					AE_INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
 					for (std::uint32_t i = 0; i < animCount; ++i)
 					{
-						INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animationDb.GetClipName(i));
+						AE_INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animationDb.GetClipName(i));
 					}
 				}
 			}
 			catch (const std::exception& e)
 			{
-				WARN(aether::LogCategory::App, "Fox model load failed (re-run AssetPacker to regenerate): {}", e.what());
+				AE_WARN(aether::LogCategory::App, "Fox model load failed (re-run AssetPacker to regenerate): {}", e.what());
 			}
 		}
 		else
 		{
-			INFO(aether::LogCategory::App, "Fox model not found at '{}'; skipping.", kFoxPath);
+			AE_INFO(aether::LogCategory::App, "Fox model not found at '{}'; skipping.", kFoxPath);
 		}
 	}
 
@@ -276,7 +276,7 @@ namespace aether::app
 
 				//m_foxInstances.push_back(std::move(instances));
 			}
-			INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
+			AE_INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 		}
 
 		// ── Sky cubes ─────────────────────────────────────────────────────────
@@ -386,7 +386,7 @@ namespace aether::app
 		const auto rendererLights = m_services->Get<Renderer>().GetPointLights();
 		m_pointLights.assign(rendererLights.begin(), rendererLights.end());
 
-		INFO(aether::LogCategory::App, "Scene built: {} foxes on ground + {} ring + 1 center + 2 orbit sky cubes.", kFoxCount, kRingCount);
+		AE_INFO(aether::LogCategory::App, "Scene built: {} foxes on ground + {} ring + 1 center + 2 orbit sky cubes.", kFoxCount, kRingCount);
 	}
 
 	void SandboxGameSystem::Update(aether::World& world, float dt)
@@ -610,14 +610,14 @@ namespace aether::app
 				const auto next = static_cast<aether::TonemapMode>((static_cast<int>(m_services->Get<Renderer>().GetTonemapMode()) + 1) % 3);
 				m_services->Get<Renderer>().SetTonemapMode(next);
 				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
-				INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
+				AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 			}
 
 			if (m_input->IsKeyPressed(aether::Key::F))
 			{
 				const bool enabled = !m_services->Get<Renderer>().IsFxaaEnabled();
 				m_services->Get<Renderer>().SetFxaaEnabled(enabled);
-				INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
+				AE_INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
 			}
 
 			if (m_input->IsKeyPressed(aether::Key::C))
@@ -625,7 +625,7 @@ namespace aether::app
 				const aether::CameraHandle active = m_cameras->GetMainCamera();
 				const aether::CameraHandle next = (active == m_orbitCamera) ? m_freeCamera : m_orbitCamera;
 				m_cameras->SetMainCamera(next);
-				INFO(aether::LogCategory::App, "Main camera: {}", (next == m_freeCamera) ? "Free" : "Orbit");
+				AE_INFO(aether::LogCategory::App, "Main camera: {}", (next == m_freeCamera) ? "Free" : "Orbit");
 			}
 		}
 
@@ -660,7 +660,7 @@ namespace aether::app
 			return;
 		}
 
-		INFO(aether::LogCategory::App, "SandboxGameSystem unregistered.");
+		AE_INFO(aether::LogCategory::App, "SandboxGameSystem unregistered.");
 
 		// Destroy all sandbox entities in one pass.
 		std::vector<entt::entity> toDestroy;

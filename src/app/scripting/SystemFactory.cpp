@@ -14,7 +14,7 @@ namespace aether::app
 		auto it = m_factories.find(std::string(name));
 		if (it == m_factories.end())
 		{
-			WARN(LogCategory::App, "SystemFactory: unknown system '{}'", name);
+			AE_WARN(LogCategory::App, "SystemFactory: unknown system '{}'", name);
 			return nullptr;
 		}
 		return it->second();

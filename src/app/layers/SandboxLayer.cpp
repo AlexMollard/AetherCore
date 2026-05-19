@@ -34,7 +34,7 @@ namespace aether::app
 
 	void SandboxLayer::OnAttach(LayerContext& context)
 	{
-		INFO(LogCategory::App, "Sandbox layer attached.");
+		AE_INFO(LogCategory::App, "Sandbox layer attached.");
 
 		auto gameSystem = std::make_unique<SandboxGameSystem>();
 		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());

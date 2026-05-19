@@ -245,15 +245,15 @@ namespace aether
 				{
 					if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
 					{
-						WARN(LogCategory::Animation, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+						AE_WARN(LogCategory::Animation, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
 					}
 					else if (animNodeCount == 0u || nodePoseCursor + animNodeCount > m_maxSampledPoses)
 					{
-						WARN(LogCategory::Animation, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
+						AE_WARN(LogCategory::Animation, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
 					}
 					else if (skinJobCount >= m_maxAnimationDraws || m_animationSampleJobCount >= m_maxAnimationDraws)
 					{
-						WARN(LogCategory::Animation, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
+						AE_WARN(LogCategory::Animation, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
 					}
 					else
 					{
@@ -412,9 +412,9 @@ namespace aether
 		if (skinJobCount > 0 && m_debugLogSkinJobsFramesLeft > 0)
 		{
 			--m_debugLogSkinJobsFramesLeft;
-			INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs):", frameIndex, skinJobCount, sampleJobsThisFrame);
-			INFO(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
-			INFO(LogCategory::Animation,
+			AE_INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs):", frameIndex, skinJobCount, sampleJobsThisFrame);
+			AE_INFO(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
+			AE_INFO(LogCategory::Animation,
 			        "  nodeParentsAddr=0x{:x}  skinMetasAddr=0x{:x}  skinJointsAddr=0x{:x}  skinInverseBindsAddr=0x{:x}",
 			        m_animationDb ? m_animationDb->GetNodeParentsAddr() : 0,
 			        m_animationDb ? m_animationDb->GetSkinMetasAddr() : 0,
@@ -424,12 +424,12 @@ namespace aether
 			for (std::uint32_t ji = 0; ji < logLimit; ++ji)
 			{
 				const SkinCopyJob& sj = m_skinCopyJobsMapped[animJobBase + ji];
-				INFO(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
+				AE_INFO(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
 			}
 			for (std::uint32_t ji = 0; ji < std::min(sampleJobsThisFrame, logLimit); ++ji)
 			{
 				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
-				INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
+				AE_INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
 			}
 		}
 

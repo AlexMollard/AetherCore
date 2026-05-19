@@ -407,7 +407,7 @@ namespace aether
 			Throw(updateResult.error());
 		}
 
-		INFO(LogCategory::Asset, "FontAtlas built: {} glyphs, atlas {}x{}, bindless slot {}.", kGlyphCount, atlasW, atlasH, m_bindlessSlot);
+		AE_INFO(LogCategory::Asset, "FontAtlas built: {} glyphs, atlas {}x{}, bindless slot {}.", kGlyphCount, atlasW, atlasH, m_bindlessSlot);
 	}
 
 	// ── Destroy ───────────────────────────────────────────────────────────────

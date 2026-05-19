@@ -76,13 +76,13 @@ namespace aether::io
 	{
 		if (s_backend != nullptr)
 		{
-			WARN(LogCategory::FileSystem, "FileSystem::Initialize() called more than once - ignoring.");
+			AE_WARN(LogCategory::FileSystem, "FileSystem::Initialize() called more than once - ignoring.");
 			return;
 		}
 
 		s_backend = new FileSystemBackend();
 		s_backend->ioThread = std::make_unique<IoExecutor>();
-		INFO(LogCategory::FileSystem, "FileSystem initialized.");
+		AE_INFO(LogCategory::FileSystem, "FileSystem initialized.");
 	}
 
 	bool FileSystem::IsInitialized()
@@ -171,7 +171,7 @@ namespace aether::io
 		delete s_backend;
 		s_backend = nullptr;
 
-		INFO(LogCategory::FileSystem, "FileSystem shut down.");
+		AE_INFO(LogCategory::FileSystem, "FileSystem shut down.");
 	}
 
 	void FileSystem::Mount(std::string_view mountPoint, std::filesystem::path physicalPath)
@@ -181,7 +181,7 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::Mount() called before Initialize().");
 		}
 
-		INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
+		AE_INFO(LogCategory::FileSystem, "Mounting '{}://' -> '{}'", mountPoint, physicalPath.string());
 		std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<DirectoryBackend>(std::move(physicalPath)));
 	}
@@ -193,7 +193,7 @@ namespace aether::io
 			AE_ASSERT_ALWAYS(false, "FileSystem::MountPak() called before Initialize().");
 		}
 
-		INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
+		AE_INFO(LogCategory::FileSystem, "Mounting pak '{}://' -> '{}'", mountPoint, pakPath.string());
 		std::scoped_lock lock(s_backend->mountsMutex);
 		s_backend->mounts.insert_or_assign(std::string(mountPoint), std::make_shared<PakBackend>(std::move(pakPath)));
 	}
@@ -218,7 +218,7 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
-		VERBOSE(LogCategory::FileSystem, "ReadFile: {}", virtualPath);
+		AE_VERBOSE(LogCategory::FileSystem, "ReadFile: {}", virtualPath);
 		const auto backend = ResolveBackend(mountPoint);
 		return backend->Read(relativePath);
 	}
@@ -231,7 +231,7 @@ namespace aether::io
 		}
 
 		const auto [mountPoint, relativePath] = ParseVirtualPath(virtualPath);
-		VERBOSE(LogCategory::FileSystem, "OpenStream: {}", virtualPath);
+		AE_VERBOSE(LogCategory::FileSystem, "OpenStream: {}", virtualPath);
 		const auto backend = ResolveBackend(mountPoint);
 		return backend->OpenStream(relativePath);
 	}
@@ -250,7 +250,7 @@ namespace aether::io
 		{
 			return result;
 		}
-		VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, result->size());
+		AE_VERBOSE(LogCategory::FileSystem, "Glob: '{}' returned {} result(s)", virtualPattern, result->size());
 		return result;
 	}
 
@@ -263,7 +263,7 @@ namespace aether::io
 
 		const std::string virtualPathString(virtualPath);
 		auto handle = std::make_shared<FileRequest>();
-		VERBOSE(LogCategory::FileSystem, "RequestAsync (priority={}): {}", static_cast<int>(priority), virtualPathString);
+		AE_VERBOSE(LogCategory::FileSystem, "RequestAsync (priority={}): {}", static_cast<int>(priority), virtualPathString);
 
 		s_backend->ioThread->Submit(priority,
 		        [handle, virtualPathString]()

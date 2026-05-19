@@ -254,7 +254,7 @@ namespace aether
 		if (!m_renderGraph->HasPass(m_passName))
 		{
 			RegisterPass();
-			INFO(LogCategory::Engine, "QuadRenderer: pass '{}' re-registered after graph reset.", m_passName);
+			AE_INFO(LogCategory::Engine, "QuadRenderer: pass '{}' re-registered after graph reset.", m_passName);
 		}
 	}
 
@@ -284,7 +284,7 @@ namespace aether
 
 		RegisterPass();
 		m_ready = true;
-		INFO(LogCategory::Engine, "QuadRenderer: pass '{}' registered.", m_passName);
+		AE_INFO(LogCategory::Engine, "QuadRenderer: pass '{}' registered.", m_passName);
 	}
 
 	void QuadRenderer::Shutdown(ServiceContainer& services)

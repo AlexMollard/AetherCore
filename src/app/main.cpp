@@ -70,12 +70,12 @@ int main()
 		{
 			aether::CrashHandler::ReportGraphicsFault("UnhandledVulkanException", exception.what());
 		}
-		ERROR(category, "Unhandled exception: {}", exception.what());
+		AE_ERROR(category, "Unhandled exception: {}", exception.what());
 		return -1;
 	}
 	catch (...)
 	{
-		ERROR(aether::LogCategory::Unknown, "Unknown non-standard exception.");
+		AE_ERROR(aether::LogCategory::Unknown, "Unknown non-standard exception.");
 		return -1;
 	}
 }

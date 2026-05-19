@@ -95,11 +95,11 @@ namespace aether
 		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu.HasDedicatedComputeQueue();
 		if (!m_settings.graphics.asyncCompute)
 		{
-			INFO(LogCategory::Engine, "Async compute disabled by settings.");
+			AE_INFO(LogCategory::Engine, "Async compute disabled by settings.");
 		}
 		if (!enableAsyncCompute)
 		{
-			WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
+			AE_WARN(LogCategory::Engine, "Async compute disabled: no dedicated compute queue available.");
 		}
 
 		if (enableAsyncCompute)
@@ -118,7 +118,7 @@ namespace aether
 			        }
 		        });
 
-		INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu.GetBindlessManager().GetCapacity());
+		AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu.GetBindlessManager().GetCapacity());
 	}
 
 	AetherCore::~AetherCore()
@@ -181,7 +181,7 @@ namespace aether
 		auto size = m_platform.GetWindow().WaitForValidFramebufferSize();
 		m_gpu.RecreateSwapchain(m_platform.GetWindow(), m_settings.graphics.vsync);
 
-		INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", size.width, size.height);
+		AE_INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", size.width, size.height);
 	}
 
 	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)

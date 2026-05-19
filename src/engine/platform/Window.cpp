@@ -10,7 +10,7 @@ namespace aether
 {
 	Window::Window(const char* title, int width, int height)
 	{
-		INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
+		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
 
 		if (!glfwInit())
 		{
@@ -25,12 +25,12 @@ namespace aether
 			throw WindowError("Failed to create GLFW window.");
 		}
 
-		INFO(LogCategory::Window, "Window created successfully.");
+		AE_INFO(LogCategory::Window, "Window created successfully.");
 	}
 
 	Window::~Window()
 	{
-		VERBOSE(LogCategory::Window, "Destroying window resources.");
+		AE_VERBOSE(LogCategory::Window, "Destroying window resources.");
 
 		if (m_window != nullptr)
 		{

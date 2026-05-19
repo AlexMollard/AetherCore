@@ -160,7 +160,7 @@ namespace aether::app
 		m_cornerBL = reg(ui::SpawnPanel(world, UiAnchors::BottomLeft({ 8.f, 8.f }, { 105.f, 36.f }), "BottomLeft", false, false, 0.5f));
 		m_cornerBR = reg(ui::SpawnPanel(world, UiAnchors::BottomRight({ 8.f, 8.f }, { 115.f, 36.f }), "BottomRight", false, false, 0.5f));
 
-		INFO(LogCategory::App, "UiSandboxLayer attached ({} entities).", m_entities.size());
+		AE_INFO(LogCategory::App, "UiSandboxLayer attached ({} entities).", m_entities.size());
 	}
 
 	// ── OnDetach ─────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ namespace aether::app
 			world.Destroy(e);
 		}
 		m_entities.clear();
-		INFO(LogCategory::App, "UiSandboxLayer detached.");
+		AE_INFO(LogCategory::App, "UiSandboxLayer detached.");
 	}
 
 	// ── OnUpdate ─────────────────────────────────────────────────────────────────

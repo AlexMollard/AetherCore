@@ -119,7 +119,7 @@ namespace aether::app
 
 	void VoxelWorldLayer::OnAttach(LayerContext& context)
 	{
-		INFO(LogCategory::App, "VoxelWorldLayer attached.");
+		AE_INFO(LogCategory::App, "VoxelWorldLayer attached.");
 
 		ServiceContainer& s = context.services;
 
@@ -189,7 +189,7 @@ namespace aether::app
 			s.Get<CameraManager>().Destroy(m_camera);
 		}
 
-		INFO(LogCategory::App, "VoxelWorldLayer detached.");
+		AE_INFO(LogCategory::App, "VoxelWorldLayer detached.");
 	}
 
 	void VoxelWorldLayer::OnUpdate(LayerContext& context)

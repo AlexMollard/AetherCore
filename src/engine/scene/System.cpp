@@ -11,7 +11,7 @@ namespace aether
 			return;
 		}
 
-		VERBOSE(LogCategory::Engine, "Registering system: {}", system->GetName());
+		AE_VERBOSE(LogCategory::Engine, "Registering system: {}", system->GetName());
 		m_systems.push_back(std::move(system));
 		// Note: OnRegister is called when the system is added to World via
 		// RegisterSystem()
@@ -22,7 +22,7 @@ namespace aether
 		auto it = std::find_if(m_systems.begin(), m_systems.end(), [name](const std::unique_ptr<System>& sys) { return sys && std::string_view(sys->GetName()) == name; });
 		if (it != m_systems.end())
 		{
-			VERBOSE(LogCategory::Engine, "Unregistering system: {}", name);
+			AE_VERBOSE(LogCategory::Engine, "Unregistering system: {}", name);
 			m_systems.erase(it);
 		}
 	}

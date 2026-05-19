@@ -59,7 +59,7 @@ namespace aether
 		auto result = buildSwapchain(enableVsync ? VK_PRESENT_MODE_FIFO_KHR : VK_PRESENT_MODE_IMMEDIATE_KHR);
 		if (!result && !enableVsync)
 		{
-			WARN(LogCategory::Engine, "Swapchain IMMEDIATE present mode unavailable; falling back to FIFO (VSync on).");
+			AE_WARN(LogCategory::Engine, "Swapchain IMMEDIATE present mode unavailable; falling back to FIFO (VSync on).");
 			result = buildSwapchain(VK_PRESENT_MODE_FIFO_KHR);
 		}
 
@@ -182,7 +182,7 @@ namespace aether
 			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_frames[i].commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, cbName.c_str());
 		}
 
-		INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));
+		AE_INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));
 	}
 
 	void Swapchain::Shutdown(VkDevice device)
@@ -261,7 +261,7 @@ namespace aether
 
 		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
 		{
-			WARN(LogCategory::Vulkan, "Swapchain out of date - recreation needed.");
+			AE_WARN(LogCategory::Vulkan, "Swapchain out of date - recreation needed.");
 			m_needsRecreation = true;
 			return;
 		}
@@ -270,7 +270,7 @@ namespace aether
 		{
 			// Suboptimal: we can still present this frame, but request recreation
 			// afterwards.
-			WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
+			AE_WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
 			m_needsRecreation = true;
 		}
 
@@ -374,7 +374,7 @@ namespace aether
 			const VkResult submitResult = vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight);
 			if (submitResult == VK_ERROR_DEVICE_LOST)
 			{
-				ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
+				AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
 				std::terminate();
 			}
 			if (submitResult != VK_SUCCESS)
@@ -394,7 +394,7 @@ namespace aether
 		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
 		if (presentResult == VK_ERROR_DEVICE_LOST)
 		{
-			ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueuePresentKHR (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
+			AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueuePresentKHR (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
 			std::terminate();
 		}
 		if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
