@@ -123,6 +123,10 @@ namespace aether
 		// extension explicitly so vkb enables it and the function pointers are available.
 		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
+		// maintenance9 allows queue family ownership transfers to be omitted when both
+		// queue families are compatible, eliminating unnecessary barriers.
+		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
+
 		auto physicalDeviceResult = selector.select();
 
 		if (!physicalDeviceResult)
@@ -130,7 +134,13 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
 		}
 
+		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
+			.maintenance9 = VK_TRUE,
+		};
+
 		vkb::DeviceBuilder deviceBuilder{ physicalDeviceResult.value() };
+		deviceBuilder.add_pNext(&maintenance9Features);
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
