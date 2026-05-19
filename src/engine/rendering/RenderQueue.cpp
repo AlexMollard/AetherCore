@@ -29,38 +29,38 @@ namespace aether
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags));
+		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags, "RenderQueue.InstanceData"));
 		m_instanceDataBuffer = std::move(b0);
 		m_instanceDataMapped = static_cast<DrawInstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
 
-		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(CullDrawInput), kSsboFlags));
+		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(CullDrawInput), kSsboFlags, "RenderQueue.CullInput"));
 		m_cullInputBuffer = std::move(b1);
 		m_cullInputMapped = static_cast<CullDrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
 
-		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags));
+		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags, "RenderQueue.BatchDesc"));
 		m_batchDescBuffer = std::move(b2);
 		m_batchDescMapped = static_cast<CullBatch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
 
 		if (m_maxAnimationDraws > 0u)
 		{
-			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(SkinCopyJob), kSsboFlags));
+			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
 			m_skinCopyJobBuffer = std::move(b3);
 			m_skinCopyJobsMapped = static_cast<SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
 
-			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimatorSampleJob), kSsboFlags));
+			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
 			m_animationSampleJobsBuffer = std::move(b4);
 			m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
 
 			constexpr VkBufferUsageFlags kAnimationSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags));
+			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.SkinPalette"));
 			m_skinPaletteBuffer = std::move(b5);
 
-			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags));
+			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
 			m_sampledPosesBuffer = std::move(b6);
 		}
 
-		AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT));
+		AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
 		m_outputIndirectBuffer = std::move(b7);
 		EnsureSkinCopyPipeline();
 	}
@@ -135,6 +135,29 @@ namespace aether
 		const std::uint32_t drawBase = frameSlot * m_maxDraws;
 		const std::uint32_t batchBase = frameSlot * m_maxBatches;
 		const std::uint32_t animJobBase = frameSlot * m_maxAnimationDraws;
+
+		// GPU timestamp readback: read results from kFramesInFlight frames ago, reset slot for this frame.
+		if (m_timestampPool && m_timestampPool->IsValid())
+		{
+			float tsMs[GpuTimestampPool::kMaxTimestamps]{};
+			const std::uint32_t readCount = m_timestampPool->BeginFrame(frameIndex, tsMs);
+			const TsSlots& prev = m_tsSlots[frameSlot];
+#ifdef TRACY_ENABLE
+			if (prev.animSampleStart != UINT32_MAX && prev.animSampleEnd < readCount)
+			{
+				TracyPlot("GPU/AnimSample_ms", static_cast<double>(tsMs[prev.animSampleEnd] - tsMs[prev.animSampleStart]));
+			}
+			if (prev.skinPaletteStart != UINT32_MAX && prev.skinPaletteEnd < readCount)
+			{
+				TracyPlot("GPU/SkinPalette_ms", static_cast<double>(tsMs[prev.skinPaletteEnd] - tsMs[prev.skinPaletteStart]));
+			}
+			if (prev.cullStart != UINT32_MAX && prev.cullEnd < readCount)
+			{
+				TracyPlot("GPU/Cull_ms", static_cast<double>(tsMs[prev.cullEnd] - tsMs[prev.cullStart]));
+			}
+#endif
+			m_tsSlots[frameSlot] = {};
+		}
 
 		// Clear device-local animation buffers on first call to prevent garbage on first frame.
 		if (!m_animationBuffersCleared)
@@ -222,15 +245,15 @@ namespace aether
 				{
 					if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
 					{
-						WARN(LogCategory::Engine, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
+						WARN(LogCategory::Animation, "RenderQueue: sampled skin palette pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", skinJointCursor + dc.skinJointCount, m_maxSkinJoints);
 					}
 					else if (animNodeCount == 0u || nodePoseCursor + animNodeCount > m_maxSampledPoses)
 					{
-						WARN(LogCategory::Engine, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
+						WARN(LogCategory::Animation, "RenderQueue: sampled node-pose pool overflow (needed {}, cap {}) - dropping GPU skinning for this draw.", nodePoseCursor + animNodeCount, m_maxSampledPoses);
 					}
 					else if (skinJobCount >= m_maxAnimationDraws || m_animationSampleJobCount >= m_maxAnimationDraws)
 					{
-						WARN(LogCategory::Engine, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
+						WARN(LogCategory::Animation, "RenderQueue: animation job overflow (jobs {}, cap {}) - dropping GPU skinning for this draw.", std::max(skinJobCount, m_animationSampleJobCount), m_maxAnimationDraws);
 					}
 					else
 					{
@@ -353,8 +376,19 @@ namespace aether
 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_animationSamplePipeline);
 				vkCmdPushConstants(cmd, m_animationSamplePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
-				const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
-				vkCmdDispatch(cmd, groups, 1, 1);
+				if (m_timestampPool)
+				{
+					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+				{
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
+					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
+					vkCmdDispatch(cmd, groups, 1, 1);
+				}
+				if (m_timestampPool)
+				{
+					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
 				CommandRecorder(cmd).EndDebugLabel();
 
 				const VkMemoryBarrier2 animToSkin{
@@ -378,9 +412,9 @@ namespace aether
 		if (skinJobCount > 0 && m_debugLogSkinJobsFramesLeft > 0)
 		{
 			--m_debugLogSkinJobsFramesLeft;
-			INFO(LogCategory::Engine, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs):", frameIndex, skinJobCount, sampleJobsThisFrame);
-			INFO(LogCategory::Engine, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
-			INFO(LogCategory::Engine,
+			INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs):", frameIndex, skinJobCount, sampleJobsThisFrame);
+			INFO(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
+			INFO(LogCategory::Animation,
 			        "  nodeParentsAddr=0x{:x}  skinMetasAddr=0x{:x}  skinJointsAddr=0x{:x}  skinInverseBindsAddr=0x{:x}",
 			        m_animationDb ? m_animationDb->GetNodeParentsAddr() : 0,
 			        m_animationDb ? m_animationDb->GetSkinMetasAddr() : 0,
@@ -390,12 +424,12 @@ namespace aether
 			for (std::uint32_t ji = 0; ji < logLimit; ++ji)
 			{
 				const SkinCopyJob& sj = m_skinCopyJobsMapped[animJobBase + ji];
-				INFO(LogCategory::Engine, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
+				INFO(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
 			}
 			for (std::uint32_t ji = 0; ji < std::min(sampleJobsThisFrame, logLimit); ++ji)
 			{
 				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
-				INFO(LogCategory::Engine, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
+				INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
 			}
 		}
 
@@ -415,8 +449,19 @@ namespace aether
 			CommandRecorder(cmd).BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinCopyPipeline);
 			vkCmdPushConstants(cmd, m_skinCopyPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
-			const std::uint32_t groups = (skinJobCount + 63u) / 64u;
-			vkCmdDispatch(cmd, groups, 1, 1);
+			if (m_timestampPool)
+			{
+				m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+			}
+			{
+				AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.BuildSkinPalette");
+				const std::uint32_t groups = (skinJobCount + 63u) / 64u;
+				vkCmdDispatch(cmd, groups, 1, 1);
+			}
+			if (m_timestampPool)
+			{
+				m_tsSlots[frameSlot].skinPaletteEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+			}
 			CommandRecorder(cmd).EndDebugLabel();
 
 			const VkMemoryBarrier2 skinToShaders{
@@ -453,8 +498,19 @@ namespace aether
 			CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
 			vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
-			const std::uint32_t groups = (totalDraws + 63u) / 64u;
-			vkCmdDispatch(cmd, groups, 1, 1);
+			if (m_timestampPool)
+			{
+				m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+			}
+			{
+				AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
+				const std::uint32_t groups = (totalDraws + 63u) / 64u;
+				vkCmdDispatch(cmd, groups, 1, 1);
+			}
+			if (m_timestampPool)
+			{
+				m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+			}
 			CommandRecorder(cmd).EndDebugLabel();
 		}
 
@@ -479,6 +535,7 @@ namespace aether
 			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
 			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
+		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, cmd);
 #endif
 		++m_animationFrameCount;
 	}
@@ -626,6 +683,9 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create skin copy compute pipeline."));
 		}
 
+		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_skinCopyPipeline), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
+		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_skinCopyPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
+
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}
 
@@ -677,6 +737,9 @@ namespace aether
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create animation sample compute pipeline."));
 		}
+
+		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_animationSamplePipeline), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
+		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_animationSamplePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
 
 		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}

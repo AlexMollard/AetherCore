@@ -145,7 +145,7 @@ namespace aether
 		totalBytes += align16(skinInverseBinds.size() * sizeof(glm::mat4));
 		totalBytes += align16(allStrings.size());
 
-		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes });
+		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes, .debugName = "AnimationDatabase" });
 
 		VkDevice device = ctx.GetDevice().device;
 		VkQueue queue = ctx.GetGraphicsQueue();

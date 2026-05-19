@@ -36,6 +36,7 @@ namespace aether
 		{
 			VkDeviceSize capacityBytes = 256ull * 1024 * 1024;
 			VkBufferUsageFlags additionalUsage = 0;
+			const char* debugName = nullptr;
 		};
 
 		void Initialize(const VulkanContext& ctx, Desc desc);

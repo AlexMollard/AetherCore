@@ -24,7 +24,7 @@ namespace aether::ui
 	//
 	// RenderAll: automatically draws all ECS UI entities (panels, buttons, sliders,
 	// checkboxes, text inputs, progress bars, item slots). No per-frame manual
-	// Draw* calls required — just create the ECS components and they render.
+	// Draw* calls required - just create the ECS components and they render.
 	//
 	// EndFrame: reserved for post-gui cleanup (e.g. tooltip timers).
 	class UiSystem

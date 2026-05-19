@@ -6,8 +6,10 @@
 #include <vector>
 #include "vulkan/volk.hpp"
 
+#include "utils/GpuProfiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "rendering/GpuContracts.hpp"
+#include "rendering/GpuTimestampPool.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
@@ -88,6 +90,21 @@ namespace aether
 			m_debugLogSkinJobsFramesLeft = frameCount;
 		}
 
+		// Optional GPU timestamp pool for measuring dispatch durations.
+		// When set, BeginFrame/Write/Readback are called automatically and results
+		// are emitted as TracyPlot entries: GPU/AnimSample_ms, GPU/SkinPalette_ms, GPU/Cull_ms.
+		void SetTimestampPool(GpuTimestampPool* pool)
+		{
+			m_timestampPool = pool;
+		}
+
+		// Optional Tracy GPU context for CPU-correlated GPU timeline zones.
+		// Pass VulkanContext::GetTracyVkCtx() after initialization.
+		void SetTracyVkCtx(TracyVkCtx ctx)
+		{
+			m_tracyVkCtx = ctx;
+		}
+
 		// Write inputs and dispatch animation/cull compute.
 		void PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
 
@@ -163,7 +180,23 @@ namespace aether
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::uint32_t m_animationFrameCount = 0;
 		bool m_animationBuffersCleared = false;
-		uint64_t m_tracyAnimationCtx = 0;
+		TracyVkCtx m_tracyVkCtx = nullptr;
+
+		GpuTimestampPool* m_timestampPool = nullptr;
+
+		// Per-slot timestamp query indices written this frame, used to correlate results
+		// with the correct dispatch when BeginFrame reads them back kFramesInFlight later.
+		struct TsSlots
+		{
+			std::uint32_t animSampleStart = UINT32_MAX;
+			std::uint32_t animSampleEnd = UINT32_MAX;
+			std::uint32_t skinPaletteStart = UINT32_MAX;
+			std::uint32_t skinPaletteEnd = UINT32_MAX;
+			std::uint32_t cullStart = UINT32_MAX;
+			std::uint32_t cullEnd = UINT32_MAX;
+		};
+
+		std::array<TsSlots, kFramesInFlight> m_tsSlots{};
 
 		void EnsureSkinCopyPipeline();
 		void EnsureAnimationSamplePipeline();

@@ -25,6 +25,7 @@ namespace aether
 		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), 65536);
 		m_renderQueue.SetDebugForceVisible(false);
 		m_renderQueue.SetDebugBypassIndirect(false);
+		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
 
 		m_shadowService.Initialize(vk, swapchain);
 		m_renderTargetService.Initialize(vk);

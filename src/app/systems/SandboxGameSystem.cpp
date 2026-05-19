@@ -251,30 +251,30 @@ namespace aether::app
 
 				auto instances = aether::ecs::SpawnModel(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f);
 
-				// Set initial animation state on each spawned SkinnedMeshComponent.
-				if (m_foxModel->animationDb.IsValid())
-				{
-					std::uniform_real_distribution<float> phaseDist(0.0f, runDur > 0.f ? runDur : 1.0f);
-					const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
-					for (const aether::Entity e: instances)
-					{
-						if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
-						{
-							smc->clipIndex = kAnimRun;
-							smc->playbackSpeed = kFoxAnimRunSpeed;
-							smc->animTime = phase;
-						}
-					}
-				}
+				//// Set initial animation state on each spawned SkinnedMeshComponent.
+				//if (m_foxModel->animationDb.IsValid())
+				//{
+				//	std::uniform_real_distribution<float> phaseDist(0.0f, runDur > 0.f ? runDur : 1.0f);
+				//	const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
+				//	for (const aether::Entity e: instances)
+				//	{
+				//		if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
+				//		{
+				//			smc->clipIndex = kAnimRun;
+				//			smc->playbackSpeed = kFoxAnimRunSpeed;
+				//			smc->animTime = phase;
+				//		}
+				//	}
+				//}
 
-				for (const aether::Entity e: instances)
-				{
-					world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-					world->EmplaceOrReplace<FoxTag>(e, FoxTag{});
-					world->EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
-				}
+				//for (const aether::Entity e: instances)
+				//{
+				//	world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
+				//	world->EmplaceOrReplace<FoxTag>(e, FoxTag{});
+				//	world->EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
+				//}
 
-				m_foxInstances.push_back(std::move(instances));
+				//m_foxInstances.push_back(std::move(instances));
 			}
 			INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 		}

@@ -24,10 +24,10 @@ namespace aether
 
 		// Convenience factory: persistently-mapped, host-sequential-write, coherency-flushed.
 		// Use for per-frame CPU-written buffers (uniform/storage).
-		static Expected<UniqueBuffer> CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+		static Expected<UniqueBuffer> CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName = nullptr);
 
 		// Convenience factory: device-local, GPU-optimal. Caller must upload via staging.
-		static Expected<UniqueBuffer> CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage);
+		static Expected<UniqueBuffer> CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName = nullptr);
 
 		void Reset();
 
@@ -47,9 +47,18 @@ namespace aether
 
 		void SetVirtualResourceId(std::uint64_t virtualResourceId);
 
+		// Name this buffer for RenderDoc / NSight / validation layers.
+		// No-op if the debug utils extension was not loaded.
+		void SetName(const char* name) const;
+
+		// Called once by VulkanContext after device creation.
+		static void SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn);
+
 		explicit operator bool() const;
 
 	private:
+		static inline PFN_vkSetDebugUtilsObjectNameEXT s_setObjectNameFn = nullptr;
+
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkDevice m_device = VK_NULL_HANDLE;
 		VkBuffer m_buffer = VK_NULL_HANDLE;

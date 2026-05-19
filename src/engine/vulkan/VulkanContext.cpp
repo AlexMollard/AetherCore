@@ -7,6 +7,7 @@
 
 #include "utils/AetherExceptions.hpp"
 #include "rendering/CommandRecorder.hpp"
+#include "vulkan/UniqueBuffer.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
@@ -60,11 +61,11 @@ namespace aether
 #ifndef NDEBUG
 		// GPU-Assisted Validation: catches out-of-bounds BDA accesses, descriptor errors,
 		// and other GPU-side issues that CPU validation layers cannot see.
-		// NOTE: Do NOT add RESERVE_BINDING_SLOT — binding 0 of set 0 is occupied by the
+		// NOTE: Do NOT add RESERVE_BINDING_SLOT - binding 0 of set 0 is occupied by the
 		// bindless texture array. GPU-AV will inject its descriptor into set 2 instead
 		// (pipelines only use sets 0 and 1, so set 2 is free for the validation layer).
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
-		INFO(LogCategory::Vulkan, "GPU-Assisted Validation enabled (debug build).");
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+		INFO(LogCategory::Vulkan, "GPU-Assisted Validation + Synchronization Validation enabled (debug build).");
 #endif
 
 		auto instanceResult = instanceBuilder.build();
@@ -101,6 +102,7 @@ namespace aether
 		requiredFeatures12.timelineSemaphore = VK_TRUE;
 		requiredFeatures12.drawIndirectCount = VK_TRUE;
 		requiredFeatures12.shaderInt8 = VK_TRUE;
+		requiredFeatures12.hostQueryReset = VK_TRUE;
 
 		VkPhysicalDeviceVulkan13Features requiredFeatures13{};
 		requiredFeatures13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
@@ -114,7 +116,14 @@ namespace aether
 		requiredFeatures10.drawIndirectFirstInstance = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{ *m_instance };
-		auto physicalDeviceResult = selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13).select();
+		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
+#ifdef TRACY_ENABLE
+		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
+		// It is promoted to core in Vulkan 1.4 under the KHR name, but we request the EXT
+		// extension explicitly so vkb enables it and the function pointers are available.
+		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
+#endif
+		auto physicalDeviceResult = selector.select();
 
 		if (!physicalDeviceResult)
 		{
@@ -162,7 +171,9 @@ namespace aether
 
 		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")), reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
 
-		CommandRecorder::SetObjectNameFunction(reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT")));
+		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
+		CommandRecorder::SetObjectNameFunction(setObjectNameFn);
+		UniqueBuffer::SetObjectNameFunction(setObjectNameFn);
 
 		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
 		// so VRAM usage is visible alongside CPU heap allocations.
@@ -194,6 +205,22 @@ namespace aether
 			Throw(AetherError::Vulkan(static_cast<int32_t>(allocatorResult), std::format("Failed to create VMA allocator. VkResult={}", static_cast<int>(allocatorResult))));
 		}
 
+#ifdef TRACY_ENABLE
+		{
+			const auto qpreset = reinterpret_cast<PFN_vkResetQueryPoolEXT>(vkGetDeviceProcAddr(m_device->device, "vkResetQueryPool"));
+			const auto gpdctd = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(vkGetInstanceProcAddr(m_instance->instance, "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
+			const auto gct = reinterpret_cast<PFN_vkGetCalibratedTimestampsEXT>(vkGetDeviceProcAddr(m_device->device, "vkGetCalibratedTimestampsEXT"));
+
+			if (!qpreset || !gpdctd || !gct)
+			{
+				Throw(AetherError::Vulkan(0, "Tracy GPU context requires VK_EXT_calibrated_timestamps but function pointers are null. Ensure the extension is supported by the driver."));
+			}
+
+			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
+			AE_PROFILE_GPU_CONTEXT_NAME(m_tracyVkCtx, "AetherCore GPU");
+		}
+#endif
+
 		INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");
 	}
 
@@ -207,8 +234,17 @@ namespace aether
 			m_allocator = VK_NULL_HANDLE;
 		}
 
+#ifdef TRACY_ENABLE
+		if (m_tracyVkCtx)
+		{
+			TracyVkDestroy(m_tracyVkCtx);
+			m_tracyVkCtx = nullptr;
+		}
+#endif
+
 		CommandRecorder::SetDebugLabelFunctions(nullptr, nullptr);
 		CommandRecorder::SetObjectNameFunction(nullptr);
+		UniqueBuffer::SetObjectNameFunction(nullptr);
 
 		if (m_device.has_value())
 		{
@@ -234,6 +270,11 @@ namespace aether
 	const vkb::Device& VulkanContext::GetDevice() const
 	{
 		return *m_device;
+	}
+
+	VkPhysicalDevice VulkanContext::GetPhysicalDevice() const
+	{
+		return m_device->physical_device;
 	}
 
 	VkSurfaceKHR VulkanContext::GetSurface() const

@@ -28,6 +28,7 @@ namespace aether
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
 			shadowQueue.Initialize(context.GetDevice().device, context.GetAllocator());
+			shadowQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		}
 		for (auto& voxelQueue: m_voxelShadowRenderQueues)
 		{
@@ -35,6 +36,7 @@ namespace aether
 			// 512 draws / 512 batches covers worlds up to ~170 chunks per cascade;
 			// maxAnimationDraws=0 skips all animation/skin buffer allocation entirely.
 			voxelQueue.Initialize(context.GetDevice().device, context.GetAllocator(), 512, 512, 0u);
+			voxelQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		}
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());

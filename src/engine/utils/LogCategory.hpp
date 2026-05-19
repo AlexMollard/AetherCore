@@ -7,6 +7,7 @@ namespace aether
 		Engine,
 		Window,
 		Vulkan,
+		Animation,
 		Validation,
 		Asset,
 		FileSystem,

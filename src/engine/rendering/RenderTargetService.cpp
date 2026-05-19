@@ -123,6 +123,7 @@ namespace aether
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
 		rt.renderQueue.Initialize(m_context->GetDevice().device, m_context->GetAllocator());
+		rt.renderQueue.SetTracyVkCtx(m_context->GetTracyVkCtx());
 
 		const std::uint32_t id = m_nextId++;
 		m_targets.emplace(id, std::move(rt));

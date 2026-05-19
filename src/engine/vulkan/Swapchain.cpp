@@ -339,9 +339,17 @@ namespace aether
 			.signalSemaphoreCount = 1,
 			.pSignalSemaphores = &renderFinished,
 		};
-		if (vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight) != VK_SUCCESS)
 		{
-			Throw(AetherError::Vulkan(0, "Failed to submit queue."));
+			const VkResult submitResult = vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight);
+			if (submitResult == VK_ERROR_DEVICE_LOST)
+			{
+				ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
+				std::terminate();
+			}
+			if (submitResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Failed to submit queue."));
+			}
 		}
 
 		const VkPresentInfoKHR presentInfo{
@@ -353,6 +361,11 @@ namespace aether
 			.pImageIndices = &m_imageIndex,
 		};
 		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
+		if (presentResult == VK_ERROR_DEVICE_LOST)
+		{
+			ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueuePresentKHR (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
+			std::terminate();
+		}
 		if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
 		{
 			m_needsRecreation = true;

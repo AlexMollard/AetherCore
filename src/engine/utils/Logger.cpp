@@ -104,6 +104,8 @@ namespace aether
 					return "App";
 				case LogCategory::Std:
 					return "Std";
+				case LogCategory::Animation:
+					return "Animation";
 				case LogCategory::Unknown:
 					return "Unknown";
 				default:

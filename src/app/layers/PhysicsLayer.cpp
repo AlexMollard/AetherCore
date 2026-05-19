@@ -23,7 +23,7 @@ namespace aether::app
 
 	void PhysicsLayer::OnDetach(LayerContext& context)
 	{
-		// PhysicsSystem is engine-owned and stays alive — only the game system goes.
+		// PhysicsSystem is engine-owned and stays alive - only the game system goes.
 		context.Get<World>().UnregisterSystem("PhysicsGameSystem");
 		m_gameSystem = nullptr;
 	}

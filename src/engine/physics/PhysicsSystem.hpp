@@ -119,7 +119,7 @@ namespace aether
 		bool m_needsBroadPhaseOptimize = false;
 
 		// Auto-disconnects in the destructor (declared last so it disconnects
-		// before m_physics is destroyed — reverse member destruction order).
+		// before m_physics is destroyed - reverse member destruction order).
 		entt::scoped_connection m_rigidBodyDestroyConn;
 	};
 

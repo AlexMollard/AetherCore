@@ -26,6 +26,8 @@ namespace aether
 					return FormatError("Window", code, message);
 				case LogCategory::Vulkan:
 					return FormatError("Vulkan", code, message);
+				case LogCategory::Animation:
+					return FormatError("Animation", code, message);
 				case LogCategory::Validation:
 					return FormatError("Validation", code, message);
 				case LogCategory::Asset:
@@ -96,6 +98,7 @@ namespace aether
 			case LogCategory::Window:
 				throw WindowError(err.message);
 			case LogCategory::Engine:
+			case LogCategory::Animation:
 			case LogCategory::Validation:
 			case LogCategory::App:
 			case LogCategory::Std:

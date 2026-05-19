@@ -16,7 +16,7 @@ namespace aether
 
 		constexpr VkBufferUsageFlags kBaseUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage));
+		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage, desc.debugName));
 		m_buffer = std::move(buffer);
 		m_freeList.push_back({ 0, desc.capacityBytes });
 	}
@@ -62,7 +62,7 @@ namespace aether
 			{
 				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{ alignedOffset + bytes, effectiveSize - bytes });
 				// Block at idx now represents the allocated region: {alignedOffset, bytes}
-				// Replace it with the remainder since we only split once — keep it simple:
+				// Replace it with the remainder since we only split once - keep it simple:
 				// erase the usable slot (idx) since we'll let the normal free-list manage leftovers.
 				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
 			}

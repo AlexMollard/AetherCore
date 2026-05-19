@@ -3,6 +3,7 @@
 #include <mutex>
 #include <optional>
 #include "utils/Assert.hpp"
+#include "utils/GpuProfiler.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
@@ -22,6 +23,13 @@ namespace aether
 
 		[[nodiscard]] const vkb::Instance& GetInstance() const;
 		[[nodiscard]] const vkb::Device& GetDevice() const;
+		[[nodiscard]] VkPhysicalDevice GetPhysicalDevice() const;
+
+		[[nodiscard]] TracyVkCtx GetTracyVkCtx() const
+		{
+			return m_tracyVkCtx;
+		}
+
 		[[nodiscard]] VkSurfaceKHR GetSurface() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
 		[[nodiscard]] VkQueue GetGraphicsQueue() const;
@@ -46,5 +54,6 @@ namespace aether
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
 		mutable std::mutex m_graphicsQueueMutex;
+		TracyVkCtx m_tracyVkCtx = nullptr;
 	};
 } // namespace aether

@@ -86,7 +86,7 @@ namespace aether
 		return out;
 	}
 
-	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName)
 	{
 		const VkBufferCreateInfo bufInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -97,10 +97,15 @@ namespace aether
 			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 			.usage = VMA_MEMORY_USAGE_AUTO,
 		};
-		return Create(allocator, device, bufInfo, allocInfo);
+		auto result = Create(allocator, device, bufInfo, allocInfo);
+		if (result && debugName)
+		{
+			result->SetName(debugName);
+		}
+		return result;
 	}
 
-	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage)
+	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName)
 	{
 		const VkBufferCreateInfo bufInfo{
 			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -110,7 +115,32 @@ namespace aether
 		const VmaAllocationCreateInfo allocInfo{
 			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
-		return Create(allocator, device, bufInfo, allocInfo);
+		auto result = Create(allocator, device, bufInfo, allocInfo);
+		if (result && debugName)
+		{
+			result->SetName(debugName);
+		}
+		return result;
+	}
+
+	void UniqueBuffer::SetName(const char* name) const
+	{
+		if (!s_setObjectNameFn || m_buffer == VK_NULL_HANDLE || !name)
+		{
+			return;
+		}
+		const VkDebugUtilsObjectNameInfoEXT info{
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_BUFFER,
+			.objectHandle = reinterpret_cast<std::uint64_t>(m_buffer),
+			.pObjectName = name,
+		};
+		s_setObjectNameFn(m_device, &info);
+	}
+
+	void UniqueBuffer::SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn)
+	{
+		s_setObjectNameFn = fn;
 	}
 
 	void UniqueBuffer::Reset()
