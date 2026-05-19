@@ -158,7 +158,7 @@ namespace aether
 		return m_sets[frameSlot];
 	}
 
-	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const std::uint32_t computeQueueFamily, const std::uint32_t graphicsQueueFamily) const
+	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const bool isAsyncCompute) const
 	{
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
@@ -168,14 +168,32 @@ namespace aether
 
 		if (m_gpuBinningEnabled && cmd.IsValid())
 		{
-			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, computeQueueFamily, graphicsQueueFamily);
+			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc);
+			if (!isAsyncCompute)
+			{
+				// Same queue: explicit compute→fragment barrier required.
+				// Async path: the semaphore wait at FRAGMENT_SHADER in SubmitAndPresent covers this.
+				const VkMemoryBarrier2 computeToFragment{
+					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				};
+				const VkDependencyInfo dep{
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.memoryBarrierCount = 1,
+					.pMemoryBarriers = &computeToFragment,
+				};
+				vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &dep);
+			}
 			return;
 		}
 
 		UpdateForViewCpu(frameSlot, camera, extent, fc);
 	}
 
-	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::uint32_t srcQueueFamily, const std::uint32_t dstQueueFamily) const
+	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
 	{
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
@@ -270,103 +288,13 @@ namespace aether
 		}
 		cmd.EndDebugLabel();
 
-		// When queue families differ, issue QFOT release barriers on each buffer so
-		// the graphics queue can acquire ownership before the fragment shader reads.
-		// When same family, a plain memory barrier from compute to fragment suffices.
-		// const auto& frame = m_buffers[frameSlot];
-		const bool crossFamily = srcQueueFamily != dstQueueFamily && srcQueueFamily != 0xFFFFFFFF && dstQueueFamily != 0xFFFFFFFF;
-
-		if (crossFamily)
-		{
-			const VkBuffer bufs[3] = {
-				frame.lights.Get(),
-				frame.tileHeaders.Get(),
-				frame.tileIndices.Get(),
-			};
-			VkBufferMemoryBarrier2 releases[3]{};
-			for (int i = 0; i < 3; ++i)
-			{
-				releases[i] = VkBufferMemoryBarrier2{
-					.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.dstAccessMask = 0,
-					.srcQueueFamilyIndex = srcQueueFamily,
-					.dstQueueFamilyIndex = dstQueueFamily,
-					.buffer = bufs[i],
-					.offset = 0,
-					.size = VK_WHOLE_SIZE,
-				};
-			}
-			const VkDependencyInfo releaseDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.bufferMemoryBarrierCount = 3,
-				.pBufferMemoryBarriers = releases,
-			};
-			vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &releaseDep);
-		}
-		else
-		{
-			const VkMemoryBarrier2 computeToFragment{
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-			};
-			const VkDependencyInfo computeToFragmentDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.memoryBarrierCount = 1,
-				.pMemoryBarriers = &computeToFragment,
-			};
-			vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &computeToFragmentDep);
-		}
-
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	void LightingManager::EmitAcquireBarriers(const std::uint32_t frameSlot, CommandRecorder& graphicsCmd, const std::uint32_t srcFamily, const std::uint32_t dstFamily) const
+	void LightingManager::EmitAcquireBarriers(const std::uint32_t /*frameSlot*/, CommandRecorder& /*graphicsCmd*/, const std::uint32_t /*srcFamily*/, const std::uint32_t /*dstFamily*/) const
 	{
-		if (srcFamily == dstFamily || srcFamily == 0xFFFFFFFF || dstFamily == 0xFFFFFFFF)
-		{
-			return;
-		}
-
-		const auto& frame = m_buffers[frameSlot];
-		if (frame.lights.Get() == VK_NULL_HANDLE)
-		{
-			return; // buffers not yet allocated (no lights this frame)
-		}
-
-		const VkBuffer bufs[3] = {
-			frame.lights.Get(),
-			frame.tileHeaders.Get(),
-			frame.tileIndices.Get(),
-		};
-		VkBufferMemoryBarrier2 acquires[3]{};
-		for (int i = 0; i < 3; ++i)
-		{
-			acquires[i] = VkBufferMemoryBarrier2{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.srcAccessMask = 0,
-				.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-				.srcQueueFamilyIndex = srcFamily,
-				.dstQueueFamilyIndex = dstFamily,
-				.buffer = bufs[i],
-				.offset = 0,
-				.size = VK_WHOLE_SIZE,
-			};
-		}
-		const VkDependencyInfo acquireDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.bufferMemoryBarrierCount = 3,
-			.pBufferMemoryBarriers = acquires,
-		};
-		vkCmdPipelineBarrier2(graphicsCmd.GetCommandBuffer(), &acquireDep);
+		// maintenance9 eliminates queue family ownership transfers entirely.
 	}
 
 	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const

@@ -261,20 +261,12 @@ namespace aether
 			{
 				if (m_asyncCompute.IsEnabled())
 				{
-					const std::uint32_t computeFamily = m_gpu.GetVulkanContext().GetComputeQueueFamily();
-					const std::uint32_t graphicsFamily = m_gpu.GetVulkanContext().GetGraphicsQueueFamily();
-
 					m_asyncCompute.BeginFrame(m_gpu, frameIdx);
 					CommandRecorder lightingCmd = m_asyncCompute.GetCommandRecorder(frameIdx);
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, computeFamily, graphicsFamily);
+					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true);
 					m_asyncCompute.EndCommandBuffer(frameIdx);
 
 					(void) m_asyncCompute.Submit(m_gpu, frameIdx);
-
-					if (computeFamily != graphicsFamily)
-					{
-						m_cameras.GetLightingManager().EmitAcquireBarriers(frameIdx, m_currentRecorder, computeFamily, graphicsFamily);
-					}
 				}
 				else
 				{
