@@ -27,7 +27,7 @@ namespace aether
 	class ShadowService
 	{
 	public:
-		void Initialize(VulkanContext& context, const Swapchain& swapchain);
+		void Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown(VkDevice device);
 
 		void RecreatePipeline(VkDevice device, VkFormat depthFormat);

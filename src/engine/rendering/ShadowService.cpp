@@ -19,7 +19,7 @@
 
 namespace aether
 {
-	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain)
+	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
@@ -27,7 +27,7 @@ namespace aether
 		}
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
-			shadowQueue.Initialize(context.GetDevice().device, context.GetAllocator());
+			shadowQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines);
 			shadowQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		}
 		for (auto& voxelQueue: m_voxelShadowRenderQueues)
@@ -35,7 +35,7 @@ namespace aether
 			// Voxel chunks: one batch per unique mesh, no skinning ever.
 			// 512 draws / 512 batches covers worlds up to ~170 chunks per cascade;
 			// maxAnimationDraws=0 skips all animation/skin buffer allocation entirely.
-			voxelQueue.Initialize(context.GetDevice().device, context.GetAllocator(), 512, 512, 0u);
+			voxelQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 512, 512, 0u);
 			voxelQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		}
 

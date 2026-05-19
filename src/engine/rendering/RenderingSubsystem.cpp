@@ -22,13 +22,15 @@ namespace aether
 		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
 		m_frameConstantsBuffer.Initialize(vk);
 
-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), 65536);
+		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
+
+		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, 65536);
 		m_renderQueue.SetDebugForceVisible(false);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
 
-		m_shadowService.Initialize(vk, swapchain);
-		m_renderTargetService.Initialize(vk);
+		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
+		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
 
 		m_postProcessStack = PostProcessStack::Create({
@@ -75,6 +77,7 @@ namespace aether
 		m_shadowService.Shutdown(vk.GetDevice().device);
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
+		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
 	}
 
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)

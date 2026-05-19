@@ -26,7 +26,7 @@ namespace aether
 	class RenderTargetService
 	{
 	public:
-		void Initialize(VulkanContext& context);
+		void Initialize(VulkanContext& context, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown();
 
 		void BindRuntime(RenderGraph& graph, BindlessManager& bindlessManager, CameraManager& cameraManager, LightingManager& lightingManager, Renderer& renderer, MaterialBuffer& materialBuffer, const CullPass& cullPass, std::function<std::uint64_t()> getFrameIndex, VkDevice device, VkFormat depthFormat, VkFormat forwardColorFormat);
@@ -59,6 +59,7 @@ namespace aether
 		std::unordered_map<std::uint32_t, Entry> m_targets;
 		std::uint32_t m_nextId = 1;
 
+		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 		VulkanContext* m_context = nullptr;
 		RenderGraph* m_graph = nullptr;
 		BindlessManager* m_bindlessManager = nullptr;

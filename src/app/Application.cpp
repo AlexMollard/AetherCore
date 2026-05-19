@@ -112,14 +112,14 @@ namespace aether::app
 		{
 			AE_WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.slang.spv");
 		}
-		else
-		{
-			AE_INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
-			for (const auto& shaderFile: *shaderFilesResult)
-			{
-				AE_VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
-			}
-		}
+		//else
+		//{
+		//	AE_INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
+		//	for (const auto& shaderFile: *shaderFilesResult)
+		//	{
+		//		AE_VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
+		//	}
+		//}
 
 		Logger::SetFrameNumber(0);
 		m_imguiRenderer.Init(m_engine.GetServiceContainer(), m_engine.GetServiceContainer().Get<Window>().GetHandle());

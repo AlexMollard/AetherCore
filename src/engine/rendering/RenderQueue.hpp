@@ -19,6 +19,19 @@ namespace aether
 	class GraphicsPipeline;
 	class Mesh;
 
+	// Shared compute pipelines used by every RenderQueue instance.
+	// Create one, initialize it once, then pass a const reference to each RenderQueue::Initialize().
+	struct RenderQueueSharedPipelines
+	{
+		VkPipeline skinCopy = VK_NULL_HANDLE;
+		VkPipelineLayout skinCopyLayout = VK_NULL_HANDLE;
+		VkPipeline animSample = VK_NULL_HANDLE;
+		VkPipelineLayout animSampleLayout = VK_NULL_HANDLE;
+
+		void Initialize(VkDevice device);
+		void Shutdown(VkDevice device);
+	};
+
 	// Per-draw submission payload.
 	struct DrawCommand
 	{
@@ -46,7 +59,7 @@ namespace aether
 		// (for queues that never process skinned draws, e.g. voxel shadow queues).
 		// UINT32_MAX (default) derives a sane cap from total draws using
 		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
-		void Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX);
+		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX);
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.
@@ -167,11 +180,7 @@ namespace aether
 		bool m_debugBypassIndirect = false;
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
-		VkPipeline m_skinCopyPipeline = VK_NULL_HANDLE;
-		VkPipelineLayout m_skinCopyPipelineLayout = VK_NULL_HANDLE;
-
-		VkPipeline m_animationSamplePipeline = VK_NULL_HANDLE;
-		VkPipelineLayout m_animationSamplePipelineLayout = VK_NULL_HANDLE;
+		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 
 		const AnimationDatabase* m_animationDb = nullptr;
 		UniqueBuffer m_animationSampleJobsBuffer; // AnimatorSampleJob[] CPU-mapped
@@ -197,8 +206,5 @@ namespace aether
 		};
 
 		std::array<TsSlots, kFramesInFlight> m_tsSlots{};
-
-		void EnsureSkinCopyPipeline();
-		void EnsureAnimationSamplePipeline();
 	};
 } // namespace aether

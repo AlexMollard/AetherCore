@@ -19,9 +19,10 @@
 
 namespace aether
 {
-	void RenderTargetService::Initialize(VulkanContext& context)
+	void RenderTargetService::Initialize(VulkanContext& context, const RenderQueueSharedPipelines& pipelines)
 	{
 		m_context = &context;
+		m_sharedPipelines = &pipelines;
 	}
 
 	void RenderTargetService::Shutdown()
@@ -122,7 +123,7 @@ namespace aether
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
-		rt.renderQueue.Initialize(m_context->GetDevice().device, m_context->GetAllocator());
+		rt.renderQueue.Initialize(m_context->GetDevice().device, m_context->GetAllocator(), *m_sharedPipelines);
 		rt.renderQueue.SetTracyVkCtx(m_context->GetTracyVkCtx());
 
 		const std::uint32_t id = m_nextId++;

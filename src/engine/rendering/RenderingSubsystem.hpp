@@ -96,6 +96,7 @@ namespace aether
 	private:
 		void RegisterPasses(ServiceContainer& services);
 
+		RenderQueueSharedPipelines m_renderQueuePipelines;
 		RenderGraph m_renderGraph;
 		RenderQueue m_renderQueue;
 		Renderer m_renderer;

@@ -17,10 +17,11 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws)
+	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws)
 	{
 		m_device = device;
 		m_allocator = allocator;
+		m_sharedPipelines = &pipelines;
 		m_maxDraws = maxDraws;
 		m_maxBatches = maxBatches;
 		m_maxAnimationDraws = (maxAnimationDraws == UINT32_MAX) ? std::min(maxDraws, kDefaultMaxAnimationDraws) : maxAnimationDraws;
@@ -62,32 +63,11 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
 		m_outputIndirectBuffer = std::move(b7);
-		EnsureSkinCopyPipeline();
 	}
 
 	void RenderQueue::Shutdown()
 	{
-		if (m_skinCopyPipeline != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(m_device, m_skinCopyPipeline, nullptr);
-			m_skinCopyPipeline = VK_NULL_HANDLE;
-		}
-		if (m_skinCopyPipelineLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(m_device, m_skinCopyPipelineLayout, nullptr);
-			m_skinCopyPipelineLayout = VK_NULL_HANDLE;
-		}
-		if (m_animationSamplePipeline != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(m_device, m_animationSamplePipeline, nullptr);
-			m_animationSamplePipeline = VK_NULL_HANDLE;
-		}
-		if (m_animationSamplePipelineLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(m_device, m_animationSamplePipelineLayout, nullptr);
-			m_animationSamplePipelineLayout = VK_NULL_HANDLE;
-		}
-
+		m_sharedPipelines = nullptr;
 		m_sampledPosesBuffer.Reset();
 		m_animationSampleJobsBuffer.Reset();
 		m_outputIndirectBuffer.Reset();
@@ -355,9 +335,7 @@ namespace aether
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
-			EnsureAnimationSamplePipeline();
-
-			if (m_animationSamplePipeline != VK_NULL_HANDLE)
+			if (m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE)
 			{
 				const AnimationSamplePush animPc{
 					.animDbClipsAddr = m_animationDb->GetClipsAddr(),
@@ -374,8 +352,8 @@ namespace aether
 				};
 
 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_animationSamplePipeline);
-				vkCmdPushConstants(cmd, m_animationSamplePipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animSample);
+				vkCmdPushConstants(cmd, m_sharedPipelines->animSampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -447,8 +425,8 @@ namespace aether
 			};
 
 			CommandRecorder(cmd).BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_skinCopyPipeline);
-			vkCmdPushConstants(cmd, m_skinCopyPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->skinCopy);
+			vkCmdPushConstants(cmd, m_sharedPipelines->skinCopyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
 			if (m_timestampPool)
 			{
 				m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -639,108 +617,116 @@ namespace aether
 		return m_commandSlots[slot % kFramesInFlight].empty();
 	}
 
-	void RenderQueue::EnsureSkinCopyPipeline()
+	void RenderQueueSharedPipelines::Initialize(VkDevice device)
 	{
-		if (m_skinCopyPipeline != VK_NULL_HANDLE)
 		{
-			return;
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(SkinPalettePush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &skinCopyLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = skinCopyLayout,
+			};
+			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skinCopy) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopy), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopyLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
 
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv"));
-
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
-
-		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(SkinPalettePush),
-		};
-		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
-		};
-		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_skinCopyPipelineLayout) != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create skin copy pipeline layout."));
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.slang.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(AnimationSamplePush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animSampleLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = animSampleLayout,
+			};
+			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &animSample) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSample), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSampleLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
-
-		const VkPipelineShaderStageCreateInfo stage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "main",
-		};
-		const VkComputePipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = stage,
-			.layout = m_skinCopyPipelineLayout,
-		};
-		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_skinCopyPipeline) != VK_SUCCESS)
-		{
-			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create skin copy compute pipeline."));
-		}
-
-		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_skinCopyPipeline), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
-		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_skinCopyPipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
-
-		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}
 
-	void RenderQueue::EnsureAnimationSamplePipeline()
+	void RenderQueueSharedPipelines::Shutdown(VkDevice device)
 	{
-		if (m_animationSamplePipeline != VK_NULL_HANDLE)
+		if (skinCopy != VK_NULL_HANDLE)
 		{
-			return;
+			vkDestroyPipeline(device, skinCopy, nullptr);
+			skinCopy = VK_NULL_HANDLE;
 		}
-
-		if (m_animationDb == nullptr || !m_animationDb->IsValid())
+		if (skinCopyLayout != VK_NULL_HANDLE)
 		{
-			return;
+			vkDestroyPipelineLayout(device, skinCopyLayout, nullptr);
+			skinCopyLayout = VK_NULL_HANDLE;
 		}
-
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.slang.spv"));
-
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, spirv, "RenderQueue"));
-
-		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(AnimationSamplePush),
-		};
-		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
-		};
-		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_animationSamplePipelineLayout) != VK_SUCCESS)
+		if (animSample != VK_NULL_HANDLE)
 		{
-			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create animation sample pipeline layout."));
+			vkDestroyPipeline(device, animSample, nullptr);
+			animSample = VK_NULL_HANDLE;
 		}
-
-		const VkPipelineShaderStageCreateInfo stage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "main",
-		};
-		const VkComputePipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = stage,
-			.layout = m_animationSamplePipelineLayout,
-		};
-		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_animationSamplePipeline) != VK_SUCCESS)
+		if (animSampleLayout != VK_NULL_HANDLE)
 		{
-			vkDestroyShaderModule(m_device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "RenderQueue: failed to create animation sample compute pipeline."));
+			vkDestroyPipelineLayout(device, animSampleLayout, nullptr);
+			animSampleLayout = VK_NULL_HANDLE;
 		}
-
-		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_animationSamplePipeline), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
-		CommandRecorder::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_animationSamplePipelineLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
-
-		vkDestroyShaderModule(m_device, shaderModule, nullptr);
 	}
 } // namespace aether

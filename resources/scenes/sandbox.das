@@ -91,8 +91,8 @@ def on_attach(world : World?)
 	add_capsule_body(world, capsule, 0.6, 0.3, true)
 
 	// ── Foxes in a circle ─────────────────────────────────────────────────────
-	spawn_foxes(world, 12, 8.0)
-	g_fox_count = 12
+	spawn_foxes(world, 1, 8.0)
+	g_fox_count = 1
 
 	// ── Native UI - Scene Controls panel ──────────────────────────────────────
 	let panel = create_ui_panel(world, 16.0, 16.0, 280.0, 240.0, "Scene Controls")
