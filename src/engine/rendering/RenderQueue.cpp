@@ -60,8 +60,8 @@ namespace aether
 			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
 			m_sampledPosesBuffer = std::move(b6);
 
-			// Debug buffer: host-visible for reading back skin matrices, sampled poses, and intermediate globalM (1024 bytes = 256 floats)
-			AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateMapped(allocator, device, 1024, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.DebugSkinMatrices"));
+			// Debug buffer: host-visible for reading back ComposeTrs test and skin matrices (512 bytes = 128 floats)
+			AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateMapped(allocator, device, 512, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.DebugSkinMatrices"));
 			m_debugSkinMatrixBuffer = std::move(b8);
 			m_debugSkinMatrixMapped = static_cast<float*>(m_debugSkinMatrixBuffer.GetAllocationInfo().pMappedData);
 		}
@@ -584,27 +584,19 @@ namespace aether
 		if (m_debugSkinMatrixMapped != nullptr && m_debugSkinMatrixBuffer.GetDeviceAddress() != 0)
 		{
 			vkDeviceWaitIdle(m_device);
-			AE_INFO(LogCategory::Animation, "  === GPU SKIN MATRICES (first 4 joints, from debug buffer) ===");
-			for (std::uint32_t j = 0; j < 4u; ++j)
-			{
-				const float* m = &m_debugSkinMatrixMapped[j * 16u];
-				AE_INFO(LogCategory::Animation, "    SkinMat[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
-				        j, m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
-			}
-			AE_INFO(LogCategory::Animation, "  === GPU GLOBALM (joint 2 / node 4 hierarchy walk, from debug buffer) ===");
-			for (std::uint32_t step = 0; step < 6u; ++step)
-			{
-				const float* m = &m_debugSkinMatrixMapped[200u + step * 16u];
-				AE_INFO(LogCategory::Animation, "    Step[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
-				        step, m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
-			}
-			AE_INFO(LogCategory::Animation, "  === GPU SAMPLED POSES (nodes 0-5, from debug buffer) ===");
-			for (std::uint32_t n = 0; n < 6u; ++n)
-			{
-				const float* p = &m_debugSkinMatrixMapped[128u + n * 12u];
-				AE_INFO(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}]",
-				        n, p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], p[9]);
-			}
+			auto dumpMat = [&](const char* label, uint32_t offset) {
+				const float* m = &m_debugSkinMatrixMapped[offset];
+				AE_INFO(LogCategory::Animation, "  {} [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
+				        label,
+				        m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+			};
+			dumpMat("ComposeTrs(node4)   ", 0u);
+			dumpMat("invBind[2] (GPU)    ", 16u);
+			dumpMat("globalM step 0      ", 32u);
+			dumpMat("globalM step 1      ", 48u);
+			dumpMat("globalM step 2      ", 64u);
+			dumpMat("globalM step 3      ", 80u);
+			dumpMat("skinMatrix (joint2) ", 96u);
 		}
 
 		recorder.BeginDebugLabel("RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, 1.0f);
