@@ -21,11 +21,11 @@ struct VSOutput
 };
 
 [shader("vertex")]
-VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
 {
     FrameConstantsData* fc        = (FrameConstantsData*)(pc.frameAddr);
     DrawInstanceData*   instances = (DrawInstanceData*)(pc.instanceDataAddr);
-    const uint instanceIndex = startInstance + instanceId;
+    const uint instanceIndex = startInstance;
     const float4x4 model = instances[instanceIndex].model;
 
     VoxelVertex* verts = (VoxelVertex*)(instances[instanceIndex].vertexBufferAddr);

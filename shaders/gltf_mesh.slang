@@ -35,6 +35,7 @@
 //   offset 64  : uint    occlusionSlot
 //   offset 68  : uint    emissiveSlot
 
+
 // ── Bindless resources ────────────────────────────────────────────────────
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
@@ -121,15 +122,16 @@ float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
 
 // ── Vertex shader ─────────────────────────────────────────────────────────
 
-// Keep instance indexing explicit: combine the per-draw base instance with the
-// per-instance id so we always address DrawInstanceData correctly for both direct
-// and indirect draws, independent of backend semantic mapping details.
+// SV_StartInstanceLocation == gl_BaseInstance == firstInstance from the draw command.
+// All draws use instanceCount=1, so this directly selects the right DrawInstanceData slot.
+// Do NOT add SV_InstanceID: Slang maps it to gl_InstanceIndex which already includes
+// the base, so adding both would double-count firstInstance and read the wrong slot.
 [shader("vertex")]
-VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID, uint startInstance : SV_StartInstanceLocation)
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
 {
     FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
     DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
-    const uint instanceIndex = startInstance + instanceId;
+    const uint instanceIndex = startInstance;
     DrawInstanceData instance = instances[instanceIndex];
 
     Vertex* verts = (Vertex*)(instance.vertexBufferAddr);

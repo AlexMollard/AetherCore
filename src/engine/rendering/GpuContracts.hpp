@@ -159,8 +159,7 @@ namespace aether
 		VkDeviceAddress skinInverseBindsAddr = 0;
 		std::uint32_t jobCount = 0;
 		std::uint32_t _pad0 = 0;
-		std::uint32_t _pad1 = 0;
-		std::uint32_t _pad2 = 0;
+		VkDeviceAddress debugSkinMatricesAddr = 0; // BDA for debug output buffer (64 floats)
 	};
 
 	static_assert(sizeof(SkinPalettePush) == 64, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
@@ -172,8 +171,7 @@ namespace aether
 	static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 40);
 	static_assert(offsetof(SkinPalettePush, jobCount) == 48);
 	static_assert(offsetof(SkinPalettePush, _pad0) == 52);
-	static_assert(offsetof(SkinPalettePush, _pad1) == 56);
-	static_assert(offsetof(SkinPalettePush, _pad2) == 60);
+	static_assert(offsetof(SkinPalettePush, debugSkinMatricesAddr) == 56);
 
 	struct AnimationSamplePush
 	{

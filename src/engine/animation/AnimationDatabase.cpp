@@ -158,10 +158,16 @@ namespace aether
 		db.m_bindTranslationsAddr = UploadArray(db.m_heap, bindTranslations, device, queue, uploadPool);
 		db.m_bindRotationsAddr = UploadArray(db.m_heap, bindRotations, device, queue, uploadPool);
 		db.m_bindScalesAddr = UploadArray(db.m_heap, bindScales, device, queue, uploadPool);
+		db.m_bindTranslations = std::move(bindTranslations);
+		db.m_bindRotations = std::move(bindRotations);
+		db.m_bindScales = std::move(bindScales);
+		db.m_nodeParents = std::move(nodeParents);
 		db.m_skinMetas = skinMetas;
 		db.m_skinMetasAddr = UploadArray(db.m_heap, skinMetas, device, queue, uploadPool);
-		db.m_skinJointsAddr = UploadArray(db.m_heap, skinJoints, device, queue, uploadPool);
-		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, skinInverseBinds, device, queue, uploadPool);
+		db.m_skinJoints = std::move(skinJoints);
+		db.m_skinJointsAddr = UploadArray(db.m_heap, db.m_skinJoints, device, queue, uploadPool);
+		db.m_skinInverseBinds = std::move(skinInverseBinds);
+		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
 
 		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())

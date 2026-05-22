@@ -185,6 +185,8 @@ namespace aether
 		const AnimationDatabase* m_animationDb = nullptr;
 		UniqueBuffer m_animationSampleJobsBuffer; // AnimatorSampleJob[] CPU-mapped
 		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
+		UniqueBuffer m_debugSkinMatrixBuffer;     // Debug: 64 floats for first 4 skin matrices (host-visible)
+		float* m_debugSkinMatrixMapped = nullptr;
 
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::uint32_t m_animationFrameCount = 0;

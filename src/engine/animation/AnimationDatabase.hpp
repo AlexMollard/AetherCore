@@ -176,6 +176,15 @@ namespace aether
 			return !m_clips.empty();
 		}
 
+		// CPU accessors for bind pose data (debug/validation).
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindTranslations() const { return m_bindTranslations; }
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindRotations() const { return m_bindRotations; }
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindScales() const { return m_bindScales; }
+		[[nodiscard]] const std::vector<std::int32_t>& GetNodeParents() const { return m_nodeParents; }
+		[[nodiscard]] const std::vector<glm::mat4>& GetSkinInverseBinds() const { return m_skinInverseBinds; }
+		[[nodiscard]] const std::vector<std::uint32_t>& GetSkinJoints() const { return m_skinJoints; }
+		[[nodiscard]] const std::vector<GpuSkinMeta>& GetSkinMetas() const { return m_skinMetas; }
+
 	private:
 		GpuHeap m_heap;
 
@@ -194,6 +203,12 @@ namespace aether
 
 		std::vector<GpuClip> m_clips;         // CPU-side copy for GetClipName()/GetClipDuration()
 		std::vector<GpuSkinMeta> m_skinMetas; // CPU-side copy for GetSkinJointCount()
+		std::vector<glm::vec4> m_bindTranslations; // CPU-side copy for debug
+		std::vector<glm::vec4> m_bindRotations;    // CPU-side copy for debug
+		std::vector<glm::vec4> m_bindScales;       // CPU-side copy for debug
+		std::vector<std::int32_t> m_nodeParents;   // CPU-side copy for debug
+		std::vector<glm::mat4> m_skinInverseBinds; // CPU-side copy for debug
+		std::vector<std::uint32_t> m_skinJoints;   // CPU-side copy for debug
 		std::string m_clipNames;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_skinCount = 0;

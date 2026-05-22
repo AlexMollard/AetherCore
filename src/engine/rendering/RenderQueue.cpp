@@ -59,6 +59,11 @@ namespace aether
 
 			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
 			m_sampledPosesBuffer = std::move(b6);
+
+			// Debug buffer: host-visible for reading back first 4 skin matrices + intermediate globalM (128 floats = 512 bytes)
+			AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateMapped(allocator, device, 512, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.DebugSkinMatrices"));
+			m_debugSkinMatrixBuffer = std::move(b8);
+			m_debugSkinMatrixMapped = static_cast<float*>(m_debugSkinMatrixBuffer.GetAllocationInfo().pMappedData);
 		}
 
 		AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
@@ -68,6 +73,7 @@ namespace aether
 	void RenderQueue::Shutdown()
 	{
 		m_sharedPipelines = nullptr;
+		m_debugSkinMatrixBuffer.Reset();
 		m_sampledPosesBuffer.Reset();
 		m_animationSampleJobsBuffer.Reset();
 		m_outputIndirectBuffer.Reset();
@@ -78,6 +84,7 @@ namespace aether
 		m_instanceDataBuffer.Reset();
 		m_animationSampleJobsMapped = nullptr;
 		m_skinCopyJobsMapped = nullptr;
+		m_debugSkinMatrixMapped = nullptr;
 		m_instanceDataMapped = nullptr;
 		m_cullInputMapped = nullptr;
 		m_batchDescMapped = nullptr;
@@ -409,6 +416,48 @@ namespace aether
 				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
 				AE_INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
 			}
+
+			// DEBUG: Dump bind pose data for first job's nodes
+			if (m_animationDb && sampleJobsThisFrame > 0)
+			{
+				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase];
+				const auto& bindT = m_animationDb->GetBindTranslations();
+				const auto& bindR = m_animationDb->GetBindRotations();
+				const auto& bindS = m_animationDb->GetBindScales();
+				const auto& parents = m_animationDb->GetNodeParents();
+				AE_INFO(LogCategory::Animation, "  === BIND POSE DUMP (nodeCount={}) ===", aj.nodeCount);
+				const std::uint32_t dumpLimit = std::min(aj.nodeCount, 10u);
+				for (std::uint32_t n = 0; n < dumpLimit; ++n)
+				{
+					const auto& t = bindT[n];
+					const auto& r = bindR[n];
+					const auto& s = bindS[n];
+					AE_INFO(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}] parent={}",
+					        n, t.x, t.y, t.z, r.x, r.y, r.z, r.w, s.x, s.y, s.z, parents[n]);
+				}
+
+				// DEBUG: Dump skin joints and inverse bind matrices for first skin
+				const auto& skinJoints = m_animationDb->GetSkinJoints();
+				const auto& invBinds = m_animationDb->GetSkinInverseBinds();
+				AE_INFO(LogCategory::Animation, "  === SKIN JOINTS (first skin, {} joints) ===", skinJoints.size());
+				const std::uint32_t jointDumpLimit = std::min(static_cast<std::uint32_t>(skinJoints.size()), 10u);
+				for (std::uint32_t j = 0; j < jointDumpLimit; ++j)
+				{
+					AE_INFO(LogCategory::Animation, "    Joint[{}]: nodeIndex={}", j, skinJoints[j]);
+				}
+				AE_INFO(LogCategory::Animation, "  === INVERSE BIND MATRICES (first 3) ===");
+				const std::uint32_t invBindDumpLimit = std::min(static_cast<std::uint32_t>(invBinds.size()), 3u);
+				for (std::uint32_t j = 0; j < invBindDumpLimit; ++j)
+				{
+					const auto& m = invBinds[j];
+					AE_INFO(LogCategory::Animation, "    InvBind[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
+					        j,
+					        m[0][0], m[0][1], m[0][2], m[0][3],
+					        m[1][0], m[1][1], m[1][2], m[1][3],
+					        m[2][0], m[2][1], m[2][2], m[2][3],
+					        m[3][0], m[3][1], m[3][2], m[3][3]);
+				}
+			}
 		}
 
 		if (skinJobCount > 0)
@@ -422,6 +471,7 @@ namespace aether
 				.skinJointsAddr = m_animationDb != nullptr ? m_animationDb->GetSkinJointsAddr() : 0,
 				.skinInverseBindsAddr = m_animationDb != nullptr ? m_animationDb->GetSkinInverseBindsAddr() : 0,
 				.jobCount = skinJobCount,
+				.debugSkinMatricesAddr = m_debugSkinMatrixBuffer.GetDeviceAddress(),
 			};
 
 			CommandRecorder(cmd).BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
@@ -530,6 +580,26 @@ namespace aether
 			return;
 		}
 
+		// DEBUG: Read back and print skin matrices from previous dispatch
+		if (m_debugSkinMatrixMapped != nullptr && m_debugSkinMatrixBuffer.GetDeviceAddress() != 0)
+		{
+			vkDeviceWaitIdle(m_device);
+			AE_INFO(LogCategory::Animation, "  === GPU SKIN MATRICES (first 4 joints, from debug buffer) ===");
+			for (std::uint32_t j = 0; j < 4u; ++j)
+			{
+				const float* m = &m_debugSkinMatrixMapped[j * 16u];
+				AE_INFO(LogCategory::Animation, "    SkinMat[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
+				        j, m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+			}
+			AE_INFO(LogCategory::Animation, "  === GPU GLOBALM (joint 2 / node 4 hierarchy walk, from debug buffer) ===");
+			for (std::uint32_t step = 0; step < 6u; ++step)
+			{
+				const float* m = &m_debugSkinMatrixMapped[64u + step * 16u];
+				AE_INFO(LogCategory::Animation, "    Step[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
+				        step, m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15]);
+			}
+		}
+
 		recorder.BeginDebugLabel("RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, 1.0f);
 
 		const DrawPushConstants sharedPc{
@@ -626,7 +696,7 @@ namespace aether
 			const VkPushConstantRange pushRange{
 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 				.offset = 0,
-				.size = sizeof(SkinPalettePush),
+				.size = sizeof(SkinPalettePush), // 72 bytes
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
