@@ -65,6 +65,29 @@ void buildSkinPalette(uint3 tid : SV_DispatchThreadID)
     uint* skinJoints = (uint*)(pc.skinJointsAddr);
     float4x4* skinInverseBinds = (float4x4*)(pc.skinInverseBindsAddr);
 
+    // Debug: dump raw sampled poses for nodes 0-5 of job 0 (at offset 128, 12 floats each)
+    if (jobIndex == 0u && pc.debugSkinMatricesAddr != 0uL)
+    {
+        float* debugOut = (float*)(pc.debugSkinMatricesAddr);
+        for (uint n = 0u; n < 6u; ++n)
+        {
+            SampledNodePose p = sampled[n];
+            uint outBase = 128u + n * 12u;
+            debugOut[outBase + 0]  = p.translation.x;
+            debugOut[outBase + 1]  = p.translation.y;
+            debugOut[outBase + 2]  = p.translation.z;
+            debugOut[outBase + 3]  = p.rotation.x;
+            debugOut[outBase + 4]  = p.rotation.y;
+            debugOut[outBase + 5]  = p.rotation.z;
+            debugOut[outBase + 6]  = p.rotation.w;
+            debugOut[outBase + 7]  = p.scale.x;
+            debugOut[outBase + 8]  = p.scale.y;
+            debugOut[outBase + 9]  = p.scale.z;
+            debugOut[outBase + 10] = float(n);
+            debugOut[outBase + 11] = 0.0;
+        }
+    }
+
     GpuSkinMeta meta = skinMetas[job.skinIndex];
     for (uint j = 0u; j < job.jointCount; ++j)
     {
@@ -137,11 +160,11 @@ void buildSkinPalette(uint3 tid : SV_DispatchThreadID)
             debugOut[outBase + 15] = skinMatrix[3][3];
         }
 
-        // Debug: dump intermediate globalM for joint 2 (node 4) at offset 64
-        if (jobIndex == 0u && j == 2u && pc.debugSkinMatricesAddr != 0uL)
-        {
-            float* debugOut = (float*)(pc.debugSkinMatricesAddr);
-            uint outBase = 64u + safety * 16u;
+            // Debug: dump intermediate globalM for joint 2 (node 4) at offset 200
+            if (jobIndex == 0u && j == 2u && pc.debugSkinMatricesAddr != 0uL)
+            {
+                float* debugOut = (float*)(pc.debugSkinMatricesAddr);
+                uint outBase = 200u + safety * 16u;
             debugOut[outBase + 0]  = globalM[0][0];
             debugOut[outBase + 1]  = globalM[0][1];
             debugOut[outBase + 2]  = globalM[0][2];
