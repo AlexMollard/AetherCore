@@ -72,7 +72,8 @@ struct SkinPalettePush
     [[vk::offset(40)]] uint64_t skinInverseBindsAddr;
     [[vk::offset(48)]] uint jobCount;
     [[vk::offset(52)]] uint _pad0;
-    [[vk::offset(56)]] uint64_t debugSkinMatricesAddr; // BDA for debug output buffer (64 floats)
+    [[vk::offset(56)]] uint _reserved0;
+    [[vk::offset(60)]] uint _reserved1;
 };
 
 struct AnimationSamplePush

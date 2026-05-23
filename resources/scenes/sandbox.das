@@ -144,9 +144,9 @@ def on_update(world : World?)
 		add_transform(world, fox)
 		set_transform(world, fox, pos, float3(0.0, yaw, 0.0), float3(0.05, 0.05, 0.05))
 		load_model(world, fox, "assets://models/Fox/Fox.mesh")
-		// set_animation(world, fox, 2)
-		// set_playback_speed(world, fox, 0.7)
-		// set_anim_time(world, fox, float(g_fox_count) * 0.3)
+		set_animation(world, fox, 2)
+		set_playback_speed(world, fox, 0.7)
+		set_anim_time(world, fox, float(g_fox_count) * 0.3)
 		g_fox_count++
 
 		set_ui_button_label(world, g_spawn_btn, "Spawn Fox ({g_fox_count})")
@@ -181,8 +181,8 @@ def on_update(world : World?)
 	{
 		if (get_current_animation(world, e) != anim_clip)
 		{
-			//set_animation(world, e, anim_clip)
-			//set_playback_speed(world, e, g_rotate_foxes ? 0.7 : 1.0)
+			set_animation(world, e, anim_clip)
+			set_playback_speed(world, e, g_rotate_foxes ? 0.7 : 1.0)
 		}
 	}
 

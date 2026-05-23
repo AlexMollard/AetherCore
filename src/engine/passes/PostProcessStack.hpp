@@ -122,6 +122,6 @@ namespace aether
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
 		float m_exposure = 1.0f;
-		bool m_fxaaEnabled = true;
+		bool m_fxaaEnabled = false;
 	};
 } // namespace aether

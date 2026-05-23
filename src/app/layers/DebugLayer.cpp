@@ -144,6 +144,22 @@ namespace aether::app
 			}
 		}
 
+		
+		if (context.Get<Input>().IsKeyPressed(aether::Key::F))
+		{
+			const bool enabled = !context.Get<Renderer>().IsFxaaEnabled();
+			context.Get<Renderer>().SetFxaaEnabled(enabled);
+			AE_INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
+		}
+
+		if (context.Get<Input>().IsKeyPressed(aether::Key::T))
+		{
+			const auto next = static_cast<aether::TonemapMode>((static_cast<int>(context.Get<Renderer>().GetTonemapMode()) + 1) % 3);
+			context.Get<Renderer>().SetTonemapMode(next);
+			const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
+			AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
+		}
+
 		if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
 		{
 			if (scripting->HasError())

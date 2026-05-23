@@ -84,9 +84,9 @@ namespace aether::app::scripting
 
 // BIND_COMPONENT("name", ComponentType)
 // Expands to three Bind<> calls inside a DasModuleBase constructor (lib must be in scope):
-//   add_name(world, entity_id)    – emplaces the component
+//   add_name(world, entity_id)    - emplaces the component
 //   has_name(world, entity_id)    -> bool
-//   remove_name(world, entity_id) – removes the component
+//   remove_name(world, entity_id) - removes the component
 #define BIND_COMPONENT(NAME, TYPE)                                                 \
 	Bind<world_add_component<TYPE>>(lib, "add_" NAME, SE::modifyExternal);         \
 	Bind<world_has_component<TYPE>>(lib, "has_" NAME, SE::accessExternal);         \

@@ -603,23 +603,8 @@ namespace aether::app
 			m_services->Get<Renderer>().SetPointLights(m_pointLights);
 		}
 
-		// ── Input: T = cycle tonemap, F = toggle FXAA, C = swap camera ────────
+		// ── Input: C = swap camera ────────
 		{
-			if (m_input->IsKeyPressed(aether::Key::T))
-			{
-				const auto next = static_cast<aether::TonemapMode>((static_cast<int>(m_services->Get<Renderer>().GetTonemapMode()) + 1) % 3);
-				m_services->Get<Renderer>().SetTonemapMode(next);
-				const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
-				AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
-			}
-
-			if (m_input->IsKeyPressed(aether::Key::F))
-			{
-				const bool enabled = !m_services->Get<Renderer>().IsFxaaEnabled();
-				m_services->Get<Renderer>().SetFxaaEnabled(enabled);
-				AE_INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
-			}
-
 			if (m_input->IsKeyPressed(aether::Key::C))
 			{
 				const aether::CameraHandle active = m_cameras->GetMainCamera();

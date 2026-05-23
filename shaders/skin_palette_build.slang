@@ -22,9 +22,9 @@ float4x4 QuatToMat(float4 q)
     float wz = w * z;
 
     return float4x4(
-        float4(1.0 - 2.0 * (yy + zz), 2.0 * (xy + wz),       2.0 * (xz - wy),       0.0),
-        float4(2.0 * (xy - wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz + wx),       0.0),
-        float4(2.0 * (xz + wy),       2.0 * (yz - wx),       1.0 - 2.0 * (xx + yy), 0.0),
+        float4(1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz),       2.0 * (xz + wy),       0.0),
+        float4(2.0 * (xy + wz),       1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx),       0.0),
+        float4(2.0 * (xz - wy),       2.0 * (yz + wx),       1.0 - 2.0 * (xx + yy), 0.0),
         float4(0.0,                    0.0,                    0.0,                    1.0)
     );
 }
@@ -33,10 +33,10 @@ float4x4 ComposeTrs(float4 t, float4 q, float4 s)
 {
     float4x4 r = QuatToMat(normalize(q));
     return float4x4(
-        float4(r[0][0] * s.x, r[0][1] * s.x, r[0][2] * s.x, 0.0),
-        float4(r[1][0] * s.y, r[1][1] * s.y, r[1][2] * s.y, 0.0),
-        float4(r[2][0] * s.z, r[2][1] * s.z, r[2][2] * s.z, 0.0),
-        float4(t.x,           t.y,            t.z,            1.0)
+        float4(r[0][0] * s.x, r[0][1] * s.y, r[0][2] * s.z, t.x),
+        float4(r[1][0] * s.x, r[1][1] * s.y, r[1][2] * s.z, t.y),
+        float4(r[2][0] * s.x, r[2][1] * s.y, r[2][2] * s.z, t.z),
+        float4(0.0,           0.0,            0.0,            1.0)
     );
 }
 
@@ -72,55 +72,6 @@ void buildSkinPalette(uint3 tid : SV_DispatchThreadID)
     GpuSkinMeta* skinMetas = (GpuSkinMeta*)(pc.skinMetasAddr);
     uint* skinJoints = (uint*)(pc.skinJointsAddr);
     float4x4* skinInverseBinds = (float4x4*)(pc.skinInverseBindsAddr);
-
-    // Debug: for joint 2 (node 4), dump hierarchy walk step by step
-    // Layout: offset 0 = ComposeTrs(node4), offset 16 = invBind[2] from GPU,
-    // offset 32 = globalM after step 0, offset 48 = globalM after step 1,
-    // offset 64 = globalM after step 2, offset 80 = globalM after step 3,
-    // offset 96 = final skinMatrix for joint 2
-    if (jobIndex == 0u && pc.debugSkinMatricesAddr != 0uL)
-    {
-        float* debugOut = (float*)(pc.debugSkinMatricesAddr);
-
-        GpuSkinMeta meta = skinMetas[job.skinIndex];
-        uint nodeIndex = skinJoints[meta.jointOffset + 2u];
-
-        // Dump invBind[2] as read by shader
-        const uint invBindBase = meta.inverseBindOffset / 64u;
-        WriteMatrix(debugOut, 16u, skinInverseBinds[invBindBase + 2u]);
-
-        float4x4 globalM = float4x4(
-            float4(1.0, 0.0, 0.0, 0.0),
-            float4(0.0, 1.0, 0.0, 0.0),
-            float4(0.0, 0.0, 1.0, 0.0),
-            float4(0.0, 0.0, 0.0, 1.0));
-
-        uint safety = 0u;
-        int walk = int(nodeIndex);
-        uint stepOffset = 32u;
-        while (walk >= 0 && safety < max(1u, job.nodeCount) && safety < 4u)
-        {
-            SampledNodePose p = sampled[uint(walk)];
-            float4x4 localM = ComposeTrs(p.translation, p.rotation, p.scale);
-
-            // Dump ComposeTrs for first step
-            if (safety == 0u)
-            {
-                WriteMatrix(debugOut, 0u, localM);
-            }
-
-            globalM = mul(localM, globalM);
-            WriteMatrix(debugOut, stepOffset, globalM);
-            stepOffset += 16u;
-
-            walk = nodeParents[uint(walk)];
-            ++safety;
-        }
-
-        // Final skin matrix for joint 2
-        float4x4 skinMatrix = mul(globalM, skinInverseBinds[invBindBase + 2u]);
-        WriteMatrix(debugOut, 96u, skinMatrix);
-    }
 
     GpuSkinMeta meta = skinMetas[job.skinIndex];
     for (uint j = 0u; j < job.jointCount; ++j)
