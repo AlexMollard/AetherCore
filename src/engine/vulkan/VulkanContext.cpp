@@ -12,7 +12,7 @@
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
 
-#define VULKAN_GPU_DEBUG
+// #define VULKAN_GPU_DEBUG
 // #define VULKAN_CPU_DEBUG
 
 

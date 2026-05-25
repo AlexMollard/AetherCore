@@ -1,13 +1,13 @@
 // vsm_blur.slang - Separable Gaussian blur for VSM shadow atlas.
 // Single entry point; dispatch twice (first horizontal, then vertical).
 
-[[vk::binding(0, 0)]] RWTexture2D<float2> g_atlas;
+[[vk::binding(0, 0)]] RWTexture2D<float2> g_output;
 [[vk::binding(1, 0)]] Texture2D<float2>  g_input;
 
 struct BlurPushConstants
 {
-    uint2  atlasSize;   // width, height
-    uint   isHorizontal; // 0 = vertical, 1 = horizontal
+    uint2  atlasSize;
+    uint   isHorizontal;
     float  _pad0;
 };
 
@@ -15,47 +15,33 @@ struct BlurPushConstants
 
 // 5-tap Gaussian weights.
 static const float kWeights[5] = { 0.153388, 0.221461, 0.250301, 0.221461, 0.153388 };
-static const float kOffsets[5] = { -2.0, -1.0, 0.0, 1.0, 2.0 };
+static const int kOffsets[5] = { -2, -1, 0, 1, 2 };
 
-groupshared float2 s_Shared[256];
-
-// Each 16x16 thread group processes a 16-wide strip of the atlas.
-[numthreads(256, 1, 1)]
+[numthreads(16, 16, 1)]
 [shader("compute")]
-void main(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
+void main(uint3 gid : SV_DispatchThreadID)
 {
-    uint row = gid.y;
-    uint colBase = gid.x * 256u;
-
-    uint2 pos;
-    if (pc.isHorizontal != 0u)
-    {
-        pos = uint2(colBase + gtid.x, row);
-    }
-    else
-    {
-        pos = uint2(row, colBase + gtid.x);
-    }
-
-    if (pos.x >= pc.atlasSize.x || pos.y >= pc.atlasSize.y)
+    if (gid.x >= pc.atlasSize.x || gid.y >= pc.atlasSize.y)
     {
         return;
     }
 
-    s_Shared[gtid.x] = g_input[pos];
-
-    GroupMemoryBarrierWithGroupSync();
-
     float2 result = float2(0.0, 0.0);
+
     [unroll]
     for (int t = 0; t < 5; ++t)
     {
-        int sharedIdx = int(gtid.x) + int(kOffsets[t]);
-        if (sharedIdx >= 0 && sharedIdx < 256)
+        uint2 pos = gid.xy;
+        if (pc.isHorizontal != 0u)
         {
-            result += s_Shared[sharedIdx] * kWeights[t];
+            pos.x = uint(max(min(int(gid.x) + kOffsets[t], int(pc.atlasSize.x) - 1), 0));
         }
+        else
+        {
+            pos.y = uint(max(min(int(gid.y) + kOffsets[t], int(pc.atlasSize.y) - 1), 0));
+        }
+        result += g_input[pos] * kWeights[t];
     }
 
-    g_atlas[pos] = result;
+    g_output[gid.xy] = result;
 }

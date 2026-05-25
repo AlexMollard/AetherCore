@@ -392,7 +392,7 @@ namespace aether
 				{
 					const glm::vec3 lightToCam = glm::normalize(camPos - c.position);
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + lightToCam, glm::vec3(0.0f, 1.0f, 0.0f));
-					const glm::mat4 lightProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(90.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -406,7 +406,7 @@ namespace aether
 				{
 					const glm::vec3 camToLight = glm::normalize(c.position - camPos);
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + camToLight, glm::vec3(0.0f, 1.0f, 0.0f));
-					const glm::mat4 lightProj = glm::perspective(glm::radians(90.0f), 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(90.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -433,7 +433,7 @@ namespace aether
 				                           : glm::vec3(0.0f, 1.0f, 0.0f);
 				const glm::mat4 lightView = glm::lookAt(src.position, src.position + lightDir, up);
 				const float fov = 2.0f * src.outerAngleRad;
-				const glm::mat4 lightProj = glm::perspective(fov, 1.0f, 0.1f, src.radius);
+				const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(fov, 1.0f, 1.0f, 0.1f, src.radius);
 
 				m_perLightShadows.push_back(PerLightShadow{
 				        .viewProj = lightProj * lightView,
@@ -582,8 +582,7 @@ namespace aether
 			                const BlurPushConstants hPc{ kW, kH, 1u, 0.0f };
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
 
-			                constexpr std::uint32_t kGroupSize = 256u;
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (kW + kGroupSize - 1u) / kGroupSize, kH, 1u);
+			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (kW + 15u) / 16u, (kH + 15u) / 16u, 1u);
 		                });
 
 		// Vertical blur: read scratch (sampled), write atlas (storage).
@@ -602,8 +601,7 @@ namespace aether
 			                const BlurPushConstants vPc{ kW, kH, 0u, 0.0f };
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
 
-			                constexpr std::uint32_t kGroupSize = 256u;
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), kW, (kH + kGroupSize - 1u) / kGroupSize, 1u);
+			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (kW + 15u) / 16u, (kH + 15u) / 16u, 1u);
 		                });
 	}
 } // namespace aether

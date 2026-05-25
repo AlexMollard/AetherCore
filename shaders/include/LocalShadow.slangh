@@ -20,7 +20,7 @@ float2 LocalShadowUV(float3 worldPos, float4x4 viewProj, float4 atlasRegion)
 {
     float4 clipPos = mul(viewProj, float4(worldPos, 1.0));
     float3 ndc = clipPos.xyz / clipPos.w;
-    float2 uv = ndc.xy * float2(0.5, -0.5) + 0.5;
+    float2 uv = ndc.xy * 0.5 + 0.5;
     return atlasRegion.xy + uv * atlasRegion.zw;
 }
 
@@ -35,7 +35,7 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerStat
         return 1.0;
     }
 
-    float2 uv = ndc.xy * float2(0.5, -0.5) + 0.5;
+    float2 uv = ndc.xy * 0.5 + 0.5;
     float2 atlasUV = sd.atlasRegion.xy + uv * sd.atlasRegion.zw;
 
     float2 moments = g_textures[atlasSlot].SampleLevel(samp, atlasUV, 0.0).rg;
@@ -43,13 +43,19 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerStat
 
     float ex = moments.x;
     float exSq = moments.y;
-    float variance = max(exSq - ex * ex, 0.0);
-    float md = receiverDepth - ex;
-    float p = variance / max(variance + md * md, 1e-8);
 
-    const float kVarBias = 0.01;
-    const float kLightBleed = 0.8;
-    return saturate((p - kLightBleed) / max(1.0 - kLightBleed, 1e-8) - kVarBias);
+    // Receiver is in front of all stored occluders — definitely lit.
+    if (receiverDepth <= ex)
+    {
+        return 1.0;
+    }
+
+    float variance = max(exSq - ex * ex, 0.00002);
+    float md = receiverDepth - ex;
+    float p = variance / (variance + md * md);
+
+    const float kLightBleed = 0.65;
+    return saturate((p - kLightBleed) / (1.0 - kLightBleed));
 }
 
 // Evaluate shadow visibility for a local light by its ShadowLightData index.
