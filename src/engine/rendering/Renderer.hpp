@@ -22,6 +22,7 @@ namespace aether
 			float radius = 1.0f;
 			glm::vec3 color{ 1.0f };
 			float intensity = 1.0f;
+			bool castsShadow = false;
 		};
 
 		struct SpotLight
@@ -33,6 +34,7 @@ namespace aether
 			glm::vec3 color{ 1.0f };
 			float intensity = 1.0f;
 			float outerAngleRad = 0.60f;
+			bool castsShadow = false;
 		};
 
 		Renderer() = default;

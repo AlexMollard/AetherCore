@@ -12,6 +12,14 @@
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
 
+#define VULKAN_GPU_DEBUG
+// #define VULKAN_CPU_DEBUG
+
+
+#if defined(VULKAN_GPU_DEBUG) && defined(VULKAN_CPU_DEBUG)
+#	error "VULKAN_GPU_DEBUG and VULKAN_CPU_DEBUG are mutually exclusive"
+#endif
+
 namespace
 {
 	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
@@ -50,22 +58,29 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to initialize volk Vulkan loader."));
 		}
 
-		vkb::InstanceBuilder instanceBuilder;
-		instanceBuilder.set_app_name(appName)
-		        .require_api_version(1, 4, 0)
-		        .request_validation_layers()
-		        .set_debug_callback(LogValidationMessage)
-		        .set_debug_messenger_severity(VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
-		        .set_debug_messenger_type(VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT);
+		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 
-#ifndef NDEBUG
-		// GPU-Assisted Validation: catches out-of-bounds BDA accesses, descriptor errors,
-		// and other GPU-side issues that CPU validation layers cannot see.
-		// NOTE: Do NOT add RESERVE_BINDING_SLOT - binding 0 of set 0 is occupied by the
-		// bindless texture array. GPU-AV will inject its descriptor into set 2 instead
-		// (pipelines only use sets 0 and 1, so set 2 is free for the validation layer).
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT).add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
-		AE_INFO(LogCategory::Vulkan, "GPU-Assisted Validation + Synchronization Validation enabled (debug build).");
+		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+
+#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
+#endif
+
+		vkb::InstanceBuilder instanceBuilder;
+		instanceBuilder.set_app_name(appName);
+		instanceBuilder.require_api_version(1, 4, 0);
+		instanceBuilder.request_validation_layers();
+		instanceBuilder.set_debug_callback(LogValidationMessage);
+		instanceBuilder.set_debug_messenger_severity(debugSeverity);
+		instanceBuilder.set_debug_messenger_type(debugTypes);
+
+#if defined(VULKAN_GPU_DEBUG)
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
+		AE_INFO(LogCategory::Vulkan, "GPU-AV + Synchronization Validation enabled.");
+#elif defined(VULKAN_CPU_DEBUG)
+		AE_INFO(LogCategory::Vulkan, "Core Validation (CPU) enabled.");
 #endif
 
 		auto instanceResult = instanceBuilder.build();

@@ -22,4 +22,7 @@ struct FrameConstantsData
     [[vk::offset(544)]] float4 shadowCascadeSplits;         // xyz=split far distances in view-space units
     [[vk::offset(560)]] float4 shadowParams;                // x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
     [[vk::offset(576)]] uint4 shadowCascadeInfo[3];         // x=bindless slot (0xFFFFFFFF=disabled), y=width, z=height
+    [[vk::offset(624)]] uint    shadowAtlasSlot;            // VSM atlas bindless slot (0xFFFFFFFF = none)
+    [[vk::offset(628)]] uint    shadowLightCount;           // number of active local shadow lights
+    [[vk::offset(632)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
 };

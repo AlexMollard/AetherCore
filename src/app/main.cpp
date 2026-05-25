@@ -43,7 +43,7 @@ int main()
 
 	try
 	{
-		aether::Logger::SetMinimumLevel(aether::LogLevel::Verbose);
+		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
 
 		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
 

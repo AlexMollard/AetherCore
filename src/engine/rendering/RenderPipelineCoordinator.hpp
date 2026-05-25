@@ -10,6 +10,7 @@ namespace aether
 	class BindlessManager;
 	class CullPass;
 	class ForwardPass;
+	class LocalShadowService;
 	class PostProcessStack;
 	class RenderQueue;
 	class RenderTargetService;
@@ -24,6 +25,7 @@ namespace aether
 		        SkyboxPass& skyboxPass,
 		        PostProcessStack& postProcessStack,
 		        ShadowService& shadowService,
+		        LocalShadowService& localShadowService,
 		        BindlessManager& bindlessManager,
 		        VkDevice device,
 		        VkFormat depthFormat,

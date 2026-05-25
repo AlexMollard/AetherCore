@@ -198,22 +198,26 @@ namespace aether
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
-		for (const Renderer::PointLight& src: m_renderer->GetPointLights())
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetPointLights().size()); ++i)
 		{
+			const Renderer::PointLight& src = m_renderer->GetPointLights()[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
 			        .params = glm::vec4(0.0f),
+			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-		for (const Renderer::SpotLight& src: m_renderer->GetSpotLights())
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetSpotLights().size()); ++i)
 		{
+			const Renderer::SpotLight& src = m_renderer->GetSpotLights()[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
 			        .params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
+			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
 
@@ -302,22 +306,26 @@ namespace aether
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
-		for (const Renderer::PointLight& src: m_renderer->GetPointLights())
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetPointLights().size()); ++i)
 		{
+			const Renderer::PointLight& src = m_renderer->GetPointLights()[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
 			        .params = glm::vec4(0.0f),
+			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-		for (const Renderer::SpotLight& src: m_renderer->GetSpotLights())
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetSpotLights().size()); ++i)
 		{
+			const Renderer::SpotLight& src = m_renderer->GetSpotLights()[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
 			        .params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
+			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
 
@@ -622,6 +630,25 @@ namespace aether
 			 },
 		};
 		vkUpdateDescriptorSets(m_context->GetDevice().device, static_cast<std::uint32_t>(std::size(writes)), writes, 0, nullptr);
+	}
+
+	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)
+	{
+		auto& frame = m_buffers[frameSlot];
+		if (!frame.lights || shadowIndices.empty())
+		{
+			return;
+		}
+
+		const std::size_t lightCount = frame.lights.GetSize() / sizeof(GpuLight);
+		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
+		GpuLight* mapped = static_cast<GpuLight*>(frame.lights.GetAllocationInfo().pMappedData);
+		for (std::size_t i = 0; i < applyCount; ++i)
+		{
+			mapped[i].shadowIndex.x = shadowIndices[i].x; // shadowIndex
+			mapped[i].shadowIndex.y = shadowIndices[i].y; // shadowStrength
+		}
+		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
 	}
 
 	void LightingManager::DisableForView(FrameConstants& fc) const

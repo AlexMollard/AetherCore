@@ -8,6 +8,7 @@
 #include "rendering/FrameComposer.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "passes/PostProcessStack.hpp"
+#include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderPipelineCoordinator.hpp"
@@ -63,6 +64,11 @@ namespace aether
 			return m_shadowService;
 		}
 
+		[[nodiscard]] LocalShadowService& GetLocalShadowService()
+		{
+			return m_localShadowService;
+		}
+
 		[[nodiscard]] RenderTargetService& GetRenderTargetService()
 		{
 			return m_renderTargetService;
@@ -102,6 +108,7 @@ namespace aether
 		Renderer m_renderer;
 		FrameConstantsBuffer m_frameConstantsBuffer;
 		ShadowService m_shadowService;
+		LocalShadowService m_localShadowService;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
 		ForwardPass m_forwardPass;

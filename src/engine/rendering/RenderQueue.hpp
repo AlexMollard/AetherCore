@@ -124,6 +124,11 @@ namespace aether
 		// Emit graphics draws from indirect output.
 		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr);
 
+		// Same as FlushDraw but overrides the frame constants BDA in push constants
+		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
+		// (e.g., local shadow atlas where each light has a different VP matrix).
+		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr);
+
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
 

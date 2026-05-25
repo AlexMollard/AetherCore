@@ -15,7 +15,6 @@ namespace aether::app
 
 	void DayNightSystem::OnRegister([[maybe_unused]] aether::World& world)
 	{
-		m_time = 0.0f;
 	}
 
 	void DayNightSystem::Update([[maybe_unused]] aether::World& world, float dt)
@@ -25,13 +24,22 @@ namespace aether::app
 			return;
 		}
 
-		m_time += dt;
+		if (m_enabled)
+		{
+			m_time += dt * m_timeSpeed;
+			if (m_time >= 86400.0f)
+			{
+				m_time -= 86400.0f;
+			}
+		}
 
-		const float sunAngle = m_time * 0.18f;
-		const glm::vec3 sunDirection = glm::normalize(glm::vec3(std::cos(sunAngle), 0.35f + 0.85f * std::sin(sunAngle * 0.7f), std::sin(sunAngle)));
+		const float hours = std::fmod(m_time / 3600.0f, 24.0f);
+		const float sunAngle = (hours / 24.0f) * 6.2832f - 1.5708f;
 
-		const float dayFactor = glm::smoothstep(-0.05f, 0.35f, sunDirection.y);
-		const float horizonFactor = 1.0f - glm::smoothstep(0.0f, 0.50f, std::abs(sunDirection.y));
+		m_sunDirection = glm::normalize(glm::vec3(std::cos(sunAngle), std::sin(sunAngle), 0.15f));
+
+		const float dayFactor = glm::smoothstep(-0.05f, 0.35f, m_sunDirection.y);
+		const float horizonFactor = 1.0f - glm::smoothstep(0.0f, 0.50f, std::abs(m_sunDirection.y));
 		const float dawnFactor = horizonFactor * (1.0f - dayFactor * 0.6f);
 
 		const float sunIntensity = 0.45f + (5.2f - 0.45f) * dayFactor;
@@ -65,7 +73,7 @@ namespace aether::app
 
 		const glm::vec3 skyVoid = skyVoidNight * (1.0f - dayFactor) + skyVoidDay * dayFactor;
 
-		m_renderer->SetDirectionalLight(sunDirection, sunIntensity);
+		m_renderer->SetDirectionalLight(m_sunDirection, sunIntensity);
 		m_renderer->SetSunColor(sunColor);
 		m_renderer->SetAmbientLight(ambient);
 		m_renderer->SetSkyGradient(skyHorizon, skyZenith);
@@ -74,6 +82,5 @@ namespace aether::app
 
 	void DayNightSystem::OnUnregister([[maybe_unused]] aether::World& world)
 	{
-		m_time = 0.0f;
 	}
 } // namespace aether::app

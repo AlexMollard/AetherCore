@@ -254,6 +254,8 @@ namespace aether
 
 		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
 
+		m_rendering.GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), m_rendering.GetRenderer(), m_sceneSub.GetScene(), m_sceneSub.GetWorld(), fc);
+
 		if (packet.hasCameraData)
 		{
 			const Camera* cam = m_cameras.GetCameraManager().TryGetMainCamera();
@@ -277,6 +279,12 @@ namespace aether
 		else
 		{
 			m_rendering.GetFrameComposer().ApplyNoCameraLightingFallback(fc);
+		}
+
+		// Patch shadow indices into the GpuLight buffer after lighting culling fills it.
+		if (packet.hasCameraData)
+		{
+			m_cameras.GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering.GetLocalShadowService().GetLightShadowIndices());
 		}
 
 		m_rendering.GetFrameConstantsBuffer().Write(frameIdx, fc);

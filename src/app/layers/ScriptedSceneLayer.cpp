@@ -16,6 +16,7 @@
 #include "rendering/Renderer.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
+#include "systems/DayNightSystem.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -119,6 +120,10 @@ namespace aether::app
 		m_sceneCtx.cameras = &context.Get<CameraManager>();
 		m_sceneCtx.renderer = &context.Get<Renderer>();
 		m_sceneCtx.input = &context.Get<Input>();
+		if (auto* dn = context.TryGet<aether::app::DayNightSystem>())
+		{
+			m_sceneCtx.dayNight = dn;
+		}
 		m_sceneCtx.systemFactory = &m_systemFactory;
 		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
 		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();

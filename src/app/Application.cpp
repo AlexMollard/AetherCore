@@ -157,11 +157,13 @@ namespace aether::app
 			auto* physicsPtr = physicsSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
 			services.Register<aether::PhysicsSystem>(*physicsPtr);
-		}
 
-		auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
-		dayNightSystem->Init(*attachContext.TryGet<Renderer>());
-		attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
+			auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
+			dayNightSystem->Init(*attachContext.TryGet<Renderer>());
+			auto* dayNightPtr = dayNightSystem.get();
+			attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
+			services.Register<aether::app::DayNightSystem>(*dayNightPtr);
+		}
 
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;

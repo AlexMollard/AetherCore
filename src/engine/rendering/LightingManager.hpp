@@ -23,6 +23,11 @@ namespace aether
 		void LinkRenderer(const Renderer& renderer);
 		void Shutdown();
 
+		// Patch shadow indices into the per-light GPU buffer.
+		// shadowIndices is an array of 2x float per light (shadowIndex, shadowStrength)
+		// matching the layout of GpuLight::shadowIndex (5th float4).
+		void ApplyShadowIndices(std::uint32_t frameSlot, std::span<const glm::vec2> shadowIndices);
+
 		void SetRttBinningEnabled(bool enabled)
 		{
 			m_rttBinningEnabled = enabled;
@@ -57,6 +62,7 @@ namespace aether
 			glm::vec4 colorIntensity{ 0.0f };
 			glm::vec4 directionType{ 0.0f }; // xyz=dir for spot, w=type (0=point, 1=spot)
 			glm::vec4 params{ 0.0f };        // x=innerCos, y=outerCos for spot
+			glm::vec4 shadowIndex{ -1.0f, 0.0f, 0.0f, 0.0f }; // x=shadow index, y=shadow strength
 		};
 
 		struct TileHeader

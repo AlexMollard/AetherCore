@@ -30,6 +30,7 @@ namespace aether
 		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
 
 		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
+		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
 
@@ -75,6 +76,7 @@ namespace aether
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
 		m_shadowService.Shutdown(vk.GetDevice().device);
+		m_localShadowService.Shutdown(vk.GetDevice().device);
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
@@ -120,6 +122,7 @@ namespace aether
 		        m_skyboxPass,
 		        m_postProcessStack,
 		        m_shadowService,
+		        m_localShadowService,
 		        services.Get<BindlessManager>(),
 		        services.Get<VulkanContext>().GetDevice().device,
 		        services.Get<Swapchain>().GetDepthFormat(),

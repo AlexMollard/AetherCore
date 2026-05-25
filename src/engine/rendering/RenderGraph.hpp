@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
@@ -263,6 +264,14 @@ namespace aether
 			std::vector<CompiledBarrier> preBarriers;
 		};
 
+		struct ResourceState
+		{
+			VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+			VkPipelineStageFlags2 writeStage = VK_PIPELINE_STAGE_2_NONE;
+			VkAccessFlags2 writeAccess = VK_ACCESS_2_NONE;
+			bool isCrossFrame = false;
+		};
+
 		void Compile();
 		void EnsureTransientImages(const FrameTarget& target);
 
@@ -276,8 +285,8 @@ namespace aether
 		std::vector<ExternalImageEntry> m_externalImages;   // indexed by (id - kFirstExternalId)
 		std::vector<TransientImageEntry> m_transientImages; // indexed by (id - kFirstTransientId)
 		std::vector<TransientPhysicalImage> m_transientPhysicalImages;
+		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
-		bool m_dirty = true;
 	};
 } // namespace aether

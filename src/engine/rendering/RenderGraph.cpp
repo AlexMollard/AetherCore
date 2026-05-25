@@ -42,7 +42,6 @@ namespace aether
 		m_compiled.clear();
 		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
-		m_dirty = true;
 	}
 
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
@@ -58,7 +57,6 @@ namespace aether
 		        .storeOp = storeOp,
 		        .clearValue = clearValue,
 		});
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -70,7 +68,6 @@ namespace aether
 			.storeOp = storeOp,
 			.clearValue = clearValue,
 		};
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -80,7 +77,6 @@ namespace aether
 		        .image = image,
 		        .type = ImageAccessType::SampledRead,
 		});
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -91,7 +87,6 @@ namespace aether
 		        .type = ImageAccessType::SampledRead,
 		});
 		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -102,7 +97,6 @@ namespace aether
 		        .type = ImageAccessType::StorageRead,
 		});
 		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -113,7 +107,6 @@ namespace aether
 		        .type = ImageAccessType::StorageWrite,
 		});
 		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
@@ -133,14 +126,12 @@ namespace aether
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(VkExtent2D extent)
 	{
 		m_graph.m_passes[m_passIndex].extentOverride = extent;
-		m_graph.m_dirty = true;
 		return *this;
 	}
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
 		m_passes.push_back(PassRecord{ .name = std::move(name) });
-		m_dirty = true;
 		return PassBuilder{ *this, m_passes.size() - 1 };
 	}
 
@@ -150,7 +141,6 @@ namespace aether
 		        .name = std::move(name),
 		        .kind = PassKind::Compute,
 		});
-		m_dirty = true;
 		return PassBuilder{ *this, m_passes.size() - 1 };
 	}
 
@@ -158,7 +148,6 @@ namespace aether
 	{
 		const uint32_t id = kFirstExternalId + static_cast<uint32_t>(m_externalImages.size());
 		m_externalImages.push_back({ image, view, aspect });
-		m_dirty = true;
 		return RGImage{ id };
 	}
 
@@ -172,7 +161,6 @@ namespace aether
 		TransientImageEntry entry{};
 		entry.desc = desc;
 		m_transientImages.push_back(std::move(entry));
-		m_dirty = true;
 		const uint32_t id = kFirstTransientId + static_cast<uint32_t>(m_transientImages.size() - 1);
 		return RGImage{ id };
 	}
@@ -281,8 +269,7 @@ namespace aether
 				m_transientImages[idx].aliasPhysicalIndex = 0xFFFFFFFFu;
 				m_transientImages[idx].allocatedExtent = {};
 				m_transientImages[idx].desc = {};
-				m_dirty = true;
-			}
+					}
 			return;
 		}
 
@@ -290,8 +277,7 @@ namespace aether
 		if (idx < m_externalImages.size())
 		{
 			m_externalImages[idx] = {};
-			m_dirty = true;
-		}
+			}
 	}
 
 	void RenderGraph::RemovePass(const std::string& name)
@@ -300,8 +286,7 @@ namespace aether
 		if (it != m_passes.end())
 		{
 			m_passes.erase(it);
-			m_dirty = true;
-		}
+			}
 	}
 
 	bool RenderGraph::HasPass(std::string_view name) const
@@ -327,7 +312,6 @@ namespace aether
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
-		m_dirty = true;
 	}
 
 	void RenderGraph::EnsureTransientImages(const FrameTarget& target)
@@ -516,10 +500,7 @@ namespace aether
 			return;
 		}
 
-		if (m_dirty)
-		{
-			Compile();
-		}
+		Compile();
 
 		EnsureTransientImages(target);
 
@@ -723,23 +704,35 @@ namespace aether
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}
 
-		struct ResourceState
-		{
-			VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			VkPipelineStageFlags2 writeStage = VK_PIPELINE_STAGE_2_NONE;
-			VkAccessFlags2 writeAccess = VK_ACCESS_2_NONE;
-		};
-
+		// Carry over end-of-frame state from the prior frame. Images that
+		// persist across frames (external images, transient depth) need their
+		// actual GPU layout tracked so the first-access barrier in this frame
+		// uses the correct oldLayout.
 		std::unordered_map<uint32_t, ResourceState> states;
+		for (const auto& [id, s]: m_lastImageStates)
+		{
+			states[id] = {
+				s.layout,
+				s.writeStage,
+				s.writeAccess,
+				true, // isCrossFrame
+			};
+		}
+
+		// Pre-seed swapchain images with their resting layout. Overrides any
+		// loaded state — swapchain images are re-acquired each frame and their
+		// layout is managed externally.
 		states[kSwapchainColorId] = {
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
 			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+			false, // isCrossFrame
 		};
 		states[kSwapchainDepthId] = {
 			VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
 			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+			false, // isCrossFrame
 		};
 
 		for (const std::size_t idx: sortedIndices)
@@ -765,8 +758,8 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.writeStage,
-						        .srcAccess = s.writeAccess,
+						        .srcStage = s.isCrossFrame ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : s.writeStage,
+						        .srcAccess = s.isCrossFrame ? VK_ACCESS_2_MEMORY_WRITE_BIT : s.writeAccess,
 						        .dstStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 						        .dstAccess = loadRead ? (VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT) : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
 						        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -791,6 +784,7 @@ namespace aether
 					kTarget,
 					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 					VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+					false, // isCrossFrame
 				};
 			}
 
@@ -813,8 +807,8 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.writeStage,
-						        .srcAccess = s.writeAccess,
+						        .srcStage = s.isCrossFrame ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : s.writeStage,
+						        .srcAccess = s.isCrossFrame ? VK_ACCESS_2_MEMORY_WRITE_BIT : s.writeAccess,
 						        .dstStage = kDepthStages,
 						        .dstAccess = loadRead ? (VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 						        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -839,6 +833,7 @@ namespace aether
 					kTarget,
 					kDepthStages,
 					VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+					false, // isCrossFrame
 				};
 			}
 
@@ -870,9 +865,31 @@ namespace aether
 				}
 
 				const auto it = states.find(resId);
-				const VkPipelineStageFlags2 srcStage = (it != states.end()) ? it->second.writeStage : VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-				const VkAccessFlags2 srcAccess = (it != states.end()) ? it->second.writeAccess : VK_ACCESS_2_NONE;
-				const VkImageLayout oldLayout = (it != states.end()) ? it->second.layout : VK_IMAGE_LAYOUT_UNDEFINED;
+				VkPipelineStageFlags2 srcStage;
+				VkAccessFlags2 srcAccess;
+				VkImageLayout oldLayout;
+
+				if (it != states.end())
+				{
+					const ResourceState& s = it->second;
+					oldLayout = s.layout;
+					if (s.isCrossFrame)
+					{
+						srcStage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+						srcAccess = VK_ACCESS_2_MEMORY_WRITE_BIT;
+					}
+					else
+					{
+						srcStage = s.writeStage;
+						srcAccess = s.writeAccess;
+					}
+				}
+				else
+				{
+					oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+					srcStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+					srcAccess = VK_ACCESS_2_NONE;
+				}
 
 				cp.preBarriers.push_back({
 				        .resourceId = resId,
@@ -885,21 +902,19 @@ namespace aether
 				        .aspect = ResolveAspect(resId),
 				});
 
-				if (r.type == ImageAccessType::StorageWrite)
-				{
-					states[resId] = {
-						targetLayout,
-						dstStage,
-						dstAccess,
-					};
-				}
+				states[resId] = {
+					targetLayout,
+					dstStage,
+					dstAccess,
+					false, // isCrossFrame
+				};
 			}
 
 			m_compiled.push_back(std::move(cp));
 		}
 
-		AE_INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
-		m_dirty = false;
+		// AE_INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
+		m_lastImageStates = states;
 	}
 
 	VkImage RenderGraph::ResolveImage(uint32_t resourceId, const FrameTarget& target) const

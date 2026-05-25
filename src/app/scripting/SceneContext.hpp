@@ -22,6 +22,7 @@ namespace aether
 namespace aether::app
 {
 	class SystemFactory;
+	class DayNightSystem;
 }
 
 namespace aether::app::scripting
@@ -34,6 +35,7 @@ namespace aether::app::scripting
 		aether::CameraManager* cameras = nullptr;
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
+		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::app::SystemFactory* systemFactory = nullptr;
 		aether::GraphicsPipeline* defaultPipeline = nullptr;
 		float deltaTime = 0.0f;

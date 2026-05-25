@@ -12,29 +12,29 @@ namespace aether
 	//
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (624 bytes):
+	// Layout (640 bytes):
 	//   offset   0 : mat4     viewProj               (64)
 	//   offset  64 : mat4     view                   (64)
 	//   offset 128 : mat4     proj                   (64)
 	//   offset 192 : uint64   materialBufferAddr      ( 8)  BDA of MaterialBuffer
 	//   offset 200 : uint64   _pad0                   ( 8)
-	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world dir,
-	//   w=intensity offset 224 : vec4     ambientColor            (16)  rgb=ambient
-	//   lighting term, a=unused offset 240 : vec4     cameraWorldPos          (16)
-	//   xyz=camera position, w=1 offset 256 : vec4     sunColor                (16)
-	//   rgb=sun light color, a=unused offset 272 : vec4     skyHorizonColor (16)
-	//   rgb=sky horizon tint, a=unused offset 288 : vec4     skyZenithColor (16)
-	//   rgb=sky zenith tint, a=unused offset 304 : vec4     skyVoidColor (16)
-	//   rgb=below-horizon void tint, a=unused offset 320 : uvec4 tiledLightGridInfo
-	//   (16)  x=tilePx, y=tilesX, z=tilesY, w=lightCount offset 336 : uvec4
-	//   tiledLightBufferOffsets (16)  x=lightBase, y=headerBase, z=indexBase,
-	//   w=unused offset 352 : mat4[3]  shadowViewProjCascades (192)
-	//   light clip-space transforms for CSM cascades offset 544 : vec4
-	//   shadowCascadeSplits (16) xyz=split far distances in view-space units
-	//   offset 560 : vec4 shadowParams (16) x=depthBias, y=normalBias,
-	//   z=strength, w=pcfRadiusTexels offset 576 : uvec4[3] shadowCascadeInfo
-	//   (48) each: x=bindlessSlot (or 0xFFFFFFFF), y=width, z=height, w=unused
-	//   Total: 624 bytes
+	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world dir, w=intensity
+	//   offset 224 : vec4     ambientColor            (16)  rgb=ambient term, a=unused
+	//   offset 240 : vec4     cameraWorldPos          (16)  xyz=camera position, w=1
+	//   offset 256 : vec4     sunColor                (16)  rgb=sun light color, a=unused
+	//   offset 272 : vec4     skyHorizonColor         (16)  rgb=sky horizon, a=unused
+	//   offset 288 : vec4     skyZenithColor          (16)  rgb=sky zenith, a=unused
+	//   offset 304 : vec4     skyVoidColor            (16)  rgb=void tint, a=unused
+	//   offset 320 : uvec4    tiledLightGridInfo      (16)  x=tilePx, y=tilesX, z=tilesY, w=lightCount
+	//   offset 336 : uvec4    tiledLightBufferOffsets (16)  x=lightBase, y=headerBase, z=indexBase, w=unused
+	//   offset 352 : mat4[3]  shadowViewProjCascades (192)  light clip transforms for CSM cascades
+	//   offset 544 : vec4     shadowCascadeSplits     (16)  xyz=split far distances
+	//   offset 560 : vec4     shadowParams            (16)  x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
+	//   offset 576 : uvec4[3] shadowCascadeInfo       (48)  each: x=bindlessSlot, y=width, z=height, w=unused
+	//   offset 624 : uint     shadowAtlasSlot         ( 4)  bindless slot for VSM atlas (0xFFFFFFFF = none)
+	//   offset 628 : uint     shadowLightCount        ( 4)  number of active shadow lights
+	//   offset 632 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
+	//   Total: 640 bytes
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{ 1.0f };
@@ -59,9 +59,12 @@ namespace aether
 			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
 			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
 		};
+		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;
+		std::uint32_t shadowLightCount = 0;
+		std::uint64_t shadowLightDataAddr = 0;
 	};
 
-	static_assert(sizeof(FrameConstants) == 624,
+	static_assert(sizeof(FrameConstants) == 640,
 	        "FrameConstants layout changed - update the Slang structs in "
 	        "gltf_mesh.slang and skybox.slang.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
@@ -82,4 +85,8 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowCascadeSplits) == 544);
 	static_assert(offsetof(FrameConstants, shadowParams) == 560);
 	static_assert(offsetof(FrameConstants, shadowCascadeInfo) == 576);
+	static_assert(offsetof(FrameConstants, shadowAtlasSlot) == 624);
+	static_assert(offsetof(FrameConstants, shadowLightCount) == 628);
+	static_assert(offsetof(FrameConstants, shadowLightDataAddr) == 632);
+	static_assert(sizeof(FrameConstants) == 640);
 } // namespace aether

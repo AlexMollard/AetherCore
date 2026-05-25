@@ -328,7 +328,7 @@ namespace aether
 		// Auto-log skin jobs for the first frame that has any, to ease bring-up debugging.
 		if (skinJobCount > 0 && m_animationFrameCount == 0 && m_debugLogSkinJobsFramesLeft == 0)
 		{
-			m_debugLogSkinJobsFramesLeft = 1;
+			// m_debugLogSkinJobsFramesLeft = 1;
 		}
 #endif
 
@@ -622,6 +622,93 @@ namespace aether
 			{
 				// Vertex data is fetched via BDA in the vertex shader (DrawInstanceData.vertexBufferAddr).
 				// Only the index buffer needs binding to drive SV_VertexID via fixed-function fetch.
+				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
+				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
+				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)
+				{
+					recorder.BindIndexBuffer(indexBuffer, indexOffset);
+					lastIndexBuffer = indexBuffer;
+					lastIndexOffset = indexOffset;
+				}
+				lastMesh = batch.mesh;
+			}
+
+			if (m_debugBypassIndirect)
+			{
+				const std::uint32_t indexCount = (batch.mesh != nullptr) ? batch.mesh->GetIndexCount() : 0u;
+				for (std::uint32_t local = 0; local < batch.drawCount; ++local)
+				{
+					recorder.DrawIndexed(indexCount, 1u, 0u, 0, batch.outputStart + local);
+				}
+			}
+			else
+			{
+				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
+			}
+		}
+
+		recorder.EndDebugLabel();
+	}
+
+	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline)
+	{
+		AE_PROFILE_ZONE();
+		if (!recorder.IsValid())
+		{
+			return;
+		}
+		if (m_batchRenderInfos.empty())
+		{
+			return;
+		}
+
+		recorder.BeginDebugLabel("RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f, 1.0f);
+
+		const DrawPushConstants sharedPc{
+			.frameAddr = overrideFrameAddr,
+			.instanceDataAddr = m_cachedInstanceDataAddr,
+			.skinPaletteAddr = m_cachedSkinPaletteAddr,
+		};
+
+		const GraphicsPipeline* lastPipeline = nullptr;
+		const Mesh* lastMesh = nullptr;
+		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
+		VkDeviceSize lastIndexOffset = ~0ull;
+		const GraphicsPipeline* lastSetPipeline = nullptr;
+		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
+
+		for (std::uint32_t bi = 0; bi < static_cast<std::uint32_t>(m_batchRenderInfos.size()); ++bi)
+		{
+			const BatchRenderInfo& batch = m_batchRenderInfos[bi];
+			const GraphicsPipeline* activePipeline = overridePipeline != nullptr ? overridePipeline : batch.pipeline;
+
+			if (activePipeline != nullptr && activePipeline != lastPipeline)
+			{
+				recorder.BindGraphicsPipeline(*activePipeline);
+				lastPipeline = activePipeline;
+				lastSetPipeline = nullptr;
+				lastLightingSetPipeline = nullptr;
+			}
+
+			if (bindlessSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline != lastSetPipeline)
+			{
+				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+				lastSetPipeline = activePipeline;
+			}
+
+			if (lightingSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
+			{
+				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
+				lastLightingSetPipeline = activePipeline;
+			}
+
+			if (activePipeline != nullptr)
+			{
+				recorder.PushConstants(activePipeline->GetLayout(), sharedPc);
+			}
+
+			if (batch.mesh != nullptr)
+			{
 				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
 				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
 				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)

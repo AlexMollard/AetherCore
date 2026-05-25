@@ -48,6 +48,7 @@
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
 #include "include/DirectionalShadowCSM.slangh"
+#include "include/LocalShadow.slangh"
 
 // ── Shared constants ─────────────────────────────────────────────────────
 static const uint  kNoTexture     = 0xFFFFFFFFu;
@@ -229,16 +230,19 @@ struct LocalLight
     uint   type; // 0=point, 1=spot
     float  innerCos;
     float  outerCos;
+    float  shadowIndex;  // >= 0 = index into shadowLightData[]
+    float  shadowStrength;
 };
 
 LocalLight LoadLocalLight(uint index)
 {
-    // CPU packs 4 float4 rows per light.
-    uint base = index * 4u;
+    // CPU packs 5 float4 rows per light (4th row = shadow data).
+    uint base = index * 5u;
     float4 p0 = g_lightData[base + 0u];
     float4 p1 = g_lightData[base + 1u];
     float4 p2 = g_lightData[base + 2u];
     float4 p3 = g_lightData[base + 3u];
+    float4 p4 = g_lightData[base + 4u];
 
     LocalLight l;
     l.position = p0.xyz;
@@ -249,6 +253,8 @@ LocalLight LoadLocalLight(uint index)
     l.type = (uint)round(p2.w);
     l.innerCos = p3.x;
     l.outerCos = p3.y;
+    l.shadowIndex = p4.x;
+    l.shadowStrength = p4.y;
     return l;
 }
 
@@ -261,6 +267,7 @@ void AccumulateLocalLight(
     in float3 baseColor,
     in float metallic,
     in float roughness,
+    in FrameConstantsData* fc,
     inout float3 sum)
 {
     float3 toLight = light.position - worldPos;
@@ -313,7 +320,17 @@ void AccumulateLocalLight(
     // Keep local highlights, but bias toward diffuse so point emitters do not
     // read like directional "torch" beams on highly detailed normal maps.
     const float localSpecularWeight = 0.28;
-    sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL;
+    float shadowVis = 1.0;
+
+    // Evaluate local shadow if this light has an atlas entry.
+    if (light.shadowIndex >= 0.0 && fc->shadowAtlasSlot != 0xFFFFFFFFu)
+    {
+        uint shadowIdx = (uint)light.shadowIndex;
+        shadowVis = SampleLocalShadow(shadowIdx, fc->shadowAtlasSlot, worldPos, g_linearSampler, fc);
+        shadowVis = lerp(1.0, shadowVis, light.shadowStrength);
+    }
+
+    sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL * shadowVis;
 }
 
 // ── Fragment shader ───────────────────────────────────────────────────────
@@ -518,6 +535,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 baseColor.rgb,
                 metallic,
                 roughness,
+                fc,
                 Lo);
         }
     }

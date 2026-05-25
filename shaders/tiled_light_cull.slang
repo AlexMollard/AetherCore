@@ -43,7 +43,7 @@ void binLights(uint3 tid : SV_DispatchThreadID)
         return;
     }
 
-    uint base = lightIndex * 4u;
+    uint base = lightIndex * 5u;
     float4 p0 = g_lightData[base + 0u];
     float3 worldPos = p0.xyz;
     float radius = max(p0.w, 1e-4);
