@@ -131,7 +131,7 @@ namespace aether
 
 		vkDestroyShaderModule(device, blurModule, nullptr);
 
-		// Sampler for blur input (nearest clamp-to-edge — texel fetch, sampler unused).
+		// Sampler for blur input (nearest clamp-to-edge - texel fetch, sampler unused).
 		{
 			VkSamplerCreateInfo sci{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
 			sci.magFilter = VK_FILTER_NEAREST;
@@ -170,7 +170,7 @@ namespace aether
 			m_blurDescriptorSetV = sets[1];
 		}
 
-		// Write descriptor bindings once — the atlas and scratch images never change.
+		// Write descriptor bindings once - the atlas and scratch images never change.
 		/* DescriptorSetH: binding 0 = scratch (storage), binding 1 = atlas (sampled). */
 		{
 			VkDescriptorImageInfo scratchOut{};
@@ -358,7 +358,7 @@ namespace aether
 		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
 
-		// Initialize shadow index mapping — entries are filled during the
+		// Initialize shadow index mapping - entries are filled during the
 		// allocation loop below. Lights not in the budget stay at -1.
 		const std::uint32_t totalLights = pointCount + spotCount;
 		m_lightShadowIndices.assign(totalLights, glm::vec2(-1.0f, 1.0f));
@@ -368,27 +368,20 @@ namespace aether
 		// shadow-index mapping below points to the correct entries.
 		std::uint32_t shadowDataIdx = 0;
 
+		// Fixed resolution for all shadows - avoids atlas layout shifts when
+		// camera distance changes, which causes flickering.
+		constexpr std::uint32_t kShadowRes = 256u;
+
 		for (std::uint32_t i = 0; i < budget; ++i)
 		{
 			const ShadowCandidate& c = candidates[i];
 
-			// Determine region size based on distance.
-			const float dist = std::sqrt(c.distanceSq);
-			std::uint32_t shadowRes = 256u;
-			if (dist < 15.0f)
-			{
-				shadowRes = 512u;
-			}
-			else if (dist > 60.0f)
-			{
-				shadowRes = 128u;
-			}
-
 			if (c.lightType == 0u)
 			{
-				// Point light: two perspective faces (front+back), each half resolution.
-				// Both use lightType=1 on the GPU side (2 consecutive entries).
-				const std::uint32_t faceRes = std::max(shadowRes / 2u, 64u);
+				// Point light: two fixed hemisphere faces (upper +Y, lower -Y).
+				// Using fixed world-space directions instead of camera-relative
+				// ones eliminates flickering when the camera moves.
+				const std::uint32_t faceRes = std::max(kShadowRes / 2u, 64u);
 
 				ShadowAtlasManager::Region r0 = m_atlasManager.Allocate(faceRes, faceRes);
 				ShadowAtlasManager::Region r1 = m_atlasManager.Allocate(faceRes, faceRes);
@@ -397,11 +390,10 @@ namespace aether
 					break;
 				}
 
-				// Front face: lookAt from light toward camera.
+				// Upper hemisphere: look up from the light.
 				{
-					const glm::vec3 lightToCam = glm::normalize(camPos - c.position);
-					const glm::mat4 lightView = glm::lookAt(c.position, c.position + lightToCam, glm::vec3(0.0f, 1.0f, 0.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(90.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(120.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -411,16 +403,15 @@ namespace aether
 					});
 				}
 
-				// Back face: lookAt from camera toward light.
+				// Lower hemisphere: look down from the light.
 				{
-					const glm::vec3 camToLight = glm::normalize(c.position - camPos);
-					const glm::mat4 lightView = glm::lookAt(c.position, c.position + camToLight, glm::vec3(0.0f, 1.0f, 0.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(90.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(120.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = r1,
-					        .depthBias = 0.002f,
+					        .depthBias = 0.003f,
 					        .lightType = 1u, // point (same type, 2nd entry)
 					});
 				}
@@ -432,7 +423,7 @@ namespace aether
 			else
 			{
 				// Spot light: single perspective region.
-				ShadowAtlasManager::Region r = m_atlasManager.Allocate(shadowRes, shadowRes);
+				ShadowAtlasManager::Region r = m_atlasManager.Allocate(kShadowRes, kShadowRes);
 				if (!r.IsValid())
 				{
 					break;
@@ -561,7 +552,7 @@ namespace aether
 
 		// ── VSM blur passes ────────────────────────────────────────────────
 		// Horizontal blur: read atlas (sampled), write scratch (storage).
-		// Descriptors set up once in Initialize() — no per-frame updates needed.
+		// Descriptors set up once in Initialize() - no per-frame updates needed.
 		graph.AddComputePass("$VSMBlurH")
 		        .ReadTexture(m_atlasImage)
 		        .WriteStorageImage(m_blurScratchImage)

@@ -27,9 +27,9 @@ var g_sphere_mesh : uint  = 0u
 // ── Day/Night cycle state ─────────────────────────────────────────────────────
 
 var g_day_night_enabled : bool  = true
-var g_time_speed        : float = 60.0   // simulated seconds per real second
-var g_time_of_day       : float = 12.0   // hours (0-24)
-var g_manual_mode       : bool  = false  // when true, sandbox controls lighting directly
+var g_time_speed        : float = 60.0
+var g_time_of_day       : float = 12.0
+var g_manual_mode       : bool  = false
 
 var g_dn_toggle_btn     : uint  = 0u
 var g_time_slider       : uint  = 0u
@@ -43,29 +43,29 @@ var g_sun_dir_label     : uint  = 0u
 [export]
 def on_attach(world : World?)
 {
-	// Cache primitive mesh handles for reuse across entities.
 	g_cube_mesh   = create_mesh(world, "cube")
 	g_sphere_mesh = create_mesh(world, "sphere")
 
-	// ── Lighting ──────────────────────────────────────────────────────────────
-	set_ambient(float3(0.04, 0.05, 0.07))
-	set_sun(float3(-0.5, -0.8, -0.3), 3.0, float3(1.0, 0.88, 0.72))
-	add_point_light(float3( 10.0, 7.0,  4.0), float3(1.0, 0.60, 0.20), 6.0, 24.0, true)
-	add_point_light(float3(-10.0, 7.0, -4.0), float3(0.20, 0.60, 1.0), 6.0, 24.0, true)
-	add_spot_light(float3( 0.0, 8.0, -14.0), float3(0.95, 0.80, 0.55), 10.0, 28.0,
-		float3( 0.0, -0.55,  0.83), 0.30, 0.55, true)
-	add_spot_light(float3( 0.0, 8.0,  14.0), float3(0.95, 0.80, 0.55), 10.0, 28.0,
-		float3( 0.0, -0.55, -0.83), 0.30, 0.55, true)
-	add_spot_light(float3(-14.0, 8.0,  0.0), float3(0.95, 0.85, 0.60), 10.0, 28.0,
-		float3( 0.83, -0.55,  0.0), 0.30, 0.55, true)
-	add_spot_light(float3( 14.0, 8.0,  0.0), float3(0.95, 0.85, 0.60), 10.0, 28.0,
-		float3(-0.83, -0.55,  0.0), 0.30, 0.55, true)
-	add_point_light(float3( 5.0, 3.0,  5.0), float3(1.0, 0.25, 0.25), 3.0, 10.0, true)
-	add_point_light(float3(-5.0, 3.0, -5.0), float3(0.25, 1.0, 0.25), 3.0, 10.0, true)
-	set_sky(float3(0.45, 0.65, 1.0), float3(0.07, 0.14, 0.55))
+	// ── Lighting: sparse, well-separated for clear shadow testing ──────────
+	set_ambient(float3(0.06, 0.06, 0.08))
+
+	// Single directional sun - high angle, moderate intensity
+	set_sun(float3(-0.3, -0.9, -0.2), 2.0, float3(1.0, 0.92, 0.78))
+
+	// One warm point light - far left, elevated, illuminates left zone
+	add_point_light(float3(-18.0, 10.0, 0.0), float3(1.0, 0.55, 0.15), 10.0, 30.0, true)
+
+	// One cool point light - far right, elevated, illuminates right zone
+	add_point_light(float3(18.0, 10.0, 0.0), float3(0.15, 0.45, 1.0), 10.0, 30.0, true)
+
+	// One spot light - center, pointing down at the middle area
+	add_spot_light(float3(0.0, 10.0, 0.0), float3(1.0, 0.90, 0.70), 12.0, 25.0,
+		float3(0.0, -1.0, 0.0), 0.20, 0.50, true)
+
+	set_sky(float3(0.40, 0.60, 0.95), float3(0.08, 0.15, 0.50))
 
 	// ── Camera ────────────────────────────────────────────────────────────────
-	let cam = create_orbit_camera(float3(0.0, 7.0, 18.0), float3(0.0, 0.5, 0.0), 55.0)
+	let cam = create_orbit_camera(float3(0.0, 10.0, 28.0), float3(0.0, 1.0, 0.0), 50.0)
 	set_main_camera(cam)
 
 	// ── Wide ground platform ──────────────────────────────────────────────────
@@ -74,91 +74,92 @@ def on_attach(world : World?)
 	set_transform(world, floor,
 		float3(0.0, -0.5, 0.0),
 		float3(0.0, 0.0, 0.0),
-		float3(40.0, 1.0, 40.0))
+		float3(60.0, 1.0, 60.0))
 	add_mesh(world, floor, g_cube_mesh)
-	add_box_body(world, floor, float3(20.0, 0.5, 20.0), false)
+	add_box_body(world, floor, float3(30.0, 0.5, 30.0), false)
 
-	// ── Center box stack ──────────────────────────────────────────────────────
-	for (row in range(4))
+	// ── LEFT ZONE: box stack under warm point light ─────────────────────────
+	for (row in range(3))
 	{
-		for (col in range(4))
+		for (col in range(3))
 		{
 			let bx = entity_create(world)
 			add_transform(world, bx)
 			set_transform(world, bx,
-				float3(float(col - 1) * 1.6, 1.0 + float(row) * 1.8, float(row - 1) * 1.6),
+				float3(-18.0 + float(col - 1) * 1.8, 0.5 + float(row) * 1.6, float(row - 1) * 1.8),
 				float3(0.0, 0.0, 0.0),
-				float3(0.7, 0.7, 0.7))
+				float3(0.8, 0.8, 0.8))
 			add_mesh(world, bx, g_cube_mesh)
-			add_box_body(world, bx, float3(0.35, 0.35, 0.35), true)
+			add_box_body(world, bx, float3(0.4, 0.4, 0.4), true)
 		}
 	}
 
-	// ── Tall pillars ──────────────────────────────────────────────────────────
-	let pillar_positions = [
-		float3( 4.0, 0.0,  4.0), float3(-4.0, 0.0,  4.0),
-		float3( 4.0, 0.0, -4.0), float3(-4.0, 0.0, -4.0),
-		float3( 6.0, 0.0,  0.0), float3(-6.0, 0.0,  0.0),
-		float3( 0.0, 0.0,  6.0), float3( 0.0, 0.0, -6.0)
-	]
-	for (pos in pillar_positions)
+	// ─ RIGHT ZONE: sphere grid under cool point light ──────────────────────
+	for (i in range(4))
 	{
-		let pillar = entity_create(world)
-		add_transform(world, pillar)
-		set_transform(world, pillar,
-			float3(pos.x, 2.0, pos.z),
-			float3(0.0, 0.0, 0.0),
-			float3(0.5, 4.0, 0.5))
-		add_mesh(world, pillar, g_cube_mesh)
-		add_box_body(world, pillar, float3(0.25, 2.0, 0.25), false)
-	}
-
-	// ── Ground-level sphere grid ──────────────────────────────────────────────
-	for (i in range(5))
-	{
-		for (j in range(5))
+		for (j in range(4))
 		{
-			let sx = -8.0 + float(i) * 4.0
-			let sz = -8.0 + float(j) * 4.0
-			if (abs(sx) > 3.0 || abs(sz) > 3.0)
-			{
-				let s = entity_create(world)
-				add_transform(world, s)
-				set_transform(world, s,
-					float3(sx, 0.4, sz),
-					float3(0.0, 0.0, 0.0),
-					float3(0.4, 0.4, 0.4))
-				add_mesh(world, s, g_sphere_mesh)
-				add_sphere_body(world, s, 0.4, false)
-			}
+			let s = entity_create(world)
+			add_transform(world, s)
+			set_transform(world, s,
+				float3(14.0 + float(i) * 2.5, 0.5, -3.0 + float(j) * 2.5),
+				float3(0.0, 0.0, 0.0),
+				float3(0.5, 0.5, 0.5))
+			add_mesh(world, s, g_sphere_mesh)
+			add_sphere_body(world, s, 0.5, true)
 		}
 	}
 
-	// ── Physics sphere ────────────────────────────────────────────────────────
+	// ─ CENTER ZONE: tall pillar under spot light ──────────────────────────
+	let pillar = entity_create(world)
+	add_transform(world, pillar)
+	set_transform(world, pillar,
+		float3(0.0, 3.0, 0.0),
+		float3(0.0, 0.0, 0.0),
+		float3(0.6, 6.0, 0.6))
+	add_mesh(world, pillar, g_cube_mesh)
+	add_box_body(world, pillar, float3(0.3, 3.0, 0.3), false)
+
+	// Small boxes around the center pillar to show spot shadow spread
+	for (k in range(6))
+	{
+		let angle = float(k) * 1.0472  // 60 deg spacing
+		let r = 4.0
+		let cb = entity_create(world)
+		add_transform(world, cb)
+		set_transform(world, cb,
+			float3(cos(angle) * r, 0.4, sin(angle) * r),
+			float3(0.0, 0.0, 0.0),
+			float3(0.5, 0.5, 0.5))
+		add_mesh(world, cb, g_cube_mesh)
+		add_box_body(world, cb, float3(0.25, 0.25, 0.25), true)
+	}
+
+	// ── Physics sphere (drops from above, left zone) ───────────────────────
 	let sphere = entity_create(world)
 	add_transform(world, sphere)
 	set_transform(world, sphere,
-		float3(4.0, 12.0, -3.0),
+		float3(-18.0, 14.0, 0.0),
 		float3(0.0, 0.0, 0.0),
-		float3(0.7, 0.7, 0.7))
+		float3(0.8, 0.8, 0.8))
 	add_mesh(world, sphere, g_sphere_mesh)
-	add_sphere_body(world, sphere, 0.7, true)
+	add_sphere_body(world, sphere, 0.8, true)
 
-	// ── Physics capsule ───────────────────────────────────────────────────────
+	// ─ Physics box (drops from above, right zone) ──────────────────────────
 	let capsule = entity_create(world)
 	add_transform(world, capsule)
 	set_transform(world, capsule,
-		float3(-4.0, 14.0, 3.0),
+		float3(18.0, 16.0, 0.0),
 		float3(0.0, 0.0, 0.0),
-		float3(1.0, 1.0, 1.0))
+		float3(0.8, 0.8, 0.8))
 	add_mesh(world, capsule, g_cube_mesh)
-	add_capsule_body(world, capsule, 0.6, 0.6, true)
+	add_box_body(world, capsule, float3(0.4, 0.4, 0.4), true)
 
-	// ── Foxes ─────────────────────────────────────────────────────────────────
-	spawn_foxes(world, 3, 10.0)
+	// ── Foxes in a circle (center) ──────────────────────────────────────────
+	spawn_foxes(world, 3, 8.0)
 	g_fox_count = 3
 
-	// ── Native UI - Scene Controls panel ──────────────────────────────────────
+	// ── Native UI - Scene Controls panel ────────────────────────────────────
 	let panel = create_ui_panel(world, 16.0, 16.0, 280.0, 240.0, "Scene Controls")
 	set_ui_panel_collapsible(world, panel, true)
 
@@ -184,7 +185,7 @@ def on_attach(world : World?)
 	set_ui_button_press_color(world, g_spawn_btn, float4(0.10, 0.28, 0.15, 1.0))
 	add_ui_child(world, panel, g_spawn_btn)
 
-	// ── Native UI - Day/Night Controls panel ──────────────────────────────────
+	// ── Native UI - Day/Night Controls panel ────────────────────────────────
 	let dn_panel = create_ui_panel(world, 312.0, 16.0, 280.0, 260.0, "Day / Night")
 	set_ui_panel_collapsible(world, dn_panel, true)
 
@@ -298,7 +299,6 @@ def on_update(world : World?)
 
 	if (g_manual_mode)
 	{
-		// Manual mode: sandbox directly sets time of day via slider
 		let new_time = get_ui_slider_value(world, g_time_slider)
 		if (abs(new_time - g_time_of_day) > 0.01)
 		{
@@ -308,19 +308,15 @@ def on_update(world : World?)
 	}
 	else
 	{
-		// Auto mode: read time speed from slider, read current time from system
 		g_time_speed = get_ui_slider_value(world, g_speed_slider_dn)
 		set_time_speed(g_time_speed)
 		g_time_of_day = get_time_of_day()
-		// Sync slider to current auto time
 		set_ui_slider_value(world, g_time_slider, g_time_of_day)
 	}
 
-	// Update time display
 	let time_str = format_time(g_time_of_day)
 	set_ui_text(world, g_time_label, "Time: {time_str}")
 
-	// Update sun direction display
 	let sun_dir = get_sun_direction()
 	let sun_str = "Sun: ({sun_dir.x:.2f}, {sun_dir.y:.2f}, {sun_dir.z:.2f})"
 	set_ui_text(world, g_sun_dir_label, sun_str)
@@ -343,8 +339,9 @@ def on_update(world : World?)
 		imgui_separator()
 		imgui_text_colored(float4(0.6, 0.9, 0.6, 1.0), "Lights")
 		imgui_separator()
-		imgui_label_text("Point lights", "6  (all shadow)")
-		imgui_label_text("Spot lights", "4  (all shadow)")
+		imgui_label_text("Point lights", "2  (warm left, cool right)")
+		imgui_label_text("Spot lights", "1  (center, down)")
+		imgui_label_text("Directional", "1  (sun)")
 		imgui_spacing()
 		imgui_separator()
 		imgui_text_colored(float4(1.0, 0.9, 0.5, 1.0), "Day / Night")
@@ -359,24 +356,23 @@ def on_update(world : World?)
 	imgui_end()
 
 	// ── Keyboard shortcuts ────────────────────────────────────────────────────
-	if (is_key_pressed(32))  // Space - toggle fox rotation
+	if (is_key_pressed(32))
 	{
 		g_rotate_foxes = !g_rotate_foxes
 		set_ui_checked(world, g_rotate_cb, g_rotate_foxes)
 	}
 
-	if (is_key_down(61))  // = / +
+	if (is_key_down(61))
 	{
 		g_speed_scale = clamp(g_speed_scale + dt * 2.0, 0.1, 5.0)
 		set_ui_slider_value(world, g_speed_slider, g_speed_scale)
 	}
-	if (is_key_down(45))  // -
+	if (is_key_down(45))
 	{
 		g_speed_scale = clamp(g_speed_scale - dt * 2.0, 0.1, 5.0)
 		set_ui_slider_value(world, g_speed_slider, g_speed_scale)
 	}
 
-	// T - toggle day/night manual mode
 	if (is_key_pressed(84))
 	{
 		g_manual_mode = !g_manual_mode
@@ -384,8 +380,7 @@ def on_update(world : World?)
 		set_day_night_enabled(!g_manual_mode)
 	}
 
-	// Page Up / Page Down - scrub time forward/backward in manual mode
-	if (is_key_down(73) && g_manual_mode)  // Page Up
+	if (is_key_down(73) && g_manual_mode)
 	{
 		g_time_of_day = clamp(g_time_of_day + dt * 2.0, 0.0, 24.0)
 		if (g_time_of_day >= 24.0)
@@ -395,7 +390,7 @@ def on_update(world : World?)
 		set_time_of_day(g_time_of_day)
 		set_ui_slider_value(world, g_time_slider, g_time_of_day)
 	}
-	if (is_key_down(74) && g_manual_mode)  // Page Down
+	if (is_key_down(74) && g_manual_mode)
 	{
 		g_time_of_day = g_time_of_day - dt * 2.0
 		if (g_time_of_day < 0.0)
@@ -406,16 +401,14 @@ def on_update(world : World?)
 		set_ui_slider_value(world, g_time_slider, g_time_of_day)
 	}
 
-	// Home - jump to noon
-	if (is_key_pressed(71))  // Home
+	if (is_key_pressed(71))
 	{
 		g_time_of_day = 12.0
 		set_time_of_day(12.0)
 		set_ui_slider_value(world, g_time_slider, 12.0)
 	}
 
-	// End - jump to midnight
-	if (is_key_pressed(79))  // End
+	if (is_key_pressed(79))
 	{
 		g_time_of_day = 0.0
 		set_time_of_day(0.0)

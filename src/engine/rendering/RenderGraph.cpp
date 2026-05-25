@@ -720,7 +720,7 @@ namespace aether
 		}
 
 		// Pre-seed swapchain images with their resting layout. Overrides any
-		// loaded state — swapchain images are re-acquired each frame and their
+		// loaded state - swapchain images are re-acquired each frame and their
 		// layout is managed externally.
 		states[kSwapchainColorId] = {
 			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

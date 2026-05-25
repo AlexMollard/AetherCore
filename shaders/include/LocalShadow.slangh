@@ -15,7 +15,7 @@ struct ShadowLightData
 };
 
 // Convert world-space position to shadow atlas UV for a perspective light.
-// Returns UV in atlas space (not normalized [0,1] — caller checks region bounds).
+// Returns UV in atlas space (not normalized [0,1] - caller checks region bounds).
 float2 LocalShadowUV(float3 worldPos, float4x4 viewProj, float4 atlasRegion)
 {
     float4 clipPos = mul(viewProj, float4(worldPos, 1.0));
@@ -44,13 +44,13 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerStat
     float ex = moments.x;
     float exSq = moments.y;
 
-    // Receiver is in front of all stored occluders — definitely lit.
+    // Receiver is in front of all stored occluders - definitely lit.
     if (receiverDepth <= ex)
     {
         return 1.0;
     }
 
-    float variance = max(exSq - ex * ex, 0.00002);
+    float variance = max(exSq - ex * ex, 0.0001);
     float md = receiverDepth - ex;
     float p = variance / (variance + md * md);
 
