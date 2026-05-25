@@ -39,7 +39,7 @@ namespace aether
 	static_assert(sizeof(ShadowLightData) == 96, "ShadowLightData must be 96 bytes for GPU layout");
 
 	// Maximum number of local shadow lights rendered per frame.
-	inline constexpr std::uint32_t kMaxLocalShadows = 64u;
+	inline constexpr std::uint32_t kMaxLocalShadows = 256u;
 
 	// Orchestrates spot and point light shadow rendering into a shared atlas.
 	// Responsibilities:

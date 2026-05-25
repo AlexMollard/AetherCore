@@ -358,7 +358,16 @@ namespace aether
 		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
 
+		// Initialize shadow index mapping — entries are filled during the
+		// allocation loop below. Lights not in the budget stay at -1.
+		const std::uint32_t totalLights = pointCount + spotCount;
+		m_lightShadowIndices.assign(totalLights, glm::vec2(-1.0f, 1.0f));
+
 		// Allocate atlas regions and build per-light data.
+		// Track the running index into m_perLightShadows so that the
+		// shadow-index mapping below points to the correct entries.
+		std::uint32_t shadowDataIdx = 0;
+
 		for (std::uint32_t i = 0; i < budget; ++i)
 		{
 			const ShadowCandidate& c = candidates[i];
@@ -415,6 +424,10 @@ namespace aether
 					        .lightType = 1u, // point (same type, 2nd entry)
 					});
 				}
+
+				// Map this point light to the first of its 2 consecutive entries.
+				m_lightShadowIndices[c.lightIndex] = glm::vec2(static_cast<float>(shadowDataIdx), 1.0f);
+				shadowDataIdx += 2u;
 			}
 			else
 			{
@@ -441,6 +454,10 @@ namespace aether
 				        .depthBias = 0.001f,
 				        .lightType = 0u, // spot
 				});
+
+				// Map this spot light to its single entry.
+				m_lightShadowIndices[pointCount + c.lightIndex] = glm::vec2(static_cast<float>(shadowDataIdx), 1.0f);
+				shadowDataIdx += 1u;
 			}
 		}
 
@@ -469,28 +486,6 @@ namespace aether
 			lightFc[i].cameraWorldPos = glm::vec4(camPos, 1.0f);
 		}
 		AE_EXPECT_OR_THROW_VOID(m_lightConstantsBuffer.FlushMapped());
-
-		// Build per-light shadow index mapping for all lights in GpuLight buffer order.
-		// Point lights = first pointCount slots, spot lights = next spotCount slots.
-		const std::uint32_t totalLights = pointCount + spotCount;
-		m_lightShadowIndices.assign(totalLights, glm::vec2(-1.0f, 1.0f));
-		for (std::uint32_t i = 0; i < budget; ++i)
-		{
-			const ShadowCandidate& c = candidates[i];
-			float shadowIdx = static_cast<float>(i);
-			// Candidate type 0=point, 1=spot on CPU side. Point lights get the
-			// shadowIdx pointing to the first of 2 consecutive ShadowLightData entries.
-			if (c.lightType == 0u)
-			{
-				// Point light: stored in first pointCount GpuLight slots.
-				m_lightShadowIndices[c.lightIndex] = glm::vec2(shadowIdx, 1.0f);
-			}
-			else
-			{
-				// Spot light: stored after all point lights.
-				m_lightShadowIndices[pointCount + c.lightIndex] = glm::vec2(shadowIdx, 1.0f);
-			}
-		}
 
 		// Fill FrameConstants for the shader.
 		fc.shadowAtlasSlot = m_atlasBindlessSlot;
