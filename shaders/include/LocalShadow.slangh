@@ -41,11 +41,13 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
 
     float2 moments = g_textures[atlasSlot].SampleLevel(samp, atlasUV, 0.0).rg;
 
-    // Normal-based slope bias: surfaces at grazing angle get more bias
-    // to prevent self-shadowing without causing peter panning on flat surfaces.
+    // Normal-based slope bias (world-space). Scaled by near/viewDepth² to
+    // keep world-space offset constant regardless of perspective non-linearity.
+    const float viewDepth = abs(clipPos.w);
     const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(L)));
-    const float bias = sd.depthBias + sd.normalBias * slope;
-    float receiverDepth = ndc.z - bias;
+    const float worldBias = sd.depthBias + sd.normalBias * slope;
+    const float ndcBias = worldBias * (0.1 / max(viewDepth * viewDepth, 0.01));
+    float receiverDepth = ndc.z - ndcBias;
 
     float ex = moments.x;
     float exSq = moments.y;

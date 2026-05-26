@@ -404,8 +404,8 @@ namespace aether
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = r0,
-					        .depthBias = 0.0005f,
-					        .normalBias = 0.0008f,
+					        .depthBias = 0.005f,
+					        .normalBias = 0.015f,
 					        .lightType = 1u, // point
 					});
 				}
@@ -418,8 +418,8 @@ namespace aether
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = r1,
-					        .depthBias = 0.0005f,
-					        .normalBias = 0.0008f,
+					        .depthBias = 0.005f,
+					        .normalBias = 0.015f,
 					        .lightType = 1u, // point (same type, 2nd entry)
 					});
 				}
@@ -450,8 +450,8 @@ namespace aether
 				m_perLightShadows.push_back(PerLightShadow{
 				        .viewProj = lightProj * lightView,
 				        .region = r,
-				        .depthBias = 0.0005f,
-				        .normalBias = 0.0008f,
+				        .depthBias = 0.005f,
+				        .normalBias = 0.015f,
 				        .lightType = 0u, // spot
 				});
 

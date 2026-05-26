@@ -30,9 +30,9 @@ namespace aether
 	{
 		glm::mat4 viewProj{ 1.0f };
 		glm::vec4 atlasRegion{ 0.0f }; // xy=UV offset, zw=UV scale
-		float depthBias = 0.0005f;
+		float depthBias = 0.005f;
 		std::uint32_t lightType = 0; // 0=spot, 1=point (2 entries: front+back)
-		float normalBias = 0.0008f;
+		float normalBias = 0.015f;
 		float _pad1 = 0.0f;
 	};
 
@@ -93,8 +93,8 @@ namespace aether
 		{
 			glm::mat4 viewProj{ 1.0f };
 			ShadowAtlasManager::Region region;
-			float depthBias = 0.0005f;
-			float normalBias = 0.0008f;
+			float depthBias = 0.005f;
+			float normalBias = 0.015f;
 			std::uint32_t lightType = 0;
 		};
 
