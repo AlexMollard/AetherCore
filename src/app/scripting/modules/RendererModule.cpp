@@ -58,6 +58,23 @@ namespace
 		ActiveContext().renderer->SetSkyGradient({ horizon.x, horizon.y, horizon.z }, { zenith.x, zenith.y, zenith.z });
 	}
 
+	void das_set_point_light_position(int idx, das::float3 pos)
+	{
+		ActiveContext().renderer->SetPointLightPosition(static_cast<std::uint32_t>(idx), { pos.x, pos.y, pos.z });
+	}
+
+	void das_set_spot_light_position(int idx, das::float3 pos)
+	{
+		ActiveContext().renderer->SetSpotLightPosition(static_cast<std::uint32_t>(idx), { pos.x, pos.y, pos.z });
+	}
+
+	void das_clear_lights()
+	{
+		auto& r = *ActiveContext().renderer;
+		r.ClearPointLights();
+		r.ClearSpotLights();
+	}
+
 	void das_set_sky_void(das::float3 color)
 	{
 		ActiveContext().renderer->SetSkyVoidColor({ color.x, color.y, color.z });
@@ -140,7 +157,10 @@ namespace aether::app::scripting
 			Bind<das_set_ambient>(lib, "set_ambient", SE::modifyExternal);
 			Bind<das_set_sun>(lib, "set_sun", SE::modifyExternal);
 			Bind<das_add_point_light>(lib, "add_point_light", SE::modifyExternal);
+			Bind<das_set_point_light_position>(lib, "set_point_light_position", SE::modifyExternal);
 			Bind<das_add_spot_light>(lib, "add_spot_light", SE::modifyExternal);
+			Bind<das_set_spot_light_position>(lib, "set_spot_light_position", SE::modifyExternal);
+			Bind<das_clear_lights>(lib, "clear_lights", SE::modifyExternal);
 			Bind<das_set_sky>(lib, "set_sky", SE::modifyExternal);
 			Bind<das_set_sky_void>(lib, "set_sky_void", SE::modifyExternal);
 

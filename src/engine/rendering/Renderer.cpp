@@ -121,6 +121,14 @@ namespace aether
 		m_pointLights = std::move(lights);
 	}
 
+	void Renderer::SetPointLightPosition(const std::uint32_t idx, const glm::vec3 position)
+	{
+		if (idx < m_pointLights.size())
+		{
+			m_pointLights[idx].position = position;
+		}
+	}
+
 	void Renderer::ClearPointLights()
 	{
 		m_pointLights.clear();
@@ -139,6 +147,14 @@ namespace aether
 			light.outerAngleRad = glm::clamp(light.outerAngleRad, light.innerAngleRad + 0.01f, 1.55f);
 		}
 		m_spotLights = std::move(lights);
+	}
+
+	void Renderer::SetSpotLightPosition(const std::uint32_t idx, const glm::vec3 position)
+	{
+		if (idx < m_spotLights.size())
+		{
+			m_spotLights[idx].position = position;
+		}
 	}
 
 	void Renderer::ClearSpotLights()

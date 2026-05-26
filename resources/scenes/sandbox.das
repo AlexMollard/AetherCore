@@ -24,6 +24,12 @@ var g_fps_label    : uint  = 0u
 var g_cube_mesh   : uint  = 0u
 var g_sphere_mesh : uint  = 0u
 
+// ── Moving light state ─────────────────────────────────────────────────────────
+
+var g_time           : float = 0.0
+var g_orbit_radius   : float = 20.0
+var g_orbit_height   : float = 8.0
+
 // ── Day/Night cycle state ─────────────────────────────────────────────────────
 
 var g_day_night_enabled : bool  = true
@@ -45,8 +51,10 @@ def on_attach(world : World?)
 {
 	g_cube_mesh   = create_mesh(world, "cube")
 	g_sphere_mesh = create_mesh(world, "sphere")
+	g_time        = 0.0
 
 	// ── Lighting: sparse, well-separated for clear shadow testing ──────────
+	clear_lights()
 	set_ambient(float3(0.06, 0.06, 0.08))
 
 	// Single directional sun - high angle, moderate intensity
@@ -61,6 +69,9 @@ def on_attach(world : World?)
 	// One spot light - center, pointing down at the middle area
 	add_spot_light(float3(0.0, 10.0, 0.0), float3(1.0, 0.90, 0.70), 12.0, 25.0,
 		float3(0.0, -1.0, 0.0), 0.20, 0.50, true)
+
+	// Moving point light (index 2) - orbits the scene
+	add_point_light(float3(g_orbit_radius, g_orbit_height, 0.0), float3(1.0, 0.2, 0.8), 8.0, 25.0, true)
 
 	set_sky(float3(0.40, 0.60, 0.95), float3(0.08, 0.15, 0.50))
 
@@ -235,6 +246,13 @@ def on_update(world : World?)
 {
 	let dt = get_delta_time()
 
+	// ── Animate moving point light (index 2 in point light list) ───────────────
+	g_time += dt
+	let orbit_x = cos(g_time * 0.3) * g_orbit_radius
+	let orbit_z = sin(g_time * 0.3) * g_orbit_radius
+	let orbit_y = g_orbit_height + sin(g_time * 0.5) * 3.0
+	set_point_light_position(2, float3(orbit_x, orbit_y, orbit_z))
+
 	// ── Read UI controls ──────────────────────────────────────────────────────
 	g_speed_scale  = get_ui_slider_value(world, g_speed_slider)
 	g_rotate_foxes = get_ui_checked(world, g_rotate_cb)
@@ -339,7 +357,7 @@ def on_update(world : World?)
 		imgui_separator()
 		imgui_text_colored(float4(0.6, 0.9, 0.6, 1.0), "Lights")
 		imgui_separator()
-		imgui_label_text("Point lights", "2  (warm left, cool right)")
+		imgui_label_text("Point lights", "3  (static x2 + orbiting)")
 		imgui_label_text("Spot lights", "1  (center, down)")
 		imgui_label_text("Directional", "1  (sun)")
 		imgui_spacing()

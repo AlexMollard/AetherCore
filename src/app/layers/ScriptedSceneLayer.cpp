@@ -70,6 +70,10 @@ namespace aether::app
 			world.UnregisterSystem(name.c_str());
 		}
 		m_sceneCtx.registeredSystems.clear();
+
+		// Clear script-created lights so reload doesn't stack duplicates.
+		context.Get<Renderer>().ClearPointLights();
+		context.Get<Renderer>().ClearSpotLights();
 	}
 
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
