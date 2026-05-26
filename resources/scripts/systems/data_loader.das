@@ -1,9 +1,10 @@
 options gen2;
-
+require daslib/json_boost;
+require daslib/strings;
+require game_components;
 require data_io;
-require daslib/json;
 
-// ── Data structures ───────────────────────────────────────────────────────────
+// ── Struct Definitions ────────────────────────────────────────────────────────
 
 struct NpcData
 {
@@ -29,91 +30,109 @@ struct DialogueNode
     responses  : array<DialogueResponse>
 }
 
-// ── Loading helpers ───────────────────────────────────────────────────────────
+// ── Loading Helpers ───────────────────────────────────────────────────────────
 
 def private load_float3(jv : JsonValue?; key : string) : float3
 {
-    if (jv == null) { return float3(0,0,0); }
-    let val = (*jv)[key];
-    if (val == null) { return float3(0,0,0); }
-    let arr = *val;
-    return float3(arr[0] |> to_float,
-                  arr[1] |> to_float,
-                  arr[2] |> to_float);
+    let val = jv?[key];
+    if (val == null) { return float3(0.0, 0.0, 0.0); }
+    var arr <- get_array(val);
+    return float3(get_float(arr[0]), get_float(arr[1]), get_float(arr[2]));
 }
+
+def private get_string_default(jv : JsonValue?; key : string; def_val : string) : string
+{
+    let val = jv?[key];
+    if (val == null) { return def_val; }
+    return get_string(val);
+}
+
+// ── NPC Parsing ───────────────────────────────────────────────────────────────
 
 def private parse_npc(jv : JsonValue?) : NpcData
 {
-    return NpcData(
-        id          = jv["id"] |> to_string,
-        name        = jv["name"] |> to_string,
-        model       = jv["model"] |> to_string,
-        dialogue_id = jv["dialogue_id"] |> to_string,
-        position    = load_float3(jv, "position"),
-        rotation    = load_float3(jv, "rotation"),
-        scale       = load_float3(jv, "scale")
-    );
+    var npcData : NpcData;
+    npcData.id = get_string_default(jv, "id", "");
+    npcData.name = get_string_default(jv, "name", "");
+    npcData.model = get_string_default(jv, "model", "");
+    npcData.dialogue_id = get_string_default(jv, "dialogue_id", "");
+    npcData.position = load_float3(jv, "position");
+    npcData.rotation = load_float3(jv, "rotation");
+    npcData.scale = load_float3(jv, "scale");
+    return npcData;
+
 }
 
 [export]
 def load_npcs(path : string) : array<NpcData>
 {
-    var result : array<NpcData>;
     let text = read_text_file(path);
-    if (length(text) == 0) { return result; }
+    if (length(text) == 0) { return <- [[array<NpcData>()]]; }
 
-    let json_data = read_json(text, null);
-    if (json_data == null) { return result; }
+    var err : string;
+    var json_data = read_json(text, err);
+    if (json_data == null) { return <- [[array<NpcData>()]]; }
 
-    let arr = *json_data;
-    for (i in 0..length(arr))
+    var arr <- get_array(json_data);
+    var result : array<NpcData>;
+    for (obj in arr)
     {
-        result |> push(parse_npc(arr[i]));
+        result |> push(parse_npc(obj));
     }
-    return result;
+    return <- result;
 }
 
-def private parse_dialogue_node(key : string; jv : JsonValue?) : DialogueNode?
+// ── Dialogue Parsing ──────────────────────────────────────────────────────────
+
+def private parse_dialogue_node(jv : JsonValue?) : DialogueNode
 {
-    if (jv == null) { return null; }
-    let responses_jv = (*jv)["responses"];
-    if (responses_jv == null) { return null; }
-    let responses_arr = *responses_jv;
     var responses : array<DialogueResponse>;
-    for (i in 0..length(responses_arr))
+    let responses_jv = jv?["responses"];
+    if (responses_jv != null)
     {
-        let rj = responses_arr[i];
-        responses |> push(DialogueResponse(
-            text      = rj["text"] |> to_string,
-            next_node = rj["next_node"] |> to_string
-        ));
+        var responses_arr <- get_array(responses_jv);
+        for (resp in responses_arr)
+        {
+            var responseEntry : DialogueResponse;
+            responseEntry.text = get_string_default(resp, "text", "");
+            responseEntry.next_node = get_string_default(resp, "next_node", "");
+            
+            responses |> push(responseEntry);
+        }
     }
-    return DialogueNode(
-        speaker_id = (*jv)["speaker_id"] |> to_string,
-        text       = (*jv)["text"] |> to_string,
-        responses  = responses
-    );
+
+    var node : DialogueNode;
+    node.speaker_id = get_string_default(jv, "speaker_id", "");
+    node.text = get_string_default(jv, "text", "");
+    node.responses = responses;
+
+    return node;
 }
 
 [export]
-def load_dialogues(path : string) : table<string, DialogueNode>
+def load_dialogues(path : string) : table<string; DialogueNode>
 {
-    var result : table<string, DialogueNode>;
     let text = read_text_file(path);
-    if (length(text) == 0) { return result; }
-
-    let json_data = read_json(text, null);
-    if (json_data == null) { return result; }
-
-    let dict = *json_data;
-    let keys = dict |> get_keys();
-    for (k in keys)
+    if (length(text) == 0) 
     {
-        let node = parse_dialogue_node(k, dict[k]);
-        if (node != null)
+        return <- [[table<string; DialogueNode>()]];
+    }
+
+    var err : string;
+    var json_data = read_json(text, err);
+    if (json_data == null)
+    {
+        return <- [[table<string; DialogueNode>()]];
+    }
+
+    var dict <- get_object(json_data);
+    var result : table<string; DialogueNode>;
+    for (k, v in keys(dict), values(dict))
+    {
+        if (v != null)
         {
-            result[k] = *node;
+            result[k] <- parse_dialogue_node(v);
         }
     }
-    return result;
+    return <- result;
 }

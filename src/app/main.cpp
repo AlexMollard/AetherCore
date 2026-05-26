@@ -54,7 +54,8 @@ int main()
 
 		// application.PushLayer(std::make_unique<aether::app::FishingLayer>());
 		application.PushLayer(std::make_unique<aether::app::LoadingLayer>());
-		application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("game.das", std::move(systemFactory)));
+		// application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("game.das", std::move(systemFactory)));
+		application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("sandbox.das", std::move(systemFactory)));
 		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
 		// application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());

@@ -35,6 +35,7 @@ namespace aether::app::scripting
 		}
 
 		// Fall back to native filesystem for absolute/relative paths
+		// This is needed for daslib and daScript's own modules
 		if (FILE* ff = fopen(fileName.c_str(), "rb"))
 		{
 			struct stat st;
@@ -72,8 +73,11 @@ namespace aether::app::scripting
 		auto* vfs = new VfsFileSystem();
 		addFileSystem(vfs, true, false);
 
-		// Load daslib modules (json, strings, etc.) from the daScript installation
+		// Introduce daslib modules (json, strings, etc.) from the daScript installation.
+		// This pre-loads them into the file info cache so they're available when
+		// require "daslib/xxx" is processed.
 		introduceDaslib();
+		introduceNativeModules();
 	}
 
 	void VfsFileAccess::AddSearchRoot(const das::string& prefix, const das::string& rootPath)
@@ -113,6 +117,7 @@ namespace aether::app::scripting
 		}
 
 		// Fall back to the default resolution (daslib, native modules, etc.)
+		// Call parent implementation which handles daslib, native modules, and extraRoots
 		return das::FsFileAccess::getModuleInfo(req, from);
 	}
 

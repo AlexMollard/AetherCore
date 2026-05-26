@@ -99,6 +99,7 @@ static void for_each_components(aether::World* w, const das::TBlock<void, uint32
 // BIND_FOR_EACH("name", ComponentType...)  -- used inside DasModuleBase ctor
 // Expands to a Bind<> call that registers for_each_name() in the library.
 #define BIND_FOR_EACH(NAME, ...) \
+    Bind<for_each_components<__VA_ARGS__>>(lib, "for_each_" NAME, SE::accessExternal); \
 
 // BIND_COMPONENT("name", ComponentType)
 // Expands to three Bind<> calls inside a DasModuleBase constructor (lib must be in scope):

@@ -42,6 +42,33 @@ namespace aether::app::scripting
 			EnsureModulesRegistered();
 			m_modulesRegistered = true;
 		}
+
+		// Ensure daslang knows where its source tree (daslib) is so requires
+		// like `require daslib/json` can be resolved. Try common locations
+		// relative to the working directory (build output) and set the
+		// das root if we find a daslib directory.
+		try {
+			using fs = std::filesystem::path;
+			fs cwd = std::filesystem::current_path();
+			std::vector<fs> candidates = {
+				cwd / "_deps" / "dascript-src",
+				cwd / "build" / "_deps" / "dascript-src",
+				cwd / ".." / "_deps" / "dascript-src",
+				cwd / ".." / "build" / "_deps" / "dascript-src",
+				cwd / "_deps" / "dascript-src",
+			};
+			for (const auto &c : candidates) {
+				std::error_code ec;
+                if (!c.empty() && std::filesystem::exists(c / "daslib", ec)) {
+                    das::setDasRoot(c.string());
+                    AE_INFO(LogCategory::App, "daslang root set to '{}'.", c.string());
+                    break;
+                }
+			}
+		} catch (const std::exception &e) {
+			AE_WARN(LogCategory::App, "Failed to auto-detect daslang root: {}", e.what());
+		}
+
 		AE_INFO(LogCategory::App, "ScriptingSubsystem initialised.");
 	}
 
@@ -97,9 +124,8 @@ namespace aether::app::scripting
 
 		auto fAccess = das::make_smart<VfsFileAccess>();
 
-		// Configure search roots so require "systems/xxx" resolves from scripts://
 		const std::string scriptsRoot = "scripts://";
-		fAccess->AddSearchRoot("systems", scriptsRoot + "systems");
+		fAccess->AddSearchRoot("scripts", scriptsRoot + "scripts");
 
 		das::ModuleGroup moduleGroup;
 		das::TextPrinter logs;
