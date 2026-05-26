@@ -1,0 +1,89 @@
+{
+  "alric_intro": {
+    "speaker_id": "alric",
+    "text": "Welcome, traveler! I am Alric, the town's blacksmith. If you need a weapon forged, you've come to the right place.",
+    "responses": [
+      { "text": "Tell me about the town.", "next_node": "alric_town" },
+      { "text": "I'm looking for work.", "next_node": "alric_work" },
+      { "text": "Goodbye.", "next_node": null }
+    ]
+  },
+  "alric_town": {
+    "speaker_id": "alric",
+    "text": "This town has stood for over a hundred years. The old keep to the north has been abandoned since the war, but folks say strange lights have been seen there at night.",
+    "responses": [
+      { "text": "Strange lights? Tell me more.", "next_node": "alric_lights" },
+      { "text": "I'll check it out.", "next_node": "alric_quest" },
+      { "text": "Goodbye.", "next_node": null }
+    ]
+  },
+  "alric_lights": {
+    "speaker_id": "alric",
+    "text": "Aye, blue-ish flickers near the old tower. The guard won't go near it. If you're brave enough to investigate, come back and tell me what you find.",
+    "responses": [
+      { "text": "I'll investigate the keep.", "next_node": "alric_quest" },
+      { "text": "Sounds dangerous. Farewell.", "next_node": null }
+    ]
+  },
+  "alric_work": {
+    "speaker_id": "alric",
+    "text": "I could always use help at the forge. But first, prove yourself - bring me 5 iron ore from the mines east of town.",
+    "responses": [
+      { "text": "I'll find that ore.", "next_node": null },
+      { "text": "Maybe later.", "next_node": null }
+    ]
+  },
+  "alric_quest": {
+    "speaker_id": "alric",
+    "text": "Good luck, friend. And be careful - the road to the keep is treacherous.",
+    "responses": [
+      { "text": "I will. Farewell.", "next_node": null }
+    ]
+  },
+  "elsa_intro": {
+    "speaker_id": "elsa",
+    "text": "Greetings. I am Elsa. The light flows through all living things, and I have learned to listen to it.",
+    "responses": [
+      { "text": "Can you heal me?", "next_node": "elsa_heal" },
+      { "text": "Tell me about your craft.", "next_node": "elsa_craft" },
+      { "text": "Goodbye.", "next_node": null }
+    ]
+  },
+  "elsa_heal": {
+    "speaker_id": "elsa",
+    "text": "You seem healthy enough, but should you fall in battle, seek me out. My healing salves can mend even the deepest wounds.",
+    "responses": [
+      { "text": "Thank you, Elsa.", "next_node": null }
+    ]
+  },
+  "elsa_craft": {
+    "speaker_id": "elsa",
+    "text": "I brew potions and poultices from herbs found in the surrounding woods. The silverleaf that grows near the old stream is especially potent.",
+    "responses": [
+      { "text": "Fascinating. Goodbye.", "next_node": null }
+    ]
+  },
+  "brom_riddle": {
+    "speaker_id": "brom",
+    "text": "Halt! Answer my riddle and you may pass:\n\nI speak without a mouth and hear without ears. I have no body, but I come alive with the wind.\n\nWhat am I?",
+    "responses": [
+      { "text": "An echo.", "next_node": "brom_correct" },
+      { "text": "A ghost.", "next_node": "brom_wrong" },
+      { "text": "I don't know. Farewell.", "next_node": null }
+    ]
+  },
+  "brom_correct": {
+    "speaker_id": "brom",
+    "text": "Correct! You are sharper than you look. Take this - it may serve you well on your journey.",
+    "responses": [
+      { "text": "Thank you, wanderer.", "next_node": null }
+    ]
+  },
+  "brom_wrong": {
+    "speaker_id": "brom",
+    "text": "Wrong. Come back when you've thought harder about it.",
+    "responses": [
+      { "text": "I will reflect on it.", "next_node": null }
+    ]
+  }
+}

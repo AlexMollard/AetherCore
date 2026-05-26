@@ -33,7 +33,7 @@ set_target_properties(App PROPERTIES
 # In dev builds, let the scripting subsystem find .das files in the source tree
 # so hot-reload (F5) picks up edits without a C++ rebuild.
 target_compile_definitions(App PRIVATE
-    AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
+    AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scripts"
 )
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
@@ -55,13 +55,17 @@ add_custom_command(TARGET App POST_BUILD
     VERBATIM
 )
 
-# Copy scene scripts (*.das) directly to data/scenes/ so hot-reload can read
+# Copy scene scripts (*.das) directly to data/scripts/ so hot-reload can read
 # them from the filesystem without unpacking the pak.
 add_custom_command(TARGET App POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scenes"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/scenes"
-        "${CMAKE_BINARY_DIR}/data/scenes"
-    COMMENT "Copying scene scripts to data/scenes"
+        "${CMAKE_SOURCE_DIR}/resources/scripts"
+        "${CMAKE_BINARY_DIR}/data/scripts"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/data"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/data"
+        "${CMAKE_BINARY_DIR}/data/data"
+    COMMENT "Copying scripts and data to build output"
     VERBATIM
 )

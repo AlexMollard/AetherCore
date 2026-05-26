@@ -149,6 +149,24 @@ namespace aether::io
 		});
 		Mount("config", configDirectory);
 
+		// ── data:// ────────────────────────────────────────────────────────────
+		// Game data files (JSON configs, NPC definitions, dialogues, etc.)
+		const auto dataDirectory = ResolveMountedDirectory({
+		        workingDirectory / "data/data",
+		        workingDirectory / "../data/data",
+		        workingDirectory / "../../data/data",
+		});
+		Mount("data", dataDirectory);
+
+		// ── scripts:// ──────────────────────────────────────────────────────────
+		// Scene scripts copied from resources/scripts/ at build time.
+		const auto scriptsDirectory = ResolveMountedDirectory({
+		        workingDirectory / "data/scripts",
+		        workingDirectory / "../data/scripts",
+		        workingDirectory / "../../data/scripts",
+		});
+		Mount("scripts", scriptsDirectory);
+
 		// ── logs:// ───────────────────────────────────────────────────────────
 		Mount("logs", workingDirectory / "logs");
 	}

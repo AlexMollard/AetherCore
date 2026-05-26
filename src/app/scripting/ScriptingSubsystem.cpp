@@ -2,10 +2,10 @@
 #include "ScriptHandle.hpp"
 #include "SceneContext.hpp"
 #include "DasModuleBase.hpp" // GetModuleRegistrars()
+#include "VfsFileAccess.hpp"
 
 // Pull in the full daScript API after our own headers (heavy include).
 #include "daScript/daScript.h"
-#include "daScript/simulate/fs_file_info.h"
 
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
@@ -71,9 +71,9 @@ namespace aether::app::scripting
 #ifdef AETHER_SCRIPTS_SOURCE_DIR
 		roots.emplace_back(AETHER_SCRIPTS_SOURCE_DIR);
 #endif
-		roots.emplace_back(cwd / "data" / "scenes");
-		roots.emplace_back(cwd / "../data/scenes");
-		roots.emplace_back(cwd / "../../data/scenes");
+		roots.emplace_back(cwd / "data" / "scripts");
+		roots.emplace_back(cwd / "../data/scripts");
+		roots.emplace_back(cwd / "../../data/scripts");
 		roots.emplace_back(cwd);
 		roots.emplace_back(cwd / "..");
 		roots.emplace_back(cwd / "../..");
@@ -95,7 +95,12 @@ namespace aether::app::scripting
 		m_lastError.clear();
 		const std::string resolvedPath = ResolveScriptPath(path);
 
-		auto fAccess = das::make_smart<das::FsFileAccess>();
+		auto fAccess = das::make_smart<VfsFileAccess>();
+
+		// Configure search roots so require "systems/xxx" resolves from scripts://
+		const std::string scriptsRoot = "scripts://";
+		fAccess->AddSearchRoot("systems", scriptsRoot + "systems");
+
 		das::ModuleGroup moduleGroup;
 		das::TextPrinter logs;
 

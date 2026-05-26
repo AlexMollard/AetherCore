@@ -82,6 +82,24 @@ namespace aether::app::scripting
 	};
 } // namespace aether::app::scripting
 
+// ── Generic per-component-type iteration ───────────────────────────────────────
+// for_each<Components...>(world, block)  →  iterates entities via EnTT view
+template<typename... Components>
+static void for_each_components(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
+{
+	for (auto enttE: w->View<Components...>())
+	{
+		const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
+		vec4f args[1];
+		args[0] = das::cast<uint32_t>::from(id);
+		ctx->invoke(block, args, nullptr, at);
+	}
+}
+
+// BIND_FOR_EACH("name", ComponentType...)  -- used inside DasModuleBase ctor
+// Expands to a Bind<> call that registers for_each_name() in the library.
+#define BIND_FOR_EACH(NAME, ...) \
+
 // BIND_COMPONENT("name", ComponentType)
 // Expands to three Bind<> calls inside a DasModuleBase constructor (lib must be in scope):
 //   add_name(world, entity_id)    - emplaces the component
