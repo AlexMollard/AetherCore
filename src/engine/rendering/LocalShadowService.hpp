@@ -106,20 +106,18 @@ namespace aether
 		// Per-light shadow data (CPU side, rebuilt each frame).
 		std::vector<PerLightShadow> m_perLightShadows;
 
-		// GPU buffer for ShadowLightData array, updated each frame.
-		UniqueBuffer m_shadowDataBuffer;
+		// Per-frame GPU buffer for ShadowLightData array (double-buffered for kMaxFramesInFlight).
+		std::array<UniqueBuffer, kMaxFramesInFlight> m_shadowDataBuffer;
+		std::array<VkDeviceAddress, kMaxFramesInFlight> m_shadowDataAddr{};
 
-		// Small per-light frame constants buffer for atlas rendering.
+		// Per-frame small per-light frame constants buffer for atlas rendering.
 		// Each light gets a full FrameConstants-sized block.
-		UniqueBuffer m_lightConstantsBuffer;
+		std::array<UniqueBuffer, kMaxFramesInFlight> m_lightConstantsBuffer;
+		std::array<VkDeviceAddress, kMaxFramesInFlight> m_lightConstantsAddr{};
 
 		// Shadow index for each light in GpuLight buffer order:
 		// x=shadowDataIndex(-1=none), y=shadowStrength.
 		std::vector<glm::vec2> m_lightShadowIndices;
-
-		// Cached addresses.
-		VkDeviceAddress m_shadowDataAddr = 0;
-		VkDeviceAddress m_lightConstantsAddr = 0;
 
 		// ── VSM blur resources ──────────────────────────────────────────────
 		VkPipeline m_blurPipeline = VK_NULL_HANDLE;

@@ -58,18 +58,24 @@ namespace aether
 		m_perLightShadows.reserve(kMaxLocalShadows);
 		m_lightShadowIndices.reserve(4096);
 
-		// Allocate GPU buffers for per-light shadow data and light constants.
+		// Allocate per-frame GPU buffers for per-light shadow data and light constants (double-buffered).
 		constexpr VkBufferUsageFlags kSsboBda = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-		AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device,
-		        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
-		m_shadowDataBuffer = std::move(sdBuf);
-		m_shadowDataAddr = m_shadowDataBuffer.GetDeviceAddress();
-
-		AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device,
-		        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
-		m_lightConstantsBuffer = std::move(lcBuf);
-		m_lightConstantsAddr = m_lightConstantsBuffer.GetDeviceAddress();
+		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
+			{
+				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device,
+				        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
+				m_shadowDataBuffer[i] = std::move(sdBuf);
+				m_shadowDataAddr[i] = m_shadowDataBuffer[i].GetDeviceAddress();
+			}
+			{
+				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device,
+				        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
+				m_lightConstantsBuffer[i] = std::move(lcBuf);
+				m_lightConstantsAddr[i] = m_lightConstantsBuffer[i].GetDeviceAddress();
+			}
+		}
 
 		// ── Create blur scratch image ──────────────────────────────────────
 		AE_EXPECT_OR_THROW(scratchImg, UniqueImage::Create(device, allocator,
@@ -234,8 +240,8 @@ namespace aether
 	{
 		m_shadowRenderQueue.Shutdown();
 		m_shadowPipeline.Destroy();
-		m_shadowDataBuffer.Reset();
-		m_lightConstantsBuffer.Reset();
+		for (auto& buf : m_shadowDataBuffer) buf.Reset();
+		for (auto& buf : m_lightConstantsBuffer) buf.Reset();
 		m_atlasManager.Shutdown();
 
 		m_blurScratch.Reset();
@@ -393,7 +399,7 @@ namespace aether
 				// Upper hemisphere: look up from the light.
 				{
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(120.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(170.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -406,7 +412,7 @@ namespace aether
 				// Lower hemisphere: look down from the light.
 				{
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(120.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(170.0f), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -452,9 +458,10 @@ namespace aether
 			}
 		}
 
-		// Write ShadowLightData to GPU buffer.
+		// Write ShadowLightData to per-frame GPU buffer.
 		const std::uint32_t shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
-		ShadowLightData* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer.GetAllocationInfo().pMappedData);
+		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
+		ShadowLightData* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].GetAllocationInfo().pMappedData);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
@@ -467,21 +474,21 @@ namespace aether
 			mapped[i].depthBias = pls.depthBias;
 			mapped[i].lightType = pls.lightType;
 		}
-		AE_EXPECT_OR_THROW_VOID(m_shadowDataBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_shadowDataBuffer[bufSlot].FlushMapped());
 
 		// Write per-light frame constants (just viewProj) for atlas rendering.
-		FrameConstants* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer.GetAllocationInfo().pMappedData);
+		FrameConstants* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].GetAllocationInfo().pMappedData);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
 			lightFc[i].cameraWorldPos = glm::vec4(camPos, 1.0f);
 		}
-		AE_EXPECT_OR_THROW_VOID(m_lightConstantsBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_lightConstantsBuffer[bufSlot].FlushMapped());
 
 		// Fill FrameConstants for the shader.
 		fc.shadowAtlasSlot = m_atlasBindlessSlot;
 		fc.shadowLightCount = shadowCount;
-		fc.shadowLightDataAddr = m_shadowDataAddr;
+		fc.shadowLightDataAddr = m_shadowDataAddr[bufSlot];
 	}
 
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat)
@@ -543,7 +550,7 @@ namespace aether
 				                };
 				                vkCmdSetScissor(ctx.recorder.GetCommandBuffer(), 0, 1, &scissor);
 
-				                const VkDeviceAddress lightFcAddr = m_lightConstantsAddr + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
+				                const VkDeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
 				                m_shadowRenderQueue.FlushDrawWithFrameAddr(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, lightFcAddr, &m_shadowPipeline);
 			                }
 
