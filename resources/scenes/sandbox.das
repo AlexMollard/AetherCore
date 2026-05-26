@@ -61,14 +61,13 @@ def on_attach(world : World?)
 	set_sun(float3(-0.3, -0.9, -0.2), 2.0, float3(1.0, 0.92, 0.78))
 
 	// One warm point light - far left, elevated, illuminates left zone
-	add_point_light(float3(-18.0, 10.0, 0.0), float3(1.0, 0.55, 0.15), 10.0, 30.0, true)
+	add_point_light(float3(-18.0, 2.0, 0.0), float3(1.0, 0.55, 0.15), 10.0, 30.0, true)
 
 	// One cool point light - far right, elevated, illuminates right zone
-	add_point_light(float3(18.0, 10.0, 0.0), float3(0.15, 0.45, 1.0), 10.0, 30.0, true)
+	add_point_light(float3(18.0, 2.0, 0.0), float3(0.15, 0.45, 1.0), 10.0, 30.0, true)
 
 	// One spot light - center, pointing down at the middle area
-	add_spot_light(float3(0.0, 10.0, 0.0), float3(1.0, 0.90, 0.70), 12.0, 25.0,
-		float3(0.0, -1.0, 0.0), 0.20, 0.50, true)
+	add_spot_light(float3(-6.0, 2.5, 0.0), float3(1.0, 0.90, 0.70), 12.0, 25.0, float3(0.8, -1.0, 0.0), 0.20, 0.90, true)
 
 	// Moving point light (index 2) - orbits the scene
 	add_point_light(float3(g_orbit_radius, g_orbit_height, 0.0), float3(1.0, 0.2, 0.8), 8.0, 25.0, true)
@@ -150,7 +149,7 @@ def on_attach(world : World?)
 	let sphere = entity_create(world)
 	add_transform(world, sphere)
 	set_transform(world, sphere,
-		float3(-18.0, 14.0, 0.0),
+		float3(-14.0, 14.0, 0.0),
 		float3(0.0, 0.0, 0.0),
 		float3(0.8, 0.8, 0.8))
 	add_mesh(world, sphere, g_sphere_mesh)
@@ -160,7 +159,7 @@ def on_attach(world : World?)
 	let capsule = entity_create(world)
 	add_transform(world, capsule)
 	set_transform(world, capsule,
-		float3(18.0, 16.0, 0.0),
+		float3(14.0, 16.0, 0.0),
 		float3(0.0, 0.0, 0.0),
 		float3(0.8, 0.8, 0.8))
 	add_mesh(world, capsule, g_cube_mesh)
