@@ -45,6 +45,8 @@ var g_manual_cb         : uint  = 0u;
 var g_time_label        : uint  = 0u;
 var g_sun_dir_label     : uint  = 0u;
 
+var g_player : uint = 0u;
+
 // ── on_attach ─────────────────────────────────────────────────────────────────
 
 [export]
@@ -229,6 +231,14 @@ def on_attach(world : World?)
 	g_manual_cb = create_ui_checkbox(world, 328.0, 232.0, 260.0, 28.0, "Manual mode (pause auto)", false);
 	add_ui_child(world, dn_panel, g_manual_cb);
 
+	// ── spawn a human with the idle animation ──────────────────────────────
+	g_player = entity_create(world);
+	add_transform(world, g_player);
+	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
+	load_model(world, g_player, "assets://models/Human/Human.mesh");
+	set_animation(world, g_player, 2);
+	set_playback_speed(world, g_player, 0.5);
+
 	init_default_bindings();
 }
 
@@ -312,6 +322,10 @@ def on_update(world : World?)
 			set_playback_speed(world, e, g_rotate_foxes ? 0.7 : 1.0);
 		}
 	};
+
+	// reset the player pos
+	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
+	set_animation(world, g_player, 2);
 
 	// ── Day/Night cycle controls ──────────────────────────────────────────────
 	g_manual_mode = get_ui_checked(world, g_manual_cb);
