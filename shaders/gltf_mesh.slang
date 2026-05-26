@@ -326,7 +326,7 @@ void AccumulateLocalLight(
     if (light.shadowIndex >= 0.0 && fc->shadowAtlasSlot != 0xFFFFFFFFu)
     {
         uint shadowIdx = (uint)light.shadowIndex;
-        shadowVis = SampleLocalShadow(shadowIdx, fc->shadowAtlasSlot, worldPos, g_linearSampler, fc);
+        shadowVis = SampleLocalShadow(shadowIdx, fc->shadowAtlasSlot, worldPos, N, L, g_linearSampler, fc);
         shadowVis = lerp(1.0, shadowVis, light.shadowStrength);
     }
 

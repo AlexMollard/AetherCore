@@ -28,7 +28,7 @@ var g_sphere_mesh : uint  = 0u
 
 var g_time           : float = 0.0
 var g_orbit_radius   : float = 20.0
-var g_orbit_height   : float = 8.0
+var g_orbit_height   : float = 3.0
 
 // ── Day/Night cycle state ─────────────────────────────────────────────────────
 
@@ -249,7 +249,7 @@ def on_update(world : World?)
 	g_time += dt
 	let orbit_x = cos(g_time * 0.3) * g_orbit_radius
 	let orbit_z = sin(g_time * 0.3) * g_orbit_radius
-	let orbit_y = g_orbit_height + sin(g_time * 0.5) * 3.0
+	let orbit_y = g_orbit_height
 	set_point_light_position(2, float3(orbit_x, orbit_y, orbit_z))
 
 	// ── Read UI controls ──────────────────────────────────────────────────────

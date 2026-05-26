@@ -11,7 +11,8 @@ struct ShadowLightData
     [[vk::offset(64)]] float4   atlasRegion;   // xy=UV offset, zw=UV scale
     [[vk::offset(80)]] float    depthBias;
     [[vk::offset(84)]] uint     lightType;     // 0=spot, 1=point
-    [[vk::offset(88)]] float2   _pad;
+    [[vk::offset(88)]] float    normalBias;
+    [[vk::offset(92)]] float    _pad;
 };
 
 // Convert world-space position to shadow atlas UV for a perspective light.
@@ -25,7 +26,7 @@ float2 LocalShadowUV(float3 worldPos, float4x4 viewProj, float4 atlasRegion)
 }
 
 // Evaluate VSM shadow for a single face entry.
-float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerState samp)
+float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 L, uint atlasSlot, SamplerState samp)
 {
     float4 clipPos = mul(sd.viewProj, float4(worldPos, 1.0));
     float3 ndc = clipPos.xyz / clipPos.w;
@@ -39,7 +40,12 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerStat
     float2 atlasUV = sd.atlasRegion.xy + uv * sd.atlasRegion.zw;
 
     float2 moments = g_textures[atlasSlot].SampleLevel(samp, atlasUV, 0.0).rg;
-    float receiverDepth = ndc.z - sd.depthBias;
+
+    // Normal-based slope bias: surfaces at grazing angle get more bias
+    // to prevent self-shadowing without causing peter panning on flat surfaces.
+    const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(L)));
+    const float bias = sd.depthBias + sd.normalBias * slope;
+    float receiverDepth = ndc.z - bias;
 
     float ex = moments.x;
     float exSq = moments.y;
@@ -54,13 +60,13 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, uint atlasSlot, SamplerStat
     float md = receiverDepth - ex;
     float p = variance / (variance + md * md);
 
-    const float kLightBleed = 0.65;
+    const float kLightBleed = 0.40;
     return saturate((p - kLightBleed) / (1.0 - kLightBleed));
 }
 
 // Evaluate shadow visibility for a local light by its ShadowLightData index.
 // Returns 1.0 = fully lit, 0.0 = fully shadowed.
-float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, SamplerState samp, FrameConstantsData* fc)
+float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 worldNormal, float3 L, SamplerState samp, FrameConstantsData* fc)
 {
     ShadowLightData* shadowData = (ShadowLightData*)(fc->shadowLightDataAddr);
     ShadowLightData sd = shadowData[shadowIdx];
@@ -68,14 +74,14 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, Sampler
     if (sd.lightType == 0u)
     {
         // Spot light: single perspective entry.
-        return SampleVSM(sd, worldPos, atlasSlot, samp);
+        return SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, samp);
     }
     else
     {
         // Point light: two consecutive entries (front+back).
-        float vis0 = SampleVSM(sd, worldPos, atlasSlot, samp);
+        float vis0 = SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, samp);
         ShadowLightData sd1 = shadowData[shadowIdx + 1u];
-        float vis1 = SampleVSM(sd1, worldPos, atlasSlot, samp);
+        float vis1 = SampleVSM(sd1, worldPos, worldNormal, L, atlasSlot, samp);
         return min(vis0, vis1);
     }
 }

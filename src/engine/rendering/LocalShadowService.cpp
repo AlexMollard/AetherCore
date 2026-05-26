@@ -376,7 +376,7 @@ namespace aether
 
 		// Fixed resolution for all shadows - avoids atlas layout shifts when
 		// camera distance changes, which causes flickering.
-		constexpr std::uint32_t kShadowRes = 256u;
+		constexpr std::uint32_t kShadowRes = 512u;
 
 		for (std::uint32_t i = 0; i < budget; ++i)
 		{
@@ -404,7 +404,8 @@ namespace aether
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = r0,
-					        .depthBias = 0.002f,
+					        .depthBias = 0.0005f,
+					        .normalBias = 0.0008f,
 					        .lightType = 1u, // point
 					});
 				}
@@ -417,7 +418,8 @@ namespace aether
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = r1,
-					        .depthBias = 0.003f,
+					        .depthBias = 0.0005f,
+					        .normalBias = 0.0008f,
 					        .lightType = 1u, // point (same type, 2nd entry)
 					});
 				}
@@ -448,7 +450,8 @@ namespace aether
 				m_perLightShadows.push_back(PerLightShadow{
 				        .viewProj = lightProj * lightView,
 				        .region = r,
-				        .depthBias = 0.001f,
+				        .depthBias = 0.0005f,
+				        .normalBias = 0.0008f,
 				        .lightType = 0u, // spot
 				});
 
@@ -472,6 +475,7 @@ namespace aether
 			        static_cast<float>(pls.region.width) / static_cast<float>(ShadowAtlasManager::kAtlasWidth),
 			        static_cast<float>(pls.region.height) / static_cast<float>(ShadowAtlasManager::kAtlasHeight));
 			mapped[i].depthBias = pls.depthBias;
+			mapped[i].normalBias = pls.normalBias;
 			mapped[i].lightType = pls.lightType;
 		}
 		AE_EXPECT_OR_THROW_VOID(m_shadowDataBuffer[bufSlot].FlushMapped());
