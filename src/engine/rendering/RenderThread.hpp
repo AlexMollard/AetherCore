@@ -1,9 +1,7 @@
 #pragma once
 
 #include <atomic>
-#include <condition_variable>
 #include <cstdint>
-#include <mutex>
 #include <thread>
 
 #include <glm/glm.hpp>
@@ -38,32 +36,21 @@ namespace aether
 
 		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;
-		// CPU-side double-buffer slot (frameIndex % kMaxFramesInFlight).
-		// The game thread wrote draw commands and UI lists into this slot.
-		// The render thread reads from the same slot while the game thread
-		// writes to the other slot for the next frame.
 		std::uint32_t drawSlot = 0;
 	};
 
 	// Dedicated render thread that owns all Vulkan submission work.
 	//
-	// Frame pipeline:
-	//   Game thread  : Sim N -> SetWriteSlot(N) -> LayerGui -> GatherDraws -> PreparePacket -> SubmitFrame(N)
-	//   Render thread:                                                                   <- wake, read ->
-	//                                                                                      WaitFence -> Record -> Submit -> Present
+	// Frame pipeline (fully pipelined):
+	//   Game thread   : Sim N -> SubmitFrame(N) -> Sim N+1 -> SubmitFrame(N+1) -> ...
+	//   Render thread :              Read N -> Exec N            Read N+1 -> Exec N+1 -> ...
 	//
-	// Synchronisation uses a bounded channel (capacity = 2 = double-buffered)
-	// plus a consumed-acknowledgment condvar.
+	// Synchronisation uses a bounded channel (capacity = 2 = double-buffered).
+	// SubmitFrame writes to the channel and returns immediately -- the game thread
+	// continues with frame N+1's simulation while the render thread executes frame N.
 	//
-	// The game thread blocks at SubmitFrame only until the render thread has
-	// consumed the packet from the channel (microsecond latency).  The render
-	// thread reads from the channel BEFORE the fence wait, so the game thread
-	// is unblocked before GPU work begins.
-	//
-	// The consumed-acknowledgment prevents the game thread from starting
-	// the next frame's BeginFrame() - which may call ImGui's texture update
-	// checks - while the render thread is still processing texture uploads
-	// from the previous frame.
+	// All shared render data is deep-copied per frame slot, so there are no
+	// data races between the game and render threads.
 	class RenderThread
 	{
 	public:
@@ -73,8 +60,8 @@ namespace aether
 		void Stop();
 
 		// Hand off a completed render packet to the render thread.
-		// Blocks until the render thread has consumed the packet
-		// (microsecond latency, not GPU-frame latency).
+		// Returns immediately (microsecond latency).  The render thread picks
+		// up the packet from the channel and processes it asynchronously.
 		void SubmitFrame(RenderFramePacket packet);
 
 		// Block until the render thread has no pending work.
@@ -88,13 +75,10 @@ namespace aether
 		std::thread m_thread;
 		coro::channel<RenderFramePacket> m_channel;
 
-		// Consumed-acknowledgment: protects game-thread operations that must
-		// not run concurrently with the render thread's ExecuteRenderFrame
-		// (e.g. ImGui's UpdateTexturesNewFrame check during BeginFrame).
-		std::mutex m_ackMutex;
-		std::condition_variable m_ackCv;
-		bool m_consumed = false;
-		bool m_shutdown = false;
+		// Tracks the index of the last fully-executed frame (for shutdown /
+		// debugging / statistics).  Not used for per-frame synchronisation.
+		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{ 0 };
+		std::atomic<bool> m_shutdown{ false };
 	};
 
 } // namespace aether

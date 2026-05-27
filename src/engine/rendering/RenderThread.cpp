@@ -22,15 +22,6 @@ namespace aether
 		m_shutdown = true;
 		m_channel.close();
 
-		// Unblock the game thread if it's waiting on the consumed ack
-		// (should not normally happen since Stop is called after the
-		// game loop exits, but guard against edge cases).
-		{
-			std::lock_guard lock(m_ackMutex);
-			m_consumed = true;
-		}
-		m_ackCv.notify_one();
-
 		if (m_thread.joinable())
 		{
 			m_thread.join();
@@ -41,37 +32,24 @@ namespace aether
 	{
 		AE_PROFILE_ZONE_N("RenderThread::Submit");
 
-		// Block until a slot is available in the channel.
+		// Write to the channel and return immediately.
+		// The render thread picks up the packet asynchronously.
+		// If both channel slots are occupied (render thread is 2 frames behind),
+		// this blocks until a slot frees up -- natural backpressure.
 		m_channel.write(std::move(packet));
-
-		// Wait for the render thread to finish the full frame before returning.
-		// This prevents the game thread from calling ImGui::NewFrame() (which
-		// runs UpdateTexturesNewFrame) while the render thread is still inside
-		// ImGui_ImplVulkan_UpdateTexture, where tex->TexID is set before
-		// tex->Status is updated to OK - an invariant the assert checks.
-		{
-			std::unique_lock lock(m_ackMutex);
-			m_ackCv.wait(lock, [this] { return m_consumed; });
-			m_consumed = false;
-		}
 	}
 
 	void RenderThread::WaitIdle()
 	{
-		// The channel is empty when the render thread has consumed everything.
-		// However, the render thread may still be executing the last frame.
-		// Close the channel so the render thread's read() returns an error,
-		// then join the thread to wait for full completion.
-		// (Callers should call Stop() first; this is a safety fallback.)
+		// Close the channel to unblock any pending read, then join.
 		if (!m_shutdown)
 		{
 			m_shutdown = true;
 			m_channel.close();
-			{
-				std::lock_guard lock(m_ackMutex);
-				m_consumed = true;
-			}
-			m_ackCv.notify_one();
+		}
+		if (m_thread.joinable())
+		{
+			m_thread.join();
 		}
 	}
 
@@ -89,23 +67,15 @@ namespace aether
 			}
 			catch (const std::runtime_error&)
 			{
-				// Channel closed - time to shut down.
 				break;
 			}
 
 			// Execute the frame. This blocks on the GPU fence internally and
-			// includes ImGui texture uploads (RenderDrawData -> UpdateTexture).
+			// includes all command recording and submission.
 			m_engine->ExecuteRenderFrame(packet);
 
-			// Signal the game thread only after the full frame is done.
-			// Unblocking earlier would let the game thread call ImGui::NewFrame()
-			// while UpdateTexture still has tex->TexID set but Status != OK,
-			// triggering the ImFontAtlasUpdateNewFrame assertion.
-			{
-				std::lock_guard lock(m_ackMutex);
-				m_consumed = true;
-			}
-			m_ackCv.notify_one();
+			// Publish the completed frame index (for statistics / shutdown).
+			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
 		}
 	}
 

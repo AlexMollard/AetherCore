@@ -19,14 +19,14 @@ namespace aether
 	// Integrates Dear ImGui (docking branch) with AetherCore's render graph.
 	//
 	// Threading model:
-	//   Game thread : BeginFrame() -> [layer OnGui calls] -> SnapshotFrame()
-	//                 -> RenderPlatformWindows() (secondary OS windows)
+	//   Game thread  : BeginFrame() -> [layer OnGui calls] -> SnapshotFrame()
+	//                  -> RenderPlatformWindows() (secondary OS windows)
 	//   Render thread : registered RenderGraph pass calls RenderSlot()
 	//
-	// SnapshotFrame stores a pointer to ImGui's draw data (no deep-copy).
-	// Safety is guaranteed by the frame-slot lifecycle: the game thread cannot
-	// call ImGui::NewFrame() (which invalidates the data) until the render
-	// thread has finished consuming that slot, enforced by SubmitFrame sync.
+	// SnapshotFrame deep-copies ImGui's draw data into a per-slot owned buffer.
+	// This eliminates the data dependency between threads: the game thread can
+	// immediately call ImGui::NewFrame() (which invalidates ImGui's internal
+	// draw data) without waiting for the render thread to finish.
 	class ImGuiRenderer
 	{
 	public:
@@ -42,28 +42,32 @@ namespace aether
 		void BeginFrame();
 
 		// Game thread - after all OnGui callbacks.
-		// Finalises the ImGui frame and records a pointer to the draw data.
+		// Finalises the ImGui frame and deep-copies all draw data into
+		// the current write slot so the render thread can consume it
+		// independently of ImGui's internal data lifetime.
 		void SnapshotFrame();
 
 		// Game thread - after SnapshotFrame, before SubmitFrame.
 		// Renders secondary OS windows (ViewportsEnable) using imgui_impl_vulkan.
 		void RenderPlatformWindows();
 
-		// Called from the swapchain-recreated callback to re-register the render
-		// graph pass (the graph is cleared on every swapchain resize).
 		void ReregisterPass(ServiceContainer& services);
 
 	private:
-		struct FrameSlot
+		// Owned deep-copy of a single ImGui frame's draw data.
+		// All memory is allocated via IM_ALLOC / ImGui::MemAlloc so that
+		// ImVector destructors (~ImDrawList) free it correctly via IM_FREE.
+		struct ImGuiSlot
 		{
-			// Borrowed from ImGui - valid until the next ImGui::NewFrame().
-			ImDrawData* drawData = nullptr;
+			ImDrawData drawData;
 			bool valid = false;
+
+			void Free();
 		};
 
 		void RenderSlot(PassContext& ctx, uint32_t slot);
 
-		std::array<FrameSlot, Swapchain::kMaxFramesInFlight> m_slots;
+		std::array<ImGuiSlot, Swapchain::kMaxFramesInFlight> m_slots;
 		uint32_t m_writeSlot = 0;
 
 		ServiceContainer* m_services = nullptr;
@@ -71,12 +75,11 @@ namespace aether
 
 } // namespace aether
 
-#else // AETHER_IMGUI not defined - no-op stub, zero ImGui dependency
+#else // AETHER_IMGUI not defined - no-op stub
 
 #	include <cstdint>
 
 struct GLFWwindow;
-
 class ServiceContainer;
 
 namespace aether
@@ -84,33 +87,13 @@ namespace aether
 	class ImGuiRenderer
 	{
 	public:
-		void Init(ServiceContainer&, GLFWwindow*)
-		{
-		}
-
-		void Shutdown(ServiceContainer&)
-		{
-		}
-
-		void SetWriteSlot(uint32_t)
-		{
-		}
-
-		void BeginFrame()
-		{
-		}
-
-		void SnapshotFrame()
-		{
-		}
-
-		void RenderPlatformWindows()
-		{
-		}
-
-		void ReregisterPass(ServiceContainer&)
-		{
-		}
+		void Init(ServiceContainer&, GLFWwindow*) {}
+		void Shutdown(ServiceContainer&) {}
+		void SetWriteSlot(uint32_t) {}
+		void BeginFrame() {}
+		void SnapshotFrame() {}
+		void RenderPlatformWindows() {}
+		void ReregisterPass(ServiceContainer&) {}
 	};
 
 } // namespace aether
