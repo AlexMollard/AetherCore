@@ -3,11 +3,11 @@
   "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
   "configurePresets": [
     {
-      "name": "vs2026-clangcl",
-      "displayName": "VS 2026 ClangCL",
-      "description": "Uses clang-cl with Visual Studio 2026 generator.",
-      "generator": "Visual Studio 18 2026",
-      "binaryDir": "${sourceDir}/build",
+      "name": "vs2022-clang",
+      "displayName": "VS 2022 ClangCL",
+      "description": "Uses clang-cl with Visual Studio 2022 generator.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build-vs2022-clang",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",
@@ -16,35 +16,70 @@
       "toolset": {
         "value": "ClangCL",
         "strategy": "set"
+      }
+    },
+    {
+      "name": "vs2022-msvc",
+      "displayName": "VS 2022 MSVC",
+      "description": "Uses MSVC with Visual Studio 2022 generator.",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build-vs2022-msvc",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "vs2026-clang",
+      "displayName": "VS 2026 ClangCL",
+      "description": "Uses clang-cl with Visual Studio 2026 generator.",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build-vs2026-clang",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "toolset": {
+        "value": "ClangCL",
+        "strategy": "set"
+      }
+    },
+    {
+      "name": "vs2026-msvc",
+      "displayName": "VS 2026 MSVC",
+      "description": "Uses MSVC with Visual Studio 2026 generator.",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build-vs2026-msvc",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "linux-clang",
+      "displayName": "Linux Clang",
+      "description": "Uses clang with Ninja generator on Linux.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-linux-clang",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
       }
     },
     {
       "name": "default",
-      "displayName": "VS 2022 ClangCL",
-      "description": "Uses clang-cl with Visual Studio 2022 generator. Falls back to system compiler on Linux/macOS.",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      },
-      "toolset": {
-        "value": "ClangCL",
-        "strategy": "set"
-      }
-    },
-    {
-      "name": "msvc",
-      "displayName": "MSVC Fallback",
-      "description": "Uses the default MSVC compiler with Visual Studio generator.",
-      "generator": "Visual Studio 17 2022",
-      "binaryDir": "${sourceDir}/build-msvc",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      }
+      "displayName": "VS 2022 MSVC",
+      "description": "Default: MSVC with Visual Studio 2022 generator.",
+      "inherits": "vs2022-msvc",
+      "binaryDir": "${sourceDir}/build"
     }
   ]
 }

@@ -1,6 +1,6 @@
 # ⚡ AetherCore
 
-A C++26 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, coroutines, and a custom asset pipeline.
+A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, coroutines, and a custom asset pipeline.
 
 ---
 
@@ -88,36 +88,44 @@ include/                   Shared format headers (PakFormat, AeBnFormat)
 
 ### Windows
 
-**Prerequisites:** Visual Studio 2022, CMake 4.0+, Vulkan SDK
+**Prerequisites:** Visual Studio 2022 or 2026, CMake 4.0+, Vulkan SDK
 
-Clang-cl is the default compiler. MSVC is available as a fallback.
+**Compiler support:** Clang-cl uses C++26. MSVC uses C++23 (MSVC does not yet support C++26).
 
 ```powershell
-# Default (Clang-cl)
-cmake --preset default
-cmake --build --preset default --config Debug
+# VS 2022 + MSVC (default)
+cmake --preset vs2022-msvc
+cmake --build --preset vs2022-msvc --config Debug
 
-# MSVC fallback
-cmake --preset msvc
-cmake --build --preset msvc --config Debug
+# VS 2022 + Clang-cl
+cmake --preset vs2022-clang
+cmake --build --preset vs2022-clang --config Debug
+
+# VS 2026 + MSVC
+cmake --preset vs2026-msvc
+cmake --build --preset vs2026-msvc --config Debug
+
+# VS 2026 + Clang-cl
+cmake --preset vs2026-clang
+cmake --build --preset vs2026-clang --config Debug
 ```
 
 ### Linux
 
-**Prerequisites:** GCC 11+ or Clang 13+, CMake 4.0+, Vulkan SDK
+**Prerequisites:** Clang 13+, CMake 4.0+, Vulkan SDK, Ninja
 
 Install dependencies (Ubuntu/Debian):
 
 ```bash
-sudo apt-get install build-essential cmake git libvulkan-dev vulkan-tools \
+sudo apt-get install build-essential cmake git ninja-build clang libvulkan-dev vulkan-tools \
   libglfw3-dev libglm-dev libfreetype6-dev
 ```
 
 Configure and build:
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j$(nproc)
+cmake --preset linux-clang
+cmake --build --preset linux-clang
 ```
 
 Run:
