@@ -3,6 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "mesh/VoxelVertex.hpp"
+#include "utils/Profiler.hpp"
 #include "BlockRegistry.hpp"
 
 namespace voxel
@@ -55,6 +56,7 @@ namespace voxel
 
 	void ChunkMesher::Build(const std::uint16_t* blocks, const BlockRegistry& registry, const glm::ivec3& origin)
 	{
+		AE_PROFILE_ZONE();
 		Clear();
 
 		// Estimate: average chunk won't fill more than ~30% of faces.

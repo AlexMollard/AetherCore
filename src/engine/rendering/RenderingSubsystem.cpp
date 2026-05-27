@@ -1,5 +1,6 @@
 #include "rendering/RenderingSubsystem.hpp"
 
+#include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "camera/CameraManager.hpp"
 #include "rendering/LightingManager.hpp"
@@ -12,6 +13,7 @@ namespace aether
 {
 	void RenderingSubsystem::Init(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		VulkanContext& vk = services.Get<VulkanContext>();
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
@@ -68,6 +70,7 @@ namespace aether
 
 	void RenderingSubsystem::Shutdown(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		VulkanContext& vk = services.Get<VulkanContext>();
 
 		m_postProcessStack.Destroy();
@@ -84,6 +87,7 @@ namespace aether
 
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		VulkanContext& vk = services.Get<VulkanContext>();
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
@@ -115,6 +119,7 @@ namespace aether
 
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		LightingManager& lighting = services.Get<LightingManager>();
 
 		m_renderPipelineCoordinator.RegisterPasses(

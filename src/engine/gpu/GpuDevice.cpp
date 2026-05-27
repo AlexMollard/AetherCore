@@ -2,6 +2,7 @@
 
 #include <mutex>
 
+#include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "platform/Window.hpp"
@@ -22,6 +23,7 @@ namespace aether
 
 	void GpuDevice::Init(ServiceContainer& services, const Config& config)
 	{
+		AE_PROFILE_ZONE();
 		m_gfx = new GraphicsDevice();
 		m_gfx->Init(services, { .appName = config.appName, .enableVsync = config.enableVsync });
 
@@ -34,6 +36,7 @@ namespace aether
 
 	void GpuDevice::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_gfx)
 		{
 			m_gfx->Shutdown();
@@ -42,6 +45,7 @@ namespace aether
 
 	void GpuDevice::WaitIdle()
 	{
+		AE_PROFILE_ZONE();
 		if (vkDeviceWaitIdle(m_gfx->GetVulkanContext().GetDevice().device) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "GpuDevice: failed to wait for device idle."));
@@ -137,6 +141,7 @@ namespace aether
 
 	void GpuDevice::RecreateSwapchain(Window& window, bool enableVsync)
 	{
+		AE_PROFILE_ZONE();
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 
@@ -158,6 +163,7 @@ namespace aether
 
 	void GpuDevice::SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue)
 	{
+		AE_PROFILE_ZONE();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 

@@ -8,6 +8,7 @@
 #include "ui/UiTheme.hpp"
 #include "scene/World.hpp"
 #include "UiWidgets.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::ui
 {
@@ -15,6 +16,7 @@ namespace aether::ui
 
 	void UiSystem::BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
 	{
+		AE_PROFILE_ZONE();
 		// ── Mouse state ────────────────────────────────────────────────────────
 		ctx.mousePos = input.GetMousePos();
 		ctx.mouseDelta = input.GetMouseDelta();

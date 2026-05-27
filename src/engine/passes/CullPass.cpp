@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "rendering/CommandRecorder.hpp"
+#include "utils/Profiler.hpp"
 #include "io/FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/RenderGraph.hpp"
@@ -13,11 +14,13 @@ namespace aether
 {
 	void CullPass::Initialize(VkDevice device)
 	{
+		AE_PROFILE_ZONE();
 		m_device = device;
 	}
 
 	void CullPass::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_device == VK_NULL_HANDLE)
 		{
 			return;
@@ -37,6 +40,7 @@ namespace aether
 
 	Expected<void> CullPass::EnsurePipeline()
 	{
+		AE_PROFILE_ZONE();
 		if (m_pipeline != VK_NULL_HANDLE)
 		{
 			return {};
@@ -93,6 +97,7 @@ namespace aether
 
 	void CullPass::RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix)
 	{
+		AE_PROFILE_ZONE();
 		AE_EXPECT_OR_THROW_VOID(EnsurePipeline());
 
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);

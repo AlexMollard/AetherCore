@@ -1,12 +1,14 @@
 #include "rendering/ShadowAtlasManager.hpp"
 
 #include "gpu/BindlessManager.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
 	void ShadowAtlasManager::Initialize(const VulkanContext& ctx, BindlessManager& bindless)
 	{
+		AE_PROFILE_ZONE();
 		m_bindless = &bindless;
 		const VkDevice device = ctx.GetDevice().device;
 		const VmaAllocator allocator = ctx.GetAllocator();
@@ -26,6 +28,7 @@ namespace aether
 
 	void ShadowAtlasManager::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_bindlessSlot != 0xFFFFFFFFu && m_bindless != nullptr)
 		{
 			m_atlas.ReleaseBindlessSampled();
@@ -38,11 +41,13 @@ namespace aether
 
 	void ShadowAtlasManager::Reset()
 	{
+		AE_PROFILE_ZONE();
 		m_shelves.clear();
 	}
 
 	ShadowAtlasManager::Region ShadowAtlasManager::Allocate(const std::uint32_t width, const std::uint32_t height)
 	{
+		AE_PROFILE_ZONE();
 		if (width == 0 || height == 0 || width > kAtlasWidth || height > kAtlasHeight)
 		{
 			return {};

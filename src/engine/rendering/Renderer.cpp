@@ -4,12 +4,14 @@
 #include <utility>
 
 #include "passes/PostProcessStack.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/Swapchain.hpp"
 
 namespace aether
 {
 	void Renderer::Initialize(PostProcessStack* postProcessStack)
 	{
+		AE_PROFILE_ZONE();
 		m_postProcessStack = postProcessStack;
 	}
 
@@ -41,6 +43,7 @@ namespace aether
 
 	void Renderer::SetDirectionalLight(glm::vec3 direction, const float intensity)
 	{
+		AE_PROFILE_ZONE();
 		const float len2 = glm::dot(direction, direction);
 		if (len2 < 1e-8f)
 		{
@@ -112,6 +115,7 @@ namespace aether
 
 	void Renderer::SetPointLights(std::vector<PointLight> lights)
 	{
+		AE_PROFILE_ZONE();
 		for (PointLight& light: lights)
 		{
 			light.radius = glm::max(light.radius, 0.01f);
@@ -136,6 +140,7 @@ namespace aether
 
 	void Renderer::SetSpotLights(std::vector<SpotLight> lights)
 	{
+		AE_PROFILE_ZONE();
 		for (SpotLight& light: lights)
 		{
 			light.radius = glm::max(light.radius, 0.01f);

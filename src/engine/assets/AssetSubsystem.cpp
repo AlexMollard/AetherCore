@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "rendering/ShadowService.hpp"
@@ -15,6 +16,7 @@ namespace aether
 {
 	void AssetSubsystem::Init(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		services.Register<PrimitiveMeshes>(m_primitiveMeshes);
 
 		m_context = &services.Get<VulkanContext>();
@@ -42,6 +44,7 @@ namespace aether
 
 	void AssetSubsystem::LinkRenderingDeps(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		m_assetManager.SetRenderQueue(services.Get<RenderQueue>());
 		m_assetManager.SetShadowService(services.Get<ShadowService>());
 		m_assetManager.SetRenderTargetService(services.Get<RenderTargetService>());
@@ -49,6 +52,7 @@ namespace aether
 
 	void AssetSubsystem::FlushMeshUploads()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_meshUploadQueue.HasPendingUploads())
 		{
 			return;
@@ -100,6 +104,7 @@ namespace aether
 
 	void AssetSubsystem::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		m_assetManager = AssetManager{};
 		m_primitiveMeshes.Destroy();
 		m_meshUploadQueue.Shutdown();

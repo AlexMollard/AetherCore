@@ -1,12 +1,14 @@
 #include "camera/CameraManager.hpp"
 
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 
 	CameraHandle CameraManager::Create(const CameraDesc& desc)
 	{
+		AE_PROFILE_ZONE();
 		const uint32_t id = m_nextId++;
 		m_cameras.emplace(id, Camera{ desc });
 		return CameraHandle{ id };
@@ -14,6 +16,7 @@ namespace aether
 
 	void CameraManager::Destroy(CameraHandle handle)
 	{
+		AE_PROFILE_ZONE();
 		if (!handle.IsValid())
 		{
 			return;
@@ -55,6 +58,7 @@ namespace aether
 
 	void CameraManager::SetMainCamera(CameraHandle handle)
 	{
+		AE_PROFILE_ZONE();
 		m_mainCamera = handle;
 	}
 
@@ -97,6 +101,7 @@ namespace aether
 
 	void CameraManager::Update(const Input& input, float dt)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& [id, cam]: m_cameras)
 		{
 			cam.Update(input, dt);

@@ -5,11 +5,13 @@
 #include <glm/geometric.hpp>
 
 #include "rendering/Renderer.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::app
 {
 	void DayNightSystem::Init(aether::Renderer& renderer)
 	{
+		AE_PROFILE_ZONE();
 		m_renderer = &renderer;
 	}
 
@@ -19,6 +21,7 @@ namespace aether::app
 
 	void DayNightSystem::Update([[maybe_unused]] aether::World& world, float dt)
 	{
+		AE_PROFILE_ZONE();
 		if (m_renderer == nullptr)
 		{
 			return;

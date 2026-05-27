@@ -1,11 +1,13 @@
 #include "scene/System.hpp"
 
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void SystemRegistry::Register(std::unique_ptr<System> system)
 	{
+		AE_PROFILE_ZONE();
 		if (!system)
 		{
 			return;
@@ -19,6 +21,7 @@ namespace aether
 
 	void SystemRegistry::Unregister(const char* name)
 	{
+		AE_PROFILE_ZONE();
 		auto it = std::find_if(m_systems.begin(), m_systems.end(), [name](const std::unique_ptr<System>& sys) { return sys && std::string_view(sys->GetName()) == name; });
 		if (it != m_systems.end())
 		{
@@ -29,6 +32,7 @@ namespace aether
 
 	void SystemRegistry::UpdateAll(World& world, float dt)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& system: m_systems)
 		{
 			if (system)

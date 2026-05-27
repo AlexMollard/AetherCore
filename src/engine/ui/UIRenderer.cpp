@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -9,6 +10,7 @@ namespace aether
 {
 	void UIRenderer::Init(ServiceContainer& services, std::string_view fontVfsPath, std::string_view passNamePrefix, int glyphSize)
 	{
+		AE_PROFILE_ZONE();
 		m_swapchain = &services.Get<Swapchain>();
 		m_currentLayer = 0;
 		m_layerStack.clear();
@@ -22,6 +24,7 @@ namespace aether
 
 	void UIRenderer::Shutdown(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		m_textRenderer.Shutdown();
 		m_quadRenderer.Shutdown(services);
 		m_swapchain = nullptr;

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "utils/AetherExceptions.hpp"
+#include "utils/Profiler.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "DirectoryBackend.hpp"
@@ -194,6 +195,7 @@ namespace aether::io
 
 	void FileSystem::Mount(std::string_view mountPoint, std::filesystem::path physicalPath)
 	{
+		AE_PROFILE_ZONE();
 		if (s_backend == nullptr)
 		{
 			AE_ASSERT_ALWAYS(false, "FileSystem::Mount() called before Initialize().");
@@ -206,6 +208,7 @@ namespace aether::io
 
 	void FileSystem::MountPak(std::string_view mountPoint, std::filesystem::path pakPath)
 	{
+		AE_PROFILE_ZONE();
 		if (s_backend == nullptr)
 		{
 			AE_ASSERT_ALWAYS(false, "FileSystem::MountPak() called before Initialize().");
@@ -230,6 +233,7 @@ namespace aether::io
 
 	Expected<std::vector<std::byte>> FileSystem::ReadFile(std::string_view virtualPath)
 	{
+		AE_PROFILE_ZONE();
 		if (s_backend == nullptr)
 		{
 			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFile() called before Initialize().");
@@ -313,6 +317,7 @@ namespace aether::io
 
 	coro::task<std::vector<std::byte>> FileSystem::ReadFileAsync(std::string_view virtualPath, IOPriority priority)
 	{
+		AE_PROFILE_ZONE();
 		if (s_backend == nullptr)
 		{
 			AE_ASSERT_ALWAYS(false, "FileSystem::ReadFileAsync() called before Initialize().");

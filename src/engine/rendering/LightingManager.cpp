@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "io/FileSystem.hpp"
+#include "utils/Profiler.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/ShaderUtils.hpp"
@@ -23,6 +24,7 @@ namespace aether
 
 	void LightingManager::Initialize(const VulkanContext& context)
 	{
+		AE_PROFILE_ZONE();
 		m_context = &context;
 		m_renderer = nullptr;
 
@@ -101,6 +103,7 @@ namespace aether
 
 	void LightingManager::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_context)
 		{
 			return;
@@ -160,6 +163,7 @@ namespace aether
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const bool isAsyncCompute) const
 	{
+		AE_PROFILE_ZONE();
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
 			DisableForView(fc);
@@ -195,6 +199,7 @@ namespace aether
 
 	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
 	{
+		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
@@ -303,6 +308,7 @@ namespace aether
 
 	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
 	{
+		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
 		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
 
@@ -473,6 +479,7 @@ namespace aether
 
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
+		AE_PROFILE_ZONE();
 		auto& frame = m_buffers[frameSlot];
 		const VkDevice device = m_context->GetDevice().device;
 		const VmaAllocator allocator = m_context->GetAllocator();
@@ -512,6 +519,7 @@ namespace aether
 
 	void LightingManager::EnsureComputePipeline() const
 	{
+		AE_PROFILE_ZONE();
 		if (m_computeLayout != VK_NULL_HANDLE && m_initPipeline != VK_NULL_HANDLE && m_cullPipeline != VK_NULL_HANDLE)
 		{
 			return;
@@ -634,6 +642,7 @@ namespace aether
 
 	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)
 	{
+		AE_PROFILE_ZONE();
 		auto& frame = m_buffers[frameSlot];
 		if (!frame.lights || shadowIndices.empty())
 		{

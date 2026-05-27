@@ -4,12 +4,14 @@
 #include <cstring>
 
 #include "utils/Expected.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
 	void MeshUploadQueue::Initialize(const VulkanContext& ctx)
 	{
+		AE_PROFILE_ZONE();
 		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(ctx.GetAllocator(), ctx.GetDevice().device, kStagingCapacity, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
 		m_staging = std::move(buf);
 		m_ringHead = 0;
@@ -17,6 +19,7 @@ namespace aether
 
 	void MeshUploadQueue::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		m_staging.Reset();
 		m_pendingCopies.clear();
 		m_ringHead = 0;
@@ -24,6 +27,7 @@ namespace aether
 
 	bool MeshUploadQueue::Upload(const void* vertexData, VkDeviceSize vertexBytes, VkBuffer destVertexBuffer, VkDeviceSize destVertexOffset, const void* indexData, VkDeviceSize indexBytes, VkBuffer destIndexBuffer, VkDeviceSize destIndexOffset)
 	{
+		AE_PROFILE_ZONE();
 		const VkDeviceSize totalBytes = vertexBytes + indexBytes;
 		if (m_ringHead + totalBytes > kStagingCapacity)
 		{
@@ -45,6 +49,7 @@ namespace aether
 
 	void MeshUploadQueue::Flush(VkCommandBuffer cmd)
 	{
+		AE_PROFILE_ZONE();
 		if (m_pendingCopies.empty())
 		{
 			return;

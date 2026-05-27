@@ -2,6 +2,7 @@
 
 #include "utils/AetherExceptions.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -10,6 +11,7 @@ namespace aether
 {
 	Window::Window(const char* title, int width, int height)
 	{
+		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Window, "Initializing window '{}' ({}x{})", title, width, height);
 
 		if (!glfwInit())
@@ -30,6 +32,7 @@ namespace aether
 
 	Window::~Window()
 	{
+		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Window, "Destroying window resources.");
 
 		if (m_window != nullptr)
@@ -52,6 +55,7 @@ namespace aether
 
 	void Window::PollEvents() const
 	{
+		AE_PROFILE_ZONE();
 		glfwPollEvents();
 	}
 
@@ -65,6 +69,7 @@ namespace aether
 
 	FramebufferSize Window::WaitForValidFramebufferSize()
 	{
+		AE_PROFILE_ZONE();
 		auto size = GetFramebufferSize();
 		while (size.width == 0 || size.height == 0)
 		{

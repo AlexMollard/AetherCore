@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "camera/CameraManager.hpp"
+#include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "io/FileSystem.hpp"
 #include "passes/CullPass.hpp"
@@ -32,6 +33,7 @@ namespace aether
 
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
+		AE_PROFILE_ZONE();
 		const VkDevice device = context.GetDevice().device;
 		const VmaAllocator allocator = context.GetAllocator();
 
@@ -238,6 +240,7 @@ namespace aether
 
 	void LocalShadowService::Shutdown(VkDevice device)
 	{
+		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
 		m_shadowPipeline.Destroy();
 		for (auto& buf : m_shadowDataBuffer) buf.Reset();
@@ -275,6 +278,7 @@ namespace aether
 
 	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
 	{
+		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		m_shadowRenderQueue.Clear(drawSlot);
 		WorldRenderer::Flush(scene, m_shadowRenderQueue);
@@ -283,6 +287,7 @@ namespace aether
 
 	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, const Renderer& renderer, Scene& scene, World& world, FrameConstants& fc)
 	{
+		AE_PROFILE_ZONE();
 		// Re-populate the shadow render queue to pick up any mid-frame changes
 		// to MeshComponent::mesh pointers made by game systems after the initial
 		// PrepareQueues call.
@@ -497,6 +502,7 @@ namespace aether
 
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat)
 	{
+		AE_PROFILE_ZONE();
 		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage().Get(), m_atlasManager.GetAtlasView(), VK_IMAGE_ASPECT_COLOR_BIT);
 

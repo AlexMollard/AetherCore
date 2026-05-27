@@ -9,6 +9,7 @@
 #include "rendering/ShadowService.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderQueue.hpp"
+#include "utils/Profiler.hpp"
 
 using namespace aether;
 
@@ -53,6 +54,7 @@ namespace voxel
 
 	void ChunkManager::Initialize(ServiceContainer& services, BlockRegistry& registry, const aether::GraphicsPipeline* pipeline, int renderRadius)
 	{
+		AE_PROFILE_ZONE();
 		m_services = &services;
 		m_registry = &registry;
 		m_pipeline = pipeline;
@@ -61,6 +63,7 @@ namespace voxel
 
 	void ChunkManager::Shutdown(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		MeshArena& arena = services.Get<MeshArena>();
 		for (auto& [coord, chunk]: m_chunks)
 		{
@@ -87,6 +90,7 @@ namespace voxel
 
 	Chunk& ChunkManager::GetOrCreateChunk(const glm::ivec3& chunkCoord)
 	{
+		AE_PROFILE_ZONE();
 		auto it = m_chunks.find(chunkCoord);
 		if (it != m_chunks.end())
 		{
@@ -166,6 +170,7 @@ namespace voxel
 
 	bool ChunkManager::RebuildChunk(const glm::ivec3& chunkCoord, Chunk& chunk)
 	{
+		AE_PROFILE_ZONE();
 		MeshArena& arena = m_services->Get<MeshArena>();
 		MeshUploadQueue& uploadQueue = m_services->Get<MeshUploadQueue>();
 
@@ -193,6 +198,7 @@ namespace voxel
 
 	void ChunkManager::Update(const glm::vec3& playerWorldPos)
 	{
+		AE_PROFILE_ZONE();
 		(void) playerWorldPos;
 		assert(m_services && m_registry && m_pipeline);
 		m_rebuildAttemptsLastFrame = 0;
@@ -246,6 +252,7 @@ namespace voxel
 
 	void ChunkManager::SubmitDraws(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		assert(m_pipeline);
 		m_submittedDrawsLastFrame = 0;
 

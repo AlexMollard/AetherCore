@@ -10,6 +10,7 @@
 
 #	include "utils/ServiceContainer.hpp"
 #	include "utils/Assert.hpp"
+#	include "utils/Profiler.hpp"
 #	include "rendering/RenderGraph.hpp"
 #	include "vulkan/Swapchain.hpp"
 #	include "vulkan/VulkanContext.hpp"
@@ -204,8 +205,7 @@ namespace aether
 
 	void ImGuiRenderer::Init(ServiceContainer& services, GLFWwindow* window)
 	{
-		m_services = &services;
-
+		AE_PROFILE_ZONE();
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 
@@ -301,6 +301,7 @@ namespace aether
 
 	void ImGuiRenderer::Shutdown(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		if (vkDeviceWaitIdle(services.Get<VulkanContext>().GetDevice().device) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "ImGuiRenderer: failed to wait for device idle."));
@@ -315,6 +316,7 @@ namespace aether
 
 	void ImGuiRenderer::BeginFrame()
 	{
+		AE_PROFILE_ZONE();
 		ImGui_ImplVulkan_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
@@ -322,6 +324,7 @@ namespace aether
 
 	void ImGuiRenderer::SnapshotFrame()
 	{
+		AE_PROFILE_ZONE();
 		ImGui::Render();
 
 		ImDrawData* src = ImGui::GetDrawData();
@@ -354,6 +357,7 @@ namespace aether
 
 	void ImGuiRenderer::ReregisterPass(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		RenderGraph& renderGraph = services.Get<RenderGraph>();
 		auto swapColor = renderGraph.GetSwapchainColor();
 		renderGraph.AddPass("ImGui")

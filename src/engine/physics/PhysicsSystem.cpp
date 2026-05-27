@@ -24,6 +24,7 @@
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -184,6 +185,7 @@ namespace aether
 
 	void PhysicsSystem::OnRegister(World& world)
 	{
+		AE_PROFILE_ZONE();
 		JPH::RegisterDefaultAllocator();
 
 		JPH::Factory::sInstance = new JPH::Factory();
@@ -223,6 +225,7 @@ namespace aether
 
 	void PhysicsSystem::OnUnregister([[maybe_unused]] World& world)
 	{
+		AE_PROFILE_ZONE();
 		m_physics.reset();
 		m_jobSystem.reset();
 		m_tempAllocator.reset();
@@ -239,6 +242,7 @@ namespace aether
 
 	void PhysicsSystem::Update(World& world, float dt)
 	{
+		AE_PROFILE_ZONE();
 		FlushPendingBodies(world);
 
 		m_accumulator += dt;
@@ -263,12 +267,14 @@ namespace aether
 
 	void PhysicsSystem::StepPhysics()
 	{
+		AE_PROFILE_ZONE();
 		// collision_steps = 1 is fine for most games at 60 Hz.
 		m_physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_tempAllocator.get(), m_jobSystem.get());
 	}
 
 	void PhysicsSystem::SyncTransforms(World& world, float alpha)
 	{
+		AE_PROFILE_ZONE();
 		auto& bodyInterface = m_physics->GetBodyInterface();
 
 		for (auto [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
@@ -337,6 +343,7 @@ namespace aether
 
 	void PhysicsSystem::FlushPendingBodies(World& world)
 	{
+		AE_PROFILE_ZONE();
 		auto& bi = m_physics->GetBodyInterface();
 		auto& reg = world.GetRegistry();
 		bool addedStatic = false;

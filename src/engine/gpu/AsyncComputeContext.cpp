@@ -4,6 +4,7 @@
 #include <string>
 
 #include "gpu/GpuDevice.hpp"
+#include "utils/Profiler.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -19,6 +20,7 @@ namespace aether
 
 	void AsyncComputeContext::Init(GpuDevice& gpu)
 	{
+		AE_PROFILE_ZONE();
 		VulkanContext& vk = gpu.GetVulkanContext();
 		VkDevice device = vk.GetDevice().device;
 
@@ -90,6 +92,7 @@ namespace aether
 
 	void AsyncComputeContext::Shutdown(GpuDevice& gpu)
 	{
+		AE_PROFILE_ZONE();
 		if (!m_initialized)
 		{
 			return;
@@ -124,6 +127,7 @@ namespace aether
 
 	void AsyncComputeContext::BeginFrame(GpuDevice& gpu, std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		VkDevice device = gpu.GetVulkanContext().GetDevice().device;
 		auto& frame = m_frames[frameIndex];
 		VkFence fence = reinterpret_cast<VkFence>(frame.fence);
@@ -171,6 +175,7 @@ namespace aether
 
 	AsyncComputeContext::SubmitResult AsyncComputeContext::Submit(GpuDevice& gpu, std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		auto& frame = m_frames[frameIndex];
 		const std::uint64_t signalValue = ++m_timelineValue;
 

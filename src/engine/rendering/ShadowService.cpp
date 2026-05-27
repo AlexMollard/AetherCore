@@ -8,6 +8,7 @@
 #include <string>
 
 #include "animation/AnimationDatabase.hpp"
+#include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
@@ -21,6 +22,7 @@ namespace aether
 {
 	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
 			shadowConstants.Initialize(context);
@@ -44,6 +46,7 @@ namespace aether
 
 	void ShadowService::Shutdown(const VkDevice device)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
 			shadowQueue.Shutdown();
@@ -63,6 +66,7 @@ namespace aether
 
 	void ShadowService::RecreatePipeline(VkDevice device, VkFormat depthFormat)
 	{
+		AE_PROFILE_ZONE();
 		m_shadowPipeline.Destroy();
 		AE_EXPECT_OR_THROW(shadowPipeline,
 		        GraphicsPipeline::Create(device,
@@ -91,6 +95,7 @@ namespace aether
 
 	void ShadowService::PrepareWriteSlot(const std::uint32_t drawSlot)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
 			shadowQueue.SetWriteSlot(drawSlot);
@@ -105,6 +110,7 @@ namespace aether
 
 	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& shadowQueue: m_shadowRenderQueues)
 		{
 			shadowQueue.SetWriteSlot(drawSlot);
@@ -131,6 +137,7 @@ namespace aether
 
 	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat)
 	{
+		AE_PROFILE_ZONE();
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, m_shadowMapExtents[cascade], VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -163,6 +170,7 @@ namespace aether
 
 	void ShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
 	{
+		AE_PROFILE_ZONE();
 		glm::vec3 lightDir = glm::vec3(packet.sunDirectionIntensity);
 		if (glm::length(lightDir) < 1e-4f)
 		{
