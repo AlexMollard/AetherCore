@@ -52,5 +52,6 @@ namespace aether::app
 		LayerStack m_layers;
 		bool m_layersAttached = false;
 		std::uint64_t m_frameIndex = 0;
+		double m_elapsedTimeSeconds = 0.0;
 	};
 } // namespace aether::app

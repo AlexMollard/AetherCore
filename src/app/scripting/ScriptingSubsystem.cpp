@@ -144,6 +144,7 @@ namespace aether::app::scripting
 				m_lastError += "(unknown compile error)";
 			}
 			AE_ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
+			ReportScriptError(m_lastError);
 			return {};
 		}
 
@@ -158,6 +159,7 @@ namespace aether::app::scripting
 				m_lastError += '\n';
 			}
 			AE_ERROR(LogCategory::App, "ScriptingSubsystem: {}", m_lastError);
+			ReportScriptError(m_lastError);
 			delete ctx;
 			return {};
 		}
@@ -175,7 +177,7 @@ namespace aether::app::scripting
 	}
 
 	// Invoke a script function with World as the first argument.
-	static void InvokeWithWorld(das::Context* ctx, das::SimFunction* fn, SceneContext& activeCtx)
+	static void InvokeWithWorld(das::Context* ctx, das::SimFunction* fn, SceneContext& activeCtx, ScriptingSubsystem& subsystem)
 	{
 		if (!fn || !ctx)
 		{
@@ -193,22 +195,51 @@ namespace aether::app::scripting
 
 		if (const char* ex = ctx->getException())
 		{
+			std::string msg = "Runtime exception:\n" + std::string(ex);
 			AE_ERROR(LogCategory::App, "daScript exception: {}", ex);
+			subsystem.ReportScriptError(msg);
 		}
 	}
 
 	void ScriptingSubsystem::CallOnAttach(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeWithWorld(handle.ctx, handle.onAttach, ctx);
+		InvokeWithWorld(handle.ctx, handle.onAttach, ctx, *this);
 	}
 
 	void ScriptingSubsystem::CallOnUpdate(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeWithWorld(handle.ctx, handle.onUpdate, ctx);
+		InvokeWithWorld(handle.ctx, handle.onUpdate, ctx, *this);
 	}
 
 	void ScriptingSubsystem::CallOnDetach(ScriptHandle& handle, SceneContext& ctx)
 	{
-		InvokeWithWorld(handle.ctx, handle.onDetach, ctx);
+		InvokeWithWorld(handle.ctx, handle.onDetach, ctx, *this);
+	}
+
+	void ScriptingSubsystem::ReportScriptError(const std::string& error)
+	{
+		m_lastError = error;
+		m_pendingErrors.push_back(error);
+	}
+
+	std::vector<std::string> ScriptingSubsystem::PollPendingErrors()
+	{
+		std::vector<std::string> result = std::move(m_pendingErrors);
+		m_pendingErrors.clear();
+		return result;
+	}
+
+	void ScriptingSubsystem::ClearErrors()
+	{
+		m_lastError.clear();
+		m_pendingErrors.clear();
+		m_errorsCleared = true;
+	}
+
+	bool ScriptingSubsystem::ConsumeErrorsCleared()
+	{
+		bool result = m_errorsCleared;
+		m_errorsCleared = false;
+		return result;
 	}
 } // namespace aether::app::scripting

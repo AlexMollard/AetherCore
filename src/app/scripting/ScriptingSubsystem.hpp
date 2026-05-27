@@ -2,6 +2,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace das
 {
@@ -73,9 +74,26 @@ namespace aether::app::scripting
 			m_lastError.clear();
 		}
 
+		// Record a script error and queue it for UI toast display.
+		void ReportScriptError(const std::string& error);
+
+		// Drain all pending errors for toast display.  Returns and clears the
+		// internal queue so each error is consumed exactly once.
+		[[nodiscard]] std::vector<std::string> PollPendingErrors();
+
+		// Clear all errors and signal that any displayed error toasts should
+		// be dismissed (called after a successful script reload).
+		void ClearErrors();
+
+		// Check and consume the "errors cleared" flag.  Returns true once
+		// after ClearErrors() was called, then resets the flag.
+		[[nodiscard]] bool ConsumeErrorsCleared();
+
 	private:
 		bool m_modulesRegistered = false;
 		bool m_reloadRequested = false;
 		std::string m_lastError;
+		std::vector<std::string> m_pendingErrors;
+		bool m_errorsCleared = false;
 	};
 } // namespace aether::app::scripting

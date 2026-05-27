@@ -80,27 +80,39 @@ namespace aether::app
 	{
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath);
 
-		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
+		if (m_handle.IsValid())
+		{
+			m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 
-		// Frames in flight may still reference the buffers backing the scene
-		// entities we're about to destroy. Hot-reload is out-of-band, so a
-		// device-wide wait is acceptable.
-		context.Get<GpuDevice>().WaitIdle();
+			// Frames in flight may still reference the buffers backing the scene
+			// entities we're about to destroy. Hot-reload is out-of-band, so a
+			// device-wide wait is acceptable.
+			context.Get<GpuDevice>().WaitIdle();
 
-		DestroySceneEntities(context);
+			DestroySceneEntities(context);
+		}
 
 		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
 		if (!newHandle.IsValid())
 		{
-			AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed - keeping old scene");
-			// Reattach old scene
-			m_scripting->CallOnAttach(m_handle, m_sceneCtx);
+			m_scriptBroken = true;
+			AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed");
+			if (m_handle.IsValid())
+			{
+				AE_WARN(LogCategory::App, "Keeping old scene");
+				m_scripting->CallOnAttach(m_handle, m_sceneCtx);
+			}
 			return;
 		}
 
 		// Swap to the new script and call on_attach.
-		m_scripting->FreeHandle(m_handle);
+		if (m_handle.IsValid())
+		{
+			m_scripting->FreeHandle(m_handle);
+		}
 		m_handle = std::move(newHandle);
+		m_scriptBroken = false;
+		m_scripting->ClearErrors();
 		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
@@ -147,10 +159,13 @@ namespace aether::app
 		m_handle = m_scripting->Compile(m_scriptPath);
 		if (!m_handle.IsValid())
 		{
+			m_scriptBroken = true;
 			AE_WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
 			return;
 		}
 
+		m_scriptBroken = false;
+		m_scripting->ClearErrors();
 		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 	}
 
@@ -176,20 +191,26 @@ namespace aether::app
 
 	void ScriptedSceneLayer::OnUpdate(LayerContext& context)
 	{
-		if (!m_scripting || !m_handle.IsValid())
+		if (!m_scripting)
 		{
 			return;
 		}
 
-		m_sceneCtx.deltaTime = static_cast<float>(context.deltaTimeSeconds);
-
-		// Handle hot-reload request (from F5 in DebugLayer).
+		// Handle hot-reload even when the script hasn't compiled yet
+		// (e.g. initial compile failed) so the user can fix errors via F5.
 		if (m_scripting->HasReloadRequest())
 		{
 			m_scripting->ClearReloadRequest();
 			DoReload(context);
 			return;
 		}
+
+		if (!m_handle.IsValid())
+		{
+			return;
+		}
+
+		m_sceneCtx.deltaTime = static_cast<float>(context.deltaTimeSeconds);
 
 		m_scripting->CallOnUpdate(m_handle, m_sceneCtx);
 	}

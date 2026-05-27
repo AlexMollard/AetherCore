@@ -15,6 +15,7 @@ namespace aether::app
 	{
 		ServiceContainer& services;
 		double deltaTimeSeconds = 0.0;
+		double elapsedTimeSeconds = 0.0;
 		std::uint64_t frameIndex = 0;
 
 		template<typename T>

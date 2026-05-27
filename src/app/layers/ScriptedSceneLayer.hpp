@@ -42,5 +42,6 @@ namespace aether::app
 		scripting::ScriptHandle m_handle;
 		aether::GraphicsPipeline m_defaultPipeline;
 		scripting::ScriptingSubsystem* m_scripting = nullptr;
+		bool m_scriptBroken = false;
 	};
 } // namespace aether::app

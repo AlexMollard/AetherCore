@@ -73,6 +73,7 @@ namespace aether::app
 		LayerContext context{
 			.services = m_engine.GetServiceContainer(),
 			.deltaTimeSeconds = 0.0,
+			.elapsedTimeSeconds = 0.0,
 			.frameIndex = m_frameIndex,
 		};
 
@@ -220,10 +221,12 @@ namespace aether::app
 			const auto& input = m_engine.GetServiceContainer().Get<Input>();
 			const double timeScale = input.IsKeyDown(Key::GraveAccent) ? kFastForwardScale : 1.0;
 			const double scaledDt = deltaTime * timeScale;
+			m_elapsedTimeSeconds += scaledDt;
 
 			LayerContext frameContext{
 				.services = m_engine.GetServiceContainer(),
 				.deltaTimeSeconds = scaledDt,
+				.elapsedTimeSeconds = m_elapsedTimeSeconds,
 				.frameIndex = m_frameIndex,
 			};
 

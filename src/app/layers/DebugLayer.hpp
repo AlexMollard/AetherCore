@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <deque>
 #include <string>
 
 #include "AppLayer.hpp"
@@ -14,6 +15,20 @@ namespace aether::app::scripting
 
 namespace aether::app
 {
+	// Non-blocking toast notification for script errors.
+	// Always visible regardless of m_visible (the debug panel toggle).
+	struct ScriptErrorToast
+	{
+		std::string message;
+		std::string summary;
+		std::string filePath;
+		int line = 0;
+		bool dismissed = false;
+		bool detailsExpanded = false;
+		bool copied = false;
+		double copyFeedbackTime = 0.0;
+	};
+
 	class DebugLayer final : public AppLayer
 	{
 	public:
@@ -22,6 +37,7 @@ namespace aether::app
 
 	private:
 		static constexpr std::size_t kFrameHistorySize = 128;
+		static constexpr double kToastAutoDismissSeconds = 10.0;
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
 
@@ -31,10 +47,16 @@ namespace aether::app
 
 		void DrawFrameTimeGraph() const;
 
+		void PollScriptErrors(LayerContext& context);
+		void DrawErrorToasts(LayerContext& context);
+
+		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
+		static void OpenInVSCode(const std::string& filePath, int line);
+
 		std::array<float, kFrameHistorySize> m_frameTimesMs{};
 		std::size_t m_frameHistoryHead = 0;
 		std::size_t m_frameHistoryCount = 0;
 		bool m_visible = true;
-		std::string m_lastScriptError;
+		std::deque<ScriptErrorToast> m_errorToasts;
 	};
 } // namespace aether::app
