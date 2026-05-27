@@ -23,5 +23,8 @@ def spawn_foxes(world : World?; count : int; radius : float)
 		set_animation(world, fox, 2);
 		set_playback_speed(world, fox, 0.7);
 		set_anim_time(world, fox, float(i) * 0.3);
+
+		// Tag em
+		add_tag(world, fox, get_tag_id("fox"));
 	}
 }

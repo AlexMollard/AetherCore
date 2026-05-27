@@ -28,7 +28,7 @@ def update_player(world : World?; dt : float)
 {
     if (!is_state(0)) { return; }
     if (g_player_entity == 0u) { return; }
-    if (!has_player_tag(world, g_player_entity)) { return; }
+    if (!has_tag(world, g_player_entity, get_tag_id("player"))) { return; }
 
     let pos = get_position(world, g_player_entity);
     var new_pos = pos;
@@ -48,7 +48,7 @@ def find_nearest_npc(world : World?) : uint
     var nearest    : uint = 0u;
     var nearest_d  : float = g_interact_range;
 
-    for_each_npc(world) $(e : uint)
+    for_each_with_tag(world, get_tag_id("npc")) $(e : uint)
     {
         let npc_pos = get_position(world, e);
         let d = distance(npc_pos, player_pos);

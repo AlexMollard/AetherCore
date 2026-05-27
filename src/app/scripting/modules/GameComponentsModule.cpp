@@ -200,7 +200,6 @@ namespace aether::app::scripting
 			das::ModuleLibrary lib(this);
 
 			// ── Component lifecycle ops (add / has / remove) ────────────────
-			BIND_COMPONENT("player_tag", aether::PlayerTag)
 			BIND_COMPONENT("health", aether::HealthComponent)
 			BIND_COMPONENT("npc", aether::NpcComponent)
 			BIND_COMPONENT("dialogue_state", aether::DialogueStateComponent)
@@ -228,12 +227,11 @@ namespace aether::app::scripting
 			Bind<set_dialogue_state_current_node_id>(lib, "set_dialogue_state_current_node_id", SE::modifyExternal);
 
 			// ── Iteration helpers ───────────────────────────────────────────
-			BIND_FOR_EACH("player", aether::PlayerTag)
-			BIND_FOR_EACH("player_transform", aether::PlayerTag, aether::TransformComponent)
 			BIND_FOR_EACH("npc", aether::NpcComponent)
 			BIND_FOR_EACH("npc_transform", aether::NpcComponent, aether::TransformComponent)
 			BIND_FOR_EACH("health", aether::HealthComponent)
 			BIND_FOR_EACH("npc_health", aether::NpcComponent, aether::HealthComponent)
+			BIND_FOR_EACH("dialogue_state", aether::DialogueStateComponent)
 
 			verifyAotReady();
 		}

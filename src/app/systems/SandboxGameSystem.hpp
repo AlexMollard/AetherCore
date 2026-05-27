@@ -152,6 +152,11 @@ namespace aether::app
 		// Game time
 		float m_time = 0.0f;
 
+		// Entity handles for single-instance entities (replaces tag-based lookup)
+		aether::Entity m_groundEntity{};
+		aether::Entity m_centerEntity{};
+		std::vector<aether::Entity> m_sandboxEntities;
+
 		static constexpr int kRingCount = 8;
 		static constexpr int kFoxCount = 30;
 		static constexpr float kGroundHalfExtent = 80.0f;

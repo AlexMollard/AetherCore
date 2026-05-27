@@ -6,12 +6,6 @@
 
 namespace aether
 {
-	// Tag component - no data, marks an entity as the player.
-	struct PlayerTag
-	{
-		bool isMainPlayer = true;
-	};
-
 	// Hit-points-based health for any living entity.
 	struct HealthComponent
 	{

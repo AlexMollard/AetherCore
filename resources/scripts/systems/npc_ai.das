@@ -38,7 +38,7 @@ def update_npcs(world : World?; dt : float)
 {
     if (!is_state(0)) { return; }  // only update in Playing state
 
-    for_each_npc(world) $(e : uint)
+    for_each_with_tag(world, get_tag_id("npc")) $(e : uint)
     {
         if (e in g_npc_ai)
         {

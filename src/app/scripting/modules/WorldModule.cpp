@@ -1,6 +1,9 @@
 #include "scripting/DasModuleBase.hpp"
 
 #include <cmath>
+#include <string>
+#include <unordered_map>
+#include <array>
 
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -8,6 +11,7 @@
 
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "scene/TagSlots.hpp"
 #include "assets/AssetManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
@@ -231,6 +235,52 @@ namespace
 		}
 	}
 
+	// ── Dynamic Tags ─────────────────────────────────────────────────────────
+
+	// DAS binding functions - delegate to TagSlots.cpp implementation
+
+	// create_tag(name: string) -> uint
+	uint32_t das_create_tag(const char* name)
+	{
+		std::string tagName(name ? name : "");
+		return aether::TagCreate(tagName);
+	}
+
+	// get_tag_id(name: string) -> uint
+	uint32_t das_get_tag_id(const char* name)
+	{
+		std::string tagName(name ? name : "");
+		return aether::TagGetId(tagName);
+	}
+
+	// add_tag(world, entity_id, tag_id)
+	void das_add_tag(aether::World* w, uint32_t entityId, uint32_t tagId)
+	{
+		aether::TagAdd(w, entityId, tagId);
+	}
+
+	// has_tag(world, entity_id, tag_id) -> bool
+	bool das_has_tag(aether::World* w, uint32_t entityId, uint32_t tagId)
+	{
+		return aether::TagHas(w, entityId, tagId);
+	}
+
+	// remove_tag(world, entity_id, tag_id)
+	void das_remove_tag(aether::World* w, uint32_t entityId, uint32_t tagId)
+	{
+		aether::TagRemove(w, entityId, tagId);
+	}
+
+	// for_each_with_tag(world, tag_id) <| $(e : uint) { ... }
+	void das_for_each_with_tag(aether::World* w, uint32_t tagId, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
+	{
+		aether::ForEachWithTag(w, tagId, [&](uint32_t id) {
+			vec4f args[1];
+			args[0] = das::cast<uint32_t>::from(id);
+			ctx->invoke(block, args, nullptr, at);
+		});
+	}
+
 	// ── Primitive mesh caching ───────────────────────────────────────────────
 	// create_mesh(world, type_string) -> uint
 	// Caches a primitive mesh by type ("cube", "sphere", "plane", "quad", "triangle")
@@ -359,6 +409,14 @@ namespace aether::app::scripting
 
 			// Entity iteration
 			Bind<das_for_each_with_transform>(lib, "for_each_with_transform", SE::modifyExternal);
+
+			// Dynamic Tags
+			Bind<das_create_tag>(lib, "create_tag", SE::modifyExternal);
+			Bind<das_get_tag_id>(lib, "get_tag_id", SE::accessExternal);
+			Bind<das_add_tag>(lib, "add_tag", SE::modifyExternal);
+			Bind<das_has_tag>(lib, "has_tag", SE::accessExternal);
+			Bind<das_remove_tag>(lib, "remove_tag", SE::modifyExternal);
+			Bind<das_for_each_with_tag>(lib, "for_each_with_tag", SE::accessExternal);
 
 			verifyAotReady();
 		}

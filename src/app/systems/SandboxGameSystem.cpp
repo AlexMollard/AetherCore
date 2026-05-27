@@ -28,43 +28,22 @@ namespace aether::app
 
 	namespace
 	{
-		struct SandboxEntityTag
-		{
-			bool value = true;
-		};
-
-		struct GroundTag
-		{
-			bool value = true;
-		};
-
-		struct CenterTag
-		{
-			bool value = true;
-		};
-
-		struct RingTag
+		struct RingComponent
 		{
 			int index = 0;
 		};
 
-		struct OrbitTag
+		struct OrbitComponent
 		{
 			float phase = 0.0f;
 			bool isRttTarget = false;
 		};
 
-		struct PointLightMarkerTag
+		struct PointLightMarkerComponent
 		{
 			int index = 0;
 		};
 
-		struct FoxTag
-		{
-			bool value = true;
-		};
-
-		// Identifies which fox instance (index into m_foxAgents) this entity belongs to.
 		struct FoxInstanceIndex
 		{
 			int index = 0;
@@ -223,8 +202,8 @@ namespace aether::app
 		// ── Ground: large tiling plane ────────────────────────────────────────
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_planeMesh, m_debugTexturedMaterial);
-			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world->EmplaceOrReplace<GroundTag>(e, GroundTag{});
+			m_groundEntity = e;
+			m_sandboxEntities.push_back(e);
 		}
 
 		// ── Foxes ─────────────────────────────────────────────────────────────
@@ -283,27 +262,27 @@ namespace aether::app
 		// Centre spinning cube
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
-			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world->EmplaceOrReplace<CenterTag>(e, CenterTag{});
+			m_centerEntity = e;
+			m_sandboxEntities.push_back(e);
 		}
 
 		// Ring of 8 small cubes
 		for (int i = 0; i < kRingCount; ++i)
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
-			world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-			world->EmplaceOrReplace<RingTag>(e, RingTag{ .index = i });
+			world->EmplaceOrReplace<RingComponent>(e, RingComponent{ .index = i });
+			m_sandboxEntities.push_back(e);
 		}
 
 		// Wide-orbit pair - one textured, one RTT-fed
 		{
 			const aether::Entity eA = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
-			world->EmplaceOrReplace<SandboxEntityTag>(eA, SandboxEntityTag{});
-			world->EmplaceOrReplace<OrbitTag>(eA, OrbitTag{ .phase = 0.0f, .isRttTarget = false });
+			world->EmplaceOrReplace<OrbitComponent>(eA, OrbitComponent{ .phase = 0.0f, .isRttTarget = false });
+			m_sandboxEntities.push_back(eA);
 
 			const aether::Entity eB = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_untexturedMaterial);
-			world->EmplaceOrReplace<SandboxEntityTag>(eB, SandboxEntityTag{});
-			world->EmplaceOrReplace<OrbitTag>(eB, OrbitTag{ .phase = glm::radians(180.0f), .isRttTarget = true });
+			world->EmplaceOrReplace<OrbitComponent>(eB, OrbitComponent{ .phase = glm::radians(180.0f), .isRttTarget = true });
+			m_sandboxEntities.push_back(eB);
 		}
 	}
 
@@ -379,8 +358,8 @@ namespace aether::app
 			m_pointLightMarkerMaterials.push_back(marker);
 
 			const aether::Entity markerEntity = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_pointLightMarkerMaterials.back());
-			world->EmplaceOrReplace<SandboxEntityTag>(markerEntity, SandboxEntityTag{});
-			world->EmplaceOrReplace<PointLightMarkerTag>(markerEntity, PointLightMarkerTag{ .index = li });
+			world->EmplaceOrReplace<PointLightMarkerComponent>(markerEntity, PointLightMarkerComponent{ .index = li });
+			m_sandboxEntities.push_back(markerEntity);
 		}
 		m_services->Get<Renderer>().SetPointLights(m_pointLights);
 		const auto rendererLights = m_services->Get<Renderer>().GetPointLights();
@@ -411,10 +390,9 @@ namespace aether::app
 			glm::mat4 m = glm::rotate(glm::mat4{ 1.0f }, glm::radians(-90.0f), { 1.0f, 0.0f, 0.0f });
 			const float groundSize = 2.0f * kGroundHalfExtent;
 			m = glm::scale(m, { groundSize, groundSize, 1.0f });
-			auto gView = world.View<GroundTag, aether::TransformComponent>();
-			for (auto e: gView)
+			if (m_groundEntity.IsValid())
 			{
-				gView.get<aether::TransformComponent>(e).localToWorld = m;
+				world.Get<aether::TransformComponent>(m_groundEntity).localToWorld = m;
 			}
 		}
 
@@ -526,10 +504,9 @@ namespace aether::app
 			m = glm::rotate(m, m_time * glm::radians(22.0f), { 0.0f, 1.0f, 0.0f });
 			m = glm::rotate(m, m_time * glm::radians(11.0f), { 1.0f, 0.0f, 0.0f });
 			m = glm::scale(m, { 1.4f, 1.4f, 1.4f });
-			auto cView = world.View<CenterTag, aether::TransformComponent>();
-			for (auto e: cView)
+			if (m_centerEntity.IsValid())
 			{
-				cView.get<aether::TransformComponent>(e).localToWorld = m;
+				world.Get<aether::TransformComponent>(m_centerEntity).localToWorld = m;
 			}
 		}
 
@@ -537,10 +514,10 @@ namespace aether::app
 		{
 			constexpr float kRingRadius = 10.0f;
 			const float kStep = glm::radians(360.0f / static_cast<float>(kRingCount));
-			auto rView = world.View<RingTag, aether::TransformComponent>();
+			auto rView = world.View<RingComponent, aether::TransformComponent>();
 			for (auto e: rView)
 			{
-				const int i = rView.get<RingTag>(e).index;
+				const int i = rView.get<RingComponent>(e).index;
 				const float angle = m_time * glm::radians(40.0f) + static_cast<float>(i) * kStep;
 				const glm::vec3 pos = { kRingRadius * std::cos(angle), kSkyHeight, kRingRadius * std::sin(angle) };
 				const float selfSpin = m_time * glm::radians(90.0f + static_cast<float>(i) * 15.0f);
@@ -555,10 +532,10 @@ namespace aether::app
 		// ── Sky: wide-orbit pair at kSkyHeight + 3 ────────────────────────────
 		{
 			const glm::vec3 diagAxis = glm::normalize(glm::vec3{ 1.0f, 1.0f, 0.3f });
-			auto oView = world.View<OrbitTag, aether::TransformComponent>();
+			auto oView = world.View<OrbitComponent, aether::TransformComponent>();
 			for (auto e: oView)
 			{
-				const float phase = oView.get<OrbitTag>(e).phase;
+				const float phase = oView.get<OrbitComponent>(e).phase;
 				const float orbAngle = m_time * glm::radians(18.0f) + phase;
 				const float bob = 0.8f * std::sin(m_time * 1.2f + phase);
 				const glm::vec3 pos = { 17.0f * std::cos(orbAngle), kSkyHeight + 3.0f + bob, 17.0f * std::sin(orbAngle) };
@@ -572,10 +549,10 @@ namespace aether::app
 
 		// ── Point-light markers: small cubes tinted to each light's color ────
 		{
-			auto markerView = world.View<PointLightMarkerTag, aether::TransformComponent>();
+			auto markerView = world.View<PointLightMarkerComponent, aether::TransformComponent>();
 			for (auto e: markerView)
 			{
-				const int idx = markerView.get<PointLightMarkerTag>(e).index;
+				const int idx = markerView.get<PointLightMarkerComponent>(e).index;
 				if (idx < 0 || static_cast<std::size_t>(idx) >= m_pointLights.size())
 				{
 					continue;
@@ -626,10 +603,10 @@ namespace aether::app
 		{
 			m_rttFeedMaterial.albedoSlot = rtSlot;
 			m_assets->RegisterMaterial(m_rttFeedMaterial);
-			auto rttView = world.View<OrbitTag, aether::MaterialComponent>();
+			auto rttView = world.View<OrbitComponent, aether::MaterialComponent>();
 			for (auto e: rttView)
 			{
-				if (rttView.get<OrbitTag>(e).isRttTarget)
+				if (rttView.get<OrbitComponent>(e).isRttTarget)
 				{
 					rttView.get<aether::MaterialComponent>(e).material = m_rttFeedMaterial;
 					break;
@@ -648,15 +625,14 @@ namespace aether::app
 		AE_INFO(aether::LogCategory::App, "SandboxGameSystem unregistered.");
 
 		// Destroy all sandbox entities in one pass.
-		std::vector<entt::entity> toDestroy;
+		for (const aether::Entity e: m_sandboxEntities)
 		{
-			auto allView = world.View<SandboxEntityTag>();
-			toDestroy.assign(allView.begin(), allView.end());
+			if (e.IsValid())
+			{
+				world.Destroy(e);
+			}
 		}
-		for (const entt::entity e: toDestroy)
-		{
-			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
-		}
+		m_sandboxEntities.clear();
 
 		m_foxAgents.clear();
 		m_foxInstances.clear();

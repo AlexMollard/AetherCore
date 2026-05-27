@@ -47,6 +47,12 @@ var g_sun_dir_label     : uint  = 0u;
 
 var g_player : uint = 0u;
 
+// ── Tags ─────────────────────────────────────────────────────────────────────
+
+var g_fox_tag : uint = 0u;
+var g_ground_tag : uint = 0u;
+var g_center_tag : uint = 0u;
+
 // ── on_attach ─────────────────────────────────────────────────────────────────
 
 [export]
@@ -55,6 +61,11 @@ def on_attach(world : World?)
 	g_cube_mesh   = create_mesh(world, "cube");
 	g_sphere_mesh = create_mesh(world, "sphere");
 	g_time        = 0.0;
+
+	// ── Create tags ─────────────────────────────────────────────────────────
+	g_fox_tag    = create_tag("fox");
+	g_ground_tag = create_tag("ground");
+	g_center_tag = create_tag("center");
 
 	// ── Lighting: sparse, well-separated for clear shadow testing ──────────
 	clear_lights();
@@ -90,6 +101,7 @@ def on_attach(world : World?)
 		float3(60.0, 1.0, 60.0));
 	add_mesh(world, floor, g_cube_mesh);
 	add_box_body(world, floor, float3(30.0, 0.5, 30.0), false);
+	add_tag(world, floor, g_ground_tag);
 
 	// ── LEFT ZONE: box stack under warm point light ─────────────────────────
 	for (row in 0..3)
@@ -132,6 +144,7 @@ def on_attach(world : World?)
 		float3(0.6, 6.0, 0.6));
 	add_mesh(world, pillar, g_cube_mesh);
 	add_box_body(world, pillar, float3(0.3, 3.0, 0.3), false);
+	add_tag(world, pillar, g_center_tag);
 
 	// Small boxes around the center pillar to show spot shadow spread
 	for (k in 0..6)
@@ -238,6 +251,7 @@ def on_attach(world : World?)
 	load_model(world, g_player, "assets://models/Human/Human.mesh");
 	set_animation(world, g_player, 2);
 	set_playback_speed(world, g_player, 0.5);
+	add_tag(world, g_player, create_tag("player"));
 
 	init_default_bindings();
 }
@@ -284,6 +298,7 @@ def on_update(world : World?)
 		set_animation(world, fox, 2);
 		set_playback_speed(world, fox, 0.7);
 		set_anim_time(world, fox, float(g_fox_count) * 0.3);
+		add_tag(world, fox, g_fox_tag);
 		g_fox_count++;
 
 		set_ui_button_label(world, g_spawn_btn, "Spawn Fox ({g_fox_count})");
@@ -292,22 +307,19 @@ def on_update(world : World?)
 	// Rotate all foxes if enabled
 	if (g_rotate_foxes)
 	{
-		for_each_with_transform(world) $(e : uint)
+		for_each_with_tag(world, g_fox_tag) $(e : uint)
 		{
-			let scale = get_scale(world, e);
-			if (scale.x < 0.1)
+			let pos    = get_position(world, e);
+			let euler  = get_euler(world, e);
+			let scale  = get_scale(world, e);
+			let angle  = atan2(pos.x, pos.z);
+			let r      = sqrt(pos.x * pos.x + pos.z * pos.z);
+			if (r > 0.5)
 			{
-				let pos    = get_position(world, e);
-				let euler  = get_euler(world, e);
-				let angle  = atan2(pos.x, pos.z);
-				let r      = sqrt(pos.x * pos.x + pos.z * pos.z);
-				if (r > 0.5)
-				{
-					let na  = angle + dt * g_speed_scale * 0.6;
-					let np  = float3(sin(na) * r, pos.y, cos(na) * r);
-					let ny  = na * 57.2958 + 90.0;
-					set_transform(world, e, np, float3(euler.x, ny, euler.z), scale);
-				}
+				let na  = angle + dt * g_speed_scale * 0.6;
+				let np  = float3(sin(na) * r, pos.y, cos(na) * r);
+				let ny  = na * 57.2958 + 90.0;
+				set_transform(world, e, np, float3(euler.x, ny, euler.z), scale);
 			}
 		};
 	}
