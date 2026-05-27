@@ -198,6 +198,8 @@ namespace aether::app
 		{
 			AE_PROFILE_ZONE_N("Frame");
 
+			const auto frameStartTime = std::chrono::steady_clock::now();
+
 			m_framePacer.Wait();
 
 			// Resume any coroutines whose async I/O completed on the background
@@ -294,7 +296,10 @@ namespace aether::app
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
 
 			// Hand the packet to the render thread.
+			const auto submitStart = std::chrono::steady_clock::now();
 			m_renderThread.SubmitFrame(std::move(packet));
+			AE_PROFILE_PLOT("Frame/ChannelSubmitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - submitStart).count()));
+			AE_PROFILE_PLOT("Frame/GameThreadTotalNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - frameStartTime).count()));
 
 			AE_PROFILE_FRAME;
 			++m_frameIndex;

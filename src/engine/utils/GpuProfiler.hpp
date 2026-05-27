@@ -12,14 +12,21 @@
 #	include <tracy/TracyVulkan.hpp>
 
 #	define AE_PROFILE_GPU_ZONE(ctx, cmdbuf, name) TracyVkZone(ctx, cmdbuf, name)
+#	define AE_PROFILE_GPU_ZONE_T(ctx, cmdbuf, varname, name) TracyVkZoneTransient(ctx, varname, cmdbuf, name, true)
 #	define AE_PROFILE_GPU_COLLECT(ctx, cmdbuf) TracyVkCollect(ctx, cmdbuf)
 #	define AE_PROFILE_GPU_CONTEXT_NAME(ctx, name) TracyVkContextName(ctx, name, std::strlen(name))
+
+// GPU-variant plot: records a value on the GPU timeline in Tracy.
+// Falls back to TracyPlot on the CPU timeline when the GPU context isn't available.
+#	define AE_PROFILE_GPU_PLOT(name, val) TracyPlot(name, val)
 #else
 // Provide the type even when Tracy is disabled so headers that store TracyVkCtx
 // members compile without pulling in any Vulkan headers.
 using TracyVkCtx = void*;
 
 #	define AE_PROFILE_GPU_ZONE(ctx, cmdbuf, name) (void) 0
+#	define AE_PROFILE_GPU_ZONE_T(ctx, cmdbuf, varname, name) (void) 0
 #	define AE_PROFILE_GPU_COLLECT(ctx, cmdbuf) (void) 0
 #	define AE_PROFILE_GPU_CONTEXT_NAME(ctx, name) (void) 0
+#	define AE_PROFILE_GPU_PLOT(name, val) (void) 0
 #endif

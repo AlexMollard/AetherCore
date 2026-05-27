@@ -22,6 +22,7 @@ namespace aether
 		MaterialBuffer& materials = services.Get<MaterialBuffer>();
 
 		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
+		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
 		m_frameConstantsBuffer.Initialize(vk);
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);

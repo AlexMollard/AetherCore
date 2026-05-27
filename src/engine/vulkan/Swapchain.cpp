@@ -1,5 +1,6 @@
 #include "vulkan/Swapchain.hpp"
 
+#include <chrono>
 #include <format>
 
 #define GLFW_INCLUDE_VULKAN
@@ -8,6 +9,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -246,17 +248,21 @@ namespace aether
 		FrameSync& frame = m_frames[m_currentFrame];
 
 		{
+			const auto fenceStart = std::chrono::steady_clock::now();
 			AE_PROFILE_ZONE_N("WaitForFence");
 			if (vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 			{
 				Throw(AetherError::Vulkan(0, "Failed to wait for fence."));
 			}
+			AE_PROFILE_PLOT("Swapchain/FenceWaitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - fenceStart).count()));
 		}
 
 		VkResult acquireResult;
 		{
+			const auto acquireStart = std::chrono::steady_clock::now();
 			AE_PROFILE_ZONE_N("AcquireNextImage");
 			acquireResult = vkAcquireNextImageKHR(device, m_swapchain.swapchain, UINT64_MAX, frame.imageAvailable, VK_NULL_HANDLE, &m_imageIndex);
+			AE_PROFILE_PLOT("Swapchain/AcquireImageNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - acquireStart).count()));
 		}
 
 		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)

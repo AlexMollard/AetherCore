@@ -11,6 +11,7 @@
 #include "rendering/CommandRecorder.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
@@ -586,6 +587,7 @@ namespace aether
 
 			if (pass.execute)
 			{
+				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, recorder.GetCommandBuffer(), gpuPassZone, pass.name.c_str());
 				PassContext ctx{ recorder, passExtent, frameAddr, frameIndex };
 				pass.execute(ctx);
 			}
@@ -597,6 +599,8 @@ namespace aether
 
 			recorder.EndDebugLabel();
 		}
+
+		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, recorder.GetCommandBuffer());
 	}
 
 	void RenderGraph::Compile()

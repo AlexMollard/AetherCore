@@ -38,6 +38,8 @@
 #	define AE_PROFILE_FREE(ptr) TracyFree(ptr)
 #	define AE_PROFILE_ALLOC_N(ptr, size, pool) TracyAllocN(ptr, size, pool)
 #	define AE_PROFILE_FREE_N(ptr, pool) TracyFreeN(ptr, pool)
+#	define AE_PROFILE_PLOT(name, val) TracyPlot(name, val)
+#	define AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color) TracyPlotConfig(name, type, step, fill, color)
 #else
 #	define AE_PROFILE_ZONE() (void) 0
 #	define AE_PROFILE_ZONE_N(name) (void) 0
@@ -48,4 +50,6 @@
 #	define AE_PROFILE_FREE(ptr) (void) 0
 #	define AE_PROFILE_ALLOC_N(ptr, size, pool) (void) 0
 #	define AE_PROFILE_FREE_N(ptr, pool) (void) 0
+#	define AE_PROFILE_PLOT(name, val) (void) 0
+#	define AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color) (void) 0
 #endif

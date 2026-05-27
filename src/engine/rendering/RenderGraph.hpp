@@ -10,6 +10,7 @@
 #include "vulkan/volk.hpp"
 
 #include "rendering/CommandRecorder.hpp"
+#include "utils/GpuProfiler.hpp"
 #include "vulkan/UniqueImage.hpp"
 
 namespace aether
@@ -84,6 +85,12 @@ namespace aether
 
 		void Initialize(VkDevice device, VmaAllocator allocator);
 		void Shutdown();
+
+		// Optional Tracy GPU context for GPU-zone instrumentation of render passes.
+		void SetTracyVkCtx(TracyVkCtx ctx)
+		{
+			m_tracyVkCtx = ctx;
+		}
 
 		// Fluent pass builder; use immediately, do not store.
 		class PassBuilder
@@ -288,5 +295,6 @@ namespace aether
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		TracyVkCtx m_tracyVkCtx = nullptr;
 	};
 } // namespace aether

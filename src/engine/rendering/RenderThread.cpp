@@ -2,12 +2,13 @@
 
 #include "AetherCore.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether
 {
 	RenderThread::RenderThread()
-	      : m_channel(2) // double-buffered: game thread writes one slot while
-	                     // render thread reads the other
+	      : m_channel(Swapchain::kMaxFramesInFlight) // match swapchain depth: game thread can write
+	                                                 // up to 3 frames ahead before backpressure kicks in
 	{
 	}
 

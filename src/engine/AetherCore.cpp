@@ -1,6 +1,7 @@
 #include "AetherCore.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <stdexcept>
@@ -21,6 +22,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "rendering/RenderThread.hpp"
+#include "utils/GpuProfiler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
@@ -231,9 +233,11 @@ namespace aether
 	void AetherCore::ExecuteRenderFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
+		const auto execStart = std::chrono::steady_clock::now();
 		m_frameIndex = packet.frameIndex;
 		BeginFrame();
 		EndFrame(packet);
+		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));
 	}
 
 	void AetherCore::EndFrame(const RenderFramePacket& packet)
@@ -272,6 +276,8 @@ namespace aether
 				}
 				else
 				{
+					const TracyVkCtx vkCtx = m_gpu.GetVulkanContext().GetTracyVkCtx();
+					AE_PROFILE_GPU_ZONE_T(vkCtx, m_currentRecorder.GetCommandBuffer(), gpuLightingZone, "Lighting.UpdateForView");
 					m_cameras.GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu.GetSwapchainExtent(), fc, true);
 				}
 			}
