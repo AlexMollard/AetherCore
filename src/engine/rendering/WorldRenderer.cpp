@@ -30,6 +30,7 @@ namespace aether
 			std::uint32_t skinJointCount = 0;
 			std::uint32_t animClipIndex = 0;
 			float animTime = 0.f;
+			const AnimationDatabase* animDb = nullptr;
 			if (const auto* smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
 				if (smc->animDb && smc->animDb->IsValid())
@@ -38,6 +39,7 @@ namespace aether
 					skinJointCount = smc->jointCount;
 					animClipIndex = std::min(smc->clipIndex, smc->animDb->GetClipCount() - 1u);
 					animTime = smc->animTime;
+					animDb = smc->animDb;
 				}
 			}
 
@@ -50,6 +52,7 @@ namespace aether
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
+			        .animDb = animDb,
 			});
 		}
 	}

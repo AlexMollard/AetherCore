@@ -45,6 +45,7 @@ namespace aether
 		std::uint32_t animClipIndex = 0;           // active clip for GPU sampling
 		float animTime = 0.0f;                     // active clip time for GPU sampling
 		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
+		const AnimationDatabase* animDb = nullptr; // per-draw animation database for GPU sampling
 	};
 
 	// Collects draws, runs cull/animation compute, then emits indirect draws.

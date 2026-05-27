@@ -182,7 +182,7 @@ def on_attach(world : World?)
 	add_box_body(world, capsule, float3(0.4, 0.4, 0.4), true);
 
 	// ── Foxes in a circle (center) ──────────────────────────────────────────
-	spawn_foxes(world, 3, 8.0);
+	spawn_foxes(world, 3, 8.0, g_fox_tag);
 	g_fox_count = 3;
 
 	// ── Native UI - Scene Controls panel ────────────────────────────────────
@@ -326,7 +326,7 @@ def on_update(world : World?)
 
 	// Switch fox animations
 	let anim_clip = g_rotate_foxes ? 2 : 0;
-	for_each_with_animator(world) $(e : uint)
+	for_each_with_tag(world, g_fox_tag) $(e : uint)
 	{
 		if (get_current_animation(world, e) != anim_clip)
 		{

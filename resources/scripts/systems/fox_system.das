@@ -5,7 +5,7 @@ require math
 require animation
 
 // Spawn `count` foxes arranged in a circle of the given radius.
-def spawn_foxes(world : World?; count : int; radius : float)
+def spawn_foxes(world : World?; count : int; radius : float; fox_tag : uint)
 {
 	let step = 6.2832 / float(count);
 	for (i in range(count))
@@ -25,6 +25,6 @@ def spawn_foxes(world : World?; count : int; radius : float)
 		set_anim_time(world, fox, float(i) * 0.3);
 
 		// Tag em
-		add_tag(world, fox, get_tag_id("fox"));
+		add_tag(world, fox, fox_tag);
 	}
 }
