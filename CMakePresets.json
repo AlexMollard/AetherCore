@@ -77,9 +77,55 @@
     {
       "name": "default",
       "displayName": "VS 2022 MSVC",
-      "description": "Default: MSVC with Visual Studio 2022 generator.",
+      "description": "Default: MSVC with Visual Studio 2022 generator, RelWithDebInfo build type.",
       "inherits": "vs2022-msvc",
-      "binaryDir": "${sourceDir}/build"
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "displayName": "Default (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo configuration using default MSVC toolchain.",
+      "configurePreset": "default",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs2022-msvc",
+      "displayName": "VS 2022 MSVC (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo using MSVC with Visual Studio 2022 generator.",
+      "configurePreset": "vs2022-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs2022-clang",
+      "displayName": "VS 2022 ClangCL (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo using ClangCL with Visual Studio 2022 generator.",
+      "configurePreset": "vs2022-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs2026-msvc",
+      "displayName": "VS 2026 MSVC (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo using MSVC with Visual Studio 2026 generator.",
+      "configurePreset": "vs2026-msvc",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs2026-clang",
+      "displayName": "VS 2026 ClangCL (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo using ClangCL with Visual Studio 2026 generator.",
+      "configurePreset": "vs2026-clang",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "linux-clang",
+      "displayName": "Linux Clang (RelWithDebInfo)",
+      "description": "Build with RelWithDebInfo using Clang on Linux (Ninja).",
+      "configurePreset": "linux-clang"
     }
   ]
 }
