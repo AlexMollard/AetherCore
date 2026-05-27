@@ -14,7 +14,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		auto view = world.GetRegistry().view<const PipelineComponent, const MeshComponent, const TransformComponent>();
-		for (auto enttEntity: view)
+		for (auto enttEntity : view)
 		{
 			const auto& pipelineComp = view.get<const PipelineComponent>(enttEntity);
 			const auto& meshComp = view.get<const MeshComponent>(enttEntity);

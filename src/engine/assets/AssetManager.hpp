@@ -65,7 +65,7 @@ namespace aether
 		// then parse and upload textures on the game thread.
 		[[nodiscard]] coro::async<Expected<LoadedModel>> LoadModelAsync(std::string_view path);
 
-		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale = 1.0f);
+		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId = 0, float scale = 1.0f);
 
 		// Bind runtime dependencies once during engine startup.
 		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, VkCommandPool uploadPool);

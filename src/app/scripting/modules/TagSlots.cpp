@@ -122,10 +122,12 @@ namespace
 
 		void ForEach(World* world, uint32_t tagId, const std::function<void(uint32_t)>& callback) const
 		{
-			if (tagId < kMaxTagSlots)
+			if (tagId >= kMaxTagSlots)
 			{
-				m_tagOps[tagId].for_each(world, callback);
+				return;
 			}
+
+			m_tagOps[tagId].for_each(world, callback);
 		}
 
 	private:

@@ -145,83 +145,109 @@ namespace
 	// Recomposes the full TRS matrix from the three float3 arguments.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
 	{
-		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id });
-		if (!tc)
+		const auto xform = ComposeTransform({ pos.x, pos.y, pos.z }, { euler.x, euler.y, euler.z }, { scale.x, scale.y, scale.z });
+
+		// Update script entity transform.
+		if (auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
 		{
-			return;
+			tc->localToWorld = xform;
 		}
-		tc->localToWorld = ComposeTransform({ pos.x, pos.y, pos.z }, { euler.x, euler.y, euler.z }, { scale.x, scale.y, scale.z });
+
+		// Propagate to spawned mesh entities.
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		if (sec)
+		{
+			for (const auto eid : sec->entityIds)
+			{
+				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{ eid }))
+				{
+					stc->localToWorld = xform;
+				}
+			}
+		}
 	}
 
-	// ── Model loading ─────────────────────────────────────────────────────────
+// ── Model loading ─────────────────────────────────────────────────────────
 
-	// load_model(world, entity_id, path)
-	void das_load_model(aether::World* w, uint32_t id, const char* path)
+// load_model(world, entity_id, path)
+void das_load_model(aether::World* w, uint32_t id, const char* path)
+{
+	auto& ctx = ActiveContext();
+
+	if (!ctx.defaultPipeline)
 	{
-		auto& ctx = ActiveContext();
+		AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
+		return;
+	}
 
-		if (!ctx.defaultPipeline)
+	glm::mat4 xform{ 1.0f };
+
+	if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
+	{
+		xform = tc->localToWorld;
+	}
+
+	// -------------------------------------------------------------------------
+	// Try reuse existing model
+	// -------------------------------------------------------------------------
+
+	aether::LoadedModel* modelPtr = nullptr;
+
+	auto it = ctx.loadedModelMap.find(path);
+
+	if (it != ctx.loadedModelMap.end())
+	{
+		modelPtr = &ctx.loadedModels[it->second];
+	}
+	else
+	{
+		auto result = ctx.assets->LoadModel(path);
+
+		if (!result)
 		{
-			AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
+			AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
 			return;
 		}
 
-		glm::mat4 xform{ 1.0f };
+		ctx.loadedModels.push_back(std::move(result.value()));
 
-		if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
-		{
-			xform = tc->localToWorld;
-		}
+		const size_t index = ctx.loadedModels.size() - 1;
 
-		// -------------------------------------------------------------------------
-		// Try reuse existing model
-		// -------------------------------------------------------------------------
+		ctx.loadedModelMap[path] = index;
 
-		aether::LoadedModel* modelPtr = nullptr;
-
-		auto it = ctx.loadedModelMap.find(path);
-
-		if (it != ctx.loadedModelMap.end())
-		{
-			modelPtr = &ctx.loadedModels[it->second];
-		}
-		else
-		{
-			auto result = ctx.assets->LoadModel(path);
-
-			if (!result)
-			{
-				AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
-				return;
-			}
-
-			ctx.loadedModels.push_back(std::move(result.value()));
-
-			const size_t index = ctx.loadedModels.size() - 1;
-
-			ctx.loadedModelMap[path] = index;
-
-			modelPtr = &ctx.loadedModels[index];
-		}
-
-		// -------------------------------------------------------------------------
-		// Spawn instance
-		// -------------------------------------------------------------------------
-
-		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline);
-
-		for (aether::Entity meshEntity: meshEntities)
-		{
-			if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))
-			{
-				tc->localToWorld = xform * tc->localToWorld;
-			}
-
-			ctx.sceneEntities.push_back(meshEntity);
-		}
+		modelPtr = &ctx.loadedModels[index];
 	}
 
-	// ── Entity iteration ──────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
+	// Spawn instance with parent link
+	// -------------------------------------------------------------------------
+
+	std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline, id);
+
+	for (aether::Entity meshEntity : meshEntities)
+	{
+		if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))
+		{
+			tc->localToWorld = xform * tc->localToWorld;
+		}
+		ctx.sceneEntities.push_back(meshEntity);
+	}
+
+	// Store spawned entity IDs for script-level propagation.
+	auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+	if (!sec)
+	{
+		w->Emplace<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+	}
+	sec->entityIds.clear();
+	for (const aether::Entity me : meshEntities)
+	{
+		sec->entityIds.push_back(me.id);
+	}
+}
+
+// ── Entity iteration ──────────────────────────────────────────────────────
 
 	// for_each_with_transform(world) <| $(e : uint) { ... }
 	void das_for_each_with_transform(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)

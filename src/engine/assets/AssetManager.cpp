@@ -620,7 +620,7 @@ namespace aether
 		}
 	}
 
-	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, float scale)
+	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId, float scale)
 	{
 		std::vector<Entity> entities;
 		entities.reserve(model.primitives.size());
@@ -637,6 +637,11 @@ namespace aether
 		for (const LoadedModelPrimitive& primitive: model.primitives)
 		{
 			const Entity entity = aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, primitive.material, scaleMat * primitive.localTransform);
+
+			if (parentEntityId != 0)
+			{
+				m_world->Emplace<ParentEntityComponent>(entity, ParentEntityComponent{ .parentId = parentEntityId });
+			}
 
 			if (model.animationDb.IsValid() && primitive.skinIndex >= 0)
 			{

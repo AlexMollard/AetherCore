@@ -1,5 +1,7 @@
 #include "scripting/DasModuleBase.hpp"
 
+#include <algorithm>
+
 #include "daScript/daScript.h"
 
 #include "scene/Components.hpp"
@@ -9,52 +11,124 @@ namespace
 {
 	using namespace aether::app::scripting;
 
+	// ── Helpers ───────────────────────────────────────────────────────────────
+
+	// Find a SkinnedMeshComponent on entity or any spawned child.
+	const aether::SkinnedMeshComponent* FindSmcOrSpawned(const aether::World* w, uint32_t id)
+	{
+		const aether::Entity e{ id };
+		if (const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
+		{
+			return smc;
+		}
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
+		if (sec && !sec->entityIds.empty())
+		{
+			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ sec->entityIds.front() });
+		}
+		return nullptr;
+	}
+
+	aether::SkinnedMeshComponent* FindSmcOrSpawned(aether::World* w, uint32_t id)
+	{
+		const aether::Entity e{ id };
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
+		{
+			return smc;
+		}
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
+		if (sec && !sec->entityIds.empty())
+		{
+			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ sec->entityIds.front() });
+		}
+		return nullptr;
+	}
+
+	void ForEachSpawnedSmc(aether::World* w, uint32_t id, auto&& f)
+	{
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		if (!sec) return;
+		for (const auto eid : sec->entityIds)
+		{
+			if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ eid }))
+			{
+				f(*smc);
+			}
+		}
+	}
+
 	// ── Playback control ──────────────────────────────────────────────────────
 
 	void das_set_animation(aether::World* w, uint32_t id, int32_t clipIndex)
 	{
-		auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
-		if (!smc || clipIndex < 0)
+		if (clipIndex < 0) return;
+
+		auto clampAndSet = [clipIndex](aether::SkinnedMeshComponent& smc)
 		{
-			return;
+			if (!smc.animDb) return;
+			const auto maxClip = static_cast<int32_t>(smc.animDb->GetClipCount());
+			if (maxClip <= 0) return;
+			smc.clipIndex = static_cast<std::uint32_t>(std::min(clipIndex, maxClip - 1));
+			smc.animTime = 0.f;
+		};
+
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
+		{
+			clampAndSet(*smc);
 		}
-		smc->clipIndex = static_cast<std::uint32_t>(clipIndex);
-		smc->animTime = 0.f;
+
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		if (sec)
+		{
+			for (const auto eid : sec->entityIds)
+			{
+				if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ eid }))
+				{
+					clampAndSet(*smc);
+				}
+			}
+		}
 	}
 
 	int32_t das_get_current_animation(aether::World* w, uint32_t id)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		return smc ? static_cast<int32_t>(smc->clipIndex) : -1;
 	}
 
 	void das_set_playback_speed(aether::World* w, uint32_t id, float speed)
 	{
-		auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
-		if (smc)
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
 		{
 			smc->playbackSpeed = speed;
 		}
+		ForEachSpawnedSmc(w, id, [speed](aether::SkinnedMeshComponent& smc)
+		{
+			smc.playbackSpeed = speed;
+		});
 	}
 
 	float das_get_playback_speed(aether::World* w, uint32_t id)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		return smc ? smc->playbackSpeed : 0.f;
 	}
 
 	void das_set_anim_time(aether::World* w, uint32_t id, float t)
 	{
-		auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
-		if (smc)
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
 		{
 			smc->animTime = t;
 		}
+		ForEachSpawnedSmc(w, id, [t](aether::SkinnedMeshComponent& smc)
+		{
+			smc.animTime = t;
+		});
 	}
 
 	float das_get_anim_time(aether::World* w, uint32_t id)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		return smc ? smc->animTime : 0.f;
 	}
 
@@ -62,13 +136,13 @@ namespace
 
 	int32_t das_get_animation_count(aether::World* w, uint32_t id)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		return (smc && smc->animDb) ? static_cast<int32_t>(smc->animDb->GetClipCount()) : 0;
 	}
 
 	const char* das_get_animation_name(aether::World* w, uint32_t id, int32_t index)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		if (!smc || !smc->animDb || index < 0)
 		{
 			return nullptr;
@@ -83,7 +157,7 @@ namespace
 
 	float das_get_animation_duration(aether::World* w, uint32_t id)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		if (!smc || !smc->animDb)
 		{
 			return 0.f;
@@ -93,7 +167,7 @@ namespace
 
 	int32_t das_find_animation(aether::World* w, uint32_t id, const char* name)
 	{
-		const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id });
+		const auto* smc = FindSmcOrSpawned(w, id);
 		if (!smc || !smc->animDb || !name)
 		{
 			return -1;

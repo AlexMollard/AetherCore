@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <vector>
 #include <glm/glm.hpp>
 #include "vulkan/volk.hpp"
 
@@ -49,5 +50,17 @@ namespace aether
 		float animTime = 0.f;
 		float playbackSpeed = 1.f;
 		bool looping = true;
+	};
+
+	// Links a spawned mesh entity back to its parent script entity.
+	struct ParentEntityComponent
+	{
+		std::uint32_t parentId = 0;
+	};
+
+	// Stores spawned mesh entity IDs on the script entity.
+	struct SpawnedEntitiesComponent
+	{
+		std::vector<std::uint32_t> entityIds;
 	};
 } // namespace aether
