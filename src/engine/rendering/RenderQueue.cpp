@@ -60,10 +60,12 @@ namespace aether
 			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
 			m_sampledPosesBuffer = std::move(b6);
 
+			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
+			m_nodeGlobalTransformsBuffer = std::move(b7);
 		}
 
-		AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
-		m_outputIndirectBuffer = std::move(b7);
+		AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
+		m_outputIndirectBuffer = std::move(b8);
 	}
 
 	void RenderQueue::Shutdown()
@@ -74,6 +76,7 @@ namespace aether
 		m_outputIndirectBuffer.Reset();
 		m_skinPaletteBuffer.Reset();
 		m_skinCopyJobBuffer.Reset();
+		m_nodeGlobalTransformsBuffer.Reset();
 		m_batchDescBuffer.Reset();
 		m_cullInputBuffer.Reset();
 		m_instanceDataBuffer.Reset();
@@ -85,10 +88,10 @@ namespace aether
 		m_maxDraws = 0;
 		m_maxBatches = 0;
 		m_animationFrameCount = 0;
-		m_animationBuffersCleared = false;
 		m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
+		m_animationSlotCleared = {};
 		m_allocator = VK_NULL_HANDLE;
 		m_device = VK_NULL_HANDLE;
 	}
@@ -128,6 +131,10 @@ namespace aether
 			{
 				TracyPlot("GPU/AnimSample_ms", static_cast<double>(tsMs[prev.animSampleEnd] - tsMs[prev.animSampleStart]));
 			}
+			if (prev.nodeFlattenStart != UINT32_MAX && prev.nodeFlattenEnd < readCount)
+			{
+				TracyPlot("GPU/NodeFlatten_ms", static_cast<double>(tsMs[prev.nodeFlattenEnd] - tsMs[prev.nodeFlattenStart]));
+			}
 			if (prev.skinPaletteStart != UINT32_MAX && prev.skinPaletteEnd < readCount)
 			{
 				TracyPlot("GPU/SkinPalette_ms", static_cast<double>(tsMs[prev.skinPaletteEnd] - tsMs[prev.skinPaletteStart]));
@@ -140,17 +147,26 @@ namespace aether
 			m_tsSlots[frameSlot] = {};
 		}
 
-		// Clear device-local animation buffers on first call to prevent garbage on first frame.
-		if (!m_animationBuffersCleared)
+		// Clear device-local animation buffers on first use of each frame slot.
+		// Each slot is cleared individually so in-flight slots don't sit with garbage
+		// until the first animation sample writes their data.
+		if (!m_animationSlotCleared[frameSlot])
 		{
-			m_animationBuffersCleared = true;
+			m_animationSlotCleared[frameSlot] = true;
 			if (m_skinPaletteBuffer)
 			{
-				vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), 0, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), 0);
-			}
-			if (m_sampledPosesBuffer)
+				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
+			vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+		}
+		if (m_sampledPosesBuffer)
 			{
-				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), 0, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), 0);
+				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose);
+				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+			}
+			if (m_nodeGlobalTransformsBuffer)
+			{
+				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
+				vkCmdFillBuffer(cmd, m_nodeGlobalTransformsBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
 			}
 			const VkMemoryBarrier2 fillToCompute{
 				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -171,6 +187,8 @@ namespace aether
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);
 		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
 		const VkDeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose) : 0;
+		const VkDeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
 
@@ -271,6 +289,7 @@ namespace aether
 							.jointCount = dc.skinJointCount,
 							.skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
 							.nodeCount = drawNodeCount,
+							.nodePoseOffset = nodePoseCursor,
 						};
 
 						if (animSampleBatchCount > 0 && animSampleBatches[animSampleBatchCount - 1].db == drawAnimDb)
@@ -497,6 +516,91 @@ namespace aether
 			}
 		}
 
+		// ── Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) ──
+		if (sampleJobsThisFrame > 0 && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
+		{
+			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
+
+			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
+			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
+
+			const VkDeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob);
+
+			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
+			{
+				const auto& batch = animSampleBatches[bi];
+				const std::uint32_t depthCount = batch.db->GetDepthCount();
+				if (depthCount == 0) continue;
+
+				if (m_timestampPool && bi == 0 && skinJobCount > 0) // write start if we also have skin jobs
+				{
+					m_tsSlots[frameSlot].nodeFlattenStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+
+				for (std::uint32_t di = 0; di < depthCount; ++di)
+				{
+					const AnimationDatabase::DepthRange& range = batch.db->GetDepthRange(di);
+					if (range.count == 0) continue;
+
+					const NodeFlattenPush flattenPc{
+						.sampledPosesAddr = currSampledPosesAddr,
+						.nodeParentsAddr = batch.db->GetNodeParentsAddr(),
+						.globalTransformsAddr = currNodeGlobalTransformsAddr,
+						.depthSortedNodesAddr = batch.db->GetDepthSortedNodesAddr(),
+						.animatorJobsAddr = animJobsBDA,
+						.depthOffset = range.startIndex,
+						.nodeCount = range.count,
+						.batchStartJob = batch.startJob,
+						.batchJobCount = batch.count,
+					};
+					vkCmdPushConstants(cmd, m_sharedPipelines->nodeFlattenLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(flattenPc), &flattenPc);
+
+					const std::uint32_t totalWork = batch.count * range.count;
+					const std::uint32_t groups = (totalWork + 63u) / 64u;
+					vkCmdDispatch(cmd, groups, 1, 1);
+
+					// Barrier between depth levels: parent writes from this
+					// dispatch must be visible to the next level's reads.
+					if (di + 1 < depthCount)
+					{
+						const VkMemoryBarrier2 depthBarrier{
+							.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+							.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+							.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+							.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+							.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+						};
+						const VkDependencyInfo depthBarrierDep{
+							.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+							.memoryBarrierCount = 1,
+							.pMemoryBarriers = &depthBarrier,
+						};
+						vkCmdPipelineBarrier2(cmd, &depthBarrierDep);
+					}
+				}
+
+				if (m_timestampPool && bi == animSampleBatchCount - 1 && skinJobCount > 0)
+				{
+					m_tsSlots[frameSlot].nodeFlattenEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+			}
+			CommandRecorder(cmd).EndDebugLabel();
+
+			const VkMemoryBarrier2 flattenToSkin{
+				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			};
+			const VkDependencyInfo flattenToSkinDep{
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.memoryBarrierCount = 1,
+				.pMemoryBarriers = &flattenToSkin,
+			};
+			vkCmdPipelineBarrier2(cmd, &flattenToSkinDep);
+		}
+
 		if (skinJobCount > 0)
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
@@ -510,7 +614,7 @@ namespace aether
 				const SkinPalettePush skinPc{
 					.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(SkinCopyJob),
 					.dstPaletteAddr = currSkinPaletteAddr,
-					.nodeParentsAddr = batch.db->GetNodeParentsAddr(),
+					.globalTransformsAddr = currNodeGlobalTransformsAddr,
 					.skinMetasAddr = batch.db->GetSkinMetasAddr(),
 					.skinJointsAddr = batch.db->GetSkinJointsAddr(),
 					.skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
@@ -883,6 +987,49 @@ namespace aether
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
+
+		{
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://node_flatten.slang.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(NodeFlattenPush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &nodeFlattenLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = nodeFlattenLayout,
+			};
+			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &nodeFlatten) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlatten), VK_OBJECT_TYPE_PIPELINE, "Animation.NodeFlatten");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlattenLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.NodeFlatten.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+		}
 	}
 
 	void RenderQueueSharedPipelines::Shutdown(VkDevice device)
@@ -906,6 +1053,16 @@ namespace aether
 		{
 			vkDestroyPipelineLayout(device, animSampleLayout, nullptr);
 			animSampleLayout = VK_NULL_HANDLE;
+		}
+		if (nodeFlatten != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, nodeFlatten, nullptr);
+			nodeFlatten = VK_NULL_HANDLE;
+		}
+		if (nodeFlattenLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
+			nodeFlattenLayout = VK_NULL_HANDLE;
 		}
 	}
 } // namespace aether

@@ -58,7 +58,7 @@ struct SkinCopyJob
     [[vk::offset(12)]] uint jointCount;
     [[vk::offset(16)]] uint skinIndex;
     [[vk::offset(20)]] uint nodeCount;
-    [[vk::offset(24)]] uint _pad0;
+    [[vk::offset(24)]] uint nodePoseOffset;
     [[vk::offset(28)]] uint _pad1;
 };
 
@@ -66,7 +66,7 @@ struct SkinPalettePush
 {
     [[vk::offset(0)]]  uint64_t jobsAddr;
     [[vk::offset(8)]]  uint64_t dstPaletteAddr;
-    [[vk::offset(16)]] uint64_t nodeParentsAddr;
+    [[vk::offset(16)]] uint64_t globalTransformsAddr;
     [[vk::offset(24)]] uint64_t skinMetasAddr;
     [[vk::offset(32)]] uint64_t skinJointsAddr;
     [[vk::offset(40)]] uint64_t skinInverseBindsAddr;
@@ -74,6 +74,19 @@ struct SkinPalettePush
     [[vk::offset(52)]] uint _pad0;
     [[vk::offset(56)]] uint _reserved0;
     [[vk::offset(60)]] uint _reserved1;
+};
+
+struct NodeFlattenPush
+{
+    [[vk::offset(0)]]  uint64_t sampledPosesAddr;
+    [[vk::offset(8)]]  uint64_t nodeParentsAddr;
+    [[vk::offset(16)]] uint64_t globalTransformsAddr;
+    [[vk::offset(24)]] uint64_t depthSortedNodesAddr;
+    [[vk::offset(32)]] uint64_t animatorJobsAddr;
+    [[vk::offset(40)]] uint depthOffset;
+    [[vk::offset(44)]] uint nodeCount;
+    [[vk::offset(48)]] uint batchStartJob;
+    [[vk::offset(52)]] uint batchJobCount;
 };
 
 struct AnimationSamplePush

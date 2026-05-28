@@ -59,6 +59,12 @@ namespace aether
 
 		static_assert(sizeof(GpuSkinMeta) == 16);
 
+		struct DepthRange
+		{
+			std::uint32_t startIndex; // index into depthSortedNodes
+			std::uint32_t count;      // nodes at this depth
+		};
+
 		AnimationDatabase() = default;
 		~AnimationDatabase() = default;
 
@@ -135,6 +141,26 @@ namespace aether
 			return m_skinInverseBindsAddr;
 		}
 
+		[[nodiscard]] VkDeviceAddress GetDepthSortedNodesAddr() const
+		{
+			return m_depthSortedNodesAddr;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetDepthRangesAddr() const
+		{
+			return m_depthRangesAddr;
+		}
+
+		[[nodiscard]] std::uint32_t GetDepthCount() const
+		{
+			return m_depthCount;
+		}
+
+		[[nodiscard]] const DepthRange& GetDepthRange(std::uint32_t index) const
+		{
+			return m_depthRanges[index];
+		}
+
 		// CPU accessors for validation/debugging.
 		[[nodiscard]] std::uint32_t GetClipCount() const
 		{
@@ -200,6 +226,8 @@ namespace aether
 		VkDeviceAddress m_skinMetasAddr = 0;
 		VkDeviceAddress m_skinJointsAddr = 0;
 		VkDeviceAddress m_skinInverseBindsAddr = 0;
+		VkDeviceAddress m_depthSortedNodesAddr = 0;
+		VkDeviceAddress m_depthRangesAddr = 0;
 
 		std::vector<GpuClip> m_clips;         // CPU-side copy for GetClipName()/GetClipDuration()
 		std::vector<GpuSkinMeta> m_skinMetas; // CPU-side copy for GetSkinJointCount()
@@ -210,7 +238,10 @@ namespace aether
 		std::vector<glm::mat4> m_skinInverseBinds; // CPU-side copy for debug
 		std::vector<std::uint32_t> m_skinJoints;   // CPU-side copy for debug
 		std::string m_clipNames;
+		std::vector<std::uint32_t> m_depthSortedNodes;
+		std::vector<DepthRange> m_depthRanges;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_skinCount = 0;
+		std::uint32_t m_depthCount = 0;
 	};
 } // namespace aether

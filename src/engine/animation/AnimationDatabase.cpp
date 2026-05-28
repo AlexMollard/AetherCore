@@ -100,6 +100,55 @@ namespace aether
 			bindScales.emplace_back(n.scale, 0.0f);
 		}
 
+		// ── Compute node depths for level-by-level flatten ──────────────────
+		static constexpr std::uint32_t kUnsetDepth = UINT32_MAX;
+		std::vector<std::uint32_t> nodeDepth(nodeParents.size(), kUnsetDepth);
+		for (std::size_t i = 0; i < nodeParents.size(); ++i)
+		{
+			if (nodeParents[i] < 0)
+				nodeDepth[i] = 0;
+		}
+		bool changed = true;
+		std::uint32_t maxDepth = 0;
+		while (changed)
+		{
+			changed = false;
+			for (std::size_t i = 0; i < nodeParents.size(); ++i)
+			{
+				if (nodeDepth[i] != kUnsetDepth)
+					continue;
+				const int p = nodeParents[i];
+				if (p >= 0 && nodeDepth[static_cast<std::size_t>(p)] != kUnsetDepth)
+				{
+					nodeDepth[i] = nodeDepth[static_cast<std::size_t>(p)] + 1;
+					maxDepth = std::max(maxDepth, nodeDepth[i]);
+					changed = true;
+				}
+			}
+		}
+
+		std::vector<std::vector<std::uint32_t>> nodesAtDepth(maxDepth + 1);
+		for (std::size_t i = 0; i < nodeDepth.size(); ++i)
+		{
+			nodesAtDepth[nodeDepth[i]].push_back(static_cast<std::uint32_t>(i));
+		}
+
+		std::vector<std::uint32_t> depthSortedNodes;
+		std::vector<AnimationDatabase::DepthRange> depthRanges;
+		depthRanges.reserve(maxDepth + 1);
+		for (std::uint32_t d = 0; d <= maxDepth; ++d)
+		{
+			DepthRange r;
+			r.startIndex = static_cast<std::uint32_t>(depthSortedNodes.size());
+			r.count = static_cast<std::uint32_t>(nodesAtDepth[d].size());
+			depthSortedNodes.insert(depthSortedNodes.end(), nodesAtDepth[d].begin(), nodesAtDepth[d].end());
+			depthRanges.push_back(r);
+		}
+
+		db.m_depthSortedNodes = std::move(depthSortedNodes);
+		db.m_depthRanges = std::move(depthRanges);
+		db.m_depthCount = maxDepth + 1;
+
 		skinMetas.reserve(asset.skins.size());
 		for (const auto& s: asset.skins)
 		{
@@ -143,6 +192,7 @@ namespace aether
 		totalBytes += align16(skinMetas.size() * sizeof(GpuSkinMeta));
 		totalBytes += align16(skinJoints.size() * sizeof(std::uint32_t));
 		totalBytes += align16(skinInverseBinds.size() * sizeof(glm::mat4));
+		totalBytes += align16(db.m_depthSortedNodes.size() * sizeof(std::uint32_t));
 		totalBytes += align16(allStrings.size());
 
 		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes, .debugName = "AnimationDatabase" });
@@ -168,6 +218,11 @@ namespace aether
 		db.m_skinJointsAddr = UploadArray(db.m_heap, db.m_skinJoints, device, queue, uploadPool);
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
 		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
+
+		if (!db.m_depthSortedNodes.empty())
+		{
+			db.m_depthSortedNodesAddr = UploadArray(db.m_heap, db.m_depthSortedNodes, device, queue, uploadPool);
+		}
 
 		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())
@@ -195,11 +250,16 @@ namespace aether
 		m_skinMetasAddr = 0;
 		m_skinJointsAddr = 0;
 		m_skinInverseBindsAddr = 0;
+		m_depthSortedNodesAddr = 0;
+		m_depthRangesAddr = 0;
 		m_clips.clear();
 		m_skinMetas.clear();
 		m_clipNames.clear();
+		m_depthSortedNodes.clear();
+		m_depthRanges.clear();
 		m_nodeCount = 0;
 		m_skinCount = 0;
+		m_depthCount = 0;
 	}
 
 	std::string_view AnimationDatabase::GetClipName(std::uint32_t clipIndex) const

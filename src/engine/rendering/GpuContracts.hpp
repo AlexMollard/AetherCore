@@ -110,7 +110,7 @@ namespace aether
 		std::uint32_t jointCount = 0;
 		std::uint32_t skinIndex = 0;
 		std::uint32_t nodeCount = 0;
-		std::uint32_t _pad0 = 0;
+		std::uint32_t nodePoseOffset = 0; // offset into global-transforms / sampled-poses array
 		std::uint32_t _pad1 = 0;
 	};
 
@@ -120,7 +120,7 @@ namespace aether
 	static_assert(offsetof(SkinCopyJob, jointCount) == 12);
 	static_assert(offsetof(SkinCopyJob, skinIndex) == 16);
 	static_assert(offsetof(SkinCopyJob, nodeCount) == 20);
-	static_assert(offsetof(SkinCopyJob, _pad0) == 24);
+	static_assert(offsetof(SkinCopyJob, nodePoseOffset) == 24);
 	static_assert(offsetof(SkinCopyJob, _pad1) == 28);
 
 	struct AnimatorSampleJob
@@ -153,7 +153,7 @@ namespace aether
 	{
 		VkDeviceAddress jobsAddr = 0;
 		VkDeviceAddress dstPaletteAddr = 0;
-		VkDeviceAddress nodeParentsAddr = 0;
+		VkDeviceAddress globalTransformsAddr = 0; // per-node float4x4[] from flatten pass
 		VkDeviceAddress skinMetasAddr = 0;
 		VkDeviceAddress skinJointsAddr = 0;
 		VkDeviceAddress skinInverseBindsAddr = 0;
@@ -166,13 +166,37 @@ namespace aether
 	static_assert(sizeof(SkinPalettePush) == 64, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
 	static_assert(offsetof(SkinPalettePush, jobsAddr) == 0);
 	static_assert(offsetof(SkinPalettePush, dstPaletteAddr) == 8);
-	static_assert(offsetof(SkinPalettePush, nodeParentsAddr) == 16);
+	static_assert(offsetof(SkinPalettePush, globalTransformsAddr) == 16);
 	static_assert(offsetof(SkinPalettePush, skinMetasAddr) == 24);
 	static_assert(offsetof(SkinPalettePush, skinJointsAddr) == 32);
 	static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 40);
 	static_assert(offsetof(SkinPalettePush, jobCount) == 48);
 	static_assert(offsetof(SkinPalettePush, _reserved0) == 56);
 	static_assert(offsetof(SkinPalettePush, _reserved1) == 60);
+
+	struct NodeFlattenPush
+	{
+		VkDeviceAddress sampledPosesAddr = 0;
+		VkDeviceAddress nodeParentsAddr = 0;
+		VkDeviceAddress globalTransformsAddr = 0;
+		VkDeviceAddress depthSortedNodesAddr = 0;
+		VkDeviceAddress animatorJobsAddr = 0; // to read per-job nodePoseOffset
+		std::uint32_t depthOffset = 0;
+		std::uint32_t nodeCount = 0;    // nodes at this depth level
+		std::uint32_t batchStartJob = 0; // first job in this batch (rel to animJobBase)
+		std::uint32_t batchJobCount = 0; // number of jobs in batch
+	};
+
+	static_assert(sizeof(NodeFlattenPush) == 56, "NodeFlattenPush layout changed - update shaders/include/AnimationContracts.slangh.");
+	static_assert(offsetof(NodeFlattenPush, sampledPosesAddr) == 0);
+	static_assert(offsetof(NodeFlattenPush, nodeParentsAddr) == 8);
+	static_assert(offsetof(NodeFlattenPush, globalTransformsAddr) == 16);
+	static_assert(offsetof(NodeFlattenPush, depthSortedNodesAddr) == 24);
+	static_assert(offsetof(NodeFlattenPush, animatorJobsAddr) == 32);
+	static_assert(offsetof(NodeFlattenPush, depthOffset) == 40);
+	static_assert(offsetof(NodeFlattenPush, nodeCount) == 44);
+	static_assert(offsetof(NodeFlattenPush, batchStartJob) == 48);
+	static_assert(offsetof(NodeFlattenPush, batchJobCount) == 52);
 
 	struct AnimationSamplePush
 	{

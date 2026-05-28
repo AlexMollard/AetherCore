@@ -27,6 +27,8 @@ namespace aether
 		VkPipelineLayout skinCopyLayout = VK_NULL_HANDLE;
 		VkPipeline animSample = VK_NULL_HANDLE;
 		VkPipelineLayout animSampleLayout = VK_NULL_HANDLE;
+		VkPipeline nodeFlatten = VK_NULL_HANDLE;
+		VkPipelineLayout nodeFlattenLayout = VK_NULL_HANDLE;
 
 		void Initialize(VkDevice device);
 		void Shutdown(VkDevice device);
@@ -155,6 +157,7 @@ namespace aether
 		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
 		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
 		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
+		UniqueBuffer m_nodeGlobalTransformsBuffer; // float4x4[] per-node global transforms (flatten pass output)
 
 		SkinCopyJob* m_skinCopyJobsMapped = nullptr;
 		AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
@@ -180,6 +183,7 @@ namespace aether
 		VkDeviceAddress m_cachedFrameAddr = 0;
 		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
+		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
 		std::uint32_t m_cachedDrawBase = 0;           // frameSlot * maxDraws
 		std::uint32_t m_cachedBatchBase = 0;          // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
@@ -193,7 +197,7 @@ namespace aether
 		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::uint32_t m_animationFrameCount = 0;
-		bool m_animationBuffersCleared = false;
+		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 		TracyVkCtx m_tracyVkCtx = nullptr;
 
 		GpuTimestampPool* m_timestampPool = nullptr;
@@ -204,6 +208,8 @@ namespace aether
 		{
 			std::uint32_t animSampleStart = UINT32_MAX;
 			std::uint32_t animSampleEnd = UINT32_MAX;
+			std::uint32_t nodeFlattenStart = UINT32_MAX;
+			std::uint32_t nodeFlattenEnd = UINT32_MAX;
 			std::uint32_t skinPaletteStart = UINT32_MAX;
 			std::uint32_t skinPaletteEnd = UINT32_MAX;
 			std::uint32_t cullStart = UINT32_MAX;

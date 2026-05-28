@@ -71,11 +71,18 @@ Bracket FindBracket(uint timesOffset, uint count, float t, float* allTimes)
 // Nlerp two quaternions (in xyzw format as float4).
 // Faster approximation of Slerp — visually equivalent for typical animation
 // keyframe density, avoids acos/sin/divide.
+float4 SafeNormalize(float4 v)
+{
+    return (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f && v.w == 0.0f)
+        ? float4(0.0f, 0.0f, 0.0f, 1.0f)
+        : normalize(v);
+}
+
 float4 Nlerp(float4 q1, float4 q2, float t)
 {
     if (dot(q1, q2) < 0.0f)
         q2 = -q2;
-    return normalize(lerp(q1, q2, t));
+    return SafeNormalize(lerp(q1, q2, t));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,18 +109,18 @@ void main(uint3 dtid : SV_DispatchThreadID)
     float4* bindScales = (float4*)(pc.bindScalesAddr);
     SampledNodePose* poses = (SampledNodePose*)(pc.sampledPosesAddr);
 
-    if (job.animClipIndex >= pc.clipCount)
-        return;
-
     const uint poseBase = job.nodePoseOffset;
     for (uint j = 0u; j < job.nodeCount; ++j)
     {
         SampledNodePose initPose;
         initPose.translation = bindTranslations[j];
-        initPose.rotation = bindRotations[j];
+        initPose.rotation = SafeNormalize(bindRotations[j]);
         initPose.scale = bindScales[j];
         poses[poseBase + j] = initPose;
     }
+
+    if (job.animClipIndex >= pc.clipCount)
+        return;
 
     GpuClip clip = clips[job.animClipIndex];
 
@@ -150,7 +157,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
             float4 sampled = (channel.interpolation == 1u)
                 ? values[valIdx0]
                 : Nlerp(values[valIdx0], values[valIdx1], bracket.alpha);
-            poses[poseIdx].rotation = normalize(sampled);
+            poses[poseIdx].rotation = SafeNormalize(sampled);
         }
         else if (animPath == 2u)  // Scale
         {
