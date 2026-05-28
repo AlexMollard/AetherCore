@@ -69,11 +69,12 @@ namespace aether
 		vkb::InstanceBuilder instanceBuilder;
 		instanceBuilder.set_app_name(appName);
 		instanceBuilder.require_api_version(1, 4, 0);
+#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
 		instanceBuilder.request_validation_layers();
 		instanceBuilder.set_debug_callback(LogValidationMessage);
 		instanceBuilder.set_debug_messenger_severity(debugSeverity);
 		instanceBuilder.set_debug_messenger_type(debugTypes);
-
+#endif
 #if defined(VULKAN_GPU_DEBUG)
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
