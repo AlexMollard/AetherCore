@@ -176,7 +176,7 @@ namespace aether
 			if (!isAsyncCompute)
 			{
 				// Same queue: explicit compute→fragment barrier required.
-				// Async path: the semaphore wait at FRAGMENT_SHADER in SubmitAndPresent covers this.
+				// Async path: the semaphore wait at DRAW_INDIRECT in SubmitAndPresent covers this.
 				const VkMemoryBarrier2 computeToFragment{
 					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,

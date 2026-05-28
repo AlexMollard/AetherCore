@@ -272,7 +272,7 @@ namespace aether
 					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true);
 					m_asyncCompute.EndCommandBuffer(frameIdx);
 
-					(void) m_asyncCompute.Submit(m_gpu, frameIdx);
+					m_asyncComputeSubmitResult = m_asyncCompute.Submit(m_gpu, frameIdx);
 				}
 				else
 				{
@@ -306,7 +306,7 @@ namespace aether
 
 		if (m_asyncCompute.IsEnabled())
 		{
-			m_gpu.SubmitAndPresent(m_asyncCompute.GetTimelineSemaphoreHandle(), m_asyncCompute.GetCurrentTimelineValue());
+			m_gpu.SubmitAndPresent(m_asyncComputeSubmitResult.semaphoreHandle, m_asyncComputeSubmitResult.timelineValue);
 		}
 		else
 		{

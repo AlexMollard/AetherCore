@@ -101,6 +101,7 @@ namespace aether
 		PlatformSubsystem m_platform;
 		GpuDevice m_gpu;
 		AsyncComputeContext m_asyncCompute;
+		AsyncComputeContext::SubmitResult m_asyncComputeSubmitResult{};
 		SceneSubsystem m_sceneSub;
 		AssetSubsystem m_assetsSub;
 		CameraSubsystem m_cameras;

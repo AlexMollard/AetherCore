@@ -320,7 +320,7 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::EndFrame(VkQueue graphicsQueue, VkQueue presentQueue, VkSemaphore extraWaitSemaphore, VkPipelineStageFlags extraWaitStage, std::uint64_t extraWaitValue)
+	void Swapchain::EndFrame(VkQueue graphicsQueue, VkQueue presentQueue, VkSemaphore extraWaitSemaphore, VkPipelineStageFlags2 extraWaitStage, std::uint64_t extraWaitValue)
 	{
 		if (!m_frameValid)
 		{
@@ -341,46 +341,53 @@ namespace aether
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
 
-		VkSemaphore waitSemaphores[2] = { frame.imageAvailable, VK_NULL_HANDLE };
-		VkPipelineStageFlags waitStages[2] = {
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-			extraWaitStage,
+		VkSemaphoreSubmitInfo imageWait{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = frame.imageAvailable,
+			.value = 0,
+			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		};
+
+		VkSemaphoreSubmitInfo extraWait{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = extraWaitSemaphore,
+			.value = extraWaitValue,
+			.stageMask = extraWaitStage,
+		};
+
+		VkSemaphoreSubmitInfo waitInfos[2] = { imageWait, extraWait };
 		std::uint32_t waitCount = 1;
 		if (extraWaitSemaphore != VK_NULL_HANDLE)
 		{
-			waitSemaphores[1] = extraWaitSemaphore;
 			waitCount = 2;
 		}
 
-		// imageAvailable is a binary semaphore (wait value 0 is ignored by spec).
-		// extraWaitSemaphore is a timeline semaphore when extraWaitValue > 0.
-		const std::uint64_t waitValues[2] = { 0, extraWaitValue };
-		const std::uint64_t signalValue = 0; // renderFinished is a binary semaphore
-		const VkTimelineSemaphoreSubmitInfo timelineInfo{
-			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-			.waitSemaphoreValueCount = waitCount,
-			.pWaitSemaphoreValues = waitValues,
-			.signalSemaphoreValueCount = 1,
-			.pSignalSemaphoreValues = &signalValue,
+		VkCommandBufferSubmitInfo cmdInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			.commandBuffer = cmd,
 		};
 
-		const VkSubmitInfo submit{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.pNext = &timelineInfo,
-			.waitSemaphoreCount = waitCount,
-			.pWaitSemaphores = waitSemaphores,
-			.pWaitDstStageMask = waitStages,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &cmd,
-			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &renderFinished,
+		VkSemaphoreSubmitInfo signalInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = renderFinished,
+			.value = 0,
+			.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		};
+
+		VkSubmitInfo2 submit{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			.waitSemaphoreInfoCount = waitCount,
+			.pWaitSemaphoreInfos = waitInfos,
+			.commandBufferInfoCount = 1,
+			.pCommandBufferInfos = &cmdInfo,
+			.signalSemaphoreInfoCount = 1,
+			.pSignalSemaphoreInfos = &signalInfo,
 		};
 		{
-			const VkResult submitResult = vkQueueSubmit(graphicsQueue, 1, &submit, frame.inFlight);
+			const VkResult submitResult = vkQueueSubmit2(graphicsQueue, 1, &submit, frame.inFlight);
 			if (submitResult == VK_ERROR_DEVICE_LOST)
 			{
-				AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
+				AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit2 (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
 				std::terminate();
 			}
 			if (submitResult != VK_SUCCESS)

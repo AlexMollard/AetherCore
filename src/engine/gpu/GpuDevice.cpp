@@ -171,7 +171,7 @@ namespace aether
 
 		{
 			std::lock_guard lock(vk.GetGraphicsQueueMutex());
-			swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, asyncComputeTimelineValue);
+			swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, asyncComputeTimelineValue);
 		}
 	}
 

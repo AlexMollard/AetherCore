@@ -179,31 +179,31 @@ namespace aether
 		auto& frame = m_frames[frameIndex];
 		const std::uint64_t signalValue = ++m_timelineValue;
 
-		const VkTimelineSemaphoreSubmitInfo timelineSubmit{
-			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-			.waitSemaphoreValueCount = 0,
-			.pWaitSemaphoreValues = nullptr,
-			.signalSemaphoreValueCount = 1,
-			.pSignalSemaphoreValues = &signalValue,
-		};
-
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
 		VkFence fence = reinterpret_cast<VkFence>(frame.fence);
 		VkSemaphore timelineSem = reinterpret_cast<VkSemaphore>(m_timelineSemaphoreHandle);
 
-		const VkSubmitInfo submitInfo{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.pNext = &timelineSubmit,
-			.waitSemaphoreCount = 0,
-			.pWaitSemaphores = nullptr,
-			.pWaitDstStageMask = nullptr,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &cmd,
-			.signalSemaphoreCount = 1,
-			.pSignalSemaphores = &timelineSem,
+		VkCommandBufferSubmitInfo cmdInfo{
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			.commandBuffer = cmd,
 		};
 
-		if (vkQueueSubmit(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
+		VkSemaphoreSubmitInfo signalInfo{
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+			.semaphore = timelineSem,
+			.value = signalValue,
+			.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		};
+
+		VkSubmitInfo2 submitInfo{
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			.commandBufferInfoCount = 1,
+			.pCommandBufferInfos = &cmdInfo,
+			.signalSemaphoreInfoCount = 1,
+			.pSignalSemaphoreInfos = &signalInfo,
+		};
+
+		if (vkQueueSubmit2(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to submit queue."));
 		}
