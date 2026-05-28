@@ -23,23 +23,18 @@ namespace aether
 	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		for (auto& shadowConstants: m_shadowFrameConstants)
+		for (auto& shadowConstants : m_shadowFrameConstants)
 		{
 			shadowConstants.Initialize(context);
 		}
-		for (auto& shadowQueue: m_shadowRenderQueues)
-		{
-			shadowQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines);
-			shadowQueue.SetTracyVkCtx(context.GetTracyVkCtx());
-		}
-		for (auto& voxelQueue: m_voxelShadowRenderQueues)
-		{
-			// Voxel chunks: one batch per unique mesh, no skinning ever.
-			// 512 draws / 512 batches covers worlds up to ~170 chunks per cascade;
-			// maxAnimationDraws=0 skips all animation/skin buffer allocation entirely.
-			voxelQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 512, 512, 0u);
-			voxelQueue.SetTracyVkCtx(context.GetTracyVkCtx());
-		}
+
+		// Single shadow queue with 3× output capacity for multi-frustum culling.
+		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 8192, 1024, UINT32_MAX, 8192 * kCullMultiFrustumCount);
+		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
+
+		// Single voxel queue: 512 draws, no animation, 3× output capacity.
+		m_voxelShadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 512, 512, 0u, 512 * kCullMultiFrustumCount);
+		m_voxelShadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
 	}
@@ -47,21 +42,15 @@ namespace aether
 	void ShadowService::Shutdown(const VkDevice device)
 	{
 		AE_PROFILE_ZONE();
-		for (auto& shadowQueue: m_shadowRenderQueues)
-		{
-			shadowQueue.Shutdown();
-		}
-		for (auto& voxelQueue: m_voxelShadowRenderQueues)
-		{
-			voxelQueue.Shutdown();
-		}
-		for (auto& shadowConstants: m_shadowFrameConstants)
+		m_shadowRenderQueue.Shutdown();
+		m_voxelShadowRenderQueue.Shutdown();
+		for (auto& shadowConstants : m_shadowFrameConstants)
 		{
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
 		m_voxelShadowPipeline.Destroy();
-		(void) device;
+		(void)device;
 	}
 
 	void ShadowService::RecreatePipeline(VkDevice device, VkFormat depthFormat)
@@ -96,74 +85,70 @@ namespace aether
 	void ShadowService::PrepareWriteSlot(const std::uint32_t drawSlot)
 	{
 		AE_PROFILE_ZONE();
-		for (auto& shadowQueue: m_shadowRenderQueues)
-		{
-			shadowQueue.SetWriteSlot(drawSlot);
-			shadowQueue.Clear(drawSlot);
-		}
-		for (auto& voxelQueue: m_voxelShadowRenderQueues)
-		{
-			voxelQueue.SetWriteSlot(drawSlot);
-			voxelQueue.Clear(drawSlot);
-		}
+		m_shadowRenderQueue.SetWriteSlot(drawSlot);
+		m_shadowRenderQueue.Clear(drawSlot);
+		m_voxelShadowRenderQueue.SetWriteSlot(drawSlot);
+		m_voxelShadowRenderQueue.Clear(drawSlot);
 	}
 
 	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
 	{
 		AE_PROFILE_ZONE();
-		for (auto& shadowQueue: m_shadowRenderQueues)
-		{
-			shadowQueue.SetWriteSlot(drawSlot);
-			WorldRenderer::Flush(scene, shadowQueue);
-			WorldRenderer::Flush(world, shadowQueue);
-		}
+		m_shadowRenderQueue.SetWriteSlot(drawSlot);
+		WorldRenderer::Flush(scene, m_shadowRenderQueue);
+		WorldRenderer::Flush(world, m_shadowRenderQueue);
 	}
 
 	void ShadowService::SetAnimationDatabase(const AnimationDatabase* animationDb)
 	{
-		for (auto& shadowQueue: m_shadowRenderQueues)
-		{
-			shadowQueue.SetAnimationDatabase(animationDb);
-		}
+		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
 	void ShadowService::SubmitShadowCaster(const DrawCommand& cmd)
 	{
-		for (auto& voxelQueue: m_voxelShadowRenderQueues)
-		{
-			voxelQueue.Submit(cmd);
-		}
+		m_voxelShadowRenderQueue.Submit(cmd);
 	}
 
 	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat)
 	{
 		AE_PROFILE_ZONE();
+
+		// ── Multi-frustum cull pass (replaces 3× per-cascade cull dispatches) ──
+		graph.AddComputePass("$CullDraws_Shadow").ExecuteCompute(
+		        [this, &cullPass](PassContext& ctx)
+		        {
+			        const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+			        VkDeviceAddress cascadeAddrs[kCullMultiFrustumCount];
+			        for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
+			        {
+				        cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
+			        }
+			        m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
+			        m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
+			        m_voxelShadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
+			        m_voxelShadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
+		        });
+
+		// ── Per-cascade depth passes (read from each cascade's output region) ──
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, m_shadowMapExtents[cascade], VK_IMAGE_USAGE_SAMPLED_BIT);
 			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, device);
 
 			const std::string idx = std::to_string(cascade);
-			graph.AddComputePass("$CullDraws_Shadow_C" + idx)
-			        .ExecuteCompute(
-			                [this, cascade, &cullPass](PassContext& ctx)
-			                {
-				                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
-				                const VkDeviceAddress shadowFrameAddr = m_shadowFrameConstants[cascade].GetDeviceAddress(frameIdx);
-				                m_shadowRenderQueues[cascade].PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), shadowFrameAddr, cullPass.GetPipeline(), cullPass.GetPipelineLayout(), ctx.frameIndex);
-				                m_voxelShadowRenderQueues[cascade].PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), shadowFrameAddr, cullPass.GetPipeline(), cullPass.GetPipelineLayout(), ctx.frameIndex);
-			                });
-
 			graph.AddPass("$DirectionalShadow_C" + idx)
 			        .WriteDepth(m_shadowDepth[cascade], VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearDepthValue(1.0f))
 			        .SetExtent(m_shadowMapExtents[cascade])
 			        .Execute(
 			                [this, cascade](PassContext& ctx)
 			                {
-				                m_shadowRenderQueues[cascade].FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline);
-				                m_shadowRenderQueues[cascade].Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
-				                m_voxelShadowRenderQueues[cascade].FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_voxelShadowPipeline);
-				                m_voxelShadowRenderQueues[cascade].Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
+				                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
+				                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+
+				                const std::uint32_t voxelCascadeOffset = cascade * m_voxelShadowRenderQueue.GetMaxDraws();
+				                m_voxelShadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_voxelShadowPipeline, voxelCascadeOffset);
+				                m_voxelShadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			                });
 		}
 	}
@@ -220,7 +205,6 @@ namespace aether
 			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + 120.0f);
 			glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
 
-			// Texel-snap to suppress cascade shimmer while moving the camera.
 			const float texelSize = (2.0f * orthoHalf) / std::max(1.0f, static_cast<float>(m_shadowMapExtents[cascade].width));
 			glm::vec3 centerLs = glm::vec3(lightView * glm::vec4(shadowCenter, 1.0f));
 			centerLs.x = std::floor(centerLs.x / texelSize + 0.5f) * texelSize;

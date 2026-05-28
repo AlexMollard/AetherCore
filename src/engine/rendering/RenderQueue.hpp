@@ -64,7 +64,10 @@ namespace aether
 		// (for queues that never process skinned draws, e.g. voxel shadow queues).
 		// UINT32_MAX (default) derives a sane cap from total draws using
 		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
-		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX);
+		// outputDrawCapacity overrides the per-frame indirect output buffer capacity.
+		// When 0 (default), it equals maxDraws.  Use e.g. maxDraws * 3 for multi-frustum
+		// shadow queues that write 3 independent cascade output regions.
+		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX, std::uint32_t outputDrawCapacity = 0);
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.
@@ -124,15 +127,32 @@ namespace aether
 		}
 
 		// Write inputs and dispatch animation/cull compute.
+		// For multi-frustum queues (outputDrawCapacity > maxDraws), call
+		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
+		// constants addresses; the computePipeline/layout must then be compatible
+		// with CullMultiPushConstants.
 		void PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
 
+		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
+		// used by PrepareAndDispatch to build CullMultiPushConstants.
+		void SetMultiCullFrameAddrs(const VkDeviceAddress addrs[3])
+		{
+			m_multiFrameAddrs[0] = addrs[0];
+			m_multiFrameAddrs[1] = addrs[1];
+			m_multiFrameAddrs[2] = addrs[2];
+		}
+
+		[[nodiscard]] std::uint32_t GetMaxDraws() const { return m_maxDraws; }
+
 		// Emit graphics draws from indirect output.
-		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr);
+		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
+		// used by multi-frustum queues to select one cascade's output region.
+		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr);
+		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -165,6 +185,7 @@ namespace aether
 		AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
 
 		std::uint32_t m_maxDraws = 0;
+		std::uint32_t m_outputDrawCapacity = 0; // indirect buffer capacity per frame slot (defaults to m_maxDraws)
 		std::uint32_t m_maxBatches = 0;
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
@@ -182,6 +203,7 @@ namespace aether
 		std::vector<BatchRenderInfo> m_batchRenderInfos;
 
 		// Cached per-frame addresses/state for FlushDraw.
+		VkDeviceAddress m_multiFrameAddrs[3] = {};
 		VkDeviceAddress m_cachedFrameAddr = 0;
 		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot

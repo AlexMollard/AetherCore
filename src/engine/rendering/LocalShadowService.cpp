@@ -524,7 +524,7 @@ namespace aether
 				                return;
 			                }
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, cullPass.GetPipeline(), cullPass.GetPipelineLayout(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), cullPass.GetSingleLayout(), ctx.frameIndex);
 		                });
 
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.

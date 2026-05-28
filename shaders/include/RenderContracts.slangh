@@ -56,6 +56,21 @@ struct CullPushConstants
     [[vk::offset(60)]] uint _pad1;
 };
 
+static const uint kCullMultiFrustumCount = 3u;
+
+struct CullMultiPushConstants
+{
+    [[vk::offset(0)]]  uint64_t frameAddrs[kCullMultiFrustumCount];
+    [[vk::offset(24)]] uint64_t instanceDataAddr;
+    [[vk::offset(32)]] uint64_t inputCmdAddr;
+    [[vk::offset(40)]] uint64_t outputCmdAddr;
+    [[vk::offset(48)]] uint64_t batchDescAddr;
+    [[vk::offset(56)]] uint     totalDrawCount;
+    [[vk::offset(60)]] uint     outputCascadeStride; // bytes per cascade region
+    [[vk::offset(64)]] uint     debugFlags;
+    [[vk::offset(68)]] uint     _pad0;
+};
+
 static const uint kCullDebugForceVisibleBit = 1u;
 
 #endif

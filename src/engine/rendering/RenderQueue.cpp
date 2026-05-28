@@ -17,13 +17,14 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws)
+	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws, std::uint32_t outputDrawCapacity)
 	{
 		m_device = device;
 		m_allocator = allocator;
 		m_sharedPipelines = &pipelines;
 		m_maxDraws = maxDraws;
 		m_maxBatches = maxBatches;
+		m_outputDrawCapacity = (outputDrawCapacity > 0) ? outputDrawCapacity : maxDraws;
 		m_maxAnimationDraws = (maxAnimationDraws == UINT32_MAX) ? std::min(maxDraws, kDefaultMaxAnimationDraws) : maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
@@ -64,7 +65,7 @@ namespace aether
 			m_nodeGlobalTransformsBuffer = std::move(b7);
 		}
 
-		AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
+		AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_outputDrawCapacity) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
 		m_outputIndirectBuffer = std::move(b8);
 	}
 
@@ -86,6 +87,7 @@ namespace aether
 		m_cullInputMapped = nullptr;
 		m_batchDescMapped = nullptr;
 		m_maxDraws = 0;
+		m_outputDrawCapacity = 0;
 		m_maxBatches = 0;
 		m_animationFrameCount = 0;
 		m_maxAnimationDraws = 0;
@@ -182,7 +184,7 @@ namespace aether
 			};
 			vkCmdPipelineBarrier2(cmd, &fillToComputeDep);
 		}
-		m_cachedDrawBase = drawBase;
+		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);
 		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
@@ -704,39 +706,75 @@ namespace aether
 			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
 		}
 
+		// ── Cull dispatch: single or multi-frustum ──
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullDrawInput);
-		const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
 		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullBatch);
-		const CullPushConstants pc{
-			.frameAddr = frameAddr,
-			.instanceDataAddr = m_cachedInstanceDataAddr,
-			.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
-			.outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
-			.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
-			.batchCountAddr = 0, // reserved
-			.totalDrawCount = totalDraws,
-			.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
-		};
 
+		if (m_outputDrawCapacity > m_maxDraws)
 		{
-			AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
-			CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-			vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
-			if (m_timestampPool)
+			// Multi-frustum mode (shadow cascades): test each draw against 3 VP matrices,
+			// write 3 independent output regions.  The 3 frame constant BDAs must have
+			// been set via SetMultiCullFrameAddrs() before this call.
+			const VkDeviceSize outputBase = static_cast<VkDeviceSize>(frameSlot) * m_outputDrawCapacity;
+			const VkDeviceSize outputCmdOffset = outputBase * sizeof(VkDrawIndexedIndirectCommand);
+			const VkDeviceSize cascadeStride = static_cast<VkDeviceSize>(m_maxDraws) * sizeof(VkDrawIndexedIndirectCommand);
+
+			const CullMultiPushConstants multiPc{
+				.frameAddrs = { m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2] },
+				.instanceDataAddr = m_cachedInstanceDataAddr,
+				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+				.outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
+				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+				.totalDrawCount = totalDraws,
+				.outputCascadeStride = static_cast<std::uint32_t>(cascadeStride),
+				.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
+			};
+
 			{
-				m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-			}
-			{
-				AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
+				AE_PROFILE_ZONE_N("RenderQueue.Cull.DispatchMulti");
+				CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+				vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(multiPc), &multiPc);
 				const std::uint32_t groups = (totalDraws + 63u) / 64u;
 				vkCmdDispatch(cmd, groups, 1, 1);
+				CommandRecorder(cmd).EndDebugLabel();
 			}
-			if (m_timestampPool)
+		}
+		else
+		{
+			// Single-frustum mode (main camera, local shadows).
+			const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
+			const CullPushConstants pc{
+				.frameAddr = frameAddr,
+				.instanceDataAddr = m_cachedInstanceDataAddr,
+				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+				.outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
+				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+				.batchCountAddr = 0,
+				.totalDrawCount = totalDraws,
+				.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
+			};
+
 			{
-				m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
+				CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+				vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+				if (m_timestampPool)
+				{
+					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+				{
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
+					const std::uint32_t groups = (totalDraws + 63u) / 64u;
+					vkCmdDispatch(cmd, groups, 1, 1);
+				}
+				if (m_timestampPool)
+				{
+					m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+				CommandRecorder(cmd).EndDebugLabel();
 			}
-			CommandRecorder(cmd).EndDebugLabel();
 		}
 
 		// Ensure indirect args are visible before draw-indirect.
@@ -765,7 +803,7 @@ namespace aether
 		++m_animationFrameCount;
 	}
 
-	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline)
+	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -847,14 +885,14 @@ namespace aether
 			}
 			else
 			{
-				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
+				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
 			}
 		}
 
 		recorder.EndDebugLabel();
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline)
+	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -934,7 +972,7 @@ namespace aether
 			}
 			else
 			{
-				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
+				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
 			}
 		}
 

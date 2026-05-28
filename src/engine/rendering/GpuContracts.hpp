@@ -7,6 +7,10 @@
 
 namespace aether
 {
+	// Number of shadow cascades for multi-frustum culling.
+	// Must match kShadowCascadeCount in FrameConstants.hpp.
+	inline constexpr std::uint32_t kCullMultiFrustumCount = 3u;
+
 	// Per-instance payload consumed by the standard mesh shader path.
 	// Keep in sync with shaders/include/RenderContracts.slangh.
 	struct DrawInstanceData
@@ -88,6 +92,31 @@ namespace aether
 		std::uint32_t _pad0 = 0;
 		std::uint32_t _pad1 = 0;
 	};
+
+	struct CullMultiPushConstants
+	{
+		// Three frame constants BDAs (one per shadow cascade).
+		VkDeviceAddress frameAddrs[kCullMultiFrustumCount] = {};
+		VkDeviceAddress instanceDataAddr = 0;
+		VkDeviceAddress inputCmdAddr = 0;
+		VkDeviceAddress outputCmdAddr = 0;           // base BDA of output buffer
+		VkDeviceAddress batchDescAddr = 0;
+		std::uint32_t totalDrawCount = 0;
+		std::uint32_t outputCascadeStride = 0;        // maxDraws * sizeof(VkDrawIndexedIndirectCommand) in bytes
+		std::uint32_t debugFlags = 0;
+		std::uint32_t _pad0 = 0;
+	};
+
+	static_assert(sizeof(CullMultiPushConstants) <= 128, "CullMultiPushConstants exceeds 128-byte push constant limit.");
+	static_assert(offsetof(CullMultiPushConstants, frameAddrs) == 0);
+	static_assert(offsetof(CullMultiPushConstants, instanceDataAddr) == 24);
+	static_assert(offsetof(CullMultiPushConstants, inputCmdAddr) == 32);
+	static_assert(offsetof(CullMultiPushConstants, outputCmdAddr) == 40);
+	static_assert(offsetof(CullMultiPushConstants, batchDescAddr) == 48);
+	static_assert(offsetof(CullMultiPushConstants, totalDrawCount) == 56);
+	static_assert(offsetof(CullMultiPushConstants, outputCascadeStride) == 60);
+	static_assert(offsetof(CullMultiPushConstants, debugFlags) == 64);
+	static_assert(offsetof(CullMultiPushConstants, _pad0) == 68);
 
 	static constexpr std::uint32_t kCullDebugForceVisibleBit = 1u << 0;
 
