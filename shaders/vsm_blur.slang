@@ -12,8 +12,11 @@
 struct BlurPushConstants
 {
     uint2  atlasSize;
+    uint2  blurOffset;  // Top-left corner of the region to blur
     uint   isHorizontal;
     float  _pad0;
+    float  _pad1;
+    float  _pad2;
 };
 
 [[vk::push_constant]] BlurPushConstants pc;
@@ -38,8 +41,9 @@ uint2 ClampRead(int2 p, uint2 atlasSize)
 [shader("compute")]
 void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
 {
-    // Workgroup origin (top-left of this 16x16 output tile).
-    uint2 origin = dtid.xy - gtid.xy;
+    // Workgroup origin (top-left of this 16x16 output tile) + blur offset.
+    uint2 origin = dtid.xy - gtid.xy + pc.blurOffset;
+    uint2 globalPos = dtid.xy + pc.blurOffset;
 
     // ── Phase 1: Load padded 20x20 tile into LDS ──
 
@@ -91,8 +95,9 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
     GroupMemoryBarrierWithGroupSync();
 
     // ── Phase 2: Compute convolution from LDS ──
-    // Only valid threads (within atlas bounds) produce output.
-    if (dtid.x < pc.atlasSize.x && dtid.y < pc.atlasSize.y)
+    // Only valid threads (within blur region bounds) produce output.
+    uint2 localPos = dtid.xy;
+    if (localPos.x < pc.atlasSize.x && localPos.y < pc.atlasSize.y)
     {
         float2 result = float2(0.0, 0.0);
         [unroll]
@@ -103,6 +108,6 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
             else
                 result += tile[gtid.y + kOffsets[t] + 2][gtid.x] * kWeights[t];
         }
-        g_output[dtid.xy] = result;
+        g_output[globalPos] = result;
     }
 }

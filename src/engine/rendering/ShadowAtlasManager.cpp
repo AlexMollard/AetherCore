@@ -43,6 +43,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shelves.clear();
+		m_usedBounds = {};
 	}
 
 	ShadowAtlasManager::Region ShadowAtlasManager::Allocate(const std::uint32_t width, const std::uint32_t height)
@@ -60,6 +61,21 @@ namespace aether
 			{
 				Region r{ shelf.cursorX, shelf.y, width, height };
 				shelf.cursorX += width;
+				
+				// Update used bounds
+				if (m_usedBounds.width == 0)
+				{
+					m_usedBounds = r;
+				}
+				else
+				{
+					const std::uint32_t minX = std::min(m_usedBounds.x, r.x);
+					const std::uint32_t minY = std::min(m_usedBounds.y, r.y);
+					const std::uint32_t maxX = std::max(m_usedBounds.x + m_usedBounds.width, r.x + r.width);
+					const std::uint32_t maxY = std::max(m_usedBounds.y + m_usedBounds.height, r.y + r.height);
+					m_usedBounds = { minX, minY, maxX - minX, maxY - minY };
+				}
+				
 				return r;
 			}
 		}
@@ -72,6 +88,22 @@ namespace aether
 		}
 
 		m_shelves.push_back(Shelf{ nextY, height, width });
-		return Region{ 0, nextY, width, height };
+		Region r{ 0, nextY, width, height };
+		
+		// Update used bounds
+		if (m_usedBounds.width == 0)
+		{
+			m_usedBounds = r;
+		}
+		else
+		{
+			const std::uint32_t minX = std::min(m_usedBounds.x, r.x);
+			const std::uint32_t minY = std::min(m_usedBounds.y, r.y);
+			const std::uint32_t maxX = std::max(m_usedBounds.x + m_usedBounds.width, r.x + r.width);
+			const std::uint32_t maxY = std::max(m_usedBounds.y + m_usedBounds.height, r.y + r.height);
+			m_usedBounds = { minX, minY, maxX - minX, maxY - minY };
+		}
+		
+		return r;
 	}
 } // namespace aether

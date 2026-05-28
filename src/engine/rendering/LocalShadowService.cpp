@@ -26,10 +26,14 @@ namespace aether
 	{
 		std::uint32_t atlasWidth;
 		std::uint32_t atlasHeight;
+		std::uint32_t blurOffsetX;
+		std::uint32_t blurOffsetY;
 		std::uint32_t isHorizontal;
 		float _pad0;
+		float _pad1;
+		float _pad2;
 	};
-	static_assert(sizeof(BlurPushConstants) == 16, "BlurPushConstants must be 16 bytes");
+	static_assert(sizeof(BlurPushConstants) == 32, "BlurPushConstants must be 32 bytes");
 
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
@@ -576,16 +580,17 @@ namespace aether
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {
-			                constexpr std::uint32_t kW = ShadowAtlasManager::kAtlasWidth;
-			                constexpr std::uint32_t kH = ShadowAtlasManager::kAtlasHeight;
+			                const auto bounds = m_atlasManager.GetUsedBounds();
+			                if (bounds.width == 0 || bounds.height == 0)
+				                return; // Nothing allocated, skip blur
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetH, 0, nullptr);
 
-			                const BlurPushConstants hPc{ kW, kH, 1u, 0.0f };
+			                const BlurPushConstants hPc{ bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f };
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
 
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (kW + 15u) / 16u, (kH + 15u) / 16u, 1u);
+			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 
 		// Vertical blur: read scratch (sampled), write atlas (storage).
@@ -595,16 +600,17 @@ namespace aether
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {
-			                constexpr std::uint32_t kW = ShadowAtlasManager::kAtlasWidth;
-			                constexpr std::uint32_t kH = ShadowAtlasManager::kAtlasHeight;
+			                const auto bounds = m_atlasManager.GetUsedBounds();
+			                if (bounds.width == 0 || bounds.height == 0)
+				                return; // Nothing allocated, skip blur
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetV, 0, nullptr);
 
-			                const BlurPushConstants vPc{ kW, kH, 0u, 0.0f };
+			                const BlurPushConstants vPc{ bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f };
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
 
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (kW + 15u) / 16u, (kH + 15u) / 16u, 1u);
+			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 	}
 } // namespace aether

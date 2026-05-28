@@ -48,6 +48,13 @@ namespace aether
 		// Returns an invalid region (width=0) on failure (atlas full).
 		[[nodiscard]] Region Allocate(std::uint32_t width, std::uint32_t height);
 
+		// Get the bounding box of all allocated regions this frame.
+		// Returns {0,0,0,0} if nothing is allocated.
+		[[nodiscard]] Region GetUsedBounds() const
+		{
+			return m_usedBounds;
+		}
+
 		// Access the atlas image for render graph registration.
 		[[nodiscard]] UniqueImage& GetAtlasImage()
 		{
@@ -76,5 +83,6 @@ namespace aether
 		BindlessManager* m_bindless = nullptr;
 		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
 		std::vector<Shelf> m_shelves;
+		Region m_usedBounds{}; // Bounding box of all allocated regions this frame
 	};
 } // namespace aether
