@@ -391,6 +391,57 @@ namespace aether
 
 		if (sampleJobsThisFrame > 0)
 		{
+			// ── Pass 0: Parallel bind-pose initialization ──
+			// Dispatched before animation sampling to write all node bind poses
+			// in parallel (each thread handles one (job, node) pair).
+			if (m_sharedPipelines != nullptr && m_sharedPipelines->poseInit != VK_NULL_HANDLE)
+			{
+				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
+
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
+				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
+
+				const VkDeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob);
+
+				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
+				{
+					const auto& batch = animSampleBatches[bi];
+					const std::uint32_t nodeCount = batch.db->GetNodeCount();
+					if (nodeCount == 0) continue;
+
+					const PoseInitPush initPc{
+						.bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
+						.bindRotationsAddr = batch.db->GetBindRotationsAddr(),
+						.bindScalesAddr = batch.db->GetBindScalesAddr(),
+						.animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimatorSampleJob),
+						.sampledPosesAddr = currSampledPosesAddr,
+						.jobCount = batch.count,
+						.nodeCountPerJob = nodeCount,
+					};
+					vkCmdPushConstants(cmd, m_sharedPipelines->poseInitLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(initPc), &initPc);
+
+					const std::uint32_t groupsX = (batch.count + 7u) / 8u;
+					const std::uint32_t groupsY = (nodeCount + 7u) / 8u;
+					vkCmdDispatch(cmd, groupsX, groupsY, 1);
+				}
+
+				const VkMemoryBarrier2 poseInitToAnim{
+					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				};
+				const VkDependencyInfo poseInitToAnimDep{
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.memoryBarrierCount = 1,
+					.pMemoryBarriers = &poseInitToAnim,
+				};
+				vkCmdPipelineBarrier2(cmd, &poseInitToAnimDep);
+
+				CommandRecorder(cmd).EndDebugLabel();
+			}
+
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
 			if (m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE)
@@ -989,6 +1040,49 @@ namespace aether
 		}
 
 		{
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://pose_init.slang.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(PoseInitPush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &poseInitLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = poseInitLayout,
+			};
+			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &poseInit) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInit), VK_OBJECT_TYPE_PIPELINE, "Animation.PoseInit");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInitLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.PoseInit.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+		}
+
+		{
 			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://node_flatten.slang.spv"));
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
@@ -1059,10 +1153,20 @@ namespace aether
 			vkDestroyPipeline(device, nodeFlatten, nullptr);
 			nodeFlatten = VK_NULL_HANDLE;
 		}
-		if (nodeFlattenLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
-			nodeFlattenLayout = VK_NULL_HANDLE;
-		}
+	if (nodeFlattenLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
+		nodeFlattenLayout = VK_NULL_HANDLE;
 	}
+	if (poseInit != VK_NULL_HANDLE)
+	{
+		vkDestroyPipeline(device, poseInit, nullptr);
+		poseInit = VK_NULL_HANDLE;
+	}
+	if (poseInitLayout != VK_NULL_HANDLE)
+	{
+		vkDestroyPipelineLayout(device, poseInitLayout, nullptr);
+		poseInitLayout = VK_NULL_HANDLE;
+	}
+}
 } // namespace aether

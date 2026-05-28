@@ -225,4 +225,24 @@ namespace aether
 	static_assert(offsetof(AnimationSamplePush, sampledPosesAddr) == 64);
 	static_assert(offsetof(AnimationSamplePush, jobCount) == 72);
 	static_assert(offsetof(AnimationSamplePush, clipCount) == 76);
+
+	struct PoseInitPush
+	{
+		VkDeviceAddress bindTranslationsAddr = 0;
+		VkDeviceAddress bindRotationsAddr = 0;
+		VkDeviceAddress bindScalesAddr = 0;
+		VkDeviceAddress animatorJobsAddr = 0;
+		VkDeviceAddress sampledPosesAddr = 0;
+		std::uint32_t jobCount = 0;
+		std::uint32_t nodeCountPerJob = 0;
+	};
+
+	static_assert(sizeof(PoseInitPush) == 48, "PoseInitPush layout changed - update shaders/include/AnimationContracts.slangh.");
+	static_assert(offsetof(PoseInitPush, bindTranslationsAddr) == 0);
+	static_assert(offsetof(PoseInitPush, bindRotationsAddr) == 8);
+	static_assert(offsetof(PoseInitPush, bindScalesAddr) == 16);
+	static_assert(offsetof(PoseInitPush, animatorJobsAddr) == 24);
+	static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
+	static_assert(offsetof(PoseInitPush, jobCount) == 40);
+	static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
 } // namespace aether

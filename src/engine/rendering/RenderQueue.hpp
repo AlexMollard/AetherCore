@@ -29,6 +29,8 @@ namespace aether
 		VkPipelineLayout animSampleLayout = VK_NULL_HANDLE;
 		VkPipeline nodeFlatten = VK_NULL_HANDLE;
 		VkPipelineLayout nodeFlattenLayout = VK_NULL_HANDLE;
+		VkPipeline poseInit = VK_NULL_HANDLE;
+		VkPipelineLayout poseInitLayout = VK_NULL_HANDLE;
 
 		void Initialize(VkDevice device);
 		void Shutdown(VkDevice device);

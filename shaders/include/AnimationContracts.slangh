@@ -5,6 +5,13 @@
 // Keep in sync with src/engine/AnimationDatabase.hpp,
 // src/engine/RenderQueue.hpp, and src/engine/RenderQueueGpuContracts.hpp.
 
+float4 SafeNormalize(float4 v)
+{
+    return (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f && v.w == 0.0f)
+        ? float4(0.0f, 0.0f, 0.0f, 1.0f)
+        : normalize(v);
+}
+
 struct GpuChannel
 {
     [[vk::offset(0)]] uint nodeIndex;
@@ -102,6 +109,17 @@ struct AnimationSamplePush
     [[vk::offset(64)]] uint64_t sampledPosesAddr;
     [[vk::offset(72)]] uint jobCount;
     [[vk::offset(76)]] uint clipCount;
+};
+
+struct PoseInitPush
+{
+    [[vk::offset(0)]]  uint64_t bindTranslationsAddr;
+    [[vk::offset(8)]]  uint64_t bindRotationsAddr;
+    [[vk::offset(16)]] uint64_t bindScalesAddr;
+    [[vk::offset(24)]] uint64_t animatorJobsAddr;
+    [[vk::offset(32)]] uint64_t sampledPosesAddr;
+    [[vk::offset(40)]] uint jobCount;
+    [[vk::offset(44)]] uint nodeCountPerJob;
 };
 
 #endif
