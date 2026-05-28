@@ -43,50 +43,39 @@ Bracket FindBracket(uint timesOffset, uint count, float t, float* allTimes)
     {
         result.lo = count - 1;
         result.hi = count - 1;
+        result.alpha = 1.0f;
         return result;
     }
 
-    for (uint i = 0; i + 1 < count; ++i)
+    uint lo = 0u;
+    uint hi = count - 1u;
+    while (lo < hi - 1u)
     {
-        float t0 = allTimes[timesOffset + i];
-        float t1 = allTimes[timesOffset + i + 1];
-        
-        if (t < t1)
-        {
-            result.lo = i;
-            result.hi = i + 1;
-            float range = t1 - t0;
-            result.alpha = (range > 1e-6f) ? (t - t0) / range : 0.0f;
-            return result;
-        }
+        uint mid = (lo + hi) >> 1u;
+        float midTime = allTimes[timesOffset + mid];
+        if (t >= midTime)
+            lo = mid;
+        else
+            hi = mid;
     }
 
+    result.lo = lo;
+    result.hi = hi;
+    float t0 = allTimes[timesOffset + lo];
+    float t1 = allTimes[timesOffset + hi];
+    float range = t1 - t0;
+    result.alpha = (range > 1e-6f) ? (t - t0) / range : 0.0f;
     return result;
 }
 
-// Slerp two quaternions (in xyzw format as float4).
-float4 Slerp(float4 q1, float4 q2, float t)
+// Nlerp two quaternions (in xyzw format as float4).
+// Faster approximation of Slerp — visually equivalent for typical animation
+// keyframe density, avoids acos/sin/divide.
+float4 Nlerp(float4 q1, float4 q2, float t)
 {
-    float dot_val = dot(q1, q2);
-
-    if (dot_val < 0.0f)
-    {
+    if (dot(q1, q2) < 0.0f)
         q2 = -q2;
-        dot_val = -dot_val;
-    }
-
-    dot_val = clamp(dot_val, -1.0f, 1.0f);
-
-    float theta = acos(dot_val);
-    float sin_theta = sin(theta);
-
-    if (sin_theta < 1e-6f)
-        return lerp(q1, q2, t);
-
-    float w1 = sin((1.0f - t) * theta) / sin_theta;
-    float w2 = sin(t * theta) / sin_theta;
-
-    return w1 * q1 + w2 * q2;
+    return normalize(lerp(q1, q2, t));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -160,7 +149,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
             uint valIdx1 = channel.valuesOffset / 16u + bracket.hi;
             float4 sampled = (channel.interpolation == 1u)
                 ? values[valIdx0]
-                : Slerp(values[valIdx0], values[valIdx1], bracket.alpha);
+                : Nlerp(values[valIdx0], values[valIdx1], bracket.alpha);
             poses[poseIdx].rotation = normalize(sampled);
         }
         else if (animPath == 2u)  // Scale
