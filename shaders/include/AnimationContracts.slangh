@@ -41,6 +41,12 @@ struct AnimatorSampleJob
     [[vk::offset(4)]] float animTime;
     [[vk::offset(8)]] uint nodePoseOffset;
     [[vk::offset(12)]] uint nodeCount;
+    [[vk::offset(16)]] uint64_t clipsAddr;
+    [[vk::offset(24)]] uint64_t channelsAddr;
+    [[vk::offset(32)]] uint64_t timesAddr;
+    [[vk::offset(40)]] uint64_t valuesAddr;
+    [[vk::offset(48)]] uint clipCount;
+    [[vk::offset(52)]] uint _pad0;
 };
 
 struct SampledNodePose

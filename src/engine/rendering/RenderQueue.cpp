@@ -284,6 +284,11 @@ namespace aether
 							.animTime = dc.animTime,
 							.nodePoseOffset = nodePoseCursor,
 							.nodeCount = drawNodeCount,
+							.clipsAddr = drawAnimDb->GetClipsAddr(),
+							.channelsAddr = drawAnimDb->GetChannelsAddr(),
+							.timesAddr = drawAnimDb->GetTimesAddr(),
+							.valuesAddr = drawAnimDb->GetValuesAddr(),
+							.clipCount = drawClipCount,
 						};
 						m_skinCopyJobsMapped[animJobBase + skinJobCount] = SkinCopyJob{
 							.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(SampledNodePose),
@@ -446,41 +451,37 @@ namespace aether
 
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
-			if (m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE)
+			if (m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE && sampleJobsThisFrame > 0)
 			{
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animSample);
 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
-				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
+				const AnimationSamplePush animPc{
+					.animDbClipsAddr = 0,
+					.animDbChannelsAddr = 0,
+					.animDbTimesAddr = 0,
+					.animDbValuesAddr = 0,
+					.bindTranslationsAddr = 0,
+					.bindRotationsAddr = 0,
+					.bindScalesAddr = 0,
+					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob),
+					.sampledPosesAddr = currSampledPosesAddr,
+					.jobCount = sampleJobsThisFrame,
+					.clipCount = 0,
+				};
+				vkCmdPushConstants(cmd, m_sharedPipelines->animSampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
+				if (m_timestampPool)
 				{
-					const auto& batch = animSampleBatches[bi];
-					const AnimationSamplePush animPc{
-						.animDbClipsAddr = batch.db->GetClipsAddr(),
-						.animDbChannelsAddr = batch.db->GetChannelsAddr(),
-						.animDbTimesAddr = batch.db->GetTimesAddr(),
-						.animDbValuesAddr = batch.db->GetValuesAddr(),
-						.bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
-						.bindRotationsAddr = batch.db->GetBindRotationsAddr(),
-						.bindScalesAddr = batch.db->GetBindScalesAddr(),
-						.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimatorSampleJob),
-						.sampledPosesAddr = currSampledPosesAddr,
-						.jobCount = batch.count,
-						.clipCount = batch.db->GetClipCount(),
-					};
-					vkCmdPushConstants(cmd, m_sharedPipelines->animSampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
-					if (m_timestampPool && bi == 0)
-					{
-						m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-					}
-					{
-						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
-						const std::uint32_t groups = (batch.count + 63u) / 64u;
-						vkCmdDispatch(cmd, groups, 1, 1);
-					}
-					if (m_timestampPool && bi == animSampleBatchCount - 1)
-					{
-						m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-					}
+					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				}
+				{
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
+					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
+					vkCmdDispatch(cmd, groups, 1, 1);
+				}
+				if (m_timestampPool)
+				{
+					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 				}
 
 				CommandRecorder(cmd).EndDebugLabel();

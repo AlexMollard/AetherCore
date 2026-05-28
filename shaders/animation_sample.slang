@@ -88,19 +88,17 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (jobIdx >= pc.jobCount)
         return;
 
-    // Load job state
     AnimatorSampleJob* jobs = (AnimatorSampleJob*)(pc.animatorJobsAddr);
     AnimatorSampleJob job = jobs[jobIdx];
 
-    // Load animation clip metadata
-    GpuClip* clips = (GpuClip*)(pc.animDbClipsAddr);
-    GpuChannel* channels = (GpuChannel*)(pc.animDbChannelsAddr);
-    float* times = (float*)(pc.animDbTimesAddr);
-    float4* values = (float4*)(pc.animDbValuesAddr);
-    SampledNodePose* poses = (SampledNodePose*)(pc.sampledPosesAddr);
-
-    if (job.animClipIndex >= pc.clipCount)
+    if (job.animClipIndex >= job.clipCount)
         return;
+
+    GpuClip* clips = (GpuClip*)(job.clipsAddr);
+    GpuChannel* channels = (GpuChannel*)(job.channelsAddr);
+    float* times = (float*)(job.timesAddr);
+    float4* values = (float4*)(job.valuesAddr);
+    SampledNodePose* poses = (SampledNodePose*)(pc.sampledPosesAddr);
 
     const uint poseBase = job.nodePoseOffset;
 

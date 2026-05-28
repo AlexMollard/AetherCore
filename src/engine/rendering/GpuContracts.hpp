@@ -158,13 +158,25 @@ namespace aether
 		float animTime = 0.0f;
 		std::uint32_t nodePoseOffset = 0;
 		std::uint32_t nodeCount = 0;
+		VkDeviceAddress clipsAddr = 0;
+		VkDeviceAddress channelsAddr = 0;
+		VkDeviceAddress timesAddr = 0;
+		VkDeviceAddress valuesAddr = 0;
+		std::uint32_t clipCount = 0;
+		std::uint32_t _pad0 = 0;
 	};
 
-	static_assert(sizeof(AnimatorSampleJob) == 16, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
+	static_assert(sizeof(AnimatorSampleJob) == 56, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
 	static_assert(offsetof(AnimatorSampleJob, animClipIndex) == 0);
 	static_assert(offsetof(AnimatorSampleJob, animTime) == 4);
 	static_assert(offsetof(AnimatorSampleJob, nodePoseOffset) == 8);
 	static_assert(offsetof(AnimatorSampleJob, nodeCount) == 12);
+	static_assert(offsetof(AnimatorSampleJob, clipsAddr) == 16);
+	static_assert(offsetof(AnimatorSampleJob, channelsAddr) == 24);
+	static_assert(offsetof(AnimatorSampleJob, timesAddr) == 32);
+	static_assert(offsetof(AnimatorSampleJob, valuesAddr) == 40);
+	static_assert(offsetof(AnimatorSampleJob, clipCount) == 48);
+	static_assert(offsetof(AnimatorSampleJob, _pad0) == 52);
 
 	struct SampledNodePose
 	{
