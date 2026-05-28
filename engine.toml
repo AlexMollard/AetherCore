@@ -5,7 +5,7 @@ width = 1920
 height = 1080
 
 [graphics]
-vsync = false
+vsync = true
 fxaa = false
 asyncCompute = true
 
