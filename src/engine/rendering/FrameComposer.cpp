@@ -19,6 +19,7 @@ namespace aether
 		}
 
 		fc.materialBufferAddr = packet.materialBufferAddr;
+		fc.elapsedTime = packet.elapsedTime;
 		fc.sunDirectionIntensity = packet.sunDirectionIntensity;
 		fc.ambientColor = packet.ambientColor;
 		fc.sunColor = packet.sunColor;

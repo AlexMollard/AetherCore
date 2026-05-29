@@ -8,7 +8,7 @@ struct FrameConstantsData
     [[vk::offset(64)]]  float4x4 view;
     [[vk::offset(128)]] float4x4 proj;
     [[vk::offset(192)]] uint64_t materialBufferAddr;
-    // offset 200: _pad0 (not accessed in shaders)
+    [[vk::offset(200)]] float elapsedTime;            // offset 204: uint32 _pad0 (not accessed in shaders)
     [[vk::offset(208)]] float4 sunDirectionIntensity; // xyz=world dir, w=intensity
     [[vk::offset(224)]] float4 ambientColor;          // rgb=ambient term, a=unused
     [[vk::offset(240)]] float4 cameraWorldPos;        // xyz=camera pos, w=1

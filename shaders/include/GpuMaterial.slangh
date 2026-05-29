@@ -1,0 +1,19 @@
+// Must stay binary-compatible with aether::GpuMaterial (80 bytes).
+
+struct GpuMaterial
+{
+    [[vk::offset(0)]]  float4 baseColorFactor;
+    [[vk::offset(16)]] float  metallicFactor;
+    [[vk::offset(20)]] float  roughnessFactor;
+    [[vk::offset(24)]] float  occlusionStrength;
+    [[vk::offset(28)]] float  alphaCutoff;
+    [[vk::offset(32)]] float4 emissiveFactor;          // xyz = emissive RGB, w unused
+    [[vk::offset(48)]] uint   flags;
+    [[vk::offset(52)]] uint   albedoSlot;
+    [[vk::offset(56)]] uint   normalSlot;
+    [[vk::offset(60)]] uint   metallicRoughnessSlot;
+    [[vk::offset(64)]] uint   occlusionSlot;
+    [[vk::offset(68)]] uint   emissiveSlot;
+    [[vk::offset(72)]] uint   _pad0;
+    [[vk::offset(76)]] uint   _pad1;
+};

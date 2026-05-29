@@ -6,6 +6,7 @@
 
 #include "scene/Entity.hpp"
 #include "AetherCore.hpp" // for LoadedModel
+#include "effects/EffectManager.hpp"
 #include "material/Material.hpp"
 
 namespace aether
@@ -38,6 +39,7 @@ namespace aether::app::scripting
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::app::SystemFactory* systemFactory = nullptr;
 		aether::GraphicsPipeline* defaultPipeline = nullptr;
+		aether::app::effects::EffectManager* effects = nullptr;
 		float deltaTime = 0.0f;
 		std::string scriptPath;
 

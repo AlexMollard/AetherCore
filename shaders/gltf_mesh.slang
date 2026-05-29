@@ -1,42 +1,14 @@
 // gltf_mesh.slang - Full PBR forward shader for all standard geometry.
 //
-// Vertex data is fetched via buffer device address stored in DrawInstanceData.vertexBufferAddr.
-// No vertex input bindings - the pipeline uses an empty vertex input state.
+// Vertex data is fetched via buffer device address (BDA) stored in
+// DrawInstanceData.vertexBufferAddr.  No vertex input bindings.
 //
-// Push constants  (24 bytes, matches aether::DrawPushConstants):
+// Push constants (24 bytes, matches aether::DrawPushConstants):
 //   offset  0 : uint64_t  frameAddr         BDA -> FrameConstantsData
 //   offset  8 : uint64_t  instanceDataAddr  BDA -> DrawInstanceData[]
-//
-// FrameConstantsData  (320 bytes, matches aether::FrameConstants):
-//   offset   0 : float4x4  viewProj
-//   offset  64 : float4x4  view
-//   offset 128 : float4x4  proj
-//   offset 192 : uint64_t  materialBufferAddr   BDA -> GpuMaterial[]
-//   offset 200 : uint64_t  _pad0
-//   offset 208 : float4    sunDirectionIntensity  (xyz=world dir, w=intensity)
-//   offset 224 : float4    ambientColor           (rgb=ambient, a=unused)
-//   offset 240 : float4    cameraWorldPos         (xyz=camera pos, w=1)
-//   offset 256 : float4    sunColor               (rgb=sun light color, a=unused)
-//   offset 272 : float4    skyHorizonColor        (rgb=sky horizon color, a=unused)
-//   offset 288 : float4    skyZenithColor         (rgb=sky zenith color, a=unused)
-//   offset 304 : float4    skyVoidColor           (rgb=sky void color, a=unused)
-//
-// GpuMaterial  (80 bytes, matches aether::GpuMaterial):
-//   offset  0  : float4  baseColorFactor
-//   offset 16  : float   metallicFactor
-//   offset 20  : float   roughnessFactor
-//   offset 24  : float   occlusionStrength
-//   offset 28  : float   alphaCutoff
-//   offset 32  : float4  emissiveFactor  (xyz = emissive RGB)
-//   offset 48  : uint    flags           (bit 0=doubleSided, 1=alphaBlend, 2=alphaMask)
-//   offset 52  : uint    albedoSlot
-//   offset 56  : uint    normalSlot
-//   offset 60  : uint    metallicRoughnessSlot
-//   offset 64  : uint    occlusionSlot
-//   offset 68  : uint    emissiveSlot
+//   offset 16 : uint64_t  skinPaletteAddr   BDA -> float4x4[] skin matrices
 
-
-// ── Bindless resources ────────────────────────────────────────────────────
+// ── Bindless resources (descriptor set 0) ────────────────────────────────
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
@@ -47,8 +19,11 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/GpuMaterial.slangh"
 #include "include/DirectionalShadowCSM.slangh"
 #include "include/LocalShadow.slangh"
+#include "include/MeshVertex.slangh"
+#include "include/DefaultVertex.slangh"
 
 // ── Shared constants ─────────────────────────────────────────────────────
 static const uint  kNoTexture     = 0xFFFFFFFFu;
@@ -57,141 +32,7 @@ static const uint  kFlagDoubleSided = 1u;
 static const uint  kFlagAlphaBlend  = 2u;
 static const uint  kFlagAlphaMask   = 4u;
 
-// ── GPU structs (layout must exactly match their C++ counterparts) ────────
-
-struct GpuMaterial
-{
-    [[vk::offset(0)]]  float4 baseColorFactor;
-    [[vk::offset(16)]] float  metallicFactor;
-    [[vk::offset(20)]] float  roughnessFactor;
-    [[vk::offset(24)]] float  occlusionStrength;
-    [[vk::offset(28)]] float  alphaCutoff;
-    [[vk::offset(32)]] float4 emissiveFactor;          // xyz = emissive RGB, w unused
-    [[vk::offset(48)]] uint   flags;
-    [[vk::offset(52)]] uint   albedoSlot;
-    [[vk::offset(56)]] uint   normalSlot;
-    [[vk::offset(60)]] uint   metallicRoughnessSlot;
-    [[vk::offset(64)]] uint   occlusionSlot;
-    [[vk::offset(68)]] uint   emissiveSlot;
-    [[vk::offset(72)]] uint   _pad0;
-    [[vk::offset(76)]] uint   _pad1;
-};
-
 [[vk::push_constant]] DrawPushConstants pc;
-
-// ── Vertex layout (must match aether::Mesh::Vertex, 92 bytes) ─────────────
-
-struct Vertex
-{
-    [[vk::offset(0)]]  float3 position;
-    [[vk::offset(12)]] float3 normal;
-    [[vk::offset(24)]] float4 tangent;      // w = bitangent sign
-    [[vk::offset(40)]] float2 uv;
-    [[vk::offset(48)]] float3 color;
-    [[vk::offset(60)]] uint4  jointIndices;
-    [[vk::offset(76)]] float4 jointWeights;
-};
-
-struct VSOutput
-{
-    float4 svPosition                          : SV_Position;
-    [[vk::location(0)]] float3 worldPos        : TEXCOORD0;
-    [[vk::location(1)]] float3 worldNormal     : TEXCOORD1;
-    [[vk::location(2)]] float3 worldTangent    : TEXCOORD2;
-    [[vk::location(3)]] float  tangentSign     : TEXCOORD3;
-    [[vk::location(4)]] float2 uv              : TEXCOORD4;
-    [[vk::location(5)]] float3 vertexColor     : TEXCOORD5;
-    [[vk::location(6)]] nointerpolation uint materialIndex : TEXCOORD6;
-};
-
-// Transform direction vectors (normal/tangent) through a world matrix basis,
-// correcting for non-uniform axis scale without requiring matrix inverse().
-// basis must be the TRANSPOSED float3x3 of the model matrix so that basis[i]
-// is the i-th column of the model matrix (= world-space basis vector i).
-float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
-{
-    float3 c0 = basis[0];
-    float3 c1 = basis[1];
-    float3 c2 = basis[2];
-
-    const float d0 = max(dot(c0, c0), 1e-8);
-    const float d1 = max(dot(c1, c1), 1e-8);
-    const float d2 = max(dot(c2, c2), 1e-8);
-
-    return normalize(c0 * (v.x / d0) + c1 * (v.y / d1) + c2 * (v.z / d2));
-}
-
-// ── Vertex shader ─────────────────────────────────────────────────────────
-
-// SV_StartInstanceLocation == gl_BaseInstance == firstInstance from the draw command.
-// All draws use instanceCount=1, so this directly selects the right DrawInstanceData slot.
-// Do NOT add SV_InstanceID: Slang maps it to gl_InstanceIndex which already includes
-// the base, so adding both would double-count firstInstance and read the wrong slot.
-[shader("vertex")]
-VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
-{
-    FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
-    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
-    const uint instanceIndex = startInstance;
-    DrawInstanceData instance = instances[instanceIndex];
-
-    Vertex* verts = (Vertex*)(instance.vertexBufferAddr);
-    Vertex input = verts[vertexId];
-
-    float4 worldPos;
-    float3 worldNormal;
-    float3 worldTangent;
-
-    if (pc.skinPaletteAddr != 0uL && instance.skinJointCount > 0u)
-    {
-        // GPU skinning: blend up to 4 joint matrices weighted by BLENDWEIGHT0.
-        float4x4* joints = (float4x4*)(pc.skinPaletteAddr);
-        const uint base = instance.skinPaletteOffset;
-        float4x4 skinMatrix =
-            input.jointWeights.x * joints[base + input.jointIndices.x] +
-            input.jointWeights.y * joints[base + input.jointIndices.y] +
-            input.jointWeights.z * joints[base + input.jointIndices.z] +
-            input.jointWeights.w * joints[base + input.jointIndices.w];
-
-        float4x4 worldMatrix = mul(instance.model, skinMatrix);
-        worldPos = mul(worldMatrix, float4(input.position, 1.0));
-
-        // Scale-correct normal/tangent transform for non-uniform scaling.
-        // float3x3(row0, row1, row2) gives HLSL rows; transpose so that basis[i]
-        // is column i of the world matrix, as TransformDirectionScaleCorrect expects.
-        float3x3 world3 = transpose(float3x3(
-            worldMatrix[0].xyz,
-            worldMatrix[1].xyz,
-            worldMatrix[2].xyz
-        ));
-        worldNormal  = TransformDirectionScaleCorrect(input.normal, world3);
-        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, world3);
-    }
-    else
-    {
-        worldPos     = mul(instance.model, float4(input.position, 1.0));
-
-        // Same scale-correct path for static meshes.
-        float3x3 model3 = transpose(float3x3(
-            instance.model[0].xyz,
-            instance.model[1].xyz,
-            instance.model[2].xyz
-        ));
-        worldNormal  = TransformDirectionScaleCorrect(input.normal, model3);
-        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, model3);
-    }
-
-    VSOutput o;
-    o.svPosition  = mul(fc->viewProj, worldPos);
-    o.worldPos    = worldPos.xyz;
-    o.worldNormal = worldNormal;
-    o.worldTangent = worldTangent;
-    o.tangentSign = input.tangent.w;
-    o.uv          = input.uv;
-    o.vertexColor = input.color;
-    o.materialIndex = instance.materialIndex;
-    return o;
-}
 
 // ── PBR utilities ─────────────────────────────────────────────────────────
 
@@ -230,13 +71,12 @@ struct LocalLight
     uint   type; // 0=point, 1=spot
     float  innerCos;
     float  outerCos;
-    float  shadowIndex;  // >= 0 = index into shadowLightData[]
+    float  shadowIndex;
     float  shadowStrength;
 };
 
 LocalLight LoadLocalLight(uint index)
 {
-    // CPU packs 5 float4 rows per light (4th row = shadow data).
     uint base = index * 5u;
     float4 p0 = g_lightData[base + 0u];
     float4 p1 = g_lightData[base + 1u];
@@ -285,7 +125,7 @@ void AccumulateLocalLight(
     float spotAtten = 1.0;
     if (light.type == 1u)
     {
-        // Spotlight cone is defined by light.direction (forward axis).
+        // Spotlight cone attenuation.
         float cd = dot(normalize(light.direction), -L);
         float den = max(light.innerCos - light.outerCos, 1e-5);
         spotAtten = saturate((cd - light.outerCos) / den);
@@ -317,12 +157,11 @@ void AccumulateLocalLight(
 
     float3 radiance = light.color * (light.intensity * rangeAtten * spotAtten);
 
-    // Keep local highlights, but bias toward diffuse so point emitters do not
-    // read like directional "torch" beams on highly detailed normal maps.
+    // Bias toward diffuse so point emitters don't read like directional
+    // "torch" beams on highly detailed normal maps.
     const float localSpecularWeight = 0.28;
     float shadowVis = 1.0;
 
-    // Evaluate local shadow if this light has an atlas entry.
     if (light.shadowIndex >= 0.0 && fc->shadowAtlasSlot != 0xFFFFFFFFu)
     {
         uint shadowIdx = (uint)light.shadowIndex;
@@ -341,7 +180,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     FrameConstantsData* fc        = (FrameConstantsData*)(pc.frameAddr);
     GpuMaterial*        materials = (GpuMaterial*)(fc->materialBufferAddr);
 
-    // Safe fallback when a draw is missing a valid registered material.
     GpuMaterial mat;
     mat.baseColorFactor = float4(1.0, 1.0, 1.0, 1.0);
     mat.metallicFactor = 0.0;
@@ -393,7 +231,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
     else
     {
-        // Fallback for assets that came in with degenerate/missing normals.
+        // Fallback: screen-space dFdxy face normal.
         float3 faceN = cross(ddx(input.worldPos), ddy(input.worldPos));
         const float faceLen2 = dot(faceN, faceN);
         N = (faceLen2 > 1e-12) ? normalize(faceN) : float3(0.0, 1.0, 0.0);
@@ -402,7 +240,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 Traw = input.worldTangent;
     const float tRawLen2 = dot(Traw, Traw);
     float3 T = (tRawLen2 > 1e-12) ? normalize(Traw) : float3(1.0, 0.0, 0.0);
-    T = T - N * dot(T, N);                      // Gram-Schmidt re-orthogonalise
+    T = T - N * dot(T, N);                         // Gram-Schmidt re-orthogonalise
     const float tLen2 = dot(T, T);
     if (tLen2 > 1e-12)
     {
@@ -460,12 +298,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         emissive *= g_textures[mat.emissiveSlot].Sample(g_linearSampler, uv).rgb;
     }
 
-    // ── PBR lighting (directional + tiled local lights) ───────────────────
     float3 sunDir       = normalize(fc->sunDirectionIntensity.xyz);
     float  sunIntensity = fc->sunDirectionIntensity.w;
     float3 sunColor     = fc->sunColor.rgb;
     float3 ambientColor = fc->ambientColor.rgb;
 
+    // ── PBR lighting (directional + tiled local lights) ───────────────────
     float3 camWorldPos = fc->cameraWorldPos.xyz;
 
     float3 Vraw = camWorldPos - input.worldPos;

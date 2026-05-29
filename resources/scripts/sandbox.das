@@ -4,6 +4,7 @@ require world;
 require renderer;
 require camera;
 require physics;
+require effects;
 require input;
 require input_bindings;
 require ui;
@@ -45,6 +46,7 @@ var g_manual_cb         : uint  = 0u;
 var g_time_label        : uint  = 0u;
 var g_sun_dir_label     : uint  = 0u;
 
+var g_plasma_sphere : uint = 0u;
 var g_player : uint = 0u;
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
@@ -160,6 +162,19 @@ def on_attach(world : World?)
 		add_mesh(world, cb, g_cube_mesh);
 		add_box_body(world, cb, float3(0.25, 0.25, 0.25), true);
 	}
+
+	// ── Plasma sphere (floating center, animated shader) ──────────────────
+	g_plasma_sphere = entity_create(world);
+	add_transform(world, g_plasma_sphere);
+	set_transform(world, g_plasma_sphere,
+		float3(0.0, 6.0, 0.0),
+		float3(0.0, 0.0, 0.0),
+		float3(1.2, 1.2, 1.2));
+	add_mesh(world, g_plasma_sphere, g_sphere_mesh);
+	set_entity_effect(world, g_plasma_sphere, "plasma");
+	set_effect_color(world, g_plasma_sphere, 1.0, 0.4, 0.9);
+	set_effect_speed(world, g_plasma_sphere, 0.8);
+	add_tag(world, g_plasma_sphere, g_center_tag);
 
 	// ── Physics sphere (drops from above, left zone) ───────────────────────
 	let sphere = entity_create(world);
@@ -278,6 +293,20 @@ def on_update(world : World?)
 	let orbit_z = sin(g_time * 0.3) * g_orbit_radius;
 	let orbit_y = g_orbit_height;
 	set_point_light_position(2, float3(orbit_x, orbit_y, orbit_z));
+
+	// ── Plasma sphere animation ────────────────────────────────────────────
+	if (entity_valid(g_plasma_sphere))
+	{
+		let bob = sin(g_time * 0.8) * 0.8;
+		var pos = get_position(world, g_plasma_sphere);
+		pos.y = 6.0 + bob;
+		set_position(world, g_plasma_sphere, pos);
+
+		let hue = sin(g_time * 0.3) * 0.5 + 0.5;
+		set_effect_color(world, g_plasma_sphere, 0.5 + hue * 0.5, 0.2, 0.8 - hue * 0.4);
+		set_effect_speed(world, g_plasma_sphere, 0.6 + sin(g_time * 0.2) * 0.4);
+		set_effect_intensity(world, g_plasma_sphere, 0.7 + sin(g_time * 0.5) * 0.3);
+	}
 
 	// ── Read UI controls ──────────────────────────────────────────────────────
 	g_speed_scale  = get_ui_slider_value(world, g_speed_slider);

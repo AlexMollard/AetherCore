@@ -4,6 +4,7 @@
 #include <string>
 
 #include "AppLayer.hpp"
+#include "effects/EffectManager.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/ScriptHandle.hpp"
@@ -41,6 +42,7 @@ namespace aether::app
 		scripting::SceneContext m_sceneCtx;
 		scripting::ScriptHandle m_handle;
 		aether::GraphicsPipeline m_defaultPipeline;
+		aether::app::effects::EffectManager m_effectManager;
 		scripting::ScriptingSubsystem* m_scripting = nullptr;
 		bool m_scriptBroken = false;
 	};

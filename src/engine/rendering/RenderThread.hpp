@@ -37,6 +37,9 @@ namespace aether
 		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;
 		std::uint32_t drawSlot = 0;
+
+		// Elapsed simulation time in seconds (for time-based shader effects).
+		float elapsedTime = 0.0f;
 	};
 
 	// Dedicated render thread that owns all Vulkan submission work.

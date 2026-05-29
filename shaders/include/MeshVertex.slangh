@@ -1,0 +1,42 @@
+// Must match aether::Mesh::Vertex (92 bytes).
+// Included by gltf_mesh.slang and plasma.slang.
+
+struct Vertex
+{
+    [[vk::offset(0)]]  float3 position;
+    [[vk::offset(12)]] float3 normal;
+    [[vk::offset(24)]] float4 tangent;      // w = bitangent sign
+    [[vk::offset(40)]] float2 uv;
+    [[vk::offset(48)]] float3 color;
+    [[vk::offset(60)]] uint4  jointIndices;
+    [[vk::offset(76)]] float4 jointWeights;
+};
+
+struct VSOutput
+{
+    float4 svPosition                          : SV_Position;
+    [[vk::location(0)]] float3 worldPos        : TEXCOORD0;
+    [[vk::location(1)]] float3 worldNormal     : TEXCOORD1;
+    [[vk::location(2)]] float3 worldTangent    : TEXCOORD2;
+    [[vk::location(3)]] float  tangentSign     : TEXCOORD3;
+    [[vk::location(4)]] float2 uv              : TEXCOORD4;
+    [[vk::location(5)]] float3 vertexColor     : TEXCOORD5;
+    [[vk::location(6)]] nointerpolation uint materialIndex : TEXCOORD6;
+};
+
+// Transform direction vectors (normal/tangent) through a world matrix basis,
+// correcting for non-uniform axis scale without requiring matrix inverse().
+// basis must be the TRANSPOSED float3x3 of the model matrix so that basis[i]
+// is the i-th column of the model matrix (= world-space basis vector i).
+float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
+{
+    float3 c0 = basis[0];
+    float3 c1 = basis[1];
+    float3 c2 = basis[2];
+
+    const float d0 = max(dot(c0, c0), 1e-8);
+    const float d1 = max(dot(c1, c1), 1e-8);
+    const float d2 = max(dot(c2, c2), 1e-8);
+
+    return normalize(c0 * (v.x / d0) + c1 * (v.y / d1) + c2 * (v.z / d2));
+}

@@ -1,0 +1,63 @@
+// Requires pc: DrawPushConstants, the vsOutput type from MeshVertex.slangh, and
+// includes: FrameConstants.slangh, RenderContracts.slangh, MeshVertex.slangh.
+
+[shader("vertex")]
+VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartInstanceLocation)
+{
+    FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
+    const uint instanceIndex = startInstance;
+    DrawInstanceData instance = instances[instanceIndex];
+
+    Vertex* verts = (Vertex*)(instance.vertexBufferAddr);
+    Vertex input = verts[vertexId];
+
+    float4 worldPos;
+    float3 worldNormal;
+    float3 worldTangent;
+
+    if (pc.skinPaletteAddr != 0uL && instance.skinJointCount > 0u)
+    {
+        float4x4* joints = (float4x4*)(pc.skinPaletteAddr);
+        const uint base = instance.skinPaletteOffset;
+        float4x4 skinMatrix =
+            input.jointWeights.x * joints[base + input.jointIndices.x] +
+            input.jointWeights.y * joints[base + input.jointIndices.y] +
+            input.jointWeights.z * joints[base + input.jointIndices.z] +
+            input.jointWeights.w * joints[base + input.jointIndices.w];
+
+        float4x4 worldMatrix = mul(instance.model, skinMatrix);
+        worldPos = mul(worldMatrix, float4(input.position, 1.0));
+
+        float3x3 world3 = transpose(float3x3(
+            worldMatrix[0].xyz,
+            worldMatrix[1].xyz,
+            worldMatrix[2].xyz
+        ));
+        worldNormal  = TransformDirectionScaleCorrect(input.normal, world3);
+        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, world3);
+    }
+    else
+    {
+        worldPos     = mul(instance.model, float4(input.position, 1.0));
+
+        float3x3 model3 = transpose(float3x3(
+            instance.model[0].xyz,
+            instance.model[1].xyz,
+            instance.model[2].xyz
+        ));
+        worldNormal  = TransformDirectionScaleCorrect(input.normal, model3);
+        worldTangent = TransformDirectionScaleCorrect(input.tangent.xyz, model3);
+    }
+
+    VSOutput o;
+    o.svPosition  = mul(fc->viewProj, worldPos);
+    o.worldPos    = worldPos.xyz;
+    o.worldNormal = worldNormal;
+    o.worldTangent = worldTangent;
+    o.tangentSign = input.tangent.w;
+    o.uv          = input.uv;
+    o.vertexColor = input.color;
+    o.materialIndex = instance.materialIndex;
+    return o;
+}

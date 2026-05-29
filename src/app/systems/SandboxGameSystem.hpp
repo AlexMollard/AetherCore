@@ -14,6 +14,7 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/Renderer.hpp"
 #include "material/Material.hpp"
+#include "effects/EffectManager.hpp"
 #include "AetherCore.hpp"
 #include "scene/System.hpp"
 
@@ -132,6 +133,7 @@ namespace aether::app
 
 		// Assets
 		aether::GraphicsPipeline m_pipeline;
+		aether::app::effects::EffectManager m_effectManager;
 		std::vector<aether::Texture> m_debugMaterialTextures;
 		aether::Material m_debugTexturedMaterial;
 		aether::Material m_untexturedMaterial;

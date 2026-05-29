@@ -17,7 +17,8 @@ namespace aether
 	//   offset  64 : mat4     view                   (64)
 	//   offset 128 : mat4     proj                   (64)
 	//   offset 192 : uint64   materialBufferAddr      ( 8)  BDA of MaterialBuffer
-	//   offset 200 : uint64   _pad0                   ( 8)
+	//   offset 200 : float    elapsedTime             ( 4)
+	//   offset 204 : uint32   _pad0                   ( 4)
 	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world dir, w=intensity
 	//   offset 224 : vec4     ambientColor            (16)  rgb=ambient term, a=unused
 	//   offset 240 : vec4     cameraWorldPos          (16)  xyz=camera position, w=1
@@ -41,7 +42,8 @@ namespace aether
 		glm::mat4 view{ 1.0f };
 		glm::mat4 proj{ 1.0f };
 		std::uint64_t materialBufferAddr = 0;
-		std::uint64_t _pad0 = 0;
+		float elapsedTime = 0.0f;
+		std::uint32_t _pad0 = 0;
 		glm::vec4 sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
 		glm::vec4 ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };
 		glm::vec4 cameraWorldPos{ 0.0f, 0.0f, 0.0f, 1.0f };
@@ -71,7 +73,8 @@ namespace aether
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
 	static_assert(offsetof(FrameConstants, materialBufferAddr) == 192);
-	static_assert(offsetof(FrameConstants, _pad0) == 200);
+	static_assert(offsetof(FrameConstants, elapsedTime) == 200);
+	static_assert(offsetof(FrameConstants, _pad0) == 204);
 	static_assert(offsetof(FrameConstants, sunDirectionIntensity) == 208);
 	static_assert(offsetof(FrameConstants, ambientColor) == 224);
 	static_assert(offsetof(FrameConstants, cameraWorldPos) == 240);

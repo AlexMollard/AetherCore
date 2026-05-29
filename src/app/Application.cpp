@@ -299,6 +299,7 @@ namespace aether::app
 
 			// Flush ECS draws and build a frame packet.
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
+			packet.elapsedTime = static_cast<float>(m_elapsedTimeSeconds);
 
 			// Hand the packet to the render thread.
 			const auto submitStart = std::chrono::steady_clock::now();

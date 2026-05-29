@@ -9,6 +9,7 @@
 #include <thread>
 
 #include "camera/Camera.hpp"
+#include "effects/EffectManager.hpp"
 #include "rendering/LightingManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
@@ -107,6 +108,30 @@ namespace aether::app
 		                .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		        }));
 		m_pipeline = std::move(pipeline);
+
+		// ── Plasma effect pipeline ─────────────────────────────────────────────
+		{
+			aether::Material plasmaMat{};
+			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+			plasmaMat.emissiveFactor = glm::vec3(1.0f, 0.3f, 0.8f);
+			plasmaMat.metallicFactor = 0.5f;
+			plasmaMat.roughnessFactor = 2.0f;
+			plasmaMat.occlusionStrength = 0.8f;
+
+			const bool ok = m_effectManager.CreateAndRegister(
+			        "plasma",
+			        *m_assets,
+			        bindlessLayout,
+			        lightingLayout,
+			        aether::PostProcessStack::GetForwardColorFormat(),
+			        m_services->Get<Swapchain>().GetDepthFormat(),
+			        "shaders://plasma.slang.spv",
+			        plasmaMat);
+			if (!ok)
+			{
+				AE_WARN(aether::LogCategory::App, "SandboxGameSystem: failed to create plasma pipeline");
+			}
+		}
 
 		m_cubeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
 		m_quadMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Quad);
@@ -633,6 +658,8 @@ namespace aether::app
 			}
 		}
 		m_sandboxEntities.clear();
+
+		m_effectManager.DestroyAll(*m_assets);
 
 		m_foxAgents.clear();
 		m_foxInstances.clear();

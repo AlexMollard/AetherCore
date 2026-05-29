@@ -8,6 +8,7 @@
 
 #include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
+#include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
@@ -131,11 +132,37 @@ namespace aether::app
 
 		BuildDefaultPipeline(context);
 
+		// Register effects so script can use set_entity_effect().
+		{
+			const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
+			const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
+			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
+
+			aether::Material plasmaMat{};
+			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+			plasmaMat.emissiveFactor = glm::vec3(1.0f, 0.3f, 0.8f); // tint = pink
+			plasmaMat.metallicFactor = 0.5f;                         // speed
+			plasmaMat.roughnessFactor = 2.0f;                        // scale
+			plasmaMat.occlusionStrength = 0.8f;                      // intensity
+
+			m_effectManager.CreateAndRegister(
+			        "plasma",
+			        context.Get<AssetManager>(),
+			        bindlessLayout,
+			        lightingLayout,
+			        colorFormat,
+			        depthFormat,
+			        "shaders://plasma.slang.spv",
+			        plasmaMat);
+		}
+
 		m_sceneCtx.world = &context.Get<World>();
 		m_sceneCtx.assets = &context.Get<AssetManager>();
 		m_sceneCtx.cameras = &context.Get<CameraManager>();
 		m_sceneCtx.renderer = &context.Get<Renderer>();
 		m_sceneCtx.input = &context.Get<Input>();
+		m_sceneCtx.effects = &m_effectManager;
 		if (auto* dn = context.TryGet<aether::app::DayNightSystem>())
 		{
 			m_sceneCtx.dayNight = dn;
@@ -177,6 +204,8 @@ namespace aether::app
 		}
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
+
+		m_effectManager.DestroyAll(context.Get<AssetManager>());
 
 		if (m_sceneCtx.defaultMaterialRegistered)
 		{
