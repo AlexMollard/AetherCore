@@ -208,11 +208,16 @@ namespace aether::app
 
 			Logger::SetFrameNumber(m_frameIndex);
 
-			m_engine.PumpEvents();
-
+			// Measure dt before PumpEvents so drag stalls and window-event jitter
+			// don't inflate simulation timing or cause camera/object jumps.
+			constexpr double kMaxDeltaTime = 1.0 / 30.0;
 			const auto currentFrameTime = std::chrono::steady_clock::now();
-			const auto deltaTime = std::chrono::duration<double>(currentFrameTime - previousFrameTime).count();
+			const auto deltaTime = std::min(
+				std::chrono::duration<double>(currentFrameTime - previousFrameTime).count(),
+				kMaxDeltaTime);
 			previousFrameTime = currentFrameTime;
+
+			m_engine.PumpEvents();
 
 			// Update engine-level per-frame systems (input + camera).
 			// Camera uses unscaled dt so it stays controllable during fast-forward.
