@@ -263,7 +263,7 @@ def on_attach(world : World?)
 	g_player = entity_create(world);
 	add_transform(world, g_player);
 	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
-	load_model(world, g_player, "assets://models/Human/Human.mesh");
+	load_model(world, g_player, "assets://models/Human/human.mesh");
 	set_animation(world, g_player, 0);
 	set_playback_speed(world, g_player, 1.0);
 	add_tag(world, g_player, create_tag("player"));

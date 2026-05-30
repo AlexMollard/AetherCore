@@ -205,7 +205,7 @@ void das_load_model(aether::World* w, uint32_t id, const char* path)
 
 		if (!result)
 		{
-			AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}'", path);
+			AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}' because of {}", path, result.error());
 			return;
 		}
 
