@@ -1,24 +1,7 @@
 // UI compute preprocess.
 // Performs a simple in-place layer sort and writes VkDrawIndirectCommand.
 
-struct DrawCommandData
-{
-    float4 data0;
-    float4 data1;
-    float4 color;
-    uint type;
-    int  layer;
-    uint textureSlot; // was _pad0; not used by the sort but must match the C++ layout
-    uint _pad1;
-};
-
-struct DrawIndirectCommand
-{
-    uint vertexCount;
-    uint instanceCount;
-    uint firstVertex;
-    uint firstInstance;
-};
+#include "include/UIStructs.slangh"
 
 struct BuildPush
 {

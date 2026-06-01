@@ -1,3 +1,6 @@
+#ifndef AETHER_PBR_UTILITIES_SLANGH
+#define AETHER_PBR_UTILITIES_SLANGH
+
 // PBRUtilities.slangh - Shared PBR lighting functions for forward shading.
 //
 // Requires before inclusion:
@@ -145,3 +148,5 @@ void AccumulateLocalLight(
 
     sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL * shadowVis;
 }
+
+#endif

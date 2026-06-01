@@ -14,6 +14,8 @@
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
 
+#include "include/FullScreenTriangle.slangh"
+
 // Push constant: HDR slot, tonemap operator, and pre-tonemap exposure.
 struct TonemapPush
 {
@@ -22,20 +24,6 @@ struct TonemapPush
     float exposure;
 };
 [[vk::push_constant]] TonemapPush pc;
-
-// ── Vertex shader ──────────────────────────────────────────────────────────
-// Produces a CCW triangle that covers the entire NDC clip-space:
-//   VertexID 0 -> (-1, -1, 0, 1)   top-left  (NDC)
-//   VertexID 1 -> ( 3, -1, 0, 1)   bottom-right overshoot
-//   VertexID 2 -> (-1,  3, 0, 1)   top-right overshoot
-// The rasteriser clips the overshoot, giving a full viewport triangle with
-// no vertex buffer and no wasted fill from two-triangle quads.
-[shader("vertex")]
-float4 vertexMain(uint vertexID : SV_VertexID) : SV_Position
-{
-    float2 uv = float2((vertexID << 1u) & 2u, vertexID & 2u);
-    return float4(uv * 2.0f - 1.0f, 0.0f, 1.0f);
-}
 
 // ── Tonemap operators ──────────────────────────────────────────────────────
 

@@ -1,4 +1,3 @@
-// pose_init.slang
 // Parallel bind-pose initialization for all animator jobs.
 // Uses 2D dispatch: (jobIdx, nodeIdx) linearized into (x, y).
 // Each thread writes a single node's bind-pose TRS to the sampled poses buffer.

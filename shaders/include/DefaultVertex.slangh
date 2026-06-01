@@ -1,3 +1,6 @@
+#ifndef AETHER_DEFAULT_VERTEX_SLANGH
+#define AETHER_DEFAULT_VERTEX_SLANGH
+
 // Requires pc: DrawPushConstants, the vsOutput type from MeshVertex.slangh, and
 // includes: FrameConstants.slangh, RenderContracts.slangh, MeshVertex.slangh.
 
@@ -61,3 +64,5 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     o.materialIndex = instance.materialIndex;
     return o;
 }
+
+#endif

@@ -1,19 +1,12 @@
-// voxel_shadow_depth.slang - depth-only shadow caster for voxel chunk geometry.
+// depth-only shadow caster for voxel chunk geometry.
 // Vertex data fetched via buffer device address (DrawInstanceData.vertexBufferAddr).
 // Voxel vertices are already in world space; no skinning required.
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/VoxelVertex.slangh"
 
 [[vk::push_constant]] DrawPushConstants pc;
-
-// Must match aether::VoxelVertex (24 bytes). Only position is used here.
-struct VoxelVertex
-{
-    [[vk::offset(0)]]  float3 position;
-    [[vk::offset(12)]] uint   packed;
-    [[vk::offset(16)]] float2 uv;
-};
 
 struct VSOutput
 {

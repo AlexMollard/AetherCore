@@ -2,6 +2,7 @@
 // One indirect-instanced draw emits rectangles/circles/lines/textured-rects/SDF-glyphs
 // from a device-addressable command buffer.
 
+#include "include/UIStructs.slangh"
 #include "text_sdf.slangh"
 
 static const uint kShapeRect        = 0;
@@ -13,17 +14,6 @@ static const uint kShapeSdfGlyph    = 4;
 // Bindless resources (set 0).
 [[vk::binding(0, 0)]] Texture2D g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
-
-struct DrawCommandData
-{
-    float4 data0;        // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1
-    float4 data1;        // Rect/Line: cornerRadius/thickness | TexturedRect: u0,v0,u1,v1
-    float4 color;        // RGBA tint
-    uint   type;
-    int    layer;
-    uint   textureSlot;  // bindless slot (TexturedRect only)
-    uint   _pad1;
-};
 
 struct ShapesPush
 {

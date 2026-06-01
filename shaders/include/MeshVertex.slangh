@@ -1,3 +1,6 @@
+#ifndef AETHER_MESH_VERTEX_SLANGH
+#define AETHER_MESH_VERTEX_SLANGH
+
 // Must match aether::Mesh::Vertex (92 bytes).
 // Included by gltf_mesh.slang and plasma.slang.
 
@@ -40,3 +43,5 @@ float3 TransformDirectionScaleCorrect(float3 v, float3x3 basis)
 
     return normalize(c0 * (v.x / d0) + c1 * (v.y / d1) + c2 * (v.z / d2));
 }
+
+#endif

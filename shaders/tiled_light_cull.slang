@@ -1,4 +1,3 @@
-// tiled_light_cull.slang
 // GPU tiled-light binning compute path.
 
 [[vk::binding(0, 0)]] StructuredBuffer<float4> g_lightData;

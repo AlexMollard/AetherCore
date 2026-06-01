@@ -1,4 +1,4 @@
-// voxel_chunk.slang - Forward shader for GPU-driven voxel chunk geometry.
+// Forward shader for GPU-driven voxel chunk geometry.
 //
 // Vertex ABI (matches aether::VoxelVertex, 24 bytes):
 //   loc 0  POSITION    float3   - world-space vertex position
@@ -23,9 +23,10 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/VoxelVertex.slangh"
+#include "include/GpuMaterial.slangh"
 #include "include/DirectionalShadowCSM.slangh"
 
-static const uint    kNoTexture  = 0xFFFFFFFFu;
 static const float   kAOLevels[4] = { 1.0f, 0.75f, 0.55f, 0.35f };
 
 // Face normals indexed by faceIndex (0=+X, 1=-X, 2=+Y, 3=-Y, 4=+Z, 5=-Z).
@@ -38,33 +39,7 @@ static const float3 kFaceNormals[6] = {
     float3( 0,  0, -1),
 };
 
-// Minimal GpuMaterial subset - only the fields we use.
-// Must stay in sync with GpuMaterial in gltf_mesh.slang / src/engine/GpuMaterial.hpp.
-struct GpuMaterial
-{
-    [[vk::offset(0)]]  float4 baseColorFactor;
-    [[vk::offset(16)]] float  metallicFactor;
-    [[vk::offset(20)]] float  roughnessFactor;
-    [[vk::offset(24)]] float  occlusionStrength;
-    [[vk::offset(28)]] float  alphaCutoff;
-    [[vk::offset(32)]] float4 emissiveFactor;
-    [[vk::offset(48)]] uint   flags;
-    [[vk::offset(52)]] uint   albedoSlot;
-    [[vk::offset(56)]] uint   normalSlot;
-    [[vk::offset(60)]] uint   metallicRoughnessSlot;
-    [[vk::offset(64)]] uint   occlusionSlot;
-    [[vk::offset(68)]] uint   emissiveSlot;
-};
-
 [[vk::push_constant]] DrawPushConstants pc;
-
-// Must match aether::VoxelVertex (24 bytes).
-struct VoxelVertex
-{
-    [[vk::offset(0)]]  float3 position;
-    [[vk::offset(12)]] uint   packed;
-    [[vk::offset(16)]] float2 uv;
-};
 
 struct VSOutput
 {

@@ -1,0 +1,12 @@
+#ifndef AETHER_VOXEL_VERTEX_SLANGH
+#define AETHER_VOXEL_VERTEX_SLANGH
+
+// Must match aether::VoxelVertex (24 bytes).
+struct VoxelVertex
+{
+    [[vk::offset(0)]]  float3 position;
+    [[vk::offset(12)]] uint   packed;
+    [[vk::offset(16)]] float2 uv;
+};
+
+#endif

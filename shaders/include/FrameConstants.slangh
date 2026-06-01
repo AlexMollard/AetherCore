@@ -1,3 +1,6 @@
+#ifndef AETHER_FRAME_CONSTANTS_SLANGH
+#define AETHER_FRAME_CONSTANTS_SLANGH
+
 // Shared per-frame constants layout for Slang shaders.
 // Keep this struct in lockstep with aether::FrameConstants in
 // src/engine/FrameConstants.hpp.
@@ -26,3 +29,5 @@ struct FrameConstantsData
     [[vk::offset(628)]] uint    shadowLightCount;           // number of active local shadow lights
     [[vk::offset(632)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
 };
+
+#endif

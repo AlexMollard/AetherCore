@@ -1,4 +1,4 @@
-// skybox.slang - Procedural gradient sky, rendered as a full-screen pass
+// Procedural gradient sky, rendered as a full-screen pass
 // that runs before the forward pass so all opaque geometry draws on top.
 //
 // Designed to grow: future passes can layer volumetric clouds, atmospheric

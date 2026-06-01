@@ -1,3 +1,6 @@
+#ifndef AETHER_BINDLESS_CONTRACT_SLANGH
+#define AETHER_BINDLESS_CONTRACT_SLANGH
+
 // Shared bindless descriptor contract for shader-side declarations.
 // Keep these values aligned with src/engine/BindlessContract.hpp.
 
@@ -5,3 +8,5 @@ static const uint MEOW_BINDLESS_SET = 1;
 static const uint MEOW_BINDLESS_SAMPLED_IMAGE_BINDING = 0;
 
 #define MEOW_BINDLESS_BINDING [[vk::binding(MEOW_BINDLESS_SAMPLED_IMAGE_BINDING, MEOW_BINDLESS_SET)]]
+
+#endif

@@ -1,4 +1,4 @@
-// plasma.slang - Animated time-based plasma shader.
+// Animated time-based plasma shader.
 //
 // Reinterprets GpuMaterial fields for effect control:
 //   emissiveFactor.xyz = tint (color modulation)
@@ -19,9 +19,9 @@
 
 [[vk::push_constant]] DrawPushConstants pc;
 
-// ── Fragment shader (plasma effect) ────────────────────────────────────────
-
 static const float kPI = 3.14159265358979323846;
+
+// ── Fragment shader (plasma effect) ────────────────────────────────────────
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
@@ -37,13 +37,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     mat.alphaCutoff = 0.5;
     mat.emissiveFactor = float4(0.0, 0.0, 0.0, 0.0);
     mat.flags = 0u;
-    mat.albedoSlot = 0xFFFFFFFFu;
-    mat.normalSlot = 0xFFFFFFFFu;
-    mat.metallicRoughnessSlot = 0xFFFFFFFFu;
-    mat.occlusionSlot = 0xFFFFFFFFu;
-    mat.emissiveSlot = 0xFFFFFFFFu;
+    mat.albedoSlot = kNoTexture;
+    mat.normalSlot = kNoTexture;
+    mat.metallicRoughnessSlot = kNoTexture;
+    mat.occlusionSlot = kNoTexture;
+    mat.emissiveSlot = kNoTexture;
 
-    if (input.materialIndex != 0xFFFFFFFFu)
+    if (input.materialIndex != kNoTexture)
     {
         mat = materials[input.materialIndex];
     }
@@ -58,7 +58,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float2 uv = input.uv;
 
     float3 baseColor = mat.baseColorFactor.rgb;
-    if (mat.albedoSlot != 0xFFFFFFFFu)
+    if (mat.albedoSlot != kNoTexture)
     {
         baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv).rgb;
     }

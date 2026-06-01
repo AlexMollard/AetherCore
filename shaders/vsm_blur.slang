@@ -1,4 +1,4 @@
-// vsm_blur.slang - Separable Gaussian blur for VSM shadow atlas.
+// Separable Gaussian blur for VSM shadow atlas.
 // Single entry point; dispatch twice (first horizontal, then vertical).
 //
 // Uses groupshared memory to cache the 5-tap filter window:

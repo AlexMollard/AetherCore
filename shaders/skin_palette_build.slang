@@ -1,4 +1,3 @@
-// skin_palette_build.slang
 // Builds a per-frame global skin palette pool from pre-flattened node transforms.
 // Reads per-node float4x4 global transforms (written by node_flatten.slang)
 // and combines each with the skin's inverse bind matrix.

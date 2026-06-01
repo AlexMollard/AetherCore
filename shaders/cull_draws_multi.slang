@@ -1,8 +1,8 @@
-// cull_draws_multi.slang - GPU-driven indirect draw culling pass (multi-frustum).
+// GPU-driven indirect draw culling pass (multi-frustum).
 //
 // Like cull_draws.slang but tests each draw against 3 independent cascade
 // frustums and writes 3 separate VkDrawIndexedIndirectCommand outputs (one per
-// cascade).  Replaces 3× single-frustum dispatches on 3× duplicated data with
+// cascade).  Replaces 3x single-frustum dispatches on 3x duplicated data with
 // 1 dispatch on shared data.
 //
 // See cull_draws.slang for the base data layout.  This shader uses
@@ -20,44 +20,9 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/FrustumCull.slangh"
 
 [[vk::push_constant]] CullMultiPushConstants pc;
-
-// ── Frustum culling ──────────────────────────────────────────────────────────
-
-// Same as cull_draws.slang.  Returns true if the sphere is inside (or straddling)
-// the frustum defined by viewProj.
-bool TestSphereFrustum(float4 sphere, float4x4 viewProj)
-{
-    if (sphere.w <= 0.0)
-        return true;
-
-    float4 row0 = float4(viewProj[0][0], viewProj[1][0], viewProj[2][0], viewProj[3][0]);
-    float4 row1 = float4(viewProj[0][1], viewProj[1][1], viewProj[2][1], viewProj[3][1]);
-    float4 row2 = float4(viewProj[0][2], viewProj[1][2], viewProj[2][2], viewProj[3][2]);
-    float4 row3 = float4(viewProj[0][3], viewProj[1][3], viewProj[2][3], viewProj[3][3]);
-
-    float4 planes[6];
-    planes[0] = row3 + row0;
-    planes[1] = row3 - row0;
-    planes[2] = row3 + row1;
-    planes[3] = row3 - row1;
-    planes[4] = row2;
-    planes[5] = row3 - row2;
-
-    float3 center = sphere.xyz;
-    float  radius = sphere.w;
-
-    for (int i = 0; i < 6; ++i)
-    {
-        float3 n    = planes[i].xyz;
-        float  d    = planes[i].w;
-        float  nLen = length(n);
-        if (dot(n, center) + d < -radius * nLen)
-            return false;
-    }
-    return true;
-}
 
 // ── Compute entry point ──────────────────────────────────────────────────────
 

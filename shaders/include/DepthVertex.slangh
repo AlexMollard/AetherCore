@@ -1,0 +1,55 @@
+#ifndef AETHER_DEPTH_VERTEX_SLANGH
+#define AETHER_DEPTH_VERTEX_SLANGH
+
+// Depth-pass vertex shader helpers.
+// Requires before inclusion:
+//   - pc: DrawPushConstants
+//   - Vertex struct (from MeshVertex.slangh)
+//   - FrameConstantsData and DrawInstanceData types (via FrameConstants.slangh / RenderContracts.slangh)
+
+struct DepthVSOutput
+{
+    float4 svPosition : SV_Position;
+};
+
+struct DepthVSOutputWithWorldPos
+{
+    float4 svPosition : SV_Position;
+    float3 worldPos   : TEXCOORD0;
+};
+
+// Shared vertex transform for depth-only and VSM shadow passes.
+// Computes skinned world-space position and its clip-space transform.
+// Returns clip-space position; worldPos is an output parameter.
+float4 DepthVertexTransform(uint vertexId, uint instanceIndex, out float3 worldPos)
+{
+    FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
+    DrawInstanceData instance = instances[instanceIndex];
+
+    Vertex* verts = (Vertex*)(instance.vertexBufferAddr);
+    Vertex input = verts[vertexId];
+
+    float4 wPos;
+    if (pc.skinPaletteAddr != 0uL && instance.skinJointCount > 0u)
+    {
+        float4x4* joints = (float4x4*)(pc.skinPaletteAddr);
+        const uint base = instance.skinPaletteOffset;
+        float4x4 skinMatrix =
+            input.jointWeights.x * joints[base + input.jointIndices.x] +
+            input.jointWeights.y * joints[base + input.jointIndices.y] +
+            input.jointWeights.z * joints[base + input.jointIndices.z] +
+            input.jointWeights.w * joints[base + input.jointIndices.w];
+
+        wPos = mul(instance.model, mul(skinMatrix, float4(input.position, 1.0)));
+    }
+    else
+    {
+        wPos = mul(instance.model, float4(input.position, 1.0));
+    }
+
+    worldPos = wPos.xyz;
+    return mul(fc->viewProj, wPos);
+}
+
+#endif

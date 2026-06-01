@@ -18,6 +18,8 @@
 [[vk::binding(0, 0)]]
 Texture2D g_textures[];
 
+#include "include/FullScreenTriangle.slangh"
+
 // Push constant: bindless slot, FXAA toggle
 struct FxaaPush { uint ldrSlot; uint fxaaEnabled; };
 [[vk::push_constant]] FxaaPush pc;
@@ -33,14 +35,6 @@ float3 LoadRGB(Texture2D tex, int2 coord)
 float Luma(float3 rgb)
 {
     return dot(rgb, float3(0.2126f, 0.7152f, 0.0722f));
-}
-
-// ── Vertex shader ──────────────────────────────────────────────────────────
-[shader("vertex")]
-float4 vertexMain(uint vertexID : SV_VertexID) : SV_Position
-{
-    float2 uv = float2((vertexID << 1u) & 2u, vertexID & 2u);
-    return float4(uv * 2.0f - 1.0f, 0.0f, 1.0f);
 }
 
 // ── Fragment shader ────────────────────────────────────────────────────────
@@ -147,7 +141,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     // How far along the edge are we?  0 at centre, 0.5 at endpoint -> blend 0..1.
     float blendFactor = max(0.0f, 0.5f - distMin / edgeLen);
 
-    // ── Sub-pixel blend (3×3 box filter) ──────────────────────────────────
+    // ── Sub-pixel blend (3x3 box filter) ──────────────────────────────────
     const float3 rgbBox  = (rgbN + rgbS + rgbW + rgbE
                           + rgbNW + rgbNE + rgbSW + rgbSE) * (1.0f / 8.0f);
     const float  lumaBox = Luma(rgbBox);

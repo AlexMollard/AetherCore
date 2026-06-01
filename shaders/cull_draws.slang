@@ -1,4 +1,4 @@
-// cull_draws.slang - GPU-driven indirect draw culling pass.
+// GPU-driven indirect draw culling pass.
 //
 // Reads per-draw CullDrawInput prototype commands and DrawInstanceData (with world-space
 // bounding spheres) from CPU-written BDA-addressed SSBOs. Frustum-culls each draw against
@@ -22,58 +22,15 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
+#include "include/FrustumCull.slangh"
 
 [[vk::push_constant]] CullPushConstants pc;
-
-// ── Frustum culling ──────────────────────────────────────────────────────────
-
-// Test a world-space bounding sphere against the 6 frustum planes derived from viewProj.
-// Uses the Gribb-Hartmann method for Vulkan (column-major matrix, depth range [0, 1]).
-// Returns true if the sphere is potentially visible (not fully outside any plane).
-// sphere.w <= 0 means no valid bounds - always returns true.
-bool TestSphereFrustum(float4 sphere, float4x4 viewProj)
-{
-    if (sphere.w <= 0.0)
-        return true;
-
-    // Reconstruct matrix rows from column-major storage.
-    // viewProj[col][row] in Slang/SPIR-V, so row i = (vp[0][i], vp[1][i], vp[2][i], vp[3][i]).
-    float4 row0 = float4(viewProj[0][0], viewProj[1][0], viewProj[2][0], viewProj[3][0]);
-    float4 row1 = float4(viewProj[0][1], viewProj[1][1], viewProj[2][1], viewProj[3][1]);
-    float4 row2 = float4(viewProj[0][2], viewProj[1][2], viewProj[2][2], viewProj[3][2]);
-    float4 row3 = float4(viewProj[0][3], viewProj[1][3], viewProj[2][3], viewProj[3][3]);
-
-    // Plane equations (unnormalized): plane[i] = float4(normal.xyz, d) where
-    // a point P is inside if dot(normal, P) + d >= 0.
-    float4 planes[6];
-    planes[0] = row3 + row0; // left
-    planes[1] = row3 - row0; // right
-    planes[2] = row3 + row1; // bottom  (Vulkan +Y down convention)
-    planes[3] = row3 - row1; // top
-    planes[4] = row2;        // near    (Vulkan depth [0, 1])
-    planes[5] = row3 - row2; // far
-
-    float3 center = sphere.xyz;
-    float  radius = sphere.w;
-
-    for (int i = 0; i < 6; ++i)
-    {
-        float3 n    = planes[i].xyz;
-        float  d    = planes[i].w;
-        float  nLen = length(n);
-        // Signed distance from plane = (dot(n, center) + d) / nLen.
-        // Fully outside if distance < -radius.
-        if (dot(n, center) + d < -radius * nLen)
-            return false;
-    }
-    return true;
-}
 
 // ── Compute entry point ──────────────────────────────────────────────────────
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
-void cullDraws(uint3 tid : SV_DispatchThreadID)
+void main(uint3 tid : SV_DispatchThreadID)
 {
     const uint drawIdx = tid.x;
     if (drawIdx >= pc.totalDrawCount)

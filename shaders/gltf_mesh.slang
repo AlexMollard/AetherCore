@@ -1,4 +1,4 @@
-// gltf_mesh.slang - Full PBR forward shader for all standard geometry.
+// Full PBR forward shader for all standard geometry.
 //
 // Vertex data is fetched via buffer device address (BDA) stored in
 // DrawInstanceData.vertexBufferAddr.  No vertex input bindings.
@@ -25,12 +25,6 @@
 #include "include/PBRUtilities.slangh"
 #include "include/MeshVertex.slangh"
 #include "include/DefaultVertex.slangh"
-
-// ── Shared constants ─────────────────────────────────────────────────────
-static const uint  kNoTexture     = 0xFFFFFFFFu;
-static const uint  kFlagDoubleSided = 1u;
-static const uint  kFlagAlphaBlend  = 2u;
-static const uint  kFlagAlphaMask   = 4u;
 
 [[vk::push_constant]] DrawPushConstants pc;
 

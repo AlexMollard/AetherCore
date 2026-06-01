@@ -1,0 +1,35 @@
+#ifndef AETHER_FULL_SCREEN_TRIANGLE_SLANGH
+#define AETHER_FULL_SCREEN_TRIANGLE_SLANGH
+
+// Full-screen triangle vertex shader that generates a CCW triangle covering
+// all NDC clip-space from SV_VertexID alone — no vertex buffer needed.
+//   ID 0 -> NDC (-1, -1)
+//   ID 1 -> NDC ( 3, -1)
+//   ID 2 -> NDC (-1,  3)
+
+[shader("vertex")]
+float4 vertexMain(uint vertexID : SV_VertexID) : SV_Position
+{
+    float2 uv = float2((vertexID << 1u) & 2u, vertexID & 2u);
+    return float4(uv * 2.0f - 1.0f, 0.0f, 1.0f);
+}
+
+// Variant that also passes NDC coordinates to the fragment shader.
+struct FSTriVSOut
+{
+    float4 svPos : SV_Position;
+    float2 ndc   : TEXCOORD0;
+};
+
+[shader("vertex")]
+FSTriVSOut vertexMainNDC(uint vertexID : SV_VertexID)
+{
+    const float2 uv    = float2((vertexID << 1u) & 2u, vertexID & 2u);
+    const float2 ndcXY = uv * 2.0f - 1.0f;
+    FSTriVSOut o;
+    o.svPos = float4(ndcXY, 0.0f, 1.0f);
+    o.ndc   = ndcXY;
+    return o;
+}
+
+#endif

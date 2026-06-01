@@ -1,4 +1,3 @@
-// node_flatten.slang
 // Level-by-level hierarchy flattening compute shader.
 // Dispatched once per depth level per AnimationDatabase batch.
 // Uses 2D linearization: dtid.x encodes (jobIdx, nodeIdx) within batch.

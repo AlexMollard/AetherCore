@@ -1,4 +1,12 @@
+#ifndef AETHER_GPU_MATERIAL_SLANGH
+#define AETHER_GPU_MATERIAL_SLANGH
+
 // Must stay binary-compatible with aether::GpuMaterial (80 bytes).
+
+static const uint kNoTexture       = 0xFFFFFFFFu;
+static const uint kFlagDoubleSided = 1u;
+static const uint kFlagAlphaBlend  = 2u;
+static const uint kFlagAlphaMask   = 4u;
 
 struct GpuMaterial
 {
@@ -17,3 +25,5 @@ struct GpuMaterial
     [[vk::offset(72)]] uint   _pad0;
     [[vk::offset(76)]] uint   _pad1;
 };
+
+#endif
