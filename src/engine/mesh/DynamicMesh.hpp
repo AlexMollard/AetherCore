@@ -14,7 +14,7 @@ namespace aether
 	//
 	// Usage:
 	//   DynamicMesh m;
-	//   m.Rebuild(vertices.data(), vertCount, sizeof(VoxelVertex),
+	//   m.Rebuild(vertices.data(), vertCount, sizeof(MyVertex),
 	//             indices.data(),  idxCount,
 	//             arena, uploadQueue);
 	//
@@ -41,7 +41,7 @@ namespace aether
 		DynamicMesh& operator=(DynamicMesh&&) noexcept;
 
 		// Upload new geometry into the arena.  Frees the previous allocation first.
-		// vertexStride = sizeof(your vertex type), e.g. sizeof(VoxelVertex).
+		// vertexStride = sizeof(your vertex type), e.g. sizeof(MyVertex).
 		// Returns false if the staging ring is full - the old mesh is freed and the
 		// chunk should be retried next frame (needsRebuild stays true at call site).
 		[[nodiscard]] bool Rebuild(const void* vertexData, std::uint32_t vertexCount, std::uint32_t vertexStride, const std::uint32_t* indices, std::uint32_t indexCount, MeshArena& arena, MeshUploadQueue& uploadQueue);

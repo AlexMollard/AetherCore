@@ -53,35 +53,10 @@ namespace aether
 			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.") };
 		}
 
-		// ── Immutable nearest+clamp sampler (binding 2; voxel atlas) ──────────
-		const VkSamplerCreateInfo nearestClampSamplerInfo{
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = VK_FILTER_NEAREST,
-			.minFilter = VK_FILTER_NEAREST,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.mipLodBias = 0.0f,
-			.anisotropyEnable = VK_FALSE,
-			.compareEnable = VK_FALSE,
-			.minLod = 0.0f,
-			.maxLod = VK_LOD_CLAMP_NONE,
-			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-			.unnormalizedCoordinates = VK_FALSE,
-		};
-		if (vkCreateSampler(m_device, &nearestClampSamplerInfo, nullptr, &m_nearestClampSampler) != VK_SUCCESS)
-		{
-			vkDestroySampler(m_device, m_linearSampler, nullptr);
-			m_linearSampler = VK_NULL_HANDLE;
-			m_device = VK_NULL_HANDLE;
-			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create nearest-clamp sampler.") };
-		}
-
 		// ── Descriptor pool ───────────────────────────────────────────────────
 		const VkDescriptorPoolSize poolSizes[2] = {
 			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity },
-			{			    VK_DESCRIPTOR_TYPE_SAMPLER,          2 },
+			{			    VK_DESCRIPTOR_TYPE_SAMPLER,          1 },
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
@@ -96,10 +71,8 @@ namespace aether
 		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
 		if (poolResult != VK_SUCCESS)
 		{
-			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
 			vkDestroySampler(m_device, m_linearSampler, nullptr);
 			m_linearSampler = VK_NULL_HANDLE;
-			m_nearestClampSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
 			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.") };
 		}
@@ -107,8 +80,7 @@ namespace aether
 		// ── Descriptor set layout ─────────────────────────────────────────────
 		// binding 0 - COMBINED_IMAGE_SAMPLER array (bindless image array)
 		// binding 1 - SAMPLER (immutable linear sampler, shared by most draws)
-		// binding 2 - SAMPLER (immutable nearest+clamp sampler, voxel atlas)
-		const VkDescriptorSetLayoutBinding bindings[3] = {
+		const VkDescriptorSetLayoutBinding bindings[2] = {
 			{
              .binding = bindless::kSampledImageBinding, // 0
 			        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -123,28 +95,20 @@ namespace aether
              .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
              .pImmutableSamplers = &m_linearSampler, // embedded in the layout
 			},
-			{
-             .binding = 2,
-             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-             .descriptorCount = 1,
-             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-             .pImmutableSamplers = &m_nearestClampSampler, // embedded in the layout
-			},
 		};
 
-		// VARIABLE_DESCRIPTOR_COUNT must be on the LAST binding; since binding 2
-		// (immutable nearest+clamp sampler) is last and has a fixed count of 1, we drop
+		// VARIABLE_DESCRIPTOR_COUNT must be on the LAST binding; since binding 1
+		// (immutable linear sampler) is last and has a fixed count of 1, we drop
 		// VARIABLE_DESCRIPTOR_COUNT from binding 0 instead.
-		const VkDescriptorBindingFlags bindingFlags[3] = {
+		const VkDescriptorBindingFlags bindingFlags[2] = {
 			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
-			0, // immutable sampler needs no special flags
 			0, // immutable sampler needs no special flags
 		};
 
 		const VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
 			.pNext = nullptr,
-			.bindingCount = 3,
+			.bindingCount = 2,
 			.pBindingFlags = bindingFlags,
 		};
 
@@ -152,7 +116,7 @@ namespace aether
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			.pNext = &bindingFlagsInfo,
 			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = 3,
+			.bindingCount = 2,
 			.pBindings = bindings,
 		};
 
@@ -160,11 +124,9 @@ namespace aether
 		if (layoutResult != VK_SUCCESS)
 		{
 			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
 			vkDestroySampler(m_device, m_linearSampler, nullptr);
 			m_pool = VK_NULL_HANDLE;
 			m_linearSampler = VK_NULL_HANDLE;
-			m_nearestClampSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
 			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(layoutResult), "Failed to create bindless descriptor layout.") };
 		}
@@ -182,12 +144,10 @@ namespace aether
 		{
 			vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
 			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
 			vkDestroySampler(m_device, m_linearSampler, nullptr);
 			m_layout = VK_NULL_HANDLE;
 			m_pool = VK_NULL_HANDLE;
 			m_linearSampler = VK_NULL_HANDLE;
-			m_nearestClampSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
 			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(setResult), "Failed to allocate bindless descriptor set.") };
 		}
@@ -228,12 +188,6 @@ namespace aether
 		{
 			vkDestroySampler(m_device, m_linearSampler, nullptr);
 			m_linearSampler = VK_NULL_HANDLE;
-		}
-
-		if (m_nearestClampSampler != VK_NULL_HANDLE)
-		{
-			vkDestroySampler(m_device, m_nearestClampSampler, nullptr);
-			m_nearestClampSampler = VK_NULL_HANDLE;
 		}
 
 		m_set = VK_NULL_HANDLE;

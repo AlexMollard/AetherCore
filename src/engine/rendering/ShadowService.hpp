@@ -25,8 +25,7 @@ namespace aether
 
 	// Owns and orchestrates directional CSM resources and passes.
 	//
-	// Optimized to use a single RenderQueue per draw source (regular + voxel)
-	// with multi-frustum culling: one cull dispatch tests each draw against
+	// Uses multi-frustum culling: one cull dispatch tests each draw against
 	// all 3 cascade view-proj matrices, writing 3 independent output regions.
 	// This replaces 3× per-cascade queues that each duplicated the same draw data.
 	class ShadowService
@@ -38,14 +37,10 @@ namespace aether
 		void RecreatePipeline(VkDevice device, VkFormat depthFormat);
 
 		// Set the double-buffer write slot and clear it on the single shadow queue.
-		// Must be called before any SubmitShadowCaster calls for this frame.
 		void PrepareWriteSlot(std::uint32_t drawSlot);
 
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
-
-		// Submit a draw command as a shadow caster to the single voxel queue.
-		void SubmitShadowCaster(const DrawCommand& cmd);
 
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
@@ -56,13 +51,11 @@ namespace aether
 		}
 
 	private:
-		// Single queues replace the per-cascade arrays — multi-frustum culling
+		// Single queue replaces the per-cascade arrays — multi-frustum culling
 		// handles all 3 cascades in one dispatch on shared draw data.
 		RenderQueue m_shadowRenderQueue;
-		RenderQueue m_voxelShadowRenderQueue;
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
-		GraphicsPipeline m_voxelShadowPipeline;
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
 		std::array<VkExtent2D, kShadowCascadeCount> m_shadowMapExtents{
 			VkExtent2D{ 4096u, 4096u },

@@ -61,7 +61,7 @@ namespace aether
 
 		// maxAnimationDraws controls the animation-related pool sizes separately
 		// from total draw capacity. Pass 0 to disable all animation/skin buffers
-		// (for queues that never process skinned draws, e.g. voxel shadow queues).
+		// (for queues that never process skinned draws, e.g. non-skinned shadow queues).
 		// UINT32_MAX (default) derives a sane cap from total draws using
 		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
 		// outputDrawCapacity overrides the per-frame indirect output buffer capacity.

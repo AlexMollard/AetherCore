@@ -10,8 +10,8 @@ namespace aether
 {
 	class VulkanContext;
 
-	// A large pre-allocated pair of device-local buffers (vertex + index) that voxel
-	// chunk meshes suballocate from via a sorted free-list.
+	// A large pre-allocated pair of device-local buffers (vertex + index) that dynamic
+	// meshes suballocate from via a sorted free-list.
 	//
 	// Backed by two GpuHeap instances so the free-list logic lives in one place.
 	// The arena is vertex-format agnostic - callers supply byte sizes alongside counts.

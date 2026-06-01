@@ -17,7 +17,6 @@ A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction lay
 - **Animation system** - skeletal animation with GPU skinning pipeline
 - **In-engine UI system** - widget-based immediate-mode UI (`UiSystem`, `UiWidgets`, `UiLayout`, `UiWorld`) with theming
 - **Offscreen rendering** - render-to-texture camera targets
-- **Voxel world layer** - chunk meshing and block registry
 - **Asset pipeline** - virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML
 - **Asset processor** - mesh processing, texture compression, SPIR-V optimization in the asset packer
 - **Tracy profiling** - integrated instrumentation via engine macros
@@ -64,11 +63,10 @@ src/app/
   Application.hpp/cpp      Main application loop with coroutine executor and loading manager
   main.cpp                 Entry point
   layers/                  AppLayer interface, LayerStack, LoadingLayer,
-                           SandboxLayer, DebugLayer, VoxelWorldLayer,
+                           SandboxLayer, DebugLayer,
                            FishingLayer, InventoryLayer, UiSandboxLayer,
                            PhysicsLayer
   systems/                 Game systems (day/night, fishing, physics, sandbox)
-  voxel/                   Block registry, chunk manager, chunk mesher
 
 shaders/                   Slang shader sources
 resources/                 Source assets (packed at build time)

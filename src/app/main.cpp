@@ -9,7 +9,6 @@
 #include "layers/LoadingLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 // #include "layers/SandboxLayer.hpp"
-// #include "layers/VoxelWorldLayer.hpp"
 // #include "layers/PhysicsLayer.hpp"
 // #include "layers/UiSandboxLayer.hpp"
 // #include "layers/InventoryLayer.hpp"
@@ -56,7 +55,6 @@ int main()
 		application.PushLayer(std::make_unique<aether::app::LoadingLayer>());
 		// application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("game.das", std::move(systemFactory)));
 		application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("sandbox.das", std::move(systemFactory)));
-		// application.PushLayer(std::make_unique<aether::app::VoxelWorldLayer>());
 		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
 		// application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());
 		// application.PushLayer(std::make_unique<aether::app::InventoryLayer>());

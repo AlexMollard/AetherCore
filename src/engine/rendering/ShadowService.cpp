@@ -32,10 +32,6 @@ namespace aether
 		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 8192, 1024, UINT32_MAX, 8192 * kCullMultiFrustumCount);
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
-		// Single voxel queue: 512 draws, no animation, 3× output capacity.
-		m_voxelShadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 512, 512, 0u, 512 * kCullMultiFrustumCount);
-		m_voxelShadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
-
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
 	}
 
@@ -43,13 +39,11 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
-		m_voxelShadowRenderQueue.Shutdown();
 		for (auto& shadowConstants : m_shadowFrameConstants)
 		{
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
-		m_voxelShadowPipeline.Destroy();
 		(void)device;
 	}
 
@@ -68,18 +62,6 @@ namespace aether
 		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		                }));
 		m_shadowPipeline = std::move(shadowPipeline);
-		m_voxelShadowPipeline.Destroy();
-		AE_EXPECT_OR_THROW(voxelShadowPipeline,
-		        GraphicsPipeline::Create(device,
-		                {
-		                        .shaderVfsPath = "shaders://voxel_shadow_depth.slang.spv",
-		                        .colorFormat = VK_FORMAT_UNDEFINED,
-		                        .depthFormat = depthFormat,
-		                        .depthTestEnable = true,
-		                        .depthWriteEnable = true,
-		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
-		                }));
-		m_voxelShadowPipeline = std::move(voxelShadowPipeline);
 	}
 
 	void ShadowService::PrepareWriteSlot(const std::uint32_t drawSlot)
@@ -87,8 +69,6 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		m_shadowRenderQueue.Clear(drawSlot);
-		m_voxelShadowRenderQueue.SetWriteSlot(drawSlot);
-		m_voxelShadowRenderQueue.Clear(drawSlot);
 	}
 
 	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
@@ -102,11 +82,6 @@ namespace aether
 	void ShadowService::SetAnimationDatabase(const AnimationDatabase* animationDb)
 	{
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
-	}
-
-	void ShadowService::SubmitShadowCaster(const DrawCommand& cmd)
-	{
-		m_voxelShadowRenderQueue.Submit(cmd);
 	}
 
 	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat)
@@ -125,8 +100,6 @@ namespace aether
 			        }
 			        m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
 			        m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
-			        m_voxelShadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
-			        m_voxelShadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
 		        });
 
 		// ── Per-cascade depth passes (read from each cascade's output region) ──
@@ -140,16 +113,12 @@ namespace aether
 			        .WriteDepth(m_shadowDepth[cascade], VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearDepthValue(1.0f))
 			        .SetExtent(m_shadowMapExtents[cascade])
 			        .Execute(
-			                [this, cascade](PassContext& ctx)
-			                {
-				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
-				                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
-				                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
-
-				                const std::uint32_t voxelCascadeOffset = cascade * m_voxelShadowRenderQueue.GetMaxDraws();
-				                m_voxelShadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_voxelShadowPipeline, voxelCascadeOffset);
-				                m_voxelShadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
-			                });
+		                [this, cascade](PassContext& ctx)
+		                {
+			                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
+			                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
+			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+		                });
 		}
 	}
 

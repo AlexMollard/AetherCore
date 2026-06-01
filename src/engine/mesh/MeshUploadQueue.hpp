@@ -11,7 +11,7 @@ namespace aether
 {
 	class VulkanContext;
 
-	// Batches pending voxel chunk vertex/index uploads into a persistently-mapped
+	// Batches pending dynamic mesh vertex/index uploads into a persistently-mapped
 	// staging ring buffer, then emits all vkCmdCopyBuffer calls and a single
 	// transfer -> vertex/index barrier when Flush() is called.
 	//
