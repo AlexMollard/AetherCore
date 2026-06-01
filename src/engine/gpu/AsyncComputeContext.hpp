@@ -59,6 +59,7 @@ namespace aether
 		std::array<FrameResources, kMaxFramesInFlight> m_frames{};
 		std::uint64_t m_timelineSemaphoreHandle = 0;
 		std::uint64_t m_timelineValue = 0;
+		GpuDevice* m_gpu = nullptr;
 		bool m_enabled = false;
 		bool m_initialized = false;
 	};

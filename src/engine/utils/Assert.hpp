@@ -28,5 +28,6 @@ namespace aether
 // AE_ASSERT_ALWAYS: Invariant check that runs in all builds.
 // Use for conditions where continuing would cause undefined behavior
 // (e.g., null device, stale handle, out-of-bounds index).
-#define AE_ASSERT_ALWAYS(expr, msg) do { if (!(expr)) { ::aether::Logger::ErrorAt(::aether::LogCategory::Engine, std::source_location::current(), "Assert failed: {}", msg); Throw(AetherError::Engine(msg)); } } while(0)
+// Calls std::abort() to guarantee termination even inside try/catch.
+#define AE_ASSERT_ALWAYS(expr, msg) do { if (!(expr)) { ::aether::Logger::ErrorAt(::aether::LogCategory::Engine, std::source_location::current(), "Assert failed: {}", msg); ::aether::Logger::Flush(); std::abort(); } } while(0)
 } // namespace aether

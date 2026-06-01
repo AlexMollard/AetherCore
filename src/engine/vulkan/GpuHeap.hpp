@@ -23,6 +23,10 @@ namespace aether
 	// Two instances are the typical setup: one for vertex data, one for index
 	// data (mirrors the separate-heap design of MeshArena).
 	//
+	// Thread safety: NOT thread-safe. All Alloc/Free calls must occur on the
+	// same thread. Use external synchronization if concurrent access is required.
+	// In AetherCore, GpuHeap is only used during asset loading (single-threaded).
+	//
 	// Usage:
 	//   heap.Initialize(ctx, { .capacityBytes = 256 << 20 });
 	//   GpuSpan<Mesh::Vertex> verts = heap.Alloc<Mesh::Vertex>(count);

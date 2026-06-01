@@ -16,6 +16,10 @@ namespace aether
 {
 	AsyncComputeContext::~AsyncComputeContext()
 	{
+		if (m_initialized && m_gpu)
+		{
+			Shutdown(*m_gpu);
+		}
 	}
 
 	void AsyncComputeContext::Init(GpuDevice& gpu)
@@ -23,6 +27,36 @@ namespace aether
 		AE_PROFILE_ZONE();
 		VulkanContext& vk = gpu.GetVulkanContext();
 		VkDevice device = vk.GetDevice().device;
+
+		m_gpu = &gpu;
+
+		struct InitCleanup
+		{
+			VkDevice device = VK_NULL_HANDLE;
+			VkSemaphore timelineSemaphore = VK_NULL_HANDLE;
+			std::vector<VkCommandPool> commandPools;
+			std::vector<VkFence> fences;
+
+			~InitCleanup()
+			{
+				if (device == VK_NULL_HANDLE) return;
+				for (auto fence : fences)
+				{
+					if (fence != VK_NULL_HANDLE) vkDestroyFence(device, fence, nullptr);
+				}
+				for (auto pool : commandPools)
+				{
+					if (pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, pool, nullptr);
+				}
+				if (timelineSemaphore != VK_NULL_HANDLE)
+				{
+					vkDestroySemaphore(device, timelineSemaphore, nullptr);
+				}
+			}
+
+			void Disarm() { device = VK_NULL_HANDLE; }
+		} cleanup;
+		cleanup.device = device;
 
 		const VkSemaphoreTypeCreateInfo timelineTypeInfo{
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -39,6 +73,7 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create compute timeline semaphore."));
 		}
 		m_timelineSemaphoreHandle = reinterpret_cast<std::uint64_t>(semaphore);
+		cleanup.timelineSemaphore = semaphore;
 		CommandRecorder::SetObjectName(device, m_timelineSemaphoreHandle, VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
 
 		VkFenceCreateInfo fenceInfo{};
@@ -60,6 +95,7 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create async compute command pool."));
 			}
 			frame.commandPool = reinterpret_cast<std::uint64_t>(pool);
+			cleanup.commandPools.push_back(pool);
 
 			const VkCommandBufferAllocateInfo allocInfo{
 				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -80,12 +116,14 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to create async compute fence."));
 			}
 			frame.fence = reinterpret_cast<std::uint64_t>(fence);
+			cleanup.fences.push_back(fence);
 
 			const std::string suffix = "[" + std::to_string(frameI) + "]";
 			CommandRecorder::SetObjectName(device, frame.commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, ("AsyncCompute.Cmd" + suffix).c_str());
 			CommandRecorder::SetObjectName(device, frame.fence, VK_OBJECT_TYPE_FENCE, ("AsyncCompute.Fence" + suffix).c_str());
 		}
 
+		cleanup.Disarm();
 		m_enabled = true;
 		m_initialized = true;
 	}

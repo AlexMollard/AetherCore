@@ -21,6 +21,7 @@ namespace aether
 
 	void GraphicsDevice::Shutdown()
 	{
+		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);
 		m_resourcePool.Shutdown();
 		m_bindlessManager.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext->GetDevice().device);

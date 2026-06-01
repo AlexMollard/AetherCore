@@ -1,9 +1,12 @@
 #pragma once
 
 #include <cassert>
+#include <string>
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
+
+#include "utils/Assert.hpp"
 
 class ServiceContainer
 {
@@ -18,7 +21,8 @@ public:
 	[[nodiscard]] T& Get() const
 	{
 		auto it = m_services.find(std::type_index(typeid(T)));
-		assert(it != m_services.end() && "Service not registered");
+		AE_ASSERT_ALWAYS(it != m_services.end(),
+			std::string("Service not registered: ") + typeid(T).name());
 		return *static_cast<T*>(it->second);
 	}
 

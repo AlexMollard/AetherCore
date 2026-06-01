@@ -321,13 +321,29 @@ namespace aether
 			}
 		}
 
+		void CrashFlushBestEffort()
+		{
+			LoggerBackend& backend = GetBackend();
+			if (!backend.initialized.load(std::memory_order_relaxed))
+			{
+				return;
+			}
+
+			std::scoped_lock writeLock(backend.outputMutex);
+			std::cerr.flush();
+			if (backend.fileStream.is_open())
+			{
+				backend.fileStream.flush();
+			}
+		}
+
 		void TerminateHandler()
 		{
 			bool expected = false;
 			if (g_crashHandlerActive.compare_exchange_strong(expected, true))
 			{
 				Logger::Log(LogLevel::Error, LogCategory::Engine, "std::terminate called -- unhandled C++ exception", std::source_location::current());
-				Logger::Shutdown();
+				CrashFlushBestEffort();
 			}
 			LoggerBackend& backend = GetBackend();
 			if (backend.previousTerminateHandler)
@@ -343,7 +359,7 @@ namespace aether
 			if (g_crashHandlerActive.compare_exchange_strong(expected, true))
 			{
 				Logger::Log(LogLevel::Error, LogCategory::Engine, "Abort signal -- CRT assert or explicit abort()", std::source_location::current());
-				Logger::Shutdown();
+				CrashFlushBestEffort();
 			}
 			LoggerBackend& backend = GetBackend();
 			std::signal(SIGABRT, backend.previousAbortHandler ? backend.previousAbortHandler : SIG_DFL);
@@ -359,7 +375,7 @@ namespace aether
 				const DWORD code = pExceptionInfo->ExceptionRecord->ExceptionCode;
 				const void* address = pExceptionInfo->ExceptionRecord->ExceptionAddress;
 				Logger::Log(LogLevel::Error, LogCategory::Engine, std::format("Unhandled exception 0x{:08X} ({}) at 0x{:016X}", code, ExceptionCodeToString(code), reinterpret_cast<std::uintptr_t>(address)), std::source_location::current());
-				Logger::Shutdown();
+				CrashFlushBestEffort();
 			}
 			LoggerBackend& backend = GetBackend();
 			if (backend.previousExceptionFilter)

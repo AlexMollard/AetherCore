@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -32,31 +33,39 @@ namespace aether
 
 		T& operator[](std::size_t i)
 		{
+			AE_ASSERT(data != nullptr, "Cannot index device-local GpuSpan from CPU");
+			AE_ASSERT(i < count, "GpuSpan index out of bounds");
 			return data[i];
 		}
 
 		const T& operator[](std::size_t i) const
 		{
+			AE_ASSERT(data != nullptr, "Cannot index device-local GpuSpan from CPU");
+			AE_ASSERT(i < count, "GpuSpan index out of bounds");
 			return data[i];
 		}
 
 		T* begin()
 		{
+			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data;
 		}
 
 		T* end()
 		{
+			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data + count;
 		}
 
 		const T* begin() const
 		{
+			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data;
 		}
 
 		const T* end() const
 		{
+			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data + count;
 		}
 	};
