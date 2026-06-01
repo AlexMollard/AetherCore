@@ -1,5 +1,6 @@
 #include "ui/QuadRenderer.hpp"
 
+#include <cstring>
 #include <glm/geometric.hpp>
 #include <vector>
 #include <vk_mem_alloc.h>
@@ -98,27 +99,28 @@ namespace aether
 				                return;
 			                }
 
-			                const std::uint32_t frameSlot = readSlot;
-			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
-			                if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
-			                {
-				                m_commandBuffers[frameSlot].Reset();
+			const std::uint32_t frameSlot = readSlot;
+				const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
+				if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
+				{
+					m_commandBuffers[frameSlot].Reset();
 
-				                VkBufferCreateInfo bufferInfo{
-					                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-					                .size = commandBytes,
-					                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-					                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-				                };
+					const VkDeviceSize allocSize = commandBytes * 2;
+					VkBufferCreateInfo bufferInfo{
+						.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+						.size = allocSize,
+						.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+						.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+					};
 
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
-				                m_commandBuffers[frameSlot] = std::move(buf);
-				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(commandBytes);
-			                }
+				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
+					m_commandBuffers[frameSlot] = std::move(buf);
+					m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
+				}
 
 			                if (!m_indirectBuffers[frameSlot])
 			                {
@@ -135,17 +137,13 @@ namespace aether
 				                m_indirectBuffers[frameSlot] = std::move(buf);
 			                }
 
-			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
-			                if (mappedCommands == nullptr)
-			                {
-				                return;
-			                }
+				void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
+				if (mappedCommands == nullptr)
+				{
+					return;
+				}
 
-			                auto* cmdData = static_cast<DrawCommandData*>(mappedCommands);
-			                for (std::size_t i = 0; i < pending.size(); ++i)
-			                {
-				                cmdData[i] = pending[i].cmd;
-			                }
+				std::memcpy(mappedCommands, pending.data(), commandBytes);
 
 			                const VkMemoryBarrier2 hostToCompute{
 				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -260,6 +258,11 @@ namespace aether
 		m_bindlessMgr = &services.Get<BindlessManager>();
 		m_swapchain = &services.Get<Swapchain>();
 		m_passName = std::string(passName);
+
+		for (auto& slot : m_pendingQuads)
+		{
+			slot.reserve(256);
+		}
 
 		const VkDescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
 

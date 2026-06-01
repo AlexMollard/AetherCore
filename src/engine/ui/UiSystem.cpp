@@ -1,5 +1,7 @@
 #include "UiSystem.hpp"
 
+#include <limits>
+
 #include "platform/Input.hpp"
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
@@ -13,6 +15,22 @@
 namespace aether::ui
 {
 	static constexpr float kTitleBarHeight = 48.f;
+
+	static void MoveSubtree(aether::World& world, Entity entity, glm::vec2 delta)
+	{
+		if (auto* t = world.TryGet<UiTransformComponent>(entity))
+		{
+			t->rect.offsetMinPx += delta;
+			t->rect.offsetMaxPx += delta;
+		}
+		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		{
+			for (const Entity child : ch->children)
+			{
+				MoveSubtree(world, child, delta);
+			}
+		}
+	}
 
 	void UiSystem::BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
 	{
@@ -194,7 +212,7 @@ namespace aether::ui
 	{
 		const glm::vec2 mp = ctx.mousePos;
 		Entity bestEntity;
-		float bestZ = -1e9f;
+		std::int32_t bestLayer = std::numeric_limits<std::int32_t>::min();
 
 		for (auto [e, transform, inp]: world.View<UiTransformComponent, UiInputComponent>().each())
 		{
@@ -212,9 +230,10 @@ namespace aether::ui
 			const glm::vec4 r = ResolveUiRectPx(extent, transform.rect);
 			if (mp.x >= r.x && mp.x <= r.x + r.z && mp.y >= r.y && mp.y <= r.y + r.w)
 			{
-				if (transform.zOrder > bestZ)
+				const std::int32_t layer = ComputeEffectiveLayer(world, aether::World::FromEntt(e));
+				if (layer > bestLayer)
 				{
-					bestZ = transform.zOrder;
+					bestLayer = layer;
 					bestEntity = aether::World::FromEntt(e);
 				}
 			}
@@ -243,20 +262,31 @@ namespace aether::ui
 					ctx.dragStartMousePos = ctx.mousePos;
 					ctx.dragStartRectMin = transform->rect.offsetMinPx;
 					ctx.dragStartRectMax = transform->rect.offsetMaxPx;
+					BringToFront(world, ctx.draggedEntity);
 				}
 			}
 		}
 
-		// Continue drag: apply mouse delta to the panel's pixel offsets and keep it on top.
+		// Continue drag: apply mouse delta to the panel and all descendants.
 		if (ctx.isDragging && ctx.mouseDown && ctx.draggedEntity.IsValid())
 		{
 			if (auto* transform = world.TryGet<UiTransformComponent>(ctx.draggedEntity))
 			{
 				const glm::vec2 delta = ctx.mousePos - ctx.dragStartMousePos;
-				transform->rect.offsetMinPx = ctx.dragStartRectMin + delta;
-				transform->rect.offsetMaxPx = ctx.dragStartRectMax + delta;
+				const glm::vec2 newMin = ctx.dragStartRectMin + delta;
+				const glm::vec2 newMax = ctx.dragStartRectMax + delta;
+				const glm::vec2 frameDelta = newMin - transform->rect.offsetMinPx;
+				transform->rect.offsetMinPx = newMin;
+				transform->rect.offsetMaxPx = newMax;
+
+				if (const auto* ch = world.TryGet<UiChildrenComponent>(ctx.draggedEntity))
+				{
+					for (const Entity child : ch->children)
+					{
+						MoveSubtree(world, child, frameDelta);
+					}
+				}
 			}
-			BringToFront(world, ctx.draggedEntity);
 		}
 
 		// End drag.  Only suppress the click if the mouse actually moved;

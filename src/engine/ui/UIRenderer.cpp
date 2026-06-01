@@ -1,5 +1,6 @@
 #include "ui/UIRenderer.hpp"
 
+#include <algorithm>
 #include <string>
 
 #include "utils/Profiler.hpp"
@@ -71,7 +72,18 @@ namespace aether
 		{
 			return;
 		}
-		const glm::vec4 px = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
+		glm::vec4 px = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
+
+		if (!m_clipStack.empty())
+		{
+			const glm::vec4& parent = m_clipStack.back();
+			const float minX = std::max(px.x, parent.x);
+			const float minY = std::max(px.y, parent.y);
+			const float maxX = std::min(px.x + px.z, parent.x + parent.z);
+			const float maxY = std::min(px.y + px.w, parent.y + parent.w);
+			px = (maxX > minX && maxY > minY) ? glm::vec4(minX, minY, maxX - minX, maxY - minY) : glm::vec4(0.f, 0.f, 0.f, 0.f);
+		}
+
 		m_clipStack.push_back(px);
 		m_quadRenderer.SetClipRect(px);
 	}

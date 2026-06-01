@@ -79,6 +79,7 @@ namespace aether
 		VkSampler m_sampler = VK_NULL_HANDLE;
 		VmaAllocation m_allocation = VK_NULL_HANDLE;
 		uint32_t m_bindlessSlot = 0xFFFFFFFFu;
+		BindlessManager* m_bindlessMgr = nullptr;
 
 		uint32_t m_atlasWidth = 0;
 		uint32_t m_atlasHeight = 0;

@@ -64,9 +64,28 @@ namespace aether::ui
 		};
 	}
 
-	// Z-order to GPU sort-layer scale.  100 sub-layers between each integer z-step
-	// gives room for bg/header/separator without bleeding into adjacent entities.
-	static constexpr float kZLayerScale = 100.f;
+	std::int32_t ComputeEffectiveLayer(aether::World& world, Entity entity, int subLayer)
+	{
+		Entity current = entity;
+		while (auto* parent = world.TryGet<UiParentComponent>(current))
+		{
+			current = parent->parent;
+		}
+		float rootZ = 0.f;
+		if (auto* rt = world.TryGet<UiTransformComponent>(current))
+		{
+			rootZ = rt->zOrder;
+		}
+		float entityZ = 0.f;
+		if (auto* et = world.TryGet<UiTransformComponent>(entity))
+		{
+			entityZ = et->zOrder;
+		}
+		const float offset = std::clamp(entityZ - rootZ, 0.f, 9.999f);
+		const std::int32_t rootLayer = static_cast<std::int32_t>(rootZ + 0.5f) * 100000;
+		const std::int32_t offsetLayer = static_cast<std::int32_t>(offset * 10000.f + 0.5f);
+		return rootLayer + offsetLayer + subLayer;
+	}
 
 	// ── Button ────────────────────────────────────────────────────────────────
 
@@ -81,7 +100,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		// Smooth colour blend: mix normal->hover, then normal->press using animated weights.
 		// pressT takes priority over hoverT (press is the innermost state).
@@ -125,7 +144,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float trackH = px.w;
@@ -136,7 +155,7 @@ namespace aether::ui
 		{
 			slider->isDragging = true;
 		}
-		if (!input.IsMouseButtonDown(MouseButton::Left))
+		if (!input.IsMouseButtonDown(MouseButton::Left) || !inp->hovered)
 		{
 			slider->isDragging = false;
 		}
@@ -180,7 +199,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		if (inp->clicked)
 		{
@@ -231,7 +250,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float range = std::max(slider->max - slider->min, 1e-6f);
@@ -286,7 +305,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		const std::int32_t baseLayer = static_cast<std::int32_t>(t->zOrder * kZLayerScale);
+		const std::int32_t baseLayer = ComputeEffectiveLayer(world, entity);
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float hdrH = theme.headerHeight;
@@ -379,25 +398,41 @@ namespace aether::ui
 
 	void BringToFront(aether::World& world, Entity entity)
 	{
+		Entity root = entity;
+		while (auto* parent = world.TryGet<UiParentComponent>(root))
+		{
+			root = parent->parent;
+		}
+
 		float maxZ = 0.f;
 		for (auto [e, t]: world.View<UiTransformComponent>().each())
 		{
-			maxZ = std::max(maxZ, t.zOrder);
+			const Entity ent = aether::World::FromEntt(e);
+			if (!world.Has<UiParentComponent>(ent))
+			{
+				maxZ = std::max(maxZ, t.zOrder);
+			}
 		}
 
-		auto* t = world.TryGet<UiTransformComponent>(entity);
+		if (maxZ > 1'000'000.f)
+		{
+			for (auto [e, t]: world.View<UiTransformComponent>().each())
+			{
+				t.zOrder *= 0.5f;
+			}
+			maxZ *= 0.5f;
+		}
+
+		auto* t = world.TryGet<UiTransformComponent>(root);
 		if (!t || t->zOrder > maxZ)
 		{
 			return;
 		}
 
-		// Raise by enough to land one step above the current maximum.
-		// The same delta is applied to every descendant so children always remain
-		// above their parent panel, preserving their relative z ordering.
 		const float delta = maxZ + 1.f - t->zOrder;
 		t->zOrder = maxZ + 1.f;
 
-		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		if (const auto* ch = world.TryGet<UiChildrenComponent>(root))
 		{
 			for (const Entity child: ch->children)
 			{
@@ -605,7 +640,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 
@@ -661,8 +696,19 @@ namespace aether::ui
 
 	void AddChild(aether::World& world, Entity parent, Entity child)
 	{
-		world.TryGet<UiChildrenComponent>(parent)->children.push_back(child);
+		auto* children = world.TryGet<UiChildrenComponent>(parent);
+		children->children.push_back(child);
 		world.Emplace<UiParentComponent>(child, UiParentComponent{ parent });
+
+		if (auto* parentTransform = world.TryGet<UiTransformComponent>(parent))
+		{
+			if (auto* childTransform = world.TryGet<UiTransformComponent>(child))
+			{
+				const float parentZ = parentTransform->zOrder;
+				const float offset = 0.01f * static_cast<float>(children->children.size());
+				childTransform->zOrder = parentZ + offset;
+			}
+		}
 	}
 
 	// ── Item Slot ─────────────────────────────────────────────────────────────
@@ -678,7 +724,7 @@ namespace aether::ui
 		}
 
 		const std::int32_t prevLayer = ui.GetLayer();
-		ui.SetLayer(static_cast<std::int32_t>(t->zOrder * kZLayerScale));
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		static constexpr float kBorderW = 2.f;

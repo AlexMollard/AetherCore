@@ -119,10 +119,11 @@ namespace aether
 	        m_sampler(std::exchange(o.m_sampler, VK_NULL_HANDLE)),
 	        m_allocation(std::exchange(o.m_allocation, VK_NULL_HANDLE)),
 	        m_bindlessSlot(std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu)),
+	        m_bindlessMgr(std::exchange(o.m_bindlessMgr, nullptr)),
 	        m_atlasWidth(std::exchange(o.m_atlasWidth, 0u)),
 	        m_atlasHeight(std::exchange(o.m_atlasHeight, 0u)),
 	        m_glyphSize(std::exchange(o.m_glyphSize, 0)),
-	        m_glyphs(o.m_glyphs)
+	        m_glyphs(std::move(o.m_glyphs))
 	{
 	}
 
@@ -138,10 +139,11 @@ namespace aether
 			m_sampler = std::exchange(o.m_sampler, VK_NULL_HANDLE);
 			m_allocation = std::exchange(o.m_allocation, VK_NULL_HANDLE);
 			m_bindlessSlot = std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu);
+			m_bindlessMgr = std::exchange(o.m_bindlessMgr, nullptr);
 			m_atlasWidth = std::exchange(o.m_atlasWidth, 0u);
 			m_atlasHeight = std::exchange(o.m_atlasHeight, 0u);
 			m_glyphSize = std::exchange(o.m_glyphSize, 0);
-			m_glyphs = o.m_glyphs;
+			m_glyphs = std::move(o.m_glyphs);
 		}
 		return *this;
 	}
@@ -155,6 +157,8 @@ namespace aether
 
 	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, uint32_t uploadQueueFamily, BindlessManager& bindless)
 	{
+		m_bindlessMgr = &bindless;
+
 		// ── 1. Initialise FreeType ────────────────────────────────────────────
 		FT_Library ft{};
 		if (FT_Init_FreeType(&ft) != 0)
@@ -419,6 +423,11 @@ namespace aether
 			return;
 		}
 
+		if (m_bindlessSlot != 0xFFFFFFFFu && m_bindlessMgr != nullptr)
+		{
+			m_bindlessMgr->FreeSampledImageSlot(m_bindlessSlot);
+			m_bindlessSlot = 0xFFFFFFFFu;
+		}
 		if (m_sampler != VK_NULL_HANDLE)
 		{
 			vkDestroySampler(m_device, m_sampler, nullptr);
@@ -435,7 +444,7 @@ namespace aether
 			m_image = VK_NULL_HANDLE;
 			m_allocation = VK_NULL_HANDLE;
 		}
-		m_bindlessSlot = 0xFFFFFFFFu;
+		m_bindlessMgr = nullptr;
 		m_device = VK_NULL_HANDLE;
 		m_allocator = nullptr;
 	}

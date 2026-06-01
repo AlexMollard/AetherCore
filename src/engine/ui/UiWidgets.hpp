@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 #include "vulkan/volk.hpp"
 
@@ -58,8 +59,13 @@ namespace aether::ui
 
 	// ── Z-order management ────────────────────────────────────────────────────
 
-	// Raises entity to the highest z-order in the world so it renders and
-	// hit-tests on top of everything else.
+	// Computes the GPU sort layer for an entity by combining its root panel's
+	// z-order with the entity's offset within the panel hierarchy.
+	[[nodiscard]] std::int32_t ComputeEffectiveLayer(aether::World& world, Entity entity, int subLayer = 0);
+
+	// Raises the root panel of `entity` to the highest z-order in the world so
+	// it renders and hit-tests on top of everything else.  If `entity` is a
+	// child widget, the entire root panel is raised.
 	void BringToFront(aether::World& world, Entity entity);
 
 	// ── Layout ───────────────────────────────────────────────────────────────
