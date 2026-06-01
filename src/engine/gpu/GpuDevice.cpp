@@ -1,7 +1,5 @@
 #include "gpu/GpuDevice.hpp"
 
-#include <mutex>
-
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
@@ -169,10 +167,7 @@ namespace aether
 
 		VkSemaphore computeFinished = asyncComputeSemaphoreHandle ? reinterpret_cast<VkSemaphore>(asyncComputeSemaphoreHandle) : VK_NULL_HANDLE;
 
-		{
-			std::lock_guard lock(vk.GetGraphicsQueueMutex());
-			swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, asyncComputeTimelineValue);
-		}
+		swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, asyncComputeTimelineValue);
 	}
 
 	CommandRecorder GpuDevice::GetCurrentCommandRecorder() const

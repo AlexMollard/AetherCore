@@ -19,5 +19,11 @@ namespace aether::app
 		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
 
 		FishingGameSystem* m_gameSystem = nullptr;
+
+		// Cached display values updated in OnUpdate
+		std::size_t m_fishCount = 0;
+		std::size_t m_score = 0;
+		const char* m_bobberState = "";
+		aether::CameraHandle m_activeCamera;
 	};
 } // namespace aether::app

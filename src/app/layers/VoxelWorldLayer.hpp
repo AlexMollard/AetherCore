@@ -8,10 +8,6 @@
 
 namespace aether::app
 {
-	// Showcases the voxel world infrastructure:
-	// - Flat terrain filled with grass/dirt/stone layers
-	// - Free-fly camera to explore
-	// - Press T to toggle wireframe (requires debug layer)
 	class VoxelWorldLayer final : public AppLayer
 	{
 	public:

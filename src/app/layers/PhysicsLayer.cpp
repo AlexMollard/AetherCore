@@ -1,19 +1,33 @@
 #include "PhysicsLayer.hpp"
 
-#include "utils/DebugGui.hpp"
+#include <array>
+#include <cstdio>
 
-#include "utils/Logger.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiLayout.hpp"
 #include "systems/PhysicsGameSystem.hpp"
 #include "scene/World.hpp"
+#include "utils/Logger.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether::app
 {
+	namespace
+	{
+		UiRect PxRect(float l, float t, float r, float b)
+		{
+			return UiRect{
+				.anchorMin = { 0.f, 0.f },
+				.anchorMax = { 0.f, 0.f },
+				.offsetMinPx = { l, t },
+				.offsetMaxPx = { r, b }
+			};
+		}
+	} // namespace
+
 	void PhysicsLayer::OnAttach(LayerContext& context)
 	{
 		AE_INFO(aether::LogCategory::App, "PhysicsLayer attached.");
-
-		// PhysicsSystem is engine-owned (registered in Application::Run).
-		// PhysicsGameSystem retrieves it from the ServiceContainer during OnRegister.
 
 		auto gameSystem = std::make_unique<PhysicsGameSystem>();
 		gameSystem->Init(context.services, context.Get<AssetManager>(), context.Get<CameraManager>(), context.Get<Input>());
@@ -23,13 +37,18 @@ namespace aether::app
 
 	void PhysicsLayer::OnDetach(LayerContext& context)
 	{
-		// PhysicsSystem is engine-owned and stays alive - only the game system goes.
 		context.Get<World>().UnregisterSystem("PhysicsGameSystem");
 		m_gameSystem = nullptr;
 	}
 
 	void PhysicsLayer::OnUpdate([[maybe_unused]] LayerContext& context)
 	{
+		if (m_gameSystem)
+		{
+			m_activeBodyCount = m_gameSystem->GetActiveBodyCount();
+			m_projectileCount = m_gameSystem->GetProjectileCount();
+			m_simTime = m_gameSystem->GetSimTime();
+		}
 	}
 
 	void PhysicsLayer::OnGui([[maybe_unused]] LayerContext& context)
@@ -39,58 +58,68 @@ namespace aether::app
 			return;
 		}
 
-		static constexpr ImVec4 kGood{ 0.40f, 0.72f, 0.46f, 1.f };
-		static constexpr ImVec4 kWarn{ 0.86f, 0.71f, 0.30f, 1.f };
+		UIRenderer& ui = context.Get<UIRenderer>();
 
-		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("PHYSICS", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
+		constexpr float kPanelW = 280.f;
+		constexpr float kPadX = 14.f;
+		constexpr float kPadY = 10.f;
+		constexpr float kRowH = 18.f;
+		constexpr float kSepH = 12.f;
+
+		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
+		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
+		const glm::vec4 green{ 0.40f, 0.72f, 0.46f, 1.f };
+		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
+
+		// Calculate panel height
+		float contentH = kPadY;
+		// SIMULATION section
+		contentH += kRowH; // Dynamic bodies
+		contentH += kRowH; // Projectiles
+		contentH += kRowH; // Sim time
+		contentH += kRowH; // Step rate
+		contentH += kSepH;
+		// CONTROLS section
+		contentH += kRowH; // Space
+		contentH += kRowH; // R
+		contentH += kRowH; // C
+		contentH += kPadY;
+
+		ui.DrawRect(PxRect(12.f, 12.f, 12.f + kPanelW, 12.f + contentH), bg, 6.f);
+
+		float y = 12.f + kPadY;
+		const float col2X = 12.f + 180.f;
+		const float colCtrlX = 12.f + 80.f;
+		const float textSize = 13.f;
+
+		std::array<char, 64> buf{};
+
+		auto label = [&](const char* name, const char* value, glm::vec4 valueColor)
 		{
-			ImGui::End();
-			return;
-		}
+			ui.DrawText(name, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, white);
+			ui.DrawText(value, { .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			y += kRowH;
+		};
 
-		ImGui::SeparatorText("SIMULATION");
-		ImGui::Columns(2, "##sim", false);
+		auto ctrl = [&](const char* key, const char* desc)
+		{
+			ui.DrawText(key, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, yellow);
+			ui.DrawText(desc, { .anchor = { 0.f, 0.f }, .offsetPx = { colCtrlX, y } }, textSize, white);
+			y += kRowH;
+		};
 
-		ImGui::Text("Dynamic bodies");
-		ImGui::NextColumn();
-		ImGui::Text("%d", m_gameSystem->GetActiveBodyCount());
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%d", m_activeBodyCount);
+		label("Dynamic bodies", buf.data(), white);
+		std::snprintf(buf.data(), buf.size(), "%d", m_projectileCount);
+		label("Projectiles", buf.data(), white);
+		std::snprintf(buf.data(), buf.size(), "%.1f s", m_simTime);
+		label("Sim time", buf.data(), white);
+		label("Step rate", "60.0 Hz (fixed)", green);
 
-		ImGui::Text("Projectiles");
-		ImGui::NextColumn();
-		ImGui::Text("%d", m_gameSystem->GetProjectileCount());
-		ImGui::NextColumn();
+		y += 4.f;
 
-		ImGui::Text("Sim time");
-		ImGui::NextColumn();
-		ImGui::Text("%.1f s", m_gameSystem->GetSimTime());
-		ImGui::NextColumn();
-
-		ImGui::Text("Step rate");
-		ImGui::NextColumn();
-		ImGui::TextColored(kGood, "%.0f Hz (fixed)", 1.f / aether::PhysicsSystem::kFixedTimestep);
-		ImGui::NextColumn();
-
-		ImGui::Columns(1);
-		ImGui::SeparatorText("CONTROLS");
-		ImGui::Columns(2, "##ctrl", false);
-
-		ImGui::Text("Space");
-		ImGui::NextColumn();
-		ImGui::TextColored(kWarn, "Fire projectile");
-		ImGui::NextColumn();
-		ImGui::Text("R");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Reset scene");
-		ImGui::NextColumn();
-		ImGui::Text("C");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Toggle camera");
-		ImGui::NextColumn();
-
-		ImGui::Columns(1);
-		ImGui::End();
+		ctrl("Space", "Fire projectile");
+		ctrl("R", "Reset scene");
+		ctrl("C", "Toggle camera");
 	}
-
 } // namespace aether::app

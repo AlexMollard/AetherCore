@@ -16,7 +16,6 @@ A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction lay
 - **Jolt physics** - component-based rigid body and shape authoring
 - **Animation system** - skeletal animation with GPU skinning pipeline
 - **In-engine UI system** - widget-based immediate-mode UI (`UiSystem`, `UiWidgets`, `UiLayout`, `UiWorld`) with theming
-- **ImGui integration** - Dear ImGui for debug overlays (toggle at build time via `AETHERCORE_ENABLE_IMGUI`)
 - **Offscreen rendering** - render-to-texture camera targets
 - **Voxel world layer** - chunk meshing and block registry
 - **Asset pipeline** - virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML
@@ -51,7 +50,7 @@ src/engine/
   scene/                   Scene graph, ECS helpers, world, scene subsystem
   text/                    Font atlas, text renderer
   ui/                      In-engine UI system (widgets, layout, theme),
-                           ImGui integration, quad/text renderers
+                           quad/text renderers
   utils/                   Logger, profiler, settings, text/ini parser,
                            debug GUI helpers, frame pacer, loading manager,
                            Expected<T>, AetherError, AE_ASSERT macros,
@@ -140,7 +139,6 @@ Run:
 
 | Option | Default | Description |
 |---|---|---|
-| `AETHERCORE_ENABLE_IMGUI` | `ON` | Include Dear ImGui debug UI (disable for shipping builds) |
 | `AETHERCORE_ENABLE_ASAN` | `OFF` | Enable AddressSanitizer on all first-party targets |
 | `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | Use `/Z7` + `/DEBUG:FASTLINK` in Debug for faster MSVC iteration (VS 2022 and earlier) |
 
@@ -226,7 +224,6 @@ Managed via CMake FetchContent / CPM:
 | cgltf | glTF model loading |
 | FreeType | Font rasterization |
 | Tracy | Performance profiling |
-| Dear ImGui | Debug UI overlay |
 | libzstd | PAK compression |
 | xxHash | Hash-based asset IDs |
 | toml++ | TOML config parsing |

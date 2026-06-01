@@ -10,7 +10,6 @@
 #include "utils/coro/Executor.hpp"
 #include "layers/LayerStack.hpp"
 #include "rendering/RenderThread.hpp"
-#include "ui/ImGuiRenderer.hpp"
 
 namespace aether::app
 {
@@ -44,10 +43,9 @@ namespace aether::app
 
 		aether::EngineSettings m_settings;
 		aether::AetherCore m_engine;
-		aether::RenderThread m_renderThread;
-		aether::FramePacer m_framePacer;
-		aether::ImGuiRenderer m_imguiRenderer;
-		aether::coro::queued_executor m_coroExecutor;
+	aether::RenderThread m_renderThread;
+	aether::FramePacer m_framePacer;
+	aether::coro::queued_executor m_coroExecutor;
 		aether::LoadingManager m_loadingManager;
 		LayerStack m_layers;
 		bool m_layersAttached = false;

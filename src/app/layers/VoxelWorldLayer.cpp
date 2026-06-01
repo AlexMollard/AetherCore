@@ -6,7 +6,8 @@
 #include <cstdio>
 #include <glm/glm.hpp>
 
-#include "utils/DebugGui.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiLayout.hpp"
 
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
@@ -33,6 +34,16 @@ namespace aether::app
 
 	namespace
 	{
+		UiRect PxRect(float l, float t, float r, float b)
+		{
+			return UiRect{
+				.anchorMin = { 0.f, 0.f },
+				.anchorMax = { 0.f, 0.f },
+				.offsetMinPx = { l, t },
+				.offsetMaxPx = { r, b }
+			};
+		}
+
 		float SampleTerrain2D(int worldX, int worldZ)
 		{
 			const float x = static_cast<float>(worldX);
@@ -203,90 +214,97 @@ namespace aether::app
 
 	void VoxelWorldLayer::OnGui(LayerContext& context)
 	{
-		static constexpr ImVec4 kGood{ 0.40f, 0.72f, 0.46f, 1.f };
-		static constexpr ImVec4 kWarn{ 0.86f, 0.71f, 0.30f, 1.f };
+		UIRenderer& ui = context.Get<UIRenderer>();
 
-		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("VOXEL WORLD", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
-		{
-			ImGui::End();
-			return;
-		}
+		constexpr float kPanelW = 320.f;
+		constexpr float kPadX = 14.f;
+		constexpr float kPadY = 10.f;
+		constexpr float kRowH = 18.f;
+		constexpr float kSepH = 16.f;
 
-		ImGui::SeparatorText("WORLDGEN");
-		ImGui::Columns(2, "##wg", false);
+		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
+		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
+		const glm::vec4 green{ 0.40f, 0.72f, 0.46f, 1.f };
+		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
+		const glm::vec4 red{ 0.80f, 0.33f, 0.30f, 1.f };
 
-		ImGui::Text("Radius (chunks)");
-		ImGui::NextColumn();
-		ImGui::Text("%d", kWorldRadius);
-		ImGui::NextColumn();
-		ImGui::Text("Target XY chunks");
-		ImGui::NextColumn();
-		ImGui::Text("%d", (kWorldRadius * 2 + 1) * (kWorldRadius * 2 + 1));
-		ImGui::NextColumn();
-		ImGui::Text("Chunk size");
-		ImGui::NextColumn();
-		ImGui::Text("%d", voxel::kChunkSize);
-		ImGui::NextColumn();
-		ImGui::Text("Max terrain Y");
-		ImGui::NextColumn();
-		ImGui::Text("%d", kTotalHeight);
-		ImGui::NextColumn();
-
+		const voxel::ChunkManager::DebugStats stats = m_chunkManager.GetDebugStats();
 		const aether::Camera* cam = context.Get<CameraManager>().TryGet(m_camera);
+
+		// Calculate panel height
+		float contentH = kPadY;
+		contentH += kRowH; // Radius
+		contentH += kRowH; // Target XY chunks
+		contentH += kRowH; // Chunk size
+		contentH += kRowH; // Max terrain Y
+		if (cam)
+			contentH += kRowH; // Camera pos
+		contentH += kSepH;
+		contentH += kRowH; // Total chunks
+		contentH += kRowH; // Ready chunks
+		contentH += kRowH; // Dirty chunks
+		contentH += kRowH; // Empty chunks
+		contentH += kRowH; // Submitted draws
+		contentH += kRowH; // Draw path
+		contentH += kRowH; // Rebuild A/U/F
+		contentH += kPadY;
+
+		ui.DrawRect(PxRect(12.f, 12.f, 12.f + kPanelW, 12.f + contentH), bg, 6.f);
+
+		float y = 12.f + kPadY;
+		const float col2X = 12.f + 190.f;
+		const float textSize = 13.f;
+
+		std::array<char, 128> buf{};
+
+		auto label = [&](const char* name, const char* value, glm::vec4 valueColor)
+		{
+			ui.DrawText(name, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, white);
+			ui.DrawText(value, { .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			y += kRowH;
+		};
+
+		std::snprintf(buf.data(), buf.size(), "%d", kWorldRadius);
+		label("Radius (chunks)", buf.data(), white);
+
+		std::snprintf(buf.data(), buf.size(), "%d", (kWorldRadius * 2 + 1) * (kWorldRadius * 2 + 1));
+		label("Target XY chunks", buf.data(), white);
+
+		std::snprintf(buf.data(), buf.size(), "%d", voxel::kChunkSize);
+		label("Chunk size", buf.data(), white);
+
+		std::snprintf(buf.data(), buf.size(), "%d", kTotalHeight);
+		label("Max terrain Y", buf.data(), white);
+
 		if (cam)
 		{
 			const glm::vec3 p = cam->GetPosition();
-			ImGui::Text("Camera pos");
-			ImGui::NextColumn();
-			ImGui::Text("%.1f, %.1f, %.1f", p.x, p.y, p.z);
-			ImGui::NextColumn();
+			std::snprintf(buf.data(), buf.size(), "%.1f, %.1f, %.1f", p.x, p.y, p.z);
+			label("Camera pos", buf.data(), white);
 		}
 
-		ImGui::Columns(1);
-		ImGui::SeparatorText("CHUNK RUNTIME");
-		ImGui::Columns(2, "##cr", false);
+		y += 4.f;
 
-		const voxel::ChunkManager::DebugStats stats = m_chunkManager.GetDebugStats();
+		std::snprintf(buf.data(), buf.size(), "%zu", stats.totalChunks);
+		label("Total chunks", buf.data(), white);
 
-		ImGui::Text("Total chunks");
-		ImGui::NextColumn();
-		ImGui::Text("%zu", stats.totalChunks);
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%zu", stats.readyChunks);
+		label("Ready chunks", buf.data(), stats.readyChunks > 1 ? green : yellow);
 
-		ImGui::Text("Ready chunks");
-		ImGui::NextColumn();
-		ImGui::TextColored(stats.readyChunks > 1 ? kGood : kWarn, "%zu", stats.readyChunks);
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%zu", stats.dirtyChunks);
+		label("Dirty chunks", buf.data(), stats.dirtyChunks == 0 ? green : yellow);
 
-		ImGui::Text("Dirty chunks");
-		ImGui::NextColumn();
-		ImGui::TextColored(stats.dirtyChunks == 0 ? kGood : kWarn, "%zu", stats.dirtyChunks);
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%zu", stats.emptyChunks);
+		label("Empty chunks", buf.data(), white);
 
-		ImGui::Text("Empty chunks");
-		ImGui::NextColumn();
-		ImGui::Text("%zu", stats.emptyChunks);
-		ImGui::NextColumn();
-
-		ImGui::Text("Submitted draws");
-		ImGui::NextColumn();
-		ImGui::TextColored(stats.submittedDrawsLastFrame > 1 ? kGood : kWarn, "%u", stats.submittedDrawsLastFrame);
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%u", stats.submittedDrawsLastFrame);
+		label("Submitted draws", buf.data(), stats.submittedDrawsLastFrame > 1 ? green : yellow);
 
 		const bool bypass = context.Get<RenderQueue>().IsDebugBypassIndirect();
-		ImGui::Text("Draw path");
-		ImGui::NextColumn();
-		ImGui::TextColored(bypass ? kWarn : kGood, bypass ? "Bypass indirect" : "Indirect");
-		ImGui::NextColumn();
+		label("Draw path", bypass ? "Bypass indirect" : "Indirect", bypass ? yellow : green);
 
-		ImGui::Text("Rebuild A/U/F");
-		ImGui::NextColumn();
-		ImGui::TextColored(stats.rebuildFailuresLastFrame == 0 ? kGood : kWarn, "%u / %u / %u", stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
-		ImGui::NextColumn();
-
-		ImGui::Columns(1);
-		ImGui::End();
+		std::snprintf(buf.data(), buf.size(), "%u / %u / %u", stats.rebuildAttemptsLastFrame, stats.rebuildUploadsLastFrame, stats.rebuildFailuresLastFrame);
+		label("Rebuild A/U/F", buf.data(), stats.rebuildFailuresLastFrame == 0 ? green : red);
 	}
 
 	// ── Terrain generation ────────────────────────────────────────────────────

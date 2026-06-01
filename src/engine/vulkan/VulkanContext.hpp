@@ -1,6 +1,5 @@
 #pragma once
 
-#include <mutex>
 #include <optional>
 #include "utils/Assert.hpp"
 #include "utils/GpuProfiler.hpp"
@@ -38,11 +37,6 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 
-		[[nodiscard]] std::mutex& GetGraphicsQueueMutex() const
-		{
-			return m_graphicsQueueMutex;
-		}
-
 	private:
 		std::optional<vkb::Instance> m_instance;
 		std::optional<vkb::Device> m_device;
@@ -53,7 +47,6 @@ namespace aether
 		VkQueue m_presentQueue = VK_NULL_HANDLE;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
-		mutable std::mutex m_graphicsQueueMutex;
 		TracyVkCtx m_tracyVkCtx = nullptr;
 	};
 } // namespace aether

@@ -1,12 +1,30 @@
 #include "FishingLayer.hpp"
 
-#include "utils/DebugGui.hpp"
+#include <array>
+#include <cstdio>
 
-#include "utils/Logger.hpp"
+#include "camera/CameraManager.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiLayout.hpp"
 #include "systems/FishingGameSystem.hpp"
+#include "scene/World.hpp"
+#include "utils/Logger.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether::app
 {
+	namespace
+	{
+		UiRect PxRect(float l, float t, float r, float b)
+		{
+			return UiRect{
+				.anchorMin = { 0.f, 0.f },
+				.anchorMax = { 0.f, 0.f },
+				.offsetMinPx = { l, t },
+				.offsetMaxPx = { r, b }
+			};
+		}
+	} // namespace
 
 	const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
 	{
@@ -37,66 +55,84 @@ namespace aether::app
 
 	void FishingLayer::OnUpdate(LayerContext& context)
 	{
-		(void) context;
+		m_activeCamera = context.Get<CameraManager>().GetMainCamera();
+		if (m_gameSystem)
+		{
+			m_fishCount = m_gameSystem->GetFishCount();
+			m_score = m_gameSystem->GetScore();
+			m_bobberState = m_gameSystem->GetBobberStateName();
+		}
 	}
 
 	void FishingLayer::OnGui(LayerContext& context)
 	{
-		ImGui::SetNextWindowPos(ImVec2(12.f, 12.f), ImGuiCond_FirstUseEver);
-		if (!ImGui::Begin("FISHING DEMO", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse))
+		UIRenderer& ui = context.Get<UIRenderer>();
+
+		constexpr float kPanelW = 280.f;
+		constexpr float kPadX = 14.f;
+		constexpr float kPadY = 10.f;
+		constexpr float kRowH = 18.f;
+		constexpr float kSepH = 12.f;
+
+		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
+		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
+		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
+
+		// Calculate panel height
+		float contentH = kPadY;
+		// GAME section
+		contentH += kRowH; // Camera
+		contentH += kRowH; // Fish
+		contentH += kRowH; // Score
+		contentH += kRowH; // Bobber
+		contentH += kSepH;
+		// CONTROLS section
+		contentH += kRowH; // LMB
+		contentH += kRowH; // Space
+		contentH += kRowH; // RMB
+		contentH += kRowH; // WASD
+		contentH += kPadY;
+
+		ui.DrawRect(PxRect(12.f, 12.f, 12.f + kPanelW, 12.f + contentH), bg, 6.f);
+
+		float y = 12.f + kPadY;
+		const float col2X = 12.f + 160.f;
+		const float colCtrlX = 12.f + 80.f;
+		const float textSize = 13.f;
+
+		std::array<char, 64> buf{};
+
+		auto label = [&](const char* name, const char* value, glm::vec4 valueColor)
 		{
-			ImGui::End();
-			return;
-		}
+			ui.DrawText(name, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, white);
+			ui.DrawText(value, { .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			y += kRowH;
+		};
 
-		ImGui::SeparatorText("GAME");
-		ImGui::Columns(2, "##gm", false);
-
-		ImGui::Text("Camera");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted(GetActiveCameraName(context.Get<CameraManager>().GetMainCamera()));
-		ImGui::NextColumn();
-
-		if (m_gameSystem)
+		auto ctrl = [&](const char* key, const char* desc)
 		{
-			ImGui::Text("Fish");
-			ImGui::NextColumn();
-			ImGui::Text("%zu", m_gameSystem->GetFishCount());
-			ImGui::NextColumn();
+			ui.DrawText(key, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, yellow);
+			ui.DrawText(desc, { .anchor = { 0.f, 0.f }, .offsetPx = { colCtrlX, y } }, textSize, white);
+			y += kRowH;
+		};
 
-			ImGui::Text("Score");
-			ImGui::NextColumn();
-			ImGui::Text("%zu", m_gameSystem->GetScore());
-			ImGui::NextColumn();
+		label("Camera", GetActiveCameraName(m_activeCamera), white);
 
-			ImGui::Text("Bobber");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(m_gameSystem->GetBobberStateName());
-			ImGui::NextColumn();
-		}
+		y += 4.f;
 
-		ImGui::Columns(1);
-		ImGui::SeparatorText("CONTROLS");
-		ImGui::Columns(2, "##ctrl", false);
+		std::snprintf(buf.data(), buf.size(), "%zu", m_fishCount);
+		label("Fish", buf.data(), white);
 
-		ImGui::Text("LMB");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Cast to water");
-		ImGui::NextColumn();
-		ImGui::Text("Space");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Hook / Reel");
-		ImGui::NextColumn();
-		ImGui::Text("RMB");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Rotate camera");
-		ImGui::NextColumn();
-		ImGui::Text("WASD");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted("Move camera");
-		ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%zu", m_score);
+		label("Score", buf.data(), white);
 
-		ImGui::Columns(1);
-		ImGui::End();
+		label("Bobber", m_bobberState, white);
+
+		y += 4.f;
+
+		ctrl("LMB", "Cast to water");
+		ctrl("Space", "Hook / Reel");
+		ctrl("RMB", "Rotate camera");
+		ctrl("WASD", "Move camera");
 	}
 } // namespace aether::app

@@ -45,6 +45,13 @@ namespace aether
 		void PushClipRect(const UiRect& rect);
 		void PopClipRect();
 
+		// Re-registers the underlying quad render pass in the render graph.
+		// Call after swapchain recreation when the graph has been cleared.
+		void ReRegisterPass()
+		{
+			m_quadRenderer.ReRegisterPass();
+		}
+
 		void SetLayer(std::int32_t layer)
 		{
 			m_currentLayer = layer;

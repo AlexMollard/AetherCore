@@ -11,16 +11,17 @@
 #include <shellapi.h>
 #endif
 
-#include "utils/DebugGui.hpp"
-
 #include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "platform/Input.hpp"
+#include "ui/UIRenderer.hpp"
+#include "ui/UiLayout.hpp"
 #include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/Renderer.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether::app
 {
@@ -51,12 +52,6 @@ namespace aether::app
 			}
 			return { 0.80f, 0.33f, 0.30f, 1.f };
 		}
-
-		ImVec4 ToImVec4(glm::vec4 c)
-		{
-			return { c.r, c.g, c.b, c.a };
-		}
-
 	} // namespace
 
 	// ── Stat helpers ──────────────────────────────────────────────────────────
@@ -118,23 +113,7 @@ namespace aether::app
 		return v;
 	}
 
-	void DebugLayer::DrawFrameTimeGraph() const
-	{
-		// Build a flat float array in chronological order for ImGui::PlotHistogram.
-		std::array<float, kFrameHistorySize> ordered{};
-		for (std::size_t i = 0; i < m_frameHistoryCount; ++i)
-		{
-			const std::size_t idx = (m_frameHistoryHead + kFrameHistorySize - m_frameHistoryCount + i) % kFrameHistorySize;
-			ordered[i] = m_frameTimesMs[idx];
-		}
-
-		std::array<char, 32> overlay{};
-		std::snprintf(overlay.data(), overlay.size(), "%.2f ms", GetAverageFrameTimeMs());
-
-		ImGui::PlotHistogram("##ft", ordered.data(), static_cast<int>(m_frameHistoryCount), 0, overlay.data(), 0.f, 33.333f, ImVec2(ImGui::GetContentRegionAvail().x, 72.f));
-	}
-
-	// ── Script error toast ────────────────────────────────────────────────────
+	// ── Script error location ─────────────────────────────────────────────────
 
 	void DebugLayer::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
@@ -147,7 +126,7 @@ namespace aether::app
 		//   D:\AetherCore\resources\scripts\sandbox.das:30:0
 		// The location line (path:line:col) appears on a separate line.
 		// Search for the pattern "*.das:NUMBER:NUMBER" which indicates the actual location.
-		
+
 		// Find all occurrences of ".das:" followed by digits (the location pattern)
 		std::size_t searchPos = 0;
 		while (searchPos < error.size())
@@ -155,7 +134,7 @@ namespace aether::app
 			const auto dasPos = error.find(".das:", searchPos);
 			if (dasPos == std::string::npos)
 				break;
-			
+
 			// Check if this is followed by a number (line number)
 			const std::size_t colonPos = dasPos + 4;
 			if (colonPos >= error.size() || !std::isdigit(static_cast<unsigned char>(error[colonPos])))
@@ -163,17 +142,17 @@ namespace aether::app
 				searchPos = dasPos + 1;
 				continue;
 			}
-			
+
 			// Scan backwards to find the start of the path
 			std::size_t start = dasPos;
 			while (start > 0 && error[start - 1] != ' ' && error[start - 1] != '\n' && error[start - 1] != '\r')
 			{
 				--start;
 			}
-			
+
 			// Extract the path including .das
 			outPath = error.substr(start, dasPos + 4 - start);
-			
+
 			// Parse the line number after .das:
 			std::size_t lineStart = colonPos + 1;
 			std::size_t lineEnd = lineStart;
@@ -181,7 +160,7 @@ namespace aether::app
 			{
 				++lineEnd;
 			}
-			
+
 			if (lineEnd > lineStart)
 			{
 				try
@@ -193,11 +172,11 @@ namespace aether::app
 					outLine = 0;
 				}
 			}
-			
+
 			// Found a valid location, stop searching
 			if (outLine > 0)
 				break;
-			
+
 			searchPos = dasPos + 1;
 		}
 	}
@@ -279,38 +258,32 @@ namespace aether::app
 		for (auto& err : errors)
 		{
 			// Split multi-error compiler output into individual errors.
-			// daslang compiler outputs all errors as one string, each starting with "error[NNNNN]:"
 			std::vector<std::string> individualErrors;
 			std::regex errorPattern(R"(error\[\d+\]:)");
 			auto begin = std::sregex_iterator(err.begin(), err.end(), errorPattern);
 			auto end = std::sregex_iterator();
-			
+
 			if (begin == end)
 			{
-				// No error[NNNNN]: pattern found, treat as single error
 				individualErrors.push_back(err);
 			}
 			else
 			{
-				// Split by error[NNNNN]: pattern
 				std::size_t lastPos = 0;
 				for (auto it = begin; it != end; ++it)
 				{
 					std::smatch match = *it;
 					if (it == begin)
 					{
-						// First error - include everything from start to next error
 						lastPos = match.position();
 					}
 					else
 					{
-						// Extract previous error block
 						std::string prevError = err.substr(lastPos, match.position() - lastPos);
 						individualErrors.push_back(prevError);
 						lastPos = match.position();
 					}
 				}
-				// Add the last error block
 				individualErrors.push_back(err.substr(lastPos));
 			}
 
@@ -345,248 +318,18 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::DrawErrorToasts(LayerContext& context)
+	namespace
 	{
-		if (m_errorToasts.empty())
-			return;
-
-		const double now = context.elapsedTimeSeconds;
-
-		if (m_errorToasts.empty())
-			return;
-
-		ImGuiViewport* vp    = ImGui::GetMainViewport();
-		const float toastW   = std::min(520.f, vp->WorkSize.x * 0.7f);
-		const float margin   = 16.f;
-		const float anchorX  = vp->WorkPos.x + vp->WorkSize.x - margin;
-		float       yOffset  = vp->WorkPos.y + vp->WorkSize.y - margin;
-
-		constexpr std::size_t kMaxVisibleToasts = 3;
-		constexpr float kToastStackGap = 4.f;
-
-		const std::size_t visibleCount = std::min(m_errorToasts.size(), kMaxVisibleToasts);
-		const std::size_t hiddenCount = m_errorToasts.size() - visibleCount;
-
-		// Draw visible toasts (newest first, from back of deque)
-		for (std::size_t i = 0; i < visibleCount; ++i)
+		UiRect PxRect(float l, float t, float r, float b)
 		{
-			ScriptErrorToast& toast = m_errorToasts[m_errorToasts.size() - 1 - i];
-
-			char winId[64];
-			std::snprintf(winId, sizeof(winId), "##toast_%p", &toast);
-
-			ImGui::SetNextWindowPos(ImVec2(anchorX, yOffset), ImGuiCond_Always, ImVec2(1.f, 1.f));
-			ImGui::SetNextWindowSize(ImVec2(toastW, 0.f), ImGuiCond_Always);
-
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.14f, 0.04f, 0.04f, 1.f));
-			ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.48f, 0.12f, 0.12f, 1.f));
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   5.f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    ImVec2(12.f, 10.f));
-
-			constexpr ImGuiWindowFlags kFlags =
-				ImGuiWindowFlags_NoTitleBar         |
-				ImGuiWindowFlags_NoResize           |
-				ImGuiWindowFlags_NoMove             |
-				ImGuiWindowFlags_NoScrollbar        |
-				ImGuiWindowFlags_NoScrollWithMouse  |
-				ImGuiWindowFlags_NoSavedSettings    |
-				ImGuiWindowFlags_NoDocking          |
-				ImGuiWindowFlags_NoFocusOnAppearing |
-				ImGuiWindowFlags_NoNav;
-
-			if (ImGui::Begin(winId, nullptr, kFlags))
-			{
-				// --- Header: title left, filename:line right ---
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.32f, 0.32f, 1.f));
-				ImGui::TextUnformatted("SCRIPT ERROR");
-				ImGui::PopStyleColor();
-
-				if (!toast.filePath.empty())
-				{
-					const char* p  = toast.filePath.c_str();
-					const char* sl = std::strrchr(p, '/');
-					const char* bs = std::strrchr(p, '\\');
-					const char* fn = (sl > bs ? sl : bs) ? (sl > bs ? sl : bs) + 1 : p;
-
-					char loc[128];
-					std::snprintf(loc, sizeof(loc), "%s:%d", fn, toast.line);
-
-					const float locW = ImGui::CalcTextSize(loc).x;
-					ImGui::SameLine();
-					ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - locW);
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.48f, 0.36f, 0.36f, 1.f));
-					ImGui::TextUnformatted(loc);
-					ImGui::PopStyleColor();
-				}
-
-				ImGui::PushStyleColor(ImGuiCol_Separator, ImVec4(0.38f, 0.10f, 0.10f, 1.f));
-				ImGui::Separator();
-				ImGui::PopStyleColor();
-
-				// --- Summary ---
-				ImGui::Spacing();
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.93f, 0.87f, 0.80f, 1.f));
-				ImGui::TextWrapped("%s", toast.summary.c_str());
-				ImGui::PopStyleColor();
-				ImGui::Spacing();
-
-				// --- Callstack / full message (always visible) ---
-				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.09f, 0.09f, 1.f));
-				ImGui::PushStyleColor(ImGuiCol_Border,  ImVec4(0.22f, 0.17f, 0.17f, 1.f));
-				ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 3.f);
-
-				if (ImGui::BeginChild("##stack", ImVec2(0.f, 120.f), true, ImGuiWindowFlags_HorizontalScrollbar))
-				{
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.70f, 0.62f, 0.57f, 1.f));
-					ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.f, 2.f));
-					ImGui::TextUnformatted(toast.message.c_str());
-					ImGui::PopStyleVar();
-					ImGui::PopStyleColor();
-
-					// Only auto-scroll if already at the bottom.
-					if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.f)
-						ImGui::SetScrollHereY(1.f);
-				}
-				ImGui::EndChild();
-				ImGui::PopStyleVar();
-				ImGui::PopStyleColor(2);
-
-				ImGui::Spacing();
-
-				// --- Buttons ---
-				ImGui::PushID(&toast);
-				ImGui::PushStyleVar(ImGuiStyleVar_FramePadding,  ImVec2(9.f, 4.f));
-				ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 3.f);
-				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,   ImVec2(6.f, 4.f));
-
-				// Pushes a consistent dark-red button style; caller pops 4 colors.
-				auto PushRedBtn = [](float brightness) {
-					const float b = brightness;
-					ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.28f * b, 0.07f * b, 0.07f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f * b, 0.12f * b, 0.12f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.60f * b, 0.18f * b, 0.18f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.92f,     0.62f,     0.62f,     1.f));
-				};
-
-				PushRedBtn(1.f);
-				if (ImGui::Button(toast.copied ? "Copied!" : "Copy"))
-				{
-					ImGui::SetClipboardText(toast.message.c_str());
-					toast.copied = true;
-					toast.copyFeedbackTime = now;
-				}
-				ImGui::PopStyleColor(4);
-
-				if (toast.copied && (now - toast.copyFeedbackTime) > 1.5)
-					toast.copied = false;
-
-				ImGui::SameLine();
-
-				PushRedBtn(1.f);
-				if (ImGui::Button("Open in VS Code"))
-					OpenInVSCode(toast.filePath, toast.line);
-				ImGui::PopStyleColor(4);
-
-				// Dismiss flush-right with exact calculated width.
-				const float dismissW = ImGui::CalcTextSize("Dismiss").x
-									+ ImGui::GetStyle().FramePadding.x * 2.f;
-				ImGui::SameLine();
-				ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - dismissW);
-
-				PushRedBtn(1.3f); // slightly brighter to differentiate as destructive
-				if (ImGui::Button("Dismiss"))
-					toast.dismissed = true;
-				ImGui::PopStyleColor(4);
-
-				ImGui::PopStyleVar(3);
-				ImGui::PopID();
-
-				// --- Progress bar ---
-				ImGui::Spacing();
-				ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.58f, 0.14f, 0.14f, 1.f));
-				ImGui::PushStyleColor(ImGuiCol_FrameBg,       ImVec4(0.10f, 0.03f, 0.03f, 1.f));
-				ImGui::PopStyleColor(2);
-			}
-			ImGui::End();
-
-			ImGui::PopStyleVar(3);
-			ImGui::PopStyleColor(2);
-
-			yOffset -= (ImGui::GetWindowHeight() / 1.6f) + kToastStackGap;
+			return UiRect{
+				.anchorMin = { 0.f, 0.f },
+				.anchorMax = { 0.f, 0.f },
+				.offsetMinPx = { l, t },
+				.offsetMaxPx = { r, b }
+			};
 		}
-
-		// Draw "X more errors" indicator above oldest visible toast
-		if (hiddenCount > 0)
-		{
-			const float indicatorHeight = 60.f;
-			yOffset -= indicatorHeight + kToastStackGap;
-
-			char indicatorId[64];
-			std::snprintf(indicatorId, sizeof(indicatorId), "##more_errors_%zu", hiddenCount);
-
-			ImGui::SetNextWindowPos(ImVec2(anchorX, yOffset), ImGuiCond_Always, ImVec2(1.f, 1.f));
-			ImGui::SetNextWindowSize(ImVec2(toastW, indicatorHeight));
-			ImGui::SetNextWindowBgAlpha(0.97f);
-
-			ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.14f, 0.04f, 0.04f, 1.f));
-			ImGui::PushStyleColor(ImGuiCol_Border,   ImVec4(0.48f, 0.12f, 0.12f, 1.f));
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,   5.f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding,    ImVec2(12.f, 10.f));
-
-			constexpr ImGuiWindowFlags kIndicatorFlags =
-				ImGuiWindowFlags_NoTitleBar         |
-				ImGuiWindowFlags_NoResize           |
-				ImGuiWindowFlags_NoMove             |
-				ImGuiWindowFlags_NoScrollbar        |
-				ImGuiWindowFlags_NoScrollWithMouse  |
-				ImGuiWindowFlags_NoSavedSettings    |
-				ImGuiWindowFlags_NoDocking          |
-				ImGuiWindowFlags_NoFocusOnAppearing |
-				ImGuiWindowFlags_NoNav;
-
-			if (ImGui::Begin(indicatorId, nullptr, kIndicatorFlags))
-			{
-				// Center: "⚠ X more errors"
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.32f, 0.32f, 1.f));
-				
-				char moreText[64];
-				std::snprintf(moreText, sizeof(moreText), "⚠  %zu more error%s", hiddenCount, hiddenCount > 1 ? "s" : "");
-				
-				const float textW = ImGui::CalcTextSize(moreText).x;
-				const float textX = (toastW - ImGui::GetStyle().WindowPadding.x * 2.f - textW) * 0.5f;
-				ImGui::SetCursorPosX(ImGui::GetStyle().WindowPadding.x + textX);
-				ImGui::TextUnformatted(moreText);
-				
-				ImGui::PopStyleColor();
-
-				// Right: "Dismiss All" button
-				const float dismissAllW = ImGui::CalcTextSize("Dismiss All").x + ImGui::GetStyle().FramePadding.x * 2.f;
-				ImGui::SameLine();
-				ImGui::SetCursorPosX(ImGui::GetWindowContentRegionMax().x - dismissAllW);
-
-				auto PushRedBtn = [](float brightness) {
-					const float b = brightness;
-					ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.28f * b, 0.07f * b, 0.07f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.45f * b, 0.12f * b, 0.12f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive,  ImVec4(0.60f * b, 0.18f * b, 0.18f * b, 1.f));
-					ImGui::PushStyleColor(ImGuiCol_Text,          ImVec4(0.92f,     0.62f,     0.62f,     1.f));
-				};
-
-				PushRedBtn(1.3f);
-				if (ImGui::Button("Dismiss All"))
-				{
-					m_errorToasts.clear();
-				}
-				ImGui::PopStyleColor(4);
-			}
-			ImGui::End();
-
-			ImGui::PopStyleVar(3);
-			ImGui::PopStyleColor(2);
-		}
-	}
+	} // namespace
 
 	// ── AppLayer overrides ────────────────────────────────────────────────────
 
@@ -605,7 +348,6 @@ namespace aether::app
 			}
 		}
 
-		
 		if (context.Get<Input>().IsKeyPressed(aether::Key::F))
 		{
 			const bool enabled = !context.Get<Renderer>().IsFxaaEnabled();
@@ -631,25 +373,87 @@ namespace aether::app
 
 	void DebugLayer::OnGui(LayerContext& context)
 	{
-		// Error toasts are always visible, regardless of m_visible.
-		DrawErrorToasts(context);
+		UIRenderer& ui = context.Get<UIRenderer>();
+		const Input& input = context.Get<Input>();
+		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
+		const float sw = static_cast<float>(extent.width);
+		const float sh = static_cast<float>(extent.height);
+
+		const glm::vec4 green{ 0.40f, 0.72f, 0.46f, 1.f };
+		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
+		const glm::vec4 red{ 0.80f, 0.33f, 0.30f, 1.f };
+		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
+		const glm::vec4 dimmed{ 0.50f, 0.60f, 0.69f, 1.f };
+		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
+		const glm::vec4 sectionFg{ 0.58f, 0.68f, 0.78f, 1.f };
+
+		// ── Error notification bar (always visible) ──────────────────────────
+		if (!m_errorToasts.empty())
+		{
+			constexpr float kBarHeight = 44.f;
+			constexpr float kDismissW = 100.f;
+			constexpr float kMargin = 16.f;
+			const float barY = sh - kBarHeight - kMargin;
+
+			// Background bar
+			ui.DrawRect(PxRect(0.f, barY, sw, barY + kBarHeight), { 0.14f, 0.04f, 0.04f, 0.95f }, 4.f);
+
+			// Error count text
+			const std::size_t count = m_errorToasts.size();
+			// Use the first error's summary or just "Script Errors"
+			const std::string& summary = m_errorToasts[0].summary;
+			std::array<char, 256> errText{};
+			if (count == 1)
+			{
+				std::snprintf(errText.data(), errText.size(), "Script Error: %s", summary.c_str());
+			}
+			else
+			{
+				std::snprintf(errText.data(), errText.size(), "Script Errors (%zu): %s", count, summary.c_str());
+			}
+
+			const float textY = barY + (kBarHeight - 14.f) * 0.5f;
+			ui.DrawText(errText.data(), UiPoint{ .anchor = { 0.f, 1.f }, .offsetPx = { kMargin, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f } }, 14.f, { 0.95f, 0.32f, 0.32f, 1.f });
+
+			// Dismiss button
+			const float dismissX = sw - kDismissW - kMargin;
+			const float dismissTextX = sw - kDismissW - kMargin + 10.f;
+			const float dismissY = barY + (kBarHeight - 24.f) * 0.5f;
+
+			ui.DrawRect(PxRect(dismissX, dismissY, dismissX + kDismissW - 10.f, dismissY + 24.f), { 0.35f, 0.10f, 0.10f, 1.f }, 3.f);
+			ui.DrawText("Dismiss All", UiPoint{ .anchor = { 0.f, 1.f }, .offsetPx = { dismissTextX, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f } }, 13.f, { 0.85f, 0.55f, 0.55f, 1.f });
+
+			// Click detection for dismiss
+			if (input.IsMouseButtonPressed(MouseButton::Left))
+			{
+				const glm::vec2 mp = input.GetMousePos();
+				if (mp.x >= dismissX && mp.x <= dismissX + kDismissW - 10.f && mp.y >= dismissY && mp.y <= dismissY + 24.f)
+				{
+					m_errorToasts.clear();
+				}
+			}
+		}
 
 		if (!m_visible)
 		{
 			return;
 		}
 
-		// Keep the panel anchored to the top-right with a fixed initial size.
-		const ImGuiIO& io = ImGui::GetIO();
-		ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x - 12.f, 12.f), ImGuiCond_FirstUseEver, ImVec2(1.f, 0.f));
-		ImGui::SetNextWindowSize(ImVec2(420.f, 0.f), ImGuiCond_FirstUseEver);
-
-		ImGui::Begin("DEBUG OVERLAY", &m_visible, ImGuiWindowFlags_NoCollapse);
+		// ── Debug overlay panel ──────────────────────────────────────────────
+		const float panelX = sw - 420.f;
+		const float panelY = 12.f;
+		const float panelW = 408.f;
+		const float col2X = panelX + 220.f;
+		const float padX = 14.f;
+		const float padY = 10.f;
+		const float rowH = 18.f;
+		const float sepH = 12.f;
+		const float textSize = 13.f;
 
 		std::array<char, 128> buf{};
 
-		// ── PERFORMANCE ────────────────────────────────────────────────────────
-		ImGui::SeparatorText("PERFORMANCE");
+		// Calculate panel height first (two-pass drawing)
+		float contentH = padY;
 
 		const float curMs = m_frameHistoryCount > 0 ? m_frameTimesMs[(m_frameHistoryHead + kFrameHistorySize - 1) % kFrameHistorySize] : static_cast<float>(context.deltaTimeSeconds * 1000.0);
 		const float avgMs = GetAverageFrameTimeMs();
@@ -658,150 +462,195 @@ namespace aether::app
 		const float curFps = curMs > 0.f ? 1000.f / curMs : 0.f;
 		const float avgFps = avgMs > 0.f ? 1000.f / avgMs : 0.f;
 
-		ImGui::Columns(2, "perf", false);
+		// Pass 1: measure
+		auto addRow = [&]() { contentH += rowH; };
+		auto addSep = [&]() { contentH += sepH; };
+		contentH += rowH; // Frame
+		contentH += rowH; // FPS
+		contentH += rowH; // Delta
+		contentH += rowH; // Avg FPS
+		contentH += rowH; // Min
+		contentH += rowH; // Max
+		contentH += 76.f + 4.f; // histogram height + spacing
+		addSep(); // separator before RENDERER
+		contentH += rowH; // Tonemap
+		contentH += rowH; // FXAA
+		contentH += rowH; // Resolution
+		addSep(); // separator before CAMERA
+		contentH += rowH; // Position
+		contentH += rowH; // FOV
+		contentH += rowH; // Near
+		contentH += rowH; // Far
+		addSep(); // separator before LIGHTING
+		contentH += rowH; // Point Lights
+		contentH += rowH; // Spot Lights
+		contentH += rowH; // Sun Intensity
+		addSep(); // separator before SCRIPTING
+		contentH += 30.f; // Reload button
+		contentH += padY;
 
+		const float panelH = contentH;
+
+		// Background
+		ui.DrawRect(PxRect(panelX, panelY, panelX + panelW, panelY + panelH), bg, 6.f);
+
+		// Border accent
+		ui.DrawRect(PxRect(panelX, panelY, panelX + 3.f, panelY + panelH), { 0.30f, 0.45f, 0.65f, 0.6f }, 6.f);
+
+		float y = panelY + padY;
+
+		auto drawLabelValue = [&](const char* label, const char* value, glm::vec4 valueColor)
+		{
+			ui.DrawText(label, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { panelX + padX, y } }, textSize, white);
+			ui.DrawText(value, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			y += rowH;
+		};
+
+		// ── PERFORMANCE ──────────────────────────────────────────────────────
 		std::snprintf(buf.data(), buf.size(), "#%llu", static_cast<unsigned long long>(context.frameIndex));
-		ImGui::Text("Frame");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted(buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Frame", buf.data(), white);
 
 		std::snprintf(buf.data(), buf.size(), "%.1f", curFps);
-		ImGui::Text("FPS");
-		ImGui::NextColumn();
-		ImGui::TextColored(ToImVec4(FpsColor(curFps)), "%s", buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("FPS", buf.data(), FpsColor(curFps));
 
 		std::snprintf(buf.data(), buf.size(), "%.2f ms", curMs);
-		ImGui::Text("Delta");
-		ImGui::NextColumn();
-		ImGui::TextColored(ToImVec4(MsColor(curMs)), "%s", buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Delta", buf.data(), MsColor(curMs));
 
 		std::snprintf(buf.data(), buf.size(), "%.1f", avgFps);
-		ImGui::Text("Avg FPS");
-		ImGui::NextColumn();
-		ImGui::TextColored(ToImVec4(FpsColor(avgFps)), "%s", buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Avg FPS", buf.data(), FpsColor(avgFps));
 
 		std::snprintf(buf.data(), buf.size(), "%.2f ms", minMs);
-		ImGui::Text("Min");
-		ImGui::NextColumn();
-		ImGui::TextColored(ToImVec4({ 0.40f, 0.72f, 0.46f, 1.f }), "%s", buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Min", buf.data(), green);
 
 		std::snprintf(buf.data(), buf.size(), "%.2f ms", maxMs);
-		ImGui::Text("Max");
-		ImGui::NextColumn();
-		ImGui::TextColored(ToImVec4(MsColor(maxMs)), "%s", buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Max", buf.data(), MsColor(maxMs));
 
-		ImGui::Columns(1);
+		// Frame time histogram
+		{
+			const float chartX = panelX + padX;
+			const float chartY = y;
+			const float chartW = panelW - padX * 2.f;
+			const float chartH = 76.f;
 
-		ImGui::Spacing();
-		ImGui::TextDisabled("Frame Time (0 - 33 ms)  /  ref: 60fps 30fps");
-		DrawFrameTimeGraph();
+			ui.DrawRect(PxRect(chartX, chartY, chartX + chartW, chartY + chartH), { 0.12f, 0.12f, 0.15f, 1.f }, 3.f);
 
-		// ── RENDERER ──────────────────────────────────────────────────────────
-		ImGui::SeparatorText("RENDERER");
-		ImGui::Columns(2, "rend", false);
+			if (m_frameHistoryCount > 0)
+			{
+				const float maxFrameTime = 33.333f;
+				const float barW = chartW / static_cast<float>(kFrameHistorySize);
+				for (std::size_t i = 0; i < kFrameHistorySize; ++i)
+				{
+					if (i >= m_frameHistoryCount)
+					{
+						continue;
+					}
+					const std::size_t idx = (m_frameHistoryHead + kFrameHistorySize - m_frameHistoryCount + i) % kFrameHistorySize;
+					const float val = m_frameTimesMs[idx];
+					const float barH = (std::min(val, maxFrameTime) / maxFrameTime) * chartH;
+					const float bx = chartX + static_cast<float>(i) * barW;
+					const float by = chartY + chartH - barH;
 
-		ImGui::Text("Tonemap");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted(GetTonemapModeName(context.Get<Renderer>().GetTonemapMode()));
-		ImGui::NextColumn();
+					glm::vec4 barColor{ 0.42f, 0.62f, 0.74f, 1.f };
+					if (val > 25.f)
+						barColor = { 0.80f, 0.33f, 0.30f, 1.f };
+					else if (val > 16.667f)
+						barColor = { 0.86f, 0.71f, 0.30f, 1.f };
+
+					ui.DrawRect(PxRect(bx, by, bx + std::max(barW - 1.f, 1.f), chartY + chartH), barColor);
+				}
+			}
+
+			// Reference lines at 16.667ms (60fps) and 33.333ms (30fps)
+			const float refY60 = chartY + chartH - (16.667f / 33.333f * chartH);
+			const float refY30 = chartY + chartH - (33.333f / 33.333f * chartH);
+			ui.DrawLine(UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, refY60 } }, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX + chartW, refY60 } }, 1.f, { 0.40f, 0.72f, 0.46f, 0.4f });
+			ui.DrawLine(UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, refY30 } }, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX + chartW, refY30 } }, 1.f, { 0.86f, 0.71f, 0.30f, 0.4f });
+
+			// Bottom label
+			std::snprintf(buf.data(), buf.size(), "Frame Time (0 - 33 ms)  |  avg: %.2f ms  |  ref: 60fps  30fps", avgMs);
+			ui.DrawText(buf.data(), UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, chartY + chartH + 2.f } }, 11.f, dimmed);
+
+			y = chartY + chartH + 18.f;
+		}
+
+		// ── RENDERER ─────────────────────────────────────────────────────────
+		y += 4.f;
+		drawLabelValue("Tonemap", GetTonemapModeName(context.Get<Renderer>().GetTonemapMode()), white);
 
 		const bool fxaa = context.Get<Renderer>().IsFxaaEnabled();
-		ImGui::Text("FXAA");
-		ImGui::NextColumn();
-		ImGui::TextColored(fxaa ? ImVec4(0.4f, 0.72f, 0.46f, 1.f) : ImVec4(0.5f, 0.6f, 0.69f, 1.f), fxaa ? "On" : "Off");
-		ImGui::NextColumn();
+		drawLabelValue("FXAA", fxaa ? "On" : "Off", fxaa ? green : dimmed);
 
 		const VkExtent2D ext = context.Get<Swapchain>().GetExtent();
 		std::snprintf(buf.data(), buf.size(), "%u x %u", ext.width, ext.height);
-		ImGui::Text("Resolution");
-		ImGui::NextColumn();
-		ImGui::TextUnformatted(buf.data());
-		ImGui::NextColumn();
+		drawLabelValue("Resolution", buf.data(), white);
 
-		ImGui::Columns(1);
-
-		// ── CAMERA ────────────────────────────────────────────────────────────
-		ImGui::SeparatorText("CAMERA");
-
+		// ── CAMERA ───────────────────────────────────────────────────────────
+		y += 4.f;
 		const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera();
 		if (cam)
 		{
-			ImGui::Columns(2, "cam", false);
 			const glm::vec3 pos = cam->GetPosition();
 			std::snprintf(buf.data(), buf.size(), "%.1f, %.1f, %.1f", pos.x, pos.y, pos.z);
-			ImGui::Text("Position");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
+			drawLabelValue("Position", buf.data(), white);
 
 			std::snprintf(buf.data(), buf.size(), "%.0f deg", cam->GetFovDegrees());
-			ImGui::Text("FOV");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
+			drawLabelValue("FOV", buf.data(), white);
 
 			std::snprintf(buf.data(), buf.size(), "%.2f", cam->GetNearPlane());
-			ImGui::Text("Near");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
+			drawLabelValue("Near", buf.data(), white);
 
 			std::snprintf(buf.data(), buf.size(), "%.0f", cam->GetFarPlane());
-			ImGui::Text("Far");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
-			ImGui::Columns(1);
+			drawLabelValue("Far", buf.data(), white);
 		}
 		else
 		{
-			ImGui::TextDisabled("No active camera");
+			y += rowH; // Position placeholder
+			ui.DrawText("No active camera", UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { panelX + padX, y - rowH * 3.f } }, textSize, dimmed);
 		}
 
-		// ── LIGHTING ──────────────────────────────────────────────────────────
-		ImGui::SeparatorText("LIGHTING");
+		// ── LIGHTING ─────────────────────────────────────────────────────────
+		y += 4.f;
+		std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetPointLights().size());
+		drawLabelValue("Point Lights", buf.data(), white);
 
-		{
-			ImGui::Columns(2, "light", false);
+		std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetSpotLights().size());
+		drawLabelValue("Spot Lights", buf.data(), white);
 
-			std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetPointLights().size());
-			ImGui::Text("Point Lights");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
+		std::snprintf(buf.data(), buf.size(), "%.2f", context.Get<Renderer>().GetDirectionalLightIntensity());
+		drawLabelValue("Sun Intensity", buf.data(), white);
 
-			std::snprintf(buf.data(), buf.size(), "%zu", context.Get<Renderer>().GetSpotLights().size());
-			ImGui::Text("Spot Lights");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
-
-			std::snprintf(buf.data(), buf.size(), "%.2f", context.Get<Renderer>().GetDirectionalLightIntensity());
-			ImGui::Text("Sun Intensity");
-			ImGui::NextColumn();
-			ImGui::TextUnformatted(buf.data());
-			ImGui::NextColumn();
-
-			ImGui::Columns(1);
-		}
-
-		// ── SCRIPTING ─────────────────────────────────────────────────────────
+		// ── SCRIPTING ────────────────────────────────────────────────────────
+		y += 4.f;
 		if (context.TryGet<scripting::ScriptingSubsystem>())
 		{
-			ImGui::SeparatorText("SCRIPTING");
+			const float btnX = panelX + padX;
+			const float btnY = y;
+			const float btnW = panelW - padX * 2.f;
+			const float btnH = 28.f;
 
-			if (ImGui::Button("Reload Script [F5]"))
+			// Button background
+			const bool hovered = input.IsMouseButtonDown(MouseButton::Left) ?
+				false :
+				(input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW &&
+					input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH);
+
+			const glm::vec4 btnColor = hovered ? glm::vec4{ 0.25f, 0.30f, 0.40f, 1.f } : glm::vec4{ 0.20f, 0.24f, 0.30f, 1.f };
+			ui.DrawRect(PxRect(btnX, btnY, btnX + btnW, btnY + btnH), btnColor, 4.f);
+
+			// Button text centered
+			constexpr const char* kBtnText = "Reload Script  [F5]";
+			const float textW = ui.MeasureText(kBtnText, 13.f);
+			const float textBX = btnX + (btnW - textW) * 0.5f;
+			const float textBY = btnY + (btnH - textSize) * 0.5f;
+			ui.DrawText(kBtnText, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { textBX, textBY } }, textSize, white);
+
+			// Click detection
+			if (input.IsMouseButtonPressed(MouseButton::Left) &&
+				input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW &&
+				input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH)
 			{
 				context.TryGet<scripting::ScriptingSubsystem>()->RequestReload();
 			}
 		}
-
-		ImGui::End();
 	}
 } // namespace aether::app

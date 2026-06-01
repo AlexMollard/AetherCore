@@ -89,7 +89,6 @@ namespace aether::app
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
 
 		m_layers.DetachAll(context);
-		m_imguiRenderer.Shutdown(m_engine.GetServiceContainer());
 		// Engine UIRenderer shutdown is handled by AetherCore.
 		AE_INFO(LogCategory::App, "Application shutdown complete.");
 	}
@@ -123,8 +122,6 @@ namespace aether::app
 		//}
 
 		Logger::SetFrameNumber(0);
-		m_imguiRenderer.Init(m_engine.GetServiceContainer(), m_engine.GetServiceContainer().Get<Window>().GetHandle());
-		m_engine.SetSwapchainRecreatedCallback([this](aether::AetherCore& e) { m_imguiRenderer.ReregisterPass(e.GetServiceContainer()); });
 
 		// Set the coroutine default executor - all cross-thread continuation
 		// resumptions (e.g. I/O thread → game thread) go through this queue
@@ -252,7 +249,6 @@ namespace aether::app
 			{
 				uiRenderer->SetWriteSlot(drawSlot);
 			}
-			m_imguiRenderer.SetWriteSlot(drawSlot);
 
 			// ECS UI system: hit-test, drag, widget state (runs before OnGui).
 			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
@@ -269,9 +265,6 @@ namespace aether::app
 					uiSystem->RenderAll(uiWorld, *uiRenderer, m_engine.GetServiceContainer().Get<Input>(), extent);
 				}
 			}
-
-			// ImGui new frame.
-			m_imguiRenderer.BeginFrame();
 
 			// Layer game-logic update.
 			{
@@ -290,12 +283,6 @@ namespace aether::app
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
 				uiSystem->EndFrame(uiWorld, uiCtx);
 			}
-
-			// Snapshot ImGui draw data.
-			m_imguiRenderer.SnapshotFrame();
-
-			// Render secondary OS windows.
-			m_imguiRenderer.RenderPlatformWindows();
 
 			// Flush ECS draws and build a frame packet.
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);

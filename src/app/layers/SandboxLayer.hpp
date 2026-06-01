@@ -1,15 +1,15 @@
 #pragma once
 
+#include <string>
+
 #include "AppLayer.hpp"
 #include "camera/CameraManager.hpp"
+#include "scene/Entity.hpp"
 
 namespace aether::app
 {
 	class SandboxGameSystem;
 
-	// Application layer for the sandbox scene.
-	// Coordinates with SandboxGameSystem for all actual game logic.
-	// Also handles debug UI rendering.
 	class SandboxLayer final : public AppLayer
 	{
 	public:
@@ -22,5 +22,12 @@ namespace aether::app
 		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
 
 		SandboxGameSystem* m_gameSystem = nullptr;
+
+		// Cached display values updated in OnUpdate
+		std::size_t m_foxCount = 0;
+		std::size_t m_primCount = 0;
+		unsigned m_animCount = 0;
+		std::string m_animName;
+		aether::CameraHandle m_activeCamera;
 	};
 } // namespace aether::app

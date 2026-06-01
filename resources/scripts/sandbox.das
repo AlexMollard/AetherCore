@@ -8,7 +8,6 @@ require effects;
 require input;
 require input_bindings;
 require ui;
-require imgui;
 require math;
 require animation;
 require systems/fox_system;
@@ -21,8 +20,6 @@ var g_rotate_foxes : bool  = true;
 var g_spawn_btn    : uint  = 0u;
 var g_speed_slider : uint  = 0u;
 var g_rotate_cb    : uint  = 0u;
-var g_fps_label    : uint  = 0u;
-
 var g_cube_mesh   : uint  = 0u;
 var g_sphere_mesh : uint  = 0u;
 
@@ -203,11 +200,6 @@ def on_attach(world : World?)
 	// ── Native UI - Scene Controls panel ────────────────────────────────────
 	let panel = create_ui_panel(world, 16.0, 16.0, 280.0, 240.0, "Scene Controls");
 	set_ui_panel_collapsible(world, panel, true);
-
-	g_fps_label = create_ui_label(world, 16.0, 56.0, 260.0, 24.0, "FPS: --");
-	set_ui_font_size(world, g_fps_label, 13.0);
-	set_ui_text_color(world, g_fps_label, float4(0.7, 0.85, 1.0, 1.0));
-	add_ui_child(world, panel, g_fps_label);
 
 	let sep_lbl = create_ui_label(world, 16.0, 88.0, 260.0, 20.0, "Fox rotation speed");
 	set_ui_font_size(world, sep_lbl, 12.0);
@@ -394,40 +386,6 @@ def on_update(world : World?)
 	let sun_dir = get_sun_direction();
 	let sun_str = "Sun: ({sun_dir.x:.2f}, {sun_dir.y:.2f}, {sun_dir.z:.2f})";
 	set_ui_text(world, g_sun_dir_label, sun_str);
-
-	// ── FPS label ─────────────────────────────────────────────────────────────
-	let fps = imgui_get_frame_rate();
-	set_ui_text(world, g_fps_label, "FPS: {int(fps)}");
-
-	// ── ImGui debug overlay ───────────────────────────────────────────────────
-	imgui_set_next_window_pos_once(16.0, 272.0);
-	imgui_set_next_window_size_once(280.0, 0.0);
-	if (imgui_begin("Debug Info"))
-	{
-		imgui_text("Scene");
-		imgui_separator();
-		imgui_label_text("Foxes", "{g_fox_count}");
-		imgui_label_text("Speed", "{g_speed_scale}");
-		imgui_label_text("Rotate", "{g_rotate_foxes}");
-		imgui_spacing();
-		imgui_separator();
-		imgui_text_colored(float4(0.6, 0.9, 0.6, 1.0), "Lights");
-		imgui_separator();
-		imgui_label_text("Point lights", "3  (static x2 + orbiting)");
-		imgui_label_text("Spot lights", "1  (center, down)");
-		imgui_label_text("Directional", "1  (sun)");
-		imgui_spacing();
-		imgui_separator();
-		imgui_text_colored(float4(1.0, 0.9, 0.5, 1.0), "Day / Night");
-		imgui_separator();
-		imgui_label_text("Time", "{time_str}");
-		imgui_label_text("Mode", g_manual_mode ? "Manual" : "Auto");
-		imgui_label_text("Speed", "{g_time_speed:.1f} sec/sec");
-		imgui_spacing();
-		imgui_separator();
-		imgui_text_colored(float4(0.5, 0.9, 0.5, 1.0), "Hot-reload: F5");
-	}
-	imgui_end();
 
 	// ── Keyboard shortcuts ────────────────────────────────────────────────────
 	if (is_action_pressed("toggle_rotate"))

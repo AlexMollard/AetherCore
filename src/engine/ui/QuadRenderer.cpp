@@ -244,18 +244,13 @@ namespace aether
 		                });
 	}
 
-	void QuadRenderer::EnsurePassRegistered()
+	void QuadRenderer::ReRegisterPass()
 	{
 		if (!m_ready || m_vkCtx == nullptr)
 		{
 			return;
 		}
-
-		if (!m_renderGraph->HasPass(m_passName))
-		{
-			RegisterPass();
-			AE_INFO(LogCategory::Engine, "QuadRenderer: pass '{}' re-registered after graph reset.", m_passName);
-		}
+		RegisterPass();
 	}
 
 	void QuadRenderer::Init(ServiceContainer& services, std::string_view passName)
@@ -328,8 +323,6 @@ namespace aether
 
 	void QuadRenderer::DrawRect(const UiRect& rect, glm::vec4 color, std::int32_t layer, float cornerRadiusPx)
 	{
-		EnsurePassRegistered();
-
 		if (m_vkCtx == nullptr)
 		{
 			return;
@@ -356,7 +349,6 @@ namespace aether
 
 	void QuadRenderer::DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color, std::int32_t layer)
 	{
-		EnsurePassRegistered();
 		if (m_vkCtx == nullptr || !m_ready || thicknessPx <= 0.0f)
 		{
 			return;
@@ -384,7 +376,6 @@ namespace aether
 
 	void QuadRenderer::DrawCircle(const UiPoint& center, float radiusPx, glm::vec4 color, std::int32_t layer)
 	{
-		EnsurePassRegistered();
 		if (m_vkCtx == nullptr || !m_ready || radiusPx <= 0.0f)
 		{
 			return;
@@ -404,7 +395,6 @@ namespace aether
 
 	void QuadRenderer::DrawTexturedRect(const UiRect& rect, std::uint32_t textureSlot, glm::vec4 uvRect, glm::vec4 tint, std::int32_t layer)
 	{
-		EnsurePassRegistered();
 		if (m_vkCtx == nullptr || !m_ready)
 		{
 			return;
@@ -431,7 +421,6 @@ namespace aether
 
 	void QuadRenderer::DrawGlyph(glm::vec4 glyphRectPx, glm::vec4 uvRect, glm::vec4 color, std::uint32_t atlasSlot, std::int32_t layer)
 	{
-		EnsurePassRegistered();
 		if (!m_ready || glyphRectPx.z <= 0.f || glyphRectPx.w <= 0.f || IsClipped(glyphRectPx))
 		{
 			return;

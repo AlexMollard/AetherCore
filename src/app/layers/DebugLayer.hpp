@@ -15,7 +15,7 @@ namespace aether::app::scripting
 
 namespace aether::app
 {
-	// Non-blocking toast notification for script errors.
+	// Non-blocking error notification for script errors.
 	// Always visible regardless of m_visible (the debug panel toggle).
 	struct ScriptErrorToast
 	{
@@ -24,9 +24,6 @@ namespace aether::app
 		std::string filePath;
 		int line = 0;
 		bool dismissed = false;
-		bool detailsExpanded = false;
-		bool copied = false;
-		double copyFeedbackTime = 0.0;
 	};
 
 	class DebugLayer final : public AppLayer
@@ -45,10 +42,7 @@ namespace aether::app
 		float GetMinFrameTimeMs() const;
 		float GetMaxFrameTimeMs() const;
 
-		void DrawFrameTimeGraph() const;
-
 		void PollScriptErrors(LayerContext& context);
-		void DrawErrorToasts(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);

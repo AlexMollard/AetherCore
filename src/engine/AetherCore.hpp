@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <vector>
 
@@ -87,11 +86,6 @@ namespace aether
 			return GpuDevice::GetForwardColorFormat();
 		}
 
-		void SetSwapchainRecreatedCallback(std::function<void(AetherCore&)> cb)
-		{
-			m_swapchainRecreatedCallback = std::move(cb);
-		}
-
 	private:
 		void BeginFrame();
 		void EndFrame(const RenderFramePacket& packet);
@@ -111,6 +105,5 @@ namespace aether
 		CommandRecorder m_currentRecorder;
 		std::uint64_t m_frameIndex = 0;
 		EngineSettings m_settings{};
-		std::function<void(AetherCore&)> m_swapchainRecreatedCallback;
 	};
 } // namespace aether

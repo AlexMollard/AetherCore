@@ -114,9 +114,12 @@ namespace aether
 		        [this]()
 		        {
 			        m_rendering.RecreateSwapchainResources(m_services);
-			        if (m_swapchainRecreatedCallback)
+			        // UI render graph passes are cleared by the reset above;
+			        // eagerly re-register them so the lazy-check is skipped on
+			        // every subsequent Draw* call.
+			        if (auto* ui = m_services.TryGet<UIRenderer>())
 			        {
-				        m_swapchainRecreatedCallback(*this);
+				        ui->ReRegisterPass();
 			        }
 		        });
 
