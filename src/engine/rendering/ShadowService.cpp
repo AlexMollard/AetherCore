@@ -29,7 +29,7 @@ namespace aether
 		}
 
 		// Single shadow queue with 3× output capacity for multi-frustum culling.
-		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 8192, 1024, UINT32_MAX, 8192 * kCullMultiFrustumCount);
+		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueue::Config{ .maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount });
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());

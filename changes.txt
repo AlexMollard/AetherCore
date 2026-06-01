@@ -1,0 +1,1596 @@
+diff --git a/src/engine/AetherCore.cpp b/src/engine/AetherCore.cpp
+index 632c367..cc3057a 100644
+--- a/src/engine/AetherCore.cpp
++++ b/src/engine/AetherCore.cpp
+@@ -304,6 +304,7 @@ namespace aether
+ 		const FrameTarget frameTarget = m_gpu.BuildFrameTarget();
+ 
+ 		m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
++		m_rendering.GetRenderGraph().BeginFrame(frameIdx);
+ 		m_rendering.GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
+ 		m_currentRecorder.EndDebugLabel();
+ 
+diff --git a/src/engine/passes/CullPass.cpp b/src/engine/passes/CullPass.cpp
+index f5bd252..8d62a9d 100644
+--- a/src/engine/passes/CullPass.cpp
++++ b/src/engine/passes/CullPass.cpp
+@@ -62,7 +62,7 @@ namespace aether
+ 		const VkPushConstantRange pushRange{
+ 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 			.offset = 0,
+-			.size = sizeof(CullPushConstants),
++			.size = sizeof(CullContracts::PushConstants),
+ 		};
+ 		const VkPipelineLayoutCreateInfo layoutInfo{
+ 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+@@ -119,7 +119,7 @@ namespace aether
+ 		const VkPushConstantRange pushRange{
+ 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 			.offset = 0,
+-			.size = sizeof(CullMultiPushConstants),
++			.size = sizeof(CullContracts::MultiPushConstants),
+ 		};
+ 		const VkPipelineLayoutCreateInfo layoutInfo{
+ 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+diff --git a/src/engine/rendering/CommandRecorder.cpp b/src/engine/rendering/CommandRecorder.cpp
+index 20dd9ec..488f3d9 100644
+--- a/src/engine/rendering/CommandRecorder.cpp
++++ b/src/engine/rendering/CommandRecorder.cpp
+@@ -41,10 +41,10 @@ namespace aether
+ 		vkCmdBindDescriptorSets(m_cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, set, 1, &descriptorSet, 0, nullptr);
+ 	}
+ 
+-	void CommandRecorder::PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc)
++	void CommandRecorder::PushConstants(VkPipelineLayout layout, const DrawContracts::PushConstants& pc)
+ 	{
+ 		AE_PROFILE_ZONE_N("CmdRecorder::PushConstants");
+-		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawPushConstants), &pc);
++		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawContracts::PushConstants), &pc);
+ 	}
+ 
+ 	void CommandRecorder::MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
+diff --git a/src/engine/rendering/CommandRecorder.hpp b/src/engine/rendering/CommandRecorder.hpp
+index 644e7f0..0492b6c 100644
+--- a/src/engine/rendering/CommandRecorder.hpp
++++ b/src/engine/rendering/CommandRecorder.hpp
+@@ -38,7 +38,7 @@ namespace aether
+ 		void DrawIndexedIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride = sizeof(VkDrawIndexedIndirectCommand));
+ 		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
+ 		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);
+-		void PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc);
++		void PushConstants(VkPipelineLayout layout, const DrawContracts::PushConstants& pc);
+ 		void MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess);
+ 
+ 		void HostToShaderBarrier();
+diff --git a/src/engine/rendering/FrameConstants.hpp b/src/engine/rendering/FrameConstants.hpp
+index 45e4ebd..752a1e6 100644
+--- a/src/engine/rendering/FrameConstants.hpp
++++ b/src/engine/rendering/FrameConstants.hpp
+@@ -10,60 +10,69 @@ namespace aether
+ 	// Per-frame constant data written once to a GPU buffer before any draws.
+ 	// Accessed via Buffer Device Address pushed per draw call.
+ 	//
++	// Usage Notes:
++	// - skyVoidColor: Active feature used by skybox.slang:208 for void/space rendering, set by DayNightSystem
++	// - shadowCascadeInfo: Populated by ShadowService for CSM (3 cascades)
++	// - tiledLightGridInfo/tiledLightBufferOffsets: Used by tiled_light_cull.slang for local lights
++	// - shadowViewProjCascades: Directional light cascade matrices (ShadowService)
++	// - shadowAtlasSlot: Bindless slot for local shadow atlas (LocalShadowService)
++	//
++	// Sync with shaders/include/FrameConstants.slangh - update both when modifying.
++	//
+ 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
+ 
+ 	// Layout (640 bytes):
+-	//   offset   0 : mat4     viewProj               (64)
+-	//   offset  64 : mat4     view                   (64)
+-	//   offset 128 : mat4     proj                   (64)
++	//   offset   0 : mat4     viewProj               (64)  Combined view-projection matrix
++	//   offset  64 : mat4     view                   (64)  View matrix
++	//   offset 128 : mat4     proj                   (64)  Projection matrix
+ 	//   offset 192 : uint64   materialBufferAddr      ( 8)  BDA of MaterialBuffer
+-	//   offset 200 : float    elapsedTime             ( 4)
+-	//   offset 204 : uint32   _pad0                   ( 4)
+-	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world dir, w=intensity
++	//   offset 200 : float    elapsedTime             ( 4)  Frame elapsed time in seconds
++	//   offset 204 : uint32   _pad0                   ( 4)  Alignment padding
++	//   offset 208 : vec4     sunDirectionIntensity   (16)  xyz=world-space direction, w=intensity (directional light)
+ 	//   offset 224 : vec4     ambientColor            (16)  rgb=ambient term, a=unused
+ 	//   offset 240 : vec4     cameraWorldPos          (16)  xyz=camera position, w=1
+ 	//   offset 256 : vec4     sunColor                (16)  rgb=sun light color, a=unused
+-	//   offset 272 : vec4     skyHorizonColor         (16)  rgb=sky horizon, a=unused
+-	//   offset 288 : vec4     skyZenithColor          (16)  rgb=sky zenith, a=unused
+-	//   offset 304 : vec4     skyVoidColor            (16)  rgb=void tint, a=unused
+-	//   offset 320 : uvec4    tiledLightGridInfo      (16)  x=tilePx, y=tilesX, z=tilesY, w=lightCount
++	//   offset 272 : vec4     skyHorizonColor         (16)  rgb=sky horizon gradient, a=unused (skybox.slang)
++	//   offset 288 : vec4     skyZenithColor          (16)  rgb=sky zenith gradient, a=unused (skybox.slang)
++	//   offset 304 : vec4     skyVoidColor            (16)  rgb=void/space tint, a=unused (skybox.slang:208, DayNightSystem)
++	//   offset 320 : uvec4    tiledLightGridInfo      (16)  x=tilePx, y=tilesX, z=tilesY, w=lightCount (tiled lighting)
+ 	//   offset 336 : uvec4    tiledLightBufferOffsets (16)  x=lightBase, y=headerBase, z=indexBase, w=unused
+-	//   offset 352 : mat4[3]  shadowViewProjCascades (192)  light clip transforms for CSM cascades
+-	//   offset 544 : vec4     shadowCascadeSplits     (16)  xyz=split far distances
++	//   offset 352 : mat4[3]  shadowViewProjCascades (192)  Light clip transforms for CSM cascades (ShadowService)
++	//   offset 544 : vec4     shadowCascadeSplits     (16)  xyz=split far distances for 3 cascades
+ 	//   offset 560 : vec4     shadowParams            (16)  x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
+-	//   offset 576 : uvec4[3] shadowCascadeInfo       (48)  each: x=bindlessSlot, y=width, z=height, w=unused
+-	//   offset 624 : uint     shadowAtlasSlot         ( 4)  bindless slot for VSM atlas (0xFFFFFFFF = none)
+-	//   offset 628 : uint     shadowLightCount        ( 4)  number of active shadow lights
++	//   offset 576 : uvec4[3] shadowCascadeInfo       (48)  Each: x=bindlessSlot, y=width, z=height, w=unused
++	//   offset 624 : uint     shadowAtlasSlot         ( 4)  Bindless slot for VSM atlas (0xFFFFFFFF = none, LocalShadowService)
++	//   offset 628 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
+ 	//   offset 632 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
+ 	//   Total: 640 bytes
+ 	struct FrameConstants
+ 	{
+-		glm::mat4 viewProj{ 1.0f };
+-		glm::mat4 view{ 1.0f };
+-		glm::mat4 proj{ 1.0f };
+-		std::uint64_t materialBufferAddr = 0;
+-		float elapsedTime = 0.0f;
+-		std::uint32_t _pad0 = 0;
+-		glm::vec4 sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
+-		glm::vec4 ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };
+-		glm::vec4 cameraWorldPos{ 0.0f, 0.0f, 0.0f, 1.0f };
+-		glm::vec4 sunColor{ 1.0f, 0.96f, 0.90f, 1.0f };
+-		glm::vec4 skyHorizonColor{ 0.34f, 0.52f, 0.82f, 1.0f };
+-		glm::vec4 skyZenithColor{ 0.08f, 0.19f, 0.45f, 1.0f };
+-		glm::vec4 skyVoidColor{ 0.001f, 0.002f, 0.005f, 1.0f };
+-		glm::uvec4 tiledLightGridInfo{ 0u, 0u, 0u, 0u };
+-		glm::uvec4 tiledLightBufferOffsets{ 0u, 0u, 0u, 0u };
+-		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{ glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f) };
+-		glm::vec4 shadowCascadeSplits{ 24.0f, 80.0f, 220.0f, 0.0f };
+-		glm::vec4 shadowParams{ 0.0008f, 0.0012f, 1.0f, 1.5f };
+-		std::array<glm::uvec4, kShadowCascadeCount> shadowCascadeInfo{
++		glm::mat4 viewProj{ 1.0f };                                                          // offset 0
++		glm::mat4 view{ 1.0f };                                                              // offset 64
++		glm::mat4 proj{ 1.0f };                                                              // offset 128
++		std::uint64_t materialBufferAddr = 0;                                                // offset 192
++		float elapsedTime = 0.0f;                                                            // offset 200
++		std::uint32_t _pad0 = 0;                                                             // offset 204
++		glm::vec4 sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };                     // offset 208, directional light
++		glm::vec4 ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };                                 // offset 224
++		glm::vec4 cameraWorldPos{ 0.0f, 0.0f, 0.0f, 1.0f };                                  // offset 240
++		glm::vec4 sunColor{ 1.0f, 0.96f, 0.90f, 1.0f };                                      // offset 256
++		glm::vec4 skyHorizonColor{ 0.34f, 0.52f, 0.82f, 1.0f };                              // offset 272, skybox.slang
++		glm::vec4 skyZenithColor{ 0.08f, 0.19f, 0.45f, 1.0f };                               // offset 288, skybox.slang
++		glm::vec4 skyVoidColor{ 0.001f, 0.002f, 0.005f, 1.0f };                              // offset 304, skybox.slang:208
++		glm::uvec4 tiledLightGridInfo{ 0u, 0u, 0u, 0u };                                     // offset 320, tiled lighting
++		glm::uvec4 tiledLightBufferOffsets{ 0u, 0u, 0u, 0u };                                // offset 336, tiled lighting
++		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{ glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f) }; // offset 352
++		glm::vec4 shadowCascadeSplits{ 24.0f, 80.0f, 220.0f, 0.0f };                         // offset 544, CSM splits
++		glm::vec4 shadowParams{ 0.0008f, 0.0012f, 1.0f, 1.5f };                              // offset 560, shadow params
++		std::array<glm::uvec4, kShadowCascadeCount> shadowCascadeInfo{                       // offset 576, CSM bindless slots
+ 			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+ 			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+ 			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+ 		};
+-		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;
+-		std::uint32_t shadowLightCount = 0;
+-		std::uint64_t shadowLightDataAddr = 0;
++		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;                                         // offset 624, local shadows
++		std::uint32_t shadowLightCount = 0;                                                  // offset 628
++		std::uint64_t shadowLightDataAddr = 0;                                               // offset 632
+ 	};
+ 
+ 	static_assert(sizeof(FrameConstants) == 640,
+diff --git a/src/engine/rendering/GpuContracts.hpp b/src/engine/rendering/GpuContracts.hpp
+index 0cdacd6..8fe45a4 100644
+--- a/src/engine/rendering/GpuContracts.hpp
++++ b/src/engine/rendering/GpuContracts.hpp
+@@ -11,279 +11,303 @@ namespace aether
+ 	// Must match kShadowCascadeCount in FrameConstants.hpp.
+ 	inline constexpr std::uint32_t kCullMultiFrustumCount = 3u;
+ 
+-	// Per-instance payload consumed by the standard mesh shader path.
+-	// Keep in sync with shaders/include/RenderContracts.slangh.
+-	struct DrawInstanceData
+-	{
+-		glm::mat4 model{ 1.0f };
+-		std::uint32_t materialIndex = 0xFFFFFFFFu;
+-		std::uint32_t skinPaletteOffset = 0;
+-		std::uint32_t skinJointCount = 0;
+-		std::uint32_t _pad0 = 0;
+-		glm::vec4 worldBoundingSphere{};
+-		VkDeviceAddress vertexBufferAddr = 0; // BDA of the vertex data for this draw
+-	};
+-
+-	static_assert(sizeof(DrawInstanceData) == 104, "DrawInstanceData layout changed - update shaders/include/RenderContracts.slangh.");
+-	static_assert(offsetof(DrawInstanceData, model) == 0);
+-	static_assert(offsetof(DrawInstanceData, materialIndex) == 64);
+-	static_assert(offsetof(DrawInstanceData, skinPaletteOffset) == 68);
+-	static_assert(offsetof(DrawInstanceData, skinJointCount) == 72);
+-	static_assert(offsetof(DrawInstanceData, _pad0) == 76);
+-	static_assert(offsetof(DrawInstanceData, worldBoundingSphere) == 80);
+-	static_assert(offsetof(DrawInstanceData, vertexBufferAddr) == 96);
+-
+-	struct DrawPushConstants
++	// ─────────────────────────────────────────────────────────────────────────
++	// Draw Contracts
++	// ─────────────────────────────────────────────────────────────────────────
++	// Per-instance payload and push constants for mesh rendering.
++	// Sync with shaders/include/RenderContracts.slangh.
++
++	namespace DrawContracts
+ 	{
+-		VkDeviceAddress frameAddr = 0;
+-		VkDeviceAddress instanceDataAddr = 0;
+-		VkDeviceAddress skinPaletteAddr = 0;
+-	};
++		struct InstanceData
++		{
++			glm::mat4 model{ 1.0f };
++			std::uint32_t materialIndex = 0xFFFFFFFFu;
++			std::uint32_t skinPaletteOffset = 0;
++			std::uint32_t skinJointCount = 0;
++			std::uint32_t _pad0 = 0;
++			glm::vec4 worldBoundingSphere{};
++			VkDeviceAddress vertexBufferAddr = 0;
++		};
+ 
+-	static_assert(sizeof(DrawPushConstants) == 24, "DrawPushConstants layout changed - update shaders/include/RenderContracts.slangh.");
+-	static_assert(offsetof(DrawPushConstants, frameAddr) == 0);
+-	static_assert(offsetof(DrawPushConstants, instanceDataAddr) == 8);
+-	static_assert(offsetof(DrawPushConstants, skinPaletteAddr) == 16);
++		static_assert(sizeof(InstanceData) == 104, "InstanceData layout changed - update shaders/include/RenderContracts.slangh.");
++		static_assert(offsetof(InstanceData, model) == 0);
++		static_assert(offsetof(InstanceData, materialIndex) == 64);
++		static_assert(offsetof(InstanceData, skinPaletteOffset) == 68);
++		static_assert(offsetof(InstanceData, skinJointCount) == 72);
++		static_assert(offsetof(InstanceData, _pad0) == 76);
++		static_assert(offsetof(InstanceData, worldBoundingSphere) == 80);
++		static_assert(offsetof(InstanceData, vertexBufferAddr) == 96);
+ 
+-	struct CullDrawInput
+-	{
+-		std::uint32_t indexCount = 0;
+-		std::uint32_t instanceCount = 1;
+-		std::uint32_t firstIndex = 0;
+-		std::int32_t vertexOffset = 0;
+-		std::uint32_t firstInstance = 0;
+-		std::uint32_t batchIndex = 0;
+-		std::uint32_t _pad[2]{};
+-	};
+-
+-	static_assert(sizeof(CullDrawInput) == 32, "CullDrawInput layout changed - update shaders/include/RenderContracts.slangh.");
+-	static_assert(offsetof(CullDrawInput, indexCount) == 0);
+-	static_assert(offsetof(CullDrawInput, instanceCount) == 4);
+-	static_assert(offsetof(CullDrawInput, firstIndex) == 8);
+-	static_assert(offsetof(CullDrawInput, vertexOffset) == 12);
+-	static_assert(offsetof(CullDrawInput, firstInstance) == 16);
+-	static_assert(offsetof(CullDrawInput, batchIndex) == 20);
+-	static_assert(offsetof(CullDrawInput, _pad) == 24);
+-
+-	struct CullBatch
+-	{
+-		std::uint32_t inputStart = 0;
+-		std::uint32_t drawCount = 0;
+-		std::uint32_t outputStart = 0;
+-		std::uint32_t _pad = 0;
+-	};
+-
+-	static_assert(sizeof(CullBatch) == 16, "CullBatch layout changed - update shaders/include/RenderContracts.slangh.");
+-	static_assert(offsetof(CullBatch, inputStart) == 0);
+-	static_assert(offsetof(CullBatch, drawCount) == 4);
+-	static_assert(offsetof(CullBatch, outputStart) == 8);
+-	static_assert(offsetof(CullBatch, _pad) == 12);
+-
+-	struct CullPushConstants
+-	{
+-		VkDeviceAddress frameAddr = 0;
+-		VkDeviceAddress instanceDataAddr = 0;
+-		VkDeviceAddress inputCmdAddr = 0;
+-		VkDeviceAddress outputCmdAddr = 0;
+-		VkDeviceAddress batchDescAddr = 0;
+-		VkDeviceAddress batchCountAddr = 0;
+-		std::uint32_t totalDrawCount = 0;
+-		std::uint32_t debugFlags = 0;
+-		std::uint32_t _pad0 = 0;
+-		std::uint32_t _pad1 = 0;
+-	};
+-
+-	struct CullMultiPushConstants
+-	{
+-		// Three frame constants BDAs (one per shadow cascade).
+-		VkDeviceAddress frameAddrs[kCullMultiFrustumCount] = {};
+-		VkDeviceAddress instanceDataAddr = 0;
+-		VkDeviceAddress inputCmdAddr = 0;
+-		VkDeviceAddress outputCmdAddr = 0;           // base BDA of output buffer
+-		VkDeviceAddress batchDescAddr = 0;
+-		std::uint32_t totalDrawCount = 0;
+-		std::uint32_t outputCascadeStride = 0;        // maxDraws * sizeof(VkDrawIndexedIndirectCommand) in bytes
+-		std::uint32_t debugFlags = 0;
+-		std::uint32_t _pad0 = 0;
+-	};
+-
+-	static_assert(sizeof(CullMultiPushConstants) <= 128, "CullMultiPushConstants exceeds 128-byte push constant limit.");
+-	static_assert(offsetof(CullMultiPushConstants, frameAddrs) == 0);
+-	static_assert(offsetof(CullMultiPushConstants, instanceDataAddr) == 24);
+-	static_assert(offsetof(CullMultiPushConstants, inputCmdAddr) == 32);
+-	static_assert(offsetof(CullMultiPushConstants, outputCmdAddr) == 40);
+-	static_assert(offsetof(CullMultiPushConstants, batchDescAddr) == 48);
+-	static_assert(offsetof(CullMultiPushConstants, totalDrawCount) == 56);
+-	static_assert(offsetof(CullMultiPushConstants, outputCascadeStride) == 60);
+-	static_assert(offsetof(CullMultiPushConstants, debugFlags) == 64);
+-	static_assert(offsetof(CullMultiPushConstants, _pad0) == 68);
+-
+-	static constexpr std::uint32_t kCullDebugForceVisibleBit = 1u << 0;
+-
+-	static_assert(sizeof(CullPushConstants) == 64, "CullPushConstants layout changed - update shaders/include/RenderContracts.slangh.");
+-	static_assert(offsetof(CullPushConstants, frameAddr) == 0);
+-	static_assert(offsetof(CullPushConstants, instanceDataAddr) == 8);
+-	static_assert(offsetof(CullPushConstants, inputCmdAddr) == 16);
+-	static_assert(offsetof(CullPushConstants, outputCmdAddr) == 24);
+-	static_assert(offsetof(CullPushConstants, batchDescAddr) == 32);
+-	static_assert(offsetof(CullPushConstants, batchCountAddr) == 40);
+-	static_assert(offsetof(CullPushConstants, totalDrawCount) == 48);
+-	static_assert(offsetof(CullPushConstants, debugFlags) == 52);
+-	static_assert(offsetof(CullPushConstants, _pad0) == 56);
+-	static_assert(offsetof(CullPushConstants, _pad1) == 60);
+-
+-	struct SkinCopyJob
+-	{
+-		VkDeviceAddress sampledPosesAddr = 0;
+-		std::uint32_t dstPaletteOffset = 0;
+-		std::uint32_t jointCount = 0;
+-		std::uint32_t skinIndex = 0;
+-		std::uint32_t nodeCount = 0;
+-		std::uint32_t nodePoseOffset = 0; // offset into global-transforms / sampled-poses array
+-		std::uint32_t _pad1 = 0;
+-	};
+-
+-	static_assert(sizeof(SkinCopyJob) == 32, "SkinCopyJob layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(SkinCopyJob, sampledPosesAddr) == 0);
+-	static_assert(offsetof(SkinCopyJob, dstPaletteOffset) == 8);
+-	static_assert(offsetof(SkinCopyJob, jointCount) == 12);
+-	static_assert(offsetof(SkinCopyJob, skinIndex) == 16);
+-	static_assert(offsetof(SkinCopyJob, nodeCount) == 20);
+-	static_assert(offsetof(SkinCopyJob, nodePoseOffset) == 24);
+-	static_assert(offsetof(SkinCopyJob, _pad1) == 28);
+-
+-	struct AnimatorSampleJob
+-	{
+-		std::uint32_t animClipIndex = 0;
+-		float animTime = 0.0f;
+-		std::uint32_t nodePoseOffset = 0;
+-		std::uint32_t nodeCount = 0;
+-		VkDeviceAddress clipsAddr = 0;
+-		VkDeviceAddress channelsAddr = 0;
+-		VkDeviceAddress timesAddr = 0;
+-		VkDeviceAddress valuesAddr = 0;
+-		std::uint32_t clipCount = 0;
+-		std::uint32_t _pad0 = 0;
+-	};
+-
+-	static_assert(sizeof(AnimatorSampleJob) == 56, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(AnimatorSampleJob, animClipIndex) == 0);
+-	static_assert(offsetof(AnimatorSampleJob, animTime) == 4);
+-	static_assert(offsetof(AnimatorSampleJob, nodePoseOffset) == 8);
+-	static_assert(offsetof(AnimatorSampleJob, nodeCount) == 12);
+-	static_assert(offsetof(AnimatorSampleJob, clipsAddr) == 16);
+-	static_assert(offsetof(AnimatorSampleJob, channelsAddr) == 24);
+-	static_assert(offsetof(AnimatorSampleJob, timesAddr) == 32);
+-	static_assert(offsetof(AnimatorSampleJob, valuesAddr) == 40);
+-	static_assert(offsetof(AnimatorSampleJob, clipCount) == 48);
+-	static_assert(offsetof(AnimatorSampleJob, _pad0) == 52);
+-
+-	struct SampledNodePose
+-	{
+-		glm::vec4 translation{ 0.0f, 0.0f, 0.0f, 0.0f };
+-		glm::vec4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
+-		glm::vec4 scale{ 1.0f, 1.0f, 1.0f, 0.0f };
+-	};
++		struct PushConstants
++		{
++			VkDeviceAddress frameAddr = 0;
++			VkDeviceAddress instanceDataAddr = 0;
++			VkDeviceAddress skinPaletteAddr = 0;
++		};
+ 
+-	static_assert(sizeof(SampledNodePose) == 48, "SampledNodePose layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(SampledNodePose, translation) == 0);
+-	static_assert(offsetof(SampledNodePose, rotation) == 16);
+-	static_assert(offsetof(SampledNodePose, scale) == 32);
++		static_assert(sizeof(PushConstants) == 24, "PushConstants layout changed - update shaders/include/RenderContracts.slangh.");
++		static_assert(offsetof(PushConstants, frameAddr) == 0);
++		static_assert(offsetof(PushConstants, instanceDataAddr) == 8);
++		static_assert(offsetof(PushConstants, skinPaletteAddr) == 16);
++	}
+ 
+-	struct SkinPalettePush
+-	{
+-		VkDeviceAddress jobsAddr = 0;
+-		VkDeviceAddress dstPaletteAddr = 0;
+-		VkDeviceAddress globalTransformsAddr = 0; // per-node float4x4[] from flatten pass
+-		VkDeviceAddress skinMetasAddr = 0;
+-		VkDeviceAddress skinJointsAddr = 0;
+-		VkDeviceAddress skinInverseBindsAddr = 0;
+-		std::uint32_t jobCount = 0;
+-		std::uint32_t _pad0 = 0;
+-		std::uint32_t _reserved0 = 0;
+-		std::uint32_t _reserved1 = 0;
+-	};
+-
+-	static_assert(sizeof(SkinPalettePush) == 64, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(SkinPalettePush, jobsAddr) == 0);
+-	static_assert(offsetof(SkinPalettePush, dstPaletteAddr) == 8);
+-	static_assert(offsetof(SkinPalettePush, globalTransformsAddr) == 16);
+-	static_assert(offsetof(SkinPalettePush, skinMetasAddr) == 24);
+-	static_assert(offsetof(SkinPalettePush, skinJointsAddr) == 32);
+-	static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 40);
+-	static_assert(offsetof(SkinPalettePush, jobCount) == 48);
+-	static_assert(offsetof(SkinPalettePush, _reserved0) == 56);
+-	static_assert(offsetof(SkinPalettePush, _reserved1) == 60);
+-
+-	struct NodeFlattenPush
+-	{
+-		VkDeviceAddress sampledPosesAddr = 0;
+-		VkDeviceAddress nodeParentsAddr = 0;
+-		VkDeviceAddress globalTransformsAddr = 0;
+-		VkDeviceAddress depthSortedNodesAddr = 0;
+-		VkDeviceAddress animatorJobsAddr = 0; // to read per-job nodePoseOffset
+-		std::uint32_t depthOffset = 0;
+-		std::uint32_t nodeCount = 0;    // nodes at this depth level
+-		std::uint32_t batchStartJob = 0; // first job in this batch (rel to animJobBase)
+-		std::uint32_t batchJobCount = 0; // number of jobs in batch
+-	};
+-
+-	static_assert(sizeof(NodeFlattenPush) == 56, "NodeFlattenPush layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(NodeFlattenPush, sampledPosesAddr) == 0);
+-	static_assert(offsetof(NodeFlattenPush, nodeParentsAddr) == 8);
+-	static_assert(offsetof(NodeFlattenPush, globalTransformsAddr) == 16);
+-	static_assert(offsetof(NodeFlattenPush, depthSortedNodesAddr) == 24);
+-	static_assert(offsetof(NodeFlattenPush, animatorJobsAddr) == 32);
+-	static_assert(offsetof(NodeFlattenPush, depthOffset) == 40);
+-	static_assert(offsetof(NodeFlattenPush, nodeCount) == 44);
+-	static_assert(offsetof(NodeFlattenPush, batchStartJob) == 48);
+-	static_assert(offsetof(NodeFlattenPush, batchJobCount) == 52);
+-
+-	struct AnimationSamplePush
++	// ─────────────────────────────────────────────────────────────────────────
++	// Cull Contracts
++	// ─────────────────────────────────────────────────────────────────────────
++	// Compute-based frustum culling input/output and push constants.
++	// Sync with shaders/cull_draws.slang and cull_draws_multi.slang.
++
++	namespace CullContracts
+ 	{
+-		VkDeviceAddress animDbClipsAddr = 0;
+-		VkDeviceAddress animDbChannelsAddr = 0;
+-		VkDeviceAddress animDbTimesAddr = 0;
+-		VkDeviceAddress animDbValuesAddr = 0;
+-		VkDeviceAddress bindTranslationsAddr = 0;
+-		VkDeviceAddress bindRotationsAddr = 0;
+-		VkDeviceAddress bindScalesAddr = 0;
+-		VkDeviceAddress animatorJobsAddr = 0;
+-		VkDeviceAddress sampledPosesAddr = 0;
+-		std::uint32_t jobCount = 0;
+-		std::uint32_t clipCount = 0;
+-	};
+-
+-	static_assert(sizeof(AnimationSamplePush) == 80, "AnimationSamplePush layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(AnimationSamplePush, animDbClipsAddr) == 0);
+-	static_assert(offsetof(AnimationSamplePush, animDbChannelsAddr) == 8);
+-	static_assert(offsetof(AnimationSamplePush, animDbTimesAddr) == 16);
+-	static_assert(offsetof(AnimationSamplePush, animDbValuesAddr) == 24);
+-	static_assert(offsetof(AnimationSamplePush, bindTranslationsAddr) == 32);
+-	static_assert(offsetof(AnimationSamplePush, bindRotationsAddr) == 40);
+-	static_assert(offsetof(AnimationSamplePush, bindScalesAddr) == 48);
+-	static_assert(offsetof(AnimationSamplePush, animatorJobsAddr) == 56);
+-	static_assert(offsetof(AnimationSamplePush, sampledPosesAddr) == 64);
+-	static_assert(offsetof(AnimationSamplePush, jobCount) == 72);
+-	static_assert(offsetof(AnimationSamplePush, clipCount) == 76);
+-
+-	struct PoseInitPush
++		struct DrawInput
++		{
++			std::uint32_t indexCount = 0;
++			std::uint32_t instanceCount = 1;
++			std::uint32_t firstIndex = 0;
++			std::int32_t vertexOffset = 0;
++			std::uint32_t firstInstance = 0;
++			std::uint32_t batchIndex = 0;
++			std::uint32_t _pad[2]{};
++		};
++
++		static_assert(sizeof(DrawInput) == 32, "DrawInput layout changed - update shaders/include/RenderContracts.slangh.");
++		static_assert(offsetof(DrawInput, indexCount) == 0);
++		static_assert(offsetof(DrawInput, instanceCount) == 4);
++		static_assert(offsetof(DrawInput, firstIndex) == 8);
++		static_assert(offsetof(DrawInput, vertexOffset) == 12);
++		static_assert(offsetof(DrawInput, firstInstance) == 16);
++		static_assert(offsetof(DrawInput, batchIndex) == 20);
++		static_assert(offsetof(DrawInput, _pad) == 24);
++
++		struct Batch
++		{
++			std::uint32_t inputStart = 0;
++			std::uint32_t drawCount = 0;
++			std::uint32_t outputStart = 0;
++			std::uint32_t _pad = 0;
++		};
++
++		static_assert(sizeof(Batch) == 16, "Batch layout changed - update shaders/include/RenderContracts.slangh.");
++		static_assert(offsetof(Batch, inputStart) == 0);
++		static_assert(offsetof(Batch, drawCount) == 4);
++		static_assert(offsetof(Batch, outputStart) == 8);
++		static_assert(offsetof(Batch, _pad) == 12);
++
++		struct PushConstants
++		{
++			VkDeviceAddress frameAddr = 0;
++			VkDeviceAddress instanceDataAddr = 0;
++			VkDeviceAddress inputCmdAddr = 0;
++			VkDeviceAddress outputCmdAddr = 0;
++			VkDeviceAddress batchDescAddr = 0;
++			VkDeviceAddress batchCountAddr = 0;
++			std::uint32_t totalDrawCount = 0;
++			std::uint32_t debugFlags = 0;
++			std::uint32_t _pad0 = 0;
++			std::uint32_t _pad1 = 0;
++		};
++
++		static_assert(sizeof(PushConstants) == 64, "PushConstants layout changed - update shaders/include/RenderContracts.slangh.");
++		static_assert(offsetof(PushConstants, frameAddr) == 0);
++		static_assert(offsetof(PushConstants, instanceDataAddr) == 8);
++		static_assert(offsetof(PushConstants, inputCmdAddr) == 16);
++		static_assert(offsetof(PushConstants, outputCmdAddr) == 24);
++		static_assert(offsetof(PushConstants, batchDescAddr) == 32);
++		static_assert(offsetof(PushConstants, batchCountAddr) == 40);
++		static_assert(offsetof(PushConstants, totalDrawCount) == 48);
++		static_assert(offsetof(PushConstants, debugFlags) == 52);
++		static_assert(offsetof(PushConstants, _pad0) == 56);
++		static_assert(offsetof(PushConstants, _pad1) == 60);
++
++		struct MultiPushConstants
++		{
++			VkDeviceAddress frameAddrs[kCullMultiFrustumCount] = {};
++			VkDeviceAddress instanceDataAddr = 0;
++			VkDeviceAddress inputCmdAddr = 0;
++			VkDeviceAddress outputCmdAddr = 0;
++			VkDeviceAddress batchDescAddr = 0;
++			std::uint32_t totalDrawCount = 0;
++			std::uint32_t outputCascadeStride = 0;
++			std::uint32_t debugFlags = 0;
++			std::uint32_t _pad0 = 0;
++		};
++
++		static_assert(sizeof(MultiPushConstants) <= 128, "MultiPushConstants exceeds 128-byte push constant limit.");
++		static_assert(offsetof(MultiPushConstants, frameAddrs) == 0);
++		static_assert(offsetof(MultiPushConstants, instanceDataAddr) == 24);
++		static_assert(offsetof(MultiPushConstants, inputCmdAddr) == 32);
++		static_assert(offsetof(MultiPushConstants, outputCmdAddr) == 40);
++		static_assert(offsetof(MultiPushConstants, batchDescAddr) == 48);
++		static_assert(offsetof(MultiPushConstants, totalDrawCount) == 56);
++		static_assert(offsetof(MultiPushConstants, outputCascadeStride) == 60);
++		static_assert(offsetof(MultiPushConstants, debugFlags) == 64);
++		static_assert(offsetof(MultiPushConstants, _pad0) == 68);
++
++		inline constexpr std::uint32_t kDebugForceVisibleBit = 1u << 0;
++	}
++
++	// ─────────────────────────────────────────────────────────────────────────
++	// Animation Contracts
++	// ─────────────────────────────────────────────────────────────────────────
++	// GPU-driven animation skinning: clip sampling, pose flattening, skin palette.
++	// Sync with shaders/include/AnimationContracts.slangh.
++
++	namespace AnimationContracts
+ 	{
+-		VkDeviceAddress bindTranslationsAddr = 0;
+-		VkDeviceAddress bindRotationsAddr = 0;
+-		VkDeviceAddress bindScalesAddr = 0;
+-		VkDeviceAddress animatorJobsAddr = 0;
+-		VkDeviceAddress sampledPosesAddr = 0;
+-		std::uint32_t jobCount = 0;
+-		std::uint32_t nodeCountPerJob = 0;
+-	};
+-
+-	static_assert(sizeof(PoseInitPush) == 48, "PoseInitPush layout changed - update shaders/include/AnimationContracts.slangh.");
+-	static_assert(offsetof(PoseInitPush, bindTranslationsAddr) == 0);
+-	static_assert(offsetof(PoseInitPush, bindRotationsAddr) == 8);
+-	static_assert(offsetof(PoseInitPush, bindScalesAddr) == 16);
+-	static_assert(offsetof(PoseInitPush, animatorJobsAddr) == 24);
+-	static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
+-	static_assert(offsetof(PoseInitPush, jobCount) == 40);
+-	static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
+-} // namespace aether
++		struct SkinCopyJob
++		{
++			VkDeviceAddress sampledPosesAddr = 0;
++			std::uint32_t dstPaletteOffset = 0;
++			std::uint32_t jointCount = 0;
++			std::uint32_t skinIndex = 0;
++			std::uint32_t nodeCount = 0;
++			std::uint32_t nodePoseOffset = 0;
++			std::uint32_t _pad1 = 0;
++		};
++
++		static_assert(sizeof(SkinCopyJob) == 32, "SkinCopyJob layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(SkinCopyJob, sampledPosesAddr) == 0);
++		static_assert(offsetof(SkinCopyJob, dstPaletteOffset) == 8);
++		static_assert(offsetof(SkinCopyJob, jointCount) == 12);
++		static_assert(offsetof(SkinCopyJob, skinIndex) == 16);
++		static_assert(offsetof(SkinCopyJob, nodeCount) == 20);
++		static_assert(offsetof(SkinCopyJob, nodePoseOffset) == 24);
++		static_assert(offsetof(SkinCopyJob, _pad1) == 28);
++
++		struct AnimatorSampleJob
++		{
++			std::uint32_t animClipIndex = 0;
++			float animTime = 0.0f;
++			std::uint32_t nodePoseOffset = 0;
++			std::uint32_t nodeCount = 0;
++			VkDeviceAddress clipsAddr = 0;
++			VkDeviceAddress channelsAddr = 0;
++			VkDeviceAddress timesAddr = 0;
++			VkDeviceAddress valuesAddr = 0;
++			std::uint32_t clipCount = 0;
++			std::uint32_t _pad0 = 0;
++		};
++
++		static_assert(sizeof(AnimatorSampleJob) == 56, "AnimatorSampleJob layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(AnimatorSampleJob, animClipIndex) == 0);
++		static_assert(offsetof(AnimatorSampleJob, animTime) == 4);
++		static_assert(offsetof(AnimatorSampleJob, nodePoseOffset) == 8);
++		static_assert(offsetof(AnimatorSampleJob, nodeCount) == 12);
++		static_assert(offsetof(AnimatorSampleJob, clipsAddr) == 16);
++		static_assert(offsetof(AnimatorSampleJob, channelsAddr) == 24);
++		static_assert(offsetof(AnimatorSampleJob, timesAddr) == 32);
++		static_assert(offsetof(AnimatorSampleJob, valuesAddr) == 40);
++		static_assert(offsetof(AnimatorSampleJob, clipCount) == 48);
++		static_assert(offsetof(AnimatorSampleJob, _pad0) == 52);
++
++		struct SampledNodePose
++		{
++			glm::vec4 translation{ 0.0f, 0.0f, 0.0f, 0.0f };
++			glm::vec4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
++			glm::vec4 scale{ 1.0f, 1.0f, 1.0f, 0.0f };
++		};
++
++		static_assert(sizeof(SampledNodePose) == 48, "SampledNodePose layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(SampledNodePose, translation) == 0);
++		static_assert(offsetof(SampledNodePose, rotation) == 16);
++		static_assert(offsetof(SampledNodePose, scale) == 32);
++
++		struct SkinPalettePush
++		{
++			VkDeviceAddress jobsAddr = 0;
++			VkDeviceAddress dstPaletteAddr = 0;
++			VkDeviceAddress globalTransformsAddr = 0;
++			VkDeviceAddress skinMetasAddr = 0;
++			VkDeviceAddress skinJointsAddr = 0;
++			VkDeviceAddress skinInverseBindsAddr = 0;
++			std::uint32_t jobCount = 0;
++			std::uint32_t _pad0 = 0;
++			std::uint32_t _reserved0 = 0;
++			std::uint32_t _reserved1 = 0;
++		};
++
++		static_assert(sizeof(SkinPalettePush) == 64, "SkinPalettePush layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(SkinPalettePush, jobsAddr) == 0);
++		static_assert(offsetof(SkinPalettePush, dstPaletteAddr) == 8);
++		static_assert(offsetof(SkinPalettePush, globalTransformsAddr) == 16);
++		static_assert(offsetof(SkinPalettePush, skinMetasAddr) == 24);
++		static_assert(offsetof(SkinPalettePush, skinJointsAddr) == 32);
++		static_assert(offsetof(SkinPalettePush, skinInverseBindsAddr) == 40);
++		static_assert(offsetof(SkinPalettePush, jobCount) == 48);
++		static_assert(offsetof(SkinPalettePush, _reserved0) == 56);
++		static_assert(offsetof(SkinPalettePush, _reserved1) == 60);
++
++		struct NodeFlattenPush
++		{
++			VkDeviceAddress sampledPosesAddr = 0;
++			VkDeviceAddress nodeParentsAddr = 0;
++			VkDeviceAddress globalTransformsAddr = 0;
++			VkDeviceAddress depthSortedNodesAddr = 0;
++			VkDeviceAddress animatorJobsAddr = 0;
++			std::uint32_t depthOffset = 0;
++			std::uint32_t nodeCount = 0;
++			std::uint32_t batchStartJob = 0;
++			std::uint32_t batchJobCount = 0;
++		};
++
++		static_assert(sizeof(NodeFlattenPush) == 56, "NodeFlattenPush layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(NodeFlattenPush, sampledPosesAddr) == 0);
++		static_assert(offsetof(NodeFlattenPush, nodeParentsAddr) == 8);
++		static_assert(offsetof(NodeFlattenPush, globalTransformsAddr) == 16);
++		static_assert(offsetof(NodeFlattenPush, depthSortedNodesAddr) == 24);
++		static_assert(offsetof(NodeFlattenPush, animatorJobsAddr) == 32);
++		static_assert(offsetof(NodeFlattenPush, depthOffset) == 40);
++		static_assert(offsetof(NodeFlattenPush, nodeCount) == 44);
++		static_assert(offsetof(NodeFlattenPush, batchStartJob) == 48);
++		static_assert(offsetof(NodeFlattenPush, batchJobCount) == 52);
++
++		struct AnimationSamplePush
++		{
++			VkDeviceAddress animDbClipsAddr = 0;
++			VkDeviceAddress animDbChannelsAddr = 0;
++			VkDeviceAddress animDbTimesAddr = 0;
++			VkDeviceAddress animDbValuesAddr = 0;
++			VkDeviceAddress bindTranslationsAddr = 0;
++			VkDeviceAddress bindRotationsAddr = 0;
++			VkDeviceAddress bindScalesAddr = 0;
++			VkDeviceAddress animatorJobsAddr = 0;
++			VkDeviceAddress sampledPosesAddr = 0;
++			std::uint32_t jobCount = 0;
++			std::uint32_t clipCount = 0;
++		};
++
++		static_assert(sizeof(AnimationSamplePush) == 80, "AnimationSamplePush layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(AnimationSamplePush, animDbClipsAddr) == 0);
++		static_assert(offsetof(AnimationSamplePush, animDbChannelsAddr) == 8);
++		static_assert(offsetof(AnimationSamplePush, animDbTimesAddr) == 16);
++		static_assert(offsetof(AnimationSamplePush, animDbValuesAddr) == 24);
++		static_assert(offsetof(AnimationSamplePush, bindTranslationsAddr) == 32);
++		static_assert(offsetof(AnimationSamplePush, bindRotationsAddr) == 40);
++		static_assert(offsetof(AnimationSamplePush, bindScalesAddr) == 48);
++		static_assert(offsetof(AnimationSamplePush, animatorJobsAddr) == 56);
++		static_assert(offsetof(AnimationSamplePush, sampledPosesAddr) == 64);
++		static_assert(offsetof(AnimationSamplePush, jobCount) == 72);
++		static_assert(offsetof(AnimationSamplePush, clipCount) == 76);
++
++		struct PoseInitPush
++		{
++			VkDeviceAddress bindTranslationsAddr = 0;
++			VkDeviceAddress bindRotationsAddr = 0;
++			VkDeviceAddress bindScalesAddr = 0;
++			VkDeviceAddress animatorJobsAddr = 0;
++			VkDeviceAddress sampledPosesAddr = 0;
++			std::uint32_t jobCount = 0;
++			std::uint32_t nodeCountPerJob = 0;
++		};
++
++		static_assert(sizeof(PoseInitPush) == 48, "PoseInitPush layout changed - update shaders/include/AnimationContracts.slangh.");
++		static_assert(offsetof(PoseInitPush, bindTranslationsAddr) == 0);
++		static_assert(offsetof(PoseInitPush, bindRotationsAddr) == 8);
++		static_assert(offsetof(PoseInitPush, bindScalesAddr) == 16);
++		static_assert(offsetof(PoseInitPush, animatorJobsAddr) == 24);
++		static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
++		static_assert(offsetof(PoseInitPush, jobCount) == 40);
++		static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
++	}
++}
+diff --git a/src/engine/rendering/GraphicsPipeline.cpp b/src/engine/rendering/GraphicsPipeline.cpp
+index 0e85286..bc699da 100644
+--- a/src/engine/rendering/GraphicsPipeline.cpp
++++ b/src/engine/rendering/GraphicsPipeline.cpp
+@@ -147,7 +147,7 @@ namespace aether
+ 		const VkPushConstantRange kModelRange{
+ 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+ 			.offset = 0,
+-			.size = sizeof(DrawPushConstants),
++			.size = sizeof(DrawContracts::PushConstants),
+ 		};
+ 		const VkPushConstantRange kCustomRange{
+ 			.stageFlags = desc.pushConstantStages,
+diff --git a/src/engine/rendering/LocalShadowService.cpp b/src/engine/rendering/LocalShadowService.cpp
+index 8bf96bb..6a52f87 100644
+--- a/src/engine/rendering/LocalShadowService.cpp
++++ b/src/engine/rendering/LocalShadowService.cpp
+@@ -44,7 +44,7 @@ namespace aether
+ 		m_atlasManager.Initialize(context, bindless);
+ 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
+ 
+-		m_shadowRenderQueue.Initialize(device, allocator, pipelines, 4096, 512, 0u);
++		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{ .maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 0u });
+ 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
+ 
+ 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
+diff --git a/src/engine/rendering/RenderGraph.cpp b/src/engine/rendering/RenderGraph.cpp
+index f2ce923..82c83a2 100644
+--- a/src/engine/rendering/RenderGraph.cpp
++++ b/src/engine/rendering/RenderGraph.cpp
+@@ -9,6 +9,7 @@
+ 
+ #include "gpu/BindlessManager.hpp"
+ #include "rendering/CommandRecorder.hpp"
++#include "utils/Assert.hpp"
+ #include "utils/Expected.hpp"
+ #include "utils/Logger.hpp"
+ #include "utils/GpuProfiler.hpp"
+@@ -28,23 +29,40 @@ namespace aether
+ 		for (TransientImageEntry& entry: m_transientImages)
+ 		{
+ 			entry.image.Reset();
+-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
++			entry.aliasedEntryIndex = 0xFFFFFFFFu;
+ 			entry.allocatedExtent = {};
+ 		}
+-		for (TransientPhysicalImage& physical: m_transientPhysicalImages)
+-		{
+-			physical.image.Reset();
+-			physical.allocatedExtent = {};
+-		}
+-		m_transientPhysicalImages.clear();
+ 		m_transientImages.clear();
+ 		m_externalImages.clear();
+ 		m_passes.clear();
+ 		m_compiled.clear();
++		
++		// Clear any pending destructions
++		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
++		{
++			m_pendingDestructions[i].clear();
++		}
++		
+ 		m_device = VK_NULL_HANDLE;
+ 		m_allocator = VK_NULL_HANDLE;
+ 	}
+ 
++	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
++	{
++		m_currentFrame = frameIndex % kMaxFramesInFlight;
++		
++		// Destroy images from the frame that the GPU has now finished with.
++		// Since we have kMaxFramesInFlight frames, the GPU should be done
++		// with frame (currentFrame) by the time we start a new frame with
++		// the same index.
++		std::vector<PendingDestruction>& toDestroy = m_pendingDestructions[m_currentFrame];
++		for (PendingDestruction& pending: toDestroy)
++		{
++			pending.image.Reset();
++		}
++		toDestroy.clear();
++	}
++
+ 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
+ 	      : m_graph(graph), m_passIndex(passIndex)
+ 	{
+@@ -206,7 +224,7 @@ namespace aether
+ 		TransientImageEntry& entry = m_transientImages[idx];
+ 		entry.bindlessRequested = true;
+ 		entry.bindlessLayout = descriptorLayout;
+-		entry.aliasPhysicalIndex = 0xFFFFFFFFu;
++		entry.aliasedEntryIndex = 0xFFFFFFFFu;
+ 
+ 		if (!entry.image)
+ 		{
+@@ -264,13 +282,21 @@ namespace aether
+ 			const uint32_t idx = image.id - kFirstTransientId;
+ 			if (idx < m_transientImages.size())
+ 			{
+-				m_transientImages[idx].image.Reset();
++				// Queue the image for deferred destruction instead of
++				// destroying it immediately. This prevents use-after-free
++				// when the GPU is still executing commands that reference
++				// this image.
++				PendingDestruction pending{};
++				pending.entryIndex = idx;
++				pending.image = std::move(m_transientImages[idx].image);
++				m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
++				
+ 				m_transientImages[idx].bindlessRequested = false;
+ 				m_transientImages[idx].bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+-				m_transientImages[idx].aliasPhysicalIndex = 0xFFFFFFFFu;
++				m_transientImages[idx].aliasedEntryIndex = 0xFFFFFFFFu;
+ 				m_transientImages[idx].allocatedExtent = {};
+ 				m_transientImages[idx].desc = {};
+-					}
++			}
+ 			return;
+ 		}
+ 
+@@ -278,7 +304,7 @@ namespace aether
+ 		if (idx < m_externalImages.size())
+ 		{
+ 			m_externalImages[idx] = {};
+-			}
++		}
+ 	}
+ 
+ 	void RenderGraph::RemovePass(const std::string& name)
+@@ -297,18 +323,19 @@ namespace aether
+ 
+ 	void RenderGraph::Clear()
+ 	{
++		// Queue all transient images for deferred destruction.
+ 		for (TransientImageEntry& entry: m_transientImages)
+ 		{
+-			entry.image.Reset();
+-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
++			if (entry.image)
++			{
++				PendingDestruction pending{};
++				pending.entryIndex = 0xFFFFFFFFu; // entry index not needed for Clear()
++				pending.image = std::move(entry.image);
++				m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
++			}
++			entry.aliasedEntryIndex = 0xFFFFFFFFu;
+ 			entry.allocatedExtent = {};
+ 		}
+-		for (TransientPhysicalImage& physical: m_transientPhysicalImages)
+-		{
+-			physical.image.Reset();
+-			physical.allocatedExtent = {};
+-		}
+-		m_transientPhysicalImages.clear();
+ 		m_transientImages.clear();
+ 		m_externalImages.clear();
+ 		m_passes.clear();
+@@ -365,10 +392,15 @@ namespace aether
+ 		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
+ 		{
+ 			TransientImageEntry& entry = m_transientImages[idx];
+-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
+-			if (!entry.bindlessRequested)
++			entry.aliasedEntryIndex = 0xFFFFFFFFu;
++			if (!entry.bindlessRequested && entry.image)
+ 			{
+-				entry.image.Reset();
++				// Queue for deferred destruction - GPU may still be using
++				// this image from a previous frame.
++				PendingDestruction pending{};
++				pending.entryIndex = idx;
++				pending.image = std::move(entry.image);
++				m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
+ 				entry.allocatedExtent = {};
+ 			}
+ 		}
+@@ -388,7 +420,8 @@ namespace aether
+ 		}
+ 		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) { return lifetimes[a].first < lifetimes[b].first; });
+ 
+-		std::vector<int> physicalLastUse(m_transientPhysicalImages.size(), -1);
++		// Track last use of each entry to enable aliasing.
++		std::vector<int> entryLastUse(m_transientImages.size(), -1);
+ 
+ 		for (const std::uint32_t idx: candidates)
+ 		{
+@@ -405,40 +438,44 @@ namespace aether
+ 			const int lastUse = lifetimes[idx].last;
+ 			std::uint32_t chosen = 0xFFFFFFFFu;
+ 
+-			for (std::uint32_t p = 0; p < m_transientPhysicalImages.size(); ++p)
++			// Find an existing entry with matching properties that doesn't overlap in lifetime.
++			for (std::uint32_t e = 0; e < m_transientImages.size(); ++e)
+ 			{
+-				const TransientPhysicalImage& phys = m_transientPhysicalImages[p];
+-				if (phys.desc.format != entry.desc.format || phys.desc.usage != entry.desc.usage || phys.desc.aspect != entry.desc.aspect)
++				if (e == idx) continue;
++				const TransientImageEntry& candidate = m_transientImages[e];
++
++				// Only alias to owner entries (have their own image, not aliases themselves).
++				if (candidate.aliasedEntryIndex != 0xFFFFFFFFu) continue;
++				if (!candidate.image) continue;
++
++				if (candidate.desc.format != entry.desc.format || candidate.desc.usage != entry.desc.usage || candidate.desc.aspect != entry.desc.aspect)
+ 				{
+ 					continue;
+ 				}
+-				if (phys.allocatedExtent.width != requestedExtent.width || phys.allocatedExtent.height != requestedExtent.height)
++				if (candidate.allocatedExtent.width != requestedExtent.width || candidate.allocatedExtent.height != requestedExtent.height)
+ 				{
+ 					continue;
+ 				}
+-				if (physicalLastUse[p] >= firstUse)
++				if (entryLastUse[e] >= firstUse)
+ 				{
+ 					continue;
+ 				}
+-				chosen = p;
++				chosen = e;
+ 				break;
+ 			}
+ 
+ 			if (chosen == 0xFFFFFFFFu)
+ 			{
+-				chosen = static_cast<std::uint32_t>(m_transientPhysicalImages.size());
+-				m_transientPhysicalImages.push_back(TransientPhysicalImage{
+-				        .desc = entry.desc,
+-				        .allocatedExtent = requestedExtent,
+-				});
+-				physicalLastUse.push_back(-1);
+-			}
+-
+-			TransientPhysicalImage& phys = m_transientPhysicalImages[chosen];
+-			const bool needsCreate = !phys.image || phys.allocatedExtent.width != requestedExtent.width || phys.allocatedExtent.height != requestedExtent.height;
+-			if (needsCreate)
+-			{
+-				phys.image.Reset();
++				// No alias available - this entry owns its own image.
++				chosen = idx;
++				// Queue old image for deferred destruction before creating new one.
++				if (entry.image)
++				{
++					PendingDestruction pending{};
++					pending.entryIndex = idx;
++					pending.image = std::move(entry.image);
++					m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
++				}
+ 				AE_EXPECT_OR_THROW(newImage,
+ 				        UniqueImage::Create(m_device,
+ 				                m_allocator,
+@@ -447,15 +484,17 @@ namespace aether
+ 				                        .format = entry.desc.format,
+ 				                        .usage = entry.desc.usage,
+ 				                }));
+-				phys.image = std::move(newImage);
+-				phys.allocatedExtent = requestedExtent;
+-				phys.desc = entry.desc;
+-				const std::string physName = std::format("RenderGraph.Transient.Physical[{}]", chosen);
+-				phys.image.SetName(m_device, physName.c_str());
++				entry.image = std::move(newImage);
++				entry.allocatedExtent = requestedExtent;
++				const std::string entryName = std::format("RenderGraph.Transient[{}]", idx);
++				entry.image.SetName(m_device, entryName.c_str());
+ 			}
+-
+-			entry.aliasPhysicalIndex = chosen;
+-			physicalLastUse[chosen] = lastUse;
++			else
++			{
++				// Alias the chosen entry.
++				entry.aliasedEntryIndex = chosen;
++			}
++			entryLastUse[chosen] = lastUse;
+ 		}
+ 
+ 		for (std::uint32_t entryIdx = 0; entryIdx < m_transientImages.size(); ++entryIdx)
+@@ -478,7 +517,14 @@ namespace aether
+ 				continue;
+ 			}
+ 
+-			entry.image.Reset();
++			// Queue old image for deferred destruction before creating new one.
++			if (entry.image)
++			{
++				PendingDestruction pending{};
++				pending.entryIndex = entryIdx;
++				pending.image = std::move(entry.image);
++				m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
++			}
+ 			AE_EXPECT_OR_THROW(newImage,
+ 			        UniqueImage::Create(m_device,
+ 			                m_allocator,
+@@ -712,9 +758,18 @@ namespace aether
+ 		// persist across frames (external images, transient depth) need their
+ 		// actual GPU layout tracked so the first-access barrier in this frame
+ 		// uses the correct oldLayout.
++		// NOTE: Transient images are excluded because EnsureTransientImages()
++		// may destroy and recreate them each frame, resulting in new VkImage
++		// handles that start in UNDEFINED layout.
+ 		std::unordered_map<uint32_t, ResourceState> states;
+ 		for (const auto& [id, s]: m_lastImageStates)
+ 		{
++			// Skip transient images - they get recreated each frame and
++			// always start in UNDEFINED layout.
++			if (IsTransientId(id))
++			{
++				continue;
++			}
+ 			states[id] = {
+ 				s.layout,
+ 				s.writeStage,
+@@ -941,10 +996,11 @@ namespace aether
+ 				{
+ 					return entry.image.Get();
+ 				}
+-				if (entry.aliasPhysicalIndex < m_transientPhysicalImages.size())
+-				{
+-					return m_transientPhysicalImages[entry.aliasPhysicalIndex].image.Get();
+-				}
++			if (entry.aliasedEntryIndex < m_transientImages.size())
++			{
++				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
++				return m_transientImages[entry.aliasedEntryIndex].image.Get();
++			}
+ 			}
+ 			return VK_NULL_HANDLE;
+ 		}
+@@ -976,10 +1032,11 @@ namespace aether
+ 				{
+ 					return entry.image.GetDefaultView();
+ 				}
+-				if (entry.aliasPhysicalIndex < m_transientPhysicalImages.size())
+-				{
+-					return m_transientPhysicalImages[entry.aliasPhysicalIndex].image.GetDefaultView();
+-				}
++			if (entry.aliasedEntryIndex < m_transientImages.size())
++			{
++				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
++				return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
++			}
+ 			}
+ 			return VK_NULL_HANDLE;
+ 		}
+diff --git a/src/engine/rendering/RenderGraph.hpp b/src/engine/rendering/RenderGraph.hpp
+index 369fdac..df3f984 100644
+--- a/src/engine/rendering/RenderGraph.hpp
++++ b/src/engine/rendering/RenderGraph.hpp
+@@ -86,6 +86,10 @@ namespace aether
+ 		void Initialize(VkDevice device, VmaAllocator allocator);
+ 		void Shutdown();
+ 
++		// Begin a new frame - must be called before Execute() to process
++		// deferred destructions from frames the GPU has finished.
++		void BeginFrame(std::uint32_t frameIndex);
++
+ 		// Optional Tracy GPU context for GPU-zone instrumentation of render passes.
+ 		void SetTracyVkCtx(TracyVkCtx ctx)
+ 		{
+@@ -204,17 +208,10 @@ namespace aether
+ 			bool bindlessRequested = false;
+ 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+ 			UniqueImage image;
+-			std::uint32_t aliasPhysicalIndex = 0xFFFFFFFFu;
++			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu; // index of entry we alias (when image is null)
+ 			VkExtent2D allocatedExtent{};
+ 		};
+ 
+-		struct TransientPhysicalImage
+-		{
+-			TransientImageDesc desc{};
+-			VkExtent2D allocatedExtent{};
+-			UniqueImage image;
+-		};
+-
+ 		struct AttachmentRef
+ 		{
+ 			RGImage image{};
+@@ -291,10 +288,21 @@ namespace aether
+ 		std::vector<CompiledPass> m_compiled;
+ 		std::vector<ExternalImageEntry> m_externalImages;   // indexed by (id - kFirstExternalId)
+ 		std::vector<TransientImageEntry> m_transientImages; // indexed by (id - kFirstTransientId)
+-		std::vector<TransientPhysicalImage> m_transientPhysicalImages;
+ 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
+ 		VkDevice m_device = VK_NULL_HANDLE;
+ 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+ 		TracyVkCtx m_tracyVkCtx = nullptr;
++
++		// Deferred destruction: images are queued for destruction and only
++		// actually destroyed when the GPU has finished the frame they were
++		// used in. Indexed by frame index % kMaxFramesInFlight.
++		static constexpr std::size_t kMaxFramesInFlight = 3;
++		struct PendingDestruction
++		{
++			std::uint32_t entryIndex = 0xFFFFFFFFu;
++			UniqueImage image;
++		};
++		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
++		std::uint32_t m_currentFrame = 0;
+ 	};
+ } // namespace aether
+diff --git a/src/engine/rendering/RenderQueue.cpp b/src/engine/rendering/RenderQueue.cpp
+index 5047183..00861cb 100644
+--- a/src/engine/rendering/RenderQueue.cpp
++++ b/src/engine/rendering/RenderQueue.cpp
+@@ -17,48 +17,48 @@
+ 
+ namespace aether
+ {
+-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws, std::uint32_t maxBatches, std::uint32_t maxAnimationDraws, std::uint32_t outputDrawCapacity)
++	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const Config& config)
+ 	{
+ 		m_device = device;
+ 		m_allocator = allocator;
+ 		m_sharedPipelines = &pipelines;
+-		m_maxDraws = maxDraws;
+-		m_maxBatches = maxBatches;
+-		m_outputDrawCapacity = (outputDrawCapacity > 0) ? outputDrawCapacity : maxDraws;
+-		m_maxAnimationDraws = (maxAnimationDraws == UINT32_MAX) ? std::min(maxDraws, kDefaultMaxAnimationDraws) : maxAnimationDraws;
++		m_maxDraws = config.maxDraws;
++		m_maxBatches = config.maxBatches;
++		m_outputDrawCapacity = (config.outputDrawCapacity > 0) ? config.outputDrawCapacity : config.maxDraws;
++		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
+ 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
+ 		m_maxSampledPoses = m_maxSkinJoints * 2u;
+ 
+ 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+ 
+-		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(DrawInstanceData), kSsboFlags, "RenderQueue.InstanceData"));
++		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxDraws) * sizeof(DrawContracts::InstanceData), kSsboFlags, "RenderQueue.InstanceData"));
+ 		m_instanceDataBuffer = std::move(b0);
+-		m_instanceDataMapped = static_cast<DrawInstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
++		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
+ 
+-		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxDraws) * sizeof(CullDrawInput), kSsboFlags, "RenderQueue.CullInput"));
++		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxDraws) * sizeof(CullContracts::DrawInput), kSsboFlags, "RenderQueue.CullInput"));
+ 		m_cullInputBuffer = std::move(b1);
+-		m_cullInputMapped = static_cast<CullDrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
++		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
+ 
+-		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(maxBatches) * sizeof(CullBatch), kSsboFlags, "RenderQueue.BatchDesc"));
++		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxBatches) * sizeof(CullContracts::Batch), kSsboFlags, "RenderQueue.BatchDesc"));
+ 		m_batchDescBuffer = std::move(b2);
+-		m_batchDescMapped = static_cast<CullBatch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
++		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
+ 
+ 		if (m_maxAnimationDraws > 0u)
+ 		{
+-			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
++			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
+ 			m_skinCopyJobBuffer = std::move(b3);
+-			m_skinCopyJobsMapped = static_cast<SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
++			m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
+ 
+-			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
++			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
+ 			m_animationSampleJobsBuffer = std::move(b4);
+-			m_animationSampleJobsMapped = static_cast<AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
++			m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
+ 
+ 			constexpr VkBufferUsageFlags kAnimationSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+ 
+ 			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.SkinPalette"));
+ 			m_skinPaletteBuffer = std::move(b5);
+ 
+-			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
++			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
+ 			m_sampledPosesBuffer = std::move(b6);
+ 
+ 			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
+@@ -162,7 +162,7 @@ namespace aether
+ 		}
+ 		if (m_sampledPosesBuffer)
+ 			{
+-				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose);
++				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
+ 				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+ 			}
+ 			if (m_nodeGlobalTransformsBuffer)
+@@ -186,9 +186,9 @@ namespace aether
+ 		}
+ 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
+ 		m_cachedBatchBase = batchBase;
+-		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawInstanceData);
++		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
+ 		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+-		const VkDeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(SampledNodePose) : 0;
++		const VkDeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
+ 		const VkDeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+ 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
+ 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
+@@ -279,7 +279,7 @@ namespace aether
+ 					{
+ 						skinPaletteOffset = skinJointCursor;
+ 						skinJointCount = dc.skinJointCount;
+-						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = AnimatorSampleJob{
++						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = AnimationContracts::AnimatorSampleJob{
+ 							.animClipIndex = dc.animClipIndex,
+ 							.animTime = dc.animTime,
+ 							.nodePoseOffset = nodePoseCursor,
+@@ -290,8 +290,8 @@ namespace aether
+ 							.valuesAddr = drawAnimDb->GetValuesAddr(),
+ 							.clipCount = drawClipCount,
+ 						};
+-						m_skinCopyJobsMapped[animJobBase + skinJobCount] = SkinCopyJob{
+-							.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(SampledNodePose),
++						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
++							.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
+ 							.dstPaletteOffset = skinPaletteOffset,
+ 							.jointCount = dc.skinJointCount,
+ 							.skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
+@@ -326,7 +326,7 @@ namespace aether
+ 					}
+ 				}
+ 
+-				m_instanceDataMapped[drawBase + globalDrawIdx] = DrawInstanceData{
++				m_instanceDataMapped[drawBase + globalDrawIdx] = DrawContracts::InstanceData{
+ 					.model = dc.modelMatrix,
+ 					.materialIndex = dc.materialIndex,
+ 					.skinPaletteOffset = skinPaletteOffset,
+@@ -335,7 +335,7 @@ namespace aether
+ 					.vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
+ 				};
+ 
+-				m_cullInputMapped[drawBase + globalDrawIdx] = CullDrawInput{
++				m_cullInputMapped[drawBase + globalDrawIdx] = CullContracts::DrawInput{
+ 					.indexCount = (dc.mesh != nullptr) ? dc.mesh->GetIndexCount() : 0u,
+ 					.instanceCount = 1u,
+ 					.firstIndex = 0u,
+@@ -347,7 +347,7 @@ namespace aether
+ 				++globalDrawIdx;
+ 			}
+ 
+-			m_batchDescMapped[batchBase + batchIdx] = CullBatch{ batchOutputStart, batchDrawCount, batchOutputStart };
++			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{ batchOutputStart, batchDrawCount, batchOutputStart };
+ 
+ 			m_batchRenderInfos.push_back(BatchRenderInfo{
+ 			        .pipeline = batchPipeline,
+@@ -408,7 +408,7 @@ namespace aether
+ 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
+ 				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
+ 
+-				const VkDeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob);
++				const VkDeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+ 
+ 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
+ 				{
+@@ -416,11 +416,11 @@ namespace aether
+ 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
+ 					if (nodeCount == 0) continue;
+ 
+-					const PoseInitPush initPc{
++					const AnimationContracts::PoseInitPush initPc{
+ 						.bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
+ 						.bindRotationsAddr = batch.db->GetBindRotationsAddr(),
+ 						.bindScalesAddr = batch.db->GetBindScalesAddr(),
+-						.animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimatorSampleJob),
++						.animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimationContracts::AnimatorSampleJob),
+ 						.sampledPosesAddr = currSampledPosesAddr,
+ 						.jobCount = batch.count,
+ 						.nodeCountPerJob = nodeCount,
+@@ -456,7 +456,7 @@ namespace aether
+ 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animSample);
+ 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
+ 
+-				const AnimationSamplePush animPc{
++				const AnimationContracts::AnimationSamplePush animPc{
+ 					.animDbClipsAddr = 0,
+ 					.animDbChannelsAddr = 0,
+ 					.animDbTimesAddr = 0,
+@@ -464,7 +464,7 @@ namespace aether
+ 					.bindTranslationsAddr = 0,
+ 					.bindRotationsAddr = 0,
+ 					.bindScalesAddr = 0,
+-					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob),
++					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
+ 					.sampledPosesAddr = currSampledPosesAddr,
+ 					.jobCount = sampleJobsThisFrame,
+ 					.clipCount = 0,
+@@ -520,18 +520,18 @@ namespace aether
+ 			const std::uint32_t logLimit = std::min(skinJobCount, 8u);
+ 			for (std::uint32_t ji = 0; ji < logLimit; ++ji)
+ 			{
+-				const SkinCopyJob& sj = m_skinCopyJobsMapped[animJobBase + ji];
++				const AnimationContracts::SkinCopyJob& sj = m_skinCopyJobsMapped[animJobBase + ji];
+ 				AE_INFO(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
+ 			}
+ 			for (std::uint32_t ji = 0; ji < std::min(sampleJobsThisFrame, logLimit); ++ji)
+ 			{
+-				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
++				const AnimationContracts::AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
+ 				AE_INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
+ 			}
+ 
+ 			if (logDb && sampleJobsThisFrame > 0)
+ 			{
+-				const AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase];
++				const AnimationContracts::AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase];
+ 				const auto& bindT = logDb->GetBindTranslations();
+ 				const auto& bindR = logDb->GetBindRotations();
+ 				const auto& bindS = logDb->GetBindScales();
+@@ -578,7 +578,7 @@ namespace aether
+ 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
+ 			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
+ 
+-			const VkDeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimatorSampleJob);
++			const VkDeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+ 
+ 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
+ 			{
+@@ -596,7 +596,7 @@ namespace aether
+ 					const AnimationDatabase::DepthRange& range = batch.db->GetDepthRange(di);
+ 					if (range.count == 0) continue;
+ 
+-					const NodeFlattenPush flattenPc{
++					const AnimationContracts::NodeFlattenPush flattenPc{
+ 						.sampledPosesAddr = currSampledPosesAddr,
+ 						.nodeParentsAddr = batch.db->GetNodeParentsAddr(),
+ 						.globalTransformsAddr = currNodeGlobalTransformsAddr,
+@@ -665,8 +665,8 @@ namespace aether
+ 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
+ 			{
+ 				const auto& batch = skinPaletteBatches[bi];
+-				const SkinPalettePush skinPc{
+-					.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(SkinCopyJob),
++				const AnimationContracts::SkinPalettePush skinPc{
++					.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
+ 					.dstPaletteAddr = currSkinPaletteAddr,
+ 					.globalTransformsAddr = currNodeGlobalTransformsAddr,
+ 					.skinMetasAddr = batch.db->GetSkinMetasAddr(),
+@@ -708,8 +708,8 @@ namespace aether
+ 		}
+ 
+ 		// ── Cull dispatch: single or multi-frustum ──
+-		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullDrawInput);
+-		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullBatch);
++		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
++		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullContracts::Batch);
+ 
+ 		if (m_outputDrawCapacity > m_maxDraws)
+ 		{
+@@ -720,7 +720,7 @@ namespace aether
+ 			const VkDeviceSize outputCmdOffset = outputBase * sizeof(VkDrawIndexedIndirectCommand);
+ 			const VkDeviceSize cascadeStride = static_cast<VkDeviceSize>(m_maxDraws) * sizeof(VkDrawIndexedIndirectCommand);
+ 
+-			const CullMultiPushConstants multiPc{
++			const CullContracts::MultiPushConstants multiPc{
+ 				.frameAddrs = { m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2] },
+ 				.instanceDataAddr = m_cachedInstanceDataAddr,
+ 				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+@@ -728,7 +728,7 @@ namespace aether
+ 				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+ 				.totalDrawCount = totalDraws,
+ 				.outputCascadeStride = static_cast<std::uint32_t>(cascadeStride),
+-				.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
++				.debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
+ 			};
+ 
+ 			{
+@@ -745,7 +745,7 @@ namespace aether
+ 		{
+ 			// Single-frustum mode (main camera, local shadows).
+ 			const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
+-			const CullPushConstants pc{
++			const CullContracts::PushConstants pc{
+ 				.frameAddr = frameAddr,
+ 				.instanceDataAddr = m_cachedInstanceDataAddr,
+ 				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+@@ -753,7 +753,7 @@ namespace aether
+ 				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+ 				.batchCountAddr = 0,
+ 				.totalDrawCount = totalDraws,
+-				.debugFlags = m_debugForceVisible ? kCullDebugForceVisibleBit : 0u,
++				.debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
+ 			};
+ 
+ 			{
+@@ -818,7 +818,7 @@ namespace aether
+ 
+ 		recorder.BeginDebugLabel("RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, 1.0f);
+ 
+-		const DrawPushConstants sharedPc{
++		const DrawContracts::PushConstants sharedPc{
+ 			.frameAddr = m_cachedFrameAddr,
+ 			.instanceDataAddr = m_cachedInstanceDataAddr,
+ 			.skinPaletteAddr = m_cachedSkinPaletteAddr,
+@@ -907,7 +907,7 @@ namespace aether
+ 
+ 		recorder.BeginDebugLabel("RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f, 1.0f);
+ 
+-		const DrawPushConstants sharedPc{
++		const DrawContracts::PushConstants sharedPc{
+ 			.frameAddr = overrideFrameAddr,
+ 			.instanceDataAddr = m_cachedInstanceDataAddr,
+ 			.skinPaletteAddr = m_cachedSkinPaletteAddr,
+@@ -999,7 +999,7 @@ namespace aether
+ 			const VkPushConstantRange pushRange{
+ 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 				.offset = 0,
+-				.size = sizeof(SkinPalettePush), // 72 bytes
++				.size = sizeof(AnimationContracts::SkinPalettePush), // 72 bytes
+ 			};
+ 			const VkPipelineLayoutCreateInfo layoutInfo{
+ 				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+@@ -1042,7 +1042,7 @@ namespace aether
+ 			const VkPushConstantRange pushRange{
+ 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 				.offset = 0,
+-				.size = sizeof(AnimationSamplePush),
++				.size = sizeof(AnimationContracts::AnimationSamplePush),
+ 			};
+ 			const VkPipelineLayoutCreateInfo layoutInfo{
+ 				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+@@ -1085,7 +1085,7 @@ namespace aether
+ 			const VkPushConstantRange pushRange{
+ 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 				.offset = 0,
+-				.size = sizeof(PoseInitPush),
++				.size = sizeof(AnimationContracts::PoseInitPush),
+ 			};
+ 			const VkPipelineLayoutCreateInfo layoutInfo{
+ 				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+@@ -1128,7 +1128,7 @@ namespace aether
+ 			const VkPushConstantRange pushRange{
+ 				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+ 				.offset = 0,
+-				.size = sizeof(NodeFlattenPush),
++				.size = sizeof(AnimationContracts::NodeFlattenPush),
+ 			};
+ 			const VkPipelineLayoutCreateInfo layoutInfo{
+ 				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+diff --git a/src/engine/rendering/RenderQueue.hpp b/src/engine/rendering/RenderQueue.hpp
+index 7da5cfd..39dd8e1 100644
+--- a/src/engine/rendering/RenderQueue.hpp
++++ b/src/engine/rendering/RenderQueue.hpp
+@@ -59,15 +59,22 @@ namespace aether
+ 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
+ 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
+ 
+-		// maxAnimationDraws controls the animation-related pool sizes separately
+-		// from total draw capacity. Pass 0 to disable all animation/skin buffers
+-		// (for queues that never process skinned draws, e.g. non-skinned shadow queues).
+-		// UINT32_MAX (default) derives a sane cap from total draws using
+-		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
+-		// outputDrawCapacity overrides the per-frame indirect output buffer capacity.
+-		// When 0 (default), it equals maxDraws.  Use e.g. maxDraws * 3 for multi-frustum
+-		// shadow queues that write 3 independent cascade output regions.
+-		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX, std::uint32_t outputDrawCapacity = 0);
++		// Configuration struct for Initialize - replaces multiple parameters.
++		// maxAnimationDraws controls animation pool sizes separately from total draw capacity.
++		// Pass 0 to disable all animation/skin buffers (for non-skinned queues).
++		// UINT32_MAX (default) derives a sane cap from total draws using kDefaultMaxAnimationDraws.
++		// outputDrawCapacity overrides per-frame indirect output buffer capacity (0 = equals maxDraws).
++		// Use e.g. maxDraws * 3 for multi-frustum shadow queues writing 3 cascade regions.
++		struct Config
++		{
++			std::uint32_t maxDraws = 8192;
++			std::uint32_t maxBatches = 1024;
++			std::uint32_t maxAnimationDraws = UINT32_MAX;
++			std::uint32_t outputDrawCapacity = 0;
++		};
++
++		// Initialize with configuration struct.
++		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const Config& config = {});
+ 		void Shutdown();
+ 
+ 		// Optional animation database for GPU sampling.
+@@ -167,22 +174,22 @@ namespace aether
+ 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+ 
+ 		// CPU-written per-frame inputs.
+-		UniqueBuffer m_instanceDataBuffer; // DrawInstanceData[]  - SSBO + BDA
+-		UniqueBuffer m_cullInputBuffer;    // CullDrawInput[]     - SSBO + BDA
+-		UniqueBuffer m_batchDescBuffer;    // CullBatch[]         - SSBO + BDA
++		UniqueBuffer m_instanceDataBuffer; // DrawContracts::InstanceData[]  - SSBO + BDA
++		UniqueBuffer m_cullInputBuffer;    // CullContracts::DrawInput[]     - SSBO + BDA
++		UniqueBuffer m_batchDescBuffer;    // CullContracts::Batch[]         - SSBO + BDA
+ 
+-		DrawInstanceData* m_instanceDataMapped = nullptr;
+-		CullDrawInput* m_cullInputMapped = nullptr;
+-		CullBatch* m_batchDescMapped = nullptr;
++		DrawContracts::InstanceData* m_instanceDataMapped = nullptr;
++		CullContracts::DrawInput* m_cullInputMapped = nullptr;
++		CullContracts::Batch* m_batchDescMapped = nullptr;
+ 
+ 		// Device-local outputs consumed by draw/compute.
+ 		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
+ 		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
+-		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
++		UniqueBuffer m_skinCopyJobBuffer;    // AnimationContracts::SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
+ 		UniqueBuffer m_nodeGlobalTransformsBuffer; // float4x4[] per-node global transforms (flatten pass output)
+ 
+-		SkinCopyJob* m_skinCopyJobsMapped = nullptr;
+-		AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
++		AnimationContracts::SkinCopyJob* m_skinCopyJobsMapped = nullptr;
++		AnimationContracts::AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
+ 
+ 		std::uint32_t m_maxDraws = 0;
+ 		std::uint32_t m_outputDrawCapacity = 0; // indirect buffer capacity per frame slot (defaults to m_maxDraws)
+@@ -205,7 +212,7 @@ namespace aether
+ 		// Cached per-frame addresses/state for FlushDraw.
+ 		VkDeviceAddress m_multiFrameAddrs[3] = {};
+ 		VkDeviceAddress m_cachedFrameAddr = 0;
+-		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
++		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawContracts::InstanceData[0] for current frame slot
+ 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
+ 		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
+ 		std::uint32_t m_cachedDrawBase = 0;           // frameSlot * maxDraws
+@@ -217,8 +224,8 @@ namespace aether
+ 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
+ 
+ 		const AnimationDatabase* m_animationDb = nullptr;
+-		UniqueBuffer m_animationSampleJobsBuffer; // AnimatorSampleJob[] CPU-mapped
+-		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
++		UniqueBuffer m_animationSampleJobsBuffer; // AnimationContracts::AnimatorSampleJob[] CPU-mapped
++		UniqueBuffer m_sampledPosesBuffer;        // AnimationContracts::SampledNodePose[] GPU-written
+ 		std::uint32_t m_animationSampleJobCount = 0;
+ 		std::uint32_t m_animationFrameCount = 0;
+ 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
+diff --git a/src/engine/rendering/RenderingSubsystem.cpp b/src/engine/rendering/RenderingSubsystem.cpp
+index d7fb38d..7288882 100644
+--- a/src/engine/rendering/RenderingSubsystem.cpp
++++ b/src/engine/rendering/RenderingSubsystem.cpp
+@@ -27,7 +27,7 @@ namespace aether
+ 
+ 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
+ 
+-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, 65536);
++		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{ .maxDraws = 65536 });
+ 		m_renderQueue.SetDebugForceVisible(false);
+ 		m_renderQueue.SetDebugBypassIndirect(false);
+ 		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
+diff --git a/src/engine/rendering/ShadowService.cpp b/src/engine/rendering/ShadowService.cpp
+index e942ce6..0cb77a3 100644
+--- a/src/engine/rendering/ShadowService.cpp
++++ b/src/engine/rendering/ShadowService.cpp
+@@ -29,7 +29,7 @@ namespace aether
+ 		}
+ 
+ 		// Single shadow queue with 3× output capacity for multi-frustum culling.
+-		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, 8192, 1024, UINT32_MAX, 8192 * kCullMultiFrustumCount);
++		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueue::Config{ .maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount });
+ 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
+ 
+ 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());

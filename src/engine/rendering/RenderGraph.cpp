@@ -9,6 +9,7 @@
 
 #include "gpu/BindlessManager.hpp"
 #include "rendering/CommandRecorder.hpp"
+#include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/GpuProfiler.hpp"
@@ -28,21 +29,110 @@ namespace aether
 		for (TransientImageEntry& entry: m_transientImages)
 		{
 			entry.image.Reset();
-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
+			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 			entry.allocatedExtent = {};
 		}
-		for (TransientPhysicalImage& physical: m_transientPhysicalImages)
-		{
-			physical.image.Reset();
-			physical.allocatedExtent = {};
-		}
-		m_transientPhysicalImages.clear();
 		m_transientImages.clear();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
+
+		for (auto& [key, cachedList]: m_imageCache)
+		{
+			for (CachedImage& ci: cachedList)
+			{
+				ci.image.Reset();
+			}
+		}
+		m_imageCache.clear();
+
+		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
+			m_pendingDestructions[i].clear();
+		}
+
+		m_lastImageStates.clear();
+		m_compileDirty = true;
 		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
+	}
+
+	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
+	{
+		m_currentFrame = frameIndex % kMaxFramesInFlight;
+		
+		// Destroy images from the frame that the GPU has now finished with.
+		// Since we have kMaxFramesInFlight frames, the GPU should be done
+		// with frame (currentFrame) by the time we start a new frame with
+		// the same index.
+		std::vector<PendingDestruction>& toDestroy = m_pendingDestructions[m_currentFrame];
+		for (PendingDestruction& pending: toDestroy)
+		{
+			pending.image.Reset();
+		}
+		toDestroy.clear();
+	}
+
+	RenderGraph::ImageCacheKey RenderGraph::MakeCacheKey(const TransientImageDesc& desc, VkExtent2D extent) const
+	{
+		return ImageCacheKey{
+			.format = desc.format,
+			.usage = desc.usage,
+			.aspect = desc.aspect,
+			.width = extent.width,
+			.height = extent.height,
+			.mipLevels = 1,
+			.samples = VK_SAMPLE_COUNT_1_BIT,
+		};
+	}
+
+	void RenderGraph::MoveToCache(TransientImageEntry& entry)
+	{
+		if (!entry.image) return;
+		const ImageCacheKey key = MakeCacheKey(entry.desc, entry.allocatedExtent);
+		m_imageCache[key].push_back(CachedImage{
+			.image = std::move(entry.image),
+			.lastUsedFrame = m_currentFrame,
+		});
+		entry.allocatedExtent = {};
+	}
+
+	UniqueImage RenderGraph::TryPullFromCache(const ImageCacheKey& key)
+	{
+		auto it = m_imageCache.find(key);
+		if (it == m_imageCache.end() || it->second.empty())
+		{
+			return {};
+		}
+		UniqueImage img = std::move(it->second.back().image);
+		it->second.pop_back();
+		if (it->second.empty())
+		{
+			m_imageCache.erase(it);
+		}
+		return img;
+	}
+
+	void RenderGraph::EvictStaleCacheEntries()
+	{
+		for (auto it = m_imageCache.begin(); it != m_imageCache.end();)
+		{
+			auto& list = it->second;
+			std::erase_if(list, [&](const CachedImage& ci) {
+				const std::uint32_t age = (m_currentFrame >= ci.lastUsedFrame)
+					? (m_currentFrame - ci.lastUsedFrame)
+					: (kMaxFramesInFlight + m_currentFrame - ci.lastUsedFrame);
+				return age > kCacheMaxStaleFrames;
+			});
+			if (list.empty())
+			{
+				it = m_imageCache.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
 	}
 
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
@@ -133,6 +223,7 @@ namespace aether
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
 		m_passes.push_back(PassRecord{ .name = std::move(name) });
+		m_compileDirty = true;
 		return PassBuilder{ *this, m_passes.size() - 1 };
 	}
 
@@ -142,6 +233,7 @@ namespace aether
 		        .name = std::move(name),
 		        .kind = PassKind::Compute,
 		});
+		m_compileDirty = true;
 		return PassBuilder{ *this, m_passes.size() - 1 };
 	}
 
@@ -206,7 +298,7 @@ namespace aether
 		TransientImageEntry& entry = m_transientImages[idx];
 		entry.bindlessRequested = true;
 		entry.bindlessLayout = descriptorLayout;
-		entry.aliasPhysicalIndex = 0xFFFFFFFFu;
+		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 
 		if (!entry.image)
 		{
@@ -264,13 +356,23 @@ namespace aether
 			const uint32_t idx = image.id - kFirstTransientId;
 			if (idx < m_transientImages.size())
 			{
-				m_transientImages[idx].image.Reset();
-				m_transientImages[idx].bindlessRequested = false;
-				m_transientImages[idx].bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				m_transientImages[idx].aliasPhysicalIndex = 0xFFFFFFFFu;
-				m_transientImages[idx].allocatedExtent = {};
-				m_transientImages[idx].desc = {};
-					}
+				TransientImageEntry& entry = m_transientImages[idx];
+				if (entry.bindlessRequested)
+				{
+					PendingDestruction pending{};
+					pending.entryIndex = idx;
+					pending.image = std::move(entry.image);
+					m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
+				}
+				else
+				{
+					MoveToCache(entry);
+				}
+				entry.bindlessRequested = false;
+				entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+				entry.aliasedEntryIndex = 0xFFFFFFFFu;
+				entry.desc = {};
+			}
 			return;
 		}
 
@@ -278,7 +380,7 @@ namespace aether
 		if (idx < m_externalImages.size())
 		{
 			m_externalImages[idx] = {};
-			}
+		}
 	}
 
 	void RenderGraph::RemovePass(const std::string& name)
@@ -287,7 +389,8 @@ namespace aether
 		if (it != m_passes.end())
 		{
 			m_passes.erase(it);
-			}
+			m_compileDirty = true;
+		}
 	}
 
 	bool RenderGraph::HasPass(std::string_view name) const
@@ -299,20 +402,14 @@ namespace aether
 	{
 		for (TransientImageEntry& entry: m_transientImages)
 		{
-			entry.image.Reset();
-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
-			entry.allocatedExtent = {};
+			MoveToCache(entry);
+			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 		}
-		for (TransientPhysicalImage& physical: m_transientPhysicalImages)
-		{
-			physical.image.Reset();
-			physical.allocatedExtent = {};
-		}
-		m_transientPhysicalImages.clear();
 		m_transientImages.clear();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
+		m_compileDirty = true;
 	}
 
 	void RenderGraph::EnsureTransientImages(const FrameTarget& target)
@@ -362,100 +459,115 @@ namespace aether
 			}
 		}
 
+		std::vector<VkExtent2D> requestedExtents(m_transientImages.size());
+		std::vector<std::uint32_t> candidates;
+		candidates.reserve(m_transientImages.size());
+
 		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
 		{
 			TransientImageEntry& entry = m_transientImages[idx];
-			entry.aliasPhysicalIndex = 0xFFFFFFFFu;
-			if (!entry.bindlessRequested)
-			{
-				entry.image.Reset();
-				entry.allocatedExtent = {};
-			}
-		}
+			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 
-		std::vector<std::uint32_t> candidates;
-		candidates.reserve(m_transientImages.size());
-		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
-		{
-			if (m_transientImages[idx].bindlessRequested)
+			const VkExtent2D reqExt = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
+			requestedExtents[idx] = reqExt;
+
+			if (entry.bindlessRequested) continue;
+
+			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || reqExt.width == 0 || reqExt.height == 0)
 			{
+				MoveToCache(entry);
 				continue;
 			}
+
 			if (lifetimes[idx].last >= lifetimes[idx].first)
 			{
 				candidates.push_back(idx);
 			}
+			else
+			{
+				MoveToCache(entry);
+			}
 		}
-		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) { return lifetimes[a].first < lifetimes[b].first; });
 
-		std::vector<int> physicalLastUse(m_transientPhysicalImages.size(), -1);
+		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) {
+			return lifetimes[a].first < lifetimes[b].first;
+		});
+
+		std::vector<int> entryLastUse(m_transientImages.size(), -1);
 
 		for (const std::uint32_t idx: candidates)
 		{
 			TransientImageEntry& entry = m_transientImages[idx];
-			const VkExtent2D requestedExtent = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
-
-			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || requestedExtent.width == 0 || requestedExtent.height == 0)
-			{
-				AE_WARN(LogCategory::Engine, "RenderGraph: skipping invalid transient image desc (format={}, usage=0x{:X}, extent={}x{}).", static_cast<int>(entry.desc.format), entry.desc.usage, requestedExtent.width, requestedExtent.height);
-				continue;
-			}
-
+			const VkExtent2D reqExt = requestedExtents[idx];
 			const int firstUse = lifetimes[idx].first;
 			const int lastUse = lifetimes[idx].last;
+
+			const bool needsCreate = !entry.image ||
+			                         entry.allocatedExtent.width != reqExt.width ||
+			                         entry.allocatedExtent.height != reqExt.height;
+
 			std::uint32_t chosen = 0xFFFFFFFFu;
 
-			for (std::uint32_t p = 0; p < m_transientPhysicalImages.size(); ++p)
-			{
-				const TransientPhysicalImage& phys = m_transientPhysicalImages[p];
-				if (phys.desc.format != entry.desc.format || phys.desc.usage != entry.desc.usage || phys.desc.aspect != entry.desc.aspect)
-				{
-					continue;
-				}
-				if (phys.allocatedExtent.width != requestedExtent.width || phys.allocatedExtent.height != requestedExtent.height)
-				{
-					continue;
-				}
-				if (physicalLastUse[p] >= firstUse)
-				{
-					continue;
-				}
-				chosen = p;
-				break;
-			}
-
-			if (chosen == 0xFFFFFFFFu)
-			{
-				chosen = static_cast<std::uint32_t>(m_transientPhysicalImages.size());
-				m_transientPhysicalImages.push_back(TransientPhysicalImage{
-				        .desc = entry.desc,
-				        .allocatedExtent = requestedExtent,
-				});
-				physicalLastUse.push_back(-1);
-			}
-
-			TransientPhysicalImage& phys = m_transientPhysicalImages[chosen];
-			const bool needsCreate = !phys.image || phys.allocatedExtent.width != requestedExtent.width || phys.allocatedExtent.height != requestedExtent.height;
 			if (needsCreate)
 			{
-				phys.image.Reset();
-				AE_EXPECT_OR_THROW(newImage,
-				        UniqueImage::Create(m_device,
-				                m_allocator,
-				                {
-				                        .extent = requestedExtent,
-				                        .format = entry.desc.format,
-				                        .usage = entry.desc.usage,
-				                }));
-				phys.image = std::move(newImage);
-				phys.allocatedExtent = requestedExtent;
-				phys.desc = entry.desc;
-				const std::string physName = std::format("RenderGraph.Transient.Physical[{}]", chosen);
-				phys.image.SetName(m_device, physName.c_str());
-			}
+				for (std::uint32_t e = 0; e < m_transientImages.size(); ++e)
+				{
+					if (e == idx) continue;
+					const TransientImageEntry& candidate = m_transientImages[e];
+					if (candidate.aliasedEntryIndex != 0xFFFFFFFFu) continue;
+					if (!candidate.image) continue;
+					if (candidate.desc.format != entry.desc.format ||
+					    candidate.desc.usage != entry.desc.usage ||
+					    candidate.desc.aspect != entry.desc.aspect) continue;
+					if (candidate.allocatedExtent.width != reqExt.width ||
+					    candidate.allocatedExtent.height != reqExt.height) continue;
+					if (entryLastUse[e] >= firstUse) continue;
 
-			entry.aliasPhysicalIndex = chosen;
-			physicalLastUse[chosen] = lastUse;
+					chosen = e;
+					break;
+				}
+
+				if (chosen == 0xFFFFFFFFu)
+				{
+					chosen = idx;
+					const ImageCacheKey key = MakeCacheKey(entry.desc, reqExt);
+					UniqueImage cached = TryPullFromCache(key);
+
+					if (cached)
+					{
+						MoveToCache(entry);
+						entry.image = std::move(cached);
+						entry.allocatedExtent = reqExt;
+					}
+					else
+					{
+						MoveToCache(entry);
+						AE_EXPECT_OR_THROW(newImage,
+						        UniqueImage::Create(m_device,
+						                m_allocator,
+						                {
+						                        .extent = reqExt,
+						                        .format = entry.desc.format,
+						                        .usage = entry.desc.usage,
+						                }));
+						entry.image = std::move(newImage);
+						entry.allocatedExtent = reqExt;
+						const std::string entryName = std::format("RenderGraph.Transient[{}]", idx);
+						entry.image.SetName(m_device, entryName.c_str());
+					}
+				}
+				else
+				{
+					MoveToCache(entry);
+					entry.aliasedEntryIndex = chosen;
+					entry.allocatedExtent = reqExt;
+				}
+			}
+			else
+			{
+				chosen = idx;
+			}
+			entryLastUse[chosen] = lastUse;
 		}
 
 		for (std::uint32_t entryIdx = 0; entryIdx < m_transientImages.size(); ++entryIdx)
@@ -466,32 +578,49 @@ namespace aether
 				continue;
 			}
 
-			const VkExtent2D requestedExtent = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
-			const bool needsCreate = !entry.image || entry.allocatedExtent.width != requestedExtent.width || entry.allocatedExtent.height != requestedExtent.height;
+			const VkExtent2D reqExt = requestedExtents[entryIdx];
+			const bool needsCreate = !entry.image ||
+			                         entry.allocatedExtent.width != reqExt.width ||
+			                         entry.allocatedExtent.height != reqExt.height;
 			if (!needsCreate)
 			{
 				continue;
 			}
 
-			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || requestedExtent.width == 0 || requestedExtent.height == 0)
+			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || reqExt.width == 0 || reqExt.height == 0)
 			{
+				MoveToCache(entry);
 				continue;
 			}
 
-			entry.image.Reset();
-			AE_EXPECT_OR_THROW(newImage,
-			        UniqueImage::Create(m_device,
-			                m_allocator,
-			                {
-			                        .extent = requestedExtent,
-			                        .format = entry.desc.format,
-			                        .usage = entry.desc.usage,
-			                }));
-			entry.image = std::move(newImage);
-			entry.allocatedExtent = requestedExtent;
+			const ImageCacheKey key = MakeCacheKey(entry.desc, reqExt);
+			UniqueImage cached = TryPullFromCache(key);
+
+			if (cached)
+			{
+				MoveToCache(entry);
+				entry.image = std::move(cached);
+				entry.allocatedExtent = reqExt;
+			}
+			else
+			{
+				MoveToCache(entry);
+				AE_EXPECT_OR_THROW(newImage,
+				        UniqueImage::Create(m_device,
+				                m_allocator,
+				                {
+				                        .extent = reqExt,
+				                        .format = entry.desc.format,
+				                        .usage = entry.desc.usage,
+				                }));
+				entry.image = std::move(newImage);
+				entry.allocatedExtent = reqExt;
+			}
 			const std::string entryName = std::format("RenderGraph.Transient.Bindless[{}]", entryIdx);
 			entry.image.SetName(m_device, entryName.c_str());
 		}
+
+		EvictStaleCacheEntries();
 	}
 
 	void RenderGraph::Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
@@ -514,6 +643,7 @@ namespace aether
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
+			m_scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
 				const VkImage image = ResolveImage(b.resourceId, target);
@@ -522,14 +652,24 @@ namespace aether
 					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
 					continue;
 				}
-				vkutil::TransitionImage(recorder.GetCommandBuffer(), image, b.oldLayout, b.newLayout, b.srcStage, b.srcAccess, b.dstStage, b.dstAccess, b.aspect);
+				m_scratchBarriers.push_back({
+					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					.srcStageMask = b.srcStage,
+					.srcAccessMask = b.srcAccess,
+					.dstStageMask = b.dstStage,
+					.dstAccessMask = b.dstAccess,
+					.oldLayout = b.oldLayout,
+					.newLayout = b.newLayout,
+					.image = image,
+					.subresourceRange = { b.aspect, 0, 1, 0, 1 },
+				});
 			}
+			vkutil::TransitionImages(recorder.GetCommandBuffer(), m_scratchBarriers.data(), static_cast<uint32_t>(m_scratchBarriers.size()));
 
-			std::vector<VkRenderingAttachmentInfo> colorInfos;
-			colorInfos.reserve(pass.colorWrites.size());
+			m_scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
-				colorInfos.push_back({
+				m_scratchColorInfos.push_back({
 				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 				        .imageView = ResolveView(a.image.id, target),
 				        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -556,15 +696,15 @@ namespace aether
 			}
 
 			const VkExtent2D passExtent = pass.extentOverride.value_or(target.extent);
-			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!colorInfos.empty() || hasDepth);
+			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!m_scratchColorInfos.empty() || hasDepth);
 			if (useDynamicRendering)
 			{
 				const VkRenderingInfo renderInfo{
 					.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
 					.renderArea = { { 0, 0 }, passExtent },
 					.layerCount = 1,
-					.colorAttachmentCount = static_cast<uint32_t>(colorInfos.size()),
-					.pColorAttachments = colorInfos.data(),
+					.colorAttachmentCount = static_cast<uint32_t>(m_scratchColorInfos.size()),
+					.pColorAttachments = m_scratchColorInfos.data(),
 					.pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
 				vkCmdBeginRendering(recorder.GetCommandBuffer(), &renderInfo);
@@ -605,6 +745,12 @@ namespace aether
 
 	void RenderGraph::Compile()
 	{
+		if (!m_compileDirty)
+		{
+			return;
+		}
+		m_compileDirty = false;
+
 		const std::size_t N = m_passes.size();
 		m_compiled.clear();
 		m_compiled.reserve(N);
@@ -708,18 +854,21 @@ namespace aether
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}
 
-		// Carry over end-of-frame state from the prior frame. Images that
-		// persist across frames (external images, transient depth) need their
-		// actual GPU layout tracked so the first-access barrier in this frame
-		// uses the correct oldLayout.
 		std::unordered_map<uint32_t, ResourceState> states;
 		for (const auto& [id, s]: m_lastImageStates)
 		{
+			if (IsTransientId(id))
+			{
+				const uint32_t idx = id - kFirstTransientId;
+				if (idx >= m_transientImages.size()) continue;
+				const TransientImageEntry& entry = m_transientImages[idx];
+				if (!entry.image && entry.aliasedEntryIndex == 0xFFFFFFFFu) continue;
+			}
 			states[id] = {
 				s.layout,
 				s.writeStage,
 				s.writeAccess,
-				true, // isCrossFrame
+				true,
 			};
 		}
 
@@ -918,7 +1067,7 @@ namespace aether
 		}
 
 		// AE_INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
-		m_lastImageStates = states;
+		std::swap(m_lastImageStates, states);
 	}
 
 	VkImage RenderGraph::ResolveImage(uint32_t resourceId, const FrameTarget& target) const
@@ -941,10 +1090,11 @@ namespace aether
 				{
 					return entry.image.Get();
 				}
-				if (entry.aliasPhysicalIndex < m_transientPhysicalImages.size())
-				{
-					return m_transientPhysicalImages[entry.aliasPhysicalIndex].image.Get();
-				}
+			if (entry.aliasedEntryIndex < m_transientImages.size())
+			{
+				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
+				return m_transientImages[entry.aliasedEntryIndex].image.Get();
+			}
 			}
 			return VK_NULL_HANDLE;
 		}
@@ -976,10 +1126,11 @@ namespace aether
 				{
 					return entry.image.GetDefaultView();
 				}
-				if (entry.aliasPhysicalIndex < m_transientPhysicalImages.size())
-				{
-					return m_transientPhysicalImages[entry.aliasPhysicalIndex].image.GetDefaultView();
-				}
+			if (entry.aliasedEntryIndex < m_transientImages.size())
+			{
+				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
+				return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
+			}
 			}
 			return VK_NULL_HANDLE;
 		}

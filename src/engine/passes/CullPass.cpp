@@ -62,7 +62,7 @@ namespace aether
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 			.offset = 0,
-			.size = sizeof(CullPushConstants),
+			.size = sizeof(CullContracts::PushConstants),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
@@ -119,7 +119,7 @@ namespace aether
 		const VkPushConstantRange pushRange{
 			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
 			.offset = 0,
-			.size = sizeof(CullMultiPushConstants),
+			.size = sizeof(CullContracts::MultiPushConstants),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
 			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,

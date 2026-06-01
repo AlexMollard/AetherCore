@@ -147,7 +147,7 @@ namespace aether
 		const VkPushConstantRange kModelRange{
 			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 			.offset = 0,
-			.size = sizeof(DrawPushConstants),
+			.size = sizeof(DrawContracts::PushConstants),
 		};
 		const VkPushConstantRange kCustomRange{
 			.stageFlags = desc.pushConstantStages,

@@ -41,10 +41,10 @@ namespace aether
 		vkCmdBindDescriptorSets(m_cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, set, 1, &descriptorSet, 0, nullptr);
 	}
 
-	void CommandRecorder::PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc)
+	void CommandRecorder::PushConstants(VkPipelineLayout layout, const DrawContracts::PushConstants& pc)
 	{
 		AE_PROFILE_ZONE_N("CmdRecorder::PushConstants");
-		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawPushConstants), &pc);
+		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawContracts::PushConstants), &pc);
 	}
 
 	void CommandRecorder::MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)

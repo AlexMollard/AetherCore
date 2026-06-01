@@ -241,8 +241,6 @@ namespace aether::app
 			m_foxAgents.reserve(kFoxCount);
 			m_foxInstances.reserve(kFoxCount);
 
-			const float runDur = m_foxModel->animationDb.IsValid() ? m_foxModel->animationDb.GetClipDuration(kAnimRun) : 0.f;
-
 			for (int i = 0; i < kFoxCount; ++i)
 			{
 				FoxAgent agent;
@@ -253,7 +251,7 @@ namespace aether::app
 				agent.idle = false;
 				m_foxAgents.push_back(agent);
 
-				auto instances = aether::ecs::SpawnModel(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f);
+				aether::ecs::SpawnModel(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f);
 
 				//// Set initial animation state on each spawned SkinnedMeshComponent.
 				//if (m_foxModel->animationDb.IsValid())

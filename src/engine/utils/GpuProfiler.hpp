@@ -14,7 +14,7 @@
 #	define AE_PROFILE_GPU_ZONE(ctx, cmdbuf, name) TracyVkZone(ctx, cmdbuf, name)
 #	define AE_PROFILE_GPU_ZONE_T(ctx, cmdbuf, varname, name) TracyVkZoneTransient(ctx, varname, cmdbuf, name, true)
 #	define AE_PROFILE_GPU_COLLECT(ctx, cmdbuf) TracyVkCollect(ctx, cmdbuf)
-#	define AE_PROFILE_GPU_CONTEXT_NAME(ctx, name) TracyVkContextName(ctx, name, std::strlen(name))
+#	define AE_PROFILE_GPU_CONTEXT_NAME(ctx, name) TracyVkContextName(ctx, name, static_cast<std::uint16_t>(std::strlen(name)))
 
 // GPU-variant plot: records a value on the GPU timeline in Tracy.
 // Falls back to TracyPlot on the CPU timeline when the GPU context isn't available.

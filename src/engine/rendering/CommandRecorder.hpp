@@ -38,7 +38,7 @@ namespace aether
 		void DrawIndexedIndirectCount(VkBuffer indirectBuffer, VkDeviceSize indirectOffset, VkBuffer countBuffer, VkDeviceSize countOffset, std::uint32_t maxDrawCount, std::uint32_t stride = sizeof(VkDrawIndexedIndirectCommand));
 		void BindIndexBuffer(VkBuffer buffer, VkDeviceSize offset = 0, VkIndexType indexType = VK_INDEX_TYPE_UINT32);
 		void BindDescriptorSet(VkPipelineLayout layout, std::uint32_t set, VkDescriptorSet descriptorSet);
-		void PushConstants(VkPipelineLayout layout, const DrawPushConstants& pc);
+		void PushConstants(VkPipelineLayout layout, const DrawContracts::PushConstants& pc);
 		void MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess);
 
 		void HostToShaderBarrier();

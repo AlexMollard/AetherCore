@@ -24,4 +24,14 @@ namespace aether::vkutil
 		};
 		vkCmdPipelineBarrier2(cmd, &dep);
 	}
+	inline void TransitionImages(VkCommandBuffer cmd, const VkImageMemoryBarrier2* barriers, uint32_t count)
+	{
+		if (count == 0) return;
+		const VkDependencyInfo dep{
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.imageMemoryBarrierCount = count,
+			.pImageMemoryBarriers = barriers,
+		};
+		vkCmdPipelineBarrier2(cmd, &dep);
+	}
 } // namespace aether::vkutil

@@ -313,6 +313,7 @@ void das_load_model(aether::World* w, uint32_t id, const char* path)
 	// and returns a handle that can be passed to add_mesh.
 	uint32_t das_create_mesh(aether::World* w, const char* type)
 	{
+		(void)w;
 		auto& ctx = ActiveContext();
 		if (!ctx.primitives || !ctx.defaultPipeline)
 		{

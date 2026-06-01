@@ -30,7 +30,7 @@ namespace aether::ecs
 	template<typename... Tags>
 	inline std::size_t SpawnModel(aether::World& world, aether::AssetManager& assets, aether::LoadedModel& model, aether::GraphicsPipeline& pipeline, float scale, Tags... tags)
 	{
-		const std::vector<aether::Entity> entities = assets.SpawnModel(model, pipeline, scale);
+		const std::vector<aether::Entity> entities = assets.SpawnModel(model, pipeline, static_cast<uint32_t>(scale));
 		for (const aether::Entity e: entities)
 		{
 			(world.EmplaceOrReplace<Tags>(e, tags), ...);

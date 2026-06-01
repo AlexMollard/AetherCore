@@ -304,6 +304,7 @@ namespace aether
 		const FrameTarget frameTarget = m_gpu.BuildFrameTarget();
 
 		m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
+		m_rendering.GetRenderGraph().BeginFrame(frameIdx);
 		m_rendering.GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
 		m_currentRecorder.EndDebugLabel();
 

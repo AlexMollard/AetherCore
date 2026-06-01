@@ -27,7 +27,7 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, 65536);
+		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{ .maxDraws = 65536 });
 		m_renderQueue.SetDebugForceVisible(false);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());

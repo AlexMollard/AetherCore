@@ -412,7 +412,6 @@ namespace aether::app
 				std::snprintf(errText.data(), errText.size(), "Script Errors (%zu): %s", count, summary.c_str());
 			}
 
-			const float textY = barY + (kBarHeight - 14.f) * 0.5f;
 			ui.DrawText(errText.data(), UiPoint{ .anchor = { 0.f, 1.f }, .offsetPx = { kMargin, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f } }, 14.f, { 0.95f, 0.32f, 0.32f, 1.f });
 
 			// Dismiss button

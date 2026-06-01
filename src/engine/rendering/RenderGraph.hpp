@@ -86,6 +86,10 @@ namespace aether
 		void Initialize(VkDevice device, VmaAllocator allocator);
 		void Shutdown();
 
+		// Begin a new frame - must be called before Execute() to process
+		// deferred destructions from frames the GPU has finished.
+		void BeginFrame(std::uint32_t frameIndex);
+
 		// Optional Tracy GPU context for GPU-zone instrumentation of render passes.
 		void SetTracyVkCtx(TracyVkCtx ctx)
 		{
@@ -204,15 +208,8 @@ namespace aether
 			bool bindlessRequested = false;
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			UniqueImage image;
-			std::uint32_t aliasPhysicalIndex = 0xFFFFFFFFu;
+			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu; // index of entry we alias (when image is null)
 			VkExtent2D allocatedExtent{};
-		};
-
-		struct TransientPhysicalImage
-		{
-			TransientImageDesc desc{};
-			VkExtent2D allocatedExtent{};
-			UniqueImage image;
 		};
 
 		struct AttachmentRef
@@ -279,6 +276,51 @@ namespace aether
 			bool isCrossFrame = false;
 		};
 
+		struct ImageCacheKey
+		{
+			VkFormat format = VK_FORMAT_UNDEFINED;
+			VkImageUsageFlags usage = 0;
+			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			uint32_t width = 0;
+			uint32_t height = 0;
+			uint32_t mipLevels = 1;
+			VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
+
+			bool operator==(const ImageCacheKey& other) const noexcept
+			{
+				return format == other.format && usage == other.usage &&
+				       aspect == other.aspect && width == other.width &&
+				       height == other.height && mipLevels == other.mipLevels &&
+				       samples == other.samples;
+			}
+		};
+
+		struct ImageCacheKeyHash
+		{
+			std::size_t operator()(const ImageCacheKey& k) const noexcept
+			{
+				std::size_t h = std::hash<uint32_t>{}(static_cast<uint32_t>(k.format));
+				h ^= std::hash<uint32_t>{}(k.usage) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(k.aspect) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(k.width) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(k.height) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(k.mipLevels) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(static_cast<uint32_t>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				return h;
+			}
+		};
+
+		struct CachedImage
+		{
+			UniqueImage image;
+			std::uint32_t lastUsedFrame = 0;
+		};
+
+		void MoveToCache(TransientImageEntry& entry);
+		UniqueImage TryPullFromCache(const ImageCacheKey& key);
+		void EvictStaleCacheEntries();
+		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageDesc& desc, VkExtent2D extent) const;
+
 		void Compile();
 		void EnsureTransientImages(const FrameTarget& target);
 
@@ -291,10 +333,28 @@ namespace aether
 		std::vector<CompiledPass> m_compiled;
 		std::vector<ExternalImageEntry> m_externalImages;   // indexed by (id - kFirstExternalId)
 		std::vector<TransientImageEntry> m_transientImages; // indexed by (id - kFirstTransientId)
-		std::vector<TransientPhysicalImage> m_transientPhysicalImages;
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
+		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		TracyVkCtx m_tracyVkCtx = nullptr;
+
+		bool m_compileDirty = true;
+
+		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
+		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
+
+		// Deferred destruction: images are queued for destruction and only
+		// actually destroyed when the GPU has finished the frame they were
+		// used in. Indexed by frame index % kMaxFramesInFlight.
+		static constexpr std::size_t kMaxFramesInFlight = 3;
+		static constexpr std::uint32_t kCacheMaxStaleFrames = 10;
+		struct PendingDestruction
+		{
+			std::uint32_t entryIndex = 0xFFFFFFFFu;
+			UniqueImage image;
+		};
+		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
+		std::uint32_t m_currentFrame = 0;
 	};
 } // namespace aether

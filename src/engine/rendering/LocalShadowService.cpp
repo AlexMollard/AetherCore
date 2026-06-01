@@ -44,7 +44,7 @@ namespace aether
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
-		m_shadowRenderQueue.Initialize(device, allocator, pipelines, 4096, 512, 0u);
+		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{ .maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 0u });
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
@@ -507,6 +507,8 @@ namespace aether
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat)
 	{
 		AE_PROFILE_ZONE();
+		(void)bindless;
+		(void)device;
 		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage().Get(), m_atlasManager.GetAtlasView(), VK_IMAGE_ASPECT_COLOR_BIT);
 

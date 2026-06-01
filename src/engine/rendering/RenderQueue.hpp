@@ -59,15 +59,22 @@ namespace aether
 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
-		// maxAnimationDraws controls the animation-related pool sizes separately
-		// from total draw capacity. Pass 0 to disable all animation/skin buffers
-		// (for queues that never process skinned draws, e.g. non-skinned shadow queues).
-		// UINT32_MAX (default) derives a sane cap from total draws using
-		// kDefaultMaxAnimationDraws instead of assuming every draw can animate.
-		// outputDrawCapacity overrides the per-frame indirect output buffer capacity.
-		// When 0 (default), it equals maxDraws.  Use e.g. maxDraws * 3 for multi-frustum
-		// shadow queues that write 3 independent cascade output regions.
-		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, std::uint32_t maxDraws = 8192, std::uint32_t maxBatches = 1024, std::uint32_t maxAnimationDraws = UINT32_MAX, std::uint32_t outputDrawCapacity = 0);
+		// Configuration struct for Initialize - replaces multiple parameters.
+		// maxAnimationDraws controls animation pool sizes separately from total draw capacity.
+		// Pass 0 to disable all animation/skin buffers (for non-skinned queues).
+		// UINT32_MAX (default) derives a sane cap from total draws using kDefaultMaxAnimationDraws.
+		// outputDrawCapacity overrides per-frame indirect output buffer capacity (0 = equals maxDraws).
+		// Use e.g. maxDraws * 3 for multi-frustum shadow queues writing 3 cascade regions.
+		struct Config
+		{
+			std::uint32_t maxDraws = 8192;
+			std::uint32_t maxBatches = 1024;
+			std::uint32_t maxAnimationDraws = UINT32_MAX;
+			std::uint32_t outputDrawCapacity = 0;
+		};
+
+		// Initialize with configuration struct.
+		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const Config& config = {});
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.
@@ -167,22 +174,22 @@ namespace aether
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 
 		// CPU-written per-frame inputs.
-		UniqueBuffer m_instanceDataBuffer; // DrawInstanceData[]  - SSBO + BDA
-		UniqueBuffer m_cullInputBuffer;    // CullDrawInput[]     - SSBO + BDA
-		UniqueBuffer m_batchDescBuffer;    // CullBatch[]         - SSBO + BDA
+		UniqueBuffer m_instanceDataBuffer; // DrawContracts::InstanceData[]  - SSBO + BDA
+		UniqueBuffer m_cullInputBuffer;    // CullContracts::DrawInput[]     - SSBO + BDA
+		UniqueBuffer m_batchDescBuffer;    // CullContracts::Batch[]         - SSBO + BDA
 
-		DrawInstanceData* m_instanceDataMapped = nullptr;
-		CullDrawInput* m_cullInputMapped = nullptr;
-		CullBatch* m_batchDescMapped = nullptr;
+		DrawContracts::InstanceData* m_instanceDataMapped = nullptr;
+		CullContracts::DrawInput* m_cullInputMapped = nullptr;
+		CullContracts::Batch* m_batchDescMapped = nullptr;
 
 		// Device-local outputs consumed by draw/compute.
 		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
 		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
-		UniqueBuffer m_skinCopyJobBuffer;    // SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
+		UniqueBuffer m_skinCopyJobBuffer;    // AnimationContracts::SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
 		UniqueBuffer m_nodeGlobalTransformsBuffer; // float4x4[] per-node global transforms (flatten pass output)
 
-		SkinCopyJob* m_skinCopyJobsMapped = nullptr;
-		AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
+		AnimationContracts::SkinCopyJob* m_skinCopyJobsMapped = nullptr;
+		AnimationContracts::AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
 
 		std::uint32_t m_maxDraws = 0;
 		std::uint32_t m_outputDrawCapacity = 0; // indirect buffer capacity per frame slot (defaults to m_maxDraws)
@@ -205,7 +212,7 @@ namespace aether
 		// Cached per-frame addresses/state for FlushDraw.
 		VkDeviceAddress m_multiFrameAddrs[3] = {};
 		VkDeviceAddress m_cachedFrameAddr = 0;
-		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawInstanceData[0] for current frame slot
+		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawContracts::InstanceData[0] for current frame slot
 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
 		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
 		std::uint32_t m_cachedDrawBase = 0;           // frameSlot * maxDraws
@@ -217,8 +224,8 @@ namespace aether
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 
 		const AnimationDatabase* m_animationDb = nullptr;
-		UniqueBuffer m_animationSampleJobsBuffer; // AnimatorSampleJob[] CPU-mapped
-		UniqueBuffer m_sampledPosesBuffer;        // SampledNodePose[] GPU-written
+		UniqueBuffer m_animationSampleJobsBuffer; // AnimationContracts::AnimatorSampleJob[] CPU-mapped
+		UniqueBuffer m_sampledPosesBuffer;        // AnimationContracts::SampledNodePose[] GPU-written
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::uint32_t m_animationFrameCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
