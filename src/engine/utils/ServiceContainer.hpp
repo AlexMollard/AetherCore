@@ -8,12 +8,14 @@
 
 #include "utils/Assert.hpp"
 
-// Type-erased service locator / dependency injection container.
-//
-// Thread safety: NOT thread-safe. All registrations must occur during
-// initialization (single-threaded). Reads during the frame loop are safe
-// as long as no concurrent modifications happen. Use external synchronization
-// if Register/Unregister/Clear are called concurrently with Get/TryGet/Has.
+namespace aether
+{
+	// Type-erased service locator / dependency injection container.
+	//
+	// Thread safety: NOT thread-safe. All registrations must occur during
+	// initialization (single-threaded). Reads during the frame loop are safe
+	// as long as no concurrent modifications happen. Use external synchronization
+	// if Register/Unregister/Clear are called concurrently with Get/TryGet/Has.
 class ServiceContainer
 {
 public:
@@ -59,3 +61,4 @@ public:
 private:
 	std::unordered_map<std::type_index, void*> m_services;
 };
+} // namespace aether

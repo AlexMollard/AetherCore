@@ -13,7 +13,7 @@
 #include "ui/UiLayout.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

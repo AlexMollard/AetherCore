@@ -5,7 +5,7 @@
 #include "platform/Input.hpp"
 #include "platform/Window.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

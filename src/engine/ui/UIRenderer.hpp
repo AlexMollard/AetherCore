@@ -9,7 +9,7 @@
 #include "ui/QuadRenderer.hpp"
 #include "text/TextRenderer.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

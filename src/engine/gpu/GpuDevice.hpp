@@ -5,7 +5,7 @@
 
 #include "gpu/GpuTypes.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

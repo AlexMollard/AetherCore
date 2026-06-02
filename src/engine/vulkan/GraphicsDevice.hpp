@@ -7,7 +7,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

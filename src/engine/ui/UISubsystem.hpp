@@ -6,7 +6,7 @@
 #include "ui/UiContext.hpp"
 #include "ui/UiSystem.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

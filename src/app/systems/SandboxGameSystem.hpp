@@ -18,7 +18,7 @@
 #include "scene/LoadedModel.hpp"
 #include "scene/System.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

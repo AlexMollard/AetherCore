@@ -6,7 +6,7 @@
 #include "text/FontAtlas.hpp"
 #include "ui/UiLayout.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {

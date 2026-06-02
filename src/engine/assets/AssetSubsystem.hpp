@@ -9,7 +9,7 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "assets/AssetManager.hpp"
 
-class ServiceContainer;
+namespace aether { class ServiceContainer; }
 
 namespace aether
 {
