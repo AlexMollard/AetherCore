@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "scene/Entity.hpp"
-#include "AetherCore.hpp" // for LoadedModel
+#include "scene/LoadedModel.hpp"
 #include "effects/EffectManager.hpp"
 #include "material/Material.hpp"
 

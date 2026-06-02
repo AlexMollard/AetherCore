@@ -18,6 +18,7 @@
 #include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
 #include "assets/AssetManager.hpp"
+#include "utils/ServiceContainer.hpp"
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
 

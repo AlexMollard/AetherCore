@@ -4,9 +4,9 @@
 #include <glm/glm.hpp>
 #include <vector>
 
-#include "AetherCore.hpp"
 #include "assets/AssetManager.hpp"
 #include "scene/Components.hpp"
+#include "scene/LoadedModel.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "material/Material.hpp"
 #include "mesh/Mesh.hpp"

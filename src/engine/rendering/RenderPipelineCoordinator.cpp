@@ -12,39 +12,27 @@
 
 namespace aether
 {
-	void RenderPipelineCoordinator::RegisterPasses(RenderGraph& graph,
-	        SkyboxPass& skyboxPass,
-	        PostProcessStack& postProcessStack,
-	        ShadowService& shadowService,
-	        LocalShadowService& localShadowService,
-	        BindlessManager& bindlessManager,
-	        const VkDevice device,
-	        const VkFormat depthFormat,
-	        CullPass& cullPass,
-	        RenderQueue& mainRenderQueue,
-	        ForwardPass& forwardPass,
-	        std::function<VkDescriptorSet()> getLightingSet,
-	        RenderTargetService& renderTargetService)
+	void RenderPipelineCoordinator::RegisterPasses(const PassRegistrationContext& ctx)
 	{
 		// Pass 1: sky background.
-		skyboxPass.RegisterPass(graph, postProcessStack.GetHdrColor());
+		ctx.skyboxPass.RegisterPass(ctx.graph, ctx.postProcessStack.GetHdrColor());
 
 		// Passes 2..N: shadow cascades (directional CSM).
-		shadowService.RegisterPasses(graph, bindlessManager, device, cullPass, depthFormat);
+		ctx.shadowService.RegisterPasses(ctx.graph, ctx.bindlessManager, ctx.device, ctx.cullPass, ctx.depthFormat);
 
 		// Local shadow passes: atlas setup, cull, render, blur.
-		localShadowService.RegisterPasses(graph, bindlessManager, device, cullPass, depthFormat);
+		ctx.localShadowService.RegisterPasses(ctx.graph, ctx.bindlessManager, ctx.device, ctx.cullPass, ctx.depthFormat);
 
 		// Main camera cull pass.
-		cullPass.RegisterPass(graph, mainRenderQueue);
+		ctx.cullPass.RegisterPass(ctx.graph, ctx.mainRenderQueue);
 
 		// Main camera forward lighting pass.
-		forwardPass.RegisterPass(graph, postProcessStack.GetHdrColor(), graph.GetSwapchainDepth(), mainRenderQueue, bindlessManager.GetSet(), std::move(getLightingSet), shadowService.GetShadowDepthImages(), localShadowService.GetAtlasRGImage());
+		ctx.forwardPass.RegisterPass(ctx.graph, ctx.postProcessStack.GetHdrColor(), ctx.graph.GetSwapchainDepth(), ctx.mainRenderQueue, ctx.bindlessManager.GetSet(), std::move(ctx.getLightingSet), ctx.shadowService.GetShadowDepthImages(), ctx.localShadowService.GetAtlasRGImage());
 
 		// RTT camera pass set.
-		renderTargetService.RegisterPasses();
+		ctx.renderTargetService.RegisterPasses();
 
 		// Post-processing chain.
-		postProcessStack.RegisterPasses(graph, bindlessManager);
+		ctx.postProcessStack.RegisterPasses(ctx.graph, ctx.bindlessManager);
 	}
 } // namespace aether

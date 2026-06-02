@@ -197,16 +197,14 @@ namespace aether
 		UpdateForViewCpu(frameSlot, camera, extent, fc, pointLights, spotLights);
 	}
 
-	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	void LightingManager::BuildLightList(std::vector<GpuLight>& outLights, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
 	{
-		AE_PROFILE_ZONE();
-		std::vector<GpuLight> lights;
-		lights.reserve(pointLights.size() + spotLights.size());
+		outLights.reserve(outLights.size() + pointLights.size() + spotLights.size());
 
 		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(pointLights.size()); ++i)
 		{
 			const Renderer::PointLight& src = pointLights[i];
-			lights.push_back(GpuLight{
+			outLights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
@@ -217,7 +215,7 @@ namespace aether
 		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(spotLights.size()); ++i)
 		{
 			const Renderer::SpotLight& src = spotLights[i];
-			lights.push_back(GpuLight{
+			outLights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
 			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
@@ -225,6 +223,13 @@ namespace aether
 			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
+	}
+
+	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	{
+		AE_PROFILE_ZONE();
+		std::vector<GpuLight> lights;
+		BuildLightList(lights, pointLights, spotLights);
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
 		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
@@ -310,30 +315,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
-		lights.reserve(pointLights.size() + spotLights.size());
-
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(pointLights.size()); ++i)
-		{
-			const Renderer::PointLight& src = pointLights[i];
-			lights.push_back(GpuLight{
-			        .positionRadius = glm::vec4(src.position, src.radius),
-			        .colorIntensity = glm::vec4(src.color, src.intensity),
-			        .directionType = glm::vec4(0.0f, 0.0f, 0.0f, 0.0f),
-			        .params = glm::vec4(0.0f),
-			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
-			});
-		}
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(spotLights.size()); ++i)
-		{
-			const Renderer::SpotLight& src = spotLights[i];
-			lights.push_back(GpuLight{
-			        .positionRadius = glm::vec4(src.position, src.radius),
-			        .colorIntensity = glm::vec4(src.color, src.intensity),
-			        .directionType = glm::vec4(glm::normalize(src.direction), 1.0f),
-			        .params = glm::vec4(std::cos(src.innerAngleRad), std::cos(src.outerAngleRad), 0.0f, 0.0f),
-			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
-			});
-		}
+		BuildLightList(lights, pointLights, spotLights);
 
 		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
 		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;

@@ -15,7 +15,7 @@
 #include "rendering/Renderer.hpp"
 #include "material/Material.hpp"
 #include "effects/EffectManager.hpp"
-#include "AetherCore.hpp"
+#include "scene/LoadedModel.hpp"
 #include "scene/System.hpp"
 
 class ServiceContainer;

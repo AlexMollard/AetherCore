@@ -17,22 +17,28 @@ namespace aether
 	class ShadowService;
 	class SkyboxPass;
 
+	// Aggregates all dependencies needed for render graph pass registration.
+	struct PassRegistrationContext
+	{
+		RenderGraph& graph;
+		SkyboxPass& skyboxPass;
+		PostProcessStack& postProcessStack;
+		ShadowService& shadowService;
+		LocalShadowService& localShadowService;
+		BindlessManager& bindlessManager;
+		VkDevice device = VK_NULL_HANDLE;
+		VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+		CullPass& cullPass;
+		RenderQueue& mainRenderQueue;
+		ForwardPass& forwardPass;
+		std::function<VkDescriptorSet()> getLightingSet;
+		RenderTargetService& renderTargetService;
+	};
+
 	// Centralizes render-graph pass topology registration order.
 	class RenderPipelineCoordinator
 	{
 	public:
-		void RegisterPasses(RenderGraph& graph,
-		        SkyboxPass& skyboxPass,
-		        PostProcessStack& postProcessStack,
-		        ShadowService& shadowService,
-		        LocalShadowService& localShadowService,
-		        BindlessManager& bindlessManager,
-		        VkDevice device,
-		        VkFormat depthFormat,
-		        CullPass& cullPass,
-		        RenderQueue& mainRenderQueue,
-		        ForwardPass& forwardPass,
-		        std::function<VkDescriptorSet()> getLightingSet,
-		        RenderTargetService& renderTargetService);
+		void RegisterPasses(const PassRegistrationContext& ctx);
 	};
 } // namespace aether

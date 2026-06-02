@@ -83,6 +83,10 @@ namespace aether
 
 		void EnsureBuffers(std::uint32_t frameSlot, std::size_t lightCount, std::size_t tileCount, std::size_t indexCount) const;
 		void EnsureComputePipeline() const;
+
+		// Builds GpuLight array from point/spot light spans. Appends to outLights.
+		static void BuildLightList(std::vector<GpuLight>& outLights, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
+
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void UpdateForViewGpu(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void UpdateDescriptorSet(std::uint32_t frameSlot) const;

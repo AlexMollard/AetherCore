@@ -25,21 +25,6 @@
 namespace aether
 {
 	struct FrameConstants;
-	struct LoadedModelPrimitive
-	{
-		Mesh mesh;
-		Material material{};
-		glm::mat4 localTransform{ 1.0f };
-		std::int32_t skinIndex = -1;
-	};
-
-	struct LoadedModel
-	{
-		std::vector<Texture> textures;
-		std::vector<LoadedModelPrimitive> primitives;
-		AnimationDatabase animationDb;
-	};
-
 	class AetherCore
 	{
 	public:

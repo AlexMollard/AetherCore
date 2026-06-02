@@ -123,23 +123,26 @@ namespace aether
 		AE_PROFILE_ZONE();
 		LightingManager& lighting = services.Get<LightingManager>();
 
-		m_renderPipelineCoordinator.RegisterPasses(
-		        m_renderGraph,
-		        m_skyboxPass,
-		        m_postProcessStack,
-		        m_shadowService,
-		        m_localShadowService,
-		        services.Get<BindlessManager>(),
-		        services.Get<VulkanContext>().GetDevice().device,
-		        services.Get<Swapchain>().GetDepthFormat(),
-		        m_cullPass,
-		        m_renderQueue,
-		        m_forwardPass,
-		        [this, &lighting]()
-		        {
-			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-			        return lighting.GetSet(frameIdx);
-		        },
-		        m_renderTargetService);
+		const PassRegistrationContext ctx{
+			.graph = m_renderGraph,
+			.skyboxPass = m_skyboxPass,
+			.postProcessStack = m_postProcessStack,
+			.shadowService = m_shadowService,
+			.localShadowService = m_localShadowService,
+			.bindlessManager = services.Get<BindlessManager>(),
+			.device = services.Get<VulkanContext>().GetDevice().device,
+			.depthFormat = services.Get<Swapchain>().GetDepthFormat(),
+			.cullPass = m_cullPass,
+			.mainRenderQueue = m_renderQueue,
+			.forwardPass = m_forwardPass,
+			.getLightingSet = [this, &lighting]()
+			{
+				const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
+				return lighting.GetSet(frameIdx);
+			},
+			.renderTargetService = m_renderTargetService,
+		};
+
+		m_renderPipelineCoordinator.RegisterPasses(ctx);
 	}
 } // namespace aether
