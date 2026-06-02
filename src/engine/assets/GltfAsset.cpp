@@ -1,8 +1,11 @@
 #include "assets/GltfAsset.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
+#include <queue>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -11,14 +14,65 @@
 #include <AeBnFormat.hpp>
 
 #include "io/FileSystem.hpp"
+#include "io/FileGlobOptions.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace aether::assets
 {
 	namespace
 	{
+		std::vector<std::string> CollectSimilarMeshPaths(std::string_view meshPath, int maxSuggestions = 3)
+		{
+			// Derive a glob pattern for the same directory: mount://dir/*.mesh
+			const std::size_t ss = meshPath.find("://");
+			if (ss == std::string_view::npos)
+			{
+				return {};
+			}
+
+			const std::string mount(meshPath.substr(0, ss));
+			const std::filesystem::path rel(meshPath.substr(ss + 3));
+			const std::string dirPattern = mount + "://" + rel.parent_path().generic_string() + "/*.mesh";
+
+			auto result = io::FileSystem::Glob(dirPattern, {.recursive = false});
+			if (!result.has_value() || result->empty())
+			{
+				return {};
+			}
+
+			const std::string targetFilename = rel.filename().generic_string();
+
+			using Pair = std::pair<int, std::string>;
+			auto cmp = [](const Pair& a, const Pair& b)
+			{
+				return a.first > b.first;
+			};
+			std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> pq(cmp);
+
+			for (const auto& path: *result)
+			{
+				const std::string candidateFilename = std::filesystem::path(path).filename().generic_string();
+				const int d = utils::Levenshtein(targetFilename, candidateFilename);
+				pq.emplace(d, path);
+				if (static_cast<int>(pq.size()) > maxSuggestions)
+				{
+					pq.pop();
+				}
+			}
+
+			std::vector<std::string> suggestions;
+			while (!pq.empty())
+			{
+				suggestions.push_back(std::move(pq.top().second));
+				pq.pop();
+			}
+			std::reverse(suggestions.begin(), suggestions.end());
+			return suggestions;
+		}
+
 		std::pair<std::string_view, std::string_view> SplitVfsPath(std::string_view vfsPath)
 		{
 			constexpr std::string_view kSeparator = "://";
@@ -335,7 +389,22 @@ namespace aether::assets
 
 		if (!TryAebn(meshPath))
 		{
-			AE_UNEXPECTED(AetherError::Asset("packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it."));
+			std::string msg = "packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it.";
+			auto suggestions = CollectSimilarMeshPaths(meshPath);
+			if (!suggestions.empty())
+			{
+				msg += " Did you mean: ";
+				for (std::size_t i = 0; i < suggestions.size(); ++i)
+				{
+					if (i > 0)
+					{
+						msg += ", ";
+					}
+					msg += "'" + suggestions[i] + "'";
+				}
+				msg += "?";
+			}
+			AE_UNEXPECTED(AetherError::Asset(std::move(msg)));
 		}
 
 		std::vector<std::byte> meshData;

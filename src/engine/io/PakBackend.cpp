@@ -1,7 +1,10 @@
 #include "PakBackend.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <fstream>
+#include <limits>
+#include <queue>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
@@ -15,6 +18,7 @@
 
 #include "utils/AetherExceptions.hpp"
 #include "utils/Expected.hpp"
+#include "utils/StringUtils.hpp"
 
 namespace aether::io
 {
@@ -120,7 +124,7 @@ namespace aether::io
 
 	bool PakBackend::Exists(std::string_view relativePath) const
 	{
-		if (m_index.contains(std::string(relativePath)))
+		if (FindInsensitive(relativePath) != m_index.end())
 		{
 			return true;
 		}
@@ -139,10 +143,33 @@ namespace aether::io
 
 	Expected<std::vector<std::byte>> PakBackend::Read(std::string_view relativePath) const
 	{
-		const auto it = m_index.find(std::string(relativePath));
+		std::string bestMatch;
+		const auto it = FindInsensitive(relativePath, &bestMatch);
 		if (it == m_index.end())
 		{
-			AE_UNEXPECTED(AetherError::FileSystem("asset not found in pak: " + std::string(relativePath)));
+			std::string msg = "asset not found in pak: " + std::string(relativePath);
+			if (!bestMatch.empty())
+			{
+				msg += ". Did you mean '" + bestMatch + "'?";
+			}
+			else
+			{
+				auto suggestions = CollectDidYouMean(relativePath);
+				if (!suggestions.empty())
+				{
+					msg += ". Did you mean: ";
+					for (std::size_t i = 0; i < suggestions.size(); ++i)
+					{
+						if (i > 0)
+						{
+							msg += ", ";
+						}
+						msg += "'" + suggestions[i] + "'";
+					}
+					msg += "?";
+				}
+			}
+			AE_UNEXPECTED(AetherError::FileSystem(std::move(msg)));
 		}
 
 		const auto& info = it->second;
@@ -219,6 +246,73 @@ namespace aether::io
 			}
 		}
 		std::sort(results.begin(), results.end());
+		return results;
+	}
+
+	PakBackend::Index::const_iterator PakBackend::FindInsensitive(std::string_view path, std::string* bestMatch) const
+	{
+		// Exact match (O(1) fast path).
+		auto it = m_index.find(std::string(path));
+		if (it != m_index.end())
+		{
+			return it;
+		}
+
+		// Case-insensitive scan (O(n) on miss).
+		for (auto ci = m_index.begin(); ci != m_index.end(); ++ci)
+		{
+			if (utils::IEq(ci->first, path))
+			{
+				if (bestMatch)
+				{
+					*bestMatch = ci->first;
+				}
+				return ci;
+			}
+		}
+
+		// Fuzzy (Levenshtein) – only on explicit request.
+		if (bestMatch)
+		{
+			*bestMatch = {};
+			int bestDist = (std::numeric_limits<int>::max)();
+			for (const auto& ci: m_index)
+			{
+				const int d = utils::Levenshtein(path, ci.first);
+				if (d < bestDist && d <= static_cast<int>(path.size()) / 2 + 1)
+				{
+					bestDist = d;
+					*bestMatch = ci.first;
+				}
+			}
+		}
+
+		return m_index.end();
+	}
+
+	std::vector<std::string> PakBackend::CollectDidYouMean(std::string_view path, int maxSuggestions) const
+	{
+		using Pair = std::pair<int, std::string>;
+		auto cmp = [](const Pair& a, const Pair& b) { return a.first > b.first; };
+		std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> pq(cmp);
+
+		for (const auto& ci: m_index)
+		{
+			const int d = utils::Levenshtein(path, ci.first);
+			pq.emplace(d, ci.first);
+			if (static_cast<int>(pq.size()) > maxSuggestions)
+			{
+				pq.pop();
+			}
+		}
+
+		std::vector<std::string> results;
+		while (!pq.empty())
+		{
+			results.push_back(std::move(pq.top().second));
+			pq.pop();
+		}
+		std::reverse(results.begin(), results.end());
 		return results;
 	}
 

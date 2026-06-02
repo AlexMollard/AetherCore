@@ -39,8 +39,20 @@ namespace aether::io
 			uint32_t flags;
 		};
 
+		using Index = std::unordered_map<std::string, EntryInfo>;
+
+		// Find an entry matching path.  Tries exact lookup first (O(1)), then
+		// falls back to case-insensitive comparison (O(n) on miss).
+		// If still not found and bestMatch is non-null, runs Levenshtein-based
+		// fuzzy search and writes the closest matching path (if any).
+		[[nodiscard]] Index::const_iterator FindInsensitive(std::string_view path, std::string* bestMatch = nullptr) const;
+
+		// Collect up to maxSuggestions paths from the index that are
+		// Levenshtein-close to path (used for "Did you mean?" messages).
+		[[nodiscard]] std::vector<std::string> CollectDidYouMean(std::string_view path, int maxSuggestions = 3) const;
+
 		std::filesystem::path m_pakPath;
 		uint64_t m_assetDataBase{0};
-		std::unordered_map<std::string, EntryInfo> m_index;
+		Index m_index;
 	};
 } // namespace aether::io
