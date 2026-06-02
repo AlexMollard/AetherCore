@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <unordered_map>
 #include <vector>
 #include "vulkan/volk.hpp"
 
@@ -19,6 +20,25 @@ namespace aether
 		{
 			std::uint32_t maxSampledImages = 4096;
 			std::uint32_t deferredFreeFrames = 3;
+		};
+
+		struct SamplerKey
+		{
+			VkFilter filter = VK_FILTER_LINEAR;
+			VkSamplerMipmapMode mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			VkSamplerAddressMode addressMode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			bool operator==(const SamplerKey& other) const = default;
+		};
+
+		struct SamplerKeyHash
+		{
+			std::size_t operator()(const SamplerKey& key) const
+			{
+				std::size_t h = static_cast<std::size_t>(key.filter);
+				h ^= static_cast<std::size_t>(key.mipmapMode) << 4;
+				h ^= static_cast<std::size_t>(key.addressMode) << 8;
+				return h;
+			}
 		};
 
 		BindlessManager() = default;
@@ -51,6 +71,10 @@ namespace aether
 			return 1u;
 		}
 
+		// Returns a cached VkSampler matching the given filter/mipmap/address mode.
+		// Creates a new sampler if no matching one exists. Thread-safe.
+		[[nodiscard]] Expected<VkSampler> GetOrCreateSampler(VkFilter filter, VkSamplerMipmapMode mipmapMode, VkSamplerAddressMode addressMode);
+
 		[[nodiscard]] Expected<std::uint32_t> AllocateSampledImageSlot();
 		void FreeSampledImageSlot(std::uint32_t slot);
 		void FreeSampledImageSlotDeferred(std::uint32_t slot);
@@ -78,5 +102,8 @@ namespace aether
 		std::vector<bool> m_slotAllocated;
 		std::vector<PendingSlotFree> m_pendingSlotFrees;
 		VkSampler m_linearSampler = VK_NULL_HANDLE;
+
+		// Sampler deduplication cache: key -> VkSampler.
+		std::unordered_map<SamplerKey, VkSampler, SamplerKeyHash> m_samplerCache;
 	};
 } // namespace aether

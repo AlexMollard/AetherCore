@@ -215,11 +215,14 @@ namespace aether
 		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawContracts::InstanceData[0] for current frame slot
 		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
 		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
-		std::uint32_t m_cachedDrawBase = 0;           // frameSlot * maxDraws
-		std::uint32_t m_cachedBatchBase = 0;          // frameSlot * maxBatches
+		VkDeviceAddress m_cachedDrawBase = 0;           // frameSlot * maxDraws
+		VkDeviceAddress m_cachedBatchBase = 0;          // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
+
+		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr.
+		void FlushDrawImpl(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

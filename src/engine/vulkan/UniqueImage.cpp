@@ -260,43 +260,24 @@ namespace aether
 			}
 		}
 
-		const VkSamplerCreateInfo samplerCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.magFilter = filter == TextureFilter::Nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
-			.minFilter = filter == TextureFilter::Nearest ? VK_FILTER_NEAREST : VK_FILTER_LINEAR,
-			.mipmapMode = filter == TextureFilter::Nearest ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.mipLodBias = 0.0f,
-			.anisotropyEnable = VK_FALSE,
-			.maxAnisotropy = 1.0f,
-			.compareEnable = VK_FALSE,
-			.compareOp = VK_COMPARE_OP_ALWAYS,
-			.minLod = 0.0f,
-			.maxLod = static_cast<float>(m_mipLevels),
-			.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-			.unnormalizedCoordinates = VK_FALSE,
-		};
+		const VkFilter vkFilter = (filter == TextureFilter::Nearest) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
+		const VkSamplerMipmapMode vkMipmapMode = (filter == TextureFilter::Nearest) ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
 
-		VkSampler sampler = VK_NULL_HANDLE;
-		const VkResult samplerResult = vkCreateSampler(device, &samplerCreateInfo, nullptr, &sampler);
-		if (samplerResult != VK_SUCCESS)
+		Expected<VkSampler> samplerResult = bindlessManager.GetOrCreateSampler(vkFilter, vkMipmapMode, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+		if (!samplerResult)
 		{
 			if (ownView)
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(samplerResult), "Failed to create sampler for bindless registration"));
+			return Unexpected{ AetherError::Vulkan(0, "Failed to get cached sampler for bindless registration") };
 		}
+		VkSampler sampler = *samplerResult;
 
-		// Allocate bindless slot - if this fails, clean up sampler and view.
+		// Allocate bindless slot - if this fails, clean up view.
 		Expected<std::uint32_t> slotResult = bindlessManager.AllocateSampledImageSlot();
 		if (!slotResult)
 		{
-			vkDestroySampler(device, sampler, nullptr);
 			if (ownView)
 			{
 				vkDestroyImageView(device, view, nullptr);
@@ -304,12 +285,11 @@ namespace aether
 			AE_UNEXPECTED(slotResult.error());
 		}
 
-		// Update descriptor - if this fails, free the slot and clean up.
+		// Update descriptor - if this fails, free the slot and clean up view.
 		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, view, sampler, descriptorLayout);
 		if (!updateResult)
 		{
 			bindlessManager.FreeSampledImageSlot(*slotResult);
-			vkDestroySampler(device, sampler, nullptr);
 			if (ownView)
 			{
 				vkDestroyImageView(device, view, nullptr);
@@ -339,11 +319,7 @@ namespace aether
 			}
 		}
 
-		if (m_defaultSampler != VK_NULL_HANDLE && m_bindlessDevice != VK_NULL_HANDLE)
-		{
-			vkDestroySampler(m_bindlessDevice, m_defaultSampler, nullptr);
-		}
-
+		// Sampler is cached in BindlessManager - do not destroy.
 		if (m_defaultView != VK_NULL_HANDLE && m_bindlessDevice != VK_NULL_HANDLE)
 		{
 			vkDestroyImageView(m_bindlessDevice, m_defaultView, nullptr);

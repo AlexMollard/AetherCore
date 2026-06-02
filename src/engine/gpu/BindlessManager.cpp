@@ -190,6 +190,12 @@ namespace aether
 			m_linearSampler = VK_NULL_HANDLE;
 		}
 
+		for (const auto& [key, sampler] : m_samplerCache)
+		{
+			vkDestroySampler(m_device, sampler, nullptr);
+		}
+		m_samplerCache.clear();
+
 		m_set = VK_NULL_HANDLE;
 		m_device = VK_NULL_HANDLE;
 		m_capacity = 0;
@@ -247,6 +253,48 @@ namespace aether
 		m_freeSlots.pop_back();
 		m_slotAllocated[slot] = true;
 		return slot;
+	}
+
+	Expected<VkSampler> BindlessManager::GetOrCreateSampler(const VkFilter filter, const VkSamplerMipmapMode mipmapMode, const VkSamplerAddressMode addressMode)
+	{
+		std::scoped_lock lock(m_mutex);
+		if (m_device == VK_NULL_HANDLE)
+		{
+			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
+		}
+
+		const SamplerKey key{ filter, mipmapMode, addressMode };
+		const auto it = m_samplerCache.find(key);
+		if (it != m_samplerCache.end())
+		{
+			return it->second;
+		}
+
+		const VkSamplerCreateInfo samplerInfo{
+			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+			.magFilter = filter,
+			.minFilter = filter,
+			.mipmapMode = mipmapMode,
+			.addressModeU = addressMode,
+			.addressModeV = addressMode,
+			.addressModeW = addressMode,
+			.mipLodBias = 0.0f,
+			.anisotropyEnable = VK_FALSE,
+			.compareEnable = VK_FALSE,
+			.minLod = 0.0f,
+			.maxLod = VK_LOD_CLAMP_NONE,
+			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+			.unnormalizedCoordinates = VK_FALSE,
+		};
+
+		VkSampler sampler = VK_NULL_HANDLE;
+		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+		{
+			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.") };
+		}
+
+		m_samplerCache[key] = sampler;
+		return sampler;
 	}
 
 	void BindlessManager::FreeSampledImageSlot(const std::uint32_t slot)

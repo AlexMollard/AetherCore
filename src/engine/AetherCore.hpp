@@ -24,6 +24,7 @@
 
 namespace aether
 {
+	struct FrameConstants;
 	struct LoadedModelPrimitive
 	{
 		Mesh mesh;
@@ -90,6 +91,11 @@ namespace aether
 		void BeginFrame();
 		void EndFrame(const RenderFramePacket& packet);
 		void RecreateSwapchain();
+
+		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
+		void PatchShadowIndices(std::uint32_t frameIdx);
+		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc);
+		void SubmitAndAdvance();
 
 		ServiceContainer m_services;
 		PlatformSubsystem m_platform;

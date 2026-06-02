@@ -262,8 +262,21 @@ namespace aether
 
 		FrameConstants fc = m_rendering.GetFrameComposer().ComposeBaseFrameConstants(packet, m_sceneSub.GetScene().GetViewProjection());
 
-		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
+		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
+		if (packet.hasCameraData)
+		{
+			PatchShadowIndices(frameIdx);
+		}
+
+		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
+
+		SubmitAndAdvance();
+	}
+
+	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)
+	{
+		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
 		m_rendering.GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), m_sceneSub.GetScene(), m_sceneSub.GetWorld(), fc);
 
 		if (packet.hasCameraData)
@@ -277,7 +290,6 @@ namespace aether
 					CommandRecorder lightingCmd = m_asyncCompute.GetCommandRecorder(frameIdx);
 					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
 					m_asyncCompute.EndCommandBuffer(frameIdx);
-
 					m_asyncComputeSubmitResult = m_asyncCompute.Submit(m_gpu, frameIdx);
 				}
 				else
@@ -292,13 +304,15 @@ namespace aether
 		{
 			m_rendering.GetFrameComposer().ApplyNoCameraLightingFallback(fc);
 		}
+	}
 
-		// Patch shadow indices into the GpuLight buffer after lighting culling fills it.
-		if (packet.hasCameraData)
-		{
-			m_cameras.GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering.GetLocalShadowService().GetLightShadowIndices());
-		}
+	void AetherCore::PatchShadowIndices(const std::uint32_t frameIdx)
+	{
+		m_cameras.GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering.GetLocalShadowService().GetLightShadowIndices());
+	}
 
+	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc)
+	{
 		m_rendering.GetFrameConstantsBuffer().Write(frameIdx, fc);
 		const std::uint64_t frameAddr = m_rendering.GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 
@@ -310,7 +324,10 @@ namespace aether
 		m_rendering.GetRenderGraph().BeginFrame(frameIdx);
 		m_rendering.GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
 		m_currentRecorder.EndDebugLabel();
+	}
 
+	void AetherCore::SubmitAndAdvance()
+	{
 		if (m_asyncCompute.IsEnabled())
 		{
 			m_gpu.SubmitAndPresent(m_asyncComputeSubmitResult.semaphoreHandle, m_asyncComputeSubmitResult.timelineValue);
