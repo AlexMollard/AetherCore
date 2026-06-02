@@ -1,0 +1,46 @@
+#pragma once
+
+#include <cstdint>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+#include "rendering/Renderer.hpp"
+
+namespace aether
+{
+	// Per-frame render data snapshot produced by the game thread and consumed by
+	// the render thread. All fields are captured from game state BEFORE the render
+	// thread starts executing, so there are no races with the next simulation tick.
+	struct RenderFramePacket
+	{
+		// Camera matrices snapshotted at end of simulation.
+		glm::mat4 view{1.0f};
+		glm::mat4 proj{1.0f};
+		glm::vec4 cameraWorldPos{0.0f};
+		bool hasCameraData = false;
+
+		// Lighting state snapshotted at end of simulation.
+		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
+		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
+		glm::vec4 sunColor{1.0f};
+		glm::vec4 skyHorizonColor{1.0f};
+		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};
+		glm::vec4 skyVoidColor{0.0f};
+
+		// Local light lists snapshotted to avoid data race between game thread
+		// (SetPointLights/SetSpotLights) and render thread reads.
+		std::vector<Renderer::PointLight> pointLights;
+		std::vector<Renderer::SpotLight> spotLights;
+
+		// Stable GPU resource addresses.
+		std::uint64_t materialBufferAddr = 0;
+
+		// Frame identity - render thread uses these for GPU buffer slot selection.
+		std::uint64_t frameIndex = 0;
+		std::uint32_t drawSlot = 0;
+
+		// Elapsed simulation time in seconds (for time-based shader effects).
+		float elapsedTime = 0.0f;
+	};
+} // namespace aether

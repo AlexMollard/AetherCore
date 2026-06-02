@@ -8,6 +8,7 @@
 #include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
+#include "mesh/Mesh.hpp"
 #include "scene/Entity.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "material/Material.hpp"

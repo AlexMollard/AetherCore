@@ -10,7 +10,7 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
-#include "rendering/RenderThread.hpp"
+#include "rendering/RenderFramePacket.hpp"
 
 namespace aether
 {

@@ -8,6 +8,7 @@
 #include "ui/UiLayout.hpp"
 #include "ui/UiWidgets.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/Swapchain.hpp"
 
 namespace aether::app
 {

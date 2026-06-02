@@ -4,6 +4,7 @@
 #include <cstdio>
 
 #include "AetherCore.hpp"
+#include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "platform/Input.hpp"
 #include "ui/UIRenderer.hpp"

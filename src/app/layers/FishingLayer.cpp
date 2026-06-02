@@ -3,7 +3,9 @@
 #include <array>
 #include <cstdio>
 
+#include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
+#include "platform/Input.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiLayout.hpp"
 #include "systems/FishingGameSystem.hpp"

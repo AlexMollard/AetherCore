@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cassert>
+#include <memory>
 #include <string>
 #include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
+#include <vector>
 
 #include "utils/Assert.hpp"
 
@@ -23,6 +25,13 @@ namespace aether
 		void Register(T& service)
 		{
 			m_services[std::type_index(typeid(T))] = &service;
+		}
+
+		template<typename T>
+		void RegisterOwned(std::unique_ptr<T> service)
+		{
+			Register<T>(*service);
+			m_owned.push_back(std::shared_ptr<void>(std::move(service)));
 		}
 
 		template<typename T>
@@ -55,9 +64,11 @@ namespace aether
 		void Clear()
 		{
 			m_services.clear();
+			m_owned.clear();
 		}
 
 	private:
 		std::unordered_map<std::type_index, void*> m_services;
+		std::vector<std::shared_ptr<void>> m_owned;
 	};
 } // namespace aether

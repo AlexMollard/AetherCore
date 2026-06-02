@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 
 #include "rendering/FrameConstants.hpp"
-#include "rendering/RenderThread.hpp"
+#include "rendering/RenderFramePacket.hpp"
 
 namespace aether
 {

@@ -14,14 +14,22 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "assets/GltfAsset.hpp"
+#include "assets/AssetSubsystem.hpp"
+#include "camera/CameraSubsystem.hpp"
+#include "gpu/AsyncComputeContext.hpp"
+#include "gpu/BindlessManager.hpp"
+#include "gpu/GpuDevice.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "io/FileSystem.hpp"
+#include "material/MaterialBuffer.hpp"
+#include "platform/PlatformSubsystem.hpp"
 #include "rendering/FrameConstants.hpp"
+#include "rendering/RenderingSubsystem.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
-#include "io/FileSystem.hpp"
-#include "gpu/BindlessManager.hpp"
-#include "material/MaterialBuffer.hpp"
-#include "rendering/RenderThread.hpp"
+#include "ui/UISubsystem.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -40,53 +48,68 @@ namespace aether
 		m_settings.window.width = config.width;
 		m_settings.window.height = config.height;
 
+		// Create all subsystems.
+		m_services.RegisterOwned(std::make_unique<PlatformSubsystem>());
+		m_services.RegisterOwned(std::make_unique<SceneSubsystem>());
+		m_services.RegisterOwned(std::make_unique<AssetSubsystem>());
+		m_services.RegisterOwned(std::make_unique<UISubsystem>());
+		m_services.RegisterOwned(std::make_unique<AsyncComputeContext>());
+		m_gpu = std::make_unique<GpuDevice>();
+		m_cameras = std::make_unique<CameraSubsystem>();
+		m_rendering = std::make_unique<RenderingSubsystem>();
+
+		auto& platform = m_services.Get<PlatformSubsystem>();
+		auto& sceneSub = m_services.Get<SceneSubsystem>();
+		auto& assetsSub = m_services.Get<AssetSubsystem>();
+
 		// ── 1. Platform ─────────────────────────────────────────────────────
-		m_platform.Init({.appName = config.appName, .width = config.width, .height = config.height});
-		m_services.Register<Window>(m_platform.GetWindow());
-		m_services.Register<Input>(m_platform.GetInput());
+		platform.Init({.appName = config.appName, .width = config.width, .height = config.height});
+		m_services.Register<Window>(platform.GetWindow());
+		m_services.Register<Input>(platform.GetInput());
 
 		// ── 2. Graphics device ──────────────────────────────────────────────
-		m_gpu.Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync});
+		m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync});
 
 		// ── 3. Scene (ECS + legacy) ─────────────────────────────────────────
-		m_sceneSub.Init();
-		m_services.Register<World>(m_sceneSub.GetWorld());
-		m_services.Register<Scene>(m_sceneSub.GetScene());
+		sceneSub.Init();
+		m_services.Register<World>(sceneSub.GetWorld());
+		m_services.Register<Scene>(sceneSub.GetScene());
 
 		// ── 4. Assets ───────────────────────────────────────────────────────
-		m_assetsSub.Init(m_services);
-		m_services.Register<AssetManager>(m_assetsSub.GetAssetManager());
-		m_services.Register<MeshArena>(m_assetsSub.GetMeshArena());
-		m_services.Register<MeshUploadQueue>(m_assetsSub.GetMeshUploadQueue());
-		m_services.Register<MaterialBuffer>(m_assetsSub.GetMaterialBuffer());
-		m_services.Register<AssetSubsystem>(m_assetsSub);
+		assetsSub.Init(m_services);
+		m_services.Register<AssetManager>(assetsSub.GetAssetManager());
+		m_services.Register<MeshArena>(assetsSub.GetMeshArena());
+		m_services.Register<MeshUploadQueue>(assetsSub.GetMeshUploadQueue());
+		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
+		m_services.Register<AssetSubsystem>(assetsSub);
 
 		// ── 5. Cameras ──────────────────────────────────────────────────────
-		m_cameras.Init(m_services);
-		m_services.Register<CameraManager>(m_cameras.GetCameraManager());
-		m_services.Register<LightingManager>(m_cameras.GetLightingManager());
+		m_cameras->Init(m_services);
+		m_services.Register<CameraManager>(m_cameras->GetCameraManager());
+		m_services.Register<LightingManager>(m_cameras->GetLightingManager());
 
 		// ── 6. Rendering ────────────────────────────────────────────────────
-		m_rendering.Init(m_services);
-		m_rendering.SetFrameIndexProvider([this]() { return m_frameIndex; });
-		m_services.Register<Renderer>(m_rendering.GetRenderer());
-		m_services.Register<RenderQueue>(m_rendering.GetRenderQueue());
-		m_services.Register<RenderGraph>(m_rendering.GetRenderGraph());
-		m_services.Register<ShadowService>(m_rendering.GetShadowService());
-		m_services.Register<RenderTargetService>(m_rendering.GetRenderTargetService());
+		m_rendering->Init(m_services);
+		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
+		m_services.Register<Renderer>(m_rendering->GetRenderer());
+		m_services.Register<RenderQueue>(m_rendering->GetRenderQueue());
+		m_services.Register<RenderGraph>(m_rendering->GetRenderGraph());
+		m_services.Register<ShadowService>(m_rendering->GetShadowService());
+		m_services.Register<RenderTargetService>(m_rendering->GetRenderTargetService());
 
 		// ── 7. UI ──────────────────────────────────────────────────────────
 		if (config.uiFontPath != nullptr && config.uiFontPath[0] != '\0')
 		{
-			m_ui.Init(m_services, config.uiFontPath, config.uiPassNamePrefix, config.uiGlyphSize);
-			m_services.Register<UIRenderer>(m_ui.GetUiRenderer());
-			m_services.Register<ui::UiContext>(m_ui.GetUiContext());
-			m_services.Register<ui::UiSystem>(m_ui.GetUiSystem());
+			auto& ui = m_services.Get<UISubsystem>();
+			ui.Init(m_services, config.uiFontPath, config.uiPassNamePrefix, config.uiGlyphSize);
+			m_services.Register<UIRenderer>(ui.GetUiRenderer());
+			m_services.Register<ui::UiContext>(ui.GetUiContext());
+			m_services.Register<ui::UiSystem>(ui.GetUiSystem());
 		}
 
 		// Link cross-subsystem dependencies.
-		m_cameras.GetLightingManager().LinkRenderer(m_rendering.GetRenderer());
-		m_assetsSub.LinkRenderingDeps(m_services);
+		m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
+		assetsSub.LinkRenderingDeps(m_services);
 
 		// ── 8. Create default main camera ───────────────────────────────────
 		CameraManager& cameras = m_services.Get<CameraManager>();
@@ -94,7 +117,7 @@ namespace aether
 		cameras.SetMainCamera(mainCam);
 
 		// ── 9. Async compute (optional) ─────────────────────────────────────
-		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu.HasDedicatedComputeQueue();
+		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu->HasDedicatedComputeQueue();
 		if (!m_settings.graphics.asyncCompute)
 		{
 			AE_INFO(LogCategory::Engine, "Async compute disabled by settings.");
@@ -106,14 +129,14 @@ namespace aether
 
 		if (enableAsyncCompute)
 		{
-			m_asyncCompute.Init(m_gpu);
+			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
 		}
 
 		// ── 10. Swapchain recreation callback ──────────────────────────────
-		m_gpu.SetSwapchainRecreatedCallback(
+		m_gpu->SetSwapchainRecreatedCallback(
 		        [this]()
 		        {
-			        m_rendering.RecreateSwapchainResources(m_services);
+			        m_rendering->RecreateSwapchainResources(m_services);
 			        // UI render graph passes are cleared by the reset above;
 			        // eagerly re-register them so the lazy-check is skipped on
 			        // every subsequent Draw* call.
@@ -123,25 +146,25 @@ namespace aether
 			        }
 		        });
 
-		AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu.GetBindlessManager().GetCapacity());
+		AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu->GetBindlessManager().GetCapacity());
 	}
 
 	AetherCore::~AetherCore()
 	{
-		m_gpu.WaitIdle();
+		m_gpu->WaitIdle();
 
-		m_asyncCompute.Shutdown(m_gpu);
+		m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
 
 		// Subsystems free their VMA-backed allocations (VMA still alive).
-		m_rendering.Shutdown(m_services);
-		m_ui.Shutdown(m_services);
-		m_cameras.Shutdown();
-		m_assetsSub.Shutdown();
+		m_rendering->Shutdown(m_services);
+		m_services.Get<UISubsystem>().Shutdown(m_services);
+		m_cameras->Shutdown();
+		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.
 
 		// GPU shutdown destroys internal Vulkan resources.
-		m_gpu.Shutdown();
-		m_platform.Shutdown();
+		m_gpu->Shutdown();
+		m_services.Get<PlatformSubsystem>().Shutdown();
 
 		m_services.Clear();
 		io::FileSystem::Shutdown();
@@ -149,42 +172,44 @@ namespace aether
 
 	void AetherCore::WaitIdle()
 	{
-		m_gpu.WaitIdle();
+		m_gpu->WaitIdle();
 	}
 
 	bool AetherCore::ShouldClose()
 	{
-		return m_platform.GetWindow().ShouldClose();
+		return m_services.Get<PlatformSubsystem>().GetWindow().ShouldClose();
 	}
 
 	void AetherCore::PumpEvents()
 	{
-		m_platform.GetWindow().PollEvents();
+		m_services.Get<PlatformSubsystem>().GetWindow().PollEvents();
 	}
 
 	void AetherCore::Tick(const float dt)
 	{
 		AE_PROFILE_ZONE();
-		m_platform.GetInput().Update();
-		m_cameras.GetCameraManager().Update(m_platform.GetInput(), dt);
+		auto& platform = m_services.Get<PlatformSubsystem>();
+		platform.GetInput().Update();
+		m_cameras->GetCameraManager().Update(platform.GetInput(), dt);
 	}
 
 	void AetherCore::BeginFrame()
 	{
 		AE_PROFILE_ZONE();
-		if (m_gpu.SwapchainNeedsRecreation())
+		if (m_gpu->SwapchainNeedsRecreation())
 		{
 			RecreateSwapchain();
 		}
 
-		m_gpu.BeginSwapchainFrame();
-		m_currentRecorder = m_gpu.GetCurrentCommandRecorder();
+		m_gpu->BeginSwapchainFrame();
+		m_currentRecorder = m_gpu->GetCurrentCommandRecorder();
 	}
 
 	void AetherCore::RecreateSwapchain()
 	{
-		auto size = m_platform.GetWindow().WaitForValidFramebufferSize();
-		m_gpu.RecreateSwapchain(m_platform.GetWindow(), m_settings.graphics.vsync);
+		auto& platform = m_services.Get<PlatformSubsystem>();
+		auto size = platform.GetWindow().WaitForValidFramebufferSize();
+		m_gpu->RecreateSwapchain(platform.GetWindow(), m_settings.graphics.vsync);
 
 		AE_INFO(LogCategory::Engine, "Swapchain recreated ({}x{}).", size.width, size.height);
 	}
@@ -192,15 +217,18 @@ namespace aether
 	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		GpuExtent2D extent = m_gpu.GetSwapchainExtent();
-		RenderQueue& renderQueue = m_rendering.GetRenderQueue();
-		Scene& scene = m_sceneSub.GetScene();
-		World& world = m_sceneSub.GetWorld();
-		RenderTargetService& rttService = m_rendering.GetRenderTargetService();
-		ShadowService& shadowService = m_rendering.GetShadowService();
-		MaterialBuffer& materialBuffer = m_assetsSub.GetMaterialBuffer();
-		CameraManager& cameras = m_cameras.GetCameraManager();
-		Renderer& renderer = m_rendering.GetRenderer();
+		auto& sceneSub = m_services.Get<SceneSubsystem>();
+		auto& assetsSub = m_services.Get<AssetSubsystem>();
+
+		GpuExtent2D extent = m_gpu->GetSwapchainExtent();
+		RenderQueue& renderQueue = m_rendering->GetRenderQueue();
+		Scene& scene = sceneSub.GetScene();
+		World& world = sceneSub.GetWorld();
+		RenderTargetService& rttService = m_rendering->GetRenderTargetService();
+		ShadowService& shadowService = m_rendering->GetShadowService();
+		MaterialBuffer& materialBuffer = assetsSub.GetMaterialBuffer();
+		CameraManager& cameras = m_cameras->GetCameraManager();
+		Renderer& renderer = m_rendering->GetRenderer();
 
 		renderQueue.SetWriteSlot(drawSlot);
 		WorldRenderer::Flush(scene, renderQueue);
@@ -250,17 +278,17 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 
-		if (!m_gpu.IsSwapchainFrameValid())
+		if (!m_gpu->IsSwapchainFrameValid())
 		{
-			m_gpu.SubmitAndPresent();
+			m_gpu->SubmitAndPresent();
 			++m_frameIndex;
-			m_gpu.GetBindlessManager().AdvanceFrame(m_frameIndex);
+			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			return;
 		}
 
 		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
-		FrameConstants fc = m_rendering.GetFrameComposer().ComposeBaseFrameConstants(packet, m_sceneSub.GetScene().GetViewProjection());
+		FrameConstants fc = m_rendering->GetFrameComposer().ComposeBaseFrameConstants(packet, m_services.Get<SceneSubsystem>().GetScene().GetViewProjection());
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
@@ -276,69 +304,77 @@ namespace aether
 
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)
 	{
-		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
-		m_rendering.GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), m_sceneSub.GetScene(), m_sceneSub.GetWorld(), fc);
+		m_rendering->GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), fc);
+		m_rendering->GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), m_services.Get<SceneSubsystem>().GetScene(), m_services.Get<SceneSubsystem>().GetWorld(), fc);
 
 		if (packet.hasCameraData)
 		{
-			const Camera* cam = m_cameras.GetCameraManager().TryGetMainCamera();
+			const Camera* cam = m_cameras->GetCameraManager().TryGetMainCamera();
 			if (cam)
 			{
-				if (m_asyncCompute.IsEnabled())
+				auto& asyncCompute = m_services.Get<AsyncComputeContext>();
+				if (asyncCompute.IsEnabled())
 				{
-					m_asyncCompute.BeginFrame(m_gpu, frameIdx);
-					CommandRecorder lightingCmd = m_asyncCompute.GetCommandRecorder(frameIdx);
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
-					m_asyncCompute.EndCommandBuffer(frameIdx);
-					m_asyncComputeSubmitResult = m_asyncCompute.Submit(m_gpu, frameIdx);
+					asyncCompute.BeginFrame(*m_gpu, frameIdx);
+					CommandRecorder lightingCmd = asyncCompute.GetCommandRecorder(frameIdx);
+					m_cameras->GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
+					asyncCompute.EndCommandBuffer(frameIdx);
+					auto result = asyncCompute.Submit(*m_gpu, frameIdx);
+					m_asyncSubmitSemaphore = result.semaphoreHandle;
+					m_asyncSubmitTimeline = result.timelineValue;
 				}
 				else
 				{
-					const TracyVkCtx vkCtx = m_gpu.GetVulkanContext().GetTracyVkCtx();
+					const TracyVkCtx vkCtx = m_gpu->GetVulkanContext().GetTracyVkCtx();
 					AE_PROFILE_GPU_ZONE_T(vkCtx, m_currentRecorder.GetCommandBuffer(), gpuLightingZone, "Lighting.UpdateForView");
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
+					m_cameras->GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
 				}
 			}
 		}
 		else
 		{
-			m_rendering.GetFrameComposer().ApplyNoCameraLightingFallback(fc);
+			m_rendering->GetFrameComposer().ApplyNoCameraLightingFallback(fc);
 		}
 	}
 
 	void AetherCore::PatchShadowIndices(const std::uint32_t frameIdx)
 	{
-		m_cameras.GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering.GetLocalShadowService().GetLightShadowIndices());
+		m_cameras->GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering->GetLocalShadowService().GetLightShadowIndices());
 	}
 
 	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc)
 	{
-		m_rendering.GetFrameConstantsBuffer().Write(frameIdx, fc);
-		const std::uint64_t frameAddr = m_rendering.GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
+		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
+		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 
 		m_currentRecorder.HostToShaderBarrier();
 
-		const FrameTarget frameTarget = m_gpu.BuildFrameTarget();
+		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
 
 		m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
-		m_rendering.GetRenderGraph().BeginFrame(frameIdx);
-		m_rendering.GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
+		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
+		m_rendering->GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
 		m_currentRecorder.EndDebugLabel();
 	}
 
 	void AetherCore::SubmitAndAdvance()
 	{
-		if (m_asyncCompute.IsEnabled())
+		if (m_services.Get<AsyncComputeContext>().IsEnabled())
 		{
-			m_gpu.SubmitAndPresent(m_asyncComputeSubmitResult.semaphoreHandle, m_asyncComputeSubmitResult.timelineValue);
+			m_gpu->SubmitAndPresent(m_asyncSubmitSemaphore, m_asyncSubmitTimeline);
 		}
 		else
 		{
-			m_gpu.SubmitAndPresent();
+			m_gpu->SubmitAndPresent();
 		}
 
 		++m_frameIndex;
-		m_gpu.GetBindlessManager().AdvanceFrame(m_frameIndex);
+		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
+	}
+
+	GpuFormat AetherCore::GetForwardColorFormat()
+	{
+		return GpuDevice::GetForwardColorFormat();
 	}
 
 } // namespace aether

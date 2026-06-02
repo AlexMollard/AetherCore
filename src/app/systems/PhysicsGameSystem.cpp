@@ -11,11 +11,13 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scene/Components.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "physics/PhysicsComponents.hpp"
 
 namespace aether::app

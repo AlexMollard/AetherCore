@@ -12,8 +12,11 @@
 #include "platform/Input.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
+#include "gpu/BindlessManager.hpp"
+#include "passes/PostProcessStack.hpp"
 #include "platform/Window.hpp"
 #include "scene/World.hpp"
+#include "vulkan/Swapchain.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/gtx/quaternion.hpp>
 
