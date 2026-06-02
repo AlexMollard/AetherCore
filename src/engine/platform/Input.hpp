@@ -187,6 +187,20 @@ namespace aether
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
 		[[nodiscard]] const std::string& GetTypedChars() const;
 
+		// ── Mouse capture ──────────────────────────────────────────────────────
+		// Set by UiSystem when the UI is actively consuming mouse input.
+		// Camera and other systems should skip their own mouse processing
+		// while this is true to prevent conflicts (e.g. orbiting while dragging a panel).
+		void SetMouseCaptured(bool captured)
+		{
+			m_mouseCaptured = captured;
+		}
+
+		[[nodiscard]] bool IsMouseCaptured() const
+		{
+			return m_mouseCaptured;
+		}
+
 	private:
 		static void OnScroll(GLFWwindow* window, double xOffset, double yOffset);
 		static void OnChar(GLFWwindow* window, unsigned int codepoint);
@@ -213,5 +227,6 @@ namespace aether
 		std::string m_pendingChars; // accumulated from char callback before frame boundary
 
 		bool m_firstUpdate = true;
+		bool m_mouseCaptured = false;
 	};
 } // namespace aether

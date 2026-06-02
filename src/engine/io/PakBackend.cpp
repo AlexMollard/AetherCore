@@ -293,7 +293,10 @@ namespace aether::io
 	std::vector<std::string> PakBackend::CollectDidYouMean(std::string_view path, int maxSuggestions) const
 	{
 		using Pair = std::pair<int, std::string>;
-		auto cmp = [](const Pair& a, const Pair& b) { return a.first > b.first; };
+		auto cmp = [](const Pair& a, const Pair& b)
+		{
+			return a.first > b.first;
+		};
 		std::priority_queue<Pair, std::vector<Pair>, decltype(cmp)> pq(cmp);
 
 		for (const auto& ci: m_index)

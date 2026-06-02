@@ -48,6 +48,12 @@ namespace aether::ui
 	// Returns true if the panel body should be rendered (false when collapsed).
 	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
 
+	// Label row: draws static label (left) + dynamic value (right, coloured).
+	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
+	// Section separator: draws a thin horizontal line.
+	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
 	// Text input: draws background, text/placeholder, and a blinking cursor when focused.
 	// UiSystem feeds typed characters when this entity has keyboard focus.
 	// Returns true for ONE frame when the user submits with Enter.
@@ -56,6 +62,11 @@ namespace aether::ui
 	// Item slot: draws rarity border, hover/press overlay, icon placeholder,
 	// and a quantity badge.  Returns true the frame the slot is clicked.
 	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
+	// Graph: draws a time-series bar chart with background, reference lines,
+	// and a legend label.  Supports UiInputComponent for hover interaction
+	// (optional - omit for a read-only plot).
+	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// ── Z-order management ────────────────────────────────────────────────────
 
@@ -102,11 +113,21 @@ namespace aether::ui
 	// Panel entity with UiTransformComponent + UiInputComponent + UiPanelComponent.
 	Entity SpawnPanel(aether::World& world, UiRect rect, std::string_view title, bool draggable = true, bool collapsible = false, float zOrder = 0.f);
 
+	// Label-value row entity (UiTransform + UiLabelRowComponent).
+	Entity SpawnLabelRow(aether::World& world, UiRect rect, std::string_view label, float zOrder = 0.f);
+
+	// Section separator entity (UiTransform + UiSectionComponent).
+	Entity SpawnSection(aether::World& world, UiRect rect, float zOrder = 0.f);
+
 	// Single-line text input entity.
 	Entity SpawnTextInput(aether::World& world, UiRect rect, std::string_view placeholder = {}, float zOrder = 0.f);
 
 	// Single item slot entity (UiTransform + UiInput + UiItemSlot).
 	Entity SpawnItemSlot(aether::World& world, UiRect rect = {}, float zOrder = 0.f);
+
+	// Time-series graph entity (UiTransform + UiGraphComponent).
+	// UiInputComponent is optional - omit for a read-only plot.
+	Entity SpawnGraph(aether::World& world, UiRect rect, std::string_view label, float rangeMin = 0.f, float rangeMax = 33.333f, float zOrder = 0.f);
 
 	// Spawns a grid container entity + slotCount item slot children in one call.
 	// slotsOut must point to an array of at least slotCount Entities.

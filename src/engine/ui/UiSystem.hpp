@@ -31,7 +31,7 @@ namespace aether::ui
 	{
 	public:
 		// deltaTime - seconds since last frame; used for hover/press animation lerp.
-		void BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
+		void BeginFrame(aether::World& world, Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
 		void RenderAll(aether::World& world, UIRenderer& ui, const Input& input, VkExtent2D extent);
 		void EndFrame(aether::World& world, UiContext& ctx);
 

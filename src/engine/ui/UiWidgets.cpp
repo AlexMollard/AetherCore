@@ -822,4 +822,154 @@ namespace aether::ui
 		return container;
 	}
 
+	// ── Label row ──────────────────────────────────────────────────────────────
+
+	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		auto* row = world.TryGet<UiLabelRowComponent>(entity);
+		if (!t || !row)
+		{
+			return;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float y = px.y + px.w * 0.5f + theme.labelFontSize * 0.35f;
+		const float col2X = px.x + 206.f;
+
+		ui.DrawText(row->label, PixelPoint(*t, {px.x, y}, extent), theme.labelFontSize, theme.textLabel);
+		if (!row->value.empty())
+		{
+			ui.DrawText(row->value, PixelPoint(*t, {col2X, y}, extent), theme.labelFontSize, row->valueColor);
+		}
+
+		ui.SetLayer(prevLayer);
+	}
+
+	Entity SpawnLabelRow(aether::World& world, UiRect rect, std::string_view label, float zOrder)
+	{
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiLabelRowComponent>(UiLabelRowComponent{.label = std::string(label)}).entity();
+	}
+
+	// ── Section separator ──────────────────────────────────────────────────────
+
+	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		if (!t)
+		{
+			return;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float lineY = px.y + px.w * 0.5f;
+		ui.DrawLine(PixelPoint(*t, {px.x, lineY}, extent), PixelPoint(*t, {px.x + px.z, lineY}, extent), 1.f, theme.separator);
+
+		ui.SetLayer(prevLayer);
+	}
+
+	Entity SpawnSection(aether::World& world, UiRect rect, float zOrder)
+	{
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSectionComponent>().entity();
+	}
+
+	// ── Graph ──────────────────────────────────────────────────────────────────
+
+	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* t = world.TryGet<UiTransformComponent>(entity);
+		auto* graph = world.TryGet<UiGraphComponent>(entity);
+		if (!t || !graph)
+		{
+			return;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float chartX = px.x;
+		constexpr float kTopPad = 6.f;
+		const float chartY = px.y + kTopPad;
+		const float chartW = px.z;
+		constexpr float kChartH = 76.f;
+		constexpr float kLegendArea = 26.f;
+		const float chartH = std::min(px.w - kLegendArea, kChartH);
+		const float range = std::max(graph->rangeMax - graph->rangeMin, 1e-6f);
+
+		// Background (full entity rect).
+		ui.DrawRect(t->rect, {0.12f, 0.12f, 0.15f, 1.f}, 3.f);
+
+		// Bars in the upper chart region.
+		if (graph->count > 0)
+		{
+			const float barW = chartW / static_cast<float>(UiGraphComponent::kMaxSamples);
+			for (std::size_t i = 0; i < UiGraphComponent::kMaxSamples; ++i)
+			{
+				if (i >= graph->count)
+				{
+					continue;
+				}
+				const std::size_t idx = (graph->head + UiGraphComponent::kMaxSamples - graph->count + i) % UiGraphComponent::kMaxSamples;
+				const float val = graph->samples[idx];
+				const float barH = (std::clamp(val, graph->rangeMin, graph->rangeMax) / range) * chartH;
+				const float bx = chartX + static_cast<float>(i) * barW;
+				const float by = chartY + chartH - barH;
+
+				glm::vec4 barColor = theme.accent;
+				const float normalMs = (graph->rangeMax - graph->rangeMin) / 2.f;
+				if (val > graph->rangeMin + normalMs * 1.5f)
+				{
+					barColor = theme.bad;
+				}
+				else if (val > graph->rangeMin + normalMs)
+				{
+					barColor = theme.warn;
+				}
+
+				ui.DrawRect(PixelToUiRect(*t, {bx, by, std::max(barW - 1.f, 1.f), barH}, extent), barColor);
+			}
+		}
+
+		// Reference lines.
+		auto drawRef = [&](float refValue, const glm::vec4& color)
+		{
+			if (refValue < graph->rangeMin || refValue > graph->rangeMax)
+			{
+				return;
+			}
+			const float refY = chartY + chartH - ((refValue - graph->rangeMin) / range) * chartH;
+			ui.DrawLine(PixelPoint(*t, {chartX, refY}, extent), PixelPoint(*t, {chartX + chartW, refY}, extent), 1.f, color * glm::vec4{1.f, 1.f, 1.f, 0.4f});
+		};
+		drawRef(16.667f, theme.good);
+		drawRef(33.333f, theme.warn);
+
+		// Legend text in the lower area.
+		if (!graph->label.empty())
+		{
+			const float legendY = px.y + px.w - 6.f;
+			ui.DrawText(graph->label, PixelPoint(*t, {chartX, legendY}, extent), 11.f, theme.textLabel * glm::vec4{1.f, 1.f, 1.f, 0.8f});
+		}
+
+		ui.SetLayer(prevLayer);
+	}
+
+	Entity SpawnGraph(aether::World& world, UiRect rect, std::string_view label, float rangeMin, float rangeMax, float zOrder)
+	{
+		return world.Spawn()
+		        .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
+		        .Add<UiGraphComponent>(UiGraphComponent{
+		                .rangeMin = rangeMin,
+		                .rangeMax = rangeMax,
+		                .label = std::string(label),
+		        })
+		        .entity();
+	}
+
 } // namespace aether::ui

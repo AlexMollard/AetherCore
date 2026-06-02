@@ -32,7 +32,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::BeginFrame(aether::World& world, const Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
+	void UiSystem::BeginFrame(aether::World& world, Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
 	{
 		AE_PROFILE_ZONE();
 		// ── Mouse state ────────────────────────────────────────────────────────
@@ -71,6 +71,11 @@ namespace aether::ui
 		HitTest(world, ctx, extent);
 		FlushWidgetStates(world, ctx);
 		UpdateTransitions(world, deltaTime);
+
+		// Capture mouse while any UI element is actively pressed/dragged.
+		// Camera (and other systems) can check Input::IsMouseCaptured() to skip
+		// their own mouse processing and avoid conflicting with UI interactions.
+		input.SetMouseCaptured(ctx.activeEntity.IsValid());
 	}
 
 	// ── Private helpers used by BeginFrame and RenderAll ─────────────────────
@@ -132,6 +137,18 @@ namespace aether::ui
 			else if (world.Has<UiItemSlotComponent>(entity))
 			{
 				DrawItemSlot(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiLabelRowComponent>(entity))
+			{
+				DrawLabelRow(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiSectionComponent>(entity))
+			{
+				DrawSection(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiGraphComponent>(entity))
+			{
+				DrawGraph(world, entity, ui, extent, theme);
 			}
 		}
 

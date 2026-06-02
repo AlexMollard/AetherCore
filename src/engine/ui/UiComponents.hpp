@@ -176,6 +176,38 @@ namespace aether::ui
 		glm::vec4 rarityColor{0.f, 0.f, 0.f, 0.f};
 	};
 
+	// ── Label row ──────────────────────────────────────────────────────────────
+	// A two-column row: static label on the left, dynamic value on the right.
+	struct UiLabelRowComponent
+	{
+		std::string label;
+		std::string value;
+		glm::vec4 valueColor{1.f, 1.f, 1.f, 1.f};
+	};
+
+	// ── Section separator ──────────────────────────────────────────────────────
+	// DrawSection renders a horizontal separator line for this entity.
+	struct UiSectionComponent
+	{
+		bool _present = false; // dummy field — some EnTT versions return void from emplace for empty types
+	};
+
+	// ── Graph ──────────────────────────────────────────────────────────────────
+	// Time-series bar graph widget.  Renders a background rect, proportional bars,
+	// reference lines (e.g. 60/30 fps), and a legend label below.
+	struct UiGraphComponent
+	{
+		static constexpr std::size_t kMaxSamples = 128;
+
+		std::array<float, kMaxSamples> samples{};
+		std::size_t head = 0;
+		std::size_t count = 0;
+		float rangeMin = 0.f;
+		float rangeMax = 33.333f; // 30 fps
+
+		std::string label;
+	};
+
 	// ── Hierarchy ──────────────────────────────────────────────────────────────
 	struct UiChildrenComponent
 	{

@@ -11,11 +11,15 @@ namespace aether::utils
 	inline bool IEq(std::string_view a, std::string_view b)
 	{
 		if (a.size() != b.size())
+		{
 			return false;
+		}
 		for (std::size_t i = 0; i < a.size(); ++i)
 		{
 			if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
+			{
 				return false;
+			}
 		}
 		return true;
 	}
@@ -25,13 +29,21 @@ namespace aether::utils
 	{
 		const std::size_t m = a.size();
 		const std::size_t n = b.size();
-		if (m == 0) return static_cast<int>(n);
-		if (n == 0) return static_cast<int>(m);
+		if (m == 0)
+		{
+			return static_cast<int>(n);
+		}
+		if (n == 0)
+		{
+			return static_cast<int>(m);
+		}
 
 		std::vector<int> prev(n + 1);
 		std::vector<int> curr(n + 1);
 		for (std::size_t j = 0; j <= n; ++j)
+		{
 			prev[j] = static_cast<int>(j);
+		}
 
 		for (std::size_t i = 1; i <= m; ++i)
 		{
