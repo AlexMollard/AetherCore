@@ -3,7 +3,10 @@
 #include "camera/CameraManager.hpp"
 #include "rendering/LightingManager.hpp"
 
-namespace aether { class ServiceContainer; }
+namespace aether
+{
+	class ServiceContainer;
+}
 
 namespace aether
 {

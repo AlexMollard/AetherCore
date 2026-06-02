@@ -101,7 +101,7 @@ namespace aether
 			}
 
 			const std::string noExt = std::filesystem::path(stem).extension().empty() ? stem : std::filesystem::path(stem).stem().string();
-			constexpr std::string_view kExts[] = { ".texture", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2" };
+			constexpr std::string_view kExts[] = {".texture", ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2"};
 			for (const std::string_view ext: kExts)
 			{
 				const std::string candidate = ResolvePathInFolder(folderPath, noExt + std::string(ext));
@@ -416,11 +416,11 @@ namespace aether
 		std::string autoEmissive;
 		if (!folderPath.empty())
 		{
-			autoAlbedo = ResolveFirstAliasInFolder(folderPath, { "albedo", "basecolor", "base_color", "diffuse", "color" });
-			autoNormal = ResolveFirstAliasInFolder(folderPath, { "normal", "nrm" });
-			autoMetallicRoughness = ResolveFirstAliasInFolder(folderPath, { "metallicroughness", "metal_rough", "metalrough", "orm", "roughness", "metallic" });
-			autoOcclusion = ResolveFirstAliasInFolder(folderPath, { "occlusion", "ao", "ambientocclusion" });
-			autoEmissive = ResolveFirstAliasInFolder(folderPath, { "emissive", "emission" });
+			autoAlbedo = ResolveFirstAliasInFolder(folderPath, {"albedo", "basecolor", "base_color", "diffuse", "color"});
+			autoNormal = ResolveFirstAliasInFolder(folderPath, {"normal", "nrm"});
+			autoMetallicRoughness = ResolveFirstAliasInFolder(folderPath, {"metallicroughness", "metal_rough", "metalrough", "orm", "roughness", "metallic"});
+			autoOcclusion = ResolveFirstAliasInFolder(folderPath, {"occlusion", "ao", "ambientocclusion"});
+			autoEmissive = ResolveFirstAliasInFolder(folderPath, {"emissive", "emission"});
 		}
 
 		const std::string albedoPath = !spec.albedoPath.empty() ? spec.albedoPath : autoAlbedo;
@@ -640,7 +640,7 @@ namespace aether
 
 			if (parentEntityId != 0)
 			{
-				m_world->Emplace<ParentEntityComponent>(entity, ParentEntityComponent{ .parentId = parentEntityId });
+				m_world->Emplace<ParentEntityComponent>(entity, ParentEntityComponent{.parentId = parentEntityId});
 			}
 
 			if (model.animationDb.IsValid() && primitive.skinIndex >= 0)

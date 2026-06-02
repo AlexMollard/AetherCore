@@ -36,13 +36,13 @@ namespace aether
 
 	struct BoxBodyDesc
 	{
-		glm::vec3 halfExtents{ 0.5f, 0.5f, 0.5f };
+		glm::vec3 halfExtents{0.5f, 0.5f, 0.5f};
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
 		PhysicsLayer layer = PhysicsLayer::Moving;
 		float friction = 0.5f;
 		float restitution = 0.0f;
 		bool startActive = true;
-		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
+		glm::vec3 initialVelocity{0.f, 0.f, 0.f};
 	};
 
 	struct SphereBodyDesc
@@ -53,7 +53,7 @@ namespace aether
 		float friction = 0.5f;
 		float restitution = 0.0f;
 		bool startActive = true;
-		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
+		glm::vec3 initialVelocity{0.f, 0.f, 0.f};
 	};
 
 	struct CapsuleBodyDesc
@@ -65,7 +65,7 @@ namespace aether
 		float friction = 0.5f;
 		float restitution = 0.0f;
 		bool startActive = true;
-		glm::vec3 initialVelocity{ 0.f, 0.f, 0.f };
+		glm::vec3 initialVelocity{0.f, 0.f, 0.f};
 	};
 
 	// ── Runtime components (managed by PhysicsSystem) ─────────────────────────
@@ -89,10 +89,10 @@ namespace aether
 	struct PhysicsStateComponent
 	{
 		glm::vec3 prevPosition{};
-		glm::quat prevRotation{ 1.f, 0.f, 0.f, 0.f };
+		glm::quat prevRotation{1.f, 0.f, 0.f, 0.f};
 		glm::vec3 currPosition{};
-		glm::quat currRotation{ 1.f, 0.f, 0.f, 0.f };
-		glm::vec3 scale{ 1.f, 1.f, 1.f };
+		glm::quat currRotation{1.f, 0.f, 0.f, 0.f};
+		glm::vec3 scale{1.f, 1.f, 1.f};
 	};
 
 } // namespace aether

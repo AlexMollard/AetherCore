@@ -22,12 +22,12 @@ namespace aether
 		float farPlane = 1000.0f;
 
 		// ── Free mode starting pose ───────────────────────────────────────────
-		glm::vec3 position = { 0.0f, 3.0f, 7.0f };
+		glm::vec3 position = {0.0f, 3.0f, 7.0f};
 		float yaw = 0.0f;     // degrees, rotation around world Y axis
 		float pitch = -20.0f; // degrees, up/down tilt (+-89 clamped)
 
 		// ── Orbit mode starting pose ──────────────────────────────────────────
-		glm::vec3 orbitTarget = { 0.0f, 0.0f, 0.0f };
+		glm::vec3 orbitTarget = {0.0f, 0.0f, 0.0f};
 		float orbitDistance = 7.0f;
 		float orbitYaw = 0.0f;    // degrees around target's Y axis
 		float orbitPitch = 20.0f; // degrees above/below horizon

@@ -67,7 +67,7 @@ namespace aether::app::scripting
 	// ── VfsFileAccess ─────────────────────────────────────────────────────────────
 
 	VfsFileAccess::VfsFileAccess()
-		: das::FsFileAccess()
+	      : das::FsFileAccess()
 	{
 		// Insert VfsFileSystem at the front so it is tried first.
 		auto* vfs = new VfsFileSystem();
@@ -82,7 +82,7 @@ namespace aether::app::scripting
 
 	void VfsFileAccess::AddSearchRoot(const das::string& prefix, const das::string& rootPath)
 	{
-		searchRoots.push_back({ prefix, rootPath });
+		searchRoots.push_back({prefix, rootPath});
 		addFsRoot(prefix, rootPath);
 	}
 

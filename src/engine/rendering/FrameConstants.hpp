@@ -47,32 +47,33 @@ namespace aether
 	//   Total: 640 bytes
 	struct FrameConstants
 	{
-		glm::mat4 viewProj{ 1.0f };                                                          // offset 0
-		glm::mat4 view{ 1.0f };                                                              // offset 64
-		glm::mat4 proj{ 1.0f };                                                              // offset 128
-		std::uint64_t materialBufferAddr = 0;                                                // offset 192
-		float elapsedTime = 0.0f;                                                            // offset 200
-		std::uint32_t _pad0 = 0;                                                             // offset 204
-		glm::vec4 sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };                     // offset 208, directional light
-		glm::vec4 ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };                                 // offset 224
-		glm::vec4 cameraWorldPos{ 0.0f, 0.0f, 0.0f, 1.0f };                                  // offset 240
-		glm::vec4 sunColor{ 1.0f, 0.96f, 0.90f, 1.0f };                                      // offset 256
-		glm::vec4 skyHorizonColor{ 0.34f, 0.52f, 0.82f, 1.0f };                              // offset 272, skybox.slang
-		glm::vec4 skyZenithColor{ 0.08f, 0.19f, 0.45f, 1.0f };                               // offset 288, skybox.slang
-		glm::vec4 skyVoidColor{ 0.001f, 0.002f, 0.005f, 1.0f };                              // offset 304, skybox.slang:208
-		glm::uvec4 tiledLightGridInfo{ 0u, 0u, 0u, 0u };                                     // offset 320, tiled lighting
-		glm::uvec4 tiledLightBufferOffsets{ 0u, 0u, 0u, 0u };                                // offset 336, tiled lighting
-		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{ glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f) }; // offset 352
-		glm::vec4 shadowCascadeSplits{ 24.0f, 80.0f, 220.0f, 0.0f };                         // offset 544, CSM splits
-		glm::vec4 shadowParams{ 0.0008f, 0.0012f, 1.0f, 1.5f };                              // offset 560, shadow params
-		std::array<glm::uvec4, kShadowCascadeCount> shadowCascadeInfo{                       // offset 576, CSM bindless slots
-			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
-			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
-			glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+		glm::mat4 viewProj{1.0f};                                                                                             // offset 0
+		glm::mat4 view{1.0f};                                                                                                 // offset 64
+		glm::mat4 proj{1.0f};                                                                                                 // offset 128
+		std::uint64_t materialBufferAddr = 0;                                                                                 // offset 192
+		float elapsedTime = 0.0f;                                                                                             // offset 200
+		std::uint32_t _pad0 = 0;                                                                                              // offset 204
+		glm::vec4 sunDirectionIntensity{0.577f, 0.577f, 0.577f, 3.0f};                                                        // offset 208, directional light
+		glm::vec4 ambientColor{0.03f, 0.04f, 0.06f, 1.0f};                                                                    // offset 224
+		glm::vec4 cameraWorldPos{0.0f, 0.0f, 0.0f, 1.0f};                                                                     // offset 240
+		glm::vec4 sunColor{1.0f, 0.96f, 0.90f, 1.0f};                                                                         // offset 256
+		glm::vec4 skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};                                                                 // offset 272, skybox.slang
+		glm::vec4 skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};                                                                  // offset 288, skybox.slang
+		glm::vec4 skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};                                                                 // offset 304, skybox.slang:208
+		glm::uvec4 tiledLightGridInfo{0u, 0u, 0u, 0u};                                                                        // offset 320, tiled lighting
+		glm::uvec4 tiledLightBufferOffsets{0u, 0u, 0u, 0u};                                                                   // offset 336, tiled lighting
+		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)}; // offset 352
+		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};                                                            // offset 544, CSM splits
+		glm::vec4 shadowParams{0.0008f, 0.0012f, 1.0f, 1.5f};                                                                 // offset 560, shadow params
+		std::array<glm::uvec4, kShadowCascadeCount> shadowCascadeInfo{
+		        // offset 576, CSM bindless slots
+		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
+		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
 		};
-		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;                                         // offset 624, local shadows
-		std::uint32_t shadowLightCount = 0;                                                  // offset 628
-		std::uint64_t shadowLightDataAddr = 0;                                               // offset 632
+		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu; // offset 624, local shadows
+		std::uint32_t shadowLightCount = 0;          // offset 628
+		std::uint64_t shadowLightDataAddr = 0;       // offset 632
 	};
 
 	static_assert(sizeof(FrameConstants) == 640,

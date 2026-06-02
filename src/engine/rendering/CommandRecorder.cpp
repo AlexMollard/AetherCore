@@ -55,23 +55,26 @@ namespace aether
 		}
 
 		const VkMemoryBarrier2 barrier{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = srcStage,
-			.srcAccessMask = srcAccess,
-			.dstStageMask = dstStage,
-			.dstAccessMask = dstAccess,
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = srcStage,
+		        .srcAccessMask = srcAccess,
+		        .dstStageMask = dstStage,
+		        .dstAccessMask = dstAccess,
 		};
 		const VkDependencyInfo dep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &barrier,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &barrier,
 		};
 		vkCmdPipelineBarrier2(m_cmd, &dep);
 	}
 
 	void CommandRecorder::HostToShaderBarrier()
 	{
-		MemoryBarrier2(VK_PIPELINE_STAGE_2_HOST_BIT, VK_ACCESS_2_HOST_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+		MemoryBarrier2(VK_PIPELINE_STAGE_2_HOST_BIT,
+		        VK_ACCESS_2_HOST_WRITE_BIT,
+		        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		        VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 	}
 
 	void CommandRecorder::BeginDebugLabel(const char* name, float r, float g, float b, float a)
@@ -82,9 +85,9 @@ namespace aether
 		}
 
 		const VkDebugUtilsLabelEXT label{
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
-			.pLabelName = name,
-			.color = { r, g, b, a },
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+		        .pLabelName = name,
+		        .color = {r, g, b, a},
 		};
 		s_beginDebugLabelFn(m_cmd, &label);
 	}
@@ -115,10 +118,10 @@ namespace aether
 			return;
 		}
 		const VkDebugUtilsObjectNameInfoEXT info{
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = type,
-			.objectHandle = handle,
-			.pObjectName = name,
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		        .objectType = type,
+		        .objectHandle = handle,
+		        .pObjectName = name,
 		};
 		// Best-effort debug naming - failure is non-critical.
 		[[maybe_unused]] const VkResult nameResult = s_setObjectNameFn(device, &info);

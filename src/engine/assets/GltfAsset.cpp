@@ -27,7 +27,7 @@ namespace aether::assets
 			{
 				AE_ASSERT_ALWAYS(false, "Invalid VFS path (missing ://): " + std::string(vfsPath));
 			}
-			return { vfsPath.substr(0, sep), vfsPath.substr(sep + kSeparator.size()) };
+			return {vfsPath.substr(0, sep), vfsPath.substr(sep + kSeparator.size())};
 		}
 
 		std::string ResolveRelativeVfsPath(std::string_view baseFilePath, std::string_view relativePath)

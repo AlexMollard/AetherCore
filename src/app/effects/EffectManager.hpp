@@ -40,14 +40,7 @@ namespace aether::app::effects
 		// it with a default material in one call.  Returns true on success.
 		// The pipeline inherits depthTestEnable=true, depthWriteEnable=true.
 		bool CreateAndRegister(
-		        const char* name,
-		        aether::AssetManager& assets,
-		        VkDescriptorSetLayout bindlessLayout,
-		        VkDescriptorSetLayout lightingLayout,
-		        VkFormat colorFormat,
-		        VkFormat depthFormat,
-		        const char* shaderVfsPath,
-		        const aether::Material& material);
+		        const char* name, aether::AssetManager& assets, VkDescriptorSetLayout bindlessLayout, VkDescriptorSetLayout lightingLayout, VkFormat colorFormat, VkFormat depthFormat, const char* shaderVfsPath, const aether::Material& material);
 
 		// Lookup. Returns nullptr if name not found.
 		[[nodiscard]] const EffectData* Find(const char* name) const;

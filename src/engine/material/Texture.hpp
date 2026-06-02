@@ -44,9 +44,11 @@ namespace aether
 		// Load a texture from raw file bytes (already read from disk).
 		// Useful after an async I/O operation - the GPU upload still happens
 		// synchronously on the calling thread (requires a valid Vulkan context).
-		[[nodiscard]] static Expected<Texture> LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] static Expected<Texture> LoadFromFileData(
+		        std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
-		[[nodiscard]] static Expected<Texture> LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] static Expected<Texture> LoadFromDiskPath(
+		        const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		void Destroy();
 

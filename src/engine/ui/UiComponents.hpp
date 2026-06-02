@@ -23,8 +23,8 @@ namespace aether::ui
 	// Background quad appearance.
 	struct UiRenderComponent
 	{
-		glm::vec4 backgroundColor{ 0.f, 0.f, 0.f, 0.f };
-		glm::vec4 borderColor{ 0.f, 0.f, 0.f, 0.f };
+		glm::vec4 backgroundColor{0.f, 0.f, 0.f, 0.f};
+		glm::vec4 borderColor{0.f, 0.f, 0.f, 0.f};
 		float cornerRadius = 0.f;
 		float borderWidth = 0.f;
 		bool visible = true;
@@ -35,7 +35,7 @@ namespace aether::ui
 	{
 		std::string text;
 		float fontSize = 14.f;
-		glm::vec4 color{ 1.f, 1.f, 1.f, 1.f };
+		glm::vec4 color{1.f, 1.f, 1.f, 1.f};
 	};
 
 	// ── Interaction ────────────────────────────────────────────────────────────
@@ -83,10 +83,10 @@ namespace aether::ui
 	struct UiButtonComponent
 	{
 		std::string label;
-		glm::vec4 normalColor{ 0.20f, 0.24f, 0.30f, 1.f };
-		glm::vec4 hoverColor{ 0.28f, 0.34f, 0.44f, 1.f };
-		glm::vec4 pressColor{ 0.16f, 0.20f, 0.26f, 1.f };
-		glm::vec4 textColor{ 0.88f, 0.91f, 0.93f, 1.f };
+		glm::vec4 normalColor{0.20f, 0.24f, 0.30f, 1.f};
+		glm::vec4 hoverColor{0.28f, 0.34f, 0.44f, 1.f};
+		glm::vec4 pressColor{0.16f, 0.20f, 0.26f, 1.f};
+		glm::vec4 textColor{0.88f, 0.91f, 0.93f, 1.f};
 	};
 
 	// ── Slider ─────────────────────────────────────────────────────────────────
@@ -110,8 +110,8 @@ namespace aether::ui
 	struct UiImageComponent
 	{
 		std::uint32_t textureSlot = 0;
-		glm::vec4 uvRect{ 0.f, 0.f, 1.f, 1.f }; // u0, v0, u1, v1
-		glm::vec4 tint{ 1.f, 1.f, 1.f, 1.f };
+		glm::vec4 uvRect{0.f, 0.f, 1.f, 1.f}; // u0, v0, u1, v1
+		glm::vec4 tint{1.f, 1.f, 1.f, 1.f};
 	};
 
 	// ── Clip ───────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ namespace aether::ui
 	struct UiClipComponent
 	{
 		UiRect clipRect;
-		glm::vec2 scrollOffset{ 0.f };
+		glm::vec2 scrollOffset{0.f};
 	};
 
 	// ── Layout ─────────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ namespace aether::ui
 		std::uint32_t textureSlot = 0; // 0 = no icon texture
 		int quantity = 0;              // 0 = empty
 		bool selected = false;
-		glm::vec4 rarityColor{ 0.f, 0.f, 0.f, 0.f };
+		glm::vec4 rarityColor{0.f, 0.f, 0.f, 0.f};
 	};
 
 	// ── Hierarchy ──────────────────────────────────────────────────────────────

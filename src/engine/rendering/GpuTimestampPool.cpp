@@ -22,9 +22,9 @@ namespace aether
 		m_periodNs = props.limits.timestampPeriod;
 
 		const VkQueryPoolCreateInfo createInfo{
-			.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-			.queryType = VK_QUERY_TYPE_TIMESTAMP,
-			.queryCount = kMaxTimestamps,
+		        .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+		        .queryType = VK_QUERY_TYPE_TIMESTAMP,
+		        .queryCount = kMaxTimestamps,
 		};
 
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)

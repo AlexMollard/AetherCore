@@ -31,7 +31,8 @@ namespace aether
 		}
 	} // namespace
 
-	CompiledResourceSet PassResourceCompiler::Compile(ResourcePool& pool, const std::vector<BufferLifetimeRequest>& bufferRequests, const std::vector<ImageLifetimeRequest>& imageRequests, const ResourcePool::BufferFactory& bufferFactory, const ResourcePool::ImageFactory& imageFactory)
+	CompiledResourceSet PassResourceCompiler::Compile(
+	        ResourcePool& pool, const std::vector<BufferLifetimeRequest>& bufferRequests, const std::vector<ImageLifetimeRequest>& imageRequests, const ResourcePool::BufferFactory& bufferFactory, const ResourcePool::ImageFactory& imageFactory)
 	{
 		CompiledResourceSet out{};
 		out.buffers.reserve(bufferRequests.size());

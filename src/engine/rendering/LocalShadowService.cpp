@@ -33,6 +33,7 @@ namespace aether
 		float _pad1;
 		float _pad2;
 	};
+
 	static_assert(sizeof(BlurPushConstants) == 32, "BlurPushConstants must be 32 bytes");
 
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
@@ -44,7 +45,7 @@ namespace aether
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
-		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{ .maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 0u });
+		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 0u});
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
@@ -70,27 +71,27 @@ namespace aether
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			{
-				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device,
-				        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
+				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
 				m_shadowDataBuffer[i] = std::move(sdBuf);
 				m_shadowDataAddr[i] = m_shadowDataBuffer[i].GetDeviceAddress();
 			}
 			{
-				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device,
-				        static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
+				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
 				m_lightConstantsBuffer[i] = std::move(lcBuf);
 				m_lightConstantsAddr[i] = m_lightConstantsBuffer[i].GetDeviceAddress();
 			}
 		}
 
 		// ── Create blur scratch image ──────────────────────────────────────
-		AE_EXPECT_OR_THROW(scratchImg, UniqueImage::Create(device, allocator,
-		        {
-		                .extent = { ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight },
-		                .format = ShadowAtlasManager::kAtlasFormat,
-		                .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		                .debugName = "ShadowBlurScratch",
-		        }));
+		AE_EXPECT_OR_THROW(scratchImg,
+		        UniqueImage::Create(device,
+		                allocator,
+		                {
+		                        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
+		                        .format = ShadowAtlasManager::kAtlasFormat,
+		                        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .debugName = "ShadowBlurScratch",
+		                }));
 		m_blurScratch = std::move(scratchImg);
 
 		// ── Create VSM blur compute pipeline ───────────────────────────────
@@ -109,7 +110,7 @@ namespace aether
 			bindings[1].descriptorCount = 1;
 			bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
-			VkDescriptorSetLayoutCreateInfo dslci{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+			VkDescriptorSetLayoutCreateInfo dslci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
 			dslci.bindingCount = 2;
 			dslci.pBindings = bindings;
 			AE_ASSERT_ALWAYS(vkCreateDescriptorSetLayout(device, &dslci, nullptr, &m_blurDescriptorSetLayout) == VK_SUCCESS, "Failed to create blur descriptor set layout");
@@ -122,7 +123,7 @@ namespace aether
 			pcRange.offset = 0;
 			pcRange.size = sizeof(BlurPushConstants);
 
-			VkPipelineLayoutCreateInfo plci{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
+			VkPipelineLayoutCreateInfo plci{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
 			plci.setLayoutCount = 1;
 			plci.pSetLayouts = &m_blurDescriptorSetLayout;
 			plci.pushConstantRangeCount = 1;
@@ -132,7 +133,7 @@ namespace aether
 
 		// Compute pipeline.
 		{
-			VkComputePipelineCreateInfo cpci{ VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO };
+			VkComputePipelineCreateInfo cpci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
 			cpci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			cpci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 			cpci.stage.module = blurModule;
@@ -145,7 +146,7 @@ namespace aether
 
 		// Sampler for blur input (nearest clamp-to-edge - texel fetch, sampler unused).
 		{
-			VkSamplerCreateInfo sci{ VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
+			VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
 			sci.magFilter = VK_FILTER_NEAREST;
 			sci.minFilter = VK_FILTER_NEAREST;
 			sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
@@ -162,7 +163,7 @@ namespace aether
 			poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			poolSizes[1].descriptorCount = 2;
 
-			VkDescriptorPoolCreateInfo dpci{ VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO };
+			VkDescriptorPoolCreateInfo dpci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
 			dpci.maxSets = 2;
 			dpci.poolSizeCount = 2;
 			dpci.pPoolSizes = poolSizes;
@@ -171,8 +172,8 @@ namespace aether
 
 		// Allocate two descriptor sets (H and V variants).
 		{
-			VkDescriptorSetLayout layouts[2] = { m_blurDescriptorSetLayout, m_blurDescriptorSetLayout };
-			VkDescriptorSetAllocateInfo dsai{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO };
+			VkDescriptorSetLayout layouts[2] = {m_blurDescriptorSetLayout, m_blurDescriptorSetLayout};
+			VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
 			dsai.descriptorPool = m_blurDescriptorPool;
 			dsai.descriptorSetCount = 2;
 			dsai.pSetLayouts = layouts;
@@ -247,8 +248,14 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
 		m_shadowPipeline.Destroy();
-		for (auto& buf : m_shadowDataBuffer) buf.Reset();
-		for (auto& buf : m_lightConstantsBuffer) buf.Reset();
+		for (auto& buf: m_shadowDataBuffer)
+		{
+			buf.Reset();
+		}
+		for (auto& buf: m_lightConstantsBuffer)
+		{
+			buf.Reset();
+		}
 		m_atlasManager.Shutdown();
 
 		m_blurScratch.Reset();
@@ -364,11 +371,7 @@ namespace aether
 		}
 
 		// Sort by distance (closest first = highest priority).
-		std::sort(candidates.begin(), candidates.end(),
-		        [](const ShadowCandidate& a, const ShadowCandidate& b)
-		        {
-			        return a.distanceSq < b.distanceSq;
-		        });
+		std::sort(candidates.begin(), candidates.end(), [](const ShadowCandidate& a, const ShadowCandidate& b) { return a.distanceSq < b.distanceSq; });
 
 		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
@@ -449,9 +452,7 @@ namespace aether
 				std::span<const Renderer::SpotLight> spLights = packet.spotLights;
 				const Renderer::SpotLight& src = spLights[c.lightIndex];
 				const glm::vec3 lightDir = glm::normalize(src.direction);
-				const glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f)
-				                           ? glm::vec3(1.0f, 0.0f, 0.0f)
-				                           : glm::vec3(0.0f, 1.0f, 0.0f);
+				const glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 				const glm::mat4 lightView = glm::lookAt(src.position, src.position + lightDir, up);
 				const float fov = 2.0f * src.outerAngleRad;
 				const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(fov, 1.0f, 1.0f, 0.1f, src.radius);
@@ -478,8 +479,7 @@ namespace aether
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
 			mapped[i].viewProj = pls.viewProj;
-			mapped[i].atlasRegion = glm::vec4(
-			        static_cast<float>(pls.region.x) / static_cast<float>(ShadowAtlasManager::kAtlasWidth),
+			mapped[i].atlasRegion = glm::vec4(static_cast<float>(pls.region.x) / static_cast<float>(ShadowAtlasManager::kAtlasWidth),
 			        static_cast<float>(pls.region.y) / static_cast<float>(ShadowAtlasManager::kAtlasHeight),
 			        static_cast<float>(pls.region.width) / static_cast<float>(ShadowAtlasManager::kAtlasWidth),
 			        static_cast<float>(pls.region.height) / static_cast<float>(ShadowAtlasManager::kAtlasHeight));
@@ -507,8 +507,8 @@ namespace aether
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat)
 	{
 		AE_PROFILE_ZONE();
-		(void)bindless;
-		(void)device;
+		(void) bindless;
+		(void) device;
 		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage().Get(), m_atlasManager.GetAtlasView(), VK_IMAGE_ASPECT_COLOR_BIT);
 
@@ -516,9 +516,7 @@ namespace aether
 		m_blurScratchImage = graph.RegisterImage(m_blurScratch.Get(), m_blurScratch.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
 
 		// Create a transient depth attachment for the atlas render pass.
-		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat,
-		        VkExtent2D{ ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight },
-		        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat, VkExtent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
 
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
@@ -537,7 +535,7 @@ namespace aether
 		graph.AddPass("$LocalShadowAtlasRender")
 		        .WriteColor(m_atlasImage, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
 		        .WriteDepth(atlasDepth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
-		        .SetExtent(VkExtent2D{ ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight })
+		        .SetExtent(VkExtent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
@@ -551,18 +549,18 @@ namespace aether
 				                const PerLightShadow& pls = m_perLightShadows[li];
 
 				                const VkViewport vp{
-					                .x = static_cast<float>(pls.region.x),
-					                .y = static_cast<float>(pls.region.y),
-					                .width = static_cast<float>(pls.region.width),
-					                .height = static_cast<float>(pls.region.height),
-					                .minDepth = 0.0f,
-					                .maxDepth = 1.0f,
+				                        .x = static_cast<float>(pls.region.x),
+				                        .y = static_cast<float>(pls.region.y),
+				                        .width = static_cast<float>(pls.region.width),
+				                        .height = static_cast<float>(pls.region.height),
+				                        .minDepth = 0.0f,
+				                        .maxDepth = 1.0f,
 				                };
 				                vkCmdSetViewport(ctx.recorder.GetCommandBuffer(), 0, 1, &vp);
 
 				                const VkRect2D scissor{
-					                .offset = { static_cast<std::int32_t>(pls.region.x), static_cast<std::int32_t>(pls.region.y) },
-					                .extent = { pls.region.width, pls.region.height },
+				                        .offset = {static_cast<std::int32_t>(pls.region.x), static_cast<std::int32_t>(pls.region.y)},
+				                        .extent = {pls.region.width, pls.region.height},
 				                };
 				                vkCmdSetScissor(ctx.recorder.GetCommandBuffer(), 0, 1, &scissor);
 
@@ -584,12 +582,14 @@ namespace aether
 		                {
 			                const auto bounds = m_atlasManager.GetUsedBounds();
 			                if (bounds.width == 0 || bounds.height == 0)
+			                {
 				                return; // Nothing allocated, skip blur
+			                }
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetH, 0, nullptr);
 
-			                const BlurPushConstants hPc{ bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f };
+			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
 
 			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
@@ -604,12 +604,14 @@ namespace aether
 		                {
 			                const auto bounds = m_atlasManager.GetUsedBounds();
 			                if (bounds.width == 0 || bounds.height == 0)
+			                {
 				                return; // Nothing allocated, skip blur
+			                }
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetV, 0, nullptr);
 
-			                const BlurPushConstants vPc{ bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f };
+			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
 
 			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);

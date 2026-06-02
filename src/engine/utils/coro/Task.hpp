@@ -83,7 +83,7 @@ namespace aether::coro
 
 			async get_return_object() noexcept
 			{
-				return async{ std::coroutine_handle<promise_type>::from_promise(*this) };
+				return async{std::coroutine_handle<promise_type>::from_promise(*this)};
 			}
 		};
 
@@ -158,12 +158,12 @@ namespace aether::coro
 
 		[[nodiscard]] awaiter operator co_await() &
 		{
-			return awaiter{ m_handle };
+			return awaiter{m_handle};
 		}
 
 		[[nodiscard]] awaiter operator co_await() &&
 		{
-			return awaiter{ m_handle };
+			return awaiter{m_handle};
 		}
 
 		[[nodiscard]] explicit operator bool() const noexcept
@@ -172,7 +172,7 @@ namespace aether::coro
 		}
 
 	private:
-		std::coroutine_handle<promise_type> m_handle{ nullptr };
+		std::coroutine_handle<promise_type> m_handle{nullptr};
 	};
 
 	// ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ namespace aether::coro
 		template<typename T>
 		struct task_state
 		{
-			std::atomic<bool> ready{ false };
+			std::atomic<bool> ready{false};
 			std::exception_ptr error;
 			T value;
 			std::coroutine_handle<> continuation;
@@ -220,7 +220,7 @@ namespace aether::coro
 		template<>
 		struct task_state<void>
 		{
-			std::atomic<bool> ready{ false };
+			std::atomic<bool> ready{false};
 			std::exception_ptr error;
 			std::coroutine_handle<> continuation;
 		};
@@ -346,12 +346,12 @@ namespace aether::coro
 
 		[[nodiscard]] awaiter operator co_await() &
 		{
-			return awaiter{ m_state };
+			return awaiter{m_state};
 		}
 
 		[[nodiscard]] awaiter operator co_await() &&
 		{
-			return awaiter{ std::move(m_state) };
+			return awaiter{std::move(m_state)};
 		}
 
 		[[nodiscard]] bool is_ready() const noexcept
@@ -393,7 +393,7 @@ namespace aether::coro
 				state->value = std::move(v);
 			}
 			state->ready.store(true, std::memory_order_release);
-			return task{ std::move(state) };
+			return task{std::move(state)};
 		}
 
 		[[nodiscard]] static task make_exception(std::exception_ptr e)
@@ -401,15 +401,15 @@ namespace aether::coro
 			auto state = std::make_shared<state_type>();
 			state->error = std::move(e);
 			state->ready.store(true, std::memory_order_release);
-			return task{ std::move(state) };
+			return task{std::move(state)};
 		}
 
 		[[nodiscard]] static std::pair<task, source_type> create()
 		{
 			auto state = std::make_shared<state_type>();
-			task t{ state };
-			source_type s{ state };
-			return { std::move(t), std::move(s) };
+			task t{state};
+			source_type s{state};
+			return {std::move(t), std::move(s)};
 		}
 
 	private:

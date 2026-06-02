@@ -24,7 +24,7 @@ namespace aether::io
 		{
 			std::scoped_lock lock(m_mutex);
 			++m_pendingCount;
-			m_queue.push({ priority, std::move(job) });
+			m_queue.push({priority, std::move(job)});
 		}
 		m_workCv.notify_one();
 	}

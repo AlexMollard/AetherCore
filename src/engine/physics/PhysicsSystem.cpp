@@ -41,8 +41,8 @@ namespace aether
 
 	namespace BroadPhaseLayers
 	{
-		static constexpr JPH::BroadPhaseLayer kNonMoving{ 0 };
-		static constexpr JPH::BroadPhaseLayer kMoving{ 1 };
+		static constexpr JPH::BroadPhaseLayer kNonMoving{0};
+		static constexpr JPH::BroadPhaseLayer kMoving{1};
 		static constexpr uint32_t kNumLayers = 2;
 	} // namespace BroadPhaseLayers
 
@@ -155,22 +155,22 @@ namespace aether
 
 	static glm::vec3 FromJolt(JPH::Vec3Arg v)
 	{
-		return { v.GetX(), v.GetY(), v.GetZ() };
+		return {v.GetX(), v.GetY(), v.GetZ()};
 	}
 
 	static glm::quat FromJolt(JPH::QuatArg q)
 	{
-		return { q.GetW(), q.GetX(), q.GetY(), q.GetZ() };
+		return {q.GetW(), q.GetX(), q.GetY(), q.GetZ()};
 	}
 
 	static JPH::Vec3 ToJolt(glm::vec3 v)
 	{
-		return { v.x, v.y, v.z };
+		return {v.x, v.y, v.z};
 	}
 
 	static JPH::Quat ToJolt(glm::quat q)
 	{
-		return { q.x, q.y, q.z, q.w };
+		return {q.x, q.y, q.z, q.w};
 	}
 
 	static glm::mat4 ToTransform(glm::vec3 pos, glm::quat rot, glm::vec3 scale = glm::vec3(1.f))
@@ -302,7 +302,7 @@ namespace aether
 
 	static glm::vec3 ExtractPosition(const TransformComponent& t)
 	{
-		return { t.localToWorld[3][0], t.localToWorld[3][1], t.localToWorld[3][2] };
+		return {t.localToWorld[3][0], t.localToWorld[3][1], t.localToWorld[3][2]};
 	}
 
 	static glm::quat ExtractRotation(const TransformComponent& t)
@@ -353,7 +353,7 @@ namespace aether
 		// can reconstruct one from the other inline wherever World's typed API is needed.
 		auto toAether = [](entt::entity e) -> Entity
 		{
-			return Entity{ static_cast<uint32_t>(entt::to_integral(e)) };
+			return Entity{static_cast<uint32_t>(entt::to_integral(e))};
 		};
 
 		auto applyVelocity = [&](entt::entity e, glm::vec3 v)
@@ -376,7 +376,7 @@ namespace aether
 			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
-			JPH::BoxShapeSettings ss{ ToJolt(desc.halfExtents) };
+			JPH::BoxShapeSettings ss{ToJolt(desc.halfExtents)};
 			ss.mMaterial = nullptr;
 			auto result = ss.Create();
 			if (result.HasError())
@@ -387,7 +387,7 @@ namespace aether
 
 			const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
-			JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+			JPH::BodyCreationSettings bcs{result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer)};
 			bcs.mFriction = desc.friction;
 			bcs.mRestitution = desc.restitution;
 
@@ -415,7 +415,7 @@ namespace aether
 			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
-			JPH::SphereShapeSettings ss{ desc.radius };
+			JPH::SphereShapeSettings ss{desc.radius};
 			auto result = ss.Create();
 			if (result.HasError())
 			{
@@ -425,7 +425,7 @@ namespace aether
 
 			const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
-			JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+			JPH::BodyCreationSettings bcs{result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer)};
 			bcs.mFriction = desc.friction;
 			bcs.mRestitution = desc.restitution;
 
@@ -453,7 +453,7 @@ namespace aether
 			}
 
 			const auto* tc = reg.try_get<TransformComponent>(entity);
-			JPH::CapsuleShapeSettings ss{ desc.halfHeight, desc.radius };
+			JPH::CapsuleShapeSettings ss{desc.halfHeight, desc.radius};
 			auto result = ss.Create();
 			if (result.HasError())
 			{
@@ -463,11 +463,11 @@ namespace aether
 
 			const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
 			const glm::quat rot = tc ? ExtractRotation(*tc) : glm::quat(1.f, 0.f, 0.f, 0.f);
-			JPH::BodyCreationSettings bcs{ result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer) };
+			JPH::BodyCreationSettings bcs{result.Get(), JPH::RVec3(pos.x, pos.y, pos.z), ToJolt(rot), ToJoltMotionType(desc.motionType), ToJoltLayer(desc.layer)};
 			bcs.mFriction = desc.friction;
 			bcs.mRestitution = desc.restitution;
 
-			const glm::vec3 capsuleScale{ desc.radius * 2.f, desc.halfHeight * 2.f + desc.radius * 2.f, desc.radius * 2.f };
+			const glm::vec3 capsuleScale{desc.radius * 2.f, desc.halfHeight * 2.f + desc.radius * 2.f, desc.radius * 2.f};
 			AddBodyToEntity(world, toAether(entity), bi, bcs, desc.motionType, capsuleScale, desc.startActive);
 			if (desc.motionType == PhysicsMotionType::Static)
 			{

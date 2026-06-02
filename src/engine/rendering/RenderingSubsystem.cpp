@@ -27,7 +27,7 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{ .maxDraws = 65536 });
+		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{.maxDraws = 65536});
 		m_renderQueue.SetDebugForceVisible(false);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
@@ -124,23 +124,24 @@ namespace aether
 		LightingManager& lighting = services.Get<LightingManager>();
 
 		const PassRegistrationContext ctx{
-			.graph = m_renderGraph,
-			.skyboxPass = m_skyboxPass,
-			.postProcessStack = m_postProcessStack,
-			.shadowService = m_shadowService,
-			.localShadowService = m_localShadowService,
-			.bindlessManager = services.Get<BindlessManager>(),
-			.device = services.Get<VulkanContext>().GetDevice().device,
-			.depthFormat = services.Get<Swapchain>().GetDepthFormat(),
-			.cullPass = m_cullPass,
-			.mainRenderQueue = m_renderQueue,
-			.forwardPass = m_forwardPass,
-			.getLightingSet = [this, &lighting]()
-			{
-				const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-				return lighting.GetSet(frameIdx);
-			},
-			.renderTargetService = m_renderTargetService,
+		        .graph = m_renderGraph,
+		        .skyboxPass = m_skyboxPass,
+		        .postProcessStack = m_postProcessStack,
+		        .shadowService = m_shadowService,
+		        .localShadowService = m_localShadowService,
+		        .bindlessManager = services.Get<BindlessManager>(),
+		        .device = services.Get<VulkanContext>().GetDevice().device,
+		        .depthFormat = services.Get<Swapchain>().GetDepthFormat(),
+		        .cullPass = m_cullPass,
+		        .mainRenderQueue = m_renderQueue,
+		        .forwardPass = m_forwardPass,
+		        .getLightingSet =
+		                [this, &lighting]()
+		        {
+			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
+			        return lighting.GetSet(frameIdx);
+		        },
+		        .renderTargetService = m_renderTargetService,
 		};
 
 		m_renderPipelineCoordinator.RegisterPasses(ctx);

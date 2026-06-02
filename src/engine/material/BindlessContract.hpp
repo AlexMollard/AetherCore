@@ -15,5 +15,6 @@ namespace aether::bindless
 
 	[[nodiscard]] std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::uint32_t bindlessSetIndex = kDescriptorSetIndex);
 
-	[[nodiscard]] Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges = {}, std::uint32_t bindlessSetIndex = kDescriptorSetIndex);
+	[[nodiscard]] Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(
+	        VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges = {}, std::uint32_t bindlessSetIndex = kDescriptorSetIndex);
 } // namespace aether::bindless

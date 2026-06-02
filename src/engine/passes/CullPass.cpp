@@ -60,14 +60,14 @@ namespace aether
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, *spirv, "CullPass.single"));
 
 		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(CullContracts::PushConstants),
+		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .offset = 0,
+		        .size = sizeof(CullContracts::PushConstants),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &pushRange,
 		};
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_singleLayout) != VK_SUCCESS)
 		{
@@ -76,15 +76,15 @@ namespace aether
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "main",
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .module = shaderModule,
+		        .pName = "main",
 		};
 		const VkComputePipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = stage,
-			.layout = m_singleLayout,
+		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .stage = stage,
+		        .layout = m_singleLayout,
 		};
 		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_singlePipeline) != VK_SUCCESS)
 		{
@@ -117,14 +117,14 @@ namespace aether
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, *spirv, "CullPass.multi"));
 
 		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(CullContracts::MultiPushConstants),
+		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .offset = 0,
+		        .size = sizeof(CullContracts::MultiPushConstants),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &pushRange,
 		};
 		if (vkCreatePipelineLayout(m_device, &layoutInfo, nullptr, &m_multiLayout) != VK_SUCCESS)
 		{
@@ -133,15 +133,15 @@ namespace aether
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "main",
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .module = shaderModule,
+		        .pName = "main",
 		};
 		const VkComputePipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = stage,
-			.layout = m_multiLayout,
+		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .stage = stage,
+		        .layout = m_multiLayout,
 		};
 		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_multiPipeline) != VK_SUCCESS)
 		{
@@ -167,11 +167,7 @@ namespace aether
 		const VkPipeline pipeline = m_singlePipeline;
 		const VkPipelineLayout layout = m_singleLayout;
 
-		graph.AddComputePass(passName).ExecuteCompute(
-		        [&renderQueue, pipeline, layout](PassContext& ctx)
-		        {
-			        renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, pipeline, layout, ctx.frameIndex);
-		        });
+		graph.AddComputePass(passName).ExecuteCompute([&renderQueue, pipeline, layout](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, pipeline, layout, ctx.frameIndex); });
 	}
 
 } // namespace aether

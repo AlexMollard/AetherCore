@@ -38,9 +38,9 @@ namespace aether
 			const float oy = glm::radians(m_orbitYaw);
 			const float op = glm::radians(m_orbitPitch);
 			const glm::vec3 offset = {
-				m_orbitDistance * std::cos(op) * std::sin(oy),
-				m_orbitDistance * std::sin(op),
-				m_orbitDistance * std::cos(op) * std::cos(oy),
+			        m_orbitDistance * std::cos(op) * std::sin(oy),
+			        m_orbitDistance * std::sin(op),
+			        m_orbitDistance * std::cos(op) * std::cos(oy),
 			};
 			return m_orbitTarget + offset;
 		}
@@ -62,7 +62,7 @@ namespace aether
 
 	glm::vec3 Camera::GetRight() const
 	{
-		return glm::normalize(glm::cross(GetForward(), glm::vec3{ 0.0f, 1.0f, 0.0f }));
+		return glm::normalize(glm::cross(GetForward(), glm::vec3{0.0f, 1.0f, 0.0f}));
 	}
 
 	glm::vec3 Camera::GetUp() const
@@ -98,16 +98,16 @@ namespace aether
 			const float oy = glm::radians(m_orbitYaw);
 			const float op = glm::radians(m_orbitPitch);
 			const glm::vec3 offset = {
-				m_orbitDistance * std::cos(op) * std::sin(oy),
-				m_orbitDistance * std::sin(op),
-				m_orbitDistance * std::cos(op) * std::cos(oy),
+			        m_orbitDistance * std::cos(op) * std::sin(oy),
+			        m_orbitDistance * std::sin(op),
+			        m_orbitDistance * std::cos(op) * std::cos(oy),
 			};
 			const glm::vec3 eye = m_orbitTarget + offset;
-			return glm::lookAt(eye, m_orbitTarget, { 0.0f, 1.0f, 0.0f });
+			return glm::lookAt(eye, m_orbitTarget, {0.0f, 1.0f, 0.0f});
 		}
 
 		// Free and Manual share the same forward-based view matrix.
-		return glm::lookAt(m_position, m_position + GetForward(), { 0.0f, 1.0f, 0.0f });
+		return glm::lookAt(m_position, m_position + GetForward(), {0.0f, 1.0f, 0.0f});
 	}
 
 	glm::mat4 Camera::GetProjectionMatrix(float aspect) const

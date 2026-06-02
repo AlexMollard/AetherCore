@@ -42,7 +42,7 @@ namespace aether
 		const GraphicsPipeline* pipeline = nullptr;
 		const Mesh* mesh = nullptr; // must be indexed; null draws are not supported
 		std::uint32_t instanceCount = 1;
-		glm::mat4 modelMatrix{ 1.0f };             // per-object world transform
+		glm::mat4 modelMatrix{1.0f};               // per-object world transform
 		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
 		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase; -1 = not skinned
 		std::uint32_t skinJointCount = 0;          // number of joints in the skin
@@ -149,7 +149,10 @@ namespace aether
 			m_multiFrameAddrs[2] = addrs[2];
 		}
 
-		[[nodiscard]] std::uint32_t GetMaxDraws() const { return m_maxDraws; }
+		[[nodiscard]] std::uint32_t GetMaxDraws() const
+		{
+			return m_maxDraws;
+		}
 
 		// Emit graphics draws from indirect output.
 		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
@@ -183,9 +186,9 @@ namespace aether
 		CullContracts::Batch* m_batchDescMapped = nullptr;
 
 		// Device-local outputs consumed by draw/compute.
-		UniqueBuffer m_outputIndirectBuffer; // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
-		UniqueBuffer m_skinPaletteBuffer;    // glm::mat4[] global skin palette pool (device-local)
-		UniqueBuffer m_skinCopyJobBuffer;    // AnimationContracts::SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
+		UniqueBuffer m_outputIndirectBuffer;       // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
+		UniqueBuffer m_skinPaletteBuffer;          // glm::mat4[] global skin palette pool (device-local)
+		UniqueBuffer m_skinCopyJobBuffer;          // AnimationContracts::SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
 		UniqueBuffer m_nodeGlobalTransformsBuffer; // float4x4[] per-node global transforms (flatten pass output)
 
 		AnimationContracts::SkinCopyJob* m_skinCopyJobsMapped = nullptr;
@@ -212,17 +215,18 @@ namespace aether
 		// Cached per-frame addresses/state for FlushDraw.
 		VkDeviceAddress m_multiFrameAddrs[3] = {};
 		VkDeviceAddress m_cachedFrameAddr = 0;
-		VkDeviceAddress m_cachedInstanceDataAddr = 0; // BDA of DrawContracts::InstanceData[0] for current frame slot
-		VkDeviceAddress m_cachedSkinPaletteAddr = 0;  // BDA of global skin palette mat4[0] for current frame slot
+		VkDeviceAddress m_cachedInstanceDataAddr = 0;         // BDA of DrawContracts::InstanceData[0] for current frame slot
+		VkDeviceAddress m_cachedSkinPaletteAddr = 0;          // BDA of global skin palette mat4[0] for current frame slot
 		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
-		VkDeviceAddress m_cachedDrawBase = 0;           // frameSlot * maxDraws
-		VkDeviceAddress m_cachedBatchBase = 0;          // frameSlot * maxBatches
+		VkDeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
+		VkDeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr.
-		void FlushDrawImpl(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
+		void FlushDrawImpl(
+		        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

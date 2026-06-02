@@ -76,9 +76,9 @@ namespace aether
 		if ((out.m_usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
 		{
 			const VkBufferDeviceAddressInfo addressInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-				.pNext = nullptr,
-				.buffer = out.m_buffer,
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .pNext = nullptr,
+			        .buffer = out.m_buffer,
 			};
 			out.m_deviceAddress = vkGetBufferDeviceAddress(device, &addressInfo);
 		}
@@ -89,13 +89,13 @@ namespace aether
 	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName)
 	{
 		const VkBufferCreateInfo bufInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = size,
-			.usage = usage,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = size,
+		        .usage = usage,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO,
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
 		};
 		auto result = Create(allocator, device, bufInfo, allocInfo);
 		if (result && debugName)
@@ -108,12 +108,12 @@ namespace aether
 	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName)
 	{
 		const VkBufferCreateInfo bufInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = size,
-			.usage = usage,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = size,
+		        .usage = usage,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		auto result = Create(allocator, device, bufInfo, allocInfo);
 		if (result && debugName)
@@ -130,10 +130,10 @@ namespace aether
 			return;
 		}
 		const VkDebugUtilsObjectNameInfoEXT info{
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_BUFFER,
-			.objectHandle = reinterpret_cast<std::uint64_t>(m_buffer),
-			.pObjectName = name,
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		        .objectType = VK_OBJECT_TYPE_BUFFER,
+		        .objectHandle = reinterpret_cast<std::uint64_t>(m_buffer),
+		        .pObjectName = name,
 		};
 		s_setObjectNameFn(m_device, &info);
 	}

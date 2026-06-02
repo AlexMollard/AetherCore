@@ -19,13 +19,13 @@ namespace aether
 		m_allocator = ctx.GetAllocator();
 
 		const VkBufferCreateInfo bufferInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = sizeof(FrameConstants),
-			.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = sizeof(FrameConstants),
+		        .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO,
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
 		};
 
 		for (std::uint32_t i = 0; i < kFrameCount; ++i)
@@ -35,8 +35,8 @@ namespace aether
 			m_frames[i].mapped = m_frames[i].buffer.GetAllocationInfo().pMappedData;
 
 			const VkBufferDeviceAddressInfo addrInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-				.buffer = m_frames[i].buffer.Get(),
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .buffer = m_frames[i].buffer.Get(),
 			};
 			m_frames[i].address = vkGetBufferDeviceAddress(m_device, &addrInfo);
 		}

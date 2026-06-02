@@ -203,13 +203,40 @@ namespace aether
 		}
 
 		// CPU accessors for bind pose data (debug/validation).
-		[[nodiscard]] const std::vector<glm::vec4>& GetBindTranslations() const { return m_bindTranslations; }
-		[[nodiscard]] const std::vector<glm::vec4>& GetBindRotations() const { return m_bindRotations; }
-		[[nodiscard]] const std::vector<glm::vec4>& GetBindScales() const { return m_bindScales; }
-		[[nodiscard]] const std::vector<std::int32_t>& GetNodeParents() const { return m_nodeParents; }
-		[[nodiscard]] const std::vector<glm::mat4>& GetSkinInverseBinds() const { return m_skinInverseBinds; }
-		[[nodiscard]] const std::vector<std::uint32_t>& GetSkinJoints() const { return m_skinJoints; }
-		[[nodiscard]] const std::vector<GpuSkinMeta>& GetSkinMetas() const { return m_skinMetas; }
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindTranslations() const
+		{
+			return m_bindTranslations;
+		}
+
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindRotations() const
+		{
+			return m_bindRotations;
+		}
+
+		[[nodiscard]] const std::vector<glm::vec4>& GetBindScales() const
+		{
+			return m_bindScales;
+		}
+
+		[[nodiscard]] const std::vector<std::int32_t>& GetNodeParents() const
+		{
+			return m_nodeParents;
+		}
+
+		[[nodiscard]] const std::vector<glm::mat4>& GetSkinInverseBinds() const
+		{
+			return m_skinInverseBinds;
+		}
+
+		[[nodiscard]] const std::vector<std::uint32_t>& GetSkinJoints() const
+		{
+			return m_skinJoints;
+		}
+
+		[[nodiscard]] const std::vector<GpuSkinMeta>& GetSkinMetas() const
+		{
+			return m_skinMetas;
+		}
 
 	private:
 		GpuHeap m_heap;
@@ -229,8 +256,8 @@ namespace aether
 		VkDeviceAddress m_depthSortedNodesAddr = 0;
 		VkDeviceAddress m_depthRangesAddr = 0;
 
-		std::vector<GpuClip> m_clips;         // CPU-side copy for GetClipName()/GetClipDuration()
-		std::vector<GpuSkinMeta> m_skinMetas; // CPU-side copy for GetSkinJointCount()
+		std::vector<GpuClip> m_clips;              // CPU-side copy for GetClipName()/GetClipDuration()
+		std::vector<GpuSkinMeta> m_skinMetas;      // CPU-side copy for GetSkinJointCount()
 		std::vector<glm::vec4> m_bindTranslations; // CPU-side copy for debug
 		std::vector<glm::vec4> m_bindRotations;    // CPU-side copy for debug
 		std::vector<glm::vec4> m_bindScales;       // CPU-side copy for debug

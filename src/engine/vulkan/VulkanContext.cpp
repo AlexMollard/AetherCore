@@ -15,7 +15,6 @@
 // #define VULKAN_GPU_DEBUG
 // #define VULKAN_CPU_DEBUG
 
-
 #if defined(VULKAN_GPU_DEBUG) && defined(VULKAN_CPU_DEBUG)
 #	error "VULKAN_GPU_DEBUG and VULKAN_CPU_DEBUG are mutually exclusive"
 #endif
@@ -126,7 +125,7 @@ namespace aether
 		requiredFeatures10.multiDrawIndirect = VK_TRUE;
 		requiredFeatures10.drawIndirectFirstInstance = VK_TRUE;
 
-		vkb::PhysicalDeviceSelector selector{ *m_instance };
+		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
 #ifdef TRACY_ENABLE
 		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
@@ -146,11 +145,11 @@ namespace aether
 		}
 
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
-			.maintenance9 = VK_TRUE,
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
+		        .maintenance9 = VK_TRUE,
 		};
 
-		vkb::DeviceBuilder deviceBuilder{ physicalDeviceResult.value() };
+		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
@@ -190,7 +189,8 @@ namespace aether
 		}
 		m_presentQueue = presentQueueResult.value();
 
-		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")), reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
+		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")),
+		        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
 
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		CommandRecorder::SetObjectNameFunction(setObjectNameFn);
@@ -212,8 +212,8 @@ namespace aether
 		// so VRAM usage is visible alongside CPU heap allocations.
 #ifdef TRACY_ENABLE
 		static const VmaDeviceMemoryCallbacks kTracyVmaCallbacks{
-			.pfnAllocate = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize size, void*) { AE_PROFILE_ALLOC_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), static_cast<std::size_t>(size), "GPU"); },
-			.pfnFree = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize, void*) { AE_PROFILE_FREE_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), "GPU"); },
+		        .pfnAllocate = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize size, void*) { AE_PROFILE_ALLOC_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), static_cast<std::size_t>(size), "GPU"); },
+		        .pfnFree = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize, void*) { AE_PROFILE_FREE_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), "GPU"); },
 		};
 #endif
 

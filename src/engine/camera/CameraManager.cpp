@@ -10,8 +10,8 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		const uint32_t id = m_nextId++;
-		m_cameras.emplace(id, Camera{ desc });
-		return CameraHandle{ id };
+		m_cameras.emplace(id, Camera{desc});
+		return CameraHandle{id};
 	}
 
 	void CameraManager::Destroy(CameraHandle handle)
@@ -78,7 +78,7 @@ namespace aether
 		{
 			return cam->GetViewProjectionMatrix(aspect);
 		}
-		return glm::mat4{ 1.0f };
+		return glm::mat4{1.0f};
 	}
 
 	glm::mat4 CameraManager::GetMainView() const
@@ -87,7 +87,7 @@ namespace aether
 		{
 			return cam->GetViewMatrix();
 		}
-		return glm::mat4{ 1.0f };
+		return glm::mat4{1.0f};
 	}
 
 	glm::mat4 CameraManager::GetMainProjection(float aspect) const
@@ -96,7 +96,7 @@ namespace aether
 		{
 			return cam->GetProjectionMatrix(aspect);
 		}
-		return glm::mat4{ 1.0f };
+		return glm::mat4{1.0f};
 	}
 
 	void CameraManager::Update(const Input& input, float dt)

@@ -49,7 +49,7 @@ namespace aether
 			}
 			else
 			{
-				m_targetDuration = Duration{ 0 };
+				m_targetDuration = Duration{0};
 			}
 			// Reset so the first Wait() after a rate change re-anchors the deadline
 			// rather than trying to hit a deadline that may now be in the distant past.
@@ -114,9 +114,9 @@ namespace aether
 		// then we spin for the final stretch.  2 ms is a safe margin on Windows
 		// where timer resolution without timeBeginPeriod can be ~15 ms by default,
 		// and ~1-2 ms when the scheduler wakes on a 1 ms period.
-		static constexpr Duration kSpinThreshold{ std::chrono::duration_cast<Duration>(std::chrono::milliseconds(2)) };
+		static constexpr Duration kSpinThreshold{std::chrono::duration_cast<Duration>(std::chrono::milliseconds(2))};
 
-		Duration m_targetDuration{ 0 };
+		Duration m_targetDuration{0};
 		TimePoint m_nextFrameTime{};
 		bool m_initialised = false;
 	};

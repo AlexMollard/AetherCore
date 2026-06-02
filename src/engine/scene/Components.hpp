@@ -19,7 +19,7 @@ namespace aether
 	// World-space transform (model matrix).
 	struct TransformComponent
 	{
-		glm::mat4 localToWorld{ 1.0f };
+		glm::mat4 localToWorld{1.0f};
 	};
 
 	// Reference to a GPU vertex/index buffer.

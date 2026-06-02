@@ -40,19 +40,19 @@ inline std::vector<void (*)()>& GetModuleRegistrars()
 template<typename C>
 static void world_add_component(aether::World* w, uint32_t id)
 {
-	w->Emplace<C>(aether::Entity{ id });
+	w->Emplace<C>(aether::Entity{id});
 }
 
 template<typename C>
 static bool world_has_component(aether::World* w, uint32_t id)
 {
-	return w->Has<C>(aether::Entity{ id });
+	return w->Has<C>(aether::Entity{id});
 }
 
 template<typename C>
 static void world_remove_component(aether::World* w, uint32_t id)
 {
-	w->Remove<C>(aether::Entity{ id });
+	w->Remove<C>(aether::Entity{id});
 }
 
 // ── DasModuleBase ──────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ static void for_each_components(aether::World* w, const das::TBlock<void, uint32
 // BIND_FOR_EACH("name", ComponentType...)  -- used inside DasModuleBase ctor
 // Expands to a Bind<> call that registers for_each_name() in the library.
 #define BIND_FOR_EACH(NAME, ...) \
-    Bind<for_each_components<__VA_ARGS__>>(lib, "for_each_" NAME, SE::accessExternal); \
+    Bind<for_each_components<__VA_ARGS__>>(lib, "for_each_" NAME, SE::accessExternal);
 
 // BIND_COMPONENT("name", ComponentType)
 // Expands to three Bind<> calls inside a DasModuleBase constructor (lib must be in scope):

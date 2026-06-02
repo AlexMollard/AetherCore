@@ -74,15 +74,15 @@ namespace aether::app
 			const float length = glm::length(delta);
 			if (length < 1e-5f)
 			{
-				return glm::translate(glm::mat4{ 1.0f }, start);
+				return glm::translate(glm::mat4{1.0f}, start);
 			}
 
 			const glm::vec3 direction = delta / length;
-			const glm::vec3 zAxis = glm::vec3{ 0.0f, 0.0f, 1.0f };
+			const glm::vec3 zAxis = glm::vec3{0.0f, 0.0f, 1.0f};
 			const glm::quat rotation = glm::rotation(zAxis, direction);
-			glm::mat4 transform = glm::translate(glm::mat4{ 1.0f }, start + delta * 0.5f);
+			glm::mat4 transform = glm::translate(glm::mat4{1.0f}, start + delta * 0.5f);
 			transform = transform * glm::mat4_cast(rotation);
-			transform = glm::scale(transform, glm::vec3{ thickness, thickness, length });
+			transform = glm::scale(transform, glm::vec3{thickness, thickness, length});
 			return transform;
 		}
 
@@ -131,8 +131,8 @@ namespace aether::app
 		}
 
 		const float yawRad = glm::radians(m_player.yaw);
-		const glm::vec3 forward = glm::normalize(glm::vec3{ -std::sin(yawRad), 0.0f, -std::cos(yawRad) });
-		const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3{ 0.0f, 1.0f, 0.0f }));
+		const glm::vec3 forward = glm::normalize(glm::vec3{-std::sin(yawRad), 0.0f, -std::cos(yawRad)});
+		const glm::vec3 right = glm::normalize(glm::cross(forward, glm::vec3{0.0f, 1.0f, 0.0f}));
 
 		if (m_input->IsKeyDown(aether::Key::W))
 		{
@@ -153,7 +153,7 @@ namespace aether::app
 
 		if (aether::Camera* camera = m_cameras->TryGet(m_playerCamera))
 		{
-			camera->SetPosition(m_player.position + glm::vec3{ 0.0f, m_player.headHeight, 0.0f });
+			camera->SetPosition(m_player.position + glm::vec3{0.0f, m_player.headHeight, 0.0f});
 			camera->SetYawPitch(m_player.yaw, m_player.pitch);
 		}
 	}
@@ -175,7 +175,7 @@ namespace aether::app
 		int width = 0;
 		int height = 0;
 		glfwGetFramebufferSize(handle, &width, &height);
-		glm::vec2 frameSize{ static_cast<float>(width), static_cast<float>(height) };
+		glm::vec2 frameSize{static_cast<float>(width), static_cast<float>(height)};
 
 		glm::vec2 mousePos = m_input->GetMousePos();
 		glm::vec3 rayOrigin;
@@ -205,11 +205,11 @@ namespace aether::app
 		aether::Camera* camera = m_cameras->TryGet(m_playerCamera);
 		if (!camera)
 		{
-			return m_player.position + glm::vec3{ 0.0f, m_player.headHeight, 0.0f };
+			return m_player.position + glm::vec3{0.0f, m_player.headHeight, 0.0f};
 		}
 
 		const glm::vec3 forward = glm::normalize(camera->GetForward());
-		return camera->GetPosition() + forward * 0.5f + glm::vec3{ 0.0f, -0.18f, 0.0f };
+		return camera->GetPosition() + forward * 0.5f + glm::vec3{0.0f, -0.18f, 0.0f};
 	}
 
 	void FishingGameSystem::OnRegister(aether::World& world)
@@ -223,7 +223,7 @@ namespace aether::app
 
 		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
 		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        m_services->Get<AssetManager>().CreateGraphicsPipeline({
@@ -263,7 +263,7 @@ namespace aether::app
 
 		// Water surface.
 		{
-			const glm::mat4 transform = glm::scale(glm::rotate(glm::mat4{ 1.0f }, glm::radians(-90.0f), glm::vec3{ 1.0f, 0.0f, 0.0f }), glm::vec3{ kWaterSize, kWaterSize, 1.0f });
+			const glm::mat4 transform = glm::scale(glm::rotate(glm::mat4{1.0f}, glm::radians(-90.0f), glm::vec3{1.0f, 0.0f, 0.0f}), glm::vec3{kWaterSize, kWaterSize, 1.0f});
 			m_waterEntity = aether::ecs::SpawnMesh(world, m_pipeline, *m_planeMesh, m_waterMaterial, transform);
 			world.EmplaceOrReplace<FishingEntityTag>(m_waterEntity, FishingEntityTag{});
 		}
@@ -296,16 +296,16 @@ namespace aether::app
 			world.EmplaceOrReplace<FishingEntityTag>(entity, FishingEntityTag{});
 			m_fishEntities.push_back(entity);
 
-			glm::mat4 fishXf = glm::translate(glm::mat4{ 1.0f }, agent.pos);
-			fishXf = glm::rotate(fishXf, agent.heading, glm::vec3{ 0.0f, 1.0f, 0.0f });
-			fishXf = glm::scale(fishXf, glm::vec3{ kFishScale });
-			world.EmplaceOrReplace<aether::TransformComponent>(entity, aether::TransformComponent{ .localToWorld = fishXf });
+			glm::mat4 fishXf = glm::translate(glm::mat4{1.0f}, agent.pos);
+			fishXf = glm::rotate(fishXf, agent.heading, glm::vec3{0.0f, 1.0f, 0.0f});
+			fishXf = glm::scale(fishXf, glm::vec3{kFishScale});
+			world.EmplaceOrReplace<aether::TransformComponent>(entity, aether::TransformComponent{.localToWorld = fishXf});
 		}
 
 		// Bobber.
 		{
 			m_bobberPos = glm::vec3(0.0f, kWaterLevel + kBobberHeight, 0.0f);
-			const glm::mat4 bobberXf = glm::scale(glm::translate(glm::mat4{ 1.0f }, m_bobberPos), glm::vec3{ kBobberScale });
+			const glm::mat4 bobberXf = glm::scale(glm::translate(glm::mat4{1.0f}, m_bobberPos), glm::vec3{kBobberScale});
 			m_bobberEntity = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_bobberMaterial, bobberXf);
 			world.EmplaceOrReplace<FishingEntityTag>(m_bobberEntity, FishingEntityTag{});
 		}
@@ -318,7 +318,7 @@ namespace aether::app
 
 		// Fishing line.
 		{
-			const glm::mat4 lineXf = glm::scale(glm::translate(glm::mat4{ 1.0f }, GetRodWorldOrigin()), glm::vec3{ 0.0f });
+			const glm::mat4 lineXf = glm::scale(glm::translate(glm::mat4{1.0f}, GetRodWorldOrigin()), glm::vec3{0.0f});
 			m_lineEntity = aether::ecs::SpawnMesh(world, m_pipeline, *m_cubeMesh, m_lineMaterial, lineXf);
 			world.EmplaceOrReplace<FishingEntityTag>(m_lineEntity, FishingEntityTag{});
 		}
@@ -335,8 +335,8 @@ namespace aether::app
 
 		m_bobberPos = GetRodWorldOrigin();
 
-		m_services->Get<Renderer>().SetDirectionalLight(glm::normalize(glm::vec3{ 0.4f, -1.0f, 0.25f }), 2.2f);
-		m_services->Get<Renderer>().SetAmbientLight(glm::vec3{ 0.22f, 0.28f, 0.35f });
+		m_services->Get<Renderer>().SetDirectionalLight(glm::normalize(glm::vec3{0.4f, -1.0f, 0.25f}), 2.2f);
+		m_services->Get<Renderer>().SetAmbientLight(glm::vec3{0.22f, 0.28f, 0.35f});
 	}
 
 	void FishingGameSystem::Update(aether::World& world, float dt)
@@ -385,10 +385,10 @@ namespace aether::app
 			const float maxArc = kCastArcBase + distanceFactor * kCastArcScale;
 			const float arcShape = glm::sin(glm::pi<float>() * t);
 			const float arc = maxArc * arcShape;
-			m_bobberPos = base + glm::vec3{ 0.0f, arc, 0.0f };
+			m_bobberPos = base + glm::vec3{0.0f, arc, 0.0f};
 			if (t >= 1.0f || glm::length(m_bobberPos - m_bobberTarget) < 0.2f)
 			{
-				m_bobberPos = m_bobberTarget + glm::vec3{ 0.0f, kBobberHeight, 0.0f };
+				m_bobberPos = m_bobberTarget + glm::vec3{0.0f, kBobberHeight, 0.0f};
 				m_bobberState = BobberState::Waiting;
 				std::uniform_real_distribution<float> waitDist(1.2f, 3.2f);
 				m_waitTimer = waitDist(m_rng);
@@ -498,7 +498,7 @@ namespace aether::app
 					agent.pos += glm::vec3(std::sin(agent.heading), 0.0f, std::cos(agent.heading)) * agent.speed * dt;
 					if (glm::length(agent.pos) > kFishWanderRadius)
 					{
-						agent.pos = glm::normalize(glm::vec3{ agent.pos.x, 0.0f, agent.pos.z }) * kFishWanderRadius;
+						agent.pos = glm::normalize(glm::vec3{agent.pos.x, 0.0f, agent.pos.z}) * kFishWanderRadius;
 					}
 				}
 			}
@@ -515,17 +515,17 @@ namespace aether::app
 			}
 
 			const FishAgent& agent = m_fishAgents[i];
-			glm::mat4 xf = glm::translate(glm::mat4{ 1.0f }, agent.pos + glm::vec3{ 0.0f, std::sin(agent.bobPhase) * 0.08f, 0.0f });
-			xf = glm::rotate(xf, agent.heading, glm::vec3{ 0.0f, 1.0f, 0.0f });
-			xf = glm::scale(xf, glm::vec3{ kFishScale });
+			glm::mat4 xf = glm::translate(glm::mat4{1.0f}, agent.pos + glm::vec3{0.0f, std::sin(agent.bobPhase) * 0.08f, 0.0f});
+			xf = glm::rotate(xf, agent.heading, glm::vec3{0.0f, 1.0f, 0.0f});
+			xf = glm::scale(xf, glm::vec3{kFishScale});
 			world.Get<aether::TransformComponent>(entity).localToWorld = xf;
 		}
 
 		// Apply bobber transform.
 		if (m_bobberEntity.IsValid())
 		{
-			glm::mat4 xf = glm::translate(glm::mat4{ 1.0f }, m_bobberPos);
-			xf = glm::scale(xf, glm::vec3{ kBobberScale });
+			glm::mat4 xf = glm::translate(glm::mat4{1.0f}, m_bobberPos);
+			xf = glm::scale(xf, glm::vec3{kBobberScale});
 			world.Get<aether::TransformComponent>(m_bobberEntity).localToWorld = xf;
 		}
 
@@ -536,7 +536,7 @@ namespace aether::app
 			glm::mat4 lineXf;
 			if (m_bobberState == BobberState::Ready)
 			{
-				lineXf = glm::scale(glm::translate(glm::mat4{ 1.0f }, rodOrigin), glm::vec3{ 0.0f });
+				lineXf = glm::scale(glm::translate(glm::mat4{1.0f}, rodOrigin), glm::vec3{0.0f});
 			}
 			else
 			{
@@ -563,7 +563,7 @@ namespace aether::app
 
 		for (const entt::entity e: toDestroy)
 		{
-			world.Destroy(aether::Entity{ static_cast<std::uint32_t>(entt::to_integral(e)) });
+			world.Destroy(aether::Entity{static_cast<std::uint32_t>(entt::to_integral(e))});
 		}
 
 		m_fishAgents.clear();

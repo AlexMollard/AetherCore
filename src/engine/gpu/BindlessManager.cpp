@@ -32,40 +32,40 @@ namespace aether
 		// ── Immutable linear sampler (binding 1) ──────────────────────────────
 		// Created before the layout so the handle can be embedded as immutable.
 		const VkSamplerCreateInfo samplerInfo{
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-			.mipLodBias = 0.0f,
-			.anisotropyEnable = VK_FALSE,
-			.compareEnable = VK_FALSE,
-			.minLod = 0.0f,
-			.maxLod = VK_LOD_CLAMP_NONE,
-			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-			.unnormalizedCoordinates = VK_FALSE,
+		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		        .magFilter = VK_FILTER_LINEAR,
+		        .minFilter = VK_FILTER_LINEAR,
+		        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+		        .mipLodBias = 0.0f,
+		        .anisotropyEnable = VK_FALSE,
+		        .compareEnable = VK_FALSE,
+		        .minLod = 0.0f,
+		        .maxLod = VK_LOD_CLAMP_NONE,
+		        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+		        .unnormalizedCoordinates = VK_FALSE,
 		};
 		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler) != VK_SUCCESS)
 		{
 			m_device = VK_NULL_HANDLE;
-			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.") };
+			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.")};
 		}
 
 		// ── Descriptor pool ───────────────────────────────────────────────────
 		const VkDescriptorPoolSize poolSizes[2] = {
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity },
-			{			    VK_DESCRIPTOR_TYPE_SAMPLER,          1 },
+		        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity},
+		        {VK_DESCRIPTOR_TYPE_SAMPLER, 1},
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-			.maxSets = 1,
-			.poolSizeCount = 2,
-			.pPoolSizes = poolSizes,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		        .pNext = nullptr,
+		        .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+		        .maxSets = 1,
+		        .poolSizeCount = 2,
+		        .pPoolSizes = poolSizes,
 		};
 
 		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
@@ -74,50 +74,50 @@ namespace aether
 			vkDestroySampler(m_device, m_linearSampler, nullptr);
 			m_linearSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
-			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.") };
+			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.")};
 		}
 
 		// ── Descriptor set layout ─────────────────────────────────────────────
 		// binding 0 - COMBINED_IMAGE_SAMPLER array (bindless image array)
 		// binding 1 - SAMPLER (immutable linear sampler, shared by most draws)
 		const VkDescriptorSetLayoutBinding bindings[2] = {
-			{
-             .binding = bindless::kSampledImageBinding, // 0
-			        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-             .descriptorCount = m_capacity,
-             .stageFlags = bindless::kDefaultStages,
-             .pImmutableSamplers = nullptr,
-			 },
-			{
-             .binding = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
-             .descriptorCount = 1,
-             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-             .pImmutableSamplers = &m_linearSampler, // embedded in the layout
-			},
+		        {
+		                .binding = bindless::kSampledImageBinding, // 0
+		                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		                .descriptorCount = m_capacity,
+		                .stageFlags = bindless::kDefaultStages,
+		                .pImmutableSamplers = nullptr,
+		        },
+		        {
+		                .binding = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+		                .descriptorCount = 1,
+		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                .pImmutableSamplers = &m_linearSampler, // embedded in the layout
+		        },
 		};
 
 		// VARIABLE_DESCRIPTOR_COUNT must be on the LAST binding; since binding 1
 		// (immutable linear sampler) is last and has a fixed count of 1, we drop
 		// VARIABLE_DESCRIPTOR_COUNT from binding 0 instead.
 		const VkDescriptorBindingFlags bindingFlags[2] = {
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
-			0, // immutable sampler needs no special flags
+		        VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT,
+		        0, // immutable sampler needs no special flags
 		};
 
 		const VkDescriptorSetLayoutBindingFlagsCreateInfo bindingFlagsInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.pNext = nullptr,
-			.bindingCount = 2,
-			.pBindingFlags = bindingFlags,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+		        .pNext = nullptr,
+		        .bindingCount = 2,
+		        .pBindingFlags = bindingFlags,
 		};
 
 		const VkDescriptorSetLayoutCreateInfo layoutCreateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.pNext = &bindingFlagsInfo,
-			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = 2,
-			.pBindings = bindings,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		        .pNext = &bindingFlagsInfo,
+		        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+		        .bindingCount = 2,
+		        .pBindings = bindings,
 		};
 
 		const VkResult layoutResult = vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_layout);
@@ -128,15 +128,15 @@ namespace aether
 			m_pool = VK_NULL_HANDLE;
 			m_linearSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
-			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(layoutResult), "Failed to create bindless descriptor layout.") };
+			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(layoutResult), "Failed to create bindless descriptor layout.")};
 		}
 
 		const VkDescriptorSetAllocateInfo allocateInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.pNext = nullptr,
-			.descriptorPool = m_pool,
-			.descriptorSetCount = 1,
-			.pSetLayouts = &m_layout,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		        .pNext = nullptr,
+		        .descriptorPool = m_pool,
+		        .descriptorSetCount = 1,
+		        .pSetLayouts = &m_layout,
 		};
 
 		const VkResult setResult = vkAllocateDescriptorSets(m_device, &allocateInfo, &m_set);
@@ -149,7 +149,7 @@ namespace aether
 			m_pool = VK_NULL_HANDLE;
 			m_linearSampler = VK_NULL_HANDLE;
 			m_device = VK_NULL_HANDLE;
-			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(setResult), "Failed to allocate bindless descriptor set.") };
+			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(setResult), "Failed to allocate bindless descriptor set.")};
 		}
 
 		m_slotAllocated.assign(m_capacity, false);
@@ -190,7 +190,7 @@ namespace aether
 			m_linearSampler = VK_NULL_HANDLE;
 		}
 
-		for (const auto& [key, sampler] : m_samplerCache)
+		for (const auto& [key, sampler]: m_samplerCache)
 		{
 			vkDestroySampler(m_device, sampler, nullptr);
 		}
@@ -241,12 +241,12 @@ namespace aether
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
+			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
 
 		if (m_freeSlots.empty())
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager is out of sampled-image slots.") };
+			return Unexpected{AetherError::Engine("BindlessManager is out of sampled-image slots.")};
 		}
 
 		const std::uint32_t slot = m_freeSlots.back();
@@ -260,10 +260,10 @@ namespace aether
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
+			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
 
-		const SamplerKey key{ filter, mipmapMode, addressMode };
+		const SamplerKey key{filter, mipmapMode, addressMode};
 		const auto it = m_samplerCache.find(key);
 		if (it != m_samplerCache.end())
 		{
@@ -271,26 +271,26 @@ namespace aether
 		}
 
 		const VkSamplerCreateInfo samplerInfo{
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = filter,
-			.minFilter = filter,
-			.mipmapMode = mipmapMode,
-			.addressModeU = addressMode,
-			.addressModeV = addressMode,
-			.addressModeW = addressMode,
-			.mipLodBias = 0.0f,
-			.anisotropyEnable = VK_FALSE,
-			.compareEnable = VK_FALSE,
-			.minLod = 0.0f,
-			.maxLod = VK_LOD_CLAMP_NONE,
-			.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
-			.unnormalizedCoordinates = VK_FALSE,
+		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		        .magFilter = filter,
+		        .minFilter = filter,
+		        .mipmapMode = mipmapMode,
+		        .addressModeU = addressMode,
+		        .addressModeV = addressMode,
+		        .addressModeW = addressMode,
+		        .mipLodBias = 0.0f,
+		        .anisotropyEnable = VK_FALSE,
+		        .compareEnable = VK_FALSE,
+		        .minLod = 0.0f,
+		        .maxLod = VK_LOD_CLAMP_NONE,
+		        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
+		        .unnormalizedCoordinates = VK_FALSE,
 		};
 
 		VkSampler sampler = VK_NULL_HANDLE;
 		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
 		{
-			return Unexpected{ AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.") };
+			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.")};
 		}
 
 		m_samplerCache[key] = sampler;
@@ -357,36 +357,36 @@ namespace aether
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager is not initialized.") };
+			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
 
 		if (slot >= m_capacity)
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager slot index out of range.") };
+			return Unexpected{AetherError::Engine("BindlessManager slot index out of range.")};
 		}
 
 		if (!m_slotAllocated[slot])
 		{
-			return Unexpected{ AetherError::Engine("BindlessManager slot must be allocated before update.") };
+			return Unexpected{AetherError::Engine("BindlessManager slot must be allocated before update.")};
 		}
 
 		const VkDescriptorImageInfo imageInfo{
-			.sampler = sampler,
-			.imageView = imageView,
-			.imageLayout = imageLayout,
+		        .sampler = sampler,
+		        .imageView = imageView,
+		        .imageLayout = imageLayout,
 		};
 
 		const VkWriteDescriptorSet write{
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.pNext = nullptr,
-			.dstSet = m_set,
-			.dstBinding = bindless::kSampledImageBinding,
-			.dstArrayElement = slot,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			.pImageInfo = &imageInfo,
-			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr,
+		        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		        .pNext = nullptr,
+		        .dstSet = m_set,
+		        .dstBinding = bindless::kSampledImageBinding,
+		        .dstArrayElement = slot,
+		        .descriptorCount = 1,
+		        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		        .pImageInfo = &imageInfo,
+		        .pBufferInfo = nullptr,
+		        .pTexelBufferView = nullptr,
 		};
 
 		vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);

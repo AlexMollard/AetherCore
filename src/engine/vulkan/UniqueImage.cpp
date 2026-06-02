@@ -116,20 +116,20 @@ namespace aether
 	Expected<UniqueImage> UniqueImage::Create(VkDevice device, VmaAllocator allocator, const Desc& desc)
 	{
 		const VkImageCreateInfo imageInfo{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = desc.format,
-			.extent = { desc.extent.width, desc.extent.height, 1u },
-			.mipLevels = desc.mipLevels,
-			.arrayLayers = desc.arrayLayers,
-			.samples = desc.samples,
-			.tiling = VK_IMAGE_TILING_OPTIMAL,
-			.usage = desc.usage,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = desc.format,
+		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .mipLevels = desc.mipLevels,
+		        .arrayLayers = desc.arrayLayers,
+		        .samples = desc.samples,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = desc.usage,
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.usage = desc.memoryUsage,
+		        .usage = desc.memoryUsage,
 		};
 		Expected<UniqueImage> out = Create(allocator, imageInfo, allocInfo);
 		if (!out)
@@ -142,11 +142,11 @@ namespace aether
 		// Reset() (via ReleaseBindlessSampled) can destroy the view.
 		const VkImageAspectFlags aspect = DeduceAspect(desc.format);
 		const VkImageViewCreateInfo viewInfo{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = out->m_image,
-			.viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
-			.format = desc.format,
-			.subresourceRange = { aspect, 0, desc.mipLevels, 0, desc.arrayLayers },
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = out->m_image,
+		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+		        .format = desc.format,
+		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
 		};
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out->m_defaultView);
 		if (viewResult != VK_SUCCESS)
@@ -230,29 +230,28 @@ namespace aether
 		if (ownView)
 		{
 			const VkImageViewCreateInfo viewCreateInfo{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .pNext = nullptr,
-        .flags = 0,
-        .image = m_image,
-        .viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY
-                                      : VK_IMAGE_VIEW_TYPE_2D,
-        .format = m_format,
-        .components =
-            {
-                .r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                .a = VK_COMPONENT_SWIZZLE_IDENTITY,
-            },
-        .subresourceRange =
-            {
-                .aspectMask = aspectMask,
-                .baseMipLevel = 0,
-                .levelCount = m_mipLevels,
-                .baseArrayLayer = 0,
-                .layerCount = m_arrayLayers,
-            },
-    };
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			        .pNext = nullptr,
+			        .flags = 0,
+			        .image = m_image,
+			        .viewType = m_arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+			        .format = m_format,
+			        .components =
+			                {
+			                        .r = VK_COMPONENT_SWIZZLE_IDENTITY,
+			                        .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+			                        .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+			                        .a = VK_COMPONENT_SWIZZLE_IDENTITY,
+			                },
+			        .subresourceRange =
+			                {
+			                        .aspectMask = aspectMask,
+			                        .baseMipLevel = 0,
+			                        .levelCount = m_mipLevels,
+			                        .baseArrayLayer = 0,
+			                        .layerCount = m_arrayLayers,
+			                },
+			};
 			const VkResult viewResult = vkCreateImageView(device, &viewCreateInfo, nullptr, &view);
 			if (viewResult != VK_SUCCESS)
 			{
@@ -270,7 +269,7 @@ namespace aether
 			{
 				vkDestroyImageView(device, view, nullptr);
 			}
-			return Unexpected{ AetherError::Vulkan(0, "Failed to get cached sampler for bindless registration") };
+			return Unexpected{AetherError::Vulkan(0, "Failed to get cached sampler for bindless registration")};
 		}
 		VkSampler sampler = *samplerResult;
 

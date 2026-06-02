@@ -29,11 +29,11 @@ namespace aether::MeshGen
 				const float v = static_cast<float>(ny - row) * desc.uvScale;
 
 				data.vertices.push_back({
-				        .position = { x, y, 0.0f },
-				        .normal = { 0.0f, 0.0f, 1.0f },
-				        .tangent = { 1.0f, 0.0f, 0.0f, 1.0f },
-				        .uv = { u, v },
-				        .color = { 1.0f, 1.0f, 1.0f },
+				        .position = {x, y, 0.0f},
+				        .normal = {0.0f, 0.0f, 1.0f},
+				        .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
+				        .uv = {u, v},
+				        .color = {1.0f, 1.0f, 1.0f},
 				});
 			}
 		}
@@ -103,11 +103,11 @@ namespace aether::MeshGen
 				const float v = static_cast<float>(s) / static_cast<float>(stacks) * desc.uvScale;
 
 				data.vertices.push_back({
-				        .position = { x, y, z },
+				        .position = {x, y, z},
 				        .normal = normal,
-				        .tangent = { tangentXYZ.x, tangentXYZ.y, tangentXYZ.z, 1.0f },
-				        .uv = { u, v },
-				        .color = { 1.0f, 1.0f, 1.0f },
+				        .tangent = {tangentXYZ.x, tangentXYZ.y, tangentXYZ.z, 1.0f},
+				        .uv = {u, v},
+				        .color = {1.0f, 1.0f, 1.0f},
 				});
 			}
 		}
@@ -170,16 +170,16 @@ namespace aether::MeshGen
 				const float x = 0.5f * cosTheta;
 				const float z = 0.5f * sinTheta;
 
-				const glm::vec3 normal = { cosTheta, 0.0f, sinTheta };
-				const glm::vec3 tangent = { -sinTheta, 0.0f, cosTheta };
+				const glm::vec3 normal = {cosTheta, 0.0f, sinTheta};
+				const glm::vec3 tangent = {-sinTheta, 0.0f, cosTheta};
 				const float u = static_cast<float>(i) / static_cast<float>(n) * desc.uvScaleRadial;
 
 				data.vertices.push_back({
-				        .position = { x, y, z },
+				        .position = {x, y, z},
 				        .normal = normal,
-				        .tangent = { tangent.x, tangent.y, tangent.z, 1.0f },
-				        .uv = { u, v },
-				        .color = { 1.0f, 1.0f, 1.0f },
+				        .tangent = {tangent.x, tangent.y, tangent.z, 1.0f},
+				        .uv = {u, v},
+				        .color = {1.0f, 1.0f, 1.0f},
 				});
 			}
 		}
@@ -213,11 +213,11 @@ namespace aether::MeshGen
 				// Center vertex
 				const auto centerIdx = static_cast<std::uint32_t>(data.vertices.size());
 				data.vertices.push_back({
-				        .position = { 0.0f, y, 0.0f },
-				        .normal = { 0.0f, normalY, 0.0f },
-				        .tangent = { 1.0f, 0.0f, 0.0f, 1.0f },
-				        .uv = { 0.5f, 0.5f },
-				        .color = { 1.0f, 1.0f, 1.0f },
+				        .position = {0.0f, y, 0.0f},
+				        .normal = {0.0f, normalY, 0.0f},
+				        .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
+				        .uv = {0.5f, 0.5f},
+				        .color = {1.0f, 1.0f, 1.0f},
 				});
 
 				// Rim vertices - separate from the side-wall ring so normals point up/down.
@@ -235,11 +235,11 @@ namespace aether::MeshGen
 					const float v = sinTheta * 0.5f + 0.5f;
 
 					data.vertices.push_back({
-					        .position = { x, y, z },
-					        .normal = { 0.0f, normalY, 0.0f },
-					        .tangent = { 1.0f, 0.0f, 0.0f, 1.0f },
-					        .uv = { u, v },
-					        .color = { 1.0f, 1.0f, 1.0f },
+					        .position = {x, y, z},
+					        .normal = {0.0f, normalY, 0.0f},
+					        .tangent = {1.0f, 0.0f, 0.0f, 1.0f},
+					        .uv = {u, v},
+					        .color = {1.0f, 1.0f, 1.0f},
 					});
 				}
 

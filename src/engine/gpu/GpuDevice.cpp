@@ -23,7 +23,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_gfx = new GraphicsDevice();
-		m_gfx->Init(services, { .appName = config.appName, .enableVsync = config.enableVsync });
+		m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync});
 
 		services.Register<GpuDevice>(*this);
 		services.Register<VulkanContext>(m_gfx->GetVulkanContext());
@@ -116,7 +116,7 @@ namespace aether
 	GpuExtent2D GpuDevice::GetSwapchainExtent() const
 	{
 		const VkExtent2D extent = m_gfx->GetSwapchain().GetExtent();
-		return { extent.width, extent.height };
+		return {extent.width, extent.height};
 	}
 
 	bool GpuDevice::SwapchainNeedsRecreation() const
@@ -181,13 +181,13 @@ namespace aether
 	{
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		return FrameTarget{
-			.colorImage = swapchain.GetCurrentImage(),
-			.colorView = swapchain.GetCurrentImageView(),
-			.depthImage = swapchain.GetDepthImage(),
-			.depthView = swapchain.GetDepthImageView(),
-			.colorFormat = swapchain.GetImageFormat(),
-			.depthFormat = swapchain.GetDepthFormat(),
-			.extent = swapchain.GetExtent(),
+		        .colorImage = swapchain.GetCurrentImage(),
+		        .colorView = swapchain.GetCurrentImageView(),
+		        .depthImage = swapchain.GetDepthImage(),
+		        .depthView = swapchain.GetDepthImageView(),
+		        .colorFormat = swapchain.GetImageFormat(),
+		        .depthFormat = swapchain.GetDepthFormat(),
+		        .extent = swapchain.GetExtent(),
 		};
 	}
 

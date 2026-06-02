@@ -26,29 +26,29 @@ namespace aether
 		void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
 		{
 			const VkImageMemoryBarrier2 barrier{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-      .srcStageMask = srcStage,
-      .srcAccessMask = srcAccess,
-      .dstStageMask = dstStage,
-      .dstAccessMask = dstAccess,
-      .oldLayout = oldLayout,
-      .newLayout = newLayout,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+			        .srcStageMask = srcStage,
+			        .srcAccessMask = srcAccess,
+			        .dstStageMask = dstStage,
+			        .dstAccessMask = dstAccess,
+			        .oldLayout = oldLayout,
+			        .newLayout = newLayout,
+			        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			        .image = image,
+			        .subresourceRange =
+			                {
+			                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			                        .baseMipLevel = 0,
+			                        .levelCount = 1,
+			                        .baseArrayLayer = 0,
+			                        .layerCount = 1,
+			                },
+			};
 			const VkDependencyInfo dep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.imageMemoryBarrierCount = 1,
-				.pImageMemoryBarriers = &barrier,
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .imageMemoryBarrierCount = 1,
+			        .pImageMemoryBarriers = &barrier,
 			};
 			vkCmdPipelineBarrier2(cmd, &dep);
 		}
@@ -56,10 +56,10 @@ namespace aether
 		VkCommandBuffer BeginOneShot(VkDevice device, VkCommandPool pool)
 		{
 			const VkCommandBufferAllocateInfo ai{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				.commandPool = pool,
-				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-				.commandBufferCount = 1,
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			        .commandPool = pool,
+			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			        .commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
 			const VkResult allocResult = vkAllocateCommandBuffers(device, &ai, &cmd);
@@ -69,8 +69,8 @@ namespace aether
 			}
 
 			const VkCommandBufferBeginInfo bi{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 			};
 			const VkResult beginResult = vkBeginCommandBuffer(cmd, &bi);
 			if (beginResult != VK_SUCCESS)
@@ -90,9 +90,9 @@ namespace aether
 				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult))));
 			}
 			const VkSubmitInfo si{
-				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-				.commandBufferCount = 1,
-				.pCommandBuffers = &cmd,
+			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			        .commandBufferCount = 1,
+			        .pCommandBuffers = &cmd,
 			};
 			const VkResult submitResult = vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
 			if (submitResult != VK_SUCCESS)
@@ -285,13 +285,13 @@ namespace aether
 		const VkDeviceSize imageBytes = atlasW * atlasH;
 
 		const VkBufferCreateInfo stagingBufInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = imageBytes,
-			.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = imageBytes,
+		        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		};
 		const VmaAllocationCreateInfo stagingAllocInfo{
-			.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO,
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
 		};
 		VkBuffer stagingBuf{};
 		VmaAllocation stagingAlloc{};
@@ -305,19 +305,19 @@ namespace aether
 		std::memcpy(stagingInfo.pMappedData, atlasPixels.data(), imageBytes);
 
 		const VkImageCreateInfo imgInfo{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-			.imageType = VK_IMAGE_TYPE_2D,
-			.format = VK_FORMAT_R8_UNORM,
-			.extent = { atlasW, atlasH, 1 },
-			.mipLevels = 1,
-			.arrayLayers = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
-			.tiling = VK_IMAGE_TILING_OPTIMAL,
-			.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-			.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = VK_FORMAT_R8_UNORM,
+		        .extent = {atlasW, atlasH, 1},
+		        .mipLevels = 1,
+		        .arrayLayers = 1,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
-		const VmaAllocationCreateInfo imgAllocInfo{ .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE };
+		const VmaAllocationCreateInfo imgAllocInfo{.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE};
 		const VkResult imageResult = vmaCreateImage(allocator, &imgInfo, &imgAllocInfo, &m_image, &m_allocation, nullptr);
 		if (imageResult != VK_SUCCESS)
 		{
@@ -326,26 +326,26 @@ namespace aether
 		}
 
 		const VkImageViewCreateInfo viewInfo{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = m_image,
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = VK_FORMAT_R8_UNORM,
-      .components =
-          {
-              VK_COMPONENT_SWIZZLE_R,
-              VK_COMPONENT_SWIZZLE_ZERO,
-              VK_COMPONENT_SWIZZLE_ZERO,
-              VK_COMPONENT_SWIZZLE_ONE,
-          },
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = m_image,
+		        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+		        .format = VK_FORMAT_R8_UNORM,
+		        .components =
+		                {
+		                        VK_COMPONENT_SWIZZLE_R,
+		                        VK_COMPONENT_SWIZZLE_ZERO,
+		                        VK_COMPONENT_SWIZZLE_ZERO,
+		                        VK_COMPONENT_SWIZZLE_ONE,
+		                },
+		        .subresourceRange =
+		                {
+		                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+		                        .baseMipLevel = 0,
+		                        .levelCount = 1,
+		                        .baseArrayLayer = 0,
+		                        .layerCount = 1,
+		                },
+		};
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &m_view);
 		if (viewResult != VK_SUCCESS)
 		{
@@ -353,14 +353,14 @@ namespace aether
 		}
 
 		const VkSamplerCreateInfo samplerInfo{
-			.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-			.magFilter = VK_FILTER_LINEAR,
-			.minFilter = VK_FILTER_LINEAR,
-			.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-			.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-			.maxLod = VK_LOD_CLAMP_NONE,
+		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+		        .magFilter = VK_FILTER_LINEAR,
+		        .minFilter = VK_FILTER_LINEAR,
+		        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+		        .maxLod = VK_LOD_CLAMP_NONE,
 		};
 		const VkResult samplerResult = vkCreateSampler(device, &samplerInfo, nullptr, &m_sampler);
 		if (samplerResult != VK_SUCCESS)
@@ -369,9 +369,9 @@ namespace aether
 		}
 
 		const VkCommandPoolCreateInfo poolInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-			.queueFamilyIndex = uploadQueueFamily,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+		        .queueFamilyIndex = uploadQueueFamily,
 		};
 		VkCommandPool uploadPool{};
 		const VkResult poolResult = vkCreateCommandPool(device, &poolInfo, nullptr, &uploadPool);
@@ -385,16 +385,23 @@ namespace aether
 		TransitionImage(cmd, m_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
 		const VkBufferImageCopy copy{
-			.bufferOffset = 0,
-			.bufferRowLength = 0,
-			.bufferImageHeight = 0,
-			.imageSubresource = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1 },
-			.imageOffset = { 0, 0, 0 },
-			.imageExtent = { atlasW, atlasH, 1 },
+		        .bufferOffset = 0,
+		        .bufferRowLength = 0,
+		        .bufferImageHeight = 0,
+		        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+		        .imageOffset = {0, 0, 0},
+		        .imageExtent = {atlasW, atlasH, 1},
 		};
 		vkCmdCopyBufferToImage(cmd, stagingBuf, m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
-		TransitionImage(cmd, m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+		TransitionImage(cmd,
+		        m_image,
+		        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+		        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 		EndAndSubmit(device, uploadPool, uploadQueue, cmd);
 		vkDestroyCommandPool(device, uploadPool, nullptr);

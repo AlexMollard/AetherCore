@@ -18,10 +18,10 @@ namespace aether::ecs
 	inline aether::EntityHandle SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::Material material, const glm::mat4& transform = glm::mat4(1.0f))
 	{
 		return world.Spawn()
-		        .AddOrReplace<aether::PipelineComponent>(aether::PipelineComponent{ .pipeline = &pipeline })
-		        .AddOrReplace<aether::MeshComponent>(aether::MeshComponent{ .mesh = &mesh })
-		        .AddOrReplace<aether::MaterialComponent>(aether::MaterialComponent{ .material = material })
-		        .AddOrReplace<aether::TransformComponent>(aether::TransformComponent{ .localToWorld = transform });
+		        .AddOrReplace<aether::PipelineComponent>(aether::PipelineComponent{.pipeline = &pipeline})
+		        .AddOrReplace<aether::MeshComponent>(aether::MeshComponent{.mesh = &mesh})
+		        .AddOrReplace<aether::MaterialComponent>(aether::MaterialComponent{.material = material})
+		        .AddOrReplace<aether::TransformComponent>(aether::TransformComponent{.localToWorld = transform});
 	}
 
 	// Spawns all primitives of a LoadedModel and tags every entity with the provided

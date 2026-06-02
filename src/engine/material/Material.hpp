@@ -14,12 +14,12 @@ namespace aether
 		static constexpr std::uint32_t kNoTexture = std::numeric_limits<std::uint32_t>::max();
 
 		// ── PBR base factors ──────────────────────────────────────────────
-		glm::vec4 baseColorFactor{ 1.0f };
-		float metallicFactor{ 0.0f };
-		float roughnessFactor{ 0.5f };
-		float occlusionStrength{ 1.0f };
-		float alphaCutoff{ 0.5f };
-		glm::vec3 emissiveFactor{ 0.0f };
+		glm::vec4 baseColorFactor{1.0f};
+		float metallicFactor{0.0f};
+		float roughnessFactor{0.5f};
+		float occlusionStrength{1.0f};
+		float alphaCutoff{0.5f};
+		glm::vec3 emissiveFactor{0.0f};
 
 		// ── Flags ─────────────────────────────────────────────────────────
 		bool doubleSided = false;

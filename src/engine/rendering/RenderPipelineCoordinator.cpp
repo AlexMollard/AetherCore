@@ -27,7 +27,14 @@ namespace aether
 		ctx.cullPass.RegisterPass(ctx.graph, ctx.mainRenderQueue);
 
 		// Main camera forward lighting pass.
-		ctx.forwardPass.RegisterPass(ctx.graph, ctx.postProcessStack.GetHdrColor(), ctx.graph.GetSwapchainDepth(), ctx.mainRenderQueue, ctx.bindlessManager.GetSet(), std::move(ctx.getLightingSet), ctx.shadowService.GetShadowDepthImages(), ctx.localShadowService.GetAtlasRGImage());
+		ctx.forwardPass.RegisterPass(ctx.graph,
+		        ctx.postProcessStack.GetHdrColor(),
+		        ctx.graph.GetSwapchainDepth(),
+		        ctx.mainRenderQueue,
+		        ctx.bindlessManager.GetSet(),
+		        std::move(ctx.getLightingSet),
+		        ctx.shadowService.GetShadowDepthImages(),
+		        ctx.localShadowService.GetAtlasRGImage());
 
 		// RTT camera pass set.
 		ctx.renderTargetService.RegisterPasses();

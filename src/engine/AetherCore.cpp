@@ -41,12 +41,12 @@ namespace aether
 		m_settings.window.height = config.height;
 
 		// ── 1. Platform ─────────────────────────────────────────────────────
-		m_platform.Init({ .appName = config.appName, .width = config.width, .height = config.height });
+		m_platform.Init({.appName = config.appName, .width = config.width, .height = config.height});
 		m_services.Register<Window>(m_platform.GetWindow());
 		m_services.Register<Input>(m_platform.GetInput());
 
 		// ── 2. Graphics device ──────────────────────────────────────────────
-		m_gpu.Init(m_services, { .appName = config.appName, .enableVsync = config.enableVsync });
+		m_gpu.Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync});
 
 		// ── 3. Scene (ECS + legacy) ─────────────────────────────────────────
 		m_sceneSub.Init();

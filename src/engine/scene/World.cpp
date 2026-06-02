@@ -13,7 +13,7 @@ namespace aether
 
 	Entity World::FromEntt(entt::entity entity) noexcept
 	{
-		return Entity{ static_cast<std::uint32_t>(entt::to_integral(entity)) };
+		return Entity{static_cast<std::uint32_t>(entt::to_integral(entity))};
 	}
 
 	// ── Entity lifecycle ──────────────────────────────────────────────────────

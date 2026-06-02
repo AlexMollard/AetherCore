@@ -57,11 +57,11 @@ namespace aether
 		struct RenderObject
 		{
 			RenderObjectDesc desc;
-			glm::mat4 transform{ 1.0f };
+			glm::mat4 transform{1.0f};
 		};
 
 		std::unordered_map<std::size_t, RenderObject> m_objects;
 		std::size_t m_nextId = 1;
-		glm::mat4 m_viewProjection{ 1.0f };
+		glm::mat4 m_viewProjection{1.0f};
 	};
 } // namespace aether

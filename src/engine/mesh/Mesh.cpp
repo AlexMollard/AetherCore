@@ -15,10 +15,10 @@ namespace aether
 		VkCommandBuffer BeginOneTimeBuffer(VkDevice device, VkCommandPool pool)
 		{
 			const VkCommandBufferAllocateInfo allocInfo{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				.commandPool = pool,
-				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-				.commandBufferCount = 1,
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			        .commandPool = pool,
+			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			        .commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
 			const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
@@ -28,8 +28,8 @@ namespace aether
 			}
 
 			const VkCommandBufferBeginInfo beginInfo{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-				.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+			        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 			};
 			const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
 			if (beginResult != VK_SUCCESS)
@@ -50,9 +50,9 @@ namespace aether
 				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Mesh: failed to end one-time command buffer"));
 			}
 			const VkSubmitInfo submitInfo{
-				.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-				.commandBufferCount = 1,
-				.pCommandBuffers = &cmd,
+			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			        .commandBufferCount = 1,
+			        .pCommandBuffers = &cmd,
 			};
 			const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 			if (submitResult != VK_SUCCESS)
@@ -70,7 +70,16 @@ namespace aether
 
 		// Upload arbitrary bytes to a new device-local buffer via a transient staging buffer.
 		// Returns the device-local buffer and its BDA; the staging buffer is destroyed after submit.
-		VkBuffer UploadToDeviceLocal(VkDevice device, VmaAllocator allocator, VkQueue queue, VkCommandPool pool, VkBufferUsageFlags usage, const void* data, VkDeviceSize size, VmaAllocation& outAllocation, VkDeviceAddress& outDeviceAddress, const char* debugName = nullptr)
+		VkBuffer UploadToDeviceLocal(VkDevice device,
+		        VmaAllocator allocator,
+		        VkQueue queue,
+		        VkCommandPool pool,
+		        VkBufferUsageFlags usage,
+		        const void* data,
+		        VkDeviceSize size,
+		        VmaAllocation& outAllocation,
+		        VkDeviceAddress& outDeviceAddress,
+		        const char* debugName = nullptr)
 		{
 			// Staging: mapped, host-sequential-write.
 			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
@@ -79,12 +88,12 @@ namespace aether
 
 			// Destination: device-local with shader device address support.
 			const VkBufferCreateInfo destInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = size,
-				.usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			        .size = size,
+			        .usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			};
 			const VmaAllocationCreateInfo destAllocInfo{
-				.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+			        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 			};
 			VkBuffer dest = VK_NULL_HANDLE;
 			const VkResult createResult = vmaCreateBuffer(allocator, &destInfo, &destAllocInfo, &dest, &outAllocation, nullptr);
@@ -95,13 +104,13 @@ namespace aether
 			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(dest), VK_OBJECT_TYPE_BUFFER, debugName ? debugName : "Mesh.Buffer");
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
-			const VkBufferCopy region{ .size = size };
+			const VkBufferCopy region{.size = size};
 			vkCmdCopyBuffer(cmd, staging.Get(), dest, 1, &region);
 			EndAndSubmitOneTimeBuffer(device, pool, queue, cmd);
 
 			const VkBufferDeviceAddressInfo addrInfo{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-				.buffer = dest,
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .buffer = dest,
 			};
 			outDeviceAddress = vkGetBufferDeviceAddress(device, &addrInfo);
 
@@ -109,7 +118,8 @@ namespace aether
 		}
 	} // namespace
 
-	Mesh Mesh::CreateView(VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, VkDeviceAddress vertexDeviceAddress, VkDeviceAddress indexDeviceAddress)
+	Mesh Mesh::CreateView(
+	        VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, VkDeviceAddress vertexDeviceAddress, VkDeviceAddress indexDeviceAddress)
 	{
 		Mesh mesh;
 		// m_allocator intentionally left null - Destroy() skips vmaDestroyBuffer for views.

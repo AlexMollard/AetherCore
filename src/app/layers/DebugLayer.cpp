@@ -7,8 +7,8 @@
 #include <regex>
 
 #ifdef _WIN32
-#include <Windows.h>
-#include <shellapi.h>
+#	include <Windows.h>
+#	include <shellapi.h>
 #endif
 
 #include "AetherCore.hpp"
@@ -31,26 +31,26 @@ namespace aether::app
 		{
 			if (fps >= 55.f)
 			{
-				return { 0.40f, 0.72f, 0.46f, 1.f };
+				return {0.40f, 0.72f, 0.46f, 1.f};
 			}
 			if (fps >= 30.f)
 			{
-				return { 0.86f, 0.71f, 0.30f, 1.f };
+				return {0.86f, 0.71f, 0.30f, 1.f};
 			}
-			return { 0.80f, 0.33f, 0.30f, 1.f };
+			return {0.80f, 0.33f, 0.30f, 1.f};
 		}
 
 		glm::vec4 MsColor(float ms) noexcept
 		{
 			if (ms <= 16.667f)
 			{
-				return { 0.40f, 0.72f, 0.46f, 1.f };
+				return {0.40f, 0.72f, 0.46f, 1.f};
 			}
 			if (ms <= 25.f)
 			{
-				return { 0.86f, 0.71f, 0.30f, 1.f };
+				return {0.86f, 0.71f, 0.30f, 1.f};
 			}
-			return { 0.80f, 0.33f, 0.30f, 1.f };
+			return {0.80f, 0.33f, 0.30f, 1.f};
 		}
 	} // namespace
 
@@ -133,7 +133,9 @@ namespace aether::app
 		{
 			const auto dasPos = error.find(".das:", searchPos);
 			if (dasPos == std::string::npos)
+			{
 				break;
+			}
 
 			// Check if this is followed by a number (line number)
 			const std::size_t colonPos = dasPos + 4;
@@ -175,7 +177,9 @@ namespace aether::app
 
 			// Found a valid location, stop searching
 			if (outLine > 0)
+			{
 				break;
+			}
 
 			searchPos = dasPos + 1;
 		}
@@ -194,8 +198,7 @@ namespace aether::app
 		if (!std::filesystem::path(filePath).is_absolute())
 		{
 			std::error_code ec;
-			auto candidate = std::filesystem::weakly_canonical(
-				std::filesystem::current_path() / ".." / ".." / filePath, ec);
+			auto candidate = std::filesystem::weakly_canonical(std::filesystem::current_path() / ".." / ".." / filePath, ec);
 			if (!ec && std::filesystem::exists(candidate, ec))
 			{
 				resolved = candidate.string();
@@ -255,7 +258,7 @@ namespace aether::app
 			m_errorToasts.clear();
 		}
 
-		for (auto& err : errors)
+		for (auto& err: errors)
 		{
 			// Split multi-error compiler output into individual errors.
 			std::vector<std::string> individualErrors;
@@ -287,9 +290,12 @@ namespace aether::app
 				individualErrors.push_back(err.substr(lastPos));
 			}
 
-			for (const auto& singleErr : individualErrors)
+			for (const auto& singleErr: individualErrors)
 			{
-				if (singleErr.empty()) continue;
+				if (singleErr.empty())
+				{
+					continue;
+				}
 
 				ScriptErrorToast toast;
 				toast.message = singleErr;
@@ -299,7 +305,10 @@ namespace aether::app
 				while (pos < singleErr.size())
 				{
 					auto lineEnd = singleErr.find('\n', pos);
-					if (lineEnd == std::string::npos) lineEnd = singleErr.size();
+					if (lineEnd == std::string::npos)
+					{
+						lineEnd = singleErr.size();
+					}
 					std::string line = singleErr.substr(pos, lineEnd - pos);
 
 					// Trim leading whitespace.
@@ -322,12 +331,7 @@ namespace aether::app
 	{
 		UiRect PxRect(float l, float t, float r, float b)
 		{
-			return UiRect{
-				.anchorMin = { 0.f, 0.f },
-				.anchorMax = { 0.f, 0.f },
-				.offsetMinPx = { l, t },
-				.offsetMaxPx = { r, b }
-			};
+			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 0.f}, .offsetMinPx = {l, t}, .offsetMaxPx = {r, b}};
 		}
 	} // namespace
 
@@ -359,7 +363,7 @@ namespace aether::app
 		{
 			const auto next = static_cast<aether::TonemapMode>((static_cast<int>(context.Get<Renderer>().GetTonemapMode()) + 1) % 3);
 			context.Get<Renderer>().SetTonemapMode(next);
-			const char* names[] = { "Reinhard", "ACES Filmic", "Uncharted2" };
+			const char* names[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
 			AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
 		}
 
@@ -379,13 +383,13 @@ namespace aether::app
 		const float sw = static_cast<float>(extent.width);
 		const float sh = static_cast<float>(extent.height);
 
-		const glm::vec4 green{ 0.40f, 0.72f, 0.46f, 1.f };
-		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
-		const glm::vec4 red{ 0.80f, 0.33f, 0.30f, 1.f };
-		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
-		const glm::vec4 dimmed{ 0.50f, 0.60f, 0.69f, 1.f };
-		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
-		const glm::vec4 sectionFg{ 0.58f, 0.68f, 0.78f, 1.f };
+		const glm::vec4 green{0.40f, 0.72f, 0.46f, 1.f};
+		const glm::vec4 yellow{0.86f, 0.71f, 0.30f, 1.f};
+		const glm::vec4 red{0.80f, 0.33f, 0.30f, 1.f};
+		const glm::vec4 white{0.93f, 0.93f, 0.93f, 1.f};
+		const glm::vec4 dimmed{0.50f, 0.60f, 0.69f, 1.f};
+		const glm::vec4 bg{0.08f, 0.08f, 0.11f, 0.92f};
+		const glm::vec4 sectionFg{0.58f, 0.68f, 0.78f, 1.f};
 
 		// ── Error notification bar (always visible) ──────────────────────────
 		if (!m_errorToasts.empty())
@@ -396,7 +400,7 @@ namespace aether::app
 			const float barY = sh - kBarHeight - kMargin;
 
 			// Background bar
-			ui.DrawRect(PxRect(0.f, barY, sw, barY + kBarHeight), { 0.14f, 0.04f, 0.04f, 0.95f }, 4.f);
+			ui.DrawRect(PxRect(0.f, barY, sw, barY + kBarHeight), {0.14f, 0.04f, 0.04f, 0.95f}, 4.f);
 
 			// Error count text
 			const std::size_t count = m_errorToasts.size();
@@ -412,15 +416,15 @@ namespace aether::app
 				std::snprintf(errText.data(), errText.size(), "Script Errors (%zu): %s", count, summary.c_str());
 			}
 
-			ui.DrawText(errText.data(), UiPoint{ .anchor = { 0.f, 1.f }, .offsetPx = { kMargin, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f } }, 14.f, { 0.95f, 0.32f, 0.32f, 1.f });
+			ui.DrawText(errText.data(), UiPoint{.anchor = {0.f, 1.f}, .offsetPx = {kMargin, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f}}, 14.f, {0.95f, 0.32f, 0.32f, 1.f});
 
 			// Dismiss button
 			const float dismissX = sw - kDismissW - kMargin;
 			const float dismissTextX = sw - kDismissW - kMargin + 10.f;
 			const float dismissY = barY + (kBarHeight - 24.f) * 0.5f;
 
-			ui.DrawRect(PxRect(dismissX, dismissY, dismissX + kDismissW - 10.f, dismissY + 24.f), { 0.35f, 0.10f, 0.10f, 1.f }, 3.f);
-			ui.DrawText("Dismiss All", UiPoint{ .anchor = { 0.f, 1.f }, .offsetPx = { dismissTextX, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f } }, 13.f, { 0.85f, 0.55f, 0.55f, 1.f });
+			ui.DrawRect(PxRect(dismissX, dismissY, dismissX + kDismissW - 10.f, dismissY + 24.f), {0.35f, 0.10f, 0.10f, 1.f}, 3.f);
+			ui.DrawText("Dismiss All", UiPoint{.anchor = {0.f, 1.f}, .offsetPx = {dismissTextX, -kMargin - kBarHeight + (kBarHeight - 14.f) * 0.5f}}, 13.f, {0.85f, 0.55f, 0.55f, 1.f});
 
 			// Click detection for dismiss
 			if (input.IsMouseButtonPressed(MouseButton::Left))
@@ -462,30 +466,36 @@ namespace aether::app
 		const float avgFps = avgMs > 0.f ? 1000.f / avgMs : 0.f;
 
 		// Pass 1: measure
-		auto addRow = [&]() { contentH += rowH; };
-		auto addSep = [&]() { contentH += sepH; };
-		contentH += rowH; // Frame
-		contentH += rowH; // FPS
-		contentH += rowH; // Delta
-		contentH += rowH; // Avg FPS
-		contentH += rowH; // Min
-		contentH += rowH; // Max
+		auto addRow = [&]()
+		{
+			contentH += rowH;
+		};
+		auto addSep = [&]()
+		{
+			contentH += sepH;
+		};
+		contentH += rowH;       // Frame
+		contentH += rowH;       // FPS
+		contentH += rowH;       // Delta
+		contentH += rowH;       // Avg FPS
+		contentH += rowH;       // Min
+		contentH += rowH;       // Max
 		contentH += 76.f + 4.f; // histogram height + spacing
-		addSep(); // separator before RENDERER
-		contentH += rowH; // Tonemap
-		contentH += rowH; // FXAA
-		contentH += rowH; // Resolution
-		addSep(); // separator before CAMERA
-		contentH += rowH; // Position
-		contentH += rowH; // FOV
-		contentH += rowH; // Near
-		contentH += rowH; // Far
-		addSep(); // separator before LIGHTING
-		contentH += rowH; // Point Lights
-		contentH += rowH; // Spot Lights
-		contentH += rowH; // Sun Intensity
-		addSep(); // separator before SCRIPTING
-		contentH += 30.f; // Reload button
+		addSep();               // separator before RENDERER
+		contentH += rowH;       // Tonemap
+		contentH += rowH;       // FXAA
+		contentH += rowH;       // Resolution
+		addSep();               // separator before CAMERA
+		contentH += rowH;       // Position
+		contentH += rowH;       // FOV
+		contentH += rowH;       // Near
+		contentH += rowH;       // Far
+		addSep();               // separator before LIGHTING
+		contentH += rowH;       // Point Lights
+		contentH += rowH;       // Spot Lights
+		contentH += rowH;       // Sun Intensity
+		addSep();               // separator before SCRIPTING
+		contentH += 30.f;       // Reload button
 		contentH += padY;
 
 		const float panelH = contentH;
@@ -494,14 +504,14 @@ namespace aether::app
 		ui.DrawRect(PxRect(panelX, panelY, panelX + panelW, panelY + panelH), bg, 6.f);
 
 		// Border accent
-		ui.DrawRect(PxRect(panelX, panelY, panelX + 3.f, panelY + panelH), { 0.30f, 0.45f, 0.65f, 0.6f }, 6.f);
+		ui.DrawRect(PxRect(panelX, panelY, panelX + 3.f, panelY + panelH), {0.30f, 0.45f, 0.65f, 0.6f}, 6.f);
 
 		float y = panelY + padY;
 
 		auto drawLabelValue = [&](const char* label, const char* value, glm::vec4 valueColor)
 		{
-			ui.DrawText(label, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { panelX + padX, y } }, textSize, white);
-			ui.DrawText(value, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			ui.DrawText(label, UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {panelX + padX, y}}, textSize, white);
+			ui.DrawText(value, UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {col2X, y}}, textSize, valueColor);
 			y += rowH;
 		};
 
@@ -531,7 +541,7 @@ namespace aether::app
 			const float chartW = panelW - padX * 2.f;
 			const float chartH = 76.f;
 
-			ui.DrawRect(PxRect(chartX, chartY, chartX + chartW, chartY + chartH), { 0.12f, 0.12f, 0.15f, 1.f }, 3.f);
+			ui.DrawRect(PxRect(chartX, chartY, chartX + chartW, chartY + chartH), {0.12f, 0.12f, 0.15f, 1.f}, 3.f);
 
 			if (m_frameHistoryCount > 0)
 			{
@@ -549,11 +559,15 @@ namespace aether::app
 					const float bx = chartX + static_cast<float>(i) * barW;
 					const float by = chartY + chartH - barH;
 
-					glm::vec4 barColor{ 0.42f, 0.62f, 0.74f, 1.f };
+					glm::vec4 barColor{0.42f, 0.62f, 0.74f, 1.f};
 					if (val > 25.f)
-						barColor = { 0.80f, 0.33f, 0.30f, 1.f };
+					{
+						barColor = {0.80f, 0.33f, 0.30f, 1.f};
+					}
 					else if (val > 16.667f)
-						barColor = { 0.86f, 0.71f, 0.30f, 1.f };
+					{
+						barColor = {0.86f, 0.71f, 0.30f, 1.f};
+					}
 
 					ui.DrawRect(PxRect(bx, by, bx + std::max(barW - 1.f, 1.f), chartY + chartH), barColor);
 				}
@@ -562,12 +576,12 @@ namespace aether::app
 			// Reference lines at 16.667ms (60fps) and 33.333ms (30fps)
 			const float refY60 = chartY + chartH - (16.667f / 33.333f * chartH);
 			const float refY30 = chartY + chartH - (33.333f / 33.333f * chartH);
-			ui.DrawLine(UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, refY60 } }, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX + chartW, refY60 } }, 1.f, { 0.40f, 0.72f, 0.46f, 0.4f });
-			ui.DrawLine(UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, refY30 } }, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX + chartW, refY30 } }, 1.f, { 0.86f, 0.71f, 0.30f, 0.4f });
+			ui.DrawLine(UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {chartX, refY60}}, UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {chartX + chartW, refY60}}, 1.f, {0.40f, 0.72f, 0.46f, 0.4f});
+			ui.DrawLine(UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {chartX, refY30}}, UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {chartX + chartW, refY30}}, 1.f, {0.86f, 0.71f, 0.30f, 0.4f});
 
 			// Bottom label
 			std::snprintf(buf.data(), buf.size(), "Frame Time (0 - 33 ms)  |  avg: %.2f ms  |  ref: 60fps  30fps", avgMs);
-			ui.DrawText(buf.data(), UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { chartX, chartY + chartH + 2.f } }, 11.f, dimmed);
+			ui.DrawText(buf.data(), UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {chartX, chartY + chartH + 2.f}}, 11.f, dimmed);
 
 			y = chartY + chartH + 18.f;
 		}
@@ -604,7 +618,7 @@ namespace aether::app
 		else
 		{
 			y += rowH; // Position placeholder
-			ui.DrawText("No active camera", UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { panelX + padX, y - rowH * 3.f } }, textSize, dimmed);
+			ui.DrawText("No active camera", UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {panelX + padX, y - rowH * 3.f}}, textSize, dimmed);
 		}
 
 		// ── LIGHTING ─────────────────────────────────────────────────────────
@@ -628,12 +642,9 @@ namespace aether::app
 			const float btnH = 28.f;
 
 			// Button background
-			const bool hovered = input.IsMouseButtonDown(MouseButton::Left) ?
-				false :
-				(input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW &&
-					input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH);
+			const bool hovered = input.IsMouseButtonDown(MouseButton::Left) ? false : (input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW && input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH);
 
-			const glm::vec4 btnColor = hovered ? glm::vec4{ 0.25f, 0.30f, 0.40f, 1.f } : glm::vec4{ 0.20f, 0.24f, 0.30f, 1.f };
+			const glm::vec4 btnColor = hovered ? glm::vec4{0.25f, 0.30f, 0.40f, 1.f} : glm::vec4{0.20f, 0.24f, 0.30f, 1.f};
 			ui.DrawRect(PxRect(btnX, btnY, btnX + btnW, btnY + btnH), btnColor, 4.f);
 
 			// Button text centered
@@ -641,12 +652,10 @@ namespace aether::app
 			const float textW = ui.MeasureText(kBtnText, 13.f);
 			const float textBX = btnX + (btnW - textW) * 0.5f;
 			const float textBY = btnY + (btnH - textSize) * 0.5f;
-			ui.DrawText(kBtnText, UiPoint{ .anchor = { 0.f, 0.f }, .offsetPx = { textBX, textBY } }, textSize, white);
+			ui.DrawText(kBtnText, UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {textBX, textBY}}, textSize, white);
 
 			// Click detection
-			if (input.IsMouseButtonPressed(MouseButton::Left) &&
-				input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW &&
-				input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH)
+			if (input.IsMouseButtonPressed(MouseButton::Left) && input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW && input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH)
 			{
 				context.TryGet<scripting::ScriptingSubsystem>()->RequestReload();
 			}

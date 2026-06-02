@@ -213,12 +213,12 @@ namespace aether
 	// Out-of-line definitions (both classes must be complete first).
 	inline EntityHandle World::Spawn()
 	{
-		return EntityHandle{ *this, Create() };
+		return EntityHandle{*this, Create()};
 	}
 
 	inline EntityHandle World::Handle(Entity entity)
 	{
-		return EntityHandle{ *this, entity };
+		return EntityHandle{*this, entity};
 	}
 
 } // namespace aether

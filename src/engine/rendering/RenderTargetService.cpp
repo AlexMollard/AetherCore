@@ -39,8 +39,17 @@ namespace aether
 		m_targets.clear();
 	}
 
-	void RenderTargetService::BindRuntime(
-	        RenderGraph& graph, BindlessManager& bindlessManager, CameraManager& cameraManager, LightingManager& lightingManager, Renderer& renderer, MaterialBuffer& materialBuffer, const CullPass& cullPass, std::function<std::uint64_t()> getFrameIndex, const VkDevice device, const VkFormat depthFormat, const VkFormat forwardColorFormat)
+	void RenderTargetService::BindRuntime(RenderGraph& graph,
+	        BindlessManager& bindlessManager,
+	        CameraManager& cameraManager,
+	        LightingManager& lightingManager,
+	        Renderer& renderer,
+	        MaterialBuffer& materialBuffer,
+	        const CullPass& cullPass,
+	        std::function<std::uint64_t()> getFrameIndex,
+	        const VkDevice device,
+	        const VkFormat depthFormat,
+	        const VkFormat forwardColorFormat)
 	{
 		m_graph = &graph;
 		m_bindlessManager = &bindlessManager;
@@ -218,7 +227,7 @@ namespace aether
 				                return;
 			                }
 
-			                Camera* cam = m_cameraManager->TryGet(CameraHandle{ rit->second.cameraHandleRaw });
+			                Camera* cam = m_cameraManager->TryGet(CameraHandle{rit->second.cameraHandleRaw});
 			                if (cam == nullptr || !rit->second.constants)
 			                {
 				                return;

@@ -21,7 +21,7 @@ namespace aether
 	{
 		struct InstanceData
 		{
-			glm::mat4 model{ 1.0f };
+			glm::mat4 model{1.0f};
 			std::uint32_t materialIndex = 0xFFFFFFFFu;
 			std::uint32_t skinPaletteOffset = 0;
 			std::uint32_t skinJointCount = 0;
@@ -50,7 +50,7 @@ namespace aether
 		static_assert(offsetof(PushConstants, frameAddr) == 0);
 		static_assert(offsetof(PushConstants, instanceDataAddr) == 8);
 		static_assert(offsetof(PushConstants, skinPaletteAddr) == 16);
-	}
+	} // namespace DrawContracts
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Cull Contracts
@@ -145,7 +145,7 @@ namespace aether
 		static_assert(offsetof(MultiPushConstants, _pad0) == 68);
 
 		inline constexpr std::uint32_t kDebugForceVisibleBit = 1u << 0;
-	}
+	} // namespace CullContracts
 
 	// ─────────────────────────────────────────────────────────────────────────
 	// Animation Contracts
@@ -203,9 +203,9 @@ namespace aether
 
 		struct SampledNodePose
 		{
-			glm::vec4 translation{ 0.0f, 0.0f, 0.0f, 0.0f };
-			glm::vec4 rotation{ 0.0f, 0.0f, 0.0f, 1.0f };
-			glm::vec4 scale{ 1.0f, 1.0f, 1.0f, 0.0f };
+			glm::vec4 translation{0.0f, 0.0f, 0.0f, 0.0f};
+			glm::vec4 rotation{0.0f, 0.0f, 0.0f, 1.0f};
+			glm::vec4 scale{1.0f, 1.0f, 1.0f, 0.0f};
 		};
 
 		static_assert(sizeof(SampledNodePose) == 48, "SampledNodePose layout changed - update shaders/include/AnimationContracts.slangh.");
@@ -309,5 +309,5 @@ namespace aether
 		static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
 		static_assert(offsetof(PoseInitPush, jobCount) == 40);
 		static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
-	}
-}
+	} // namespace AnimationContracts
+} // namespace aether

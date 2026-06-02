@@ -145,7 +145,7 @@ namespace aether::coro
 
 		[[nodiscard]] write_awaiter write_async(T value)
 		{
-			return write_awaiter{ this, std::move(value) };
+			return write_awaiter{this, std::move(value)};
 		}
 
 		// Awaitable for reading.
@@ -194,7 +194,7 @@ namespace aether::coro
 
 		[[nodiscard]] read_awaiter read_async()
 		{
-			return read_awaiter{ this };
+			return read_awaiter{this};
 		}
 
 		// -- Write-side notification (for the producer to notify the consumer) --

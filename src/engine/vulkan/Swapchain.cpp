@@ -23,8 +23,8 @@ namespace aether
 		VkFormat PickDepthFormat(const VkPhysicalDevice physicalDevice)
 		{
 			constexpr VkFormat kCandidates[] = {
-				VK_FORMAT_D32_SFLOAT,
-				VK_FORMAT_D16_UNORM,
+			        VK_FORMAT_D32_SFLOAT,
+			        VK_FORMAT_D16_UNORM,
 			};
 
 			for (const VkFormat format: kCandidates)
@@ -49,9 +49,9 @@ namespace aether
 
 		auto buildSwapchain = [&](const VkPresentModeKHR presentMode)
 		{
-			vkb::SwapchainBuilder builder{ ctx.GetDevice() };
-			return builder.set_desired_format({ VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
-			        .add_fallback_format({ VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
+			vkb::SwapchainBuilder builder{ctx.GetDevice()};
+			return builder.set_desired_format({VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+			        .add_fallback_format({VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
 			        .set_desired_present_mode(presentMode)
 			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
 			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -79,42 +79,42 @@ namespace aether
 		VkDevice device = ctx.GetDevice().device;
 
 		const VkImageCreateInfo depthImageInfo{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = m_depthFormat,
-      .extent =
-          {
-              .width = m_swapchain.extent.width,
-              .height = m_swapchain.extent.height,
-              .depth = 1,
-          },
-      .mipLevels = 1,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_OPTIMAL,
-      .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-  };
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = m_depthFormat,
+		        .extent =
+		                {
+		                        .width = m_swapchain.extent.width,
+		                        .height = m_swapchain.extent.height,
+		                        .depth = 1,
+		                },
+		        .mipLevels = 1,
+		        .arrayLayers = 1,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
 		const VmaAllocationCreateInfo depthAllocInfo{
-			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		AE_EXPECT_OR_THROW(depthImage, UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo));
 		m_depthImage = std::move(depthImage);
 
 		const VkImageViewCreateInfo depthViewInfo{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-      .image = m_depthImage.Get(),
-      .viewType = VK_IMAGE_VIEW_TYPE_2D,
-      .format = m_depthFormat,
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = m_depthImage.Get(),
+		        .viewType = VK_IMAGE_VIEW_TYPE_2D,
+		        .format = m_depthFormat,
+		        .subresourceRange =
+		                {
+		                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
+		                        .baseMipLevel = 0,
+		                        .levelCount = 1,
+		                        .baseArrayLayer = 0,
+		                        .layerCount = 1,
+		                },
+		};
 		if (vkCreateImageView(device, &depthViewInfo, nullptr, &m_depthView) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "Failed to create depth image view."));
@@ -142,7 +142,7 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "Failed to allocate swapchain command buffer."));
 			}
 
-			const VkSemaphoreCreateInfo semInfo{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+			const VkSemaphoreCreateInfo semInfo{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 			if (vkCreateSemaphore(device, &semInfo, nullptr, &frame.imageAvailable) != VK_SUCCESS)
 			{
 				Throw(AetherError::Vulkan(0, "Failed to create image available semaphore."));
@@ -158,7 +158,7 @@ namespace aether
 		}
 
 		// One renderFinished semaphore per swapchain image.
-		const VkSemaphoreCreateInfo semInfo2{ .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		const VkSemaphoreCreateInfo semInfo2{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 		m_renderFinishedSemaphores.resize(m_images.size(), VK_NULL_HANDLE);
 		for (auto& sem: m_renderFinishedSemaphores)
 		{
@@ -290,8 +290,8 @@ namespace aether
 		}
 
 		const VkCommandBufferBeginInfo beginInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
 		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS)
 		{
@@ -301,7 +301,14 @@ namespace aether
 		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
 		// srcStage = COLOR_ATTACHMENT_OUTPUT: synchronizes with the imageAvailable semaphore
 		// wait (also at COLOR_ATTACHMENT_OUTPUT) and with the prior frame's present read.
-		vkutil::TransitionImage(frame.commandBuffer, m_images[m_imageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+		vkutil::TransitionImage(frame.commandBuffer,
+		        m_images[m_imageIndex],
+		        VK_IMAGE_LAYOUT_UNDEFINED,
+		        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		        VK_ACCESS_2_NONE,
+		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 		// Transition: UNDEFINED -> DEPTH_ATTACHMENT_OPTIMAL
 		// srcStage/srcAccess cover the previous frame's depth write even though we discard
@@ -332,7 +339,14 @@ namespace aether
 		VkCommandBuffer cmd = frame.commandBuffer;
 
 		// Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR
-		vkutil::TransitionImage(cmd, m_images[m_imageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, VK_ACCESS_2_NONE);
+		vkutil::TransitionImage(cmd,
+		        m_images[m_imageIndex],
+		        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+		        VK_ACCESS_2_NONE);
 
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
@@ -342,20 +356,20 @@ namespace aether
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
 
 		VkSemaphoreSubmitInfo imageWait{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = frame.imageAvailable,
-			.value = 0,
-			.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = frame.imageAvailable,
+		        .value = 0,
+		        .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		};
 
 		VkSemaphoreSubmitInfo extraWait{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = extraWaitSemaphore,
-			.value = extraWaitValue,
-			.stageMask = extraWaitStage,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = extraWaitSemaphore,
+		        .value = extraWaitValue,
+		        .stageMask = extraWaitStage,
 		};
 
-		VkSemaphoreSubmitInfo waitInfos[2] = { imageWait, extraWait };
+		VkSemaphoreSubmitInfo waitInfos[2] = {imageWait, extraWait};
 		std::uint32_t waitCount = 1;
 		if (extraWaitSemaphore != VK_NULL_HANDLE)
 		{
@@ -363,25 +377,25 @@ namespace aether
 		}
 
 		VkCommandBufferSubmitInfo cmdInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			.commandBuffer = cmd,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		        .commandBuffer = cmd,
 		};
 
 		VkSemaphoreSubmitInfo signalInfo{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = renderFinished,
-			.value = 0,
-			.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = renderFinished,
+		        .value = 0,
+		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};
 
 		VkSubmitInfo2 submit{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			.waitSemaphoreInfoCount = waitCount,
-			.pWaitSemaphoreInfos = waitInfos,
-			.commandBufferInfoCount = 1,
-			.pCommandBufferInfos = &cmdInfo,
-			.signalSemaphoreInfoCount = 1,
-			.pSignalSemaphoreInfos = &signalInfo,
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		        .waitSemaphoreInfoCount = waitCount,
+		        .pWaitSemaphoreInfos = waitInfos,
+		        .commandBufferInfoCount = 1,
+		        .pCommandBufferInfos = &cmdInfo,
+		        .signalSemaphoreInfoCount = 1,
+		        .pSignalSemaphoreInfos = &signalInfo,
 		};
 		{
 			const VkResult submitResult = vkQueueSubmit2(graphicsQueue, 1, &submit, frame.inFlight);
@@ -397,12 +411,12 @@ namespace aether
 		}
 
 		const VkPresentInfoKHR presentInfo{
-			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = &renderFinished,
-			.swapchainCount = 1,
-			.pSwapchains = &m_swapchain.swapchain,
-			.pImageIndices = &m_imageIndex,
+		        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		        .waitSemaphoreCount = 1,
+		        .pWaitSemaphores = &renderFinished,
+		        .swapchainCount = 1,
+		        .pSwapchains = &m_swapchain.swapchain,
+		        .pImageIndices = &m_imageIndex,
 		};
 		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
 		if (presentResult == VK_ERROR_DEVICE_LOST)

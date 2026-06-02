@@ -16,10 +16,10 @@ namespace aether
 {
 	struct LightingComputePush
 	{
-		glm::mat4 viewProj{ 1.0f };
-		glm::vec4 params0{ 0.0f }; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
-		glm::uvec4 params1{ 0u };  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
-		glm::uvec4 params2{ 0u };  // x=maxLightsPerTile
+		glm::mat4 viewProj{1.0f};
+		glm::vec4 params0{0.0f}; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
+		glm::uvec4 params1{0u};  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+		glm::uvec4 params2{0u};  // x=maxLightsPerTile
 	};
 
 	void LightingManager::Initialize(const VulkanContext& context)
@@ -31,30 +31,30 @@ namespace aether
 		const VkDevice device = m_context->GetDevice().device;
 
 		const VkDescriptorSetLayoutBinding bindings[] = {
-			{
-             .binding = 0,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .descriptorCount = 1,
-             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			 },
-			{
-             .binding = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .descriptorCount = 1,
-             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			 },
-			{
-             .binding = 2,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .descriptorCount = 1,
-             .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
-			 },
+		        {
+		                .binding = 0,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorCount = 1,
+		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		        },
+		        {
+		                .binding = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorCount = 1,
+		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		        },
+		        {
+		                .binding = 2,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorCount = 1,
+		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		        },
 		};
 
 		const VkDescriptorSetLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.bindingCount = static_cast<std::uint32_t>(std::size(bindings)),
-			.pBindings = bindings,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		        .bindingCount = static_cast<std::uint32_t>(std::size(bindings)),
+		        .pBindings = bindings,
 		};
 		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_setLayout) != VK_SUCCESS)
 		{
@@ -62,14 +62,14 @@ namespace aether
 		}
 
 		const VkDescriptorPoolSize poolSize{
-			.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			.descriptorCount = 3u * kMaxFramesInFlight,
+		        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		        .descriptorCount = 3u * kMaxFramesInFlight,
 		};
 		const VkDescriptorPoolCreateInfo poolInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-			.maxSets = kMaxFramesInFlight,
-			.poolSizeCount = 1,
-			.pPoolSizes = &poolSize,
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		        .maxSets = kMaxFramesInFlight,
+		        .poolSizeCount = 1,
+		        .pPoolSizes = &poolSize,
 		};
 		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
 		{
@@ -79,10 +79,10 @@ namespace aether
 		std::array<VkDescriptorSetLayout, kMaxFramesInFlight> layouts{};
 		layouts.fill(m_setLayout);
 		const VkDescriptorSetAllocateInfo allocInfo{
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-			.descriptorPool = m_descriptorPool,
-			.descriptorSetCount = kMaxFramesInFlight,
-			.pSetLayouts = layouts.data(),
+		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		        .descriptorPool = m_descriptorPool,
+		        .descriptorSetCount = kMaxFramesInFlight,
+		        .pSetLayouts = layouts.data(),
 		};
 		if (vkAllocateDescriptorSets(device, &allocInfo, m_sets.data()) != VK_SUCCESS)
 		{
@@ -161,7 +161,15 @@ namespace aether
 		return m_sets[frameSlot];
 	}
 
-	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const bool isAsyncCompute, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
+	        CommandRecorder& cmd,
+	        const Camera& camera,
+	        const GpuExtent2D extent,
+	        FrameConstants& fc,
+	        const bool enableBinningForView,
+	        const bool isAsyncCompute,
+	        const std::span<const Renderer::PointLight> pointLights,
+	        const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
@@ -178,16 +186,16 @@ namespace aether
 				// Same queue: explicit compute→fragment barrier required.
 				// Async path: the semaphore wait at DRAW_INDIRECT in SubmitAndPresent covers this.
 				const VkMemoryBarrier2 computeToFragment{
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					.dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				        .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 				};
 				const VkDependencyInfo dep{
-					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					.memoryBarrierCount = 1,
-					.pMemoryBarriers = &computeToFragment,
+				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				        .memoryBarrierCount = 1,
+				        .pMemoryBarriers = &computeToFragment,
 				};
 				vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &dep);
 			}
@@ -225,7 +233,8 @@ namespace aether
 		}
 	}
 
-	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	void LightingManager::UpdateForViewGpu(
+	        const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
@@ -256,16 +265,16 @@ namespace aether
 		push.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
 
 		const VkMemoryBarrier2 hostToCompute{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-			.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+		        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		};
 		const VkDependencyInfo hostToComputeDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &hostToCompute,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &hostToCompute,
 		};
 		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &hostToComputeDep);
 
@@ -280,16 +289,16 @@ namespace aether
 		cmd.EndDebugLabel();
 
 		const VkMemoryBarrier2 computeToCompute{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		};
 		const VkDependencyInfo computeToComputeDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &computeToCompute,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &computeToCompute,
 		};
 		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &computeToComputeDep);
 
@@ -311,7 +320,8 @@ namespace aether
 		// maintenance9 eliminates queue family ownership transfers entirely.
 	}
 
-	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	void LightingManager::UpdateForViewCpu(
+	        const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
@@ -481,9 +491,9 @@ namespace aether
 			}
 
 			VkBufferCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				.size = stride * capacity,
-				.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			        .size = stride * capacity,
+			        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
 			};
 			VmaAllocationCreateInfo allocInfo{};
 			allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -513,16 +523,16 @@ namespace aether
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "LightingManager"));
 
 		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
+		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .offset = 0,
+		        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.setLayoutCount = 1,
-			.pSetLayouts = &m_setLayout,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .setLayoutCount = 1,
+		        .pSetLayouts = &m_setLayout,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &pushRange,
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computeLayout) != VK_SUCCESS)
 		{
@@ -531,15 +541,15 @@ namespace aether
 		}
 
 		const VkPipelineShaderStageCreateInfo initStage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "initTiles",
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .module = shaderModule,
+		        .pName = "initTiles",
 		};
 		const VkComputePipelineCreateInfo initInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = initStage,
-			.layout = m_computeLayout,
+		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .stage = initStage,
+		        .layout = m_computeLayout,
 		};
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
 		{
@@ -549,15 +559,15 @@ namespace aether
 		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
 
 		const VkPipelineShaderStageCreateInfo cullStage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "binLights",
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .module = shaderModule,
+		        .pName = "binLights",
 		};
 		const VkComputePipelineCreateInfo cullInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = cullStage,
-			.layout = m_computeLayout,
+		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .stage = cullStage,
+		        .layout = m_computeLayout,
 		};
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
 		{
@@ -578,46 +588,46 @@ namespace aether
 
 		auto& frame = m_buffers[frameSlot];
 		const VkDescriptorBufferInfo lightInfo{
-			.buffer = frame.lights.Get(),
-			.offset = 0,
-			.range = frame.lights.GetSize(),
+		        .buffer = frame.lights.Get(),
+		        .offset = 0,
+		        .range = frame.lights.GetSize(),
 		};
 		const VkDescriptorBufferInfo headerInfo{
-			.buffer = frame.tileHeaders.Get(),
-			.offset = 0,
-			.range = frame.tileHeaders.GetSize(),
+		        .buffer = frame.tileHeaders.Get(),
+		        .offset = 0,
+		        .range = frame.tileHeaders.GetSize(),
 		};
 		const VkDescriptorBufferInfo indexInfo{
-			.buffer = frame.tileIndices.Get(),
-			.offset = 0,
-			.range = frame.tileIndices.GetSize(),
+		        .buffer = frame.tileIndices.Get(),
+		        .offset = 0,
+		        .range = frame.tileIndices.GetSize(),
 		};
 
 		const VkWriteDescriptorSet writes[] = {
-			{
-             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-             .dstSet = m_sets[frameSlot],
-             .dstBinding = 0,
-             .descriptorCount = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .pBufferInfo = &lightInfo,
-			 },
-			{
-             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-             .dstSet = m_sets[frameSlot],
-             .dstBinding = 1,
-             .descriptorCount = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .pBufferInfo = &headerInfo,
-			 },
-			{
-             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-             .dstSet = m_sets[frameSlot],
-             .dstBinding = 2,
-             .descriptorCount = 1,
-             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-             .pBufferInfo = &indexInfo,
-			 },
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstSet = m_sets[frameSlot],
+		                .dstBinding = 0,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &lightInfo,
+		        },
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstSet = m_sets[frameSlot],
+		                .dstBinding = 1,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &headerInfo,
+		        },
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstSet = m_sets[frameSlot],
+		                .dstBinding = 2,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &indexInfo,
+		        },
 		};
 		vkUpdateDescriptorSets(m_context->GetDevice().device, static_cast<std::uint32_t>(std::size(writes)), writes, 0, nullptr);
 	}

@@ -12,14 +12,14 @@ namespace
 
 	void das_set_ambient(das::float3 color)
 	{
-		ActiveContext().renderer->SetAmbientLight({ color.x, color.y, color.z });
+		ActiveContext().renderer->SetAmbientLight({color.x, color.y, color.z});
 	}
 
 	void das_set_sun(das::float3 dir, float intensity, das::float3 color)
 	{
 		auto& r = *ActiveContext().renderer;
-		r.SetDirectionalLight({ dir.x, dir.y, dir.z }, intensity);
-		r.SetSunColor({ color.x, color.y, color.z });
+		r.SetDirectionalLight({dir.x, dir.y, dir.z}, intensity);
+		r.SetSunColor({color.x, color.y, color.z});
 	}
 
 	void das_add_point_light(das::float3 pos, das::float3 color, float intensity, float radius, bool castsShadow)
@@ -27,9 +27,9 @@ namespace
 		auto& r = *ActiveContext().renderer;
 		std::vector<aether::Renderer::PointLight> lights(r.GetPointLights().begin(), r.GetPointLights().end());
 		lights.push_back({
-		        .position = {   pos.x,   pos.y,   pos.z },
+		        .position = {pos.x, pos.y, pos.z},
 		        .radius = radius,
-		        .color = { color.x, color.y, color.z },
+		        .color = {color.x, color.y, color.z},
 		        .intensity = intensity,
 		        .castsShadow = castsShadow,
 		});
@@ -41,11 +41,11 @@ namespace
 		auto& r = *ActiveContext().renderer;
 		std::vector<aether::Renderer::SpotLight> lights(r.GetSpotLights().begin(), r.GetSpotLights().end());
 		lights.push_back({
-		        .position = {   pos.x,   pos.y,   pos.z },
+		        .position = {pos.x, pos.y, pos.z},
 		        .radius = radius,
-		        .direction = {  dir.x,   dir.y,   dir.z },
+		        .direction = {dir.x, dir.y, dir.z},
 		        .innerAngleRad = innerAngle,
-		        .color = { color.x, color.y, color.z },
+		        .color = {color.x, color.y, color.z},
 		        .intensity = intensity,
 		        .outerAngleRad = outerAngle,
 		        .castsShadow = castsShadow,
@@ -55,17 +55,17 @@ namespace
 
 	void das_set_sky(das::float3 horizon, das::float3 zenith)
 	{
-		ActiveContext().renderer->SetSkyGradient({ horizon.x, horizon.y, horizon.z }, { zenith.x, zenith.y, zenith.z });
+		ActiveContext().renderer->SetSkyGradient({horizon.x, horizon.y, horizon.z}, {zenith.x, zenith.y, zenith.z});
 	}
 
 	void das_set_point_light_position(int idx, das::float3 pos)
 	{
-		ActiveContext().renderer->SetPointLightPosition(static_cast<std::uint32_t>(idx), { pos.x, pos.y, pos.z });
+		ActiveContext().renderer->SetPointLightPosition(static_cast<std::uint32_t>(idx), {pos.x, pos.y, pos.z});
 	}
 
 	void das_set_spot_light_position(int idx, das::float3 pos)
 	{
-		ActiveContext().renderer->SetSpotLightPosition(static_cast<std::uint32_t>(idx), { pos.x, pos.y, pos.z });
+		ActiveContext().renderer->SetSpotLightPosition(static_cast<std::uint32_t>(idx), {pos.x, pos.y, pos.z});
 	}
 
 	void das_clear_lights()
@@ -77,7 +77,7 @@ namespace
 
 	void das_set_sky_void(das::float3 color)
 	{
-		ActiveContext().renderer->SetSkyVoidColor({ color.x, color.y, color.z });
+		ActiveContext().renderer->SetSkyVoidColor({color.x, color.y, color.z});
 	}
 
 	// ── Day/Night cycle controls ──────────────────────────────────────────────
@@ -138,9 +138,9 @@ namespace
 		if (auto* dn = ActiveContext().dayNight)
 		{
 			const auto d = dn->GetSunDirection();
-			return { d.x, d.y, d.z };
+			return {d.x, d.y, d.z};
 		}
-		return { 0.0f, 1.0f, 0.0f };
+		return {0.0f, 1.0f, 0.0f};
 	}
 
 } // namespace

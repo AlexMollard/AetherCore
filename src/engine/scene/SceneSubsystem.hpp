@@ -3,7 +3,10 @@
 #include "scene/Scene.hpp"
 #include "scene/World.hpp"
 
-namespace aether { class ServiceContainer; }
+namespace aether
+{
+	class ServiceContainer;
+}
 
 namespace aether
 {

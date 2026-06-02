@@ -20,18 +20,18 @@ namespace aether
 	struct RenderFramePacket
 	{
 		// Camera matrices snapshotted at end of simulation.
-		glm::mat4 view{ 1.0f };
-		glm::mat4 proj{ 1.0f };
-		glm::vec4 cameraWorldPos{ 0.0f };
+		glm::mat4 view{1.0f};
+		glm::mat4 proj{1.0f};
+		glm::vec4 cameraWorldPos{0.0f};
 		bool hasCameraData = false;
 
 		// Lighting state snapshotted at end of simulation.
-		glm::vec4 sunDirectionIntensity{ 0.0f, -1.0f, 0.0f, 1.0f };
-		glm::vec4 ambientColor{ 0.2f, 0.2f, 0.2f, 1.0f };
-		glm::vec4 sunColor{ 1.0f };
-		glm::vec4 skyHorizonColor{ 1.0f };
-		glm::vec4 skyZenithColor{ 0.5f, 0.7f, 1.0f, 1.0f };
-		glm::vec4 skyVoidColor{ 0.0f };
+		glm::vec4 sunDirectionIntensity{0.0f, -1.0f, 0.0f, 1.0f};
+		glm::vec4 ambientColor{0.2f, 0.2f, 0.2f, 1.0f};
+		glm::vec4 sunColor{1.0f};
+		glm::vec4 skyHorizonColor{1.0f};
+		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};
+		glm::vec4 skyVoidColor{0.0f};
 
 		// Local light lists snapshotted to avoid data race between game thread
 		// (SetPointLights/SetSpotLights) and render thread reads.
@@ -87,8 +87,8 @@ namespace aether
 
 		// Tracks the index of the last fully-executed frame (for shutdown /
 		// debugging / statistics).  Not used for per-frame synchronisation.
-		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{ 0 };
-		std::atomic<bool> m_shutdown{ false };
+		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{0};
+		std::atomic<bool> m_shutdown{false};
 	};
 
 } // namespace aether

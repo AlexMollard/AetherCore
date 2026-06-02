@@ -37,6 +37,7 @@ namespace aether::app::scripting
 			das::string prefix;
 			das::string rootPath;
 		};
+
 		mutable std::vector<SearchRoot> searchRoots;
 	};
 

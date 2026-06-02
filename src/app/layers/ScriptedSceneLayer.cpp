@@ -35,7 +35,7 @@ namespace aether::app
 		auto& assets = context.Get<AssetManager>();
 		const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
 		const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
@@ -142,19 +142,11 @@ namespace aether::app
 			aether::Material plasmaMat{};
 			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 			plasmaMat.emissiveFactor = glm::vec3(1.0f, 0.3f, 0.8f); // tint = pink
-			plasmaMat.metallicFactor = 0.5f;                         // speed
-			plasmaMat.roughnessFactor = 2.0f;                        // scale
-			plasmaMat.occlusionStrength = 0.8f;                      // intensity
+			plasmaMat.metallicFactor = 0.5f;                        // speed
+			plasmaMat.roughnessFactor = 2.0f;                       // scale
+			plasmaMat.occlusionStrength = 0.8f;                     // intensity
 
-			m_effectManager.CreateAndRegister(
-			        "plasma",
-			        context.Get<AssetManager>(),
-			        bindlessLayout,
-			        lightingLayout,
-			        colorFormat,
-			        depthFormat,
-			        "shaders://plasma.slang.spv",
-			        plasmaMat);
+			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, lightingLayout, colorFormat, depthFormat, "shaders://plasma.slang.spv", plasmaMat);
 		}
 
 		m_sceneCtx.world = &context.Get<World>();

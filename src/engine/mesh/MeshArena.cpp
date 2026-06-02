@@ -6,7 +6,7 @@ namespace aether
 {
 	void MeshArena::Initialize(const VulkanContext& ctx, const Desc& desc)
 	{
-		m_vertexHeap.Initialize(ctx, { .capacityBytes = desc.vertexCapacityBytes });
+		m_vertexHeap.Initialize(ctx, {.capacityBytes = desc.vertexCapacityBytes});
 		m_indexHeap.Initialize(ctx,
 		        {
 		                .capacityBytes = desc.indexCapacityBytes,
@@ -36,12 +36,12 @@ namespace aether
 		}
 
 		return Alloc{
-			m_vertexHeap.GetOffset(vs),
-			vertexCount,
-			m_indexHeap.GetOffset(is),
-			indexCount,
-			vertexBytes,
-			indexBytes,
+		        m_vertexHeap.GetOffset(vs),
+		        vertexCount,
+		        m_indexHeap.GetOffset(is),
+		        indexCount,
+		        vertexBytes,
+		        indexBytes,
 		};
 	}
 
@@ -67,6 +67,13 @@ namespace aether
 
 	Mesh MeshArena::CreateView(const Alloc& alloc) const
 	{
-		return Mesh::CreateView(m_vertexHeap.GetBuffer(), m_indexHeap.GetBuffer(), alloc.vertexCount, alloc.indexCount, alloc.vertexByteOffset, alloc.indexByteOffset, m_vertexHeap.GetBaseAddress() + alloc.vertexByteOffset, m_indexHeap.GetBaseAddress() + alloc.indexByteOffset);
+		return Mesh::CreateView(m_vertexHeap.GetBuffer(),
+		        m_indexHeap.GetBuffer(),
+		        alloc.vertexCount,
+		        alloc.indexCount,
+		        alloc.vertexByteOffset,
+		        alloc.indexByteOffset,
+		        m_vertexHeap.GetBaseAddress() + alloc.vertexByteOffset,
+		        m_indexHeap.GetBaseAddress() + alloc.indexByteOffset);
 	}
 } // namespace aether

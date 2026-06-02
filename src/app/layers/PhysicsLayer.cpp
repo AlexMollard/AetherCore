@@ -16,12 +16,7 @@ namespace aether::app
 	{
 		UiRect PxRect(float l, float t, float r, float b)
 		{
-			return UiRect{
-				.anchorMin = { 0.f, 0.f },
-				.anchorMax = { 0.f, 0.f },
-				.offsetMinPx = { l, t },
-				.offsetMaxPx = { r, b }
-			};
+			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 0.f}, .offsetMinPx = {l, t}, .offsetMaxPx = {r, b}};
 		}
 	} // namespace
 
@@ -66,10 +61,10 @@ namespace aether::app
 		constexpr float kRowH = 18.f;
 		constexpr float kSepH = 12.f;
 
-		const glm::vec4 bg{ 0.08f, 0.08f, 0.11f, 0.92f };
-		const glm::vec4 white{ 0.93f, 0.93f, 0.93f, 1.f };
-		const glm::vec4 green{ 0.40f, 0.72f, 0.46f, 1.f };
-		const glm::vec4 yellow{ 0.86f, 0.71f, 0.30f, 1.f };
+		const glm::vec4 bg{0.08f, 0.08f, 0.11f, 0.92f};
+		const glm::vec4 white{0.93f, 0.93f, 0.93f, 1.f};
+		const glm::vec4 green{0.40f, 0.72f, 0.46f, 1.f};
+		const glm::vec4 yellow{0.86f, 0.71f, 0.30f, 1.f};
 
 		// Calculate panel height
 		float contentH = kPadY;
@@ -96,15 +91,15 @@ namespace aether::app
 
 		auto label = [&](const char* name, const char* value, glm::vec4 valueColor)
 		{
-			ui.DrawText(name, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, white);
-			ui.DrawText(value, { .anchor = { 0.f, 0.f }, .offsetPx = { col2X, y } }, textSize, valueColor);
+			ui.DrawText(name, {.anchor = {0.f, 0.f}, .offsetPx = {12.f + kPadX, y}}, textSize, white);
+			ui.DrawText(value, {.anchor = {0.f, 0.f}, .offsetPx = {col2X, y}}, textSize, valueColor);
 			y += kRowH;
 		};
 
 		auto ctrl = [&](const char* key, const char* desc)
 		{
-			ui.DrawText(key, { .anchor = { 0.f, 0.f }, .offsetPx = { 12.f + kPadX, y } }, textSize, yellow);
-			ui.DrawText(desc, { .anchor = { 0.f, 0.f }, .offsetPx = { colCtrlX, y } }, textSize, white);
+			ui.DrawText(key, {.anchor = {0.f, 0.f}, .offsetPx = {12.f + kPadX, y}}, textSize, yellow);
+			ui.DrawText(desc, {.anchor = {0.f, 0.f}, .offsetPx = {colCtrlX, y}}, textSize, white);
 			y += kRowH;
 		};
 

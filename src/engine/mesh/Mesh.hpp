@@ -20,8 +20,8 @@ namespace aether
 			glm::vec4 tangent; // xyz = tangent direction, w = bitangent sign (+1 or -1)
 			glm::vec2 uv;
 			glm::vec3 color;
-			glm::uvec4 jointIndices{ 0u, 0u, 0u, 0u };
-			glm::vec4 jointWeights{ 1.0f, 0.0f, 0.0f, 0.0f };
+			glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
+			glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};
 		};
 
 		Mesh() = default;
@@ -42,7 +42,14 @@ namespace aether
 		// Create a non-owning view into an externally managed buffer (e.g. MeshArena / GpuHeap).
 		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
 		// Pass device addresses so the vertex shader can fetch vertices via BDA.
-		static Mesh CreateView(VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset = 0, VkDeviceSize indexByteOffset = 0, VkDeviceAddress vertexDeviceAddress = 0, VkDeviceAddress indexDeviceAddress = 0);
+		static Mesh CreateView(VkBuffer vertexBuffer,
+		        VkBuffer indexBuffer,
+		        std::uint32_t vertexCount,
+		        std::uint32_t indexCount,
+		        VkDeviceSize vertexByteOffset = 0,
+		        VkDeviceSize indexByteOffset = 0,
+		        VkDeviceAddress vertexDeviceAddress = 0,
+		        VkDeviceAddress indexDeviceAddress = 0);
 
 		void Destroy();
 

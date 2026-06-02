@@ -33,14 +33,14 @@ namespace aether
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
 
 		const VkPushConstantRange pushRange{
-			.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			.offset = 0,
-			.size = sizeof(ComputePush),
+		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .offset = 0,
+		        .size = sizeof(ComputePush),
 		};
 		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &pushRange,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &pushRange,
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computePipelineLayout) != VK_SUCCESS)
 		{
@@ -49,15 +49,15 @@ namespace aether
 		}
 
 		const VkPipelineShaderStageCreateInfo stage{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			.module = shaderModule,
-			.pName = "main",
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+		        .module = shaderModule,
+		        .pName = "main",
 		};
 		const VkComputePipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = stage,
-			.layout = m_computePipelineLayout,
+		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .stage = stage,
+		        .layout = m_computePipelineLayout,
 		};
 		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
 		{
@@ -99,36 +99,36 @@ namespace aether
 				                return;
 			                }
 
-			const std::uint32_t frameSlot = readSlot;
-				const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
-				if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
-				{
-					m_commandBuffers[frameSlot].Reset();
+			                const std::uint32_t frameSlot = readSlot;
+			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
+			                if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
+			                {
+				                m_commandBuffers[frameSlot].Reset();
 
-					const VkDeviceSize allocSize = commandBytes * 2;
-					VkBufferCreateInfo bufferInfo{
-						.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-						.size = allocSize,
-						.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-						.sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-					};
+				                const VkDeviceSize allocSize = commandBytes * 2;
+				                VkBufferCreateInfo bufferInfo{
+				                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				                        .size = allocSize,
+				                        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+				                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+				                };
 
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 
-				AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
-					m_commandBuffers[frameSlot] = std::move(buf);
-					m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
-				}
+				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
+				                m_commandBuffers[frameSlot] = std::move(buf);
+				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
+			                }
 
 			                if (!m_indirectBuffers[frameSlot])
 			                {
 				                const VkBufferCreateInfo indirectInfo{
-					                .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-					                .size = sizeof(VkDrawIndirectCommand),
-					                .usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-					                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+				                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+				                        .size = sizeof(VkDrawIndirectCommand),
+				                        .usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+				                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 				                };
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
@@ -137,32 +137,32 @@ namespace aether
 				                m_indirectBuffers[frameSlot] = std::move(buf);
 			                }
 
-				void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
-				if (mappedCommands == nullptr)
-				{
-					return;
-				}
+			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
+			                if (mappedCommands == nullptr)
+			                {
+				                return;
+			                }
 
-				std::memcpy(mappedCommands, pending.data(), commandBytes);
+			                std::memcpy(mappedCommands, pending.data(), commandBytes);
 
 			                const VkMemoryBarrier2 hostToCompute{
-				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				                .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-				                .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-				                .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				                .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
+			                        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			                        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+			                        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+			                        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			                        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
 			                };
 			                const VkDependencyInfo hostToComputeDep{
-				                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				                .memoryBarrierCount = 1,
-				                .pMemoryBarriers = &hostToCompute,
+			                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			                        .memoryBarrierCount = 1,
+			                        .pMemoryBarriers = &hostToCompute,
 			                };
 			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &hostToComputeDep);
 
 			                const ComputePush push{
-				                .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
-				                .indirectCmdAddr = m_indirectBuffers[frameSlot].GetDeviceAddress(),
-				                .commandCount = commandCount,
+			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
+			                        .indirectCmdAddr = m_indirectBuffers[frameSlot].GetDeviceAddress(),
+			                        .commandCount = commandCount,
 			                };
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
@@ -172,16 +172,16 @@ namespace aether
 			                // Barrier here (outside any render pass) - compute writes must be
 			                // visible to the subsequent indirect-draw and vertex-shader reads.
 			                const VkMemoryBarrier2 computeToGraphics{
-				                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				                .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				                .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-				                .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-				                .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT,
+			                        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			                        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			                        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
+			                        .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+			                        .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT,
 			                };
 			                const VkDependencyInfo computeToGraphicsDep{
-				                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				                .memoryBarrierCount = 1,
-				                .pMemoryBarriers = &computeToGraphics,
+			                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			                        .memoryBarrierCount = 1,
+			                        .pMemoryBarriers = &computeToGraphics,
 			                };
 			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &computeToGraphicsDep);
 		                });
@@ -207,17 +207,14 @@ namespace aether
 			                const std::uint32_t frameSlot = readSlot;
 
 			                const VkViewport viewport{
-				                .x = 0.f,
-				                .y = 0.f,
-				                .width = static_cast<float>(ext.width),
-				                .height = static_cast<float>(ext.height),
-				                .minDepth = 0.f,
-				                .maxDepth = 1.f,
+			                        .x = 0.f,
+			                        .y = 0.f,
+			                        .width = static_cast<float>(ext.width),
+			                        .height = static_cast<float>(ext.height),
+			                        .minDepth = 0.f,
+			                        .maxDepth = 1.f,
 			                };
-			                const VkRect2D scissor{
-				                .offset = { 0, 0 },
-                                  .extent = ext
-			                };
+			                const VkRect2D scissor{.offset = {0, 0}, .extent = ext};
 			                vkCmdSetViewport(cmd, 0, 1, &viewport);
 			                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
@@ -231,8 +228,8 @@ namespace aether
 			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
 
 			                const QuadPush push{
-				                .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
-				                .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
+			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
+			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
 			                };
 			                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &push);
 
@@ -259,7 +256,7 @@ namespace aether
 		m_swapchain = &services.Get<Swapchain>();
 		m_passName = std::string(passName);
 
-		for (auto& slot : m_pendingQuads)
+		for (auto& slot: m_pendingQuads)
 		{
 			slot.reserve(256);
 		}
@@ -341,12 +338,12 @@ namespace aether
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
-		                                .data0 = pxRect,
-		                                .data1 = glm::vec4(cornerRadiusPx, 0.f, 0.f, 0.f),
-		                                .color = color,
-		                                .type = static_cast<std::uint32_t>(ShapeType::Rect),
-		                                .layer = layer,
-		                                },
+		                        .data0 = pxRect,
+		                        .data1 = glm::vec4(cornerRadiusPx, 0.f, 0.f, 0.f),
+		                        .color = color,
+		                        .type = static_cast<std::uint32_t>(ShapeType::Rect),
+		                        .layer = layer,
+		                },
 		});
 	}
 
@@ -368,12 +365,12 @@ namespace aether
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
-		                                .data0 = glm::vec4(p0, p1),
-		                                .data1 = glm::vec4(thicknessPx, 0.f, 0.f, 0.f),
-		                                .color = color,
-		                                .type = static_cast<std::uint32_t>(ShapeType::Line),
-		                                .layer = layer,
-		                                },
+		                        .data0 = glm::vec4(p0, p1),
+		                        .data1 = glm::vec4(thicknessPx, 0.f, 0.f, 0.f),
+		                        .color = color,
+		                        .type = static_cast<std::uint32_t>(ShapeType::Line),
+		                        .layer = layer,
+		                },
 		});
 	}
 
@@ -387,12 +384,12 @@ namespace aether
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
-		                                .data0 = glm::vec4(c.x, c.y, radiusPx, 0.f),
-		                                .data1 = glm::vec4(0.f),
-		                                .color = color,
-		                                .type = static_cast<std::uint32_t>(ShapeType::Circle),
-		                                .layer = layer,
-		                                },
+		                        .data0 = glm::vec4(c.x, c.y, radiusPx, 0.f),
+		                        .data1 = glm::vec4(0.f),
+		                        .color = color,
+		                        .type = static_cast<std::uint32_t>(ShapeType::Circle),
+		                        .layer = layer,
+		                },
 		});
 	}
 
@@ -412,13 +409,13 @@ namespace aether
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
-		                                .data0 = pxRect,
-		                                .data1 = uvRect, // u0, v0, u1, v1
+		                        .data0 = pxRect,
+		                        .data1 = uvRect, // u0, v0, u1, v1
 		                        .color = tint,
-		                                .type = static_cast<std::uint32_t>(ShapeType::TexturedRect),
-		                                .layer = layer,
-		                                .textureSlot = textureSlot,
-		                                },
+		                        .type = static_cast<std::uint32_t>(ShapeType::TexturedRect),
+		                        .layer = layer,
+		                        .textureSlot = textureSlot,
+		                },
 		});
 	}
 
@@ -432,19 +429,19 @@ namespace aether
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
-		                                .data0 = glyphRectPx,
-		                                .data1 = uvRect,
-		                                .color = color,
-		                                .type = static_cast<std::uint32_t>(ShapeType::SdfGlyph),
-		                                .layer = layer,
-		                                .textureSlot = atlasSlot,
-		                                },
+		                        .data0 = glyphRectPx,
+		                        .data1 = uvRect,
+		                        .color = color,
+		                        .type = static_cast<std::uint32_t>(ShapeType::SdfGlyph),
+		                        .layer = layer,
+		                        .textureSlot = atlasSlot,
+		                },
 		});
 	}
 
 	void QuadRenderer::SetClipRect(glm::vec4 pixelRect)
 	{
-		m_clipState = { .active = true, .pixelRect = pixelRect };
+		m_clipState = {.active = true, .pixelRect = pixelRect};
 	}
 
 	void QuadRenderer::ClearClipRect()

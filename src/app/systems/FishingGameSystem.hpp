@@ -85,8 +85,8 @@ namespace aether::app
 
 		struct FishAgent
 		{
-			glm::vec3 pos{ 0.0f };
-			glm::vec3 target{ 0.0f };
+			glm::vec3 pos{0.0f};
+			glm::vec3 target{0.0f};
 			float heading = 0.0f;
 			float speed = 0.0f;
 			float bobPhase = 0.0f;
@@ -101,7 +101,7 @@ namespace aether::app
 
 		struct PlayerController
 		{
-			glm::vec3 position{ 0.0f, 2.0f, -16.0f };
+			glm::vec3 position{0.0f, 2.0f, -16.0f};
 			float yaw = 180.0f;
 			float pitch = -12.0f;
 			float moveSpeed = 12.0f;
@@ -126,15 +126,15 @@ namespace aether::app
 		std::vector<aether::Entity> m_fishEntities;
 
 		std::vector<FishAgent> m_fishAgents;
-		std::mt19937 m_rng{ 12345 };
+		std::mt19937 m_rng{12345};
 
 		aether::Material m_lineMaterial;
 
 		BobberState m_bobberState = BobberState::Ready;
-		glm::vec3 m_bobberPos{ 0.0f };
-		glm::vec3 m_bobberTarget{ 0.0f };
-		glm::vec3 m_castOrigin{ 0.0f };
-		glm::vec3 m_castDirection{ 0.0f, 0.0f, 1.0f };
+		glm::vec3 m_bobberPos{0.0f};
+		glm::vec3 m_bobberTarget{0.0f};
+		glm::vec3 m_castOrigin{0.0f};
+		glm::vec3 m_castDirection{0.0f, 0.0f, 1.0f};
 		float m_castProgress = 0.0f;
 		float m_castTotalDistance = 0.0f;
 		float m_waitTimer = 0.0f;

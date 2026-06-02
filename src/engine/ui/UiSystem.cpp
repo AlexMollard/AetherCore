@@ -25,7 +25,7 @@ namespace aether::ui
 		}
 		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
 		{
-			for (const Entity child : ch->children)
+			for (const Entity child: ch->children)
 			{
 				MoveSubtree(world, child, delta);
 			}
@@ -281,7 +281,7 @@ namespace aether::ui
 
 				if (const auto* ch = world.TryGet<UiChildrenComponent>(ctx.draggedEntity))
 				{
-					for (const Entity child : ch->children)
+					for (const Entity child: ch->children)
 					{
 						MoveSubtree(world, child, frameDelta);
 					}

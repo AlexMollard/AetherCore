@@ -23,26 +23,27 @@ namespace aether::bindless
 		return out;
 	}
 
-	Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
+	Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(
+	        VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
 	{
 		AE_ASSERT_ALWAYS(device != VK_NULL_HANDLE, "Cannot create pipeline layout: VkDevice is null.");
 
 		const auto setLayouts = ComposePipelineSetLayouts(pipelineLayouts, bindlessLayout, bindlessSetIndex);
 		const VkPipelineLayoutCreateInfo createInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.pNext = nullptr,
-			.flags = 0,
-			.setLayoutCount = static_cast<std::uint32_t>(setLayouts.size()),
-			.pSetLayouts = setLayouts.data(),
-			.pushConstantRangeCount = static_cast<std::uint32_t>(pushConstantRanges.size()),
-			.pPushConstantRanges = pushConstantRanges.data(),
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .pNext = nullptr,
+		        .flags = 0,
+		        .setLayoutCount = static_cast<std::uint32_t>(setLayouts.size()),
+		        .pSetLayouts = setLayouts.data(),
+		        .pushConstantRangeCount = static_cast<std::uint32_t>(pushConstantRanges.size()),
+		        .pPushConstantRanges = pushConstantRanges.data(),
 		};
 
 		VkPipelineLayout layout = VK_NULL_HANDLE;
 		const VkResult result = vkCreatePipelineLayout(device, &createInfo, nullptr, &layout);
 		if (result != VK_SUCCESS)
 		{
-			return Unexpected{ AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create bindless-aware pipeline layout.") };
+			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create bindless-aware pipeline layout.")};
 		}
 
 		return layout;

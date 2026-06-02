@@ -48,7 +48,7 @@ namespace aether
 		m_prevMousePos = m_mousePos;
 		double cx = 0.0, cy = 0.0;
 		glfwGetCursorPos(m_window, &cx, &cy);
-		m_mousePos = { static_cast<float>(cx), static_cast<float>(cy) };
+		m_mousePos = {static_cast<float>(cx), static_cast<float>(cy)};
 
 		// On the very first update there is no meaningful "previous" position,
 		// so prevent a large spurious delta by seeding prev = current.
@@ -161,7 +161,7 @@ namespace aether
 		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (self)
 		{
-			self->m_pendingScroll += glm::vec2{ static_cast<float>(xOffset), static_cast<float>(yOffset) };
+			self->m_pendingScroll += glm::vec2{static_cast<float>(xOffset), static_cast<float>(yOffset)};
 		}
 	}
 

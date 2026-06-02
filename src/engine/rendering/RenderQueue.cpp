@@ -65,7 +65,12 @@ namespace aether
 			m_nodeGlobalTransformsBuffer = std::move(b7);
 		}
 
-		AE_EXPECT_OR_THROW(b8, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_outputDrawCapacity) * sizeof(VkDrawIndexedIndirectCommand), VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "RenderQueue.IndirectOutput"));
+		AE_EXPECT_OR_THROW(b8,
+		        UniqueBuffer::CreateDeviceLocal(allocator,
+		                device,
+		                kFramesInFlight * static_cast<VkDeviceSize>(m_outputDrawCapacity) * sizeof(VkDrawIndexedIndirectCommand),
+		                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		                "RenderQueue.IndirectOutput"));
 		m_outputIndirectBuffer = std::move(b8);
 	}
 
@@ -158,9 +163,9 @@ namespace aether
 			if (m_skinPaletteBuffer)
 			{
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-			vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
-		}
-		if (m_sampledPosesBuffer)
+				vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+			}
+			if (m_sampledPosesBuffer)
 			{
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
 				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
@@ -171,16 +176,16 @@ namespace aether
 				vkCmdFillBuffer(cmd, m_nodeGlobalTransformsBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
 			}
 			const VkMemoryBarrier2 fillToCompute{
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-				.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+			        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 			};
 			const VkDependencyInfo fillToComputeDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.memoryBarrierCount = 1,
-				.pMemoryBarriers = &fillToCompute,
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .memoryBarrierCount = 1,
+			        .pMemoryBarriers = &fillToCompute,
 			};
 			vkCmdPipelineBarrier2(cmd, &fillToComputeDep);
 		}
@@ -188,7 +193,8 @@ namespace aether
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
 		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
-		const VkDeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
+		const VkDeviceAddress currSampledPosesAddr =
+		        (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
 		const VkDeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
@@ -205,12 +211,14 @@ namespace aether
 			std::uint32_t startJob;
 			std::uint32_t count;
 		};
+
 		struct SkinPaletteBatch
 		{
 			const AnimationDatabase* db;
 			std::uint32_t startJob;
 			std::uint32_t count;
 		};
+
 		AnimSampleBatch animSampleBatches[64];
 		std::uint32_t animSampleBatchCount = 0;
 		SkinPaletteBatch skinPaletteBatches[64];
@@ -280,23 +288,23 @@ namespace aether
 						skinPaletteOffset = skinJointCursor;
 						skinJointCount = dc.skinJointCount;
 						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = AnimationContracts::AnimatorSampleJob{
-							.animClipIndex = dc.animClipIndex,
-							.animTime = dc.animTime,
-							.nodePoseOffset = nodePoseCursor,
-							.nodeCount = drawNodeCount,
-							.clipsAddr = drawAnimDb->GetClipsAddr(),
-							.channelsAddr = drawAnimDb->GetChannelsAddr(),
-							.timesAddr = drawAnimDb->GetTimesAddr(),
-							.valuesAddr = drawAnimDb->GetValuesAddr(),
-							.clipCount = drawClipCount,
+						        .animClipIndex = dc.animClipIndex,
+						        .animTime = dc.animTime,
+						        .nodePoseOffset = nodePoseCursor,
+						        .nodeCount = drawNodeCount,
+						        .clipsAddr = drawAnimDb->GetClipsAddr(),
+						        .channelsAddr = drawAnimDb->GetChannelsAddr(),
+						        .timesAddr = drawAnimDb->GetTimesAddr(),
+						        .valuesAddr = drawAnimDb->GetValuesAddr(),
+						        .clipCount = drawClipCount,
 						};
 						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
-							.sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
-							.dstPaletteOffset = skinPaletteOffset,
-							.jointCount = dc.skinJointCount,
-							.skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
-							.nodeCount = drawNodeCount,
-							.nodePoseOffset = nodePoseCursor,
+						        .sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
+						        .dstPaletteOffset = skinPaletteOffset,
+						        .jointCount = dc.skinJointCount,
+						        .skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
+						        .nodeCount = drawNodeCount,
+						        .nodePoseOffset = nodePoseCursor,
 						};
 
 						if (animSampleBatchCount > 0 && animSampleBatches[animSampleBatchCount - 1].db == drawAnimDb)
@@ -306,7 +314,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(animSampleBatchCount < 64, "RenderQueue: too many animation sample batches");
-							animSampleBatches[animSampleBatchCount++] = { drawAnimDb, sampleJobsThisFrame, 1u };
+							animSampleBatches[animSampleBatchCount++] = {drawAnimDb, sampleJobsThisFrame, 1u};
 						}
 
 						if (skinPaletteBatchCount > 0 && skinPaletteBatches[skinPaletteBatchCount - 1].db == drawAnimDb)
@@ -316,7 +324,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(skinPaletteBatchCount < 64, "RenderQueue: too many skin palette batches");
-							skinPaletteBatches[skinPaletteBatchCount++] = { drawAnimDb, skinJobCount, 1u };
+							skinPaletteBatches[skinPaletteBatchCount++] = {drawAnimDb, skinJobCount, 1u};
 						}
 
 						++sampleJobsThisFrame;
@@ -327,27 +335,27 @@ namespace aether
 				}
 
 				m_instanceDataMapped[drawBase + globalDrawIdx] = DrawContracts::InstanceData{
-					.model = dc.modelMatrix,
-					.materialIndex = dc.materialIndex,
-					.skinPaletteOffset = skinPaletteOffset,
-					.skinJointCount = skinJointCount,
-					.worldBoundingSphere = dc.worldBoundingSphere,
-					.vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
+				        .model = dc.modelMatrix,
+				        .materialIndex = dc.materialIndex,
+				        .skinPaletteOffset = skinPaletteOffset,
+				        .skinJointCount = skinJointCount,
+				        .worldBoundingSphere = dc.worldBoundingSphere,
+				        .vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
 				};
 
 				m_cullInputMapped[drawBase + globalDrawIdx] = CullContracts::DrawInput{
-					.indexCount = (dc.mesh != nullptr) ? dc.mesh->GetIndexCount() : 0u,
-					.instanceCount = 1u,
-					.firstIndex = 0u,
-					.vertexOffset = 0,
-					.firstInstance = globalDrawIdx, // frame-relative; BDA base (m_cachedInstanceDataAddr) accounts for slot
-					.batchIndex = batchIdx,
+				        .indexCount = (dc.mesh != nullptr) ? dc.mesh->GetIndexCount() : 0u,
+				        .instanceCount = 1u,
+				        .firstIndex = 0u,
+				        .vertexOffset = 0,
+				        .firstInstance = globalDrawIdx, // frame-relative; BDA base (m_cachedInstanceDataAddr) accounts for slot
+				        .batchIndex = batchIdx,
 				};
 
 				++globalDrawIdx;
 			}
 
-			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{ batchOutputStart, batchDrawCount, batchOutputStart };
+			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{batchOutputStart, batchDrawCount, batchOutputStart};
 
 			m_batchRenderInfos.push_back(BatchRenderInfo{
 			        .pipeline = batchPipeline,
@@ -375,16 +383,16 @@ namespace aether
 
 		// Ensure host writes are visible to compute/graphics shader reads.
 		const VkMemoryBarrier2 hostToShaders{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-			.srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-			.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+		        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 		};
 		const VkDependencyInfo hostToShaderDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &hostToShaders,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &hostToShaders,
 		};
 		vkCmdPipelineBarrier2(cmd, &hostToShaderDep);
 
@@ -414,16 +422,19 @@ namespace aether
 				{
 					const auto& batch = animSampleBatches[bi];
 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
-					if (nodeCount == 0) continue;
+					if (nodeCount == 0)
+					{
+						continue;
+					}
 
 					const AnimationContracts::PoseInitPush initPc{
-						.bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
-						.bindRotationsAddr = batch.db->GetBindRotationsAddr(),
-						.bindScalesAddr = batch.db->GetBindScalesAddr(),
-						.animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimationContracts::AnimatorSampleJob),
-						.sampledPosesAddr = currSampledPosesAddr,
-						.jobCount = batch.count,
-						.nodeCountPerJob = nodeCount,
+					        .bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
+					        .bindRotationsAddr = batch.db->GetBindRotationsAddr(),
+					        .bindScalesAddr = batch.db->GetBindScalesAddr(),
+					        .animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimationContracts::AnimatorSampleJob),
+					        .sampledPosesAddr = currSampledPosesAddr,
+					        .jobCount = batch.count,
+					        .nodeCountPerJob = nodeCount,
 					};
 					vkCmdPushConstants(cmd, m_sharedPipelines->poseInitLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(initPc), &initPc);
 
@@ -433,16 +444,16 @@ namespace aether
 				}
 
 				const VkMemoryBarrier2 poseInitToAnim{
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 				};
 				const VkDependencyInfo poseInitToAnimDep{
-					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					.memoryBarrierCount = 1,
-					.pMemoryBarriers = &poseInitToAnim,
+				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				        .memoryBarrierCount = 1,
+				        .pMemoryBarriers = &poseInitToAnim,
 				};
 				vkCmdPipelineBarrier2(cmd, &poseInitToAnimDep);
 
@@ -457,17 +468,17 @@ namespace aether
 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
-					.animDbClipsAddr = 0,
-					.animDbChannelsAddr = 0,
-					.animDbTimesAddr = 0,
-					.animDbValuesAddr = 0,
-					.bindTranslationsAddr = 0,
-					.bindRotationsAddr = 0,
-					.bindScalesAddr = 0,
-					.animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
-					.sampledPosesAddr = currSampledPosesAddr,
-					.jobCount = sampleJobsThisFrame,
-					.clipCount = 0,
+				        .animDbClipsAddr = 0,
+				        .animDbChannelsAddr = 0,
+				        .animDbTimesAddr = 0,
+				        .animDbValuesAddr = 0,
+				        .bindTranslationsAddr = 0,
+				        .bindRotationsAddr = 0,
+				        .bindScalesAddr = 0,
+				        .animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
+				        .sampledPosesAddr = currSampledPosesAddr,
+				        .jobCount = sampleJobsThisFrame,
+				        .clipCount = 0,
 				};
 				vkCmdPushConstants(cmd, m_sharedPipelines->animSampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
 				if (m_timestampPool)
@@ -487,16 +498,16 @@ namespace aether
 				CommandRecorder(cmd).EndDebugLabel();
 
 				const VkMemoryBarrier2 animToSkin{
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 				};
 				const VkDependencyInfo animToSkinDep{
-					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					.memoryBarrierCount = 1,
-					.pMemoryBarriers = &animToSkin,
+				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				        .memoryBarrierCount = 1,
+				        .pMemoryBarriers = &animToSkin,
 				};
 				vkCmdPipelineBarrier2(cmd, &animToSkinDep);
 			}
@@ -507,8 +518,7 @@ namespace aether
 		if (skinJobCount > 0 && m_debugLogSkinJobsFramesLeft > 0)
 		{
 			--m_debugLogSkinJobsFramesLeft;
-			AE_INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs, {} anim batches, {} skin batches):",
-			        frameIndex, skinJobCount, sampleJobsThisFrame, animSampleBatchCount, skinPaletteBatchCount);
+			AE_INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs, {} anim batches, {} skin batches):", frameIndex, skinJobCount, sampleJobsThisFrame, animSampleBatchCount, skinPaletteBatchCount);
 			AE_INFO(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
 			const AnimationDatabase* logDb = (skinPaletteBatchCount > 0) ? skinPaletteBatches[0].db : nullptr;
 			AE_INFO(LogCategory::Animation,
@@ -543,8 +553,7 @@ namespace aether
 					const auto& t = bindT[n];
 					const auto& r = bindR[n];
 					const auto& s = bindS[n];
-					AE_INFO(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}] parent={}",
-					        n, t.x, t.y, t.z, r.x, r.y, r.z, r.w, s.x, s.y, s.z, parents[n]);
+					AE_INFO(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}] parent={}", n, t.x, t.y, t.z, r.x, r.y, r.z, r.w, s.x, s.y, s.z, parents[n]);
 				}
 
 				const auto& skinJoints = logDb->GetSkinJoints();
@@ -560,12 +569,25 @@ namespace aether
 				for (std::uint32_t j = 0; j < invBindDumpLimit; ++j)
 				{
 					const auto& m = invBinds[j];
-					AE_INFO(LogCategory::Animation, "    InvBind[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
+					AE_INFO(LogCategory::Animation,
+					        "    InvBind[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
 					        j,
-					        m[0][0], m[0][1], m[0][2], m[0][3],
-					        m[1][0], m[1][1], m[1][2], m[1][3],
-					        m[2][0], m[2][1], m[2][2], m[2][3],
-					        m[3][0], m[3][1], m[3][2], m[3][3]);
+					        m[0][0],
+					        m[0][1],
+					        m[0][2],
+					        m[0][3],
+					        m[1][0],
+					        m[1][1],
+					        m[1][2],
+					        m[1][3],
+					        m[2][0],
+					        m[2][1],
+					        m[2][2],
+					        m[2][3],
+					        m[3][0],
+					        m[3][1],
+					        m[3][2],
+					        m[3][3]);
 				}
 			}
 		}
@@ -584,7 +606,10 @@ namespace aether
 			{
 				const auto& batch = animSampleBatches[bi];
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
-				if (depthCount == 0) continue;
+				if (depthCount == 0)
+				{
+					continue;
+				}
 
 				if (m_timestampPool && bi == 0 && skinJobCount > 0) // write start if we also have skin jobs
 				{
@@ -594,18 +619,21 @@ namespace aether
 				for (std::uint32_t di = 0; di < depthCount; ++di)
 				{
 					const AnimationDatabase::DepthRange& range = batch.db->GetDepthRange(di);
-					if (range.count == 0) continue;
+					if (range.count == 0)
+					{
+						continue;
+					}
 
 					const AnimationContracts::NodeFlattenPush flattenPc{
-						.sampledPosesAddr = currSampledPosesAddr,
-						.nodeParentsAddr = batch.db->GetNodeParentsAddr(),
-						.globalTransformsAddr = currNodeGlobalTransformsAddr,
-						.depthSortedNodesAddr = batch.db->GetDepthSortedNodesAddr(),
-						.animatorJobsAddr = animJobsBDA,
-						.depthOffset = range.startIndex,
-						.nodeCount = range.count,
-						.batchStartJob = batch.startJob,
-						.batchJobCount = batch.count,
+					        .sampledPosesAddr = currSampledPosesAddr,
+					        .nodeParentsAddr = batch.db->GetNodeParentsAddr(),
+					        .globalTransformsAddr = currNodeGlobalTransformsAddr,
+					        .depthSortedNodesAddr = batch.db->GetDepthSortedNodesAddr(),
+					        .animatorJobsAddr = animJobsBDA,
+					        .depthOffset = range.startIndex,
+					        .nodeCount = range.count,
+					        .batchStartJob = batch.startJob,
+					        .batchJobCount = batch.count,
 					};
 					vkCmdPushConstants(cmd, m_sharedPipelines->nodeFlattenLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(flattenPc), &flattenPc);
 
@@ -618,16 +646,16 @@ namespace aether
 					if (di + 1 < depthCount)
 					{
 						const VkMemoryBarrier2 depthBarrier{
-							.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-							.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-							.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-							.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-							.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+						        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+						        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+						        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 						};
 						const VkDependencyInfo depthBarrierDep{
-							.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-							.memoryBarrierCount = 1,
-							.pMemoryBarriers = &depthBarrier,
+						        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+						        .memoryBarrierCount = 1,
+						        .pMemoryBarriers = &depthBarrier,
 						};
 						vkCmdPipelineBarrier2(cmd, &depthBarrierDep);
 					}
@@ -641,16 +669,16 @@ namespace aether
 			CommandRecorder(cmd).EndDebugLabel();
 
 			const VkMemoryBarrier2 flattenToSkin{
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 			};
 			const VkDependencyInfo flattenToSkinDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.memoryBarrierCount = 1,
-				.pMemoryBarriers = &flattenToSkin,
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .memoryBarrierCount = 1,
+			        .pMemoryBarriers = &flattenToSkin,
 			};
 			vkCmdPipelineBarrier2(cmd, &flattenToSkinDep);
 		}
@@ -666,13 +694,13 @@ namespace aether
 			{
 				const auto& batch = skinPaletteBatches[bi];
 				const AnimationContracts::SkinPalettePush skinPc{
-					.jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
-					.dstPaletteAddr = currSkinPaletteAddr,
-					.globalTransformsAddr = currNodeGlobalTransformsAddr,
-					.skinMetasAddr = batch.db->GetSkinMetasAddr(),
-					.skinJointsAddr = batch.db->GetSkinJointsAddr(),
-					.skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
-					.jobCount = batch.count,
+				        .jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
+				        .dstPaletteAddr = currSkinPaletteAddr,
+				        .globalTransformsAddr = currNodeGlobalTransformsAddr,
+				        .skinMetasAddr = batch.db->GetSkinMetasAddr(),
+				        .skinJointsAddr = batch.db->GetSkinJointsAddr(),
+				        .skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
+				        .jobCount = batch.count,
 				};
 				vkCmdPushConstants(cmd, m_sharedPipelines->skinCopyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
 				if (m_timestampPool && bi == 0)
@@ -693,16 +721,16 @@ namespace aether
 			CommandRecorder(cmd).EndDebugLabel();
 
 			const VkMemoryBarrier2 skinToShaders{
-				.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-				.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 			};
 			const VkDependencyInfo skinToShadersDep{
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.memoryBarrierCount = 1,
-				.pMemoryBarriers = &skinToShaders,
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .memoryBarrierCount = 1,
+			        .pMemoryBarriers = &skinToShaders,
 			};
 			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
 		}
@@ -721,14 +749,14 @@ namespace aether
 			const VkDeviceSize cascadeStride = static_cast<VkDeviceSize>(m_maxDraws) * sizeof(VkDrawIndexedIndirectCommand);
 
 			const CullContracts::MultiPushConstants multiPc{
-				.frameAddrs = { m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2] },
-				.instanceDataAddr = m_cachedInstanceDataAddr,
-				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
-				.outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
-				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
-				.totalDrawCount = totalDraws,
-				.outputCascadeStride = static_cast<std::uint32_t>(cascadeStride),
-				.debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
+			        .frameAddrs = {m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2]},
+			        .instanceDataAddr = m_cachedInstanceDataAddr,
+			        .inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+			        .outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
+			        .batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+			        .totalDrawCount = totalDraws,
+			        .outputCascadeStride = static_cast<std::uint32_t>(cascadeStride),
+			        .debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
 			};
 
 			{
@@ -746,14 +774,14 @@ namespace aether
 			// Single-frustum mode (main camera, local shadows).
 			const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
 			const CullContracts::PushConstants pc{
-				.frameAddr = frameAddr,
-				.instanceDataAddr = m_cachedInstanceDataAddr,
-				.inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
-				.outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
-				.batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
-				.batchCountAddr = 0,
-				.totalDrawCount = totalDraws,
-				.debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
+			        .frameAddr = frameAddr,
+			        .instanceDataAddr = m_cachedInstanceDataAddr,
+			        .inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
+			        .outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
+			        .batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+			        .batchCountAddr = 0,
+			        .totalDrawCount = totalDraws,
+			        .debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
 			};
 
 			{
@@ -780,16 +808,16 @@ namespace aether
 
 		// Ensure indirect args are visible before draw-indirect.
 		const VkMemoryBarrier2 computeToIndirect{
-			.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			.dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-			.dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+		        .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
 		};
 		const VkDependencyInfo computeToIndirectDep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.memoryBarrierCount = 1,
-			.pMemoryBarriers = &computeToIndirect,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &computeToIndirect,
 		};
 		vkCmdPipelineBarrier2(cmd, &computeToIndirectDep);
 
@@ -814,7 +842,8 @@ namespace aether
 		FlushDrawImpl(recorder, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
-	void RenderQueue::FlushDrawImpl(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
+	void RenderQueue::FlushDrawImpl(
+	        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -829,9 +858,9 @@ namespace aether
 		recorder.BeginDebugLabel(debugLabel, r, g, b, 1.0f);
 
 		const DrawContracts::PushConstants sharedPc{
-			.frameAddr = frameAddr,
-			.instanceDataAddr = m_cachedInstanceDataAddr,
-			.skinPaletteAddr = m_cachedSkinPaletteAddr,
+		        .frameAddr = frameAddr,
+		        .instanceDataAddr = m_cachedInstanceDataAddr,
+		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
 		};
 
 		const GraphicsPipeline* lastPipeline = nullptr;
@@ -920,14 +949,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::SkinPalettePush), // 72 bytes
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::SkinPalettePush), // 72 bytes
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &skinCopyLayout) != VK_SUCCESS)
 			{
@@ -936,15 +965,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = skinCopyLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = skinCopyLayout,
 			};
 			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skinCopy) != VK_SUCCESS)
 			{
@@ -963,14 +992,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::AnimationSamplePush),
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::AnimationSamplePush),
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animSampleLayout) != VK_SUCCESS)
 			{
@@ -979,15 +1008,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = animSampleLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = animSampleLayout,
 			};
 			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &animSample) != VK_SUCCESS)
 			{
@@ -1006,14 +1035,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::PoseInitPush),
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::PoseInitPush),
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &poseInitLayout) != VK_SUCCESS)
 			{
@@ -1022,15 +1051,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = poseInitLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = poseInitLayout,
 			};
 			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &poseInit) != VK_SUCCESS)
 			{
@@ -1049,14 +1078,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::NodeFlattenPush),
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::NodeFlattenPush),
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &nodeFlattenLayout) != VK_SUCCESS)
 			{
@@ -1065,15 +1094,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = nodeFlattenLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = nodeFlattenLayout,
 			};
 			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &nodeFlatten) != VK_SUCCESS)
 			{
@@ -1115,20 +1144,20 @@ namespace aether
 			vkDestroyPipeline(device, nodeFlatten, nullptr);
 			nodeFlatten = VK_NULL_HANDLE;
 		}
-	if (nodeFlattenLayout != VK_NULL_HANDLE)
-	{
-		vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
-		nodeFlattenLayout = VK_NULL_HANDLE;
+		if (nodeFlattenLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
+			nodeFlattenLayout = VK_NULL_HANDLE;
+		}
+		if (poseInit != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, poseInit, nullptr);
+			poseInit = VK_NULL_HANDLE;
+		}
+		if (poseInitLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, poseInitLayout, nullptr);
+			poseInitLayout = VK_NULL_HANDLE;
+		}
 	}
-	if (poseInit != VK_NULL_HANDLE)
-	{
-		vkDestroyPipeline(device, poseInit, nullptr);
-		poseInit = VK_NULL_HANDLE;
-	}
-	if (poseInitLayout != VK_NULL_HANDLE)
-	{
-		vkDestroyPipelineLayout(device, poseInitLayout, nullptr);
-		poseInitLayout = VK_NULL_HANDLE;
-	}
-}
 } // namespace aether

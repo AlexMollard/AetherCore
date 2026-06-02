@@ -29,38 +29,38 @@ namespace aether
 		void Initialize(VkDevice device);
 		void Shutdown();
 
-	// Registers a "$CullDraws[_<namePrefix>]" compute pass that dispatches the
-	// single-frustum cull shader against the pre-populated renderQueue.
-	void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
+		// Registers a "$CullDraws[_<namePrefix>]" compute pass that dispatches the
+		// single-frustum cull shader against the pre-populated renderQueue.
+		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
 
-	[[nodiscard]] VkPipeline GetSinglePipeline() const
-	{
-		return m_singlePipeline;
-	}
+		[[nodiscard]] VkPipeline GetSinglePipeline() const
+		{
+			return m_singlePipeline;
+		}
 
-	[[nodiscard]] VkPipelineLayout GetSingleLayout() const
-	{
-		return m_singleLayout;
-	}
+		[[nodiscard]] VkPipelineLayout GetSingleLayout() const
+		{
+			return m_singleLayout;
+		}
 
-	[[nodiscard]] VkPipeline GetMultiPipeline() const
-	{
-		return m_multiPipeline;
-	}
+		[[nodiscard]] VkPipeline GetMultiPipeline() const
+		{
+			return m_multiPipeline;
+		}
 
-	[[nodiscard]] VkPipelineLayout GetMultiLayout() const
-	{
-		return m_multiLayout;
-	}
+		[[nodiscard]] VkPipelineLayout GetMultiLayout() const
+		{
+			return m_multiLayout;
+		}
 
-private:
-	Expected<void> EnsureSinglePipeline();
-	Expected<void> EnsureMultiPipeline();
+	private:
+		Expected<void> EnsureSinglePipeline();
+		Expected<void> EnsureMultiPipeline();
 
-	VkDevice m_device = VK_NULL_HANDLE;
-	VkPipeline m_singlePipeline = VK_NULL_HANDLE;
-	VkPipelineLayout m_singleLayout = VK_NULL_HANDLE;
-	VkPipeline m_multiPipeline = VK_NULL_HANDLE;
-	VkPipelineLayout m_multiLayout = VK_NULL_HANDLE;
+		VkDevice m_device = VK_NULL_HANDLE;
+		VkPipeline m_singlePipeline = VK_NULL_HANDLE;
+		VkPipelineLayout m_singleLayout = VK_NULL_HANDLE;
+		VkPipeline m_multiPipeline = VK_NULL_HANDLE;
+		VkPipelineLayout m_multiLayout = VK_NULL_HANDLE;
 	};
 } // namespace aether

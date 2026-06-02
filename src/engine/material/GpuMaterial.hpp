@@ -29,19 +29,19 @@ namespace aether
 		static constexpr std::uint32_t kAlphaBlend = 1u << 1;
 		static constexpr std::uint32_t kAlphaMask = 1u << 2;
 
-		glm::vec4 baseColorFactor{ 1.0f };
-		float metallicFactor{ 1.0f };
-		float roughnessFactor{ 1.0f };
-		float occlusionStrength{ 1.0f };
-		float alphaCutoff{ 0.5f };
-		glm::vec4 emissiveFactor{ 0.0f }; // w unused
-		std::uint32_t flags{ 0 };
-		std::uint32_t albedoSlot{ kNoTexture };
-		std::uint32_t normalSlot{ kNoTexture };
-		std::uint32_t metallicRoughnessSlot{ kNoTexture };
-		std::uint32_t occlusionSlot{ kNoTexture };
-		std::uint32_t emissiveSlot{ kNoTexture };
-		std::uint32_t _pad[2]{ 0, 0 };
+		glm::vec4 baseColorFactor{1.0f};
+		float metallicFactor{1.0f};
+		float roughnessFactor{1.0f};
+		float occlusionStrength{1.0f};
+		float alphaCutoff{0.5f};
+		glm::vec4 emissiveFactor{0.0f}; // w unused
+		std::uint32_t flags{0};
+		std::uint32_t albedoSlot{kNoTexture};
+		std::uint32_t normalSlot{kNoTexture};
+		std::uint32_t metallicRoughnessSlot{kNoTexture};
+		std::uint32_t occlusionSlot{kNoTexture};
+		std::uint32_t emissiveSlot{kNoTexture};
+		std::uint32_t _pad[2]{0, 0};
 	};
 
 	static_assert(sizeof(GpuMaterial) == 80, "GpuMaterial size changed - update the Slang struct in gltf_mesh.slang.");

@@ -26,31 +26,25 @@ namespace
 	{
 		static TagOps build()
 		{
-			return TagOps{
-				.add = [](World* w, uint32_t id) {
-					w->GetRegistry().emplace_or_replace<TagSlot<N>>(World::ToEntt(Entity{ id }));
-				},
-				.has = [](World* w, uint32_t id) -> bool {
-					return w->Has<TagSlot<N>>(Entity{ id });
-				},
-				.remove = [](World* w, uint32_t id) {
-					w->Remove<TagSlot<N>>(Entity{ id });
-				},
-				.for_each = [](World* w, const std::function<void(uint32_t)>& callback) {
-					for (auto enttE : w->View<TagSlot<N>>())
-					{
-						const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
-						callback(id);
-					}
-				}
-			};
+			return TagOps{.add = [](World* w, uint32_t id) { w->GetRegistry().emplace_or_replace<TagSlot<N>>(World::ToEntt(Entity{id})); },
+			        .has = [](World* w, uint32_t id) -> bool { return w->Has<TagSlot<N>>(Entity{id}); },
+			        .remove = [](World* w, uint32_t id) { w->Remove<TagSlot<N>>(Entity{id}); },
+			        .for_each =
+			                [](World* w, const std::function<void(uint32_t)>& callback)
+			        {
+				        for (auto enttE: w->View<TagSlot<N>>())
+				        {
+					        const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
+					        callback(id);
+				        }
+			        }};
 		}
 	};
 
 	template<int... Is>
 	std::array<TagOps, sizeof...(Is)> make_tag_ops_array_impl(std::integer_sequence<int, Is...>)
 	{
-		return { TagOpsBuilder<Is>::build()... };
+		return {TagOpsBuilder<Is>::build()...};
 	}
 
 	inline std::array<TagOps, kMaxTagSlots> make_tag_ops_array()
@@ -62,7 +56,7 @@ namespace
 	{
 	public:
 		TagRegistry()
-			: m_tagOps(make_tag_ops_array())
+		      : m_tagOps(make_tag_ops_array())
 		{
 		}
 

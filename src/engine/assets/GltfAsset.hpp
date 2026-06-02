@@ -28,10 +28,10 @@ namespace aether::assets
 	struct GltfMaterial
 	{
 		std::string name;
-		glm::vec4 baseColorFactor{ 1.0f };
+		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor = 1.0f;
 		float roughnessFactor = 1.0f;
-		glm::vec3 emissiveFactor{ 0.0f };
+		glm::vec3 emissiveFactor{0.0f};
 		float alphaCutoff = 0.5f;
 		bool doubleSided = false;
 		bool alphaBlend = false;
@@ -58,10 +58,10 @@ namespace aether::assets
 		std::vector<std::uint32_t> children;
 		std::int32_t meshIndex = -1;
 		std::int32_t skinIndex = -1;
-		glm::vec3 translation{ 0.0f };
-		glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
-		glm::vec3 scale{ 1.0f };
-		glm::mat4 matrix{ 1.0f };
+		glm::vec3 translation{0.0f};
+		glm::quat rotation{1.0f, 0.0f, 0.0f, 0.0f};
+		glm::vec3 scale{1.0f};
+		glm::mat4 matrix{1.0f};
 		bool hasMatrix = false;
 	};
 

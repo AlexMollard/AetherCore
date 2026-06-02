@@ -52,7 +52,7 @@ namespace
 	// entity_destroy(world, entity_id)
 	void das_entity_destroy(aether::World* w, uint32_t id)
 	{
-		w->Destroy(aether::Entity{ id });
+		w->Destroy(aether::Entity{id});
 	}
 
 	// entity_valid(entity_id) -> bool
@@ -68,7 +68,7 @@ namespace
 	das::float3 das_get_position(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id });
+		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -83,7 +83,7 @@ namespace
 	// Only updates the translation column - leaves rotation/scale intact.
 	void das_set_position(aether::World* w, uint32_t id, das::float3 pos)
 	{
-		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id });
+		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return;
@@ -96,7 +96,7 @@ namespace
 	{
 		das::float3 r{};
 		r.x = r.y = r.z = 1.0f;
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id });
+		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -112,7 +112,7 @@ namespace
 	das::float3 das_get_euler(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id });
+		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -145,21 +145,21 @@ namespace
 	// Recomposes the full TRS matrix from the three float3 arguments.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
 	{
-		const auto xform = ComposeTransform({ pos.x, pos.y, pos.z }, { euler.x, euler.y, euler.z }, { scale.x, scale.y, scale.z });
+		const auto xform = ComposeTransform({pos.x, pos.y, pos.z}, {euler.x, euler.y, euler.z}, {scale.x, scale.y, scale.z});
 
 		// Update script entity transform.
-		if (auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
+		if (auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
 		{
 			tc->localToWorld = xform;
 		}
 
 		// Propagate to spawned mesh entities.
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
 		{
-			for (const auto eid : sec->entityIds)
+			for (const auto eid: sec->entityIds)
 			{
-				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{ eid }))
+				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
 				{
 					stc->localToWorld = xform;
 				}
@@ -167,87 +167,87 @@ namespace
 		}
 	}
 
-// ── Model loading ─────────────────────────────────────────────────────────
+	// ── Model loading ─────────────────────────────────────────────────────────
 
-// load_model(world, entity_id, path)
-void das_load_model(aether::World* w, uint32_t id, const char* path)
-{
-	auto& ctx = ActiveContext();
-
-	if (!ctx.defaultPipeline)
+	// load_model(world, entity_id, path)
+	void das_load_model(aether::World* w, uint32_t id, const char* path)
 	{
-		AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
-		return;
-	}
+		auto& ctx = ActiveContext();
 
-	glm::mat4 xform{ 1.0f };
-
-	if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{ id }))
-	{
-		xform = tc->localToWorld;
-	}
-
-	// -------------------------------------------------------------------------
-	// Try reuse existing model
-	// -------------------------------------------------------------------------
-
-	aether::LoadedModel* modelPtr = nullptr;
-
-	auto it = ctx.loadedModelMap.find(path);
-
-	if (it != ctx.loadedModelMap.end())
-	{
-		modelPtr = &ctx.loadedModels[it->second];
-	}
-	else
-	{
-		auto result = ctx.assets->LoadModel(path);
-
-		if (!result)
+		if (!ctx.defaultPipeline)
 		{
-			AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}' because of {}", path, result.error());
+			AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
 			return;
 		}
 
-		ctx.loadedModels.push_back(std::move(result.value()));
+		glm::mat4 xform{1.0f};
 
-		const size_t index = ctx.loadedModels.size() - 1;
-
-		ctx.loadedModelMap[path] = index;
-
-		modelPtr = &ctx.loadedModels[index];
-	}
-
-	// -------------------------------------------------------------------------
-	// Spawn instance with parent link
-	// -------------------------------------------------------------------------
-
-	std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline, id);
-
-	for (aether::Entity meshEntity : meshEntities)
-	{
-		if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))
+		if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
 		{
-			tc->localToWorld = xform * tc->localToWorld;
+			xform = tc->localToWorld;
 		}
-		ctx.sceneEntities.push_back(meshEntity);
+
+		// -------------------------------------------------------------------------
+		// Try reuse existing model
+		// -------------------------------------------------------------------------
+
+		aether::LoadedModel* modelPtr = nullptr;
+
+		auto it = ctx.loadedModelMap.find(path);
+
+		if (it != ctx.loadedModelMap.end())
+		{
+			modelPtr = &ctx.loadedModels[it->second];
+		}
+		else
+		{
+			auto result = ctx.assets->LoadModel(path);
+
+			if (!result)
+			{
+				AE_WARN(aether::LogCategory::App, "load_model: failed to load '{}' because of {}", path, result.error());
+				return;
+			}
+
+			ctx.loadedModels.push_back(std::move(result.value()));
+
+			const size_t index = ctx.loadedModels.size() - 1;
+
+			ctx.loadedModelMap[path] = index;
+
+			modelPtr = &ctx.loadedModels[index];
+		}
+
+		// -------------------------------------------------------------------------
+		// Spawn instance with parent link
+		// -------------------------------------------------------------------------
+
+		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline, id);
+
+		for (aether::Entity meshEntity: meshEntities)
+		{
+			if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))
+			{
+				tc->localToWorld = xform * tc->localToWorld;
+			}
+			ctx.sceneEntities.push_back(meshEntity);
+		}
+
+		// Store spawned entity IDs for script-level propagation.
+		auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		if (!sec)
+		{
+			w->Emplace<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+			sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		}
+		sec->entityIds.clear();
+		for (const aether::Entity me: meshEntities)
+		{
+			sec->entityIds.push_back(me.id);
+		}
 	}
 
-	// Store spawned entity IDs for script-level propagation.
-	auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
-	if (!sec)
-	{
-		w->Emplace<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
-		sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
-	}
-	sec->entityIds.clear();
-	for (const aether::Entity me : meshEntities)
-	{
-		sec->entityIds.push_back(me.id);
-	}
-}
-
-// ── Entity iteration ──────────────────────────────────────────────────────
+	// ── Entity iteration ──────────────────────────────────────────────────────
 
 	// for_each_with_transform(world) <| $(e : uint) { ... }
 	void das_for_each_with_transform(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
@@ -300,11 +300,14 @@ void das_load_model(aether::World* w, uint32_t id, const char* path)
 	// for_each_with_tag(world, tag_id) <| $(e : uint) { ... }
 	void das_for_each_with_tag(aether::World* w, uint32_t tagId, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
 	{
-		aether::ForEachWithTag(w, tagId, [&](uint32_t id) {
-			vec4f args[1];
-			args[0] = das::cast<uint32_t>::from(id);
-			ctx->invoke(block, args, nullptr, at);
-		});
+		aether::ForEachWithTag(w,
+		        tagId,
+		        [&](uint32_t id)
+		        {
+			        vec4f args[1];
+			        args[0] = das::cast<uint32_t>::from(id);
+			        ctx->invoke(block, args, nullptr, at);
+		        });
 	}
 
 	// ── Primitive mesh caching ───────────────────────────────────────────────
@@ -313,7 +316,7 @@ void das_load_model(aether::World* w, uint32_t id, const char* path)
 	// and returns a handle that can be passed to add_mesh.
 	uint32_t das_create_mesh(aether::World* w, const char* type)
 	{
-		(void)w;
+		(void) w;
 		auto& ctx = ActiveContext();
 		if (!ctx.primitives || !ctx.defaultPipeline)
 		{
@@ -383,10 +386,10 @@ void das_load_model(aether::World* w, uint32_t id, const char* path)
 			return;
 		}
 
-		const aether::Entity e{ entityId };
-		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{ .pipeline = entry.pipeline });
-		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{ .mesh = entry.mesh });
-		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{ .material = entry.material });
+		const aether::Entity e{entityId};
+		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = entry.pipeline});
+		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = entry.mesh});
+		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{.material = entry.material});
 	}
 
 } // namespace

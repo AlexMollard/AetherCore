@@ -18,7 +18,7 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage, desc.debugName));
 		m_buffer = std::move(buffer);
-		m_freeList.push_back({ 0, desc.capacityBytes });
+		m_freeList.push_back({0, desc.capacityBytes});
 	}
 
 	void GpuHeap::Shutdown()
@@ -52,7 +52,7 @@ namespace aether
 			// Split off alignment waste as a separate free block (reuse current slot).
 			if (waste > 0)
 			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{ alignedOffset, effectiveSize });
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset, effectiveSize});
 				m_freeList[idx].size = waste;
 				++idx;
 			}
@@ -60,7 +60,7 @@ namespace aether
 			// Split off remaining free space after the allocation.
 			if (effectiveSize > bytes)
 			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{ alignedOffset + bytes, effectiveSize - bytes });
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset + bytes, effectiveSize - bytes});
 				// Block at idx now represents the allocated region: {alignedOffset, bytes}
 				// Replace it with the remainder since we only split once - keep it simple:
 				// erase the usable slot (idx) since we'll let the normal free-list manage leftovers.
@@ -83,7 +83,7 @@ namespace aether
 		constexpr VkDeviceSize kMinAlignment = 16;
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 		auto it = std::lower_bound(m_freeList.begin(), m_freeList.end(), offset, [](const FreeBlock& b, VkDeviceSize o) { return b.offset < o; });
-		it = m_freeList.insert(it, { offset, bytes });
+		it = m_freeList.insert(it, {offset, bytes});
 
 		// Merge with next block if adjacent.
 		if (const auto next = std::next(it); next != m_freeList.end() && it->offset + it->size == next->offset)
@@ -116,10 +116,10 @@ namespace aether
 
 		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			.commandPool = pool,
-			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			.commandBufferCount = 1,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		        .commandPool = pool,
+		        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		        .commandBufferCount = 1,
 		};
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
@@ -129,8 +129,8 @@ namespace aether
 		}
 
 		const VkCommandBufferBeginInfo beginInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
 		const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
 		if (beginResult != VK_SUCCESS)
@@ -139,7 +139,7 @@ namespace aether
 			Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "GpuHeap: failed to begin upload command buffer"));
 		}
 
-		const VkBufferCopy region{ .srcOffset = 0, .dstOffset = dstOffset, .size = bytes };
+		const VkBufferCopy region{.srcOffset = 0, .dstOffset = dstOffset, .size = bytes};
 		vkCmdCopyBuffer(cmd, staging.Get(), m_buffer.Get(), 1, &region);
 
 		const VkResult endResult = vkEndCommandBuffer(cmd);
@@ -150,9 +150,9 @@ namespace aether
 		}
 
 		const VkSubmitInfo submitInfo{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &cmd,
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		        .commandBufferCount = 1,
+		        .pCommandBuffers = &cmd,
 		};
 		const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
 		if (submitResult != VK_SUCCESS)

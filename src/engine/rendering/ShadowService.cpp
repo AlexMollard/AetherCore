@@ -23,13 +23,13 @@ namespace aether
 	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		for (auto& shadowConstants : m_shadowFrameConstants)
+		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
 			shadowConstants.Initialize(context);
 		}
 
 		// Single shadow queue with 3× output capacity for multi-frustum culling.
-		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueue::Config{ .maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount });
+		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueue::Config{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
@@ -39,12 +39,12 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
-		for (auto& shadowConstants : m_shadowFrameConstants)
+		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
-		(void)device;
+		(void) device;
 	}
 
 	void ShadowService::RecreatePipeline(VkDevice device, VkFormat depthFormat)
@@ -89,18 +89,19 @@ namespace aether
 		AE_PROFILE_ZONE();
 
 		// ── Multi-frustum cull pass (replaces 3× per-cascade cull dispatches) ──
-		graph.AddComputePass("$CullDraws_Shadow").ExecuteCompute(
-		        [this, &cullPass](PassContext& ctx)
-		        {
-			        const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
-			        VkDeviceAddress cascadeAddrs[kCullMultiFrustumCount];
-			        for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
-			        {
-				        cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
-			        }
-			        m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
-			        m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
-		        });
+		graph.AddComputePass("$CullDraws_Shadow")
+		        .ExecuteCompute(
+		                [this, &cullPass](PassContext& ctx)
+		                {
+			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+			                VkDeviceAddress cascadeAddrs[kCullMultiFrustumCount];
+			                for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
+			                {
+				                cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
+			                }
+			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
+		                });
 
 		// ── Per-cascade depth passes (read from each cascade's output region) ──
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
@@ -113,12 +114,12 @@ namespace aether
 			        .WriteDepth(m_shadowDepth[cascade], VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearDepthValue(1.0f))
 			        .SetExtent(m_shadowMapExtents[cascade])
 			        .Execute(
-		                [this, cascade](PassContext& ctx)
-		                {
-			                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
-			                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
-			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
-		                });
+			                [this, cascade](PassContext& ctx)
+			                {
+				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
+				                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
+				                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+			                });
 		}
 	}
 

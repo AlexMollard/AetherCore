@@ -17,10 +17,10 @@ namespace
 		aether::CameraDesc desc{};
 		desc.mode = aether::CameraMode::Orbit;
 		desc.fovDegrees = fovDeg;
-		desc.orbitTarget = { target.x, target.y, target.z };
+		desc.orbitTarget = {target.x, target.y, target.z};
 		desc.orbitYaw = 0.0f;
 		desc.orbitPitch = 20.0f;
-		desc.orbitDistance = glm::length(glm::vec3{ pos.x - target.x, pos.y - target.y, pos.z - target.z });
+		desc.orbitDistance = glm::length(glm::vec3{pos.x - target.x, pos.y - target.y, pos.z - target.z});
 		return ctx.cameras->Create(desc).id;
 	}
 
@@ -31,13 +31,13 @@ namespace
 		aether::CameraDesc desc{};
 		desc.mode = aether::CameraMode::Free;
 		desc.fovDegrees = fovDeg;
-		desc.position = { pos.x, pos.y, pos.z };
+		desc.position = {pos.x, pos.y, pos.z};
 		return ctx.cameras->Create(desc).id;
 	}
 
 	void das_set_main_camera(uint32_t id)
 	{
-		ActiveContext().cameras->SetMainCamera(aether::CameraHandle{ id });
+		ActiveContext().cameras->SetMainCamera(aether::CameraHandle{id});
 	}
 
 } // namespace

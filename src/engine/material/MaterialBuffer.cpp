@@ -25,8 +25,8 @@ namespace aether
 		m_mapped = static_cast<GpuMaterial*>(allocInfo.pMappedData);
 
 		const VkBufferDeviceAddressInfo addrInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-			.buffer = m_buffer.Get(),
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		        .buffer = m_buffer.Get(),
 		};
 		m_address = vkGetBufferDeviceAddress(m_device, &addrInfo);
 

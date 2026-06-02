@@ -32,35 +32,35 @@ namespace aether::ui
 	// anchor so subsequent UIRenderer draws are consistent.
 	static UiRect PixelToUiRect(const UiTransformComponent& t, glm::vec4 px, VkExtent2D ext)
 	{
-		const glm::vec2 sizePx{ static_cast<float>(ext.width), static_cast<float>(ext.height) };
+		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
 		return UiRect{
-			.anchorMin = t.rect.anchorMin,
-			.anchorMax = t.rect.anchorMin,
-			.offsetMinPx = {        px.x - anchorPx.x,        px.y - anchorPx.y },
-			.offsetMaxPx = { px.x + px.z - anchorPx.x, px.y + px.w - anchorPx.y },
+		        .anchorMin = t.rect.anchorMin,
+		        .anchorMax = t.rect.anchorMin,
+		        .offsetMinPx = {px.x - anchorPx.x, px.y - anchorPx.y},
+		        .offsetMaxPx = {px.x + px.z - anchorPx.x, px.y + px.w - anchorPx.y},
 		};
 	}
 
 	// A UiPoint centred on a pixel rect, using the entity's anchor.
 	static UiPoint CentrePoint(const UiTransformComponent& t, glm::vec4 px, VkExtent2D ext)
 	{
-		const glm::vec2 sizePx{ static_cast<float>(ext.width), static_cast<float>(ext.height) };
+		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
 		return UiPoint{
-			.anchor = t.rect.anchorMin,
-			.offsetPx = { px.x + px.z * 0.5f - anchorPx.x, px.y + px.w * 0.5f - anchorPx.y },
+		        .anchor = t.rect.anchorMin,
+		        .offsetPx = {px.x + px.z * 0.5f - anchorPx.x, px.y + px.w * 0.5f - anchorPx.y},
 		};
 	}
 
 	// UiPoint at a specific pixel position, using the entity's anchor.
 	static UiPoint PixelPoint(const UiTransformComponent& t, glm::vec2 px, VkExtent2D ext)
 	{
-		const glm::vec2 sizePx{ static_cast<float>(ext.width), static_cast<float>(ext.height) };
+		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
 		return UiPoint{
-			.anchor = t.rect.anchorMin,
-			.offsetPx = px - anchorPx,
+		        .anchor = t.rect.anchorMin,
+		        .offsetPx = px - anchorPx,
 		};
 	}
 
@@ -119,12 +119,7 @@ namespace aether::ui
 		{
 			const UiPoint centre = CentrePoint(*t, px, extent);
 			const float textW = ui.MeasureText(btn->label, theme.buttonFontSize);
-			ui.DrawText(btn->label,
-			        UiPoint{
-			                centre.anchor, { centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f }
-            },
-			        theme.buttonFontSize,
-			        btn->textColor);
+			ui.DrawText(btn->label, UiPoint{centre.anchor, {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, btn->textColor);
 		}
 
 		ui.SetLayer(prevLayer);
@@ -174,13 +169,13 @@ namespace aether::ui
 		const float fillW = px.z * fillFraction;
 		if (fillW > 0.f)
 		{
-			ui.DrawRect(PixelToUiRect(*t, { px.x, px.y, fillW, trackH }, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
+			ui.DrawRect(PixelToUiRect(*t, {px.x, px.y, fillW, trackH}, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
 		}
 
 		// Draw knob circle.
 		const float knobCX = px.x + fillW;
 		const float knobCY = px.y + trackH * 0.5f;
-		ui.DrawCircle(PixelPoint(*t, { knobCX, knobCY }, extent), theme.knobRadius, slider->isDragging ? theme.accent : theme.sliderKnob);
+		ui.DrawCircle(PixelPoint(*t, {knobCX, knobCY}, extent), theme.knobRadius, slider->isDragging ? theme.accent : theme.sliderKnob);
 
 		ui.SetLayer(prevLayer);
 		return slider->value;
@@ -209,7 +204,7 @@ namespace aether::ui
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float boxSize = std::min(px.w, 16.f);
 		const float boxY = px.y + (px.w - boxSize) * 0.5f;
-		const glm::vec4 boxPx = { px.x, boxY, boxSize, boxSize };
+		const glm::vec4 boxPx = {px.x, boxY, boxSize, boxSize};
 
 		// Box background.
 		const glm::vec4 boxColor = cb->checked ? theme.checkboxOn : theme.checkboxOff;
@@ -219,9 +214,9 @@ namespace aether::ui
 		if (cb->checked)
 		{
 			const float m = boxSize * 0.15f;
-			const glm::vec2 p0{ boxPx.x + m, boxPx.y + boxPx.w * 0.5f };
-			const glm::vec2 p1{ boxPx.x + boxPx.z * 0.4f, boxPx.y + boxPx.w - m * 1.5f };
-			const glm::vec2 p2{ boxPx.x + boxPx.z - m, boxPx.y + m * 1.5f };
+			const glm::vec2 p0{boxPx.x + m, boxPx.y + boxPx.w * 0.5f};
+			const glm::vec2 p1{boxPx.x + boxPx.z * 0.4f, boxPx.y + boxPx.w - m * 1.5f};
+			const glm::vec2 p2{boxPx.x + boxPx.z - m, boxPx.y + m * 1.5f};
 			ui.DrawLine(PixelPoint(*t, p0, extent), PixelPoint(*t, p1, extent), 2.f, theme.text);
 			ui.DrawLine(PixelPoint(*t, p1, extent), PixelPoint(*t, p2, extent), 2.f, theme.text);
 		}
@@ -231,7 +226,7 @@ namespace aether::ui
 		{
 			const float labelX = boxPx.x + boxSize + 6.f;
 			const float labelY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
-			ui.DrawText(cb->label, PixelPoint(*t, { labelX, labelY }, extent), theme.bodyFontSize, theme.text);
+			ui.DrawText(cb->label, PixelPoint(*t, {labelX, labelY}, extent), theme.bodyFontSize, theme.text);
 		}
 
 		ui.SetLayer(prevLayer);
@@ -260,7 +255,7 @@ namespace aether::ui
 		ui.DrawRect(t->rect, theme.sliderTrack, theme.cornerRadius * 0.5f);
 		if (fillW > 0.f)
 		{
-			ui.DrawRect(PixelToUiRect(*t, { px.x, px.y, fillW, px.w }, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
+			ui.DrawRect(PixelToUiRect(*t, {px.x, px.y, fillW, px.w}, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
 		}
 		ui.SetLayer(prevLayer);
 	}
@@ -288,7 +283,7 @@ namespace aether::ui
 				if (!panel->collapsed)
 				{
 					panel->expandedRect = t->rect;
-					t->rect = PixelToUiRect(*t, { px0.x, px0.y, px0.z, theme.headerHeight }, extent);
+					t->rect = PixelToUiRect(*t, {px0.x, px0.y, px0.z, theme.headerHeight}, extent);
 				}
 				else
 				{
@@ -309,7 +304,7 @@ namespace aether::ui
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float hdrH = theme.headerHeight;
-		const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 
 		// Panel background - only drawn when expanded.
@@ -321,11 +316,11 @@ namespace aether::ui
 
 		// Header background (always drawn; covers the full rect when collapsed).
 		ui.SetLayer(baseLayer + 1);
-		const glm::vec4 hdrPx = { px.x, px.y, px.z, hdrH };
+		const glm::vec4 hdrPx = {px.x, px.y, px.z, hdrH};
 		ui.DrawRect(PixelToUiRect(*t, hdrPx, extent), theme.panelHeaderBg, theme.cornerRadius);
 
 		// Accent bar on left edge of header.
-		const glm::vec4 accentPx = { px.x + 2.f, px.y + hdrH * 0.2f, 3.f, hdrH * 0.6f };
+		const glm::vec4 accentPx = {px.x + 2.f, px.y + hdrH * 0.2f, 3.f, hdrH * 0.6f};
 		ui.DrawRect(PixelToUiRect(*t, accentPx, extent), theme.accent);
 
 		// Title text.
@@ -334,8 +329,8 @@ namespace aether::ui
 			ui.DrawText(panel->title,
 			        UiPoint{
 			                .anchor = t->rect.anchorMin,
-			                .offsetPx = { px.x + theme.padding - anchorPx.x, px.y + hdrH * 0.5f + theme.titleFontSize * 0.35f - anchorPx.y },
-            },
+			                .offsetPx = {px.x + theme.padding - anchorPx.x, px.y + hdrH * 0.5f + theme.titleFontSize * 0.35f - anchorPx.y},
+			        },
 			        theme.titleFontSize,
 			        theme.textTitle);
 		}
@@ -348,14 +343,14 @@ namespace aether::ui
 			if (panel->collapsed)
 			{
 				// Right-pointing triangle (collapsed).
-				ui.DrawLine(PixelPoint(*t, { arrowX - 5.f, arrowY - 5.f }, extent), PixelPoint(*t, { arrowX, arrowY }, extent), 2.f, theme.textLabel);
-				ui.DrawLine(PixelPoint(*t, { arrowX, arrowY }, extent), PixelPoint(*t, { arrowX - 5.f, arrowY + 5.f }, extent), 2.f, theme.textLabel);
+				ui.DrawLine(PixelPoint(*t, {arrowX - 5.f, arrowY - 5.f}, extent), PixelPoint(*t, {arrowX, arrowY}, extent), 2.f, theme.textLabel);
+				ui.DrawLine(PixelPoint(*t, {arrowX, arrowY}, extent), PixelPoint(*t, {arrowX - 5.f, arrowY + 5.f}, extent), 2.f, theme.textLabel);
 			}
 			else
 			{
 				// Down-pointing triangle (expanded).
-				ui.DrawLine(PixelPoint(*t, { arrowX - 5.f, arrowY - 3.f }, extent), PixelPoint(*t, { arrowX, arrowY + 3.f }, extent), 2.f, theme.textLabel);
-				ui.DrawLine(PixelPoint(*t, { arrowX, arrowY + 3.f }, extent), PixelPoint(*t, { arrowX + 5.f, arrowY - 3.f }, extent), 2.f, theme.textLabel);
+				ui.DrawLine(PixelPoint(*t, {arrowX - 5.f, arrowY - 3.f}, extent), PixelPoint(*t, {arrowX, arrowY + 3.f}, extent), 2.f, theme.textLabel);
+				ui.DrawLine(PixelPoint(*t, {arrowX, arrowY + 3.f}, extent), PixelPoint(*t, {arrowX + 5.f, arrowY - 3.f}, extent), 2.f, theme.textLabel);
 			}
 		}
 
@@ -364,11 +359,8 @@ namespace aether::ui
 		{
 			ui.SetLayer(baseLayer + 2);
 			const float sepY = px.y + hdrH;
-			ui.DrawLine(
-			        UiPoint{
-			                .anchor = t->rect.anchorMin, .offsetPx = { px.x + theme.padding - anchorPx.x, sepY - anchorPx.y }
-            },
-			        UiPoint{ .anchor = t->rect.anchorMin, .offsetPx = { px.x + px.z - theme.padding - anchorPx.x, sepY - anchorPx.y } },
+			ui.DrawLine(UiPoint{.anchor = t->rect.anchorMin, .offsetPx = {px.x + theme.padding - anchorPx.x, sepY - anchorPx.y}},
+			        UiPoint{.anchor = t->rect.anchorMin, .offsetPx = {px.x + px.z - theme.padding - anchorPx.x, sepY - anchorPx.y}},
 			        1.f,
 			        theme.separator);
 		}
@@ -505,11 +497,11 @@ namespace aether::ui
 
 			if (isVertical)
 			{
-				ct->rect = PixelToUiRect(*ct, { parentPx.x + pad, cursor, crossSize, mainSize }, extent);
+				ct->rect = PixelToUiRect(*ct, {parentPx.x + pad, cursor, crossSize, mainSize}, extent);
 			}
 			else
 			{
-				ct->rect = PixelToUiRect(*ct, { cursor, parentPx.y + pad, mainSize, crossSize }, extent);
+				ct->rect = PixelToUiRect(*ct, {cursor, parentPx.y + pad, mainSize, crossSize}, extent);
 			}
 			cursor += mainSize + spacing;
 		}
@@ -564,7 +556,7 @@ namespace aether::ui
 			const int row = i / cols;
 			const float x = parentPx.x + pad + static_cast<float>(col) * (slot + sp);
 			const float y = parentPx.y + pad + static_cast<float>(row) * (slot + sp);
-			ct->rect = PixelToUiRect(*ct, { x, y, slot, slot }, extent);
+			ct->rect = PixelToUiRect(*ct, {x, y, slot, slot}, extent);
 			++i;
 		}
 
@@ -596,28 +588,28 @@ namespace aether::ui
 
 	Entity SpawnButton(aether::World& world, UiRect rect, std::string_view label, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiButtonComponent>(UiButtonComponent{ .label = std::string(label) }).entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiButtonComponent>(UiButtonComponent{.label = std::string(label)}).entity();
 	}
 
 	Entity SpawnSlider(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiSliderComponent>(UiSliderComponent{ .min = min, .max = max, .value = value }).entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiSliderComponent>(UiSliderComponent{.min = min, .max = max, .value = value}).entity();
 	}
 
 	Entity SpawnCheckbox(aether::World& world, UiRect rect, std::string_view label, bool checked, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiCheckboxComponent>(UiCheckboxComponent{ .checked = checked, .label = std::string(label) }).entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiCheckboxComponent>(UiCheckboxComponent{.checked = checked, .label = std::string(label)}).entity();
 	}
 
 	Entity SpawnProgressBar(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiSliderComponent>(UiSliderComponent{ .min = min, .max = max, .value = value }).entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSliderComponent>(UiSliderComponent{.min = min, .max = max, .value = value}).entity();
 	}
 
 	Entity SpawnPanel(aether::World& world, UiRect rect, std::string_view title, bool draggable, bool collapsible, float zOrder)
 	{
 		return world.Spawn()
-		        .Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder })
+		        .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
 		        .Add<UiInputComponent>()
 		        .Add<UiPanelComponent>(UiPanelComponent{
 		                .title = std::string(title),
@@ -651,7 +643,7 @@ namespace aether::ui
 		// Accent bar on left edge indicates keyboard focus.
 		if (inp->focused)
 		{
-			const glm::vec4 accentPx = { px.x, px.y + 3.f, 2.f, px.w - 6.f };
+			const glm::vec4 accentPx = {px.x, px.y + 3.f, 2.f, px.w - 6.f};
 			ui.DrawRect(PixelToUiRect(*t, accentPx, extent), theme.accent);
 		}
 
@@ -663,11 +655,11 @@ namespace aether::ui
 
 		if (ti->text.empty() && !ti->placeholder.empty())
 		{
-			ui.DrawText(ti->placeholder, PixelPoint(*t, { textX, textY }, extent), theme.bodyFontSize, theme.placeholder);
+			ui.DrawText(ti->placeholder, PixelPoint(*t, {textX, textY}, extent), theme.bodyFontSize, theme.placeholder);
 		}
 		else if (!ti->text.empty())
 		{
-			ui.DrawText(ti->text, PixelPoint(*t, { textX, textY }, extent), theme.bodyFontSize, theme.text);
+			ui.DrawText(ti->text, PixelPoint(*t, {textX, textY}, extent), theme.bodyFontSize, theme.text);
 		}
 
 		// Blinking cursor - only when focused.
@@ -675,7 +667,7 @@ namespace aether::ui
 		{
 			const std::string_view prefix(ti->text.data(), static_cast<std::size_t>(ti->cursorPos));
 			const float cursorX = textX + ui.MeasureText(prefix, theme.bodyFontSize);
-			ui.DrawLine(PixelPoint(*t, { cursorX, px.y + 3.f }, extent), PixelPoint(*t, { cursorX, px.y + px.w - 3.f }, extent), 1.5f, theme.accent);
+			ui.DrawLine(PixelPoint(*t, {cursorX, px.y + 3.f}, extent), PixelPoint(*t, {cursorX, px.y + px.w - 3.f}, extent), 1.5f, theme.accent);
 		}
 
 		ui.PopClipRect();
@@ -689,7 +681,7 @@ namespace aether::ui
 
 	Entity SpawnTextInput(aether::World& world, UiRect rect, std::string_view placeholder, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{ .placeholder = std::string(placeholder) }).entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{.placeholder = std::string(placeholder)}).entity();
 	}
 
 	// ── Hierarchy helper ──────────────────────────────────────────────────────
@@ -698,7 +690,7 @@ namespace aether::ui
 	{
 		auto* children = world.TryGet<UiChildrenComponent>(parent);
 		children->children.push_back(child);
-		world.Emplace<UiParentComponent>(child, UiParentComponent{ parent });
+		world.Emplace<UiParentComponent>(child, UiParentComponent{parent});
 
 		if (auto* parentTransform = world.TryGet<UiTransformComponent>(parent))
 		{
@@ -748,19 +740,19 @@ namespace aether::ui
 		ui.DrawRect(t->rect, borderColor, theme.slotCornerRadius);
 
 		// Inner background.
-		const glm::vec4 innerPx = { px.x + kBorderW, px.y + kBorderW, px.z - 2.f * kBorderW, px.w - 2.f * kBorderW };
+		const glm::vec4 innerPx = {px.x + kBorderW, px.y + kBorderW, px.z - 2.f * kBorderW, px.w - 2.f * kBorderW};
 		ui.DrawRect(PixelToUiRect(*t, innerPx, extent), theme.slotBg, theme.slotCornerRadius - kBorderW);
 
 		// Item contents when the slot is not empty.
 		if (slot->quantity > 0)
 		{
 			const float iconInset = kBorderW + 2.f;
-			const glm::vec4 iconPx = { px.x + iconInset, px.y + iconInset, px.z - 2.f * iconInset, px.w - 2.f * iconInset };
+			const glm::vec4 iconPx = {px.x + iconInset, px.y + iconInset, px.z - 2.f * iconInset, px.w - 2.f * iconInset};
 			const UiRect iconRect = PixelToUiRect(*t, iconPx, extent);
 
 			if (slot->textureSlot > 0)
 			{
-				ui.DrawTexturedRect(iconRect, slot->textureSlot, { 0.f, 0.f, 1.f, 1.f }, glm::vec4(1.f));
+				ui.DrawTexturedRect(iconRect, slot->textureSlot, {0.f, 0.f, 1.f, 1.f}, glm::vec4(1.f));
 			}
 			else if (slot->rarityColor.a > 0.f)
 			{
@@ -778,22 +770,12 @@ namespace aether::ui
 				const float tx = px.x + px.z - tw - 3.f;
 				const float ty = px.y + px.w - theme.slotFontSize - 2.f;
 
-				const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+				const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 				const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 
 				// Drop shadow for readability.
-				ui.DrawText(qty,
-				        UiPoint{
-				                t->rect.anchorMin, { tx - anchorPx.x + 1.f, ty - anchorPx.y + 1.f }
-                },
-				        theme.slotFontSize,
-				        { 0.f, 0.f, 0.f, 0.75f });
-				ui.DrawText(qty,
-				        UiPoint{
-				                t->rect.anchorMin, { tx - anchorPx.x, ty - anchorPx.y }
-                },
-				        theme.slotFontSize,
-				        theme.quantityText);
+				ui.DrawText(qty, UiPoint{t->rect.anchorMin, {tx - anchorPx.x + 1.f, ty - anchorPx.y + 1.f}}, theme.slotFontSize, {0.f, 0.f, 0.f, 0.75f});
+				ui.DrawText(qty, UiPoint{t->rect.anchorMin, {tx - anchorPx.x, ty - anchorPx.y}}, theme.slotFontSize, theme.quantityText);
 			}
 		}
 
@@ -811,13 +793,13 @@ namespace aether::ui
 
 	Entity SpawnItemSlot(aether::World& world, UiRect rect, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{ .rect = rect, .zOrder = zOrder }).Add<UiInputComponent>().Add<UiItemSlotComponent>().entity();
+		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiItemSlotComponent>().entity();
 	}
 
 	Entity SpawnItemGrid(aether::World& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder)
 	{
 		Entity container = world.Spawn()
-		                           .Add<UiTransformComponent>(UiTransformComponent{ .rect = containerRect, .zOrder = containerZOrder })
+		                           .Add<UiTransformComponent>(UiTransformComponent{.rect = containerRect, .zOrder = containerZOrder})
 		                           .Add<UiGridLayoutComponent>(UiGridLayoutComponent{
 		                                   .columns = columns,
 		                                   .slotSize = slotSize,

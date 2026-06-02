@@ -71,10 +71,10 @@ namespace aether::app
 		}
 
 		LayerContext context{
-			.services = m_engine.GetServiceContainer(),
-			.deltaTimeSeconds = 0.0,
-			.elapsedTimeSeconds = 0.0,
-			.frameIndex = m_frameIndex,
+		        .services = m_engine.GetServiceContainer(),
+		        .deltaTimeSeconds = 0.0,
+		        .elapsedTimeSeconds = 0.0,
+		        .frameIndex = m_frameIndex,
 		};
 
 		m_renderThread.Stop();
@@ -140,9 +140,9 @@ namespace aether::app
 		m_renderThread.Start(m_engine);
 
 		LayerContext attachContext{
-			.services = m_engine.GetServiceContainer(),
-			.deltaTimeSeconds = 0.0,
-			.frameIndex = 0,
+		        .services = m_engine.GetServiceContainer(),
+		        .deltaTimeSeconds = 0.0,
+		        .frameIndex = 0,
 		};
 
 		// Register engine-level systems before layers so any layer's OnRegister
@@ -209,9 +209,7 @@ namespace aether::app
 			// don't inflate simulation timing or cause camera/object jumps.
 			constexpr double kMaxDeltaTime = 1.0 / 30.0;
 			const auto currentFrameTime = std::chrono::steady_clock::now();
-			const auto deltaTime = std::min(
-				std::chrono::duration<double>(currentFrameTime - previousFrameTime).count(),
-				kMaxDeltaTime);
+			const auto deltaTime = std::min(std::chrono::duration<double>(currentFrameTime - previousFrameTime).count(), kMaxDeltaTime);
 			previousFrameTime = currentFrameTime;
 
 			m_engine.PumpEvents();
@@ -228,10 +226,10 @@ namespace aether::app
 			m_elapsedTimeSeconds += scaledDt;
 
 			LayerContext frameContext{
-				.services = m_engine.GetServiceContainer(),
-				.deltaTimeSeconds = scaledDt,
-				.elapsedTimeSeconds = m_elapsedTimeSeconds,
-				.frameIndex = m_frameIndex,
+			        .services = m_engine.GetServiceContainer(),
+			        .deltaTimeSeconds = scaledDt,
+			        .elapsedTimeSeconds = m_elapsedTimeSeconds,
+			        .frameIndex = m_frameIndex,
 			};
 
 			// Update ECS systems (game logic) with scaled dt.

@@ -47,25 +47,30 @@ namespace aether::app::scripting
 		// like `require daslib/json` can be resolved. Try common locations
 		// relative to the working directory (build output) and set the
 		// das root if we find a daslib directory.
-		try {
+		try
+		{
 			using fs = std::filesystem::path;
 			fs cwd = std::filesystem::current_path();
 			std::vector<fs> candidates = {
-				cwd / "_deps" / "dascript-src",
-				cwd / "build" / "_deps" / "dascript-src",
-				cwd / ".." / "_deps" / "dascript-src",
-				cwd / ".." / "build" / "_deps" / "dascript-src",
-				cwd / "_deps" / "dascript-src",
+			        cwd / "_deps" / "dascript-src",
+			        cwd / "build" / "_deps" / "dascript-src",
+			        cwd / ".." / "_deps" / "dascript-src",
+			        cwd / ".." / "build" / "_deps" / "dascript-src",
+			        cwd / "_deps" / "dascript-src",
 			};
-			for (const auto &c : candidates) {
+			for (const auto& c: candidates)
+			{
 				std::error_code ec;
-                if (!c.empty() && std::filesystem::exists(c / "daslib", ec)) {
-                    das::setDasRoot(c.string());
-                    AE_INFO(LogCategory::App, "daslang root set to '{}'.", c.string());
-                    break;
-                }
+				if (!c.empty() && std::filesystem::exists(c / "daslib", ec))
+				{
+					das::setDasRoot(c.string());
+					AE_INFO(LogCategory::App, "daslang root set to '{}'.", c.string());
+					break;
+				}
 			}
-		} catch (const std::exception &e) {
+		}
+		catch (const std::exception& e)
+		{
 			AE_WARN(LogCategory::App, "Failed to auto-detect daslang root: {}", e.what());
 		}
 

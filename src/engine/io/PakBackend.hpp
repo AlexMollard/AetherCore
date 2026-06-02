@@ -40,7 +40,7 @@ namespace aether::io
 		};
 
 		std::filesystem::path m_pakPath;
-		uint64_t m_assetDataBase{ 0 };
+		uint64_t m_assetDataBase{0};
 		std::unordered_map<std::string, EntryInfo> m_index;
 	};
 } // namespace aether::io

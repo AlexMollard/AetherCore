@@ -25,6 +25,7 @@
 namespace aether
 {
 	struct FrameConstants;
+
 	class AetherCore
 	{
 	public:

@@ -18,20 +18,20 @@ namespace aether
 	public:
 		struct PointLight
 		{
-			glm::vec3 position{ 0.0f };
+			glm::vec3 position{0.0f};
 			float radius = 1.0f;
-			glm::vec3 color{ 1.0f };
+			glm::vec3 color{1.0f};
 			float intensity = 1.0f;
 			bool castsShadow = false;
 		};
 
 		struct SpotLight
 		{
-			glm::vec3 position{ 0.0f };
+			glm::vec3 position{0.0f};
 			float radius = 1.0f;
-			glm::vec3 direction{ 0.0f, -1.0f, 0.0f };
+			glm::vec3 direction{0.0f, -1.0f, 0.0f};
 			float innerAngleRad = 0.35f;
-			glm::vec3 color{ 1.0f };
+			glm::vec3 color{1.0f};
 			float intensity = 1.0f;
 			float outerAngleRad = 0.60f;
 			bool castsShadow = false;
@@ -129,12 +129,12 @@ namespace aether
 		PostProcessStack* m_postProcessStack = nullptr;
 
 		// Cached light parameters (also written to frame constants).
-		glm::vec4 m_sunDirectionIntensity{ 0.577f, 0.577f, 0.577f, 3.0f };
-		glm::vec4 m_sunColor{ 1.0f, 0.96f, 0.90f, 1.0f };
-		glm::vec4 m_ambientColor{ 0.03f, 0.04f, 0.06f, 1.0f };
-		glm::vec4 m_skyHorizonColor{ 0.34f, 0.52f, 0.82f, 1.0f };
-		glm::vec4 m_skyZenithColor{ 0.08f, 0.19f, 0.45f, 1.0f };
-		glm::vec4 m_skyVoidColor{ 0.001f, 0.002f, 0.005f, 1.0f };
+		glm::vec4 m_sunDirectionIntensity{0.577f, 0.577f, 0.577f, 3.0f};
+		glm::vec4 m_sunColor{1.0f, 0.96f, 0.90f, 1.0f};
+		glm::vec4 m_ambientColor{0.03f, 0.04f, 0.06f, 1.0f};
+		glm::vec4 m_skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};
+		glm::vec4 m_skyZenithColor{0.08f, 0.19f, 0.45f, 1.0f};
+		glm::vec4 m_skyVoidColor{0.001f, 0.002f, 0.005f, 1.0f};
 		std::vector<PointLight> m_pointLights;
 		std::vector<SpotLight> m_spotLights;
 	};

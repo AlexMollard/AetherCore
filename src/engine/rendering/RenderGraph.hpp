@@ -141,12 +141,12 @@ namespace aether
 
 		[[nodiscard]] RGImage GetSwapchainColor() const
 		{
-			return RGImage{ kSwapchainColorId };
+			return RGImage{kSwapchainColorId};
 		}
 
 		[[nodiscard]] RGImage GetSwapchainDepth() const
 		{
-			return RGImage{ kSwapchainDepthId };
+			return RGImage{kSwapchainDepthId};
 		}
 
 		// Register an externally-owned image and return an RGImage handle.
@@ -288,10 +288,7 @@ namespace aether
 
 			bool operator==(const ImageCacheKey& other) const noexcept
 			{
-				return format == other.format && usage == other.usage &&
-				       aspect == other.aspect && width == other.width &&
-				       height == other.height && mipLevels == other.mipLevels &&
-				       samples == other.samples;
+				return format == other.format && usage == other.usage && aspect == other.aspect && width == other.width && height == other.height && mipLevels == other.mipLevels && samples == other.samples;
 			}
 		};
 
@@ -349,11 +346,13 @@ namespace aether
 		// used in. Indexed by frame index % kMaxFramesInFlight.
 		static constexpr std::size_t kMaxFramesInFlight = 3;
 		static constexpr std::uint32_t kCacheMaxStaleFrames = 10;
+
 		struct PendingDestruction
 		{
 			std::uint32_t entryIndex = 0xFFFFFFFFu;
 			UniqueImage image;
 		};
+
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;
 	};

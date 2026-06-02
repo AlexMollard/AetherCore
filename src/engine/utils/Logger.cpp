@@ -25,9 +25,9 @@ namespace aether
 {
 	namespace
 	{
-		std::atomic<LogLevel> g_minimumLevel{ LogLevel::Verbose };
+		std::atomic<LogLevel> g_minimumLevel{LogLevel::Verbose};
 		constexpr std::uint64_t kInvalidFrameNumber = (std::numeric_limits<std::uint64_t>::max)();
-		std::atomic<std::uint64_t> g_frameNumber{ kInvalidFrameNumber };
+		std::atomic<std::uint64_t> g_frameNumber{kInvalidFrameNumber};
 
 		struct LogEntry
 		{
@@ -54,7 +54,7 @@ namespace aether
 			std::string filePath;
 			std::uint64_t nextSequence = 0;
 			std::uint64_t completedSequence = 0;
-			std::atomic<bool> initialized{ false };
+			std::atomic<bool> initialized{false};
 			bool stopRequested = false;
 			std::terminate_handler previousTerminateHandler = nullptr;
 			void (*previousAbortHandler)(int) = nullptr;
@@ -63,7 +63,7 @@ namespace aether
 #endif
 		};
 
-		std::atomic<bool> g_crashHandlerActive{ false };
+		std::atomic<bool> g_crashHandlerActive{false};
 
 		LoggerBackend& GetBackend()
 		{
@@ -221,7 +221,7 @@ namespace aether
 
 			if (nowTime == cachedSecond)
 			{
-				return { cachedTimestamp, 8 };
+				return {cachedTimestamp, 8};
 			}
 
 			// Cross-platform time conversion: use thread-local storage on all platforms
@@ -236,7 +236,7 @@ namespace aether
 			std::snprintf(cachedTimestamp, sizeof(cachedTimestamp), "%02d:%02d:%02d", localTime.tm_hour, localTime.tm_min, localTime.tm_sec);
 
 			cachedSecond = nowTime;
-			return { cachedTimestamp, 8 };
+			return {cachedTimestamp, 8};
 		}
 
 		std::string_view ExtractFileName(const std::string_view path)
@@ -502,7 +502,7 @@ namespace aether
 		backend.filePath = std::string(filePath);
 		if (!backend.filePath.empty())
 		{
-			const std::filesystem::path logPath{ backend.filePath };
+			const std::filesystem::path logPath{backend.filePath};
 			if (logPath.has_parent_path())
 			{
 				std::error_code errorCode;

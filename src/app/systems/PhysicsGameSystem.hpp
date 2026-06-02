@@ -101,7 +101,7 @@ namespace aether::app
 		int m_projectileCount = 0;
 		float m_projectileCooldown = 0.0f;
 
-		std::mt19937 m_rng{ 1337 };
+		std::mt19937 m_rng{1337};
 
 		static constexpr float kGroundHalfExtent = 20.0f;
 		static constexpr float kGroundThickness = 0.5f;

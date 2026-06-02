@@ -13,7 +13,10 @@
 #include "ui/UiLayout.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
-namespace aether { class ServiceContainer; }
+namespace aether
+{
+	class ServiceContainer;
+}
 
 namespace aether
 {
@@ -70,7 +73,7 @@ namespace aether
 
 		// Re-registers UI render passes in the render graph (needed after a
 		// swapchain recreation that clears the graph).  Safe to call multiple
-		// times — the underlying RegisterPass will add duplicate passes if
+		// times - the underlying RegisterPass will add duplicate passes if
 		// called redundantly.
 		void ReRegisterPass();
 

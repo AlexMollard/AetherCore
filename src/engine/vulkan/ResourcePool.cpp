@@ -55,8 +55,8 @@ namespace aether
 		});
 
 		return VirtualBufferHandle{
-			.id = static_cast<std::uint32_t>(m_virtualBuffers.size()),
-			.generation = m_virtualBuffers.back().generation,
+		        .id = static_cast<std::uint32_t>(m_virtualBuffers.size()),
+		        .generation = m_virtualBuffers.back().generation,
 		};
 	}
 
@@ -70,8 +70,8 @@ namespace aether
 		});
 
 		return VirtualImageHandle{
-			.id = static_cast<std::uint32_t>(m_virtualImages.size()),
-			.generation = m_virtualImages.back().generation,
+		        .id = static_cast<std::uint32_t>(m_virtualImages.size()),
+		        .generation = m_virtualImages.back().generation,
 		};
 	}
 
@@ -225,8 +225,8 @@ namespace aether
 		if (record.aliasSourceId.has_value())
 		{
 			const auto sourceHandle = VirtualBufferHandle{
-				.id = *record.aliasSourceId + 1,
-				.generation = m_virtualBuffers[*record.aliasSourceId].generation,
+			        .id = *record.aliasSourceId + 1,
+			        .generation = m_virtualBuffers[*record.aliasSourceId].generation,
 			};
 			auto& sourceRecord = RequireBufferRecord(sourceHandle);
 
@@ -287,7 +287,7 @@ namespace aether
 		UniqueBuffer resource = factory(record.desc);
 		m_physicalBuffers.push_back(BufferPhysicalRecord{
 		        .resource = std::move(resource),
-		        .owners = { handle.id - 1 },
+		        .owners = {handle.id - 1},
 		        .visibility = record.contract.visibility,
 		        .queue = record.contract.lifetime.queue,
 		});
@@ -303,8 +303,8 @@ namespace aether
 		if (record.aliasSourceId.has_value())
 		{
 			const auto sourceHandle = VirtualImageHandle{
-				.id = *record.aliasSourceId + 1,
-				.generation = m_virtualImages[*record.aliasSourceId].generation,
+			        .id = *record.aliasSourceId + 1,
+			        .generation = m_virtualImages[*record.aliasSourceId].generation,
 			};
 			auto& sourceRecord = RequireImageRecord(sourceHandle);
 
@@ -370,7 +370,7 @@ namespace aether
 		EnsureImageVisibilityBindings(resource, record.contract);
 		m_physicalImages.push_back(ImagePhysicalRecord{
 		        .resource = std::move(resource),
-		        .owners = { handle.id - 1 },
+		        .owners = {handle.id - 1},
 		        .visibility = record.contract.visibility,
 		        .queue = record.contract.lifetime.queue,
 		});

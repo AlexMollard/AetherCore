@@ -16,7 +16,7 @@ namespace
 	// Find a SkinnedMeshComponent on entity or any spawned child.
 	const aether::SkinnedMeshComponent* FindSmcOrSpawned(const aether::World* w, uint32_t id)
 	{
-		const aether::Entity e{ id };
+		const aether::Entity e{id};
 		if (const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
 		{
 			return smc;
@@ -24,14 +24,14 @@ namespace
 		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
 		if (sec && !sec->entityIds.empty())
 		{
-			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ sec->entityIds.front() });
+			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{sec->entityIds.front()});
 		}
 		return nullptr;
 	}
 
 	aether::SkinnedMeshComponent* FindSmcOrSpawned(aether::World* w, uint32_t id)
 	{
-		const aether::Entity e{ id };
+		const aether::Entity e{id};
 		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
 		{
 			return smc;
@@ -39,18 +39,21 @@ namespace
 		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
 		if (sec && !sec->entityIds.empty())
 		{
-			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ sec->entityIds.front() });
+			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{sec->entityIds.front()});
 		}
 		return nullptr;
 	}
 
 	void ForEachSpawnedSmc(aether::World* w, uint32_t id, auto&& f)
 	{
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
-		if (!sec) return;
-		for (const auto eid : sec->entityIds)
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		if (!sec)
 		{
-			if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ eid }))
+			return;
+		}
+		for (const auto eid: sec->entityIds)
+		{
+			if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
 			{
 				f(*smc);
 			}
@@ -61,28 +64,37 @@ namespace
 
 	void das_set_animation(aether::World* w, uint32_t id, int32_t clipIndex)
 	{
-		if (clipIndex < 0) return;
+		if (clipIndex < 0)
+		{
+			return;
+		}
 
 		auto clampAndSet = [clipIndex](aether::SkinnedMeshComponent& smc)
 		{
-			if (!smc.animDb) return;
+			if (!smc.animDb)
+			{
+				return;
+			}
 			const auto maxClip = static_cast<int32_t>(smc.animDb->GetClipCount());
-			if (maxClip <= 0) return;
+			if (maxClip <= 0)
+			{
+				return;
+			}
 			smc.clipIndex = static_cast<std::uint32_t>(std::min(clipIndex, maxClip - 1));
 			smc.animTime = 0.f;
 		};
 
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			clampAndSet(*smc);
 		}
 
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{ id });
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
 		{
-			for (const auto eid : sec->entityIds)
+			for (const auto eid: sec->entityIds)
 			{
-				if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ eid }))
+				if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
 				{
 					clampAndSet(*smc);
 				}
@@ -98,14 +110,11 @@ namespace
 
 	void das_set_playback_speed(aether::World* w, uint32_t id, float speed)
 	{
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			smc->playbackSpeed = speed;
 		}
-		ForEachSpawnedSmc(w, id, [speed](aether::SkinnedMeshComponent& smc)
-		{
-			smc.playbackSpeed = speed;
-		});
+		ForEachSpawnedSmc(w, id, [speed](aether::SkinnedMeshComponent& smc) { smc.playbackSpeed = speed; });
 	}
 
 	float das_get_playback_speed(aether::World* w, uint32_t id)
@@ -116,14 +125,11 @@ namespace
 
 	void das_set_anim_time(aether::World* w, uint32_t id, float t)
 	{
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{ id }))
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			smc->animTime = t;
 		}
-		ForEachSpawnedSmc(w, id, [t](aether::SkinnedMeshComponent& smc)
-		{
-			smc.animTime = t;
-		});
+		ForEachSpawnedSmc(w, id, [t](aether::SkinnedMeshComponent& smc) { smc.animTime = t; });
 	}
 
 	float das_get_anim_time(aether::World* w, uint32_t id)

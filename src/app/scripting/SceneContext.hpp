@@ -24,7 +24,7 @@ namespace aether::app
 {
 	class SystemFactory;
 	class DayNightSystem;
-}
+} // namespace aether::app
 
 namespace aether::app::scripting
 {

@@ -9,7 +9,10 @@
 #include "ui/QuadRenderer.hpp"
 #include "text/TextRenderer.hpp"
 
-namespace aether { class ServiceContainer; }
+namespace aether
+{
+	class ServiceContainer;
+}
 
 namespace aether
 {
@@ -80,7 +83,7 @@ namespace aether
 	private:
 		Swapchain* m_swapchain = nullptr;
 		std::int32_t m_currentLayer = 0;
-		std::vector<std::int32_t> m_layerStack{ 0 };
+		std::vector<std::int32_t> m_layerStack{0};
 		std::vector<glm::vec4> m_clipStack; // resolved pixel rects (x,y,w,h)
 		TextRenderer m_textRenderer;
 		QuadRenderer m_quadRenderer;

@@ -47,20 +47,20 @@ namespace aether::app
 
 		const float sunIntensity = 0.45f + (5.2f - 0.45f) * dayFactor;
 
-		const glm::vec3 ambientNight = { 0.010f, 0.012f, 0.018f };
-		const glm::vec3 ambientDay = { 0.120f, 0.130f, 0.150f };
-		const glm::vec3 ambientDawn = { 0.220f, 0.135f, 0.080f };
-		const glm::vec3 sunNight = { 0.08f, 0.10f, 0.18f };
-		const glm::vec3 sunDay = { 1.00f, 0.96f, 0.90f };
-		const glm::vec3 sunDawn = { 1.25f, 0.62f, 0.32f };
-		const glm::vec3 skyHorizonNight = { 0.015f, 0.020f, 0.040f };
-		const glm::vec3 skyHorizonDay = { 0.34f, 0.52f, 0.82f };
-		const glm::vec3 skyHorizonDawn = { 0.78f, 0.38f, 0.16f };
-		const glm::vec3 skyZenithNight = { 0.004f, 0.008f, 0.018f };
-		const glm::vec3 skyZenithDay = { 0.08f, 0.19f, 0.45f };
-		const glm::vec3 skyZenithDawn = { 0.18f, 0.12f, 0.28f };
-		const glm::vec3 skyVoidNight = { 0.0004f, 0.0008f, 0.0018f };
-		const glm::vec3 skyVoidDay = { 0.0015f, 0.0020f, 0.0040f };
+		const glm::vec3 ambientNight = {0.010f, 0.012f, 0.018f};
+		const glm::vec3 ambientDay = {0.120f, 0.130f, 0.150f};
+		const glm::vec3 ambientDawn = {0.220f, 0.135f, 0.080f};
+		const glm::vec3 sunNight = {0.08f, 0.10f, 0.18f};
+		const glm::vec3 sunDay = {1.00f, 0.96f, 0.90f};
+		const glm::vec3 sunDawn = {1.25f, 0.62f, 0.32f};
+		const glm::vec3 skyHorizonNight = {0.015f, 0.020f, 0.040f};
+		const glm::vec3 skyHorizonDay = {0.34f, 0.52f, 0.82f};
+		const glm::vec3 skyHorizonDawn = {0.78f, 0.38f, 0.16f};
+		const glm::vec3 skyZenithNight = {0.004f, 0.008f, 0.018f};
+		const glm::vec3 skyZenithDay = {0.08f, 0.19f, 0.45f};
+		const glm::vec3 skyZenithDawn = {0.18f, 0.12f, 0.28f};
+		const glm::vec3 skyVoidNight = {0.0004f, 0.0008f, 0.0018f};
+		const glm::vec3 skyVoidDay = {0.0015f, 0.0020f, 0.0040f};
 
 		glm::vec3 ambient = ambientNight * (1.0f - dayFactor) + ambientDay * dayFactor;
 		ambient = ambient * (1.0f - dawnFactor) + ambientDawn * dawnFactor;

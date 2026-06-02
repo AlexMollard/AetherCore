@@ -106,7 +106,9 @@ namespace aether
 		for (std::size_t i = 0; i < nodeParents.size(); ++i)
 		{
 			if (nodeParents[i] < 0)
+			{
 				nodeDepth[i] = 0;
+			}
 		}
 		bool changed = true;
 		std::uint32_t maxDepth = 0;
@@ -116,7 +118,9 @@ namespace aether
 			for (std::size_t i = 0; i < nodeParents.size(); ++i)
 			{
 				if (nodeDepth[i] != kUnsetDepth)
+				{
 					continue;
+				}
 				const int p = nodeParents[i];
 				if (p >= 0 && nodeDepth[static_cast<std::size_t>(p)] != kUnsetDepth)
 				{
@@ -195,7 +199,7 @@ namespace aether
 		totalBytes += align16(db.m_depthSortedNodes.size() * sizeof(std::uint32_t));
 		totalBytes += align16(allStrings.size());
 
-		db.m_heap.Initialize(ctx, { .capacityBytes = totalBytes, .debugName = "AnimationDatabase" });
+		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
 		VkDevice device = ctx.GetDevice().device;
 		VkQueue queue = ctx.GetGraphicsQueue();

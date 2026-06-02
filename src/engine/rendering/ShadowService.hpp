@@ -51,17 +51,17 @@ namespace aether
 		}
 
 	private:
-		// Single queue replaces the per-cascade arrays — multi-frustum culling
+		// Single queue replaces the per-cascade arrays - multi-frustum culling
 		// handles all 3 cascades in one dispatch on shared draw data.
 		RenderQueue m_shadowRenderQueue;
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
 		std::array<VkExtent2D, kShadowCascadeCount> m_shadowMapExtents{
-			VkExtent2D{ 4096u, 4096u },
-			VkExtent2D{ 2048u, 2048u },
-			VkExtent2D{ 1024u, 1024u },
+		        VkExtent2D{4096u, 4096u},
+		        VkExtent2D{2048u, 2048u},
+		        VkExtent2D{1024u, 1024u},
 		};
-		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{ 0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu };
+		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
 	};
 } // namespace aether

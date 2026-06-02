@@ -12,8 +12,8 @@ namespace aether
 	// offsetPx is a pixel offset from that anchor.
 	struct UiPoint
 	{
-		glm::vec2 anchor{ 0.0f, 0.0f };
-		glm::vec2 offsetPx{ 0.0f, 0.0f };
+		glm::vec2 anchor{0.0f, 0.0f};
+		glm::vec2 offsetPx{0.0f, 0.0f};
 	};
 
 	// Anchor-based rectangle in screen space.
@@ -22,22 +22,22 @@ namespace aether
 	//   max = anchorMax * extent + offsetMaxPx
 	struct UiRect
 	{
-		glm::vec2 anchorMin{ 0.0f, 0.0f };
-		glm::vec2 anchorMax{ 0.0f, 0.0f };
-		glm::vec2 offsetMinPx{ 0.0f, 0.0f };
-		glm::vec2 offsetMaxPx{ 0.0f, 0.0f };
+		glm::vec2 anchorMin{0.0f, 0.0f};
+		glm::vec2 anchorMax{0.0f, 0.0f};
+		glm::vec2 offsetMinPx{0.0f, 0.0f};
+		glm::vec2 offsetMaxPx{0.0f, 0.0f};
 	};
 
 	[[nodiscard]] inline glm::vec2 ResolveUiPointPx(VkExtent2D extent, const UiPoint& point)
 	{
-		const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		return point.anchor * sizePx + point.offsetPx;
 	}
 
 	// Returns x, y, width, height in pixels. Width/height are clamped to >= 0.
 	[[nodiscard]] inline glm::vec4 ResolveUiRectPx(VkExtent2D extent, const UiRect& rect)
 	{
-		const glm::vec2 sizePx{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		const glm::vec2 minPos = rect.anchorMin * sizePx + rect.offsetMinPx;
 		const glm::vec2 maxPos = rect.anchorMax * sizePx + rect.offsetMaxPx;
 
@@ -71,58 +71,58 @@ namespace aether
 		// Internal helper: both anchor corners identical -> fixed-size widget.
 		[[nodiscard]] inline UiRect Fixed(glm::vec2 anchor, glm::vec2 offsetMinPx, glm::vec2 sizePx)
 		{
-			return UiRect{ anchor, anchor, offsetMinPx, offsetMinPx + sizePx };
+			return UiRect{anchor, anchor, offsetMinPx, offsetMinPx + sizePx};
 		}
 
 		// ── Fixed-position presets ─────────────────────────────────────────────
 
 		[[nodiscard]] inline UiRect TopLeft(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 0.f, 0.f }, marginPx, sizePx);
+			return Fixed({0.f, 0.f}, marginPx, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect TopCenter(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
 			// Anchor at top-centre; shift left by half the width so the widget is centred.
-			return Fixed({ 0.5f, 0.f }, glm::vec2{ -sizePx.x * 0.5f + marginPx.x, marginPx.y }, sizePx);
+			return Fixed({0.5f, 0.f}, glm::vec2{-sizePx.x * 0.5f + marginPx.x, marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect TopRight(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
 			// Anchor at top-right; offsets are negative to place the widget to the left.
-			return Fixed({ 1.f, 0.f }, glm::vec2{ -sizePx.x - marginPx.x, marginPx.y }, sizePx);
+			return Fixed({1.f, 0.f}, glm::vec2{-sizePx.x - marginPx.x, marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect MiddleLeft(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 0.f, 0.5f }, glm::vec2{ marginPx.x, -sizePx.y * 0.5f + marginPx.y }, sizePx);
+			return Fixed({0.f, 0.5f}, glm::vec2{marginPx.x, -sizePx.y * 0.5f + marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect Center(glm::vec2 sizePx, glm::vec2 offsetPx = {})
 		{
 			// Anchor at screen centre; subtract half size so the widget is centred.
 			const glm::vec2 min = offsetPx - sizePx * 0.5f;
-			return Fixed({ 0.5f, 0.5f }, min, sizePx);
+			return Fixed({0.5f, 0.5f}, min, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect MiddleRight(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 1.f, 0.5f }, glm::vec2{ -sizePx.x - marginPx.x, -sizePx.y * 0.5f + marginPx.y }, sizePx);
+			return Fixed({1.f, 0.5f}, glm::vec2{-sizePx.x - marginPx.x, -sizePx.y * 0.5f + marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect BottomLeft(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 0.f, 1.f }, glm::vec2{ marginPx.x, -sizePx.y - marginPx.y }, sizePx);
+			return Fixed({0.f, 1.f}, glm::vec2{marginPx.x, -sizePx.y - marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect BottomCenter(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 0.5f, 1.f }, glm::vec2{ -sizePx.x * 0.5f + marginPx.x, -sizePx.y - marginPx.y }, sizePx);
+			return Fixed({0.5f, 1.f}, glm::vec2{-sizePx.x * 0.5f + marginPx.x, -sizePx.y - marginPx.y}, sizePx);
 		}
 
 		[[nodiscard]] inline UiRect BottomRight(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
-			return Fixed({ 1.f, 1.f }, glm::vec2{ -sizePx.x - marginPx.x, -sizePx.y - marginPx.y }, sizePx);
+			return Fixed({1.f, 1.f}, glm::vec2{-sizePx.x - marginPx.x, -sizePx.y - marginPx.y}, sizePx);
 		}
 
 		// ── Stretch presets ────────────────────────────────────────────────────
@@ -130,34 +130,19 @@ namespace aether
 		// Fills the screen; `inset` shrinks each edge uniformly.
 		[[nodiscard]] inline UiRect StretchFull(float inset = 0.f)
 		{
-			return UiRect{
-				{    0.f,    0.f },
-                {    1.f,    1.f },
-                {  inset,  inset },
-                { -inset, -inset }
-			};
+			return UiRect{{0.f, 0.f}, {1.f, 1.f}, {inset, inset}, {-inset, -inset}};
 		}
 
 		// Full-width horizontal band.  `yPx` and `heightPx` are in pixels from the top.
 		[[nodiscard]] inline UiRect StretchHorizontal(float yPx, float heightPx, float insetX = 0.f)
 		{
-			return UiRect{
-				{     0.f,            0.f },
-                {     1.f,            0.f },
-                {  insetX,            yPx },
-                { -insetX, yPx + heightPx }
-			};
+			return UiRect{{0.f, 0.f}, {1.f, 0.f}, {insetX, yPx}, {-insetX, yPx + heightPx}};
 		}
 
 		// Full-height vertical column.  `xPx` and `widthPx` are in pixels from the left.
 		[[nodiscard]] inline UiRect StretchVertical(float xPx, float widthPx, float insetY = 0.f)
 		{
-			return UiRect{
-				{           0.f,     0.f },
-                {           0.f,     1.f },
-                {           xPx,  insetY },
-                { xPx + widthPx, -insetY }
-			};
+			return UiRect{{0.f, 0.f}, {0.f, 1.f}, {xPx, insetY}, {xPx + widthPx, -insetY}};
 		}
 
 	} // namespace UiAnchors

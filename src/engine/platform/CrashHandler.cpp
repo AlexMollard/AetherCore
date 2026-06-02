@@ -36,7 +36,7 @@ namespace aether
 {
 	namespace
 	{
-		std::atomic<bool> g_installed{ false };
+		std::atomic<bool> g_installed{false};
 		std::string g_appName = "AetherCore";
 		std::mutex g_writeMutex;
 		std::atomic_flag g_crashInProgress = ATOMIC_FLAG_INIT;
@@ -84,14 +84,15 @@ namespace aether
 			const std::string& name = frame.symbol;
 			const std::string& file = frame.file;
 
-			if (name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("SignalHandlerThunk") != std::string::npos || name.find("UnhandledExceptionFilterThunk") != std::string::npos
-			        || name.find("TerminateHandlerThunk") != std::string::npos)
+			if (name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("SignalHandlerThunk") != std::string::npos
+			        || name.find("UnhandledExceptionFilterThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos)
 			{
 				return true;
 			}
 
-			if (name.find("__scrt_common_main") != std::string::npos || name.find("invoke_main") != std::string::npos || name.find("mainCRTStartup") != std::string::npos || name.find("UnhandledExceptionFilter") != std::string::npos || name.find("BaseThreadInitThunk") != std::string::npos || name.find("RtlUserThreadStart") != std::string::npos
-			        || name.find("KiUserExceptionDispatcher") != std::string::npos || name.find("_C_specific_handler") != std::string::npos || name.find("seh_filter_exe") != std::string::npos)
+			if (name.find("__scrt_common_main") != std::string::npos || name.find("invoke_main") != std::string::npos || name.find("mainCRTStartup") != std::string::npos || name.find("UnhandledExceptionFilter") != std::string::npos
+			        || name.find("BaseThreadInitThunk") != std::string::npos || name.find("RtlUserThreadStart") != std::string::npos || name.find("KiUserExceptionDispatcher") != std::string::npos
+			        || name.find("_C_specific_handler") != std::string::npos || name.find("seh_filter_exe") != std::string::npos)
 			{
 				return true;
 			}
@@ -419,7 +420,8 @@ namespace aether
 			const std::string& name = frame.symbol;
 
 			// Filter out internal crash handler and signal handling frames
-			if (name.find("SignalHandlerThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("WriteCallStack") != std::string::npos || name.find("WriteTextCrashReport") != std::string::npos)
+			if (name.find("SignalHandlerThunk") != std::string::npos || name.find("TerminateHandlerThunk") != std::string::npos || name.find("CaptureCrashArtifacts") != std::string::npos || name.find("WriteCallStack") != std::string::npos
+			        || name.find("WriteTextCrashReport") != std::string::npos)
 			{
 				return true;
 			}

@@ -29,7 +29,17 @@ namespace aether
 		void Initialize(VulkanContext& context, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown();
 
-		void BindRuntime(RenderGraph& graph, BindlessManager& bindlessManager, CameraManager& cameraManager, LightingManager& lightingManager, Renderer& renderer, MaterialBuffer& materialBuffer, const CullPass& cullPass, std::function<std::uint64_t()> getFrameIndex, VkDevice device, VkFormat depthFormat, VkFormat forwardColorFormat);
+		void BindRuntime(RenderGraph& graph,
+		        BindlessManager& bindlessManager,
+		        CameraManager& cameraManager,
+		        LightingManager& lightingManager,
+		        Renderer& renderer,
+		        MaterialBuffer& materialBuffer,
+		        const CullPass& cullPass,
+		        std::function<std::uint64_t()> getFrameIndex,
+		        VkDevice device,
+		        VkFormat depthFormat,
+		        VkFormat forwardColorFormat);
 
 		void OnRenderGraphReset(VkDevice device, VkFormat depthFormat, VkFormat forwardColorFormat);
 		void RegisterPasses();

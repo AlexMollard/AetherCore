@@ -31,6 +31,7 @@ namespace aether
 			std::uint32_t y = 0;
 			std::uint32_t width = 0;
 			std::uint32_t height = 0;
+
 			[[nodiscard]] bool IsValid() const
 			{
 				return width > 0 && height > 0;

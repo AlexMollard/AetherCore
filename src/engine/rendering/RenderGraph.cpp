@@ -60,7 +60,7 @@ namespace aether
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
-		
+
 		// Destroy images from the frame that the GPU has now finished with.
 		// Since we have kMaxFramesInFlight frames, the GPU should be done
 		// with frame (currentFrame) by the time we start a new frame with
@@ -76,23 +76,26 @@ namespace aether
 	RenderGraph::ImageCacheKey RenderGraph::MakeCacheKey(const TransientImageDesc& desc, VkExtent2D extent) const
 	{
 		return ImageCacheKey{
-			.format = desc.format,
-			.usage = desc.usage,
-			.aspect = desc.aspect,
-			.width = extent.width,
-			.height = extent.height,
-			.mipLevels = 1,
-			.samples = VK_SAMPLE_COUNT_1_BIT,
+		        .format = desc.format,
+		        .usage = desc.usage,
+		        .aspect = desc.aspect,
+		        .width = extent.width,
+		        .height = extent.height,
+		        .mipLevels = 1,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
 		};
 	}
 
 	void RenderGraph::MoveToCache(TransientImageEntry& entry)
 	{
-		if (!entry.image) return;
+		if (!entry.image)
+		{
+			return;
+		}
 		const ImageCacheKey key = MakeCacheKey(entry.desc, entry.allocatedExtent);
 		m_imageCache[key].push_back(CachedImage{
-			.image = std::move(entry.image),
-			.lastUsedFrame = m_currentFrame,
+		        .image = std::move(entry.image),
+		        .lastUsedFrame = m_currentFrame,
 		});
 		entry.allocatedExtent = {};
 	}
@@ -118,12 +121,12 @@ namespace aether
 		for (auto it = m_imageCache.begin(); it != m_imageCache.end();)
 		{
 			auto& list = it->second;
-			std::erase_if(list, [&](const CachedImage& ci) {
-				const std::uint32_t age = (m_currentFrame >= ci.lastUsedFrame)
-					? (m_currentFrame - ci.lastUsedFrame)
-					: (kMaxFramesInFlight + m_currentFrame - ci.lastUsedFrame);
-				return age > kCacheMaxStaleFrames;
-			});
+			std::erase_if(list,
+			        [&](const CachedImage& ci)
+			        {
+				        const std::uint32_t age = (m_currentFrame >= ci.lastUsedFrame) ? (m_currentFrame - ci.lastUsedFrame) : (kMaxFramesInFlight + m_currentFrame - ci.lastUsedFrame);
+				        return age > kCacheMaxStaleFrames;
+			        });
 			if (list.empty())
 			{
 				it = m_imageCache.erase(it);
@@ -154,10 +157,10 @@ namespace aether
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteDepth(RGImage image, VkAttachmentLoadOp loadOp, VkAttachmentStoreOp storeOp, VkClearValue clearValue)
 	{
 		m_graph.m_passes[m_passIndex].depthWrite = AttachmentRef{
-			.image = image,
-			.loadOp = loadOp,
-			.storeOp = storeOp,
-			.clearValue = clearValue,
+		        .image = image,
+		        .loadOp = loadOp,
+		        .storeOp = storeOp,
+		        .clearValue = clearValue,
 		};
 		return *this;
 	}
@@ -222,9 +225,9 @@ namespace aether
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
-		m_passes.push_back(PassRecord{ .name = std::move(name) });
+		m_passes.push_back(PassRecord{.name = std::move(name)});
 		m_compileDirty = true;
-		return PassBuilder{ *this, m_passes.size() - 1 };
+		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
 	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name)
@@ -234,14 +237,14 @@ namespace aether
 		        .kind = PassKind::Compute,
 		});
 		m_compileDirty = true;
-		return PassBuilder{ *this, m_passes.size() - 1 };
+		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
 	RGImage RenderGraph::RegisterImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
 	{
 		const uint32_t id = kFirstExternalId + static_cast<uint32_t>(m_externalImages.size());
-		m_externalImages.push_back({ image, view, aspect });
-		return RGImage{ id };
+		m_externalImages.push_back({image, view, aspect});
+		return RGImage{id};
 	}
 
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
@@ -255,7 +258,7 @@ namespace aether
 		entry.desc = desc;
 		m_transientImages.push_back(std::move(entry));
 		const uint32_t id = kFirstTransientId + static_cast<uint32_t>(m_transientImages.size() - 1);
-		return RGImage{ id };
+		return RGImage{id};
 	}
 
 	RGImage RenderGraph::CreateTransientColor(VkFormat format, VkExtent2D extent, VkImageUsageFlags extraUsage)
@@ -471,7 +474,10 @@ namespace aether
 			const VkExtent2D reqExt = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
 			requestedExtents[idx] = reqExt;
 
-			if (entry.bindlessRequested) continue;
+			if (entry.bindlessRequested)
+			{
+				continue;
+			}
 
 			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || reqExt.width == 0 || reqExt.height == 0)
 			{
@@ -489,9 +495,7 @@ namespace aether
 			}
 		}
 
-		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) {
-			return lifetimes[a].first < lifetimes[b].first;
-		});
+		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) { return lifetimes[a].first < lifetimes[b].first; });
 
 		std::vector<int> entryLastUse(m_transientImages.size(), -1);
 
@@ -502,9 +506,7 @@ namespace aether
 			const int firstUse = lifetimes[idx].first;
 			const int lastUse = lifetimes[idx].last;
 
-			const bool needsCreate = !entry.image ||
-			                         entry.allocatedExtent.width != reqExt.width ||
-			                         entry.allocatedExtent.height != reqExt.height;
+			const bool needsCreate = !entry.image || entry.allocatedExtent.width != reqExt.width || entry.allocatedExtent.height != reqExt.height;
 
 			std::uint32_t chosen = 0xFFFFFFFFu;
 
@@ -512,16 +514,31 @@ namespace aether
 			{
 				for (std::uint32_t e = 0; e < m_transientImages.size(); ++e)
 				{
-					if (e == idx) continue;
+					if (e == idx)
+					{
+						continue;
+					}
 					const TransientImageEntry& candidate = m_transientImages[e];
-					if (candidate.aliasedEntryIndex != 0xFFFFFFFFu) continue;
-					if (!candidate.image) continue;
-					if (candidate.desc.format != entry.desc.format ||
-					    candidate.desc.usage != entry.desc.usage ||
-					    candidate.desc.aspect != entry.desc.aspect) continue;
-					if (candidate.allocatedExtent.width != reqExt.width ||
-					    candidate.allocatedExtent.height != reqExt.height) continue;
-					if (entryLastUse[e] >= firstUse) continue;
+					if (candidate.aliasedEntryIndex != 0xFFFFFFFFu)
+					{
+						continue;
+					}
+					if (!candidate.image)
+					{
+						continue;
+					}
+					if (candidate.desc.format != entry.desc.format || candidate.desc.usage != entry.desc.usage || candidate.desc.aspect != entry.desc.aspect)
+					{
+						continue;
+					}
+					if (candidate.allocatedExtent.width != reqExt.width || candidate.allocatedExtent.height != reqExt.height)
+					{
+						continue;
+					}
+					if (entryLastUse[e] >= firstUse)
+					{
+						continue;
+					}
 
 					chosen = e;
 					break;
@@ -579,9 +596,7 @@ namespace aether
 			}
 
 			const VkExtent2D reqExt = requestedExtents[entryIdx];
-			const bool needsCreate = !entry.image ||
-			                         entry.allocatedExtent.width != reqExt.width ||
-			                         entry.allocatedExtent.height != reqExt.height;
+			const bool needsCreate = !entry.image || entry.allocatedExtent.width != reqExt.width || entry.allocatedExtent.height != reqExt.height;
 			if (!needsCreate)
 			{
 				continue;
@@ -653,15 +668,15 @@ namespace aether
 					continue;
 				}
 				m_scratchBarriers.push_back({
-					.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					.srcStageMask = b.srcStage,
-					.srcAccessMask = b.srcAccess,
-					.dstStageMask = b.dstStage,
-					.dstAccessMask = b.dstAccess,
-					.oldLayout = b.oldLayout,
-					.newLayout = b.newLayout,
-					.image = image,
-					.subresourceRange = { b.aspect, 0, 1, 0, 1 },
+				        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				        .srcStageMask = b.srcStage,
+				        .srcAccessMask = b.srcAccess,
+				        .dstStageMask = b.dstStage,
+				        .dstAccessMask = b.dstAccess,
+				        .oldLayout = b.oldLayout,
+				        .newLayout = b.newLayout,
+				        .image = image,
+				        .subresourceRange = {b.aspect, 0, 1, 0, 1},
 				});
 			}
 			vkutil::TransitionImages(recorder.GetCommandBuffer(), m_scratchBarriers.data(), static_cast<uint32_t>(m_scratchBarriers.size()));
@@ -686,12 +701,12 @@ namespace aether
 				hasDepth = true;
 				const AttachmentRef& da = *pass.depthWrite;
 				depthInfo = {
-					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = ResolveView(da.image.id, target),
-					.imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-					.loadOp = da.loadOp,
-					.storeOp = da.storeOp,
-					.clearValue = da.clearValue,
+				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				        .imageView = ResolveView(da.image.id, target),
+				        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+				        .loadOp = da.loadOp,
+				        .storeOp = da.storeOp,
+				        .clearValue = da.clearValue,
 				};
 			}
 
@@ -700,26 +715,26 @@ namespace aether
 			if (useDynamicRendering)
 			{
 				const VkRenderingInfo renderInfo{
-					.sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-					.renderArea = { { 0, 0 }, passExtent },
-					.layerCount = 1,
-					.colorAttachmentCount = static_cast<uint32_t>(m_scratchColorInfos.size()),
-					.pColorAttachments = m_scratchColorInfos.data(),
-					.pDepthAttachment = hasDepth ? &depthInfo : nullptr,
+				        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+				        .renderArea = {{0, 0}, passExtent},
+				        .layerCount = 1,
+				        .colorAttachmentCount = static_cast<uint32_t>(m_scratchColorInfos.size()),
+				        .pColorAttachments = m_scratchColorInfos.data(),
+				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
 				vkCmdBeginRendering(recorder.GetCommandBuffer(), &renderInfo);
 
 				const VkViewport viewport{
-					.x = 0.0f,
-					.y = 0.0f,
-					.width = static_cast<float>(passExtent.width),
-					.height = static_cast<float>(passExtent.height),
-					.minDepth = 0.0f,
-					.maxDepth = 1.0f,
+				        .x = 0.0f,
+				        .y = 0.0f,
+				        .width = static_cast<float>(passExtent.width),
+				        .height = static_cast<float>(passExtent.height),
+				        .minDepth = 0.0f,
+				        .maxDepth = 1.0f,
 				};
 				const VkRect2D scissor{
-					{ 0, 0 },
-					passExtent,
+				        {0, 0},
+				        passExtent,
 				};
 				vkCmdSetViewport(recorder.GetCommandBuffer(), 0, 1, &viewport);
 				vkCmdSetScissor(recorder.GetCommandBuffer(), 0, 1, &scissor);
@@ -728,7 +743,7 @@ namespace aether
 			if (pass.execute)
 			{
 				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, recorder.GetCommandBuffer(), gpuPassZone, pass.name.c_str());
-				PassContext ctx{ recorder, passExtent, frameAddr, frameIndex };
+				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
 				pass.execute(ctx);
 			}
 
@@ -860,15 +875,21 @@ namespace aether
 			if (IsTransientId(id))
 			{
 				const uint32_t idx = id - kFirstTransientId;
-				if (idx >= m_transientImages.size()) continue;
+				if (idx >= m_transientImages.size())
+				{
+					continue;
+				}
 				const TransientImageEntry& entry = m_transientImages[idx];
-				if (!entry.image && entry.aliasedEntryIndex == 0xFFFFFFFFu) continue;
+				if (!entry.image && entry.aliasedEntryIndex == 0xFFFFFFFFu)
+				{
+					continue;
+				}
 			}
 			states[id] = {
-				s.layout,
-				s.writeStage,
-				s.writeAccess,
-				true,
+			        s.layout,
+			        s.writeStage,
+			        s.writeAccess,
+			        true,
 			};
 		}
 
@@ -876,16 +897,16 @@ namespace aether
 		// loaded state - swapchain images are re-acquired each frame and their
 		// layout is managed externally.
 		states[kSwapchainColorId] = {
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-			VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-			false, // isCrossFrame
+		        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+		        false, // isCrossFrame
 		};
 		states[kSwapchainDepthId] = {
-			VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-			VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-			VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-			false, // isCrossFrame
+		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		        false, // isCrossFrame
 		};
 
 		for (const std::size_t idx: sortedIndices)
@@ -934,10 +955,10 @@ namespace aether
 				}
 
 				states[resId] = {
-					kTarget,
-					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-					VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-					false, // isCrossFrame
+				        kTarget,
+				        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+				        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+				        false, // isCrossFrame
 				};
 			}
 
@@ -983,10 +1004,10 @@ namespace aether
 				}
 
 				states[resId] = {
-					kTarget,
-					kDepthStages,
-					VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					false, // isCrossFrame
+				        kTarget,
+				        kDepthStages,
+				        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+				        false, // isCrossFrame
 				};
 			}
 
@@ -1056,10 +1077,10 @@ namespace aether
 				});
 
 				states[resId] = {
-					targetLayout,
-					dstStage,
-					dstAccess,
-					false, // isCrossFrame
+				        targetLayout,
+				        dstStage,
+				        dstAccess,
+				        false, // isCrossFrame
 				};
 			}
 
@@ -1090,11 +1111,11 @@ namespace aether
 				{
 					return entry.image.Get();
 				}
-			if (entry.aliasedEntryIndex < m_transientImages.size())
-			{
-				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-				return m_transientImages[entry.aliasedEntryIndex].image.Get();
-			}
+				if (entry.aliasedEntryIndex < m_transientImages.size())
+				{
+					AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
+					return m_transientImages[entry.aliasedEntryIndex].image.Get();
+				}
 			}
 			return VK_NULL_HANDLE;
 		}
@@ -1126,11 +1147,11 @@ namespace aether
 				{
 					return entry.image.GetDefaultView();
 				}
-			if (entry.aliasedEntryIndex < m_transientImages.size())
-			{
-				AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-				return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
-			}
+				if (entry.aliasedEntryIndex < m_transientImages.size())
+				{
+					AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
+					return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
+				}
 			}
 			return VK_NULL_HANDLE;
 		}

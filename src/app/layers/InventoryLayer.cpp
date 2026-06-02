@@ -12,13 +12,13 @@
 namespace aether::app
 {
 	// ── GW2-style rarity colours ──────────────────────────────────────────────
-	static constexpr glm::vec4 kRarityJunk{ 0.60f, 0.60f, 0.60f, 1.f };
-	static constexpr glm::vec4 kRarityFine{ 0.27f, 0.45f, 0.83f, 1.f };
-	static constexpr glm::vec4 kRarityMasterwork{ 0.15f, 0.55f, 0.20f, 1.f };
-	static constexpr glm::vec4 kRarityRare{ 0.80f, 0.72f, 0.14f, 1.f };
-	static constexpr glm::vec4 kRarityExotic{ 0.85f, 0.49f, 0.09f, 1.f };
-	static constexpr glm::vec4 kRarityAscended{ 0.71f, 0.13f, 0.53f, 1.f };
-	static constexpr glm::vec4 kRarityLegendary{ 0.27f, 0.85f, 0.78f, 1.f };
+	static constexpr glm::vec4 kRarityJunk{0.60f, 0.60f, 0.60f, 1.f};
+	static constexpr glm::vec4 kRarityFine{0.27f, 0.45f, 0.83f, 1.f};
+	static constexpr glm::vec4 kRarityMasterwork{0.15f, 0.55f, 0.20f, 1.f};
+	static constexpr glm::vec4 kRarityRare{0.80f, 0.72f, 0.14f, 1.f};
+	static constexpr glm::vec4 kRarityExotic{0.85f, 0.49f, 0.09f, 1.f};
+	static constexpr glm::vec4 kRarityAscended{0.71f, 0.13f, 0.53f, 1.f};
+	static constexpr glm::vec4 kRarityLegendary{0.27f, 0.85f, 0.78f, 1.f};
 
 	struct FakeItem
 	{
@@ -28,65 +28,65 @@ namespace aether::app
 
 	// 48 fake items - some slots intentionally empty (quantity 0).
 	static constexpr FakeItem kItems[kInventorySlots] = {
-		// Row 1 - assorted loot
-		{  kRarityLegendary,   1 },
-		{   kRarityAscended,   1 },
-		{     kRarityExotic,   1 },
-		{       kRarityRare,   3 },
-		{ kRarityMasterwork,   5 },
-		{       kRarityFine,  12 },
-		{       kRarityJunk,  50 },
-		{		        {},   0 }, // empty
+	        // Row 1 - assorted loot
+	        {kRarityLegendary, 1},
+	        {kRarityAscended, 1},
+	        {kRarityExotic, 1},
+	        {kRarityRare, 3},
+	        {kRarityMasterwork, 5},
+	        {kRarityFine, 12},
+	        {kRarityJunk, 50},
+	        {{}, 0}, // empty
 
-		// Row 2
-		{     kRarityExotic,   1 },
-		{       kRarityRare,   2 },
-		{ kRarityMasterwork,   8 },
-		{       kRarityFine,  25 },
-		{       kRarityFine,  17 },
-		{       kRarityJunk, 100 },
-		{		        {},   0 },
-		{		        {},   0 },
+	        // Row 2
+	        {kRarityExotic, 1},
+	        {kRarityRare, 2},
+	        {kRarityMasterwork, 8},
+	        {kRarityFine, 25},
+	        {kRarityFine, 17},
+	        {kRarityJunk, 100},
+	        {{}, 0},
+	        {{}, 0},
 
-		// Row 3
-		{   kRarityAscended,   1 },
-		{       kRarityRare,   1 },
-		{       kRarityRare,   1 },
-		{ kRarityMasterwork,   3 },
-		{ kRarityMasterwork,   3 },
-		{       kRarityFine,  42 },
-		{       kRarityJunk,  99 },
-		{		        {},   0 },
+	        // Row 3
+	        {kRarityAscended, 1},
+	        {kRarityRare, 1},
+	        {kRarityRare, 1},
+	        {kRarityMasterwork, 3},
+	        {kRarityMasterwork, 3},
+	        {kRarityFine, 42},
+	        {kRarityJunk, 99},
+	        {{}, 0},
 
-		// Row 4
-		{     kRarityExotic,   1 },
-		{     kRarityExotic,   1 },
-		{       kRarityRare,   4 },
-		{       kRarityFine,  30 },
-		{       kRarityFine,   7 },
-		{       kRarityJunk,  18 },
-		{		        {},   0 },
-		{		        {},   0 },
+	        // Row 4
+	        {kRarityExotic, 1},
+	        {kRarityExotic, 1},
+	        {kRarityRare, 4},
+	        {kRarityFine, 30},
+	        {kRarityFine, 7},
+	        {kRarityJunk, 18},
+	        {{}, 0},
+	        {{}, 0},
 
-		// Row 5
-		{  kRarityLegendary,   1 },
-		{   kRarityAscended,   1 },
-		{ kRarityMasterwork,   2 },
-		{ kRarityMasterwork,   6 },
-		{       kRarityFine,  11 },
-		{       kRarityJunk,  33 },
-		{		        {},   0 },
-		{		        {},   0 },
+	        // Row 5
+	        {kRarityLegendary, 1},
+	        {kRarityAscended, 1},
+	        {kRarityMasterwork, 2},
+	        {kRarityMasterwork, 6},
+	        {kRarityFine, 11},
+	        {kRarityJunk, 33},
+	        {{}, 0},
+	        {{}, 0},
 
-		// Row 6 - mostly empty (end of bag)
-		{       kRarityRare,   1 },
-		{       kRarityFine,   9 },
-		{		        {},   0 },
-		{		        {},   0 },
-		{		        {},   0 },
-		{		        {},   0 },
-		{		        {},   0 },
-		{		        {},   0 },
+	        // Row 6 - mostly empty (end of bag)
+	        {kRarityRare, 1},
+	        {kRarityFine, 9},
+	        {{}, 0},
+	        {{}, 0},
+	        {{}, 0},
+	        {{}, 0},
+	        {{}, 0},
+	        {{}, 0},
 	};
 
 	// Panel and grid dimensions (must be consistent with constants above).
@@ -117,7 +117,7 @@ namespace aether::app
 		// panel subtree (grid container + all slots) by the same delta, keeping
 		// slots above the panel body at all times.
 		m_panel = reg(ui::SpawnPanel(world,
-		        UiAnchors::Center({ kPanelW, kPanelH }),
+		        UiAnchors::Center({kPanelW, kPanelH}),
 		        std::format("Inventory  \xC2\xB7  Bag 1  ({}/{})", 40, kInventorySlots),
 		        /*draggable=*/true,
 		        /*collapsible=*/true,
@@ -193,10 +193,10 @@ namespace aether::app
 			if (auto* gt = world.TryGet<ui::UiTransformComponent>(m_gridContainer))
 			{
 				gt->rect = UiRect{
-					.anchorMin = {            0.f,            0.f },
-					.anchorMax = {            0.f,            0.f },
-					.offsetMinPx = {          gridX,          gridY },
-					.offsetMaxPx = { gridX + kGridW, gridY + kGridH },
+				        .anchorMin = {0.f, 0.f},
+				        .anchorMax = {0.f, 0.f},
+				        .offsetMinPx = {gridX, gridY},
+				        .offsetMaxPx = {gridX + kGridW, gridY + kGridH},
 				};
 			}
 		}

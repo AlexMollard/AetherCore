@@ -55,10 +55,10 @@ namespace aether::app
 
 		// ── Ground ────────────────────────────────────────────────────────────────
 		{
-			aether::EntityHandle ground = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_groundMaterial, glm::translate(glm::mat4(1.f), { 0.f, -kGroundThickness, 0.f }));
+			aether::EntityHandle ground = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_groundMaterial, glm::translate(glm::mat4(1.f), {0.f, -kGroundThickness, 0.f}));
 			ground.Add<PhysicsSceneTag>();
 			ground.Add<aether::BoxBodyDesc>(aether::BoxBodyDesc{
-			        .halfExtents = { kGroundHalfExtent, kGroundThickness, kGroundHalfExtent },
+			        .halfExtents = {kGroundHalfExtent, kGroundThickness, kGroundHalfExtent},
 			        .motionType = PhysicsMotionType::Static,
 			        .layer = aether::PhysicsLayer::NonMoving,
 			});
@@ -76,14 +76,12 @@ namespace aether::app
 			glm::vec3 half;
 		};
 
-		const std::array<WallDesc, 4> walls = {
-			{
-             { { 0.f, wallH * 0.5f, wallHalf + wallT }, { wallHalf, wallH * 0.5f, wallT } },
-             { { 0.f, wallH * 0.5f, -wallHalf - wallT }, { wallHalf, wallH * 0.5f, wallT } },
-             { { wallHalf + wallT, wallH * 0.5f, 0.f }, { wallT, wallH * 0.5f, wallHalf } },
-             { { -wallHalf - wallT, wallH * 0.5f, 0.f }, { wallT, wallH * 0.5f, wallHalf } },
-			 }
-		};
+		const std::array<WallDesc, 4> walls = {{
+		        {{0.f, wallH * 0.5f, wallHalf + wallT}, {wallHalf, wallH * 0.5f, wallT}},
+		        {{0.f, wallH * 0.5f, -wallHalf - wallT}, {wallHalf, wallH * 0.5f, wallT}},
+		        {{wallHalf + wallT, wallH * 0.5f, 0.f}, {wallT, wallH * 0.5f, wallHalf}},
+		        {{-wallHalf - wallT, wallH * 0.5f, 0.f}, {wallT, wallH * 0.5f, wallHalf}},
+		}};
 
 		for (const WallDesc& wallDesc: walls)
 		{
@@ -106,7 +104,7 @@ namespace aether::app
 				const float x = (col - (kStackWidth - 1) * 0.5f) * (boxHalf * 2.f + 0.02f);
 				const float y = boxHalf + row * (boxHalf * 2.f + 0.01f) + kGroundThickness * 0.f;
 
-				aether::EntityHandle box = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_boxMaterial, glm::translate(glm::mat4(1.f), { x, y, 0.f }));
+				aether::EntityHandle box = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_boxMaterial, glm::translate(glm::mat4(1.f), {x, y, 0.f}));
 				box.Add<PhysicsSceneTag>();
 				box.Add<aether::BoxBodyDesc>(aether::BoxBodyDesc{
 				        .halfExtents = glm::vec3(boxHalf),
@@ -125,7 +123,7 @@ namespace aether::app
 		for (int scatterIdx = 0; scatterIdx < kScatterCount; ++scatterIdx)
 		{
 			const float radius = radiusDist(m_rng);
-			const glm::vec3 pos = { posDist(m_rng), heightDist(m_rng), posDist(m_rng) };
+			const glm::vec3 pos = {posDist(m_rng), heightDist(m_rng), posDist(m_rng)};
 
 			aether::EntityHandle scatterSphere = aether::ecs::SpawnMesh(world, m_pipeline, sphere, m_roundBodyMaterial, glm::translate(glm::mat4(1.f), pos));
 			scatterSphere.Add<PhysicsSceneTag>();
@@ -171,7 +169,7 @@ namespace aether::app
 		// ── Pipeline ──────────────────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
 		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        m_assets->CreateGraphicsPipeline({
@@ -221,7 +219,7 @@ namespace aether::app
 		// ── Cameras ───────────────────────────────────────────────────────────────
 		m_orbitCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Orbit,
-		        .orbitTarget = { 0.f, 4.f, 0.f },
+		        .orbitTarget = {0.f, 4.f, 0.f},
 		        .orbitDistance = 28.f,
 		        .orbitYaw = 25.f,
 		        .orbitPitch = 22.f,
@@ -229,7 +227,7 @@ namespace aether::app
 
 		m_freeCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Free,
-		        .position = { 0.f, 6.f, 22.f },
+		        .position = {0.f, 6.f, 22.f},
 		        .yaw = 0.f,
 		        .pitch = -12.f,
 		        .moveSpeed = 10.f,
@@ -246,8 +244,8 @@ namespace aether::app
 		const aether::Mesh& sphere = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Sphere);
 
 		// Fire from slightly above and in front of the camera toward the target stack.
-		const glm::vec3 spawnPos = { 0.f, 3.f, kGroundHalfExtent - 1.f };
-		const glm::vec3 direction = glm::normalize(glm::vec3{ 0.f, 0.2f, -1.f });
+		const glm::vec3 spawnPos = {0.f, 3.f, kGroundHalfExtent - 1.f};
+		const glm::vec3 direction = glm::normalize(glm::vec3{0.f, 0.2f, -1.f});
 
 		aether::EntityHandle projectile = aether::ecs::SpawnMesh(world, m_pipeline, sphere, m_projectileMaterial, glm::translate(glm::mat4(1.f), spawnPos));
 		projectile.Add<PhysicsSceneTag>();
@@ -299,7 +297,7 @@ namespace aether::app
 		if (m_input->IsKeyPressed(aether::Key::R))
 		{
 			ClearScene(world);
-			m_rng = std::mt19937{ 1337 };
+			m_rng = std::mt19937{1337};
 			m_simTime = 0.f;
 			BuildScene(world);
 			AE_INFO(aether::LogCategory::App, "Physics scene reset.");

@@ -2,7 +2,7 @@
 #define AETHER_FULL_SCREEN_TRIANGLE_SLANGH
 
 // Full-screen triangle vertex shader that generates a CCW triangle covering
-// all NDC clip-space from SV_VertexID alone — no vertex buffer needed.
+// all NDC clip-space from SV_VertexID alone - no vertex buffer needed.
 //   ID 0 -> NDC (-1, -1)
 //   ID 1 -> NDC ( 3, -1)
 //   ID 2 -> NDC (-1,  3)

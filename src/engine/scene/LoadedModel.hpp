@@ -14,7 +14,7 @@ namespace aether
 	{
 		Mesh mesh;
 		Material material{};
-		glm::mat4 localTransform{ 1.0f };
+		glm::mat4 localTransform{1.0f};
 		std::int32_t skinIndex = -1;
 	};
 

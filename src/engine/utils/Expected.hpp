@@ -47,27 +47,27 @@ namespace aether
 
 		static AetherError Vulkan(int32_t vkResult, std::string_view msg)
 		{
-			return { .category = LogCategory::Vulkan, .message = std::string(msg), .code = vkResult };
+			return {.category = LogCategory::Vulkan, .message = std::string(msg), .code = vkResult};
 		}
 
 		static AetherError Asset(std::string_view msg)
 		{
-			return { .category = LogCategory::Asset, .message = std::string(msg) };
+			return {.category = LogCategory::Asset, .message = std::string(msg)};
 		}
 
 		static AetherError FileSystem(std::string_view msg)
 		{
-			return { .category = LogCategory::FileSystem, .message = std::string(msg) };
+			return {.category = LogCategory::FileSystem, .message = std::string(msg)};
 		}
 
 		static AetherError Window(std::string_view msg)
 		{
-			return { .category = LogCategory::Window, .message = std::string(msg) };
+			return {.category = LogCategory::Window, .message = std::string(msg)};
 		}
 
 		static AetherError Engine(std::string_view msg)
 		{
-			return { .category = LogCategory::Engine, .message = std::string(msg) };
+			return {.category = LogCategory::Engine, .message = std::string(msg)};
 		}
 
 	private:

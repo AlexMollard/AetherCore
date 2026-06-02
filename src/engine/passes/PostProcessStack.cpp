@@ -99,17 +99,14 @@ namespace aether
 			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 
 			                const VkViewport vp{
-				                .x = 0.0f,
-				                .y = 0.0f,
-				                .width = static_cast<float>(ctx.extent.width),
-				                .height = static_cast<float>(ctx.extent.height),
-				                .minDepth = 0.0f,
-				                .maxDepth = 1.0f,
+			                        .x = 0.0f,
+			                        .y = 0.0f,
+			                        .width = static_cast<float>(ctx.extent.width),
+			                        .height = static_cast<float>(ctx.extent.height),
+			                        .minDepth = 0.0f,
+			                        .maxDepth = 1.0f,
 			                };
-			                const VkRect2D scissor{
-				                { 0, 0 },
-                                ctx.extent
-			                };
+			                const VkRect2D scissor{{0, 0}, ctx.extent};
 			                vkCmdSetViewport(cmd, 0, 1, &vp);
 			                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
@@ -141,17 +138,14 @@ namespace aether
 			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
 
 			                const VkViewport vp{
-				                .x = 0.0f,
-				                .y = 0.0f,
-				                .width = static_cast<float>(ctx.extent.width),
-				                .height = static_cast<float>(ctx.extent.height),
-				                .minDepth = 0.0f,
-				                .maxDepth = 1.0f,
+			                        .x = 0.0f,
+			                        .y = 0.0f,
+			                        .width = static_cast<float>(ctx.extent.width),
+			                        .height = static_cast<float>(ctx.extent.height),
+			                        .minDepth = 0.0f,
+			                        .maxDepth = 1.0f,
 			                };
-			                const VkRect2D scissor{
-				                { 0, 0 },
-                                ctx.extent
-			                };
+			                const VkRect2D scissor{{0, 0}, ctx.extent};
 			                vkCmdSetViewport(cmd, 0, 1, &vp);
 			                vkCmdSetScissor(cmd, 0, 1, &scissor);
 

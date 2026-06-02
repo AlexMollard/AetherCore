@@ -3,7 +3,7 @@ Language: Cpp
 BasedOnStyle: LLVM
 AccessModifierOffset: -4
 AlignAfterOpenBracket: DontAlign
-AlignArrayOfStructures: Right
+AlignArrayOfStructures: None
 AlignConsecutiveAssignments:
   Enabled: false
 AlignConsecutiveDeclarations:
@@ -46,10 +46,10 @@ BraceWrapping:
 BreakBeforeBinaryOperators: NonAssignment
 BreakBeforeBraces: Custom
 BreakConstructorInitializers: BeforeColon
-ColumnLimit: 350
+ColumnLimit: 250
 ConstructorInitializerIndentWidth: 6
 ContinuationIndentWidth: 8
-Cpp11BracedListStyle: false
+Cpp11BracedListStyle: true
 LineEnding: DeriveLF
 EmptyLineBeforeAccessModifier: Always
 IncludeCategories:

@@ -17,7 +17,10 @@
 #include "rendering/ShadowService.hpp"
 #include "passes/SkyboxPass.hpp"
 
-namespace aether { class ServiceContainer; }
+namespace aether
+{
+	class ServiceContainer;
+}
 
 namespace aether
 {

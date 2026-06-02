@@ -16,16 +16,9 @@ namespace aether::app::effects
 	}
 
 	bool EffectManager::CreateAndRegister(
-	        const char* name,
-	        aether::AssetManager& assets,
-	        VkDescriptorSetLayout bindlessLayout,
-	        VkDescriptorSetLayout lightingLayout,
-	        VkFormat colorFormat,
-	        VkFormat depthFormat,
-	        const char* shaderVfsPath,
-	        const aether::Material& material)
+	        const char* name, aether::AssetManager& assets, VkDescriptorSetLayout bindlessLayout, VkDescriptorSetLayout lightingLayout, VkFormat colorFormat, VkFormat depthFormat, const char* shaderVfsPath, const aether::Material& material)
 	{
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{ bindlessLayout, lightingLayout };
+		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = shaderVfsPath,

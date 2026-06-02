@@ -38,33 +38,21 @@ namespace aether::app
 
 		// "Loading..." heading.
 		ui.SetLayer(-99);
-		ui.DrawText("Loading...",
-		        UiPoint{
-		                {  0.f,            0.f },
-                        { barX, centerY - 36.f }
-        },
-		        28.f,
-		        glm::vec4(0.88f, 0.91f, 0.93f, 1.f));
+		ui.DrawText("Loading...", UiPoint{{0.f, 0.f}, {barX, centerY - 36.f}}, 28.f, glm::vec4(0.88f, 0.91f, 0.93f, 1.f));
 
 		// Progress bar background track.
-		ui.DrawRect(UiAnchors::Fixed({ 0.f, 0.f }, { barX, centerY }, { kBarWidth, kBarHeight }), glm::vec4(0.12f, 0.15f, 0.20f, 1.f), kCornerRadius);
+		ui.DrawRect(UiAnchors::Fixed({0.f, 0.f}, {barX, centerY}, {kBarWidth, kBarHeight}), glm::vec4(0.12f, 0.15f, 0.20f, 1.f), kCornerRadius);
 
 		// Progress bar fill.
 		const float progress = loadingManager->GetProgress();
 		const float fillWidth = std::max(4.0f, (kBarWidth - 4.0f) * progress);
-		ui.DrawRect(UiAnchors::Fixed({ 0.f, 0.f }, { barX + 2.f, centerY + 2.f }, { fillWidth, kBarHeight - 4.f }), glm::vec4(0.42f, 0.62f, 0.74f, 1.f), kCornerRadius - 2.f);
+		ui.DrawRect(UiAnchors::Fixed({0.f, 0.f}, {barX + 2.f, centerY + 2.f}, {fillWidth, kBarHeight - 4.f}), glm::vec4(0.42f, 0.62f, 0.74f, 1.f), kCornerRadius - 2.f);
 
 		// Current task label beneath the bar.
 		const std::string_view task = loadingManager->GetCurrentTask();
 		if (!task.empty())
 		{
-			ui.DrawText(task,
-			        UiPoint{
-			                {  0.f,                         0.f },
-                            { barX, centerY + kBarHeight + 10.f }
-            },
-			        15.f,
-			        glm::vec4(0.50f, 0.55f, 0.60f, 1.f));
+			ui.DrawText(task, UiPoint{{0.f, 0.f}, {barX, centerY + kBarHeight + 10.f}}, 15.f, glm::vec4(0.50f, 0.55f, 0.60f, 1.f));
 		}
 	}
 

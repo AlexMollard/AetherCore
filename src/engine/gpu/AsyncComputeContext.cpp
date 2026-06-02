@@ -39,14 +39,23 @@ namespace aether
 
 			~InitCleanup()
 			{
-				if (device == VK_NULL_HANDLE) return;
-				for (auto fence : fences)
+				if (device == VK_NULL_HANDLE)
 				{
-					if (fence != VK_NULL_HANDLE) vkDestroyFence(device, fence, nullptr);
+					return;
 				}
-				for (auto pool : commandPools)
+				for (auto fence: fences)
 				{
-					if (pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, pool, nullptr);
+					if (fence != VK_NULL_HANDLE)
+					{
+						vkDestroyFence(device, fence, nullptr);
+					}
+				}
+				for (auto pool: commandPools)
+				{
+					if (pool != VK_NULL_HANDLE)
+					{
+						vkDestroyCommandPool(device, pool, nullptr);
+					}
 				}
 				if (timelineSemaphore != VK_NULL_HANDLE)
 				{
@@ -54,18 +63,22 @@ namespace aether
 				}
 			}
 
-			void Disarm() { device = VK_NULL_HANDLE; }
+			void Disarm()
+			{
+				device = VK_NULL_HANDLE;
+			}
 		} cleanup;
+
 		cleanup.device = device;
 
 		const VkSemaphoreTypeCreateInfo timelineTypeInfo{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-			.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-			.initialValue = 0,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+		        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		        .initialValue = 0,
 		};
 		const VkSemaphoreCreateInfo semInfo{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-			.pNext = &timelineTypeInfo,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		        .pNext = &timelineTypeInfo,
 		};
 		VkSemaphore semaphore = VK_NULL_HANDLE;
 		if (vkCreateSemaphore(device, &semInfo, nullptr, &semaphore) != VK_SUCCESS)
@@ -85,9 +98,9 @@ namespace aether
 			auto& frame = m_frames[frameI];
 
 			const VkCommandPoolCreateInfo poolInfo{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-				.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-				.queueFamilyIndex = vk.GetComputeQueueFamily(),
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			        .queueFamilyIndex = vk.GetComputeQueueFamily(),
 			};
 			VkCommandPool pool = VK_NULL_HANDLE;
 			if (vkCreateCommandPool(device, &poolInfo, nullptr, &pool) != VK_SUCCESS)
@@ -98,10 +111,10 @@ namespace aether
 			cleanup.commandPools.push_back(pool);
 
 			const VkCommandBufferAllocateInfo allocInfo{
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				.commandPool = pool,
-				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-				.commandBufferCount = 1,
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			        .commandPool = pool,
+			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			        .commandBufferCount = 1,
 			};
 			VkCommandBuffer cmd = VK_NULL_HANDLE;
 			if (vkAllocateCommandBuffers(device, &allocInfo, &cmd) != VK_SUCCESS)
@@ -186,8 +199,8 @@ namespace aether
 
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
 		const VkCommandBufferBeginInfo beginInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
 		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
 		{
@@ -222,23 +235,23 @@ namespace aether
 		VkSemaphore timelineSem = reinterpret_cast<VkSemaphore>(m_timelineSemaphoreHandle);
 
 		VkCommandBufferSubmitInfo cmdInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			.commandBuffer = cmd,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		        .commandBuffer = cmd,
 		};
 
 		VkSemaphoreSubmitInfo signalInfo{
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-			.semaphore = timelineSem,
-			.value = signalValue,
-			.stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = timelineSem,
+		        .value = signalValue,
+		        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 		};
 
 		VkSubmitInfo2 submitInfo{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			.commandBufferInfoCount = 1,
-			.pCommandBufferInfos = &cmdInfo,
-			.signalSemaphoreInfoCount = 1,
-			.pSignalSemaphoreInfos = &signalInfo,
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		        .commandBufferInfoCount = 1,
+		        .pCommandBufferInfos = &cmdInfo,
+		        .signalSemaphoreInfoCount = 1,
+		        .pSignalSemaphoreInfos = &signalInfo,
 		};
 
 		if (vkQueueSubmit2(gpu.GetVulkanContext().GetComputeQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
@@ -247,8 +260,8 @@ namespace aether
 		}
 
 		return {
-			.semaphoreHandle = m_timelineSemaphoreHandle,
-			.timelineValue = signalValue,
+		        .semaphoreHandle = m_timelineSemaphoreHandle,
+		        .timelineValue = signalValue,
 		};
 	}
 } // namespace aether

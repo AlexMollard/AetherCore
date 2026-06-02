@@ -35,7 +35,7 @@ namespace aether::io
 		friend class IOThread;
 		friend class FileSystem;
 
-		std::atomic<State> m_state{ State::Pending };
+		std::atomic<State> m_state{State::Pending};
 		std::vector<std::byte> m_data;
 		std::string m_error;
 	};

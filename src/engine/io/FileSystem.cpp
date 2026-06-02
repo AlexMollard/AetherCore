@@ -44,7 +44,7 @@ namespace aether::io
 			{
 				AE_ASSERT_ALWAYS(false, "Invalid virtual path (missing ://): " + std::string(virtualPath));
 			}
-			return { virtualPath.substr(0, sep), virtualPath.substr(sep + separator.size()) };
+			return {virtualPath.substr(0, sep), virtualPath.substr(sep + separator.size())};
 		}
 
 		std::shared_ptr<IFileBackend> ResolveBackend(std::string_view mountPoint)
@@ -102,9 +102,9 @@ namespace aether::io
 		// Fall back to a loose assets/ directory if the pak does not yet exist
 		// (e.g., clean checkout before first build).
 		const std::filesystem::path pakCandidates[] = {
-			workingDirectory / "data" / "assets.pak",
-			workingDirectory / "../data/assets.pak",
-			workingDirectory / "../../data/assets.pak",
+		        workingDirectory / "data" / "assets.pak",
+		        workingDirectory / "../data/assets.pak",
+		        workingDirectory / "../../data/assets.pak",
 		};
 		bool pakMounted = false;
 		for (const auto& candidate: pakCandidates)

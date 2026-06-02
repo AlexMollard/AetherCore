@@ -69,7 +69,7 @@ Bracket FindBracket(uint timesOffset, uint count, float t, float* allTimes)
 }
 
 // Nlerp two quaternions (in xyzw format as float4).
-// Faster approximation of Slerp — visually equivalent for typical animation
+// Faster approximation of Slerp - visually equivalent for typical animation
 // keyframe density, avoids acos/sin/divide.
 float4 Nlerp(float4 q1, float4 q2, float t)
 {

@@ -26,9 +26,9 @@ namespace aether
 
 		// Upload command pool - transient, per-buffer reset.
 		const VkCommandPoolCreateInfo uploadPoolInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-			.queueFamilyIndex = vk.GetGraphicsQueueFamily(),
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+		        .queueFamilyIndex = vk.GetGraphicsQueueFamily(),
 		};
 		if (vkCreateCommandPool(vk.GetDevice().device, &uploadPoolInfo, nullptr, &m_uploadPool) != VK_SUCCESS)
 		{
@@ -60,10 +60,10 @@ namespace aether
 
 		VulkanContext& vk = *m_context;
 		const VkCommandBufferAllocateInfo allocInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			.commandPool = m_uploadPool,
-			.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			.commandBufferCount = 1,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+		        .commandPool = m_uploadPool,
+		        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+		        .commandBufferCount = 1,
 		};
 		VkCommandBuffer cmd = VK_NULL_HANDLE;
 		if (vkAllocateCommandBuffers(vk.GetDevice().device, &allocInfo, &cmd) != VK_SUCCESS)
@@ -72,8 +72,8 @@ namespace aether
 		}
 
 		const VkCommandBufferBeginInfo beginInfo{
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
 		};
 		if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
 		{
@@ -86,9 +86,9 @@ namespace aether
 		}
 
 		const VkSubmitInfo submitInfo{
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.commandBufferCount = 1,
-			.pCommandBuffers = &cmd,
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		        .commandBufferCount = 1,
+		        .pCommandBuffers = &cmd,
 		};
 		if (vkQueueSubmit(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 		{

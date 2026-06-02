@@ -114,7 +114,7 @@ namespace aether::io
 		for (const auto& e: entries)
 		{
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
-			m_index.emplace(std::move(path), EntryInfo{ e.dataOffset, e.dataSize, e.contentHash, e.flags });
+			m_index.emplace(std::move(path), EntryInfo{e.dataOffset, e.dataSize, e.contentHash, e.flags});
 		}
 	}
 

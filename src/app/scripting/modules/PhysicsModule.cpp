@@ -13,9 +13,9 @@ namespace
 	void das_add_box_body(aether::World* w, uint32_t id, das::float3 half, bool dynamic)
 	{
 		aether::BoxBodyDesc desc{};
-		desc.halfExtents = { half.x, half.y, half.z };
+		desc.halfExtents = {half.x, half.y, half.z};
 		desc.motionType = dynamic ? aether::PhysicsMotionType::Dynamic : aether::PhysicsMotionType::Static;
-		w->Emplace<aether::BoxBodyDesc>(aether::Entity{ id }, desc);
+		w->Emplace<aether::BoxBodyDesc>(aether::Entity{id}, desc);
 	}
 
 	// add_sphere_body(world, entity_id, radius, dynamic)
@@ -24,7 +24,7 @@ namespace
 		aether::SphereBodyDesc desc{};
 		desc.radius = radius;
 		desc.motionType = dynamic ? aether::PhysicsMotionType::Dynamic : aether::PhysicsMotionType::Static;
-		w->Emplace<aether::SphereBodyDesc>(aether::Entity{ id }, desc);
+		w->Emplace<aether::SphereBodyDesc>(aether::Entity{id}, desc);
 	}
 
 	// add_capsule_body(world, entity_id, half_height, radius, dynamic)
@@ -34,7 +34,7 @@ namespace
 		desc.halfHeight = halfHeight;
 		desc.radius = radius;
 		desc.motionType = dynamic ? aether::PhysicsMotionType::Dynamic : aether::PhysicsMotionType::Static;
-		w->Emplace<aether::CapsuleBodyDesc>(aether::Entity{ id }, desc);
+		w->Emplace<aether::CapsuleBodyDesc>(aether::Entity{id}, desc);
 	}
 
 	// get_physics_position(world, entity_id) -> float3
@@ -42,7 +42,7 @@ namespace
 	das::float3 das_get_physics_position(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{ id });
+		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 		if (!ps)
 		{
 			return r;
@@ -58,7 +58,7 @@ namespace
 	{
 		das::float3 r{};
 		r.x = r.y = r.z = 1.0f;
-		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{ id });
+		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 		if (!ps)
 		{
 			return r;

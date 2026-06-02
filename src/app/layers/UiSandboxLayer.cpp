@@ -43,7 +43,7 @@ namespace aether::app
 		// ── Widget Gallery ─────────────────────────────────────────────────────
 		// padding=58 clears the 48px panel header and adds an 10px inner margin.
 		// For a 300px-wide panel the content area is 300 - 2*58 = 184px wide.
-		m_galleryPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 120.f, 20.f }, { 300.f, 355.f }), "Widget Gallery", /*draggable=*/true, /*collapsible=*/true, 1.f));
+		m_galleryPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({120.f, 20.f}, {300.f, 355.f}), "Widget Gallery", /*draggable=*/true, /*collapsible=*/true, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_galleryPanel,
 		        ui::UiLayoutComponent{
@@ -66,7 +66,7 @@ namespace aether::app
 		ui::AddChild(world, m_galleryPanel, m_progressBar);
 
 		// ── Text Input ─────────────────────────────────────────────────────────
-		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 120.f, 395.f }, { 300.f, 120.f }), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
+		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({120.f, 395.f}, {300.f, 120.f}), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_inputPanel,
 		        ui::UiLayoutComponent{
@@ -90,13 +90,13 @@ namespace aether::app
 		        ui::UiTransformComponent{
 		                .rect =
 		                        UiRect{
-                                       .anchorMin = { 0.f, 1.f },
-                                       .anchorMax = { 1.f, 1.f },
-                                       .offsetMinPx = { 20.f, -98.f },
-                                       .offsetMaxPx = { -20.f, -52.f },
-		                               },
+		                                .anchorMin = {0.f, 1.f},
+		                                .anchorMax = {1.f, 1.f},
+		                                .offsetMinPx = {20.f, -98.f},
+		                                .offsetMaxPx = {-20.f, -52.f},
+		                        },
 		                .zOrder = 1.f,
-        });
+		        });
 		world.Emplace<ui::UiLayoutComponent>(m_flexContainer,
 		        ui::UiLayoutComponent{
 		                .direction = ui::UiLayoutComponent::Direction::Horizontal,
@@ -133,7 +133,7 @@ namespace aether::app
 		// The initial height (80px) is a placeholder.  Each frame RunLayouts runs
 		// ApplyLayout with autoSize=true, which shrinks/grows the panel to exactly
 		// wrap its three children plus padding.
-		m_autoPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 440.f, 20.f }, { 280.f, 80.f }), "Auto-Size", /*draggable=*/true, /*collapsible=*/true, 1.f));
+		m_autoPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({440.f, 20.f}, {280.f, 80.f}), "Auto-Size", /*draggable=*/true, /*collapsible=*/true, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_autoPanel,
 		        ui::UiLayoutComponent{
@@ -155,10 +155,10 @@ namespace aether::app
 		// ── Corner anchor mini-panels ──────────────────────────────────────────
 		// Each one demonstrates a different UiAnchors preset.
 		// They are non-draggable / non-collapsible so they stay put as reference.
-		m_cornerTL = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({ 8.f, 8.f }, { 95.f, 36.f }), "TopLeft", false, false, 0.5f));
-		m_cornerTR = reg(ui::SpawnPanel(world, UiAnchors::TopRight({ 8.f, 8.f }, { 100.f, 36.f }), "TopRight", false, false, 0.5f));
-		m_cornerBL = reg(ui::SpawnPanel(world, UiAnchors::BottomLeft({ 8.f, 8.f }, { 105.f, 36.f }), "BottomLeft", false, false, 0.5f));
-		m_cornerBR = reg(ui::SpawnPanel(world, UiAnchors::BottomRight({ 8.f, 8.f }, { 115.f, 36.f }), "BottomRight", false, false, 0.5f));
+		m_cornerTL = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({8.f, 8.f}, {95.f, 36.f}), "TopLeft", false, false, 0.5f));
+		m_cornerTR = reg(ui::SpawnPanel(world, UiAnchors::TopRight({8.f, 8.f}, {100.f, 36.f}), "TopRight", false, false, 0.5f));
+		m_cornerBL = reg(ui::SpawnPanel(world, UiAnchors::BottomLeft({8.f, 8.f}, {105.f, 36.f}), "BottomLeft", false, false, 0.5f));
+		m_cornerBR = reg(ui::SpawnPanel(world, UiAnchors::BottomRight({8.f, 8.f}, {115.f, 36.f}), "BottomRight", false, false, 0.5f));
 
 		AE_INFO(LogCategory::App, "UiSandboxLayer attached ({} entities).", m_entities.size());
 	}
@@ -240,16 +240,10 @@ namespace aether::app
 
 			// Thin separator line along the top edge.
 			const glm::vec4 px = ResolveUiRectPx(extent, ct->rect);
-			const glm::vec2 sz{ static_cast<float>(extent.width), static_cast<float>(extent.height) };
+			const glm::vec2 sz{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 			const glm::vec2 anchPx = ct->rect.anchorMin * sz;
 
-			ui.DrawLine(
-			        UiPoint{
-			                .anchor = ct->rect.anchorMin, .offsetPx = { px.x - anchPx.x, px.y - anchPx.y }
-            },
-			        UiPoint{ .anchor = ct->rect.anchorMin, .offsetPx = { px.x + px.z - anchPx.x, px.y - anchPx.y } },
-			        1.f,
-			        theme.separator);
+			ui.DrawLine(UiPoint{.anchor = ct->rect.anchorMin, .offsetPx = {px.x - anchPx.x, px.y - anchPx.y}}, UiPoint{.anchor = ct->rect.anchorMin, .offsetPx = {px.x + px.z - anchPx.x, px.y - anchPx.y}}, 1.f, theme.separator);
 		}
 	}
 

@@ -9,8 +9,8 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		const std::size_t id = m_nextId++;
-		m_objects[id] = RenderObject{ .desc = desc };
-		return Handle{ .id = id };
+		m_objects[id] = RenderObject{.desc = desc};
+		return Handle{.id = id};
 	}
 
 	void Scene::RemoveRenderObject(Handle handle)

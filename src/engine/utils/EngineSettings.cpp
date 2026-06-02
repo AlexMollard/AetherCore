@@ -85,15 +85,15 @@ namespace aether
 		}
 
 		const std::filesystem::path candidates[] = {
-			cwd / "data" / "config" / requested,
-			cwd / ".." / "data" / "config" / requested,
-			cwd / ".." / ".." / "data" / "config" / requested,
-			cwd / "config" / requested,
-			cwd / ".." / "config" / requested,
-			cwd / ".." / ".." / "config" / requested,
-			cwd / requested,
-			cwd / ".." / requested,
-			cwd / ".." / ".." / requested,
+		        cwd / "data" / "config" / requested,
+		        cwd / ".." / "data" / "config" / requested,
+		        cwd / ".." / ".." / "data" / "config" / requested,
+		        cwd / "config" / requested,
+		        cwd / ".." / "config" / requested,
+		        cwd / ".." / ".." / "config" / requested,
+		        cwd / requested,
+		        cwd / ".." / requested,
+		        cwd / ".." / ".." / requested,
 		};
 
 		for (const auto& candidate: candidates)
@@ -151,7 +151,15 @@ namespace aether
 						text[i] = static_cast<char>(bytes[i]);
 					}
 					ParseSettingsText(text, settings);
-					AE_INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", virtualPath, settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
+					AE_INFO(LogCategory::Engine,
+					        "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})",
+					        virtualPath,
+					        settings.window.width,
+					        settings.window.height,
+					        settings.graphics.vsync ? "on" : "off",
+					        settings.graphics.fxaa ? "on" : "off",
+					        settings.graphics.asyncCompute ? "on" : "off",
+					        settings.app.targetFps);
 					return settings;
 				}
 			}
@@ -179,7 +187,15 @@ namespace aether
 
 		ParseSettingsStream(in, settings);
 
-		AE_INFO(LogCategory::Engine, "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})", path.string(), settings.window.width, settings.window.height, settings.graphics.vsync ? "on" : "off", settings.graphics.fxaa ? "on" : "off", settings.graphics.asyncCompute ? "on" : "off", settings.app.targetFps);
+		AE_INFO(LogCategory::Engine,
+		        "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})",
+		        path.string(),
+		        settings.window.width,
+		        settings.window.height,
+		        settings.graphics.vsync ? "on" : "off",
+		        settings.graphics.fxaa ? "on" : "off",
+		        settings.graphics.asyncCompute ? "on" : "off",
+		        settings.app.targetFps);
 		return settings;
 	}
 } // namespace aether
