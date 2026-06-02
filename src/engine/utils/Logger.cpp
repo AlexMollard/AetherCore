@@ -120,6 +120,16 @@ namespace aether
 					return "Std";
 				case LogCategory::Animation:
 					return "Animation";
+				case LogCategory::Render:
+					return "Render";
+				case LogCategory::Scene:
+					return "Scene";
+				case LogCategory::Camera:
+					return "Camera";
+				case LogCategory::UI:
+					return "UI";
+				case LogCategory::Input:
+					return "Input";
 				case LogCategory::Unknown:
 					return "Unknown";
 				default:

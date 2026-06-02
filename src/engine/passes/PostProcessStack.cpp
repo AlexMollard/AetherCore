@@ -71,8 +71,16 @@ namespace aether
 	{
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
+		if (m_ldrColorImage.GetBindlessSampledSlot() != 0)
+		{
+			m_ldrColorImage.ReleaseBindlessSampled(true);
+		}
 		m_ldrColorImage.Reset();
 		m_ldrColor = RGImage{};
+		if (m_hdrColorImage.GetBindlessSampledSlot() != 0)
+		{
+			m_hdrColorImage.ReleaseBindlessSampled(true);
+		}
 		m_hdrColorImage.Reset();
 		m_hdrColor = RGImage{};
 	}

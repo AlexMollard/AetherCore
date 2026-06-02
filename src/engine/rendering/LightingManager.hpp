@@ -51,7 +51,7 @@ namespace aether
 		[[nodiscard]] VkDescriptorSetLayout GetSetLayout() const;
 		[[nodiscard]] VkDescriptorSet GetSet(std::uint32_t frameSlot) const;
 
-		void UpdateForView(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, bool enableBinningForView, bool isAsyncCompute = false) const;
+		void UpdateForView(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, bool enableBinningForView, bool isAsyncCompute = false, std::span<const Renderer::PointLight> pointLights = {}, std::span<const Renderer::SpotLight> spotLights = {}) const;
 
 		void EmitAcquireBarriers(std::uint32_t frameSlot, CommandRecorder& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
 
@@ -83,8 +83,8 @@ namespace aether
 
 		void EnsureBuffers(std::uint32_t frameSlot, std::size_t lightCount, std::size_t tileCount, std::size_t indexCount) const;
 		void EnsureComputePipeline() const;
-		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc) const;
-		void UpdateForViewGpu(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc) const;
+		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
+		void UpdateForViewGpu(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void UpdateDescriptorSet(std::uint32_t frameSlot) const;
 		void DisableForView(FrameConstants& fc) const;
 

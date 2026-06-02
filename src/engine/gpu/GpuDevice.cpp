@@ -38,6 +38,8 @@ namespace aether
 		if (m_gfx)
 		{
 			m_gfx->Shutdown();
+			delete m_gfx;
+			m_gfx = nullptr;
 		}
 	}
 

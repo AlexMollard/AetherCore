@@ -94,6 +94,12 @@ namespace aether
 		[[nodiscard]] bool IsValid() const;
 	};
 
+	// A render-graph-oriented resource pool that supports virtual resources,
+	// automatic and explicit aliasing, and bindless visibility bindings.
+	//
+	// Thread safety: NOT thread-safe. All create/materialize calls must occur
+	// on a single thread (the render thread in AetherCore). Use external
+	// synchronization if concurrent access is required.
 	class ResourcePool
 	{
 	public:

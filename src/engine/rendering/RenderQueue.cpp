@@ -228,7 +228,7 @@ namespace aether
 		        });
 
 		const std::uint32_t totalDraws = static_cast<std::uint32_t>(m_commands.size());
-		assert(totalDraws <= m_maxDraws && "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
+		AE_ASSERT_ALWAYS(totalDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
 		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
 		std::uint32_t batchIdx = 0;
@@ -247,7 +247,7 @@ namespace aether
 			}
 			const std::uint32_t batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
 
-			assert(batchIdx < m_maxBatches && "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
+			AE_ASSERT_ALWAYS(batchIdx < m_maxBatches, "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
 
 			for (std::size_t j = i; j < batchEnd; ++j)
 			{
@@ -305,7 +305,7 @@ namespace aether
 						}
 						else
 						{
-							assert(animSampleBatchCount < 64 && "RenderQueue: too many animation sample batches");
+							AE_ASSERT_ALWAYS(animSampleBatchCount < 64, "RenderQueue: too many animation sample batches");
 							animSampleBatches[animSampleBatchCount++] = { drawAnimDb, sampleJobsThisFrame, 1u };
 						}
 
@@ -315,7 +315,7 @@ namespace aether
 						}
 						else
 						{
-							assert(skinPaletteBatchCount < 64 && "RenderQueue: too many skin palette batches");
+							AE_ASSERT_ALWAYS(skinPaletteBatchCount < 64, "RenderQueue: too many skin palette batches");
 							skinPaletteBatches[skinPaletteBatchCount++] = { drawAnimDb, skinJobCount, 1u };
 						}
 

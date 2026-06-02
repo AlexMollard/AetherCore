@@ -230,6 +230,9 @@ namespace aether
 		packet.skyZenithColor = renderer.GetSkyZenithColorVector();
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
 
+		packet.pointLights.assign(renderer.GetPointLights().begin(), renderer.GetPointLights().end());
+		packet.spotLights.assign(renderer.GetSpotLights().begin(), renderer.GetSpotLights().end());
+
 		return packet;
 	}
 
@@ -261,7 +264,7 @@ namespace aether
 
 		m_rendering.GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), fc);
 
-		m_rendering.GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), m_rendering.GetRenderer(), m_sceneSub.GetScene(), m_sceneSub.GetWorld(), fc);
+		m_rendering.GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras.GetCameraManager(), m_sceneSub.GetScene(), m_sceneSub.GetWorld(), fc);
 
 		if (packet.hasCameraData)
 		{
@@ -272,7 +275,7 @@ namespace aether
 				{
 					m_asyncCompute.BeginFrame(m_gpu, frameIdx);
 					CommandRecorder lightingCmd = m_asyncCompute.GetCommandRecorder(frameIdx);
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true);
+					m_cameras.GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
 					m_asyncCompute.EndCommandBuffer(frameIdx);
 
 					m_asyncComputeSubmitResult = m_asyncCompute.Submit(m_gpu, frameIdx);
@@ -281,7 +284,7 @@ namespace aether
 				{
 					const TracyVkCtx vkCtx = m_gpu.GetVulkanContext().GetTracyVkCtx();
 					AE_PROFILE_GPU_ZONE_T(vkCtx, m_currentRecorder.GetCommandBuffer(), gpuLightingZone, "Lighting.UpdateForView");
-					m_cameras.GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu.GetSwapchainExtent(), fc, true);
+					m_cameras.GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu.GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
 				}
 			}
 		}

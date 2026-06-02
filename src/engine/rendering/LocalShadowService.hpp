@@ -70,7 +70,7 @@ namespace aether
 		// allocate atlas regions, and fill FrameConstants with shadow info.
 		// Re-populates the shadow render queue from Scene/World to capture any
 		// mid-frame MeshComponent changes from game systems.
-		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, const Renderer& renderer, Scene& scene, World& world, FrameConstants& fc);
+		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, Scene& scene, World& world, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat);

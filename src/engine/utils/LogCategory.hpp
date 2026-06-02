@@ -13,6 +13,11 @@ namespace aether
 		FileSystem,
 		App,
 		Std,
+		Render,
+		Scene,
+		Camera,
+		UI,
+		Input,
 		Unknown,
 	};
 }

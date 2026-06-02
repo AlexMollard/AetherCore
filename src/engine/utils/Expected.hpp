@@ -40,8 +40,9 @@ namespace aether
 					return FormatError("Standard", code, message);
 				case LogCategory::Unknown:
 					return FormatError("Unknown", code, message);
+				default:
+					return FormatError("Unknown", code, message);
 			}
-			return message;
 		}
 
 		static AetherError Vulkan(int32_t vkResult, std::string_view msg)
@@ -103,6 +104,7 @@ namespace aether
 			case LogCategory::App:
 			case LogCategory::Std:
 			case LogCategory::Unknown:
+			default:
 				throw EngineError(err.message);
 		}
 	}

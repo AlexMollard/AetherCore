@@ -161,7 +161,7 @@ namespace aether
 		return m_sets[frameSlot];
 	}
 
-	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const bool isAsyncCompute) const
+	void LightingManager::UpdateForView(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const bool enableBinningForView, const bool isAsyncCompute, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
@@ -172,7 +172,7 @@ namespace aether
 
 		if (m_gpuBinningEnabled && cmd.IsValid())
 		{
-			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc);
+			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, pointLights, spotLights);
 			if (!isAsyncCompute)
 			{
 				// Same queue: explicit compute→fragment barrier required.
@@ -194,18 +194,18 @@ namespace aether
 			return;
 		}
 
-		UpdateForViewCpu(frameSlot, camera, extent, fc);
+		UpdateForViewCpu(frameSlot, camera, extent, fc, pointLights, spotLights);
 	}
 
-	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
+	void LightingManager::UpdateForViewGpu(const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
-		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
+		lights.reserve(pointLights.size() + spotLights.size());
 
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetPointLights().size()); ++i)
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(pointLights.size()); ++i)
 		{
-			const Renderer::PointLight& src = m_renderer->GetPointLights()[i];
+			const Renderer::PointLight& src = pointLights[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
@@ -214,9 +214,9 @@ namespace aether
 			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetSpotLights().size()); ++i)
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(spotLights.size()); ++i)
 		{
-			const Renderer::SpotLight& src = m_renderer->GetSpotLights()[i];
+			const Renderer::SpotLight& src = spotLights[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
@@ -306,15 +306,15 @@ namespace aether
 		// maintenance9 eliminates queue family ownership transfers entirely.
 	}
 
-	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc) const
+	void LightingManager::UpdateForViewCpu(const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
-		lights.reserve(m_renderer->GetPointLights().size() + m_renderer->GetSpotLights().size());
+		lights.reserve(pointLights.size() + spotLights.size());
 
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetPointLights().size()); ++i)
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(pointLights.size()); ++i)
 		{
-			const Renderer::PointLight& src = m_renderer->GetPointLights()[i];
+			const Renderer::PointLight& src = pointLights[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
@@ -323,9 +323,9 @@ namespace aether
 			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(m_renderer->GetSpotLights().size()); ++i)
+		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(spotLights.size()); ++i)
 		{
-			const Renderer::SpotLight& src = m_renderer->GetSpotLights()[i];
+			const Renderer::SpotLight& src = spotLights[i];
 			lights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),

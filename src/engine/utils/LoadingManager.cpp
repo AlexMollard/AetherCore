@@ -19,10 +19,18 @@ namespace aether
 			return false;
 		}
 
-		auto& task = m_tasks.front();
-		m_currentTask = task.name;
-		task.fn();
+		auto task = std::move(m_tasks.front());
 		m_tasks.pop_front();
+		m_currentTask = task.name;
+		try
+		{
+			task.fn();
+		}
+		catch (...)
+		{
+			++m_completed;
+			throw;
+		}
 		++m_completed;
 
 		// Intentionally keep m_currentTask set to the last completed task

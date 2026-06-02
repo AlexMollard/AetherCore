@@ -3,10 +3,12 @@
 #include <atomic>
 #include <cstdint>
 #include <thread>
+#include <vector>
 
 #include <glm/glm.hpp>
 
 #include "utils/coro/Channel.hpp"
+#include "rendering/Renderer.hpp"
 
 namespace aether
 {
@@ -30,6 +32,11 @@ namespace aether
 		glm::vec4 skyHorizonColor{ 1.0f };
 		glm::vec4 skyZenithColor{ 0.5f, 0.7f, 1.0f, 1.0f };
 		glm::vec4 skyVoidColor{ 0.0f };
+
+		// Local light lists snapshotted to avoid data race between game thread
+		// (SetPointLights/SetSpotLights) and render thread reads.
+		std::vector<Renderer::PointLight> pointLights;
+		std::vector<Renderer::SpotLight> spotLights;
 
 		// Stable GPU resource addresses.
 		std::uint64_t materialBufferAddr = 0;

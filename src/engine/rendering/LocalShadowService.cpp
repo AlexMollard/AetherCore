@@ -289,7 +289,7 @@ namespace aether
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
 	}
 
-	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, const Renderer& renderer, Scene& scene, World& world, FrameConstants& fc)
+	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, Scene& scene, World& world, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
 		// Re-populate the shadow render queue to pick up any mid-frame changes
@@ -307,8 +307,8 @@ namespace aether
 		const Camera* mainCam = cameraManager.TryGetMainCamera();
 		const glm::vec3 camPos = (mainCam != nullptr) ? mainCam->GetPosition() : glm::vec3(0.0f);
 
-		const std::uint32_t pointCount = static_cast<std::uint32_t>(renderer.GetPointLights().size());
-		const std::uint32_t spotCount = static_cast<std::uint32_t>(renderer.GetSpotLights().size());
+		const std::uint32_t pointCount = static_cast<std::uint32_t>(packet.pointLights.size());
+		const std::uint32_t spotCount = static_cast<std::uint32_t>(packet.spotLights.size());
 
 		struct ShadowCandidate
 		{
@@ -323,7 +323,7 @@ namespace aether
 
 		// Gather point lights (type 0 on CPU = point).
 		{
-			std::span<const Renderer::PointLight> ptLights = renderer.GetPointLights();
+			std::span<const Renderer::PointLight> ptLights = packet.pointLights;
 			for (std::size_t i = 0; i < ptLights.size() && candidates.size() < kMaxLocalShadows; ++i)
 			{
 				if (!ptLights[i].castsShadow)
@@ -344,7 +344,7 @@ namespace aether
 
 		// Gather spot lights (type 1 on CPU = spot).
 		{
-			std::span<const Renderer::SpotLight> spLights = renderer.GetSpotLights();
+			std::span<const Renderer::SpotLight> spLights = packet.spotLights;
 			for (std::size_t i = 0; i < spLights.size() && candidates.size() < kMaxLocalShadows; ++i)
 			{
 				if (!spLights[i].castsShadow)
@@ -446,7 +446,7 @@ namespace aether
 					break;
 				}
 
-				std::span<const Renderer::SpotLight> spLights = renderer.GetSpotLights();
+				std::span<const Renderer::SpotLight> spLights = packet.spotLights;
 				const Renderer::SpotLight& src = spLights[c.lightIndex];
 				const glm::vec3 lightDir = glm::normalize(src.direction);
 				const glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f)
