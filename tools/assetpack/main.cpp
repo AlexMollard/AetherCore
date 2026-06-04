@@ -8,6 +8,7 @@
 #include <charconv>
 #include <filesystem>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #include "MaterialImporter.hpp"
@@ -15,20 +16,26 @@
 
 namespace fs = std::filesystem;
 
-int main(int argc, char* argv[])
+struct Args
 {
-	bool importMaterials  = false;
-	int  compressionLevel = 3; // zstd default; 0 = disabled
-	int  argOffset        = 1;
+	bool     importMaterials  = false;
+	int      compressionLevel = 3;
+	fs::path sourceDir;
+	fs::path outputPath;
+};
 
-	// Parse flags before positional arguments.
+static std::optional<Args> ParseArgs(int argc, char* argv[])
+{
+	Args args;
+	int argOffset = 1;
+
 	while (argOffset < argc)
 	{
 		const std::string arg = argv[argOffset];
 
 		if (arg == "--import-materials")
 		{
-			importMaterials = true;
+			args.importMaterials = true;
 			++argOffset;
 		}
 		else if (arg == "--compress-level")
@@ -36,14 +43,14 @@ int main(int argc, char* argv[])
 			if (argOffset + 1 >= argc)
 			{
 				std::cerr << "AssetPacker: --compress-level requires a value (0-22)\n";
-				return 1;
+				return std::nullopt;
 			}
 			const std::string val = argv[argOffset + 1];
-			auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), compressionLevel);
+			auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), args.compressionLevel);
 			if (ec != std::errc{})
 			{
 				std::cerr << "AssetPacker: invalid compression level '" << val << "'\n";
-				return 1;
+				return std::nullopt;
 			}
 			argOffset += 2;
 		}
@@ -52,14 +59,14 @@ int main(int argc, char* argv[])
 			if (argc < argOffset + 2)
 			{
 				std::cerr << "Usage: AssetPacker import-materials <source-dir>\n";
-				return 1;
+				return std::nullopt;
 			}
 			const int result = MaterialImporter::ImportDirectory(fs::path(argv[argOffset + 1]));
-			return (result < 0) ? 1 : 0;
+			std::exit((result < 0) ? 1 : 0);
 		}
 		else
 		{
-			break; // positional args start here
+			break;
 		}
 	}
 
@@ -67,25 +74,34 @@ int main(int argc, char* argv[])
 	{
 		std::cerr << "Usage: AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
+		return std::nullopt;
+	}
+
+	args.sourceDir  = fs::path(argv[argOffset]);
+	args.outputPath = fs::path(argv[argOffset + 1]);
+
+	return args;
+}
+
+int main(int argc, char* argv[])
+{
+	const auto args = ParseArgs(argc, argv);
+	if (!args)
+		return 1;
+
+	if (!fs::is_directory(args->sourceDir))
+	{
+		std::cerr << "AssetPacker: source directory not found: " << args->sourceDir << "\n";
 		return 1;
 	}
 
-	const fs::path sourceDir(argv[argOffset]);
-	const fs::path outPath(argv[argOffset + 1]);
-
-	if (!fs::is_directory(sourceDir))
+	if (args->importMaterials)
 	{
-		std::cerr << "AssetPacker: source directory not found: " << sourceDir << "\n";
-		return 1;
-	}
-
-	if (importMaterials)
-	{
-		if (MaterialImporter::ImportDirectory(sourceDir) < 0)
+		if (MaterialImporter::ImportDirectory(args->sourceDir) < 0)
 			return 1;
 	}
 
-	PakWriter writer(compressionLevel);
-	writer.AddDirectory(sourceDir);
-	return writer.Write(outPath) ? 0 : 1;
+	PakWriter writer(args->compressionLevel);
+	writer.AddDirectory(args->sourceDir);
+	return writer.Write(args->outputPath) ? 0 : 1;
 }

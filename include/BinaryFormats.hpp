@@ -180,3 +180,16 @@ static_assert(sizeof(AnimHeaderDisk)      == 14);
 static_assert(sizeof(ChannelHeaderDisk)   == 12);
 static_assert(sizeof(AnimSetHeaderDisk)   == 24);
 static_assert(sizeof(MaterialHeaderDisk)  == 64);
+
+// ── Magic + version validation helpers ───────────────────────────────────
+
+inline bool CheckMagic(const SkelHeaderDisk& h)
+    { return h.magic[0]=='S' && h.magic[1]=='K' && h.magic[2]=='E' && h.magic[3]=='L' && h.version == SKEL_VERSION; }
+inline bool CheckMagic(const MeshHeaderDisk& h)
+    { return h.magic[0]=='M' && h.magic[1]=='E' && h.magic[2]=='S' && h.magic[3]=='H' && h.version == MESH_VERSION; }
+inline bool CheckMagic(const AnimHeaderDisk& h)
+    { return h.magic[0]=='A' && h.magic[1]=='N' && h.magic[2]=='I' && h.magic[3]=='M' && h.version == ANIM_VERSION; }
+inline bool CheckMagic(const AnimSetHeaderDisk& h)
+    { return h.magic[0]=='A' && h.magic[1]=='S' && h.magic[2]=='E' && h.magic[3]=='T' && h.version == ASET_VERSION; }
+inline bool CheckMagic(const MaterialHeaderDisk& h)
+    { return h.magic[0]=='M' && h.magic[1]=='A' && h.magic[2]=='T' && h.magic[3]=='L' && h.version == MATL_VERSION; }

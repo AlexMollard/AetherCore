@@ -97,9 +97,11 @@ namespace
 	// Manifest - persists per-file mtime + hash so unchanged assets are skipped
 	// -------------------------------------------------------------------------
 
-	// Bump when the output format for any processed asset type changes so that
-	// stale cached files are automatically regenerated on the next pack.
-	constexpr int kPackerVersion = 2;
+	// Bump when the manifest format changes so that stale cached manifests
+	// are automatically regenerated on the next pack.
+	// This is distinct from any tool or format version — see kManifestVersion
+	// if/when a separate tool-level version is needed.
+	constexpr int kManifestVersion = 2;
 
 	struct ManifestEntry
 	{
@@ -123,7 +125,7 @@ namespace
 			if (line.empty())
 				continue;
 			// Expected: "# AetherPak manifest vN"
-			const std::string expected = "# AetherPak manifest v" + std::to_string(kPackerVersion);
+			const std::string expected = "# AetherPak manifest v" + std::to_string(kManifestVersion);
 			if (line != expected)
 				return {}; // version mismatch - force full repack
 			break;
@@ -158,7 +160,7 @@ namespace
 		if (!out)
 			return;
 
-		out << "# AetherPak manifest v" << kPackerVersion << "\n";
+		out << "# AetherPak manifest v" << kManifestVersion << "\n";
 		for (const auto& [vpath, e] : map)
 			out << vpath << '\t' << std::dec << e.mtimeTicks << '\t' << std::hex << e.contentHash << '\n';
 	}

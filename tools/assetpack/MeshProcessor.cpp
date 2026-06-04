@@ -48,7 +48,7 @@ namespace MeshProcessor
             AppendBytes(buf, s.data(), s.size());
         }
 
-        void AppendRawStr(std::vector<std::byte>& buf, const std::string& s)
+        void AppendStringData(std::vector<std::byte>& buf, const std::string& s)
         {
             AppendBytes(buf, s.data(), s.size());
         }
@@ -415,14 +415,14 @@ namespace MeshProcessor
                 hdr.skeletonHash = skelHash;
 
                 Append(result.skelData, hdr);
-                AppendRawStr(result.skelData, skelName);
+                AppendStringData(result.skelData, skelName);
 
                 for (const auto& bone : bones)
                 {
                     BoneEntryHeaderDisk boneHdr;
                     boneHdr.nameLen = static_cast<uint16_t>(bone.name.size());
                     Append(result.skelData, boneHdr);
-                    AppendRawStr(result.skelData, bone.name);
+                    AppendStringData(result.skelData, bone.name);
 
                     const int32_t remappedParent = (bone.parentIndex >= 0)
                         ? static_cast<int32_t>(remapTable[static_cast<std::size_t>(bone.parentIndex)]) : -1;
@@ -762,7 +762,7 @@ namespace MeshProcessor
                     idx16[i] = static_cast<uint16_t>(combinedIndices[i]);
                 AppendBytes(result.meshData, idx16.data(), idx16.size() * sizeof(uint16_t));
             }
-            AppendRawStr(result.meshData, skinRefPath);
+            AppendStringData(result.meshData, skinRefPath);
             for (const auto& matPath : materialPaths)
                 AppendStr(result.meshData, matPath);
         }
@@ -799,7 +799,7 @@ namespace MeshProcessor
                 animHdr.channelCount = validChannels;
                 animHdr.nameLen = static_cast<uint16_t>(animName.size());
                 Append(animData, animHdr);
-                AppendRawStr(animData, animName);
+                AppendStringData(animData, animName);
 
                 for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
                 {

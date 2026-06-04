@@ -1,6 +1,7 @@
 #include "TextureProcessor.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -137,10 +138,12 @@ namespace TextureProcessor
 		// Block compression
 		// -------------------------------------------------------------------------
 
+		using Block4x4 = std::array<uint8_t, 64>;
+
 		// Gather a 4x4 pixel block from the decoded image into a flat RGBA8 array.
 		// Clamps to image edges so partial border blocks are handled correctly.
 		void GatherBlock(const uint8_t* pixels, int width, int height, int channels, int blockX, int blockY,
-		        uint8_t out[4 * 4 * 4]) // always RGBA8
+		        Block4x4& out) // always RGBA8
 		{
 			for (int py = 0; py < 4; ++py)
 			{
@@ -149,7 +152,7 @@ namespace TextureProcessor
 					const int sx = std::min(blockX * 4 + px, width - 1);
 					const int sy = std::min(blockY * 4 + py, height - 1);
 					const uint8_t* src = pixels + (sy * width + sx) * channels;
-					uint8_t* dst = out + (py * 4 + px) * 4;
+					uint8_t* dst = out.data() + (py * 4 + px) * 4;
 					dst[0] = channels > 0 ? src[0] : 0;
 					dst[1] = channels > 1 ? src[1] : 0;
 					dst[2] = channels > 2 ? src[2] : 0;
@@ -199,7 +202,7 @@ namespace TextureProcessor
 			std::vector<std::byte> out(static_cast<std::size_t>(blockW * blockH) * bytesPerBlock);
 			std::byte* dst = out.data();
 
-			uint8_t block[4 * 4 * 4];
+			Block4x4 block{};
 
 			for (int by = 0; by < blockH; ++by)
 			{
@@ -211,10 +214,10 @@ namespace TextureProcessor
 					{
 						case BCnFmt::BC7_LINEAR:
 						case BCnFmt::BC7_SRGB:
-							bc7enc_compress_block(dst, block, &bc7Params);
+							bc7enc_compress_block(dst, block.data(), &bc7Params);
 							break;
 						case BCnFmt::BC4:
-							rgbcx::encode_bc4(dst, block, 4); // stride 4 -> red channel of RGBA
+							rgbcx::encode_bc4(dst, block.data(), 4); // stride 4 -> red channel of RGBA
 							break;
 					}
 					dst += bytesPerBlock;
