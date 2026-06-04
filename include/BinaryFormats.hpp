@@ -63,7 +63,9 @@ struct MeshHeaderDisk
 };
 
 // Disk vertex — 96 bytes, aligned to 16/32-byte cache lines.
-// Matches Mesh::Vertex runtime struct (see src/engine/mesh/Mesh.hpp).
+// Converted to aether::Mesh::Vertex (100 bytes) at load time via
+// GltfAsset::LoadFromMesh. Note: disk stores color as packed uint32 RGBA8
+// while runtime stores it as unpacked vec3 RGB.
 struct DiskMeshVertex
 {
     float    position[3];     // 12 bytes

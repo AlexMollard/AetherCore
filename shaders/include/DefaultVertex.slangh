@@ -60,6 +60,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     o.worldTangent = worldTangent;
     o.tangentSign = input.tangent.w;
     o.uv          = input.uv;
+    o.uv2         = input.uv2;
     o.vertexColor = input.color;
     o.materialIndex = instance.materialIndex;
     return o;

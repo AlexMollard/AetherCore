@@ -1,7 +1,7 @@
 #ifndef AETHER_MESH_VERTEX_SLANGH
 #define AETHER_MESH_VERTEX_SLANGH
 
-// Must match aether::Mesh::Vertex (92 bytes).
+// Must match aether::Mesh::Vertex (100 bytes).
 // Included by gltf_mesh.slang and plasma.slang.
 
 struct Vertex
@@ -10,9 +10,10 @@ struct Vertex
     [[vk::offset(12)]] float3 normal;
     [[vk::offset(24)]] float4 tangent;      // w = bitangent sign
     [[vk::offset(40)]] float2 uv;
-    [[vk::offset(48)]] float3 color;
-    [[vk::offset(60)]] uint4  jointIndices;
-    [[vk::offset(76)]] float4 jointWeights;
+    [[vk::offset(48)]] float2 uv2;          // secondary UV
+    [[vk::offset(56)]] float3 color;
+    [[vk::offset(68)]] uint4  jointIndices;
+    [[vk::offset(84)]] float4 jointWeights;
 };
 
 struct VSOutput
@@ -23,8 +24,9 @@ struct VSOutput
     [[vk::location(2)]] float3 worldTangent    : TEXCOORD2;
     [[vk::location(3)]] float  tangentSign     : TEXCOORD3;
     [[vk::location(4)]] float2 uv              : TEXCOORD4;
-    [[vk::location(5)]] float3 vertexColor     : TEXCOORD5;
-    [[vk::location(6)]] nointerpolation uint materialIndex : TEXCOORD6;
+    [[vk::location(5)]] float2 uv2             : TEXCOORD5;
+    [[vk::location(6)]] float3 vertexColor     : TEXCOORD6;
+    [[vk::location(7)]] nointerpolation uint materialIndex : TEXCOORD7;
 };
 
 // Transform direction vectors (normal/tangent) through a world matrix basis,

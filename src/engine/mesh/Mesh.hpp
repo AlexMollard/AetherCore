@@ -17,8 +17,9 @@ namespace aether
 		{
 			glm::vec3 position;
 			glm::vec3 normal;
-			glm::vec4 tangent; // xyz = tangent direction, w = bitangent sign (+1 or -1)
+			glm::vec4 tangent; // xyz = tangent direction, w = bitangent sign
 			glm::vec2 uv;
+			glm::vec2 uv2; // secondary UV (lightmaps, detail maps)
 			glm::vec3 color;
 			glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
 			glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};

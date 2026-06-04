@@ -479,6 +479,7 @@ namespace aether::assets
 				dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
 				dst.tangent = glm::vec4(src.tangent[0], src.tangent[1], src.tangent[2], src.tangent[3]);
 				dst.uv = glm::vec2(src.uv[0], src.uv[1]);
+				dst.uv2 = glm::vec2(src.uv2[0], src.uv2[1]);
 				dst.color = UnpackColorRGBA8(src.color);
 				dst.jointIndices = glm::uvec4(src.jointIndices[0], src.jointIndices[1], src.jointIndices[2], src.jointIndices[3]);
 				dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
