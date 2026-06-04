@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -40,6 +42,7 @@ namespace MeshProcessor
 
         void AppendStr(std::vector<std::byte>& buf, const std::string& s)
         {
+            assert(s.size() <= std::numeric_limits<uint16_t>::max() && "string too long for uint16_t length prefix");
             const uint16_t len = static_cast<uint16_t>(s.size());
             AppendBytes(buf, &len, sizeof(len));
             AppendBytes(buf, s.data(), s.size());
@@ -567,6 +570,17 @@ namespace MeshProcessor
                             cgltf_accessor_read_float(weightsAcc, v, fv.data(), 4);
                             dst.jointWeights[0] = fv[0]; dst.jointWeights[1] = fv[1];
                             dst.jointWeights[2] = fv[2]; dst.jointWeights[3] = fv[3];
+
+                            float wsum = dst.jointWeights[0] + dst.jointWeights[1]
+                                       + dst.jointWeights[2] + dst.jointWeights[3];
+                            if (wsum > 1e-6f)
+                            {
+                                const float inv = 1.f / wsum;
+                                dst.jointWeights[0] *= inv;
+                                dst.jointWeights[1] *= inv;
+                                dst.jointWeights[2] *= inv;
+                                dst.jointWeights[3] *= inv;
+                            }
                         }
                     }
 

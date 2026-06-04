@@ -81,7 +81,7 @@ namespace
 			lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
 		static constexpr std::string_view kSkip[] = {
-		    ".jpg", ".jpeg", ".png", ".webp",
+		    ".jpg", ".jpeg", ".png",
 		    ".dds", ".ktx", ".ktx2", ".basis",
 		    ".ogg", ".mp3", ".opus", ".flac", ".aac",
 		    ".zip", ".gz", ".br", ".zst",
@@ -170,8 +170,6 @@ namespace
 	    const std::vector<PakWriter::FileRecord>& files)
 	{
 		if (!fs::exists(pakPath))
-			return false;
-		if (manifest.size() != files.size())
 			return false;
 
 		for (const auto& file : files)
@@ -338,7 +336,7 @@ namespace
 		}();
 
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
-		    ext == ".tga" || ext == ".bmp")
+		    ext == ".tga" || ext == ".bmp" || ext == ".webp")
 		{
 			auto result = TextureProcessor::ToDDS(raw, diskPath);
 			if (!result.empty())
@@ -542,107 +540,118 @@ bool PakWriter::Write(const fs::path& outPath) const
 	for (const auto& file : m_files)
 		futures.push_back(std::async(std::launch::async, ProcessFile, file.virtualPath, file.diskPath, m_sourceDir, m_compressionLevel));
 
-	// --- Collect results and build in-memory sections ------------------------
+	// --- Collect results ----------------------------------------------------
+	std::vector<FileResult> allResults;
+	allResults.reserve(futures.size());
+	bool anyError = false;
+	int fileIdx = 0;
+
+	for (auto& future : futures)
+	{
+		FileResult res = future.get();
+		if (!res.ok)
+		{
+			std::cerr << "  ! WARNING: " << res.errorMsg << " - skipping\n";
+			anyError = true;
+		}
+		allResults.push_back(std::move(res));
+		++fileIdx;
+	}
+
+	// --- Flatten primary + extra files, sort by virtual path ----------------
+	struct PackItem
+	{
+		std::string virtualPath;
+		std::vector<std::byte> data;
+		uint32_t flags = 0;
+		uint64_t rawSize = 0;
+		uint64_t contentHash = 0;
+	};
+
+	std::vector<PackItem> items;
+	items.reserve(allResults.size() * 2);
+
+	for (std::size_t ri = 0; ri < allResults.size(); ++ri)
+	{
+		const FileResult& res = allResults[ri];
+		if (!res.ok) continue;
+
+		items.push_back({ res.virtualPath, res.data, res.flags, res.rawSize, res.contentHash });
+
+		for (const auto& extra : res.extraFiles)
+		{
+			if (extra.data.empty()) continue;
+			items.push_back({ extra.virtualPath, extra.data, extra.flags, extra.rawSize, extra.contentHash });
+		}
+	}
+
+	std::sort(items.begin(), items.end(),
+		[](const PackItem& a, const PackItem& b) { return a.virtualPath < b.virtualPath; });
+
+	// --- Build in-memory sections -------------------------------------------
 	std::vector<char>      pathData;
 	std::vector<std::byte> assetData;
 	std::vector<PakEntry>  entries;
 	std::vector<LogEntry>  logEntries;
 	ManifestMap            newManifest;
-	entries.reserve(m_files.size());
-	logEntries.reserve(m_files.size());
+	entries.reserve(items.size());
+	logEntries.reserve(items.size());
 	newManifest.reserve(m_files.size());
 
 	uint64_t totalRawBytes = 0;
-	bool     anyError      = false;
-	int      fileIdx       = 0;
 
-	for (auto& future : futures)
+	for (const auto& item : items)
 	{
-		FileResult res = future.get();
-
-		if (!res.ok)
-		{
-			std::cerr << "  ! WARNING: " << res.errorMsg << " - skipping\n";
-			anyError = true;
-			++fileIdx;
-			continue;
-		}
-
-		totalRawBytes         += res.rawSize;
-		const uint64_t onDisk  = static_cast<uint64_t>(res.data.size());
+		totalRawBytes += item.rawSize;
+		const uint64_t onDisk = static_cast<uint64_t>(item.data.size());
 
 		PakEntry entry;
-		entry.pathOffset  = static_cast<uint32_t>(pathData.size());
-		entry.pathLen     = static_cast<uint32_t>(res.virtualPath.size());
-		entry.flags       = res.flags;
-		entry.dataOffset  = static_cast<uint64_t>(assetData.size());
-		entry.dataSize    = onDisk;
-		entry.contentHash = res.contentHash;
+		entry.pathOffset = static_cast<uint32_t>(pathData.size());
+		entry.pathLen = static_cast<uint32_t>(item.virtualPath.size());
+		entry.flags = item.flags;
+		entry.dataOffset = static_cast<uint64_t>(assetData.size());
+		entry.dataSize = onDisk;
+		entry.contentHash = item.contentHash;
 		entries.push_back(entry);
 
-		logEntries.push_back({ res.virtualPath, res.rawSize, onDisk, res.contentHash, res.flags });
+		logEntries.push_back({ item.virtualPath, item.rawSize, onDisk, item.contentHash, item.flags });
 
-		pathData.insert(pathData.end(), res.virtualPath.begin(), res.virtualPath.end());
+		pathData.insert(pathData.end(), item.virtualPath.begin(), item.virtualPath.end());
 		pathData.push_back('\0');
-		assetData.insert(assetData.end(), res.data.begin(), res.data.end());
-
-		std::error_code ec;
-		const auto      mtime  = fs::last_write_time(m_files[fileIdx].diskPath, ec);
-		const int64_t   ticks  = ec ? 0 : mtime.time_since_epoch().count();
-		newManifest[m_files[fileIdx].virtualPath] = { ticks, res.contentHash };
+		assetData.insert(assetData.end(), item.data.begin(), item.data.end());
 
 		// Console line
-		const bool compressed = (res.flags & PAK_FLAG_ZSTD) != 0;
-		std::cout << "  + " << std::left << std::setw(52) << res.virtualPath;
+		const bool compressed = (item.flags & PAK_FLAG_ZSTD) != 0;
+		std::cout << "  + " << std::left << std::setw(52) << item.virtualPath;
 		if (compressed)
 		{
-			const double ratio = 100.0 * (1.0 - static_cast<double>(onDisk) / static_cast<double>(res.rawSize));
-			std::cout << FormatSize(res.rawSize) << " -> " << FormatSize(onDisk)
+			const double ratio = 100.0 * (1.0 - static_cast<double>(onDisk) / static_cast<double>(item.rawSize));
+			std::cout << FormatSize(item.rawSize) << " -> " << FormatSize(onDisk)
 			          << "  (" << std::fixed << std::setprecision(1) << ratio << "% smaller)\n";
 		}
 		else
 		{
-			std::cout << FormatSize(res.rawSize) << "  (stored raw)\n";
+			std::cout << FormatSize(item.rawSize) << "  (stored raw)\n";
 		}
+	}
 
-		// Process extra files from asset processing (e.g., .skel, .anim, .animset)
-		for (auto& extra : res.extraFiles)
+	// Build manifest from source files (mtime-based) + derived files (hash-only)
+	newManifest.reserve(m_files.size() + items.size());
+	for (std::size_t ri = 0; ri < allResults.size(); ++ri)
+	{
+		const FileResult& res = allResults[ri];
+		if (!res.ok) continue;
+
+		std::error_code ec;
+		const auto mtime = fs::last_write_time(m_files[ri].diskPath, ec);
+		const int64_t ticks = ec ? 0 : mtime.time_since_epoch().count();
+		newManifest[m_files[ri].virtualPath] = { ticks, res.contentHash };
+
+		for (const auto& extra : res.extraFiles)
 		{
 			if (extra.data.empty()) continue;
-
-			totalRawBytes += extra.rawSize;
-			const uint64_t extraOnDisk = static_cast<uint64_t>(extra.data.size());
-
-			PakEntry extraEntry;
-			extraEntry.pathOffset = static_cast<uint32_t>(pathData.size());
-			extraEntry.pathLen = static_cast<uint32_t>(extra.virtualPath.size());
-			extraEntry.flags = extra.flags;
-			extraEntry.dataOffset = static_cast<uint64_t>(assetData.size());
-			extraEntry.dataSize = extraOnDisk;
-			extraEntry.contentHash = extra.contentHash;
-			entries.push_back(extraEntry);
-
-			logEntries.push_back({ extra.virtualPath, extra.rawSize, extraOnDisk, extra.contentHash, extra.flags });
-
-			pathData.insert(pathData.end(), extra.virtualPath.begin(), extra.virtualPath.end());
-			pathData.push_back('\0');
-			assetData.insert(assetData.end(), extra.data.begin(), extra.data.end());
-
-			const bool extraCompressed = (extra.flags & PAK_FLAG_ZSTD) != 0;
-			std::cout << "  + " << std::left << std::setw(52) << extra.virtualPath;
-			if (extraCompressed)
-			{
-				const double ratio = 100.0 * (1.0 - static_cast<double>(extraOnDisk) / static_cast<double>(extra.rawSize));
-				std::cout << FormatSize(extra.rawSize) << " -> " << FormatSize(extraOnDisk)
-				          << "  (" << std::fixed << std::setprecision(1) << ratio << "% smaller)\n";
-			}
-			else
-			{
-				std::cout << FormatSize(extra.rawSize) << "  (stored raw)\n";
-			}
+			newManifest[extra.virtualPath] = { 0, extra.contentHash };
 		}
-
-		++fileIdx;
 	}
 
 	// --- Write pak file ------------------------------------------------------
