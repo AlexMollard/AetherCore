@@ -331,7 +331,7 @@ namespace MeshProcessor
             std::stable_sort(out.bones.begin(), out.bones.end(),
                 [](const BoneInfo& a, const BoneInfo& b) { return a.name < b.name; });
 
-            for (uint32_t i = 0; i < static_cast<uint32_t>(out.bones.size()); ++i)
+            for (std::size_t i = 0; i < out.bones.size(); ++i)
                 out.remapTable[static_cast<std::size_t>(out.bones[i].originalIndex)] = i;
 
             out.skelHash = ComputeSkeletonHash(out.bones, out.remapTable);

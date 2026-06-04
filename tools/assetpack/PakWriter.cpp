@@ -354,6 +354,9 @@ namespace
 		PakFileResult result;
 		result.virtualPath = virtualPath;
 
+		// Reusable compression context — avoids per-call alloc/free overhead
+		ZSTD_CCtx* cctx = (compressionLevel > 0) ? ZSTD_createCCtx() : nullptr;
+
 		std::ifstream in(diskPath, std::ios::binary | std::ios::ate);
 		if (!in)
 		{
@@ -412,7 +415,8 @@ namespace
 			{
 				const std::size_t bound = ZSTD_compressBound(extra.rawSize);
 				std::vector<std::byte> compressed(bound);
-				const std::size_t compressedSize = ZSTD_compress(
+				const std::size_t compressedSize = ZSTD_compressCCtx(
+				    cctx,
 				    compressed.data(), bound,
 				    extra.data.data(), extra.rawSize,
 				    compressionLevel);
@@ -439,7 +443,8 @@ namespace
 			const std::size_t      bound = ZSTD_compressBound(processedSize);
 			std::vector<std::byte> compressed(bound);
 
-			const std::size_t compressedSize = ZSTD_compress(
+			const std::size_t compressedSize = ZSTD_compressCCtx(
+			    cctx,
 			    compressed.data(), bound,
 			    rawData.data(),    processedSize,
 			    compressionLevel);
@@ -450,12 +455,14 @@ namespace
 				result.data  = std::move(compressed);
 				result.flags = PAK_FLAG_ZSTD;
 				result.ok    = true;
+				if (cctx) ZSTD_freeCCtx(cctx);
 				return result;
 			}
 		}
 
 		result.data = std::move(rawData);
 		result.ok   = true;
+		if (cctx) ZSTD_freeCCtx(cctx);
 		return result;
 	}
 } // namespace
