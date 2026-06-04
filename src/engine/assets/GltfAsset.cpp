@@ -1,21 +1,20 @@
 #include "assets/GltfAsset.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <cstring>
 #include <filesystem>
 #include <queue>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <AeBnFormat.hpp>
+#include <BinaryFormats.hpp>
 
 #include "io/FileSystem.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "utils/Assert.hpp"
+#include "utils/BinaryReader.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/StringUtils.hpp"
@@ -26,7 +25,6 @@ namespace aether::assets
 	{
 		std::vector<std::string> CollectSimilarMeshPaths(std::string_view meshPath, int maxSuggestions = 3)
 		{
-			// Derive a glob pattern for the same directory: mount://dir/*.mesh
 			const std::size_t ss = meshPath.find("://");
 			if (ss == std::string_view::npos)
 			{
@@ -98,9 +96,7 @@ namespace aether::assets
 		}
 
 		// Derive the .mesh sibling of a GLTF/GLB VFS path.
-		// "mount://path/model.gltf" -> "mount://path/model.mesh"
-		// This is the public ResolveMeshPath implementation.
-		std::string DeriveAebnPath(std::string_view vfsPath)
+		std::string DeriveMeshPath(std::string_view vfsPath)
 		{
 			const std::size_t ss = vfsPath.find("://");
 			if (ss == std::string_view::npos)
@@ -112,254 +108,399 @@ namespace aether::assets
 			return mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".mesh";
 		}
 
-		// -------------------------------------------------------------------------
-		// AEBN binary deserialiser
-		// -------------------------------------------------------------------------
-
-		Expected<GltfAsset> LoadFromAebn(const std::vector<std::byte>& data, std::string_view meshVfsPath)
+		// Derive the .skel path from a skin reference path stored in the mesh.
+		std::string ResolveSkelPath(std::string_view meshVfsPath, std::string_view skinRefPath)
 		{
-			const std::byte* p = data.data();
-			const std::byte* end = data.data() + data.size();
-
-			auto CheckSpace = [&](std::size_t n) -> bool
+			if (skinRefPath.empty())
 			{
-				if (static_cast<std::size_t>(end - p) < n)
+				return {};
+			}
+			std::string candidate = ResolveRelativeVfsPath(meshVfsPath, skinRefPath);
+			// Try .skel extension
+			if (io::FileSystem::Exists(candidate))
+			{
+				return candidate;
+			}
+			// Try replacing extension with .skel
+			std::filesystem::path p(candidate);
+			if (p.has_extension())
+			{
+				p.replace_extension(".skel");
+				std::string skelPath = std::string(p.generic_string());
+				// Re-insert mount
+				auto [mount, rel] = SplitVfsPath(candidate);
+				std::filesystem::path relP(rel);
+				if (relP.has_extension())
 				{
-					return false;
+					relP.replace_extension(".skel");
+					skelPath = std::string(mount) + "://" + relP.generic_string();
 				}
-				return true;
-			};
-
-			auto ReadT = [&]<typename T>() -> T
-			{
-				if (!CheckSpace(sizeof(T)))
+				if (io::FileSystem::Exists(skelPath))
 				{
-					return T{};
+					return skelPath;
 				}
-				T val;
-				std::memcpy(&val, p, sizeof(T));
-				p += sizeof(T);
-				return val;
-			};
+			}
+			return {};
+		}
 
-			auto ReadStr = [&](std::uint16_t len) -> std::string
+		// Derive .animset path from mesh path (same directory, same stem).
+		std::string DeriveAnimSetPath(std::string_view meshVfsPath)
+		{
+			const std::size_t ss = meshVfsPath.find("://");
+			if (ss == std::string_view::npos)
 			{
-				if (!CheckSpace(len))
+				return {};
+			}
+			const std::string mount(meshVfsPath.substr(0, ss));
+			const std::filesystem::path rel(meshVfsPath.substr(ss + 3));
+			std::filesystem::path animSetPath = rel.parent_path() / (rel.stem().string() + ".animset");
+			std::string candidate = mount + "://" + animSetPath.generic_string();
+			if (io::FileSystem::Exists(candidate))
+			{
+				return candidate;
+			}
+			return {};
+		}
+
+		// Unpack a packed RGBA8 uint32 into RGB floats (0-1 range).
+		glm::vec3 UnpackColorRGBA8(uint32_t packed)
+		{
+			const float r = static_cast<float>((packed >> 0) & 0xFF) / 255.0f;
+			const float g = static_cast<float>((packed >> 8) & 0xFF) / 255.0f;
+			const float b = static_cast<float>((packed >> 16) & 0xFF) / 255.0f;
+			return glm::vec3(r, g, b);
+		}
+
+		// Load a .skel file and populate GltfSkin.
+		GltfSkin LoadSkeleton(std::string_view skelPath)
+		{
+			GltfSkin skin;
+			auto data = io::FileSystem::ReadFile(std::string(skelPath));
+			if (!data.has_value())
+			{
+				return skin;
+			}
+
+			BinaryReader reader(*data);
+			SkelHeaderDisk hdr = reader.Read<SkelHeaderDisk>();
+			if (!CheckMagic(hdr))
+			{
+				return skin;
+			}
+
+			skin.name = std::string(skelPath.substr(skelPath.find_last_of('/') + 1));
+			skin.joints.reserve(hdr.boneCount);
+			skin.inverseBindMatrices.reserve(hdr.boneCount);
+
+			// Read skeleton name (not used for runtime, skip)
+			reader.Skip(hdr.nameLen);
+
+			for (uint32_t i = 0; i < hdr.boneCount; ++i)
+			{
+				uint16_t boneNameLen = reader.Read<uint16_t>();
+				std::string boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
+				reader.Advance(boneNameLen);
+
+				int32_t parentIndex = reader.Read<int32_t>();
+				(void)parentIndex; // Parent info stored in nodes, not skin
+
+				float ibm[16];
+				reader.ReadRaw(ibm, sizeof(ibm));
+
+				skin.joints.push_back(i);
+				glm::mat4 ibmMat;
+				std::memcpy(&ibmMat[0][0], ibm, sizeof(ibm));
+				skin.inverseBindMatrices.push_back(ibmMat);
+			}
+
+			return skin;
+		}
+
+		// Load a .anim file and populate GltfAnimation.
+		GltfAnimation LoadAnimation(std::string_view animPath)
+		{
+			GltfAnimation anim;
+			auto data = io::FileSystem::ReadFile(std::string(animPath));
+			if (!data.has_value())
+			{
+				return anim;
+			}
+
+			BinaryReader reader(*data);
+			AnimHeaderDisk hdr = reader.Read<AnimHeaderDisk>();
+			if (!CheckMagic(hdr))
+			{
+				return anim;
+			}
+
+			anim.name = std::string(reinterpret_cast<const char*>(reader.Data()), hdr.nameLen);
+			reader.Advance(hdr.nameLen);
+			anim.channels.reserve(hdr.channelCount);
+
+			for (uint32_t ci = 0; ci < hdr.channelCount; ++ci)
+			{
+				ChannelHeaderDisk ch = reader.Read<ChannelHeaderDisk>();
+				GltfAnimationChannel channel;
+				channel.nodeIndex = ch.nodeIndex;
+
+				switch (static_cast<AnimPathDisk>(ch.path))
 				{
-					return {};
+					case AnimPathDisk::Translation:
+						channel.path = GltfAnimationPath::Translation;
+						break;
+					case AnimPathDisk::Rotation:
+						channel.path = GltfAnimationPath::Rotation;
+						break;
+					case AnimPathDisk::Scale:
+						channel.path = GltfAnimationPath::Scale;
+						break;
+					case AnimPathDisk::Weights:
+						channel.path = GltfAnimationPath::Weights;
+						break;
 				}
-				std::string s(reinterpret_cast<const char*>(p), len);
-				p += len;
-				return s;
-			};
 
-			const AeBnHeader hdr = ReadT.template operator()<AeBnHeader>();
-			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) != 0 || hdr.version != AEBN_VERSION)
+				switch (static_cast<AnimInterpDisk>(ch.interp))
+				{
+					case AnimInterpDisk::Linear:
+						channel.interpolation = GltfInterpolation::Linear;
+						break;
+					case AnimInterpDisk::Step:
+						channel.interpolation = GltfInterpolation::Step;
+						break;
+					case AnimInterpDisk::CubicSpline:
+						channel.interpolation = GltfInterpolation::CubicSpline;
+						break;
+				}
+
+				channel.times.resize(ch.keyCount);
+				reader.ReadRaw(channel.times.data(), ch.keyCount * sizeof(float));
+
+				channel.values.resize(ch.keyCount);
+				for (uint32_t k = 0; k < ch.keyCount; ++k)
+				{
+					float v4[4];
+					reader.ReadRaw(v4, sizeof(v4));
+					channel.values[k] = glm::vec4(v4[0], v4[1], v4[2], v4[3]);
+				}
+
+				anim.channels.push_back(std::move(channel));
+			}
+
+			return anim;
+		}
+
+		// Load a .material binary file and populate GltfMaterial.
+		// Returns true on success, false if file not found or invalid.
+		bool LoadMaterialBinary(std::string_view matPath, GltfMaterial& outMat)
+		{
+			auto data = io::FileSystem::ReadFile(std::string(matPath));
+			if (!data.has_value())
 			{
-				AE_UNEXPECTED(AetherError::Asset("invalid magic or version: " + std::string(meshVfsPath)));
+				return false;
+			}
+
+			BinaryReader reader(*data);
+			MaterialHeaderDisk hdr = reader.Read<MaterialHeaderDisk>();
+			if (!CheckMagic(hdr))
+			{
+				return false;
+			}
+
+			outMat.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
+			outMat.metallicFactor = hdr.metallicFactor;
+			outMat.roughnessFactor = hdr.roughnessFactor;
+			outMat.emissiveFactor = glm::vec3(hdr.emissiveFactor[0], hdr.emissiveFactor[1], hdr.emissiveFactor[2]);
+			outMat.alphaCutoff = hdr.alphaCutoff;
+			outMat.doubleSided = hdr.doubleSided != 0;
+			outMat.alphaBlend = hdr.alphaBlend != 0;
+			outMat.alphaMask = hdr.alphaMask != 0;
+
+			// Read texture path entries.
+			for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
+			{
+				uint8_t type = reader.Read<uint8_t>();
+				std::string texPath = reader.ReadString();
+
+				// Resolve relative to the material file's directory.
+				std::string resolvedPath = ResolveRelativeVfsPath(matPath, texPath);
+
+				auto texType = static_cast<TextureTypeDisk>(type);
+				switch (texType)
+				{
+					case TextureTypeDisk::BaseColor:
+						outMat.albedoPath = std::move(resolvedPath);
+						break;
+					case TextureTypeDisk::Normal:
+						outMat.normalPath = std::move(resolvedPath);
+						break;
+					case TextureTypeDisk::MetallicRoughness:
+						outMat.metallicRoughnessPath = std::move(resolvedPath);
+						break;
+					case TextureTypeDisk::Occlusion:
+						outMat.occlusionPath = std::move(resolvedPath);
+						break;
+					case TextureTypeDisk::Emissive:
+						outMat.emissivePath = std::move(resolvedPath);
+						break;
+				}
+			}
+
+			return true;
+		}
+
+		// Load a .mesh file and populate GltfAsset.
+		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath)
+		{
+			BinaryReader reader(data);
+			MeshHeaderDisk hdr = reader.Read<MeshHeaderDisk>();
+
+			if (std::memcmp(hdr.magic, MESH_MAGIC, 4) != 0)
+			{
+				AE_UNEXPECTED(AetherError::Asset("invalid mesh magic: " + std::string(meshVfsPath)));
+			}
+			if (hdr.version != MESH_VERSION)
+			{
+				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
 
 			GltfAsset asset;
 
-			// Images
-			asset.images.reserve(hdr.imageCount);
-			for (std::uint32_t i = 0; i < hdr.imageCount; ++i)
+			// Read vertices.
+			std::vector<DiskMeshVertex> diskVerts(hdr.vertexCount);
+			reader.ReadRaw(diskVerts.data(), hdr.vertexCount * sizeof(DiskMeshVertex));
+
+			// Read indices.
+			std::vector<uint32_t> indices(hdr.indexCount);
+			if (hdr.indexType == 0)
 			{
-				const auto ih = ReadT.template operator()<AeBnImageHeader>();
-				std::string name = ReadStr(ih.nameLen);
-				const std::string relUri = ReadStr(ih.uriLen);
-				asset.images.push_back({
-				        .name = std::move(name),
-				        .uri = relUri.empty() ? std::string() : ResolveRelativeVfsPath(meshVfsPath, relUri),
-				});
+				// uint16 indices
+				std::vector<uint16_t> indices16(hdr.indexCount);
+				reader.ReadRaw(indices16.data(), hdr.indexCount * sizeof(uint16_t));
+				for (uint32_t i = 0; i < hdr.indexCount; ++i)
+				{
+					indices[i] = indices16[i];
+				}
+			}
+			else
+			{
+				reader.ReadRaw(indices.data(), hdr.indexCount * sizeof(uint32_t));
 			}
 
-			// Textures
-			asset.textures.reserve(hdr.textureCount);
-			for (std::uint32_t i = 0; i < hdr.textureCount; ++i)
+			// Read skin reference path.
+			std::string skinRefPath;
+			if (hdr.skinRefPathLen > 0)
 			{
-				const auto th = ReadT.template operator()<AeBnTextureHeader>();
-				asset.textures.push_back({
-				        .name = ReadStr(th.nameLen),
-				        .imageIndex = th.imageIndex,
-				});
+				skinRefPath = reader.ReadString();
 			}
 
-			// Materials
-			asset.materials.reserve(hdr.materialCount);
-			for (std::uint32_t i = 0; i < hdr.materialCount; ++i)
+			// Read material paths.
+			std::vector<std::string> matPaths(hdr.materialCount);
+			for (uint32_t i = 0; i < hdr.materialCount; ++i)
 			{
-				const auto mh = ReadT.template operator()<AeBnMaterialHeader>();
+				matPaths[i] = reader.ReadString();
+			}
+
+			// Convert disk vertices to runtime vertices.
+			GltfPrimitive prim;
+			prim.nodeIndex = 0;
+			prim.materialIndex = hdr.materialCount > 0 ? 0 : -1;
+			prim.skinIndex = !skinRefPath.empty() ? 0 : -1;
+			prim.vertices.resize(hdr.vertexCount);
+			prim.indices = std::move(indices);
+
+			for (uint32_t v = 0; v < hdr.vertexCount; ++v)
+			{
+				const DiskMeshVertex& src = diskVerts[v];
+				Mesh::Vertex& dst = prim.vertices[v];
+				dst.position = glm::vec3(src.position[0], src.position[1], src.position[2]);
+				dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
+				dst.tangent = glm::vec4(src.tangent[0], src.tangent[1], src.tangent[2], src.tangent[3]);
+				dst.uv = glm::vec2(src.uv[0], src.uv[1]);
+				dst.color = UnpackColorRGBA8(src.color);
+				dst.jointIndices = glm::uvec4(src.jointIndices[0], src.jointIndices[1], src.jointIndices[2], src.jointIndices[3]);
+				dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
+			}
+
+			asset.primitives.push_back(std::move(prim));
+
+			// Create a root node referencing the primitive.
+			GltfNode rootNode;
+			rootNode.name = "root";
+			rootNode.meshIndex = 0;
+			rootNode.skinIndex = prim.skinIndex;
+			asset.nodes.push_back(std::move(rootNode));
+
+			// Load skeleton if present.
+			if (!skinRefPath.empty())
+			{
+				std::string skelPath = ResolveSkelPath(meshVfsPath, skinRefPath);
+				if (!skelPath.empty())
+				{
+					GltfSkin skin = LoadSkeleton(skelPath);
+					if (!skin.joints.empty())
+					{
+						asset.skins.push_back(std::move(skin));
+					}
+				}
+			}
+
+			// Load materials from binary .material files.
+			for (uint32_t i = 0; i < hdr.materialCount; ++i)
+			{
 				GltfMaterial mat;
-				mat.name = ReadStr(mh.nameLen);
-				mat.baseColorFactor = glm::vec4(mh.baseColorFactor[0], mh.baseColorFactor[1], mh.baseColorFactor[2], mh.baseColorFactor[3]);
-				mat.metallicFactor = mh.metallicFactor;
-				mat.roughnessFactor = mh.roughnessFactor;
-				mat.emissiveFactor = glm::vec3(mh.emissiveFactor[0], mh.emissiveFactor[1], mh.emissiveFactor[2]);
-				mat.alphaCutoff = mh.alphaCutoff;
-				mat.baseColorTexture = mh.baseColorTexture;
-				mat.metallicRoughnessTexture = mh.metallicRoughnessTexture;
-				mat.normalTexture = mh.normalTexture;
-				mat.occlusionTexture = mh.occlusionTexture;
-				mat.emissiveTexture = mh.emissiveTexture;
-				mat.doubleSided = mh.doubleSided != 0;
-				mat.alphaBlend = mh.alphaBlend != 0;
-				mat.alphaMask = mh.alphaMask != 0;
+				mat.name = "material_" + std::to_string(i);
+
+				std::string matFullPath = ResolveRelativeVfsPath(meshVfsPath, matPaths[i]);
+
+				// Try binary .material first, then fall back to TOML folder.
+				if (!LoadMaterialBinary(matFullPath, mat))
+				{
+					// Try as a folder with properties.toml
+					std::string tomlPath = matFullPath + "/properties.toml";
+					if (io::FileSystem::Exists(tomlPath))
+					{
+						// TOML materials are loaded at runtime by AssetManager, not here.
+						// Store the folder path so AssetManager can resolve it later.
+						mat.name = matPaths[i];
+					}
+				}
+				else
+				{
+					mat.name = matPaths[i];
+				}
+
 				asset.materials.push_back(std::move(mat));
 			}
 
-			// Nodes
-			asset.nodes.resize(hdr.nodeCount);
-			for (std::uint32_t i = 0; i < hdr.nodeCount; ++i)
+			// Load animations from .animset if present.
+			std::string animSetPath = DeriveAnimSetPath(meshVfsPath);
+			if (!animSetPath.empty())
 			{
-				const auto nh = ReadT.template operator()<AeBnNodeHeader>();
-				GltfNode& node = asset.nodes[i];
-				node.parentIndex = nh.parentIndex;
-				node.meshIndex = nh.meshIndex;
-				node.skinIndex = nh.skinIndex;
-				node.translation = glm::vec3(nh.translation[0], nh.translation[1], nh.translation[2]);
-				// AEBN stores xyzw; GLM quat ctor is (w,x,y,z)
-				node.rotation = glm::quat(nh.rotation[3], nh.rotation[0], nh.rotation[1], nh.rotation[2]);
-				node.scale = glm::vec3(nh.scale[0], nh.scale[1], nh.scale[2]);
-				node.hasMatrix = nh.hasMatrix != 0;
-				if (node.hasMatrix)
+				auto animSetData = io::FileSystem::ReadFile(animSetPath);
+				if (animSetData.has_value())
 				{
-					std::memcpy(&node.matrix[0][0], nh.matrix, sizeof(nh.matrix));
-				}
-				node.children.resize(nh.childCount);
-				for (std::uint32_t c = 0; c < nh.childCount; ++c)
-				{
-					node.children[c] = ReadT.template operator()<std::uint32_t>();
-				}
-				node.name = ReadStr(nh.nameLen);
-			}
+					BinaryReader animSetReader(*animSetData);
+					AnimSetHeaderDisk asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
+					if (CheckMagic(asetHdr))
+					{
+						// Resolve .anim paths relative to the animset file's directory.
+						std::string animDir = animSetPath.substr(0, animSetPath.find_last_of('/') + 1);
 
-			// Skins
-			asset.skins.reserve(hdr.skinCount);
-			for (std::uint32_t i = 0; i < hdr.skinCount; ++i)
-			{
-				const auto sh = ReadT.template operator()<AeBnSkinHeader>();
-				GltfSkin skin;
-				skin.skeletonRoot = sh.skeletonRoot;
-				skin.name = ReadStr(sh.nameLen);
-				skin.joints.resize(sh.jointCount);
-				for (std::uint32_t j = 0; j < sh.jointCount; ++j)
-				{
-					skin.joints[j] = ReadT.template operator()<std::uint32_t>();
-				}
-				skin.inverseBindMatrices.resize(sh.jointCount);
-				for (std::uint32_t j = 0; j < sh.jointCount; ++j)
-				{
-					if (!CheckSpace(64))
-					{
-						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
+						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
+						{
+							std::string animRelPath = animSetReader.ReadString();
+							std::string animFullPath = animDir + animRelPath;
+							if (io::FileSystem::Exists(animFullPath))
+							{
+								GltfAnimation anim = LoadAnimation(animFullPath);
+								if (!anim.name.empty())
+								{
+									asset.animations.push_back(std::move(anim));
+								}
+							}
+						}
 					}
-					std::memcpy(&skin.inverseBindMatrices[j][0][0], p, 64);
-					p += 64;
 				}
-				asset.skins.push_back(std::move(skin));
-			}
-
-			// Primitives
-			asset.primitives.reserve(hdr.primitiveCount);
-			for (std::uint32_t i = 0; i < hdr.primitiveCount; ++i)
-			{
-				const auto ph = ReadT.template operator()<AeBnPrimitiveHeader>();
-				GltfPrimitive prim;
-				prim.nodeIndex = ph.nodeIndex;
-				prim.materialIndex = ph.materialIndex;
-				prim.skinIndex = ph.skinIndex;
-				prim.vertices.resize(ph.vertexCount);
-				if (!CheckSpace(ph.vertexCount * sizeof(AeBnVertex)))
-				{
-					AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
-				}
-				for (std::uint32_t v = 0; v < ph.vertexCount; ++v)
-				{
-					AeBnVertex src;
-					std::memcpy(&src, p, sizeof(AeBnVertex));
-					p += sizeof(AeBnVertex);
-					Mesh::Vertex& dst = prim.vertices[v];
-					dst.position = glm::vec3(src.position[0], src.position[1], src.position[2]);
-					dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
-					dst.tangent = glm::vec4(src.tangent[0], src.tangent[1], src.tangent[2], src.tangent[3]);
-					dst.uv = glm::vec2(src.uv[0], src.uv[1]);
-					dst.color = glm::vec3(src.color[0], src.color[1], src.color[2]);
-					dst.jointIndices = glm::uvec4(src.jointIndices[0], src.jointIndices[1], src.jointIndices[2], src.jointIndices[3]);
-					dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
-				}
-				prim.indices.resize(ph.indexCount);
-				if (!CheckSpace(ph.indexCount * sizeof(std::uint32_t)))
-				{
-					AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
-				}
-				std::memcpy(prim.indices.data(), p, ph.indexCount * sizeof(std::uint32_t));
-				p += ph.indexCount * sizeof(std::uint32_t);
-				asset.primitives.push_back(std::move(prim));
-			}
-
-			// Animations
-			asset.animations.reserve(hdr.animCount);
-			for (std::uint32_t ai = 0; ai < hdr.animCount; ++ai)
-			{
-				const auto ah = ReadT.template operator()<AeBnAnimHeader>();
-				GltfAnimation anim;
-				anim.name = ReadStr(ah.nameLen);
-				anim.channels.reserve(ah.channelCount);
-				for (std::uint32_t ci = 0; ci < ah.channelCount; ++ci)
-				{
-					const auto ch = ReadT.template operator()<AeBnChannelHeader>();
-					GltfAnimationChannel channel;
-					channel.nodeIndex = ch.nodeIndex;
-					switch (static_cast<AeBnAnimPath>(ch.path))
-					{
-						case AeBnAnimPath::Translation:
-							channel.path = GltfAnimationPath::Translation;
-							break;
-						case AeBnAnimPath::Rotation:
-							channel.path = GltfAnimationPath::Rotation;
-							break;
-						case AeBnAnimPath::Scale:
-							channel.path = GltfAnimationPath::Scale;
-							break;
-						case AeBnAnimPath::Weights:
-							channel.path = GltfAnimationPath::Weights;
-							break;
-					}
-					switch (static_cast<AeBnInterp>(ch.interp))
-					{
-						case AeBnInterp::Linear:
-							channel.interpolation = GltfInterpolation::Linear;
-							break;
-						case AeBnInterp::Step:
-							channel.interpolation = GltfInterpolation::Step;
-							break;
-						case AeBnInterp::CubicSpline:
-							channel.interpolation = GltfInterpolation::CubicSpline;
-							break;
-					}
-					channel.times.resize(ch.keyCount);
-					if (!CheckSpace(ch.keyCount * sizeof(float)))
-					{
-						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
-					}
-					std::memcpy(channel.times.data(), p, ch.keyCount * sizeof(float));
-					p += ch.keyCount * sizeof(float);
-					channel.values.resize(ch.keyCount);
-					if (!CheckSpace(ch.keyCount * 4 * sizeof(float)))
-					{
-						AE_UNEXPECTED(AetherError::Asset("truncated data in " + std::string(meshVfsPath)));
-					}
-					for (std::uint32_t k = 0; k < ch.keyCount; ++k)
-					{
-						float v4[4];
-						std::memcpy(v4, p, sizeof(v4));
-						p += sizeof(v4);
-						channel.values[k] = glm::vec4(v4[0], v4[1], v4[2], v4[3]);
-					}
-					anim.channels.push_back(std::move(channel));
-				}
-				asset.animations.push_back(std::move(anim));
 			}
 
 			return asset;
@@ -375,19 +516,18 @@ namespace aether::assets
 
 		// Derive the .mesh path - try the exact path given first (caller may already
 		// pass a .mesh path), then fall back to replacing the extension.
-		auto TryAebn = [&](const std::string& meshPath) -> bool
+		auto TryMesh = [&](const std::string& meshPath) -> bool
 		{
 			return !meshPath.empty() && io::FileSystem::Exists(meshPath);
 		};
 
-		// Accept .mesh directly, or derive from .gltf / .glb / any extension.
 		std::string meshPath = vfsPath;
-		if (!TryAebn(meshPath))
+		if (!TryMesh(meshPath))
 		{
-			meshPath = DeriveAebnPath(vfsPath);
+			meshPath = DeriveMeshPath(vfsPath);
 		}
 
-		if (!TryAebn(meshPath))
+		if (!TryMesh(meshPath))
 		{
 			std::string msg = "packed .mesh not found for '" + vfsPath + "'. Run AssetPacker to generate it.";
 			auto suggestions = CollectSimilarMeshPaths(meshPath);
@@ -409,35 +549,16 @@ namespace aether::assets
 
 		std::vector<std::byte> meshData;
 		{
-			AE_PROFILE_ZONE_N("GltfAsset::LoadAebn");
+			AE_PROFILE_ZONE_N("GltfAsset::LoadMesh");
 			AE_EXPECT_OR_THROW(data, io::FileSystem::ReadFile(meshPath));
 			meshData = std::move(data);
-
-			if (meshData.size() >= sizeof(AeBnHeader))
-			{
-				AeBnHeader hdr{};
-				std::memcpy(&hdr, meshData.data(), sizeof(hdr));
-				if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
-				{
-					AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + meshPath + "'. Re-run AssetPacker."));
-				}
-			}
 		}
-		return LoadFromAebn(meshData, meshPath);
+		return LoadFromMesh(meshData, meshPath);
 	}
 
 	Expected<GltfAsset> GltfAsset::LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath)
 	{
-		if (meshData.size() >= sizeof(AeBnHeader))
-		{
-			AeBnHeader hdr{};
-			std::memcpy(&hdr, meshData.data(), sizeof(hdr));
-			if (std::memcmp(hdr.magic, AEBN_MAGIC, 4) == 0 && hdr.version != AEBN_VERSION)
-			{
-				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(AEBN_VERSION) + ") for '" + std::string(debugPath) + "'. Re-run AssetPacker."));
-			}
-		}
-		return LoadFromAebn(meshData, debugPath);
+		return LoadFromMesh(meshData, debugPath);
 	}
 
 	std::string GltfAsset::ResolveMeshPath(std::string_view vfsPath)

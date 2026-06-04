@@ -41,6 +41,13 @@ namespace aether::assets
 		std::int32_t normalTexture = -1;
 		std::int32_t occlusionTexture = -1;
 		std::int32_t emissiveTexture = -1;
+
+		// Texture paths from binary .material files (resolved at runtime).
+		std::string albedoPath;
+		std::string normalPath;
+		std::string metallicRoughnessPath;
+		std::string occlusionPath;
+		std::string emissivePath;
 	};
 
 	struct GltfSkin

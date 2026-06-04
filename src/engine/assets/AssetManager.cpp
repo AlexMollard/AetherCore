@@ -4,10 +4,14 @@
 #include <filesystem>
 #include <stdexcept>
 
+#include <BinaryFormats.hpp>
+
 #include "assets/GltfAsset.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "io/FileSystem.hpp"
+#include "io/FileGlobOptions.hpp"
+#include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
 #include "material/Material.hpp"
 #include "material/MaterialBuffer.hpp"
@@ -370,6 +374,94 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Asset("file/folder not found: " + requestedPath));
 		}
 
+		// Try binary .material first, fall back to TOML.
+		const bool isBinary = presetPath.ends_with(".material");
+		if (isBinary)
+		{
+			auto data = io::FileSystem::ReadFile(presetPath);
+			if (data.has_value())
+			{
+				BinaryReader reader(*data);
+				MaterialHeaderDisk hdr = reader.Read<MaterialHeaderDisk>();
+				if (CheckMagic(hdr))
+				{
+					Material material;
+					material.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
+					material.metallicFactor = hdr.metallicFactor;
+					material.roughnessFactor = hdr.roughnessFactor;
+					material.emissiveFactor = glm::vec3(hdr.emissiveFactor[0], hdr.emissiveFactor[1], hdr.emissiveFactor[2]);
+					material.alphaCutoff = hdr.alphaCutoff;
+					material.doubleSided = hdr.doubleSided != 0;
+					material.alphaBlend = hdr.alphaBlend != 0;
+					material.alphaMask = hdr.alphaMask != 0;
+
+					// Resolve texture paths.
+					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
+					{
+						uint8_t type = reader.Read<uint8_t>();
+						std::string texRelPath = reader.ReadString();
+						std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
+
+						// Try .texture sibling first.
+						if (!io::FileSystem::Exists(texPath))
+						{
+							const std::size_t ss = texPath.find("://");
+							if (ss != std::string_view::npos)
+							{
+								const std::filesystem::path rel(texPath.substr(ss + 3));
+								const std::string candidate = texPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
+								if (io::FileSystem::Exists(candidate))
+								{
+									texPath = candidate;
+								}
+							}
+						}
+
+						auto loadSlot = [this, &outTextures, &texPath]() -> std::uint32_t
+						{
+							if (!io::FileSystem::Exists(texPath))
+							{
+								return Material::kNoTexture;
+							}
+							auto texResult = CreateTexture(texPath);
+							if (!texResult.has_value())
+							{
+								return Material::kNoTexture;
+							}
+							const std::uint32_t slot = texResult->GetBindlessSlot();
+							outTextures.push_back(std::move(*texResult));
+							return slot;
+						};
+
+						auto texType = static_cast<TextureTypeDisk>(type);
+						switch (texType)
+						{
+							case TextureTypeDisk::BaseColor:
+								material.albedoSlot = loadSlot();
+								break;
+							case TextureTypeDisk::Normal:
+								material.normalSlot = loadSlot();
+								break;
+							case TextureTypeDisk::MetallicRoughness:
+								material.metallicRoughnessSlot = loadSlot();
+								break;
+							case TextureTypeDisk::Occlusion:
+								material.occlusionSlot = loadSlot();
+								break;
+							case TextureTypeDisk::Emissive:
+								material.emissiveSlot = loadSlot();
+								break;
+						}
+					}
+
+					RegisterMaterial(material);
+					AE_INFO(LogCategory::Engine, "Loaded binary material '{}'.", requestedPath);
+					return material;
+				}
+			}
+		}
+
+		// TOML fallback.
 		AE_TRY(text, ReadTextFile(presetPath));
 		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
 		Material material = spec.material;
@@ -458,20 +550,9 @@ namespace aether
 		AE_TRY(source, assets::GltfAsset::LoadFromVfsPath(path));
 		LoadedModel loaded;
 
-		std::vector<std::uint32_t> imageSlots(source->images.size(), Material::kNoTexture);
-		loaded.textures.reserve(source->images.size());
-		for (std::size_t imageIndex = 0; imageIndex < source->images.size(); ++imageIndex)
-		{
-			const assets::GltfImage& image = source->images[imageIndex];
-			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
-			{
-				continue;
-			}
-
-			AE_TRY(texture, CreateTexture(image.uri));
-			imageSlots[imageIndex] = texture->GetBindlessSlot();
-			loaded.textures.push_back(std::move(*texture));
-		}
+		// New format: materials have texture paths, not embedded images.
+		// Textures are loaded in FinaliseModelLoad.
+		std::vector<std::uint32_t> imageSlots;
 
 		FinaliseModelLoad(loaded, *source, imageSlots, path);
 		return loaded;
@@ -499,26 +580,8 @@ namespace aether
 		}
 		LoadedModel loaded;
 
-		// Load textures asynchronously.
-		std::vector<std::uint32_t> imageSlots(source->images.size(), Material::kNoTexture);
-		loaded.textures.reserve(source->images.size());
-		for (std::size_t imageIndex = 0; imageIndex < source->images.size(); ++imageIndex)
-		{
-			const assets::GltfImage& image = source->images[imageIndex];
-			if (image.uri.empty() || std::string_view(image.uri).starts_with("data:"))
-			{
-				continue;
-			}
-
-			auto texResult = co_await CreateTextureAsync(image.uri);
-			if (!texResult.has_value())
-			{
-				AE_WARN(LogCategory::Engine, "LoadModelAsync: texture load failed for '{}', skipping.", image.uri);
-				continue;
-			}
-			imageSlots[imageIndex] = texResult->GetBindlessSlot();
-			loaded.textures.push_back(std::move(*texResult));
-		}
+		// New format: textures are loaded in FinaliseModelLoad from material paths.
+		std::vector<std::uint32_t> imageSlots;
 
 		FinaliseModelLoad(loaded, *source, imageSlots, pathStr);
 		co_return loaded;
@@ -555,6 +618,48 @@ namespace aether
 			worldNodeTransforms[nodeIndex] = transform;
 		}
 
+		// Helper: load a texture from a VFS path, trying .texture sibling first.
+		auto loadTextureFromPath = [this, &loaded](std::string_view texturePath) -> std::uint32_t
+		{
+			if (texturePath.empty())
+			{
+				return Material::kNoTexture;
+			}
+
+			std::string resolvedPath(texturePath);
+			// Try .texture sibling first (pre-transcoded DDS).
+			if (!io::FileSystem::Exists(resolvedPath))
+			{
+				const std::size_t ss = resolvedPath.find("://");
+				if (ss != std::string_view::npos)
+				{
+					const std::filesystem::path rel(resolvedPath.substr(ss + 3));
+					const std::string candidate = resolvedPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
+					if (io::FileSystem::Exists(candidate))
+					{
+						resolvedPath = candidate;
+					}
+				}
+			}
+
+			if (!io::FileSystem::Exists(resolvedPath))
+			{
+				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture missing '{}'.", texturePath);
+				return Material::kNoTexture;
+			}
+
+			auto texResult = CreateTexture(resolvedPath);
+			if (!texResult.has_value())
+			{
+				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture load failed '{}'.", resolvedPath);
+				return Material::kNoTexture;
+			}
+
+			const std::uint32_t slot = texResult->GetBindlessSlot();
+			loaded.textures.push_back(std::move(*texResult));
+			return slot;
+		};
+
 		loaded.primitives.reserve(source.primitives.size());
 		for (const assets::GltfPrimitive& primitive: source.primitives)
 		{
@@ -586,25 +691,38 @@ namespace aether
 				mat.alphaBlend = srcMat.alphaBlend;
 				mat.alphaMask = srcMat.alphaMask;
 
-				auto resolveSlot = [&](const std::int32_t texIdx) -> std::uint32_t
+				// New format: resolve texture paths from GltfMaterial.
+				// Old format: resolve via imageSlots index chain.
+				if (imageSlots.empty())
 				{
-					if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
+					mat.albedoSlot = loadTextureFromPath(srcMat.albedoPath);
+					mat.normalSlot = loadTextureFromPath(srcMat.normalPath);
+					mat.metallicRoughnessSlot = loadTextureFromPath(srcMat.metallicRoughnessPath);
+					mat.occlusionSlot = loadTextureFromPath(srcMat.occlusionPath);
+					mat.emissiveSlot = loadTextureFromPath(srcMat.emissivePath);
+				}
+				else
+				{
+					auto resolveSlot = [&](const std::int32_t texIdx) -> std::uint32_t
 					{
-						return Material::kNoTexture;
-					}
-					const assets::GltfTexture& tex = source.textures[static_cast<std::size_t>(texIdx)];
-					if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageSlots.size())
-					{
-						return Material::kNoTexture;
-					}
-					return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
-				};
+						if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
+						{
+							return Material::kNoTexture;
+						}
+						const assets::GltfTexture& tex = source.textures[static_cast<std::size_t>(texIdx)];
+						if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageSlots.size())
+						{
+							return Material::kNoTexture;
+						}
+						return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
+					};
 
-				mat.albedoSlot = resolveSlot(srcMat.baseColorTexture);
-				mat.normalSlot = resolveSlot(srcMat.normalTexture);
-				mat.metallicRoughnessSlot = resolveSlot(srcMat.metallicRoughnessTexture);
-				mat.occlusionSlot = resolveSlot(srcMat.occlusionTexture);
-				mat.emissiveSlot = resolveSlot(srcMat.emissiveTexture);
+					mat.albedoSlot = resolveSlot(srcMat.baseColorTexture);
+					mat.normalSlot = resolveSlot(srcMat.normalTexture);
+					mat.metallicRoughnessSlot = resolveSlot(srcMat.metallicRoughnessTexture);
+					mat.occlusionSlot = resolveSlot(srcMat.occlusionTexture);
+					mat.emissiveSlot = resolveSlot(srcMat.emissiveTexture);
+				}
 
 				RegisterMaterial(mat);
 			}
@@ -612,7 +730,7 @@ namespace aether
 			loaded.primitives.push_back(std::move(loadedPrim));
 		}
 
-		AE_INFO(LogCategory::Engine, "Loaded glTF '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
+		AE_INFO(LogCategory::Engine, "Loaded model '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
 
 		if (!source.skins.empty() && !source.animations.empty())
 		{
