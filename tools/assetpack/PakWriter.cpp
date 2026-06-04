@@ -60,7 +60,7 @@ namespace
 
 	struct ManifestEntry
 	{
-		int64_t  mtimeTicks;  // last_write_time ticks at time of packing
+		int64_t  mtimeSec;    // last_write_time as seconds since epoch
 		uint64_t contentHash; // XXH3-64 of uncompressed content
 	};
 
@@ -91,7 +91,7 @@ namespace
 			if (line.empty() || line[0] == '#')
 				continue;
 
-			// Format: virtualPath\tmtimeTicks\thashHex
+			// Format: virtualPath\tmtimeSec\thashHex
 			const auto t1 = line.find('\t');
 			const auto t2 = line.find('\t', t1 + 1);
 			if (t1 == std::string::npos || t2 == std::string::npos)
@@ -102,7 +102,7 @@ namespace
 			const std::string_view hstr = { line.data() + t2 + 1, line.size() - t2 - 1 };
 
 			ManifestEntry e{};
-			std::from_chars(mstr.data(), mstr.data() + mstr.size(), e.mtimeTicks);
+			std::from_chars(mstr.data(), mstr.data() + mstr.size(), e.mtimeSec);
 			std::from_chars(hstr.data(), hstr.data() + hstr.size(), e.contentHash, 16);
 			map.emplace(vpath, e);
 		}
@@ -117,7 +117,7 @@ namespace
 
 		out << "# AetherPak manifest v" << kManifestVersion << "\n";
 		for (const auto& [vpath, e] : map)
-			out << vpath << '\t' << std::dec << e.mtimeTicks << '\t' << std::hex << e.contentHash << '\n';
+			out << vpath << '\t' << std::dec << e.mtimeSec << '\t' << std::hex << e.contentHash << '\n';
 	}
 
 	// Returns true if the pak file exists and every source file's mtime matches
@@ -141,7 +141,8 @@ namespace
 			if (ec)
 				return false;
 
-			if (mtime.time_since_epoch().count() != it->second.mtimeTicks)
+			const auto mtimeSec = std::chrono::duration_cast<std::chrono::seconds>(mtime.time_since_epoch()).count();
+			if (mtimeSec != it->second.mtimeSec)
 				return false;
 		}
 		return true;
@@ -243,7 +244,7 @@ namespace
 	// Asset processing dispatch
 	// -------------------------------------------------------------------------
 
-	struct ProcessedFile
+	struct PakFileData
 	{
 		std::string virtualPath;
 		std::vector<std::byte> data;
@@ -256,7 +257,7 @@ namespace
 	{
 		std::vector<std::byte> data;
 		std::string            outExt;
-		std::vector<ProcessedFile> extraFiles;
+		std::vector<PakFileData> extraFiles;
 	};
 
 	ProcessAssetResult ProcessAsset(
@@ -306,7 +307,7 @@ namespace
 				const std::string stem = Stem(diskPath);
 				const std::string dir = fs::path(virtualPath).parent_path().generic_string();
 
-				std::vector<ProcessedFile> extraFiles;
+				std::vector<PakFileData> extraFiles;
 
 				if (!meshResult.skelData.empty())
 				{
@@ -332,7 +333,7 @@ namespace
 		return {};
 	}
 
-	struct FileResult
+	struct PakFileResult
 	{
 		std::string            virtualPath;
 		std::vector<std::byte> data;
@@ -341,16 +342,16 @@ namespace
 		uint64_t               contentHash = 0;
 		bool                   ok          = false;
 		std::string            errorMsg;
-		std::vector<ProcessedFile> extraFiles;
+		std::vector<PakFileData> extraFiles;
 	};
 
 	// -------------------------------------------------------------------------
 	// Per-file read + compress task (runs on a worker thread)
 	// -------------------------------------------------------------------------
 
-	FileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, const fs::path& sourceDir, int compressionLevel)
+	PakFileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, const fs::path& sourceDir, int compressionLevel)
 	{
-		FileResult result;
+		PakFileResult result;
 		result.virtualPath = virtualPath;
 
 		std::ifstream in(diskPath, std::ios::binary | std::ios::ate);
@@ -502,20 +503,20 @@ bool PakWriter::Write(const fs::path& outPath) const
 	else
 		std::cout << "AssetPacker: reading " << m_files.size() << " file(s) (compression disabled)...\n";
 
-	std::vector<std::future<FileResult>> futures;
+	std::vector<std::future<PakFileResult>> futures;
 	futures.reserve(m_files.size());
 	for (const auto& file : m_files)
 		futures.push_back(std::async(std::launch::async, ProcessFile, file.virtualPath, file.diskPath, m_sourceDir, m_compressionLevel));
 
 	// --- Collect results ----------------------------------------------------
-	std::vector<FileResult> allResults;
+	std::vector<PakFileResult> allResults;
 	allResults.reserve(futures.size());
 	bool anyError = false;
 	int fileIdx = 0;
 
 	for (auto& future : futures)
 	{
-		FileResult res = future.get();
+		PakFileResult res = future.get();
 		if (!res.ok)
 		{
 			std::cerr << "  ! WARNING: " << res.errorMsg << " - skipping\n";
@@ -540,7 +541,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 	for (std::size_t ri = 0; ri < allResults.size(); ++ri)
 	{
-		const FileResult& res = allResults[ri];
+		const PakFileResult& res = allResults[ri];
 		if (!res.ok) continue;
 
 		items.push_back({ res.virtualPath, res.data, res.flags, res.rawSize, res.contentHash });
@@ -606,13 +607,13 @@ bool PakWriter::Write(const fs::path& outPath) const
 	newManifest.reserve(m_files.size() + items.size());
 	for (std::size_t ri = 0; ri < allResults.size(); ++ri)
 	{
-		const FileResult& res = allResults[ri];
+		const PakFileResult& res = allResults[ri];
 		if (!res.ok) continue;
 
 		std::error_code ec;
 		const auto mtime = fs::last_write_time(m_files[ri].diskPath, ec);
-		const int64_t ticks = ec ? 0 : mtime.time_since_epoch().count();
-		newManifest[m_files[ri].virtualPath] = { ticks, res.contentHash };
+		const int64_t mtimeSec = ec ? 0 : std::chrono::duration_cast<std::chrono::seconds>(mtime.time_since_epoch()).count();
+		newManifest[m_files[ri].virtualPath] = { mtimeSec, res.contentHash };
 
 		for (const auto& extra : res.extraFiles)
 		{

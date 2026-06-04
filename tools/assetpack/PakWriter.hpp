@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <PakFormat.hpp>
+#include "PakFormat.hpp"
 
 namespace fs = std::filesystem;
 
