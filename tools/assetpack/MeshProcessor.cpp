@@ -1,6 +1,6 @@
 #include "MeshProcessor.hpp"
 
-#include <AeBnFormat.hpp>
+#include <BinaryFormats.hpp>
 
 #include <algorithm>
 #include <array>
@@ -12,6 +12,10 @@
 
 #define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
+
+#define XXH_STATIC_LINKING_ONLY
+#define XXH_IMPLEMENTATION
+#include <xxhash.h>
 
 namespace MeshProcessor
 {
@@ -36,6 +40,13 @@ namespace MeshProcessor
 
         void AppendStr(std::vector<std::byte>& buf, const std::string& s)
         {
+            const uint16_t len = static_cast<uint16_t>(s.size());
+            AppendBytes(buf, &len, sizeof(len));
+            AppendBytes(buf, s.data(), s.size());
+        }
+
+        void AppendRawStr(std::vector<std::byte>& buf, const std::string& s)
+        {
             AppendBytes(buf, s.data(), s.size());
         }
 
@@ -48,43 +59,17 @@ namespace MeshProcessor
             if (!value || !data.nodes) return -1;
             return static_cast<int32_t>(value - data.nodes);
         }
-        static int32_t ToIndex(const cgltf_mesh* value, const cgltf_data& data)
-        {
-            if (!value || !data.meshes) return -1;
-            return static_cast<int32_t>(value - data.meshes);
-        }
-        static int32_t ToIndex(const cgltf_skin* value, const cgltf_data& data)
-        {
-            if (!value || !data.skins) return -1;
-            return static_cast<int32_t>(value - data.skins);
-        }
         static int32_t ToIndex(const cgltf_material* value, const cgltf_data& data)
         {
             if (!value || !data.materials) return -1;
             return static_cast<int32_t>(value - data.materials);
         }
-        static int32_t ToIndex(const cgltf_image* value, const cgltf_data& data)
-        {
-            if (!value || !data.images) return -1;
-            return static_cast<int32_t>(value - data.images);
-        }
-        static int32_t ToIndex(const cgltf_texture* value, const cgltf_data& data)
-        {
-            if (!value || !data.textures) return -1;
-            return static_cast<int32_t>(value - data.textures);
-        }
 
         static std::string SafeStr(const char* s) { return s ? s : ""; }
 
-        // -------------------------------------------------------------------------
-        // Image URI: replace extension with ".texture"
-        // -------------------------------------------------------------------------
-
-        std::string TextureUri(const char* rawUri)
+        static std::string Stem(const std::filesystem::path& p)
         {
-            if (!rawUri) return {};
-            const std::filesystem::path p(rawUri);
-            return (p.parent_path() / p.stem()).generic_string() + ".texture";
+            return p.stem().string();
         }
 
         // -------------------------------------------------------------------------
@@ -103,10 +88,22 @@ namespace MeshProcessor
         }
 
         // -------------------------------------------------------------------------
-        // Normal generation (used when the primitive has no NORMAL attribute)
+        // Normal generation
         // -------------------------------------------------------------------------
 
-        void GenerateNormals(std::vector<AeBnVertex>& verts, const std::vector<uint32_t>& idx)
+        struct TempVertex
+        {
+            float position[3];
+            float normal[3];
+            float tangent[4];
+            float uv[2];
+            float uv2[2];
+            uint32_t color; // RGBA8 packed
+            uint32_t jointIndices[4];
+            float jointWeights[4];
+        };
+
+        void GenerateNormals(std::vector<TempVertex>& verts, const std::vector<uint32_t>& idx)
         {
             for (auto& v : verts)
                 v.normal[0] = v.normal[1] = v.normal[2] = 0.f;
@@ -125,8 +122,6 @@ namespace MeshProcessor
                 const float nx = ey*fz - ez*fy;
                 const float ny = ez*fx - ex*fz;
                 const float nz = ex*fy - ey*fx;
-                const float len2 = nx*nx + ny*ny + nz*nz;
-                if (len2 < 1e-16f) continue;
 
                 for (uint32_t j : {ia, ib, ic})
                 {
@@ -150,13 +145,162 @@ namespace MeshProcessor
                 }
             }
         }
+
+        // -------------------------------------------------------------------------
+        // Color packing: float[4] -> RGBA8 uint32
+        // -------------------------------------------------------------------------
+
+        static uint32_t PackColorRGBA8(const float rgba[4])
+        {
+            uint32_t r = static_cast<uint32_t>(std::clamp(rgba[0], 0.f, 1.f) * 255.f);
+            uint32_t g = static_cast<uint32_t>(std::clamp(rgba[1], 0.f, 1.f) * 255.f);
+            uint32_t b = static_cast<uint32_t>(std::clamp(rgba[2], 0.f, 1.f) * 255.f);
+            uint32_t a = static_cast<uint32_t>(std::clamp(rgba[3], 0.f, 1.f) * 255.f);
+            return (r << 0) | (g << 8) | (b << 16) | (a << 24);
+        }
+
+        // -------------------------------------------------------------------------
+        // Bounding volume computation
+        // -------------------------------------------------------------------------
+
+        struct Bounds
+        {
+            float aabbMin[3] = { 0, 0, 0 };
+            float aabbMax[3] = { 0, 0, 0 };
+            float sphereCenter[3] = { 0, 0, 0 };
+            float sphereRadius = 0;
+        };
+
+        Bounds ComputeBounds(const std::vector<TempVertex>& verts)
+        {
+            Bounds bounds;
+            if (verts.empty()) return bounds;
+
+            bounds.aabbMin[0] = bounds.aabbMax[0] = verts[0].position[0];
+            bounds.aabbMin[1] = bounds.aabbMax[1] = verts[0].position[1];
+            bounds.aabbMin[2] = bounds.aabbMax[2] = verts[0].position[2];
+
+            for (const auto& v : verts)
+            {
+                bounds.aabbMin[0] = std::min(bounds.aabbMin[0], v.position[0]);
+                bounds.aabbMin[1] = std::min(bounds.aabbMin[1], v.position[1]);
+                bounds.aabbMin[2] = std::min(bounds.aabbMin[2], v.position[2]);
+                bounds.aabbMax[0] = std::max(bounds.aabbMax[0], v.position[0]);
+                bounds.aabbMax[1] = std::max(bounds.aabbMax[1], v.position[1]);
+                bounds.aabbMax[2] = std::max(bounds.aabbMax[2], v.position[2]);
+            }
+
+            bounds.sphereCenter[0] = (bounds.aabbMin[0] + bounds.aabbMax[0]) * 0.5f;
+            bounds.sphereCenter[1] = (bounds.aabbMin[1] + bounds.aabbMax[1]) * 0.5f;
+            bounds.sphereCenter[2] = (bounds.aabbMin[2] + bounds.aabbMax[2]) * 0.5f;
+
+            for (const auto& v : verts)
+            {
+                const float dx = v.position[0] - bounds.sphereCenter[0];
+                const float dy = v.position[1] - bounds.sphereCenter[1];
+                const float dz = v.position[2] - bounds.sphereCenter[2];
+                const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+                bounds.sphereRadius = std::max(bounds.sphereRadius, dist);
+            }
+
+            return bounds;
+        }
+
+        // -------------------------------------------------------------------------
+        // Bone sorting and remap
+        // -------------------------------------------------------------------------
+
+        struct BoneInfo
+        {
+            std::string name;
+            int32_t originalIndex;
+            int32_t parentIndex; // original
+            std::array<float, 16> ibm;
+        };
+
+        uint64_t ComputeSkeletonHash(const std::vector<BoneInfo>& sortedBones, const std::vector<uint32_t>& remapTable)
+        {
+            std::vector<uint8_t> payload;
+            payload.reserve(sortedBones.size() * 128);
+
+            for (const auto& bone : sortedBones)
+            {
+                // name bytes (no null terminator)
+                payload.insert(payload.end(), bone.name.begin(), bone.name.end());
+                // remapped parent index
+                const int32_t remappedParent = (bone.parentIndex >= 0) ? static_cast<int32_t>(remapTable[static_cast<std::size_t>(bone.parentIndex)]) : -1;
+                const auto* p = reinterpret_cast<const uint8_t*>(&remappedParent);
+                payload.insert(payload.end(), p, p + sizeof(remappedParent));
+                // ibm[16] column-major
+                const auto* m = reinterpret_cast<const uint8_t*>(bone.ibm.data());
+                payload.insert(payload.end(), m, m + sizeof(float) * 16);
+            }
+
+            return XXH3_64bits(payload.data(), payload.size());
+        }
+
+        // -------------------------------------------------------------------------
+        // Collect bones from all skins
+        // -------------------------------------------------------------------------
+
+        std::vector<BoneInfo> CollectBones(const cgltf_data& data)
+        {
+            std::vector<BoneInfo> bones;
+            std::vector<bool> seen(data.nodes_count, false);
+
+            for (cgltf_size si = 0; si < data.skins_count; ++si)
+            {
+                const cgltf_skin& skin = data.skins[si];
+                for (cgltf_size ji = 0; ji < skin.joints_count; ++ji)
+                {
+                    const int32_t nodeIdx = ToIndex(skin.joints[ji], data);
+                    if (nodeIdx < 0 || seen[static_cast<std::size_t>(nodeIdx)]) continue;
+                    seen[static_cast<std::size_t>(nodeIdx)] = true;
+
+                    BoneInfo info;
+                    info.name = SafeStr(data.nodes[static_cast<std::size_t>(nodeIdx)].name);
+                    info.originalIndex = nodeIdx;
+                    info.parentIndex = (data.nodes[static_cast<std::size_t>(nodeIdx)].parent)
+                        ? ToIndex(data.nodes[static_cast<std::size_t>(nodeIdx)].parent, data) : -1;
+
+                    // Read inverse bind matrix
+                    if (skin.inverse_bind_matrices && ji < skin.inverse_bind_matrices->count)
+                    {
+                        cgltf_accessor_read_float(skin.inverse_bind_matrices, ji, info.ibm.data(), 16);
+                    }
+                    else
+                    {
+                        info.ibm = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 };
+                    }
+
+                    bones.push_back(std::move(info));
+                }
+            }
+
+            return bones;
+        }
+
+        // -------------------------------------------------------------------------
+        // Material name extraction
+        // -------------------------------------------------------------------------
+
+        std::string GetMaterialName(const cgltf_data& data, int32_t materialIndex)
+        {
+            if (materialIndex < 0 || static_cast<std::size_t>(materialIndex) >= data.materials_count)
+                return "default";
+            const std::string name = SafeStr(data.materials[static_cast<std::size_t>(materialIndex)].name);
+            return name.empty() ? "material_" + std::to_string(materialIndex) : name;
+        }
+
     } // namespace
 
     // -------------------------------------------------------------------------
 
-    std::vector<std::byte> ToBinary(
+    ProcessedResult Process(
         const std::vector<std::byte>& gltfData,
-        const std::filesystem::path&  sourcePath)
+        const std::filesystem::path&  sourcePath,
+        const std::string&            virtualPath,
+        const std::filesystem::path&  sourceDir)
     {
         cgltf_options options{};
         cgltf_data*   data = nullptr;
@@ -177,6 +321,55 @@ namespace MeshProcessor
             return {};
         }
 
+        ProcessedResult result;
+
+        // ── Collect and sort bones ──────────────────────────────────────────────
+        std::vector<BoneInfo> bones = CollectBones(*data);
+
+        // Build remap table: remapTable[originalIndex] = sortedIndex
+        std::vector<uint32_t> remapTable(data->nodes_count, static_cast<uint32_t>(-1));
+
+        if (!bones.empty())
+        {
+            // Sort bones by name for deterministic hash
+            std::stable_sort(bones.begin(), bones.end(),
+                [](const BoneInfo& a, const BoneInfo& b) { return a.name < b.name; });
+
+            // Build remap table
+            for (uint32_t i = 0; i < static_cast<uint32_t>(bones.size()); ++i)
+            {
+                remapTable[static_cast<std::size_t>(bones[i].originalIndex)] = i;
+            }
+
+            // Compute skeleton hash
+            result.skeletonHash = std::to_string(ComputeSkeletonHash(bones, remapTable));
+
+            // ── Write .skel file ────────────────────────────────────────────────
+            {
+                const std::string skelName = Stem(sourcePath);
+                SkelHeaderDisk hdr;
+                hdr.boneCount = static_cast<uint32_t>(bones.size());
+                hdr.nameLen = static_cast<uint16_t>(skelName.size());
+                hdr.skeletonHash = ComputeSkeletonHash(bones, remapTable);
+
+                Append(result.skelData, hdr);
+                AppendRawStr(result.skelData, skelName);
+
+                for (const auto& bone : bones)
+                {
+                    BoneEntryHeaderDisk boneHdr;
+                    boneHdr.nameLen = static_cast<uint16_t>(bone.name.size());
+                    Append(result.skelData, boneHdr);
+                    AppendRawStr(result.skelData, bone.name);
+
+                    const int32_t remappedParent = (bone.parentIndex >= 0)
+                        ? static_cast<int32_t>(remapTable[static_cast<std::size_t>(bone.parentIndex)]) : -1;
+                    Append(result.skelData, remappedParent);
+                    AppendBytes(result.skelData, bone.ibm.data(), sizeof(float) * 16);
+                }
+            }
+        }
+
         // ── Count total primitives ──────────────────────────────────────────────
         uint32_t totalPrims = 0;
         for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
@@ -193,364 +386,330 @@ namespace MeshProcessor
             }
         }
 
-        // ── File header ─────────────────────────────────────────────────────────
-        AeBnHeader fileHdr;
-        fileHdr.imageCount     = static_cast<uint32_t>(data->images_count);
-        fileHdr.textureCount   = static_cast<uint32_t>(data->textures_count);
-        fileHdr.materialCount  = static_cast<uint32_t>(data->materials_count);
-        fileHdr.nodeCount      = static_cast<uint32_t>(data->nodes_count);
-        fileHdr.skinCount      = static_cast<uint32_t>(data->skins_count);
-        fileHdr.primitiveCount = totalPrims;
-        fileHdr.animCount      = static_cast<uint32_t>(data->animations_count);
-
-        std::vector<std::byte> out;
-        out.reserve(gltfData.size() * 2);
-        Append(out, fileHdr);
-
-        // ── Images ──────────────────────────────────────────────────────────────
-        for (cgltf_size i = 0; i < data->images_count; ++i)
+        // ── Collect unique material names for path refs ─────────────────────────
+        // Only emit material paths where a corresponding .material directory exists.
+        // If no .material file exists, the engine will use a default material.
+        std::vector<std::string> materialPaths;
         {
-            const cgltf_image& img = data->images[i];
-            const std::string name = SafeStr(img.name);
-            const std::string uri  = TextureUri(img.uri);
-
-            AeBnImageHeader hdr;
-            hdr.nameLen = static_cast<uint16_t>(name.size());
-            hdr.uriLen  = static_cast<uint16_t>(uri.size());
-            Append(out, hdr);
-            AppendStr(out, name);
-            AppendStr(out, uri);
-        }
-
-        // ── Textures ────────────────────────────────────────────────────────────
-        for (cgltf_size i = 0; i < data->textures_count; ++i)
-        {
-            const cgltf_texture& tex = data->textures[i];
-            const std::string name = SafeStr(tex.name);
-
-            AeBnTextureHeader hdr;
-            hdr.imageIndex = ToIndex(tex.image, *data);
-            hdr.nameLen    = static_cast<uint16_t>(name.size());
-            Append(out, hdr);
-            AppendStr(out, name);
-        }
-
-        // ── Materials ───────────────────────────────────────────────────────────
-        for (cgltf_size i = 0; i < data->materials_count; ++i)
-        {
-            const cgltf_material& mat = data->materials[i];
-            const std::string name = SafeStr(mat.name);
-
-            AeBnMaterialHeader hdr{};
-            const auto& pbr = mat.pbr_metallic_roughness;
-            for (int k = 0; k < 4; ++k) hdr.baseColorFactor[k]  = static_cast<float>(pbr.base_color_factor[k]);
-            hdr.metallicFactor  = static_cast<float>(pbr.metallic_factor);
-            hdr.roughnessFactor = static_cast<float>(pbr.roughness_factor);
-            for (int k = 0; k < 3; ++k) hdr.emissiveFactor[k] = static_cast<float>(mat.emissive_factor[k]);
-            hdr.alphaCutoff              = static_cast<float>(mat.alpha_cutoff);
-            hdr.baseColorTexture         = ToIndex(pbr.base_color_texture.texture, *data);
-            hdr.metallicRoughnessTexture = ToIndex(pbr.metallic_roughness_texture.texture, *data);
-            hdr.normalTexture            = ToIndex(mat.normal_texture.texture, *data);
-            hdr.occlusionTexture         = ToIndex(mat.occlusion_texture.texture, *data);
-            hdr.emissiveTexture          = ToIndex(mat.emissive_texture.texture, *data);
-            hdr.doubleSided = mat.double_sided ? 1 : 0;
-            hdr.alphaBlend  = (mat.alpha_mode == cgltf_alpha_mode_blend) ? 1 : 0;
-            hdr.alphaMask   = (mat.alpha_mode == cgltf_alpha_mode_mask)  ? 1 : 0;
-            hdr.nameLen     = static_cast<uint16_t>(name.size());
-            Append(out, hdr);
-            AppendStr(out, name);
-        }
-
-        // ── Nodes ───────────────────────────────────────────────────────────────
-        for (cgltf_size i = 0; i < data->nodes_count; ++i)
-        {
-            const cgltf_node& node = data->nodes[i];
-            const std::string name = SafeStr(node.name);
-
-            AeBnNodeHeader hdr{};
-            hdr.parentIndex = (node.parent) ? ToIndex(node.parent, *data) : -1;
-            hdr.meshIndex   = ToIndex(node.mesh, *data);
-            hdr.skinIndex   = ToIndex(node.skin, *data);
-
-            if (node.has_translation)
+            std::vector<bool> seen(data->materials_count, false);
+            for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
             {
-                for (int k = 0; k < 3; ++k) hdr.translation[k] = static_cast<float>(node.translation[k]);
-            }
-            // Default rotation: identity quaternion stored as xyzw = (0,0,0,1)
-            hdr.rotation[0] = 0.f; hdr.rotation[1] = 0.f; hdr.rotation[2] = 0.f; hdr.rotation[3] = 1.f;
-            if (node.has_rotation)
-            {
-                for (int k = 0; k < 4; ++k) hdr.rotation[k] = static_cast<float>(node.rotation[k]);
-            }
-            hdr.scale[0] = hdr.scale[1] = hdr.scale[2] = 1.f;
-            if (node.has_scale)
-            {
-                for (int k = 0; k < 3; ++k) hdr.scale[k] = static_cast<float>(node.scale[k]);
-            }
-            if (node.has_matrix)
-            {
-                hdr.hasMatrix = 1;
-                for (int k = 0; k < 16; ++k) hdr.matrix[k] = static_cast<float>(node.matrix[k]);
-            }
-            hdr.childCount = static_cast<uint32_t>(node.children_count);
-            hdr.nameLen    = static_cast<uint16_t>(name.size());
-
-            Append(out, hdr);
-            for (cgltf_size c = 0; c < node.children_count; ++c)
-            {
-                const uint32_t childIdx = static_cast<uint32_t>(ToIndex(node.children[c], *data));
-                Append(out, childIdx);
-            }
-            AppendStr(out, name);
-        }
-
-        // ── Skins ───────────────────────────────────────────────────────────────
-        for (cgltf_size i = 0; i < data->skins_count; ++i)
-        {
-            const cgltf_skin& skin = data->skins[i];
-            const std::string name = SafeStr(skin.name);
-
-            AeBnSkinHeader hdr;
-            hdr.skeletonRoot = ToIndex(skin.skeleton, *data);
-            hdr.jointCount   = static_cast<uint32_t>(skin.joints_count);
-            hdr.nameLen      = static_cast<uint16_t>(name.size());
-            Append(out, hdr);
-            AppendStr(out, name);
-
-            for (cgltf_size j = 0; j < skin.joints_count; ++j)
-            {
-                const uint32_t jointIdx = static_cast<uint32_t>(ToIndex(skin.joints[j], *data));
-                Append(out, jointIdx);
-            }
-
-            if (skin.inverse_bind_matrices)
-            {
-                std::array<float, 16> mtx{};
-                for (cgltf_size m = 0; m < skin.inverse_bind_matrices->count; ++m)
+                const cgltf_node& node = data->nodes[ni];
+                if (!node.mesh) continue;
+                for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
                 {
-                    cgltf_accessor_read_float(skin.inverse_bind_matrices, m, mtx.data(), 16);
-                    AppendBytes(out, mtx.data(), sizeof(mtx));
+                    const int32_t matIdx = ToIndex(node.mesh->primitives[pi].material, *data);
+                    if (matIdx >= 0 && !seen[static_cast<std::size_t>(matIdx)])
+                    {
+                        seen[static_cast<std::size_t>(matIdx)] = true;
+                        const std::string matName = GetMaterialName(*data, matIdx);
+                        const std::string matDirPath = (sourceDir / "materials" / (matName + ".material") / "properties.toml").string();
+                        if (std::filesystem::exists(matDirPath))
+                        {
+                            materialPaths.push_back("materials/" + matName + ".material");
+                        }
+                    }
                 }
             }
-            else
-            {
-                // Write identity matrices for each joint
-                const std::array<float, 16> identity = {
-                    1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1
-                };
-                for (uint32_t j = 0; j < skin.joints_count; ++j)
-                    AppendBytes(out, identity.data(), sizeof(identity));
-            }
         }
 
-        // ── Primitives ──────────────────────────────────────────────────────────
-        for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
+        // ── Write .mesh file ────────────────────────────────────────────────────
         {
-            const cgltf_node& node = data->nodes[ni];
-            if (!node.mesh) continue;
-
-            for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
+            // First pass: collect all vertices and indices to compute bounds
+            std::vector<TempVertex> allVerts;
+            for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
             {
-                const cgltf_primitive& prim = node.mesh->primitives[pi];
-                if (prim.type != cgltf_primitive_type_triangles) continue;
-
-                const cgltf_accessor* posAcc     = FindAttr(prim, cgltf_attribute_type_position, 0);
-                if (!posAcc) continue;
-
-                const cgltf_accessor* normAcc    = FindAttr(prim, cgltf_attribute_type_normal, 0);
-                const cgltf_accessor* tanAcc     = FindAttr(prim, cgltf_attribute_type_tangent, 0);
-                const cgltf_accessor* uvAcc      = FindAttr(prim, cgltf_attribute_type_texcoord, 0);
-                if (!uvAcc) uvAcc = FindAttr(prim, cgltf_attribute_type_texcoord, 1);
-                const cgltf_accessor* colorAcc   = FindAttr(prim, cgltf_attribute_type_color, 0);
-                const cgltf_accessor* jointsAcc  = FindAttr(prim, cgltf_attribute_type_joints, 0);
-                const cgltf_accessor* weightsAcc = FindAttr(prim, cgltf_attribute_type_weights, 0);
-
-                const uint32_t vertCount = static_cast<uint32_t>(posAcc->count);
-
-                std::vector<AeBnVertex> verts(vertCount);
-                std::array<float, 4>       fv{};
-                std::array<cgltf_uint, 4>  uv{};
-
-                for (uint32_t v = 0; v < vertCount; ++v)
+                const cgltf_node& node = data->nodes[ni];
+                if (!node.mesh) continue;
+                for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
                 {
-                    AeBnVertex& dst = verts[v];
+                    const cgltf_primitive& prim = node.mesh->primitives[pi];
+                    if (prim.type != cgltf_primitive_type_triangles) continue;
+                    const cgltf_accessor* posAcc = FindAttr(prim, cgltf_attribute_type_position, 0);
+                    if (!posAcc) continue;
+                    const uint32_t vertCount = static_cast<uint32_t>(posAcc->count);
+                    allVerts.resize(allVerts.size() + vertCount);
+                }
+            }
 
-                    cgltf_accessor_read_float(posAcc, v, fv.data(), 3);
-                    dst.position[0] = fv[0]; dst.position[1] = fv[1]; dst.position[2] = fv[2];
+            Bounds bounds = ComputeBounds(allVerts);
 
-                    if (normAcc)
-                    {
-                        cgltf_accessor_read_float(normAcc, v, fv.data(), 3);
-                        dst.normal[0] = fv[0]; dst.normal[1] = fv[1]; dst.normal[2] = fv[2];
-                    }
+            // Skin ref path - same directory as source mesh in virtual path
+            const std::string skinRefDir = std::filesystem::path(virtualPath).parent_path().generic_string();
+            const std::string skinRefPath = bones.empty() ? "" : (skinRefDir.empty() ? (Stem(sourcePath) + ".skel") : (skinRefDir + "/" + Stem(sourcePath) + ".skel"));
 
-                    if (tanAcc)
-                    {
-                        cgltf_accessor_read_float(tanAcc, v, fv.data(), 4);
-                        dst.tangent[0] = fv[0]; dst.tangent[1] = fv[1]; dst.tangent[2] = fv[2]; dst.tangent[3] = fv[3];
-                    }
-                    else
-                    {
-                        dst.tangent[0] = 1.f; dst.tangent[1] = 0.f; dst.tangent[2] = 0.f; dst.tangent[3] = 1.f;
-                    }
+            MeshHeaderDisk hdr;
+            hdr.vertexCount = 0; // Will be set per-primitive
+            hdr.indexCount = 0;
+            hdr.skinRefPathLen = static_cast<uint32_t>(skinRefPath.size());
+            hdr.materialCount = static_cast<uint32_t>(materialPaths.size());
+            std::memcpy(hdr.aabbMin, bounds.aabbMin, sizeof(bounds.aabbMin));
+            std::memcpy(hdr.aabbMax, bounds.aabbMax, sizeof(bounds.aabbMax));
+            std::memcpy(hdr.sphereCenter, bounds.sphereCenter, sizeof(bounds.sphereCenter));
+            hdr.sphereRadius = bounds.sphereRadius;
 
-                    if (uvAcc)
-                    {
-                        cgltf_accessor_read_float(uvAcc, v, fv.data(), 2);
-                        dst.uv[0] = fv[0]; dst.uv[1] = fv[1];
-                    }
+            // We write the header first, then vertices/indices per primitive
+            // Since we have multiple primitives, we need to aggregate them
+            // For simplicity, combine all primitives into one mesh
+            std::vector<DiskMeshVertex> combinedVerts;
+            std::vector<uint32_t> combinedIndices;
+            uint32_t vertexOffset = 0;
 
-                    if (colorAcc)
-                    {
-                        cgltf_accessor_read_float(colorAcc, v, fv.data(), 4);
-                        dst.color[0] = fv[0]; dst.color[1] = fv[1]; dst.color[2] = fv[2];
-                    }
-                    else
-                    {
-                        dst.color[0] = dst.color[1] = dst.color[2] = 1.f;
-                    }
+            for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
+            {
+                const cgltf_node& node = data->nodes[ni];
+                if (!node.mesh) continue;
+                for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
+                {
+                    const cgltf_primitive& prim = node.mesh->primitives[pi];
+                    if (prim.type != cgltf_primitive_type_triangles) continue;
+                    const cgltf_accessor* posAcc = FindAttr(prim, cgltf_attribute_type_position, 0);
+                    if (!posAcc) continue;
 
-                    if (jointsAcc)
-                    {
-                        cgltf_accessor_read_uint(jointsAcc, v, uv.data(), 4);
-                        dst.jointIndices[0] = uv[0]; dst.jointIndices[1] = uv[1];
-                        dst.jointIndices[2] = uv[2]; dst.jointIndices[3] = uv[3];
-                    }
+                    const uint32_t vertCount = static_cast<uint32_t>(posAcc->count);
+                    const cgltf_accessor* normAcc = FindAttr(prim, cgltf_attribute_type_normal, 0);
+                    const cgltf_accessor* tanAcc = FindAttr(prim, cgltf_attribute_type_tangent, 0);
+                    const cgltf_accessor* uvAcc = FindAttr(prim, cgltf_attribute_type_texcoord, 0);
+                    const cgltf_accessor* uv2Acc = FindAttr(prim, cgltf_attribute_type_texcoord, 1);
+                    const cgltf_accessor* colorAcc = FindAttr(prim, cgltf_attribute_type_color, 0);
+                    const cgltf_accessor* jointsAcc = FindAttr(prim, cgltf_attribute_type_joints, 0);
+                    const cgltf_accessor* weightsAcc = FindAttr(prim, cgltf_attribute_type_weights, 0);
 
-                    if (weightsAcc)
+                    std::vector<TempVertex> verts(vertCount);
+                    std::array<float, 4> fv{};
+                    std::array<cgltf_uint, 4> uv{};
+
+                    for (uint32_t v = 0; v < vertCount; ++v)
                     {
-                        cgltf_accessor_read_float(weightsAcc, v, fv.data(), 4);
-                        dst.jointWeights[0] = fv[0]; dst.jointWeights[1] = fv[1];
-                        dst.jointWeights[2] = fv[2]; dst.jointWeights[3] = fv[3];
-                    }
-                    else
-                    {
+                        TempVertex& dst = verts[v];
+
+                        cgltf_accessor_read_float(posAcc, v, fv.data(), 3);
+                        dst.position[0] = fv[0]; dst.position[1] = fv[1]; dst.position[2] = fv[2];
+
+                        if (normAcc)
+                        {
+                            cgltf_accessor_read_float(normAcc, v, fv.data(), 3);
+                            dst.normal[0] = fv[0]; dst.normal[1] = fv[1]; dst.normal[2] = fv[2];
+                        }
+
+                        if (tanAcc)
+                        {
+                            cgltf_accessor_read_float(tanAcc, v, fv.data(), 4);
+                            dst.tangent[0] = fv[0]; dst.tangent[1] = fv[1]; dst.tangent[2] = fv[2]; dst.tangent[3] = fv[3];
+                        }
+                        else
+                        {
+                            dst.tangent[0] = 1.f; dst.tangent[1] = 0.f; dst.tangent[2] = 0.f; dst.tangent[3] = 1.f;
+                        }
+
+                        if (uvAcc)
+                        {
+                            cgltf_accessor_read_float(uvAcc, v, fv.data(), 2);
+                            dst.uv[0] = fv[0]; dst.uv[1] = fv[1];
+                        }
+
+                        if (uv2Acc)
+                        {
+                            cgltf_accessor_read_float(uv2Acc, v, fv.data(), 2);
+                            dst.uv2[0] = fv[0]; dst.uv2[1] = fv[1];
+                        }
+
+                        if (colorAcc)
+                        {
+                            cgltf_accessor_read_float(colorAcc, v, fv.data(), 4);
+                            dst.color = PackColorRGBA8(fv.data());
+                        }
+                        else
+                        {
+                            dst.color = 0xFFFFFFFF; // white
+                        }
+
+                        // Initialize joint indices to sentinel
+                        dst.jointIndices[0] = 0xFFFFFFFF;
+                        dst.jointIndices[1] = 0xFFFFFFFF;
+                        dst.jointIndices[2] = 0xFFFFFFFF;
+                        dst.jointIndices[3] = 0xFFFFFFFF;
                         dst.jointWeights[0] = 1.f;
-                        dst.jointWeights[1] = dst.jointWeights[2] = dst.jointWeights[3] = 0.f;
+                        dst.jointWeights[1] = 0.f;
+                        dst.jointWeights[2] = 0.f;
+                        dst.jointWeights[3] = 0.f;
+
+                        if (jointsAcc)
+                        {
+                            cgltf_accessor_read_uint(jointsAcc, v, uv.data(), 4);
+                            for (int j = 0; j < 4; ++j)
+                            {
+                                if (uv[j] < remapTable.size())
+                                    dst.jointIndices[j] = remapTable[uv[j]];
+                                // else keep sentinel
+                            }
+                        }
+
+                        if (weightsAcc)
+                        {
+                            cgltf_accessor_read_float(weightsAcc, v, fv.data(), 4);
+                            dst.jointWeights[0] = fv[0]; dst.jointWeights[1] = fv[1];
+                            dst.jointWeights[2] = fv[2]; dst.jointWeights[3] = fv[3];
+                        }
                     }
+
+                    // Build index buffer
+                    std::vector<uint32_t> indices;
+                    if (prim.indices)
+                    {
+                        indices.resize(prim.indices->count);
+                        for (cgltf_size k = 0; k < prim.indices->count; ++k)
+                            indices[k] = static_cast<uint32_t>(cgltf_accessor_read_index(prim.indices, k)) + vertexOffset;
+                    }
+                    else
+                    {
+                        indices.resize(vertCount);
+                        for (uint32_t k = 0; k < vertCount; ++k) indices[k] = k + vertexOffset;
+                    }
+
+                    // Generate normals if missing
+                    if (!normAcc) GenerateNormals(verts, indices);
+
+                    // Convert to DiskMeshVertex
+                    const std::size_t baseIdx = combinedVerts.size();
+                    combinedVerts.resize(baseIdx + vertCount);
+                    for (uint32_t v = 0; v < vertCount; ++v)
+                    {
+                        const TempVertex& src = verts[v];
+                        DiskMeshVertex& dst = combinedVerts[baseIdx + v];
+                        std::memcpy(dst.position, src.position, sizeof(src.position));
+                        std::memcpy(dst.normal, src.normal, sizeof(src.normal));
+                        std::memcpy(dst.tangent, src.tangent, sizeof(src.tangent));
+                        std::memcpy(dst.uv, src.uv, sizeof(src.uv));
+                        dst.color = src.color;
+                        std::memcpy(dst.uv2, src.uv2, sizeof(src.uv2));
+                        std::memset(dst._pad, 0, sizeof(dst._pad));
+                        std::memcpy(dst.jointIndices, src.jointIndices, sizeof(src.jointIndices));
+                        std::memcpy(dst.jointWeights, src.jointWeights, sizeof(src.jointWeights));
+                    }
+
+                    combinedIndices.insert(combinedIndices.end(), indices.begin(), indices.end());
+                    vertexOffset += vertCount;
                 }
+            }
 
-                // Build index buffer
-                std::vector<uint32_t> indices;
-                if (prim.indices)
-                {
-                    indices.resize(prim.indices->count);
-                    for (cgltf_size k = 0; k < prim.indices->count; ++k)
-                        indices[k] = static_cast<uint32_t>(cgltf_accessor_read_index(prim.indices, k));
-                }
-                else
-                {
-                    indices.resize(vertCount);
-                    for (uint32_t k = 0; k < vertCount; ++k) indices[k] = k;
-                }
+            hdr.vertexCount = static_cast<uint32_t>(combinedVerts.size());
+            hdr.indexCount = static_cast<uint32_t>(combinedIndices.size());
 
-                // Generate normals if missing (matches GltfAsset.cpp behaviour)
-                if (!normAcc) GenerateNormals(verts, indices);
-
-                // Fix near-black color streams (matches GltfAsset.cpp behaviour)
-                if (colorAcc)
-                {
-                    float maxC = 0.f;
-                    for (const auto& vtx : verts)
-                        maxC = std::max(maxC, std::max(vtx.color[0], std::max(vtx.color[1], vtx.color[2])));
-                    if (maxC < 0.01f)
-                        for (auto& vtx : verts)
-                            vtx.color[0] = vtx.color[1] = vtx.color[2] = 1.f;
-                }
-
-                AeBnPrimitiveHeader hdr;
-                hdr.nodeIndex     = static_cast<uint32_t>(ni);
-                hdr.materialIndex = ToIndex(prim.material, *data);
-                hdr.skinIndex     = ToIndex(node.skin, *data);
-                hdr.vertexCount   = vertCount;
-                hdr.indexCount    = static_cast<uint32_t>(indices.size());
-
-                Append(out, hdr);
-                AppendBytes(out, verts.data(), verts.size() * sizeof(AeBnVertex));
-                AppendBytes(out, indices.data(), indices.size() * sizeof(uint32_t));
+            Append(result.meshData, hdr);
+            AppendBytes(result.meshData, combinedVerts.data(), combinedVerts.size() * sizeof(DiskMeshVertex));
+            AppendBytes(result.meshData, combinedIndices.data(), combinedIndices.size() * sizeof(uint32_t));
+            AppendRawStr(result.meshData, skinRefPath);
+            for (const auto& matPath : materialPaths)
+            {
+                AppendStr(result.meshData, matPath);
             }
         }
 
-        // ── Animations ──────────────────────────────────────────────────────────
-        for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
+        // ── Write .anim files and .animset ──────────────────────────────────────
+        if (data->animations_count > 0 && !bones.empty())
         {
-            const cgltf_animation& anim = data->animations[ai];
-            const std::string animName = SafeStr(anim.name);
+            std::vector<std::string> animPaths;
 
-            // Count valid channels first
-            uint32_t validChannels = 0;
-            for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
+            for (cgltf_size ai = 0; ai < data->animations_count; ++ai)
             {
-                const auto& ch = anim.channels[ci];
-                if (ch.sampler && ch.target_node && ch.sampler->input && ch.sampler->output)
-                    ++validChannels;
+                const cgltf_animation& anim = data->animations[ai];
+                const std::string animName = SafeStr(anim.name);
+                const std::string fileName = Stem(sourcePath) + "_" + (animName.empty() ? std::to_string(ai) : animName) + ".anim";
+
+                std::vector<std::byte> animData;
+
+                // Count valid channels
+                uint32_t validChannels = 0;
+                for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
+                {
+                    const auto& ch = anim.channels[ci];
+                    if (ch.sampler && ch.target_node && ch.sampler->input && ch.sampler->output)
+                        ++validChannels;
+                }
+
+                AnimHeaderDisk animHdr;
+                animHdr.channelCount = validChannels;
+                animHdr.nameLen = static_cast<uint16_t>(animName.size());
+                Append(animData, animHdr);
+                AppendRawStr(animData, animName);
+
+                for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
+                {
+                    const cgltf_animation_channel& ch = anim.channels[ci];
+                    if (!ch.sampler || !ch.target_node || !ch.sampler->input || !ch.sampler->output)
+                        continue;
+
+                    const int32_t targetNode = ToIndex(ch.target_node, *data);
+                    if (targetNode < 0) continue;
+
+                    // Remap node index
+                    const uint32_t remappedNode = remapTable[static_cast<std::size_t>(targetNode)];
+
+                    AnimPathDisk path;
+                    switch (ch.target_path)
+                    {
+                        case cgltf_animation_path_type_rotation:    path = AnimPathDisk::Rotation;    break;
+                        case cgltf_animation_path_type_scale:       path = AnimPathDisk::Scale;       break;
+                        case cgltf_animation_path_type_weights:     path = AnimPathDisk::Weights;     break;
+                        default:                                     path = AnimPathDisk::Translation; break;
+                    }
+
+                    AnimInterpDisk interp;
+                    switch (ch.sampler->interpolation)
+                    {
+                        case cgltf_interpolation_type_step:         interp = AnimInterpDisk::Step;        break;
+                        case cgltf_interpolation_type_cubic_spline: interp = AnimInterpDisk::CubicSpline; break;
+                        default:                                     interp = AnimInterpDisk::Linear;      break;
+                    }
+
+                    const cgltf_accessor* inputAcc  = ch.sampler->input;
+                    const cgltf_accessor* outputAcc = ch.sampler->output;
+                    const uint32_t keyCount = static_cast<uint32_t>(std::min(inputAcc->count, outputAcc->count));
+
+                    ChannelHeaderDisk chHdr;
+                    chHdr.nodeIndex = remappedNode;
+                    chHdr.path = static_cast<uint8_t>(path);
+                    chHdr.interp = static_cast<uint8_t>(interp);
+                    chHdr.keyCount = keyCount;
+                    Append(animData, chHdr);
+
+                    // Times
+                    std::array<float, 4> val{};
+                    for (uint32_t k = 0; k < keyCount; ++k)
+                    {
+                        cgltf_accessor_read_float(inputAcc, k, val.data(), 1);
+                        Append(animData, val[0]);
+                    }
+
+                    // Values - vec4 per key
+                    const bool isRotation = (path == AnimPathDisk::Rotation);
+                    const uint32_t compCount = isRotation ? 4 : 3;
+                    for (uint32_t k = 0; k < keyCount; ++k)
+                    {
+                        val[3] = 0.f;
+                        cgltf_accessor_read_float(outputAcc, k, val.data(), compCount);
+                        AppendBytes(animData, val.data(), sizeof(float) * 4);
+                    }
+                }
+
+                result.animFiles.emplace_back(fileName, std::move(animData));
+                animPaths.push_back("animations/" + fileName);
             }
 
-            AeBnAnimHeader animHdr;
-            animHdr.channelCount = validChannels;
-            animHdr.nameLen      = static_cast<uint16_t>(animName.size());
-            Append(out, animHdr);
-            AppendStr(out, animName);
+            // Write .animset
+            AnimSetHeaderDisk setHdr;
+            setHdr.animCount = static_cast<uint32_t>(animPaths.size());
+            setHdr.skeletonHash = ComputeSkeletonHash(bones, remapTable);
 
-            for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
+            Append(result.animsetData, setHdr);
+            for (const auto& animPath : animPaths)
             {
-                const cgltf_animation_channel& ch = anim.channels[ci];
-                if (!ch.sampler || !ch.target_node || !ch.sampler->input || !ch.sampler->output)
-                    continue;
-
-                const int32_t targetNode = ToIndex(ch.target_node, *data);
-                if (targetNode < 0) continue;
-
-                AeBnAnimPath path;
-                switch (ch.target_path)
-                {
-                    case cgltf_animation_path_type_rotation:    path = AeBnAnimPath::Rotation;    break;
-                    case cgltf_animation_path_type_scale:       path = AeBnAnimPath::Scale;       break;
-                    case cgltf_animation_path_type_weights:     path = AeBnAnimPath::Weights;     break;
-                    default:                                     path = AeBnAnimPath::Translation; break;
-                }
-
-                AeBnInterp interp;
-                switch (ch.sampler->interpolation)
-                {
-                    case cgltf_interpolation_type_step:         interp = AeBnInterp::Step;        break;
-                    case cgltf_interpolation_type_cubic_spline: interp = AeBnInterp::CubicSpline; break;
-                    default:                                     interp = AeBnInterp::Linear;      break;
-                }
-
-                const cgltf_accessor* inputAcc  = ch.sampler->input;
-                const cgltf_accessor* outputAcc = ch.sampler->output;
-                const uint32_t keyCount = static_cast<uint32_t>(std::min(inputAcc->count, outputAcc->count));
-
-                AeBnChannelHeader chHdr;
-                chHdr.nodeIndex = static_cast<uint32_t>(targetNode);
-                chHdr.path      = static_cast<uint8_t>(path);
-                chHdr.interp    = static_cast<uint8_t>(interp);
-                chHdr._pad[0]   = chHdr._pad[1] = 0;
-                chHdr.keyCount  = keyCount;
-                Append(out, chHdr);
-
-                // Times
-                std::array<float, 4> val{};
-                for (uint32_t k = 0; k < keyCount; ++k)
-                {
-                    cgltf_accessor_read_float(inputAcc, k, val.data(), 1);
-                    Append(out, val[0]);
-                }
-
-                // Values - vec4 per key (Translation/Scale: w=0, Rotation: xyzw)
-                const bool isRotation = (path == AeBnAnimPath::Rotation);
-                const uint32_t compCount = isRotation ? 4 : 3;
-                for (uint32_t k = 0; k < keyCount; ++k)
-                {
-                    val[3] = 0.f;
-                    cgltf_accessor_read_float(outputAcc, k, val.data(), compCount);
-                    AppendBytes(out, val.data(), sizeof(float) * 4);
-                }
+                AppendStr(result.animsetData, animPath);
             }
         }
 
         cgltf_free(data);
-        return out;
+        return result;
     }
 } // namespace MeshProcessor

@@ -26,6 +26,13 @@
 
 namespace
 {
+	namespace fs = std::filesystem;
+
+	static std::string Stem(const fs::path& p)
+	{
+		return p.stem().string();
+	}
+
 	constexpr std::size_t kMinCompressSize = 64;
 
 	std::string FormatSize(uint64_t bytes)
@@ -283,10 +290,43 @@ namespace
 	// Returns processed bytes (or empty = skip processing) and sets outExt to
 	// the replacement extension for the virtual path (e.g. ".texture"), or
 	// leaves it empty if the path should not change.
+	// For mesh processing, outFiles is populated with additional files (.skel, .anim, .animset).
+	struct ProcessedFile
+	{
+		std::string virtualPath;
+		std::vector<std::byte> data;
+		uint32_t flags = 0;
+		uint64_t rawSize = 0;
+		uint64_t contentHash = 0;
+	};
+
+	struct FileResult
+	{
+		std::string            virtualPath;
+		std::vector<std::byte> data;
+		uint32_t               flags       = 0;
+		uint64_t               rawSize     = 0;
+		uint64_t               contentHash = 0;
+		bool                   ok          = false;
+		std::string            errorMsg;
+		std::vector<ProcessedFile> extraFiles; // Additional files from asset processing
+	};
+
+	// -------------------------------------------------------------------------
+	// Asset processing dispatch - runs before compression
+	// -------------------------------------------------------------------------
+
+	// Returns processed bytes (or empty = skip processing) and sets outExt to
+	// the replacement extension for the virtual path (e.g. ".texture"), or
+	// leaves it empty if the path should not change.
+	// For mesh processing, outFiles is populated with additional files (.skel, .anim, .animset).
 	std::vector<std::byte> ProcessAsset(
 	    const std::vector<std::byte>& raw,
 	    const fs::path&               diskPath,
-	    std::string&                  outExt)
+	    const std::string&            virtualPath,
+	    const fs::path&               sourceDir,
+	    std::string&                  outExt,
+	    std::vector<ProcessedFile>&   outFiles)
 	{
 		outExt.clear();
 
@@ -313,10 +353,35 @@ namespace
 
 		if (ext == ".gltf" || ext == ".glb")
 		{
-			auto result = MeshProcessor::ToBinary(raw, diskPath);
-			if (!result.empty())
+			auto result = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
+			if (!result.meshData.empty())
+			{
+				const std::string stem = Stem(diskPath);
+				const std::string dir = fs::path(virtualPath).parent_path().generic_string();
+
+				// Additional files: .skel, .animset, .anim
+				if (!result.skelData.empty())
+				{
+					const std::string skelPath = dir.empty() ? (stem + ".skel") : (dir + "/" + stem + ".skel");
+					outFiles.push_back({ skelPath, std::move(result.skelData) });
+				}
+				if (!result.animsetData.empty())
+				{
+					const std::string animsetPath = dir.empty() ? (stem + ".animset") : (dir + "/" + stem + ".animset");
+					outFiles.push_back({ animsetPath, std::move(result.animsetData) });
+				}
+				for (auto& [fileName, animData] : result.animFiles)
+				{
+					if (!animData.empty())
+					{
+						outFiles.push_back({ "animations/" + fileName, std::move(animData) });
+					}
+				}
+
 				outExt = ".mesh";
-			return result;
+				return std::move(result.meshData);
+			}
+			return {};
 		}
 
 		return {};
@@ -326,18 +391,7 @@ namespace
 	// Per-file read + compress task (runs on a worker thread)
 	// -------------------------------------------------------------------------
 
-	struct FileResult
-	{
-		std::string            virtualPath;
-		std::vector<std::byte> data;
-		uint32_t               flags       = 0;
-		uint64_t               rawSize     = 0;
-		uint64_t               contentHash = 0;
-		bool                   ok          = false;
-		std::string            errorMsg;
-	};
-
-	FileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, int compressionLevel)
+	FileResult ProcessFile(const std::string& virtualPath, const fs::path& diskPath, const fs::path& sourceDir, int compressionLevel)
 	{
 		FileResult result;
 		result.virtualPath = virtualPath;
@@ -365,7 +419,8 @@ namespace
 		// convert GLTF -> flat AEBN binary.  On success the virtual path extension
 		// is replaced so the engine sees a consistent type regardless of source format.
 		std::string newExt;
-		auto processed = ProcessAsset(rawData, diskPath, newExt);
+		std::vector<ProcessedFile> extraFiles;
+		auto processed = ProcessAsset(rawData, diskPath, virtualPath, sourceDir, newExt, extraFiles);
 		if (!processed.empty())
 		{
 			rawData = std::move(processed);
@@ -377,6 +432,33 @@ namespace
 				    ? stem + newExt
 				    : parent + "/" + stem + newExt;
 			}
+		}
+
+		// Queue extra files from asset processing (e.g., .skel, .anim, .animset from mesh processing)
+		for (auto& extra : extraFiles)
+		{
+			if (extra.data.empty()) continue;
+
+			extra.contentHash = XXH3_64bits(extra.data.data(), extra.data.size());
+			extra.rawSize = static_cast<uint64_t>(extra.data.size());
+
+			if (compressionLevel > 0 && extra.rawSize >= kMinCompressSize && !IsAlreadyCompressed(diskPath))
+			{
+				const std::size_t bound = ZSTD_compressBound(extra.rawSize);
+				std::vector<std::byte> compressed(bound);
+				const std::size_t compressedSize = ZSTD_compress(
+				    compressed.data(), bound,
+				    extra.data.data(), extra.rawSize,
+				    compressionLevel);
+				if (!ZSTD_isError(compressedSize) && compressedSize < extra.rawSize)
+				{
+					compressed.resize(compressedSize);
+					extra.data = std::move(compressed);
+					extra.flags |= PAK_FLAG_ZSTD;
+				}
+			}
+
+			result.extraFiles.push_back(std::move(extra));
 		}
 
 		result.contentHash = XXH3_64bits(rawData.data(), rawData.size());
@@ -458,7 +540,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 	std::vector<std::future<FileResult>> futures;
 	futures.reserve(m_files.size());
 	for (const auto& file : m_files)
-		futures.push_back(std::async(std::launch::async, ProcessFile, file.virtualPath, file.diskPath, m_compressionLevel));
+		futures.push_back(std::async(std::launch::async, ProcessFile, file.virtualPath, file.diskPath, m_sourceDir, m_compressionLevel));
 
 	// --- Collect results and build in-memory sections ------------------------
 	std::vector<char>      pathData;
@@ -522,6 +604,44 @@ bool PakWriter::Write(const fs::path& outPath) const
 		{
 			std::cout << FormatSize(res.rawSize) << "  (stored raw)\n";
 		}
+
+		// Process extra files from asset processing (e.g., .skel, .anim, .animset)
+		for (auto& extra : res.extraFiles)
+		{
+			if (extra.data.empty()) continue;
+
+			totalRawBytes += extra.rawSize;
+			const uint64_t extraOnDisk = static_cast<uint64_t>(extra.data.size());
+
+			PakEntry extraEntry;
+			extraEntry.pathOffset = static_cast<uint32_t>(pathData.size());
+			extraEntry.pathLen = static_cast<uint32_t>(extra.virtualPath.size());
+			extraEntry.flags = extra.flags;
+			extraEntry.dataOffset = static_cast<uint64_t>(assetData.size());
+			extraEntry.dataSize = extraOnDisk;
+			extraEntry.contentHash = extra.contentHash;
+			entries.push_back(extraEntry);
+
+			logEntries.push_back({ extra.virtualPath, extra.rawSize, extraOnDisk, extra.contentHash, extra.flags });
+
+			pathData.insert(pathData.end(), extra.virtualPath.begin(), extra.virtualPath.end());
+			pathData.push_back('\0');
+			assetData.insert(assetData.end(), extra.data.begin(), extra.data.end());
+
+			const bool extraCompressed = (extra.flags & PAK_FLAG_ZSTD) != 0;
+			std::cout << "  + " << std::left << std::setw(52) << extra.virtualPath;
+			if (extraCompressed)
+			{
+				const double ratio = 100.0 * (1.0 - static_cast<double>(extraOnDisk) / static_cast<double>(extra.rawSize));
+				std::cout << FormatSize(extra.rawSize) << " -> " << FormatSize(extraOnDisk)
+				          << "  (" << std::fixed << std::setprecision(1) << ratio << "% smaller)\n";
+			}
+			else
+			{
+				std::cout << FormatSize(extra.rawSize) << "  (stored raw)\n";
+			}
+		}
+
 		++fileIdx;
 	}
 
