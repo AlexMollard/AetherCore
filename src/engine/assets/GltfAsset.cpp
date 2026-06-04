@@ -471,6 +471,12 @@ namespace aether::assets
 			prim.vertices.resize(hdr.vertexCount);
 			prim.indices = std::move(indices);
 
+			// Store bounding volume from mesh header.
+			std::memcpy(prim.aabbMin, hdr.aabbMin, sizeof(prim.aabbMin));
+			std::memcpy(prim.aabbMax, hdr.aabbMax, sizeof(prim.aabbMax));
+			std::memcpy(prim.sphereCenter, hdr.sphereCenter, sizeof(prim.sphereCenter));
+			prim.sphereRadius = hdr.sphereRadius;
+
 			for (uint32_t v = 0; v < hdr.vertexCount; ++v)
 			{
 				const DiskMeshVertex& src = diskVerts[v];

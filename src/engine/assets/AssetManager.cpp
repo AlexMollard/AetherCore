@@ -278,6 +278,11 @@ namespace aether
 		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices);
 	}
 
+	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
+	{
+		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices, aabbMin, aabbMax, sphereCenter, sphereRadius);
+	}
+
 	Expected<Texture> AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
 	{
 		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
@@ -684,7 +689,8 @@ namespace aether
 			        primitive.skinIndex, primitive.materialIndex);
 
 			LoadedModelPrimitive loadedPrim;
-			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices);
+			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices,
+			        primitive.aabbMin, primitive.aabbMax, primitive.sphereCenter, primitive.sphereRadius);
 			loadedPrim.skinIndex = primitive.skinIndex;
 
 			if (primitive.skinIndex < 0 && primitive.nodeIndex < worldNodeTransforms.size())

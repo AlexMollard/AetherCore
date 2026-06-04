@@ -147,13 +147,18 @@ namespace aether
 		return mesh;
 	}
 
-	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices)
+	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
 	{
 		Mesh mesh = Create(device, allocator, uploadQueue, uploadPool, vertices);
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
 
 		const VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
 		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation, mesh.m_indexDeviceAddress, "Mesh.Index");
+
+		if (aabbMin) mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
+		if (aabbMax) mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
+		if (sphereCenter) mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
+
 		return mesh;
 	}
 
@@ -174,7 +179,10 @@ namespace aether
 	        m_vertexByteOffset(other.m_vertexByteOffset),
 	        m_indexByteOffset(other.m_indexByteOffset),
 	        m_vertexDeviceAddress(other.m_vertexDeviceAddress),
-	        m_indexDeviceAddress(other.m_indexDeviceAddress)
+	        m_indexDeviceAddress(other.m_indexDeviceAddress),
+	        m_aabbMin(other.m_aabbMin),
+	        m_aabbMax(other.m_aabbMax),
+	        m_boundingSphere(other.m_boundingSphere)
 	{
 		other.m_device = VK_NULL_HANDLE;
 		other.m_allocator = nullptr;
@@ -188,6 +196,9 @@ namespace aether
 		other.m_indexByteOffset = 0;
 		other.m_vertexDeviceAddress = 0;
 		other.m_indexDeviceAddress = 0;
+		other.m_aabbMin = glm::vec3(0.0f);
+		other.m_aabbMax = glm::vec3(0.0f);
+		other.m_boundingSphere = glm::vec4(0.0f);
 	}
 
 	Mesh& Mesh::operator=(Mesh&& other) noexcept
@@ -208,6 +219,9 @@ namespace aether
 			m_indexByteOffset = other.m_indexByteOffset;
 			m_vertexDeviceAddress = other.m_vertexDeviceAddress;
 			m_indexDeviceAddress = other.m_indexDeviceAddress;
+			m_aabbMin = other.m_aabbMin;
+			m_aabbMax = other.m_aabbMax;
+			m_boundingSphere = other.m_boundingSphere;
 
 			other.m_device = VK_NULL_HANDLE;
 			other.m_allocator = nullptr;
@@ -221,6 +235,9 @@ namespace aether
 			other.m_indexByteOffset = 0;
 			other.m_vertexDeviceAddress = 0;
 			other.m_indexDeviceAddress = 0;
+			other.m_aabbMin = glm::vec3(0.0f);
+			other.m_aabbMax = glm::vec3(0.0f);
+			other.m_boundingSphere = glm::vec4(0.0f);
 		}
 		return *this;
 	}

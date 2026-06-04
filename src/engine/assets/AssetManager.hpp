@@ -39,6 +39,7 @@ namespace aether
 		// Mesh creation.
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices);
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices);
+		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius);
 
 		// Texture creation.
 		[[nodiscard]] Expected<Texture> CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);

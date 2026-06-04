@@ -79,6 +79,12 @@ namespace aether::assets
 		std::int32_t skinIndex = -1;
 		std::vector<Mesh::Vertex> vertices;
 		std::vector<std::uint32_t> indices;
+
+		// Bounding volume (from mesh header).
+		float aabbMin[3] = {0, 0, 0};
+		float aabbMax[3] = {0, 0, 0};
+		float sphereCenter[3] = {0, 0, 0};
+		float sphereRadius = 0.0f;
 	};
 
 	enum class GltfAnimationPath

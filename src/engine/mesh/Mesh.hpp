@@ -38,7 +38,7 @@ namespace aether
 		// Uploads via a staging buffer to device-local memory; call after the upload
 		// pool is created (blocks until the queue is idle).
 		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices);
-		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices);
+		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin = nullptr, const float* aabbMax = nullptr, const float* sphereCenter = nullptr, float sphereRadius = 0.0f);
 
 		// Create a non-owning view into an externally managed buffer (e.g. MeshArena / GpuHeap).
 		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
@@ -108,6 +108,22 @@ namespace aether
 			return m_indexDeviceAddress;
 		}
 
+		// Local-space bounding sphere (xyz=center, w=radius).
+		[[nodiscard]] glm::vec4 GetBoundingSphere() const
+		{
+			return m_boundingSphere;
+		}
+
+		// Local-space AABB (min/max).
+		[[nodiscard]] glm::vec3 GetAABBMin() const
+		{
+			return m_aabbMin;
+		}
+		[[nodiscard]] glm::vec3 GetAABBMax() const
+		{
+			return m_aabbMax;
+		}
+
 	private:
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = nullptr;
@@ -121,5 +137,10 @@ namespace aether
 		VkDeviceSize m_indexByteOffset = 0;
 		VkDeviceAddress m_vertexDeviceAddress = 0;
 		VkDeviceAddress m_indexDeviceAddress = 0;
+
+		// Local-space bounding volume (from mesh header).
+		glm::vec3 m_aabbMin{0.0f};
+		glm::vec3 m_aabbMax{0.0f};
+		glm::vec4 m_boundingSphere{0.0f, 0.0f, 0.0f, 0.0f}; // xyz=center, w=radius
 	};
 } // namespace aether

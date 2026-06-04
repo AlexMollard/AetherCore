@@ -1,5 +1,7 @@
 #include "rendering/WorldRenderer.hpp"
 
+#include <algorithm>
+
 #include "material/Material.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
@@ -10,6 +12,25 @@
 
 namespace aether
 {
+	namespace
+	{
+		// Transform a local-space bounding sphere (xyz=center, w=radius) to world space.
+		// The center is transformed by the model matrix; the radius is scaled by the
+		// maximum axis scale extracted from the matrix.
+		glm::vec4 TransformBoundingSphere(glm::vec4 localSphere, const glm::mat4& model)
+		{
+			glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
+
+			// Extract max scale from the model matrix columns.
+			glm::vec3 col0(model[0]);
+			glm::vec3 col1(model[1]);
+			glm::vec3 col2(model[2]);
+			float maxScale = std::max({glm::length(col0), glm::length(col1), glm::length(col2)});
+
+			return glm::vec4(center, localSphere.w * maxScale);
+		}
+	} // namespace
+
 	void WorldRenderer::Flush(const World& world, RenderQueue& queue, const IAnimationProvider* /*anim*/)
 	{
 		AE_PROFILE_ZONE();
@@ -52,6 +73,7 @@ namespace aether
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
+			        .worldBoundingSphere = TransformBoundingSphere(meshComp.mesh->GetBoundingSphere(), transformComp.localToWorld),
 			        .animDb = animDb,
 			});
 		}
