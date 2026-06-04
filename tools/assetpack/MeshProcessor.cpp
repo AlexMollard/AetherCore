@@ -1,22 +1,20 @@
 #include "MeshProcessor.hpp"
 
+#include "PipelineUtils.hpp"
+
 #include <BinaryFormats.hpp>
 
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
-#include <limits>
 #include <string>
 #include <vector>
 
-#define CGLTF_IMPLEMENTATION
 #include <cgltf.h>
 
 #define XXH_STATIC_LINKING_ONLY
-#define XXH_IMPLEMENTATION
 #include <xxhash.h>
 
 namespace MeshProcessor
@@ -24,34 +22,8 @@ namespace MeshProcessor
     namespace
     {
         // -------------------------------------------------------------------------
-        // Write helpers
+        // Index helpers
         // -------------------------------------------------------------------------
-
-        template <typename T>
-        void Append(std::vector<std::byte>& buf, const T& value)
-        {
-            const auto* p = reinterpret_cast<const std::byte*>(&value);
-            buf.insert(buf.end(), p, p + sizeof(T));
-        }
-
-        void AppendBytes(std::vector<std::byte>& buf, const void* src, std::size_t n)
-        {
-            const auto* p = reinterpret_cast<const std::byte*>(src);
-            buf.insert(buf.end(), p, p + n);
-        }
-
-        void AppendStr(std::vector<std::byte>& buf, const std::string& s)
-        {
-            assert(s.size() <= std::numeric_limits<uint16_t>::max() && "string too long for uint16_t length prefix");
-            const uint16_t len = static_cast<uint16_t>(s.size());
-            AppendBytes(buf, &len, sizeof(len));
-            AppendBytes(buf, s.data(), s.size());
-        }
-
-        void AppendStringData(std::vector<std::byte>& buf, const std::string& s)
-        {
-            AppendBytes(buf, s.data(), s.size());
-        }
 
         // -------------------------------------------------------------------------
         // Index helpers
@@ -69,11 +41,6 @@ namespace MeshProcessor
         }
 
         std::string SafeStr(const char* s) { return s ? s : ""; }
-
-        std::string Stem(const std::filesystem::path& p)
-        {
-            return p.stem().string();
-        }
 
         // -------------------------------------------------------------------------
         // Attribute lookup

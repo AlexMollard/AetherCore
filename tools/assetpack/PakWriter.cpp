@@ -1,25 +1,22 @@
 #include "PakWriter.hpp"
 
+#include "MaterialProcessor.hpp"
+#include "MeshProcessor.hpp"
+#include "PipelineUtils.hpp"
+#include "SpirvProcessor.hpp"
+#include "TextureProcessor.hpp"
+
 #include <algorithm>
 #include <charconv>
 #include <chrono>
-#include <cstring>
-#include <ctime>
 #include <fstream>
 #include <future>
-#include <iomanip>
 #include <iostream>
-#include <sstream>
 #include <unordered_map>
 
 #define XXH_INLINE_ALL
 #include <xxhash.h>
 #include <zstd.h>
-
-#include "MaterialProcessor.hpp"
-#include "MeshProcessor.hpp"
-#include "SpirvProcessor.hpp"
-#include "TextureProcessor.hpp"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,49 +26,7 @@ namespace
 {
 	namespace fs = std::filesystem;
 
-	static std::string Stem(const fs::path& p)
-	{
-		return p.stem().string();
-	}
-
 	constexpr std::size_t kMinCompressSize = 64;
-
-	std::string FormatSize(uint64_t bytes)
-	{
-		std::ostringstream ss;
-		ss << std::fixed << std::setprecision(1);
-		if (bytes >= 1024ULL * 1024 * 1024)
-			ss << static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0) << " GB";
-		else if (bytes >= 1024ULL * 1024)
-			ss << static_cast<double>(bytes) / (1024.0 * 1024.0) << " MB";
-		else if (bytes >= 1024ULL)
-			ss << static_cast<double>(bytes) / 1024.0 << " KB";
-		else
-			ss << bytes << " B";
-		return ss.str();
-	}
-
-	std::string FormatDuration(double seconds)
-	{
-		std::ostringstream ss;
-		ss << std::fixed << std::setprecision(2) << seconds << " s";
-		return ss.str();
-	}
-
-	std::string FormatTimestamp()
-	{
-		const auto now   = std::chrono::system_clock::now();
-		const std::time_t tt = std::chrono::system_clock::to_time_t(now);
-		std::tm tm{};
-#if defined(_WIN32)
-		localtime_s(&tm, &tt);
-#else
-		localtime_r(&tt, &tm);
-#endif
-		std::ostringstream ss;
-		ss << std::put_time(&tm, "%Y-%m-%d %H:%M:%S");
-		return ss.str();
-	}
 
 	bool IsAlreadyCompressed(const fs::path& path)
 	{
