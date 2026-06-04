@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <span>
 #include <vector>
 
 namespace SpirvProcessor
@@ -8,5 +9,5 @@ namespace SpirvProcessor
 	// Returns stripped bytes, or an empty vector if the input is not valid SPIR-V.
 	// Removes: OpSource, OpSourceContinued, OpSourceExtension, OpName,
 	//          OpMemberName, OpString, OpLine, OpNoLine, OpModuleProcessed.
-	[[nodiscard]] std::vector<std::byte> Strip(const std::vector<std::byte>& spv);
+	[[nodiscard]] std::vector<std::byte> Strip(std::span<const std::byte> spv);
 } // namespace SpirvProcessor

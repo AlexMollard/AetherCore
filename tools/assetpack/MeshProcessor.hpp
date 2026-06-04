@@ -1,6 +1,7 @@
 #pragma once
 #include <cstddef>
 #include <filesystem>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -27,7 +28,7 @@ namespace MeshProcessor
 	//
 	// Returns empty result if the input is not valid or contains no meshes.
 	[[nodiscard]] ProcessedResult Process(
-	    const std::vector<std::byte>& gltfData,
+	    std::span<const std::byte>    gltfData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::string&            virtualPath,
 	    const std::filesystem::path&  sourceDir);

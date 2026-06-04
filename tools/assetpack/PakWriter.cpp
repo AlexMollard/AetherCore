@@ -564,7 +564,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 		[](const PackItem& a, const PackItem& b) { return a.virtualPath < b.virtualPath; });
 
 	// --- Build in-memory sections -------------------------------------------
-	std::vector<char>      pathData;
+	std::vector<std::byte> pathData;
 	std::vector<std::byte> assetData;
 	std::vector<PakEntry>  entries;
 	std::vector<LogEntry>  logEntries;
@@ -572,6 +572,13 @@ bool PakWriter::Write(const fs::path& outPath) const
 	entries.reserve(items.size());
 	logEntries.reserve(items.size());
 	newManifest.reserve(m_files.size());
+
+	auto PushPathString = [&](std::string_view s)
+	{
+		const auto* p = reinterpret_cast<const std::byte*>(s.data());
+		pathData.insert(pathData.end(), p, p + s.size());
+		pathData.push_back(std::byte{0});
+	};
 
 	uint64_t totalRawBytes = 0;
 
@@ -591,8 +598,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 		logEntries.push_back({ item.virtualPath, item.rawSize, onDisk, item.contentHash, item.flags });
 
-		pathData.insert(pathData.end(), item.virtualPath.begin(), item.virtualPath.end());
-		pathData.push_back('\0');
+		PushPathString(item.virtualPath);
 		assetData.insert(assetData.end(), item.data.begin(), item.data.end());
 
 		// Console line
@@ -666,7 +672,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 		out.write(reinterpret_cast<const char*>(&header), sizeof(header));
 		out.write(reinterpret_cast<const char*>(entries.data()), static_cast<std::streamsize>(entryTableSize));
-		out.write(pathData.data(), static_cast<std::streamsize>(pathData.size()));
+		out.write(reinterpret_cast<const char*>(pathData.data()), static_cast<std::streamsize>(pathData.size()));
 		out.write(reinterpret_cast<const char*>(assetData.data()), static_cast<std::streamsize>(assetData.size()));
 
 		if (!out)

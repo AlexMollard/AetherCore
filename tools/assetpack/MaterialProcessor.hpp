@@ -1,6 +1,8 @@
 #pragma once
 
+#include <cstddef>
 #include <filesystem>
+#include <span>
 #include <vector>
 
 namespace MaterialProcessor
@@ -13,7 +15,7 @@ namespace MaterialProcessor
 	//
 	// Returns empty if parsing fails.
 	[[nodiscard]] std::vector<std::byte> Process(
-	    const std::vector<std::byte>& tomlData,
+	    std::span<const std::byte>    tomlData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::filesystem::path&  sourceDir);
 } // namespace MaterialProcessor

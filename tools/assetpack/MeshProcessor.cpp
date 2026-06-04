@@ -768,7 +768,7 @@ namespace MeshProcessor
     // -------------------------------------------------------------------------
 
     ProcessedResult Process(
-        const std::vector<std::byte>& gltfData,
+        std::span<const std::byte>    gltfData,
         const std::filesystem::path&  sourcePath,
         const std::string&            virtualPath,
         const std::filesystem::path&  sourceDir)
