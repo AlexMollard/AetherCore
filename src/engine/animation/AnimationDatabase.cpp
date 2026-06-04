@@ -197,6 +197,7 @@ namespace aether
 		totalBytes += align16(skinJoints.size() * sizeof(std::uint32_t));
 		totalBytes += align16(skinInverseBinds.size() * sizeof(glm::mat4));
 		totalBytes += align16(db.m_depthSortedNodes.size() * sizeof(std::uint32_t));
+		totalBytes += align16(db.m_depthRanges.size() * sizeof(DepthRange));
 		totalBytes += align16(allStrings.size());
 
 		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
@@ -226,6 +227,7 @@ namespace aether
 		if (!db.m_depthSortedNodes.empty())
 		{
 			db.m_depthSortedNodesAddr = UploadArray(db.m_heap, db.m_depthSortedNodes, device, queue, uploadPool);
+			db.m_depthRangesAddr = UploadArray(db.m_heap, db.m_depthRanges, device, queue, uploadPool);
 		}
 
 		// Strings: upload as raw bytes using char specialisation.
