@@ -368,6 +368,7 @@ namespace MeshProcessor
 
         // Build remap table: remapTable[originalIndex] = sortedIndex
         std::vector<uint32_t> remapTable(data->nodes_count, static_cast<uint32_t>(-1));
+        uint64_t skelHash = 0;
 
         if (!bones.empty())
         {
@@ -382,7 +383,7 @@ namespace MeshProcessor
             }
 
             // Compute skeleton hash
-            const uint64_t skelHash = ComputeSkeletonHash(bones, remapTable);
+            skelHash = ComputeSkeletonHash(bones, remapTable);
             result.skeletonHash = std::to_string(skelHash);
 
             // ── Write .skel file ────────────────────────────────────────────────
@@ -410,6 +411,17 @@ namespace MeshProcessor
                 }
             }
         }
+
+        // ── Eight-influences warning helper ─────────────────────────────────────
+        auto WarnEightInfluences = [&](const cgltf_primitive& prim, const std::string& primDesc)
+        {
+            if (FindAttr(prim, cgltf_attribute_type_joints, 1))
+            {
+                std::cerr << "  MeshProcessor: WARNING - " << primDesc
+                          << " has JOINTS_1/WEIGHTS_1 (8+ influences). "
+                          << "Only the first 4 influences are stored.\n";
+            }
+        };
 
         // ── Count total primitives ──────────────────────────────────────────────
         uint32_t totalPrims = 0;
@@ -468,6 +480,10 @@ namespace MeshProcessor
             {
                 const cgltf_node& node = data->nodes[ni];
                 if (!node.mesh) continue;
+
+                float worldMat[16];
+                cgltf_node_transform_world(&node, worldMat);
+
                 for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
                 {
                     const cgltf_primitive& prim = node.mesh->primitives[pi];
@@ -584,6 +600,8 @@ namespace MeshProcessor
                         }
                     }
 
+                    WarnEightInfluences(prim, SafeStr(node.name) + " primitive " + std::to_string(pi));
+
                     // Build index buffer
                     std::vector<uint32_t> indices;
                     if (prim.indices)
@@ -660,11 +678,16 @@ namespace MeshProcessor
             const std::string skinRefDir = std::filesystem::path(virtualPath).parent_path().generic_string();
             const std::string skinRefPath = bones.empty() ? "" : (skinRefDir.empty() ? (Stem(sourcePath) + ".skel") : (skinRefDir + "/" + Stem(sourcePath) + ".skel"));
 
+            uint32_t maxIdx = 0;
+            for (const auto& idx : combinedIndices)
+                if (idx > maxIdx) maxIdx = idx;
+
             MeshHeaderDisk hdr;
             hdr.vertexCount = static_cast<uint32_t>(combinedVerts.size());
             hdr.indexCount = static_cast<uint32_t>(combinedIndices.size());
             hdr.skinRefPathLen = static_cast<uint32_t>(skinRefPath.size());
             hdr.materialCount = static_cast<uint32_t>(materialPaths.size());
+            hdr.indexType = (maxIdx > 0xFFFF) ? 1 : 0;
             std::memcpy(hdr.aabbMin, bounds.aabbMin, sizeof(bounds.aabbMin));
             std::memcpy(hdr.aabbMax, bounds.aabbMax, sizeof(bounds.aabbMax));
             std::memcpy(hdr.sphereCenter, bounds.sphereCenter, sizeof(bounds.sphereCenter));
@@ -672,7 +695,18 @@ namespace MeshProcessor
 
             Append(result.meshData, hdr);
             AppendBytes(result.meshData, combinedVerts.data(), combinedVerts.size() * sizeof(DiskMeshVertex));
-            AppendBytes(result.meshData, combinedIndices.data(), combinedIndices.size() * sizeof(uint32_t));
+
+            if (maxIdx > 0xFFFF)
+            {
+                AppendBytes(result.meshData, combinedIndices.data(), combinedIndices.size() * sizeof(uint32_t));
+            }
+            else
+            {
+                std::vector<uint16_t> idx16(combinedIndices.size());
+                for (std::size_t i = 0; i < combinedIndices.size(); ++i)
+                    idx16[i] = static_cast<uint16_t>(combinedIndices[i]);
+                AppendBytes(result.meshData, idx16.data(), idx16.size() * sizeof(uint16_t));
+            }
             AppendRawStr(result.meshData, skinRefPath);
             for (const auto& matPath : materialPaths)
                 AppendStr(result.meshData, matPath);

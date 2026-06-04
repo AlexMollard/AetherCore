@@ -43,7 +43,7 @@ struct BoneEntryHeaderDisk
 // ============================================================================
 
 inline constexpr char MESH_MAGIC[4] = { 'M', 'E', 'S', 'H' };
-inline constexpr uint32_t MESH_VERSION = 1;
+inline constexpr uint32_t MESH_VERSION = 2;
 
 struct MeshHeaderDisk
 {
@@ -57,7 +57,9 @@ struct MeshHeaderDisk
     float    aabbMax[3]      = { 0, 0, 0 };
     float    sphereCenter[3] = { 0, 0, 0 };
     float    sphereRadius    = 0;
-    // Total: 4+4+4+4+4+4+12+12+12+4 = 64 bytes
+    uint8_t  indexType       = 0; // 0 = uint16, 1 = uint32
+    uint8_t  _pad[3]         = { 0, 0, 0 };
+    // Total: 4+4+4+4+4+4+12+12+12+4+1+3 = 68 bytes
 };
 
 // Disk vertex — 96 bytes, aligned to 16/32-byte cache lines.
@@ -173,7 +175,7 @@ struct MaterialHeaderDisk
 
 static_assert(sizeof(SkelHeaderDisk)      == 22);
 static_assert(sizeof(BoneEntryHeaderDisk) == 2);
-static_assert(sizeof(MeshHeaderDisk)      == 64);
+static_assert(sizeof(MeshHeaderDisk)      == 68);
 static_assert(sizeof(AnimHeaderDisk)      == 14);
 static_assert(sizeof(ChannelHeaderDisk)   == 12);
 static_assert(sizeof(AnimSetHeaderDisk)   == 24);

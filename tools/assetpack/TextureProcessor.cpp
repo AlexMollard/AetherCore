@@ -35,6 +35,8 @@ namespace TextureProcessor
 		constexpr uint32_t DDPF_FOURCC = 0x00000004u;
 
 		constexpr uint32_t DDSCAPS_TEXTURE = 0x00001000u;
+		constexpr uint32_t DDSCAPS_COMPLEX = 0x00000008u;
+		constexpr uint32_t DDSCAPS_MIPMAP  = 0x00400000u;
 
 		constexpr uint32_t FOURCC_DX10 = 0x30315844u; // "DX10"
 
@@ -155,6 +157,38 @@ namespace TextureProcessor
 			}
 		}
 
+		// Box-filter 2×2 downsample for mip chain generation.
+		void DownsampleBox2x2(const uint8_t* src, int srcW, int srcH, int channels, uint8_t* dst)
+		{
+			const int dstW = std::max(1, srcW / 2);
+			const int dstH = std::max(1, srcH / 2);
+			for (int y = 0; y < dstH; ++y)
+			{
+				for (int x = 0; x < dstW; ++x)
+				{
+					for (int c = 0; c < channels; ++c)
+					{
+						int sum = 0;
+						int count = 0;
+						for (int dy = 0; dy < 2; ++dy)
+						{
+							for (int dx = 0; dx < 2; ++dx)
+							{
+								const int sx = x * 2 + dx;
+								const int sy = y * 2 + dy;
+								if (sx < srcW && sy < srcH)
+								{
+									sum += src[(sy * srcW + sx) * channels + c];
+									++count;
+								}
+							}
+						}
+						dst[(y * dstW + x) * channels + c] = static_cast<uint8_t>(sum / count);
+					}
+				}
+			}
+		}
+
 		std::vector<std::byte> CompressBlocks(const uint8_t* pixels, int width, int height, int channels, BCnFmt fmt, const bc7enc_compress_block_params& bc7Params)
 		{
 			const int blockW = (width + 3) / 4;
@@ -192,7 +226,13 @@ namespace TextureProcessor
 		// DDS output
 		// -------------------------------------------------------------------------
 
-		std::vector<std::byte> BuildDDS(int width, int height, BCnFmt fmt, const std::vector<std::byte>& blockData)
+		struct MipData
+		{
+			int w, h;
+			std::vector<std::byte> compressed;
+		};
+
+		std::vector<std::byte> BuildDDS(int baseWidth, int baseHeight, BCnFmt fmt, const std::vector<MipData>& mips)
 		{
 			uint32_t dxgiFmt = 0;
 			switch (fmt)
@@ -211,12 +251,18 @@ namespace TextureProcessor
 			DDSHeader header;
 			DDSHeaderDXT10 dx10{};
 
-			header.dwHeight = static_cast<uint32_t>(height);
-			header.dwWidth = static_cast<uint32_t>(width);
-			header.dwPitchOrLinearSize = static_cast<uint32_t>(blockData.size());
+			header.dwHeight = static_cast<uint32_t>(baseHeight);
+			header.dwWidth = static_cast<uint32_t>(baseWidth);
+			header.dwPitchOrLinearSize = static_cast<uint32_t>(mips.empty() ? 0u : mips[0].compressed.size());
+			header.dwMipMapCount = static_cast<uint32_t>(mips.size());
+			header.dwCaps |= DDSCAPS_COMPLEX | DDSCAPS_MIPMAP;
 			dx10.dxgiFormat = dxgiFmt;
 
-			const std::size_t totalSize = sizeof(uint32_t) + sizeof(DDSHeader) + sizeof(DDSHeaderDXT10) + blockData.size();
+			std::size_t totalPixelData = 0;
+			for (const auto& m : mips)
+				totalPixelData += m.compressed.size();
+
+			const std::size_t totalSize = sizeof(uint32_t) + sizeof(DDSHeader) + sizeof(DDSHeaderDXT10) + totalPixelData;
 
 			std::vector<std::byte> dds(totalSize);
 			std::byte* p = dds.data();
@@ -230,7 +276,8 @@ namespace TextureProcessor
 			write(&DDS_MAGIC, sizeof(DDS_MAGIC));
 			write(&header, sizeof(header));
 			write(&dx10, sizeof(dx10));
-			write(blockData.data(), blockData.size());
+			for (const auto& m : mips)
+				write(m.compressed.data(), m.compressed.size());
 
 			return dds;
 		}
@@ -266,9 +313,32 @@ namespace TextureProcessor
 		bc7enc_compress_block_params bc7Params;
 		bc7enc_compress_block_params_init(&bc7Params); // good speed/quality tradeoff
 
-		const std::vector<std::byte> blocks = CompressBlocks(pixels, width, height, srcChannels, fmt, bc7Params);
+		// Build mip chain
+		std::vector<MipData> mips;
+		int mipW = width, mipH = height;
+		const uint8_t* srcPixels = pixels;
+		std::vector<uint8_t> mipStorage;
+
+		while (true)
+		{
+			auto blocks = CompressBlocks(srcPixels, mipW, mipH, srcChannels, fmt, bc7Params);
+			mips.push_back({ mipW, mipH, std::move(blocks) });
+
+			if (mipW == 1 && mipH == 1)
+				break;
+
+			const int newW = std::max(1, mipW / 2);
+			const int newH = std::max(1, mipH / 2);
+			mipStorage.resize(static_cast<std::size_t>(newW * newH) * srcChannels);
+			DownsampleBox2x2(srcPixels, mipW, mipH, srcChannels, mipStorage.data());
+
+			mipW = newW;
+			mipH = newH;
+			srcPixels = mipStorage.data();
+		}
+
 		stbi_image_free(pixels);
 
-		return BuildDDS(width, height, fmt, blocks);
+		return BuildDDS(width, height, fmt, mips);
 	}
 } // namespace TextureProcessor

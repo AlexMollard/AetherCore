@@ -16,6 +16,7 @@
 #include <xxhash.h>
 #include <zstd.h>
 
+#include "MaterialProcessor.hpp"
 #include "MeshProcessor.hpp"
 #include "SpirvProcessor.hpp"
 #include "TextureProcessor.hpp"
@@ -344,6 +345,21 @@ namespace
 			return result;
 		}
 
+		if (ext == ".toml")
+		{
+			// Only process properties.toml inside materials/ -> binary .material
+			if (diskPath.filename() == "properties.toml")
+			{
+				auto result = MaterialProcessor::Process(raw, diskPath, sourceDir);
+				if (!result.empty())
+				{
+					outExt = ".material";
+					return result;
+				}
+			}
+			return {}; // pass through as raw for non-material .toml
+		}
+
 		if (ext == ".spv")
 		{
 			return SpirvProcessor::Strip(raw); // extension unchanged
@@ -429,6 +445,16 @@ namespace
 				result.virtualPath = parent.empty()
 				    ? stem + newExt
 				    : parent + "/" + stem + newExt;
+			}
+
+			// Material files: rewrite virtual path to the .material path
+			if (newExt == ".material")
+			{
+				auto dir = fs::path(virtualPath).parent_path();
+				const std::string dirName = dir.filename().string();
+				if (dirName.size() < 9 || dirName.substr(dirName.size() - 9) != ".material")
+					dir += ".material";
+				result.virtualPath = dir.generic_string();
 			}
 		}
 
