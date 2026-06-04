@@ -14,7 +14,7 @@
 
 namespace MaterialProcessor
 {
-	std::vector<std::byte> Process(
+	ByteBuffer Process(
 	    std::span<const std::byte>    tomlData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::filesystem::path&  sourceDir)

@@ -32,7 +32,7 @@ namespace SpirvProcessor
 		}
 	} // namespace
 
-	std::vector<std::byte> Strip(std::span<const std::byte> spv)
+	ByteBuffer Strip(std::span<const std::byte> spv)
 	{
 		if (spv.size() < kHeaderWords * sizeof(uint32_t) || spv.size() % sizeof(uint32_t) != 0)
 			return {};

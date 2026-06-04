@@ -129,7 +129,7 @@ namespace TextureProcessor
 		});
 	}
 
-	std::vector<std::byte> ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, BC7Quality quality)
+	ByteBuffer ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, BC7Quality quality)
 	{
 		InitEncoders();
 

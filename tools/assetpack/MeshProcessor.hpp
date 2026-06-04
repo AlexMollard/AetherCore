@@ -3,17 +3,18 @@
 #include <filesystem>
 #include <span>
 #include <string>
-#include <vector>
+
+#include "PipelineUtils.hpp"
 
 namespace MeshProcessor
 {
 	// Output from processing a glTF/GLB file — separate asset files.
 	struct ProcessedResult
 	{
-		std::vector<std::byte> skelData;    // .skel binary (empty if no skeleton)
-		std::vector<std::byte> meshData;    // .mesh binary
-		std::vector<std::byte> animsetData; // .animset binary (empty if no animations)
-		std::vector<std::pair<std::string, std::vector<std::byte>>> animFiles; // (filename, data) per clip
+		ByteBuffer skelData;    // .skel binary (empty if no skeleton)
+		ByteBuffer meshData;    // .mesh binary
+		ByteBuffer animsetData; // .animset binary (empty if no animations)
+		std::vector<std::pair<std::string, ByteBuffer>> animFiles; // (filename, data) per clip
 		std::string skeletonHash;           // hex string of XXH3-64 hash
 	};
 

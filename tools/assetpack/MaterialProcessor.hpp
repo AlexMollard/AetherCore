@@ -3,7 +3,8 @@
 #include <cstddef>
 #include <filesystem>
 #include <span>
-#include <vector>
+
+#include "PipelineUtils.hpp"
 
 namespace MaterialProcessor
 {
@@ -14,7 +15,7 @@ namespace MaterialProcessor
 	// sourceDir is the root source directory (used to locate companion files).
 	//
 	// Returns empty if parsing fails.
-	[[nodiscard]] std::vector<std::byte> Process(
+	[[nodiscard]] ByteBuffer Process(
 	    std::span<const std::byte>    tomlData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::filesystem::path&  sourceDir);

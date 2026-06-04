@@ -2,7 +2,8 @@
 #include <cstddef>
 #include <filesystem>
 #include <span>
-#include <vector>
+
+#include "PipelineUtils.hpp"
 
 namespace TextureProcessor
 {
@@ -23,7 +24,7 @@ namespace TextureProcessor
 	//
 	// Returns empty if the input is not a supported image or encoding fails.
 	// Output extension for the virtual path is always ".texture".
-	[[nodiscard]] std::vector<std::byte> ToDDS(
+	[[nodiscard]] ByteBuffer ToDDS(
 	    std::span<const std::byte>    imageData,
 	    const std::filesystem::path&  sourcePath,
 	    BC7Quality                   quality = BC7Quality::Normal);

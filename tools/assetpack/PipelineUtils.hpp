@@ -13,6 +13,9 @@
 
 namespace fs = std::filesystem;
 
+// Canonical owned binary buffer type.
+using ByteBuffer = std::vector<std::byte>;
+
 // Shared formatting and path utilities used by multiple asset processors.
 
 inline std::string Stem(const fs::path& p)
