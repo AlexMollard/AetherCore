@@ -91,8 +91,17 @@ namespace aether::assets
 			}
 
 			auto [mount, baseRelative] = SplitVfsPath(baseFilePath);
-			std::filesystem::path base = std::filesystem::path(std::string(baseRelative)).parent_path();
-			std::filesystem::path resolved = (base / std::filesystem::path(std::string(relativePath))).lexically_normal();
+
+			// If relativePath is already a path from the mount root (no ../ prefix),
+			// just prepend the mount directly.
+			const std::filesystem::path relP = std::filesystem::path(std::string(relativePath));
+			if (!relP.is_absolute() && relativePath.find("..") == std::string_view::npos)
+			{
+				return std::string(mount) + "://" + relP.lexically_normal().generic_string();
+			}
+
+			const std::filesystem::path base = std::filesystem::path(std::string(baseRelative)).parent_path();
+			const std::filesystem::path resolved = (base / relP).lexically_normal();
 			return std::string(mount) + "://" + resolved.generic_string();
 		}
 
