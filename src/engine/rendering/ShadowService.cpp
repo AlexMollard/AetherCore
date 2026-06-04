@@ -30,7 +30,11 @@ namespace aether
 
 		// Single shadow queue with 3× output capacity for multi-frustum culling.
 		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueue::Config{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
+		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", 
+		        m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
+		m_shadowRenderQueue.SetDebugDisableAnimation(false);
+		m_shadowRenderQueue.SetDebugAnimPassMask(0x3u); // Test: PoseInit + AnimSample
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
 	}

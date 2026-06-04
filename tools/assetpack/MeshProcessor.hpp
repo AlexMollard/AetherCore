@@ -8,7 +8,7 @@
 
 namespace MeshProcessor
 {
-	// Output from processing a glTF/GLB file — separate asset files.
+	// Output from processing a glTF/GLB file - separate asset files.
 	struct ProcessedResult
 	{
 		ByteBuffer skelData;    // .skel binary (empty if no skeleton)

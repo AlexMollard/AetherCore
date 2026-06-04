@@ -28,6 +28,8 @@ namespace aether
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
+		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", 
+		        m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
@@ -63,6 +65,8 @@ namespace aether
 
 			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
 			m_nodeGlobalTransformsBuffer = std::move(b7);
+			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses=0x{:x}, nodeGlobalTransforms=0x{:x}",
+			        m_skinPaletteBuffer.GetDeviceAddress(), m_sampledPosesBuffer.GetDeviceAddress(), m_nodeGlobalTransformsBuffer.GetDeviceAddress());
 		}
 
 		AE_EXPECT_OR_THROW(b8,
@@ -404,14 +408,16 @@ namespace aether
 		}
 #endif
 
-		if (sampleJobsThisFrame > 0)
+		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
+			AE_INFO(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
 			// ── Pass 0: Parallel bind-pose initialization ──
 			// Dispatched before animation sampling to write all node bind poses
 			// in parallel (each thread handles one (job, node) pair).
-			if (m_sharedPipelines != nullptr && m_sharedPipelines->poseInit != VK_NULL_HANDLE)
+			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit != VK_NULL_HANDLE)
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
+				AE_INFO(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
 
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
 				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
@@ -422,6 +428,8 @@ namespace aether
 				{
 					const auto& batch = animSampleBatches[bi];
 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
+					AE_INFO(LogCategory::Animation, "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
+					        bi, nodeCount, batch.count, batch.db->GetBindTranslationsAddr(), batch.db->GetBindRotationsAddr(), batch.db->GetBindScalesAddr());
 					if (nodeCount == 0)
 					{
 						continue;
@@ -462,7 +470,7 @@ namespace aether
 
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
-			if (m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE && sampleJobsThisFrame > 0)
+			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE && sampleJobsThisFrame > 0)
 			{
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animSample);
 				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
@@ -593,9 +601,10 @@ namespace aether
 		}
 
 		// ── Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) ──
-		if (sampleJobsThisFrame > 0 && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
+		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
+			AE_INFO(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
 			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
@@ -606,6 +615,8 @@ namespace aether
 			{
 				const auto& batch = animSampleBatches[bi];
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
+				AE_INFO(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}",
+				        bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
 				if (depthCount == 0)
 				{
 					continue;
@@ -683,7 +694,7 @@ namespace aether
 			vkCmdPipelineBarrier2(cmd, &flattenToSkinDep);
 		}
 
-		if (skinJobCount > 0)
+		if ((m_debugAnimPassMask & 8u) && skinJobCount > 0 && !m_debugDisableAnimation)
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 
@@ -720,20 +731,24 @@ namespace aether
 
 			CommandRecorder(cmd).EndDebugLabel();
 
-			const VkMemoryBarrier2 skinToShaders{
-			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-			};
-			const VkDependencyInfo skinToShadersDep{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .memoryBarrierCount = 1,
-			        .pMemoryBarriers = &skinToShaders,
-			};
-			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
-		}
+		const VkMemoryBarrier2 skinToShaders{
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+		};
+		const VkDependencyInfo skinToShadersDep{
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .memoryBarrierCount = 1,
+		        .pMemoryBarriers = &skinToShaders,
+		};
+		vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
+	}
+	else if (sampleJobsThisFrame > 0 && m_debugDisableAnimation)
+	{
+		AE_WARN(LogCategory::Animation, "Animation dispatch DISABLED by debug flag ({} sampleJobs, {} skinJobs skipped)", sampleJobsThisFrame, skinJobCount);
+	}
 
 		// ── Cull dispatch: single or multi-frustum ──
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
@@ -862,6 +877,8 @@ namespace aether
 		        .instanceDataAddr = m_cachedInstanceDataAddr,
 		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
 		};
+		AE_INFO(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", 
+		        frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		const Mesh* lastMesh = nullptr;

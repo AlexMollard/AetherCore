@@ -5,6 +5,17 @@ set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
 
 find_package(Vulkan REQUIRED)
 
+# ── NVIDIA Aftermath (GPU crash diagnostics) ────────────────────────────────────
+# Optional - only enabled on Windows with MSVC for now.
+if(MSVC)
+    find_package(NvidiaAftermath)
+    if(NVIDIA_AFTERMATH_FOUND)
+        message(STATUS "NVIDIA Aftermath SDK found: ${NVIDIA_AFTERMATH_INCLUDE_DIR}")
+    else()
+        message(STATUS "NVIDIA Aftermath SDK not found - GPU crash dumps disabled")
+    endif()
+endif()
+
 # ── Window / input ────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME glfw

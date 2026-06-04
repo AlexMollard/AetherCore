@@ -111,6 +111,21 @@ namespace aether
 			return m_debugBypassIndirect;
 		}
 
+		void SetDebugDisableAnimation(bool enabled)
+		{
+			m_debugDisableAnimation = enabled;
+		}
+
+		[[nodiscard]] bool IsDebugDisableAnimation() const
+		{
+			return m_debugDisableAnimation;
+		}
+
+		void SetDebugAnimPassMask(std::uint32_t mask)
+		{
+			m_debugAnimPassMask = mask;
+		}
+
 		// Log all skin/animation job parameters for the next N frames to the engine log.
 		// Use to verify addresses, counts, and indices are sane before they hit the GPU.
 		void SetDebugLogSkinJobs(std::uint32_t frameCount)
@@ -152,6 +167,16 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetMaxDraws() const
 		{
 			return m_maxDraws;
+		}
+
+		[[nodiscard]] std::uint32_t GetMaxSkinJoints() const
+		{
+			return m_maxSkinJoints;
+		}
+
+		[[nodiscard]] VkDeviceAddress GetSkinPaletteBufferAddress() const
+		{
+			return m_skinPaletteBuffer.GetDeviceAddress();
 		}
 
 		// Emit graphics draws from indirect output.
@@ -222,6 +247,8 @@ namespace aether
 		VkDeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
+		bool m_debugDisableAnimation = false;
+		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu; // bit 0=PoseInit, 1=AnimSample, 2=NodeFlatten, 3=SkinCopy
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr.

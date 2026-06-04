@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // ============================================================================
-// AAA Asset Pipeline — Disk Format Definitions
+// AAA Asset Pipeline - Disk Format Definitions
 //
 // All structs below describe ON-DISK layout only. They use #pragma pack(1)
 // and must NEVER be directly cast from raw file memory. Runtime loading uses
@@ -16,7 +16,7 @@
 #pragma pack(push, 1)
 
 // ============================================================================
-// .skel — Skeleton Definition
+// .skel - Skeleton Definition
 // ============================================================================
 
 inline constexpr char SKEL_MAGIC[4] = { 'S', 'K', 'E', 'L' };
@@ -39,7 +39,7 @@ struct BoneEntryHeaderDisk
 };
 
 // ============================================================================
-// .mesh — Geometry Only
+// .mesh - Geometry Only
 // ============================================================================
 
 inline constexpr char MESH_MAGIC[4] = { 'M', 'E', 'S', 'H' };
@@ -62,7 +62,7 @@ struct MeshHeaderDisk
     // Total: 4+4+4+4+4+4+12+12+12+4+1+3 = 68 bytes
 };
 
-// Disk vertex — 96 bytes, aligned to 16/32-byte cache lines.
+// Disk vertex - 96 bytes, aligned to 16/32-byte cache lines.
 // Converted to aether::Mesh::Vertex (100 bytes) at load time via
 // GltfAsset::LoadFromMesh. Note: disk stores color as packed uint32 RGBA8
 // while runtime stores it as unpacked vec3 RGB.
@@ -72,10 +72,10 @@ struct DiskMeshVertex
     float    normal[3];       // 12 bytes
     float    tangent[4];      // 16 bytes
     float    uv[2];           // 8 bytes
-    uint32_t color;           // 4 bytes — packed RGBA8
-    float    uv2[2];          // 8 bytes — secondary UV
-    uint8_t  _pad[4];         // 4 bytes — explicit alignment padding
-    uint32_t jointIndices[4]; // 16 bytes — 0xFFFFFFFF = unused slot
+    uint32_t color;           // 4 bytes - packed RGBA8
+    float    uv2[2];          // 8 bytes - secondary UV
+    uint8_t  _pad[4];         // 4 bytes - explicit alignment padding
+    uint32_t jointIndices[4]; // 16 bytes - 0xFFFFFFFF = unused slot
     float    jointWeights[4]; // 16 bytes
     // Total: 12+12+16+8+4+8+4+16+16 = 96 bytes
 };
@@ -83,7 +83,7 @@ struct DiskMeshVertex
 static_assert(sizeof(DiskMeshVertex) == 96);
 
 // ============================================================================
-// .anim — Single Animation Clip
+// .anim - Single Animation Clip
 // ============================================================================
 
 inline constexpr char ANIM_MAGIC[4] = { 'A', 'N', 'I', 'M' };
@@ -124,7 +124,7 @@ struct ChannelHeaderDisk
 };
 
 // ============================================================================
-// .animset — Animation Set Bundle
+// .animset - Animation Set Bundle
 // ============================================================================
 
 inline constexpr char ASET_MAGIC[4] = { 'A', 'S', 'E', 'T' };
@@ -141,7 +141,7 @@ struct AnimSetHeaderDisk
 };
 
 // ============================================================================
-// .material — Material Preset
+// .material - Material Preset
 // ============================================================================
 
 inline constexpr char MATL_MAGIC[4] = { 'M', 'A', 'T', 'L' };

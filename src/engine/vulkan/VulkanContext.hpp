@@ -7,6 +7,10 @@
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
 
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+#	include "vulkan/AftermathContext.hpp"
+#endif
+
 namespace aether
 {
 	class Window;
@@ -37,6 +41,18 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		[[nodiscard]] const AftermathContext& GetAftermathContext() const
+		{
+			return m_aftermathContext;
+		}
+
+		[[nodiscard]] AftermathContext& GetAftermathContext()
+		{
+			return m_aftermathContext;
+		}
+#endif
+
 	private:
 		std::optional<vkb::Instance> m_instance;
 		std::optional<vkb::Device> m_device;
@@ -48,5 +64,9 @@ namespace aether
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
 		TracyVkCtx m_tracyVkCtx = nullptr;
+
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		AftermathContext m_aftermathContext;
+#endif
 	};
 } // namespace aether

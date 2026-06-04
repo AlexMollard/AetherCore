@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Single-header library implementations — compiled exactly once.
+// Single-header library implementations - compiled exactly once.
 // ---------------------------------------------------------------------------
 
 #define CGLTF_IMPLEMENTATION

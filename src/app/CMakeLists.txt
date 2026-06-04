@@ -69,3 +69,13 @@ add_custom_command(TARGET App POST_BUILD
     COMMENT "Copying scripts and data to build output"
     VERBATIM
 )
+
+# NVIDIA Aftermath DLL - copy to output directory so the executable can find it.
+if(NVIDIA_AFTERMATH_FOUND)
+    get_target_property(_am_dll Nvidia::Aftermath IMPORTED_LOCATION)
+    add_custom_command(TARGET App POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${_am_dll}" "$<TARGET_FILE_DIR:App>"
+        COMMENT "Copying GFSDK_Aftermath_Lib.x64.dll to build output"
+        VERBATIM
+    )
+endif()

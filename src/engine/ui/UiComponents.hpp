@@ -189,7 +189,7 @@ namespace aether::ui
 	// DrawSection renders a horizontal separator line for this entity.
 	struct UiSectionComponent
 	{
-		bool _present = false; // dummy field — some EnTT versions return void from emplace for empty types
+		bool _present = false; // dummy field - some EnTT versions return void from emplace for empty types
 	};
 
 	// ── Graph ──────────────────────────────────────────────────────────────────

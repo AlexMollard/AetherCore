@@ -95,7 +95,7 @@ inline void AppendStringData(std::vector<std::byte>& buf, const std::string& s)
 using Vec3 = glm::vec3;
 using Vec4 = glm::vec4;
 
-// Simple logger callback — defaults to stderr. Redirect by passing a custom LogFn.
+// Simple logger callback - defaults to stderr. Redirect by passing a custom LogFn.
 using LogFn = void(*)(std::string_view);
 
 inline void DefaultLog(std::string_view msg)

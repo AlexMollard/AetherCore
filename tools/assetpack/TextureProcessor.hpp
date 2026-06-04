@@ -12,7 +12,7 @@ namespace TextureProcessor
 	{
 		Normal = 0, // good default (bc7enc_compress_block_params_init)
 		High   = 1, // more partitions / attempts
-		Ultra  = 2, // maximum quality (very slow — use for shipping only)
+		Ultra  = 2, // maximum quality (very slow - use for shipping only)
 	};
 
 	// Decode a PNG/JPG/TGA image and re-encode it as a BCn DDS file.

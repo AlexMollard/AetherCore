@@ -26,6 +26,7 @@ target_link_libraries(Engine
         # libdl provides dladdr for symbol resolution in crash handler on Linux
         $<$<PLATFORM_ID:Linux>:dl>
         Tracy::TracyClient
+        $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:Nvidia::Aftermath>
     PRIVATE
         freetype
 )
@@ -36,6 +37,7 @@ target_compile_definitions(Engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
     GLM_ENABLE_EXPERIMENTAL
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
+    $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:AETHER_ENABLE_NVIDIA_AFTERMATH>
 )
 
 # Shared pak format header lives at <repo>/include/ - included by PakBackend

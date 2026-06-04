@@ -136,6 +136,14 @@ namespace aether
 		// maintenance9 allows queue family ownership transfers to be omitted when both
 		// queue families are compatible, eliminating unnecessary barriers.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
+		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
+		{
+			[[maybe_unused]] const bool amEnabled = m_aftermathContext.EnableGpuCrashDumps(".");
+			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+		}
+#endif
 
 		auto physicalDeviceResult = selector.select();
 
@@ -148,6 +156,19 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
 		        .maintenance9 = VK_TRUE,
 		};
+
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
+		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
+		        .pNext = nullptr,
+		        .flags = VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV |
+		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV |
+		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
+		};
+
+		// Chain with maintenance9: maintenance9 -> diagnosticsConfig
+		maintenance9Features.pNext = &diagnosticsConfig;
+#endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
@@ -252,6 +273,10 @@ namespace aether
 			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
 			AE_PROFILE_GPU_CONTEXT_NAME(m_tracyVkCtx, "AetherCore GPU");
 		}
+#endif
+
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		[[maybe_unused]] const bool amInit = m_aftermathContext.Initialize(m_device->device, physicalDeviceResult.value().physical_device);
 #endif
 
 		AE_INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");

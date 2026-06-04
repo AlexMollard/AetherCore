@@ -27,10 +27,12 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{.maxDraws = 65536});
-		m_renderQueue.SetDebugForceVisible(false);
-		m_renderQueue.SetDebugBypassIndirect(false);
-		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
+	m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{.maxDraws = 65536});
+	m_renderQueue.SetDebugForceVisible(false);
+	m_renderQueue.SetDebugBypassIndirect(false);
+	m_renderQueue.SetDebugDisableAnimation(false); // Enable animation block
+	m_renderQueue.SetDebugAnimPassMask(0x3u); // Test: PoseInit + AnimSample
+	m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
 
 		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
