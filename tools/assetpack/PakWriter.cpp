@@ -659,26 +659,6 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 	fs::create_directories(outPath.parent_path());
 
-	std::cout << "AssetPacker: writing " << outPath.generic_string() << "...\n";
-
-	std::ofstream out(outPath, std::ios::binary);
-	if (!out)
-	{
-		std::cerr << "AssetPacker: failed to create output file: " << outPath << "\n";
-		return false;
-	}
-
-	out.write(reinterpret_cast<const char*>(&header), sizeof(header));
-	out.write(reinterpret_cast<const char*>(entries.data()), static_cast<std::streamsize>(entryTableSize));
-	out.write(pathData.data(), static_cast<std::streamsize>(pathData.size()));
-	out.write(reinterpret_cast<const char*>(assetData.data()), static_cast<std::streamsize>(assetData.size()));
-
-	if (!out)
-	{
-		std::cerr << "AssetPacker: write error on " << outPath << "\n";
-		return false;
-	}
-
 	const auto   wallEnd     = std::chrono::steady_clock::now();
 	const double elapsedSecs = std::chrono::duration<double>(wallEnd - wallStart).count();
 
@@ -686,6 +666,50 @@ bool PakWriter::Write(const fs::path& outPath) const
 	    + static_cast<uint64_t>(entryTableSize)
 	    + static_cast<uint64_t>(pathData.size())
 	    + static_cast<uint64_t>(assetData.size());
+
+	// Write to a temp file first; rename on success for tear-free output
+	const fs::path tmpPath = outPath.string() + ".tmp";
+
+	std::cout << "AssetPacker: writing " << outPath.generic_string() << "...\n";
+
+	{
+		std::ofstream out(tmpPath, std::ios::binary);
+		if (!out)
+		{
+			std::cerr << "AssetPacker: failed to create output file: " << outPath << "\n";
+			return false;
+		}
+
+		out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+		out.write(reinterpret_cast<const char*>(entries.data()), static_cast<std::streamsize>(entryTableSize));
+		out.write(pathData.data(), static_cast<std::streamsize>(pathData.size()));
+		out.write(reinterpret_cast<const char*>(assetData.data()), static_cast<std::streamsize>(assetData.size()));
+
+		if (!out)
+		{
+			std::cerr << "AssetPacker: write error on " << outPath << "\n";
+			std::error_code ec;
+			fs::remove(tmpPath, ec);
+			return false;
+		}
+	}
+
+	if (!anyError)
+	{
+		std::error_code ec;
+		fs::rename(tmpPath, outPath, ec);
+		if (ec)
+		{
+			std::cerr << "AssetPacker: failed to rename temp file to " << outPath << ": " << ec.message() << "\n";
+			fs::remove(tmpPath, ec);
+			return false;
+		}
+	}
+	else
+	{
+		std::error_code ec;
+		fs::remove(tmpPath, ec);
+	}
 
 	SaveManifest(manifestPath, newManifest);
 	SaveLog(logPath, m_sourceDir, outPath, m_compressionLevel, logEntries, totalRawBytes, pakBytes, elapsedSecs);

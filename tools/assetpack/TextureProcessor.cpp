@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -237,17 +238,14 @@ namespace TextureProcessor
 
 	// -------------------------------------------------------------------------
 
-	// One-time initialisation for bc7enc and rgbcx, guarded by a flag.
+	// One-time initialisation for bc7enc and rgbcx, guarded by call_once.
 	static void InitEncoders()
 	{
-		static bool s_init = false;
-		if (s_init)
-		{
-			return;
-		}
-		bc7enc_compress_block_init();
-		rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
-		s_init = true;
+		static std::once_flag s_flag;
+		std::call_once(s_flag, [] {
+			bc7enc_compress_block_init();
+			rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
+		});
 	}
 
 	std::vector<std::byte> ToDDS(const std::vector<std::byte>& imageData, const std::filesystem::path& sourcePath)

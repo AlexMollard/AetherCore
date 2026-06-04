@@ -160,6 +160,38 @@ namespace MeshProcessor
         }
 
         // -------------------------------------------------------------------------
+        // 4x4 column-major matrix helpers
+        // -------------------------------------------------------------------------
+
+        static void Mat4MulVec3(const float m[16], const float in[3], float out[3])
+        {
+            out[0] = m[0]*in[0] + m[4]*in[1] + m[8]*in[2] + m[12];
+            out[1] = m[1]*in[0] + m[5]*in[1] + m[9]*in[2] + m[13];
+            out[2] = m[2]*in[0] + m[6]*in[1] + m[10]*in[2] + m[14];
+        }
+
+        static void Mat3InverseTransposeMulVec3(const float m[16], const float in[3], float out[3])
+        {
+            const float a = m[0], b = m[4], c = m[8];
+            const float d = m[1], e = m[5], f = m[9];
+            const float g = m[2], h = m[6], i = m[10];
+            const float A = e*i - f*h;
+            const float B = f*g - d*i;
+            const float C = d*h - e*g;
+            const float D = c*h - b*i;
+            const float E = a*i - c*g;
+            const float F = b*g - a*h;
+            const float G = b*f - c*e;
+            const float H = c*d - a*f;
+            const float I = a*e - b*d;
+            const float det = a*A + b*B + c*C;
+            const float invDet = 1.f / det;
+            out[0] = (A*in[0] + D*in[1] + G*in[2]) * invDet;
+            out[1] = (B*in[0] + E*in[1] + H*in[2]) * invDet;
+            out[2] = (C*in[0] + F*in[1] + I*in[2]) * invDet;
+        }
+
+        // -------------------------------------------------------------------------
         // Bounding volume computation
         // -------------------------------------------------------------------------
 
@@ -312,7 +344,12 @@ namespace MeshProcessor
         }
 
         const std::string srcPathStr = sourcePath.string();
-        cgltf_load_buffers(&options, data, srcPathStr.c_str());
+        if (cgltf_load_buffers(&options, data, srcPathStr.c_str()) != cgltf_result_success)
+        {
+            std::cerr << "  MeshProcessor: failed to load buffers for " << sourcePath << "\n";
+            cgltf_free(data);
+            return {};
+        }
 
         if (cgltf_validate(data) != cgltf_result_success)
         {
@@ -342,7 +379,8 @@ namespace MeshProcessor
             }
 
             // Compute skeleton hash
-            result.skeletonHash = std::to_string(ComputeSkeletonHash(bones, remapTable));
+            const uint64_t skelHash = ComputeSkeletonHash(bones, remapTable);
+            result.skeletonHash = std::to_string(skelHash);
 
             // ── Write .skel file ────────────────────────────────────────────────
             {
@@ -350,7 +388,7 @@ namespace MeshProcessor
                 SkelHeaderDisk hdr;
                 hdr.boneCount = static_cast<uint32_t>(bones.size());
                 hdr.nameLen = static_cast<uint16_t>(skelName.size());
-                hdr.skeletonHash = ComputeSkeletonHash(bones, remapTable);
+                hdr.skeletonHash = skelHash;
 
                 Append(result.skelData, hdr);
                 AppendRawStr(result.skelData, skelName);
@@ -372,11 +410,15 @@ namespace MeshProcessor
 
         // ── Count total primitives ──────────────────────────────────────────────
         uint32_t totalPrims = 0;
-        for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
-        {
-            const cgltf_node& node = data->nodes[ni];
-            if (!node.mesh) continue;
-            for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
+            for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
+            {
+                const cgltf_node& node = data->nodes[ni];
+                if (!node.mesh) continue;
+
+                float worldMat[16];
+                cgltf_node_transform_world(&node, worldMat);
+
+                for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
             {
                 if (node.mesh->primitives[pi].type == cgltf_primitive_type_triangles &&
                     FindAttr(node.mesh->primitives[pi], cgltf_attribute_type_position))
@@ -415,42 +457,6 @@ namespace MeshProcessor
 
         // ── Write .mesh file ────────────────────────────────────────────────────
         {
-            // First pass: collect all vertices and indices to compute bounds
-            std::vector<TempVertex> allVerts;
-            for (cgltf_size ni = 0; ni < data->nodes_count; ++ni)
-            {
-                const cgltf_node& node = data->nodes[ni];
-                if (!node.mesh) continue;
-                for (cgltf_size pi = 0; pi < node.mesh->primitives_count; ++pi)
-                {
-                    const cgltf_primitive& prim = node.mesh->primitives[pi];
-                    if (prim.type != cgltf_primitive_type_triangles) continue;
-                    const cgltf_accessor* posAcc = FindAttr(prim, cgltf_attribute_type_position, 0);
-                    if (!posAcc) continue;
-                    const uint32_t vertCount = static_cast<uint32_t>(posAcc->count);
-                    allVerts.resize(allVerts.size() + vertCount);
-                }
-            }
-
-            Bounds bounds = ComputeBounds(allVerts);
-
-            // Skin ref path - same directory as source mesh in virtual path
-            const std::string skinRefDir = std::filesystem::path(virtualPath).parent_path().generic_string();
-            const std::string skinRefPath = bones.empty() ? "" : (skinRefDir.empty() ? (Stem(sourcePath) + ".skel") : (skinRefDir + "/" + Stem(sourcePath) + ".skel"));
-
-            MeshHeaderDisk hdr;
-            hdr.vertexCount = 0; // Will be set per-primitive
-            hdr.indexCount = 0;
-            hdr.skinRefPathLen = static_cast<uint32_t>(skinRefPath.size());
-            hdr.materialCount = static_cast<uint32_t>(materialPaths.size());
-            std::memcpy(hdr.aabbMin, bounds.aabbMin, sizeof(bounds.aabbMin));
-            std::memcpy(hdr.aabbMax, bounds.aabbMax, sizeof(bounds.aabbMax));
-            std::memcpy(hdr.sphereCenter, bounds.sphereCenter, sizeof(bounds.sphereCenter));
-            hdr.sphereRadius = bounds.sphereRadius;
-
-            // We write the header first, then vertices/indices per primitive
-            // Since we have multiple primitives, we need to aggregate them
-            // For simplicity, combine all primitives into one mesh
             std::vector<DiskMeshVertex> combinedVerts;
             std::vector<uint32_t> combinedIndices;
             uint32_t vertexOffset = 0;
@@ -475,6 +481,8 @@ namespace MeshProcessor
                     const cgltf_accessor* jointsAcc = FindAttr(prim, cgltf_attribute_type_joints, 0);
                     const cgltf_accessor* weightsAcc = FindAttr(prim, cgltf_attribute_type_weights, 0);
 
+                    const bool isSkinned = (jointsAcc != nullptr);
+
                     std::vector<TempVertex> verts(vertCount);
                     std::array<float, 4> fv{};
                     std::array<cgltf_uint, 4> uv{};
@@ -484,11 +492,20 @@ namespace MeshProcessor
                         TempVertex& dst = verts[v];
 
                         cgltf_accessor_read_float(posAcc, v, fv.data(), 3);
-                        dst.position[0] = fv[0]; dst.position[1] = fv[1]; dst.position[2] = fv[2];
+                        if (isSkinned)
+                        {
+                            dst.position[0] = fv[0]; dst.position[1] = fv[1]; dst.position[2] = fv[2];
+                        }
+                        else
+                        {
+                            Mat4MulVec3(worldMat, fv.data(), dst.position);
+                        }
 
                         if (normAcc)
                         {
                             cgltf_accessor_read_float(normAcc, v, fv.data(), 3);
+                            if (!isSkinned)
+                                Mat3InverseTransposeMulVec3(worldMat, fv.data(), fv.data());
                             dst.normal[0] = fv[0]; dst.normal[1] = fv[1]; dst.normal[2] = fv[2];
                         }
 
@@ -593,17 +610,58 @@ namespace MeshProcessor
                 }
             }
 
+            // Compute bounds from populated vertex data
+            Bounds bounds;
+            if (!combinedVerts.empty())
+            {
+                bounds.aabbMin[0] = bounds.aabbMax[0] = combinedVerts[0].position[0];
+                bounds.aabbMin[1] = bounds.aabbMax[1] = combinedVerts[0].position[1];
+                bounds.aabbMin[2] = bounds.aabbMax[2] = combinedVerts[0].position[2];
+
+                for (const auto& v : combinedVerts)
+                {
+                    bounds.aabbMin[0] = std::min(bounds.aabbMin[0], v.position[0]);
+                    bounds.aabbMin[1] = std::min(bounds.aabbMin[1], v.position[1]);
+                    bounds.aabbMin[2] = std::min(bounds.aabbMin[2], v.position[2]);
+                    bounds.aabbMax[0] = std::max(bounds.aabbMax[0], v.position[0]);
+                    bounds.aabbMax[1] = std::max(bounds.aabbMax[1], v.position[1]);
+                    bounds.aabbMax[2] = std::max(bounds.aabbMax[2], v.position[2]);
+                }
+
+                bounds.sphereCenter[0] = (bounds.aabbMin[0] + bounds.aabbMax[0]) * 0.5f;
+                bounds.sphereCenter[1] = (bounds.aabbMin[1] + bounds.aabbMax[1]) * 0.5f;
+                bounds.sphereCenter[2] = (bounds.aabbMin[2] + bounds.aabbMax[2]) * 0.5f;
+
+                for (const auto& v : combinedVerts)
+                {
+                    const float dx = v.position[0] - bounds.sphereCenter[0];
+                    const float dy = v.position[1] - bounds.sphereCenter[1];
+                    const float dz = v.position[2] - bounds.sphereCenter[2];
+                    const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
+                    bounds.sphereRadius = std::max(bounds.sphereRadius, dist);
+                }
+            }
+
+            // Skin ref path - same directory as source mesh in virtual path
+            const std::string skinRefDir = std::filesystem::path(virtualPath).parent_path().generic_string();
+            const std::string skinRefPath = bones.empty() ? "" : (skinRefDir.empty() ? (Stem(sourcePath) + ".skel") : (skinRefDir + "/" + Stem(sourcePath) + ".skel"));
+
+            MeshHeaderDisk hdr;
             hdr.vertexCount = static_cast<uint32_t>(combinedVerts.size());
             hdr.indexCount = static_cast<uint32_t>(combinedIndices.size());
+            hdr.skinRefPathLen = static_cast<uint32_t>(skinRefPath.size());
+            hdr.materialCount = static_cast<uint32_t>(materialPaths.size());
+            std::memcpy(hdr.aabbMin, bounds.aabbMin, sizeof(bounds.aabbMin));
+            std::memcpy(hdr.aabbMax, bounds.aabbMax, sizeof(bounds.aabbMax));
+            std::memcpy(hdr.sphereCenter, bounds.sphereCenter, sizeof(bounds.sphereCenter));
+            hdr.sphereRadius = bounds.sphereRadius;
 
             Append(result.meshData, hdr);
             AppendBytes(result.meshData, combinedVerts.data(), combinedVerts.size() * sizeof(DiskMeshVertex));
             AppendBytes(result.meshData, combinedIndices.data(), combinedIndices.size() * sizeof(uint32_t));
             AppendRawStr(result.meshData, skinRefPath);
             for (const auto& matPath : materialPaths)
-            {
                 AppendStr(result.meshData, matPath);
-            }
         }
 
         // ── Write .anim files and .animset ──────────────────────────────────────
@@ -624,8 +682,14 @@ namespace MeshProcessor
                 for (cgltf_size ci = 0; ci < anim.channels_count; ++ci)
                 {
                     const auto& ch = anim.channels[ci];
-                    if (ch.sampler && ch.target_node && ch.sampler->input && ch.sampler->output)
-                        ++validChannels;
+                    if (!ch.sampler || !ch.target_node || !ch.sampler->input || !ch.sampler->output)
+                        continue;
+                    const int32_t targetNode = ToIndex(ch.target_node, *data);
+                    if (targetNode < 0 || static_cast<std::size_t>(targetNode) >= remapTable.size())
+                        continue;
+                    if (remapTable[static_cast<std::size_t>(targetNode)] == static_cast<uint32_t>(-1))
+                        continue;
+                    ++validChannels;
                 }
 
                 AnimHeaderDisk animHdr;
@@ -641,10 +705,12 @@ namespace MeshProcessor
                         continue;
 
                     const int32_t targetNode = ToIndex(ch.target_node, *data);
-                    if (targetNode < 0) continue;
+                    if (targetNode < 0 || static_cast<std::size_t>(targetNode) >= remapTable.size())
+                        continue;
 
-                    // Remap node index
                     const uint32_t remappedNode = remapTable[static_cast<std::size_t>(targetNode)];
+                    if (remappedNode == static_cast<uint32_t>(-1))
+                        continue;
 
                     AnimPathDisk path;
                     switch (ch.target_path)
@@ -700,7 +766,7 @@ namespace MeshProcessor
             // Write .animset
             AnimSetHeaderDisk setHdr;
             setHdr.animCount = static_cast<uint32_t>(animPaths.size());
-            setHdr.skeletonHash = ComputeSkeletonHash(bones, remapTable);
+            setHdr.skeletonHash = skelHash;
 
             Append(result.animsetData, setHdr);
             for (const auto& animPath : animPaths)
