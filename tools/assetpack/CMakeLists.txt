@@ -23,6 +23,14 @@ target_include_directories(AssetPacker SYSTEM PRIVATE
 
 target_link_libraries(AssetPacker PRIVATE zstd::libzstd_static)
 
+if(TARGET tomlplusplus::tomlplusplus)
+    target_link_libraries(AssetPacker PRIVATE tomlplusplus::tomlplusplus)
+elseif(TARGET tomlplusplus_tomlplusplus)
+    target_link_libraries(AssetPacker PRIVATE tomlplusplus_tomlplusplus)
+else()
+    target_include_directories(AssetPacker SYSTEM PRIVATE "${tomlplusplus_SOURCE_DIR}/include")
+endif()
+
 set_target_properties(AssetPacker PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools"
 )
