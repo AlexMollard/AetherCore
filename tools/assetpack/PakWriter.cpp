@@ -240,13 +240,9 @@ namespace
 	}
 
 	// -------------------------------------------------------------------------
-	// Asset processing dispatch - runs before compression
+	// Asset processing dispatch
 	// -------------------------------------------------------------------------
 
-	// Returns processed bytes (or empty = skip processing) and sets outExt to
-	// the replacement extension for the virtual path (e.g. ".texture"), or
-	// leaves it empty if the path should not change.
-	// For mesh processing, outFiles is populated with additional files (.skel, .anim, .animset).
 	struct ProcessedFile
 	{
 		std::string virtualPath;
@@ -256,36 +252,19 @@ namespace
 		uint64_t contentHash = 0;
 	};
 
-	struct FileResult
+	struct ProcessAssetResult
 	{
-		std::string            virtualPath;
 		std::vector<std::byte> data;
-		uint32_t               flags       = 0;
-		uint64_t               rawSize     = 0;
-		uint64_t               contentHash = 0;
-		bool                   ok          = false;
-		std::string            errorMsg;
-		std::vector<ProcessedFile> extraFiles; // Additional files from asset processing
+		std::string            outExt;
+		std::vector<ProcessedFile> extraFiles;
 	};
 
-	// -------------------------------------------------------------------------
-	// Asset processing dispatch - runs before compression
-	// -------------------------------------------------------------------------
-
-	// Returns processed bytes (or empty = skip processing) and sets outExt to
-	// the replacement extension for the virtual path (e.g. ".texture"), or
-	// leaves it empty if the path should not change.
-	// For mesh processing, outFiles is populated with additional files (.skel, .anim, .animset).
-	std::vector<std::byte> ProcessAsset(
+	ProcessAssetResult ProcessAsset(
 	    const std::vector<std::byte>& raw,
 	    const fs::path&               diskPath,
 	    const std::string&            virtualPath,
-	    const fs::path&               sourceDir,
-	    std::string&                  outExt,
-	    std::vector<ProcessedFile>&   outFiles)
+	    const fs::path&               sourceDir)
 	{
-		outExt.clear();
-
 		const auto ext = [&] {
 			std::string e = diskPath.extension().string();
 			for (char& c : e)
@@ -296,67 +275,74 @@ namespace
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
 		    ext == ".tga" || ext == ".bmp" || ext == ".webp")
 		{
-			auto result = TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
-			if (!result.empty())
-				outExt = ".texture";
-			return result;
+			auto d = TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
+			if (!d.empty())
+				return { std::move(d), ".texture", {} };
+			return {};
 		}
 
 		if (ext == ".toml")
 		{
-			// Only process properties.toml inside materials/ -> binary .material
 			if (diskPath.filename() == "properties.toml")
 			{
-				auto result = MaterialProcessor::Process(raw, diskPath, sourceDir);
-				if (!result.empty())
-				{
-					outExt = ".material";
-					return result;
-				}
+				auto d = MaterialProcessor::Process(raw, diskPath, sourceDir);
+				if (!d.empty())
+					return { std::move(d), ".material", {} };
 			}
-			return {}; // pass through as raw for non-material .toml
+			return {};
 		}
 
 		if (ext == ".spv")
 		{
-			return SpirvProcessor::Strip(raw); // extension unchanged
+			auto d = SpirvProcessor::Strip(raw);
+			return { std::move(d), {}, {} };
 		}
 
 		if (ext == ".gltf" || ext == ".glb")
 		{
-			auto result = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
-			if (!result.meshData.empty())
+			auto meshResult = MeshProcessor::Process(raw, diskPath, virtualPath, sourceDir);
+			if (!meshResult.meshData.empty())
 			{
 				const std::string stem = Stem(diskPath);
 				const std::string dir = fs::path(virtualPath).parent_path().generic_string();
 
-				// Additional files: .skel, .animset, .anim
-				if (!result.skelData.empty())
+				std::vector<ProcessedFile> extraFiles;
+
+				if (!meshResult.skelData.empty())
 				{
 					const std::string skelPath = dir.empty() ? (stem + ".skel") : (dir + "/" + stem + ".skel");
-					outFiles.push_back({ skelPath, std::move(result.skelData) });
+					extraFiles.push_back({ skelPath, std::move(meshResult.skelData) });
 				}
-				if (!result.animsetData.empty())
+				if (!meshResult.animsetData.empty())
 				{
 					const std::string animsetPath = dir.empty() ? (stem + ".animset") : (dir + "/" + stem + ".animset");
-					outFiles.push_back({ animsetPath, std::move(result.animsetData) });
+					extraFiles.push_back({ animsetPath, std::move(meshResult.animsetData) });
 				}
-				for (auto& [fileName, animData] : result.animFiles)
+				for (auto& [fileName, animData] : meshResult.animFiles)
 				{
 					if (!animData.empty())
-					{
-						outFiles.push_back({ "animations/" + fileName, std::move(animData) });
-					}
+						extraFiles.push_back({ "animations/" + fileName, std::move(animData) });
 				}
 
-				outExt = ".mesh";
-				return std::move(result.meshData);
+				return { std::move(meshResult.meshData), ".mesh", std::move(extraFiles) };
 			}
 			return {};
 		}
 
 		return {};
 	}
+
+	struct FileResult
+	{
+		std::string            virtualPath;
+		std::vector<std::byte> data;
+		uint32_t               flags       = 0;
+		uint64_t               rawSize     = 0;
+		uint64_t               contentHash = 0;
+		bool                   ok          = false;
+		std::string            errorMsg;
+		std::vector<ProcessedFile> extraFiles;
+	};
 
 	// -------------------------------------------------------------------------
 	// Per-file read + compress task (runs on a worker thread)
@@ -389,23 +375,21 @@ namespace
 		// Asset processing: transcode textures -> BCn DDS, strip SPIR-V debug info,
 		// convert GLTF -> flat AEBN binary.  On success the virtual path extension
 		// is replaced so the engine sees a consistent type regardless of source format.
-		std::string newExt;
-		std::vector<ProcessedFile> extraFiles;
-		auto processed = ProcessAsset(rawData, diskPath, virtualPath, sourceDir, newExt, extraFiles);
-		if (!processed.empty())
+		auto procResult = ProcessAsset(rawData, diskPath, virtualPath, sourceDir);
+		if (!procResult.data.empty())
 		{
-			rawData = std::move(processed);
-			if (!newExt.empty())
+			rawData = std::move(procResult.data);
+			if (!procResult.outExt.empty())
 			{
 				const auto stem = fs::path(virtualPath).stem().string();
 				const auto parent = fs::path(virtualPath).parent_path().generic_string();
 				result.virtualPath = parent.empty()
-				    ? stem + newExt
-				    : parent + "/" + stem + newExt;
+				    ? stem + procResult.outExt
+				    : parent + "/" + stem + procResult.outExt;
 			}
 
 			// Material files: rewrite virtual path to the .material path
-			if (newExt == ".material")
+			if (procResult.outExt == ".material")
 			{
 				auto dir = fs::path(virtualPath).parent_path();
 				const std::string dirName = dir.filename().string();
@@ -416,7 +400,7 @@ namespace
 		}
 
 		// Queue extra files from asset processing (e.g., .skel, .anim, .animset from mesh processing)
-		for (auto& extra : extraFiles)
+		for (auto& extra : procResult.extraFiles)
 		{
 			if (extra.data.empty()) continue;
 
