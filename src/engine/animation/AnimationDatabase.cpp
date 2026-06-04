@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "utils/Logger.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -30,6 +31,19 @@ namespace aether
 		if (asset.animations.empty())
 		{
 			return db;
+		}
+
+		// Validate animation channel node indices before building GPU data.
+		const std::uint32_t numNodes = static_cast<std::uint32_t>(asset.nodes.size());
+		for (const auto& clip: asset.animations)
+		{
+			for (const auto& ch: clip.channels)
+			{
+				if (ch.nodeIndex >= numNodes)
+				{
+					AE_WARN(LogCategory::Engine, "AnimationDatabase: channel nodeIndex {} out of range (numNodes={}) in clip '{}'. Clamping.", ch.nodeIndex, numNodes, clip.name);
+				}
+			}
 		}
 
 		// ── Build CPU arrays ─────────────────────────────────────────────────
@@ -62,7 +76,7 @@ namespace aether
 			for (const auto& srcCh: srcClip.channels)
 			{
 				GpuChannel gpuCh{};
-				gpuCh.nodeIndex = srcCh.nodeIndex;
+				gpuCh.nodeIndex = std::min(srcCh.nodeIndex, numNodes - 1);
 				gpuCh.animPath = static_cast<std::uint8_t>(srcCh.path);
 				gpuCh.interpolation = static_cast<std::uint8_t>(srcCh.interpolation);
 				gpuCh.timesOffset = static_cast<std::uint32_t>(allTimes.size() * sizeof(float));
@@ -134,7 +148,10 @@ namespace aether
 		std::vector<std::vector<std::uint32_t>> nodesAtDepth(maxDepth + 1);
 		for (std::size_t i = 0; i < nodeDepth.size(); ++i)
 		{
-			nodesAtDepth[nodeDepth[i]].push_back(static_cast<std::uint32_t>(i));
+			if (nodeDepth[i] != kUnsetDepth)
+			{
+				nodesAtDepth[nodeDepth[i]].push_back(static_cast<std::uint32_t>(i));
+			}
 		}
 
 		std::vector<std::uint32_t> depthSortedNodes;
@@ -217,8 +234,8 @@ namespace aether
 		db.m_bindRotations = std::move(bindRotations);
 		db.m_bindScales = std::move(bindScales);
 		db.m_nodeParents = std::move(nodeParents);
-		db.m_skinMetas = skinMetas;
-		db.m_skinMetasAddr = UploadArray(db.m_heap, skinMetas, device, queue, uploadPool);
+		db.m_skinMetas = std::move(skinMetas);
+		db.m_skinMetasAddr = UploadArray(db.m_heap, db.m_skinMetas, device, queue, uploadPool);
 		db.m_skinJoints = std::move(skinJoints);
 		db.m_skinJointsAddr = UploadArray(db.m_heap, db.m_skinJoints, device, queue, uploadPool);
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
@@ -263,6 +280,12 @@ namespace aether
 		m_clipNames.clear();
 		m_depthSortedNodes.clear();
 		m_depthRanges.clear();
+		m_bindTranslations.clear();
+		m_bindRotations.clear();
+		m_bindScales.clear();
+		m_nodeParents.clear();
+		m_skinInverseBinds.clear();
+		m_skinJoints.clear();
 		m_nodeCount = 0;
 		m_skinCount = 0;
 		m_depthCount = 0;
