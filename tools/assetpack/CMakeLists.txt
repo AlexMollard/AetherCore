@@ -19,6 +19,7 @@ target_include_directories(AssetPacker SYSTEM PRIVATE
     "${bc7enc_rdo_SOURCE_DIR}"      # bc7enc.h, rgbcx.h
     "${stb_SOURCE_DIR}"             # stb_image.h
     "${cgltf_SOURCE_DIR}"           # cgltf.h
+    "${glm_SOURCE_DIR}"             # glm/glm.hpp
 )
 
 target_link_libraries(AssetPacker PRIVATE zstd::libzstd_static)

@@ -5,6 +5,7 @@
 #include "PipelineUtils.hpp"
 #include "SpirvProcessor.hpp"
 #include "TextureProcessor.hpp"
+#include "ThreadPool.hpp"
 
 #include <algorithm>
 #include <charconv>
@@ -512,8 +513,11 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 	std::vector<std::future<PakFileResult>> futures;
 	futures.reserve(m_files.size());
+	ThreadPool pool;
 	for (const auto& file : m_files)
-		futures.push_back(std::async(std::launch::async, ProcessFile, file.virtualPath, file.diskPath, m_sourceDir, m_compressionLevel));
+		futures.push_back(pool.submit([virtualPath = file.virtualPath, diskPath = file.diskPath, sourceDir = m_sourceDir, compressionLevel = m_compressionLevel]() {
+			return ProcessFile(virtualPath, diskPath, sourceDir, compressionLevel);
+		}));
 
 	// --- Collect results ----------------------------------------------------
 	std::vector<PakFileResult> allResults;

@@ -71,58 +71,49 @@ namespace MeshProcessor
                 const uint32_t ia = idx[i], ib = idx[i + 1], ic = idx[i + 2];
                 if (ia >= verts.size() || ib >= verts.size() || ic >= verts.size()) continue;
 
-                const float* a = verts[ia].position;
-                const float* b = verts[ib].position;
-                const float* c = verts[ic].position;
+                Vec3 a{ verts[ia].position[0], verts[ia].position[1], verts[ia].position[2] };
+                Vec3 b{ verts[ib].position[0], verts[ib].position[1], verts[ib].position[2] };
+                Vec3 c{ verts[ic].position[0], verts[ic].position[1], verts[ic].position[2] };
 
-                const float ex = b[0]-a[0], ey = b[1]-a[1], ez = b[2]-a[2];
-                const float fx = c[0]-a[0], fy = c[1]-a[1], fz = c[2]-a[2];
-                const float nx = ey*fz - ez*fy;
-                const float ny = ez*fx - ex*fz;
-                const float nz = ex*fy - ey*fx;
+                Vec3 edge1 = b - a;
+                Vec3 edge2 = c - a;
+                Vec3 n = glm::cross(edge1, edge2);
 
-                const float gx = a[0]-b[0], gy = a[1]-b[1], gz = a[2]-b[2];
-                const float hx = c[0]-b[0], hy = c[1]-b[1], hz = c[2]-b[2];
-                const float ix = a[0]-c[0], iy = a[1]-c[1], iz = a[2]-c[2];
-                const float jx = b[0]-c[0], jy = b[1]-c[1], jz = b[2]-c[2];
+                float eLen = glm::length(edge1);
+                float fLen = glm::length(edge2);
+                float angleA = (eLen > 1e-8f && fLen > 1e-8f)
+                    ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (eLen * fLen), -1.f, 1.f)) : 1.f;
 
-                const float eLen = std::sqrt(ex*ex + ey*ey + ez*ez);
-                const float fLen = std::sqrt(fx*fx + fy*fy + fz*fz);
-                const float gLen = std::sqrt(gx*gx + gy*gy + gz*gz);
-                const float hLen = std::sqrt(hx*hx + hy*hy + hz*hz);
-                const float iLen = std::sqrt(ix*ix + iy*iy + iz*iz);
-                const float jLen = std::sqrt(jx*jx + jy*jy + jz*jz);
+                edge1 = a - b;
+                edge2 = c - b;
+                float gLen = glm::length(edge1);
+                float hLen = glm::length(edge2);
+                float angleB = (gLen > 1e-8f && hLen > 1e-8f)
+                    ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (gLen * hLen), -1.f, 1.f)) : 1.f;
 
-                const float angleA = (eLen > 1e-8f && fLen > 1e-8f)
-                    ? std::acos(std::clamp((ex*fx + ey*fy + ez*fz) / (eLen * fLen), -1.f, 1.f)) : 1.f;
-                const float angleB = (gLen > 1e-8f && hLen > 1e-8f)
-                    ? std::acos(std::clamp((gx*hx + gy*hy + gz*hz) / (gLen * hLen), -1.f, 1.f)) : 1.f;
-                const float angleC = (iLen > 1e-8f && jLen > 1e-8f)
-                    ? std::acos(std::clamp((ix*jx + iy*jy + iz*jz) / (iLen * jLen), -1.f, 1.f)) : 1.f;
+                edge1 = a - c;
+                edge2 = b - c;
+                float iLen = glm::length(edge1);
+                float jLen = glm::length(edge2);
+                float angleC = (iLen > 1e-8f && jLen > 1e-8f)
+                    ? std::acos(glm::clamp(glm::dot(edge1, edge2) / (iLen * jLen), -1.f, 1.f)) : 1.f;
 
-                verts[ia].normal[0] += nx * angleA;
-                verts[ia].normal[1] += ny * angleA;
-                verts[ia].normal[2] += nz * angleA;
-                verts[ib].normal[0] += nx * angleB;
-                verts[ib].normal[1] += ny * angleB;
-                verts[ib].normal[2] += nz * angleB;
-                verts[ic].normal[0] += nx * angleC;
-                verts[ic].normal[1] += ny * angleC;
-                verts[ic].normal[2] += nz * angleC;
+                verts[ia].normal[0] += n.x * angleA;
+                verts[ia].normal[1] += n.y * angleA;
+                verts[ia].normal[2] += n.z * angleA;
+                verts[ib].normal[0] += n.x * angleB;
+                verts[ib].normal[1] += n.y * angleB;
+                verts[ib].normal[2] += n.z * angleB;
+                verts[ic].normal[0] += n.x * angleC;
+                verts[ic].normal[1] += n.y * angleC;
+                verts[ic].normal[2] += n.z * angleC;
             }
 
             for (auto& v : verts)
             {
-                const float len2 = v.normal[0]*v.normal[0] + v.normal[1]*v.normal[1] + v.normal[2]*v.normal[2];
-                if (len2 > 1e-16f)
-                {
-                    const float inv = 1.f / std::sqrt(len2);
-                    v.normal[0] *= inv; v.normal[1] *= inv; v.normal[2] *= inv;
-                }
-                else
-                {
-                    v.normal[0] = 0.f; v.normal[1] = 1.f; v.normal[2] = 0.f;
-                }
+                Vec3 n{ v.normal[0], v.normal[1], v.normal[2] };
+                n = glm::normalize(n);
+                v.normal[0] = n.x; v.normal[1] = n.y; v.normal[2] = n.z;
             }
         }
 
@@ -143,14 +134,14 @@ namespace MeshProcessor
         // 4x4 column-major matrix helpers
         // -------------------------------------------------------------------------
 
-        void Mat4MulVec3(const float m[16], const float in[3], float out[3])
+        void Mat4MulVec3(const float m[16], Vec3 in, Vec3& out)
         {
-            out[0] = m[0]*in[0] + m[4]*in[1] + m[8]*in[2] + m[12];
-            out[1] = m[1]*in[0] + m[5]*in[1] + m[9]*in[2] + m[13];
-            out[2] = m[2]*in[0] + m[6]*in[1] + m[10]*in[2] + m[14];
+            out.x = m[0]*in.x + m[4]*in.y + m[8]*in.z + m[12];
+            out.y = m[1]*in.x + m[5]*in.y + m[9]*in.z + m[13];
+            out.z = m[2]*in.x + m[6]*in.y + m[10]*in.z + m[14];
         }
 
-        void Mat3InverseTransposeMulVec3(const float m[16], const float in[3], float out[3])
+        void Mat3InverseTransposeMulVec3(const float m[16], Vec3 in, Vec3& out)
         {
             const float a = m[0], b = m[4], c = m[8];
             const float d = m[1], e = m[5], f = m[9];
@@ -166,9 +157,9 @@ namespace MeshProcessor
             const float I = a*e - b*d;
             const float det = a*A + b*B + c*C;
             const float invDet = 1.f / det;
-            out[0] = (A*in[0] + D*in[1] + G*in[2]) * invDet;
-            out[1] = (B*in[0] + E*in[1] + H*in[2]) * invDet;
-            out[2] = (C*in[0] + F*in[1] + I*in[2]) * invDet;
+            out.x = (A*in.x + D*in.y + G*in.z) * invDet;
+            out.y = (B*in.x + E*in.y + H*in.z) * invDet;
+            out.z = (C*in.x + F*in.y + I*in.z) * invDet;
         }
 
         // -------------------------------------------------------------------------
@@ -188,9 +179,10 @@ namespace MeshProcessor
             Bounds bounds;
             if (verts.empty()) return bounds;
 
-            bounds.aabbMin[0] = bounds.aabbMax[0] = verts[0].position[0];
-            bounds.aabbMin[1] = bounds.aabbMax[1] = verts[0].position[1];
-            bounds.aabbMin[2] = bounds.aabbMax[2] = verts[0].position[2];
+            Vec3 p0{ verts[0].position[0], verts[0].position[1], verts[0].position[2] };
+            bounds.aabbMin[0] = bounds.aabbMax[0] = p0.x;
+            bounds.aabbMin[1] = bounds.aabbMax[1] = p0.y;
+            bounds.aabbMin[2] = bounds.aabbMax[2] = p0.z;
 
             for (const auto& v : verts)
             {
@@ -465,16 +457,27 @@ namespace MeshProcessor
                         }
                         else
                         {
-                            float worldPos[3];
-                            cgltf_accessor_read_float(posAcc, v, worldPos, 3);
-                            Mat4MulVec3(worldMat, worldPos, dst.position);
+                            Vec3 worldPos;
+                            Vec3 posIn;
+                            cgltf_accessor_read_float(posAcc, v, &posIn.x, 3);
+                            Mat4MulVec3(worldMat, posIn, worldPos);
+                            dst.position[0] = worldPos.x;
+                            dst.position[1] = worldPos.y;
+                            dst.position[2] = worldPos.z;
                         }
 
                         if (normAcc)
                         {
                             cgltf_accessor_read_float(normAcc, v, dst.normal, 3);
                             if (!isSkinned)
-                                Mat3InverseTransposeMulVec3(worldMat, dst.normal, dst.normal);
+                            {
+                                Vec3 normIn{ dst.normal[0], dst.normal[1], dst.normal[2] };
+                                Vec3 normOut;
+                                Mat3InverseTransposeMulVec3(worldMat, normIn, normOut);
+                                dst.normal[0] = normOut.x;
+                                dst.normal[1] = normOut.y;
+                                dst.normal[2] = normOut.z;
+                            }
                         }
 
                         if (tanAcc)
@@ -511,7 +514,7 @@ namespace MeshProcessor
                         if (jointsAcc)
                         {
                             cgltf_accessor_read_uint(jointsAcc, v, jointIdx.data(), 4);
-                            for (int j = 0; j < 4; ++j)
+                            for (uint32_t j = 0; j < 4; ++j)
                             {
                                 if (jointIdx[j] < remapTable.size())
                                     dst.jointIndices[j] = remapTable[jointIdx[j]];
@@ -562,9 +565,10 @@ namespace MeshProcessor
             // Compute bounds
             if (!out.verts.empty())
             {
-                out.bounds.aabbMin[0] = out.bounds.aabbMax[0] = out.verts[0].position[0];
-                out.bounds.aabbMin[1] = out.bounds.aabbMax[1] = out.verts[0].position[1];
-                out.bounds.aabbMin[2] = out.bounds.aabbMax[2] = out.verts[0].position[2];
+                Vec3 p0{ out.verts[0].position[0], out.verts[0].position[1], out.verts[0].position[2] };
+                out.bounds.aabbMin[0] = out.bounds.aabbMax[0] = p0.x;
+                out.bounds.aabbMin[1] = out.bounds.aabbMax[1] = p0.y;
+                out.bounds.aabbMin[2] = out.bounds.aabbMax[2] = p0.z;
 
                 for (const auto& v : out.verts)
                 {
@@ -582,48 +586,42 @@ namespace MeshProcessor
                     const std::size_t n = verts.size();
                     if (n > 0)
                     {
-                        const float* P = verts[0].position;
+                        Vec3 P{ verts[0].position[0], verts[0].position[1], verts[0].position[2] };
                         std::size_t Q = 0;
                         float maxDistSq = 0.f;
                         for (std::size_t r = 1; r < n; ++r)
                         {
-                            const float dx = verts[r].position[0] - P[0];
-                            const float dy = verts[r].position[1] - P[1];
-                            const float dz = verts[r].position[2] - P[2];
-                            const float d = dx*dx + dy*dy + dz*dz;
+                            Vec3 vr{ verts[r].position[0], verts[r].position[1], verts[r].position[2] };
+                            float d = glm::dot(vr - P, vr - P);
                             if (d > maxDistSq) { maxDistSq = d; Q = r; }
                         }
-                        const float* Qp = verts[Q].position;
+                        Vec3 Qp{ verts[Q].position[0], verts[Q].position[1], verts[Q].position[2] };
                         std::size_t R = 0;
                         maxDistSq = 0.f;
                         for (std::size_t r = 0; r < n; ++r)
                         {
-                            const float dx = verts[r].position[0] - Qp[0];
-                            const float dy = verts[r].position[1] - Qp[1];
-                            const float dz = verts[r].position[2] - Qp[2];
-                            const float d = dx*dx + dy*dy + dz*dz;
+                            Vec3 vr{ verts[r].position[0], verts[r].position[1], verts[r].position[2] };
+                            float d = glm::dot(vr - Qp, vr - Qp);
                             if (d > maxDistSq) { maxDistSq = d; R = r; }
                         }
-                        out.bounds.sphereCenter[0] = (Qp[0] + verts[R].position[0]) * 0.5f;
-                        out.bounds.sphereCenter[1] = (Qp[1] + verts[R].position[1]) * 0.5f;
-                        out.bounds.sphereCenter[2] = (Qp[2] + verts[R].position[2]) * 0.5f;
-                        const float dx = verts[R].position[0] - out.bounds.sphereCenter[0];
-                        const float dy = verts[R].position[1] - out.bounds.sphereCenter[1];
-                        const float dz = verts[R].position[2] - out.bounds.sphereCenter[2];
-                        out.bounds.sphereRadius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                        Vec3 Rp{ verts[R].position[0], verts[R].position[1], verts[R].position[2] };
+                        out.bounds.sphereCenter[0] = (Qp.x + Rp.x) * 0.5f;
+                        out.bounds.sphereCenter[1] = (Qp.y + Rp.y) * 0.5f;
+                        out.bounds.sphereCenter[2] = (Qp.z + Rp.z) * 0.5f;
+                        out.bounds.sphereRadius = glm::length(Rp - Vec3{ out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2] });
+                        Vec3 center{ out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2] };
                         for (std::size_t r = 0; r < n; ++r)
                         {
-                            const float vx = verts[r].position[0] - out.bounds.sphereCenter[0];
-                            const float vy = verts[r].position[1] - out.bounds.sphereCenter[1];
-                            const float vz = verts[r].position[2] - out.bounds.sphereCenter[2];
-                            const float d = std::sqrt(vx*vx + vy*vy + vz*vz);
+                            Vec3 vr{ verts[r].position[0], verts[r].position[1], verts[r].position[2] };
+                            float d = glm::length(vr - center);
                             if (d > out.bounds.sphereRadius)
                             {
                                 const float half = (d - out.bounds.sphereRadius) * 0.5f;
                                 out.bounds.sphereRadius += half;
-                                out.bounds.sphereCenter[0] += half * vx / d;
-                                out.bounds.sphereCenter[1] += half * vy / d;
-                                out.bounds.sphereCenter[2] += half * vz / d;
+                                Vec3 dir = (vr - center) / d;
+                                out.bounds.sphereCenter[0] += half * dir.x;
+                                out.bounds.sphereCenter[1] += half * dir.y;
+                                out.bounds.sphereCenter[2] += half * dir.z;
                             }
                         }
                     }

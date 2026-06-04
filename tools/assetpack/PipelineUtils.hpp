@@ -6,10 +6,13 @@
 #include <cstdint>
 #include <filesystem>
 #include <iomanip>
+#include <iostream>
 #include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
+
+#include <glm/glm.hpp>
 
 namespace fs = std::filesystem;
 
@@ -86,4 +89,17 @@ inline void AppendStr(std::vector<std::byte>& buf, const std::string& s)
 inline void AppendStringData(std::vector<std::byte>& buf, const std::string& s)
 {
     AppendBytes(buf, s.data(), s.size());
+}
+
+// Minimal math types for in-memory processing (not layout-controlled).
+using Vec3 = glm::vec3;
+using Vec4 = glm::vec4;
+
+// Simple logger callback — defaults to stderr. Redirect by passing a custom LogFn.
+using LogFn = void(*)(std::string_view);
+
+inline void DefaultLog(std::string_view msg)
+{
+    std::cerr.write(msg.data(), static_cast<std::streamsize>(msg.size()));
+    std::cerr << '\n';
 }
