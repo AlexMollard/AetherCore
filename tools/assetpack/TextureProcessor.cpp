@@ -295,7 +295,7 @@ namespace TextureProcessor
 		});
 	}
 
-	std::vector<std::byte> ToDDS(const std::vector<std::byte>& imageData, const std::filesystem::path& sourcePath)
+	std::vector<std::byte> ToDDS(const std::vector<std::byte>& imageData, const std::filesystem::path& sourcePath, BC7Quality quality)
 	{
 		InitEncoders();
 
@@ -311,7 +311,18 @@ namespace TextureProcessor
 		const BCnFmt fmt = ChooseFormat(sourcePath, srcChannels);
 
 		bc7enc_compress_block_params bc7Params;
-		bc7enc_compress_block_params_init(&bc7Params); // good speed/quality tradeoff
+		bc7enc_compress_block_params_init(&bc7Params);
+		switch (quality)
+		{
+			case BC7Quality::Ultra:
+				bc7Params.m_uber_level = BC7ENC_MAX_UBER_LEVEL;
+				break;
+			case BC7Quality::High:
+				bc7Params.m_uber_level = 2;
+				break;
+			default:
+				break;
+		}
 
 		// Build mip chain
 		std::vector<MipData> mips;

@@ -126,12 +126,34 @@ namespace MeshProcessor
                 const float ny = ez*fx - ex*fz;
                 const float nz = ex*fy - ey*fx;
 
-                for (uint32_t j : {ia, ib, ic})
-                {
-                    verts[j].normal[0] += nx;
-                    verts[j].normal[1] += ny;
-                    verts[j].normal[2] += nz;
-                }
+                const float gx = a[0]-b[0], gy = a[1]-b[1], gz = a[2]-b[2];
+                const float hx = c[0]-b[0], hy = c[1]-b[1], hz = c[2]-b[2];
+                const float ix = a[0]-c[0], iy = a[1]-c[1], iz = a[2]-c[2];
+                const float jx = b[0]-c[0], jy = b[1]-c[1], jz = b[2]-c[2];
+
+                const float eLen = std::sqrt(ex*ex + ey*ey + ez*ez);
+                const float fLen = std::sqrt(fx*fx + fy*fy + fz*fz);
+                const float gLen = std::sqrt(gx*gx + gy*gy + gz*gz);
+                const float hLen = std::sqrt(hx*hx + hy*hy + hz*hz);
+                const float iLen = std::sqrt(ix*ix + iy*iy + iz*iz);
+                const float jLen = std::sqrt(jx*jx + jy*jy + jz*jz);
+
+                const float angleA = (eLen > 1e-8f && fLen > 1e-8f)
+                    ? std::acos(std::clamp((ex*fx + ey*fy + ez*fz) / (eLen * fLen), -1.f, 1.f)) : 1.f;
+                const float angleB = (gLen > 1e-8f && hLen > 1e-8f)
+                    ? std::acos(std::clamp((gx*hx + gy*hy + gz*hz) / (gLen * hLen), -1.f, 1.f)) : 1.f;
+                const float angleC = (iLen > 1e-8f && jLen > 1e-8f)
+                    ? std::acos(std::clamp((ix*jx + iy*jy + iz*jz) / (iLen * jLen), -1.f, 1.f)) : 1.f;
+
+                verts[ia].normal[0] += nx * angleA;
+                verts[ia].normal[1] += ny * angleA;
+                verts[ia].normal[2] += nz * angleA;
+                verts[ib].normal[0] += nx * angleB;
+                verts[ib].normal[1] += ny * angleB;
+                verts[ib].normal[2] += nz * angleB;
+                verts[ic].normal[0] += nx * angleC;
+                verts[ic].normal[1] += ny * angleC;
+                verts[ic].normal[2] += nz * angleC;
             }
 
             for (auto& v : verts)
@@ -660,17 +682,57 @@ namespace MeshProcessor
                     bounds.aabbMax[2] = std::max(bounds.aabbMax[2], v.position[2]);
                 }
 
-                bounds.sphereCenter[0] = (bounds.aabbMin[0] + bounds.aabbMax[0]) * 0.5f;
-                bounds.sphereCenter[1] = (bounds.aabbMin[1] + bounds.aabbMax[1]) * 0.5f;
-                bounds.sphereCenter[2] = (bounds.aabbMin[2] + bounds.aabbMax[2]) * 0.5f;
-
-                for (const auto& v : combinedVerts)
+                // Ritter's bounding sphere (robust, near-optimal)
                 {
-                    const float dx = v.position[0] - bounds.sphereCenter[0];
-                    const float dy = v.position[1] - bounds.sphereCenter[1];
-                    const float dz = v.position[2] - bounds.sphereCenter[2];
-                    const float dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-                    bounds.sphereRadius = std::max(bounds.sphereRadius, dist);
+                    const auto& verts = combinedVerts;
+                    const std::size_t n = verts.size();
+                    if (n > 0)
+                    {
+                        const float* P = verts[0].position;
+                        std::size_t Q = 0;
+                        float maxDistSq = 0.f;
+                        for (std::size_t r = 1; r < n; ++r)
+                        {
+                            const float dx = verts[r].position[0] - P[0];
+                            const float dy = verts[r].position[1] - P[1];
+                            const float dz = verts[r].position[2] - P[2];
+                            const float d = dx*dx + dy*dy + dz*dz;
+                            if (d > maxDistSq) { maxDistSq = d; Q = r; }
+                        }
+                        const float* Qp = verts[Q].position;
+                        std::size_t R = 0;
+                        maxDistSq = 0.f;
+                        for (std::size_t r = 0; r < n; ++r)
+                        {
+                            const float dx = verts[r].position[0] - Qp[0];
+                            const float dy = verts[r].position[1] - Qp[1];
+                            const float dz = verts[r].position[2] - Qp[2];
+                            const float d = dx*dx + dy*dy + dz*dz;
+                            if (d > maxDistSq) { maxDistSq = d; R = r; }
+                        }
+                        bounds.sphereCenter[0] = (Qp[0] + verts[R].position[0]) * 0.5f;
+                        bounds.sphereCenter[1] = (Qp[1] + verts[R].position[1]) * 0.5f;
+                        bounds.sphereCenter[2] = (Qp[2] + verts[R].position[2]) * 0.5f;
+                        const float dx = verts[R].position[0] - bounds.sphereCenter[0];
+                        const float dy = verts[R].position[1] - bounds.sphereCenter[1];
+                        const float dz = verts[R].position[2] - bounds.sphereCenter[2];
+                        bounds.sphereRadius = std::sqrt(dx*dx + dy*dy + dz*dz);
+                        for (std::size_t r = 0; r < n; ++r)
+                        {
+                            const float vx = verts[r].position[0] - bounds.sphereCenter[0];
+                            const float vy = verts[r].position[1] - bounds.sphereCenter[1];
+                            const float vz = verts[r].position[2] - bounds.sphereCenter[2];
+                            const float d = std::sqrt(vx*vx + vy*vy + vz*vz);
+                            if (d > bounds.sphereRadius)
+                            {
+                                const float half = (d - bounds.sphereRadius) * 0.5f;
+                                bounds.sphereRadius += half;
+                                bounds.sphereCenter[0] += half * vx / d;
+                                bounds.sphereCenter[1] += half * vy / d;
+                                bounds.sphereCenter[2] += half * vz / d;
+                            }
+                        }
+                    }
                 }
             }
 

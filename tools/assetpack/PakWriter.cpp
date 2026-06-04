@@ -339,7 +339,7 @@ namespace
 		if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" ||
 		    ext == ".tga" || ext == ".bmp" || ext == ".webp")
 		{
-			auto result = TextureProcessor::ToDDS(raw, diskPath);
+			auto result = TextureProcessor::ToDDS(raw, diskPath, TextureProcessor::BC7Quality::Normal);
 			if (!result.empty())
 				outExt = ".texture";
 			return result;

@@ -5,6 +5,14 @@
 
 namespace TextureProcessor
 {
+	// BC7 compression quality / speed tradeoff.
+	enum class BC7Quality : uint8_t
+	{
+		Normal = 0, // good default (bc7enc_compress_block_params_init)
+		High   = 1, // more partitions / attempts
+		Ultra  = 2, // maximum quality (very slow — use for shipping only)
+	};
+
 	// Decode a PNG/JPG/TGA image and re-encode it as a BCn DDS file.
 	//
 	// Format selection per source filename:
@@ -16,5 +24,6 @@ namespace TextureProcessor
 	// Output extension for the virtual path is always ".texture".
 	std::vector<std::byte> ToDDS(
 	    const std::vector<std::byte>& imageData,
-	    const std::filesystem::path&  sourcePath);
+	    const std::filesystem::path&  sourcePath,
+	    BC7Quality                   quality = BC7Quality::Normal);
 } // namespace TextureProcessor
