@@ -7,11 +7,14 @@
 #include <set>
 #include <sstream>
 
+namespace MaterialImporter
+{
+
 // ---------------------------------------------------------------------------
 // Public
 // ---------------------------------------------------------------------------
 
-int MaterialImporter::ImportDirectory(const fs::path& sourceDir)
+int ImportDirectory(const fs::path& sourceDir)
 {
 	if (!fs::is_directory(sourceDir))
 	{
@@ -40,7 +43,7 @@ int MaterialImporter::ImportDirectory(const fs::path& sourceDir)
 // Private - file-write helpers
 // ---------------------------------------------------------------------------
 
-bool MaterialImporter::ShouldWrite(const fs::path& outPath)
+bool ShouldWrite(const fs::path& outPath)
 {
 	if (!fs::exists(outPath))
 	{
@@ -69,7 +72,7 @@ bool MaterialImporter::ShouldWrite(const fs::path& outPath)
 	return false;
 }
 
-bool MaterialImporter::GeneratePropertiesForFolder(const fs::path& folder)
+bool GeneratePropertiesForFolder(const fs::path& folder)
 {
 	if (!fs::is_directory(folder))
 	{
@@ -190,20 +193,20 @@ bool MaterialImporter::GeneratePropertiesForFolder(const fs::path& folder)
 // Private - string / texture-matching helpers
 // ---------------------------------------------------------------------------
 
-std::string MaterialImporter::ToLowerAscii(std::string s)
+std::string ToLowerAscii(std::string s)
 {
 	std::transform(s.begin(), s.end(), s.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 	return s;
 }
 
-std::string MaterialImporter::NormalizeForMatch(std::string s)
+std::string NormalizeForMatch(std::string s)
 {
 	s = ToLowerAscii(std::move(s));
 	s.erase(std::remove_if(s.begin(), s.end(), [](const unsigned char c) { return !std::isalnum(c); }), s.end());
 	return s;
 }
 
-std::vector<std::string> MaterialImporter::TokenizeStem(const std::string& stem)
+std::vector<std::string> TokenizeStem(const std::string& stem)
 {
 	std::vector<std::string> tokens;
 	std::string current;
@@ -232,14 +235,14 @@ std::vector<std::string> MaterialImporter::TokenizeStem(const std::string& stem)
 	return tokens;
 }
 
-bool MaterialImporter::IsImageExtension(const fs::path& path)
+bool IsImageExtension(const fs::path& path)
 {
 	const std::string ext = ToLowerAscii(path.extension().string());
 	static const std::set<std::string> kImageExts = { ".png", ".jpg", ".jpeg", ".tga", ".bmp", ".webp", ".dds", ".ktx2" };
 	return kImageExts.contains(ext);
 }
 
-bool MaterialImporter::ContainsAlias(const TextureFile& file, std::string_view alias)
+bool ContainsAlias(const TextureFile& file, std::string_view alias)
 {
 	const std::string normalizedAlias = NormalizeForMatch(std::string(alias));
 	if (normalizedAlias.empty())
@@ -267,7 +270,7 @@ namespace
 	constexpr int kPreferredAliasScore = 20;
 }
 
-std::optional<std::string> MaterialImporter::FindBestTexture(const std::vector<TextureFile>& files, std::initializer_list<std::string_view> includeAliases, std::initializer_list<std::string_view> preferredAliases, std::initializer_list<std::string_view> excludeAliases)
+std::optional<std::string> FindBestTexture(const std::vector<TextureFile>& files, std::initializer_list<std::string_view> includeAliases, std::initializer_list<std::string_view> preferredAliases, std::initializer_list<std::string_view> excludeAliases)
 {
 	std::optional<std::string> best;
 	int bestScore = 0;
@@ -325,3 +328,5 @@ std::optional<std::string> MaterialImporter::FindBestTexture(const std::vector<T
 
 	return best;
 }
+
+} // namespace MaterialImporter
