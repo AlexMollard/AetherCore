@@ -2,6 +2,8 @@
 
 #include <format>
 
+#include "rendering/CommandRecorder.hpp"
+
 namespace aether::vkutil
 {
 	Expected<VkShaderModule> CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
@@ -18,6 +20,8 @@ namespace aether::vkutil
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), std::string(owner) + ": failed to create shader module."));
 		}
+
+		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, owner);
 
 		return mod;
 	}

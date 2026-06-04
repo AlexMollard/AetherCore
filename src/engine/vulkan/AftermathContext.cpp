@@ -1,20 +1,26 @@
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 
-#include "vulkan/AftermathContext.hpp"
+#	include "vulkan/AftermathContext.hpp"
 
-#include <chrono>
-#include <cstdio>
-#include <ctime>
-#include <filesystem>
-#include <fstream>
-#include <vector>
+#	include <chrono>
+#	include <cstdio>
+#	include <ctime>
+#	include <filesystem>
+#	include <fstream>
+#	include <string>
+#	include <vector>
 
-#include "utils/Logger.hpp"
+#	include "utils/Logger.hpp"
 
 namespace aether
 {
 	namespace
 	{
+		std::filesystem::path GetCrashDumpDir()
+		{
+			return std::filesystem::current_path() / "gpu_crash_dumps";
+		}
+
 		void WriteCrashDumpToDisk(const void* data, std::uint32_t size)
 		{
 			const auto now = std::chrono::system_clock::now();
@@ -28,7 +34,7 @@ namespace aether
 
 			try
 			{
-				std::filesystem::path dir = std::filesystem::current_path() / "gpu_crash_dumps";
+				auto dir = GetCrashDumpDir();
 				std::filesystem::create_directories(dir);
 				auto path = dir / (std::string("crash_") + timeBuf + ".nv-gpudmp");
 
@@ -41,6 +47,28 @@ namespace aether
 			catch (...)
 			{
 				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to write GPU crash dump to disk");
+			}
+		}
+
+		void WriteShaderDebugInfoToDisk(const void* pShaderDebugInfo, std::uint32_t shaderDebugInfoSize)
+		{
+			GFSDK_Aftermath_ShaderDebugInfoIdentifier identifier{};
+			GFSDK_Aftermath_GetShaderDebugInfoIdentifier(GFSDK_Aftermath_Version_API, pShaderDebugInfo, shaderDebugInfoSize, &identifier);
+
+			try
+			{
+				auto dir = GetCrashDumpDir() / "shaders";
+				std::filesystem::create_directories(dir);
+
+				auto path = dir / std::format("{:016X}{:016X}.nvdbg", identifier.id[0], identifier.id[1]);
+
+				std::ofstream out(path, std::ios::binary);
+				out.write(static_cast<const char*>(pShaderDebugInfo), static_cast<std::streamsize>(shaderDebugInfoSize));
+				out.close();
+			}
+			catch (...)
+			{
+				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to write shader debug info to disk");
 			}
 		}
 	} // namespace
@@ -56,7 +84,7 @@ namespace aether
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: shader debug info received ({} bytes)", shaderDebugInfoSize);
 		if (pShaderDebugInfo && shaderDebugInfoSize > 0)
 		{
-			WriteCrashDumpToDisk(pShaderDebugInfo, shaderDebugInfoSize);
+			WriteShaderDebugInfoToDisk(pShaderDebugInfo, shaderDebugInfoSize);
 		}
 	}
 
@@ -84,10 +112,9 @@ namespace aether
 			return true;
 		}
 
-		GFSDK_Aftermath_Result result = GFSDK_Aftermath_EnableGpuCrashDumps(
-		        GFSDK_Aftermath_Version_API,
+		GFSDK_Aftermath_Result result = GFSDK_Aftermath_EnableGpuCrashDumps(GFSDK_Aftermath_Version_API,
 		        GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan,
-		        GFSDK_Aftermath_GpuCrashDumpFeatureFlags_DeferDebugInfoCallbacks,
+		        0, // No DeferDebugInfoCallbacks — write .nvdbg files eagerly so Nsight can find them
 		        OnCrashDump,
 		        OnShaderDebugInfo,
 		        OnDescription,
@@ -101,7 +128,7 @@ namespace aether
 		}
 
 		m_crashDumpsEnabled = true;
-		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dumps enabled");
+		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dumps enabled (eager shader debug info)");
 		return true;
 	}
 
@@ -125,9 +152,6 @@ namespace aether
 
 	void AftermathContext::SetEventMarker(VkCommandBuffer /*cmd*/, std::string_view /*markerName*/) const
 	{
-		// The current Aftermath SDK uses typed GFSDK_Aftermath_ContextHandle,
-		// which requires DX11/DX12-specific handle creation. For Vulkan, the
-		// device diagnostics config extension provides automatic checkpoints.
 	}
 
 	void AftermathContext::Shutdown()
