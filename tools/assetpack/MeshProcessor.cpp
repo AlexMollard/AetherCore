@@ -58,22 +58,10 @@ namespace MeshProcessor
         }
 
         // -------------------------------------------------------------------------
-        // Normal generation
+        // Normal generation (angle-weighted)
         // -------------------------------------------------------------------------
 
-        struct TempVertex
-        {
-            float position[3];
-            float normal[3];
-            float tangent[4];
-            float uv[2];
-            float uv2[2];
-            uint32_t color; // RGBA8 packed
-            uint32_t jointIndices[4];
-            float jointWeights[4];
-        };
-
-        void GenerateNormals(std::vector<TempVertex>& verts, const std::vector<uint32_t>& idx)
+        void GenerateNormals(std::vector<DiskMeshVertex>& verts, const std::vector<uint32_t>& idx)
         {
             for (auto& v : verts)
                 v.normal[0] = v.normal[1] = v.normal[2] = 0.f;
@@ -195,7 +183,7 @@ namespace MeshProcessor
             float sphereRadius;
         };
 
-        Bounds ComputeBounds(const std::vector<TempVertex>& verts)
+        Bounds ComputeBounds(const std::vector<DiskMeshVertex>& verts)
         {
             Bounds bounds;
             if (verts.empty()) return bounds;
@@ -489,12 +477,14 @@ namespace MeshProcessor
 
                     const bool isSkinned = (jointsAcc != nullptr);
 
-                    std::vector<TempVertex> verts(vertCount);
+                    std::vector<DiskMeshVertex> verts(vertCount);
+                    for (uint32_t v = 0; v < vertCount; ++v)
+                        std::memset(&verts[v]._pad, 0, sizeof(verts[v]._pad));
                     std::array<cgltf_uint, 4> jointIdx{};
 
                     for (uint32_t v = 0; v < vertCount; ++v)
                     {
-                        TempVertex& dst = verts[v];
+                        DiskMeshVertex& dst = verts[v];
 
                         if (isSkinned)
                         {
@@ -601,24 +591,7 @@ namespace MeshProcessor
                     // Generate normals if missing
                     if (!normAcc) GenerateNormals(verts, indices);
 
-                    // Convert to DiskMeshVertex
-                    const std::size_t baseIdx = combinedVerts.size();
-                    combinedVerts.resize(baseIdx + vertCount);
-                    for (uint32_t v = 0; v < vertCount; ++v)
-                    {
-                        const TempVertex& src = verts[v];
-                        DiskMeshVertex& dst = combinedVerts[baseIdx + v];
-                        std::memcpy(dst.position, src.position, sizeof(src.position));
-                        std::memcpy(dst.normal, src.normal, sizeof(src.normal));
-                        std::memcpy(dst.tangent, src.tangent, sizeof(src.tangent));
-                        std::memcpy(dst.uv, src.uv, sizeof(src.uv));
-                        dst.color = src.color;
-                        std::memcpy(dst.uv2, src.uv2, sizeof(src.uv2));
-                        std::memset(dst._pad, 0, sizeof(dst._pad));
-                        std::memcpy(dst.jointIndices, src.jointIndices, sizeof(src.jointIndices));
-                        std::memcpy(dst.jointWeights, src.jointWeights, sizeof(src.jointWeights));
-                    }
-
+                    combinedVerts.insert(combinedVerts.end(), verts.begin(), verts.end());
                     combinedIndices.insert(combinedIndices.end(), indices.begin(), indices.end());
                     vertexOffset += vertCount;
                 }
