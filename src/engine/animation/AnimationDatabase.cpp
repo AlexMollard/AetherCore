@@ -106,9 +106,20 @@ namespace aether
 		bindTranslations.reserve(asset.nodes.size());
 		bindRotations.reserve(asset.nodes.size());
 		bindScales.reserve(asset.nodes.size());
+		
+		const std::int32_t maxValidParent = static_cast<std::int32_t>(asset.nodes.size()) - 1;
 		for (const auto& n: asset.nodes)
 		{
-			nodeParents.push_back(n.parentIndex);
+			std::int32_t parent = n.parentIndex;
+			
+			// Clamp invalid parent indices to -1 (root) to prevent GPU OOB reads
+			if (parent > maxValidParent || parent < -1)
+			{
+				AE_WARN(LogCategory::Engine, "AnimationDatabase: node parentIndex {} out of range (numNodes={}). Clamping to -1.", parent, asset.nodes.size());
+				parent = -1;
+			}
+			
+			nodeParents.push_back(parent);
 			bindTranslations.emplace_back(n.translation, 0.0f);
 			bindRotations.emplace_back(n.rotation.x, n.rotation.y, n.rotation.z, n.rotation.w);
 			bindScales.emplace_back(n.scale, 0.0f);
@@ -241,11 +252,20 @@ namespace aether
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
 		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
 
+		AE_INFO(LogCategory::Engine, "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, bindT=0x{:x}, bindR=0x{:x}, bindS=0x{:x}, skinMetas=0x{:x}, skinJoints=0x{:x}, skinIBMs=0x{:x}, depthNodes=0x{:x}, depthRanges=0x{:x}",
+		        db.m_clipsAddr, db.m_channelsAddr, db.m_timesAddr, db.m_valuesAddr, db.m_nodeParentsAddr,
+		        db.m_bindTranslationsAddr, db.m_bindRotationsAddr, db.m_bindScalesAddr,
+		        db.m_skinMetasAddr, db.m_skinJointsAddr, db.m_skinInverseBindsAddr,
+		        db.m_depthSortedNodesAddr, db.m_depthRangesAddr);
+
 		if (!db.m_depthSortedNodes.empty())
 		{
 			db.m_depthSortedNodesAddr = UploadArray(db.m_heap, db.m_depthSortedNodes, device, queue, uploadPool);
 			db.m_depthRangesAddr = UploadArray(db.m_heap, db.m_depthRanges, device, queue, uploadPool);
 		}
+
+		AE_INFO(LogCategory::Engine, "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, depthNodes=0x{:x}, depthRanges=0x{:x}",
+		        db.m_clipsAddr, db.m_channelsAddr, db.m_timesAddr, db.m_valuesAddr, db.m_nodeParentsAddr, db.m_depthSortedNodesAddr, db.m_depthRangesAddr);
 
 		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())
