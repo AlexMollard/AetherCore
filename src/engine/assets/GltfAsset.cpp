@@ -16,6 +16,7 @@
 #include "utils/Assert.hpp"
 #include "utils/BinaryReader.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/StringUtils.hpp"
 
@@ -95,7 +96,6 @@ namespace aether::assets
 			return std::string(mount) + "://" + resolved.generic_string();
 		}
 
-		// Derive the .mesh sibling of a GLTF/GLB VFS path.
 		std::string DeriveMeshPath(std::string_view vfsPath)
 		{
 			const std::size_t ss = vfsPath.find("://");
@@ -108,7 +108,6 @@ namespace aether::assets
 			return mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".mesh";
 		}
 
-		// Derive the .skel path from a skin reference path stored in the mesh.
 		std::string ResolveSkelPath(std::string_view meshVfsPath, std::string_view skinRefPath)
 		{
 			if (skinRefPath.empty())
@@ -116,18 +115,15 @@ namespace aether::assets
 				return {};
 			}
 			std::string candidate = ResolveRelativeVfsPath(meshVfsPath, skinRefPath);
-			// Try .skel extension
 			if (io::FileSystem::Exists(candidate))
 			{
 				return candidate;
 			}
-			// Try replacing extension with .skel
 			std::filesystem::path p(candidate);
 			if (p.has_extension())
 			{
 				p.replace_extension(".skel");
 				std::string skelPath = std::string(p.generic_string());
-				// Re-insert mount
 				auto [mount, rel] = SplitVfsPath(candidate);
 				std::filesystem::path relP(rel);
 				if (relP.has_extension())
@@ -143,7 +139,6 @@ namespace aether::assets
 			return {};
 		}
 
-		// Derive .animset path from mesh path (same directory, same stem).
 		std::string DeriveAnimSetPath(std::string_view meshVfsPath)
 		{
 			const std::size_t ss = meshVfsPath.find("://");
@@ -162,7 +157,6 @@ namespace aether::assets
 			return {};
 		}
 
-		// Unpack a packed RGBA8 uint32 into RGB floats (0-1 range).
 		glm::vec3 UnpackColorRGBA8(uint32_t packed)
 		{
 			const float r = static_cast<float>((packed >> 0) & 0xFF) / 255.0f;
@@ -171,58 +165,120 @@ namespace aether::assets
 			return glm::vec3(r, g, b);
 		}
 
-		// Load a .skel file and populate GltfSkin.
-		GltfSkin LoadSkeleton(std::string_view skelPath)
+		// Decompose a 4x4 matrix into translation, rotation, scale.
+		// Uses polar decomposition for robust extraction.
+		void DecomposeTransform(const glm::mat4& mat, glm::vec3& outT, glm::quat& outR, glm::vec3& outS)
 		{
-			GltfSkin skin;
+			outT = glm::vec3(mat[3][0], mat[3][1], mat[3][2]);
+
+			// Extract scale from column lengths
+			glm::vec3 col0(mat[0][0], mat[0][1], mat[0][2]);
+			glm::vec3 col1(mat[1][0], mat[1][1], mat[1][2]);
+			glm::vec3 col2(mat[2][0], mat[2][1], mat[2][2]);
+
+			outS.x = glm::length(col0);
+			outS.y = glm::length(col1);
+			outS.z = glm::length(col2);
+
+			// Normalize columns to extract rotation
+			if (outS.x > 0.0001f) col0 /= outS.x;
+			if (outS.y > 0.0001f) col1 /= outS.y;
+			if (outS.z > 0.0001f) col2 /= outS.z;
+
+			glm::mat3 rotMat(col0, col1, col2);
+			outR = glm::quat_cast(rotMat);
+		}
+
+		// Load a .skel file and populate GltfSkin + bone nodes.
+		// Bone nodes are appended to asset.nodes starting at nodeIndexOffset.
+		// Returns true on success.
+		bool LoadSkeleton(std::string_view skelPath, GltfAsset& asset, GltfSkin& outSkin)
+		{
 			auto data = io::FileSystem::ReadFile(std::string(skelPath));
 			if (!data.has_value())
 			{
-				return skin;
+				AE_WARN(LogCategory::Engine, "Skeleton file not found: {}", skelPath);
+				return false;
 			}
 
 			BinaryReader reader(*data);
 			SkelHeaderDisk hdr = reader.Read<SkelHeaderDisk>();
 			if (!CheckMagic(hdr))
 			{
-				return skin;
+				AE_WARN(LogCategory::Engine, "Invalid skeleton magic: {}", skelPath);
+				return false;
 			}
 
-			skin.name = std::string(skelPath.substr(skelPath.find_last_of('/') + 1));
-			skin.joints.reserve(hdr.boneCount);
-			skin.inverseBindMatrices.reserve(hdr.boneCount);
+			AE_INFO(LogCategory::Engine, "Loading skeleton '{}': {} bones, hash={}", skelPath, hdr.boneCount, hdr.skeletonHash);
 
-			// Read skeleton name (not used for runtime, skip)
+			outSkin.name = std::string(skelPath.substr(skelPath.find_last_of('/') + 1));
+			outSkin.joints.reserve(hdr.boneCount);
+			outSkin.inverseBindMatrices.reserve(hdr.boneCount);
+
+			// Skip skeleton name
 			reader.Skip(hdr.nameLen);
+
+			// Node index 0 is the root mesh node. Bones start at index 1.
+			const uint32_t boneNodeOffset = static_cast<uint32_t>(asset.nodes.size());
+
+			// First pass: read all bone data
+			struct BoneData
+			{
+				std::string name;
+				int32_t parentIndex;
+				float ibm[16];
+			};
+			std::vector<BoneData> bones(hdr.boneCount);
 
 			for (uint32_t i = 0; i < hdr.boneCount; ++i)
 			{
 				uint16_t boneNameLen = reader.Read<uint16_t>();
-				std::string boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
+				bones[i].name = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
 				reader.Advance(boneNameLen);
-
-				int32_t parentIndex = reader.Read<int32_t>();
-				(void)parentIndex; // Parent info stored in nodes, not skin
-
-				float ibm[16];
-				reader.ReadRaw(ibm, sizeof(ibm));
-
-				skin.joints.push_back(i);
-				glm::mat4 ibmMat;
-				std::memcpy(&ibmMat[0][0], ibm, sizeof(ibm));
-				skin.inverseBindMatrices.push_back(ibmMat);
+				bones[i].parentIndex = reader.Read<int32_t>();
+				reader.ReadRaw(bones[i].ibm, sizeof(bones[i].ibm));
 			}
 
-			return skin;
+			// Second pass: create GltfNode entries for each bone
+			for (uint32_t i = 0; i < hdr.boneCount; ++i)
+			{
+				GltfNode boneNode;
+				boneNode.name = bones[i].name;
+
+				// Parent index: -1 means root bone (child of mesh node), otherwise offset by boneNodeOffset
+				if (bones[i].parentIndex < 0)
+				{
+					boneNode.parentIndex = 0; // Child of root mesh node
+				}
+				else
+				{
+					boneNode.parentIndex = static_cast<int32_t>(boneNodeOffset + bones[i].parentIndex);
+				}
+
+				// Extract bind pose from inverse bind matrix
+				glm::mat4 ibmMat;
+				std::memcpy(&ibmMat[0][0], bones[i].ibm, sizeof(bones[i].ibm));
+				glm::mat4 bindPose = glm::inverse(ibmMat);
+				DecomposeTransform(bindPose, boneNode.translation, boneNode.rotation, boneNode.scale);
+
+				asset.nodes.push_back(std::move(boneNode));
+
+				// Skin joints point to bone node indices
+				outSkin.joints.push_back(boneNodeOffset + i);
+				outSkin.inverseBindMatrices.push_back(ibmMat);
+			}
+
+			AE_INFO(LogCategory::Engine, "Skeleton loaded: {} bones, nodeOffset={}", hdr.boneCount, boneNodeOffset);
+			return true;
 		}
 
-		// Load a .anim file and populate GltfAnimation.
 		GltfAnimation LoadAnimation(std::string_view animPath)
 		{
 			GltfAnimation anim;
 			auto data = io::FileSystem::ReadFile(std::string(animPath));
 			if (!data.has_value())
 			{
+				AE_WARN(LogCategory::Engine, "Animation file not found: {}", animPath);
 				return anim;
 			}
 
@@ -230,6 +286,7 @@ namespace aether::assets
 			AnimHeaderDisk hdr = reader.Read<AnimHeaderDisk>();
 			if (!CheckMagic(hdr))
 			{
+				AE_WARN(LogCategory::Engine, "Invalid animation magic: {}", animPath);
 				return anim;
 			}
 
@@ -286,11 +343,10 @@ namespace aether::assets
 				anim.channels.push_back(std::move(channel));
 			}
 
+			AE_INFO(LogCategory::Engine, "Loaded animation '{}': {} channels, {} keys", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size());
 			return anim;
 		}
 
-		// Load a .material binary file and populate GltfMaterial.
-		// Returns true on success, false if file not found or invalid.
 		bool LoadMaterialBinary(std::string_view matPath, GltfMaterial& outMat)
 		{
 			auto data = io::FileSystem::ReadFile(std::string(matPath));
@@ -315,13 +371,10 @@ namespace aether::assets
 			outMat.alphaBlend = hdr.alphaBlend != 0;
 			outMat.alphaMask = hdr.alphaMask != 0;
 
-			// Read texture path entries.
 			for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 			{
 				uint8_t type = reader.Read<uint8_t>();
 				std::string texPath = reader.ReadString();
-
-				// Resolve relative to the material file's directory.
 				std::string resolvedPath = ResolveRelativeVfsPath(matPath, texPath);
 
 				auto texType = static_cast<TextureTypeDisk>(type);
@@ -348,7 +401,6 @@ namespace aether::assets
 			return true;
 		}
 
-		// Load a .mesh file and populate GltfAsset.
 		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath)
 		{
 			BinaryReader reader(data);
@@ -363,6 +415,16 @@ namespace aether::assets
 				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
 
+			AE_INFO(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}",
+			        meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount,
+			        hdr.skinRefPathLen > 0 ? "yes" : "no");
+			AE_INFO(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]",
+			        hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2],
+			        hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
+			AE_INFO(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}",
+			        hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
+			AE_INFO(LogCategory::Engine, "  Index type: {}", hdr.indexType == 0 ? "uint16" : "uint32");
+
 			GltfAsset asset;
 
 			// Read vertices.
@@ -373,7 +435,6 @@ namespace aether::assets
 			std::vector<uint32_t> indices(hdr.indexCount);
 			if (hdr.indexType == 0)
 			{
-				// uint16 indices
 				std::vector<uint16_t> indices16(hdr.indexCount);
 				reader.ReadRaw(indices16.data(), hdr.indexCount * sizeof(uint16_t));
 				for (uint32_t i = 0; i < hdr.indexCount; ++i)
@@ -391,6 +452,7 @@ namespace aether::assets
 			if (hdr.skinRefPathLen > 0)
 			{
 				skinRefPath = reader.ReadString();
+				AE_INFO(LogCategory::Engine, "  Skin ref: {}", skinRefPath);
 			}
 
 			// Read material paths.
@@ -398,6 +460,7 @@ namespace aether::assets
 			for (uint32_t i = 0; i < hdr.materialCount; ++i)
 			{
 				matPaths[i] = reader.ReadString();
+				AE_INFO(LogCategory::Engine, "  Material[{}]: {}", i, matPaths[i]);
 			}
 
 			// Convert disk vertices to runtime vertices.
@@ -423,11 +486,12 @@ namespace aether::assets
 
 			asset.primitives.push_back(std::move(prim));
 
-			// Create a root node referencing the primitive.
+			// Create root node for the mesh.
 			GltfNode rootNode;
 			rootNode.name = "root";
 			rootNode.meshIndex = 0;
 			rootNode.skinIndex = prim.skinIndex;
+			rootNode.parentIndex = -1;
 			asset.nodes.push_back(std::move(rootNode));
 
 			// Load skeleton if present.
@@ -436,11 +500,15 @@ namespace aether::assets
 				std::string skelPath = ResolveSkelPath(meshVfsPath, skinRefPath);
 				if (!skelPath.empty())
 				{
-					GltfSkin skin = LoadSkeleton(skelPath);
-					if (!skin.joints.empty())
+					GltfSkin skin;
+					if (LoadSkeleton(skelPath, asset, skin))
 					{
 						asset.skins.push_back(std::move(skin));
 					}
+				}
+				else
+				{
+					AE_WARN(LogCategory::Engine, "Skeleton file not resolved for skin ref: {}", skinRefPath);
 				}
 			}
 
@@ -452,21 +520,22 @@ namespace aether::assets
 
 				std::string matFullPath = ResolveRelativeVfsPath(meshVfsPath, matPaths[i]);
 
-				// Try binary .material first, then fall back to TOML folder.
 				if (!LoadMaterialBinary(matFullPath, mat))
 				{
-					// Try as a folder with properties.toml
 					std::string tomlPath = matFullPath + "/properties.toml";
 					if (io::FileSystem::Exists(tomlPath))
 					{
-						// TOML materials are loaded at runtime by AssetManager, not here.
-						// Store the folder path so AssetManager can resolve it later.
 						mat.name = matPaths[i];
 					}
 				}
 				else
 				{
 					mat.name = matPaths[i];
+					AE_INFO(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})",
+					        mat.name,
+					        mat.albedoPath.empty() ? "no" : "yes",
+					        mat.normalPath.empty() ? "no" : "yes",
+					        mat.metallicRoughnessPath.empty() ? "no" : "yes");
 				}
 
 				asset.materials.push_back(std::move(mat));
@@ -476,6 +545,7 @@ namespace aether::assets
 			std::string animSetPath = DeriveAnimSetPath(meshVfsPath);
 			if (!animSetPath.empty())
 			{
+				AE_INFO(LogCategory::Engine, "  AnimSet: {}", animSetPath);
 				auto animSetData = io::FileSystem::ReadFile(animSetPath);
 				if (animSetData.has_value())
 				{
@@ -483,7 +553,8 @@ namespace aether::assets
 					AnimSetHeaderDisk asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
 					if (CheckMagic(asetHdr))
 					{
-						// Resolve .anim paths relative to the animset file's directory.
+						AE_INFO(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
+
 						std::string animDir = animSetPath.substr(0, animSetPath.find_last_of('/') + 1);
 
 						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
@@ -498,10 +569,21 @@ namespace aether::assets
 									asset.animations.push_back(std::move(anim));
 								}
 							}
+							else
+							{
+								AE_WARN(LogCategory::Engine, "  Animation file not found: {}", animFullPath);
+							}
 						}
+					}
+					else
+					{
+						AE_WARN(LogCategory::Engine, "Invalid animset magic: {}", animSetPath);
 					}
 				}
 			}
+
+			AE_INFO(LogCategory::Engine, "Mesh loaded: {} nodes, {} skins, {} materials, {} animations",
+			        asset.nodes.size(), asset.skins.size(), asset.materials.size(), asset.animations.size());
 
 			return asset;
 		}
@@ -514,8 +596,6 @@ namespace aether::assets
 
 		const std::string vfsPath(path);
 
-		// Derive the .mesh path - try the exact path given first (caller may already
-		// pass a .mesh path), then fall back to replacing the extension.
 		auto TryMesh = [&](const std::string& meshPath) -> bool
 		{
 			return !meshPath.empty() && io::FileSystem::Exists(meshPath);
