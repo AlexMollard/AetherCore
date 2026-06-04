@@ -575,6 +575,10 @@ namespace aether::assets
 						// Resolve animation paths relative to the VFS mount root (e.g., assets://animations/...).
 						const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
 
+						// Animation channels use 0-based bone indices (from packer's remapTable).
+						// Bone nodes are stored at asset.nodes[boneNodeOffset..], so we need to offset.
+						const uint32_t boneNodeOffset = !asset.skins.empty() ? 1u : 0u;
+
 						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 						{
 							std::string animRelPath = animSetReader.ReadString();
@@ -584,6 +588,14 @@ namespace aether::assets
 								GltfAnimation anim = LoadAnimation(animFullPath);
 								if (!anim.name.empty())
 								{
+									// Offset channel node indices to match bone node positions.
+									if (boneNodeOffset > 0)
+									{
+										for (auto& ch: anim.channels)
+										{
+											ch.nodeIndex += boneNodeOffset;
+										}
+									}
 									asset.animations.push_back(std::move(anim));
 								}
 							}
