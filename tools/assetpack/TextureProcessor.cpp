@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -281,6 +282,8 @@ namespace TextureProcessor
 
 			return dds;
 		}
+		struct StbiDeleter { void operator()(uint8_t* p) { stbi_image_free(p); } };
+		using StbiImage = std::unique_ptr<uint8_t, StbiDeleter>;
 	} // namespace
 
 	// -------------------------------------------------------------------------
@@ -300,7 +303,7 @@ namespace TextureProcessor
 		InitEncoders();
 
 		int width, height, srcChannels;
-		uint8_t* pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &srcChannels, 0);
+		StbiImage pixels(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(imageData.data()), static_cast<int>(imageData.size()), &width, &height, &srcChannels, 0));
 
 		if (!pixels)
 		{
@@ -327,7 +330,7 @@ namespace TextureProcessor
 		// Build mip chain
 		std::vector<MipData> mips;
 		int mipW = width, mipH = height;
-		const uint8_t* srcPixels = pixels;
+		const uint8_t* srcPixels = pixels.get();
 		std::vector<uint8_t> mipStorage;
 
 		while (true)
@@ -347,8 +350,6 @@ namespace TextureProcessor
 			mipH = newH;
 			srcPixels = mipStorage.data();
 		}
-
-		stbi_image_free(pixels);
 
 		return BuildDDS(width, height, fmt, mips);
 	}

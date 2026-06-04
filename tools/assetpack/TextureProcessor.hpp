@@ -22,7 +22,7 @@ namespace TextureProcessor
 	//
 	// Returns empty if the input is not a supported image or encoding fails.
 	// Output extension for the virtual path is always ".texture".
-	std::vector<std::byte> ToDDS(
+	[[nodiscard]] std::vector<std::byte> ToDDS(
 	    const std::vector<std::byte>& imageData,
 	    const std::filesystem::path&  sourcePath,
 	    BC7Quality                   quality = BC7Quality::Normal);

@@ -37,8 +37,10 @@ namespace SpirvProcessor
 		if (spv.size() < kHeaderWords * sizeof(uint32_t) || spv.size() % sizeof(uint32_t) != 0)
 			return {};
 
-		const uint32_t* words     = reinterpret_cast<const uint32_t*>(spv.data());
 		const std::size_t numWords = spv.size() / sizeof(uint32_t);
+
+		std::vector<uint32_t> words(numWords);
+		std::memcpy(words.data(), spv.data(), spv.size());
 
 		if (words[0] != kMagic)
 			return {};

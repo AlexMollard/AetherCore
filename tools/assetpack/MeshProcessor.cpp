@@ -57,20 +57,20 @@ namespace MeshProcessor
         // Index helpers
         // -------------------------------------------------------------------------
 
-        static int32_t ToIndex(const cgltf_node* value, const cgltf_data& data)
+        int32_t ToIndex(const cgltf_node* value, const cgltf_data& data)
         {
             if (!value || !data.nodes) return -1;
             return static_cast<int32_t>(value - data.nodes);
         }
-        static int32_t ToIndex(const cgltf_material* value, const cgltf_data& data)
+        int32_t ToIndex(const cgltf_material* value, const cgltf_data& data)
         {
             if (!value || !data.materials) return -1;
             return static_cast<int32_t>(value - data.materials);
         }
 
-        static std::string SafeStr(const char* s) { return s ? s : ""; }
+        std::string SafeStr(const char* s) { return s ? s : ""; }
 
-        static std::string Stem(const std::filesystem::path& p)
+        std::string Stem(const std::filesystem::path& p)
         {
             return p.stem().string();
         }
@@ -175,7 +175,7 @@ namespace MeshProcessor
         // Color packing: float[4] -> RGBA8 uint32
         // -------------------------------------------------------------------------
 
-        static uint32_t PackColorRGBA8(const float rgba[4])
+        uint32_t PackColorRGBA8(const float rgba[4])
         {
             uint32_t r = static_cast<uint32_t>(std::clamp(rgba[0], 0.f, 1.f) * 255.f);
             uint32_t g = static_cast<uint32_t>(std::clamp(rgba[1], 0.f, 1.f) * 255.f);
@@ -188,14 +188,14 @@ namespace MeshProcessor
         // 4x4 column-major matrix helpers
         // -------------------------------------------------------------------------
 
-        static void Mat4MulVec3(const float m[16], const float in[3], float out[3])
+        void Mat4MulVec3(const float m[16], const float in[3], float out[3])
         {
             out[0] = m[0]*in[0] + m[4]*in[1] + m[8]*in[2] + m[12];
             out[1] = m[1]*in[0] + m[5]*in[1] + m[9]*in[2] + m[13];
             out[2] = m[2]*in[0] + m[6]*in[1] + m[10]*in[2] + m[14];
         }
 
-        static void Mat3InverseTransposeMulVec3(const float m[16], const float in[3], float out[3])
+        void Mat3InverseTransposeMulVec3(const float m[16], const float in[3], float out[3])
         {
             const float a = m[0], b = m[4], c = m[8];
             const float d = m[1], e = m[5], f = m[9];
@@ -222,10 +222,10 @@ namespace MeshProcessor
 
         struct Bounds
         {
-            float aabbMin[3] = { 0, 0, 0 };
-            float aabbMax[3] = { 0, 0, 0 };
-            float sphereCenter[3] = { 0, 0, 0 };
-            float sphereRadius = 0;
+            float aabbMin[3];
+            float aabbMax[3];
+            float sphereCenter[3];
+            float sphereRadius;
         };
 
         Bounds ComputeBounds(const std::vector<TempVertex>& verts)
@@ -277,23 +277,21 @@ namespace MeshProcessor
 
         uint64_t ComputeSkeletonHash(const std::vector<BoneInfo>& sortedBones, const std::vector<uint32_t>& remapTable)
         {
-            std::vector<uint8_t> payload;
-            payload.reserve(sortedBones.size() * 128);
+            XXH3_state_t state;
+            XXH3_64bits_reset(&state);
 
             for (const auto& bone : sortedBones)
             {
                 // name bytes (no null terminator)
-                payload.insert(payload.end(), bone.name.begin(), bone.name.end());
+                XXH3_64bits_update(&state, bone.name.data(), bone.name.size());
                 // remapped parent index
                 const int32_t remappedParent = (bone.parentIndex >= 0) ? static_cast<int32_t>(remapTable[static_cast<std::size_t>(bone.parentIndex)]) : -1;
-                const auto* p = reinterpret_cast<const uint8_t*>(&remappedParent);
-                payload.insert(payload.end(), p, p + sizeof(remappedParent));
+                XXH3_64bits_update(&state, &remappedParent, sizeof(remappedParent));
                 // ibm[16] column-major
-                const auto* m = reinterpret_cast<const uint8_t*>(bone.ibm.data());
-                payload.insert(payload.end(), m, m + sizeof(float) * 16);
+                XXH3_64bits_update(&state, bone.ibm.data(), sizeof(float) * 16);
             }
 
-            return XXH3_64bits(payload.data(), payload.size());
+            return XXH3_64bits_digest(&state);
         }
 
         // -------------------------------------------------------------------------
@@ -525,35 +523,33 @@ namespace MeshProcessor
                     const bool isSkinned = (jointsAcc != nullptr);
 
                     std::vector<TempVertex> verts(vertCount);
-                    std::array<float, 4> fv{};
-                    std::array<cgltf_uint, 4> uv{};
+                    std::array<cgltf_uint, 4> jointIdx{};
 
                     for (uint32_t v = 0; v < vertCount; ++v)
                     {
                         TempVertex& dst = verts[v];
 
-                        cgltf_accessor_read_float(posAcc, v, fv.data(), 3);
                         if (isSkinned)
                         {
-                            dst.position[0] = fv[0]; dst.position[1] = fv[1]; dst.position[2] = fv[2];
+                            cgltf_accessor_read_float(posAcc, v, dst.position, 3);
                         }
                         else
                         {
-                            Mat4MulVec3(worldMat, fv.data(), dst.position);
+                            float worldPos[3];
+                            cgltf_accessor_read_float(posAcc, v, worldPos, 3);
+                            Mat4MulVec3(worldMat, worldPos, dst.position);
                         }
 
                         if (normAcc)
                         {
-                            cgltf_accessor_read_float(normAcc, v, fv.data(), 3);
+                            cgltf_accessor_read_float(normAcc, v, dst.normal, 3);
                             if (!isSkinned)
-                                Mat3InverseTransposeMulVec3(worldMat, fv.data(), fv.data());
-                            dst.normal[0] = fv[0]; dst.normal[1] = fv[1]; dst.normal[2] = fv[2];
+                                Mat3InverseTransposeMulVec3(worldMat, dst.normal, dst.normal);
                         }
 
                         if (tanAcc)
                         {
-                            cgltf_accessor_read_float(tanAcc, v, fv.data(), 4);
-                            dst.tangent[0] = fv[0]; dst.tangent[1] = fv[1]; dst.tangent[2] = fv[2]; dst.tangent[3] = fv[3];
+                            cgltf_accessor_read_float(tanAcc, v, dst.tangent, 4);
                         }
                         else
                         {
@@ -562,20 +558,19 @@ namespace MeshProcessor
 
                         if (uvAcc)
                         {
-                            cgltf_accessor_read_float(uvAcc, v, fv.data(), 2);
-                            dst.uv[0] = fv[0]; dst.uv[1] = fv[1];
+                            cgltf_accessor_read_float(uvAcc, v, dst.uv, 2);
                         }
 
                         if (uv2Acc)
                         {
-                            cgltf_accessor_read_float(uv2Acc, v, fv.data(), 2);
-                            dst.uv2[0] = fv[0]; dst.uv2[1] = fv[1];
+                            cgltf_accessor_read_float(uv2Acc, v, dst.uv2, 2);
                         }
 
                         if (colorAcc)
                         {
-                            cgltf_accessor_read_float(colorAcc, v, fv.data(), 4);
-                            dst.color = PackColorRGBA8(fv.data());
+                            float color[4];
+                            cgltf_accessor_read_float(colorAcc, v, color, 4);
+                            dst.color = PackColorRGBA8(color);
                         }
                         else
                         {
@@ -594,20 +589,18 @@ namespace MeshProcessor
 
                         if (jointsAcc)
                         {
-                            cgltf_accessor_read_uint(jointsAcc, v, uv.data(), 4);
+                            cgltf_accessor_read_uint(jointsAcc, v, jointIdx.data(), 4);
                             for (int j = 0; j < 4; ++j)
                             {
-                                if (uv[j] < remapTable.size())
-                                    dst.jointIndices[j] = remapTable[uv[j]];
+                                if (jointIdx[j] < remapTable.size())
+                                    dst.jointIndices[j] = remapTable[jointIdx[j]];
                                 // else keep sentinel
                             }
                         }
 
                         if (weightsAcc)
                         {
-                            cgltf_accessor_read_float(weightsAcc, v, fv.data(), 4);
-                            dst.jointWeights[0] = fv[0]; dst.jointWeights[1] = fv[1];
-                            dst.jointWeights[2] = fv[2]; dst.jointWeights[3] = fv[3];
+                            cgltf_accessor_read_float(weightsAcc, v, dst.jointWeights, 4);
 
                             float wsum = dst.jointWeights[0] + dst.jointWeights[1]
                                        + dst.jointWeights[2] + dst.jointWeights[3];

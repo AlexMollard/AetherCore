@@ -12,7 +12,7 @@ namespace MaterialProcessor
 	// sourceDir is the root source directory (used to locate companion files).
 	//
 	// Returns empty if parsing fails.
-	std::vector<std::byte> Process(
+	[[nodiscard]] std::vector<std::byte> Process(
 	    const std::vector<std::byte>& tomlData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::filesystem::path&  sourceDir);

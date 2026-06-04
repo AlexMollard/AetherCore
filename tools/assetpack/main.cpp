@@ -5,6 +5,7 @@
 //   AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>
 //   AssetPacker import-materials <source-dir>
 
+#include <charconv>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -37,7 +38,13 @@ int main(int argc, char* argv[])
 				std::cerr << "AssetPacker: --compress-level requires a value (0-22)\n";
 				return 1;
 			}
-			compressionLevel = std::stoi(argv[argOffset + 1]);
+			const std::string val = argv[argOffset + 1];
+			auto [ptr, ec] = std::from_chars(val.data(), val.data() + val.size(), compressionLevel);
+			if (ec != std::errc{})
+			{
+				std::cerr << "AssetPacker: invalid compression level '" << val << "'\n";
+				return 1;
+			}
 			argOffset += 2;
 		}
 		else if (arg == "import-materials")

@@ -26,7 +26,7 @@ namespace MeshProcessor
 	// .gltf files; it is unused for self-contained .glb files.
 	//
 	// Returns empty result if the input is not valid or contains no meshes.
-	ProcessedResult Process(
+	[[nodiscard]] ProcessedResult Process(
 	    const std::vector<std::byte>& gltfData,
 	    const std::filesystem::path&  sourcePath,
 	    const std::string&            virtualPath,
