@@ -451,11 +451,12 @@ namespace aether::assets
 			std::string skinRefPath;
 			if (hdr.skinRefPathLen > 0)
 			{
-				skinRefPath = reader.ReadString();
+				skinRefPath.resize(hdr.skinRefPathLen);
+				reader.ReadRaw(skinRefPath.data(), hdr.skinRefPathLen);
 				AE_INFO(LogCategory::Engine, "  Skin ref: {}", skinRefPath);
 			}
 
-			// Read material paths.
+			// Read material paths (length-prefixed strings).
 			std::vector<std::string> matPaths(hdr.materialCount);
 			for (uint32_t i = 0; i < hdr.materialCount; ++i)
 			{
@@ -562,12 +563,13 @@ namespace aether::assets
 					{
 						AE_INFO(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
 
-						std::string animDir = animSetPath.substr(0, animSetPath.find_last_of('/') + 1);
+						// Resolve animation paths relative to the VFS mount root (e.g., assets://animations/...).
+						const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
 
 						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 						{
 							std::string animRelPath = animSetReader.ReadString();
-							std::string animFullPath = animDir + animRelPath;
+							std::string animFullPath = mountRoot + animRelPath;
 							if (io::FileSystem::Exists(animFullPath))
 							{
 								GltfAnimation anim = LoadAnimation(animFullPath);
