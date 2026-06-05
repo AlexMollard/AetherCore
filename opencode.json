@@ -13,5 +13,11 @@
       ],
       "extensions": [".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"]
     }
+  },
+  "command": {
+    "sync-lsp": {
+      "template": "Run: cmake --preset clangd",
+      "description": "Regenerate compile_commands.json for clangd LSP intelligence"
+    }
   }
 }
