@@ -14,8 +14,8 @@
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
 
-#define VULKAN_GPU_DEBUG
-// #define VULKAN_CPU_DEBUG
+// #define VULKAN_GPU_DEBUG
+#define VULKAN_CPU_DEBUG
 
 #if defined(VULKAN_GPU_DEBUG) && defined(VULKAN_CPU_DEBUG)
 #	error "VULKAN_GPU_DEBUG and VULKAN_CPU_DEBUG are mutually exclusive"

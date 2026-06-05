@@ -154,98 +154,179 @@ namespace aether
 			AE_UNEXPECTED(AetherError::Vulkan(0, "Failed to create pipeline layout."));
 		}
 
-		// ── GPL: pre-rasterization library (vertex stage) ────────────────────
 		const VkPipelineShaderStageCreateInfo vertStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
 		        .module = shaderModule,
 		        .pName = vertEntry.c_str(),
 		};
-		const VkGraphicsPipelineCreateInfo vertLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR,
-		        .stageCount = 1,
-		        .pStages = &vertStage,
-		        .pVertexInputState = &vertexInput,
-		        .pInputAssemblyState = &inputAssembly,
-		        .pViewportState = &viewportState,
-		        .pRasterizationState = &rasterizer,
-		        .pDynamicState = &dynamicState,
-		        .layout = layout,
-		};
-		VkPipeline vertLib = VK_NULL_HANDLE;
-		VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertLibInfo, nullptr, &vertLib);
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipelineLayout(device, layout, nullptr);
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex GPL library."));
-		}
-
-		// ── GPL: fragment shader library ─────────────────────────────────────
 		const VkPipelineShaderStageCreateInfo fragStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
 		        .module = shaderModule,
 		        .pName = fragEntry.c_str(),
 		};
-		const VkGraphicsPipelineCreateInfo fragLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR,
-		        .stageCount = 1,
-		        .pStages = &fragStage,
-		        .pMultisampleState = &multisampling,
-		        .pDepthStencilState = &depthStencil,
-		        .pColorBlendState = &colorBlend,
-		        .layout = layout,
-		};
-		VkPipeline fragLib = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragLibInfo, nullptr, &fragLib);
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipeline(device, vertLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment GPL library."));
-		}
 
-		// ── GPL: link vertex + fragment libraries into final pipeline ────────
-		const VkPipeline kLibs[] = {vertLib, fragLib};
-		const VkPipelineLibraryCreateInfoKHR libLink{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
-		        .libraryCount = 2,
-		        .pLibraries = kLibs,
-		};
 		const bool hasColorAttachment = desc.colorFormat != VK_FORMAT_UNDEFINED;
-		const VkPipelineRenderingCreateInfo renderingInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		        .pNext = &libLink,
-		        .colorAttachmentCount = hasColorAttachment ? 1u : 0u,
-		        .pColorAttachmentFormats = hasColorAttachment ? &desc.colorFormat : nullptr,
-		        .depthAttachmentFormat = desc.depthFormat,
-		};
-		const VkGraphicsPipelineCreateInfo linkInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &renderingInfo,
-		        .layout = layout,
-		};
+		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
+		const VkFormat* pColorFormats = hasColorAttachment ? &desc.colorFormat : nullptr;
 
 		VkPipeline pipeline = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
 
-		vkDestroyShaderModule(device, shaderModule, nullptr);
-
-		if (result != VK_SUCCESS)
 		{
-			vkDestroyPipeline(device, vertLib, nullptr);
-			vkDestroyPipeline(device, fragLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to link GPL pipeline."));
+			AE_ASSERT(layout != VK_NULL_HANDLE, "GraphicsPipeline: layout must be valid for GPL creation.");
+
+			// ── GPL: vertex input interface library ──────────────────────────────
+			const VkGraphicsPipelineLibraryCreateInfoEXT gplVertexInput{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+			        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
+			};
+			const VkGraphicsPipelineCreateInfo vertInputLibInfo{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			        .pNext = &gplVertexInput,
+			        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+			        .pVertexInputState = &vertexInput,
+					.pInputAssemblyState = &inputAssembly,
+			        .layout = layout,
+			};
+			VkPipeline vertInputLib = VK_NULL_HANDLE;
+			VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
+			if (result != VK_SUCCESS)
+			{
+				vkDestroyPipelineLayout(device, layout, nullptr);
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
+			}
+
+			// ── GPL: pre-rasterization library (vertex stage) ────────────────────
+			const VkGraphicsPipelineLibraryCreateInfoEXT gplPreRaster{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+			        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
+			};
+			const VkGraphicsPipelineCreateInfo preRasterLibInfo{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			        .pNext = &gplPreRaster,
+			        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+			        .stageCount = 1,
+			        .pStages = &vertStage,
+			        .pInputAssemblyState = &inputAssembly,
+			        .pViewportState = &viewportState,
+			        .pRasterizationState = &rasterizer,
+			        .pDynamicState = &dynamicState,
+			        .layout = layout,
+			};
+			VkPipeline preRasterLib = VK_NULL_HANDLE;
+			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
+			if (result != VK_SUCCESS)
+			{
+				vkDestroyPipeline(device, vertInputLib, nullptr);
+				vkDestroyPipelineLayout(device, layout, nullptr);
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create pre-rasterization GPL library."));
+			}
+
+			// ── GPL: fragment shader library ─────────────────────────────────────
+			const VkPipelineRenderingCreateInfo fragShaderRenderingInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			        .colorAttachmentCount = colorAttachmentCount,
+			        .pColorAttachmentFormats = pColorFormats,
+			        .depthAttachmentFormat = desc.depthFormat,
+			};
+			const VkGraphicsPipelineLibraryCreateInfoEXT gplFragShader{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+			        .pNext = &fragShaderRenderingInfo,
+			        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
+			};
+			const VkGraphicsPipelineCreateInfo fragShaderLibInfo{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			        .pNext = &gplFragShader,
+			        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+			        .stageCount = 1,
+			        .pStages = &fragStage,
+			        .pDepthStencilState = &depthStencil,
+			        .layout = layout,
+			};
+			VkPipeline fragShaderLib = VK_NULL_HANDLE;
+			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragShaderLibInfo, nullptr, &fragShaderLib);
+			if (result != VK_SUCCESS)
+			{
+				vkDestroyPipeline(device, preRasterLib, nullptr);
+				vkDestroyPipeline(device, vertInputLib, nullptr);
+				vkDestroyPipelineLayout(device, layout, nullptr);
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-shader GPL library."));
+			}
+
+			// ── GPL: fragment output interface library ───────────────────────────
+			const VkPipelineRenderingCreateInfo fragOutputRenderingInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			        .colorAttachmentCount = colorAttachmentCount,
+			        .pColorAttachmentFormats = pColorFormats,
+			        .depthAttachmentFormat = desc.depthFormat,
+			};
+			const VkGraphicsPipelineLibraryCreateInfoEXT gplFragOutput{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
+			        .pNext = &fragOutputRenderingInfo,
+			        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
+			};
+			const VkGraphicsPipelineCreateInfo fragOutputLibInfo{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			        .pNext = &gplFragOutput,
+			        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+			        .pMultisampleState = &multisampling,
+			        .pColorBlendState = &colorBlend,
+			        .layout = layout,
+			};
+			VkPipeline fragOutputLib = VK_NULL_HANDLE;
+			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragOutputLibInfo, nullptr, &fragOutputLib);
+			if (result != VK_SUCCESS)
+			{
+				vkDestroyPipeline(device, fragShaderLib, nullptr);
+				vkDestroyPipeline(device, preRasterLib, nullptr);
+				vkDestroyPipeline(device, vertInputLib, nullptr);
+				vkDestroyPipelineLayout(device, layout, nullptr);
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-output GPL library."));
+			}
+
+			// ── GPL: link all libraries into final pipeline ──────────────────────
+			const VkPipeline kLibs[] = {vertInputLib, preRasterLib, fragShaderLib, fragOutputLib};
+			const VkPipelineLibraryCreateInfoKHR libLink{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
+			        .libraryCount = 4,
+			        .pLibraries = kLibs,
+			};
+			const VkPipelineRenderingCreateInfo renderingInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+			        .pNext = &libLink,
+			        .colorAttachmentCount = colorAttachmentCount,
+			        .pColorAttachmentFormats = pColorFormats,
+			        .depthAttachmentFormat = desc.depthFormat,
+			};
+			const VkGraphicsPipelineCreateInfo linkInfo{
+			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+			        .pNext = &renderingInfo,
+			        .flags = VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT,
+			        .layout = layout,
+			};
+
+			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
+
+			// Library pipelines served their purpose — no longer needed after linking.
+			vkDestroyPipeline(device, vertInputLib, nullptr);
+			vkDestroyPipeline(device, preRasterLib, nullptr);
+			vkDestroyPipeline(device, fragShaderLib, nullptr);
+			vkDestroyPipeline(device, fragOutputLib, nullptr);
+
+			if (result != VK_SUCCESS)
+			{
+				vkDestroyPipelineLayout(device, layout, nullptr);
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to link GPL pipeline."));
+			}
 		}
 
-		// Library pipelines served their purpose — no longer needed after linking.
-		vkDestroyPipeline(device, vertLib, nullptr);
-		vkDestroyPipeline(device, fragLib, nullptr);
+		vkDestroyShaderModule(device, shaderModule, nullptr);
 
 		GraphicsPipeline out;
 		out.m_device = device;
