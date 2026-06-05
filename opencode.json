@@ -8,9 +8,8 @@
       "command": [
         "C:\\Program Files\\LLVM\\bin\\clangd.exe",
         "--background-index",
-        "--compile-commands-dir=.",
         "--clang-tidy",
-        "--query-driver=C:/Program Files/LLVM/bin/clang++"
+        "--query-driver=C:/Program Files/LLVM/bin/clang-cl.exe"
       ],
       "extensions": [".cpp", ".cc", ".cxx", ".c", ".h", ".hpp"]
     }

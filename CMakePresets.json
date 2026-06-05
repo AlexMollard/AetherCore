@@ -83,6 +83,24 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
+    },
+    {
+      "name": "clangd",
+      "displayName": "Clangd (Ninja + clang-cl)",
+      "description": "Ninja + clang-cl for compile_commands.json. Not used for production builds.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-ninja-clang",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_MAKE_PROGRAM": "C:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe",
+        "CMAKE_C_COMPILER": "clang-cl",
+        "CMAKE_CXX_COMPILER": "clang-cl",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
     }
   ],
   "buildPresets": [
@@ -126,6 +144,13 @@
       "displayName": "Linux Clang (RelWithDebInfo)",
       "description": "Build with RelWithDebInfo using Clang on Linux (Ninja).",
       "configurePreset": "linux-clang"
+    },
+    {
+      "name": "clangd",
+      "displayName": "Clangd (RelWithDebInfo)",
+      "description": "Build for clangd code intelligence (Ninja + clang-cl).",
+      "configurePreset": "clangd",
+      "configuration": "RelWithDebInfo"
     }
   ]
 }
