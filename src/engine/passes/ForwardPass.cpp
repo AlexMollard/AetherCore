@@ -25,7 +25,7 @@ namespace aether
 		}
 
 		pass->Execute(
-		        [&renderQueue, bindlessSet, &pushLightingFn](PassContext& ctx)
+		        [&renderQueue, bindlessSet, pushLightingFn](PassContext& ctx)
 		        {
 			        renderQueue.FlushDrawPush(ctx.recorder, bindlessSet, pushLightingFn);
 			        renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
