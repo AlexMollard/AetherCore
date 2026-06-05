@@ -16,10 +16,11 @@ namespace aether
 {
 	namespace
 	{
-		void WriteCrashDumpToDisk(const std::string& dir, const void* data, std::uint32_t size)
+		std::filesystem::path BuildDumpPath(const std::filesystem::path& baseDir, const std::string& prefix, const std::string& extension)
 		{
 			const auto now = std::chrono::system_clock::now();
 			const auto timeT = std::chrono::system_clock::to_time_t(now);
+			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
 			tm timeInfo;
 #if defined(_MSC_VER)
@@ -31,11 +32,31 @@ namespace aether
 			char timeBuf[64];
 			std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", &timeInfo);
 
+			char filename[256];
+			std::snprintf(filename, sizeof(filename), "%s%s_%03d%s", prefix.c_str(), timeBuf, static_cast<int>(ms.count()), extension.c_str());
+
+			return baseDir / filename;
+		}
+
+		void WriteRawDumpToDisk(const std::filesystem::path& baseDir, const void* data, std::uint32_t size, const std::string& prefix, const std::string& extension)
+		{
+			auto path = BuildDumpPath(baseDir, prefix, extension);
+
+			std::ofstream out(path, std::ios::binary);
+			out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+			out.close();
+
+			AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: {} written to {} ({} bytes)", prefix, path.string(), size);
+		}
+
+		void WriteCrashDumpToDisk(const std::string& dir, const void* data, std::uint32_t size)
+		{
 			try
 			{
 				std::filesystem::path baseDir = dir.empty() ? std::filesystem::current_path() / "gpu_crash_dumps" : std::filesystem::path(dir);
 				std::filesystem::create_directories(baseDir);
-				auto path = baseDir / (std::string("crash_") + timeBuf + ".nv-gpudmp");
+
+				auto path = BuildDumpPath(baseDir, "crash", ".nv-gpudmp");
 
 				std::ofstream out(path, std::ios::binary);
 				out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
@@ -43,7 +64,6 @@ namespace aether
 
 				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dump written to {}", path.string());
 
-				// Generate human-readable JSON alongside the raw dump.
 				GFSDK_Aftermath_GpuCrashDump_Decoder decoder{};
 				GFSDK_Aftermath_Result decResult = GFSDK_Aftermath_GpuCrashDump_CreateDecoder(
 				        GFSDK_Aftermath_Version_API,
@@ -52,20 +72,20 @@ namespace aether
 				        &decoder);
 				if (decResult == GFSDK_Aftermath_Result_Success)
 				{
-				const std::uint32_t decFlags = 0x3EFFu; // ALL_INFO minus SHADER_MAPPING_INFO
-				const std::uint32_t jsonFlags = 0u;
+					const std::uint32_t decFlags = 0x3EFFu; // ALL_INFO minus SHADER_MAPPING_INFO
+					const std::uint32_t jsonFlags = 0u;
 					std::uint32_t jsonSize = 0;
-				decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
-				        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, nullptr, &jsonSize);
-				if (decResult == GFSDK_Aftermath_Result_Success && jsonSize > 0)
-				{
-					std::vector<char> jsonBuf(jsonSize + 1);
 					decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
-					        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, jsonBuf.data(), &jsonSize);
+					        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, nullptr, &jsonSize);
+					if (decResult == GFSDK_Aftermath_Result_Success && jsonSize > 0)
+					{
+						std::vector<char> jsonBuf(jsonSize + 1);
+						decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
+						        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, jsonBuf.data(), &jsonSize);
 						if (decResult == GFSDK_Aftermath_Result_Success)
 						{
 							jsonBuf[jsonSize] = '\0';
-							auto jsonPath = baseDir / (std::string("crash_") + timeBuf + ".json");
+							auto jsonPath = baseDir / (path.stem().string() + ".json");
 							std::ofstream jsonOut(jsonPath, std::ios::binary);
 							jsonOut.write(jsonBuf.data(), static_cast<std::streamsize>(jsonSize));
 							jsonOut.close();
@@ -78,6 +98,19 @@ namespace aether
 			catch (...)
 			{
 				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to write GPU crash dump to disk");
+			}
+		}
+
+		void WriteShaderDebugInfoToDisk(const std::filesystem::path& baseDir, const void* data, std::uint32_t size)
+		{
+			try
+			{
+				std::filesystem::create_directories(baseDir);
+				WriteRawDumpToDisk(baseDir, data, size, "shader_debug", ".nvdbg");
+			}
+			catch (...)
+			{
+				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to write shader debug info to disk");
 			}
 		}
 	} // namespace
@@ -94,9 +127,10 @@ namespace aether
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: shader debug info received ({} bytes)", shaderDebugInfoSize);
 		if (pShaderDebugInfo && shaderDebugInfoSize > 0)
 		{
-			WriteCrashDumpToDisk("", pShaderDebugInfo, shaderDebugInfoSize);
+			auto* self = static_cast<AftermathContext*>(pUserData);
+			std::filesystem::path baseDir = self->m_crashDumpDir.empty() ? std::filesystem::current_path() / "gpu_crash_dumps" : std::filesystem::path(self->m_crashDumpDir);
+			WriteShaderDebugInfoToDisk(baseDir, pShaderDebugInfo, shaderDebugInfoSize);
 		}
-		(void) pUserData;
 	}
 
 	void GFSDK_AFTERMATH_CALL AftermathContext::OnDescription(PFN_GFSDK_Aftermath_AddGpuCrashDumpDescription addDescription, void* /*pUserData*/)
