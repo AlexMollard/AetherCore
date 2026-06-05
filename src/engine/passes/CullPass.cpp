@@ -12,10 +12,11 @@
 
 namespace aether
 {
-	void CullPass::Initialize(VkDevice device)
+	void CullPass::Initialize(VkDevice device, VkPipelineCache pipelineCache)
 	{
 		AE_PROFILE_ZONE();
 		m_device = device;
+		m_pipelineCache = pipelineCache;
 	}
 
 	void CullPass::Shutdown()
@@ -86,7 +87,7 @@ namespace aether
 		        .stage = stage,
 		        .layout = m_singleLayout,
 		};
-		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_singlePipeline) != VK_SUCCESS)
+		if (vkCreateComputePipelines(m_device, m_pipelineCache, 1, &pipelineInfo, nullptr, &m_singlePipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
 			vkDestroyPipelineLayout(m_device, m_singleLayout, nullptr);
@@ -143,7 +144,7 @@ namespace aether
 		        .stage = stage,
 		        .layout = m_multiLayout,
 		};
-		if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_multiPipeline) != VK_SUCCESS)
+		if (vkCreateComputePipelines(m_device, m_pipelineCache, 1, &pipelineInfo, nullptr, &m_multiPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(m_device, shaderModule, nullptr);
 			vkDestroyPipelineLayout(m_device, m_multiLayout, nullptr);

@@ -551,7 +551,7 @@ namespace aether
 		        .stage = initStage,
 		        .layout = m_computeLayout,
 		};
-		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
+		if (vkCreateComputePipelines(device, m_context->GetPipelineCache(), 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
@@ -569,7 +569,7 @@ namespace aether
 		        .stage = cullStage,
 		        .layout = m_computeLayout,
 		};
-		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
+		if (vkCreateComputePipelines(device, m_context->GetPipelineCache(), 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));

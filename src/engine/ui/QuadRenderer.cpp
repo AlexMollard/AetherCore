@@ -59,7 +59,7 @@ namespace aether
 		        .stage = stage,
 		        .layout = m_computePipelineLayout,
 		};
-		if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
+		if (vkCreateComputePipelines(device, m_vkCtx->GetPipelineCache(), 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
 		{
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			vkDestroyPipelineLayout(device, m_computePipelineLayout, nullptr);

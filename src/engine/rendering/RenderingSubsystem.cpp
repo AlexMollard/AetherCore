@@ -25,7 +25,7 @@ namespace aether
 		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
 		m_frameConstantsBuffer.Initialize(vk);
 
-		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
+		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
 	m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueue::Config{.maxDraws = 65536});
 	m_renderQueue.SetDebugForceVisible(false);
@@ -37,10 +37,11 @@ namespace aether
 		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
-		m_cullPass.Initialize(vk.GetDevice().device);
+		m_cullPass.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
+		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
@@ -52,6 +53,7 @@ namespace aether
 
 		m_skyboxPass = SkyboxPass::Create({
 		        .device = vk.GetDevice().device,
+		        .pipelineCache = vk.GetPipelineCache(),
 		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
 		});
 
@@ -95,7 +97,7 @@ namespace aether
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
 
-		m_shadowService.RecreatePipeline(vk.GetDevice().device, swapchain.GetDepthFormat());
+		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), swapchain.GetDepthFormat());
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
@@ -105,6 +107,7 @@ namespace aether
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
+		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),

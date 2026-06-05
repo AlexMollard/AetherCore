@@ -54,6 +54,7 @@ namespace aether
 		const VkFormat depthFormat = swapchain.GetDepthFormat();
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
+		                context.GetPipelineCache(),
 		                {
 		                        .shaderVfsPath = "shaders://local_shadow_depth.spv",
 		                        .colorFormat = VK_FORMAT_R32G32_SFLOAT,
@@ -141,7 +142,7 @@ namespace aether
 			cpci.stage.module = blurModule;
 			cpci.stage.pName = "main";
 			cpci.layout = m_blurPipelineLayout;
-			AE_ASSERT_ALWAYS(vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &cpci, nullptr, &m_blurPipeline) == VK_SUCCESS, "Failed to create blur compute pipeline");
+			AE_ASSERT_ALWAYS(vkCreateComputePipelines(device, context.GetPipelineCache(), 1, &cpci, nullptr, &m_blurPipeline) == VK_SUCCESS, "Failed to create blur compute pipeline");
 		}
 
 		vkDestroyShaderModule(device, blurModule, nullptr);

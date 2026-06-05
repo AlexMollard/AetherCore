@@ -26,7 +26,7 @@ namespace aether
 	class CullPass
 	{
 	public:
-		void Initialize(VkDevice device);
+		void Initialize(VkDevice device, VkPipelineCache pipelineCache);
 		void Shutdown();
 
 		// Registers a "$CullDraws[_<namePrefix>]" compute pass that dispatches the
@@ -58,6 +58,7 @@ namespace aether
 		Expected<void> EnsureMultiPipeline();
 
 		VkDevice m_device = VK_NULL_HANDLE;
+		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 		VkPipeline m_singlePipeline = VK_NULL_HANDLE;
 		VkPipelineLayout m_singleLayout = VK_NULL_HANDLE;
 		VkPipeline m_multiPipeline = VK_NULL_HANDLE;
