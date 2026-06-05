@@ -1,8 +1,8 @@
 # Vulkan 1.4 Audit Fix Plan
 
-## Phase 1 — Barrier Spec Fixes & Pipeline Cache
+## Phase 1 — Barrier Spec Fixes & Pipeline Cache ✅
 
-### 1.1 Fix depth barrier src stages with UNDEFINED layout
+### 1.1 Fix depth barrier src stages with UNDEFINED layout ✅
 **File:** `src/engine/vulkan/Swapchain.cpp:317-325`
 **Issue:** `VK_IMAGE_LAYOUT_UNDEFINED` used with `EARLY/LATE_FRAGMENT_TESTS` src stages — spec violation.
 **Fix:** Use `VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT` + `VK_ACCESS_2_NONE` as src.
@@ -11,7 +11,7 @@ doesn't flag the single shared depth image as a write-after-write hazard.
 **Risk:** Low. RenderGraph already manages layout states; the swapchain depth image just
 needs its last-known layout preserved across frames.
 
-### 1.2 Add VkPipelineCache
+### 1.2 Add VkPipelineCache ✅
 **Files:** `src/engine/vulkan/VulkanContext.hpp`, `src/engine/vulkan/VulkanContext.cpp`, all pipeline creation sites
 **Issue:** All pipelines created with `VK_NULL_HANDLE` pipeline cache.
 **Fix:** Create a single `VkPipelineCache` at device init, store in `VulkanContext`, pass to:
@@ -22,7 +22,7 @@ needs its last-known layout preserved across frames.
 Optionally serialize/deserialize from disk for faster warm starts.
 **Risk:** Low. Pipeline cache is transparent; fallback on cache miss is automatic.
 
-### 1.3 Fix vague queue handle casting
+### 1.3 Fix vague queue handle casting ✅
 **File:** `src/engine/vulkan/VulkanContext.cpp:231-239`
 **Issue:** `reinterpret_cast<std::uint64_t>(m_graphicsQueue)` where `VkQueue` may not be a pointer.
 **Fix:** Use `reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue))` for pointer-safe cast.
