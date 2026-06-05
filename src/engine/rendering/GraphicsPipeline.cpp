@@ -19,7 +19,7 @@ namespace aether
 	}
 
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)), m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)), m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
+	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)), m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)), m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_vertInputLib(std::exchange(other.m_vertInputLib, VK_NULL_HANDLE)), m_preRasterLib(std::exchange(other.m_preRasterLib, VK_NULL_HANDLE)), m_fragShaderLib(std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE)), m_fragOutputLib(std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE)), m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
 	{
 	}
 
@@ -31,6 +31,10 @@ namespace aether
 			m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
 			m_layout = std::exchange(other.m_layout, VK_NULL_HANDLE);
 			m_pipeline = std::exchange(other.m_pipeline, VK_NULL_HANDLE);
+			m_vertInputLib = std::exchange(other.m_vertInputLib, VK_NULL_HANDLE);
+			m_preRasterLib = std::exchange(other.m_preRasterLib, VK_NULL_HANDLE);
+			m_fragShaderLib = std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE);
+			m_fragOutputLib = std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE);
 			m_setLayoutCount = std::exchange(other.m_setLayoutCount, 0);
 		}
 		return *this;
@@ -46,6 +50,26 @@ namespace aether
 		{
 			vkDestroyPipeline(m_device, m_pipeline, nullptr);
 			m_pipeline = VK_NULL_HANDLE;
+		}
+		if (m_vertInputLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_vertInputLib, nullptr);
+			m_vertInputLib = VK_NULL_HANDLE;
+		}
+		if (m_preRasterLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_preRasterLib, nullptr);
+			m_preRasterLib = VK_NULL_HANDLE;
+		}
+		if (m_fragShaderLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_fragShaderLib, nullptr);
+			m_fragShaderLib = VK_NULL_HANDLE;
+		}
+		if (m_fragOutputLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(m_device, m_fragOutputLib, nullptr);
+			m_fragOutputLib = VK_NULL_HANDLE;
 		}
 		if (m_layout != VK_NULL_HANDLE)
 		{
@@ -172,6 +196,10 @@ namespace aether
 		const VkFormat* pColorFormats = hasColorAttachment ? &desc.colorFormat : nullptr;
 
 		VkPipeline pipeline = VK_NULL_HANDLE;
+		VkPipeline vertInputLib = VK_NULL_HANDLE;
+		VkPipeline preRasterLib = VK_NULL_HANDLE;
+		VkPipeline fragShaderLib = VK_NULL_HANDLE;
+		VkPipeline fragOutputLib = VK_NULL_HANDLE;
 
 		{
 			AE_ASSERT(layout != VK_NULL_HANDLE, "GraphicsPipeline: layout must be valid for GPL creation.");
@@ -189,7 +217,7 @@ namespace aether
 					.pInputAssemblyState = &inputAssembly,
 			        .layout = layout,
 			};
-			VkPipeline vertInputLib = VK_NULL_HANDLE;
+			vertInputLib = VK_NULL_HANDLE;
 			VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
 			if (result != VK_SUCCESS)
 			{
@@ -215,7 +243,7 @@ namespace aether
 			        .pDynamicState = &dynamicState,
 			        .layout = layout,
 			};
-			VkPipeline preRasterLib = VK_NULL_HANDLE;
+			preRasterLib = VK_NULL_HANDLE;
 			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
 			if (result != VK_SUCCESS)
 			{
@@ -246,7 +274,7 @@ namespace aether
 			        .pDepthStencilState = &depthStencil,
 			        .layout = layout,
 			};
-			VkPipeline fragShaderLib = VK_NULL_HANDLE;
+			fragShaderLib = VK_NULL_HANDLE;
 			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragShaderLibInfo, nullptr, &fragShaderLib);
 			if (result != VK_SUCCESS)
 			{
@@ -277,7 +305,7 @@ namespace aether
 			        .pColorBlendState = &colorBlend,
 			        .layout = layout,
 			};
-			VkPipeline fragOutputLib = VK_NULL_HANDLE;
+			fragOutputLib = VK_NULL_HANDLE;
 			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragOutputLibInfo, nullptr, &fragOutputLib);
 			if (result != VK_SUCCESS)
 			{
@@ -312,12 +340,6 @@ namespace aether
 
 			result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
 
-			// Library pipelines served their purpose — no longer needed after linking.
-			vkDestroyPipeline(device, vertInputLib, nullptr);
-			vkDestroyPipeline(device, preRasterLib, nullptr);
-			vkDestroyPipeline(device, fragShaderLib, nullptr);
-			vkDestroyPipeline(device, fragOutputLib, nullptr);
-
 			if (result != VK_SUCCESS)
 			{
 				vkDestroyPipelineLayout(device, layout, nullptr);
@@ -332,6 +354,10 @@ namespace aether
 		out.m_device = device;
 		out.m_layout = layout;
 		out.m_pipeline = pipeline;
+		out.m_vertInputLib = vertInputLib;
+		out.m_preRasterLib = preRasterLib;
+		out.m_fragShaderLib = fragShaderLib;
+		out.m_fragOutputLib = fragOutputLib;
 		out.m_setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size());
 		return out;
 	}

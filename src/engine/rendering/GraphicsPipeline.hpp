@@ -67,6 +67,10 @@ namespace aether
 		VkDevice m_device = VK_NULL_HANDLE;
 		VkPipelineLayout m_layout = VK_NULL_HANDLE;
 		VkPipeline m_pipeline = VK_NULL_HANDLE;
+		VkPipeline m_vertInputLib = VK_NULL_HANDLE;
+		VkPipeline m_preRasterLib = VK_NULL_HANDLE;
+		VkPipeline m_fragShaderLib = VK_NULL_HANDLE;
+		VkPipeline m_fragOutputLib = VK_NULL_HANDLE;
 		std::uint32_t m_setLayoutCount = 0;
 	};
 } // namespace aether
