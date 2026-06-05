@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "vulkan/volk.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 // stb_image - single-header image loader.
 // STB_IMAGE_IMPLEMENTATION must be defined in exactly one compilation unit.
@@ -136,38 +137,11 @@ namespace aether
 			                }));
 
 			{
-				const VkMemoryToImageCopyEXT region{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT,
-				        .pHostPointer = pixels,
-				        .memoryRowLength = 0,
-				        .memoryImageHeight = 0,
-				        .imageSubresource =
-				                {
-				                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				                        .mipLevel = 0,
-				                        .baseArrayLayer = 0,
-				                        .layerCount = 1,
-				                },
-				        .imageOffset = {0, 0, 0},
-				        .imageExtent =
-				                {
-				                        static_cast<std::uint32_t>(width),
-				                        static_cast<std::uint32_t>(height),
-				                        1,
-				                },
-				};
-				const VkCopyMemoryToImageInfoEXT copyInfo{
-				        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT,
-				        .dstImage = image.Get(),
-				        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-				        .regionCount = 1,
-				        .pRegions = &region,
-				};
-			const VkResult copyResult = vkCopyMemoryToImageEXT(device, &copyInfo);
-			if (copyResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadRgbaToGpuImage: vkCopyMemoryToImageEXT failed"));
-			}
+				const VkResult copyResult = vkutil::HostCopyToImage(device, image.Get(), pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+				if (copyResult != VK_SUCCESS)
+				{
+					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadRgbaToGpuImage: HostCopyToImage failed"));
+				}
 			}
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
@@ -272,27 +246,11 @@ namespace aether
 			                }));
 
 			{
-				const VkMemoryToImageCopyEXT region{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT,
-				        .pHostPointer = p,
-				        .memoryRowLength = 0,
-				        .memoryImageHeight = 0,
-				        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-				        .imageOffset = {0, 0, 0},
-				        .imageExtent = {width, height, 1},
-				};
-				const VkCopyMemoryToImageInfoEXT copyInfo{
-				        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT,
-				        .dstImage = image->Get(),
-				        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-				        .regionCount = 1,
-				        .pRegions = &region,
-				};
-			const VkResult copyResult = vkCopyMemoryToImageEXT(device, &copyInfo);
-			if (copyResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadBcnDds: vkCopyMemoryToImageEXT failed"));
-			}
+				const VkResult copyResult = vkutil::HostCopyToImage(device, image->Get(), p, width, height);
+				if (copyResult != VK_SUCCESS)
+				{
+					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadBcnDds: HostCopyToImage failed"));
+				}
 			}
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);

@@ -46,4 +46,38 @@ namespace aether::vkutil
 		};
 		vkCmdPipelineBarrier2(cmd, &dep);
 	}
+
+	inline VkResult HostCopyToImage(VkDevice device, VkImage dstImage, const void* hostData, uint32_t width, uint32_t height)
+	{
+		const VkHostImageLayoutTransitionInfo transition{
+		        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
+		        .image = dstImage,
+		        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+		        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+		};
+		VkResult result = vkTransitionImageLayout(device, 1, &transition);
+		if (result != VK_SUCCESS)
+		{
+			return result;
+		}
+
+		const VkMemoryToImageCopy region{
+		        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
+		        .pHostPointer = hostData,
+		        .memoryRowLength = 0,
+		        .memoryImageHeight = 0,
+		        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+		        .imageOffset = {0, 0, 0},
+		        .imageExtent = {width, height, 1},
+		};
+		const VkCopyMemoryToImageInfo copyInfo{
+		        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
+		        .dstImage = dstImage,
+		        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		        .regionCount = 1,
+		        .pRegions = &region,
+		};
+		return vkCopyMemoryToImage(device, &copyInfo);
+	}
 } // namespace aether::vkutil

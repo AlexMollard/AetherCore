@@ -13,6 +13,7 @@
 
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 #include "gpu/BindlessManager.hpp"
 #include "io/FileSystem.hpp"
@@ -312,26 +313,10 @@ namespace aether
 		}
 
 		{
-			const VkMemoryToImageCopyEXT region{
-			        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT,
-			        .pHostPointer = atlasPixels.data(),
-			        .memoryRowLength = 0,
-			        .memoryImageHeight = 0,
-			        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-			        .imageOffset = {0, 0, 0},
-			        .imageExtent = {atlasW, atlasH, 1},
-			};
-			const VkCopyMemoryToImageInfoEXT copyInfo{
-			        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT,
-			        .dstImage = m_image,
-			        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-			        .regionCount = 1,
-			        .pRegions = &region,
-			};
-			const VkResult copyResult = vkCopyMemoryToImageEXT(device, &copyInfo);
+			const VkResult copyResult = vkutil::HostCopyToImage(device, m_image, atlasPixels.data(), atlasW, atlasH);
 			if (copyResult != VK_SUCCESS)
 			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), std::format("FontAtlas: vkCopyMemoryToImageEXT failed. VkResult={}", static_cast<int>(copyResult))));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), std::format("FontAtlas: HostCopyToImage failed. VkResult={}", static_cast<int>(copyResult))));
 			}
 		}
 
