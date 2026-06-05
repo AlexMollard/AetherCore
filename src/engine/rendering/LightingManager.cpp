@@ -518,7 +518,7 @@ namespace aether
 		}
 
 		const VkDevice device = m_context->GetDevice().device;
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://tiled_light_cull.slang.spv"));
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://tiled_light_cull.spv"));
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "LightingManager"));
 

@@ -101,7 +101,7 @@ namespace aether::app
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        m_assets->CreateGraphicsPipeline({
-		                .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
+		                .shaderVfsPath = "shaders://gltf_mesh.spv",
 		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
 		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		                .depthTestEnable = true,
@@ -120,7 +120,7 @@ namespace aether::app
 			plasmaMat.occlusionStrength = 0.8f;
 
 			const bool ok =
-			        m_effectManager.CreateAndRegister("plasma", *m_assets, bindlessLayout, lightingLayout, aether::PostProcessStack::GetForwardColorFormat(), m_services->Get<Swapchain>().GetDepthFormat(), "shaders://plasma.slang.spv", plasmaMat);
+			        m_effectManager.CreateAndRegister("plasma", *m_assets, bindlessLayout, lightingLayout, aether::PostProcessStack::GetForwardColorFormat(), m_services->Get<Swapchain>().GetDepthFormat(), "shaders://plasma.spv", plasmaMat);
 			if (!ok)
 			{
 				AE_WARN(aether::LogCategory::App, "SandboxGameSystem: failed to create plasma pipeline");

@@ -16,7 +16,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(desc.device,
 		                {
-		                        .shaderVfsPath = "shaders://skybox.slang.spv",
+		                        .shaderVfsPath = "shaders://skybox.spv",
 		                        .colorFormat = desc.hdrColorFormat,
 		                        .depthTestEnable = false,
 		                        .depthWriteEnable = false,

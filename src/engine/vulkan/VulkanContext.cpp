@@ -12,7 +12,7 @@
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
 
-// #define VULKAN_GPU_DEBUG
+#define VULKAN_GPU_DEBUG
 // #define VULKAN_CPU_DEBUG
 
 #if defined(VULKAN_GPU_DEBUG) && defined(VULKAN_CPU_DEBUG)
@@ -139,9 +139,11 @@ namespace aether
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
+		// VK_NV_device_diagnostic_checkpoints provides vkCmdSetCheckpointNV for event markers.
 		{
 			[[maybe_unused]] const bool amEnabled = m_aftermathContext.EnableGpuCrashDumps(".");
 			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 		}
 #endif
 

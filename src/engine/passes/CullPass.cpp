@@ -51,10 +51,10 @@ namespace aether
 			return {};
 		}
 
-		AE_TRY(spirv, io::FileSystem::ReadFile("shaders://cull_draws.slang.spv"));
+		AE_TRY(spirv, io::FileSystem::ReadFile("shaders://cull_draws.spv"));
 		if (spirv->empty())
 		{
-			AE_UNEXPECTED(AetherError::Asset("CullPass: shader not found: shaders://cull_draws.slang.spv"));
+			AE_UNEXPECTED(AetherError::Asset("CullPass: shader not found: shaders://cull_draws.spv"));
 		}
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, *spirv, "CullPass.single"));
@@ -108,10 +108,10 @@ namespace aether
 			return {};
 		}
 
-		AE_TRY(spirv, io::FileSystem::ReadFile("shaders://cull_draws_multi.slang.spv"));
+		AE_TRY(spirv, io::FileSystem::ReadFile("shaders://cull_draws_multi.spv"));
 		if (spirv->empty())
 		{
-			AE_UNEXPECTED(AetherError::Asset("CullPass: multi shader not found: shaders://cull_draws_multi.slang.spv"));
+			AE_UNEXPECTED(AetherError::Asset("CullPass: multi shader not found: shaders://cull_draws_multi.spv"));
 		}
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(m_device, *spirv, "CullPass.multi"));

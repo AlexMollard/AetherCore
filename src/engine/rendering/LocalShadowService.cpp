@@ -47,7 +47,7 @@ namespace aether
 
 		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
-		m_shadowRenderQueue.SetDebugAnimPassMask(0x3u); // Test: PoseInit + AnimSample
+		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
@@ -55,7 +55,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
 		                {
-		                        .shaderVfsPath = "shaders://local_shadow_depth.slang.spv",
+		                        .shaderVfsPath = "shaders://local_shadow_depth.spv",
 		                        .colorFormat = VK_FORMAT_R32G32_SFLOAT,
 		                        .depthFormat = depthFormat,
 		                        .depthTestEnable = true,
@@ -97,7 +97,7 @@ namespace aether
 		m_blurScratch = std::move(scratchImg);
 
 		// ── Create VSM blur compute pipeline ───────────────────────────────
-		AE_EXPECT_OR_THROW(spirvBytes, io::FileSystem::ReadFile("shaders://vsm_blur.slang.spv"));
+		AE_EXPECT_OR_THROW(spirvBytes, io::FileSystem::ReadFile("shaders://vsm_blur.spv"));
 		AE_EXPECT_OR_THROW(blurModule, vkutil::CreateShaderModule(device, spirvBytes, "vsm_blur"));
 
 		// Descriptor set layout: binding 0 = RWTexture2D (storage), binding 1 = Texture2D (combined sampler).

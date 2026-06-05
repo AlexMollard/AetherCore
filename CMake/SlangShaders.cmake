@@ -4,7 +4,7 @@ option(AETHERCORE_ENABLE_SLANG "Enable Slang shader compilation when slangc is a
 set(AETHERCORE_SLANG_ROOT "$ENV{VULKAN_SDK}" CACHE PATH "Root path for Slang SDK/install (defaults to VULKAN_SDK)")
 set(AETHERCORE_SHADER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders" CACHE PATH "Directory containing Slang shader sources")
 set(AETHERCORE_SHADER_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/shaders" CACHE PATH "Directory for compiled shader outputs")
-set(AETHERCORE_SLANG_SHADER_ARGS "-g3 -target spirv -fvk-use-scalar-layout -matrix-layout-column-major" CACHE STRING "Extra arguments passed to slangc for shader compilation")
+set(AETHERCORE_SLANG_SHADER_ARGS "-target spirv -emit-spirv-directly -fvk-use-scalar-layout -matrix-layout-column-major" CACHE STRING "Extra arguments passed to slangc for shader compilation")
 
 function(aethercore_enable_slang_shader_compilation target_name)
     if (NOT AETHERCORE_ENABLE_SLANG)
@@ -64,20 +64,22 @@ function(aethercore_enable_slang_shader_compilation target_name)
     # Convert the configurable args string into a proper argument list.
     set(_aethercore_slang_arg_list "")
     if (AETHERCORE_SLANG_SHADER_ARGS)
-        separate_arguments(_aethercore_slang_arg_list NATIVE_COMMAND "${AETHERCORE_SLANG_SHADER_ARGS}")
+        separate_arguments(_aethercore_slang_arg_list UNIX_COMMAND "${AETHERCORE_SLANG_SHADER_ARGS}")
     endif()
 
     set(AETHERCORE_SHADER_OUTPUTS "")
 
     foreach(_shader_source IN LISTS AETHERCORE_SHADER_SOURCES)
         file(RELATIVE_PATH _shader_rel "${AETHERCORE_SHADER_SOURCE_DIR}" "${_shader_source}")
-        set(_shader_output "${AETHERCORE_SHADER_OUTPUT_DIR}/${_shader_rel}.spv")
+        get_filename_component(_shader_stem  "${_shader_rel}" NAME_WE)
+        get_filename_component(_shader_parent "${_shader_rel}" DIRECTORY)
+        set(_shader_output "${AETHERCORE_SHADER_OUTPUT_DIR}/${_shader_parent}/${_shader_stem}.spv")
         get_filename_component(_shader_output_dir "${_shader_output}" DIRECTORY)
 
         add_custom_command(
             OUTPUT "${_shader_output}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_shader_output_dir}"
-            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_arg_list} -o "${_shader_output}" "${_shader_source}"
+            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_arg_list} "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g3>" -o "${_shader_output}" "${_shader_source}"
             DEPENDS "${_shader_source}" ${AETHERCORE_SHADER_HEADERS}
             COMMENT "Compiling Slang shader ${_shader_rel}"
             VERBATIM
@@ -86,7 +88,7 @@ function(aethercore_enable_slang_shader_compilation target_name)
         list(APPEND AETHERCORE_SHADER_OUTPUTS "${_shader_output}")
     endforeach()
 
-    add_custom_target(CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
-    set_target_properties(CompileShaders PROPERTIES FOLDER "CMake")
-    add_dependencies(${target_name} CompileShaders)
+    add_custom_target(${target_name}_CompileShaders ALL DEPENDS ${AETHERCORE_SHADER_OUTPUTS})
+    set_target_properties(${target_name}_CompileShaders PROPERTIES FOLDER "CMake")
+    add_dependencies(${target_name} ${target_name}_CompileShaders)
 endfunction()

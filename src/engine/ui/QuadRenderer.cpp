@@ -28,7 +28,7 @@ namespace aether
 		}
 
 		const VkDevice device = m_vkCtx->GetDevice().device;
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ui_build_draws.slang.spv"));
+		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ui_build_draws.spv"));
 
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
 
@@ -265,7 +265,7 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
-		                .shaderVfsPath = "shaders://ui_shapes.slang.spv",
+		                .shaderVfsPath = "shaders://ui_shapes.spv",
 		                .colorFormat = m_swapchain->GetImageFormat(),
 		                .depthFormat = VK_FORMAT_UNDEFINED,
 		                .depthTestEnable = false,

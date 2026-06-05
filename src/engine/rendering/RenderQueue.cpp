@@ -962,7 +962,7 @@ namespace aether
 	void RenderQueueSharedPipelines::Initialize(VkDevice device)
 	{
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.slang.spv"));
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.spv"));
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
@@ -1005,7 +1005,7 @@ namespace aether
 		}
 
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.slang.spv"));
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.spv"));
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
@@ -1048,7 +1048,7 @@ namespace aether
 		}
 
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://pose_init.slang.spv"));
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://pose_init.spv"));
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
@@ -1091,7 +1091,7 @@ namespace aether
 		}
 
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://node_flatten.slang.spv"));
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://node_flatten.spv"));
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{

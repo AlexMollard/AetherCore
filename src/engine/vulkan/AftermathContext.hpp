@@ -15,13 +15,21 @@ namespace aether
 {
 	// Lightweight wrapper around NVIDIA Aftermath SDK for GPU crash diagnostics.
 	//
-	// Usage:
-	//   1. Call EnableGpuCrashDumps() once, early (before VkDevice creation).
-	//   2. After creating VkDevice, call Initialize(VkDevice, VkPhysicalDevice).
-	//   3. Before shutdown call Shutdown() / DisableGpuCrashDumps().
+	// Vulkan path:
+	//   - Feature flags are configured via VK_NV_device_diagnostics_config
+	//     (VkDeviceDiagnosticsConfigCreateInfoNV in the device pNext chain).
+	//   - Event markers use VK_NV_device_diagnostic_checkpoints (vkCmdSetCheckpointNV).
+	//   - There is no separate GFSDK_Aftermath_VK_InitializeDevice in this SDK version.
 	//
-	// Resource tracking and shader debug info are enabled via the
-	// VK_NV_device_diagnostics_config extension during device creation.
+	// Usage:
+	//   1. Call EnableGpuCrashDumps(crashDumpDir) once, before VkDevice creation.
+	//   2. Add VK_NV_device_diagnostics_config to device extension list
+	//      with VkDeviceDiagnosticsConfigCreateInfoNV in pNext.
+	//   3. Add VK_NV_device_diagnostic_checkpoints to device extension list
+	//      for per-command-buffer event markers.
+	//   4. After creating VkDevice, call Initialize(VkDevice, VkPhysicalDevice).
+	//   5. Call SetEventMarker() on command buffers to add checkpoint breadcrumbs.
+	//   6. Before shutdown call Shutdown() / DisableGpuCrashDumps().
 	class AftermathContext
 	{
 	public:
@@ -38,6 +46,8 @@ namespace aether
 		[[nodiscard]] bool EnableGpuCrashDumps(const char* crashDumpDir);
 		[[nodiscard]] bool Initialize(VkDevice device, VkPhysicalDevice physicalDevice);
 
+		// Insert an event marker via vkCmdSetCheckpointNV.
+		// Requires VK_NV_device_diagnostic_checkpoints to be enabled at device creation.
 		void SetEventMarker(VkCommandBuffer cmd, std::string_view markerName) const;
 
 		void Shutdown();
@@ -46,6 +56,11 @@ namespace aether
 		[[nodiscard]] bool IsInitialized() const
 		{
 			return m_initialized;
+		}
+
+		[[nodiscard]] const std::string& GetCrashDumpDir() const
+		{
+			return m_crashDumpDir;
 		}
 
 	private:
@@ -57,6 +72,7 @@ namespace aether
 		bool m_crashDumpsEnabled = false;
 		bool m_initialized = false;
 		VkDevice m_device = VK_NULL_HANDLE;
+		std::string m_crashDumpDir;
 	};
 } // namespace aether
 
@@ -92,6 +108,11 @@ namespace aether
 		{
 			return false;
 		}
+		[[nodiscard]] const std::string& GetCrashDumpDir() const
+		{
+			return m_empty;
+		}
+		std::string m_empty;
 	};
 } // namespace aether
 

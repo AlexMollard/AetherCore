@@ -43,7 +43,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(tonemapPipeline,
 		        GraphicsPipeline::Create(desc.device,
 		                {
-		                        .shaderVfsPath = "shaders://tonemap.slang.spv",
+		                        .shaderVfsPath = "shaders://tonemap.spv",
 		                        .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
 		                        .pushConstantSize = 3 * sizeof(uint32_t),
 		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -54,7 +54,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(fxaaPipeline,
 		        GraphicsPipeline::Create(desc.device,
 		                {
-		                        .shaderVfsPath = "shaders://fxaa.slang.spv",
+		                        .shaderVfsPath = "shaders://fxaa.spv",
 		                        .colorFormat = desc.swapchainFormat,
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
 		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,

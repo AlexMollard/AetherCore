@@ -34,7 +34,7 @@ namespace aether
 		        m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
-		m_shadowRenderQueue.SetDebugAnimPassMask(0x3u); // Test: PoseInit + AnimSample
+		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
 		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
 	}
@@ -58,7 +58,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(shadowPipeline,
 		        GraphicsPipeline::Create(device,
 		                {
-		                        .shaderVfsPath = "shaders://shadow_depth.slang.spv",
+		                        .shaderVfsPath = "shaders://shadow_depth.spv",
 		                        .colorFormat = VK_FORMAT_UNDEFINED,
 		                        .depthFormat = depthFormat,
 		                        .depthTestEnable = true,

@@ -38,7 +38,7 @@ namespace aether::app
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://gltf_mesh.slang.spv",
+		        .shaderVfsPath = "shaders://gltf_mesh.spv",
 		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
 		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
@@ -146,7 +146,7 @@ namespace aether::app
 			plasmaMat.roughnessFactor = 2.0f;                       // scale
 			plasmaMat.occlusionStrength = 0.8f;                     // intensity
 
-			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, lightingLayout, colorFormat, depthFormat, "shaders://plasma.slang.spv", plasmaMat);
+			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, lightingLayout, colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
 		}
 
 		m_sceneCtx.world = &context.Get<World>();
