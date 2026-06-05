@@ -4,10 +4,18 @@
 
 #include "rendering/CommandRecorder.hpp"
 
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+#	include "vulkan/AftermathContext.hpp"
+#endif
+
 namespace aether::vkutil
 {
 	Expected<VkShaderModule> CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
 	{
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		AftermathContext::RegisterShaderBinary(spirv.data(), static_cast<uint32_t>(spirv.size()));
+#endif
+
 		const VkShaderModuleCreateInfo info{
 		        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
 		        .codeSize = spirv.size(),

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "utils/Logger.hpp"
@@ -16,6 +17,58 @@ namespace aether
 {
 	namespace
 	{
+		struct ShaderDebugInfoIdentifierHash
+		{
+			std::size_t operator()(const GFSDK_Aftermath_ShaderDebugInfoIdentifier& id) const
+			{
+				std::size_t h = 0;
+				for (int i = 0; i < 32; ++i)
+				{
+					h ^= static_cast<std::size_t>(id.id[i]) << ((i % 8) * 8);
+				}
+				return h;
+			}
+		};
+
+		struct ShaderDebugInfoIdentifierEqual
+		{
+			bool operator()(const GFSDK_Aftermath_ShaderDebugInfoIdentifier& a, const GFSDK_Aftermath_ShaderDebugInfoIdentifier& b) const
+			{
+				for (int i = 0; i < 32; ++i)
+				{
+					if (a.id[i] != b.id[i])
+					{
+						return false;
+					}
+				}
+				return true;
+			}
+		};
+
+		using ShaderDebugInfoMap = std::unordered_map<GFSDK_Aftermath_ShaderDebugInfoIdentifier, std::vector<std::uint8_t>, ShaderDebugInfoIdentifierHash, ShaderDebugInfoIdentifierEqual>;
+
+		ShaderDebugInfoMap s_shaderDebugInfoMap;
+
+		struct ShaderBinaryHashHash
+		{
+			std::size_t operator()(const GFSDK_Aftermath_ShaderBinaryHash& h) const
+			{
+				return static_cast<std::size_t>(h.hash);
+			}
+		};
+
+		struct ShaderBinaryHashEqual
+		{
+			bool operator()(const GFSDK_Aftermath_ShaderBinaryHash& a, const GFSDK_Aftermath_ShaderBinaryHash& b) const
+			{
+				return a.hash == b.hash;
+			}
+		};
+
+		using ShaderBinaryMap = std::unordered_map<GFSDK_Aftermath_ShaderBinaryHash, std::vector<std::uint8_t>, ShaderBinaryHashHash, ShaderBinaryHashEqual>;
+
+		ShaderBinaryMap s_shaderBinaryMap;
+
 		std::filesystem::path BuildDumpPath(const std::filesystem::path& baseDir, const std::string& prefix, const std::string& extension)
 		{
 			const auto now = std::chrono::system_clock::now();
@@ -33,20 +86,57 @@ namespace aether
 			std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", &timeInfo);
 
 			char filename[256];
-			std::snprintf(filename, sizeof(filename), "%s%s_%03d%s", prefix.c_str(), timeBuf, static_cast<int>(ms.count()), extension.c_str());
+			std::snprintf(filename, sizeof(filename), "%s_%s_%03d%s", prefix.c_str(), timeBuf, static_cast<int>(ms.count()), extension.c_str());
 
 			return baseDir / filename;
 		}
 
-		void WriteRawDumpToDisk(const std::filesystem::path& baseDir, const void* data, std::uint32_t size, const std::string& prefix, const std::string& extension)
+		void GFSDK_AFTERMATH_CALL ShaderDebugInfoLookup(const GFSDK_Aftermath_ShaderDebugInfoIdentifier* pIdentifier, PFN_GFSDK_Aftermath_SetData setShaderDebugInfo, void* /*pUserData*/)
 		{
-			auto path = BuildDumpPath(baseDir, prefix, extension);
+			auto it = s_shaderDebugInfoMap.find(*pIdentifier);
+			if (it != s_shaderDebugInfoMap.end())
+			{
+				setShaderDebugInfo(it->second.data(), static_cast<std::uint32_t>(it->second.size()));
+			}
+		}
 
-			std::ofstream out(path, std::ios::binary);
-			out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
-			out.close();
+		void GFSDK_AFTERMATH_CALL ShaderBinaryLookup(const GFSDK_Aftermath_ShaderBinaryHash* pShaderHash, PFN_GFSDK_Aftermath_SetData setShaderBinary, void* /*pUserData*/)
+		{
+			auto it = s_shaderBinaryMap.find(*pShaderHash);
+			if (it != s_shaderBinaryMap.end())
+			{
+				setShaderBinary(it->second.data(), static_cast<std::uint32_t>(it->second.size()));
+			}
+		}
 
-			AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: {} written to {} ({} bytes)", prefix, path.string(), size);
+		std::uint32_t ComputeDecoderFlags()
+		{
+			return GFSDK_Aftermath_GpuCrashDumpDecoderFlags_ALL_INFO & ~GFSDK_Aftermath_GpuCrashDumpDecoderFlags_SHADER_MAPPING_INFO;
+		}
+
+		void RegisterShaderBinaryData(const void* pSpirv, uint32_t spirvSize)
+		{
+			if (!pSpirv || spirvSize == 0)
+			{
+				return;
+			}
+
+			GFSDK_Aftermath_SpirvCode spirvCode{};
+			spirvCode.pData = pSpirv;
+			spirvCode.size = spirvSize;
+
+			GFSDK_Aftermath_ShaderBinaryHash hash{};
+			GFSDK_Aftermath_Result result = GFSDK_Aftermath_GetShaderHashSpirv(
+			        GFSDK_Aftermath_Version_API,
+			        &spirvCode,
+			        &hash);
+			if (result != GFSDK_Aftermath_Result_Success)
+			{
+				return;
+			}
+
+			std::vector<std::uint8_t> copy(static_cast<const std::uint8_t*>(pSpirv), static_cast<const std::uint8_t*>(pSpirv) + spirvSize);
+			s_shaderBinaryMap[hash] = std::move(copy);
 		}
 
 		void WriteCrashDumpToDisk(const std::string& dir, const void* data, std::uint32_t size)
@@ -70,30 +160,50 @@ namespace aether
 				        data,
 				        size,
 				        &decoder);
-				if (decResult == GFSDK_Aftermath_Result_Success)
+				if (decResult != GFSDK_Aftermath_Result_Success)
 				{
-					const std::uint32_t decFlags = 0x3EFFu; // ALL_INFO minus SHADER_MAPPING_INFO
-					const std::uint32_t jsonFlags = 0u;
-					std::uint32_t jsonSize = 0;
-					decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
-					        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, nullptr, &jsonSize);
-					if (decResult == GFSDK_Aftermath_Result_Success && jsonSize > 0)
-					{
-						std::vector<char> jsonBuf(jsonSize + 1);
-						decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
-						        decoder, decFlags, jsonFlags, nullptr, nullptr, nullptr, jsonBuf.data(), &jsonSize);
-						if (decResult == GFSDK_Aftermath_Result_Success)
-						{
-							jsonBuf[jsonSize] = '\0';
-							auto jsonPath = baseDir / (path.stem().string() + ".json");
-							std::ofstream jsonOut(jsonPath, std::ios::binary);
-							jsonOut.write(jsonBuf.data(), static_cast<std::streamsize>(jsonSize));
-							jsonOut.close();
-							AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: JSON dump written to {}", jsonPath.string());
-						}
-					}
-					GFSDK_Aftermath_GpuCrashDump_DestroyDecoder(decoder);
+					AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to create crash dump decoder (result={})", static_cast<std::uint32_t>(decResult));
+					return;
 				}
+
+				const std::uint32_t decFlags = ComputeDecoderFlags();
+				const std::uint32_t jsonFlags = 0u;
+				std::uint32_t jsonSize = 0;
+				decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
+				        decoder, decFlags, jsonFlags,
+				        ShaderDebugInfoLookup, ShaderBinaryLookup, nullptr, nullptr, &jsonSize);
+				if (decResult != GFSDK_Aftermath_Result_Success)
+				{
+					AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GenerateJSON failed (result={})", static_cast<std::uint32_t>(decResult));
+					GFSDK_Aftermath_GpuCrashDump_DestroyDecoder(decoder);
+					return;
+				}
+
+				if (jsonSize == 0)
+				{
+					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: GenerateJSON returned zero size");
+					GFSDK_Aftermath_GpuCrashDump_DestroyDecoder(decoder);
+					return;
+				}
+
+				std::vector<char> jsonBuf(jsonSize + 1);
+				GFSDK_Aftermath_GpuCrashDump_GetJSON(decoder, jsonSize + 1, jsonBuf.data());
+
+				std::streamsize writeSize = static_cast<std::streamsize>(jsonSize);
+				if (writeSize > 0 && jsonBuf[writeSize - 1] == '\0')
+				{
+					writeSize--;
+				}
+
+				auto jsonPath = baseDir / (path.stem().string() + ".json");
+				std::ofstream jsonOut(jsonPath, std::ios::binary);
+				jsonOut.write(jsonBuf.data(), writeSize);
+				jsonOut.close();
+				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: JSON dump written to {} ({} bytes)", jsonPath.string(), writeSize);
+
+				GFSDK_Aftermath_GpuCrashDump_DestroyDecoder(decoder);
+				s_shaderDebugInfoMap.clear();
+				s_shaderBinaryMap.clear();
 			}
 			catch (...)
 			{
@@ -106,7 +216,26 @@ namespace aether
 			try
 			{
 				std::filesystem::create_directories(baseDir);
-				WriteRawDumpToDisk(baseDir, data, size, "shader_debug", ".nvdbg");
+
+				GFSDK_Aftermath_ShaderDebugInfoIdentifier identifier{};
+				GFSDK_Aftermath_Result idResult = GFSDK_Aftermath_GetShaderDebugInfoIdentifier(
+				        GFSDK_Aftermath_Version_API,
+				        data,
+				        size,
+				        &identifier);
+				if (idResult == GFSDK_Aftermath_Result_Success)
+				{
+					std::vector<std::uint8_t> copy(static_cast<const std::uint8_t*>(data), static_cast<const std::uint8_t*>(data) + size);
+					s_shaderDebugInfoMap[identifier] = std::move(copy);
+				}
+
+				auto path = BuildDumpPath(baseDir, "shader_debug", ".nvdbg");
+
+				std::ofstream out(path, std::ios::binary);
+				out.write(static_cast<const char*>(data), static_cast<std::streamsize>(size));
+				out.close();
+
+				AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: shader debug info written to {}", path.string());
 			}
 			catch (...)
 			{
@@ -114,6 +243,11 @@ namespace aether
 			}
 		}
 	} // namespace
+
+	void AftermathContext::RegisterShaderBinary(const void* pSpirv, uint32_t spirvSize)
+	{
+		RegisterShaderBinaryData(pSpirv, spirvSize);
+	}
 
 	void GFSDK_AFTERMATH_CALL AftermathContext::OnCrashDump(const void* pGpuCrashDump, std::uint32_t gpuCrashDumpSize, void* pUserData)
 	{
@@ -165,7 +299,7 @@ namespace aether
 		GFSDK_Aftermath_Result result = GFSDK_Aftermath_EnableGpuCrashDumps(
 		        GFSDK_Aftermath_Version_API,
 		        GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan,
-		        GFSDK_Aftermath_GpuCrashDumpFeatureFlags_DeferDebugInfoCallbacks,
+		        GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default,
 		        OnCrashDump,
 		        OnShaderDebugInfo,
 		        OnDescription,
@@ -179,7 +313,7 @@ namespace aether
 		}
 
 		m_crashDumpsEnabled = true;
-		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dumps enabled (deferred debug info)");
+		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dumps enabled");
 		return true;
 	}
 

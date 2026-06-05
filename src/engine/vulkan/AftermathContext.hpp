@@ -7,6 +7,10 @@
 #include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
+// volk.h includes vulkan_core.h but not vulkan.h. The Aftermath SDK guards
+// SpirvCode / GetShaderHashSpirv behind VULKAN_H_ (from vulkan.h umbrella).
+#include <vulkan/vulkan.h>
+
 #include <GFSDK_Aftermath.h>
 #include <GFSDK_Aftermath_GpuCrashDump.h>
 #include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
@@ -62,6 +66,10 @@ namespace aether
 		{
 			return m_crashDumpDir;
 		}
+
+		// Register SPIR-V binary for shader lookup during GPU crash dump decoding.
+		// Must be called with the exact bytes passed to vkCreateShaderModule.
+		static void RegisterShaderBinary(const void* pSpirv, uint32_t spirvSize);
 
 	private:
 		static void GFSDK_AFTERMATH_CALL OnCrashDump(const void* pGpuCrashDump, std::uint32_t gpuCrashDumpSize, void* pUserData);
