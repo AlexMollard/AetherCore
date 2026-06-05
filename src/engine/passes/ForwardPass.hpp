@@ -19,6 +19,6 @@ namespace aether
 	{
 	public:
 		void RegisterPass(
-		        RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<VkDescriptorSet()> getLightingSet, std::span<const RGImage> shadowMaps = {}, RGImage localShadowAtlas = {});
+		        RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps = {}, RGImage localShadowAtlas = {});
 	};
 } // namespace aether

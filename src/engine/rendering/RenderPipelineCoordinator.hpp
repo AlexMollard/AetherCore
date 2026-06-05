@@ -31,7 +31,7 @@ namespace aether
 		CullPass& cullPass;
 		RenderQueue& mainRenderQueue;
 		ForwardPass& forwardPass;
-		std::function<VkDescriptorSet()> getLightingSet;
+		std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn;
 		RenderTargetService& renderTargetService;
 	};
 

@@ -32,7 +32,7 @@ namespace aether
 		        ctx.graph.GetSwapchainDepth(),
 		        ctx.mainRenderQueue,
 		        ctx.bindlessManager.GetSet(),
-		        std::move(ctx.getLightingSet),
+		        std::move(ctx.pushLightingFn),
 		        ctx.shadowService.GetShadowDepthImages(),
 		        ctx.localShadowService.GetAtlasRGImage());
 

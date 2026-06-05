@@ -852,13 +852,18 @@ namespace aether
 		FlushDrawImpl(recorder, bindlessSet, lightingSet, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
+	void RenderQueue::FlushDrawPush(CommandRecorder& recorder, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	{
+		FlushDrawImpl(recorder, bindlessSet, VK_NULL_HANDLE, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
+	}
+
 	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		FlushDrawImpl(recorder, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
 	void RenderQueue::FlushDrawImpl(
-	        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
+	        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b, const LightingPushFn& pushLightingFn)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -906,7 +911,12 @@ namespace aether
 				lastSetPipeline = activePipeline;
 			}
 
-			if (lightingSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
+			if (pushLightingFn && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
+			{
+				pushLightingFn(recorder.GetCommandBuffer(), activePipeline->GetLayout());
+				lastLightingSetPipeline = activePipeline;
+			}
+			else if (lightingSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
 			{
 				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
 				lastLightingSetPipeline = activePipeline;

@@ -275,7 +275,11 @@ namespace aether
 			                }
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
-			                rit->second.renderQueue.FlushDraw(ctx.recorder, m_bindlessManager->GetSet(), m_lightingManager->GetSet(frameIdx));
+			                auto pushLighting = [this, frameIdx](VkCommandBuffer cmd, VkPipelineLayout layout)
+			                {
+				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
+			                };
+			                rit->second.renderQueue.FlushDrawPush(ctx.recorder, m_bindlessManager->GetSet(), pushLighting);
 			                rit->second.renderQueue.Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}

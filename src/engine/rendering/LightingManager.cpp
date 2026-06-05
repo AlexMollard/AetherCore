@@ -53,6 +53,7 @@ namespace aether
 
 		const VkDescriptorSetLayoutCreateInfo layoutInfo{
 		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
 		        .bindingCount = static_cast<std::uint32_t>(std::size(bindings)),
 		        .pBindings = bindings,
 		};
@@ -61,38 +62,9 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor set layout."));
 		}
 
-		const VkDescriptorPoolSize poolSize{
-		        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		        .descriptorCount = 3u * kMaxFramesInFlight,
-		};
-		const VkDescriptorPoolCreateInfo poolInfo{
-		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		        .maxSets = kMaxFramesInFlight,
-		        .poolSizeCount = 1,
-		        .pPoolSizes = &poolSize,
-		};
-		if (vkCreateDescriptorPool(device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor pool."));
-		}
-
-		std::array<VkDescriptorSetLayout, kMaxFramesInFlight> layouts{};
-		layouts.fill(m_setLayout);
-		const VkDescriptorSetAllocateInfo allocInfo{
-		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		        .descriptorPool = m_descriptorPool,
-		        .descriptorSetCount = kMaxFramesInFlight,
-		        .pSetLayouts = layouts.data(),
-		};
-		if (vkAllocateDescriptorSets(device, &allocInfo, m_sets.data()) != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to allocate lighting descriptor sets."));
-		}
-
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			EnsureBuffers(i, 1, 1, 1);
-			UpdateDescriptorSet(i);
 		}
 	}
 
@@ -135,18 +107,12 @@ namespace aether
 			vkDestroyPipelineLayout(device, m_computeLayout, nullptr);
 			m_computeLayout = VK_NULL_HANDLE;
 		}
-		if (m_descriptorPool != VK_NULL_HANDLE)
-		{
-			vkDestroyDescriptorPool(device, m_descriptorPool, nullptr);
-			m_descriptorPool = VK_NULL_HANDLE;
-		}
 		if (m_setLayout != VK_NULL_HANDLE)
 		{
 			vkDestroyDescriptorSetLayout(device, m_setLayout, nullptr);
 			m_setLayout = VK_NULL_HANDLE;
 		}
 
-		m_sets.fill(VK_NULL_HANDLE);
 		m_context = nullptr;
 		m_renderer = nullptr;
 	}
@@ -156,9 +122,48 @@ namespace aether
 		return m_setLayout;
 	}
 
-	VkDescriptorSet LightingManager::GetSet(const std::uint32_t frameSlot) const
+	void LightingManager::PushLightingDescriptor(const VkCommandBuffer cmd, const VkPipelineLayout layout, const std::uint32_t frameSlot) const
 	{
-		return m_sets[frameSlot];
+		auto& frame = m_buffers[frameSlot];
+		const VkDescriptorBufferInfo lightInfo{
+		        .buffer = frame.lights.Get(),
+		        .offset = 0,
+		        .range = frame.lights.GetSize(),
+		};
+		const VkDescriptorBufferInfo headerInfo{
+		        .buffer = frame.tileHeaders.Get(),
+		        .offset = 0,
+		        .range = frame.tileHeaders.GetSize(),
+		};
+		const VkDescriptorBufferInfo indexInfo{
+		        .buffer = frame.tileIndices.Get(),
+		        .offset = 0,
+		        .range = frame.tileIndices.GetSize(),
+		};
+		const VkWriteDescriptorSet writes[] = {
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstBinding = 0,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &lightInfo,
+		        },
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstBinding = 1,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &headerInfo,
+		        },
+		        {
+		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                .dstBinding = 2,
+		                .descriptorCount = 1,
+		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .pBufferInfo = &indexInfo,
+		        },
+		};
+		vkCmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, static_cast<std::uint32_t>(std::size(writes)), writes);
 	}
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
@@ -252,7 +257,6 @@ namespace aether
 			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
 		}
 		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
-		UpdateDescriptorSet(frameSlot);
 
 		EnsureComputePipeline();
 
@@ -278,8 +282,48 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &hostToComputeDep);
 
-		const VkDescriptorSet set = m_sets[frameSlot];
-		vkCmdBindDescriptorSets(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, 1, &set, 0, nullptr);
+		{
+			const auto& frame = m_buffers[frameSlot];
+			const VkDescriptorBufferInfo lightInfo{
+			        .buffer = frame.lights.Get(),
+			        .offset = 0,
+			        .range = frame.lights.GetSize(),
+			};
+			const VkDescriptorBufferInfo headerInfo{
+			        .buffer = frame.tileHeaders.Get(),
+			        .offset = 0,
+			        .range = frame.tileHeaders.GetSize(),
+			};
+			const VkDescriptorBufferInfo indexInfo{
+			        .buffer = frame.tileIndices.Get(),
+			        .offset = 0,
+			        .range = frame.tileIndices.GetSize(),
+			};
+			const VkWriteDescriptorSet writes[] = {
+			        {
+			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                .dstBinding = 0,
+			                .descriptorCount = 1,
+			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			                .pBufferInfo = &lightInfo,
+			        },
+			        {
+			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                .dstBinding = 1,
+			                .descriptorCount = 1,
+			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			                .pBufferInfo = &headerInfo,
+			        },
+			        {
+			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                .dstBinding = 2,
+			                .descriptorCount = 1,
+			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+			                .pBufferInfo = &indexInfo,
+			        },
+			};
+			vkCmdPushDescriptorSetKHR(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, static_cast<std::uint32_t>(std::size(writes)), writes);
+		}
 		vkCmdPushConstants(cmd.GetCommandBuffer(), m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
 
 		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
@@ -463,7 +507,6 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
 		AE_EXPECT_OR_THROW_VOID(frame.tileHeaders.FlushMapped());
 		AE_EXPECT_OR_THROW_VOID(frame.tileIndices.FlushMapped());
-		UpdateDescriptorSet(frameSlot);
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
@@ -586,59 +629,6 @@ namespace aether
 		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
-	}
-
-	void LightingManager::UpdateDescriptorSet(const std::uint32_t frameSlot) const
-	{
-		if (m_sets[frameSlot] == VK_NULL_HANDLE)
-		{
-			return;
-		}
-
-		auto& frame = m_buffers[frameSlot];
-		const VkDescriptorBufferInfo lightInfo{
-		        .buffer = frame.lights.Get(),
-		        .offset = 0,
-		        .range = frame.lights.GetSize(),
-		};
-		const VkDescriptorBufferInfo headerInfo{
-		        .buffer = frame.tileHeaders.Get(),
-		        .offset = 0,
-		        .range = frame.tileHeaders.GetSize(),
-		};
-		const VkDescriptorBufferInfo indexInfo{
-		        .buffer = frame.tileIndices.Get(),
-		        .offset = 0,
-		        .range = frame.tileIndices.GetSize(),
-		};
-
-		const VkWriteDescriptorSet writes[] = {
-		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		                .dstSet = m_sets[frameSlot],
-		                .dstBinding = 0,
-		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &lightInfo,
-		        },
-		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		                .dstSet = m_sets[frameSlot],
-		                .dstBinding = 1,
-		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &headerInfo,
-		        },
-		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-		                .dstSet = m_sets[frameSlot],
-		                .dstBinding = 2,
-		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &indexInfo,
-		        },
-		};
-		vkUpdateDescriptorSets(m_context->GetDevice().device, static_cast<std::uint32_t>(std::size(writes)), writes, 0, nullptr);
 	}
 
 	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)

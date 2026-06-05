@@ -1,7 +1,9 @@
 #pragma once
 
+#include <functional>
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <glm/glm.hpp>
 #include <vector>
 #include "vulkan/volk.hpp"
@@ -183,6 +185,7 @@ namespace aether
 		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
 		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawPush(CommandRecorder& recorder, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
@@ -251,9 +254,11 @@ namespace aether
 		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu; // bit 0=PoseInit, 1=AnimSample, 2=NodeFlatten, 3=SkinCopy
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
-		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr.
+		using LightingPushFn = std::function<void(VkCommandBuffer, VkPipelineLayout)>;
+
+		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
 		void FlushDrawImpl(
-		        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
+		        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b, const LightingPushFn& pushLightingFn = {});
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

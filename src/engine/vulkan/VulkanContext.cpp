@@ -139,6 +139,12 @@ namespace aether
 		// maintenance9 (promoted to 1.4 spec but still KHR in this SDK) allows queue
 		// family ownership transfers to be omitted when both queue families are compatible.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
+		// Push descriptors eliminate per-frame VkDescriptorPool allocation — write descriptors
+		// directly into the command buffer at bind time.
+		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
+		// Graphics pipeline libraries allow pre-compiling shader stages independently,
+		// reducing pipeline creation time for material variants.
+		selector.add_required_extension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
@@ -162,13 +168,25 @@ namespace aether
 		        .maintenance9 = VK_TRUE,
 		};
 
+		VkPhysicalDevicePushDescriptorFeaturesKHR pushDescriptorFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_FEATURES_KHR,
+		        .pushDescriptor = VK_TRUE,
+		};
+
+		VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gplFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,
+		        .graphicsPipelineLibrary = VK_TRUE,
+		};
+
 		VkPhysicalDeviceVulkan14Features features14{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
 		        .hostImageCopy = VK_TRUE,
 		};
 
-		// pNext: features14 → maintenance9Features → diagnosticsConfig
+		// pNext: features14 → maintenance9Features → pushDescriptorFeatures → gplFeatures
 		features14.pNext = &maintenance9Features;
+		maintenance9Features.pNext = &pushDescriptorFeatures;
+		pushDescriptorFeatures.pNext = &gplFeatures;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
@@ -179,7 +197,7 @@ namespace aether
 		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
 		};
 
-		maintenance9Features.pNext = &diagnosticsConfig;
+		gplFeatures.pNext = &diagnosticsConfig;
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};

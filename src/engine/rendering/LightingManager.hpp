@@ -49,7 +49,9 @@ namespace aether
 		}
 
 		[[nodiscard]] VkDescriptorSetLayout GetSetLayout() const;
-		[[nodiscard]] VkDescriptorSet GetSet(std::uint32_t frameSlot) const;
+		// Push lighting descriptors (3 storage buffers) directly into the command buffer
+		// at setIndex in the given pipeline layout. Replaces per-frame VkDescriptorSet allocation.
+		void PushLightingDescriptor(VkCommandBuffer cmd, VkPipelineLayout layout, std::uint32_t frameSlot) const;
 
 		void UpdateForView(std::uint32_t frameSlot,
 		        CommandRecorder& cmd,
@@ -98,7 +100,6 @@ namespace aether
 
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void UpdateForViewGpu(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
-		void UpdateDescriptorSet(std::uint32_t frameSlot) const;
 		void DisableForView(FrameConstants& fc) const;
 
 		const VulkanContext* m_context = nullptr;
@@ -107,8 +108,6 @@ namespace aether
 		mutable VkPipelineLayout m_computeLayout = VK_NULL_HANDLE;
 		mutable VkPipeline m_initPipeline = VK_NULL_HANDLE;
 		mutable VkPipeline m_cullPipeline = VK_NULL_HANDLE;
-		VkDescriptorPool m_descriptorPool = VK_NULL_HANDLE;
-		std::array<VkDescriptorSet, kMaxFramesInFlight> m_sets{};
 		mutable std::array<FrameLightingBuffers, kMaxFramesInFlight> m_buffers;
 		bool m_rttBinningEnabled = false;
 		bool m_gpuBinningEnabled = true;

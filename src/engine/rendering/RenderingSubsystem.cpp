@@ -140,11 +140,11 @@ namespace aether
 		        .cullPass = m_cullPass,
 		        .mainRenderQueue = m_renderQueue,
 		        .forwardPass = m_forwardPass,
-		        .getLightingSet =
-		                [this, &lighting]()
+		        .pushLightingFn =
+		                [this, &lighting](VkCommandBuffer cmd, VkPipelineLayout layout)
 		        {
 			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-			        return lighting.GetSet(frameIdx);
+			        lighting.PushLightingDescriptor(cmd, layout, frameIdx);
 		        },
 		        .renderTargetService = m_renderTargetService,
 		};
