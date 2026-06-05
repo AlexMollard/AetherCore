@@ -89,16 +89,20 @@ namespace aether
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult))));
 			}
-			const VkSubmitInfo si{
-			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			        .commandBufferCount = 1,
-			        .pCommandBuffers = &cmd,
+			const VkCommandBufferSubmitInfo cbInfo{
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			        .commandBuffer = cmd,
 			};
-			const VkResult submitResult = vkQueueSubmit(queue, 1, &si, VK_NULL_HANDLE);
+			const VkSubmitInfo2 si{
+			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			        .commandBufferInfoCount = 1,
+			        .pCommandBufferInfos = &cbInfo,
+			};
+			const VkResult submitResult = vkQueueSubmit2(queue, 1, &si, VK_NULL_HANDLE);
 			if (submitResult != VK_SUCCESS)
 			{
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit failed. VkResult={}", static_cast<int>(submitResult))));
+				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit2 failed. VkResult={}", static_cast<int>(submitResult))));
 			}
 			const VkResult idleResult = vkQueueWaitIdle(queue);
 			if (idleResult != VK_SUCCESS)

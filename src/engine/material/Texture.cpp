@@ -62,12 +62,16 @@ namespace aether
 				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Texture: failed to end upload command buffer"));
 			}
 
-			const VkSubmitInfo submitInfo{
-			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			        .commandBufferCount = 1,
-			        .pCommandBuffers = &cmd,
+			const VkCommandBufferSubmitInfo cbInfo{
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+			        .commandBuffer = cmd,
 			};
-			const VkResult submitResult = vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			const VkSubmitInfo2 submitInfo{
+			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+			        .commandBufferInfoCount = 1,
+			        .pCommandBufferInfos = &cbInfo,
+			};
+			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, VK_NULL_HANDLE);
 			if (submitResult != VK_SUCCESS)
 			{
 				vkFreeCommandBuffers(device, pool, 1, &cmd);

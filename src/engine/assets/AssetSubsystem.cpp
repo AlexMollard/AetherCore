@@ -85,12 +85,16 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to end command buffer."));
 		}
 
-		const VkSubmitInfo submitInfo{
-		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		        .commandBufferCount = 1,
-		        .pCommandBuffers = &cmd,
+		const VkCommandBufferSubmitInfo cbInfo{
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		        .commandBuffer = cmd,
 		};
-		if (vkQueueSubmit(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+		const VkSubmitInfo2 submitInfo{
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		        .commandBufferInfoCount = 1,
+		        .pCommandBufferInfos = &cbInfo,
+		};
+		if (vkQueueSubmit2(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to submit queue."));
 		}
