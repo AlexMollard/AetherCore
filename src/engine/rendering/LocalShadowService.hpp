@@ -124,9 +124,6 @@ namespace aether
 		VkPipeline m_blurPipeline = VK_NULL_HANDLE;
 		VkPipelineLayout m_blurPipelineLayout = VK_NULL_HANDLE;
 		VkDescriptorSetLayout m_blurDescriptorSetLayout = VK_NULL_HANDLE;
-		VkDescriptorPool m_blurDescriptorPool = VK_NULL_HANDLE;
-		VkDescriptorSet m_blurDescriptorSetH = VK_NULL_HANDLE; // horizontal: output=scratch, input=atlas
-		VkDescriptorSet m_blurDescriptorSetV = VK_NULL_HANDLE; // vertical:   output=atlas,   input=scratch
 		VkSampler m_blurSampler = VK_NULL_HANDLE;
 		UniqueImage m_blurScratch;
 		RGImage m_blurScratchImage{};

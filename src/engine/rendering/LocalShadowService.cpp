@@ -114,6 +114,7 @@ namespace aether
 			bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
 
 			VkDescriptorSetLayoutCreateInfo dslci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+			dslci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
 			dslci.bindingCount = 2;
 			dslci.pBindings = bindings;
 			AE_ASSERT_ALWAYS(vkCreateDescriptorSetLayout(device, &dslci, nullptr, &m_blurDescriptorSetLayout) == VK_SUCCESS, "Failed to create blur descriptor set layout");
@@ -159,91 +160,7 @@ namespace aether
 		}
 
 		// Descriptor pool.
-		{
-			VkDescriptorPoolSize poolSizes[2]{};
-			poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			poolSizes[0].descriptorCount = 2;
-			poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			poolSizes[1].descriptorCount = 2;
-
-			VkDescriptorPoolCreateInfo dpci{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-			dpci.maxSets = 2;
-			dpci.poolSizeCount = 2;
-			dpci.pPoolSizes = poolSizes;
-			AE_ASSERT_ALWAYS(vkCreateDescriptorPool(device, &dpci, nullptr, &m_blurDescriptorPool) == VK_SUCCESS, "Failed to create blur descriptor pool");
-		}
-
-		// Allocate two descriptor sets (H and V variants).
-		{
-			VkDescriptorSetLayout layouts[2] = {m_blurDescriptorSetLayout, m_blurDescriptorSetLayout};
-			VkDescriptorSetAllocateInfo dsai{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-			dsai.descriptorPool = m_blurDescriptorPool;
-			dsai.descriptorSetCount = 2;
-			dsai.pSetLayouts = layouts;
-			VkDescriptorSet sets[2];
-			AE_ASSERT_ALWAYS(vkAllocateDescriptorSets(device, &dsai, sets) == VK_SUCCESS, "Failed to allocate blur descriptor sets");
-			m_blurDescriptorSetH = sets[0];
-			m_blurDescriptorSetV = sets[1];
-		}
-
-		// Write descriptor bindings once - the atlas and scratch images never change.
-		/* DescriptorSetH: binding 0 = scratch (storage), binding 1 = atlas (sampled). */
-		{
-			VkDescriptorImageInfo scratchOut{};
-			scratchOut.imageView = m_blurScratch.GetDefaultView();
-			scratchOut.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-			VkDescriptorImageInfo atlasIn{};
-			atlasIn.sampler = m_blurSampler;
-			atlasIn.imageView = m_atlasManager.GetAtlasImage().GetDefaultView();
-			atlasIn.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			VkWriteDescriptorSet writes[2]{};
-			writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writes[0].dstSet = m_blurDescriptorSetH;
-			writes[0].dstBinding = 0;
-			writes[0].descriptorCount = 1;
-			writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			writes[0].pImageInfo = &scratchOut;
-
-			writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writes[1].dstSet = m_blurDescriptorSetH;
-			writes[1].dstBinding = 1;
-			writes[1].descriptorCount = 1;
-			writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writes[1].pImageInfo = &atlasIn;
-
-			vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
-		}
-
-		/* DescriptorSetV: binding 0 = atlas (storage), binding 1 = scratch (sampled). */
-		{
-			VkDescriptorImageInfo atlasOut{};
-			atlasOut.imageView = m_atlasManager.GetAtlasImage().GetDefaultView();
-			atlasOut.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-
-			VkDescriptorImageInfo scratchIn{};
-			scratchIn.sampler = m_blurSampler;
-			scratchIn.imageView = m_blurScratch.GetDefaultView();
-			scratchIn.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-			VkWriteDescriptorSet writes[2]{};
-			writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writes[0].dstSet = m_blurDescriptorSetV;
-			writes[0].dstBinding = 0;
-			writes[0].descriptorCount = 1;
-			writes[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			writes[0].pImageInfo = &atlasOut;
-
-			writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			writes[1].dstSet = m_blurDescriptorSetV;
-			writes[1].dstBinding = 1;
-			writes[1].descriptorCount = 1;
-			writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			writes[1].pImageInfo = &scratchIn;
-
-			vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
-		}
+		{}
 	}
 
 	void LocalShadowService::Shutdown(VkDevice device)
@@ -267,21 +184,6 @@ namespace aether
 		{
 			vkDestroySampler(device, m_blurSampler, nullptr);
 			m_blurSampler = VK_NULL_HANDLE;
-		}
-		if (m_blurDescriptorPool != VK_NULL_HANDLE)
-		{
-			vkDestroyDescriptorPool(device, m_blurDescriptorPool, nullptr);
-			m_blurDescriptorPool = VK_NULL_HANDLE;
-		}
-		if (m_blurPipeline != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(device, m_blurPipeline, nullptr);
-			m_blurPipeline = VK_NULL_HANDLE;
-		}
-		if (m_blurPipelineLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(device, m_blurPipelineLayout, nullptr);
-			m_blurPipelineLayout = VK_NULL_HANDLE;
 		}
 		if (m_blurDescriptorSetLayout != VK_NULL_HANDLE)
 		{
@@ -590,7 +492,34 @@ namespace aether
 			                }
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
-			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetH, 0, nullptr);
+
+			                const VkDescriptorImageInfo hStorageInfo{
+			                        .sampler = VK_NULL_HANDLE,
+			                        .imageView = m_blurScratch.GetDefaultView(),
+			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			                };
+			                const VkDescriptorImageInfo hSampledInfo{
+			                        .sampler = m_blurSampler,
+			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			                };
+			                const VkWriteDescriptorSet hWrites[]{
+			                        {
+			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                                .dstBinding = 0,
+			                                .descriptorCount = 1,
+			                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			                                .pImageInfo = &hStorageInfo,
+			                        },
+			                        {
+			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                                .dstBinding = 1,
+			                                .descriptorCount = 1,
+			                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			                                .pImageInfo = &hSampledInfo,
+			                        },
+			                };
+			                vkCmdPushDescriptorSetKHR(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, hWrites);
 
 			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
@@ -612,7 +541,34 @@ namespace aether
 			                }
 
 			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
-			                vkCmdBindDescriptorSets(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 1, &m_blurDescriptorSetV, 0, nullptr);
+
+			                const VkDescriptorImageInfo vStorageInfo{
+			                        .sampler = VK_NULL_HANDLE,
+			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			                };
+			                const VkDescriptorImageInfo vSampledInfo{
+			                        .sampler = m_blurSampler,
+			                        .imageView = m_blurScratch.GetDefaultView(),
+			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			                };
+			                const VkWriteDescriptorSet vWrites[]{
+			                        {
+			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                                .dstBinding = 0,
+			                                .descriptorCount = 1,
+			                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			                                .pImageInfo = &vStorageInfo,
+			                        },
+			                        {
+			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			                                .dstBinding = 1,
+			                                .descriptorCount = 1,
+			                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+			                                .pImageInfo = &vSampledInfo,
+			                        },
+			                };
+			                vkCmdPushDescriptorSetKHR(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, vWrites);
 
 			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
 			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
