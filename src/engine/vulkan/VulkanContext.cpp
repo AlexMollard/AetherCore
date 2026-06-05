@@ -140,11 +140,15 @@ namespace aether
 		// family ownership transfers to be omitted when both queue families are compatible.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
 		// Push descriptors eliminate per-frame VkDescriptorPool allocation — write descriptors
-		// directly into the command buffer at bind time.
+		// directly into the command buffer at bind time. Core in Vulkan 1.4 — enabled via
+		// features14.pushDescriptor below, but the extension name is still required by some
+		// loader/driver paths.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 		// Graphics pipeline libraries allow pre-compiling shader stages independently,
 		// reducing pipeline creation time for material variants.
 		selector.add_required_extension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
+		// VK_KHR_pipeline_library is a required dependency of VK_EXT_graphics_pipeline_library.
+		selector.add_required_extension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
@@ -176,6 +180,7 @@ namespace aether
 		VkPhysicalDeviceVulkan14Features features14{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
 		        .hostImageCopy = VK_TRUE,
+		        .pushDescriptor = VK_TRUE,
 		};
 
 		// pNext: features14 → maintenance9Features → gplFeatures
