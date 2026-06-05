@@ -285,29 +285,7 @@ namespace aether
 		m_device = device;
 		m_allocator = allocator;
 
-		// ── 3. Upload atlas to GPU ────────────────────────────────────────────
-		const VkDeviceSize imageBytes = atlasW * atlasH;
-
-		const VkBufferCreateInfo stagingBufInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = imageBytes,
-		        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-		};
-		const VmaAllocationCreateInfo stagingAllocInfo{
-		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
-		        .usage = VMA_MEMORY_USAGE_AUTO,
-		};
-		VkBuffer stagingBuf{};
-		VmaAllocation stagingAlloc{};
-		VmaAllocationInfo stagingInfo{};
-		const VkResult stagingResult = vmaCreateBuffer(allocator, &stagingBufInfo, &stagingAllocInfo, &stagingBuf, &stagingAlloc, &stagingInfo);
-		if (stagingResult != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(stagingResult), std::format("FontAtlas: vmaCreateBuffer failed for staging buffer. VkResult={}", static_cast<int>(stagingResult))));
-		}
-
-		std::memcpy(stagingInfo.pMappedData, atlasPixels.data(), imageBytes);
-
+		// ── 3. Upload atlas to GPU via host image copy (Vulkan 1.4) ─────────────
 		const VkImageCreateInfo imgInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		        .imageType = VK_IMAGE_TYPE_2D,
@@ -317,7 +295,7 @@ namespace aether
 		        .arrayLayers = 1,
 		        .samples = VK_SAMPLE_COUNT_1_BIT,
 		        .tiling = VK_IMAGE_TILING_OPTIMAL,
-		        .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
@@ -325,8 +303,31 @@ namespace aether
 		const VkResult imageResult = vmaCreateImage(allocator, &imgInfo, &imgAllocInfo, &m_image, &m_allocation, nullptr);
 		if (imageResult != VK_SUCCESS)
 		{
-			vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
 			Throw(AetherError::Vulkan(static_cast<int32_t>(imageResult), std::format("FontAtlas: vmaCreateImage failed for atlas image. VkResult={}", static_cast<int>(imageResult))));
+		}
+
+		{
+			const VkMemoryToImageCopyEXT region{
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY_EXT,
+			        .pHostPointer = atlasPixels.data(),
+			        .memoryRowLength = 0,
+			        .memoryImageHeight = 0,
+			        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+			        .imageOffset = {0, 0, 0},
+			        .imageExtent = {atlasW, atlasH, 1},
+			};
+			const VkCopyMemoryToImageInfoEXT copyInfo{
+			        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO_EXT,
+			        .dstImage = m_image,
+			        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			        .regionCount = 1,
+			        .pRegions = &region,
+			};
+			const VkResult copyResult = vkCopyMemoryToImageEXT(device, &copyInfo);
+			if (copyResult != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), std::format("FontAtlas: vkCopyMemoryToImageEXT failed. VkResult={}", static_cast<int>(copyResult))));
+			}
 		}
 
 		const VkImageViewCreateInfo viewInfo{
@@ -386,30 +387,16 @@ namespace aether
 
 		VkCommandBuffer cmd = BeginOneShot(device, uploadPool);
 
-		TransitionImage(cmd, m_image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
-
-		const VkBufferImageCopy copy{
-		        .bufferOffset = 0,
-		        .bufferRowLength = 0,
-		        .bufferImageHeight = 0,
-		        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-		        .imageOffset = {0, 0, 0},
-		        .imageExtent = {atlasW, atlasH, 1},
-		};
-		vkCmdCopyBufferToImage(cmd, stagingBuf, m_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-
-		TransitionImage(cmd,
-		        m_image,
-		        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+		TransitionImage(cmd, m_image,
+		        VK_IMAGE_LAYOUT_GENERAL,
 		        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		        VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-		        VK_ACCESS_2_TRANSFER_WRITE_BIT,
+		        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+		        VK_ACCESS_2_NONE,
 		        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
 		        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 		EndAndSubmit(device, uploadPool, uploadQueue, cmd);
 		vkDestroyCommandPool(device, uploadPool, nullptr);
-		vmaDestroyBuffer(allocator, stagingBuf, stagingAlloc);
 
 		// ── 4. Register in the bindless descriptor set ────────────────────────
 		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());

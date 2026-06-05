@@ -133,8 +133,8 @@ namespace aether
 		// extension explicitly so vkb enables it and the function pointers are available.
 		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
-		// maintenance9 allows queue family ownership transfers to be omitted when both
-		// queue families are compatible, eliminating unnecessary barriers.
+		// maintenance9 (promoted to 1.4 spec but still KHR in this SDK) allows queue
+		// family ownership transfers to be omitted when both queue families are compatible.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
@@ -159,6 +159,14 @@ namespace aether
 		        .maintenance9 = VK_TRUE,
 		};
 
+		VkPhysicalDeviceVulkan14Features features14{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+		        .hostImageCopy = VK_TRUE,
+		};
+
+		// pNext: features14 → maintenance9Features → diagnosticsConfig
+		features14.pNext = &maintenance9Features;
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
@@ -168,12 +176,11 @@ namespace aether
 		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
 		};
 
-		// Chain with maintenance9: maintenance9 -> diagnosticsConfig
 		maintenance9Features.pNext = &diagnosticsConfig;
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
-		deviceBuilder.add_pNext(&maintenance9Features);
+		deviceBuilder.add_pNext(&features14);
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
