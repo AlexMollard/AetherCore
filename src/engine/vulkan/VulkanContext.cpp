@@ -185,25 +185,21 @@ namespace aether
 		        .graphicsPipelineLibrary = VK_TRUE,
 		};
 
-		// pNext chain for device extensions features (Vulkan14 features are set via
-		// selector.set_required_features_14 above — not duplicated here to avoid
-		// pNext chain conflicts with vk-bootstrap's internal features14 struct).
-		maintenance9Features.pNext = &gplFeatures;
-
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
-		        .pNext = nullptr,
 		        .flags = VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV |
 		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV |
 		                 VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
 		};
-
-		gplFeatures.pNext = &diagnosticsConfig;
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
+		deviceBuilder.add_pNext(&gplFeatures);
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		deviceBuilder.add_pNext(&diagnosticsConfig);
+#endif
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
