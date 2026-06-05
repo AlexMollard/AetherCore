@@ -30,25 +30,18 @@ Optionally serialize/deserialize from disk for faster warm starts.
 
 ---
 
-## Phase 2 — Memory Safety & Upload Path Sanitation
+## Phase 2 — Memory Safety & Upload Path Sanitation ✅
 
-### 2.1 Deferred buffer destruction in LightingManager
+### 2.1 Deferred buffer destruction in LightingManager ✅
 **File:** `src/engine/rendering/LightingManager.cpp:479-505`
 **Issue:** `ensureBuffer` destroys old buffer immediately; may be in-flight on GPU.
 **Fix:** Move old buffer to a per-frame deferred-destruction queue, destroyed after
 `kMaxFramesInFlight` frames (like RenderGraph does for transient images).
 **Risk:** Medium. Requires adding a deferred-destruction ring buffer.
 
-### 2.2 Replace vkQueueWaitIdle in GpuHeap uploads
-**File:** `src/engine/vulkan/GpuHeap.cpp:107-173`
-**Issue:** `UploadBytes()` calls `vkQueueWaitIdle` — full GPU drain per upload.
-**Fix:** Use a persistent staging ring-buffer with per-frame fence completion tracking.
-Submit uploads to the graphics/transfer queue without waiting; advance ring on next
-use of the same slot once the fence is signaled. If GpuHeap is truly only used during
-initialization, add a `#ifndef NDEBUG` assertion that it's not called after the first frame.
-**Risk:** Medium. Requires a ring-buffer allocator or accepting that GpuHeap is init-only.
+### 2.2 Replace vkQueueWaitIdle in GpuHeap uploads ✅
 
-### 2.3 Replace vkQueueWaitIdle in texture upload paths
+### 2.3 Replace vkQueueWaitIdle in texture upload paths ✅
 **File:** `src/engine/material/Texture.cpp:55-87`
 **Issue:** `EndAndSubmitOneTimeBuffer` calls `vkQueueWaitIdle` after every upload.
 **Fix:** Same as 2.2 — use fence-based synchronization. Since texture uploads already
@@ -58,25 +51,13 @@ layout transition. Consider batching all upload layout transitions into one subm
 
 ---
 
-## Phase 3 — API Correctness & Cleanup
+## Phase 3 — API Correctness & Cleanup ✅
 
-### 3.1 Fix PushConstants ignoring pipeline layout ranges
-**File:** `src/engine/rendering/CommandRecorder.hpp:41`, `CommandRecorder.cpp:44-48`
-**Issue:** `PushConstants()` always pushes `sizeof(DrawContracts::PushConstants)` with
-`VERTEX|FRAGMENT` stages regardless of the bound layout's actual push constant ranges.
-**Fix:** Either (a) template on push constant type, or (b) add a `PushConstantsRaw()` 
-overload that takes explicit stageFlags + size, and rename the current one to 
-`PushDrawConstants()`. Callers using compute pipelines must use the raw variant.
-**Risk:** Medium. Touches the CommandRecorder public API.
+### 3.1 Fix PushConstants ignoring pipeline layout ranges ✅
 
-### 3.2 Add push constant size validation at startup
-**File:** `src/engine/vulkan/VulkanContext.cpp`
-**Issue:** No check that `VkPhysicalDeviceLimits::maxPushConstantsSize >= sizeof(largest pc struct)`.
-**Fix:** After physical device selection, read `maxPushConstantsSize` and assert it meets
-the minimum required (128 bytes guaranteed by 1.0, but verify against actual struct sizes).
-**Risk:** Trivial.
+### 3.2 Add push constant size validation at startup ✅
 
-### 3.3 Remove redundant Vulkan 1.1 feature enables
+### 3.3 Remove redundant Vulkan 1.1 feature enables ✅
 **File:** `src/engine/vulkan/VulkanContext.cpp:99-100`
 **Issue:** `shaderDrawParameters` is core in Vulkan 1.1 — redundant with 1.4 requirement.
 **Fix:** Remove from `VkPhysicalDeviceVulkan11Features` or add a comment noting it's
@@ -107,8 +88,12 @@ Moderate effort.
 
 ## Implementation Order
 ```
-Phase 1 → Phase 2 → Phase 3 → Phase 4
-  (start here)
+Phase 1 ✅ → Phase 2 ✅ → Phase 3 ✅ → Phase 4 (future work)
 ```
-Each phase should be verified with sync validation enabled (GPU-AV + sync validation)
-before moving to the next phase.
+All three phases have been implemented across 4 commits:
+1. `a9a7e9f` — Phase 1: depth barrier fix, pipeline cache init, queue casting fix
+2. `08f6f67` — Phase 1.2: pipeline cache propagation to all remaining sites
+3. `2e7276b` — Update plan.md: Phase 1 complete
+4. `8ebd71e` — Phase 1.2: pipeline cache disk persistence; Phase 2.1: deferred buffer destruction
+5. `4a50dc2` — Phase 2.2/2.3: `vkQueueWaitIdle` → per-submission fences
+6. `7ea49a3` — Phase 3: `PushConstantsRaw`, push constant size validation, document redundant 1.1 feature
