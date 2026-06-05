@@ -52,7 +52,7 @@ namespace aether
 			return cmd;
 		}
 
-		// Submit a command buffer and block until the queue is idle, then free the buffer.
+		// Submit a command buffer, wait for the submission fence, then free the buffer.
 		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
 		{
 			const VkResult endResult = vkEndCommandBuffer(cmd);
@@ -71,18 +71,22 @@ namespace aether
 			        .commandBufferInfoCount = 1,
 			        .pCommandBufferInfos = &cbInfo,
 			};
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+			VkFence fence = VK_NULL_HANDLE;
+			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(0, "Texture: failed to create upload fence"));
+			}
+			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
 			if (submitResult != VK_SUCCESS)
 			{
+				vkDestroyFence(device, fence, nullptr);
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Texture: failed to submit upload command buffer"));
 			}
-			const VkResult idleResult = vkQueueWaitIdle(queue);
-			if (idleResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), "Texture: failed to wait idle after texture upload"));
-			}
-
+			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
 

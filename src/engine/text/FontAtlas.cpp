@@ -98,17 +98,22 @@ namespace aether
 			        .commandBufferInfoCount = 1,
 			        .pCommandBufferInfos = &cbInfo,
 			};
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &si, VK_NULL_HANDLE);
+			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+			VkFence fence = VK_NULL_HANDLE;
+			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(0, std::format("FontAtlas: vkCreateFence failed.")));
+			}
+			const VkResult submitResult = vkQueueSubmit2(queue, 1, &si, fence);
 			if (submitResult != VK_SUCCESS)
 			{
+				vkDestroyFence(device, fence, nullptr);
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit2 failed. VkResult={}", static_cast<int>(submitResult))));
 			}
-			const VkResult idleResult = vkQueueWaitIdle(queue);
-			if (idleResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), std::format("FontAtlas: vkQueueWaitIdle failed. VkResult={}", static_cast<int>(idleResult))));
-			}
+			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
 	} // namespace

@@ -58,17 +58,22 @@ namespace aether
 			        .commandBufferInfoCount = 1,
 			        .pCommandBufferInfos = &cbInfo,
 			};
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, VK_NULL_HANDLE);
+			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+			VkFence fence = VK_NULL_HANDLE;
+			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
+			{
+				vkFreeCommandBuffers(device, pool, 1, &cmd);
+				Throw(AetherError::Vulkan(0, "Mesh: failed to create upload fence"));
+			}
+			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
 			if (submitResult != VK_SUCCESS)
 			{
+				vkDestroyFence(device, fence, nullptr);
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Mesh: failed to submit one-time command buffer"));
 			}
-			const VkResult idleResult = vkQueueWaitIdle(queue);
-			if (idleResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(idleResult), "Mesh: failed to wait idle after mesh upload"));
-			}
+			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
 

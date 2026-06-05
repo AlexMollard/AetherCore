@@ -94,14 +94,19 @@ namespace aether
 		        .commandBufferInfoCount = 1,
 		        .pCommandBufferInfos = &cbInfo,
 		};
-		if (vkQueueSubmit2(vk.GetGraphicsQueue(), 1, &submitInfo, VK_NULL_HANDLE) != VK_SUCCESS)
+		const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+		VkFence fence = VK_NULL_HANDLE;
+		if (vkCreateFence(vk.GetDevice().device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
 		{
+			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to create upload fence."));
+		}
+		if (vkQueueSubmit2(vk.GetGraphicsQueue(), 1, &submitInfo, fence) != VK_SUCCESS)
+		{
+			vkDestroyFence(vk.GetDevice().device, fence, nullptr);
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to submit queue."));
 		}
-		if (vkQueueWaitIdle(vk.GetGraphicsQueue()) != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to wait for queue idle."));
-		}
+		(void)vkWaitForFences(vk.GetDevice().device, 1, &fence, VK_TRUE, UINT64_MAX);
+		vkDestroyFence(vk.GetDevice().device, fence, nullptr);
 
 		vkFreeCommandBuffers(vk.GetDevice().device, m_uploadPool, 1, &cmd);
 	}
