@@ -47,6 +47,12 @@ namespace aether
 		vkCmdPushConstants(m_cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(DrawContracts::PushConstants), &pc);
 	}
 
+	void CommandRecorder::PushConstantsRaw(VkPipelineLayout layout, VkShaderStageFlags stages, std::uint32_t offset, std::uint32_t size, const void* data)
+	{
+		AE_PROFILE_ZONE_N("CmdRecorder::PushConstantsRaw");
+		vkCmdPushConstants(m_cmd, layout, stages, offset, size, data);
+	}
+
 	void CommandRecorder::MemoryBarrier2(VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
 	{
 		if (m_cmd == VK_NULL_HANDLE)

@@ -99,6 +99,7 @@ namespace aether
 
 		VkPhysicalDeviceVulkan11Features requiredFeatures11{};
 		requiredFeatures11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+		// shaderDrawParameters is core in 1.1+ but kept for SDK / pre-1.4 validation compatibility.
 		requiredFeatures11.shaderDrawParameters = VK_TRUE;
 
 		VkPhysicalDeviceVulkan12Features requiredFeatures12{};
@@ -238,6 +239,23 @@ namespace aether
 		if (m_presentQueue != m_graphicsQueue && m_presentQueue != m_computeQueue)
 		{
 			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
+		}
+
+		// Validate push constant size against hardware limits. Vulkan 1.0 guarantees
+		// at least 128 bytes, but explicit verification catches drivers that may
+		// report less for unusual virtualized/adapter configurations.
+		{
+			VkPhysicalDeviceProperties props{};
+			vkGetPhysicalDeviceProperties(m_device->physical_device, &props);
+			if (props.limits.maxPushConstantsSize < 128)
+			{
+				AE_WARN(LogCategory::Vulkan,
+				        "maxPushConstantsSize is {} bytes (< 128). "
+				        "Some compute push constants may fail to bind. "
+				        "Update your GPU driver or hardware.",
+				        props.limits.maxPushConstantsSize);
+			}
+			AE_INFO(LogCategory::Vulkan, "Physical device: {}, maxPushConstantsSize={}", props.deviceName, props.limits.maxPushConstantsSize);
 		}
 
 		// Pipeline cache for faster pipeline creation across runs.
