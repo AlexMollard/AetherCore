@@ -32,7 +32,7 @@ namespace aether
 		VkPipeline poseInit = VK_NULL_HANDLE;
 		VkPipelineLayout poseInitLayout = VK_NULL_HANDLE;
 
-		void Initialize(VkDevice device);
+		void Initialize(VkDevice device, VkPipelineCache pipelineCache);
 		void Shutdown(VkDevice device);
 	};
 

@@ -14,7 +14,7 @@ namespace aether
 		// Full-screen pass: no vertex input, no depth attachment.
 		// Push constant: a single uint64_t BDA pointer to FrameConstantsData.
 		AE_EXPECT_OR_THROW(pipeline,
-		        GraphicsPipeline::Create(desc.device,
+		        GraphicsPipeline::Create(desc.device, desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://skybox.spv",
 		                        .colorFormat = desc.hdrColorFormat,

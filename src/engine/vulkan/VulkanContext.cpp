@@ -228,14 +228,26 @@ namespace aether
 
 		// Name queues immediately so they appear correctly in RenderDoc and validation output.
 		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
-		CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_graphicsQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
+		CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
 		if (m_computeQueue != m_graphicsQueue)
 		{
-			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_computeQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Compute");
+			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_computeQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Compute");
 		}
 		if (m_presentQueue != m_graphicsQueue && m_presentQueue != m_computeQueue)
 		{
-			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(m_presentQueue), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
+			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
+		}
+
+		// Pipeline cache for faster pipeline creation across runs.
+		{
+			const VkPipelineCacheCreateInfo cacheInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+			};
+			if (vkCreatePipelineCache(m_device->device, &cacheInfo, nullptr, &m_pipelineCache) != VK_SUCCESS)
+			{
+				AE_WARN(LogCategory::Vulkan, "Failed to create pipeline cache; falling back to no cache.");
+				m_pipelineCache = VK_NULL_HANDLE;
+			}
 		}
 
 		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
@@ -295,6 +307,12 @@ namespace aether
 	{
 		AE_VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
 
+		if (m_pipelineCache != VK_NULL_HANDLE && m_device.has_value())
+		{
+			vkDestroyPipelineCache(m_device->device, m_pipelineCache, nullptr);
+			m_pipelineCache = VK_NULL_HANDLE;
+		}
+
 		if (m_allocator != VK_NULL_HANDLE)
 		{
 			vmaDestroyAllocator(m_allocator);
@@ -352,6 +370,11 @@ namespace aether
 	VmaAllocator VulkanContext::GetAllocator() const
 	{
 		return m_allocator;
+	}
+
+	VkPipelineCache VulkanContext::GetPipelineCache() const
+	{
+		return m_pipelineCache;
 	}
 
 	VkQueue VulkanContext::GetGraphicsQueue() const

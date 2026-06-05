@@ -40,6 +40,7 @@ namespace aether
 		struct Desc
 		{
 			VkDevice device = VK_NULL_HANDLE;
+			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 			VmaAllocator allocator = VK_NULL_HANDLE;
 			VkExtent2D extent = {};
 			VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;

@@ -959,7 +959,7 @@ namespace aether
 		return m_commandSlots[slot % kFramesInFlight].empty();
 	}
 
-	void RenderQueueSharedPipelines::Initialize(VkDevice device)
+	void RenderQueueSharedPipelines::Initialize(VkDevice device, VkPipelineCache pipelineCache)
 	{
 		{
 			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.spv"));
@@ -992,7 +992,7 @@ namespace aether
 			        .stage = stage,
 			        .layout = skinCopyLayout,
 			};
-			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &skinCopy) != VK_SUCCESS)
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &skinCopy) != VK_SUCCESS)
 			{
 				vkDestroyShaderModule(device, shaderModule, nullptr);
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
@@ -1035,7 +1035,7 @@ namespace aether
 			        .stage = stage,
 			        .layout = animSampleLayout,
 			};
-			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &animSample) != VK_SUCCESS)
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &animSample) != VK_SUCCESS)
 			{
 				vkDestroyShaderModule(device, shaderModule, nullptr);
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
@@ -1078,7 +1078,7 @@ namespace aether
 			        .stage = stage,
 			        .layout = poseInitLayout,
 			};
-			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &poseInit) != VK_SUCCESS)
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &poseInit) != VK_SUCCESS)
 			{
 				vkDestroyShaderModule(device, shaderModule, nullptr);
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
@@ -1121,7 +1121,7 @@ namespace aether
 			        .stage = stage,
 			        .layout = nodeFlattenLayout,
 			};
-			if (vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &nodeFlatten) != VK_SUCCESS)
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &nodeFlatten) != VK_SUCCESS)
 			{
 				vkDestroyShaderModule(device, shaderModule, nullptr);
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));

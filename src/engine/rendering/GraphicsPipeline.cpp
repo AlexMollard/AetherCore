@@ -56,7 +56,7 @@ namespace aether
 		m_setLayoutCount = 0;
 	}
 
-	Expected<GraphicsPipeline> GraphicsPipeline::Create(VkDevice device, const Desc& desc)
+	Expected<GraphicsPipeline> GraphicsPipeline::Create(VkDevice device, VkPipelineCache pipelineCache, const Desc& desc)
 	{
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())
@@ -192,7 +192,7 @@ namespace aether
 		};
 
 		VkPipeline pipeline = VK_NULL_HANDLE;
-		const VkResult result = vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline);
+		const VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &pipeline);
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 

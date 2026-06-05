@@ -310,19 +310,28 @@ namespace aether
 		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
-		// Transition: UNDEFINED -> DEPTH_ATTACHMENT_OPTIMAL
-		// srcStage/srcAccess cover the previous frame's depth write even though we discard
-		// content (UNDEFINED old layout). The memory dependency is still required to avoid
-		// WRITE_AFTER_WRITE hazards reported by sync validation.
+		// Depth layout transition. On the first frame the image is truly UNDEFINED;
+		// on subsequent frames the prior render pass left it as DEPTH_ATTACHMENT_OPTIMAL.
+		// Using the tracked layout avoids a spec violation (UNDEFINED with non-TOP_OF_PIPE
+		// src stages) and satisfies sync validation's write-after-write hazard check
+		// for the single shared depth image.
+		const bool depthIsFirstFrame = (m_depthLayout == VK_IMAGE_LAYOUT_UNDEFINED);
+		const VkPipelineStageFlags2 depthSrcStage = depthIsFirstFrame
+		        ? VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT
+		        : (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
+		const VkAccessFlags2 depthSrcAccess = depthIsFirstFrame
+		        ? VK_ACCESS_2_NONE
+		        : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		vkutil::TransitionImage(frame.commandBuffer,
 		        m_depthImage.Get(),
-		        VK_IMAGE_LAYOUT_UNDEFINED,
+		        m_depthLayout,
 		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+		        depthSrcStage,
+		        depthSrcAccess,
 		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT,
 		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
 		        VK_IMAGE_ASPECT_DEPTH_BIT);
+		m_depthLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 
 		m_frameValid = true;
 	}

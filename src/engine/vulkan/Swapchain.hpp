@@ -65,5 +65,6 @@ namespace aether
 		std::uint32_t m_graphicsQueueFamily = 0;
 		bool m_frameValid = false;
 		bool m_needsRecreation = false;
+		VkImageLayout m_depthLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 	};
 } // namespace aether

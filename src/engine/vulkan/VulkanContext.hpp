@@ -35,6 +35,7 @@ namespace aether
 
 		[[nodiscard]] VkSurfaceKHR GetSurface() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
+		[[nodiscard]] VkPipelineCache GetPipelineCache() const;
 		[[nodiscard]] VkQueue GetGraphicsQueue() const;
 		[[nodiscard]] VkQueue GetComputeQueue() const;
 		[[nodiscard]] VkQueue GetPresentQueue() const;
@@ -57,6 +58,7 @@ namespace aether
 		std::optional<vkb::Instance> m_instance;
 		std::optional<vkb::Device> m_device;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;
 		VkSurfaceKHR m_surface = VK_NULL_HANDLE;
 		VkQueue m_graphicsQueue = VK_NULL_HANDLE;
 		VkQueue m_computeQueue = VK_NULL_HANDLE;

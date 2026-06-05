@@ -27,6 +27,7 @@ namespace aether
 		struct Desc
 		{
 			VkDevice device = VK_NULL_HANDLE;
+			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 			VkFormat hdrColorFormat = VK_FORMAT_UNDEFINED;
 		};
 
