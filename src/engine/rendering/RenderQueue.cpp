@@ -410,14 +410,14 @@ namespace aether
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
-			AE_INFO(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
+			AE_VERBOSE(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
 			// ── Pass 0: Parallel bind-pose initialization ──
 			// Dispatched before animation sampling to write all node bind poses
 			// in parallel (each thread handles one (job, node) pair).
 			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit != VK_NULL_HANDLE)
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
-				AE_INFO(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
+				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
 
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
 				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
@@ -428,7 +428,7 @@ namespace aether
 				{
 					const auto& batch = animSampleBatches[bi];
 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
-					AE_INFO(LogCategory::Animation, "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
+					AE_VERBOSE(LogCategory::Animation, "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
 					        bi, nodeCount, batch.count, batch.db->GetBindTranslationsAddr(), batch.db->GetBindRotationsAddr(), batch.db->GetBindScalesAddr());
 					if (nodeCount == 0)
 					{
@@ -526,10 +526,10 @@ namespace aether
 		if (skinJobCount > 0 && m_debugLogSkinJobsFramesLeft > 0)
 		{
 			--m_debugLogSkinJobsFramesLeft;
-			AE_INFO(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs, {} anim batches, {} skin batches):", frameIndex, skinJobCount, sampleJobsThisFrame, animSampleBatchCount, skinPaletteBatchCount);
-			AE_INFO(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
+			AE_VERBOSE(LogCategory::Animation, "RenderQueue SkinJob dump (frame {}, {} jobs, {} sampleJobs, {} anim batches, {} skin batches):", frameIndex, skinJobCount, sampleJobsThisFrame, animSampleBatchCount, skinPaletteBatchCount);
+			AE_VERBOSE(LogCategory::Animation, "  dstPaletteAddr=0x{:x}", currSkinPaletteAddr);
 			const AnimationDatabase* logDb = (skinPaletteBatchCount > 0) ? skinPaletteBatches[0].db : nullptr;
-			AE_INFO(LogCategory::Animation,
+			AE_VERBOSE(LogCategory::Animation,
 			        "  nodeParentsAddr=0x{:x}  skinMetasAddr=0x{:x}  skinJointsAddr=0x{:x}  skinInverseBindsAddr=0x{:x}",
 			        logDb ? logDb->GetNodeParentsAddr() : 0,
 			        logDb ? logDb->GetSkinMetasAddr() : 0,
@@ -539,12 +539,12 @@ namespace aether
 			for (std::uint32_t ji = 0; ji < logLimit; ++ji)
 			{
 				const AnimationContracts::SkinCopyJob& sj = m_skinCopyJobsMapped[animJobBase + ji];
-				AE_INFO(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
+				AE_VERBOSE(LogCategory::Animation, "  Job[{}]: dstOff={} joints={} skin={} nodes={} sampledAddr=0x{:x}", ji, sj.dstPaletteOffset, sj.jointCount, sj.skinIndex, sj.nodeCount, sj.sampledPosesAddr);
 			}
 			for (std::uint32_t ji = 0; ji < std::min(sampleJobsThisFrame, logLimit); ++ji)
 			{
 				const AnimationContracts::AnimatorSampleJob& aj = m_animationSampleJobsMapped[animJobBase + ji];
-				AE_INFO(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
+				AE_VERBOSE(LogCategory::Animation, "  SampleJob[{}]: clip={} time={:.3f} poseOff={} nodeCount={}", ji, aj.animClipIndex, aj.animTime, aj.nodePoseOffset, aj.nodeCount);
 			}
 
 			if (logDb && sampleJobsThisFrame > 0)
@@ -554,48 +554,14 @@ namespace aether
 				const auto& bindR = logDb->GetBindRotations();
 				const auto& bindS = logDb->GetBindScales();
 				const auto& parents = logDb->GetNodeParents();
-				AE_INFO(LogCategory::Animation, "  === BIND POSE DUMP (nodeCount={}) ===", aj.nodeCount);
+				AE_VERBOSE(LogCategory::Animation, "  === BIND POSE DUMP (nodeCount={}) ===", aj.nodeCount);
 				const std::uint32_t dumpLimit = std::min(aj.nodeCount, 10u);
 				for (std::uint32_t n = 0; n < dumpLimit; ++n)
 				{
 					const auto& t = bindT[n];
 					const auto& r = bindR[n];
 					const auto& s = bindS[n];
-					AE_INFO(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}] parent={}", n, t.x, t.y, t.z, r.x, r.y, r.z, r.w, s.x, s.y, s.z, parents[n]);
-				}
-
-				const auto& skinJoints = logDb->GetSkinJoints();
-				const auto& invBinds = logDb->GetSkinInverseBinds();
-				AE_INFO(LogCategory::Animation, "  === SKIN JOINTS (first skin, {} joints) ===", skinJoints.size());
-				const std::uint32_t jointDumpLimit = std::min(static_cast<std::uint32_t>(skinJoints.size()), 10u);
-				for (std::uint32_t j = 0; j < jointDumpLimit; ++j)
-				{
-					AE_INFO(LogCategory::Animation, "    Joint[{}]: nodeIndex={}", j, skinJoints[j]);
-				}
-				AE_INFO(LogCategory::Animation, "  === INVERSE BIND MATRICES (first 3) ===");
-				const std::uint32_t invBindDumpLimit = std::min(static_cast<std::uint32_t>(invBinds.size()), 3u);
-				for (std::uint32_t j = 0; j < invBindDumpLimit; ++j)
-				{
-					const auto& m = invBinds[j];
-					AE_INFO(LogCategory::Animation,
-					        "    InvBind[{}]: [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}] [{:.2f},{:.2f},{:.2f},{:.2f}]",
-					        j,
-					        m[0][0],
-					        m[0][1],
-					        m[0][2],
-					        m[0][3],
-					        m[1][0],
-					        m[1][1],
-					        m[1][2],
-					        m[1][3],
-					        m[2][0],
-					        m[2][1],
-					        m[2][2],
-					        m[2][3],
-					        m[3][0],
-					        m[3][1],
-					        m[3][2],
-					        m[3][3]);
+					AE_VERBOSE(LogCategory::Animation, "    Node[{}]: T=[{:.2f},{:.2f},{:.2f}] R=[{:.3f},{:.3f},{:.3f},{:.3f}] S=[{:.2f},{:.2f},{:.2f}] parent={}", n, t.x, t.y, t.z, r.x, r.y, r.z, r.w, s.x, s.y, s.z, parents[n]);
 				}
 			}
 		}
@@ -604,7 +570,7 @@ namespace aether
 		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
-			AE_INFO(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
+			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
 			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
@@ -615,7 +581,7 @@ namespace aether
 			{
 				const auto& batch = animSampleBatches[bi];
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
-				AE_INFO(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}",
+				AE_VERBOSE(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}",
 				        bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
 				if (depthCount == 0)
 				{
@@ -882,7 +848,7 @@ namespace aether
 		        .instanceDataAddr = m_cachedInstanceDataAddr,
 		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
 		};
-		AE_INFO(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", 
+		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", 
 		        frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;

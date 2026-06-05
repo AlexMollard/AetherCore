@@ -23,11 +23,33 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     {
         float4x4* joints = (float4x4*)(pc.skinPaletteAddr);
         const uint base = instance.skinPaletteOffset;
+        const uint jc = instance.skinJointCount;
+
+        uint  j0 = (input.jointIndices.x < jc) ? input.jointIndices.x : 0u;
+        uint  j1 = (input.jointIndices.y < jc) ? input.jointIndices.y : 0u;
+        uint  j2 = (input.jointIndices.z < jc) ? input.jointIndices.z : 0u;
+        uint  j3 = (input.jointIndices.w < jc) ? input.jointIndices.w : 0u;
+        float w0 = (input.jointIndices.x < jc) ? input.jointWeights.x : 0.0f;
+        float w1 = (input.jointIndices.y < jc) ? input.jointWeights.y : 0.0f;
+        float w2 = (input.jointIndices.z < jc) ? input.jointWeights.z : 0.0f;
+        float w3 = (input.jointIndices.w < jc) ? input.jointWeights.w : 0.0f;
+
+        const float wsum = w0 + w1 + w2 + w3;
+        if (wsum > 1e-6f)
+        {
+            const float inv = 1.0f / wsum;
+            w0 *= inv; w1 *= inv; w2 *= inv; w3 *= inv;
+        }
+        else
+        {
+            w0 = 1.0f; w1 = 0.0f; w2 = 0.0f; w3 = 0.0f;
+        }
+
         float4x4 skinMatrix =
-            input.jointWeights.x * joints[base + input.jointIndices.x] +
-            input.jointWeights.y * joints[base + input.jointIndices.y] +
-            input.jointWeights.z * joints[base + input.jointIndices.z] +
-            input.jointWeights.w * joints[base + input.jointIndices.w];
+            w0 * joints[base + j0] +
+            w1 * joints[base + j1] +
+            w2 * joints[base + j2] +
+            w3 * joints[base + j3];
 
         float4x4 worldMatrix = mul(instance.model, skinMatrix);
         worldPos = mul(worldMatrix, float4(input.position, 1.0));

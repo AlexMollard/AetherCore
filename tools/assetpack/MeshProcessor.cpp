@@ -58,6 +58,40 @@ namespace MeshProcessor
         }
 
         // -------------------------------------------------------------------------
+        // Skin resolution
+        // -------------------------------------------------------------------------
+
+        const cgltf_skin* FindSkinForPrimitive(const cgltf_node& node, const cgltf_primitive& prim, const cgltf_data& data)
+        {
+            if (node.skin)
+                return node.skin;
+
+            for (const cgltf_node* anc = node.parent; anc != nullptr; anc = anc->parent)
+            {
+                if (anc->skin)
+                    return anc->skin;
+            }
+
+            std::array<cgltf_uint, 4> jointIdx{};
+            const cgltf_accessor* jointsAcc = FindAttr(prim, cgltf_attribute_type_joints, 0);
+            if (!jointsAcc) return nullptr;
+            cgltf_uint maxIdx = 0;
+            for (cgltf_size v = 0; v < jointsAcc->count; ++v)
+            {
+                cgltf_accessor_read_uint(jointsAcc, v, jointIdx.data(), 4);
+                for (uint32_t j = 0; j < 4; ++j)
+                    if (jointIdx[j] > maxIdx) maxIdx = jointIdx[j];
+            }
+            for (cgltf_size si = 0; si < data.skins_count; ++si)
+            {
+                const cgltf_skin& s = data.skins[si];
+                if (static_cast<cgltf_size>(maxIdx) < s.joints_count)
+                    return &s;
+            }
+            return nullptr;
+        }
+
+        // -------------------------------------------------------------------------
         // Normal generation (angle-weighted)
         // -------------------------------------------------------------------------
 
@@ -442,6 +476,16 @@ namespace MeshProcessor
 
                     const bool isSkinned = (jointsAcc != nullptr);
 
+                    const cgltf_skin* resolvedSkin = isSkinned
+                        ? FindSkinForPrimitive(node, prim, *data)
+                        : nullptr;
+                    if (isSkinned && !resolvedSkin)
+                    {
+                        std::cerr << "  MeshProcessor: WARNING - skinned primitive on '"
+                                  << SafeStr(node.name)
+                                  << "' has no resolvable skin; joint indices will remain sentinel.\n";
+                    }
+
                     std::vector<DiskMeshVertex> verts(vertCount);
                     for (uint32_t v = 0; v < vertCount; ++v)
                         std::memset(&verts[v]._pad, 0, sizeof(verts[v]._pad));
@@ -514,10 +558,16 @@ namespace MeshProcessor
                         if (jointsAcc)
                         {
                             cgltf_accessor_read_uint(jointsAcc, v, jointIdx.data(), 4);
+
                             for (uint32_t j = 0; j < 4; ++j)
                             {
-                                if (jointIdx[j] < remapTable.size())
-                                    dst.jointIndices[j] = remapTable[jointIdx[j]];
+                                if (!resolvedSkin) continue;
+                                if (jointIdx[j] >= resolvedSkin->joints_count) continue;
+                                const int32_t nodeIdx = ToIndex(resolvedSkin->joints[jointIdx[j]], *data);
+                                if (nodeIdx < 0 || static_cast<std::size_t>(nodeIdx) >= remapTable.size()) continue;
+                                const uint32_t boneIdx = remapTable[static_cast<std::size_t>(nodeIdx)];
+                                if (boneIdx == static_cast<uint32_t>(-1)) continue;
+                                dst.jointIndices[j] = boneIdx;
                             }
                         }
 
