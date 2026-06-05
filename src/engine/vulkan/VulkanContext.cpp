@@ -1,6 +1,8 @@
 #include "vulkan/VulkanContext.hpp"
 
+#include <fstream>
 #include <string>
+#include <vector>
 
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
@@ -239,11 +241,39 @@ namespace aether
 		}
 
 		// Pipeline cache for faster pipeline creation across runs.
+		// Attempt to load cached data from a previous session; fall back to empty
+		// if the file is missing or the driver rejects the data (e.g. after a
+		// driver update where the cache UUID no longer matches).
 		{
+			std::vector<char> cacheData;
+			if (std::ifstream inFile("pipeline_cache.bin", std::ios::binary | std::ios::ate); inFile.is_open())
+			{
+				const auto fileSize = inFile.tellg();
+				if (fileSize > 0)
+				{
+					cacheData.resize(static_cast<std::size_t>(fileSize));
+					inFile.seekg(0);
+					inFile.read(cacheData.data(), fileSize);
+				}
+				inFile.close();
+				AE_INFO(LogCategory::Vulkan, "Loaded pipeline cache from pipeline_cache.bin ({} bytes).", cacheData.size());
+			}
+
 			const VkPipelineCacheCreateInfo cacheInfo{
 			        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+			        .initialDataSize = cacheData.size(),
+			        .pInitialData = cacheData.empty() ? nullptr : cacheData.data(),
 			};
-			if (vkCreatePipelineCache(m_device->device, &cacheInfo, nullptr, &m_pipelineCache) != VK_SUCCESS)
+			VkResult cacheResult = vkCreatePipelineCache(m_device->device, &cacheInfo, nullptr, &m_pipelineCache);
+			if (cacheResult == VK_ERROR_INVALID_PIPELINE_CACHE_DATA)
+			{
+				AE_INFO(LogCategory::Vulkan, "Pipeline cache data rejected (driver update or format mismatch); creating fresh cache.");
+				const VkPipelineCacheCreateInfo emptyInfo{
+				        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
+				};
+				cacheResult = vkCreatePipelineCache(m_device->device, &emptyInfo, nullptr, &m_pipelineCache);
+			}
+			if (cacheResult != VK_SUCCESS)
 			{
 				AE_WARN(LogCategory::Vulkan, "Failed to create pipeline cache; falling back to no cache.");
 				m_pipelineCache = VK_NULL_HANDLE;
@@ -309,6 +339,25 @@ namespace aether
 
 		if (m_pipelineCache != VK_NULL_HANDLE && m_device.has_value())
 		{
+			// Serialize the cache to disk so subsequent runs benefit from compiled pipelines.
+			{
+				std::size_t cacheSize = 0;
+				vkGetPipelineCacheData(m_device->device, m_pipelineCache, &cacheSize, nullptr);
+				if (cacheSize > 0)
+				{
+					std::vector<char> cacheData(cacheSize);
+					const VkResult saveResult = vkGetPipelineCacheData(m_device->device, m_pipelineCache, &cacheSize, cacheData.data());
+					if (saveResult == VK_SUCCESS || saveResult == VK_INCOMPLETE)
+					{
+						if (std::ofstream outFile("pipeline_cache.bin", std::ios::binary); outFile.is_open())
+						{
+							outFile.write(cacheData.data(), static_cast<std::streamsize>(cacheSize));
+							outFile.close();
+							AE_INFO(LogCategory::Vulkan, "Saved pipeline cache to pipeline_cache.bin ({} bytes).", cacheSize);
+						}
+					}
+				}
+			}
 			vkDestroyPipelineCache(m_device->device, m_pipelineCache, nullptr);
 			m_pipelineCache = VK_NULL_HANDLE;
 		}

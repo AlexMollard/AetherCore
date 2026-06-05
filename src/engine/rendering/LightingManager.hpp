@@ -87,6 +87,7 @@ namespace aether
 			std::size_t lightsCapacity = 0;
 			std::size_t headersCapacity = 0;
 			std::size_t indicesCapacity = 0;
+			std::vector<UniqueBuffer> staleBuffers;
 		};
 
 		void EnsureBuffers(std::uint32_t frameSlot, std::size_t lightCount, std::size_t tileCount, std::size_t indexCount) const;
