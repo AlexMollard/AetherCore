@@ -130,6 +130,14 @@ namespace aether
 
 		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);
+		{
+			VkPhysicalDeviceVulkan14Features features14{
+			        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+			        .hostImageCopy = VK_TRUE,
+			        .pushDescriptor = VK_TRUE,
+			};
+			selector.set_required_features_14(features14);
+		}
 #ifdef TRACY_ENABLE
 		// VK_EXT_calibrated_timestamps is required for Tracy host-calibrated GPU zones.
 		// It is promoted to core in Vulkan 1.4 under the KHR name, but we request the EXT
@@ -177,14 +185,9 @@ namespace aether
 		        .graphicsPipelineLibrary = VK_TRUE,
 		};
 
-		VkPhysicalDeviceVulkan14Features features14{
-		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-		        .hostImageCopy = VK_TRUE,
-		        .pushDescriptor = VK_TRUE,
-		};
-
-		// pNext: features14 → maintenance9Features → gplFeatures
-		features14.pNext = &maintenance9Features;
+		// pNext chain for device extensions features (Vulkan14 features are set via
+		// selector.set_required_features_14 above — not duplicated here to avoid
+		// pNext chain conflicts with vk-bootstrap's internal features14 struct).
 		maintenance9Features.pNext = &gplFeatures;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
@@ -200,7 +203,7 @@ namespace aether
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
-		deviceBuilder.add_pNext(&features14);
+		deviceBuilder.add_pNext(&maintenance9Features);
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
