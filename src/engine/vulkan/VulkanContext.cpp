@@ -168,11 +168,6 @@ namespace aether
 		        .maintenance9 = VK_TRUE,
 		};
 
-		VkPhysicalDevicePushDescriptorFeaturesKHR pushDescriptorFeatures{
-		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PUSH_DESCRIPTOR_FEATURES_KHR,
-		        .pushDescriptor = VK_TRUE,
-		};
-
 		VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gplFeatures{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,
 		        .graphicsPipelineLibrary = VK_TRUE,
@@ -183,10 +178,9 @@ namespace aether
 		        .hostImageCopy = VK_TRUE,
 		};
 
-		// pNext: features14 → maintenance9Features → pushDescriptorFeatures → gplFeatures
+		// pNext: features14 → maintenance9Features → gplFeatures
 		features14.pNext = &maintenance9Features;
-		maintenance9Features.pNext = &pushDescriptorFeatures;
-		pushDescriptorFeatures.pNext = &gplFeatures;
+		maintenance9Features.pNext = &gplFeatures;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
@@ -301,9 +295,11 @@ namespace aether
 			        .pInitialData = cacheData.empty() ? nullptr : cacheData.data(),
 			};
 			VkResult cacheResult = vkCreatePipelineCache(m_device->device, &cacheInfo, nullptr, &m_pipelineCache);
-			if (cacheResult == VK_ERROR_INVALID_PIPELINE_CACHE_DATA)
+			if (cacheResult != VK_SUCCESS && cacheResult != VK_ERROR_OUT_OF_HOST_MEMORY)
 			{
-				AE_INFO(LogCategory::Vulkan, "Pipeline cache data rejected (driver update or format mismatch); creating fresh cache.");
+				// Driver rejected cached data (driver update, device mismatch, etc.).
+				// Retry with an empty cache.
+				AE_INFO(LogCategory::Vulkan, "Pipeline cache data rejected; creating fresh cache.");
 				const VkPipelineCacheCreateInfo emptyInfo{
 				        .sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO,
 				};

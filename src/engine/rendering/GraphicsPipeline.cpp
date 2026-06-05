@@ -194,9 +194,9 @@ namespace aether
 		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR,
 		        .stageCount = 1,
 		        .pStages = &fragStage,
+		        .pMultisampleState = &multisampling,
 		        .pDepthStencilState = &depthStencil,
 		        .pColorBlendState = &colorBlend,
-		        .pMultisampleState = &multisampling,
 		        .layout = layout,
 		};
 		VkPipeline fragLib = VK_NULL_HANDLE;
