@@ -19,7 +19,14 @@ namespace aether
 	}
 
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)), m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)), m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)), m_vertInputLib(std::exchange(other.m_vertInputLib, VK_NULL_HANDLE)), m_preRasterLib(std::exchange(other.m_preRasterLib, VK_NULL_HANDLE)), m_fragShaderLib(std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE)), m_fragOutputLib(std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE)), m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
+	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
+	        m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)),
+	        m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)),
+	        m_vertInputLib(std::exchange(other.m_vertInputLib, VK_NULL_HANDLE)),
+	        m_preRasterLib(std::exchange(other.m_preRasterLib, VK_NULL_HANDLE)),
+	        m_fragShaderLib(std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE)),
+	        m_fragOutputLib(std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE)),
+	        m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
 	{
 	}
 
@@ -214,7 +221,7 @@ namespace aether
 			        .pNext = &gplVertexInput,
 			        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
 			        .pVertexInputState = &vertexInput,
-					.pInputAssemblyState = &inputAssembly,
+			        .pInputAssemblyState = &inputAssembly,
 			        .layout = layout,
 			};
 			vertInputLib = VK_NULL_HANDLE;

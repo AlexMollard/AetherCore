@@ -5,8 +5,14 @@
 
 namespace aether
 {
-	void ForwardPass::RegisterPass(
-	        RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps, RGImage localShadowAtlas)
+	void ForwardPass::RegisterPass(RenderGraph& graph,
+	        RGImage hdrColor,
+	        RGImage depth,
+	        RenderQueue& renderQueue,
+	        VkDescriptorSet bindlessSet,
+	        std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn,
+	        std::span<const RGImage> shadowMaps,
+	        RGImage localShadowAtlas)
 	{
 		AE_PROFILE_ZONE();
 		auto* pass = &graph.AddPass("$EngineForward").WriteColor(hdrColor, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE).WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f));

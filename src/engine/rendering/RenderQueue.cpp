@@ -28,8 +28,7 @@ namespace aether
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
-		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", 
-		        m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
+		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 
 		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
@@ -65,8 +64,11 @@ namespace aether
 
 			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
 			m_nodeGlobalTransformsBuffer = std::move(b7);
-			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses=0x{:x}, nodeGlobalTransforms=0x{:x}",
-			        m_skinPaletteBuffer.GetDeviceAddress(), m_sampledPosesBuffer.GetDeviceAddress(), m_nodeGlobalTransformsBuffer.GetDeviceAddress());
+			AE_INFO(LogCategory::Render,
+			        "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses=0x{:x}, nodeGlobalTransforms=0x{:x}",
+			        m_skinPaletteBuffer.GetDeviceAddress(),
+			        m_sampledPosesBuffer.GetDeviceAddress(),
+			        m_nodeGlobalTransformsBuffer.GetDeviceAddress());
 		}
 
 		AE_EXPECT_OR_THROW(b8,
@@ -428,8 +430,14 @@ namespace aether
 				{
 					const auto& batch = animSampleBatches[bi];
 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
-					AE_VERBOSE(LogCategory::Animation, "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
-					        bi, nodeCount, batch.count, batch.db->GetBindTranslationsAddr(), batch.db->GetBindRotationsAddr(), batch.db->GetBindScalesAddr());
+					AE_VERBOSE(LogCategory::Animation,
+					        "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
+					        bi,
+					        nodeCount,
+					        batch.count,
+					        batch.db->GetBindTranslationsAddr(),
+					        batch.db->GetBindRotationsAddr(),
+					        batch.db->GetBindScalesAddr());
 					if (nodeCount == 0)
 					{
 						continue;
@@ -581,8 +589,7 @@ namespace aether
 			{
 				const auto& batch = animSampleBatches[bi];
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
-				AE_VERBOSE(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}",
-				        bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
+				AE_VERBOSE(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}", bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
 				if (depthCount == 0)
 				{
 					continue;
@@ -697,24 +704,24 @@ namespace aether
 
 			CommandRecorder(cmd).EndDebugLabel();
 
-		const VkMemoryBarrier2 skinToShaders{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-		};
-		const VkDependencyInfo skinToShadersDep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &skinToShaders,
-		};
-		vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
-	}
-	else if (sampleJobsThisFrame > 0 && m_debugDisableAnimation)
-	{
-		AE_WARN(LogCategory::Animation, "Animation dispatch DISABLED by debug flag ({} sampleJobs, {} skinJobs skipped)", sampleJobsThisFrame, skinJobCount);
-	}
+			const VkMemoryBarrier2 skinToShaders{
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+			};
+			const VkDependencyInfo skinToShadersDep{
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .memoryBarrierCount = 1,
+			        .pMemoryBarriers = &skinToShaders,
+			};
+			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
+		}
+		else if (sampleJobsThisFrame > 0 && m_debugDisableAnimation)
+		{
+			AE_WARN(LogCategory::Animation, "Animation dispatch DISABLED by debug flag ({} sampleJobs, {} skinJobs skipped)", sampleJobsThisFrame, skinJobCount);
+		}
 
 		// ── Cull dispatch: single or multi-frustum ──
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
@@ -828,8 +835,17 @@ namespace aether
 		FlushDrawImpl(recorder, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
-	void RenderQueue::FlushDrawImpl(
-	        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b, const LightingPushFn& pushLightingFn)
+	void RenderQueue::FlushDrawImpl(CommandRecorder& recorder,
+	        VkDescriptorSet bindlessSet,
+	        VkDescriptorSet lightingSet,
+	        VkDeviceAddress frameAddr,
+	        const GraphicsPipeline* overridePipeline,
+	        std::uint32_t cascadeOffset,
+	        const char* debugLabel,
+	        float r,
+	        float g,
+	        float b,
+	        const LightingPushFn& pushLightingFn)
 	{
 		AE_PROFILE_ZONE();
 		if (!recorder.IsValid())
@@ -848,8 +864,7 @@ namespace aether
 		        .instanceDataAddr = m_cachedInstanceDataAddr,
 		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
 		};
-		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", 
-		        frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
+		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		const Mesh* lastMesh = nullptr;

@@ -86,7 +86,7 @@ namespace aether
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Texture: failed to submit upload command buffer"));
 			}
-			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
@@ -146,7 +146,8 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image.Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(
+			        cmd, image.Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 
@@ -255,7 +256,8 @@ namespace aether
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
 
-			TransitionImageLayout(cmd, image->Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+			TransitionImageLayout(
+			        cmd, image->Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
 

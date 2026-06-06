@@ -72,7 +72,7 @@ namespace aether
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Mesh: failed to submit one-time command buffer"));
 			}
-			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
@@ -156,7 +156,16 @@ namespace aether
 		return mesh;
 	}
 
-	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
+	Mesh Mesh::Create(VkDevice device,
+	        VmaAllocator allocator,
+	        VkQueue uploadQueue,
+	        VkCommandPool uploadPool,
+	        std::span<const Vertex> vertices,
+	        std::span<const std::uint32_t> indices,
+	        const float* aabbMin,
+	        const float* aabbMax,
+	        const float* sphereCenter,
+	        float sphereRadius)
 	{
 		Mesh mesh = Create(device, allocator, uploadQueue, uploadPool, vertices);
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
@@ -164,9 +173,18 @@ namespace aether
 		const VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
 		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation, mesh.m_indexDeviceAddress, "Mesh.Index");
 
-		if (aabbMin) mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
-		if (aabbMax) mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
-		if (sphereCenter) mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
+		if (aabbMin)
+		{
+			mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
+		}
+		if (aabbMax)
+		{
+			mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
+		}
+		if (sphereCenter)
+		{
+			mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
+		}
 
 		return mesh;
 	}

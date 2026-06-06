@@ -126,10 +126,7 @@ namespace aether
 			spirvCode.size = spirvSize;
 
 			GFSDK_Aftermath_ShaderBinaryHash hash{};
-			GFSDK_Aftermath_Result result = GFSDK_Aftermath_GetShaderHashSpirv(
-			        GFSDK_Aftermath_Version_API,
-			        &spirvCode,
-			        &hash);
+			GFSDK_Aftermath_Result result = GFSDK_Aftermath_GetShaderHashSpirv(GFSDK_Aftermath_Version_API, &spirvCode, &hash);
 			if (result != GFSDK_Aftermath_Result_Success)
 			{
 				return;
@@ -155,11 +152,7 @@ namespace aether
 				AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dump written to {}", path.string());
 
 				GFSDK_Aftermath_GpuCrashDump_Decoder decoder{};
-				GFSDK_Aftermath_Result decResult = GFSDK_Aftermath_GpuCrashDump_CreateDecoder(
-				        GFSDK_Aftermath_Version_API,
-				        data,
-				        size,
-				        &decoder);
+				GFSDK_Aftermath_Result decResult = GFSDK_Aftermath_GpuCrashDump_CreateDecoder(GFSDK_Aftermath_Version_API, data, size, &decoder);
 				if (decResult != GFSDK_Aftermath_Result_Success)
 				{
 					AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: Failed to create crash dump decoder (result={})", static_cast<std::uint32_t>(decResult));
@@ -169,9 +162,7 @@ namespace aether
 				const std::uint32_t decFlags = ComputeDecoderFlags();
 				const std::uint32_t jsonFlags = 0u;
 				std::uint32_t jsonSize = 0;
-				decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(
-				        decoder, decFlags, jsonFlags,
-				        ShaderDebugInfoLookup, ShaderBinaryLookup, nullptr, nullptr, &jsonSize);
+				decResult = GFSDK_Aftermath_GpuCrashDump_GenerateJSON(decoder, decFlags, jsonFlags, ShaderDebugInfoLookup, ShaderBinaryLookup, nullptr, nullptr, &jsonSize);
 				if (decResult != GFSDK_Aftermath_Result_Success)
 				{
 					AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GenerateJSON failed (result={})", static_cast<std::uint32_t>(decResult));
@@ -218,11 +209,7 @@ namespace aether
 				std::filesystem::create_directories(baseDir);
 
 				GFSDK_Aftermath_ShaderDebugInfoIdentifier identifier{};
-				GFSDK_Aftermath_Result idResult = GFSDK_Aftermath_GetShaderDebugInfoIdentifier(
-				        GFSDK_Aftermath_Version_API,
-				        data,
-				        size,
-				        &identifier);
+				GFSDK_Aftermath_Result idResult = GFSDK_Aftermath_GetShaderDebugInfoIdentifier(GFSDK_Aftermath_Version_API, data, size, &identifier);
 				if (idResult == GFSDK_Aftermath_Result_Success)
 				{
 					std::vector<std::uint8_t> copy(static_cast<const std::uint8_t*>(data), static_cast<const std::uint8_t*>(data) + size);
@@ -297,14 +284,7 @@ namespace aether
 		}
 
 		GFSDK_Aftermath_Result result = GFSDK_Aftermath_EnableGpuCrashDumps(
-		        GFSDK_Aftermath_Version_API,
-		        GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan,
-		        GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default,
-		        OnCrashDump,
-		        OnShaderDebugInfo,
-		        OnDescription,
-		        OnResolveMarker,
-		        this);
+		        GFSDK_Aftermath_Version_API, GFSDK_Aftermath_GpuCrashDumpWatchedApiFlags_Vulkan, GFSDK_Aftermath_GpuCrashDumpFeatureFlags_Default, OnCrashDump, OnShaderDebugInfo, OnDescription, OnResolveMarker, this);
 
 		if (result != GFSDK_Aftermath_Result_Success)
 		{

@@ -105,7 +105,7 @@ namespace aether
 			vkDestroyFence(vk.GetDevice().device, fence, nullptr);
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to submit queue."));
 		}
-		(void)vkWaitForFences(vk.GetDevice().device, 1, &fence, VK_TRUE, UINT64_MAX);
+		(void) vkWaitForFences(vk.GetDevice().device, 1, &fence, VK_TRUE, UINT64_MAX);
 		vkDestroyFence(vk.GetDevice().device, fence, nullptr);
 
 		vkFreeCommandBuffers(vk.GetDevice().device, m_uploadPool, 1, &cmd);

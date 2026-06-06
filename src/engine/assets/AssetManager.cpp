@@ -556,9 +556,7 @@ namespace aether
 		AE_TRY(source, assets::GltfAsset::LoadFromVfsPath(path));
 		LoadedModel loaded;
 
-		AE_INFO(LogCategory::Engine, "Model parsed: {} nodes, {} primitives, {} skins, {} materials, {} animations",
-		        source->nodes.size(), source->primitives.size(), source->skins.size(),
-		        source->materials.size(), source->animations.size());
+		AE_INFO(LogCategory::Engine, "Model parsed: {} nodes, {} primitives, {} skins, {} materials, {} animations", source->nodes.size(), source->primitives.size(), source->skins.size(), source->materials.size(), source->animations.size());
 
 		// New format: materials have texture paths, not embedded images.
 		// Textures are loaded in FinaliseModelLoad.
@@ -599,8 +597,7 @@ namespace aether
 
 	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path)
 	{
-		AE_INFO(LogCategory::Engine, "Finalising model: {} nodes, {} primitives, {} skins, {} materials",
-		        source.nodes.size(), source.primitives.size(), source.skins.size(), source.materials.size());
+		AE_INFO(LogCategory::Engine, "Finalising model: {} nodes, {} primitives, {} skins, {} materials", source.nodes.size(), source.primitives.size(), source.skins.size(), source.materials.size());
 
 		std::vector<glm::mat4> localNodeTransforms(source.nodes.size(), glm::mat4(1.0f));
 		for (std::size_t nodeIndex = 0; nodeIndex < source.nodes.size(); ++nodeIndex)
@@ -684,13 +681,10 @@ namespace aether
 				continue;
 			}
 
-			AE_INFO(LogCategory::Engine, "  Primitive[{}]: {} verts, {} indices, skinIdx={}, matIdx={}",
-			        primIdx, primitive.vertices.size(), primitive.indices.size(),
-			        primitive.skinIndex, primitive.materialIndex);
+			AE_INFO(LogCategory::Engine, "  Primitive[{}]: {} verts, {} indices, skinIdx={}, matIdx={}", primIdx, primitive.vertices.size(), primitive.indices.size(), primitive.skinIndex, primitive.materialIndex);
 
 			LoadedModelPrimitive loadedPrim;
-			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices,
-			        primitive.aabbMin, primitive.aabbMax, primitive.sphereCenter, primitive.sphereRadius);
+			loadedPrim.mesh = CreateMesh(primitive.vertices, primitive.indices, primitive.aabbMin, primitive.aabbMax, primitive.sphereCenter, primitive.sphereRadius);
 			loadedPrim.skinIndex = primitive.skinIndex;
 
 			if (primitive.skinIndex < 0 && primitive.nodeIndex < worldNodeTransforms.size())
@@ -703,8 +697,7 @@ namespace aether
 				const assets::GltfMaterial& srcMat = source.materials[static_cast<std::size_t>(primitive.materialIndex)];
 				Material& mat = loadedPrim.material;
 
-				AE_INFO(LogCategory::Engine, "  Material '{}': albedo='{}', normal='{}', orm='{}'",
-				        srcMat.name, srcMat.albedoPath, srcMat.normalPath, srcMat.metallicRoughnessPath);
+				AE_INFO(LogCategory::Engine, "  Material '{}': albedo='{}', normal='{}', orm='{}'", srcMat.name, srcMat.albedoPath, srcMat.normalPath, srcMat.metallicRoughnessPath);
 
 				mat.baseColorFactor = srcMat.baseColorFactor;
 				mat.metallicFactor = srcMat.metallicFactor;
@@ -748,15 +741,13 @@ namespace aether
 					mat.emissiveSlot = resolveSlot(srcMat.emissiveTexture);
 				}
 
-				AE_INFO(LogCategory::Engine, "  Material slots: albedo={}, normal={}, orm={}, occlusion={}, emissive={}",
-				        mat.albedoSlot, mat.normalSlot, mat.metallicRoughnessSlot, mat.occlusionSlot, mat.emissiveSlot);
+				AE_INFO(LogCategory::Engine, "  Material slots: albedo={}, normal={}, orm={}, occlusion={}, emissive={}", mat.albedoSlot, mat.normalSlot, mat.metallicRoughnessSlot, mat.occlusionSlot, mat.emissiveSlot);
 
 				RegisterMaterial(mat);
 			}
 			else
 			{
-				AE_WARN(LogCategory::Engine, "  Primitive[{}]: no material (matIdx={}, numMats={})",
-				        primIdx, primitive.materialIndex, source.materials.size());
+				AE_WARN(LogCategory::Engine, "  Primitive[{}]: no material (matIdx={}, numMats={})", primIdx, primitive.materialIndex, source.materials.size());
 			}
 
 			loaded.primitives.push_back(std::move(loadedPrim));
@@ -766,13 +757,11 @@ namespace aether
 
 		if (!source.skins.empty() && !source.animations.empty())
 		{
-			AE_INFO(LogCategory::Engine, "  Creating animation database: {} skins, {} animations, {} nodes",
-			        source.skins.size(), source.animations.size(), source.nodes.size());
+			AE_INFO(LogCategory::Engine, "  Creating animation database: {} skins, {} animations, {} nodes", source.skins.size(), source.animations.size(), source.nodes.size());
 			loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
 			if (loaded.animationDb.IsValid())
 			{
-				AE_INFO(LogCategory::Engine, "  Animation database created: {} clips, {} nodes, {} skins",
-				        loaded.animationDb.GetClipCount(), loaded.animationDb.GetNodeCount(), loaded.animationDb.GetSkinCount());
+				AE_INFO(LogCategory::Engine, "  Animation database created: {} clips, {} nodes, {} skins", loaded.animationDb.GetClipCount(), loaded.animationDb.GetNodeCount(), loaded.animationDb.GetSkinCount());
 			}
 			else
 			{
@@ -781,8 +770,7 @@ namespace aether
 		}
 		else
 		{
-			AE_INFO(LogCategory::Engine, "  No animation database: skins={}, animations={}",
-			        source.skins.size(), source.animations.size());
+			AE_INFO(LogCategory::Engine, "  No animation database: skins={}, animations={}", source.skins.size(), source.animations.size());
 		}
 	}
 

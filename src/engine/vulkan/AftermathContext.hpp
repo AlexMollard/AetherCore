@@ -99,27 +99,34 @@ namespace aether
 		{
 			return false;
 		}
+
 		[[nodiscard]] bool Initialize(VkDevice, VkPhysicalDevice)
 		{
 			return false;
 		}
+
 		void SetEventMarker(VkCommandBuffer, std::string_view) const
 		{
 		}
+
 		void Shutdown()
 		{
 		}
+
 		void DisableGpuCrashDumps()
 		{
 		}
+
 		[[nodiscard]] bool IsInitialized() const
 		{
 			return false;
 		}
+
 		[[nodiscard]] const std::string& GetCrashDumpDir() const
 		{
 			return m_empty;
 		}
+
 		std::string m_empty;
 	};
 } // namespace aether

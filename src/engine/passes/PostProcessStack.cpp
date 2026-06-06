@@ -41,7 +41,8 @@ namespace aether
 		const VkDescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
-		        GraphicsPipeline::Create(desc.device, desc.pipelineCache,
+		        GraphicsPipeline::Create(desc.device,
+		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://tonemap.spv",
 		                        .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
@@ -52,7 +53,8 @@ namespace aether
 		stack.m_tonemapPipeline = std::move(tonemapPipeline);
 
 		AE_EXPECT_OR_THROW(fxaaPipeline,
-		        GraphicsPipeline::Create(desc.device, desc.pipelineCache,
+		        GraphicsPipeline::Create(desc.device,
+		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://fxaa.spv",
 		                        .colorFormat = desc.swapchainFormat,

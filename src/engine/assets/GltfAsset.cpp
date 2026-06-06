@@ -190,9 +190,18 @@ namespace aether::assets
 			outS.z = glm::length(col2);
 
 			// Normalize columns to extract rotation
-			if (outS.x > 0.0001f) col0 /= outS.x;
-			if (outS.y > 0.0001f) col1 /= outS.y;
-			if (outS.z > 0.0001f) col2 /= outS.z;
+			if (outS.x > 0.0001f)
+			{
+				col0 /= outS.x;
+			}
+			if (outS.y > 0.0001f)
+			{
+				col1 /= outS.y;
+			}
+			if (outS.z > 0.0001f)
+			{
+				col2 /= outS.z;
+			}
 
 			glm::mat3 rotMat(col0, col1, col2);
 			outR = glm::quat_cast(rotMat);
@@ -237,6 +246,7 @@ namespace aether::assets
 				int32_t parentIndex;
 				float ibm[16];
 			};
+
 			std::vector<BoneData> bones(hdr.boneCount);
 
 			for (uint32_t i = 0; i < hdr.boneCount; ++i)
@@ -424,14 +434,9 @@ namespace aether::assets
 				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
 
-			AE_INFO(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}",
-			        meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount,
-			        hdr.skinRefPathLen > 0 ? "yes" : "no");
-			AE_INFO(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]",
-			        hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2],
-			        hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
-			AE_INFO(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}",
-			        hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
+			AE_INFO(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}", meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount, hdr.skinRefPathLen > 0 ? "yes" : "no");
+			AE_INFO(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]", hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2], hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
+			AE_INFO(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}", hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
 			AE_INFO(LogCategory::Engine, "  Index type: {}", hdr.indexType == 0 ? "uint16" : "uint32");
 
 			GltfAsset asset;
@@ -548,11 +553,7 @@ namespace aether::assets
 				else
 				{
 					mat.name = matPaths[i];
-					AE_INFO(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})",
-					        mat.name,
-					        mat.albedoPath.empty() ? "no" : "yes",
-					        mat.normalPath.empty() ? "no" : "yes",
-					        mat.metallicRoughnessPath.empty() ? "no" : "yes");
+					AE_INFO(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})", mat.name, mat.albedoPath.empty() ? "no" : "yes", mat.normalPath.empty() ? "no" : "yes", mat.metallicRoughnessPath.empty() ? "no" : "yes");
 				}
 
 				asset.materials.push_back(std::move(mat));
@@ -612,8 +613,7 @@ namespace aether::assets
 				}
 			}
 
-			AE_INFO(LogCategory::Engine, "Mesh loaded: {} nodes, {} skins, {} materials, {} animations",
-			        asset.nodes.size(), asset.skins.size(), asset.materials.size(), asset.animations.size());
+			AE_INFO(LogCategory::Engine, "Mesh loaded: {} nodes, {} skins, {} materials, {} animations", asset.nodes.size(), asset.skins.size(), asset.materials.size(), asset.animations.size());
 
 			return asset;
 		}

@@ -14,12 +14,12 @@ namespace aether
 	{
 	public:
 		BinaryReader(const std::vector<std::byte>& data)
-		    : m_data(data.data()), m_end(data.data() + data.size()), m_pos(data.data())
+		      : m_data(data.data()), m_end(data.data() + data.size()), m_pos(data.data())
 		{
 		}
 
 		BinaryReader(const std::byte* data, std::size_t size)
-		    : m_data(data), m_end(data + size), m_pos(data)
+		      : m_data(data), m_end(data + size), m_pos(data)
 		{
 		}
 

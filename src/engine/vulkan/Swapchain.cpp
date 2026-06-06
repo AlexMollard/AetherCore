@@ -316,12 +316,8 @@ namespace aether
 		// src stages) and satisfies sync validation's write-after-write hazard check
 		// for the single shared depth image.
 		const bool depthIsFirstFrame = (m_depthLayout == VK_IMAGE_LAYOUT_UNDEFINED);
-		const VkPipelineStageFlags2 depthSrcStage = depthIsFirstFrame
-		        ? VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT
-		        : (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
-		const VkAccessFlags2 depthSrcAccess = depthIsFirstFrame
-		        ? VK_ACCESS_2_NONE
-		        : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+		const VkPipelineStageFlags2 depthSrcStage = depthIsFirstFrame ? VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT : (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
+		const VkAccessFlags2 depthSrcAccess = depthIsFirstFrame ? VK_ACCESS_2_NONE : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		vkutil::TransitionImage(frame.commandBuffer,
 		        m_depthImage.Get(),
 		        m_depthLayout,

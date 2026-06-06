@@ -18,7 +18,13 @@ namespace aether
 	class ForwardPass
 	{
 	public:
-		void RegisterPass(
-		        RenderGraph& graph, RGImage hdrColor, RGImage depth, RenderQueue& renderQueue, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps = {}, RGImage localShadowAtlas = {});
+		void RegisterPass(RenderGraph& graph,
+		        RGImage hdrColor,
+		        RGImage depth,
+		        RenderQueue& renderQueue,
+		        VkDescriptorSet bindlessSet,
+		        std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn,
+		        std::span<const RGImage> shadowMaps = {},
+		        RGImage localShadowAtlas = {});
 	};
 } // namespace aether

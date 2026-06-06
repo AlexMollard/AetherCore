@@ -160,7 +160,8 @@ namespace aether
 		}
 
 		// Descriptor pool.
-		{}
+		{
+		}
 	}
 
 	void LocalShadowService::Shutdown(VkDevice device)

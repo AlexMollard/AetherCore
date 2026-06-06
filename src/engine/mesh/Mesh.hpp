@@ -38,7 +38,16 @@ namespace aether
 		// Uploads via a staging buffer to device-local memory; call after the upload
 		// pool is created (blocks until the queue is idle).
 		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices);
-		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin = nullptr, const float* aabbMax = nullptr, const float* sphereCenter = nullptr, float sphereRadius = 0.0f);
+		static Mesh Create(VkDevice device,
+		        VmaAllocator allocator,
+		        VkQueue uploadQueue,
+		        VkCommandPool uploadPool,
+		        std::span<const Vertex> vertices,
+		        std::span<const std::uint32_t> indices,
+		        const float* aabbMin = nullptr,
+		        const float* aabbMax = nullptr,
+		        const float* sphereCenter = nullptr,
+		        float sphereRadius = 0.0f);
 
 		// Create a non-owning view into an externally managed buffer (e.g. MeshArena / GpuHeap).
 		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
@@ -119,6 +128,7 @@ namespace aether
 		{
 			return m_aabbMin;
 		}
+
 		[[nodiscard]] glm::vec3 GetAABBMax() const
 		{
 			return m_aabbMax;

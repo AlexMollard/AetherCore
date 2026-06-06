@@ -172,7 +172,7 @@ namespace aether
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 			Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "GpuHeap: failed to submit upload command buffer"));
 		}
-		(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+		(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 		vkDestroyFence(device, fence, nullptr);
 		vkFreeCommandBuffers(device, pool, 1, &cmd);
 	}

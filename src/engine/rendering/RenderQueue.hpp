@@ -257,8 +257,17 @@ namespace aether
 		using LightingPushFn = std::function<void(VkCommandBuffer, VkPipelineLayout)>;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
-		void FlushDrawImpl(
-		        CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress frameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b, const LightingPushFn& pushLightingFn = {});
+		void FlushDrawImpl(CommandRecorder& recorder,
+		        VkDescriptorSet bindlessSet,
+		        VkDescriptorSet lightingSet,
+		        VkDeviceAddress frameAddr,
+		        const GraphicsPipeline* overridePipeline,
+		        std::uint32_t cascadeOffset,
+		        const char* debugLabel,
+		        float r,
+		        float g,
+		        float b,
+		        const LightingPushFn& pushLightingFn = {});
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

@@ -113,7 +113,7 @@ namespace aether
 				vkFreeCommandBuffers(device, pool, 1, &cmd);
 				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit2 failed. VkResult={}", static_cast<int>(submitResult))));
 			}
-			(void)vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 		}
@@ -377,13 +377,7 @@ namespace aether
 
 		VkCommandBuffer cmd = BeginOneShot(device, uploadPool);
 
-		TransitionImage(cmd, m_image,
-		        VK_IMAGE_LAYOUT_GENERAL,
-		        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-		        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-		        VK_ACCESS_2_NONE,
-		        VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-		        VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+		TransitionImage(cmd, m_image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 		EndAndSubmit(device, uploadPool, uploadQueue, cmd);
 		vkDestroyCommandPool(device, uploadPool, nullptr);
