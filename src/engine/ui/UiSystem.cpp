@@ -32,17 +32,13 @@ namespace aether::ui
 		}
 	}
 
-	// Runs before RunLayouts so the layout system sees correct autoSize flags.
-	// Checks tab button clicks, updates UiTabComponent::selectedTab, and toggles
-	// UiLayoutComponent::autoSize so hidden pages do not expand during layout.
-	// The visible page rect is only reset when transitioning from hidden (so the
-	// previous frame's panel-layout position is preserved otherwise).
+	// Runs before RunLayouts. Checks tab button clicks, updates selection,
+	// and toggles UiLayoutComponent::autoSize + visible per page.
 	static void ProcessTabBars(aether::World& world, VkExtent2D extent)
 	{
 		(void) extent;
 		for (auto [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
 		{
-			// Check clicks on tab buttons and update selection.
 			const std::size_t tabCount = std::min(tabComp.tabNames.size(), children.children.size());
 			std::size_t newSelection = tabComp.selectedTab;
 			for (std::size_t i = 0; i < tabCount; ++i)
@@ -57,12 +53,11 @@ namespace aether::ui
 			}
 			tabComp.selectedTab = newSelection;
 
-			// Toggle autoSize and off-screen position for each page.
 			const std::size_t pageCount = std::min(tabComp.tabPages.size(), tabComp.tabNames.size());
 			for (std::size_t i = 0; i < pageCount; ++i)
 			{
-				auto* pt = world.TryGet<UiTransformComponent>(tabComp.tabPages[i]);
 				auto* layout = world.TryGet<UiLayoutComponent>(tabComp.tabPages[i]);
+				auto* pt = world.TryGet<UiTransformComponent>(tabComp.tabPages[i]);
 
 				if (i == tabComp.selectedTab)
 				{
@@ -76,6 +71,7 @@ namespace aether::ui
 							}
 						}
 						layout->autoSize = true;
+						layout->visible = true;
 					}
 				}
 				else
@@ -83,34 +79,12 @@ namespace aether::ui
 					if (layout)
 					{
 						layout->autoSize = false;
+						layout->visible = false;
 					}
 					if (pt)
 					{
-						pt->rect.offsetMinPx.y = -9999.f;
-						pt->rect.offsetMaxPx.y = -9998.f; // 1 px height
+						pt->rect.offsetMaxPx.y = pt->rect.offsetMinPx.y; // zero height
 					}
-				}
-			}
-		}
-	}
-
-	// Runs after RunLayouts, before drawing. Re-moves non-selected tab pages
-	// off-screen in case the panel layout repositioned them into view.
-	static void RehideTabPages(aether::World& world)
-	{
-		for (auto [e, tabComp]: world.View<UiTabComponent>().each())
-		{
-			const std::size_t pageCount = std::min(tabComp.tabPages.size(), tabComp.tabNames.size());
-			for (std::size_t i = 0; i < pageCount; ++i)
-			{
-				if (i == tabComp.selectedTab)
-				{
-					continue;
-				}
-				if (auto* pt = world.TryGet<UiTransformComponent>(tabComp.tabPages[i]))
-				{
-					pt->rect.offsetMinPx.y = -9999.f;
-					pt->rect.offsetMaxPx.y = -9998.f;
 				}
 			}
 		}
@@ -260,11 +234,9 @@ namespace aether::ui
 				}
 				else if (world.Has<UiChildrenComponent>(child))
 				{
-					// Skip off-screen containers (hidden tab pages moved to y ≈ -9999).
-					if (auto* ct = world.TryGet<UiTransformComponent>(child))
+					if (auto* layout = world.TryGet<UiLayoutComponent>(child))
 					{
-						const glm::vec4 r = ResolveUiRectPx(extent, ct->rect);
-						if (r.y < -9000.f)
+						if (!layout->visible)
 						{
 							continue;
 						}
@@ -290,11 +262,7 @@ namespace aether::ui
 		//    re-layout at new positions. See RunLayouts for details.
 		RunLayouts(world, extent);
 
-		// 2. Re-hide non-selected tab pages that the panel layout may have
-		//    repositioned into view during pass 2 of RunLayouts.
-		RehideTabPages(world);
-
-		// 3. Draw root-level panels (no parent) and their children.
+		// 2. Draw root-level panels (no parent) and their children.
 		for (auto [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);

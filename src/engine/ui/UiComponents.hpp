@@ -137,6 +137,9 @@ namespace aether::ui
 		// When true, ApplyLayout shrinks/grows the container to exactly wrap its
 		// children (plus padding), so panels become self-sizing without a fixed rect.
 		bool autoSize = false;
+		// When false, DrawChildren skips this container's subtree. Tab bars use
+		// this to hide non-selected pages without modifying rects.
+		bool visible = true;
 	};
 
 	// ── Text Input ─────────────────────────────────────────────────────────────
