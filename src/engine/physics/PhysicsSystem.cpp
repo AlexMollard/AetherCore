@@ -13,6 +13,9 @@
 #include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
 #include <Jolt/Physics/Body/BodyCreationSettings.h>
 #include <Jolt/Physics/Body/BodyActivationListener.h>
+#include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/Collision/ContactListener.h>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -563,6 +566,51 @@ namespace aether
 	void PhysicsSystem::SetRotation(JPH::BodyID id, glm::quat rot)
 	{
 		m_physics->GetBodyInterface().SetRotation(id, ToJolt(rot), JPH::EActivation::Activate);
+	}
+
+	// ── Raycasting ──────────────────────────────────────────────────────────────
+
+	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance, PhysicsLayer layer)
+	{
+		RaycastResult result{};
+
+		if (maxDistance <= 0.0f || glm::length(direction) < 0.001f)
+		{
+			return result;
+		}
+
+		direction = glm::normalize(direction);
+
+		// RRayCast: RVec3 (double) origin, Vec3 (float) direction+length.
+		// The direction vector's length IS the maxDistance in Jolt's convention.
+		JPH::RRayCast ray(JPH::RVec3(origin.x, origin.y, origin.z), maxDistance * JPH::Vec3(direction.x, direction.y, direction.z));
+
+		JPH::RayCastResult joltResult;
+
+		m_physics->GetNarrowPhaseQuery().CastRay(
+			ray,
+			joltResult,
+			JPH::BroadPhaseLayerFilter{},
+			JPH::ObjectLayerFilter{},
+			JPH::BodyFilter{}
+		);
+
+		if (!joltResult.mBodyID.IsInvalid())
+		{
+			result.hit = true;
+			result.bodyId = static_cast<std::uint32_t>(joltResult.mBodyID.GetIndex());
+			result.fraction = joltResult.mFraction;
+
+			// Hit position: mOrigin + fraction * mDirection (both in RVec3/double).
+			JPH::RVec3 hitPosR = ray.GetPointOnRay(joltResult.mFraction);
+			result.position = {static_cast<float>(hitPosR.GetX()), static_cast<float>(hitPosR.GetY()), static_cast<float>(hitPosR.GetZ())};
+
+			// Normal: approximate as world-up for ground detection.
+			// For true surface normal a shape-level CastRay would be needed.
+			result.normal = {0.0f, 1.0f, 0.0f};
+		}
+
+		return result;
 	}
 
 } // namespace aether
