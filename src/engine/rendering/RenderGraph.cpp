@@ -1,6 +1,7 @@
 #include "rendering/RenderGraph.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <format>
 #include <limits>
 #include <numeric>
@@ -427,6 +428,7 @@ namespace aether
 			        .name = pass.name,
 			        .isGraphics = pass.kind == PassKind::Graphics,
 			        .isCompute = pass.kind == PassKind::Compute,
+			        .lastCpuTimeMs = pass.lastCpuTimeMs,
 			});
 		}
 		return result;
@@ -670,7 +672,7 @@ namespace aether
 
 		for (const CompiledPass& cp: m_compiled)
 		{
-			const PassRecord& pass = m_passes[cp.passIndex];
+			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
@@ -760,8 +762,11 @@ namespace aether
 			if (pass.execute)
 			{
 				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, recorder.GetCommandBuffer(), gpuPassZone, pass.name.c_str());
+				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
 				pass.execute(ctx);
+				const auto t1 = std::chrono::high_resolution_clock::now();
+				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
 			}
 
 			if (useDynamicRendering)

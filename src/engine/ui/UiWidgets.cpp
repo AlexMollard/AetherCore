@@ -497,11 +497,39 @@ namespace aether::ui
 
 			if (isVertical)
 			{
-				ct->rect = PixelToUiRect(*ct, {parentPx.x + pad, cursor, crossSize, mainSize}, extent);
+				float childX = parentPx.x + pad;
+				float childW = crossSize;
+				if (layout->crossAlignment != UiLayoutComponent::Alignment::Stretch)
+				{
+					childW = childPx.z; // natural width
+					if (layout->crossAlignment == UiLayoutComponent::Alignment::Center)
+					{
+						childX += (crossSize - childW) * 0.5f;
+					}
+					else if (layout->crossAlignment == UiLayoutComponent::Alignment::End)
+					{
+						childX += crossSize - childW;
+					}
+				}
+				ct->rect = PixelToUiRect(*ct, {childX, cursor, childW, mainSize}, extent);
 			}
 			else
 			{
-				ct->rect = PixelToUiRect(*ct, {cursor, parentPx.y + pad, mainSize, crossSize}, extent);
+				float childY = parentPx.y + pad;
+				float childH = crossSize;
+				if (layout->crossAlignment != UiLayoutComponent::Alignment::Stretch)
+				{
+					childH = childPx.w; // natural height
+					if (layout->crossAlignment == UiLayoutComponent::Alignment::Center)
+					{
+						childY += (crossSize - childH) * 0.5f;
+					}
+					else if (layout->crossAlignment == UiLayoutComponent::Alignment::End)
+					{
+						childY += crossSize - childH;
+					}
+				}
+				ct->rect = PixelToUiRect(*ct, {cursor, childY, mainSize, childH}, extent);
 			}
 			cursor += mainSize + spacing;
 		}

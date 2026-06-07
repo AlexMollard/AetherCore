@@ -190,6 +190,7 @@ namespace aether
 			std::string name;
 			bool isGraphics = false;
 			bool isCompute = false;
+			float lastCpuTimeMs = 0.f;
 		};
 
 		[[nodiscard]] std::vector<PassInfo> GetPasses() const;
@@ -257,6 +258,7 @@ namespace aether
 			std::vector<ImageAccessRef> imageAccesses;
 			std::function<void(PassContext&)> execute;
 			std::optional<VkExtent2D> extentOverride; // if set, overrides target.extent
+			float lastCpuTimeMs = 0.f;
 		};
 
 		struct CompiledBarrier

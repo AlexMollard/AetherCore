@@ -375,8 +375,46 @@ namespace aether::app
 		m_separators[1] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
 		addToPage(Tab_Render, m_separators[1]);
 
-		m_labelRows[Row_RenderPasses] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Render Passes", 2.f));
-		addToPage(Tab_Render, m_labelRows[Row_RenderPasses]);
+		// Per-pass horizontal rows: label (flex) + progress bar (fixed width).
+		// Each row is an HStack container with crossAxisAlignment::Center so the
+		// progress bar is vertically centred within the 22 px row.
+		for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
+		{
+			Entity hRow = reg(world.Create());
+			world.Emplace<ui::UiTransformComponent>(hRow, ui::UiTransformComponent{.rect = HeightRect(22.f), .zOrder = 2.f});
+			world.Emplace<ui::UiLayoutComponent>(hRow,
+			        ui::UiLayoutComponent{
+			                .direction = ui::UiLayoutComponent::Direction::Horizontal,
+			                .spacing = 6.f,
+			                .padding = 2.f,
+			                .crossAlignment = ui::UiLayoutComponent::Alignment::Center,
+			        });
+			world.Emplace<ui::UiChildrenComponent>(hRow);
+			addToPage(Tab_Render, hRow);
+
+			Entity labelRow = reg(ui::SpawnLabelRow(world, {}, "", 2.f));
+			if (auto* lt = world.TryGet<ui::UiTransformComponent>(labelRow))
+			{
+				lt->flexGrow = 1.f;
+			}
+			ui::AddChild(world, hRow, labelRow);
+			m_labelRows[Row_FirstRenderPass + i] = labelRow;
+
+			Entity bar = reg(ui::SpawnProgressBar(world, {}, 0.f, 1.f, 0.f, 2.f));
+			if (auto* bt = world.TryGet<ui::UiTransformComponent>(bar))
+			{
+				bt->rect.offsetMaxPx.x = 70.f;
+				bt->rect.offsetMaxPx.y = 12.f;
+			}
+			ui::AddChild(world, hRow, bar);
+			m_passBars[i] = bar;
+		}
+
+		m_passTotalRow = reg(ui::SpawnLabelRow(world, HeightRect(22.f), "Total", 2.f));
+		addToPage(Tab_Render, m_passTotalRow);
+
+		m_separators[4] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
+		addToPage(Tab_Render, m_separators[4]);
 
 		m_labelRows[Row_PhysicsDebug] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Physics Debug", 2.f));
 		addToPage(Tab_Render, m_labelRows[Row_PhysicsDebug]);
@@ -583,16 +621,87 @@ namespace aether::app
 		std::snprintf(buf.data(), buf.size(), "%.2f", renderer.GetDirectionalLightIntensity());
 		setRow(Row_SunIntensity, buf.data(), ui::UiTheme::Default().text);
 
-		// Render passes count
+		// Render passes with names, timings, and progress bars
 		if (auto* rg = aether::GetCurrentRenderGraph())
 		{
 			auto passes = rg->GetPasses();
-			std::snprintf(buf.data(), buf.size(), "%zu passes", passes.size());
-			setRow(Row_RenderPasses, buf.data(), ui::UiTheme::Default().text);
+			float totalMs = 0.f;
+			for (std::size_t i = 0; i < passes.size(); ++i)
+			{
+				totalMs += passes[i].lastCpuTimeMs;
+			}
+
+			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
+			{
+				auto& row = m_labelRows[Row_FirstRenderPass + i];
+				if (i < passes.size())
+				{
+					const float ms = passes[i].lastCpuTimeMs;
+					const float pct = totalMs > 0.f ? ms / totalMs : 0.f;
+					const glm::vec4 timeColor = ms < 0.5f ? ui::UiTheme::Default().good : ms < 2.f ? ui::UiTheme::Default().text : ms < 5.f ? ui::UiTheme::Default().warn : ui::UiTheme::Default().bad;
+					std::snprintf(buf.data(), buf.size(), "%.2f ms", ms);
+					if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+					{
+						r->label = passes[i].name;
+						r->value = buf.data();
+						r->valueColor = timeColor;
+					}
+					if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+					{
+						slider->value = pct;
+					}
+				}
+				else
+				{
+					if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+					{
+						r->label.clear();
+						r->value.clear();
+					}
+					if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+					{
+						slider->value = 0.f;
+					}
+				}
+			}
+
+			// Total row
+			if (auto* r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
+			{
+				if (passes.empty())
+				{
+					r->label.clear();
+					r->value.clear();
+				}
+				else
+				{
+					std::snprintf(buf.data(), buf.size(), "%.2f ms", totalMs);
+					r->label = "Total";
+					r->value = buf.data();
+					r->valueColor = ui::UiTheme::Default().text;
+				}
+			}
 		}
 		else
 		{
-			setRow(Row_RenderPasses, "N/A", ui::UiTheme::Default().textLabel);
+			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
+			{
+				auto& row = m_labelRows[Row_FirstRenderPass + i];
+				if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+				{
+					r->label.clear();
+					r->value.clear();
+				}
+				if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+				{
+					slider->value = 0.f;
+				}
+			}
+			if (auto* r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
+			{
+				r->label.clear();
+				r->value.clear();
+			}
 		}
 
 		// Physics debug state

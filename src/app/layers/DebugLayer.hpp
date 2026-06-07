@@ -56,10 +56,12 @@ namespace aether::app
 			Row_PointLights,
 			Row_SpotLights,
 			Row_SunIntensity,
-			Row_RenderPasses,
 			Row_PhysicsDebug,
-			Row_Count
+			Row_FirstRenderPass,
 		};
+
+		static constexpr std::size_t kMaxRenderPassRows = 16;
+		static constexpr std::size_t kLabelRowCount = Row_FirstRenderPass + kMaxRenderPassRows;
 
 		enum Tab : std::size_t
 		{
@@ -68,8 +70,6 @@ namespace aether::app
 			Tab_Camera,
 			kTabCount
 		};
-
-		static constexpr std::size_t kLabelRowCount = Row_Count;
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
 
@@ -87,8 +87,10 @@ namespace aether::app
 		Entity m_tabBar;
 		Entity m_graphEntity;
 		Entity m_labelRows[kLabelRowCount];
-		Entity m_separators[5];
+		Entity m_separators[6];
 		Entity m_reloadButton;
+		Entity m_passTotalRow;
+		std::array<Entity, kMaxRenderPassRows> m_passBars{};
 		std::vector<Entity> m_entities;
 		std::array<Entity, kTabCount> m_tabPages;
 	};

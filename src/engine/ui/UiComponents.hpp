@@ -132,6 +132,15 @@ namespace aether::ui
 			Vertical,
 			Horizontal
 		} direction = Direction::Vertical;
+
+		enum class Alignment
+		{
+			Start, // top for horizontal, left for vertical
+			Center,
+			End,     // bottom for horizontal, right for vertical
+			Stretch, // fill the cross-axis (default)
+		};
+
 		float spacing = 4.f;
 		float padding = 8.f;
 		// When true, ApplyLayout shrinks/grows the container to exactly wrap its
@@ -140,6 +149,7 @@ namespace aether::ui
 		// When false, DrawChildren skips this container's subtree. Tab bars use
 		// this to hide non-selected pages without modifying rects.
 		bool visible = true;
+		Alignment crossAlignment = Alignment::Stretch;
 	};
 
 	// ── Text Input ─────────────────────────────────────────────────────────────
