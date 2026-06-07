@@ -6,6 +6,7 @@
 #include "vulkan/volk.hpp"
 
 #include "animation/AnimationDatabase.hpp"
+#include "assets/GltfAsset.hpp"
 #include "material/Material.hpp"
 
 namespace aether
@@ -43,13 +44,16 @@ namespace aether
 	// Drives GPU-based skeletal animation for a skinned mesh entity.
 	struct SkinnedMeshComponent
 	{
-		const AnimationDatabase* animDb = nullptr;
+		AnimationDatabase* animDb = nullptr;
 		std::uint32_t skinIndex = 0;
 		std::uint32_t jointCount = 0; // cached from animDb at spawn time
 		std::uint32_t clipIndex = 0;
 		float animTime = 0.f;
 		float playbackSpeed = 1.f;
 		bool looping = true;
+		// Runtime-loaded animation clips, kept on CPU for duration queries.
+		// Cleared after compile_animations() bakes them into animDb.
+		std::vector<assets::GltfAnimation> pendingExternalAnims;
 	};
 
 	// Links a spawned mesh entity back to its parent script entity.

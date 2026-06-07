@@ -1,11 +1,18 @@
 #include "scripting/DasModuleBase.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include "daScript/daScript.h"
 
+#include "BinaryFormats.hpp"
+#include "assets/GltfAsset.hpp"
+#include "animation/AnimationCompiler.hpp"
+#include "animation/AnimationDatabase.hpp"
+#include "io/FileSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "utils/BinaryReader.hpp"
 
 namespace
 {
@@ -13,7 +20,6 @@ namespace
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
-	// Find a SkinnedMeshComponent on entity or any spawned child.
 	const aether::SkinnedMeshComponent* FindSmcOrSpawned(const aether::World* w, uint32_t id)
 	{
 		const aether::Entity e{id};
@@ -60,6 +66,226 @@ namespace
 		}
 	}
 
+	// Build bone name to joint index map from AnimationDatabase's skeleton
+	std::unordered_map<std::string, std::uint32_t> BuildBoneNameMap(const aether::AnimationDatabase* animDb)
+	{
+		std::unordered_map<std::string, std::uint32_t> boneMap;
+		if (!animDb)
+		{
+			return boneMap;
+		}
+
+		const auto skinCount = animDb->GetSkinCount();
+		if (skinCount == 0)
+		{
+			return boneMap;
+		}
+
+		const auto jointCount = animDb->GetSkinJointCount(0);
+		const auto& skinJoints = animDb->GetSkinJoints();
+
+		for (std::uint32_t i = 0; i < jointCount; ++i)
+		{
+			const auto nodeIdx = skinJoints[i];
+			auto nodeName = animDb->GetNodeName(nodeIdx);
+			if (!nodeName.empty())
+			{
+				boneMap[std::string(nodeName)] = nodeIdx;
+			}
+		}
+
+		return boneMap;
+	}
+
+	// Remap animation channels to the target skeleton.
+	// First tries bone-name matching; if no channels have bone names,
+	// falls back to index-ordering matching (0→skinJoints[0], 1→skinJoints[1], …).
+	void RemapAnimationByBoneName(aether::assets::GltfAnimation& anim, const std::unordered_map<std::string, std::uint32_t>& boneNameToJointIndex, const aether::AnimationDatabase* animDb)
+	{
+		bool hasBoneNames = false;
+		for (auto& ch: anim.channels)
+		{
+			if (!ch.boneName.empty())
+			{
+				hasBoneNames = true;
+				auto it = boneNameToJointIndex.find(ch.boneName);
+				if (it != boneNameToJointIndex.end())
+				{
+					ch.nodeIndex = it->second;
+				}
+			}
+		}
+
+		// Fallback: if the .anim file has no bone names, match by index ordering.
+		if (!hasBoneNames && animDb)
+		{
+			const auto jointCount = animDb->GetSkinJointCount(0);
+			const auto& skinJoints = animDb->GetSkinJoints();
+			for (auto& ch: anim.channels)
+			{
+				if (ch.nodeIndex < jointCount)
+				{
+					ch.nodeIndex = skinJoints[ch.nodeIndex];
+				}
+			}
+		}
+	}
+
+	// ── Compile ───────────────────────────────────────────────────────────────
+
+	// Bake all pending animation clips into the model's AnimationDatabase.
+	// Delegates to the engine-level CompileAnimations.
+	void das_compile_animations(aether::World* w, uint32_t id)
+	{
+		aether::CompileAnimations(*w, id);
+	}
+
+	// ── Loading ───────────────────────────────────────────────────────────────
+
+	// Load a .anim file and add it as a pending clip.
+	// Returns the future clip index (valid after compile_animations).
+	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath)
+	{
+		auto* smc = FindSmcOrSpawned(w, id);
+		if (!smc)
+		{
+			AE_WARN(aether::LogCategory::Animation, "add_animation: entity {} has no SkinnedMeshComponent", id);
+			return -1;
+		}
+
+		auto data = aether::io::FileSystem::ReadFile(std::string(animPath));
+		if (!data.has_value())
+		{
+			AE_WARN(aether::LogCategory::Animation, "add_animation: file not found: {}", animPath);
+			return -1;
+		}
+
+#pragma pack(push, 1)
+
+		struct V1Header
+		{
+			char magic[4];
+			uint32_t version;
+			uint32_t channelCount;
+			uint16_t nameLen;
+		};
+
+#pragma pack(pop)
+
+		aether::BinaryReader reader(*data);
+
+		V1Header v1Hdr = reader.Read<V1Header>();
+		if (v1Hdr.magic[0] != 'A' || v1Hdr.magic[1] != 'N' || v1Hdr.magic[2] != 'I' || v1Hdr.magic[3] != 'M')
+		{
+			AE_WARN(aether::LogCategory::Animation, "add_animation: invalid animation magic");
+			return -1;
+		}
+
+		uint32_t version = v1Hdr.version;
+		uint32_t channelCount = v1Hdr.channelCount;
+		uint16_t nameLen = v1Hdr.nameLen;
+		uint16_t flags = 0;
+		if (version >= 2)
+		{
+			flags = reader.Read<uint16_t>();
+		}
+
+		aether::assets::GltfAnimation anim;
+		anim.name = std::string(reinterpret_cast<const char*>(reader.Data()), nameLen);
+		reader.Advance(nameLen);
+
+		const bool hasBoneNames = (version >= 2) && (flags & 1);
+
+		for (uint32_t ci = 0; ci < channelCount; ++ci)
+		{
+			aether::assets::GltfAnimationChannel ch;
+			ch.nodeIndex = reader.Read<uint32_t>();
+
+			if (hasBoneNames)
+			{
+				uint16_t boneNameLen = reader.Read<uint16_t>();
+				if (boneNameLen > 0)
+				{
+					ch.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
+					reader.Advance(boneNameLen);
+				}
+			}
+
+			uint8_t path = reader.Read<uint8_t>();
+			uint8_t interp = reader.Read<uint8_t>();
+			reader.Read<uint16_t>(); // padding
+			uint32_t keyCount = reader.Read<uint32_t>();
+
+			switch (static_cast<AnimPathDisk>(path))
+			{
+				case AnimPathDisk::Translation:
+					ch.path = aether::assets::GltfAnimationPath::Translation;
+					break;
+				case AnimPathDisk::Rotation:
+					ch.path = aether::assets::GltfAnimationPath::Rotation;
+					break;
+				case AnimPathDisk::Scale:
+					ch.path = aether::assets::GltfAnimationPath::Scale;
+					break;
+				case AnimPathDisk::Weights:
+					ch.path = aether::assets::GltfAnimationPath::Weights;
+					break;
+			}
+
+			switch (static_cast<AnimInterpDisk>(interp))
+			{
+				case AnimInterpDisk::Linear:
+					ch.interpolation = aether::assets::GltfInterpolation::Linear;
+					break;
+				case AnimInterpDisk::Step:
+					ch.interpolation = aether::assets::GltfInterpolation::Step;
+					break;
+				case AnimInterpDisk::CubicSpline:
+					ch.interpolation = aether::assets::GltfInterpolation::CubicSpline;
+					break;
+			}
+
+			ch.times.resize(keyCount);
+			reader.ReadRaw(ch.times.data(), keyCount * sizeof(float));
+
+			ch.values.resize(keyCount);
+			for (uint32_t k = 0; k < keyCount; ++k)
+			{
+				float v4[4];
+				reader.ReadRaw(v4, sizeof(v4));
+				ch.values[k] = glm::vec4(v4[0], v4[1], v4[2], v4[3]);
+			}
+
+			anim.channels.push_back(ch);
+		}
+
+		auto boneMap = BuildBoneNameMap(smc->animDb);
+		RemapAnimationByBoneName(anim, boneMap, smc->animDb);
+
+		const std::uint32_t pendingIdx = static_cast<std::uint32_t>(smc->pendingExternalAnims.size());
+		smc->pendingExternalAnims.push_back(std::move(anim));
+
+		const std::uint32_t internalClipCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
+		const std::uint32_t futureClipIndex = internalClipCount + pendingIdx;
+
+		AE_VERBOSE(aether::LogCategory::Animation, "add_animation: loaded '{}' for entity {}, future clip index={}", smc->pendingExternalAnims.back().name, id, futureClipIndex);
+
+		return static_cast<int32_t>(futureClipIndex);
+	}
+
+	void das_clear_pending_animations(aether::World* w, uint32_t id)
+	{
+		auto clearFn = [](aether::SkinnedMeshComponent& smc)
+		{
+			smc.pendingExternalAnims.clear();
+		};
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+		{
+			clearFn(*smc);
+		}
+		ForEachSpawnedSmc(w, id, clearFn);
+	}
+
 	// ── Playback control ──────────────────────────────────────────────────────
 
 	void das_set_animation(aether::World* w, uint32_t id, int32_t clipIndex)
@@ -68,38 +294,17 @@ namespace
 		{
 			return;
 		}
-
-		auto clampAndSet = [clipIndex](aether::SkinnedMeshComponent& smc)
+		const auto uIdx = static_cast<std::uint32_t>(clipIndex);
+		auto setClip = [uIdx](aether::SkinnedMeshComponent& smc)
 		{
-			if (!smc.animDb)
-			{
-				return;
-			}
-			const auto maxClip = static_cast<int32_t>(smc.animDb->GetClipCount());
-			if (maxClip <= 0)
-			{
-				return;
-			}
-			smc.clipIndex = static_cast<std::uint32_t>(std::min(clipIndex, maxClip - 1));
+			smc.clipIndex = uIdx;
 			smc.animTime = 0.f;
 		};
-
 		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
-			clampAndSet(*smc);
+			setClip(*smc);
 		}
-
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		if (sec)
-		{
-			for (const auto eid: sec->entityIds)
-			{
-				if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
-				{
-					clampAndSet(*smc);
-				}
-			}
-		}
+		ForEachSpawnedSmc(w, id, setClip);
 	}
 
 	int32_t das_get_current_animation(aether::World* w, uint32_t id)
@@ -138,52 +343,92 @@ namespace
 		return smc ? smc->animTime : 0.f;
 	}
 
-	// ── Clip queries ──────────────────────────────────────────────────────────
+	// ── Clip queries (checks both compiled DB clips and pending clips) ─────────
 
 	int32_t das_get_animation_count(aether::World* w, uint32_t id)
 	{
 		const auto* smc = FindSmcOrSpawned(w, id);
-		return (smc && smc->animDb) ? static_cast<int32_t>(smc->animDb->GetClipCount()) : 0;
+		if (!smc)
+		{
+			return 0;
+		}
+		const auto dbCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
+		return static_cast<int32_t>(dbCount + smc->pendingExternalAnims.size());
 	}
 
 	const char* das_get_animation_name(aether::World* w, uint32_t id, int32_t index)
 	{
 		const auto* smc = FindSmcOrSpawned(w, id);
-		if (!smc || !smc->animDb || index < 0)
+		if (!smc || index < 0)
 		{
 			return nullptr;
 		}
 		const auto uIdx = static_cast<std::uint32_t>(index);
-		if (uIdx >= smc->animDb->GetClipCount())
+		const auto dbCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
+
+		if (uIdx < dbCount)
 		{
-			return nullptr;
+			return smc->animDb->GetClipName(uIdx).data();
 		}
-		return smc->animDb->GetClipName(uIdx).data();
+		const auto pendingIdx = uIdx - dbCount;
+		if (pendingIdx < smc->pendingExternalAnims.size())
+		{
+			return smc->pendingExternalAnims[pendingIdx].name.c_str();
+		}
+		return nullptr;
 	}
 
 	float das_get_animation_duration(aether::World* w, uint32_t id)
 	{
 		const auto* smc = FindSmcOrSpawned(w, id);
-		if (!smc || !smc->animDb)
+		if (!smc)
 		{
 			return 0.f;
 		}
-		return smc->animDb->GetClipDuration(smc->clipIndex);
+		const auto clipIdx = smc->clipIndex;
+		const auto dbCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
+
+		if (clipIdx < dbCount)
+		{
+			return smc->animDb->GetClipDuration(clipIdx);
+		}
+		const auto pendingIdx = clipIdx - dbCount;
+		if (pendingIdx < smc->pendingExternalAnims.size())
+		{
+			float dur = 0.f;
+			for (const auto& ch: smc->pendingExternalAnims[pendingIdx].channels)
+			{
+				if (!ch.times.empty())
+				{
+					dur = std::max(dur, ch.times.back());
+				}
+			}
+			return dur;
+		}
+		return 0.f;
 	}
 
 	int32_t das_find_animation(aether::World* w, uint32_t id, const char* name)
 	{
 		const auto* smc = FindSmcOrSpawned(w, id);
-		if (!smc || !smc->animDb || !name)
+		if (!smc || !name)
 		{
 			return -1;
 		}
-		const std::uint32_t count = smc->animDb->GetClipCount();
-		for (std::uint32_t i = 0; i < count; ++i)
+		const auto dbCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
+
+		for (std::uint32_t i = 0; i < dbCount; ++i)
 		{
 			if (smc->animDb->GetClipName(i) == name)
 			{
 				return static_cast<int32_t>(i);
+			}
+		}
+		for (std::uint32_t i = 0; i < smc->pendingExternalAnims.size(); ++i)
+		{
+			if (smc->pendingExternalAnims[i].name == name)
+			{
+				return static_cast<int32_t>(dbCount + i);
 			}
 		}
 		return -1;
@@ -212,6 +457,14 @@ namespace aether::app::scripting
 		      : DasModuleBase("animation")
 		{
 			das::ModuleLibrary lib(this);
+
+			// Compile — bake pending animations into the AnimationDatabase
+			Bind<das_compile_animations>(lib, "compile_animations", SE::modifyExternal);
+
+			// Loading
+			Bind<das_add_animation>(lib, "add_animation", SE::modifyExternal);
+			Bind<das_add_animation>(lib, "load_external_animation", SE::modifyExternal);
+			Bind<das_clear_pending_animations>(lib, "clear_pending_animations", SE::modifyExternal);
 
 			// Playback control
 			Bind<das_set_animation>(lib, "set_animation", SE::modifyExternal);

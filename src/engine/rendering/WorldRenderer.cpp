@@ -58,7 +58,7 @@ namespace aether
 				{
 					skinIndex = static_cast<std::int32_t>(smc->skinIndex);
 					skinJointCount = smc->jointCount;
-					animClipIndex = std::min(smc->clipIndex, smc->animDb->GetClipCount() - 1u);
+					animClipIndex = smc->clipIndex;
 					animTime = smc->animTime;
 					animDb = smc->animDb;
 				}

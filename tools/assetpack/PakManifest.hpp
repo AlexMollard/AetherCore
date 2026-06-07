@@ -12,82 +12,109 @@ namespace fs = std::filesystem;
 
 // Bump when the manifest format changes so that stale cached manifests
 // are automatically regenerated on the next pack.
-inline constexpr int kManifestVersion = 2;
+inline constexpr int kManifestVersion = 3;
 
 struct ManifestEntry
 {
-    int64_t  mtimeSec;
-    uint64_t contentHash;
+	int64_t mtimeSec;
+	uint64_t contentHash;
 };
 
 using ManifestMap = std::unordered_map<std::string, ManifestEntry>;
 
 inline ManifestMap LoadManifest(const fs::path& manifestPath)
 {
-    ManifestMap map;
-    std::ifstream in(manifestPath);
-    if (!in)
-        return map;
+	ManifestMap map;
+	std::ifstream in(manifestPath);
+	if (!in)
+	{
+		return map;
+	}
 
-    std::string line;
-    while (std::getline(in, line))
-    {
-        if (line.empty()) continue;
-        const std::string expected = "# AetherPak manifest v" + std::to_string(kManifestVersion);
-        if (line != expected)
-            return {};
-        break;
-    }
+	std::string line;
+	while (std::getline(in, line))
+	{
+		if (line.empty())
+		{
+			continue;
+		}
+		const std::string expected = "# AetherPak manifest v" + std::to_string(kManifestVersion);
+		if (line != expected)
+		{
+			return {};
+		}
+		break;
+	}
 
-    while (std::getline(in, line))
-    {
-        if (line.empty() || line[0] == '#') continue;
+	while (std::getline(in, line))
+	{
+		if (line.empty() || line[0] == '#')
+		{
+			continue;
+		}
 
-        const auto t1 = line.find('\t');
-        const auto t2 = line.find('\t', t1 + 1);
-        if (t1 == std::string::npos || t2 == std::string::npos) continue;
+		const auto t1 = line.find('\t');
+		const auto t2 = line.find('\t', t1 + 1);
+		if (t1 == std::string::npos || t2 == std::string::npos)
+		{
+			continue;
+		}
 
-        const std::string  vpath = line.substr(0, t1);
-        const std::string_view mstr = { line.data() + t1 + 1, t2 - t1 - 1 };
-        const std::string_view hstr = { line.data() + t2 + 1, line.size() - t2 - 1 };
+		const std::string vpath = line.substr(0, t1);
+		const std::string_view mstr = {line.data() + t1 + 1, t2 - t1 - 1};
+		const std::string_view hstr = {line.data() + t2 + 1, line.size() - t2 - 1};
 
-        ManifestEntry e{};
-        std::from_chars(mstr.data(), mstr.data() + mstr.size(), e.mtimeSec);
-        std::from_chars(hstr.data(), hstr.data() + hstr.size(), e.contentHash, 16);
-        map.emplace(vpath, e);
-    }
-    return map;
+		ManifestEntry e{};
+		std::from_chars(mstr.data(), mstr.data() + mstr.size(), e.mtimeSec);
+		std::from_chars(hstr.data(), hstr.data() + hstr.size(), e.contentHash, 16);
+		map.emplace(vpath, e);
+	}
+	return map;
 }
 
 inline void SaveManifest(const fs::path& manifestPath, const ManifestMap& map)
 {
-    std::ofstream out(manifestPath);
-    if (!out) return;
+	std::ofstream out(manifestPath);
+	if (!out)
+	{
+		return;
+	}
 
-    out << "# AetherPak manifest v" << kManifestVersion << "\n";
-    for (const auto& [vpath, e] : map)
-        out << vpath << '\t' << std::dec << e.mtimeSec << '\t' << std::hex << e.contentHash << '\n';
+	out << "# AetherPak manifest v" << kManifestVersion << "\n";
+	for (const auto& [vpath, e]: map)
+	{
+		out << vpath << '\t' << std::dec << e.mtimeSec << '\t' << std::hex << e.contentHash << '\n';
+	}
 }
 
-template <typename FileRecord>
-inline bool IsUpToDate(
-    const fs::path& pakPath,
-    const ManifestMap& manifest,
-    const std::vector<FileRecord>& files)
+template<typename FileRecord>
+inline bool IsUpToDate(const fs::path& pakPath, const ManifestMap& manifest, const std::vector<FileRecord>& files)
 {
-    if (!fs::exists(pakPath)) return false;
+	if (!fs::exists(pakPath))
+	{
+		return false;
+	}
 
-    for (const auto& file : files)
-    {
-        const auto it = manifest.find(file.virtualPath);
-        if (it == manifest.end()) return false;
+	for (const auto& file: files)
+	{
+		const auto it = manifest.find(file.virtualPath);
+		if (it == manifest.end())
+		{
+			return false;
+		}
 
-        std::error_code ec;
-        const auto mtime = fs::last_write_time(file.diskPath, ec);
-        if (ec) return false;
+		std::error_code ec;
+		const auto mtime = fs::last_write_time(file.diskPath, ec);
+		if (ec)
+		{
+			return false;
+		}
 
-        const auto mtimeSec = std::chrono::duration_cast<std::chrono::seconds>(mtime.time_since_epoch()).count();
-        if (mtimeSec != it->second.mtimeSec) return false;
-    }
-    return true;
+		const auto mtimeSec = std::chrono::duration_cast<std::chrono::seconds>(mtime.time_since_epoch()).count();
+		if (mtimeSec != it->second.mtimeSec)
+		{
+			return false;
+		}
+	}
+	return true;
 }

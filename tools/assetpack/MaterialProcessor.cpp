@@ -14,10 +14,7 @@
 
 namespace MaterialProcessor
 {
-	ByteBuffer Process(
-	    std::span<const std::byte>    tomlData,
-	    const std::filesystem::path&  sourcePath,
-	    const std::filesystem::path&  sourceDir)
+	ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& sourceDir)
 	{
 		const std::string_view text(reinterpret_cast<const char*>(tomlData.data()), tomlData.size());
 
@@ -38,48 +35,64 @@ namespace MaterialProcessor
 			if (!arr)
 			{
 				for (int i = 0; i < count && i < static_cast<int>(fallback.size()); ++i)
+				{
 					out[i] = static_cast<float>(fallback[i]);
+				}
 				return;
 			}
 			for (int i = 0; i < count && i < static_cast<int>(arr->size()); ++i)
 			{
 				const auto* v = arr->get(i)->as_floating_point();
 				if (v)
+				{
 					out[i] = static_cast<float>(v->get());
+				}
 			}
 		};
 
-		float baseColor[4] = { 1, 1, 1, 1 };
+		float baseColor[4] = {1, 1, 1, 1};
 		float metallic = 1;
 		float roughness = 1;
-		float emissive[3] = { 0, 0, 0 };
+		float emissive[3] = {0, 0, 0};
 		float alphaCutoff = 0;
 
-		readFloats("material", "baseColorFactor", baseColor, 4, { 1.0, 1.0, 1.0, 1.0 });
-		readFloats("material", "emissiveFactor",  emissive, 3, { 0.0, 0.0, 0.0 });
+		readFloats("material", "baseColorFactor", baseColor, 4, {1.0, 1.0, 1.0, 1.0});
+		readFloats("material", "emissiveFactor", emissive, 3, {0.0, 0.0, 0.0});
 
 		{
 			const auto* v = tbl["material"]["metallicFactor"].as_floating_point();
-			if (v) metallic = static_cast<float>(v->get());
+			if (v)
+			{
+				metallic = static_cast<float>(v->get());
+			}
 		}
 		{
 			const auto* v = tbl["material"]["roughnessFactor"].as_floating_point();
-			if (v) roughness = static_cast<float>(v->get());
+			if (v)
+			{
+				roughness = static_cast<float>(v->get());
+			}
 		}
 		{
 			const auto* v = tbl["material"]["alphaCutoff"].as_floating_point();
-			if (v) alphaCutoff = static_cast<float>(v->get());
+			if (v)
+			{
+				alphaCutoff = static_cast<float>(v->get());
+			}
 		}
 
-		const bool doubleSided = [&]() -> bool {
+		const bool doubleSided = [&]() -> bool
+		{
 			const auto* v = tbl["material"]["doubleSided"].as_boolean();
 			return v && v->get();
 		}();
-		const bool alphaBlend = [&]() -> bool {
+		const bool alphaBlend = [&]() -> bool
+		{
 			const auto* v = tbl["material"]["alphaBlend"].as_boolean();
 			return v && v->get();
 		}();
-		const bool alphaMask = [&]() -> bool {
+		const bool alphaMask = [&]() -> bool
+		{
 			const auto* v = tbl["material"]["alphaMask"].as_boolean();
 			return v && v->get();
 		}();
@@ -89,20 +102,23 @@ namespace MaterialProcessor
 			uint8_t type;
 			std::string path;
 		};
+
 		std::vector<TexEntry> textures;
 
 		auto addTex = [&](const char* key, TextureTypeDisk type)
 		{
 			const auto* v = tbl["textures"][key].as_string();
 			if (v)
-				textures.push_back({ static_cast<uint8_t>(type), std::string(v->get()) });
+			{
+				textures.push_back({static_cast<uint8_t>(type), std::string(v->get())});
+			}
 		};
 
-		addTex("albedo",            TextureTypeDisk::BaseColor);
-		addTex("normal",            TextureTypeDisk::Normal);
+		addTex("albedo", TextureTypeDisk::BaseColor);
+		addTex("normal", TextureTypeDisk::Normal);
 		addTex("metallicRoughness", TextureTypeDisk::MetallicRoughness);
-		addTex("occlusion",         TextureTypeDisk::Occlusion);
-		addTex("emissive",          TextureTypeDisk::Emissive);
+		addTex("occlusion", TextureTypeDisk::Occlusion);
+		addTex("emissive", TextureTypeDisk::Emissive);
 
 		MaterialHeaderDisk hdr;
 		std::memcpy(hdr.baseColorFactor, baseColor, sizeof(baseColor));
@@ -124,7 +140,7 @@ namespace MaterialProcessor
 
 		append(&hdr, sizeof(hdr));
 
-		for (const auto& tex : textures)
+		for (const auto& tex: textures)
 		{
 			const uint16_t pathLen = static_cast<uint16_t>(tex.path.size());
 			append(&tex.type, sizeof(tex.type));

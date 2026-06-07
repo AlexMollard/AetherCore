@@ -88,4 +88,8 @@ def init_default_bindings()
     register_action("time_down",      KEY_J,          0);
     register_action("time_noon",      KEY_G,          0);
     register_action("time_midnight",  KEY_O,          0);
+    register_action("move_forward",   KEY_W,          0);
+    register_action("move_backward",  KEY_S,          0);
+    register_action("move_left",      KEY_A,          0);
+    register_action("move_right",     KEY_D,          0);
 }

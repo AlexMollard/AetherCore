@@ -25,6 +25,7 @@ namespace aether
 	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset)
 	{
 		AnimationDatabase db;
+		db.m_ctx = &ctx;
 		db.m_nodeCount = static_cast<std::uint32_t>(asset.nodes.size());
 		db.m_skinCount = static_cast<std::uint32_t>(asset.skins.size());
 
@@ -53,7 +54,7 @@ namespace aether
 		}
 		else
 		{
-			AE_INFO(LogCategory::Engine, "AnimationDatabase: all channels valid (numNodes={}, {} clips, {} skins)", numNodes, asset.animations.size(), asset.skins.size());
+			AE_VERBOSE(LogCategory::Engine, "AnimationDatabase: all channels valid (numNodes={}, {} clips, {} skins)", numNodes, asset.animations.size(), asset.skins.size());
 		}
 
 		// ── Build CPU arrays ─────────────────────────────────────────────────
@@ -133,6 +134,13 @@ namespace aether
 			bindTranslations.emplace_back(n.translation, 0.0f);
 			bindRotations.emplace_back(n.rotation.x, n.rotation.y, n.rotation.z, n.rotation.w);
 			bindScales.emplace_back(n.scale, 0.0f);
+		}
+
+		// ── Store node names for cross-skeleton remapping ──────────────────
+		db.m_nodeNames.reserve(asset.nodes.size());
+		for (const auto& n: asset.nodes)
+		{
+			db.m_nodeNames.push_back(n.name);
 		}
 
 		// ── Compute node depths for level-by-level flatten ──────────────────
@@ -266,9 +274,9 @@ namespace aether
 		for (std::uint32_t i = 1; i < asset.nodes.size() && i < 5; ++i)
 		{
 			const auto& n = asset.nodes[i];
-			AE_INFO(LogCategory::Engine, "  Node[{}]: '{}' parent={}, t=({:.1f},{:.1f},{:.1f})", i, n.name, n.parentIndex, n.translation.x, n.translation.y, n.translation.z);
+			AE_VERBOSE(LogCategory::Engine, "  Node[{}]: '{}' parent={}, t=({:.1f},{:.1f},{:.1f})", i, n.name, n.parentIndex, n.translation.x, n.translation.y, n.translation.z);
 		}
-		AE_INFO(LogCategory::Engine, "  Skin count: {}, joints count: {}", asset.skins.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
+		AE_VERBOSE(LogCategory::Engine, "  Skin count: {}, joints count: {}", asset.skins.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
 		if (!asset.skins.empty())
 		{
 			std::string jointStr;
@@ -276,10 +284,10 @@ namespace aether
 			{
 				jointStr += std::to_string(asset.skins[0].joints[ji]) + " ";
 			}
-			AE_INFO(LogCategory::Engine, "  First {} skin joints: {}", (std::min)(asset.skins[0].joints.size(), std::size_t(8)), jointStr);
+			AE_VERBOSE(LogCategory::Engine, "  First {} skin joints: {}", (std::min)(asset.skins[0].joints.size(), std::size_t(8)), jointStr);
 		}
 
-		AE_INFO(LogCategory::Engine,
+		AE_VERBOSE(LogCategory::Engine,
 		        "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, bindT=0x{:x}, bindR=0x{:x}, bindS=0x{:x}, skinMetas=0x{:x}, skinJoints=0x{:x}, skinIBMs=0x{:x}, depthNodes=0x{:x}, "
 		        "depthRanges=0x{:x}",
 		        db.m_clipsAddr,
@@ -302,7 +310,7 @@ namespace aether
 			db.m_depthRangesAddr = UploadArray(db.m_heap, db.m_depthRanges, device, queue, uploadPool);
 		}
 
-		AE_INFO(LogCategory::Engine,
+		AE_VERBOSE(LogCategory::Engine,
 		        "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, depthNodes=0x{:x}, depthRanges=0x{:x}",
 		        db.m_clipsAddr,
 		        db.m_channelsAddr,
@@ -319,6 +327,11 @@ namespace aether
 			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
 			db.m_stringsAddr = span.address;
 		}
+
+		// Store CPU copies for AppendAnimations rebuild (after GPU upload so locals are intact).
+		db.m_channels = std::move(gpuChannels);
+		db.m_times = std::move(allTimes);
+		db.m_values = std::move(allValues);
 
 		return db;
 	}
@@ -341,6 +354,9 @@ namespace aether
 		m_depthSortedNodesAddr = 0;
 		m_depthRangesAddr = 0;
 		m_clips.clear();
+		m_channels.clear();
+		m_times.clear();
+		m_values.clear();
 		m_skinMetas.clear();
 		m_clipNames.clear();
 		m_depthSortedNodes.clear();
@@ -354,6 +370,99 @@ namespace aether
 		m_nodeCount = 0;
 		m_skinCount = 0;
 		m_depthCount = 0;
+	}
+
+	Expected<std::uint32_t> AnimationDatabase::AppendAnimations(
+	        VkCommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames)
+	{
+		if (newClips.empty() || !m_ctx)
+		{
+			return static_cast<std::uint32_t>(m_clips.size());
+		}
+
+		const std::uint32_t firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
+
+		// ── Adjust and append clip data ────────────────────────────────
+		const std::uint32_t channelBase = static_cast<std::uint32_t>(m_channels.size());
+		const std::uint32_t timesBase = static_cast<std::uint32_t>(m_times.size());
+		const std::uint32_t valuesBase = static_cast<std::uint32_t>(m_values.size());
+		const std::uint32_t nameBase = static_cast<std::uint32_t>(m_clipNames.size());
+
+		m_clips.reserve(m_clips.size() + newClips.size());
+		for (std::size_t i = 0; i < newClips.size(); ++i)
+		{
+			auto clip = newClips[i];
+			clip.channelOffset += channelBase;
+			clip.nameOffset += nameBase;
+			m_clips.push_back(clip);
+		}
+
+		m_channels.reserve(m_channels.size() + newChannels.size());
+		for (const auto& ch: newChannels)
+		{
+			auto gpuCh = ch;
+			gpuCh.timesOffset += timesBase * sizeof(float);
+			gpuCh.valuesOffset += valuesBase * sizeof(glm::vec4);
+			m_channels.push_back(gpuCh);
+		}
+
+		m_times.insert(m_times.end(), newTimes.begin(), newTimes.end());
+		m_values.insert(m_values.end(), newValues.begin(), newValues.end());
+		m_clipNames += newClipNames;
+
+		// ── Rebuild GPU heap with combined data ────────────────────────
+		VkDevice device = m_ctx->GetDevice().device;
+		VkQueue queue = m_ctx->GetGraphicsQueue();
+
+		const auto align16 = [](VkDeviceSize v) -> VkDeviceSize
+		{
+			return (v + 15) & ~VkDeviceSize(15);
+		};
+
+		VkDeviceSize totalBytes = align16(m_clips.size() * sizeof(GpuClip));
+		totalBytes += align16(m_channels.size() * sizeof(GpuChannel));
+		totalBytes += align16(m_times.size() * sizeof(float));
+		totalBytes += align16(m_values.size() * sizeof(glm::vec4));
+		totalBytes += align16(m_nodeParents.size() * sizeof(std::int32_t));
+		totalBytes += align16(m_bindTranslations.size() * sizeof(glm::vec4));
+		totalBytes += align16(m_bindRotations.size() * sizeof(glm::vec4));
+		totalBytes += align16(m_bindScales.size() * sizeof(glm::vec4));
+		totalBytes += align16(m_skinMetas.size() * sizeof(GpuSkinMeta));
+		totalBytes += align16(m_skinJoints.size() * sizeof(std::uint32_t));
+		totalBytes += align16(m_skinInverseBinds.size() * sizeof(glm::mat4));
+		totalBytes += align16(m_depthSortedNodes.size() * sizeof(std::uint32_t));
+		totalBytes += align16(m_depthRanges.size() * sizeof(DepthRange));
+		totalBytes += align16(m_clipNames.size());
+
+		m_heap.Shutdown();
+		m_heap.Initialize(*m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
+
+		m_clipsAddr = UploadArray(m_heap, m_clips, device, queue, uploadPool);
+		m_channelsAddr = UploadArray(m_heap, m_channels, device, queue, uploadPool);
+		m_timesAddr = UploadArray(m_heap, m_times, device, queue, uploadPool);
+		m_valuesAddr = UploadArray(m_heap, m_values, device, queue, uploadPool);
+		m_nodeParentsAddr = UploadArray(m_heap, m_nodeParents, device, queue, uploadPool);
+		m_bindTranslationsAddr = UploadArray(m_heap, m_bindTranslations, device, queue, uploadPool);
+		m_bindRotationsAddr = UploadArray(m_heap, m_bindRotations, device, queue, uploadPool);
+		m_bindScalesAddr = UploadArray(m_heap, m_bindScales, device, queue, uploadPool);
+		m_skinMetasAddr = UploadArray(m_heap, m_skinMetas, device, queue, uploadPool);
+		m_skinJointsAddr = UploadArray(m_heap, m_skinJoints, device, queue, uploadPool);
+		m_skinInverseBindsAddr = UploadArray(m_heap, m_skinInverseBinds, device, queue, uploadPool);
+
+		if (!m_depthSortedNodes.empty())
+		{
+			m_depthSortedNodesAddr = UploadArray(m_heap, m_depthSortedNodes, device, queue, uploadPool);
+			m_depthRangesAddr = UploadArray(m_heap, m_depthRanges, device, queue, uploadPool);
+		}
+
+		if (!m_clipNames.empty())
+		{
+			GpuSpan<char> span = m_heap.Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
+			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
+			m_stringsAddr = span.address;
+		}
+
+		return firstClipIdx;
 	}
 
 	std::string_view AnimationDatabase::GetClipName(std::uint32_t clipIndex) const

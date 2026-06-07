@@ -105,6 +105,7 @@ namespace aether::assets
 	struct GltfAnimationChannel
 	{
 		std::uint32_t nodeIndex = 0;
+		std::string boneName; // v2+: bone name for cross-skeleton remapping
 		GltfAnimationPath path = GltfAnimationPath::Translation;
 		GltfInterpolation interpolation = GltfInterpolation::Linear;
 		std::vector<float> times;

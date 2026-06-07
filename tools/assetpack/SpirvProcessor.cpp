@@ -7,7 +7,7 @@ namespace SpirvProcessor
 {
 	namespace
 	{
-		constexpr uint32_t kMagic       = 0x07230203u;
+		constexpr uint32_t kMagic = 0x07230203u;
 		constexpr uint32_t kHeaderWords = 5u;
 
 		// Returns true for instructions that carry only debug/name metadata and
@@ -35,7 +35,9 @@ namespace SpirvProcessor
 	ByteBuffer Strip(std::span<const std::byte> spv)
 	{
 		if (spv.size() < kHeaderWords * sizeof(uint32_t) || spv.size() % sizeof(uint32_t) != 0)
+		{
 			return {};
+		}
 
 		const std::size_t numWords = spv.size() / sizeof(uint32_t);
 
@@ -43,30 +45,38 @@ namespace SpirvProcessor
 		std::memcpy(words.data(), spv.data(), spv.size());
 
 		if (words[0] != kMagic)
+		{
 			return {};
+		}
 
 		std::vector<uint32_t> out;
 		out.reserve(numWords);
 
 		// Copy the five-word SPIR-V header verbatim.
 		for (uint32_t i = 0; i < kHeaderWords; ++i)
+		{
 			out.push_back(words[i]);
+		}
 
 		// Walk the instruction stream, copying non-debug instructions.
 		std::size_t i = kHeaderWords;
 		while (i < numWords)
 		{
-			const uint32_t word0    = words[i];
+			const uint32_t word0 = words[i];
 			const uint32_t instrLen = word0 >> 16;
-			const uint32_t opcode   = word0 & 0xFFFFu;
+			const uint32_t opcode = word0 & 0xFFFFu;
 
 			if (instrLen == 0 || i + instrLen > numWords)
+			{
 				return {}; // malformed SPIR-V
+			}
 
 			if (!IsStrippable(opcode))
 			{
 				for (uint32_t j = 0; j < instrLen; ++j)
+				{
 					out.push_back(words[i + j]);
+				}
 			}
 			i += instrLen;
 		}

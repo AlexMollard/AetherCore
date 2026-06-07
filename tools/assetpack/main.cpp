@@ -18,8 +18,8 @@ namespace fs = std::filesystem;
 
 struct Args
 {
-	bool     importMaterials  = false;
-	int      compressionLevel = 3;
+	bool importMaterials = false;
+	int compressionLevel = 3;
 	fs::path sourceDir;
 	fs::path outputPath;
 };
@@ -77,7 +77,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 		return std::nullopt;
 	}
 
-	args.sourceDir  = fs::path(argv[argOffset]);
+	args.sourceDir = fs::path(argv[argOffset]);
 	args.outputPath = fs::path(argv[argOffset + 1]);
 
 	return args;
@@ -87,7 +87,9 @@ int main(int argc, char* argv[])
 {
 	const auto args = ParseArgs(argc, argv);
 	if (!args)
+	{
 		return 1;
+	}
 
 	if (!fs::is_directory(args->sourceDir))
 	{
@@ -98,7 +100,9 @@ int main(int argc, char* argv[])
 	if (args->importMaterials)
 	{
 		if (MaterialImporter::ImportDirectory(args->sourceDir) < 0)
+		{
 			return 1;
+		}
 	}
 
 	PakWriter writer(args->compressionLevel);

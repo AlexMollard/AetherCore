@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "animation/AnimationCompiler.hpp"
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraSubsystem.hpp"
@@ -82,6 +83,8 @@ namespace aether
 		m_services.Register<MeshUploadQueue>(assetsSub.GetMeshUploadQueue());
 		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
 		m_services.Register<AssetSubsystem>(assetsSub);
+
+		SetAnimationCompilePool(assetsSub.GetUploadPool());
 
 		// ── 5. Cameras ──────────────────────────────────────────────────────
 		m_cameras->Init(m_services);

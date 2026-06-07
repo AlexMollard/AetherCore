@@ -274,6 +274,7 @@ namespace aether
 				const std::uint32_t drawClipCount = dbValid ? drawAnimDb->GetClipCount() : 0u;
 				const std::uint32_t drawNodeCount = dbValid ? drawAnimDb->GetNodeCount() : 0u;
 				const std::uint32_t drawSkinCount = dbValid ? drawAnimDb->GetSkinCount() : 0u;
+
 				const bool wantsGpuSampling = gpuSamplingEnabled && dbValid && dc.skinJointCount > 0 && dc.skinIndex >= 0 && dc.animClipIndex < drawClipCount && static_cast<std::uint32_t>(dc.skinIndex) < drawSkinCount;
 				if (wantsGpuSampling)
 				{
@@ -293,17 +294,20 @@ namespace aether
 					{
 						skinPaletteOffset = skinJointCursor;
 						skinJointCount = dc.skinJointCount;
-						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = AnimationContracts::AnimatorSampleJob{
-						        .animClipIndex = dc.animClipIndex,
-						        .animTime = dc.animTime,
-						        .nodePoseOffset = nodePoseCursor,
-						        .nodeCount = drawNodeCount,
-						        .clipsAddr = drawAnimDb->GetClipsAddr(),
-						        .channelsAddr = drawAnimDb->GetChannelsAddr(),
-						        .timesAddr = drawAnimDb->GetTimesAddr(),
-						        .valuesAddr = drawAnimDb->GetValuesAddr(),
-						        .clipCount = drawClipCount,
-						};
+
+						AnimationContracts::AnimatorSampleJob animJob{};
+						animJob.animClipIndex = dc.animClipIndex;
+						animJob.animTime = dc.animTime;
+						animJob.nodePoseOffset = nodePoseCursor;
+						animJob.nodeCount = drawNodeCount;
+						animJob.clipsAddr = drawAnimDb->GetClipsAddr();
+						animJob.channelsAddr = drawAnimDb->GetChannelsAddr();
+						animJob.timesAddr = drawAnimDb->GetTimesAddr();
+						animJob.valuesAddr = drawAnimDb->GetValuesAddr();
+						animJob.clipCount = drawClipCount;
+
+						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = animJob;
+
 						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
 						        .sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
 						        .dstPaletteOffset = skinPaletteOffset,
@@ -513,19 +517,21 @@ namespace aether
 
 				CommandRecorder(cmd).EndDebugLabel();
 
-				const VkMemoryBarrier2 animToSkin{
+				// Barrier: make GPU anim_sample writes visible to downstream
+				// compute passes (node_flatten, build_skin_palette).
+				const VkMemoryBarrier2 animToNodeFlatten{
 				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
 				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 				};
-				const VkDependencyInfo animToSkinDep{
+				const VkDependencyInfo animToNodeFlattenDep{
 				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 				        .memoryBarrierCount = 1,
-				        .pMemoryBarriers = &animToSkin,
+				        .pMemoryBarriers = &animToNodeFlatten,
 				};
-				vkCmdPipelineBarrier2(cmd, &animToSkinDep);
+				vkCmdPipelineBarrier2(cmd, &animToNodeFlattenDep);
 			}
 
 			m_animationSampleJobCount = 0;

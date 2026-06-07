@@ -91,8 +91,10 @@ namespace TextureProcessor
 			dx10.dxgiFormat = dxgiFmt;
 
 			std::size_t totalPixelData = 0;
-			for (const auto& m : mips)
+			for (const auto& m: mips)
+			{
 				totalPixelData += m.compressed.size();
+			}
 
 			const std::size_t totalSize = sizeof(uint32_t) + sizeof(DDSHeader) + sizeof(DDSHeaderDXT10) + totalPixelData;
 
@@ -108,12 +110,22 @@ namespace TextureProcessor
 			write(&DDS_MAGIC, sizeof(DDS_MAGIC));
 			write(&header, sizeof(header));
 			write(&dx10, sizeof(dx10));
-			for (const auto& m : mips)
+			for (const auto& m: mips)
+			{
 				write(m.compressed.data(), m.compressed.size());
+			}
 
 			return dds;
 		}
-		struct StbiDeleter { void operator()(uint8_t* p) { stbi_image_free(p); } };
+
+		struct StbiDeleter
+		{
+			void operator()(uint8_t* p)
+			{
+				stbi_image_free(p);
+			}
+		};
+
 		using StbiImage = std::unique_ptr<uint8_t, StbiDeleter>;
 	} // namespace
 
@@ -123,10 +135,12 @@ namespace TextureProcessor
 	static void InitEncoders()
 	{
 		static std::once_flag s_flag;
-		std::call_once(s_flag, [] {
-			bc7enc_compress_block_init();
-			rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
-		});
+		std::call_once(s_flag,
+		        []
+		        {
+			        bc7enc_compress_block_init();
+			        rgbcx::init(rgbcx::bc1_approx_mode::cBC1Ideal);
+		        });
 	}
 
 	ByteBuffer ToDDS(std::span<const std::byte> imageData, const std::filesystem::path& sourcePath, BC7Quality quality)
@@ -167,10 +181,12 @@ namespace TextureProcessor
 		while (true)
 		{
 			auto blocks = CompressBlocks(srcPixels, mipW, mipH, srcChannels, fmt, bc7Params);
-			mips.push_back({ mipW, mipH, std::move(blocks) });
+			mips.push_back({mipW, mipH, std::move(blocks)});
 
 			if (mipW == 1 && mipH == 1)
+			{
 				break;
+			}
 
 			const int newW = std::max(1, mipW / 2);
 			const int newH = std::max(1, mipH / 2);

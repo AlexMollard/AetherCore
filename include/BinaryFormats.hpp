@@ -43,7 +43,7 @@ struct BoneEntryHeaderDisk
 // ============================================================================
 
 inline constexpr char MESH_MAGIC[4] = { 'M', 'E', 'S', 'H' };
-inline constexpr uint32_t MESH_VERSION = 2;
+inline constexpr uint32_t MESH_VERSION = 3;
 
 struct MeshHeaderDisk
 {
@@ -53,13 +53,22 @@ struct MeshHeaderDisk
     uint32_t indexCount      = 0;
     uint32_t skinRefPathLen  = 0; // 0 = no skin
     uint32_t materialCount   = 0;
+    uint32_t subMeshCount    = 0; // number of SubMeshHeaderDisk entries (v3+)
     float    aabbMin[3]      = { 0, 0, 0 };
     float    aabbMax[3]      = { 0, 0, 0 };
     float    sphereCenter[3] = { 0, 0, 0 };
     float    sphereRadius    = 0;
     uint8_t  indexType       = 0; // 0 = uint16, 1 = uint32
     uint8_t  _pad[3]         = { 0, 0, 0 };
-    // Total: 4+4+4+4+4+4+12+12+12+4+1+3 = 68 bytes
+    // Total: 4+4+4+4+4+4+12+12+12+4+1+3 = 72 bytes
+};
+
+struct SubMeshHeaderDisk
+{
+    uint32_t firstIndex;     // index into the merged index buffer
+    uint32_t indexCount;     // number of indices in this submesh
+    uint32_t materialIndex;  // index into the material paths array
+    // Total: 12 bytes
 };
 
 // Disk vertex - 96 bytes, aligned to 16/32-byte cache lines.
@@ -87,7 +96,9 @@ static_assert(sizeof(DiskMeshVertex) == 96);
 // ============================================================================
 
 inline constexpr char ANIM_MAGIC[4] = { 'A', 'N', 'I', 'M' };
-inline constexpr uint32_t ANIM_VERSION = 1;
+inline constexpr uint32_t ANIM_VERSION = 3;
+
+inline constexpr uint16_t ANIM_FLAG_HAS_BONE_NAMES = 1;
 
 enum class AnimPathDisk : uint8_t
 {
@@ -110,7 +121,9 @@ struct AnimHeaderDisk
     uint32_t version       = ANIM_VERSION;
     uint32_t channelCount  = 0;
     uint16_t nameLen       = 0;
-    // Total: 4+4+4+2 = 14 bytes
+    uint16_t flags         = 0; // v2+: bit 0 = HasBoneNames
+    // v1 layout: 4+4+4+2 = 14 bytes (no flags field)
+    // v2 layout: 4+4+4+2+2 = 16 bytes
 };
 
 struct ChannelHeaderDisk
@@ -177,8 +190,9 @@ struct MaterialHeaderDisk
 
 static_assert(sizeof(SkelHeaderDisk)      == 22);
 static_assert(sizeof(BoneEntryHeaderDisk) == 2);
-static_assert(sizeof(MeshHeaderDisk)      == 68);
-static_assert(sizeof(AnimHeaderDisk)      == 14);
+static_assert(sizeof(MeshHeaderDisk)      == 72);
+static_assert(sizeof(SubMeshHeaderDisk)   == 12);
+static_assert(sizeof(AnimHeaderDisk)      == 16);
 static_assert(sizeof(ChannelHeaderDisk)   == 12);
 static_assert(sizeof(AnimSetHeaderDisk)   == 24);
 static_assert(sizeof(MaterialHeaderDisk)  == 64);
@@ -190,7 +204,7 @@ inline bool CheckMagic(const SkelHeaderDisk& h)
 inline bool CheckMagic(const MeshHeaderDisk& h)
     { return h.magic[0]=='M' && h.magic[1]=='E' && h.magic[2]=='S' && h.magic[3]=='H' && h.version == MESH_VERSION; }
 inline bool CheckMagic(const AnimHeaderDisk& h)
-    { return h.magic[0]=='A' && h.magic[1]=='N' && h.magic[2]=='I' && h.magic[3]=='M' && h.version == ANIM_VERSION; }
+    { return h.magic[0]=='A' && h.magic[1]=='N' && h.magic[2]=='I' && h.magic[3]=='M' && (h.version == ANIM_VERSION || h.version == 2 || h.version == 1); }
 inline bool CheckMagic(const AnimSetHeaderDisk& h)
     { return h.magic[0]=='A' && h.magic[1]=='S' && h.magic[2]=='E' && h.magic[3]=='T' && h.version == ASET_VERSION; }
 inline bool CheckMagic(const MaterialHeaderDisk& h)

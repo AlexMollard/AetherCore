@@ -45,6 +45,8 @@ var g_sun_dir_label     : uint  = 0u;
 
 var g_plasma_sphere : uint = 0u;
 var g_player : uint = 0u;
+var g_player_idle_clip : int = 0;
+var g_player_walk_clip : int = -1; // -1 means not yet added
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
 
@@ -256,9 +258,21 @@ def on_attach(world : World?)
 	add_transform(world, g_player);
 	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
 	load_model(world, g_player, "assets://models/Human/Human.mesh");
-	set_animation(world, g_player, 0);
+	g_player_idle_clip = get_current_animation(world, g_player);
 	set_playback_speed(world, g_player, 1.0);
 	add_tag(world, g_player, create_tag("player"));
+
+	// Add walking animation, then compile all clips into the GPU database
+	g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim");
+	if (g_player_walk_clip >= 0)
+	{
+		print("Walking animation added as clip {g_player_walk_clip}\n");
+		compile_animations(world, g_player);
+	}
+	else
+	{
+		print("Failed to add walking animation\n");
+	}
 
 	init_default_bindings();
 }
@@ -445,6 +459,27 @@ def on_update(world : World?)
 		g_time_of_day = 0.0;
 		set_time_of_day(0.0);
 		set_ui_slider_value(world, g_time_slider, 0.0);
+	}
+
+	// ── Toggle player walking animation with 'W' key ────────────────────────
+	let currentClip = get_current_animation(world, g_player);
+
+	if (is_action_down("move_forward"))
+	{
+		if (g_player_walk_clip >= 0 && currentClip != g_player_walk_clip)
+		{
+			set_animation(world, g_player, g_player_walk_clip);
+			set_playback_speed(world, g_player, 0.8);
+		}
+	}
+	else
+	{
+		// Switch back to idle when not moving
+		if (g_player_idle_clip >= 0 && currentClip != g_player_idle_clip)
+		{
+			set_animation(world, g_player, g_player_idle_clip);
+			set_playback_speed(world, g_player, 1.0);
+		}
 	}
 }
 

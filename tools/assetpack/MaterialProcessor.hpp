@@ -15,8 +15,5 @@ namespace MaterialProcessor
 	// sourceDir is the root source directory (used to locate companion files).
 	//
 	// Returns empty if parsing fails.
-	[[nodiscard]] ByteBuffer Process(
-	    std::span<const std::byte>    tomlData,
-	    const std::filesystem::path&  sourcePath,
-	    const std::filesystem::path&  sourceDir);
+	[[nodiscard]] ByteBuffer Process(std::span<const std::byte> tomlData, const std::filesystem::path& sourcePath, const std::filesystem::path& sourceDir);
 } // namespace MaterialProcessor

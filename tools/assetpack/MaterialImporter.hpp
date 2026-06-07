@@ -39,5 +39,6 @@ namespace MaterialImporter
 	bool IsImageExtension(const fs::path& path);
 	bool ContainsAlias(const TextureFile& file, std::string_view alias);
 
-	std::optional<std::string> FindBestTexture(const std::vector<TextureFile>& files, std::initializer_list<std::string_view> includeAliases, std::initializer_list<std::string_view> preferredAliases = {}, std::initializer_list<std::string_view> excludeAliases = {});
-}
+	std::optional<std::string> FindBestTexture(
+	        const std::vector<TextureFile>& files, std::initializer_list<std::string_view> includeAliases, std::initializer_list<std::string_view> preferredAliases = {}, std::initializer_list<std::string_view> excludeAliases = {});
+} // namespace MaterialImporter

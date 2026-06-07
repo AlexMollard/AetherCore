@@ -7,6 +7,7 @@
 #include <queue>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <BinaryFormats.hpp>
@@ -227,7 +228,7 @@ namespace aether::assets
 				return false;
 			}
 
-			AE_INFO(LogCategory::Engine, "Loading skeleton '{}': {} bones, hash={}", skelPath, hdr.boneCount, hdr.skeletonHash);
+			AE_VERBOSE(LogCategory::Engine, "Loading skeleton '{}': {} bones, hash={}", skelPath, hdr.boneCount, hdr.skeletonHash);
 
 			outSkin.name = std::string(skelPath.substr(skelPath.find_last_of('/') + 1));
 			outSkin.joints.reserve(hdr.boneCount);
@@ -301,10 +302,10 @@ namespace aether::assets
 				outSkin.joints.push_back(boneNodeOffset + i);
 			}
 
-			AE_INFO(LogCategory::Engine, "Skeleton loaded: {} bones, nodeOffset={}", hdr.boneCount, boneNodeOffset);
+			AE_VERBOSE(LogCategory::Engine, "Skeleton loaded: {} bones, nodeOffset={}", hdr.boneCount, boneNodeOffset);
 			for (uint32_t i = 0; i < hdr.boneCount && i < 3; ++i)
 			{
-				AE_INFO(LogCategory::Engine,
+				AE_VERBOSE(LogCategory::Engine,
 				        "  Bone[{}]: '{}' parentIdx={} t=({:.1f},{:.1f},{:.1f}) r=({:.3f},{:.3f},{:.3f},{:.3f})",
 				        i,
 				        bones[i].name,
@@ -331,22 +332,69 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*data);
-			AnimHeaderDisk hdr = reader.Read<AnimHeaderDisk>();
+
+			// Read v1-compatible header first (14 bytes) for backward compat
+#pragma pack(push, 1)
+
+			struct V1Header
+			{
+				char magic[4];
+				uint32_t version;
+				uint32_t channelCount;
+				uint16_t nameLen;
+			};
+
+#pragma pack(pop)
+			V1Header v1Hdr = reader.Read<V1Header>();
+
+			AnimHeaderDisk hdr;
+			std::memcpy(hdr.magic, v1Hdr.magic, 4);
+			hdr.version = v1Hdr.version;
+			hdr.channelCount = v1Hdr.channelCount;
+			hdr.nameLen = v1Hdr.nameLen;
+
 			if (!CheckMagic(hdr))
 			{
 				AE_WARN(LogCategory::Engine, "Invalid animation magic: {}", animPath);
 				return anim;
 			}
 
+			AE_VERBOSE(LogCategory::Engine, "LoadAnimation '{}': version={}, channels={}, nameLen={}", animPath, hdr.version, hdr.channelCount, hdr.nameLen);
+
+			// Read flags for v2+
+			if (hdr.version >= 3)
+			{
+				hdr.flags = reader.Read<uint16_t>();
+			}
+			else
+			{
+				hdr.flags = 0;
+			}
+
+			AE_VERBOSE(LogCategory::Engine, "  flags=0x{:x}, hasBoneNames={}", hdr.flags, (hdr.version >= 3) && (hdr.flags & 1));
+
 			anim.name = std::string(reinterpret_cast<const char*>(reader.Data()), hdr.nameLen);
 			reader.Advance(hdr.nameLen);
 			anim.channels.reserve(hdr.channelCount);
 
+			const bool hasBoneNames = (hdr.version >= 3) && (hdr.flags & ANIM_FLAG_HAS_BONE_NAMES);
+
 			for (uint32_t ci = 0; ci < hdr.channelCount; ++ci)
 			{
 				ChannelHeaderDisk ch = reader.Read<ChannelHeaderDisk>();
+				AE_VERBOSE(LogCategory::Engine, "  Channel[{}]: node={}, path={}, interp={}, keyCount={}", ci, ch.nodeIndex, (int) ch.path, (int) ch.interp, ch.keyCount);
 				GltfAnimationChannel channel;
 				channel.nodeIndex = ch.nodeIndex;
+
+				if (hasBoneNames)
+				{
+					uint16_t boneNameLen = reader.Read<uint16_t>();
+					if (boneNameLen > 0)
+					{
+						channel.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
+						reader.Advance(boneNameLen);
+					}
+				}
 
 				switch (static_cast<AnimPathDisk>(ch.path))
 				{
@@ -402,8 +450,127 @@ namespace aether::assets
 				const char* pathStr = ch.path == GltfAnimationPath::Translation ? "T" : ch.path == GltfAnimationPath::Rotation ? "R" : ch.path == GltfAnimationPath::Scale ? "S" : "W";
 				chSummary += std::to_string(ch.nodeIndex) + pathStr;
 			}
-			AE_INFO(LogCategory::Engine, "Loaded animation '{}': {} channels, first={} keys [{}]", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size(), chSummary);
+			AE_VERBOSE(LogCategory::Engine, "Loaded animation '{}': {} channels, first={} keys [{}]", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size(), chSummary);
 			return anim;
+		}
+
+		// Build a bone name -> node index map from the skeleton's bone nodes.
+		// boneNodeOffset: first bone node index in asset.nodes[]
+		// jointCount: number of bones in the skeleton
+		std::unordered_map<std::string, uint32_t> BuildBoneNameMap(const GltfAsset& asset, uint32_t boneNodeOffset, uint32_t jointCount)
+		{
+			std::unordered_map<std::string, uint32_t> nameMap;
+			for (uint32_t i = 0; i < jointCount; ++i)
+			{
+				const uint32_t nodeIdx = boneNodeOffset + i;
+				if (nodeIdx < asset.nodes.size())
+				{
+					const auto& nodeName = asset.nodes[nodeIdx].name;
+					if (!nodeName.empty())
+					{
+						nameMap[nodeName] = nodeIdx;
+					}
+				}
+			}
+			return nameMap;
+		}
+
+		// Remap animation channels by bone name to work with a different skeleton.
+		// The animation's boneName field (from v2 .anim files) is used for remapping.
+		// Returns a new animation with remapped channels.
+		GltfAnimation RemapAnimationByBoneName(GltfAnimation anim, const std::unordered_map<std::string, uint32_t>& boneNameMap)
+		{
+			GltfAnimation result;
+			result.name = anim.name + " (remapped)";
+			result.channels.reserve(anim.channels.size());
+
+			for (const auto& ch: anim.channels)
+			{
+				if (ch.boneName.empty())
+				{
+					continue;
+				}
+
+				auto it = boneNameMap.find(ch.boneName);
+				if (it != boneNameMap.end())
+				{
+					GltfAnimationChannel remapped = ch;
+					remapped.nodeIndex = it->second;
+					remapped.boneName.clear(); // Clear bone name after remapping
+					result.channels.push_back(remapped);
+				}
+			}
+
+			return result;
+		}
+
+		// Try loading cross-skeleton animations from a given .animset path.
+		// Returns true if any animations were loaded and added to the asset.
+		bool TryLoadCrossSkeletonAnimations(const std::string& animSetPath, GltfAsset& asset, uint32_t boneNodeOffset, uint32_t jointCount)
+		{
+			if (animSetPath.empty() || !io::FileSystem::Exists(animSetPath))
+			{
+				return false;
+			}
+
+			auto animSetData = io::FileSystem::ReadFile(animSetPath);
+			if (!animSetData.has_value())
+			{
+				return false;
+			}
+
+			BinaryReader reader(*animSetData);
+			AnimSetHeaderDisk asetHdr = reader.Read<AnimSetHeaderDisk>();
+			if (!CheckMagic(asetHdr))
+			{
+				return false;
+			}
+
+			// Only process cross-skeleton animsets (skeletonHash == 0)
+			if (asetHdr.skeletonHash != 0)
+			{
+				return false;
+			}
+
+			AE_VERBOSE(LogCategory::Engine, "  Cross-skeleton AnimSet: {} animations", asetHdr.animCount);
+
+			const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
+
+			// Build bone name map for remapping
+			auto boneNameMap = BuildBoneNameMap(asset, boneNodeOffset, jointCount);
+			if (boneNameMap.empty())
+			{
+				AE_WARN(LogCategory::Engine, "  Cross-skeleton: no bones found for remapping");
+				return false;
+			}
+
+			bool anyLoaded = false;
+			for (uint32_t i = 0; i < asetHdr.animCount; ++i)
+			{
+				std::string animRelPath = reader.ReadString();
+				std::string animFullPath = mountRoot + animRelPath;
+
+				if (!io::FileSystem::Exists(animFullPath))
+				{
+					AE_WARN(LogCategory::Engine, "  Cross-skeleton animation file not found: {}", animFullPath);
+					continue;
+				}
+
+				GltfAnimation anim = LoadAnimation(animFullPath);
+				if (!anim.name.empty() && !anim.channels.empty())
+				{
+					// Remap channels by bone name
+					GltfAnimation remapped = RemapAnimationByBoneName(anim, boneNameMap);
+					if (!remapped.channels.empty())
+					{
+						AE_VERBOSE(LogCategory::Engine, "    Remapped '{}': {} -> {} channels", anim.name, anim.channels.size(), remapped.channels.size());
+						asset.animations.push_back(std::move(remapped));
+						anyLoaded = true;
+					}
+				}
+			}
+
+			return anyLoaded;
 		}
 
 		bool LoadMaterialBinary(std::string_view matPath, GltfMaterial& outMat)
@@ -474,10 +641,10 @@ namespace aether::assets
 				AE_UNEXPECTED(AetherError::Asset("stale .mesh cache (version " + std::to_string(hdr.version) + ", expected " + std::to_string(MESH_VERSION) + ") for '" + std::string(meshVfsPath) + "'. Re-run AssetPacker."));
 			}
 
-			AE_INFO(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}", meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount, hdr.skinRefPathLen > 0 ? "yes" : "no");
-			AE_INFO(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]", hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2], hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
-			AE_INFO(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}", hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
-			AE_INFO(LogCategory::Engine, "  Index type: {}", hdr.indexType == 0 ? "uint16" : "uint32");
+			AE_VERBOSE(LogCategory::Engine, "Loading mesh '{}': {} verts, {} indices, {} materials, skin={}", meshVfsPath, hdr.vertexCount, hdr.indexCount, hdr.materialCount, hdr.skinRefPathLen > 0 ? "yes" : "no");
+			AE_VERBOSE(LogCategory::Engine, "  AABB: [{}, {}, {}] -> [{}, {}, {}]", hdr.aabbMin[0], hdr.aabbMin[1], hdr.aabbMin[2], hdr.aabbMax[0], hdr.aabbMax[1], hdr.aabbMax[2]);
+			AE_VERBOSE(LogCategory::Engine, "  Sphere: center=[{}, {}, {}], radius={}", hdr.sphereCenter[0], hdr.sphereCenter[1], hdr.sphereCenter[2], hdr.sphereRadius);
+			AE_VERBOSE(LogCategory::Engine, "  Index type: {}", hdr.indexType == 0 ? "uint16" : "uint32");
 
 			GltfAsset asset;
 
@@ -501,13 +668,20 @@ namespace aether::assets
 				reader.ReadRaw(indices.data(), hdr.indexCount * sizeof(uint32_t));
 			}
 
+			// Read submesh headers (v3+) - written BEFORE skinRefPath
+			std::vector<SubMeshHeaderDisk> subMeshes(hdr.subMeshCount);
+			for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
+			{
+				subMeshes[sm] = reader.Read<SubMeshHeaderDisk>();
+			}
+
 			// Read skin reference path.
 			std::string skinRefPath;
 			if (hdr.skinRefPathLen > 0)
 			{
 				skinRefPath.resize(hdr.skinRefPathLen);
 				reader.ReadRaw(skinRefPath.data(), hdr.skinRefPathLen);
-				AE_INFO(LogCategory::Engine, "  Skin ref: {}", skinRefPath);
+				AE_VERBOSE(LogCategory::Engine, "  Skin ref: {}", skinRefPath);
 			}
 
 			// Read material paths (length-prefixed strings).
@@ -515,27 +689,11 @@ namespace aether::assets
 			for (uint32_t i = 0; i < hdr.materialCount; ++i)
 			{
 				matPaths[i] = reader.ReadString();
-				AE_INFO(LogCategory::Engine, "  Material[{}]: {}", i, matPaths[i]);
+				AE_VERBOSE(LogCategory::Engine, "  Material[{}]: {}", i, matPaths[i]);
 			}
 
-			// Convert disk vertices to runtime vertices.
-			GltfPrimitive prim;
-			prim.nodeIndex = 0;
-			prim.materialIndex = hdr.materialCount > 0 ? 0 : -1;
-			prim.skinIndex = !skinRefPath.empty() ? 0 : -1;
-			prim.vertices.resize(hdr.vertexCount);
-			prim.indices = std::move(indices);
-
-			// Store bounding volume from mesh header.
-			std::memcpy(prim.aabbMin, hdr.aabbMin, sizeof(prim.aabbMin));
-			std::memcpy(prim.aabbMax, hdr.aabbMax, sizeof(prim.aabbMax));
-			std::memcpy(prim.sphereCenter, hdr.sphereCenter, sizeof(prim.sphereCenter));
-			prim.sphereRadius = hdr.sphereRadius;
-
-			for (uint32_t v = 0; v < hdr.vertexCount; ++v)
+			auto ConvertVertex = [](const DiskMeshVertex& src, Mesh::Vertex& dst)
 			{
-				const DiskMeshVertex& src = diskVerts[v];
-				Mesh::Vertex& dst = prim.vertices[v];
 				dst.position = glm::vec3(src.position[0], src.position[1], src.position[2]);
 				dst.normal = glm::vec3(src.normal[0], src.normal[1], src.normal[2]);
 				dst.tangent = glm::vec4(src.tangent[0], src.tangent[1], src.tangent[2], src.tangent[3]);
@@ -544,15 +702,94 @@ namespace aether::assets
 				dst.color = UnpackColorRGBA8(src.color);
 				dst.jointIndices = glm::uvec4(src.jointIndices[0], src.jointIndices[1], src.jointIndices[2], src.jointIndices[3]);
 				dst.jointWeights = glm::vec4(src.jointWeights[0], src.jointWeights[1], src.jointWeights[2], src.jointWeights[3]);
-			}
+			};
 
-			asset.primitives.push_back(std::move(prim));
+			const int32_t skinIndex = !skinRefPath.empty() ? 0 : -1;
+			if (hdr.subMeshCount > 0)
+			{
+				// Create one primitive per submesh.
+				for (uint32_t sm = 0; sm < hdr.subMeshCount; ++sm)
+				{
+					const auto& smHdr = subMeshes[sm];
+					GltfPrimitive prim;
+					prim.nodeIndex = 0;
+					prim.materialIndex = (smHdr.materialIndex < hdr.materialCount) ? static_cast<int32_t>(smHdr.materialIndex) : static_cast<int32_t>(hdr.materialCount > 0 ? 0 : -1);
+					prim.skinIndex = skinIndex;
+
+					// Find vertex range used by this submesh.
+					uint32_t minVert = UINT32_MAX;
+					uint32_t maxVert = 0;
+					for (uint32_t k = 0; k < smHdr.indexCount; ++k)
+					{
+						const uint32_t idx = indices[smHdr.firstIndex + k];
+						minVert = std::min(minVert, idx);
+						maxVert = std::max(maxVert, idx);
+					}
+
+					// Build vertex remap: old index → local index.
+					const uint32_t vertRange = maxVert - minVert + 1;
+					std::vector<uint32_t> remap(vertRange, UINT32_MAX);
+					uint32_t localVerts = 0;
+					prim.indices.resize(smHdr.indexCount);
+					for (uint32_t k = 0; k < smHdr.indexCount; ++k)
+					{
+						const uint32_t oldIdx = indices[smHdr.firstIndex + k];
+						const uint32_t off = oldIdx - minVert;
+						if (remap[off] == UINT32_MAX)
+						{
+							remap[off] = localVerts++;
+						}
+						prim.indices[k] = remap[off];
+					}
+
+					// Extract only the vertices referenced by this submesh.
+					prim.vertices.resize(localVerts);
+					for (uint32_t v = minVert; v <= maxVert; ++v)
+					{
+						const uint32_t off = v - minVert;
+						if (remap[off] != UINT32_MAX)
+						{
+							ConvertVertex(diskVerts[v], prim.vertices[remap[off]]);
+						}
+					}
+
+					// Use merged bounding volume (conservative for each submesh).
+					std::memcpy(prim.aabbMin, hdr.aabbMin, sizeof(prim.aabbMin));
+					std::memcpy(prim.aabbMax, hdr.aabbMax, sizeof(prim.aabbMax));
+					std::memcpy(prim.sphereCenter, hdr.sphereCenter, sizeof(prim.sphereCenter));
+					prim.sphereRadius = hdr.sphereRadius;
+
+					asset.primitives.push_back(std::move(prim));
+				}
+			}
+			else
+			{
+				// Legacy: single primitive, all vertices, first material.
+				GltfPrimitive prim;
+				prim.nodeIndex = 0;
+				prim.materialIndex = hdr.materialCount > 0 ? 0 : -1;
+				prim.skinIndex = skinIndex;
+				prim.vertices.resize(hdr.vertexCount);
+				prim.indices = std::move(indices);
+
+				std::memcpy(prim.aabbMin, hdr.aabbMin, sizeof(prim.aabbMin));
+				std::memcpy(prim.aabbMax, hdr.aabbMax, sizeof(prim.aabbMax));
+				std::memcpy(prim.sphereCenter, hdr.sphereCenter, sizeof(prim.sphereCenter));
+				prim.sphereRadius = hdr.sphereRadius;
+
+				for (uint32_t v = 0; v < hdr.vertexCount; ++v)
+				{
+					ConvertVertex(diskVerts[v], prim.vertices[v]);
+				}
+
+				asset.primitives.push_back(std::move(prim));
+			}
 
 			// Create root node for the mesh.
 			GltfNode rootNode;
 			rootNode.name = "root";
 			rootNode.meshIndex = 0;
-			rootNode.skinIndex = prim.skinIndex;
+			rootNode.skinIndex = skinIndex;
 			rootNode.parentIndex = -1;
 			asset.nodes.push_back(std::move(rootNode));
 
@@ -593,7 +830,7 @@ namespace aether::assets
 				else
 				{
 					mat.name = matPaths[i];
-					AE_INFO(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})", mat.name, mat.albedoPath.empty() ? "no" : "yes", mat.normalPath.empty() ? "no" : "yes", mat.metallicRoughnessPath.empty() ? "no" : "yes");
+					AE_VERBOSE(LogCategory::Engine, "  Material '{}' loaded (albedo={}, normal={}, orm={})", mat.name, mat.albedoPath.empty() ? "no" : "yes", mat.normalPath.empty() ? "no" : "yes", mat.metallicRoughnessPath.empty() ? "no" : "yes");
 				}
 
 				asset.materials.push_back(std::move(mat));
@@ -603,7 +840,7 @@ namespace aether::assets
 			std::string animSetPath = DeriveAnimSetPath(meshVfsPath);
 			if (!animSetPath.empty())
 			{
-				AE_INFO(LogCategory::Engine, "  AnimSet: {}", animSetPath);
+				AE_VERBOSE(LogCategory::Engine, "  AnimSet: {}", animSetPath);
 				auto animSetData = io::FileSystem::ReadFile(animSetPath);
 				if (animSetData.has_value())
 				{
@@ -611,7 +848,7 @@ namespace aether::assets
 					AnimSetHeaderDisk asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
 					if (CheckMagic(asetHdr))
 					{
-						AE_INFO(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
+						AE_VERBOSE(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
 
 						// Resolve animation paths relative to the VFS mount root (e.g., assets://animations/...).
 						const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
@@ -621,7 +858,7 @@ namespace aether::assets
 						//   boneNodeOffset = asset.nodes.size() - first skin's joint count
 						//   (nodes before bones = root mesh node + any other non-bone nodes)
 						const uint32_t boneNodeOffset = (!asset.skins.empty() && !asset.skins[0].joints.empty()) ? static_cast<uint32_t>(asset.nodes.size() - asset.skins[0].joints.size()) : 0u;
-						AE_INFO(LogCategory::Engine, "  AnimSet: boneNodeOffset={}, asset.nodes.size={}, skin joints={}", boneNodeOffset, asset.nodes.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
+						AE_VERBOSE(LogCategory::Engine, "  AnimSet: boneNodeOffset={}, asset.nodes.size={}, skin joints={}", boneNodeOffset, asset.nodes.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
 
 						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 						{
@@ -635,7 +872,7 @@ namespace aether::assets
 									// Offset channel node indices to match bone node positions.
 									if (boneNodeOffset > 0)
 									{
-										AE_INFO(LogCategory::Engine, "    Offsetting {} channels by +{}", anim.channels.size(), boneNodeOffset);
+										AE_VERBOSE(LogCategory::Engine, "    Offsetting {} channels by +{}", anim.channels.size(), boneNodeOffset);
 										for (auto& ch: anim.channels)
 										{
 											ch.nodeIndex += boneNodeOffset;
@@ -657,7 +894,7 @@ namespace aether::assets
 				}
 			}
 
-			AE_INFO(LogCategory::Engine, "Mesh loaded: {} nodes, {} skins, {} materials, {} animations", asset.nodes.size(), asset.skins.size(), asset.materials.size(), asset.animations.size());
+			AE_VERBOSE(LogCategory::Engine, "Mesh loaded: {} nodes, {} skins, {} materials, {} animations", asset.nodes.size(), asset.skins.size(), asset.materials.size(), asset.animations.size());
 
 			return asset;
 		}

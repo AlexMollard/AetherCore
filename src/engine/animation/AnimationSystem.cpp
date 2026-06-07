@@ -22,18 +22,15 @@ namespace aether
 				continue;
 			}
 
-			const std::uint32_t clipCount = smc.animDb->GetClipCount();
-			if (clipCount == 0)
+			if (smc.animDb->GetClipCount() == 0)
 			{
 				continue;
 			}
 
-			const std::uint32_t clip = std::min(smc.clipIndex, clipCount - 1u);
 			smc.animTime += dt * smc.playbackSpeed;
-
 			if (smc.looping)
 			{
-				const float dur = smc.animDb->GetClipDuration(clip);
+				const float dur = smc.animDb->GetClipDuration(smc.clipIndex);
 				if (dur > 0.f && smc.animTime > dur)
 				{
 					smc.animTime = std::fmod(smc.animTime, dur);

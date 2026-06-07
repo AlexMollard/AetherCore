@@ -16,7 +16,10 @@ namespace fs = std::filesystem;
 class PakWriter
 {
 public:
-	explicit PakWriter(int compressionLevel = 3) : m_compressionLevel(compressionLevel) {}
+	explicit PakWriter(int compressionLevel = 3)
+	      : m_compressionLevel(compressionLevel)
+	{
+	}
 
 	// Add all regular files under sourceDir to the archive.  Virtual paths
 	// are relative to sourceDir with forward-slash separators.
@@ -34,11 +37,11 @@ public:
 	struct FileRecord
 	{
 		std::string virtualPath; // relative to sourceDir, forward-slash separated
-		fs::path    diskPath;
+		fs::path diskPath;
 	};
 
 private:
 	std::vector<FileRecord> m_files;
-	fs::path                m_sourceDir;
-	int                     m_compressionLevel;
+	fs::path m_sourceDir;
+	int m_compressionLevel;
 };

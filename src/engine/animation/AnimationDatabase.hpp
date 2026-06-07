@@ -2,11 +2,13 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <string>
 #include <string_view>
 #include <vector>
 #include "vulkan/volk.hpp"
 
 #include "assets/GltfAsset.hpp"
+#include "utils/Expected.hpp"
 #include "vulkan/GpuHeap.hpp"
 
 namespace aether
@@ -77,6 +79,14 @@ namespace aether
 		// Build database from a glTF asset's animation collection.
 		// ctx / uploadPool must outlive the Create call (not stored).
 		static AnimationDatabase Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset);
+
+		// Append runtime-loaded animation clips to this database.
+		// The channels must already be remapped to this skeleton's node indices.
+		// Destroys and recreates the GPU heap to accommodate the combined data.
+		// Returns the clip index of the first newly-added clip.
+		// uploadPool must be a valid compute-capable command pool.
+		Expected<std::uint32_t> AppendAnimations(
+		        VkCommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 
 		void Destroy();
 
@@ -238,7 +248,23 @@ namespace aether
 			return m_skinMetas;
 		}
 
+		[[nodiscard]] std::string_view GetNodeName(std::uint32_t nodeIndex) const
+		{
+			if (nodeIndex >= m_nodeNames.size())
+			{
+				return {};
+			}
+			return m_nodeNames[nodeIndex];
+		}
+
+		[[nodiscard]] const std::vector<std::string>& GetNodeNames() const
+		{
+			return m_nodeNames;
+		}
+
 	private:
+		const VulkanContext* m_ctx = nullptr;
+
 		GpuHeap m_heap;
 
 		VkDeviceAddress m_clipsAddr = 0;
@@ -257,6 +283,9 @@ namespace aether
 		VkDeviceAddress m_depthRangesAddr = 0;
 
 		std::vector<GpuClip> m_clips;              // CPU-side copy for GetClipName()/GetClipDuration()
+		std::vector<GpuChannel> m_channels;        // CPU-side copy for AppendAnimations rebuild
+		std::vector<float> m_times;                // CPU-side copy for AppendAnimations rebuild
+		std::vector<glm::vec4> m_values;           // CPU-side copy for AppendAnimations rebuild
 		std::vector<GpuSkinMeta> m_skinMetas;      // CPU-side copy for GetSkinJointCount()
 		std::vector<glm::vec4> m_bindTranslations; // CPU-side copy for debug
 		std::vector<glm::vec4> m_bindRotations;    // CPU-side copy for debug
@@ -265,6 +294,7 @@ namespace aether
 		std::vector<glm::mat4> m_skinInverseBinds; // CPU-side copy for debug
 		std::vector<std::uint32_t> m_skinJoints;   // CPU-side copy for debug
 		std::string m_clipNames;
+		std::vector<std::string> m_nodeNames;
 		std::vector<std::uint32_t> m_depthSortedNodes;
 		std::vector<DepthRange> m_depthRanges;
 		std::uint32_t m_nodeCount = 0;
