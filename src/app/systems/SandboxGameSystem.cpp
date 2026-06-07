@@ -187,14 +187,27 @@ namespace aether::app
 			{
 				AE_EXPECT_OR_THROW(model, m_assets->LoadModel(kFoxPath));
 				m_foxModel = std::move(model);
+				AE_INFO(aether::LogCategory::App,
+				        "Fox model: {} primitives, animDb valid={}, skins={}, nodes={}",
+				        m_foxModel->primitives.size(),
+				        m_foxModel->animationDb.IsValid(),
+				        m_foxModel->animationDb.GetSkinCount(),
+				        m_foxModel->animationDb.GetNodeCount());
 				if (m_foxModel->animationDb.IsValid())
 				{
 					const std::uint32_t animCount = m_foxModel->animationDb.GetClipCount();
 					AE_INFO(aether::LogCategory::App, "Fox glTF has {} animation(s):", animCount);
 					for (std::uint32_t i = 0; i < animCount; ++i)
 					{
-						AE_INFO(aether::LogCategory::App, "  [{}] {}", i, m_foxModel->animationDb.GetClipName(i));
+						AE_INFO(aether::LogCategory::App, "  [{}] '{}' (duration={:.2f}s)", i, m_foxModel->animationDb.GetClipName(i), m_foxModel->animationDb.GetClipDuration(i));
 					}
+				}
+
+				// Log first few primitives' skin info
+				for (std::size_t pi = 0; pi < m_foxModel->primitives.size() && pi < 2; ++pi)
+				{
+					const auto& prim = m_foxModel->primitives[pi];
+					AE_INFO(aether::LogCategory::App, "  Prim[{}]: skinIndex={}, mesh={}", pi, prim.skinIndex, prim.mesh.IsValid());
 				}
 			}
 			catch (const std::exception& e)
@@ -244,32 +257,26 @@ namespace aether::app
 				agent.idle = false;
 				m_foxAgents.push_back(agent);
 
-				aether::ecs::SpawnModel(*world, *m_assets, *m_foxModel, m_pipeline, 0.05f);
+				std::vector<aether::Entity> instances = m_assets->SpawnModel(*m_foxModel, m_pipeline, 0, 0.05f);
 
-				//// Set initial animation state on each spawned SkinnedMeshComponent.
-				//if (m_foxModel->animationDb.IsValid())
-				//{
-				//	std::uniform_real_distribution<float> phaseDist(0.0f, runDur > 0.f ? runDur : 1.0f);
-				//	const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
-				//	for (const aether::Entity e: instances)
-				//	{
-				//		if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
-				//		{
-				//			smc->clipIndex = kAnimRun;
-				//			smc->playbackSpeed = kFoxAnimRunSpeed;
-				//			smc->animTime = phase;
-				//		}
-				//	}
-				//}
+				// Set initial animation state on each spawned SkinnedMeshComponent.
+				if (m_foxModel->animationDb.IsValid())
+				{
+					const float runDur = m_foxModel->animationDb.GetClipDuration(kAnimRun);
+					std::uniform_real_distribution<float> phaseDist(0.0f, runDur > 0.f ? runDur : 1.0f);
+					const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
+					for (const aether::Entity e: instances)
+					{
+						if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
+						{
+							smc->clipIndex = kAnimRun;
+							smc->playbackSpeed = kFoxAnimRunSpeed;
+							smc->animTime = phase;
+						}
+					}
+				}
 
-				//for (const aether::Entity e: instances)
-				//{
-				//	world->EmplaceOrReplace<SandboxEntityTag>(e, SandboxEntityTag{});
-				//	world->EmplaceOrReplace<FoxTag>(e, FoxTag{});
-				//	world->EmplaceOrReplace<FoxInstanceIndex>(e, FoxInstanceIndex{ i });
-				//}
-
-				//m_foxInstances.push_back(std::move(instances));
+				m_foxInstances.push_back(std::move(instances));
 			}
 			AE_INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 		}

@@ -1,17 +1,17 @@
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 
-#include "vulkan/AftermathContext.hpp"
+#	include "vulkan/AftermathContext.hpp"
 
-#include <chrono>
-#include <cstdio>
-#include <ctime>
-#include <filesystem>
-#include <fstream>
-#include <string>
-#include <unordered_map>
-#include <vector>
+#	include <chrono>
+#	include <cstdio>
+#	include <ctime>
+#	include <filesystem>
+#	include <fstream>
+#	include <string>
+#	include <unordered_map>
+#	include <vector>
 
-#include "utils/Logger.hpp"
+#	include "utils/Logger.hpp"
 
 namespace aether
 {
@@ -76,11 +76,11 @@ namespace aether
 			const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
 			tm timeInfo;
-#if defined(_MSC_VER)
+#	if defined(_MSC_VER)
 			localtime_s(&timeInfo, &timeT);
-#else
+#	else
 			localtime_r(&timeT, &timeInfo);
-#endif
+#	endif
 
 			char timeBuf[64];
 			std::strftime(timeBuf, sizeof(timeBuf), "%Y%m%d_%H%M%S", &timeInfo);

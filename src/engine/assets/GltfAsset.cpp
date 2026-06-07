@@ -258,7 +258,19 @@ namespace aether::assets
 				reader.ReadRaw(bones[i].ibm, sizeof(bones[i].ibm));
 			}
 
+			// First, compute world transforms for all bones from their IBMs
+			// IBM = inverse(worldTransform), so worldTransform = inverse(IBM)
+			std::vector<glm::mat4> boneWorld(hdr.boneCount);
+			for (uint32_t i = 0; i < hdr.boneCount; ++i)
+			{
+				glm::mat4 ibmMat;
+				std::memcpy(&ibmMat[0][0], bones[i].ibm, sizeof(bones[i].ibm));
+				boneWorld[i] = glm::inverse(ibmMat);
+				outSkin.inverseBindMatrices.push_back(ibmMat);
+			}
+
 			// Second pass: create GltfNode entries for each bone
+			// Derive LOCAL transforms from world transforms by removing parent's world
 			for (uint32_t i = 0; i < hdr.boneCount; ++i)
 			{
 				GltfNode boneNode;
@@ -274,20 +286,37 @@ namespace aether::assets
 					boneNode.parentIndex = static_cast<int32_t>(boneNodeOffset + bones[i].parentIndex);
 				}
 
-				// Extract bind pose from inverse bind matrix
-				glm::mat4 ibmMat;
-				std::memcpy(&ibmMat[0][0], bones[i].ibm, sizeof(bones[i].ibm));
-				glm::mat4 bindPose = glm::inverse(ibmMat);
-				DecomposeTransform(bindPose, boneNode.translation, boneNode.rotation, boneNode.scale);
+				// Derive local bind pose: local = inv(parentWorld) * childWorld
+				// A root bone's world IS its local transform (parent is identity)
+				glm::mat4 localMat = boneWorld[i];
+				if (bones[i].parentIndex >= 0)
+				{
+					localMat = glm::inverse(boneWorld[static_cast<std::size_t>(bones[i].parentIndex)]) * localMat;
+				}
+				DecomposeTransform(localMat, boneNode.translation, boneNode.rotation, boneNode.scale);
 
 				asset.nodes.push_back(std::move(boneNode));
 
 				// Skin joints point to bone node indices
 				outSkin.joints.push_back(boneNodeOffset + i);
-				outSkin.inverseBindMatrices.push_back(ibmMat);
 			}
 
 			AE_INFO(LogCategory::Engine, "Skeleton loaded: {} bones, nodeOffset={}", hdr.boneCount, boneNodeOffset);
+			for (uint32_t i = 0; i < hdr.boneCount && i < 3; ++i)
+			{
+				AE_INFO(LogCategory::Engine,
+				        "  Bone[{}]: '{}' parentIdx={} t=({:.1f},{:.1f},{:.1f}) r=({:.3f},{:.3f},{:.3f},{:.3f})",
+				        i,
+				        bones[i].name,
+				        bones[i].parentIndex,
+				        asset.nodes[boneNodeOffset + i].translation.x,
+				        asset.nodes[boneNodeOffset + i].translation.y,
+				        asset.nodes[boneNodeOffset + i].translation.z,
+				        asset.nodes[boneNodeOffset + i].rotation.x,
+				        asset.nodes[boneNodeOffset + i].rotation.y,
+				        asset.nodes[boneNodeOffset + i].rotation.z,
+				        asset.nodes[boneNodeOffset + i].rotation.w);
+			}
 			return true;
 		}
 
@@ -362,7 +391,18 @@ namespace aether::assets
 				anim.channels.push_back(std::move(channel));
 			}
 
-			AE_INFO(LogCategory::Engine, "Loaded animation '{}': {} channels, {} keys", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size());
+			std::string chSummary;
+			for (std::size_t ci = 0; ci < anim.channels.size(); ++ci)
+			{
+				if (ci > 0)
+				{
+					chSummary += ", ";
+				}
+				const auto& ch = anim.channels[ci];
+				const char* pathStr = ch.path == GltfAnimationPath::Translation ? "T" : ch.path == GltfAnimationPath::Rotation ? "R" : ch.path == GltfAnimationPath::Scale ? "S" : "W";
+				chSummary += std::to_string(ch.nodeIndex) + pathStr;
+			}
+			AE_INFO(LogCategory::Engine, "Loaded animation '{}': {} channels, first={} keys [{}]", anim.name, hdr.channelCount, anim.channels.empty() ? 0 : anim.channels[0].times.size(), chSummary);
 			return anim;
 		}
 
@@ -577,8 +617,11 @@ namespace aether::assets
 						const std::string mountRoot = animSetPath.substr(0, animSetPath.find("://") + 3);
 
 						// Animation channels use 0-based bone indices (from packer's remapTable).
-						// Bone nodes are stored at asset.nodes[boneNodeOffset..], so we need to offset.
-						const uint32_t boneNodeOffset = !asset.skins.empty() ? 1u : 0u;
+						// Bone nodes are stored at asset.nodes[boneNodeOffset..], so offset is:
+						//   boneNodeOffset = asset.nodes.size() - first skin's joint count
+						//   (nodes before bones = root mesh node + any other non-bone nodes)
+						const uint32_t boneNodeOffset = (!asset.skins.empty() && !asset.skins[0].joints.empty()) ? static_cast<uint32_t>(asset.nodes.size() - asset.skins[0].joints.size()) : 0u;
+						AE_INFO(LogCategory::Engine, "  AnimSet: boneNodeOffset={}, asset.nodes.size={}, skin joints={}", boneNodeOffset, asset.nodes.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
 
 						for (uint32_t i = 0; i < asetHdr.animCount; ++i)
 						{
@@ -592,6 +635,7 @@ namespace aether::assets
 									// Offset channel node indices to match bone node positions.
 									if (boneNodeOffset > 0)
 									{
+										AE_INFO(LogCategory::Engine, "    Offsetting {} channels by +{}", anim.channels.size(), boneNodeOffset);
 										for (auto& ch: anim.channels)
 										{
 											ch.nodeIndex += boneNodeOffset;

@@ -35,15 +35,25 @@ namespace aether
 
 		// Validate animation channel node indices before building GPU data.
 		const std::uint32_t numNodes = static_cast<std::uint32_t>(asset.nodes.size());
+		std::uint32_t clampedChannels = 0;
 		for (const auto& clip: asset.animations)
 		{
 			for (const auto& ch: clip.channels)
 			{
 				if (ch.nodeIndex >= numNodes)
 				{
-					AE_WARN(LogCategory::Engine, "AnimationDatabase: channel nodeIndex {} out of range (numNodes={}) in clip '{}'. Clamping.", ch.nodeIndex, numNodes, clip.name);
+					AE_WARN(LogCategory::Engine, "AnimationDatabase: channel nodeIndex {} out of range (numNodes={}) in clip '{}'. Clamping to {}.", ch.nodeIndex, numNodes, clip.name, numNodes - 1);
+					++clampedChannels;
 				}
 			}
+		}
+		if (clampedChannels > 0)
+		{
+			AE_WARN(LogCategory::Engine, "AnimationDatabase: {} channels were clamped out-of-range. {} nodes, {} skins, {} animations.", clampedChannels, numNodes, asset.skins.size(), asset.animations.size());
+		}
+		else
+		{
+			AE_INFO(LogCategory::Engine, "AnimationDatabase: all channels valid (numNodes={}, {} clips, {} skins)", numNodes, asset.animations.size(), asset.skins.size());
 		}
 
 		// ── Build CPU arrays ─────────────────────────────────────────────────
@@ -251,6 +261,23 @@ namespace aether
 		db.m_skinJointsAddr = UploadArray(db.m_heap, db.m_skinJoints, device, queue, uploadPool);
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
 		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
+
+		// Log bone hierarchy for debugging
+		for (std::uint32_t i = 1; i < asset.nodes.size() && i < 5; ++i)
+		{
+			const auto& n = asset.nodes[i];
+			AE_INFO(LogCategory::Engine, "  Node[{}]: '{}' parent={}, t=({:.1f},{:.1f},{:.1f})", i, n.name, n.parentIndex, n.translation.x, n.translation.y, n.translation.z);
+		}
+		AE_INFO(LogCategory::Engine, "  Skin count: {}, joints count: {}", asset.skins.size(), asset.skins.empty() ? 0 : asset.skins[0].joints.size());
+		if (!asset.skins.empty())
+		{
+			std::string jointStr;
+			for (std::size_t ji = 0; ji < asset.skins[0].joints.size() && ji < 8; ++ji)
+			{
+				jointStr += std::to_string(asset.skins[0].joints[ji]) + " ";
+			}
+			AE_INFO(LogCategory::Engine, "  First {} skin joints: {}", (std::min)(asset.skins[0].joints.size(), std::size_t(8)), jointStr);
+		}
 
 		AE_INFO(LogCategory::Engine,
 		        "AnimationDatabase GPU addresses: clips=0x{:x}, channels=0x{:x}, times=0x{:x}, values=0x{:x}, parents=0x{:x}, bindT=0x{:x}, bindR=0x{:x}, bindS=0x{:x}, skinMetas=0x{:x}, skinJoints=0x{:x}, skinIBMs=0x{:x}, depthNodes=0x{:x}, "

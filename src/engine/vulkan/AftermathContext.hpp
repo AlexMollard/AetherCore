@@ -2,18 +2,18 @@
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 
-#include <string_view>
+#	include <string_view>
 
-#include "utils/Assert.hpp"
-#include "vulkan/volk.hpp"
+#	include "utils/Assert.hpp"
+#	include "vulkan/volk.hpp"
 
 // volk.h includes vulkan_core.h but not vulkan.h. The Aftermath SDK guards
 // SpirvCode / GetShaderHashSpirv behind VULKAN_H_ (from vulkan.h umbrella).
-#include <vulkan/vulkan.h>
+#	include <vulkan/vulkan.h>
 
-#include <GFSDK_Aftermath.h>
-#include <GFSDK_Aftermath_GpuCrashDump.h>
-#include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
+#	include <GFSDK_Aftermath.h>
+#	include <GFSDK_Aftermath_GpuCrashDump.h>
+#	include <GFSDK_Aftermath_GpuCrashDumpDecoding.h>
 
 namespace aether
 {
