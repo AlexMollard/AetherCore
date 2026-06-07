@@ -27,6 +27,7 @@
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
 
 namespace aether::app
 {
@@ -425,6 +426,13 @@ namespace aether::app
 			context.Get<Renderer>().SetTonemapMode(next);
 			const char* names[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
 			AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
+		}
+
+		if (input.IsKeyPressed(aether::Key::F6))
+		{
+			const bool newState = !aether::IsPhysicsDebugRenderingEnabled();
+			aether::SetPhysicsDebugRenderingEnabled(newState);
+			AE_INFO(aether::LogCategory::App, "Physics debug: {}", newState ? "on" : "off");
 		}
 
 		PollScriptErrors(context);

@@ -51,4 +51,9 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_systems.UpdateAll(*this, dt);
 	}
+
+	System* World::FindSystem(const char* name)
+	{
+		return m_systems.Find(name);
+	}
 } // namespace aether

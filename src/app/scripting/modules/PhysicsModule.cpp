@@ -4,11 +4,48 @@
 
 #include "scene/World.hpp"
 #include "physics/PhysicsComponents.hpp"
-
-// ── Binding functions ─────────────────────────────────────────────────────────
+#include "physics/PhysicsSystem.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
 
 namespace
 {
+	aether::PhysicsSystem* s_physicsSystem = nullptr;
+
+	// set_linear_velocity(world, entity_id, x, y, z)
+	void das_set_linear_velocity(aether::World* w, uint32_t id, float x, float y, float z)
+	{
+		if (!s_physicsSystem)
+		{
+			return;
+		}
+		const auto* rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
+		if (!rb)
+		{
+			return;
+		}
+		s_physicsSystem->SetLinearVelocity(rb->bodyId, {x, y, z});
+	}
+
+	// get_linear_velocity(world, entity_id) -> float3
+	das::float3 das_get_linear_velocity(aether::World* w, uint32_t id)
+	{
+		das::float3 r{0.f, 0.f, 0.f};
+		if (!s_physicsSystem)
+		{
+			return r;
+		}
+		const auto* rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
+		if (!rb)
+		{
+			return r;
+		}
+		glm::vec3 vel = s_physicsSystem->GetLinearVelocity(rb->bodyId);
+		r.x = vel.x;
+		r.y = vel.y;
+		r.z = vel.z;
+		return r;
+	}
+
 	// add_box_body(world, entity_id, half_extents, dynamic)
 	void das_add_box_body(aether::World* w, uint32_t id, das::float3 half, bool dynamic)
 	{
@@ -69,12 +106,29 @@ namespace
 		return r;
 	}
 
+	// set_physics_debug_enabled(enabled: bool)
+	void das_set_physics_debug_enabled(bool enabled)
+	{
+		aether::SetPhysicsDebugRenderingEnabled(enabled);
+	}
+
+	// is_physics_debug_enabled() -> bool
+	bool das_is_physics_debug_enabled()
+	{
+		return aether::IsPhysicsDebugRenderingEnabled();
+	}
+
 } // namespace
 
 // ── Module ────────────────────────────────────────────────────────────────────
 
 namespace aether::app::scripting
 {
+	void InitPhysicsModule(aether::PhysicsSystem* physics)
+	{
+		s_physicsSystem = physics;
+	}
+
 	struct PhysicsModule : DasModuleBase
 	{
 		PhysicsModule()
@@ -100,6 +154,14 @@ namespace aether::app::scripting
 			BIND_COMPONENT("physics_state", aether::PhysicsStateComponent)
 			Bind<das_get_physics_position>(lib, "get_physics_position", SE::accessExternal);
 			Bind<das_get_physics_scale>(lib, "get_physics_scale", SE::accessExternal);
+
+			// Velocity control
+			Bind<das_set_linear_velocity>(lib, "set_linear_velocity", SE::modifyExternal);
+			Bind<das_get_linear_velocity>(lib, "get_linear_velocity", SE::accessExternal);
+
+			// Physics debug visualization toggle
+			Bind<das_set_physics_debug_enabled>(lib, "set_physics_debug_enabled", SE::modifyExternal);
+			Bind<das_is_physics_debug_enabled>(lib, "is_physics_debug_enabled", SE::accessExternal);
 
 			verifyAotReady();
 		}

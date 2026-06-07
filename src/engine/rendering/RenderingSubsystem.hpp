@@ -16,6 +16,7 @@
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
 #include "passes/SkyboxPass.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
 
 namespace aether
 {
@@ -102,6 +103,11 @@ namespace aether
 			return m_frameComposer;
 		}
 
+	[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
+		{
+			return m_physicsDebug;
+		}
+
 	private:
 		void RegisterPasses(ServiceContainer& services);
 
@@ -120,5 +126,6 @@ namespace aether
 		FrameComposer m_frameComposer;
 		RenderPipelineCoordinator m_renderPipelineCoordinator;
 		std::function<std::uint64_t()> m_frameIndexProvider;
+		PhysicsDebugRenderer m_physicsDebug;
 	};
 } // namespace aether

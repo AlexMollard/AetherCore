@@ -35,6 +35,7 @@
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "ui/UISubsystem.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -310,6 +311,24 @@ namespace aether
 
 		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
 		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
+
+		if (m_animationIk)
+		{
+			World& world = m_services.Get<SceneSubsystem>().GetWorld();
+			auto* physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem"));
+			if (physics)
+			{
+				m_animationIk->Update(world, *physics, 1.0f / 60.0f);
+			}
+		}
+
+		if (m_rendering)
+		{
+			World& world = m_services.Get<SceneSubsystem>().GetWorld();
+			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
+			debugRenderer.SetWorld(&world);
+			debugRenderer.SetViewProj(packet.proj * packet.view);
+		}
 
 		EndFrame(packet);
 		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));

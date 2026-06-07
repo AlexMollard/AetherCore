@@ -301,6 +301,14 @@ namespace aether
 	    std::uint32_t nodeCount)
 	{
 		m_nodeCount = nodeCount;
+		if (nodeParentsAddr == 0)
+		{
+			nodeParentsAddr = m_storedNodeParentsAddr;
+		}
+		if (depthSortedNodesAddr == 0)
+		{
+			depthSortedNodesAddr = m_storedDepthSortedNodesAddr;
+		}
 		m_ikPush = AnimationContracts::IkSolvePush{
 			.globalTransformsAddr = globalTransformsAddr,
 			.ikJobsAddr = m_ikJobsBuffer.GetDeviceAddress(),

@@ -400,6 +400,10 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
+			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
+				.shapeType = PhysicsShapeType::Box,
+				.halfExtents = desc.halfExtents,
+			});
 		}
 		for (auto entity: world.View<BoxBodyDesc>())
 		{
@@ -438,6 +442,10 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
+			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
+				.shapeType = PhysicsShapeType::Sphere,
+				.radius = desc.radius,
+			});
 		}
 		for (auto entity: world.View<SphereBodyDesc>())
 		{
@@ -477,6 +485,11 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
+			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
+				.shapeType = PhysicsShapeType::Capsule,
+				.radius = desc.radius,
+				.halfHeight = desc.halfHeight,
+			});
 		}
 		for (auto entity: world.View<CapsuleBodyDesc>())
 		{
@@ -506,6 +519,7 @@ namespace aether
 
 		world.Remove<RigidBodyComponent>(entity);
 		world.Remove<PhysicsStateComponent>(entity);
+		world.Remove<PhysicsDebugShapeComponent>(entity);
 	}
 
 	void PhysicsSystem::OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity)

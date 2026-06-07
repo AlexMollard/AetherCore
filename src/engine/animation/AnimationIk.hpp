@@ -73,6 +73,12 @@ namespace aether
 		    VkDeviceAddress depthSortedNodesAddr,
 		    std::uint32_t nodeCount);
 
+		void SetDatabaseAddrs(VkDeviceAddress nodeParents, VkDeviceAddress depthSorted)
+		{
+			m_storedNodeParentsAddr = nodeParents;
+			m_storedDepthSortedNodesAddr = depthSorted;
+		}
+
 		const AnimationContracts::IkSolvePush& GetIkSolvePush() const
 		{
 			return m_ikPush;
@@ -91,5 +97,7 @@ private:
 		std::uint32_t m_maxEntities = 0;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_writtenIkJobCount = 0;
+		VkDeviceAddress m_storedNodeParentsAddr = 0;
+		VkDeviceAddress m_storedDepthSortedNodesAddr = 0;
 	};
 } // namespace aether

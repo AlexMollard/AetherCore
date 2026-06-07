@@ -95,4 +95,21 @@ namespace aether
 		glm::vec3 scale{1.f, 1.f, 1.f};
 	};
 
+	enum class PhysicsShapeType : uint8_t
+	{
+		Box,
+		Sphere,
+		Capsule,
+	};
+
+	// Debug rendering shape info - attached by PhysicsSystem when creating bodies.
+	// Used by PhysicsDebugRenderer to render wireframe shapes with color coding.
+	struct PhysicsDebugShapeComponent
+	{
+		PhysicsShapeType shapeType = PhysicsShapeType::Box;
+		glm::vec3 halfExtents{0.5f, 0.5f, 0.5f};  // For box
+		float radius = 0.5f;  // For sphere and capsule
+		float halfHeight = 0.5f;  // For capsule
+	};
+
 } // namespace aether

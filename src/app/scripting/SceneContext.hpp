@@ -18,6 +18,8 @@ namespace aether
 	class Input;
 	class GraphicsPipeline;
 	class PrimitiveMeshes;
+	class PhysicsSystem;
+	class PhysicsDebugRenderer;
 } // namespace aether
 
 namespace aether::app
@@ -40,6 +42,7 @@ namespace aether::app::scripting
 		aether::app::SystemFactory* systemFactory = nullptr;
 		aether::GraphicsPipeline* defaultPipeline = nullptr;
 		aether::app::effects::EffectManager* effects = nullptr;
+		aether::PhysicsSystem* physics = nullptr;
 		float deltaTime = 0.0f;
 		std::string scriptPath;
 

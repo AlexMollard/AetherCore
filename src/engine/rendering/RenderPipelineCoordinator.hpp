@@ -11,6 +11,7 @@ namespace aether
 	class CullPass;
 	class ForwardPass;
 	class LocalShadowService;
+	class PhysicsDebugRenderer;
 	class PostProcessStack;
 	class RenderQueue;
 	class RenderTargetService;
@@ -33,6 +34,7 @@ namespace aether
 		ForwardPass& forwardPass;
 		std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn;
 		RenderTargetService& renderTargetService;
+		PhysicsDebugRenderer& physicsDebug;
 	};
 
 	// Centralizes render-graph pass topology registration order.

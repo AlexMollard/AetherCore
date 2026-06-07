@@ -11,6 +11,8 @@ require ui;
 require math;
 require animation;
 require systems/fox_system;
+require systems/character_controller;
+require systems/third_person_camera;
 
 // ── Scene state ───────────────────────────────────────────────────────────────
 
@@ -48,6 +50,7 @@ var g_player : uint = 0u;
 var g_player_idle_clip : int = 0;
 var g_player_walk_clip : int = -1; // -1 means not yet added
 var g_player_ik_enabled : bool = true;
+var g_cam : uint = 0u;
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
 
@@ -91,8 +94,8 @@ def on_attach(world : World?)
 	set_sky(float3(0.40, 0.60, 0.95), float3(0.08, 0.15, 0.50));
 
 	// ── Camera ────────────────────────────────────────────────────────────────
-	let cam = create_orbit_camera(float3(0.0, 10.0, 28.0), float3(0.0, 1.0, 0.0), 50.0);
-	set_main_camera(cam);
+	g_cam = create_orbit_camera(float3(0.0, 10.0, 15.0), float3(0.0, 1.0, 0.0), 50.0);
+	set_main_camera(g_cam);
 
 	// ── Wide ground platform ──────────────────────────────────────────────────
 	let floor = entity_create(world);
@@ -259,6 +262,7 @@ def on_attach(world : World?)
 	add_transform(world, g_player);
 	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
 	load_model(world, g_player, "assets://models/Human/Human.mesh");
+	add_capsule_body(world, g_player, 0.025, 0.0125, true);
 	g_player_idle_clip = get_current_animation(world, g_player);
 	set_playback_speed(world, g_player, 1.0);
 	add_tag(world, g_player, create_tag("player"));
@@ -270,7 +274,7 @@ def on_attach(world : World?)
 	{
 		print("Walking animation added as clip {g_player_walk_clip}\n");
 		compile_animations(world, g_player);
-		// IK bone indices and leg lengths are initialized from C++ after compile.
+		init_entity_ik(world, g_player);
 		set_ik_enabled(world, g_player, true);
 		print("IK foot planting enabled for player\n");
 	}
@@ -375,8 +379,14 @@ def on_update(world : World?)
 		}
 	};
 
-	// reset the player pos
-	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
+	// ── Player controller & third-person camera ───────────────────────────────
+	var inputX = 0.0; var inputZ = 0.0;
+	if (is_action_down("move_forward"))  { inputZ += 1.0; }
+	if (is_action_down("move_backward")) { inputZ -= 1.0; }
+	if (is_action_down("move_left"))     { inputX -= 1.0; }
+	if (is_action_down("move_right"))    { inputX += 1.0; }
+	update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam);
+	update_third_person_camera(world, g_cam, g_player);
 
 	// ── Day/Night cycle controls ──────────────────────────────────────────────
 	g_manual_mode = get_ui_checked(world, g_manual_cb);
@@ -464,28 +474,6 @@ def on_update(world : World?)
 		g_time_of_day = 0.0;
 		set_time_of_day(0.0);
 		set_ui_slider_value(world, g_time_slider, 0.0);
-	}
-
-	// ── Toggle player walking animation with 'W' key ────────────────────────
-	let currentClip = get_current_animation(world, g_player);
-
-	if (is_action_down("move_forward"))
-	{
-		if (g_player_walk_clip >= 0)
-		{
-			// Use blend transition for smooth cross-fade to walk
-			set_animation_blend(world, g_player, g_player_walk_clip, 3.0);
-			set_playback_speed(world, g_player, 0.8);
-		}
-	}
-	else
-	{
-		// Use blend transition back to idle
-		if (g_player_idle_clip >= 0)
-		{
-			set_animation_blend(world, g_player, g_player_idle_clip, 3.0);
-			set_playback_speed(world, g_player, 1.0);
-		}
 	}
 
 	// ── Toggle IK foot planting with 'I' key ─────────────────────────────

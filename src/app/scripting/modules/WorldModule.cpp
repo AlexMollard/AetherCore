@@ -141,6 +141,36 @@ namespace
 		return r;
 	}
 
+	// set_euler(world, entity_id, euler_deg) - updates only rotation, preserves translation and scale
+	void das_set_euler(aether::World* w, uint32_t id, das::float3 euler)
+	{
+		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		if (!tc)
+		{
+			return;
+		}
+
+		glm::vec3 pos = glm::vec3(tc->localToWorld[3]);
+		float sx = glm::length(glm::vec3(tc->localToWorld[0]));
+		float sy = glm::length(glm::vec3(tc->localToWorld[1]));
+		float sz = glm::length(glm::vec3(tc->localToWorld[2]));
+		glm::vec3 scale = {sx, sy, sz};
+
+		tc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
+
+		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		if (sec)
+		{
+			for (const auto eid : sec->entityIds)
+			{
+				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
+				{
+					stc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
+				}
+			}
+		}
+	}
+
 	// set_transform(world, entity_id, pos, euler_deg, scale)
 	// Recomposes the full TRS matrix from the three float3 arguments.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
@@ -422,6 +452,7 @@ namespace aether::app::scripting
 			Bind<das_set_position>(lib, "set_position", SE::modifyExternal);
 			Bind<das_get_scale>(lib, "get_scale", SE::accessExternal);
 			Bind<das_get_euler>(lib, "get_euler", SE::accessExternal);
+			Bind<das_set_euler>(lib, "set_euler", SE::modifyExternal);
 			Bind<das_set_transform>(lib, "set_transform", SE::modifyExternal);
 
 			// Rendering components - structural ops (spawned internally by load_model)

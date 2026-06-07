@@ -46,4 +46,10 @@ namespace aether
 	{
 		m_systems.clear();
 	}
+
+	System* SystemRegistry::Find(const char* name)
+	{
+		auto it = std::find_if(m_systems.begin(), m_systems.end(), [name](const std::unique_ptr<System>& sys) { return sys && std::string_view(sys->GetName()) == name; });
+		return it != m_systems.end() ? it->get() : nullptr;
+	}
 } // namespace aether

@@ -4,6 +4,7 @@
 #include "passes/CullPass.hpp"
 #include "passes/ForwardPass.hpp"
 #include "passes/PostProcessStack.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
@@ -41,5 +42,8 @@ namespace aether
 
 		// Post-processing chain.
 		ctx.postProcessStack.RegisterPasses(ctx.graph, ctx.bindlessManager);
+
+		// Physics debug wireframe overlay (after post-processing, before final present).
+		ctx.physicsDebug.RegisterPass(ctx.graph);
 	}
 } // namespace aether

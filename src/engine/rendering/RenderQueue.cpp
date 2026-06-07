@@ -617,6 +617,7 @@ namespace aether
 		}
 
 		// ── Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) ──
+		std::uint32_t firstBatchNodeCount = 0;
 		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
@@ -630,6 +631,11 @@ namespace aether
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
 				const auto& batch = animSampleBatches[bi];
+				if (bi == 0 && m_animationIkSystem != nullptr)
+				{
+					firstBatchNodeCount = batch.db->GetNodeCount();
+					m_animationIkSystem->SetDatabaseAddrs(batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
+				}
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
 				AE_VERBOSE(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}", bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
 				if (depthCount == 0)
@@ -712,6 +718,10 @@ namespace aether
 		// ── Pass 1.8: IK solve (two-bone leg IK on GPU) ─────────────────────────
 		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve != VK_NULL_HANDLE)
 		{
+			if (m_cachedNodeGlobalTransformsAddr != 0)
+			{
+				m_animationIkSystem->BuildIkSolvePush(m_cachedNodeGlobalTransformsAddr, 0, 0, firstBatchNodeCount);
+			}
 			const AnimationContracts::IkSolvePush& ikPc = m_animationIkSystem->GetIkSolvePush();
 			const std::uint32_t ikJobCount = m_animationIkSystem->GetIkJobCount();
 			if (ikJobCount > 0 && ikPc.jobCount > 0)

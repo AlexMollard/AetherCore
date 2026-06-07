@@ -9,6 +9,7 @@
 #include "assets/GltfAsset.hpp"
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
+#include "animation/AnimationIk.hpp"
 #include "io/FileSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
@@ -17,6 +18,8 @@
 namespace
 {
 	using namespace aether::app::scripting;
+
+	aether::AnimationIkSystem* s_animationIkSystem = nullptr;
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -640,6 +643,22 @@ namespace
 		return footIndex == 0 ? ikComp->leftFootOffset.y : ikComp->rightFootOffset.y;
 	}
 
+	// init_entity_ik(world, entity_id)
+	// Initializes IK bone indices and leg lengths for an entity after animation compilation.
+	void das_init_entity_ik(aether::World* w, uint32_t id)
+	{
+		if (!s_animationIkSystem)
+		{
+			return;
+		}
+		auto* smc = FindSmcOrSpawned(w, id);
+		if (!smc || !smc->animDb)
+		{
+			return;
+		}
+		s_animationIkSystem->InitEntity(*w, id, *smc->animDb);
+	}
+
 	// ── Root motion ──────────────────────────────────────────────────────────
 
 	void das_set_root_motion_enabled(aether::World* w, uint32_t id, bool enabled)
@@ -685,6 +704,11 @@ namespace
 
 namespace aether::app::scripting
 {
+	void InitAnimationModule(aether::AnimationIkSystem* ik)
+	{
+		s_animationIkSystem = ik;
+	}
+
 	struct AnimationModule : DasModuleBase
 	{
 		AnimationModule()
@@ -721,6 +745,7 @@ namespace aether::app::scripting
 			Bind<das_set_ik_enabled>(lib, "set_ik_enabled", SE::modifyExternal);
 			Bind<das_get_foot_contact>(lib, "get_foot_contact", SE::accessExternal);
 			Bind<das_get_foot_offset_y>(lib, "get_foot_offset_y", SE::accessExternal);
+			Bind<das_init_entity_ik>(lib, "init_entity_ik", SE::modifyExternal);
 
 			// Root motion
 			Bind<das_set_root_motion_enabled>(lib, "set_root_motion_enabled", SE::modifyExternal);

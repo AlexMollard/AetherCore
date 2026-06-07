@@ -109,6 +109,9 @@ namespace aether
 		void RegisterSystem(std::unique_ptr<System> system);
 		// Remove a system by name.
 		void UnregisterSystem(const char* name);
+
+		// Find a registered system by name, returns nullptr if not found.
+		System* FindSystem(const char* name);
 		// Update all registered systems (called by the game loop).
 		void UpdateSystems(float dt);
 

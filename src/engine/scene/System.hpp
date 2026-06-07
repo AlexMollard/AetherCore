@@ -50,6 +50,9 @@ namespace aether
 		// Clear all systems.
 		void Clear();
 
+		// Find a system by name, returns nullptr if not found.
+		System* Find(const char* name);
+
 	private:
 		std::vector<std::unique_ptr<System>> m_systems;
 	};
