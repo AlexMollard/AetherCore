@@ -116,6 +116,7 @@ namespace aether::assets
 	{
 		std::string name;
 		std::vector<GltfAnimationChannel> channels;
+		bool rootLocked = false; // when true, root bone translation is stripped during compile
 	};
 
 	struct GltfAsset

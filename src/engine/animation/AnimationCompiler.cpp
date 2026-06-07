@@ -1,10 +1,12 @@
 #include "animation/AnimationCompiler.hpp"
 
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <string>
 #include <vector>
 
 #include "animation/AnimationDatabase.hpp"
+#include "assets/GltfAsset.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
@@ -44,6 +46,16 @@ namespace aether
 				return;
 			}
 
+			// Cache root bones once for all clips that need locking.
+			struct RootLockInfo
+			{
+				bool any = false;
+				std::vector<std::uint32_t> boneIndices;
+			};
+			RootLockInfo rootInfo;
+
+			const auto translationPath = static_cast<std::uint8_t>(aether::assets::GltfAnimationPath::Translation);
+
 			std::vector<AnimationDatabase::GpuClip> clips;
 			std::vector<AnimationDatabase::GpuChannel> channels;
 			std::vector<float> times;
@@ -52,6 +64,24 @@ namespace aether
 
 			for (const auto& anim: smc.pendingExternalAnims)
 			{
+				// Lazily build root bone list on first clip that needs it.
+				if (anim.rootLocked && !rootInfo.any)
+				{
+					const auto& parents = smc.animDb->GetNodeParents();
+					for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(parents.size()); ++i)
+					{
+						if (parents[i] == 0)
+						{
+							rootInfo.boneIndices.push_back(i);
+						}
+					}
+					rootInfo.any = true;
+					if (!rootInfo.boneIndices.empty())
+					{
+						AE_VERBOSE(LogCategory::Animation, "CompileAnimations: locking root translation for {} bone(s)", rootInfo.boneIndices.size());
+					}
+				}
+
 				const std::uint32_t nameOff = static_cast<std::uint32_t>(clipNames.size());
 				clipNames += anim.name;
 
@@ -63,6 +93,7 @@ namespace aether
 				clip.duration = 0.f;
 
 				uint32_t skippedChannels = 0;
+				uint32_t lockedChannels = 0;
 				for (const auto& ch: anim.channels)
 				{
 					if (ch.nodeIndex >= nodeCount)
@@ -70,6 +101,15 @@ namespace aether
 						++skippedChannels;
 						continue;
 					}
+
+					// Skip translation channels for root bones when root lock is active.
+					const bool isRootTranslation = anim.rootLocked && static_cast<std::uint8_t>(ch.path) == translationPath && std::find(rootInfo.boneIndices.begin(), rootInfo.boneIndices.end(), ch.nodeIndex) != rootInfo.boneIndices.end();
+					if (isRootTranslation)
+					{
+						++lockedChannels;
+						continue;
+					}
+
 					AnimationDatabase::GpuChannel gpuCh{};
 					gpuCh.nodeIndex = ch.nodeIndex;
 					gpuCh.animPath = static_cast<std::uint8_t>(ch.path);
@@ -89,9 +129,14 @@ namespace aether
 
 					channels.push_back(gpuCh);
 				}
+				clip.channelCount = static_cast<std::uint32_t>(channels.size()) - clip.channelOffset;
 				if (skippedChannels > 0)
 				{
 					AE_WARN(aether::LogCategory::Animation, "CompileAnimations: skipped {}/{} channels for clip '{}' (nodeIndex >= nodeCount={})", skippedChannels, anim.channels.size(), anim.name, nodeCount);
+				}
+				if (lockedChannels > 0)
+				{
+					AE_VERBOSE(aether::LogCategory::Animation, "CompileAnimations: locked {} translation channel(s) for clip '{}'", lockedChannels, anim.name);
 				}
 
 				clips.push_back(clip);

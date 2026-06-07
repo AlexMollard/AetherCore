@@ -203,9 +203,20 @@ namespace
 
 	// ── Loading ───────────────────────────────────────────────────────────────
 
+	// Forward declaration for the wrapper below.
+	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath, bool lockRoot = false);
+
+	// Backward-compatible 3-arg wrapper for load_external_animation.
+	int32_t das_load_external_animation(aether::World* w, uint32_t id, const char* animPath)
+	{
+		return das_add_animation(w, id, animPath, false);
+	}
+
 	// Load a .anim file and add it as a pending clip.
 	// Returns the future clip index (valid after compile_animations).
-	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath)
+	// If lockRoot is true, root bone translation channels are stripped
+	// during compilation (prevents root motion like walking in place).
+	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath, bool lockRoot)
 	{
 		auto* smc = FindSmcOrSpawned(w, id);
 		if (!smc)
@@ -371,13 +382,15 @@ namespace
 			AE_INFO(aether::LogCategory::Animation, "add_animation: {} channels, {} matched by name, {} total nodes in skeleton", anim.channels.size(), matched, nodeCount);
 		}
 
+		anim.rootLocked = lockRoot;
+
 		const std::uint32_t pendingIdx = static_cast<std::uint32_t>(smc->pendingExternalAnims.size());
 		smc->pendingExternalAnims.push_back(std::move(anim));
 
 		const std::uint32_t internalClipCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
 		const std::uint32_t futureClipIndex = internalClipCount + pendingIdx;
 
-		AE_VERBOSE(aether::LogCategory::Animation, "add_animation: loaded '{}' for entity {}, future clip index={}", smc->pendingExternalAnims.back().name, id, futureClipIndex);
+		AE_VERBOSE(aether::LogCategory::Animation, "add_animation: loaded '{}' for entity {}, future clip index={}, rootLocked={}", smc->pendingExternalAnims.back().name, id, futureClipIndex, lockRoot);
 
 		return static_cast<int32_t>(futureClipIndex);
 	}
@@ -572,7 +585,7 @@ namespace aether::app::scripting
 
 			// Loading
 			Bind<das_add_animation>(lib, "add_animation", SE::modifyExternal);
-			Bind<das_add_animation>(lib, "load_external_animation", SE::modifyExternal);
+			Bind<das_load_external_animation>(lib, "load_external_animation", SE::modifyExternal);
 			Bind<das_clear_pending_animations>(lib, "clear_pending_animations", SE::modifyExternal);
 
 			// Playback control

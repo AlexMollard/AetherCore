@@ -262,8 +262,9 @@ def on_attach(world : World?)
 	set_playback_speed(world, g_player, 1.0);
 	add_tag(world, g_player, create_tag("player"));
 
-	// Add walking animation, then compile all clips into the GPU database
-	g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim");
+	// Add walking animation (with root lock so the model animates in place),
+	// then compile all clips into the GPU database.
+	g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim", true);
 	if (g_player_walk_clip >= 0)
 	{
 		print("Walking animation added as clip {g_player_walk_clip}\n");
