@@ -39,10 +39,12 @@ namespace aether
 		}
 
 		auto blendView = world.View<AnimationBlendComponent>();
-		for (auto [entity, blendComp] : blendView.each())
+		for (auto [entity, blendComp]: blendView.each())
 		{
 			if (!blendComp.inTransition)
+			{
 				continue;
+			}
 
 			blendComp.blendWeight -= blendComp.transitionSpeed * dt;
 			if (blendComp.blendWeight <= 0.0f)

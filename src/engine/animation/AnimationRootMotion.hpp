@@ -18,11 +18,7 @@ namespace aether
 
 		void BeginFrame(VkDevice device, std::uint32_t frameIndex);
 
-		void RecordCopyHipsPosition(
-		    VkCommandBuffer cmd,
-		    std::uint32_t hipNodeIdx,
-		    VkDeviceAddress nodeGlobalTransformsAddr,
-		    std::uint32_t frameIndex);
+		void RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, VkDeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex);
 
 		VkTimelineSemaphoreSubmitInfo GetSignalSemaphoreSubmitInfo(std::uint32_t frameIndex) const;
 

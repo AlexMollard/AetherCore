@@ -214,6 +214,17 @@ namespace aether::ui
 		std::vector<Entity> children;
 	};
 
+	// ── Tab bar ───────────────────────────────────────────────────────────────
+	// Horizontal tab bar. Each tab is a button entity in the children list.
+	// selectedTab = index into children that is currently active.
+	// tabPages = one page entity per tab; DrawTabBar shows/hides them automatically.
+	struct UiTabComponent
+	{
+		std::vector<std::string> tabNames;
+		std::size_t selectedTab = 0;
+		std::vector<Entity> tabPages;
+	};
+
 	struct UiParentComponent
 	{
 		Entity parent;

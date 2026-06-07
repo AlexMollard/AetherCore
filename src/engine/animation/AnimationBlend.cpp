@@ -12,10 +12,9 @@ namespace aether
 		m_nodeCount = nodeCount;
 		m_blendJobs.resize(static_cast<std::size_t>(maxBlendJobCount));
 
-		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateMapped(allocator, device,
-			static_cast<VkDeviceSize>(maxBlendJobCount) * sizeof(AnimationContracts::AnimatorBlendJob),
-			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-			"AnimationBlend.Jobs"));
+		AE_EXPECT_OR_THROW(buffer,
+		        UniqueBuffer::CreateMapped(
+		                allocator, device, static_cast<VkDeviceSize>(maxBlendJobCount) * sizeof(AnimationContracts::AnimatorBlendJob), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "AnimationBlend.Jobs"));
 		m_blendJobsBuffer = std::move(buffer);
 
 		VmaAllocationInfo info = m_blendJobsBuffer.GetAllocationInfo();
@@ -33,10 +32,12 @@ namespace aether
 	{
 		auto& reg = world.GetRegistry();
 		auto view = reg.view<AnimationBlendComponent>();
-		for (auto [entity, blendComp] : view.each())
+		for (auto [entity, blendComp]: view.each())
 		{
 			if (!blendComp.inTransition)
+			{
 				continue;
+			}
 
 			blendComp.blendWeight -= blendComp.transitionSpeed * dt;
 			if (blendComp.blendWeight <= 0.0f)
@@ -49,10 +50,7 @@ namespace aether
 		}
 	}
 
-	void AnimationBlendSystem::PopulateBlendJobs(
-	    World& world,
-	    const AnimationDatabase& animDb,
-	    std::uint32_t /*frameIndex*/)
+	void AnimationBlendSystem::PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t /*frameIndex*/)
 	{
 		m_writtenJobCount = 0;
 
@@ -61,7 +59,7 @@ namespace aether
 		auto skinnedView = reg.view<SkinnedMeshComponent>();
 		std::uint32_t jobIdx = 0;
 
-		for (auto [entity, skinned] : skinnedView.each())
+		for (auto [entity, skinned]: skinnedView.each())
 		{
 			if (jobIdx >= static_cast<std::uint32_t>(m_blendJobs.size()))
 			{
@@ -99,21 +97,19 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(m_blendJobsBuffer.FlushMapped());
 	}
 
-	void AnimationBlendSystem::BuildBlendPush(
-	    const AnimationDatabase& animDb,
-	    VkDeviceAddress sampledPosesAddr)
+	void AnimationBlendSystem::BuildBlendPush(const AnimationDatabase& animDb, VkDeviceAddress sampledPosesAddr)
 	{
 		m_blendPush = AnimationContracts::AnimationBlendPush{
-			.animDbClipsAddr = animDb.GetClipsAddr(),
-			.animDbChannelsAddr = animDb.GetChannelsAddr(),
-			.animDbTimesAddr = animDb.GetTimesAddr(),
-			.animDbValuesAddr = animDb.GetValuesAddr(),
-			.bindTranslationsAddr = animDb.GetBindTranslationsAddr(),
-			.bindRotationsAddr = animDb.GetBindRotationsAddr(),
-			.bindScalesAddr = animDb.GetBindScalesAddr(),
-			.blendJobsAddr = m_blendJobsBuffer.GetDeviceAddress(),
-			.sampledPosesAddr = sampledPosesAddr,
-			.jobCount = m_writtenJobCount,
+		        .animDbClipsAddr = animDb.GetClipsAddr(),
+		        .animDbChannelsAddr = animDb.GetChannelsAddr(),
+		        .animDbTimesAddr = animDb.GetTimesAddr(),
+		        .animDbValuesAddr = animDb.GetValuesAddr(),
+		        .bindTranslationsAddr = animDb.GetBindTranslationsAddr(),
+		        .bindRotationsAddr = animDb.GetBindRotationsAddr(),
+		        .bindScalesAddr = animDb.GetBindScalesAddr(),
+		        .blendJobsAddr = m_blendJobsBuffer.GetDeviceAddress(),
+		        .sampledPosesAddr = sampledPosesAddr,
+		        .jobCount = m_writtenJobCount,
 		};
 	}
 } // namespace aether

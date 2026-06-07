@@ -400,10 +400,11 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
-			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
-				.shapeType = PhysicsShapeType::Box,
-				.halfExtents = desc.halfExtents,
-			});
+			reg.emplace<PhysicsDebugShapeComponent>(entity,
+			        PhysicsDebugShapeComponent{
+			                .shapeType = PhysicsShapeType::Box,
+			                .halfExtents = desc.halfExtents,
+			        });
 		}
 		for (auto entity: world.View<BoxBodyDesc>())
 		{
@@ -442,10 +443,11 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
-			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
-				.shapeType = PhysicsShapeType::Sphere,
-				.radius = desc.radius,
-			});
+			reg.emplace<PhysicsDebugShapeComponent>(entity,
+			        PhysicsDebugShapeComponent{
+			                .shapeType = PhysicsShapeType::Sphere,
+			                .radius = desc.radius,
+			        });
 		}
 		for (auto entity: world.View<SphereBodyDesc>())
 		{
@@ -485,11 +487,12 @@ namespace aether
 				addedStatic = true;
 			}
 			applyVelocity(entity, desc.initialVelocity);
-			reg.emplace<PhysicsDebugShapeComponent>(entity, PhysicsDebugShapeComponent{
-				.shapeType = PhysicsShapeType::Capsule,
-				.radius = desc.radius,
-				.halfHeight = desc.halfHeight,
-			});
+			reg.emplace<PhysicsDebugShapeComponent>(entity,
+			        PhysicsDebugShapeComponent{
+			                .shapeType = PhysicsShapeType::Capsule,
+			                .radius = desc.radius,
+			                .halfHeight = desc.halfHeight,
+			        });
 		}
 		for (auto entity: world.View<CapsuleBodyDesc>())
 		{
@@ -601,13 +604,7 @@ namespace aether
 
 		JPH::RayCastResult joltResult;
 
-		m_physics->GetNarrowPhaseQuery().CastRay(
-			ray,
-			joltResult,
-			JPH::BroadPhaseLayerFilter{},
-			JPH::ObjectLayerFilter{},
-			JPH::BodyFilter{}
-		);
+		m_physics->GetNarrowPhaseQuery().CastRay(ray, joltResult, JPH::BroadPhaseLayerFilter{}, JPH::ObjectLayerFilter{}, JPH::BodyFilter{});
 
 		if (!joltResult.mBodyID.IsInvalid())
 		{

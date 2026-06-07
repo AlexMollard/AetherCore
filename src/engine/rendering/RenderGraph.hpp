@@ -185,6 +185,15 @@ namespace aether
 			return m_passes.empty();
 		}
 
+		struct PassInfo
+		{
+			std::string name;
+			bool isGraphics = false;
+			bool isCompute = false;
+		};
+
+		[[nodiscard]] std::vector<PassInfo> GetPasses() const;
+
 		// Execute the compiled frame graph for the current frame.
 		void Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
@@ -355,5 +364,13 @@ namespace aether
 
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;
+
+	public:
+		static RenderGraph* s_current;
 	};
+
+	[[nodiscard]] inline RenderGraph* GetCurrentRenderGraph()
+	{
+		return RenderGraph::s_current;
+	}
 } // namespace aether

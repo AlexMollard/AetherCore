@@ -23,6 +23,7 @@ namespace aether
 
 		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
 		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
+		RenderGraph::s_current = &m_renderGraph;
 		m_frameConstantsBuffer.Initialize(vk);
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
@@ -68,7 +69,7 @@ namespace aether
 		        /*frameIndexCallback=*/[this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        vk.GetDevice().device,
 		        swapchain.GetDepthFormat(),
-PostProcessStack::GetForwardColorFormat());
+		        PostProcessStack::GetForwardColorFormat());
 
 		RegisterPasses(services);
 
@@ -88,6 +89,7 @@ PostProcessStack::GetForwardColorFormat());
 		m_shadowService.Shutdown(vk.GetDevice().device);
 		m_localShadowService.Shutdown(vk.GetDevice().device);
 		m_renderTargetService.Shutdown();
+		RenderGraph::s_current = nullptr;
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
 		m_physicsDebug.Shutdown(vk.GetDevice().device);
@@ -131,26 +133,26 @@ PostProcessStack::GetForwardColorFormat());
 		AE_PROFILE_ZONE();
 		LightingManager& lighting = services.Get<LightingManager>();
 
-const PassRegistrationContext ctx{
-			.graph = m_renderGraph,
-			.skyboxPass = m_skyboxPass,
-			.postProcessStack = m_postProcessStack,
-			.shadowService = m_shadowService,
-			.localShadowService = m_localShadowService,
-			.bindlessManager = services.Get<BindlessManager>(),
-			.device = services.Get<VulkanContext>().GetDevice().device,
-			.depthFormat = services.Get<Swapchain>().GetDepthFormat(),
-			.cullPass = m_cullPass,
-			.mainRenderQueue = m_renderQueue,
-			.forwardPass = m_forwardPass,
-			.pushLightingFn =
-				[this, &lighting](VkCommandBuffer cmd, VkPipelineLayout layout)
-			{
-				const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-				lighting.PushLightingDescriptor(cmd, layout, frameIdx);
-			},
-			.renderTargetService = m_renderTargetService,
-			.physicsDebug = m_physicsDebug,
+		const PassRegistrationContext ctx{
+		        .graph = m_renderGraph,
+		        .skyboxPass = m_skyboxPass,
+		        .postProcessStack = m_postProcessStack,
+		        .shadowService = m_shadowService,
+		        .localShadowService = m_localShadowService,
+		        .bindlessManager = services.Get<BindlessManager>(),
+		        .device = services.Get<VulkanContext>().GetDevice().device,
+		        .depthFormat = services.Get<Swapchain>().GetDepthFormat(),
+		        .cullPass = m_cullPass,
+		        .mainRenderQueue = m_renderQueue,
+		        .forwardPass = m_forwardPass,
+		        .pushLightingFn =
+		                [this, &lighting](VkCommandBuffer cmd, VkPipelineLayout layout)
+		        {
+			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
+			        lighting.PushLightingDescriptor(cmd, layout, frameIdx);
+		        },
+		        .renderTargetService = m_renderTargetService,
+		        .physicsDebug = m_physicsDebug,
 		};
 
 		m_renderPipelineCoordinator.RegisterPasses(ctx);

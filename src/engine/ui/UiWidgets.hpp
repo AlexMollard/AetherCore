@@ -134,4 +134,16 @@ namespace aether::ui
 	// Returns the grid container entity.
 	Entity SpawnItemGrid(aether::World& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder = 1.f);
 
+	// Tab bar: draws the tab strip background, each tab button with active/inactive
+	// styling, and a bottom separator. Tab state (click detection, page show/hide)
+	// is managed by UiSystem::ProcessTabBars which runs before layout.
+	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+
+	// Creates a tab page container entity with vertical layout and auto-size.
+	Entity SpawnTabPage(aether::World& world, float zOrder = 2.f);
+
+	// Creates a tab bar entity with tab buttons as children and pages as
+	// UiTabComponent::tabPages. Page entities must already exist.
+	Entity SpawnTabBar(aether::World& world, UiRect rect, const std::vector<std::string>& tabNames, const std::vector<Entity>& tabPages, float zOrder = 3.f);
+
 } // namespace aether::ui

@@ -69,6 +69,9 @@ namespace aether
 		void EndFrame(const RenderFramePacket& packet);
 		void RecreateSwapchain();
 
+		std::vector<std::string> GetRenderPassNames() const;
+		std::size_t GetRenderPassCount() const;
+
 		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
 		void PatchShadowIndices(std::uint32_t frameIdx);
 		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc);

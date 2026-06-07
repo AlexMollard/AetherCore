@@ -107,9 +107,9 @@ namespace aether
 	struct PhysicsDebugShapeComponent
 	{
 		PhysicsShapeType shapeType = PhysicsShapeType::Box;
-		glm::vec3 halfExtents{0.5f, 0.5f, 0.5f};  // For box
-		float radius = 0.5f;  // For sphere and capsule
-		float halfHeight = 0.5f;  // For capsule
+		glm::vec3 halfExtents{0.5f, 0.5f, 0.5f}; // For box
+		float radius = 0.5f;                     // For sphere and capsule
+		float halfHeight = 0.5f;                 // For capsule
 	};
 
 } // namespace aether

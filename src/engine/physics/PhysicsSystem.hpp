@@ -87,11 +87,11 @@ namespace aether
 		// Result of a single raycast query.
 		struct RaycastResult
 		{
-			bool hit = false;                 // true if a surface was hit
+			bool hit = false;                  // true if a surface was hit
 			glm::vec3 position{0.f, 0.f, 0.f}; // world-space hit point
 			glm::vec3 normal{0.f, 0.f, 0.f};   // surface normal at hit point
-			float fraction = 1.f;             // hit distance / maxDistance
-			std::uint32_t bodyId = 0;         // Jolt BodyID that was hit (0 = invalid)
+			float fraction = 1.f;              // hit distance / maxDistance
+			std::uint32_t bodyId = 0;          // Jolt BodyID that was hit (0 = invalid)
 		};
 
 		// Cast a ray against the physics world.

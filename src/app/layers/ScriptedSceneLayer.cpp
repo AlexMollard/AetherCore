@@ -28,7 +28,7 @@ namespace aether::app::scripting
 	void InitPhysicsModule(aether::PhysicsSystem* physics);
 	void InitAnimationModule(aether::AnimationIkSystem* ik);
 	void SetPhysicsDebugRendererCallback(std::function<void(bool)> callback);
-}
+} // namespace aether::app::scripting
 
 namespace aether::app
 {

@@ -41,6 +41,12 @@ namespace aether::ui
 		glm::vec4 inputFocusBg{0.07f, 0.10f, 0.16f, 1.f};
 		glm::vec4 placeholder{0.42f, 0.51f, 0.59f, 0.70f};
 
+		// ── Tab bar colours ─────────────────────────────────────────────────────
+		glm::vec4 tabStripBg{0.06f, 0.08f, 0.11f, 1.00f};
+		glm::vec4 tabActive{0.10f, 0.13f, 0.17f, 0.97f};
+		glm::vec4 tabInactive{0.06f, 0.08f, 0.11f, 0.85f};
+		glm::vec4 tabHover{0.09f, 0.11f, 0.15f, 0.95f};
+
 		// ── Inventory slot colours ──────────────────────────────────────────────
 		glm::vec4 slotBg{0.08f, 0.10f, 0.14f, 0.95f};
 		glm::vec4 slotBorder{0.22f, 0.27f, 0.35f, 1.f};
@@ -57,6 +63,7 @@ namespace aether::ui
 		float padding = 16.f;
 		float rowHeight = 20.f;
 		float knobRadius = 7.f;
+		float tabHeight = 30.f;
 
 		// ── Font sizes ─────────────────────────────────────────────────────────
 		float titleFontSize = 18.f;

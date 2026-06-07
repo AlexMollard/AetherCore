@@ -56,7 +56,17 @@ namespace aether::app
 			Row_PointLights,
 			Row_SpotLights,
 			Row_SunIntensity,
+			Row_RenderPasses,
+			Row_PhysicsDebug,
 			Row_Count
+		};
+
+		enum Tab : std::size_t
+		{
+			Tab_Performance,
+			Tab_Render,
+			Tab_Camera,
+			kTabCount
 		};
 
 		static constexpr std::size_t kLabelRowCount = Row_Count;
@@ -74,10 +84,12 @@ namespace aether::app
 
 		Entity m_debugPanel;
 		Entity m_headerSpacer;
+		Entity m_tabBar;
 		Entity m_graphEntity;
 		Entity m_labelRows[kLabelRowCount];
-		Entity m_separators[4];
+		Entity m_separators[5];
 		Entity m_reloadButton;
 		std::vector<Entity> m_entities;
+		std::array<Entity, kTabCount> m_tabPages;
 	};
 } // namespace aether::app

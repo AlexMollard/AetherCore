@@ -295,7 +295,6 @@ namespace aether::app
 			return e;
 		};
 
-		// ── Debug panel with auto-size vertical layout ────────────────────────
 		m_debugPanel = reg(ui::SpawnPanel(world,
 		        UiAnchors::TopRight({12.f, 12.f}, {kPanelW, kPanelH}),
 		        "Debug",
@@ -317,71 +316,93 @@ namespace aether::app
 			ui::AddChild(world, m_debugPanel, child);
 		};
 
-		// ── Header spacer (invisible, pushes content below the 48px header) ──
 		m_headerSpacer = reg(world.Create());
 		world.Emplace<ui::UiTransformComponent>(m_headerSpacer, ui::UiTransformComponent{.rect = HeightRect(48.f), .zOrder = 2.f});
 		addChild(m_headerSpacer);
 
-		// ── Performance label rows ───────────────────────────────────────────
-		// clang-format off
-		const char* perfLabels[] = {"Frame", "FPS", "Delta", "Avg FPS", "Min", "Max"};
-		for (std::size_t i = 0; i < 6; ++i)
+		std::vector<std::string> tabNames = {"Perf", "Render", "Camera"};
+
+		auto createPage = [&]([[maybe_unused]] Tab tab) -> Entity
 		{
-			m_labelRows[Row_Frame + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), perfLabels[i], 2.f));
-			addChild(m_labelRows[Row_Frame + i]);
+			auto page = reg(ui::SpawnTabPage(world, 2.f));
+			addChild(page);
+			return page;
+		};
+
+		m_tabPages[Tab_Performance] = createPage(Tab_Performance);
+		m_tabPages[Tab_Render] = createPage(Tab_Render);
+		m_tabPages[Tab_Camera] = createPage(Tab_Camera);
+
+		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Camera]};
+		m_tabBar = reg(ui::SpawnTabBar(world, UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {0, 0}, .offsetMaxPx = {0, ui::UiTheme::Default().tabHeight}}, tabNames, tabPageVec, 3.f));
+
+		// Insert tab bar after header spacer, before pages.
+		// addChild appends; remove and re-add pages so tab bar is ordered correctly.
+		{
+			auto* panelChildren = world.TryGet<ui::UiChildrenComponent>(m_debugPanel);
+			panelChildren->children.erase(panelChildren->children.begin() + 1, panelChildren->children.begin() + 1 + kTabCount);
+			addChild(m_tabBar);
+			for (std::size_t i = 0; i < kTabCount; ++i)
+			{
+				addChild(m_tabPages[i]);
+			}
 		}
 
-		// ── Graph ────────────────────────────────────────────────────────────
-		m_graphEntity = reg(ui::SpawnGraph(world,
-		        HeightRect(108.f),
-		        "Frame Time (0 - 33 ms)  |  ref: 60fps  30fps",
-		        0.f, 33.333f, 2.f));
-		addChild(m_graphEntity);
+		auto addToPage = [&](Tab tab, Entity child)
+		{
+			ui::AddChild(world, m_tabPages[tab], child);
+		};
 
-		// ── Separator 1 ──────────────────────────────────────────────────────
+		for (std::size_t i = 0; i < 6; ++i)
+		{
+			const char* perfLabels[] = {"Frame", "FPS", "Delta", "Avg FPS", "Min", "Max"};
+			m_labelRows[Row_Frame + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), perfLabels[i], 2.f));
+			addToPage(Tab_Performance, m_labelRows[Row_Frame + i]);
+		}
+		m_graphEntity = reg(ui::SpawnGraph(world, HeightRect(108.f), "Frame Time (0 - 33 ms)  |  ref: 60fps  30fps", 0.f, 33.333f, 2.f));
+		addToPage(Tab_Performance, m_graphEntity);
+
 		m_separators[0] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addChild(m_separators[0]);
+		addToPage(Tab_Render, m_separators[0]);
 
-		// ── Renderer label rows ──────────────────────────────────────────────
 		const char* renderLabels[] = {"Tonemap", "FXAA", "Resolution"};
 		for (std::size_t i = 0; i < 3; ++i)
 		{
 			m_labelRows[Row_Tonemap + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), renderLabels[i], 2.f));
-			addChild(m_labelRows[Row_Tonemap + i]);
+			addToPage(Tab_Render, m_labelRows[Row_Tonemap + i]);
 		}
 
-		// ── Separator 2 ──────────────────────────────────────────────────────
 		m_separators[1] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addChild(m_separators[1]);
+		addToPage(Tab_Render, m_separators[1]);
 
-		// ── Camera label rows ────────────────────────────────────────────────
+		m_labelRows[Row_RenderPasses] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Render Passes", 2.f));
+		addToPage(Tab_Render, m_labelRows[Row_RenderPasses]);
+
+		m_labelRows[Row_PhysicsDebug] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Physics Debug", 2.f));
+		addToPage(Tab_Render, m_labelRows[Row_PhysicsDebug]);
+
+		m_separators[2] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
+		addToPage(Tab_Camera, m_separators[2]);
+
 		const char* camLabels[] = {"Position", "FOV", "Near", "Far"};
 		for (std::size_t i = 0; i < 4; ++i)
 		{
 			m_labelRows[Row_Pos + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), camLabels[i], 2.f));
-			addChild(m_labelRows[Row_Pos + i]);
+			addToPage(Tab_Camera, m_labelRows[Row_Pos + i]);
 		}
 
-		// ── Separator 3 ──────────────────────────────────────────────────────
-		m_separators[2] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addChild(m_separators[2]);
+		m_separators[3] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
+		addToPage(Tab_Camera, m_separators[3]);
 
-		// ── Lighting label rows ──────────────────────────────────────────────
 		const char* lightLabels[] = {"Point Lights", "Spot Lights", "Sun Intensity"};
 		for (std::size_t i = 0; i < 3; ++i)
 		{
 			m_labelRows[Row_PointLights + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), lightLabels[i], 2.f));
-			addChild(m_labelRows[Row_PointLights + i]);
+			addToPage(Tab_Camera, m_labelRows[Row_PointLights + i]);
 		}
 
-		// ── Separator 4 ──────────────────────────────────────────────────────
-		m_separators[3] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addChild(m_separators[3]);
-
-		// ── Reload button ────────────────────────────────────────────────────
 		m_reloadButton = reg(ui::SpawnButton(world, HeightRect(28.f), "Reload Script  [F5]", 2.f));
 		addChild(m_reloadButton);
-		// clang-format on
 	}
 
 	void DebugLayer::OnDetach(LayerContext& context)
@@ -562,6 +583,22 @@ namespace aether::app
 		std::snprintf(buf.data(), buf.size(), "%.2f", renderer.GetDirectionalLightIntensity());
 		setRow(Row_SunIntensity, buf.data(), ui::UiTheme::Default().text);
 
+		// Render passes count
+		if (auto* rg = aether::GetCurrentRenderGraph())
+		{
+			auto passes = rg->GetPasses();
+			std::snprintf(buf.data(), buf.size(), "%zu passes", passes.size());
+			setRow(Row_RenderPasses, buf.data(), ui::UiTheme::Default().text);
+		}
+		else
+		{
+			setRow(Row_RenderPasses, "N/A", ui::UiTheme::Default().textLabel);
+		}
+
+		// Physics debug state
+		const bool physDebug = aether::IsPhysicsDebugRenderingEnabled();
+		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
+
 		// Reload button click detection
 		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))
 		{
@@ -571,6 +608,23 @@ namespace aether::app
 				{
 					scripting->RequestReload();
 				}
+			}
+		}
+
+		// Tab switching via keyboard shortcuts (Num1/2/3).
+		if (auto* tabComp = world.TryGet<ui::UiTabComponent>(m_tabBar))
+		{
+			if (input.IsKeyPressed(aether::Key::Num1))
+			{
+				tabComp->selectedTab = Tab_Performance;
+			}
+			else if (input.IsKeyPressed(aether::Key::Num2))
+			{
+				tabComp->selectedTab = Tab_Render;
+			}
+			else if (input.IsKeyPressed(aether::Key::Num3))
+			{
+				tabComp->selectedTab = Tab_Camera;
 			}
 		}
 

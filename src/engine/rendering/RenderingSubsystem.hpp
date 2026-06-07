@@ -103,7 +103,7 @@ namespace aether
 			return m_frameComposer;
 		}
 
-	[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
+		[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
 		{
 			return m_physicsDebug;
 		}

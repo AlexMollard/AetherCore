@@ -23,13 +23,16 @@ namespace aether
 		{
 			switch (motionType)
 			{
-				case PhysicsMotionType::Static:    return glm::vec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
-				case PhysicsMotionType::Kinematic: return glm::vec4(0.2f, 1.0f, 0.2f, 1.0f); // Green
-				case PhysicsMotionType::Dynamic:   return glm::vec4(0.2f, 0.4f, 1.0f, 1.0f); // Blue
+				case PhysicsMotionType::Static:
+					return glm::vec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
+				case PhysicsMotionType::Kinematic:
+					return glm::vec4(0.2f, 1.0f, 0.2f, 1.0f); // Green
+				case PhysicsMotionType::Dynamic:
+					return glm::vec4(0.2f, 0.4f, 1.0f, 1.0f); // Blue
 			}
 			return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow fallback
 		}
-	}
+	} // namespace
 
 	static bool s_debugRenderingEnabled = false;
 
@@ -52,25 +55,25 @@ namespace aether
 	}
 
 	PhysicsDebugRenderer::PhysicsDebugRenderer(PhysicsDebugRenderer&& rhs) noexcept
-		: m_device(rhs.m_device)
-		, m_allocator(rhs.m_allocator)
-		, m_enabled(rhs.m_enabled)
-		, m_colorMode(rhs.m_colorMode)
-		, m_world(rhs.m_world)
-		, m_viewProj(rhs.m_viewProj)
-		, m_colorFormat(rhs.m_colorFormat)
-		, m_depthFormat(rhs.m_depthFormat)
-		, m_pipeline(rhs.m_pipeline)
-		, m_pipelineLayout(rhs.m_pipelineLayout)
-		, m_boxVertexBuffer(rhs.m_boxVertexBuffer)
-		, m_boxVertexAlloc(rhs.m_boxVertexAlloc)
-		, m_boxVertexCount(rhs.m_boxVertexCount)
-		, m_sphereVertexBuffer(rhs.m_sphereVertexBuffer)
-		, m_sphereVertexAlloc(rhs.m_sphereVertexAlloc)
-		, m_sphereVertexCount(rhs.m_sphereVertexCount)
-		, m_capsuleVertexBuffer(rhs.m_capsuleVertexBuffer)
-		, m_capsuleVertexAlloc(rhs.m_capsuleVertexAlloc)
-		, m_capsuleVertexCount(rhs.m_capsuleVertexCount)
+	      : m_device(rhs.m_device),
+	        m_allocator(rhs.m_allocator),
+	        m_enabled(rhs.m_enabled),
+	        m_colorMode(rhs.m_colorMode),
+	        m_world(rhs.m_world),
+	        m_viewProj(rhs.m_viewProj),
+	        m_colorFormat(rhs.m_colorFormat),
+	        m_depthFormat(rhs.m_depthFormat),
+	        m_pipeline(rhs.m_pipeline),
+	        m_pipelineLayout(rhs.m_pipelineLayout),
+	        m_boxVertexBuffer(rhs.m_boxVertexBuffer),
+	        m_boxVertexAlloc(rhs.m_boxVertexAlloc),
+	        m_boxVertexCount(rhs.m_boxVertexCount),
+	        m_sphereVertexBuffer(rhs.m_sphereVertexBuffer),
+	        m_sphereVertexAlloc(rhs.m_sphereVertexAlloc),
+	        m_sphereVertexCount(rhs.m_sphereVertexCount),
+	        m_capsuleVertexBuffer(rhs.m_capsuleVertexBuffer),
+	        m_capsuleVertexAlloc(rhs.m_capsuleVertexAlloc),
+	        m_capsuleVertexCount(rhs.m_capsuleVertexCount)
 	{
 		rhs.m_device = VK_NULL_HANDLE;
 		rhs.m_pipeline = VK_NULL_HANDLE;
@@ -180,9 +183,9 @@ namespace aether
 
 		{
 			const VkShaderModuleCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-				.codeSize = vertData->size(),
-				.pCode = reinterpret_cast<const std::uint32_t*>(vertData->data()),
+			        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+			        .codeSize = vertData->size(),
+			        .pCode = reinterpret_cast<const std::uint32_t*>(vertData->data()),
 			};
 			if (vkCreateShaderModule(ctx.GetDevice().device, &info, nullptr, &vertModule) != VK_SUCCESS)
 			{
@@ -193,9 +196,9 @@ namespace aether
 
 		{
 			const VkShaderModuleCreateInfo info{
-				.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-				.codeSize = fragData->size(),
-				.pCode = reinterpret_cast<const std::uint32_t*>(fragData->data()),
+			        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+			        .codeSize = fragData->size(),
+			        .pCode = reinterpret_cast<const std::uint32_t*>(fragData->data()),
 			};
 			if (vkCreateShaderModule(ctx.GetDevice().device, &info, nullptr, &fragModule) != VK_SUCCESS)
 			{
@@ -206,17 +209,17 @@ namespace aether
 		}
 
 		const VkPushConstantRange kPushRange{
-			.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-			.offset = 0,
-			.size = 80,
+		        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		        .offset = 0,
+		        .size = 80,
 		};
 
 		const VkPipelineLayoutCreateInfo layoutInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			.setLayoutCount = 0,
-			.pSetLayouts = nullptr,
-			.pushConstantRangeCount = 1,
-			.pPushConstantRanges = &kPushRange,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		        .setLayoutCount = 0,
+		        .pSetLayouts = nullptr,
+		        .pushConstantRangeCount = 1,
+		        .pPushConstantRanges = &kPushRange,
 		};
 
 		if (vkCreatePipelineLayout(ctx.GetDevice().device, &layoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS)
@@ -228,123 +231,123 @@ namespace aether
 		}
 
 		const std::array<VkPipelineShaderStageCreateInfo, 2> stages{
-			VkPipelineShaderStageCreateInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_VERTEX_BIT,
-				.module = vertModule,
-				.pName = "main",
-			},
-			VkPipelineShaderStageCreateInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-				.module = fragModule,
-				.pName = "main",
-			},
+		        VkPipelineShaderStageCreateInfo{
+		                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		                .stage = VK_SHADER_STAGE_VERTEX_BIT,
+		                .module = vertModule,
+		                .pName = "main",
+		        },
+		        VkPipelineShaderStageCreateInfo{
+		                .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		                .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                .module = fragModule,
+		                .pName = "main",
+		        },
 		};
 
 		const VkVertexInputBindingDescription kBinding{
-			.binding = 0,
-			.stride = sizeof(glm::vec3),
-			.inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
+		        .binding = 0,
+		        .stride = sizeof(glm::vec3),
+		        .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
 		};
 
 		const VkVertexInputAttributeDescription kAttrib{
-			.location = 0,
-			.binding = 0,
-			.format = VK_FORMAT_R32G32B32_SFLOAT,
-			.offset = 0,
+		        .location = 0,
+		        .binding = 0,
+		        .format = VK_FORMAT_R32G32B32_SFLOAT,
+		        .offset = 0,
 		};
 
 		const VkPipelineVertexInputStateCreateInfo vertexInput{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-			.vertexBindingDescriptionCount = 1,
-			.pVertexBindingDescriptions = &kBinding,
-			.vertexAttributeDescriptionCount = 1,
-			.pVertexAttributeDescriptions = &kAttrib,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		        .vertexBindingDescriptionCount = 1,
+		        .pVertexBindingDescriptions = &kBinding,
+		        .vertexAttributeDescriptionCount = 1,
+		        .pVertexAttributeDescriptions = &kAttrib,
 		};
 
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-			.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-			.primitiveRestartEnable = VK_FALSE,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+		        .topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+		        .primitiveRestartEnable = VK_FALSE,
 		};
 
 		const VkPipelineRasterizationStateCreateInfo rasterization{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-			.depthClampEnable = VK_FALSE,
-			.rasterizerDiscardEnable = VK_FALSE,
-			.polygonMode = VK_POLYGON_MODE_LINE,
-			.cullMode = VK_CULL_MODE_NONE,
-			.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-			.depthBiasEnable = VK_FALSE,
-			.lineWidth = 1.0f,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+		        .depthClampEnable = VK_FALSE,
+		        .rasterizerDiscardEnable = VK_FALSE,
+		        .polygonMode = VK_POLYGON_MODE_LINE,
+		        .cullMode = VK_CULL_MODE_NONE,
+		        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+		        .depthBiasEnable = VK_FALSE,
+		        .lineWidth = 1.0f,
 		};
 
 		const VkPipelineMultisampleStateCreateInfo multisample{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-			.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-			.sampleShadingEnable = VK_FALSE,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+		        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+		        .sampleShadingEnable = VK_FALSE,
 		};
 
 		const VkPipelineColorBlendAttachmentState colorBlend{
-			.blendEnable = VK_TRUE,
-			.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-			.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-			.colorBlendOp = VK_BLEND_OP_ADD,
-			.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-			.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-			.alphaBlendOp = VK_BLEND_OP_ADD,
-			.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
+		        .blendEnable = VK_TRUE,
+		        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+		        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		        .colorBlendOp = VK_BLEND_OP_ADD,
+		        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+		        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+		        .alphaBlendOp = VK_BLEND_OP_ADD,
+		        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
 		};
 
 		const VkPipelineColorBlendStateCreateInfo colorBlendState{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-			.logicOpEnable = VK_FALSE,
-			.attachmentCount = 1,
-			.pAttachments = &colorBlend,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+		        .logicOpEnable = VK_FALSE,
+		        .attachmentCount = 1,
+		        .pAttachments = &colorBlend,
 		};
 
 		const VkPipelineDepthStencilStateCreateInfo depthStencil{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-			.depthTestEnable = VK_TRUE,
-			.depthWriteEnable = VK_TRUE,
-			.depthCompareOp = VK_COMPARE_OP_LESS,
-			.depthBoundsTestEnable = VK_FALSE,
-			.stencilTestEnable = VK_FALSE,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+		        .depthTestEnable = VK_TRUE,
+		        .depthWriteEnable = VK_TRUE,
+		        .depthCompareOp = VK_COMPARE_OP_LESS,
+		        .depthBoundsTestEnable = VK_FALSE,
+		        .stencilTestEnable = VK_FALSE,
 		};
 
 		const VkViewport kViewport{0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
 		const VkRect2D kScissor{{0, 0}, {1, 1}};
 		const VkPipelineViewportStateCreateInfo viewportState{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-			.viewportCount = 1,
-			.pViewports = &kViewport,
-			.scissorCount = 1,
-			.pScissors = &kScissor,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+		        .viewportCount = 1,
+		        .pViewports = &kViewport,
+		        .scissorCount = 1,
+		        .pScissors = &kScissor,
 		};
 
 		const VkPipelineRenderingCreateInfo renderingInfo{
-			.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-			.colorAttachmentCount = 1,
-			.pColorAttachmentFormats = &colorFormat,
-			.depthAttachmentFormat = depthFormat,
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+		        .colorAttachmentCount = 1,
+		        .pColorAttachmentFormats = &colorFormat,
+		        .depthAttachmentFormat = depthFormat,
 		};
 
 		const VkGraphicsPipelineCreateInfo pipelineInfo{
-			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-			.pNext = &renderingInfo,
-			.stageCount = 2,
-			.pStages = std::data(stages),
-			.pVertexInputState = &vertexInput,
-			.pInputAssemblyState = &inputAssembly,
-			.pViewportState = &viewportState,
-			.pRasterizationState = &rasterization,
-			.pMultisampleState = &multisample,
-			.pDepthStencilState = &depthStencil,
-			.pColorBlendState = &colorBlendState,
-			.layout = m_pipelineLayout,
-			.renderPass = VK_NULL_HANDLE,
-			.subpass = 0,
+		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		        .pNext = &renderingInfo,
+		        .stageCount = 2,
+		        .pStages = std::data(stages),
+		        .pVertexInputState = &vertexInput,
+		        .pInputAssemblyState = &inputAssembly,
+		        .pViewportState = &viewportState,
+		        .pRasterizationState = &rasterization,
+		        .pMultisampleState = &multisample,
+		        .pDepthStencilState = &depthStencil,
+		        .pColorBlendState = &colorBlendState,
+		        .layout = m_pipelineLayout,
+		        .renderPass = VK_NULL_HANDLE,
+		        .subpass = 0,
 		};
 
 		const VkResult result = vkCreateGraphicsPipelines(ctx.GetDevice().device, ctx.GetPipelineCache(), 1, &pipelineInfo, nullptr, &m_pipeline);
@@ -360,33 +363,45 @@ namespace aether
 	void PhysicsDebugRenderer::CreateBoxGeometry(VmaAllocator allocator)
 	{
 		const std::array<glm::vec3, 24> kBoxEdges = {
-			// Bottom face (4 edges)
-			glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{ 0.5f, -0.5f, -0.5f},
-			glm::vec3{ 0.5f, -0.5f, -0.5f}, glm::vec3{ 0.5f, -0.5f,  0.5f},
-			glm::vec3{ 0.5f, -0.5f,  0.5f}, glm::vec3{-0.5f, -0.5f,  0.5f},
-			glm::vec3{-0.5f, -0.5f,  0.5f}, glm::vec3{-0.5f, -0.5f, -0.5f},
-			// Top face (4 edges)
-			glm::vec3{-0.5f,  0.5f, -0.5f}, glm::vec3{ 0.5f,  0.5f, -0.5f},
-			glm::vec3{ 0.5f,  0.5f, -0.5f}, glm::vec3{ 0.5f,  0.5f,  0.5f},
-			glm::vec3{ 0.5f,  0.5f,  0.5f}, glm::vec3{-0.5f,  0.5f,  0.5f},
-			glm::vec3{-0.5f,  0.5f,  0.5f}, glm::vec3{-0.5f,  0.5f, -0.5f},
-			// Vertical edges (4 edges)
-			glm::vec3{-0.5f, -0.5f, -0.5f}, glm::vec3{-0.5f,  0.5f, -0.5f},
-			glm::vec3{ 0.5f, -0.5f, -0.5f}, glm::vec3{ 0.5f,  0.5f, -0.5f},
-			glm::vec3{ 0.5f, -0.5f,  0.5f}, glm::vec3{ 0.5f,  0.5f,  0.5f},
-			glm::vec3{-0.5f, -0.5f,  0.5f}, glm::vec3{-0.5f,  0.5f,  0.5f},
+		        // Bottom face (4 edges)
+		        glm::vec3{-0.5f, -0.5f, -0.5f},
+		        glm::vec3{0.5f, -0.5f, -0.5f},
+		        glm::vec3{0.5f, -0.5f, -0.5f},
+		        glm::vec3{0.5f, -0.5f, 0.5f},
+		        glm::vec3{0.5f, -0.5f, 0.5f},
+		        glm::vec3{-0.5f, -0.5f, 0.5f},
+		        glm::vec3{-0.5f, -0.5f, 0.5f},
+		        glm::vec3{-0.5f, -0.5f, -0.5f},
+		        // Top face (4 edges)
+		        glm::vec3{-0.5f, 0.5f, -0.5f},
+		        glm::vec3{0.5f, 0.5f, -0.5f},
+		        glm::vec3{0.5f, 0.5f, -0.5f},
+		        glm::vec3{0.5f, 0.5f, 0.5f},
+		        glm::vec3{0.5f, 0.5f, 0.5f},
+		        glm::vec3{-0.5f, 0.5f, 0.5f},
+		        glm::vec3{-0.5f, 0.5f, 0.5f},
+		        glm::vec3{-0.5f, 0.5f, -0.5f},
+		        // Vertical edges (4 edges)
+		        glm::vec3{-0.5f, -0.5f, -0.5f},
+		        glm::vec3{-0.5f, 0.5f, -0.5f},
+		        glm::vec3{0.5f, -0.5f, -0.5f},
+		        glm::vec3{0.5f, 0.5f, -0.5f},
+		        glm::vec3{0.5f, -0.5f, 0.5f},
+		        glm::vec3{0.5f, 0.5f, 0.5f},
+		        glm::vec3{-0.5f, -0.5f, 0.5f},
+		        glm::vec3{-0.5f, 0.5f, 0.5f},
 		};
 
 		m_boxVertexCount = static_cast<std::uint32_t>(kBoxEdges.size());
 
 		const VkBufferCreateInfo bufferInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = sizeof(kBoxEdges),
-			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = sizeof(kBoxEdges),
+		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		};
 
 		VmaAllocationCreateInfo allocInfo{
-			.usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 		};
 
 		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_boxVertexBuffer, &m_boxVertexAlloc, nullptr);
@@ -418,40 +433,24 @@ namespace aether
 				const float phi1 = static_cast<float>(j * kPi) / kSegments;
 				const float phi2 = static_cast<float>((j + 1) * kPi) / kSegments;
 
-				vertices.push_back(glm::vec3{
-					kTubeRadius * std::sin(phi1) * std::cos(theta1),
-					kTubeRadius * std::cos(phi1),
-					kTubeRadius * std::sin(phi1) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kTubeRadius * std::sin(phi1) * std::cos(theta2),
-					kTubeRadius * std::cos(phi1),
-					kTubeRadius * std::sin(phi1) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta1), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta2), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta2)});
 
-				vertices.push_back(glm::vec3{
-					kTubeRadius * std::sin(phi2) * std::cos(theta1),
-					kTubeRadius * std::cos(phi2),
-					kTubeRadius * std::sin(phi2) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kTubeRadius * std::sin(phi2) * std::cos(theta2),
-					kTubeRadius * std::cos(phi2),
-					kTubeRadius * std::sin(phi2) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta1), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta2), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta2)});
 			}
 		}
 
 		m_sphereVertexCount = static_cast<std::uint32_t>(vertices.size());
 
 		const VkBufferCreateInfo bufferInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = vertices.size() * sizeof(glm::vec3),
-			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = vertices.size() * sizeof(glm::vec3),
+		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		};
 
 		VmaAllocationCreateInfo allocInfo{
-			.usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 		};
 
 		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_sphereVertexBuffer, &m_sphereVertexAlloc, nullptr);
@@ -482,62 +481,30 @@ namespace aether
 				const float phi1 = static_cast<float>(j * kPi) / kSegments;
 				const float phi2 = static_cast<float>((j + 1) * kPi) / kSegments;
 
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi1) * std::cos(theta1),
-					kHalfHeight + kRadius * std::cos(phi1),
-					kRadius * std::sin(phi1) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi1) * std::cos(theta2),
-					kHalfHeight + kRadius * std::cos(phi1),
-					kRadius * std::sin(phi1) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi1) * std::cos(theta1), kHalfHeight + kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi1) * std::cos(theta2), kHalfHeight + kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta2)});
 
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi2) * std::cos(theta1),
-					kHalfHeight + kRadius * std::cos(phi2),
-					kRadius * std::sin(phi2) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi2) * std::cos(theta2),
-					kHalfHeight + kRadius * std::cos(phi2),
-					kRadius * std::sin(phi2) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi2) * std::cos(theta1), kHalfHeight + kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi2) * std::cos(theta2), kHalfHeight + kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta2)});
 
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi1) * std::cos(theta1),
-					-kHalfHeight - kRadius * std::cos(phi1),
-					kRadius * std::sin(phi1) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi1) * std::cos(theta2),
-					-kHalfHeight - kRadius * std::cos(phi1),
-					kRadius * std::sin(phi1) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi1) * std::cos(theta1), -kHalfHeight - kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi1) * std::cos(theta2), -kHalfHeight - kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta2)});
 
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi2) * std::cos(theta1),
-					-kHalfHeight - kRadius * std::cos(phi2),
-					kRadius * std::sin(phi2) * std::sin(theta1)
-				});
-				vertices.push_back(glm::vec3{
-					kRadius * std::sin(phi2) * std::cos(theta2),
-					-kHalfHeight - kRadius * std::cos(phi2),
-					kRadius * std::sin(phi2) * std::sin(theta2)
-				});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi2) * std::cos(theta1), -kHalfHeight - kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta1)});
+				vertices.push_back(glm::vec3{kRadius * std::sin(phi2) * std::cos(theta2), -kHalfHeight - kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta2)});
 			}
 		}
 
 		m_capsuleVertexCount = static_cast<std::uint32_t>(vertices.size());
 
 		const VkBufferCreateInfo bufferInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = vertices.size() * sizeof(glm::vec3),
-			.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = vertices.size() * sizeof(glm::vec3),
+		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
 		};
 
 		VmaAllocationCreateInfo allocInfo{
-			.usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
+		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
 		};
 
 		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_capsuleVertexBuffer, &m_capsuleVertexAlloc, nullptr);
@@ -559,80 +526,78 @@ namespace aether
 		auto depth = graph.GetSwapchainDepth();
 
 		graph.AddPass("$PhysicsDebug")
-			.WriteColor(color, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
-			.ReadTexture(depth)
-			.Execute([this](PassContext& ctx) {
-				if (!s_debugRenderingEnabled || !m_world || m_pipeline == VK_NULL_HANDLE)
-				{
-					return;
-				}
+		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
+		        .ReadTexture(depth)
+		        .Execute(
+		                [this](PassContext& ctx)
+		                {
+			                if (!s_debugRenderingEnabled || !m_world || m_pipeline == VK_NULL_HANDLE)
+			                {
+				                return;
+			                }
 
-				AE_INFO(LogCategory::Render, "PhysicsDebug: rendering frame {} with {} entities", ctx.frameIndex,
-					static_cast<std::size_t>(m_world->View<PhysicsDebugShapeComponent>().size()));
+			                CommandRecorder& recorder = ctx.recorder;
+			                VkCommandBuffer cmd = recorder.GetCommandBuffer();
 
-				CommandRecorder& recorder = ctx.recorder;
-				VkCommandBuffer cmd = recorder.GetCommandBuffer();
+			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
 
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+			                m_world->View<PhysicsDebugShapeComponent, PhysicsStateComponent, RigidBodyComponent>().each(
+			                        [&](entt::entity entity, const PhysicsDebugShapeComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
+			                        {
+				                        glm::vec4 color{1.0f, 1.0f, 0.0f, 1.0f};
 
-				m_world->View<PhysicsDebugShapeComponent, PhysicsStateComponent, RigidBodyComponent>().each(
-					[&](entt::entity entity, const PhysicsDebugShapeComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
-					{
-						glm::vec4 color{1.0f, 1.0f, 0.0f, 1.0f};
+				                        if (m_colorMode == PhysicsDebugColorMode::ByMotionType)
+				                        {
+					                        color = GetColorForMotionType(rigid.motionType);
+				                        }
 
-						if (m_colorMode == PhysicsDebugColorMode::ByMotionType)
-						{
-							color = GetColorForMotionType(rigid.motionType);
-						}
+				                        glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation);
+				                        glm::mat4 scaledModel = model * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
+				                        glm::mat4 mvp = m_viewProj * scaledModel;
 
-						glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation);
-						glm::mat4 scaledModel = model * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
-						glm::mat4 mvp = m_viewProj * scaledModel;
+				                        VkBuffer vertexBuffer = VK_NULL_HANDLE;
+				                        std::uint32_t vertexCount = 0;
 
-						VkBuffer vertexBuffer = VK_NULL_HANDLE;
-						std::uint32_t vertexCount = 0;
+				                        switch (shape.shapeType)
+				                        {
+					                        case PhysicsShapeType::Box:
+					                        {
+						                        vertexBuffer = m_boxVertexBuffer;
+						                        vertexCount = m_boxVertexCount;
+						                        break;
+					                        }
+					                        case PhysicsShapeType::Sphere:
+					                        {
+						                        vertexBuffer = m_sphereVertexBuffer;
+						                        vertexCount = m_sphereVertexCount;
+						                        break;
+					                        }
+					                        case PhysicsShapeType::Capsule:
+					                        {
+						                        vertexBuffer = m_capsuleVertexBuffer;
+						                        vertexCount = m_capsuleVertexCount;
+						                        break;
+					                        }
+				                        }
 
-						switch (shape.shapeType)
-						{
-							case PhysicsShapeType::Box:
-							{
-								vertexBuffer = m_boxVertexBuffer;
-								vertexCount = m_boxVertexCount;
-								break;
-							}
-							case PhysicsShapeType::Sphere:
-							{
-								vertexBuffer = m_sphereVertexBuffer;
-								vertexCount = m_sphereVertexCount;
-								break;
-							}
-							case PhysicsShapeType::Capsule:
-							{
-								vertexBuffer = m_capsuleVertexBuffer;
-								vertexCount = m_capsuleVertexCount;
-								break;
-							}
-						}
+				                        if (vertexBuffer == VK_NULL_HANDLE || vertexCount == 0)
+				                        {
+					                        return;
+				                        }
 
-						if (vertexBuffer == VK_NULL_HANDLE || vertexCount == 0)
-						{
-							return;
-						}
+				                        constexpr std::uint64_t kBindingOffset = 0;
+				                        vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &kBindingOffset);
 
-						constexpr std::uint64_t kBindingOffset = 0;
-						vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &kBindingOffset);
+				                        alignas(16) float pushData[20];
+				                        std::memcpy(pushData, &mvp, sizeof(mvp));
+				                        pushData[16] = color.r;
+				                        pushData[17] = color.g;
+				                        pushData[18] = color.b;
+				                        pushData[19] = color.a;
+				                        vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushData), pushData);
 
-						alignas(16) float pushData[20];
-						std::memcpy(pushData, &mvp, sizeof(mvp));
-						pushData[16] = color.r;
-						pushData[17] = color.g;
-						pushData[18] = color.b;
-						pushData[19] = color.a;
-						vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(pushData), pushData);
-
-						vkCmdDraw(cmd, vertexCount, 1, 0, 0);
-					}
-				);
-			});
+				                        vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+			                        });
+		                });
 	}
 } // namespace aether

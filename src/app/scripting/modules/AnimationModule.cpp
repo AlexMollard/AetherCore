@@ -592,15 +592,17 @@ namespace
 			blend.transitionSpeed = speed;
 			blend.inTransition = true;
 		}
-		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent& smc)
-		{
-			const aether::Entity spawnedEntity{id};
-			auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(spawnedEntity));
-			blend.secondaryClip = uIdx;
-			blend.blendWeight = 1.0f;
-			blend.transitionSpeed = speed;
-			blend.inTransition = true;
-		});
+		ForEachSpawnedSmc(w,
+		        id,
+		        [&](aether::SkinnedMeshComponent& smc)
+		        {
+			        const aether::Entity spawnedEntity{id};
+			        auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(spawnedEntity));
+			        blend.secondaryClip = uIdx;
+			        blend.blendWeight = 1.0f;
+			        blend.transitionSpeed = speed;
+			        blend.inTransition = true;
+		        });
 	}
 
 	// ── IK ───────────────────────────────────────────────────────────────────
@@ -612,13 +614,15 @@ namespace
 		{
 			ikComp->enabled = enabled;
 		}
-		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&)
-		{
-			if (auto* comp = w->TryGet<aether::IkTargetsComponent>(aether::Entity{id}))
-			{
-				comp->enabled = enabled;
-			}
-		});
+		ForEachSpawnedSmc(w,
+		        id,
+		        [&](aether::SkinnedMeshComponent&)
+		        {
+			        if (auto* comp = w->TryGet<aether::IkTargetsComponent>(aether::Entity{id}))
+			        {
+				        comp->enabled = enabled;
+			        }
+		        });
 	}
 
 	bool das_get_foot_contact(aether::World* w, uint32_t id, int32_t footIndex)
@@ -668,13 +672,15 @@ namespace
 		{
 			rmComp->enabled = enabled;
 		}
-		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&)
-		{
-			if (auto* comp = w->TryGet<aether::RootMotionComponent>(aether::Entity{id}))
-			{
-				comp->enabled = enabled;
-			}
-		});
+		ForEachSpawnedSmc(w,
+		        id,
+		        [&](aether::SkinnedMeshComponent&)
+		        {
+			        if (auto* comp = w->TryGet<aether::RootMotionComponent>(aether::Entity{id}))
+			        {
+				        comp->enabled = enabled;
+			        }
+		        });
 	}
 
 	bool das_get_root_motion_enabled(aether::World* w, uint32_t id)

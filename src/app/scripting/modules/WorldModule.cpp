@@ -161,7 +161,7 @@ namespace
 		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
 		{
-			for (const auto eid : sec->entityIds)
+			for (const auto eid: sec->entityIds)
 			{
 				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
 				{

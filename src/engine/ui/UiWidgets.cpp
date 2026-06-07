@@ -574,9 +574,37 @@ namespace aether::ui
 
 	void RunLayouts(aether::World& world, VkExtent2D extent)
 	{
+		// Three-pass layout to handle nested containers correctly regardless of
+		// EnTT view iteration order.
+		//
+		// Pass 1: child containers (auto-size to content height).
 		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
-			ApplyLayout(world, aether::World::FromEntt(e), extent);
+			const Entity entity = aether::World::FromEntt(e);
+			if (world.Has<UiParentComponent>(entity))
+			{
+				ApplyLayout(world, entity, extent);
+			}
+		}
+		// Pass 2: root containers (position children now that their sizes are
+		// known, then auto-size to fit).
+		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
+		{
+			const Entity entity = aether::World::FromEntt(e);
+			if (!world.Has<UiParentComponent>(entity))
+			{
+				ApplyLayout(world, entity, extent);
+			}
+		}
+		// Pass 3: child containers again (re-position grandchildren now that the
+		// parent has moved the container to its final position).
+		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
+		{
+			const Entity entity = aether::World::FromEntt(e);
+			if (world.Has<UiParentComponent>(entity))
+			{
+				ApplyLayout(world, entity, extent);
+			}
 		}
 		for (auto [e, grid, children]: world.View<UiGridLayoutComponent, UiChildrenComponent>().each())
 		{
@@ -877,6 +905,121 @@ namespace aether::ui
 	Entity SpawnSection(aether::World& world, UiRect rect, float zOrder)
 	{
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSectionComponent>().entity();
+	}
+
+	// ── Tab bar ────────────────────────────────────────────────────────────────
+
+	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	{
+		auto* tabComp = world.TryGet<UiTabComponent>(entity);
+		auto* transform = world.TryGet<UiTransformComponent>(entity);
+		auto* children = world.TryGet<UiChildrenComponent>(entity);
+		if (!tabComp || !transform || !children)
+		{
+			return;
+		}
+
+		// State management (click detection, page show/hide) is handled by
+		// UiSystem::ProcessTabBars which runs before RunLayouts. DrawTabBar
+		// only draws the visual tab strip and buttons.
+
+		const std::size_t tabCount = std::min(tabComp->tabNames.size(), children->children.size());
+
+		// Draw tab strip.
+		const glm::vec4 tabPx = PixelRect(*transform, extent);
+		const std::int32_t baseLayer = ComputeEffectiveLayer(world, entity);
+		const std::int32_t prevLayer = ui.GetLayer();
+
+		ui.SetLayer(baseLayer);
+		ui.DrawRect(transform->rect, theme.tabStripBg);
+
+		// Draw each tab button.
+		for (std::size_t i = 0; i < tabCount; ++i)
+		{
+			Entity btnEntity = children->children[i];
+			auto* btnT = world.TryGet<UiTransformComponent>(btnEntity);
+			auto* btnComp = world.TryGet<UiButtonComponent>(btnEntity);
+			auto* btnInp = world.TryGet<UiInputComponent>(btnEntity);
+			if (!btnT)
+			{
+				continue;
+			}
+
+			const glm::vec4 btnPx = PixelRect(*btnT, extent);
+
+			// Button background colour: active > hover > inactive.
+			glm::vec4 bgColor = theme.tabInactive;
+			if (i == tabComp->selectedTab)
+			{
+				bgColor = theme.tabActive;
+			}
+			else if (btnInp && btnInp->hovered)
+			{
+				bgColor = theme.tabHover;
+			}
+
+			ui.SetLayer(baseLayer + 1 + static_cast<std::int32_t>(i));
+			ui.DrawRect(btnT->rect, bgColor, 4.f);
+
+			// Tab label.
+			if (btnComp && !btnComp->label.empty())
+			{
+				const UiPoint centre = CentrePoint(*btnT, btnPx, extent);
+				const float textW = ui.MeasureText(btnComp->label, theme.buttonFontSize);
+				const glm::vec4 textColor = (i == tabComp->selectedTab) ? theme.accent : theme.textLabel;
+				ui.DrawText(btnComp->label, UiPoint{centre.anchor, {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, textColor);
+			}
+		}
+
+		// Bottom separator line.
+		ui.SetLayer(baseLayer + static_cast<std::int32_t>(tabCount) + 1);
+		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
+		const glm::vec2 anchorPx = transform->rect.anchorMin * sizePx;
+		const float sepY = tabPx.y + tabPx.w;
+		ui.DrawLine(
+		        UiPoint{.anchor = transform->rect.anchorMin, .offsetPx = {tabPx.x - anchorPx.x, sepY - anchorPx.y}}, UiPoint{.anchor = transform->rect.anchorMin, .offsetPx = {tabPx.x + tabPx.z - anchorPx.x, sepY - anchorPx.y}}, 1.f, theme.separator);
+
+		ui.SetLayer(prevLayer);
+	}
+
+	Entity SpawnTabPage(aether::World& world, float zOrder)
+	{
+		return world.Spawn()
+		        .Add<UiTransformComponent>(UiTransformComponent{.rect = UiRect{}, .zOrder = zOrder})
+		        .Add<UiLayoutComponent>(UiLayoutComponent{
+		                .direction = UiLayoutComponent::Direction::Vertical,
+		                .spacing = 0.f,
+		                .padding = 0.f,
+		                .autoSize = true,
+		        })
+		        .Add<UiChildrenComponent>()
+		        .entity();
+	}
+
+	Entity SpawnTabBar(aether::World& world, UiRect rect, const std::vector<std::string>& tabNames, const std::vector<Entity>& tabPages, float zOrder)
+	{
+		Entity bar = world.Spawn()
+		                     .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
+		                     .Add<UiLayoutComponent>(UiLayoutComponent{
+		                             .direction = UiLayoutComponent::Direction::Horizontal,
+		                             .spacing = 4.f,
+		                             .padding = 6.f,
+		                     })
+		                     .Add<UiTabComponent>(UiTabComponent{
+		                             .tabNames = tabNames,
+		                             .selectedTab = 0,
+		                             .tabPages = tabPages,
+		                     })
+		                     .Add<UiChildrenComponent>()
+		                     .entity();
+
+		for (std::size_t i = 0; i < tabNames.size(); ++i)
+		{
+			Entity btn = SpawnButton(world, UiRect{.offsetMaxPx = {80.f, 24.f}}, tabNames[i], zOrder + 0.01f * static_cast<float>(i + 1));
+			AddChild(world, bar, btn);
+		}
+
+		return bar;
 	}
 
 	// ── Graph ──────────────────────────────────────────────────────────────────

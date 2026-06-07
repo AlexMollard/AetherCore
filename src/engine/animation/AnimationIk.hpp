@@ -37,10 +37,7 @@ namespace aether
 
 		// Per-frame update: CPU raycast for each entity's feet, writes IkGroundResult
 		// to the staging buffer, populates IK jobs for GPU dispatch.
-		void Update(
-		    World& world,
-		    PhysicsSystem& physics,
-		    float dt);
+		void Update(World& world, PhysicsSystem& physics, float dt);
 
 		std::uint32_t GetIkJobCount() const
 		{
@@ -67,11 +64,7 @@ namespace aether
 			return static_cast<std::uint32_t>(m_groundResults.size());
 		}
 
-		void BuildIkSolvePush(
-		    VkDeviceAddress globalTransformsAddr,
-		    VkDeviceAddress nodeParentsAddr,
-		    VkDeviceAddress depthSortedNodesAddr,
-		    std::uint32_t nodeCount);
+		void BuildIkSolvePush(VkDeviceAddress globalTransformsAddr, VkDeviceAddress nodeParentsAddr, VkDeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount);
 
 		void SetDatabaseAddrs(VkDeviceAddress nodeParents, VkDeviceAddress depthSorted)
 		{
@@ -84,7 +77,7 @@ namespace aether
 			return m_ikPush;
 		}
 
-private:
+	private:
 		UniqueBuffer m_ikJobsBuffer;
 		UniqueBuffer m_groundResultsBuffer;
 		std::vector<AnimationContracts::IkSolveJob> m_ikJobs;

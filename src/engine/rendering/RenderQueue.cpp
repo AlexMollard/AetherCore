@@ -555,16 +555,16 @@ namespace aether
 					CommandRecorder(cmd).EndDebugLabel();
 
 					const VkMemoryBarrier2 blendToFlatten{
-						.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-						.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-						.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+					        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 					};
 					const VkDependencyInfo blendDep{
-						.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-						.memoryBarrierCount = 1,
-						.pMemoryBarriers = &blendToFlatten,
+					        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					        .memoryBarrierCount = 1,
+					        .pMemoryBarriers = &blendToFlatten,
 					};
 					vkCmdPipelineBarrier2(cmd, &blendDep);
 				}
@@ -738,16 +738,16 @@ namespace aether
 				CommandRecorder(cmd).EndDebugLabel();
 
 				const VkMemoryBarrier2 ikToSkin{
-					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
 				};
 				const VkDependencyInfo ikDep{
-					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					.memoryBarrierCount = 1,
-					.pMemoryBarriers = &ikToSkin,
+				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				        .memoryBarrierCount = 1,
+				        .pMemoryBarriers = &ikToSkin,
 				};
 				vkCmdPipelineBarrier2(cmd, &ikDep);
 			}
@@ -1215,14 +1215,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::AnimationBlendPush),
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::AnimationBlendPush),
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animBlendLayout) != VK_SUCCESS)
 			{
@@ -1231,15 +1231,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = animBlendLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = animBlendLayout,
 			};
 			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &animBlend) != VK_SUCCESS)
 			{
@@ -1258,14 +1258,14 @@ namespace aether
 			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
 
 			const VkPushConstantRange pushRange{
-				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-				.offset = 0,
-				.size = sizeof(AnimationContracts::IkSolvePush),
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = sizeof(AnimationContracts::IkSolvePush),
 			};
 			const VkPipelineLayoutCreateInfo layoutInfo{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-				.pushConstantRangeCount = 1,
-				.pPushConstantRanges = &pushRange,
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
 			};
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &ikSolveLayout) != VK_SUCCESS)
 			{
@@ -1274,15 +1274,15 @@ namespace aether
 			}
 
 			const VkPipelineShaderStageCreateInfo stage{
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.module = shaderModule,
-				.pName = "main",
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .module = shaderModule,
+			        .pName = "main",
 			};
 			const VkComputePipelineCreateInfo pipelineInfo{
-				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-				.stage = stage,
-				.layout = ikSolveLayout,
+			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+			        .stage = stage,
+			        .layout = ikSolveLayout,
 			};
 			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &ikSolve) != VK_SUCCESS)
 			{

@@ -16,10 +16,7 @@ namespace aether
 
 		void UpdateBlendWeights(World& world, float dt);
 
-		void PopulateBlendJobs(
-		    World& world,
-		    const AnimationDatabase& animDb,
-		    std::uint32_t frameIndex);
+		void PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t frameIndex);
 
 		void BuildBlendPush(const AnimationDatabase& animDb, VkDeviceAddress sampledPosesAddr);
 

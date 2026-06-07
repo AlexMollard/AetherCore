@@ -19,7 +19,7 @@ namespace aether
 	enum class PhysicsDebugColorMode : uint8_t
 	{
 		None,
-		ByMotionType,  // Static=red, Dynamic=blue, Kinematic=green
+		ByMotionType, // Static=red, Dynamic=blue, Kinematic=green
 	};
 
 	class PhysicsDebugRenderer
@@ -36,14 +36,35 @@ namespace aether
 		void Init(VulkanContext& ctx, VkFormat colorFormat, VkFormat depthFormat);
 		void Shutdown(VkDevice device);
 
-		void SetEnabled(bool enabled) { m_enabled = enabled; }
-		[[nodiscard]] bool IsEnabled() const { return m_enabled; }
+		void SetEnabled(bool enabled)
+		{
+			m_enabled = enabled;
+		}
 
-		void SetColorMode(PhysicsDebugColorMode mode) { m_colorMode = mode; }
-		[[nodiscard]] PhysicsDebugColorMode GetColorMode() const { return m_colorMode; }
+		[[nodiscard]] bool IsEnabled() const
+		{
+			return m_enabled;
+		}
 
-		void SetWorld(World* world) { m_world = world; }
-		void SetViewProj(const glm::mat4& viewProj) { m_viewProj = viewProj; }
+		void SetColorMode(PhysicsDebugColorMode mode)
+		{
+			m_colorMode = mode;
+		}
+
+		[[nodiscard]] PhysicsDebugColorMode GetColorMode() const
+		{
+			return m_colorMode;
+		}
+
+		void SetWorld(World* world)
+		{
+			m_world = world;
+		}
+
+		void SetViewProj(const glm::mat4& viewProj)
+		{
+			m_viewProj = viewProj;
+		}
 
 		void RegisterPass(RenderGraph& graph);
 

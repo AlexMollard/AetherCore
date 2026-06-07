@@ -18,6 +18,8 @@
 
 namespace aether
 {
+	RenderGraph* RenderGraph::s_current = nullptr;
+
 	void RenderGraph::Initialize(VkDevice device, VmaAllocator allocator)
 	{
 		m_device = device;
@@ -413,6 +415,21 @@ namespace aether
 		m_passes.clear();
 		m_compiled.clear();
 		m_compileDirty = true;
+	}
+
+	std::vector<RenderGraph::PassInfo> RenderGraph::GetPasses() const
+	{
+		std::vector<PassInfo> result;
+		result.reserve(m_passes.size());
+		for (const auto& pass: m_passes)
+		{
+			result.push_back(PassInfo{
+			        .name = pass.name,
+			        .isGraphics = pass.kind == PassKind::Graphics,
+			        .isCompute = pass.kind == PassKind::Compute,
+			});
+		}
+		return result;
 	}
 
 	void RenderGraph::EnsureTransientImages(const FrameTarget& target)

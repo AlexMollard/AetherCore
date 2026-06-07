@@ -243,6 +243,31 @@ namespace aether
 		m_currentRecorder = m_gpu->GetCurrentCommandRecorder();
 	}
 
+	std::vector<std::string> AetherCore::GetRenderPassNames() const
+	{
+		if (!m_rendering)
+		{
+			return {};
+		}
+		const auto passes = m_rendering->GetRenderGraph().GetPasses();
+		std::vector<std::string> names;
+		names.reserve(passes.size());
+		for (const auto& pass: passes)
+		{
+			names.push_back(pass.name);
+		}
+		return names;
+	}
+
+	std::size_t AetherCore::GetRenderPassCount() const
+	{
+		if (!m_rendering)
+		{
+			return 0;
+		}
+		return m_rendering->GetRenderGraph().GetPasses().size();
+	}
+
 	void AetherCore::RecreateSwapchain()
 	{
 		auto& platform = m_services.Get<PlatformSubsystem>();

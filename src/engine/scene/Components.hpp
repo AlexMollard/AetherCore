@@ -79,10 +79,10 @@ namespace aether
 	// completes and primaryClip is replaced by secondaryClip.
 	struct AnimationBlendComponent
 	{
-		std::uint32_t primaryClip = 0;          // currently active clip index in animDb
-		std::uint32_t secondaryClip = 0;        // clip to transition to (0 = no transition)
-		float blendWeight = 1.0f;              // 1.0 = fully primary, 0.0 = fully secondary
-		float transitionSpeed = 4.0f;           // blend weight reduction per second
+		std::uint32_t primaryClip = 0;   // currently active clip index in animDb
+		std::uint32_t secondaryClip = 0; // clip to transition to (0 = no transition)
+		float blendWeight = 1.0f;        // 1.0 = fully primary, 0.0 = fully secondary
+		float transitionSpeed = 4.0f;    // blend weight reduction per second
 		bool inTransition = false;
 	};
 
@@ -135,11 +135,11 @@ namespace aether
 	// character physically moves through the world rather than sliding in place.
 	struct RootMotionComponent
 	{
-		std::uint32_t hipsNodeIdx = UINT32_MAX;  // node index of the root bone (e.g. Hips)
-		glm::vec3 prevHipsWorldPos{0.0f, 0.0f, 0.0f};   // world position last frame
-		glm::vec3 accumulatedDelta{0.0f, 0.0f, 0.0f};  // total delta since animation started
-		bool applyToPhysics = true;   // push delta to PhysicsStateComponent (physics-driven movement)
-		bool applyToTransform = true; // push delta to TransformComponent (visual sync)
+		std::uint32_t hipsNodeIdx = UINT32_MAX;       // node index of the root bone (e.g. Hips)
+		glm::vec3 prevHipsWorldPos{0.0f, 0.0f, 0.0f}; // world position last frame
+		glm::vec3 accumulatedDelta{0.0f, 0.0f, 0.0f}; // total delta since animation started
+		bool applyToPhysics = true;                   // push delta to PhysicsStateComponent (physics-driven movement)
+		bool applyToTransform = true;                 // push delta to TransformComponent (visual sync)
 		bool enabled = true;
 	};
 } // namespace aether
