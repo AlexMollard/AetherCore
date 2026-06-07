@@ -62,10 +62,16 @@ namespace aether
 				clip.channelCount = static_cast<std::uint32_t>(anim.channels.size());
 				clip.duration = 0.f;
 
+				uint32_t skippedChannels = 0;
 				for (const auto& ch: anim.channels)
 				{
+					if (ch.nodeIndex >= nodeCount)
+					{
+						++skippedChannels;
+						continue;
+					}
 					AnimationDatabase::GpuChannel gpuCh{};
-					gpuCh.nodeIndex = std::min(ch.nodeIndex, nodeCount - 1u);
+					gpuCh.nodeIndex = ch.nodeIndex;
 					gpuCh.animPath = static_cast<std::uint8_t>(ch.path);
 					gpuCh.interpolation = static_cast<std::uint8_t>(ch.interpolation);
 					gpuCh.timesOffset = static_cast<std::uint32_t>(times.size() * sizeof(float));
@@ -82,6 +88,10 @@ namespace aether
 					values.insert(values.end(), ch.values.begin(), ch.values.end());
 
 					channels.push_back(gpuCh);
+				}
+				if (skippedChannels > 0)
+				{
+					AE_WARN(aether::LogCategory::Animation, "CompileAnimations: skipped {}/{} channels for clip '{}' (nodeIndex >= nodeCount={})", skippedChannels, anim.channels.size(), anim.name, nodeCount);
 				}
 
 				clips.push_back(clip);

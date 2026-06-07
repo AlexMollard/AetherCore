@@ -48,6 +48,23 @@ namespace MeshProcessor
 			return s ? s : "";
 		}
 
+		// Strip common mixamo/rig prefixes from a bone name so that
+		// skeletons and animations from different exports use consistent
+		// bare names (e.g. "mixamorig:Hips" and "mixamorig_Hips" both → "Hips").
+		std::string StripBonePrefix(const std::string& name)
+		{
+			static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
+			for (const auto* prefix: kPrefixes)
+			{
+				const std::size_t plen = std::strlen(prefix);
+				if (name.size() > plen && name.compare(0, plen, prefix) == 0)
+				{
+					return name.substr(plen);
+				}
+			}
+			return name;
+		}
+
 		// -------------------------------------------------------------------------
 		// Attribute lookup
 		// -------------------------------------------------------------------------
@@ -326,7 +343,7 @@ namespace MeshProcessor
 					seen[static_cast<std::size_t>(nodeIdx)] = true;
 
 					BoneInfo info;
-					info.name = SafeStr(data.nodes[static_cast<std::size_t>(nodeIdx)].name);
+					info.name = StripBonePrefix(SafeStr(data.nodes[static_cast<std::size_t>(nodeIdx)].name));
 					info.originalIndex = nodeIdx;
 					info.parentIndex = (data.nodes[static_cast<std::size_t>(nodeIdx)].parent) ? ToIndex(data.nodes[static_cast<std::size_t>(nodeIdx)].parent, data) : -1;
 
@@ -944,7 +961,7 @@ namespace MeshProcessor
 					for (std::size_t i = 0; i < animatedNodes.size(); ++i)
 					{
 						virtualRemap[animatedNodes[i]] = static_cast<uint32_t>(i);
-						virtualBoneNames.push_back(SafeStr(data->nodes[animatedNodes[i]].name));
+						virtualBoneNames.push_back(StripBonePrefix(SafeStr(data->nodes[animatedNodes[i]].name)));
 					}
 				}
 			}
@@ -1052,6 +1069,10 @@ namespace MeshProcessor
 					if (hasBoneNames)
 					{
 						const std::string& boneName = virtualBoneNames[remappedNode];
+						if (std::addressof(animData) != nullptr && boneName.empty())
+						{
+							std::cerr << "  WARNING: empty bone name for remappedNode=" << remappedNode << " in " << fileName << "\n";
+						}
 						uint16_t nameLen = static_cast<uint16_t>(boneName.size());
 						Append(animData, nameLen);
 						AppendStringData(animData, boneName);

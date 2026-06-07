@@ -66,7 +66,27 @@ namespace
 		}
 	}
 
-	// Build bone name to joint index map from AnimationDatabase's skeleton
+	// Strip known skeleton prefixes from a bone name, returning the cleaned name.
+	// Returns empty string if the input is empty.
+	static std::string StripBonePrefix(std::string name)
+	{
+		static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
+		for (const auto* prefix: kPrefixes)
+		{
+			const std::size_t plen = std::strlen(prefix);
+			if (name.size() > plen && name.substr(0, plen) == prefix)
+			{
+				return name.substr(plen);
+			}
+		}
+		return name;
+	}
+
+	// Build bone name → node index map from AnimationDatabase's skeleton.
+	// Registers:
+	//   - The full skeleton name (e.g. "mixamorig_Hips" → nodeIdx)
+	//   - The stripped name  (e.g. "Hips" → same nodeIdx)
+	//   - Alternate prefix forms  (e.g. "mixamorig:Hips" → same nodeIdx)
 	std::unordered_map<std::string, std::uint32_t> BuildBoneNameMap(const aether::AnimationDatabase* animDb)
 	{
 		std::unordered_map<std::string, std::uint32_t> boneMap;
@@ -84,13 +104,39 @@ namespace
 		const auto jointCount = animDb->GetSkinJointCount(0);
 		const auto& skinJoints = animDb->GetSkinJoints();
 
+		static constexpr const char* kAltPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
+
 		for (std::uint32_t i = 0; i < jointCount; ++i)
 		{
 			const auto nodeIdx = skinJoints[i];
-			auto nodeName = animDb->GetNodeName(nodeIdx);
-			if (!nodeName.empty())
+			std::string nodeName(animDb->GetNodeName(nodeIdx));
+			if (nodeName.empty())
 			{
-				boneMap[std::string(nodeName)] = nodeIdx;
+				continue;
+			}
+
+			// Full name.
+			boneMap[nodeName] = nodeIdx;
+
+			// Stripped name (without the leading prefix).
+			std::string stripped = StripBonePrefix(nodeName);
+			if (stripped != nodeName)
+			{
+				boneMap.try_emplace(stripped, nodeIdx);
+			}
+
+			// Alternate prefix forms: if the skeleton has "mixamorig_Hips",
+			// also register "mixamorig:Hips" and "Armature_Hips".
+			if (!stripped.empty())
+			{
+				for (const auto* altPrefix: kAltPrefixes)
+				{
+					std::string alt = altPrefix + stripped;
+					if (alt != nodeName)
+					{
+						boneMap.try_emplace(std::move(alt), nodeIdx);
+					}
+				}
 			}
 		}
 
@@ -98,8 +144,8 @@ namespace
 	}
 
 	// Remap animation channels to the target skeleton.
-	// First tries bone-name matching; if no channels have bone names,
-	// falls back to index-ordering matching (0→skinJoints[0], 1→skinJoints[1], …).
+	// Tries bone-name matching first (stripping prefixes from both sides).
+	// If no channels have bone names, falls back to index-ordering matching.
 	void RemapAnimationByBoneName(aether::assets::GltfAnimation& anim, const std::unordered_map<std::string, std::uint32_t>& boneNameToJointIndex, const aether::AnimationDatabase* animDb)
 	{
 		bool hasBoneNames = false;
@@ -108,10 +154,25 @@ namespace
 			if (!ch.boneName.empty())
 			{
 				hasBoneNames = true;
+
+				// Try direct lookup first.
 				auto it = boneNameToJointIndex.find(ch.boneName);
 				if (it != boneNameToJointIndex.end())
 				{
 					ch.nodeIndex = it->second;
+					continue;
+				}
+
+				// Try stripping prefix from the .anim's bone name too,
+				// in case the map has the full name but the file has prefixed.
+				std::string animBare = StripBonePrefix(ch.boneName);
+				if (animBare != ch.boneName)
+				{
+					it = boneNameToJointIndex.find(animBare);
+					if (it != boneNameToJointIndex.end())
+					{
+						ch.nodeIndex = it->second;
+					}
 				}
 			}
 		}
@@ -195,11 +256,16 @@ namespace
 		reader.Advance(nameLen);
 
 		const bool hasBoneNames = (version >= 2) && (flags & 1);
+		AE_VERBOSE(aether::LogCategory::Animation, "add_animation: .anim v{}, {} channels, name='{}', hasBoneNames={}", version, channelCount, anim.name.c_str(), hasBoneNames);
 
 		for (uint32_t ci = 0; ci < channelCount; ++ci)
 		{
 			aether::assets::GltfAnimationChannel ch;
-			ch.nodeIndex = reader.Read<uint32_t>();
+
+			// The on-disk format writes ChannelHeaderDisk FIRST (nodeIndex + path +
+			// interp + padding + keyCount = 12 bytes), THEN the optional bone name.
+			ChannelHeaderDisk diskCh = reader.Read<ChannelHeaderDisk>();
+			ch.nodeIndex = diskCh.nodeIndex;
 
 			if (hasBoneNames)
 			{
@@ -211,12 +277,7 @@ namespace
 				}
 			}
 
-			uint8_t path = reader.Read<uint8_t>();
-			uint8_t interp = reader.Read<uint8_t>();
-			reader.Read<uint16_t>(); // padding
-			uint32_t keyCount = reader.Read<uint32_t>();
-
-			switch (static_cast<AnimPathDisk>(path))
+			switch (static_cast<AnimPathDisk>(diskCh.path))
 			{
 				case AnimPathDisk::Translation:
 					ch.path = aether::assets::GltfAnimationPath::Translation;
@@ -232,7 +293,7 @@ namespace
 					break;
 			}
 
-			switch (static_cast<AnimInterpDisk>(interp))
+			switch (static_cast<AnimInterpDisk>(diskCh.interp))
 			{
 				case AnimInterpDisk::Linear:
 					ch.interpolation = aether::assets::GltfInterpolation::Linear;
@@ -245,11 +306,11 @@ namespace
 					break;
 			}
 
-			ch.times.resize(keyCount);
-			reader.ReadRaw(ch.times.data(), keyCount * sizeof(float));
+			ch.times.resize(diskCh.keyCount);
+			reader.ReadRaw(ch.times.data(), diskCh.keyCount * sizeof(float));
 
-			ch.values.resize(keyCount);
-			for (uint32_t k = 0; k < keyCount; ++k)
+			ch.values.resize(diskCh.keyCount);
+			for (uint32_t k = 0; k < diskCh.keyCount; ++k)
 			{
 				float v4[4];
 				reader.ReadRaw(v4, sizeof(v4));
@@ -259,8 +320,56 @@ namespace
 			anim.channels.push_back(ch);
 		}
 
+		{
+			std::size_t nonEmpty = 0;
+			for (const auto& ch: anim.channels)
+			{
+				if (!ch.boneName.empty())
+				{
+					if (nonEmpty < 5)
+					{
+						AE_VERBOSE(aether::LogCategory::Animation, "  channel boneName[{}]: '{}'", nonEmpty, ch.boneName);
+					}
+					++nonEmpty;
+				}
+			}
+			AE_VERBOSE(aether::LogCategory::Animation, "add_animation: {}/{} channels have non-empty boneName", nonEmpty, anim.channels.size());
+		}
+
 		auto boneMap = BuildBoneNameMap(smc->animDb);
 		RemapAnimationByBoneName(anim, boneMap, smc->animDb);
+
+		{
+			const std::uint32_t nodeCount = smc->animDb ? smc->animDb->GetNodeCount() : 0;
+			uint32_t matched = 0, unmatched = 0, oob = 0;
+			for (const auto& ch: anim.channels)
+			{
+				if (!ch.boneName.empty())
+				{
+					if (boneMap.count(ch.boneName) > 0)
+					{
+						++matched;
+					}
+					else
+					{
+						++unmatched;
+					}
+				}
+				if (ch.nodeIndex >= nodeCount)
+				{
+					++oob;
+				}
+			}
+			if (unmatched > 0)
+			{
+				AE_WARN(aether::LogCategory::Animation, "add_animation: {}/{} channels had unmatched bone names in skeleton", unmatched, unmatched + matched);
+			}
+			if (oob > 0)
+			{
+				AE_WARN(aether::LogCategory::Animation, "add_animation: {} channels have nodeIndex >= nodeCount({}) after remap — will be skipped on GPU", oob, nodeCount);
+			}
+			AE_INFO(aether::LogCategory::Animation, "add_animation: {} channels, {} matched by name, {} total nodes in skeleton", anim.channels.size(), matched, nodeCount);
+		}
 
 		const std::uint32_t pendingIdx = static_cast<std::uint32_t>(smc->pendingExternalAnims.size());
 		smc->pendingExternalAnims.push_back(std::move(anim));
