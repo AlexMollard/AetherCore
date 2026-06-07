@@ -51,7 +51,7 @@ namespace aether
 
 		void BeginSwapchainFrame();
 		void RecreateSwapchain(class Window& window, bool enableVsync);
-		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0, std::uint64_t asyncComputeTimelineValue = 0);
+		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0, std::uint64_t asyncComputeTimelineValue = 0, std::uint64_t rootMotionSignalSemaphore = 0, std::uint64_t rootMotionSignalValue = 0);
 
 		[[nodiscard]] CommandRecorder GetCurrentCommandRecorder() const;
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;

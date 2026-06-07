@@ -13,7 +13,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "animation/AnimationBlend.hpp"
 #include "animation/AnimationCompiler.hpp"
+#include "animation/AnimationDatabase.hpp"
+#include "animation/AnimationIk.hpp"
+#include "animation/AnimationRootMotion.hpp"
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraSubsystem.hpp"
@@ -135,6 +139,28 @@ namespace aether
 			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
 		}
 
+		// ── 11. Animation systems ───────────────────────────────────────────
+		m_animationBlend = std::make_unique<AnimationBlendSystem>();
+		m_animationIk = std::make_unique<AnimationIkSystem>();
+		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
+
+		VmaAllocator allocator = m_gpu->GetVulkanContext().GetAllocator();
+		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
+
+		m_animationBlend->Init(allocator, device, 256, 128);
+		m_animationIk->Init(allocator, device, 256);
+		m_rootMotion->Init(allocator, device, 256);
+
+		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
+		m_services.Register<AnimationIkSystem>(*m_animationIk);
+		m_services.Register<AnimationRootMotionSystem>(*m_rootMotion);
+
+		RenderQueue& rq = m_rendering->GetRenderQueue();
+		rq.SetAnimationBlendSystem(m_animationBlend.get());
+		rq.SetAnimationIkSystem(m_animationIk.get());
+		rq.SetRootMotionSystem(m_rootMotion.get());
+		rq.SetHipsNodeIndex(0);
+
 		// ── 10. Swapchain recreation callback ──────────────────────────────
 		m_gpu->SetSwapchainRecreatedCallback(
 		        [this]()
@@ -164,6 +190,14 @@ namespace aether
 		m_cameras->Shutdown();
 		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.
+
+		// Animation systems (reverse of init order).
+		{
+			VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
+			m_rootMotion->Shutdown(device);
+			m_animationIk->Shutdown(device);
+			m_animationBlend->Shutdown(device);
+		}
 
 		// GPU shutdown destroys internal Vulkan resources.
 		m_gpu->Shutdown();
@@ -273,6 +307,10 @@ namespace aether
 		const auto execStart = std::chrono::steady_clock::now();
 		m_frameIndex = packet.frameIndex;
 		BeginFrame();
+
+		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
+		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
+
 		EndFrame(packet);
 		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));
 	}
@@ -283,7 +321,9 @@ namespace aether
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
-			m_gpu->SubmitAndPresent();
+			const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
+			const auto rmVal = m_frameIndex + 1;
+			m_gpu->SubmitAndPresent(0, 0, rmSem, rmVal);
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			return;
@@ -362,13 +402,16 @@ namespace aether
 
 	void AetherCore::SubmitAndAdvance()
 	{
+		const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
+		const auto rmVal = m_frameIndex + 1;
+
 		if (m_services.Get<AsyncComputeContext>().IsEnabled())
 		{
-			m_gpu->SubmitAndPresent(m_asyncSubmitSemaphore, m_asyncSubmitTimeline);
+			m_gpu->SubmitAndPresent(m_asyncSubmitSemaphore, m_asyncSubmitTimeline, rmSem, rmVal);
 		}
 		else
 		{
-			m_gpu->SubmitAndPresent();
+			m_gpu->SubmitAndPresent(0, 0, rmSem, rmVal);
 		}
 
 		++m_frameIndex;

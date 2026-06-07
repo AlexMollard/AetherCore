@@ -5,6 +5,8 @@
 #include <cstring>
 #include <stdexcept>
 
+#include "animation/AnimationBlend.hpp"
+#include "animation/AnimationIk.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "io/FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -534,6 +536,40 @@ namespace aether
 				vkCmdPipelineBarrier2(cmd, &animToNodeFlattenDep);
 			}
 
+			// ── Pass 1.3: Animation blend (cross-fade between two clips) ───────────
+			if (m_animationBlendSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && (m_debugAnimPassMask & 2u))
+			{
+				const AnimationContracts::AnimationBlendPush& blendPc = m_animationBlendSystem->GetBlendPush();
+				const std::uint32_t blendJobCount = m_animationBlendSystem->GetBlendJobCount();
+				if (blendJobCount > 0 && blendPc.jobCount > 0)
+				{
+					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
+					vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animBlend);
+					CommandRecorder(cmd).BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
+					vkCmdPushConstants(cmd, m_sharedPipelines->animBlendLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(blendPc), &blendPc);
+					{
+						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.AnimBlend");
+						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
+						vkCmdDispatch(cmd, groups, 1, 1);
+					}
+					CommandRecorder(cmd).EndDebugLabel();
+
+					const VkMemoryBarrier2 blendToFlatten{
+						.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+						.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+						.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+						.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+					};
+					const VkDependencyInfo blendDep{
+						.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+						.memoryBarrierCount = 1,
+						.pMemoryBarriers = &blendToFlatten,
+					};
+					vkCmdPipelineBarrier2(cmd, &blendDep);
+				}
+			}
+
 			m_animationSampleJobCount = 0;
 		}
 
@@ -671,6 +707,40 @@ namespace aether
 			        .pMemoryBarriers = &flattenToSkin,
 			};
 			vkCmdPipelineBarrier2(cmd, &flattenToSkinDep);
+		}
+
+		// ── Pass 1.8: IK solve (two-bone leg IK on GPU) ─────────────────────────
+		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve != VK_NULL_HANDLE)
+		{
+			const AnimationContracts::IkSolvePush& ikPc = m_animationIkSystem->GetIkSolvePush();
+			const std::uint32_t ikJobCount = m_animationIkSystem->GetIkJobCount();
+			if (ikJobCount > 0 && ikPc.jobCount > 0)
+			{
+				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
+				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->ikSolve);
+				CommandRecorder(cmd).BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
+				vkCmdPushConstants(cmd, m_sharedPipelines->ikSolveLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ikPc), &ikPc);
+				{
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.IkSolve");
+					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
+					vkCmdDispatch(cmd, groups, 1, 1);
+				}
+				CommandRecorder(cmd).EndDebugLabel();
+
+				const VkMemoryBarrier2 ikToSkin{
+					.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+					.srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+					.dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+					.dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+				};
+				const VkDependencyInfo ikDep{
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.memoryBarrierCount = 1,
+					.pMemoryBarriers = &ikToSkin,
+				};
+				vkCmdPipelineBarrier2(cmd, &ikDep);
+			}
 		}
 
 		if ((m_debugAnimPassMask & 8u) && skinJobCount > 0 && !m_debugDisableAnimation)
@@ -1129,6 +1199,92 @@ namespace aether
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
+
+		{
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://anim_blend.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(AnimationContracts::AnimationBlendPush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animBlendLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = animBlendLayout,
+			};
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &animBlend) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlend), VK_OBJECT_TYPE_PIPELINE, "Animation.AnimBlend");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlendLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.AnimBlend.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+		}
+
+		{
+			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ik_solve.spv"));
+			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
+
+			const VkPushConstantRange pushRange{
+				.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.offset = 0,
+				.size = sizeof(AnimationContracts::IkSolvePush),
+			};
+			const VkPipelineLayoutCreateInfo layoutInfo{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+				.pushConstantRangeCount = 1,
+				.pPushConstantRanges = &pushRange,
+			};
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &ikSolveLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve pipeline layout."));
+			}
+
+			const VkPipelineShaderStageCreateInfo stage{
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
+				.module = shaderModule,
+				.pName = "main",
+			};
+			const VkComputePipelineCreateInfo pipelineInfo{
+				.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+				.stage = stage,
+				.layout = ikSolveLayout,
+			};
+			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &ikSolve) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));
+			}
+
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolve), VK_OBJECT_TYPE_PIPELINE, "Animation.IkSolve");
+			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolveLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.IkSolve.Layout");
+
+			vkDestroyShaderModule(device, shaderModule, nullptr);
+		}
 	}
 
 	void RenderQueueSharedPipelines::Shutdown(VkDevice device)
@@ -1172,6 +1328,26 @@ namespace aether
 		{
 			vkDestroyPipelineLayout(device, poseInitLayout, nullptr);
 			poseInitLayout = VK_NULL_HANDLE;
+		}
+		if (animBlend != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, animBlend, nullptr);
+			animBlend = VK_NULL_HANDLE;
+		}
+		if (animBlendLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, animBlendLayout, nullptr);
+			animBlendLayout = VK_NULL_HANDLE;
+		}
+		if (ikSolve != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(device, ikSolve, nullptr);
+			ikSolve = VK_NULL_HANDLE;
+		}
+		if (ikSolveLayout != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(device, ikSolveLayout, nullptr);
+			ikSolveLayout = VK_NULL_HANDLE;
 		}
 	}
 } // namespace aether

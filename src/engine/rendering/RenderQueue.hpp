@@ -17,6 +17,9 @@
 
 namespace aether
 {
+	class AnimationBlendSystem;
+	class AnimationIkSystem;
+	class AnimationRootMotionSystem;
 	class CommandRecorder;
 	class GraphicsPipeline;
 	class Mesh;
@@ -33,6 +36,10 @@ namespace aether
 		VkPipelineLayout nodeFlattenLayout = VK_NULL_HANDLE;
 		VkPipeline poseInit = VK_NULL_HANDLE;
 		VkPipelineLayout poseInitLayout = VK_NULL_HANDLE;
+		VkPipeline animBlend = VK_NULL_HANDLE;
+		VkPipelineLayout animBlendLayout = VK_NULL_HANDLE;
+		VkPipeline ikSolve = VK_NULL_HANDLE;
+		VkPipelineLayout ikSolveLayout = VK_NULL_HANDLE;
 
 		void Initialize(VkDevice device, VkPipelineCache pipelineCache);
 		void Shutdown(VkDevice device);
@@ -148,6 +155,30 @@ namespace aether
 		void SetTracyVkCtx(TracyVkCtx ctx)
 		{
 			m_tracyVkCtx = ctx;
+		}
+
+		// Optional animation extension systems. When set, the blend/IK/root-motion
+		// passes are dispatched after the standard animation pipeline.
+		void SetAnimationBlendSystem(AnimationBlendSystem* sys)
+		{
+			m_animationBlendSystem = sys;
+		}
+
+		void SetAnimationIkSystem(AnimationIkSystem* sys)
+		{
+			m_animationIkSystem = sys;
+		}
+
+		void SetRootMotionSystem(AnimationRootMotionSystem* sys)
+		{
+			m_rootMotionSystem = sys;
+		}
+
+		// Hips node index for root motion copy: vkCmdCopyBuffer reads from
+		// global transforms buffer at (hipNodeIdx * 64) bytes offset.
+		void SetHipsNodeIndex(std::uint32_t hipsNodeIdx)
+		{
+			m_hipsNodeIdx = hipsNodeIdx;
 		}
 
 		// Write inputs and dispatch animation/cull compute.
@@ -278,6 +309,11 @@ namespace aether
 		std::uint32_t m_animationFrameCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 		TracyVkCtx m_tracyVkCtx = nullptr;
+
+		AnimationBlendSystem* m_animationBlendSystem = nullptr;
+		AnimationIkSystem* m_animationIkSystem = nullptr;
+		AnimationRootMotionSystem* m_rootMotionSystem = nullptr;
+		std::uint32_t m_hipsNodeIdx = 0;
 
 		GpuTimestampPool* m_timestampPool = nullptr;
 

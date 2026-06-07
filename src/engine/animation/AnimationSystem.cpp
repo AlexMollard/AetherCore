@@ -37,5 +37,21 @@ namespace aether
 				}
 			}
 		}
+
+		auto blendView = world.View<AnimationBlendComponent>();
+		for (auto [entity, blendComp] : blendView.each())
+		{
+			if (!blendComp.inTransition)
+				continue;
+
+			blendComp.blendWeight -= blendComp.transitionSpeed * dt;
+			if (blendComp.blendWeight <= 0.0f)
+			{
+				blendComp.blendWeight = 1.0f;
+				blendComp.primaryClip = blendComp.secondaryClip;
+				blendComp.secondaryClip = 0;
+				blendComp.inTransition = false;
+			}
+		}
 	}
 } // namespace aether

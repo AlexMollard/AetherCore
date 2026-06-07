@@ -309,5 +309,103 @@ namespace aether
 		static_assert(offsetof(PoseInitPush, sampledPosesAddr) == 32);
 		static_assert(offsetof(PoseInitPush, jobCount) == 40);
 		static_assert(offsetof(PoseInitPush, nodeCountPerJob) == 44);
+
+		// Extended sample job with secondary-clip blending support.
+		// primaryClipIndex/primaryTime sample the base animation.
+		// When secondaryClipIndex is non-zero and blendWeight < 1.0, the GPU
+		// samples secondaryClipIndex/secondaryTime and lerps the resulting
+		// translations by (1 - blendWeight), leaving rotations slerped.
+		struct AnimatorBlendJob
+		{
+			std::uint32_t primaryClipIndex = 0;
+			float primaryTime = 0.0f;
+			std::uint32_t secondaryClipIndex = 0;
+			float secondaryTime = 0.0f;
+			float blendWeight = 1.0f; // 1.0=fully primary, 0.0=fully secondary
+			std::uint32_t nodePoseOffset = 0;
+			std::uint32_t nodeCount = 0;
+			VkDeviceAddress clipsAddr = 0;
+			VkDeviceAddress channelsAddr = 0;
+			VkDeviceAddress timesAddr = 0;
+			VkDeviceAddress valuesAddr = 0;
+			std::uint32_t clipCount = 0;
+			std::uint32_t _pad0 = 0;
+		};
+
+		static_assert(sizeof(AnimatorBlendJob) == 72, "AnimatorBlendJob layout changed - update shaders/include/AnimationContracts.slangh.");
+
+		// Push constant for the anim blend compute pass.
+		// The blend pass reads AnimatorBlendJob entries from a GPU buffer, samples
+		// two clip poses and lerps them, writing flat node poses to sampledPosesAddr.
+		struct AnimationBlendPush
+		{
+			VkDeviceAddress animDbClipsAddr = 0;
+			VkDeviceAddress animDbChannelsAddr = 0;
+			VkDeviceAddress animDbTimesAddr = 0;
+			VkDeviceAddress animDbValuesAddr = 0;
+			VkDeviceAddress bindTranslationsAddr = 0;
+			VkDeviceAddress bindRotationsAddr = 0;
+			VkDeviceAddress bindScalesAddr = 0;
+			VkDeviceAddress blendJobsAddr = 0;
+			VkDeviceAddress sampledPosesAddr = 0;
+			std::uint32_t jobCount = 0;
+			std::uint32_t _pad0 = 0;
+		};
+
+		static_assert(sizeof(AnimationBlendPush) == 80, "AnimationBlendPush layout changed - update shaders/include/AnimationContracts.slangh.");
+
+		// Per-entity IK solve job. Each thread handles one entity's two-bone leg IK.
+		// Bone indices are looked up once at spawn and stored in IkTargetsComponent.
+		// The pass reads global transforms (which include animation + blend), applies
+		// foot-ground corrections computed by the CPU raycast pass, and writes
+		// corrected global transforms back so the skinned mesh renders the planted feet.
+		struct IkSolveJob
+		{
+			std::uint32_t hipsNodeIdx = UINT32_MAX;
+			std::uint32_t leftKneeNodeIdx = UINT32_MAX;
+			std::uint32_t leftFootNodeIdx = UINT32_MAX;
+			std::uint32_t rightKneeNodeIdx = UINT32_MAX;
+			std::uint32_t rightFootNodeIdx = UINT32_MAX;
+			float leftUpperLegLen = 0.0f;
+			float leftLowerLegLen = 0.0f;
+			float rightUpperLegLen = 0.0f;
+			float rightLowerLegLen = 0.0f;
+			float leftKneeBendSign = 1.0f;
+			float rightKneeBendSign = 1.0f;
+			VkDeviceAddress globalTransformsAddr = 0;
+			VkDeviceAddress ikResultsAddr = 0; // CPU-written per-entity foot ground data
+			std::uint32_t entityId = 0;
+			std::uint32_t _pad0 = 0;
+		};
+
+		static_assert(sizeof(IkSolveJob) == 72, "IkSolveJob layout changed - update shaders/include/AnimationContracts.slangh.");
+
+		// Push constant for the IK solve compute pass.
+		struct IkSolvePush
+		{
+			VkDeviceAddress globalTransformsAddr = 0;
+			VkDeviceAddress ikJobsAddr = 0;
+			VkDeviceAddress ikGroundResultsAddr = 0; // VkBuffer of IkGroundResult entries
+			VkDeviceAddress nodeParentsAddr = 0;
+			VkDeviceAddress depthSortedNodesAddr = 0;
+			std::uint32_t jobCount = 0;
+			std::uint32_t nodeCount = 0;
+		};
+
+		static_assert(sizeof(IkSolvePush) == 48, "IkSolvePush layout changed - update shaders/include/AnimationContracts.slangh.");
+
+		// Per-entity IK ground result written by CPU and read by GPU IK solver.
+		// Two entries per entity: [0] = left foot, [1] = right foot.
+		struct IkGroundResult
+		{
+			std::uint32_t entityId = 0;
+			std::uint32_t footIndex = 0; // 0=left, 1=right
+			float groundY = 0.0f;
+			float footOffsetY = 0.0f; // vertical correction to apply (0 = in air)
+			std::uint32_t _pad0 = 0;
+			std::uint32_t _pad1 = 0;
+		};
+
+		static_assert(sizeof(IkGroundResult) == 24, "IkGroundResult layout changed - update shaders/include/AnimationContracts.slangh.");
 	} // namespace AnimationContracts
 } // namespace aether

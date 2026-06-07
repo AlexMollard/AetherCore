@@ -13,6 +13,9 @@ namespace aether
 	enum class GpuFormat : std::uint32_t;
 	struct FrameConstants;
 
+	class AnimationBlendSystem;
+	class AnimationIkSystem;
+	class AnimationRootMotionSystem;
 	class GpuDevice;
 	class CameraSubsystem;
 	class RenderingSubsystem;
@@ -76,6 +79,10 @@ namespace aether
 		std::unique_ptr<GpuDevice> m_gpu;
 		std::unique_ptr<CameraSubsystem> m_cameras;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
+
+		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
+		std::unique_ptr<AnimationIkSystem> m_animationIk;
+		std::unique_ptr<AnimationRootMotionSystem> m_rootMotion;
 
 		CommandRecorder m_currentRecorder;
 		std::uint64_t m_frameIndex = 0;

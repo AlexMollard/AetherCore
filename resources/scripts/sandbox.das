@@ -47,6 +47,7 @@ var g_plasma_sphere : uint = 0u;
 var g_player : uint = 0u;
 var g_player_idle_clip : int = 0;
 var g_player_walk_clip : int = -1; // -1 means not yet added
+var g_player_ik_enabled : bool = true;
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
 
@@ -269,6 +270,9 @@ def on_attach(world : World?)
 	{
 		print("Walking animation added as clip {g_player_walk_clip}\n");
 		compile_animations(world, g_player);
+		// IK bone indices and leg lengths are initialized from C++ after compile.
+		set_ik_enabled(world, g_player, true);
+		print("IK foot planting enabled for player\n");
 	}
 	else
 	{
@@ -467,20 +471,31 @@ def on_update(world : World?)
 
 	if (is_action_down("move_forward"))
 	{
-		if (g_player_walk_clip >= 0 && currentClip != g_player_walk_clip)
+		if (g_player_walk_clip >= 0)
 		{
-			set_animation(world, g_player, g_player_walk_clip);
+			// Use blend transition for smooth cross-fade to walk
+			set_animation_blend(world, g_player, g_player_walk_clip, 3.0);
 			set_playback_speed(world, g_player, 0.8);
 		}
 	}
 	else
 	{
-		// Switch back to idle when not moving
-		if (g_player_idle_clip >= 0 && currentClip != g_player_idle_clip)
+		// Use blend transition back to idle
+		if (g_player_idle_clip >= 0)
 		{
-			set_animation(world, g_player, g_player_idle_clip);
+			set_animation_blend(world, g_player, g_player_idle_clip, 3.0);
 			set_playback_speed(world, g_player, 1.0);
 		}
+	}
+
+	// ── Toggle IK foot planting with 'I' key ─────────────────────────────
+	if (is_action_pressed("toggle_ik"))
+	{
+		g_player_ik_enabled = !g_player_ik_enabled;
+		set_ik_enabled(world, g_player, g_player_ik_enabled);
+		var ikState = g_player_ik_enabled ? "ENABLED" : "DISABLED";
+		var footContact = get_foot_contact(world, g_player, 0) ? "L foot planted" : "L foot in air";
+		print("IK {ikState} ({footContact})\n");
 	}
 }
 

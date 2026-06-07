@@ -569,6 +569,118 @@ namespace
 		}
 	}
 
+	// ── Animation blend ──────────────────────────────────────────────────────
+
+	void das_set_animation_blend(aether::World* w, uint32_t id, int32_t secondaryClipIndex, float transitionSpeed)
+	{
+		if (secondaryClipIndex < 0)
+		{
+			return;
+		}
+		const auto uIdx = static_cast<std::uint32_t>(secondaryClipIndex);
+		float speed = transitionSpeed > 0.f ? transitionSpeed : 4.0f;
+
+		const aether::Entity entity{id};
+		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(entity))
+		{
+			auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(entity));
+			blend.secondaryClip = uIdx;
+			blend.blendWeight = 1.0f;
+			blend.transitionSpeed = speed;
+			blend.inTransition = true;
+		}
+		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent& smc)
+		{
+			const aether::Entity spawnedEntity{id};
+			auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(spawnedEntity));
+			blend.secondaryClip = uIdx;
+			blend.blendWeight = 1.0f;
+			blend.transitionSpeed = speed;
+			blend.inTransition = true;
+		});
+	}
+
+	// ── IK ───────────────────────────────────────────────────────────────────
+
+	void das_set_ik_enabled(aether::World* w, uint32_t id, bool enabled)
+	{
+		const aether::Entity entity{id};
+		if (auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity))
+		{
+			ikComp->enabled = enabled;
+		}
+		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&)
+		{
+			if (auto* comp = w->TryGet<aether::IkTargetsComponent>(aether::Entity{id}))
+			{
+				comp->enabled = enabled;
+			}
+		});
+	}
+
+	bool das_get_foot_contact(aether::World* w, uint32_t id, int32_t footIndex)
+	{
+		const aether::Entity entity{id};
+		const auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
+		if (!ikComp)
+		{
+			return false;
+		}
+		return footIndex == 0 ? ikComp->leftFootPlanted : ikComp->rightFootPlanted;
+	}
+
+	float das_get_foot_offset_y(aether::World* w, uint32_t id, int32_t footIndex)
+	{
+		const aether::Entity entity{id};
+		const auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
+		if (!ikComp)
+		{
+			return 0.f;
+		}
+		return footIndex == 0 ? ikComp->leftFootOffset.y : ikComp->rightFootOffset.y;
+	}
+
+	// ── Root motion ──────────────────────────────────────────────────────────
+
+	void das_set_root_motion_enabled(aether::World* w, uint32_t id, bool enabled)
+	{
+		const aether::Entity entity{id};
+		if (auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity))
+		{
+			rmComp->enabled = enabled;
+		}
+		ForEachSpawnedSmc(w, id, [&](aether::SkinnedMeshComponent&)
+		{
+			if (auto* comp = w->TryGet<aether::RootMotionComponent>(aether::Entity{id}))
+			{
+				comp->enabled = enabled;
+			}
+		});
+	}
+
+	bool das_get_root_motion_enabled(aether::World* w, uint32_t id)
+	{
+		const aether::Entity entity{id};
+		const auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity);
+		return rmComp ? rmComp->enabled : false;
+	}
+
+	void das_get_root_motion_delta(aether::World* w, uint32_t id, float& outX, float& outY, float& outZ)
+	{
+		const aether::Entity entity{id};
+		const auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity);
+		if (rmComp)
+		{
+			outX = rmComp->accumulatedDelta.x;
+			outY = rmComp->accumulatedDelta.y;
+			outZ = rmComp->accumulatedDelta.z;
+		}
+		else
+		{
+			outX = outY = outZ = 0.f;
+		}
+	}
+
 } // namespace
 
 namespace aether::app::scripting
@@ -601,6 +713,19 @@ namespace aether::app::scripting
 			Bind<das_get_animation_name>(lib, "get_animation_name", SE::accessExternal);
 			Bind<das_get_animation_duration>(lib, "get_animation_duration", SE::accessExternal);
 			Bind<das_find_animation>(lib, "find_animation", SE::accessExternal);
+
+			// Blend
+			Bind<das_set_animation_blend>(lib, "set_animation_blend", SE::modifyExternal);
+
+			// IK
+			Bind<das_set_ik_enabled>(lib, "set_ik_enabled", SE::modifyExternal);
+			Bind<das_get_foot_contact>(lib, "get_foot_contact", SE::accessExternal);
+			Bind<das_get_foot_offset_y>(lib, "get_foot_offset_y", SE::accessExternal);
+
+			// Root motion
+			Bind<das_set_root_motion_enabled>(lib, "set_root_motion_enabled", SE::modifyExternal);
+			Bind<das_get_root_motion_enabled>(lib, "get_root_motion_enabled", SE::accessExternal);
+			Bind<das_get_root_motion_delta>(lib, "get_root_motion_delta", SE::accessExternal);
 
 			// Entity iteration (name kept for script backward compatibility)
 			Bind<das_for_each_with_animator>(lib, "for_each_with_animator", SE::modifyExternal);

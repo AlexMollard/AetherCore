@@ -5,6 +5,10 @@
 // Keep in sync with src/engine/AnimationDatabase.hpp,
 // src/engine/RenderQueue.hpp, and src/engine/RenderQueueGpuContracts.hpp.
 
+#ifndef UINT32_MAX
+#define UINT32_MAX 0xFFFFFFFFu
+#endif
+
 float4 SafeNormalize(float4 v)
 {
     return (v.x == 0.0f && v.y == 0.0f && v.z == 0.0f && v.w == 0.0f)
@@ -115,6 +119,80 @@ struct AnimationSamplePush
     [[vk::offset(64)]] uint64_t sampledPosesAddr;
     [[vk::offset(72)]] uint jobCount;
     [[vk::offset(76)]] uint clipCount;
+};
+
+struct AnimatorBlendJob
+{
+    [[vk::offset(0)]] uint primaryClipIndex;
+    [[vk::offset(4)]] float primaryTime;
+    [[vk::offset(8)]] uint secondaryClipIndex;
+    [[vk::offset(12)]] float secondaryTime;
+    [[vk::offset(16)]] float blendWeight;
+    [[vk::offset(20)]] uint nodePoseOffset;
+    [[vk::offset(24)]] uint nodeCount;
+    [[vk::offset(28)]] uint _padReserved;
+    [[vk::offset(32)]] uint64_t clipsAddr;
+    [[vk::offset(40)]] uint64_t channelsAddr;
+    [[vk::offset(48)]] uint64_t timesAddr;
+    [[vk::offset(56)]] uint64_t valuesAddr;
+    [[vk::offset(64)]] uint clipCount;
+    [[vk::offset(68)]] uint _pad0;
+};
+
+struct AnimationBlendPush
+{
+    [[vk::offset(0)]] uint64_t animDbClipsAddr;
+    [[vk::offset(8)]] uint64_t animDbChannelsAddr;
+    [[vk::offset(16)]] uint64_t animDbTimesAddr;
+    [[vk::offset(24)]] uint64_t animDbValuesAddr;
+    [[vk::offset(32)]] uint64_t bindTranslationsAddr;
+    [[vk::offset(40)]] uint64_t bindRotationsAddr;
+    [[vk::offset(48)]] uint64_t bindScalesAddr;
+    [[vk::offset(56)]] uint64_t blendJobsAddr;
+    [[vk::offset(64)]] uint64_t sampledPosesAddr;
+    [[vk::offset(72)]] uint jobCount;
+    [[vk::offset(76)]] uint _pad0;
+};
+
+struct IkSolveJob
+{
+    [[vk::offset(0)]] uint hipsNodeIdx;
+    [[vk::offset(4)]] uint leftKneeNodeIdx;
+    [[vk::offset(8)]] uint leftFootNodeIdx;
+    [[vk::offset(12)]] uint rightKneeNodeIdx;
+    [[vk::offset(16)]] uint rightFootNodeIdx;
+    [[vk::offset(20)]] float leftUpperLegLen;
+    [[vk::offset(24)]] float leftLowerLegLen;
+    [[vk::offset(28)]] float rightUpperLegLen;
+    [[vk::offset(32)]] float rightLowerLegLen;
+    [[vk::offset(36)]] float leftKneeBendSign;
+    [[vk::offset(40)]] float rightKneeBendSign;
+    [[vk::offset(44)]] uint _pad0;
+    [[vk::offset(48)]] uint64_t globalTransformsAddr;
+    [[vk::offset(56)]] uint64_t ikResultsAddr;
+    [[vk::offset(64)]] uint entityId;
+    [[vk::offset(68)]] uint _pad1;
+};
+
+struct IkSolvePush
+{
+    [[vk::offset(0)]] uint64_t globalTransformsAddr;
+    [[vk::offset(8)]] uint64_t ikJobsAddr;
+    [[vk::offset(16)]] uint64_t ikGroundResultsAddr;
+    [[vk::offset(24)]] uint64_t nodeParentsAddr;
+    [[vk::offset(32)]] uint64_t depthSortedNodesAddr;
+    [[vk::offset(40)]] uint jobCount;
+    [[vk::offset(44)]] uint nodeCount;
+};
+
+struct IkGroundResult
+{
+    [[vk::offset(0)]] uint entityId;
+    [[vk::offset(4)]] uint footIndex;
+    [[vk::offset(8)]] float groundY;
+    [[vk::offset(12)]] float footOffsetY;
+    [[vk::offset(16)]] uint _pad0;
+    [[vk::offset(20)]] uint _pad1;
 };
 
 struct PoseInitPush

@@ -92,4 +92,5 @@ def init_default_bindings()
     register_action("move_backward",  KEY_S,          0);
     register_action("move_left",      KEY_A,          0);
     register_action("move_right",     KEY_D,          0);
+    register_action("toggle_ik",      KEY_I,          0);
 }
