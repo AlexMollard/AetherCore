@@ -1,0 +1,15 @@
+C:\Users\alexm\source\repos\AetherCore\.github\workflows\cmake-multi-platform.yml
+C:\Users\alexm\source\repos\AetherCore\AGENTS.md
+C:\Users\alexm\source\repos\AetherCore\CMakeLists.txt
+C:\Users\alexm\source\repos\AetherCore\README.md
+C:\Users\alexm\source\repos\AetherCore\src\app\CMakeLists.txt
+C:\Users\alexm\source\repos\AetherCore\src\engine\CMakeLists.txt
+C:\Users\alexm\source\repos\AetherCore\tools\assetpack\CMakeLists.txt
+C:\Users\alexm\source\repos\AetherCore\tools\scripts\CMakeLists.txt
+C:\Users\alexm\source\repos\AetherCore\resources\materials\MyPBRFolder\Grass004_1K-JPG_AmbientOcclusion.jpg
+C:\Users\alexm\source\repos\AetherCore\resources\materials\MyPBRFolder\Grass004_1K-JPG_Color.jpg
+C:\Users\alexm\source\repos\AetherCore\resources\materials\MyPBRFolder\Grass004_1K-JPG_Displacement.jpg
+C:\Users\alexm\source\repos\AetherCore\resources\materials\MyPBRFolder\Grass004_1K-JPG_NormalGL.jpg
+C:\Users\alexm\source\repos\AetherCore\resources\materials\MyPBRFolder\Grass004_1K-JPG_Roughness.jpg
+C:\Users\alexm\source\repos\AetherCore\resources\models\Fox\Texture.png
+C:\Users\alexm\source\repos\AetherCore\resources\textures\tex_DebugUVTiles.png
