@@ -216,6 +216,7 @@ namespace aether
 		struct AnimSampleBatch
 		{
 			const AnimationDatabase* db;
+			std::uint32_t dbGeneration;
 			std::uint32_t startJob;
 			std::uint32_t count;
 		};
@@ -223,6 +224,7 @@ namespace aether
 		struct SkinPaletteBatch
 		{
 			const AnimationDatabase* db;
+			std::uint32_t dbGeneration;
 			std::uint32_t startJob;
 			std::uint32_t count;
 		};
@@ -254,13 +256,19 @@ namespace aether
 			const GraphicsPipeline* batchPipeline = m_commands[i].pipeline;
 			const Mesh* batchMesh = m_commands[i].mesh;
 
-			const std::uint32_t batchOutputStart = globalDrawIdx;
-
 			std::size_t batchEnd = i;
 			while (batchEnd < m_commands.size() && m_commands[batchEnd].pipeline == batchPipeline && m_commands[batchEnd].mesh == batchMesh)
 			{
 				++batchEnd;
 			}
+
+			if (batchMesh == nullptr || !batchMesh->IsAlive() || !batchMesh->IsValid() || batchMesh->GetIndexBuffer() == VK_NULL_HANDLE)
+			{
+				i = batchEnd;
+				continue;
+			}
+
+			const std::uint32_t batchOutputStart = globalDrawIdx;
 			const std::uint32_t batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
 
 			AE_ASSERT_ALWAYS(batchIdx < m_maxBatches, "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
@@ -269,10 +277,16 @@ namespace aether
 			{
 				const DrawCommand& dc = m_commands[j];
 
+				if (dc.mesh && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || dc.mesh->GetIndexBuffer() == VK_NULL_HANDLE))
+				{
+					continue;
+				}
+
 				std::uint32_t skinPaletteOffset = 0;
 				std::uint32_t skinJointCount = 0;
 				const AnimationDatabase* drawAnimDb = dc.animDb;
-				const bool dbValid = drawAnimDb != nullptr && drawAnimDb->IsValid();
+				const bool generationValid = drawAnimDb != nullptr && (dc.animDbGeneration == 0 || (drawAnimDb->IsAlive() && dc.animDbGeneration == drawAnimDb->GetGeneration()));
+				const bool dbValid = drawAnimDb != nullptr && drawAnimDb->IsValid() && generationValid;
 				const std::uint32_t drawClipCount = dbValid ? drawAnimDb->GetClipCount() : 0u;
 				const std::uint32_t drawNodeCount = dbValid ? drawAnimDb->GetNodeCount() : 0u;
 				const std::uint32_t drawSkinCount = dbValid ? drawAnimDb->GetSkinCount() : 0u;
@@ -326,7 +340,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(animSampleBatchCount < 64, "RenderQueue: too many animation sample batches");
-							animSampleBatches[animSampleBatchCount++] = {drawAnimDb, sampleJobsThisFrame, 1u};
+							animSampleBatches[animSampleBatchCount++] = {drawAnimDb, drawAnimDb ? drawAnimDb->GetGeneration() : 0, sampleJobsThisFrame, 1u};
 						}
 
 						if (skinPaletteBatchCount > 0 && skinPaletteBatches[skinPaletteBatchCount - 1].db == drawAnimDb)
@@ -336,7 +350,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(skinPaletteBatchCount < 64, "RenderQueue: too many skin palette batches");
-							skinPaletteBatches[skinPaletteBatchCount++] = {drawAnimDb, skinJobCount, 1u};
+							skinPaletteBatches[skinPaletteBatchCount++] = {drawAnimDb, drawAnimDb ? drawAnimDb->GetGeneration() : 0, skinJobCount, 1u};
 						}
 
 						++sampleJobsThisFrame;
@@ -372,6 +386,7 @@ namespace aether
 			m_batchRenderInfos.push_back(BatchRenderInfo{
 			        .pipeline = batchPipeline,
 			        .mesh = batchMesh,
+			        .meshGeneration = batchMesh ? batchMesh->GetGeneration() : 0,
 			        .outputStart = batchOutputStart,
 			        .drawCount = batchDrawCount,
 			});
@@ -435,7 +450,15 @@ namespace aether
 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 				{
 					const auto& batch = animSampleBatches[bi];
+					if (batch.db == nullptr || !batch.db->IsAlive() || batch.dbGeneration != batch.db->GetGeneration())
+					{
+						continue;
+					}
 					const std::uint32_t nodeCount = batch.db->GetNodeCount();
+					if (nodeCount == 0)
+					{
+						continue;
+					}
 					AE_VERBOSE(LogCategory::Animation,
 					        "  PoseInit Batch[{}]: nodeCount={} jobCount={} bindT=0x{:x} bindR=0x{:x} bindS=0x{:x}",
 					        bi,
@@ -631,6 +654,15 @@ namespace aether
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
 				const auto& batch = animSampleBatches[bi];
+				if (batch.db == nullptr || !batch.db->IsAlive() || batch.dbGeneration != batch.db->GetGeneration())
+				{
+					continue;
+				}
+				const std::uint32_t depthAddr = batch.db->GetDepthRangesAddr();
+				if (depthAddr == 0)
+				{
+					continue;
+				}
 				if (bi == 0 && m_animationIkSystem != nullptr)
 				{
 					firstBatchNodeCount = batch.db->GetNodeCount();
@@ -763,6 +795,15 @@ namespace aether
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
 			{
 				const auto& batch = skinPaletteBatches[bi];
+				if (batch.db == nullptr || !batch.db->IsAlive() || batch.dbGeneration != batch.db->GetGeneration())
+				{
+					continue;
+				}
+				const std::uint64_t skinMetasAddr = batch.db->GetSkinMetasAddr();
+				if (skinMetasAddr == 0)
+				{
+					continue;
+				}
 				const AnimationContracts::SkinPalettePush skinPc{
 				        .jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
 				        .dstPaletteAddr = currSkinPaletteAddr,
@@ -994,10 +1035,8 @@ namespace aether
 				recorder.PushConstants(activePipeline->GetLayout(), sharedPc);
 			}
 
-			if (batch.mesh != nullptr)
+			if (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration && batch.mesh->GetIndexBuffer() != VK_NULL_HANDLE)
 			{
-				// Vertex data is fetched via BDA in the vertex shader (DrawInstanceData.vertexBufferAddr).
-				// Only the index buffer needs binding to drive SV_VertexID via fixed-function fetch.
 				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
 				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
 				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)
@@ -1011,7 +1050,7 @@ namespace aether
 
 			if (m_debugBypassIndirect)
 			{
-				const std::uint32_t indexCount = (batch.mesh != nullptr) ? batch.mesh->GetIndexCount() : 0u;
+				const std::uint32_t indexCount = (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration) ? batch.mesh->GetIndexCount() : 0u;
 				for (std::uint32_t local = 0; local < batch.drawCount; ++local)
 				{
 					recorder.DrawIndexed(indexCount, 1u, 0u, 0, batch.outputStart + local);
@@ -1029,6 +1068,7 @@ namespace aether
 	void RenderQueue::Clear(std::uint32_t slot)
 	{
 		m_commandSlots[slot % kFramesInFlight].clear();
+		m_batchRenderInfos.clear();
 	}
 
 	bool RenderQueue::IsEmpty(std::uint32_t slot) const

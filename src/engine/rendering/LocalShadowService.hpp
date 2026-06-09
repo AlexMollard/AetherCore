@@ -88,6 +88,14 @@ namespace aether
 			return m_lightShadowIndices;
 		}
 
+		void ClearAllQueues()
+		{
+			for (std::uint32_t i = 0; i < RenderQueue::kFramesInFlight; ++i)
+			{
+				m_shadowRenderQueue.Clear(i);
+			}
+		}
+
 	private:
 		struct PerLightShadow
 		{

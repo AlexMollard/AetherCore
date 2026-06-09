@@ -41,6 +41,11 @@ namespace aether
 			const auto& meshComp = view.get<const MeshComponent>(enttEntity);
 			const auto& transformComp = view.get<const TransformComponent>(enttEntity);
 
+			if (!meshComp.mesh || !meshComp.mesh->IsAlive())
+			{
+				continue;
+			}
+
 			std::uint32_t materialIndex = Material::kNoTexture;
 			if (const auto* material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
 			{
@@ -54,7 +59,7 @@ namespace aether
 			const AnimationDatabase* animDb = nullptr;
 			if (const auto* smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
-				if (smc->animDb && smc->animDb->IsValid())
+				if (smc->animDb && smc->animDb->IsAlive() && smc->animDb->IsValid())
 				{
 					skinIndex = static_cast<std::int32_t>(smc->skinIndex);
 					skinJointCount = smc->jointCount;
@@ -75,6 +80,8 @@ namespace aether
 			        .animTime = animTime,
 			        .worldBoundingSphere = TransformBoundingSphere(meshComp.mesh->GetBoundingSphere(), transformComp.localToWorld),
 			        .animDb = animDb,
+			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
+			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
 			});
 		}
 	}
@@ -90,6 +97,7 @@ namespace aether
 			        .instanceCount = 1,
 			        .modelMatrix = obj.transform,
 			        .materialIndex = obj.desc.materialIndex,
+			        .meshGeneration = obj.desc.mesh ? obj.desc.mesh->GetGeneration() : 0,
 			});
 		}
 	}

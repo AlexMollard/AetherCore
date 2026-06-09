@@ -54,6 +54,16 @@ namespace aether::app::scripting
 			m_reloadRequested = false;
 		}
 
+		[[nodiscard]] bool IsReloadInProgress() const
+		{
+			return m_reloadInProgress;
+		}
+
+		void SetReloadInProgress(bool inProgress)
+		{
+			m_reloadInProgress = inProgress;
+		}
+
 		// Delete the das::Context inside a handle and reset it to invalid.
 		// Must be called instead of `delete handle.ctx` because das::Context is
 		// only forward-declared in ScriptHandle.hpp.
@@ -92,6 +102,7 @@ namespace aether::app::scripting
 	private:
 		bool m_modulesRegistered = false;
 		bool m_reloadRequested = false;
+		bool m_reloadInProgress = false;
 		std::string m_lastError;
 		std::vector<std::string> m_pendingErrors;
 		bool m_errorsCleared = false;

@@ -131,6 +131,7 @@ namespace aether
 	        VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, VkDeviceAddress vertexDeviceAddress, VkDeviceAddress indexDeviceAddress)
 	{
 		Mesh mesh;
+		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
 		// m_allocator intentionally left null - Destroy() skips vmaDestroyBuffer for views.
 		mesh.m_buffer = vertexBuffer;
 		mesh.m_vertexCount = vertexCount;
@@ -209,7 +210,9 @@ namespace aether
 	        m_indexDeviceAddress(other.m_indexDeviceAddress),
 	        m_aabbMin(other.m_aabbMin),
 	        m_aabbMax(other.m_aabbMax),
-	        m_boundingSphere(other.m_boundingSphere)
+	        m_boundingSphere(other.m_boundingSphere),
+	        m_aliveSentinel(other.m_aliveSentinel),
+	        m_generation(other.m_generation)
 	{
 		other.m_device = VK_NULL_HANDLE;
 		other.m_allocator = nullptr;
@@ -226,6 +229,8 @@ namespace aether
 		other.m_aabbMin = glm::vec3(0.0f);
 		other.m_aabbMax = glm::vec3(0.0f);
 		other.m_boundingSphere = glm::vec4(0.0f);
+		other.m_aliveSentinel = 0;
+		other.m_generation = 0;
 	}
 
 	Mesh& Mesh::operator=(Mesh&& other) noexcept
@@ -249,6 +254,8 @@ namespace aether
 			m_aabbMin = other.m_aabbMin;
 			m_aabbMax = other.m_aabbMax;
 			m_boundingSphere = other.m_boundingSphere;
+			m_aliveSentinel = other.m_aliveSentinel;
+			m_generation = other.m_generation;
 
 			other.m_device = VK_NULL_HANDLE;
 			other.m_allocator = nullptr;
@@ -265,12 +272,15 @@ namespace aether
 			other.m_aabbMin = glm::vec3(0.0f);
 			other.m_aabbMax = glm::vec3(0.0f);
 			other.m_boundingSphere = glm::vec4(0.0f);
+			other.m_aliveSentinel = 0;
+			other.m_generation = 0;
 		}
 		return *this;
 	}
 
 	void Mesh::Destroy()
 	{
+		++m_generation;
 		if (m_indexBuffer != VK_NULL_HANDLE && m_allocator != nullptr)
 		{
 			vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
@@ -289,5 +299,6 @@ namespace aether
 		m_vertexCount = 0;
 		m_vertexByteOffset = 0;
 		m_indexByteOffset = 0;
+		m_aliveSentinel = 0;
 	}
 } // namespace aether

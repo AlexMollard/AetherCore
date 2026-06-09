@@ -59,6 +59,8 @@ namespace aether
 		float animTime = 0.0f;                     // active clip time for GPU sampling
 		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
 		const AnimationDatabase* animDb = nullptr; // per-draw animation database for GPU sampling
+		std::uint32_t animDbGeneration = 0;        // generation counter for validity check
+		std::uint32_t meshGeneration = 0;          // generation counter for mesh validity check
 	};
 
 	// Collects draws, runs cull/animation compute, then emits indirect draws.
@@ -265,6 +267,7 @@ namespace aether
 		{
 			const GraphicsPipeline* pipeline = nullptr;
 			const Mesh* mesh = nullptr;
+			std::uint32_t meshGeneration = 0;
 			std::uint32_t outputStart = 0; // first slot in output indirect buffer
 			std::uint32_t drawCount = 0;   // capacity = max surviving draws
 		};

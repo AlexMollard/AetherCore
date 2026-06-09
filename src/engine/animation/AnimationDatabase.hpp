@@ -68,13 +68,24 @@ namespace aether
 		};
 
 		AnimationDatabase() = default;
-		~AnimationDatabase() = default;
+		~AnimationDatabase()
+		{
+			++m_generation;
+			m_aliveSentinel = 0;
+		}
 
 		AnimationDatabase(const AnimationDatabase&) = delete;
 		AnimationDatabase& operator=(const AnimationDatabase&) = delete;
 
 		AnimationDatabase(AnimationDatabase&&) noexcept = default;
 		AnimationDatabase& operator=(AnimationDatabase&&) noexcept = default;
+
+		static constexpr std::uint32_t kAliveSentinel = 0xABCD1234u;
+
+		[[nodiscard]] bool IsAlive() const
+		{
+			return m_aliveSentinel == kAliveSentinel;
+		}
 
 		// Build database from a glTF asset's animation collection.
 		// ctx / uploadPool must outlive the Create call (not stored).
@@ -159,6 +170,11 @@ namespace aether
 		[[nodiscard]] VkDeviceAddress GetDepthRangesAddr() const
 		{
 			return m_depthRangesAddr;
+		}
+
+		[[nodiscard]] std::uint32_t GetGeneration() const
+		{
+			return m_generation;
 		}
 
 		[[nodiscard]] std::uint32_t GetDepthCount() const
@@ -300,5 +316,7 @@ namespace aether
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_skinCount = 0;
 		std::uint32_t m_depthCount = 0;
+		std::uint32_t m_generation{0};
+		std::uint32_t m_aliveSentinel = 0xABCD1234u;
 	};
 } // namespace aether

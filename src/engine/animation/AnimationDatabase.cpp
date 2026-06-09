@@ -31,7 +31,7 @@ namespace aether
 
 		if (asset.animations.empty())
 		{
-			return db;
+			return std::move(db);
 		}
 
 		// Validate animation channel node indices before building GPU data.
@@ -333,7 +333,7 @@ namespace aether
 		db.m_times = std::move(allTimes);
 		db.m_values = std::move(allValues);
 
-		return db;
+		return std::move(db);
 	}
 
 	void AnimationDatabase::Destroy()

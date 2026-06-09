@@ -54,12 +54,47 @@ namespace aether
 		}
 	}
 
+	std::atomic<bool> RenderThread::s_reloadInProgress{false};
+
+	void RenderThread::SetReloadInProgress(bool inProgress)
+	{
+		s_reloadInProgress.store(inProgress, std::memory_order_release);
+	}
+
+	bool RenderThread::IsReloadInProgress()
+	{
+		return s_reloadInProgress.load(std::memory_order_acquire);
+	}
+
 	void RenderThread::ThreadLoop()
 	{
 		AE_PROFILE_THREAD("RenderThread");
 
 		while (!m_shutdown)
 		{
+			// Check reload flag BEFORE reading new frame.
+			// This ensures we don't start a new frame while reload is in progress.
+			if (RenderThread::IsReloadInProgress())
+			{
+				// Wait for any in-flight frame to complete before going idle.
+				// This prevents threading errors when main thread calls WaitIdle().
+				if (!m_isIdle.load(std::memory_order_acquire))
+				{
+					m_engine->WaitIdle();
+					m_isIdle.store(true, std::memory_order_release);
+				}
+
+				// Now idle - spin until reload is done
+				while (RenderThread::IsReloadInProgress())
+				{
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+				}
+
+				// Reload complete - continue to read and process new frames
+			}
+
+			m_isIdle.store(false, std::memory_order_release);
+
 			RenderFramePacket packet;
 
 			try

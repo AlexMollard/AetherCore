@@ -45,6 +45,14 @@ namespace aether
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
 
+		void ClearAllQueues()
+		{
+			for (std::uint32_t i = 0; i < RenderQueue::kFramesInFlight; ++i)
+			{
+				m_shadowRenderQueue.Clear(i);
+			}
+		}
+
 		[[nodiscard]] std::span<const RGImage> GetShadowDepthImages() const
 		{
 			return std::span<const RGImage>(m_shadowDepth.data(), m_shadowDepth.size());

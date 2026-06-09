@@ -13,8 +13,12 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
+#include "rendering/RenderThread.hpp"
 #include "rendering/LightingManager.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/ShadowService.hpp"
+#include "rendering/LocalShadowService.hpp"
+#include "rendering/RenderQueue.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
@@ -94,12 +98,34 @@ namespace aether::app
 		{
 			m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 
+			// Signal that a reload is in progress - the render thread will skip
+			// executing any new frames until we've destroyed the old scene entities.
+			aether::RenderThread::SetReloadInProgress(true);
+
 			// Frames in flight may still reference the buffers backing the scene
 			// entities we're about to destroy. Hot-reload is out-of-band, so a
 			// device-wide wait is acceptable.
 			context.Get<GpuDevice>().WaitIdle();
 
+			// Clear all render queues to remove any pending commands that reference
+			// destroyed meshes/animation databases.
+			auto& renderQueue = context.Get<RenderQueue>();
+			for (std::uint32_t i = 0; i < RenderQueue::kFramesInFlight; ++i)
+			{
+				renderQueue.Clear(i);
+			}
+			if (auto* shadowService = context.TryGet<ShadowService>())
+			{
+				shadowService->ClearAllQueues();
+			}
+			if (auto* localShadowService = context.TryGet<LocalShadowService>())
+			{
+				localShadowService->ClearAllQueues();
+			}
+
 			DestroySceneEntities(context);
+
+			aether::RenderThread::SetReloadInProgress(false);
 		}
 
 		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);

@@ -563,7 +563,7 @@ namespace aether
 		std::vector<std::uint32_t> imageSlots;
 
 		FinaliseModelLoad(loaded, *source, imageSlots, path);
-		return loaded;
+		return std::move(loaded);
 	}
 
 	coro::async<Expected<LoadedModel>> AssetManager::LoadModelAsync(std::string_view path)
@@ -592,7 +592,7 @@ namespace aether
 		std::vector<std::uint32_t> imageSlots;
 
 		FinaliseModelLoad(loaded, *source, imageSlots, pathStr);
-		co_return loaded;
+		co_return std::move(loaded);
 	}
 
 	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path)

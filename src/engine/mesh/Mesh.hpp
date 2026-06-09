@@ -34,6 +34,18 @@ namespace aether
 		Mesh(Mesh&&) noexcept;
 		Mesh& operator=(Mesh&&) noexcept;
 
+		static constexpr std::uint32_t kAliveSentinel = 0xDEADBEEFu;
+
+		[[nodiscard]] bool IsAlive() const
+		{
+			return m_aliveSentinel == kAliveSentinel;
+		}
+
+		[[nodiscard]] std::uint32_t GetGeneration() const
+		{
+			return m_generation;
+		}
+
 		// Engine-internal factory used by AetherCore::CreateMesh.
 		// Uploads via a staging buffer to device-local memory; call after the upload
 		// pool is created (blocks until the queue is idle).
@@ -152,5 +164,7 @@ namespace aether
 		glm::vec3 m_aabbMin{0.0f};
 		glm::vec3 m_aabbMax{0.0f};
 		glm::vec4 m_boundingSphere{0.0f, 0.0f, 0.0f, 0.0f}; // xyz=center, w=radius
+		std::uint32_t m_aliveSentinel = kAliveSentinel;
+		std::uint32_t m_generation = 0;
 	};
 } // namespace aether
