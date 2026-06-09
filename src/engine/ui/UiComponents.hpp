@@ -14,7 +14,7 @@ namespace aether::ui
 	// Screen-space position, size, and Z ordering for a UI entity.
 	struct UiTransformComponent
 	{
-		UiRect rect;          // anchor-based screen rect; UiSystem updates offsetPx during drag
+		UiRect rect{};        // anchor-based screen rect; UiSystem updates offsetPx during drag
 		float zOrder = 0.f;   // higher = drawn and hit-tested on top
 		float flexGrow = 0.f; // 0 = fixed size; > 0 = takes proportional share of remaining layout space
 	};

@@ -67,7 +67,13 @@ namespace aether::ui
 						{
 							if (pt)
 							{
-								pt->rect = UiRect{};
+								if (auto* parentLink = world.TryGet<UiParentComponent>(tabComp.tabPages[i]))
+								{
+									if (auto* parentTransform = world.TryGet<UiTransformComponent>(parentLink->parent))
+									{
+										pt->rect = parentTransform->rect;
+									}
+								}
 							}
 						}
 						layout->autoSize = true;
