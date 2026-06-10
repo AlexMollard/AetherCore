@@ -208,6 +208,11 @@ namespace aether::coro
 			T value;
 			std::coroutine_handle<> continuation;
 
+			task_state() = default;
+			task_state(const task_state&) = delete;
+			task_state& operator=(const task_state&) = delete;
+			task_state(task_state&&) = delete;
+			task_state& operator=(task_state&&) = delete;
 			~task_state()
 			{
 				if (ready.load(std::memory_order_acquire) && !error)
@@ -223,6 +228,12 @@ namespace aether::coro
 			std::atomic<bool> ready{false};
 			std::exception_ptr error;
 			std::coroutine_handle<> continuation;
+
+			task_state() = default;
+			task_state(const task_state&) = delete;
+			task_state& operator=(const task_state&) = delete;
+			task_state(task_state&&) = delete;
+			task_state& operator=(task_state&&) = delete;
 		};
 
 	} // namespace detail
@@ -295,6 +306,7 @@ namespace aether::coro
 
 		task(task&&) noexcept = default;
 		task& operator=(task&&) noexcept = default;
+		~task() = default;
 
 		class awaiter
 		{

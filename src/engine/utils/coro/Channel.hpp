@@ -36,6 +36,9 @@ namespace aether::coro
 
 		channel(const channel&) = delete;
 		channel& operator=(const channel&) = delete;
+		channel(channel&&) = delete;
+		channel& operator=(channel&&) = delete;
+		~channel() = default;
 
 		// -- Blocking API -------------------------------------------------------
 
