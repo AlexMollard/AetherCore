@@ -235,8 +235,6 @@ namespace aether
 
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
-			const std::size_t blockDataSize = static_cast<std::size_t>(fileData.size()) - sizeof(uint32_t) - sizeof(DdsHeader) - sizeof(DdsDx10Header);
-
 			AE_TRY(image,
 			        UniqueImage::Create(device,
 			                allocator,

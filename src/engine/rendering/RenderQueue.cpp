@@ -649,7 +649,7 @@ namespace aether
 				{
 					continue;
 				}
-				const std::uint32_t depthAddr = batch.db->GetDepthRangesAddr();
+				const VkDeviceAddress depthAddr = batch.db->GetDepthRangesAddr();
 				if (depthAddr == 0)
 				{
 					continue;

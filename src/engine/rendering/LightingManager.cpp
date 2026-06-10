@@ -283,21 +283,21 @@ namespace aether
 		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &hostToComputeDep);
 
 		{
-			const auto& frame = m_buffers[frameSlot];
+			const auto& buf = m_buffers[frameSlot];
 			const VkDescriptorBufferInfo lightInfo{
-			        .buffer = frame.lights.Get(),
+			        .buffer = buf.lights.Get(),
 			        .offset = 0,
-			        .range = frame.lights.GetSize(),
+			        .range = buf.lights.GetSize(),
 			};
 			const VkDescriptorBufferInfo headerInfo{
-			        .buffer = frame.tileHeaders.Get(),
+			        .buffer = buf.tileHeaders.Get(),
 			        .offset = 0,
-			        .range = frame.tileHeaders.GetSize(),
+			        .range = buf.tileHeaders.GetSize(),
 			};
 			const VkDescriptorBufferInfo indexInfo{
-			        .buffer = frame.tileIndices.Get(),
+			        .buffer = buf.tileIndices.Get(),
 			        .offset = 0,
-			        .range = frame.tileIndices.GetSize(),
+			        .range = buf.tileIndices.GetSize(),
 			};
 			const VkWriteDescriptorSet writes[] = {
 			        {

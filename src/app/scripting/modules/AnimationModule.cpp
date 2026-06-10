@@ -594,7 +594,7 @@ namespace
 		}
 		ForEachSpawnedSmc(w,
 		        id,
-		        [&](aether::SkinnedMeshComponent& smc)
+		        [&](aether::SkinnedMeshComponent&)
 		        {
 			        const aether::Entity spawnedEntity{id};
 			        auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(spawnedEntity));
