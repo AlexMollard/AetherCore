@@ -45,7 +45,7 @@ namespace aether
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
-		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueue::Config{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
+		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());

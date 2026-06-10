@@ -64,28 +64,28 @@ namespace aether
 	};
 
 	// Collects draws, runs cull/animation compute, then emits indirect draws.
+	// Configuration struct for Initialize - replaces multiple parameters.
+	// maxAnimationDraws controls animation pool sizes separately from total draw capacity.
+	// Pass 0 to disable all animation/skin buffers (for non-skinned queues).
+	// UINT32_MAX (default) derives a sane cap from total draws using kDefaultMaxAnimationDraws.
+	// outputDrawCapacity overrides per-frame indirect output buffer capacity (0 = equals maxDraws).
+	// Use e.g. maxDraws * 3 for multi-frustum shadow queues writing 3 cascade regions.
+	struct RenderQueueConfig
+	{
+		std::uint32_t maxDraws = 8192;
+		std::uint32_t maxBatches = 1024;
+		std::uint32_t maxAnimationDraws = UINT32_MAX;
+		std::uint32_t outputDrawCapacity = 0;
+	};
+
 	class RenderQueue
 	{
 	public:
 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
-		// Configuration struct for Initialize - replaces multiple parameters.
-		// maxAnimationDraws controls animation pool sizes separately from total draw capacity.
-		// Pass 0 to disable all animation/skin buffers (for non-skinned queues).
-		// UINT32_MAX (default) derives a sane cap from total draws using kDefaultMaxAnimationDraws.
-		// outputDrawCapacity overrides per-frame indirect output buffer capacity (0 = equals maxDraws).
-		// Use e.g. maxDraws * 3 for multi-frustum shadow queues writing 3 cascade regions.
-		struct Config
-		{
-			std::uint32_t maxDraws = 8192;
-			std::uint32_t maxBatches = 1024;
-			std::uint32_t maxAnimationDraws = UINT32_MAX;
-			std::uint32_t outputDrawCapacity = 0;
-		};
-
 		// Initialize with configuration struct.
-		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const Config& config = {});
+		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config = {});
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.

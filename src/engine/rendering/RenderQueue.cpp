@@ -19,7 +19,7 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const Config& config)
+	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, 	const RenderQueueConfig& config)
 	{
 		m_device = device;
 		m_allocator = allocator;
