@@ -308,7 +308,6 @@ namespace aether
 		UniqueBuffer m_animationSampleJobsBuffer; // AnimationContracts::AnimatorSampleJob[] CPU-mapped
 		UniqueBuffer m_sampledPosesBuffer;        // AnimationContracts::SampledNodePose[] GPU-written
 		std::uint32_t m_animationSampleJobCount = 0;
-		std::uint32_t m_animationFrameCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 		TracyVkCtx m_tracyVkCtx = nullptr;
 

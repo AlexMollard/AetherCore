@@ -297,7 +297,6 @@ namespace aether
 			job.ikResultsAddr = m_groundResultsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(groundResultBase) * sizeof(AnimationContracts::IkGroundResult);
 
 			m_mappedIkJobs[jobIdx] = job;
-			m_ikJobs[jobIdx] = job;
 			++jobIdx;
 			++m_writtenIkJobCount;
 		}

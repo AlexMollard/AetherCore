@@ -102,8 +102,7 @@ namespace aether
 		m_maxDraws = 0;
 		m_outputDrawCapacity = 0;
 		m_maxBatches = 0;
-		m_animationFrameCount = 0;
-		m_maxAnimationDraws = 0;
+	m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
@@ -422,14 +421,6 @@ namespace aether
 		        .pMemoryBarriers = &hostToShaders,
 		};
 		vkCmdPipelineBarrier2(cmd, &hostToShaderDep);
-
-#ifndef NDEBUG
-		// Auto-log skin jobs for the first frame that has any, to ease bring-up debugging.
-		if (skinJobCount > 0 && m_animationFrameCount == 0 && m_debugLogSkinJobsFramesLeft == 0)
-		{
-			// m_debugLogSkinJobsFramesLeft = 1;
-		}
-#endif
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
@@ -944,7 +935,6 @@ namespace aether
 		}
 		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, cmd);
 #endif
-		++m_animationFrameCount;
 	}
 
 	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
