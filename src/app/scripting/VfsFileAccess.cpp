@@ -56,7 +56,7 @@ namespace aether::app::scripting
 			}
 			else
 			{
-				das_aligned_free16(source);
+				delete info;
 				return nullptr;
 			}
 		}

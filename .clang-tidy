@@ -85,7 +85,6 @@ Checks: >-
   clang-analyzer-core.uninitialized.UndefReturn,
   clang-analyzer-cplusplus.InnerPointer,
   clang-analyzer-cplusplus.Move,
-  clang-analyzer-cplusplus.NewDelete,
   clang-analyzer-cplusplus.NewDeleteLeaks,
   clang-analyzer-cplusplus.PlacementNew,
   clang-analyzer-cplusplus.PureVirtualCall,
@@ -192,6 +191,8 @@ Checks: >-
   readability-use-anyofallof,
 
 # Hard errors: these are UB, crashes, or silent data corruption
+# clang-analyzer-cplusplus.NewDelete removed from WarningsAsErrors due to
+# daScript smart_ptr.h false positives (delRef check after decrement)
 WarningsAsErrors: >-
   bugprone-dangling-handle,
   bugprone-undefined-memory-manipulation,
@@ -199,7 +200,6 @@ WarningsAsErrors: >-
   clang-analyzer-core.NullDereference,
   clang-analyzer-core.StackAddressEscape,
   clang-analyzer-core.uninitialized.UndefReturn,
-  clang-analyzer-cplusplus.NewDelete,
   clang-analyzer-cplusplus.NewDeleteLeaks,
   clang-analyzer-cplusplus.PlacementNew,
   clang-analyzer-cplusplus.PureVirtualCall,

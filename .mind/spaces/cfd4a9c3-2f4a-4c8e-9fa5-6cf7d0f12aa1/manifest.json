@@ -2,7 +2,7 @@
   "version": 1,
   "space": "projects/aethercore",
   "space_id": "cfd4a9c3-2f4a-4c8e-9fa5-6cf7d0f12aa1",
-  "manifest_updated_at_utc": "2026-06-10T04:01:10.529Z",
+  "manifest_updated_at_utc": "2026-06-10T04:26:43.038Z",
   "entries": {
     "e098d988-0333-4ec3-b034-80b49d9db9fe": {
       "memory_id": "e098d988-0333-4ec3-b034-80b49d9db9fe",
@@ -27,8 +27,8 @@
       "baseline_combined_hash": "37ad09da6a726a1e740e1b3d3fc07423bfe46c20b4828ab3bdef3bb0edfeab49",
       "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.528Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.529Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.037Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.037Z"
     },
     "986a9f4c-6913-44a7-937c-c63d7a768cb3": {
       "memory_id": "986a9f4c-6913-44a7-937c-c63d7a768cb3",
@@ -39,8 +39,8 @@
       "baseline_combined_hash": "062da872b117df58f1248f0a52ee9652fc393f2ed2ed77afcae5da0b018d3d36",
       "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.527Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.527Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.035Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.036Z"
     },
     "a695cf99-d614-49ba-9e2c-e641c515e242": {
       "memory_id": "a695cf99-d614-49ba-9e2c-e641c515e242",
@@ -51,8 +51,8 @@
       "baseline_combined_hash": "88705373f88c0799539585959bfc359f592900174bc0cb4933369a756a938588",
       "db_changed_at_utc": "2026-06-10T03:53:02.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:53:02.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.525Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.525Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.034Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.034Z"
     },
     "a142d6c1-f941-46c1-974c-bb7ee01f2bd3": {
       "memory_id": "a142d6c1-f941-46c1-974c-bb7ee01f2bd3",
@@ -63,20 +63,20 @@
       "baseline_combined_hash": "b532dededdc064c4bac56d97ab9f3a2284c4dee29363148d30156754e9445667",
       "db_changed_at_utc": "2026-06-10T03:53:56.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:53:56.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.522Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.524Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.033Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.033Z"
     },
     "24e80ed2-cd43-42b1-846d-602f5512f9af": {
       "memory_id": "24e80ed2-cd43-42b1-846d-602f5512f9af",
       "memory_name": "checkpoint-2026-06-10T04-00-47-984Z",
       "path": "checkpoint-2026-06-10T04-00-47-984Z.md",
-      "baseline_content_hash": "5402eca0834bf68a8f83145d55a8d352cb0981dbac7f1d97c882b265d2fbac88",
+      "baseline_content_hash": "c42985f94594fcacfbf6602dd43a82e6dbd58ff898ed05be7436b9fb8fec619f",
       "baseline_metadata_hash": "2dc472b034ef50451aa7a4437ba3c728e477f41c4d74a2acd276ad323dc8e6b4",
-      "baseline_combined_hash": "068ffba0c887efa1734c55540a79c40748efe6adc6ef99b4233f863e9cc56d85",
-      "db_changed_at_utc": "2026-06-10T04:00:47.000Z",
-      "frontmatter_changed_at_utc": "2026-06-10T04:00:47.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.521Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.521Z"
+      "baseline_combined_hash": "0ab47d61b1bab20bd9855cb6fcba6fb00a7b6466980f6e3bcd8d15a076841482",
+      "db_changed_at_utc": "2026-06-10T04:04:29.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:04:29.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.029Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.029Z"
     },
     "2003cdb5-9d34-45a5-b462-5ba65c8c98e8": {
       "memory_id": "2003cdb5-9d34-45a5-b462-5ba65c8c98e8",
@@ -87,8 +87,80 @@
       "baseline_combined_hash": "da27bc4f7c751ef72076b518d125ea05412da7f8f19bc1c53ce0a8a77349f7c7",
       "db_changed_at_utc": "2026-06-10T04:01:10.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T04:01:10.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.517Z",
-      "last_synced_at_utc": "2026-06-10T04:01:10.517Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.030Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.031Z"
+    },
+    "5ceeba7f-d1db-4388-a147-6ad343d66178": {
+      "memory_id": "5ceeba7f-d1db-4388-a147-6ad343d66178",
+      "memory_name": "session-2026-06-10T04-07-11-154Z-evt_eafb67632001lm6ou1dcoer52v",
+      "path": "session-2026-06-10T04-07-11-154Z-evt_eafb67632001lm6ou1dcoer52v.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "9e233c2558e36360f9047399239b253e82176d5331b230aecd595efb7b92d02b",
+      "baseline_combined_hash": "4c8067408ab6ff0e2e5ba5c93e932b6f980c0581b84d46706fe01ceb1ad01b55",
+      "db_changed_at_utc": "2026-06-10T04:07:11.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:07:11.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.027Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.028Z"
+    },
+    "e0a661b8-4e08-4d8b-91d3-7744341e299e": {
+      "memory_id": "e0a661b8-4e08-4d8b-91d3-7744341e299e",
+      "memory_name": "session-2026-06-10T04-17-44-869Z-evt_eafc021a5001ipwnrjdz9davg9",
+      "path": "session-2026-06-10T04-17-44-869Z-evt_eafc021a5001ipwnrjdz9davg9.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "676f061757fc5373c5260e2523d8799af97cc7cb07615a435c461d7d0ae708b7",
+      "baseline_combined_hash": "c5f0b78074c520cc2382e74955a5f31c03920d93d7ec25b312fa2e9d588d1d15",
+      "db_changed_at_utc": "2026-06-10T04:17:45.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:17:45.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.026Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.026Z"
+    },
+    "7127bac2-2b09-4589-b123-f93d285cd3c1": {
+      "memory_id": "7127bac2-2b09-4589-b123-f93d285cd3c1",
+      "memory_name": "session-2026-06-10T04-17-46-041Z-evt_eafc02639001084mdpytb4vb1m",
+      "path": "session-2026-06-10T04-17-46-041Z-evt_eafc02639001084mdpytb4vb1m.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "9462ef081d7c406946b42041a2d1146aa970a545e3da3d2e5138d3556d40b6fc",
+      "baseline_combined_hash": "11f2a12d192409e97ddc956e1ffa0e96e552d22b83e863e9d13821cb211cc858",
+      "db_changed_at_utc": "2026-06-10T04:17:46.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:17:46.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.024Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.025Z"
+    },
+    "7c0b8339-49cb-4355-b922-c1657627bb7d": {
+      "memory_id": "7c0b8339-49cb-4355-b922-c1657627bb7d",
+      "memory_name": "session-2026-06-10T04-20-15-667Z-evt_eafc26eb3001kvrgj49wmqzrhm",
+      "path": "session-2026-06-10T04-20-15-667Z-evt_eafc26eb3001kvrgj49wmqzrhm.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "fa45a64e5a1cc70671a832c91aa72bde91156558211b8a3ee5185ad2ad901755",
+      "baseline_combined_hash": "83a18aed71ea00c80204b84896211cfa54ad13de870055bebdea1048fcfa9058",
+      "db_changed_at_utc": "2026-06-10T04:20:16.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:20:16.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.022Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.022Z"
+    },
+    "3cd73de5-2c2a-4bea-a6f6-0f8795239b6f": {
+      "memory_id": "3cd73de5-2c2a-4bea-a6f6-0f8795239b6f",
+      "memory_name": "session-2026-06-10T04-26-40-244Z-evt_eafc84cf3002d0bsfthknco2xe",
+      "path": "session-2026-06-10T04-26-40-244Z-evt_eafc84cf3002d0bsfthknco2xe.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "70aadbceff98fc41a9b094282b80a786261b04f799695714c9c318f7e20be3e0",
+      "baseline_combined_hash": "57ed6660646e65a0b5b6e9f29c0bcf6e820ec8b879f08866a3b980aa1ca48a10",
+      "db_changed_at_utc": "2026-06-10T04:26:41.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:26:41.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.020Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.020Z"
+    },
+    "a4dff6bd-3daa-4e11-a00a-73ef70b5bf23": {
+      "memory_id": "a4dff6bd-3daa-4e11-a00a-73ef70b5bf23",
+      "memory_name": "session-2026-06-10T04-26-42-710Z-evt_eafc85696001plhhchcou91syr",
+      "path": "session-2026-06-10T04-26-42-710Z-evt_eafc85696001plhhchcou91syr.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "6f63182b2407e20c419bb152aa02d761c8e516aaeabd2c1c560d5c2bf3caa1d2",
+      "baseline_combined_hash": "7948fef7d97b9e2f1cf63385b73a9d5aea19bef7b3464c120497c9755a718000",
+      "db_changed_at_utc": "2026-06-10T04:26:42.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:26:42.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:26:43.015Z",
+      "last_synced_at_utc": "2026-06-10T04:26:43.015Z"
     }
   },
   "last_auto_export": null
