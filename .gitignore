@@ -54,3 +54,6 @@ Makefile
 .idea/
 .DS_Store
 Thumbs.db
+
+#node modules
+/node_modules/

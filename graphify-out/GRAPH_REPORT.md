@@ -1,13 +1,18 @@
-# Graph Report - .  (2026-06-09)
+# Graph Report - AetherCore  (2026-06-10)
 
 ## Corpus Check
-- 302 files · ~425,621 words
+- 291 files · ~427,899 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6397 nodes · 9088 edges · 377 communities (351 shown, 26 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 122 edges (avg confidence: 0.8)
-- Token cost: 7,200 input · 2,800 output
+- 6467 nodes · 9207 edges · 379 communities (354 shown, 25 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 126 edges (avg confidence: 0.8)
+- Token cost: 0 input · 0 output
+
+## Graph Freshness
+- Built from commit: `0e6c5a0a`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - [[_COMMUNITY_UI System Core|UI System Core]]
@@ -378,23 +383,23 @@
 3. `AnimationDatabase` - 80 edges
 4. `FishingGameSystem` - 77 edges
 5. `World` - 69 edges
-6. `PhysicsGameSystem` - 53 edges
-7. `Camera` - 53 edges
-8. `Renderer` - 50 edges
-9. `UiTheme` - 50 edges
-10. `QuadRenderer` - 49 edges
+6. `PhysicsDebugRenderer` - 55 edges
+7. `PhysicsGameSystem` - 53 edges
+8. `Camera` - 53 edges
+9. `Renderer` - 50 edges
+10. `UiTheme` - 50 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `CMake Build Presets` --semantically_similar_to--> `Multi-Platform CI Workflow`  [INFERRED] [semantically similar]
   AGENTS.md → .github/workflows/cmake-multi-platform.yml
 - `LoadMaterialPreset()` --calls--> `CheckMagic()`  [INFERRED]
   src/engine/assets/AssetManager.cpp → include/BinaryFormats.hpp
-- `Two-Layer GPU Abstraction` --rationale_for--> `AetherCore Engine`  [INFERRED]
-  AGENTS.md → README.md
-- `AetherCore CMake Project` --conceptually_related_to--> `AetherCore Engine`  [INFERRED]
-  CMakeLists.txt → README.md
-- `LSP / clangd Integration` --references--> `AetherCore CMake Project`  [INFERRED]
-  AGENTS.md → CMakeLists.txt
+- `LoadAnimation()` --calls--> `CheckMagic()`  [INFERRED]
+  src/engine/assets/GltfAsset.cpp → include/BinaryFormats.hpp
+- `LoadFromMesh()` --calls--> `CheckMagic()`  [INFERRED]
+  src/engine/assets/GltfAsset.cpp → include/BinaryFormats.hpp
+- `LoadMaterialBinary()` --calls--> `CheckMagic()`  [INFERRED]
+  src/engine/assets/GltfAsset.cpp → include/BinaryFormats.hpp
 
 ## Import Cycles
 - None detected.
@@ -405,19 +410,19 @@
 - **Grass004 PBR Texture Set (5 maps)** — grass004_color_map, grass004_normal_map, grass004_roughness_map, grass004_ambient_occlusion_map, grass004_displacement_map [EXTRACTED 1.00]
 - **Fox Animated Model Asset Group** — fox_model, fox_texture [EXTRACTED 1.00]
 
-## Communities (377 total, 26 thin omitted)
+## Communities (379 total, 25 thin omitted)
 
 ### Community 0 - "UI System Core"
-Cohesion: 0.08
-Nodes (87): Entity, vec2, Entity, Input, UiContext, UIRenderer, UiTheme, vec2 (+79 more)
+Cohesion: 0.09
+Nodes (84): Entity, Input, UiContext, UIRenderer, UiTheme, vec2, VkExtent2D, World (+76 more)
 
 ### Community 1 - "Render Queue"
 Cohesion: 0.03
 Nodes (72): AnimatorSampleJob, Batch, BatchRenderInfo, DrawInput, InstanceData, kFramesInFlight, RenderQueue, Clear (+64 more)
 
 ### Community 2 - "Script UI Bindings"
-Cohesion: 0.06
-Nodes (75): float4, das_add_ui_child(), das_create_ui_button(), das_create_ui_checkbox(), das_create_ui_image(), das_create_ui_label(), das_create_ui_panel(), das_create_ui_slider() (+67 more)
+Cohesion: 0.07
+Nodes (61): das_add_ui_child(), das_create_ui_button(), das_create_ui_checkbox(), das_create_ui_image(), das_create_ui_label(), das_create_ui_panel(), das_create_ui_slider(), das_get_ui_button_label() (+53 more)
 
 ### Community 3 - "Logger System"
 Cohesion: 0.05
@@ -448,8 +453,8 @@ Cohesion: 0.07
 Nodes (53): ImageCacheKey, PassBuilder, PassInfo, AddComputePass(), AddPass(), BeginFrame(), Clear(), Compile() (+45 more)
 
 ### Community 10 - "Physics Game System"
-Cohesion: 0.04
-Nodes (46): CameraHandle, CameraManager, Entity, GraphicsPipeline, Material, mt19937, PhysicsSystem, ServiceContainer (+38 more)
+Cohesion: 0.05
+Nodes (37): mt19937, ServiceContainer, PhysicsGameSystem, BuildScene, ClearScene, FireProjectile, Init, kGroundHalfExtent (+29 more)
 
 ### Community 11 - "Animation Database"
 Cohesion: 0.04
@@ -476,8 +481,8 @@ Cohesion: 0.05
 Nodes (31): Create, CreateView, Destroy, kAliveSentinel, m_aabbMax, m_aabbMin, m_aliveSentinel, m_allocation (+23 more)
 
 ### Community 17 - "Physics Debug Renderer"
-Cohesion: 0.05
-Nodes (40): CommandRecorder, CreateBoxGeometry, CreateCapsuleGeometry, CreateSphereGeometry, CreateWireframePipeline, Init, m_allocator, m_boxVertexAlloc (+32 more)
+Cohesion: 0.04
+Nodes (42): AppendSelfTestPattern, CreateBoxGeometry, CreateCapsuleGeometry, CreateSphereGeometry, CreateWireframePipeline, DestroyImmediateBuffer, EnsureImmediateBufferCapacity, Init (+34 more)
 
 ### Community 18 - "Camera System"
 Cohesion: 0.04
@@ -520,12 +525,12 @@ Cohesion: 0.10
 Nodes (40): FileRequestHandle, Exists(), FileSystemBackend, ioThread, mounts, mountsMutex, Flush(), Glob() (+32 more)
 
 ### Community 28 - "Debug Layer"
-Cohesion: 0.05
-Nodes (41): kMaxRenderPassRows, kTabCount, DebugLayer, GetTonemapModeName, kLabelRowCount, kMaxRenderPassRows, m_debugPanel, m_entities (+33 more)
+Cohesion: 0.06
+Nodes (35): kMaxRenderPassRows, kTabCount, DebugLayer, GetTonemapModeName, kLabelRowCount, kMaxRenderPassRows, m_debugPanel, m_debugTestShapes (+27 more)
 
 ### Community 29 - "Crash Handler"
 Cohesion: 0.11
-Nodes (39): EXCEPTION_POINTERS, BuildCrashBasePath(), BuildTimestampForFileName(), CaptureCrashArtifacts(), CaptureDiagnosticReport(), CaptureStackFrames(), DemangleSymbol(), EnsureSymbolsInitialized() (+31 more)
+Nodes (38): EXCEPTION_POINTERS, BuildCrashBasePath(), BuildTimestampForFileName(), CaptureCrashArtifacts(), CaptureDiagnosticReport(), CaptureStackFrames(), DemangleSymbol(), EnsureSymbolsInitialized() (+30 more)
 
 ### Community 30 - "Coroutine Task System"
 Cohesion: 0.07
@@ -561,7 +566,7 @@ Nodes (36): ClipState, PendingQuad, kMaxFramesInFlight, size_t, VkPipeline, VkPi
 
 ### Community 38 - "Physics System Update"
 Cohesion: 0.06
-Nodes (35): BPLayerInterface, ObjVsBPLayerFilter, ObjVsObjLayerFilter, AddForce, AddImpulse, CastRay, FlushPendingBodies, GetAngularVelocity (+27 more)
+Nodes (32): BPLayerInterface, ObjVsBPLayerFilter, ObjVsObjLayerFilter, AddForce, AddImpulse, FlushPendingBodies, GetAngularVelocity, GetLinearVelocity (+24 more)
 
 ### Community 39 - "Local Shadow Service"
 Cohesion: 0.06
@@ -572,8 +577,8 @@ Cohesion: 0.05
 Nodes (36): Renderer, ClearPointLights, ClearSpotLights, GetAmbientLight, GetColorFormat, GetDepthFormat, GetDirectionalLightDirection, GetDirectionalLightIntensity (+28 more)
 
 ### Community 41 - "Asset Packer Mesh Processor"
-Cohesion: 0.16
-Nodes (35): BoneInfo, ibm, name, originalIndex, parentIndex, CollectBones(), CollectMaterialPaths(), ComputeBounds() (+27 more)
+Cohesion: 0.18
+Nodes (31): CollectBones(), CollectMaterialPaths(), ComputeSkeletonHash(), ExtractMeshes(), FindAttr(), FindSkinForPrimitive(), GenerateGlTFMaterialData(), GenerateNormals() (+23 more)
 
 ### Community 42 - "Renderer Core"
 Cohesion: 0.09
@@ -596,8 +601,8 @@ Cohesion: 0.07
 Nodes (32): AnimationDatabase, BindlessManager, CameraManager, CullPass, Scene, ShadowService, BuildFrameShadowData, Initialize (+24 more)
 
 ### Community 47 - "Engine Core (AetherCore)"
-Cohesion: 0.06
-Nodes (34): BeginFrame, BuildShadowsAndRunLighting, EndFrame, ExecuteRenderFrame, GetForwardColorFormat, GetRenderPassCount, GetRenderPassNames, m_animationBlend (+26 more)
+Cohesion: 0.05
+Nodes (37): BeginFrame, BuildShadowsAndRunLighting, EndFrame, ExecuteRenderFrame, GetForwardColorFormat, GetRenderPassCount, GetRenderPassNames, m_animationBlend (+29 more)
 
 ### Community 48 - "Texture Loader"
 Cohesion: 0.16
@@ -616,8 +621,8 @@ Cohesion: 0.08
 Nodes (31): RenderingSubsystem, Init, m_cullPass, m_forwardPass, m_frameComposer, m_frameConstantsBuffer, m_localShadowService, m_physicsDebug (+23 more)
 
 ### Community 52 - "Asset Packer Pipeline Utils"
-Cohesion: 0.11
-Nodes (26): LogEntry, flags, hash, onDiskSize, rawSize, virtualPath, SaveLog(), Append() (+18 more)
+Cohesion: 0.13
+Nodes (21): LogEntry, flags, hash, onDiskSize, rawSize, virtualPath, SaveLog(), AddDirectory() (+13 more)
 
 ### Community 53 - "Script Tag Slots"
 Cohesion: 0.13
@@ -636,20 +641,20 @@ Cohesion: 0.07
 Nodes (30): FrameConstants, ambientColor, cameraWorldPos, elapsedTime, materialBufferAddr, _pad0, proj, shadowAtlasSlot (+22 more)
 
 ### Community 57 - "Scene World"
-Cohesion: 0.10
-Nodes (25): EntityHandle, m_entity, Handle(), Has(), Remove(), RenderQueue, Spawn(), TryGet() (+17 more)
+Cohesion: 0.20
+Nodes (11): EntityHandle, m_entity, Handle(), Has(), Remove(), RenderQueue, Spawn(), TryGet() (+3 more)
 
 ### Community 58 - "Unique Buffer (Vulkan)"
 Cohesion: 0.11
 Nodes (28): Expected, PFN_vkSetDebugUtilsObjectNameEXT, uint64_t, VkBuffer, VkBufferUsageFlags, VkDevice, VkDeviceAddress, VkDeviceSize (+20 more)
 
 ### Community 59 - "glTF Asset Loader"
-Cohesion: 0.22
-Nodes (29): BuildBoneNameMap(), CollectSimilarMeshPaths(), DeriveAnimSetPath(), DeriveMeshPath(), LoadAnimation(), LoadFromMemory(), LoadFromMesh(), LoadFromVfsPath() (+21 more)
+Cohesion: 0.25
+Nodes (25): BuildBoneNameMap(), CollectSimilarMeshPaths(), DeriveAnimSetPath(), DeriveMeshPath(), LoadAnimation(), LoadFromMemory(), LoadFromMesh(), LoadFromVfsPath() (+17 more)
 
 ### Community 60 - "Scripting Subsystem"
-Cohesion: 0.07
-Nodes (22): Context, SceneContext, ScriptHandle, CallOnAttach, CallOnDetach, CallOnUpdate, ClearErrors, Compile (+14 more)
+Cohesion: 0.09
+Nodes (16): CallOnAttach, CallOnDetach, CallOnUpdate, ClearErrors, Compile, ConsumeErrorsCleared, FreeHandle, m_errorsCleared (+8 more)
 
 ### Community 61 - "Asset Packer Asset Processor"
 Cohesion: 0.12
@@ -664,12 +669,12 @@ Cohesion: 0.08
 Nodes (19): PostProcessStack, Create, Destroy, m_exposure, m_fxaaEnabled, m_fxaaPipeline, m_hdrColor, m_hdrColorImage (+11 more)
 
 ### Community 64 - "Script UI Module"
-Cohesion: 0.08
-Nodes (11): das_read_text_file(), DataModule, GameComponentsModule, InputModule, PhysicsModule, RendererModule, SystemsModule, UIModule (+3 more)
+Cohesion: 0.09
+Nodes (10): das_read_text_file(), DataModule, InputModule, PhysicsModule, RendererModule, SystemsModule, UIModule, module (+2 more)
 
 ### Community 65 - "Script World Module"
-Cohesion: 0.15
-Nodes (24): ComposeTransform(), das_add_mesh(), das_add_tag(), das_create_mesh(), das_entity_create(), das_entity_destroy(), das_for_each_with_tag(), das_for_each_with_transform() (+16 more)
+Cohesion: 0.13
+Nodes (25): ComposeTransform(), das_add_mesh(), das_add_tag(), das_create_mesh(), das_entity_create(), das_entity_destroy(), das_for_each_with_tag(), das_for_each_with_transform() (+17 more)
 
 ### Community 66 - "Graphics Pipeline"
 Cohesion: 0.08
@@ -684,16 +689,16 @@ Cohesion: 0.08
 Nodes (24): CommandRecorder, BeginDebugLabel, BindDescriptorSet, BindGraphicsPipeline, BindIndexBuffer, Draw, DrawIndexed, DrawIndexedIndirect (+16 more)
 
 ### Community 69 - "Script Game Components"
-Cohesion: 0.16
-Nodes (25): DialogueStateComponent, assign_dlg_current_node_id(), assign_dlg_npc_id(), assign_npc_dialogue_id(), assign_npc_display_name(), assign_npc_id(), get_dialogue_state_current_node_id(), get_dialogue_state_npc_id() (+17 more)
+Cohesion: 0.15
+Nodes (26): DialogueStateComponent, assign_dlg_current_node_id(), assign_dlg_npc_id(), assign_npc_dialogue_id(), assign_npc_display_name(), assign_npc_id(), GameComponentsModule, get_dialogue_state_current_node_id() (+18 more)
 
 ### Community 70 - "Shadow Atlas Manager"
 Cohesion: 0.09
 Nodes (22): BindlessManager, ShadowAtlasManager, Allocate, Initialize, kAtlasFormat, kAtlasHeight, kAtlasWidth, m_atlas (+14 more)
 
 ### Community 71 - "UI Subsystem Init"
-Cohesion: 0.11
-Nodes (22): BuildConfigFromSettings(), OnAttach(), OnDetach(), OnGui(), OnUpdate(), PushLayer(), Application(), AppLayer (+14 more)
+Cohesion: 0.20
+Nodes (12): BuildConfigFromSettings(), OnAttach(), OnDetach(), OnGui(), OnUpdate(), PushLayer(), Application(), AppLayer (+4 more)
 
 ### Community 72 - "Bindless Manager"
 Cohesion: 0.10
@@ -704,8 +709,8 @@ Cohesion: 0.08
 Nodes (23): AdvanceBindlessFrame, BeginSwapchainFrame, BuildFrameTarget, ClearSwapchainRecreationFlag, GetComputeQueueFamily, GetCurrentCommandRecorder, GetGraphicsQueueFamily, GetSwapchainColorFormat (+15 more)
 
 ### Community 74 - "Rendering Subsystem"
-Cohesion: 0.08
-Nodes (24): RenderFramePacket, ambientColor, cameraWorldPos, drawSlot, elapsedTime, frameIndex, hasCameraData, materialBufferAddr (+16 more)
+Cohesion: 0.07
+Nodes (27): PhysicsDebugRenderer, RenderFramePacket, ambientColor, cameraWorldPos, debugVertices, drawSlot, elapsedTime, frameIndex (+19 more)
 
 ### Community 75 - "Shadow Service"
 Cohesion: 0.13
@@ -732,8 +737,8 @@ Cohesion: 0.08
 Nodes (24): BufferPhysicalRecord, ImagePhysicalRecord, BindlessImageConfig, BufferVirtualRecord, ImageVirtualRecord, ResourcePool, AliasBuffer, AliasImage (+16 more)
 
 ### Community 81 - "IO Thread Flush"
-Cohesion: 0.10
-Nodes (21): Flush, m_coroQueue, m_idleCv, m_mutex, m_pendingCount, m_queue, m_shutdown, m_thread (+13 more)
+Cohesion: 0.05
+Nodes (41): executor, name, schedule, schedule_on_resumer, get_default_executor(), inline_executor, queued_executor, m_mutex (+33 more)
 
 ### Community 82 - "Fishing Game System"
 Cohesion: 0.17
@@ -748,8 +753,8 @@ Cohesion: 0.11
 Nodes (18): CameraHandle, id, CameraManager, Create, Destroy, GetMainProjection, GetMainView, GetMainViewProjection (+10 more)
 
 ### Community 85 - "Coroutine Executor"
-Cohesion: 0.13
-Nodes (15): executor, name, schedule, schedule_on_resumer, get_default_executor(), inline_executor, queued_executor, m_mutex (+7 more)
+Cohesion: 0.21
+Nodes (17): AnimResult, files, paths, Process(), WriteAnimSet(), Append(), AppendBytes(), AppendStr() (+9 more)
 
 ### Community 86 - "GPU Abstraction"
 Cohesion: 0.10
@@ -768,8 +773,8 @@ Cohesion: 0.10
 Nodes (18): CullPass, EnsureMultiPipeline, EnsureSinglePipeline, Initialize, m_device, m_multiLayout, m_multiPipeline, m_pipelineCache (+10 more)
 
 ### Community 90 - "Local Shadow Service"
-Cohesion: 0.13
-Nodes (22): BlurPushConstants, atlasHeight, atlasWidth, blurOffsetX, blurOffsetY, isHorizontal, _pad0, _pad1 (+14 more)
+Cohesion: 0.24
+Nodes (13): BuildFrameShadowData(), Initialize(), PrepareQueues(), BindlessManager, CameraManager, FrameConstants, RenderFramePacket, RenderQueueSharedPipelines (+5 more)
 
 ### Community 91 - "Vulkan Context"
 Cohesion: 0.10
@@ -788,8 +793,8 @@ Cohesion: 0.18
 Nodes (21): BeginOneTimeBuffer(), Create(), CreateView(), Destroy(), EndAndSubmitOneTimeBuffer(), UploadToDeviceLocal(), Mesh, ~Mesh() (+13 more)
 
 ### Community 95 - "Render Graph"
-Cohesion: 0.11
-Nodes (19): BindlessManager, CachedImage, image, lastUsedFrame, GetCurrentRenderGraph(), PassContext, extent, frameConstantsAddr (+11 more)
+Cohesion: 0.10
+Nodes (22): CachedImage, image, lastUsedFrame, PassContext, extent, frameConstantsAddr, frameIndex, PendingDestruction (+14 more)
 
 ### Community 96 - "Scene System"
 Cohesion: 0.10
@@ -800,8 +805,8 @@ Cohesion: 0.11
 Nodes (18): AnimationBlendSystem, BuildBlendPush, Init, m_blendJobs, m_blendJobsBuffer, m_blendPush, m_mappedBlendJobs, m_nodeCount (+10 more)
 
 ### Community 98 - "Logger System"
-Cohesion: 0.23
-Nodes (20): format_string, LogCategory, source_location, string, string_view, ErrorAt(), FormatMessage(), InfoAt() (+12 more)
+Cohesion: 0.05
+Nodes (60): CompileAnimations(), SetAnimationCompilePool(), BeginFrame(), BuildShadowsAndRunLighting(), EndFrame(), ExecuteRenderFrame(), GetForwardColorFormat(), GetRenderPassCount() (+52 more)
 
 ### Community 99 - "GPU Material Definition"
 Cohesion: 0.10
@@ -812,8 +817,8 @@ Cohesion: 0.10
 Nodes (20): Material, albedoSlot, alphaBlend, alphaCutoff, alphaMask, baseColorFactor, doubleSided, emissiveFactor (+12 more)
 
 ### Community 101 - "Render Target Service"
-Cohesion: 0.15
-Nodes (20): BindRuntime(), DestroyCameraRenderTarget(), OnRenderGraphReset(), PrepareQueues(), SetAnimationDatabase(), Shutdown(), AnimationDatabase, BindlessManager (+12 more)
+Cohesion: 0.16
+Nodes (18): BindRuntime(), OnRenderGraphReset(), PrepareQueues(), SetAnimationDatabase(), AnimationDatabase, BindlessManager, CameraManager, CullPass (+10 more)
 
 ### Community 102 - "Day/Night Cycle System"
 Cohesion: 0.11
@@ -828,8 +833,8 @@ Cohesion: 0.10
 Nodes (20): GltfMaterial, albedoPath, alphaBlend, alphaCutoff, alphaMask, baseColorFactor, baseColorTexture, doubleSided (+12 more)
 
 ### Community 105 - "Binary Format Headers"
-Cohesion: 0.10
-Nodes (19): BoneEntryHeaderDisk, nameLen, MaterialHeaderDisk, alphaBlend, alphaCutoff, alphaMask, baseColorFactor, doubleSided (+11 more)
+Cohesion: 0.15
+Nodes (13): MaterialHeaderDisk, alphaBlend, alphaCutoff, alphaMask, baseColorFactor, doubleSided, emissiveFactor, magic (+5 more)
 
 ### Community 106 - "Frame Constants"
 Cohesion: 0.11
@@ -852,8 +857,8 @@ Cohesion: 0.17
 Nodes (11): byte, size_t, string, T, vector, BinaryReader, m_data, m_end (+3 more)
 
 ### Community 111 - "Engine Core (AetherCore)"
-Cohesion: 0.20
-Nodes (13): BeginFrame(), BuildShadowsAndRunLighting(), EndFrame(), ExecuteRenderFrame(), PatchShadowIndices(), PrepareFrame(), RecreateSwapchain(), SubmitAndAdvance() (+5 more)
+Cohesion: 0.12
+Nodes (16): Entity, vec2, UiContext, activeEntity, draggedEntity, dragStartMousePos, dragStartRectMax, dragStartRectMin (+8 more)
 
 ### Community 112 - "Utility System"
 Cohesion: 0.22
@@ -861,15 +866,15 @@ Nodes (10): format_context, formatter<std::string>, LogCategory, string, string_
 
 ### Community 113 - "GPU Abstraction"
 Cohesion: 0.13
-Nodes (12): AdvanceBindlessFrame(), GetComputeQueueFamily(), GetCurrentCommandRecorder(), GetGraphicsQueueFamily(), GetSwapchainColorFormat(), GetSwapchainDepthFormat(), SubmitAndPresent(), WaitIdle() (+4 more)
+Nodes (11): BuildFrameTarget(), GetCurrentCommandRecorder(), m_swapchainRecreatedCallback, RecreateSwapchain(), SetSwapchainRecreatedCallback(), Shutdown(), WaitIdle(), CommandRecorder (+3 more)
 
 ### Community 114 - "Input System"
 Cohesion: 0.15
 Nodes (16): Key, MouseButton, GetMouseDelta(), GetMousePos(), GetScrollDelta(), Init(), IsKeyDown(), IsKeyPressed() (+8 more)
 
 ### Community 115 - "Physics Debug Renderer"
-Cohesion: 0.17
-Nodes (16): CreateBoxGeometry(), CreateCapsuleGeometry(), CreateSphereGeometry(), CreateWireframePipeline(), GetColorForMotionType(), Init(), RegisterPass(), Shutdown() (+8 more)
+Cohesion: 0.26
+Nodes (14): float4, das_get_ui_color(), das_set_ui_border_color(), das_set_ui_button_color(), das_set_ui_button_hover_color(), das_set_ui_button_press_color(), das_set_ui_button_text_color(), das_set_ui_color() (+6 more)
 
 ### Community 116 - "Render Queue"
 Cohesion: 0.11
@@ -896,8 +901,8 @@ Cohesion: 0.11
 Nodes (17): PakEntry, contentHash, dataOffset, dataSize, flags, _pad, pathLen, pathOffset (+9 more)
 
 ### Community 122 - "Debug Layer"
-Cohesion: 0.21
-Nodes (17): FpsColor(), GetTonemapModeName(), HeightRect(), MsColor(), OnAttach(), OnDetach(), OnGui(), OnUpdate() (+9 more)
+Cohesion: 0.09
+Nodes (48): FpsColor(), GetTonemapModeName(), HeightRect(), MsColor(), OnAttach(), OnDetach(), OnGui(), OnUpdate() (+40 more)
 
 ### Community 123 - "Script Renderer Module"
 Cohesion: 0.16
@@ -920,16 +925,16 @@ Cohesion: 0.11
 Nodes (16): uint32_t, VkExtent2D, VkFormat, VkImageUsageFlags, VkSampleCountFlagBits, VmaMemoryUsage, BindlessManager, Desc (+8 more)
 
 ### Community 128 - "Asset Packer Material Importer"
-Cohesion: 0.30
-Nodes (16): ContainsAlias(), FindBestTexture(), GeneratePropertiesForFolder(), ImportDirectory(), IsImageExtension(), NormalizeForMatch(), ShouldWrite(), TokenizeStem() (+8 more)
+Cohesion: 0.07
+Nodes (42): Args, compressionLevel, importMaterials, outputPath, sourceDir, main(), ParseArgs(), ContainsAlias() (+34 more)
 
 ### Community 129 - "Camera System"
 Cohesion: 0.22
 Nodes (13): GetForward(), GetPosition(), GetProjectionMatrix(), GetRight(), GetUp(), GetViewMatrix(), GetViewProjectionMatrix(), Update() (+5 more)
 
 ### Community 130 - "Render Graph"
-Cohesion: 0.12
-Nodes (16): ImageAccessType, AttachmentRef, clearValue, image, loadOp, storeOp, GetSwapchainColor(), GetSwapchainDepth() (+8 more)
+Cohesion: 0.10
+Nodes (20): ImageAccessType, BindlessManager, CompiledPass, passIndex, preBarriers, GetCurrentRenderGraph(), GetSwapchainColor(), GetSwapchainDepth() (+12 more)
 
 ### Community 131 - "Sandbox Layer"
 Cohesion: 0.13
@@ -940,12 +945,12 @@ Cohesion: 0.14
 Nodes (12): MeshArena, Allocate, CreateView, Free, Initialize, m_indexHeap, m_vertexHeap, Shutdown (+4 more)
 
 ### Community 133 - "OpenCode Config"
-Cohesion: 0.12
-Nodes (16): command, extensions, command, sync-lsp, options, lsp, clangd, model (+8 more)
+Cohesion: 0.11
+Nodes (17): command, extensions, command, sync-lsp, options, lsp, clangd, model (+9 more)
 
 ### Community 134 - "Command Recorder"
-Cohesion: 0.13
-Nodes (16): BeginDebugLabel(), BindGraphicsPipeline(), s_beginDebugLabelFn, s_endDebugLabelFn, Draw(), EndDebugLabel(), HostToShaderBarrier(), MemoryBarrier2() (+8 more)
+Cohesion: 0.16
+Nodes (13): BeginDebugLabel(), BindGraphicsPipeline(), s_beginDebugLabelFn, s_endDebugLabelFn, Draw(), EndDebugLabel(), HostToShaderBarrier(), MemoryBarrier2() (+5 more)
 
 ### Community 135 - "Render Graph"
 Cohesion: 0.13
@@ -953,7 +958,7 @@ Nodes (17): CompiledBarrier, aspect, dstAccess, dstStage, newLayout, oldLayout, 
 
 ### Community 136 - "Render Graph"
 Cohesion: 0.12
-Nodes (15): CompiledPass, passIndex, preBarriers, ImageCacheKey, aspect, format, height, mipLevels (+7 more)
+Nodes (16): ImageCacheKey, aspect, format, height, mipLevels, samples, usage, width (+8 more)
 
 ### Community 137 - "Render Queue"
 Cohesion: 0.12
@@ -968,7 +973,7 @@ Cohesion: 0.15
 Nodes (12): System, Update, SystemRegistry, Clear, Find, m_systems, Register, Unregister (+4 more)
 
 ### Community 140 - "Physics Game System"
-Cohesion: 0.22
+Cohesion: 0.21
 Nodes (16): AssetManager, CameraManager, Input, ServiceContainer, World, BuildScene(), ClearScene(), FireProjectile() (+8 more)
 
 ### Community 141 - "UI Panel and Clip Components"
@@ -992,8 +997,8 @@ Cohesion: 0.12
 Nodes (16): IkSolveJob, entityId, globalTransformsAddr, hipsNodeIdx, ikResultsAddr, leftFootNodeIdx, leftKneeBendSign, leftKneeNodeIdx (+8 more)
 
 ### Community 146 - "Render Graph"
-Cohesion: 0.13
-Nodes (16): ExternalImageEntry, aspect, image, view, FrameTarget, colorFormat, colorImage, colorView (+8 more)
+Cohesion: 0.14
+Nodes (15): ExternalImageEntry, aspect, image, view, FrameTarget, colorFormat, colorImage, colorView (+7 more)
 
 ### Community 147 - "Sandbox Game System"
 Cohesion: 0.12
@@ -1016,12 +1021,12 @@ Cohesion: 0.13
 Nodes (15): DDSHeader, ddspf, dwCaps, dwCaps2, dwCaps3, dwCaps4, dwDepth, dwFlags (+7 more)
 
 ### Community 153 - "Asset Packer Mesh Processor"
-Cohesion: 0.13
-Nodes (15): Bounds, aabbMax, aabbMin, sphereCenter, sphereRadius, MeshExtractResult, bounds, indices (+7 more)
+Cohesion: 0.12
+Nodes (17): Bounds, aabbMax, aabbMin, sphereCenter, sphereRadius, ComputeBounds(), MeshExtractResult, bounds (+9 more)
 
 ### Community 154 - "Asset Packer PAK Writer"
-Cohesion: 0.23
-Nodes (13): IsUpToDate(), LoadManifest(), ManifestEntry, contentHash, mtimeSec, SaveManifest(), AddDirectory(), Write() (+5 more)
+Cohesion: 0.27
+Nodes (10): IsUpToDate(), LoadManifest(), ManifestEntry, contentHash, mtimeSec, SaveManifest(), ManifestMap, FileRecord (+2 more)
 
 ### Community 155 - "Camera Manager"
 Cohesion: 0.23
@@ -1048,16 +1053,16 @@ Cohesion: 0.14
 Nodes (15): uint32_t, vec4, UiImageComponent, textureSlot, tint, uvRect, UiItemSlotComponent, quantity (+7 more)
 
 ### Community 161 - "CMake Project Structure"
-Cohesion: 0.16
-Nodes (14): AetherCore Engine, Third-Party Dependencies (CPM), Project Do-Not Rules, Error Handling Patterns (Expected, AE_TRY, AE_ASSERT), Formatting Conventions, GPU Resource Management (UniqueBuffer, GpuHeap, VMA), Logging System (AE_INFO, AE_WARN, AE_ERROR), Memory and Ownership Rules (+6 more)
+Cohesion: 0.20
+Nodes (14): AetherCore Engine, Code Conventions, Project Do-Not Rules, Error handling, Formatting, GPU Resource Management (UniqueBuffer, GpuHeap, VMA), Headers, Logging (+6 more)
 
 ### Community 162 - "Root Motion Apply Delta"
 Cohesion: 0.22
 Nodes (13): ApplyDelta(), BeginFrame(), GetSignalSemaphoreSubmitInfo(), Init(), RecordCopyHipsPosition(), Shutdown(), uint32_t, VkCommandBuffer (+5 more)
 
 ### Community 163 - "Pipeline Coordinator"
-Cohesion: 0.18
-Nodes (11): FlushMeshUploads(), Init(), LinkRenderingDeps(), LocalShadowService, PassRegistrationContext, PhysicsDebugRenderer, RegisterPasses(), RenderPipelineCoordinator (+3 more)
+Cohesion: 0.19
+Nodes (10): FlushMeshUploads(), Init(), LinkRenderingDeps(), LocalShadowService, PassRegistrationContext, RegisterPasses(), RenderPipelineCoordinator, RenderTargetService (+2 more)
 
 ### Community 164 - "Binary Format Headers"
 Cohesion: 0.14
@@ -1080,8 +1085,8 @@ Cohesion: 0.14
 Nodes (14): AnimatorBlendJob, blendWeight, channelsAddr, clipCount, clipsAddr, nodeCount, nodePoseOffset, _pad0 (+6 more)
 
 ### Community 169 - "Render Graph"
-Cohesion: 0.15
-Nodes (14): TransientImageDesc, aspect, extent, format, usage, TransientImageEntry, aliasedEntryIndex, allocatedExtent (+6 more)
+Cohesion: 0.14
+Nodes (14): World, Create, Destroy, FindSystem, FromEntt, Handle, m_registry, m_systems (+6 more)
 
 ### Community 170 - "Scene Render Components"
 Cohesion: 0.18
@@ -1092,8 +1097,8 @@ Cohesion: 0.20
 Nodes (13): Entity, size_t, vector, UiChildrenComponent, children, UiParentComponent, parent, UiSectionComponent (+5 more)
 
 ### Community 172 - "UI System"
-Cohesion: 0.14
-Nodes (13): Input, UiContext, UIRenderer, UiSystem, BeginFrame, EndFrame, FlushWidgetStates, HitTest (+5 more)
+Cohesion: 0.15
+Nodes (12): ⚡ AetherCore, 📦 Asset Pipeline, Auto-importing raw texture folders, 🔧 Building, CMake Options, 📚 Dependencies, ✨ Features, Linux (+4 more)
 
 ### Community 173 - "Vulkan Implementation"
 Cohesion: 0.18
@@ -1108,16 +1113,16 @@ Cohesion: 0.23
 Nodes (12): BuildBlendPush(), Init(), PopulateBlendJobs(), Shutdown(), UpdateBlendWeights(), AnimationDatabase, uint32_t, VkDevice (+4 more)
 
 ### Community 176 - "Asset Packer Mesh Processor"
-Cohesion: 0.17
-Nodes (13): AnimResult, files, paths, SkeletonResult, bones, remapTable, skelData, skelHash (+5 more)
+Cohesion: 0.15
+Nodes (13): BoneInfo, ibm, name, originalIndex, parentIndex, SkeletonResult, bones, remapTable (+5 more)
 
 ### Community 177 - "Asset Packer PAK Writer"
 Cohesion: 0.17
-Nodes (10): PakWriter, AddDirectory, m_compressionLevel, m_files, m_sourceDir, Write, FileRecord, path (+2 more)
+Nodes (11): AetherCore project instructions, Architecture Map, Build & Commands, Config options, Dependencies, Destruction, Do Not, Resource management (+3 more)
 
 ### Community 178 - "Asset Packer Texture Processor"
-Cohesion: 0.26
-Nodes (11): BuildDDS(), CompressBlocks(), MipData, compressed, h, w, StbiDeleter, bc7enc_compress_block_params (+3 more)
+Cohesion: 0.29
+Nodes (10): BuildDDS(), CompressBlocks(), MipData, compressed, h, w, bc7enc_compress_block_params, BCnFmt (+2 more)
 
 ### Community 179 - "glTF Asset Loader"
 Cohesion: 0.15
@@ -1164,7 +1169,7 @@ Cohesion: 0.20
 Nodes (11): BufferFactory, BufferLifetimeRequest, CompiledResourceSet, ImageFactory, ImageLifetimeRequest, BuildMaterializationOrder(), Compile(), ResourcePool (+3 more)
 
 ### Community 190 - "PAK Backend"
-Cohesion: 0.17
+Cohesion: 0.15
 Nodes (12): Index, CollectDidYouMean, Exists, FindInsensitive, Glob, m_assetDataBase, m_index, m_pakPath (+4 more)
 
 ### Community 191 - "Texture Loader"
@@ -1217,7 +1222,7 @@ Nodes (11): VkAccessFlags2, VkCommandBuffer, VkDevice, VkImage, VkImageLayout, V
 
 ### Community 203 - "CMake Project Structure"
 Cohesion: 0.33
-Nodes (11): Build Targets (Engine, App, AssetPacker), CMake Build Presets, LSP / clangd Integration, App Executable Target, AssetPacker CLI Tool, CMake Helper Modules (Dependencies, TargetDefaults, SlangShaders), C++ Standard Selection (Clang 26, MSVC 23), AetherCore CMake Project (+3 more)
+Nodes (11): Build Targets (Engine, App, AssetPacker), CMake Build Presets, LSP / clangd, App Executable Target, AssetPacker CLI Tool, CMake Helper Modules (Dependencies, TargetDefaults, SlangShaders), C++ Standard Selection (Clang 26, MSVC 23), AetherCore CMake Project (+3 more)
 
 ### Community 204 - "Application"
 Cohesion: 0.20
@@ -1252,7 +1257,7 @@ Cohesion: 0.20
 Nodes (10): LayerStack, AttachAll, DetachAll, GuiAll, m_layers, Push, UpdateAll, AppLayer (+2 more)
 
 ### Community 212 - "Scripted Scene Layer"
-Cohesion: 0.36
+Cohesion: 0.35
 Nodes (10): BuildDefaultPipeline(), DestroySceneEntities(), DoReload(), OnAttach(), OnDetach(), OnUpdate(), LayerContext, ScriptedSceneLayer() (+2 more)
 
 ### Community 213 - "Bindless Pipeline Layout"
@@ -1272,8 +1277,8 @@ Cohesion: 0.18
 Nodes (11): SkinPalettePush, dstPaletteAddr, globalTransformsAddr, jobCount, jobsAddr, _pad0, _reserved0, _reserved1 (+3 more)
 
 ### Community 217 - "Render Target Service"
-Cohesion: 0.20
-Nodes (11): CreateCameraRenderTarget(), GetRenderTargetBindlessSlot(), GetRenderTargetColorImage(), HasTarget(), RegisterPasses(), RegisterPassFor(), m_getFrameIndex, Expected (+3 more)
+Cohesion: 0.22
+Nodes (9): CreateCameraRenderTarget(), Initialize(), RegisterPasses(), RegisterPassFor(), m_getFrameIndex, Expected, RenderQueueSharedPipelines, VkExtent2D (+1 more)
 
 ### Community 218 - "Skinned Mesh Component"
 Cohesion: 0.18
@@ -1292,12 +1297,12 @@ Cohesion: 0.18
 Nodes (7): Duration, TimePoint, FramePacer, kSpinThreshold, m_initialised, m_nextFrameTime, m_targetDuration
 
 ### Community 222 - "Animation Compiler"
-Cohesion: 0.22
-Nodes (9): CompileAnimations(), SetAnimationCompilePool(), WaitIdle(), Config, AetherCore(), EngineSettings, uint32_t, VkCommandPool (+1 more)
+Cohesion: 0.18
+Nodes (9): CommandRecorder, DebugVertex, color, position, RenderGraph, World, vec3, vec4 (+1 more)
 
 ### Community 223 - "Asset Packer Main Entry"
-Cohesion: 0.29
-Nodes (9): Args, compressionLevel, importMaterials, outputPath, sourceDir, main(), ParseArgs(), optional (+1 more)
+Cohesion: 0.24
+Nodes (10): UiContext, UIRenderer, ServiceContainer, UISubsystem, Init, m_uiContext, m_uiRenderer, m_uiSystem (+2 more)
 
 ### Community 224 - "glTF Asset Loader"
 Cohesion: 0.27
@@ -1320,15 +1325,15 @@ Cohesion: 0.20
 Nodes (10): kMaxSamples, array, UiGraphComponent, count, head, kMaxSamples, label, rangeMax (+2 more)
 
 ### Community 229 - "Fishing Layer"
-Cohesion: 0.33
+Cohesion: 0.31
 Nodes (9): GetActiveCameraName(), OnAttach(), OnDetach(), OnGui(), OnUpdate(), PxRect(), CameraHandle, LayerContext (+1 more)
 
 ### Community 230 - "Inventory Layer"
-Cohesion: 0.29
+Cohesion: 0.27
 Nodes (9): FakeItem, quantity, rarity, OnAttach(), OnDetach(), OnGui(), OnUpdate(), LayerContext (+1 more)
 
 ### Community 231 - "Sandbox Layer"
-Cohesion: 0.33
+Cohesion: 0.31
 Nodes (9): GetActiveCameraName(), OnAttach(), OnDetach(), OnGui(), OnUpdate(), PxRect(), CameraHandle, LayerContext (+1 more)
 
 ### Community 232 - "Material Buffer"
@@ -1392,7 +1397,7 @@ Cohesion: 0.33
 Nodes (8): IAnimationProvider, Flush(), TransformBoundingSphere(), mat4, RenderQueue, Scene, vec4, World
 
 ### Community 247 - "Directory Backend"
-Cohesion: 0.22
+Cohesion: 0.25
 Nodes (5): IFileBackend, Exists, Glob, OpenStream, Read
 
 ### Community 248 - "IO Thread Flush"
@@ -1420,8 +1425,8 @@ Cohesion: 0.22
 Nodes (9): IkSolvePush, depthSortedNodesAddr, globalTransformsAddr, ikGroundResultsAddr, ikJobsAddr, jobCount, nodeCount, nodeParentsAddr (+1 more)
 
 ### Community 254 - "Local Shadow Service"
-Cohesion: 0.25
-Nodes (9): RegisterPasses(), Shutdown(), ClearColorValue(), ClearDepthValue(), CullPass, RenderGraph, VkDevice, VkFormat (+1 more)
+Cohesion: 0.13
+Nodes (16): RegisterPasses(), Shutdown(), AttachmentRef, clearValue, image, loadOp, storeOp, ClearColorValue() (+8 more)
 
 ### Community 255 - "Resource Pool"
 Cohesion: 0.22
@@ -1468,8 +1473,8 @@ Cohesion: 0.25
 Nodes (8): Alignment, UiLayoutComponent, autoSize, crossAlignment, direction, padding, spacing, visible
 
 ### Community 267 - "Asset Packer Material Importer"
-Cohesion: 0.32
-Nodes (7): TextureFile, filename, normalizedStem, stem, tokens, string, vector
+Cohesion: 0.22
+Nodes (8): CameraManager, Entity, GraphicsPipeline, Material, PhysicsSystem, vector, AssetManager, Input
 
 ### Community 268 - "CMake Presets"
 Cohesion: 0.25
@@ -1484,7 +1489,7 @@ Cohesion: 0.25
 Nodes (7): AnimationBlendSystem, AnimationIkSystem, AnimationRootMotionSystem, CameraSubsystem, FrameConstants, GpuDevice, RenderingSubsystem
 
 ### Community 271 - "Application"
-Cohesion: 0.36
+Cohesion: 0.32
 Nodes (6): FileInfo, ModuleInfo, AddSearchRoot(), getModuleInfo(), tryOpenFile(), string
 
 ### Community 272 - "Scene System"
@@ -1492,15 +1497,15 @@ Cohesion: 0.36
 Nodes (7): Handle, RenderObjectDesc, AddRenderObject(), RemoveRenderObject(), SetTransform(), SetViewProjection(), mat4
 
 ### Community 273 - "File Request"
-Cohesion: 0.29
+Cohesion: 0.25
 Nodes (7): GetData(), GetError(), GetState(), byte, span, State, string_view
 
 ### Community 274 - "Physics Layer"
-Cohesion: 0.43
+Cohesion: 0.39
 Nodes (7): OnAttach(), OnDetach(), OnGui(), OnUpdate(), PxRect(), LayerContext, UiRect
 
 ### Community 275 - "UI Sandbox Layer"
-Cohesion: 0.43
+Cohesion: 0.39
 Nodes (7): HeightRect(), OnAttach(), OnDetach(), OnGui(), OnUpdate(), LayerContext, UiRect
 
 ### Community 276 - "Dynamic Mesh"
@@ -1556,8 +1561,8 @@ Cohesion: 0.29
 Nodes (6): ChooseFormat(), DownsampleBox2x2(), GatherBlock(), Block4x4, BCnFmt, path
 
 ### Community 289 - "Asset Packer Mesh Processor"
-Cohesion: 0.33
-Nodes (7): FindAttr(), FindSkinForPrimitive(), cgltf_accessor, cgltf_attribute_type, cgltf_node, cgltf_primitive, cgltf_skin
+Cohesion: 0.22
+Nodes (9): BlurPushConstants, atlasHeight, atlasWidth, blurOffsetX, blurOffsetY, isHorizontal, _pad0, _pad1 (+1 more)
 
 ### Community 290 - "glTF Asset Loader"
 Cohesion: 0.29
@@ -1572,12 +1577,12 @@ Cohesion: 0.33
 Nodes (6): FrameComposer, ApplyNoCameraLightingFallback(), ComposeBaseFrameConstants(), FrameConstants, mat4, RenderFramePacket
 
 ### Community 293 - "GPU Abstraction"
-Cohesion: 0.33
-Nodes (5): GpuExtent2D, height, width, uint32_t, VkExtent
+Cohesion: 0.29
+Nodes (7): ScriptErrorToast, dismissed, filePath, line, message, summary, string
 
 ### Community 295 - "Rendering Subsystem Orchestrator"
-Cohesion: 0.62
-Nodes (6): Init(), RecreateSwapchainResources(), RegisterPasses(), m_frameIndexProvider, Shutdown(), ServiceContainer
+Cohesion: 0.29
+Nodes (7): DestroyCameraRenderTarget(), GetRenderTargetBindlessSlot(), GetRenderTargetColorImage(), HasTarget(), Shutdown(), RGImage, uint32_t
 
 ### Community 297 - "Day/Night Cycle System"
 Cohesion: 0.48
@@ -1592,32 +1597,32 @@ Cohesion: 0.33
 Nodes (6): DDSHeaderDXT10, arraySize, dxgiFormat, miscFlag, miscFlags2, resourceDimension
 
 ### Community 300 - "Asset Packer Material Processor"
-Cohesion: 0.40
+Cohesion: 0.29
 Nodes (5): Process(), byte, ByteBuffer, path, span
 
 ### Community 301 - "Asset Packer SPIR-V Processor"
-Cohesion: 0.47
+Cohesion: 0.40
 Nodes (5): IsStrippable(), Strip(), byte, ByteBuffer, span
 
 ### Community 302 - "Asset Packer Texture Processor"
-Cohesion: 0.33
-Nodes (6): InitEncoders(), ToDDS(), BC7Quality, ByteBuffer, path, span
+Cohesion: 0.22
+Nodes (7): InitEncoders(), StbiDeleter, ToDDS(), BC7Quality, ByteBuffer, path, span
 
 ### Community 303 - "Binary Format Headers"
-Cohesion: 0.33
-Nodes (6): AnimHeaderDisk, channelCount, flags, magic, nameLen, version
+Cohesion: 0.10
+Nodes (21): AnimHeaderDisk, channelCount, flags, magic, nameLen, version, AnimSetHeaderDisk, animCount (+13 more)
 
 ### Community 304 - "Binary Format Headers"
-Cohesion: 0.33
-Nodes (6): AnimSetHeaderDisk, animCount, magic, _pad, skeletonHash, version
+Cohesion: 0.50
+Nodes (4): SubMeshHeaderDisk, firstIndex, indexCount, materialIndex
 
 ### Community 305 - "Binary Format Headers"
 Cohesion: 0.33
 Nodes (6): ChannelHeaderDisk, interp, keyCount, nodeIndex, _pad, path
 
 ### Community 306 - "Binary Format Headers"
-Cohesion: 0.33
-Nodes (6): SkelHeaderDisk, boneCount, magic, nameLen, skeletonHash, version
+Cohesion: 0.50
+Nodes (3): CastRay, RaycastResult, vec3
 
 ### Community 307 - "File System"
 Cohesion: 0.33
@@ -1652,8 +1657,8 @@ Cohesion: 0.33
 Nodes (6): UiRenderComponent, backgroundColor, borderColor, borderWidth, cornerRadius, visible
 
 ### Community 315 - "IO Thread Executor"
-Cohesion: 0.40
-Nodes (5): invoke_result_t, Run(), F, IOPriority, task
+Cohesion: 0.67
+Nodes (3): AdvanceBindlessFrame(), SubmitAndPresent(), uint64_t
 
 ### Community 316 - "Utility System"
 Cohesion: 0.60
@@ -1703,21 +1708,25 @@ Nodes (5): UiGridLayoutComponent, columns, padding, slotSize, spacing
 Cohesion: 0.40
 Nodes (5): UiSliderComponent, isDragging, max, min, value
 
+### Community 328 - "Application Main Entry"
+Cohesion: 0.18
+Nodes (7): RuntimeSystemsGuard, Context, SceneContext, ScriptHandle, SimFunction, string, vector
+
 ### Community 329 - "glTF Asset Loader"
-Cohesion: 0.50
-Nodes (4): DecomposeTransform(), mat4, quat, vec3
+Cohesion: 0.29
+Nodes (7): DecomposeTransform(), LoadMaterialBinary(), UnpackColorRGBA8(), GltfMaterial, mat4, quat, vec3
 
 ### Community 330 - "glTF Asset Loader"
 Cohesion: 0.50
 Nodes (4): GltfTexture, imageIndex, name, int32_t
 
 ### Community 333 - "GPU Abstraction"
-Cohesion: 0.50
-Nodes (4): m_swapchainRecreatedCallback, RecreateSwapchain(), Shutdown(), Window
+Cohesion: 0.67
+Nodes (3): GetComputeQueueFamily(), GetGraphicsQueueFamily(), uint32_t
 
 ### Community 334 - "Forward Render Pass"
-Cohesion: 0.50
-Nodes (3): ForwardPass, RegisterPass, RenderQueue
+Cohesion: 0.29
+Nodes (4): ForwardPass, RegisterPass, s_enabled, RenderQueue
 
 ### Community 336 - "Rendering Subsystem"
 Cohesion: 0.50
@@ -1733,39 +1742,39 @@ Nodes (3): string_view, IEq(), Levenshtein()
 
 ### Community 343 - "Engine Core (AetherCore)"
 Cohesion: 0.67
-Nodes (3): GetRenderPassNames(), string, vector
+Nodes (3): GetSwapchainColorFormat(), GetSwapchainDepthFormat(), GpuFormat
 
 ### Community 344 - "Service Container"
 Cohesion: 0.67
 Nodes (3): Init(), Config, ServiceContainer
 
-### Community 347 - "Render Target Service"
-Cohesion: 0.67
-Nodes (3): Initialize(), RenderQueueSharedPipelines, VulkanContext
-
 ### Community 350 - "Sandbox Game System"
 Cohesion: 0.67
 Nodes (3): OrbitComponent, isRttTarget, phase
 
+### Community 355 - "GPU Abstraction"
+Cohesion: 0.67
+Nodes (3): SetDebugLabelFunctions(), PFN_vkCmdBeginDebugUtilsLabelEXT, PFN_vkCmdEndDebugUtilsLabelEXT
+
 ## Knowledge Gaps
-- **3231 isolated node(s):** `version`, `major`, `minor`, `patch`, `configurePresets` (+3226 more)
+- **3265 isolated node(s):** `@opencode-ai/plugin`, `version`, `major`, `minor`, `patch` (+3260 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `PhysicsDebugRenderer` connect `Pipeline Coordinator` to `Physics Debug Renderer`, `Debug Layer`, `Rendering Subsystem Orchestrator`, `Script Physics Module`?**
-  _High betweenness centrality (0.058) - this node is a cross-community bridge._
-- **Why does `DasModuleBase` connect `Script UI Module` to `Script World Module`, `Script UI Bindings`, `Application`, `Script Game Components`, `Script Physics Module`, `Script Renderer Module`, `Script Animation Module`, `Scripting Module`, `Crash Handler`, `Scripting Module`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `RenderThread` connect `Rendering Subsystem` to `Scripted Scene Layer`, `Application Core`?**
-  _High betweenness centrality (0.036) - this node is a cross-community bridge._
-- **What connects `version`, `major`, `minor` to the rest of the system?**
-  _3232 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `PhysicsDebugRenderer` connect `Rendering Subsystem` to `Debug Layer`, `Rendering Subsystem Orchestrator`, `Pipeline Coordinator`, `Script Physics Module`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
+- **Why does `Throw()` connect `Swapchain (Vulkan)` to `Lighting Compute Pipeline`, `Font Texture Renderer`, `Pipeline Coordinator`, `Render Target Service`, `UI Renderer and Layout`, `GPU Heap Allocator`, `Swapchain (Vulkan)`, `Render Pipeline Coordinator`, `Texture Loader`, `GPU Abstraction`, `Utility System`, `Vulkan Context`, `Mesh System`?**
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
+- **Why does `DasModuleBase` connect `Script UI Module` to `Application`, `Script UI Bindings`, `Script World Module`, `Script Game Components`, `Script Physics Module`, `Scripting Module`, `Script Animation Module`, `Script Renderer Module`, `Scripting Module`?**
+  _High betweenness centrality (0.043) - this node is a cross-community bridge._
+- **What connects `@opencode-ai/plugin`, `version`, `major` to the rest of the system?**
+  _3266 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `UI System Core` be split into smaller, more focused modules?**
-  _Cohesion score 0.08364544319600499 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08767709168671478 - nodes in this community are weakly interconnected._
 - **Should `Render Queue` be split into smaller, more focused modules?**
   _Cohesion score 0.02564102564102564 - nodes in this community are weakly interconnected._
 - **Should `Script UI Bindings` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06610259122157588 - nodes in this community are weakly interconnected._

@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "google/gemini-2.0-flash-exp",
+  "model": "opencode/big-pickle",
   "provider": {
     "google": {
       "options": {
@@ -8,6 +8,7 @@
       }
     }
   },
+  "plugin": [],
   "permission": {
     "lsp": "allow"
   },
