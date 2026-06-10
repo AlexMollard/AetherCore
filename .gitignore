@@ -60,3 +60,8 @@ Thumbs.db
 
 # Knowledge graph (auto-generated, run `graphify update .` to regenerate)
 /graphify-out/
+
+# temorary files
+/.temp
+*.tmp
+*.log
