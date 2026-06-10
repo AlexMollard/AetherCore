@@ -668,7 +668,7 @@ namespace aether
 
 		EnsureTransientImages(target);
 
-		VkDeviceAddress frameAddr = static_cast<VkDeviceAddress>(frameConstantsAddr);
+		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
 		for (const CompiledPass& cp: m_compiled)
 		{

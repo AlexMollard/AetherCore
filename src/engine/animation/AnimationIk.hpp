@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "vulkan/UniqueBuffer.hpp"
@@ -49,12 +50,12 @@ namespace aether
 			return m_ikJobs.data();
 		}
 
-		VkDeviceAddress GetIkJobsDeviceAddress() const
+		gpu::DeviceAddress GetIkJobsDeviceAddress() const
 		{
 			return m_ikJobsBuffer.GetDeviceAddress();
 		}
 
-		VkDeviceAddress GetGroundResultsDeviceAddress() const
+		gpu::DeviceAddress GetGroundResultsDeviceAddress() const
 		{
 			return m_groundResultsBuffer.GetDeviceAddress();
 		}
@@ -64,9 +65,9 @@ namespace aether
 			return static_cast<std::uint32_t>(m_groundResults.size());
 		}
 
-		void BuildIkSolvePush(VkDeviceAddress globalTransformsAddr, VkDeviceAddress nodeParentsAddr, VkDeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount);
+		void BuildIkSolvePush(gpu::DeviceAddress globalTransformsAddr, gpu::DeviceAddress nodeParentsAddr, gpu::DeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount);
 
-		void SetDatabaseAddrs(VkDeviceAddress nodeParents, VkDeviceAddress depthSorted)
+		void SetDatabaseAddrs(gpu::DeviceAddress nodeParents, gpu::DeviceAddress depthSorted)
 		{
 			m_storedNodeParentsAddr = nodeParents;
 			m_storedDepthSortedNodesAddr = depthSorted;
@@ -90,7 +91,7 @@ namespace aether
 		std::uint32_t m_maxEntities = 0;
 		std::uint32_t m_nodeCount = 0;
 		std::uint32_t m_writtenIkJobCount = 0;
-		VkDeviceAddress m_storedNodeParentsAddr = 0;
-		VkDeviceAddress m_storedDepthSortedNodesAddr = 0;
+		gpu::DeviceAddress m_storedNodeParentsAddr = 0;
+		gpu::DeviceAddress m_storedDepthSortedNodesAddr = 0;
 	};
 } // namespace aether

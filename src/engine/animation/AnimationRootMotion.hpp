@@ -4,6 +4,10 @@
 #include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
 #include <cstdint>
+#include "gpu/GpuTypes.hpp"
+#include "vulkan/volk.hpp"
+#include <vk_mem_alloc.h>
+#include <glm/glm.hpp>
 #include <vector>
 
 namespace aether
@@ -18,7 +22,7 @@ namespace aether
 
 		void BeginFrame(VkDevice device, std::uint32_t frameIndex);
 
-		void RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, VkDeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex);
+		void RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, gpu::DeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex);
 
 		VkTimelineSemaphoreSubmitInfo GetSignalSemaphoreSubmitInfo(std::uint32_t frameIndex) const;
 

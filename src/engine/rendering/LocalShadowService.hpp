@@ -117,12 +117,12 @@ namespace aether
 
 		// Per-frame GPU buffer for ShadowLightData array (double-buffered for kMaxFramesInFlight).
 		std::array<UniqueBuffer, kMaxFramesInFlight> m_shadowDataBuffer;
-		std::array<VkDeviceAddress, kMaxFramesInFlight> m_shadowDataAddr{};
+		std::array<gpu::DeviceAddress, kMaxFramesInFlight> m_shadowDataAddr{};
 
 		// Per-frame small per-light frame constants buffer for atlas rendering.
 		// Each light gets a full FrameConstants-sized block.
 		std::array<UniqueBuffer, kMaxFramesInFlight> m_lightConstantsBuffer;
-		std::array<VkDeviceAddress, kMaxFramesInFlight> m_lightConstantsAddr{};
+		std::array<gpu::DeviceAddress, kMaxFramesInFlight> m_lightConstantsAddr{};
 
 		// Shadow index for each light in GpuLight buffer order:
 		// x=shadowDataIndex(-1=none), y=shadowStrength.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "gpu/GpuTypes.hpp"
 #include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
@@ -13,7 +14,7 @@ namespace aether
 	struct GpuSpan
 	{
 		T* data = nullptr;
-		VkDeviceAddress address = 0;
+		gpu::DeviceAddress address = 0;
 		std::uint32_t count = 0;
 
 		[[nodiscard]] bool IsValid() const
@@ -21,7 +22,7 @@ namespace aether
 			return address != 0;
 		}
 
-		[[nodiscard]] VkDeviceAddress DeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress DeviceAddress() const
 		{
 			return address;
 		}

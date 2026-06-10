@@ -3,6 +3,7 @@
 #include <format>
 #include <utility>
 
+#include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 
 namespace aether
@@ -191,7 +192,7 @@ namespace aether
 		return m_allocationInfo;
 	}
 
-	VkDeviceAddress UniqueBuffer::GetDeviceAddress() const
+	gpu::DeviceAddress UniqueBuffer::GetDeviceAddress() const
 	{
 		return m_deviceAddress;
 	}

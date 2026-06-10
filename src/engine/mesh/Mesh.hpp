@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <span>
 #include <vk_mem_alloc.h>
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -70,8 +71,8 @@ namespace aether
 		        std::uint32_t indexCount,
 		        VkDeviceSize vertexByteOffset = 0,
 		        VkDeviceSize indexByteOffset = 0,
-		        VkDeviceAddress vertexDeviceAddress = 0,
-		        VkDeviceAddress indexDeviceAddress = 0);
+		        gpu::DeviceAddress vertexDeviceAddress = 0,
+		        gpu::DeviceAddress indexDeviceAddress = 0);
 
 		void Destroy();
 
@@ -118,13 +119,13 @@ namespace aether
 		}
 
 		// Buffer device address of the vertex data - pass directly to DrawInstanceData.vertexBufferAddr.
-		[[nodiscard]] VkDeviceAddress GetVertexDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetVertexDeviceAddress() const
 		{
 			return m_vertexDeviceAddress;
 		}
 
 		// Buffer device address of the index data (for future BDA index fetch if needed).
-		[[nodiscard]] VkDeviceAddress GetIndexDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetIndexDeviceAddress() const
 		{
 			return m_indexDeviceAddress;
 		}
@@ -157,8 +158,8 @@ namespace aether
 		std::uint32_t m_indexCount = 0;
 		VkDeviceSize m_vertexByteOffset = 0;
 		VkDeviceSize m_indexByteOffset = 0;
-		VkDeviceAddress m_vertexDeviceAddress = 0;
-		VkDeviceAddress m_indexDeviceAddress = 0;
+		gpu::DeviceAddress m_vertexDeviceAddress = 0;
+		gpu::DeviceAddress m_indexDeviceAddress = 0;
 
 		// Local-space bounding volume (from mesh header).
 		glm::vec3 m_aabbMin{0.0f};

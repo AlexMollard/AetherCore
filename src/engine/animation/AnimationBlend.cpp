@@ -1,5 +1,6 @@
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationDatabase.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "vulkan/UniqueBuffer.hpp"
@@ -97,7 +98,7 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(m_blendJobsBuffer.FlushMapped());
 	}
 
-	void AnimationBlendSystem::BuildBlendPush(const AnimationDatabase& animDb, VkDeviceAddress sampledPosesAddr)
+	void AnimationBlendSystem::BuildBlendPush(const AnimationDatabase& animDb, gpu::DeviceAddress sampledPosesAddr)
 	{
 		m_blendPush = AnimationContracts::AnimationBlendPush{
 		        .animDbClipsAddr = animDb.GetClipsAddr(),

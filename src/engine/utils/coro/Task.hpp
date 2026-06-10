@@ -213,6 +213,7 @@ namespace aether::coro
 			task_state& operator=(const task_state&) = delete;
 			task_state(task_state&&) = delete;
 			task_state& operator=(task_state&&) = delete;
+
 			~task_state()
 			{
 				if (ready.load(std::memory_order_acquire) && !error)

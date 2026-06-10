@@ -470,7 +470,7 @@ namespace aether
 				                };
 				                vkCmdSetScissor(ctx.recorder.GetCommandBuffer(), 0, 1, &scissor);
 
-				                const VkDeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
+				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
 				                m_shadowRenderQueue.FlushDrawWithFrameAddr(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, lightFcAddr, &m_shadowPipeline);
 			                }
 

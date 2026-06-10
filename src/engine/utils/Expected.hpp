@@ -36,23 +36,23 @@ namespace aether
 					return FormatError("FileSystem", code, message);
 				case LogCategory::App:
 					return FormatError("Application", code, message);
-			case LogCategory::Std:
-				return FormatError("Standard", code, message);
-			case LogCategory::Render:
-				return FormatError("Render", code, message);
-			case LogCategory::Scene:
-				return FormatError("Scene", code, message);
-			case LogCategory::Camera:
-				return FormatError("Camera", code, message);
-			case LogCategory::UI:
-				return FormatError("UI", code, message);
-			case LogCategory::Input:
-				return FormatError("Input", code, message);
-			case LogCategory::Unknown:
-				return FormatError("Unknown", code, message);
-			default:
-				return FormatError("Unknown", code, message);
-		}
+				case LogCategory::Std:
+					return FormatError("Standard", code, message);
+				case LogCategory::Render:
+					return FormatError("Render", code, message);
+				case LogCategory::Scene:
+					return FormatError("Scene", code, message);
+				case LogCategory::Camera:
+					return FormatError("Camera", code, message);
+				case LogCategory::UI:
+					return FormatError("UI", code, message);
+				case LogCategory::Input:
+					return FormatError("Input", code, message);
+				case LogCategory::Unknown:
+					return FormatError("Unknown", code, message);
+				default:
+					return FormatError("Unknown", code, message);
+			}
 		}
 
 		static AetherError Vulkan(int32_t vkResult, std::string_view msg)

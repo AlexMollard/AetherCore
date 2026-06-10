@@ -5,6 +5,7 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/GpuSpan.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/volk.hpp"
@@ -87,7 +88,7 @@ namespace aether
 			return m_buffer.Get();
 		}
 
-		[[nodiscard]] VkDeviceAddress GetBaseAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetBaseAddress() const
 		{
 			return m_buffer.GetDeviceAddress();
 		}
@@ -116,6 +117,6 @@ namespace aether
 
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);
 		void FreeBytes(VkDeviceSize offset, VkDeviceSize bytes);
-		void UploadBytes(VkDeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool);
+		void UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool);
 	};
 } // namespace aether

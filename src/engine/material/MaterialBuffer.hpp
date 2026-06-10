@@ -4,6 +4,7 @@
 #include <mutex>
 #include <vector>
 #include <vk_mem_alloc.h>
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
 #include "material/GpuMaterial.hpp"
@@ -39,7 +40,7 @@ namespace aether
 
 		void Write(std::uint32_t slot, const GpuMaterial& material);
 
-		[[nodiscard]] VkDeviceAddress GetDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress() const
 		{
 			return m_address;
 		}
@@ -55,7 +56,7 @@ namespace aether
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		UniqueBuffer m_buffer;
 		GpuMaterial* m_mapped = nullptr;
-		VkDeviceAddress m_address = 0;
+		gpu::DeviceAddress m_address = 0;
 		std::vector<uint32_t> m_freeSlots;
 	};
 } // namespace aether

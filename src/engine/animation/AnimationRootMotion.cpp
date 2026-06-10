@@ -1,4 +1,5 @@
 #include "animation/AnimationRootMotion.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
@@ -93,7 +94,7 @@ namespace aether
 		}
 	}
 
-	void AnimationRootMotionSystem::RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, VkDeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex)
+	void AnimationRootMotionSystem::RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, gpu::DeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex)
 	{
 		const std::uint32_t slot = frameIndex % kSlots;
 		const VkDeviceSize dstOffset = static_cast<VkDeviceSize>(slot * m_maxEntities) * sizeof(glm::vec4);

@@ -252,7 +252,7 @@ namespace aether
 			                CommandRecorder nullRecorder;
 			                m_lightingManager->UpdateForView(frameIdx, nullRecorder, *cam, GpuExtent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
-			                const VkDeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
+			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
 			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
 		                });

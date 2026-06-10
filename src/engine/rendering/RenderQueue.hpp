@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
 #include "utils/GpuProfiler.hpp"
@@ -187,11 +188,11 @@ namespace aether
 		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
 		// constants addresses; the computePipeline/layout must then be compatible
 		// with CullMultiPushConstants.
-		void PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
+		void PrepareAndDispatch(VkCommandBuffer cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
 
 		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
 		// used by PrepareAndDispatch to build CullMultiPushConstants.
-		void SetMultiCullFrameAddrs(const VkDeviceAddress addrs[3])
+		void SetMultiCullFrameAddrs(const gpu::DeviceAddress addrs[3])
 		{
 			m_multiFrameAddrs[0] = addrs[0];
 			m_multiFrameAddrs[1] = addrs[1];
@@ -208,7 +209,7 @@ namespace aether
 			return m_maxSkinJoints;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetSkinPaletteBufferAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetSkinPaletteBufferAddress() const
 		{
 			return m_skinPaletteBuffer.GetDeviceAddress();
 		}
@@ -222,7 +223,7 @@ namespace aether
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -274,13 +275,13 @@ namespace aether
 		std::vector<BatchRenderInfo> m_batchRenderInfos;
 
 		// Cached per-frame addresses/state for FlushDraw.
-		VkDeviceAddress m_multiFrameAddrs[3] = {};
-		VkDeviceAddress m_cachedFrameAddr = 0;
-		VkDeviceAddress m_cachedInstanceDataAddr = 0;         // BDA of DrawContracts::InstanceData[0] for current frame slot
-		VkDeviceAddress m_cachedSkinPaletteAddr = 0;          // BDA of global skin palette mat4[0] for current frame slot
-		VkDeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
-		VkDeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
-		VkDeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
+		gpu::DeviceAddress m_multiFrameAddrs[3] = {};
+		gpu::DeviceAddress m_cachedFrameAddr = 0;
+		gpu::DeviceAddress m_cachedInstanceDataAddr = 0;         // BDA of DrawContracts::InstanceData[0] for current frame slot
+		gpu::DeviceAddress m_cachedSkinPaletteAddr = 0;          // BDA of global skin palette mat4[0] for current frame slot
+		gpu::DeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
+		gpu::DeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
+		gpu::DeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		bool m_debugDisableAnimation = false;
@@ -293,7 +294,7 @@ namespace aether
 		void FlushDrawImpl(CommandRecorder& recorder,
 		        VkDescriptorSet bindlessSet,
 		        VkDescriptorSet lightingSet,
-		        VkDeviceAddress frameAddr,
+		        gpu::DeviceAddress frameAddr,
 		        const GraphicsPipeline* overridePipeline,
 		        std::uint32_t cascadeOffset,
 		        const char* debugLabel,

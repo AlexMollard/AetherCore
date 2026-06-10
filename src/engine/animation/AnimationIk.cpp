@@ -304,7 +304,7 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(m_groundResultsBuffer.FlushMapped());
 	}
 
-	void AnimationIkSystem::BuildIkSolvePush(VkDeviceAddress globalTransformsAddr, VkDeviceAddress nodeParentsAddr, VkDeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount)
+	void AnimationIkSystem::BuildIkSolvePush(gpu::DeviceAddress globalTransformsAddr, gpu::DeviceAddress nodeParentsAddr, gpu::DeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount)
 	{
 		m_nodeCount = nodeCount;
 		if (nodeParentsAddr == 0)

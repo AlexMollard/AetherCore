@@ -5,6 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
 #include "assets/GltfAsset.hpp"
@@ -20,7 +21,7 @@ namespace aether
 	// and maintains lookup tables for efficient per-frame sampling on compute shader.
 	//
 	// All data lives in a single device-local GpuHeap (one VkBuffer per database).
-	// Individual array addresses are exposed as VkDeviceAddress for push-constant use.
+	// Individual array addresses are exposed as gpu::DeviceAddress for push-constant use.
 	class AnimationDatabase
 	{
 	public:
@@ -103,72 +104,72 @@ namespace aether
 		void Destroy();
 
 		// GPU buffer addresses (device addressable).
-		[[nodiscard]] VkDeviceAddress GetClipsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetClipsAddr() const
 		{
 			return m_clipsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetChannelsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetChannelsAddr() const
 		{
 			return m_channelsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetTimesAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetTimesAddr() const
 		{
 			return m_timesAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetValuesAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetValuesAddr() const
 		{
 			return m_valuesAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetStringsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetStringsAddr() const
 		{
 			return m_stringsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetNodeParentsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetNodeParentsAddr() const
 		{
 			return m_nodeParentsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetBindTranslationsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetBindTranslationsAddr() const
 		{
 			return m_bindTranslationsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetBindRotationsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetBindRotationsAddr() const
 		{
 			return m_bindRotationsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetBindScalesAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetBindScalesAddr() const
 		{
 			return m_bindScalesAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetSkinMetasAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetSkinMetasAddr() const
 		{
 			return m_skinMetasAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetSkinJointsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetSkinJointsAddr() const
 		{
 			return m_skinJointsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetSkinInverseBindsAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetSkinInverseBindsAddr() const
 		{
 			return m_skinInverseBindsAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetDepthSortedNodesAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetDepthSortedNodesAddr() const
 		{
 			return m_depthSortedNodesAddr;
 		}
 
-		[[nodiscard]] VkDeviceAddress GetDepthRangesAddr() const
+		[[nodiscard]] gpu::DeviceAddress GetDepthRangesAddr() const
 		{
 			return m_depthRangesAddr;
 		}
@@ -284,20 +285,20 @@ namespace aether
 
 		GpuHeap m_heap;
 
-		VkDeviceAddress m_clipsAddr = 0;
-		VkDeviceAddress m_channelsAddr = 0;
-		VkDeviceAddress m_timesAddr = 0;
-		VkDeviceAddress m_valuesAddr = 0;
-		VkDeviceAddress m_stringsAddr = 0;
-		VkDeviceAddress m_nodeParentsAddr = 0;
-		VkDeviceAddress m_bindTranslationsAddr = 0;
-		VkDeviceAddress m_bindRotationsAddr = 0;
-		VkDeviceAddress m_bindScalesAddr = 0;
-		VkDeviceAddress m_skinMetasAddr = 0;
-		VkDeviceAddress m_skinJointsAddr = 0;
-		VkDeviceAddress m_skinInverseBindsAddr = 0;
-		VkDeviceAddress m_depthSortedNodesAddr = 0;
-		VkDeviceAddress m_depthRangesAddr = 0;
+		gpu::DeviceAddress m_clipsAddr = 0;
+		gpu::DeviceAddress m_channelsAddr = 0;
+		gpu::DeviceAddress m_timesAddr = 0;
+		gpu::DeviceAddress m_valuesAddr = 0;
+		gpu::DeviceAddress m_stringsAddr = 0;
+		gpu::DeviceAddress m_nodeParentsAddr = 0;
+		gpu::DeviceAddress m_bindTranslationsAddr = 0;
+		gpu::DeviceAddress m_bindRotationsAddr = 0;
+		gpu::DeviceAddress m_bindScalesAddr = 0;
+		gpu::DeviceAddress m_skinMetasAddr = 0;
+		gpu::DeviceAddress m_skinJointsAddr = 0;
+		gpu::DeviceAddress m_skinInverseBindsAddr = 0;
+		gpu::DeviceAddress m_depthSortedNodesAddr = 0;
+		gpu::DeviceAddress m_depthRangesAddr = 0;
 
 		std::vector<GpuClip> m_clips;              // CPU-side copy for GetClipName()/GetClipDuration()
 		std::vector<GpuChannel> m_channels;        // CPU-side copy for AppendAnimations rebuild

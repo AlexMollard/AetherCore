@@ -5,6 +5,7 @@
 #include <cstring>
 #include <stdexcept>
 
+#include "gpu/GpuTypes.hpp"
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationIk.hpp"
 #include "rendering/CommandRecorder.hpp"
@@ -19,7 +20,7 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, 	const RenderQueueConfig& config)
+	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
 	{
 		m_device = device;
 		m_allocator = allocator;
@@ -102,7 +103,7 @@ namespace aether
 		m_maxDraws = 0;
 		m_outputDrawCapacity = 0;
 		m_maxBatches = 0;
-	m_maxAnimationDraws = 0;
+		m_maxAnimationDraws = 0;
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
@@ -115,7 +116,7 @@ namespace aether
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
-	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, VkDeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
+	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
 		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
@@ -199,10 +200,10 @@ namespace aether
 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
 		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
-		const VkDeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
-		const VkDeviceAddress currSampledPosesAddr =
+		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		const gpu::DeviceAddress currSampledPosesAddr =
 		        (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
-		const VkDeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
@@ -436,7 +437,7 @@ namespace aether
 				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
 				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
-				const VkDeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 				{
@@ -640,7 +641,7 @@ namespace aether
 			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
 			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
-			const VkDeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
@@ -649,7 +650,7 @@ namespace aether
 				{
 					continue;
 				}
-				const VkDeviceAddress depthAddr = batch.db->GetDepthRangesAddr();
+				const gpu::DeviceAddress depthAddr = batch.db->GetDepthRangesAddr();
 				if (depthAddr == 0)
 				{
 					continue;
@@ -947,7 +948,7 @@ namespace aether
 		FlushDrawImpl(recorder, bindlessSet, VK_NULL_HANDLE, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const VkDeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		FlushDrawImpl(recorder, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
@@ -955,7 +956,7 @@ namespace aether
 	void RenderQueue::FlushDrawImpl(CommandRecorder& recorder,
 	        VkDescriptorSet bindlessSet,
 	        VkDescriptorSet lightingSet,
-	        VkDeviceAddress frameAddr,
+	        gpu::DeviceAddress frameAddr,
 	        const GraphicsPipeline* overridePipeline,
 	        std::uint32_t cascadeOffset,
 	        const char* debugLabel,

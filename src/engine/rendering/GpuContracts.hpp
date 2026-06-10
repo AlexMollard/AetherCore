@@ -3,7 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include "vulkan/volk.hpp"
+
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {
@@ -27,7 +28,7 @@ namespace aether
 			std::uint32_t skinJointCount = 0;
 			std::uint32_t _pad0 = 0;
 			glm::vec4 worldBoundingSphere{};
-			VkDeviceAddress vertexBufferAddr = 0;
+			gpu::DeviceAddress vertexBufferAddr = 0;
 		};
 
 		static_assert(sizeof(InstanceData) == 104, "InstanceData layout changed - update shaders/include/RenderContracts.slangh.");
@@ -41,9 +42,9 @@ namespace aether
 
 		struct PushConstants
 		{
-			VkDeviceAddress frameAddr = 0;
-			VkDeviceAddress instanceDataAddr = 0;
-			VkDeviceAddress skinPaletteAddr = 0;
+			gpu::DeviceAddress frameAddr = 0;
+			gpu::DeviceAddress instanceDataAddr = 0;
+			gpu::DeviceAddress skinPaletteAddr = 0;
 		};
 
 		static_assert(sizeof(PushConstants) == 24, "PushConstants layout changed - update shaders/include/RenderContracts.slangh.");
@@ -96,12 +97,12 @@ namespace aether
 
 		struct PushConstants
 		{
-			VkDeviceAddress frameAddr = 0;
-			VkDeviceAddress instanceDataAddr = 0;
-			VkDeviceAddress inputCmdAddr = 0;
-			VkDeviceAddress outputCmdAddr = 0;
-			VkDeviceAddress batchDescAddr = 0;
-			VkDeviceAddress batchCountAddr = 0;
+			gpu::DeviceAddress frameAddr = 0;
+			gpu::DeviceAddress instanceDataAddr = 0;
+			gpu::DeviceAddress inputCmdAddr = 0;
+			gpu::DeviceAddress outputCmdAddr = 0;
+			gpu::DeviceAddress batchDescAddr = 0;
+			gpu::DeviceAddress batchCountAddr = 0;
 			std::uint32_t totalDrawCount = 0;
 			std::uint32_t debugFlags = 0;
 			std::uint32_t _pad0 = 0;
@@ -122,11 +123,11 @@ namespace aether
 
 		struct MultiPushConstants
 		{
-			VkDeviceAddress frameAddrs[kCullMultiFrustumCount] = {};
-			VkDeviceAddress instanceDataAddr = 0;
-			VkDeviceAddress inputCmdAddr = 0;
-			VkDeviceAddress outputCmdAddr = 0;
-			VkDeviceAddress batchDescAddr = 0;
+			gpu::DeviceAddress frameAddrs[kCullMultiFrustumCount] = {};
+			gpu::DeviceAddress instanceDataAddr = 0;
+			gpu::DeviceAddress inputCmdAddr = 0;
+			gpu::DeviceAddress outputCmdAddr = 0;
+			gpu::DeviceAddress batchDescAddr = 0;
 			std::uint32_t totalDrawCount = 0;
 			std::uint32_t outputCascadeStride = 0;
 			std::uint32_t debugFlags = 0;
@@ -157,7 +158,7 @@ namespace aether
 	{
 		struct SkinCopyJob
 		{
-			VkDeviceAddress sampledPosesAddr = 0;
+			gpu::DeviceAddress sampledPosesAddr = 0;
 			std::uint32_t dstPaletteOffset = 0;
 			std::uint32_t jointCount = 0;
 			std::uint32_t skinIndex = 0;
@@ -181,10 +182,10 @@ namespace aether
 			float animTime = 0.0f;
 			std::uint32_t nodePoseOffset = 0;
 			std::uint32_t nodeCount = 0;
-			VkDeviceAddress clipsAddr = 0;
-			VkDeviceAddress channelsAddr = 0;
-			VkDeviceAddress timesAddr = 0;
-			VkDeviceAddress valuesAddr = 0;
+			gpu::DeviceAddress clipsAddr = 0;
+			gpu::DeviceAddress channelsAddr = 0;
+			gpu::DeviceAddress timesAddr = 0;
+			gpu::DeviceAddress valuesAddr = 0;
 			std::uint32_t clipCount = 0;
 			std::uint32_t _pad0 = 0;
 		};
@@ -215,12 +216,12 @@ namespace aether
 
 		struct SkinPalettePush
 		{
-			VkDeviceAddress jobsAddr = 0;
-			VkDeviceAddress dstPaletteAddr = 0;
-			VkDeviceAddress globalTransformsAddr = 0;
-			VkDeviceAddress skinMetasAddr = 0;
-			VkDeviceAddress skinJointsAddr = 0;
-			VkDeviceAddress skinInverseBindsAddr = 0;
+			gpu::DeviceAddress jobsAddr = 0;
+			gpu::DeviceAddress dstPaletteAddr = 0;
+			gpu::DeviceAddress globalTransformsAddr = 0;
+			gpu::DeviceAddress skinMetasAddr = 0;
+			gpu::DeviceAddress skinJointsAddr = 0;
+			gpu::DeviceAddress skinInverseBindsAddr = 0;
 			std::uint32_t jobCount = 0;
 			std::uint32_t _pad0 = 0;
 			std::uint32_t _reserved0 = 0;
@@ -240,11 +241,11 @@ namespace aether
 
 		struct NodeFlattenPush
 		{
-			VkDeviceAddress sampledPosesAddr = 0;
-			VkDeviceAddress nodeParentsAddr = 0;
-			VkDeviceAddress globalTransformsAddr = 0;
-			VkDeviceAddress depthSortedNodesAddr = 0;
-			VkDeviceAddress animatorJobsAddr = 0;
+			gpu::DeviceAddress sampledPosesAddr = 0;
+			gpu::DeviceAddress nodeParentsAddr = 0;
+			gpu::DeviceAddress globalTransformsAddr = 0;
+			gpu::DeviceAddress depthSortedNodesAddr = 0;
+			gpu::DeviceAddress animatorJobsAddr = 0;
 			std::uint32_t depthOffset = 0;
 			std::uint32_t nodeCount = 0;
 			std::uint32_t batchStartJob = 0;
@@ -264,15 +265,15 @@ namespace aether
 
 		struct AnimationSamplePush
 		{
-			VkDeviceAddress animDbClipsAddr = 0;
-			VkDeviceAddress animDbChannelsAddr = 0;
-			VkDeviceAddress animDbTimesAddr = 0;
-			VkDeviceAddress animDbValuesAddr = 0;
-			VkDeviceAddress bindTranslationsAddr = 0;
-			VkDeviceAddress bindRotationsAddr = 0;
-			VkDeviceAddress bindScalesAddr = 0;
-			VkDeviceAddress animatorJobsAddr = 0;
-			VkDeviceAddress sampledPosesAddr = 0;
+			gpu::DeviceAddress animDbClipsAddr = 0;
+			gpu::DeviceAddress animDbChannelsAddr = 0;
+			gpu::DeviceAddress animDbTimesAddr = 0;
+			gpu::DeviceAddress animDbValuesAddr = 0;
+			gpu::DeviceAddress bindTranslationsAddr = 0;
+			gpu::DeviceAddress bindRotationsAddr = 0;
+			gpu::DeviceAddress bindScalesAddr = 0;
+			gpu::DeviceAddress animatorJobsAddr = 0;
+			gpu::DeviceAddress sampledPosesAddr = 0;
 			std::uint32_t jobCount = 0;
 			std::uint32_t clipCount = 0;
 		};
@@ -292,11 +293,11 @@ namespace aether
 
 		struct PoseInitPush
 		{
-			VkDeviceAddress bindTranslationsAddr = 0;
-			VkDeviceAddress bindRotationsAddr = 0;
-			VkDeviceAddress bindScalesAddr = 0;
-			VkDeviceAddress animatorJobsAddr = 0;
-			VkDeviceAddress sampledPosesAddr = 0;
+			gpu::DeviceAddress bindTranslationsAddr = 0;
+			gpu::DeviceAddress bindRotationsAddr = 0;
+			gpu::DeviceAddress bindScalesAddr = 0;
+			gpu::DeviceAddress animatorJobsAddr = 0;
+			gpu::DeviceAddress sampledPosesAddr = 0;
 			std::uint32_t jobCount = 0;
 			std::uint32_t nodeCountPerJob = 0;
 		};
@@ -324,10 +325,10 @@ namespace aether
 			float blendWeight = 1.0f; // 1.0=fully primary, 0.0=fully secondary
 			std::uint32_t nodePoseOffset = 0;
 			std::uint32_t nodeCount = 0;
-			VkDeviceAddress clipsAddr = 0;
-			VkDeviceAddress channelsAddr = 0;
-			VkDeviceAddress timesAddr = 0;
-			VkDeviceAddress valuesAddr = 0;
+			gpu::DeviceAddress clipsAddr = 0;
+			gpu::DeviceAddress channelsAddr = 0;
+			gpu::DeviceAddress timesAddr = 0;
+			gpu::DeviceAddress valuesAddr = 0;
 			std::uint32_t clipCount = 0;
 			std::uint32_t _pad0 = 0;
 		};
@@ -339,15 +340,15 @@ namespace aether
 		// two clip poses and lerps them, writing flat node poses to sampledPosesAddr.
 		struct AnimationBlendPush
 		{
-			VkDeviceAddress animDbClipsAddr = 0;
-			VkDeviceAddress animDbChannelsAddr = 0;
-			VkDeviceAddress animDbTimesAddr = 0;
-			VkDeviceAddress animDbValuesAddr = 0;
-			VkDeviceAddress bindTranslationsAddr = 0;
-			VkDeviceAddress bindRotationsAddr = 0;
-			VkDeviceAddress bindScalesAddr = 0;
-			VkDeviceAddress blendJobsAddr = 0;
-			VkDeviceAddress sampledPosesAddr = 0;
+			gpu::DeviceAddress animDbClipsAddr = 0;
+			gpu::DeviceAddress animDbChannelsAddr = 0;
+			gpu::DeviceAddress animDbTimesAddr = 0;
+			gpu::DeviceAddress animDbValuesAddr = 0;
+			gpu::DeviceAddress bindTranslationsAddr = 0;
+			gpu::DeviceAddress bindRotationsAddr = 0;
+			gpu::DeviceAddress bindScalesAddr = 0;
+			gpu::DeviceAddress blendJobsAddr = 0;
+			gpu::DeviceAddress sampledPosesAddr = 0;
 			std::uint32_t jobCount = 0;
 			std::uint32_t _pad0 = 0;
 		};
@@ -372,8 +373,8 @@ namespace aether
 			float rightLowerLegLen = 0.0f;
 			float leftKneeBendSign = 1.0f;
 			float rightKneeBendSign = 1.0f;
-			VkDeviceAddress globalTransformsAddr = 0;
-			VkDeviceAddress ikResultsAddr = 0; // CPU-written per-entity foot ground data
+			gpu::DeviceAddress globalTransformsAddr = 0;
+			gpu::DeviceAddress ikResultsAddr = 0; // CPU-written per-entity foot ground data
 			std::uint32_t entityId = 0;
 			std::uint32_t _pad0 = 0;
 		};
@@ -383,11 +384,11 @@ namespace aether
 		// Push constant for the IK solve compute pass.
 		struct IkSolvePush
 		{
-			VkDeviceAddress globalTransformsAddr = 0;
-			VkDeviceAddress ikJobsAddr = 0;
-			VkDeviceAddress ikGroundResultsAddr = 0; // VkBuffer of IkGroundResult entries
-			VkDeviceAddress nodeParentsAddr = 0;
-			VkDeviceAddress depthSortedNodesAddr = 0;
+			gpu::DeviceAddress globalTransformsAddr = 0;
+			gpu::DeviceAddress ikJobsAddr = 0;
+			gpu::DeviceAddress ikGroundResultsAddr = 0; // VkBuffer of IkGroundResult entries
+			gpu::DeviceAddress nodeParentsAddr = 0;
+			gpu::DeviceAddress depthSortedNodesAddr = 0;
 			std::uint32_t jobCount = 0;
 			std::uint32_t nodeCount = 0;
 		};

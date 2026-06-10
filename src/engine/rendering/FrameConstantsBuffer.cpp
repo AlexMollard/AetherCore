@@ -66,7 +66,7 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(m_frames[frameIndex].buffer.FlushMapped());
 	}
 
-	VkDeviceAddress FrameConstantsBuffer::GetDeviceAddress(std::uint32_t frameIndex) const
+	gpu::DeviceAddress FrameConstantsBuffer::GetDeviceAddress(std::uint32_t frameIndex) const
 	{
 		return m_frames[frameIndex].address;
 	}

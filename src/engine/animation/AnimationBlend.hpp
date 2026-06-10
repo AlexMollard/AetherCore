@@ -18,7 +18,7 @@ namespace aether
 
 		void PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t frameIndex);
 
-		void BuildBlendPush(const AnimationDatabase& animDb, VkDeviceAddress sampledPosesAddr);
+		void BuildBlendPush(const AnimationDatabase& animDb, gpu::DeviceAddress sampledPosesAddr);
 
 		const AnimationContracts::AnimationBlendPush& GetBlendPush() const
 		{
@@ -30,7 +30,7 @@ namespace aether
 			return m_writtenJobCount;
 		}
 
-		VkDeviceAddress GetBlendJobsDeviceAddress() const
+		gpu::DeviceAddress GetBlendJobsDeviceAddress() const
 		{
 			return m_blendJobsBuffer.GetDeviceAddress();
 		}

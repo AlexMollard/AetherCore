@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
 #include "vulkan/GpuHeap.hpp"
@@ -72,12 +73,12 @@ namespace aether
 			return m_indexHeap.GetBuffer();
 		}
 
-		[[nodiscard]] VkDeviceAddress GetVertexDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetVertexDeviceAddress() const
 		{
 			return m_vertexHeap.GetBaseAddress();
 		}
 
-		[[nodiscard]] VkDeviceAddress GetIndexDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetIndexDeviceAddress() const
 		{
 			return m_indexHeap.GetBaseAddress();
 		}

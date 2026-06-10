@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <vk_mem_alloc.h>
 
+#include "gpu/GpuTypes.hpp"
 #include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
@@ -39,7 +40,7 @@ namespace aether
 		[[nodiscard]] VmaAllocation GetAllocation() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
 		[[nodiscard]] const VmaAllocationInfo& GetAllocationInfo() const;
-		[[nodiscard]] VkDeviceAddress GetDeviceAddress() const;
+		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress() const;
 		[[nodiscard]] VkBufferUsageFlags GetUsage() const;
 		[[nodiscard]] VkDeviceSize GetSize() const;
 		[[nodiscard]] bool HasDeviceAddress() const;
@@ -66,7 +67,7 @@ namespace aether
 		VmaAllocationInfo m_allocationInfo{};
 		VkBufferUsageFlags m_usage = 0;
 		VkDeviceSize m_size = 0;
-		VkDeviceAddress m_deviceAddress = 0;
+		gpu::DeviceAddress m_deviceAddress = 0;
 		std::uint64_t m_virtualResourceId = 0;
 	};
 } // namespace aether

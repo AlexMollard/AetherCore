@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "gpu/GpuTypes.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -10,7 +11,7 @@ namespace aether
 	// Helper: upload a non-empty CPU array into the heap and return its device address.
 	// Returns 0 when the input span is empty (no allocation made).
 	template<typename T>
-	static VkDeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, VkCommandPool pool)
+	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, VkCommandPool pool)
 	{
 		if (data.empty())
 		{

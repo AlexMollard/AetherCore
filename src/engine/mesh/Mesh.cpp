@@ -87,7 +87,7 @@ namespace aether
 		        const void* data,
 		        VkDeviceSize size,
 		        VmaAllocation& outAllocation,
-		        VkDeviceAddress& outDeviceAddress,
+		        gpu::DeviceAddress& outDeviceAddress,
 		        const char* debugName = nullptr)
 		{
 			// Staging: mapped, host-sequential-write.
@@ -128,7 +128,7 @@ namespace aether
 	} // namespace
 
 	Mesh Mesh::CreateView(
-	        VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, VkDeviceAddress vertexDeviceAddress, VkDeviceAddress indexDeviceAddress)
+	        VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, gpu::DeviceAddress vertexDeviceAddress, gpu::DeviceAddress indexDeviceAddress)
 	{
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;

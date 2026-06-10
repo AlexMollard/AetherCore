@@ -26,7 +26,7 @@ namespace aether
 
 		void Write(std::uint32_t frameIndex, const FrameConstants& data);
 
-		[[nodiscard]] VkDeviceAddress GetDeviceAddress(std::uint32_t frameIndex) const;
+		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress(std::uint32_t frameIndex) const;
 		[[nodiscard]] std::uint64_t GetDeviceAddressU64(std::uint32_t frameIndex) const;
 
 	private:
@@ -36,7 +36,7 @@ namespace aether
 		{
 			UniqueBuffer buffer;
 			void* mapped = nullptr;
-			VkDeviceAddress address = 0;
+			gpu::DeviceAddress address = 0;
 		};
 
 		VkDevice m_device = VK_NULL_HANDLE;

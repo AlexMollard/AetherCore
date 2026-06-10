@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstring>
 
+#include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -104,7 +105,7 @@ namespace aether
 		}
 	}
 
-	void GpuHeap::UploadBytes(VkDeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)
+	void GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)
 	{
 		assert(dstAddr >= m_buffer.GetDeviceAddress());
 		const VkDeviceSize dstOffset = dstAddr - m_buffer.GetDeviceAddress();

@@ -98,7 +98,7 @@ namespace aether
 		                [this, &cullPass](PassContext& ctx)
 		                {
 			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
-			                VkDeviceAddress cascadeAddrs[kCullMultiFrustumCount];
+			                gpu::DeviceAddress cascadeAddrs[kCullMultiFrustumCount];
 			                for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
 			                {
 				                cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);

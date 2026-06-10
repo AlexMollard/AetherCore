@@ -28,10 +28,15 @@ namespace aether
 		{
 		}
 
-		template<typename VkExtent>
-		explicit GpuExtent2D(const VkExtent& ext)
+		template<typename Extent2D>
+		explicit GpuExtent2D(const Extent2D& ext)
 		      : width(ext.width), height(ext.height)
 		{
 		}
 	};
 } // namespace aether
+
+namespace aether::gpu
+{
+	using DeviceAddress = std::uint64_t;
+} // namespace aether::gpu
