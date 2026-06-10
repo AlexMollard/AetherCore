@@ -64,6 +64,15 @@ namespace aether
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
 
+		// Per-frame immediate-mode debug vertex buffer. Game-thread-only; layers
+		// append during OnUpdate and PrepareFrame moves the contents into the
+		// outgoing packet. Lock-free: the channel transfer of the packet is the
+		// synchronization point with the render thread.
+		[[nodiscard]] std::vector<DebugVertex>& GetPendingDebugVertices()
+		{
+			return m_pendingDebugVertices;
+		}
+
 	private:
 		void BeginFrame();
 		void EndFrame(const RenderFramePacket& packet);
@@ -78,6 +87,7 @@ namespace aether
 		void SubmitAndAdvance();
 
 		ServiceContainer m_services;
+		std::vector<DebugVertex> m_pendingDebugVertices;
 
 		std::unique_ptr<GpuDevice> m_gpu;
 		std::unique_ptr<CameraSubsystem> m_cameras;

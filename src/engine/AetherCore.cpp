@@ -55,6 +55,7 @@ namespace aether
 		m_settings.window.height = config.height;
 
 		// Create all subsystems.
+		m_services.Register<AetherCore>(*this);
 		m_services.RegisterOwned(std::make_unique<PlatformSubsystem>());
 		m_services.RegisterOwned(std::make_unique<SceneSubsystem>());
 		m_services.RegisterOwned(std::make_unique<AssetSubsystem>());
@@ -99,6 +100,7 @@ namespace aether
 		// ── 6. Rendering ────────────────────────────────────────────────────
 		m_rendering->Init(m_services);
 		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
+		m_services.Register<RenderingSubsystem>(*m_rendering);
 		m_services.Register<Renderer>(m_rendering->GetRenderer());
 		m_services.Register<RenderQueue>(m_rendering->GetRenderQueue());
 		m_services.Register<RenderGraph>(m_rendering->GetRenderGraph());
@@ -322,6 +324,13 @@ namespace aether
 		packet.skyVoidColor = renderer.GetSkyVoidColorVector();
 
 		packet.pointLights.assign(renderer.GetPointLights().begin(), renderer.GetPointLights().end());
+
+		// Hand the game-thread debug vertex buffer to the packet. This is the
+		// synchronization point with the render thread: the channel transfer
+		// of the packet (in Application::SubmitFrame) takes ownership of the
+		// moved vector, so no locks are required.
+		packet.debugVertices = std::move(m_pendingDebugVertices);
+		m_pendingDebugVertices.clear();
 		packet.spotLights.assign(renderer.GetSpotLights().begin(), renderer.GetSpotLights().end());
 
 		return packet;
@@ -351,8 +360,8 @@ namespace aether
 		{
 			World& world = m_services.Get<SceneSubsystem>().GetWorld();
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
+			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
 			debugRenderer.SetWorld(&world);
-			debugRenderer.SetViewProj(packet.proj * packet.view);
 		}
 
 		EndFrame(packet);

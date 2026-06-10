@@ -79,6 +79,7 @@ namespace aether::app
 		static void OpenInVSCode(const std::string& filePath, int line);
 
 		bool m_visible = true;
+		bool m_debugTestShapes = true; // F7: show diagnostic test shapes
 		aether::UiRect m_savedPanelRect{};
 		std::deque<ScriptErrorToast> m_errorToasts;
 

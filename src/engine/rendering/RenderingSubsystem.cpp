@@ -71,9 +71,9 @@ namespace aether
 		        swapchain.GetDepthFormat(),
 		        PostProcessStack::GetForwardColorFormat());
 
-		RegisterPasses(services);
-
 		m_physicsDebug.Init(vk, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
+
+		RegisterPasses(services);
 	}
 
 	void RenderingSubsystem::Shutdown(ServiceContainer& services)

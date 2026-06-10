@@ -1,11 +1,23 @@
 // Debug wireframe renderer - vertex shader
 //
-// Push constants (64 bytes at offset 0):
-//   float4x4 mvp  (model-view-projection matrix)
+// Push constants (88 bytes at offset 0):
+//   offset  0 : uint64_t  frameAddr   BDA -> FrameConstantsData (viewProj lives here)
+//   offset  8 : float4    tintColor   multiplies into per-vertex color
+//   offset 24 : float4x4  model       per-draw world transform
+//
+// Per-vertex input:
+//   float3 position : TEXCOORD0
+//   float4 color    : TEXCOORD1
+//
+// Diagnostic: tintColor.w == 2.0 -> bypass viewProj, treat input.position as NDC.
+
+#include "include/FrameConstants.slangh"
 
 struct DebugPushConstants
 {
-    float4x4 mvp;
+    uint64_t frameAddr;
+    float4   tintColor;
+    float4x4 model;
 };
 
 [[vk::push_constant]] DebugPushConstants pc;
@@ -13,17 +25,31 @@ struct DebugPushConstants
 struct VSInput
 {
     float3 position : TEXCOORD0;
+    float4 color    : TEXCOORD1;
 };
 
 struct VSOutput
 {
     float4 position : SV_Position;
+    float4 color    : TEXCOORD0;
 };
 
 [shader("vertex")]
 VSOutput main(VSInput input)
 {
     VSOutput output;
-    output.position = mul(pc.mvp, float4(input.position, 1.0));
+    if (pc.tintColor.w >= 1.5)
+    {
+        // Diagnostic: pass positions straight through as NDC. Force alpha=1
+        // so blend doesn't multiply-by-alpha and invert the color.
+        output.position = float4(input.position, 1.0);
+        output.color = float4(input.color.rgb * pc.tintColor.rgb, 1.0);
+    }
+    else
+    {
+        FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+        output.position = mul(fc->viewProj, mul(pc.model, float4(input.position, 1.0)));
+        output.color = float4(input.color.rgb * pc.tintColor.rgb, input.color.a);
+    }
     return output;
 }

@@ -68,6 +68,7 @@ namespace aether
 		};
 
 		AnimationDatabase() = default;
+
 		~AnimationDatabase()
 		{
 			++m_generation;

@@ -28,6 +28,7 @@
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
+#include "AetherCore.hpp"
 
 namespace aether::app
 {
@@ -492,6 +493,47 @@ namespace aether::app
 			const bool newState = !aether::IsPhysicsDebugRenderingEnabled();
 			aether::SetPhysicsDebugRenderingEnabled(newState);
 			AE_INFO(aether::LogCategory::App, "Physics debug: {}", newState ? "on" : "off");
+		}
+
+		if (input.IsKeyPressed(aether::Key::F7))
+		{
+			m_debugTestShapes = !m_debugTestShapes;
+			AE_INFO(aether::LogCategory::App, "Debug test shapes: {}", m_debugTestShapes ? "on" : "off");
+		}
+
+		// ── Diagnostic test shapes (F7) ───────────────────────────────────
+		// Drawn into the per-frame packet's debug vertex vector; the $Debug
+		// pass consumes them on the render thread. No locks - the channel transfer
+		// of the packet is the synchronization point.
+		if (m_debugTestShapes)
+		{
+			if (auto* engine = context.TryGet<aether::AetherCore>())
+			{
+				auto& verts = engine->GetPendingDebugVertices();
+
+				// 1m wireframe cube at the camera (always visible in front of you).
+				if (const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera())
+				{
+					const glm::vec3 camPos = cam->GetPosition();
+					const glm::vec3 camFwd = cam->GetForward();
+					// 1m box 2m in front of the camera so it's not clipping the near plane.
+					const glm::vec3 boxCenter = camPos + camFwd * 2.0f;
+					AddDebugAabb(verts, boxCenter - glm::vec3(0.5f), boxCenter + glm::vec3(0.5f), glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+
+					// 0.75m RGB axes gizmo at the same spot.
+					const glm::mat4 gizmoXform = glm::translate(glm::mat4(1.0f), boxCenter);
+					AddDebugAxes(verts, gizmoXform, 0.75f);
+				}
+
+				// 5m wireframe cube at world origin (yellow).
+				AddDebugAabb(verts, glm::vec3(-2.5f), glm::vec3(2.5f), glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));
+
+				// 2m wireframe sphere at world origin (cyan).
+				AddDebugSphere(verts, glm::vec3(0.0f), 2.0f, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f), 16);
+
+				// Vertical axis line at world origin so we can see orientation.
+				AddDebugLine(verts, glm::vec3(0.0f, -5.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
+			}
 		}
 
 		PollScriptErrors(context);

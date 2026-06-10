@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/Renderer.hpp"
 
 namespace aether
@@ -32,6 +33,11 @@ namespace aether
 		// (SetPointLights/SetSpotLights) and render thread reads.
 		std::vector<Renderer::PointLight> pointLights;
 		std::vector<Renderer::SpotLight> spotLights;
+
+		// Debug primitive vertices accumulated on the game thread (DebugLayer, etc.)
+		// and consumed by the $PhysicsDebug pass on the render thread. Lock-free:
+		// the channel transfer is the synchronization point.
+		std::vector<DebugVertex> debugVertices;
 
 		// Stable GPU resource addresses.
 		std::uint64_t materialBufferAddr = 0;
