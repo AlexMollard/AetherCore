@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "space": "projects/aethercore",
+  "space_id": "cfd4a9c3-2f4a-4c8e-9fa5-6cf7d0f12aa1",
+  "manifest_updated_at_utc": "2026-06-10T03:53:56.632Z",
+  "entries": {
+    "e098d988-0333-4ec3-b034-80b49d9db9fe": {
+      "memory_id": "e098d988-0333-4ec3-b034-80b49d9db9fe",
+      "memory_name": "checkpoint-2026-06-10T03-52-40-406Z",
+      "path": "checkpoint-2026-06-10T03-52-40-406Z.md",
+      "baseline_content_hash": "c1ec255bd302488d83702bdb79e2030706304809f0d601030da8d7a7aca0d6f7",
+      "baseline_metadata_hash": "465a19253d411aa5114318aaadbeda830de31ccb8ed4a8757966558cfd28b165",
+      "baseline_combined_hash": "1cfa3fc878769ed5390e323caa4e5467655aa5c2b67b0883a15ac3d7f17241b9",
+      "db_changed_at_utc": "2026-06-10T03:52:40.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T03:52:40.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T03:52:48.887Z",
+      "last_synced_at_utc": "2026-06-10T03:52:48.886Z",
+      "deleted": true,
+      "tombstone_at_utc": "2026-06-10T03:52:48.895Z"
+    },
+    "6fb57609-24ab-4b23-9b4b-35bb7f88e076": {
+      "memory_id": "6fb57609-24ab-4b23-9b4b-35bb7f88e076",
+      "memory_name": "mind-installation",
+      "path": "mind-installation.md",
+      "baseline_content_hash": "17e30387f1fd00d4aab107b3a734d88cd13969088e03e8a77a6d43b9e1f8ac0d",
+      "baseline_metadata_hash": "b05ffe6abab445c758416d798d61f4480797127c122d263ba42b7c9c10fdc5cd",
+      "baseline_combined_hash": "37ad09da6a726a1e740e1b3d3fc07423bfe46c20b4828ab3bdef3bb0edfeab49",
+      "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.631Z",
+      "last_synced_at_utc": "2026-06-10T03:53:56.632Z"
+    },
+    "986a9f4c-6913-44a7-937c-c63d7a768cb3": {
+      "memory_id": "986a9f4c-6913-44a7-937c-c63d7a768cb3",
+      "memory_name": "session-2026-06-10T03-52-48Z",
+      "path": "session-2026-06-10T03-52-48Z.md",
+      "baseline_content_hash": "8c6aeb93efb700f6061b5d5648446b12a4b3e72fa7cc73407dc1c82d761a8d6a",
+      "baseline_metadata_hash": "397c484d4ab4b44dc58b944787dd1345a95a738e6f1be1f64a2ec912e0b4e646",
+      "baseline_combined_hash": "062da872b117df58f1248f0a52ee9652fc393f2ed2ed77afcae5da0b018d3d36",
+      "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.630Z",
+      "last_synced_at_utc": "2026-06-10T03:53:56.630Z"
+    },
+    "a695cf99-d614-49ba-9e2c-e641c515e242": {
+      "memory_id": "a695cf99-d614-49ba-9e2c-e641c515e242",
+      "memory_name": "session-2026-06-10T03-53-02-296Z-evt_eafa98257001yjoiqt7ftm5rkr",
+      "path": "session-2026-06-10T03-53-02-296Z-evt_eafa98257001yjoiqt7ftm5rkr.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "994e3b975dc9e1373e6965439a54a9c9757fd896e8e147404c6280cc626fd4e4",
+      "baseline_combined_hash": "88705373f88c0799539585959bfc359f592900174bc0cb4933369a756a938588",
+      "db_changed_at_utc": "2026-06-10T03:53:02.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T03:53:02.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.626Z",
+      "last_synced_at_utc": "2026-06-10T03:53:56.626Z"
+    },
+    "a142d6c1-f941-46c1-974c-bb7ee01f2bd3": {
+      "memory_id": "a142d6c1-f941-46c1-974c-bb7ee01f2bd3",
+      "memory_name": "session-2026-06-10T03-53-56-309Z-evt_eafaa5555001otnjsssojll7l2",
+      "path": "session-2026-06-10T03-53-56-309Z-evt_eafaa5555001otnjsssojll7l2.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "2aad5984f581a312675d36f2f775c0d6776407ca15c42eed21b411af2fd3c7e8",
+      "baseline_combined_hash": "b532dededdc064c4bac56d97ab9f3a2284c4dee29363148d30156754e9445667",
+      "db_changed_at_utc": "2026-06-10T03:53:56.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T03:53:56.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.621Z",
+      "last_synced_at_utc": "2026-06-10T03:53:56.622Z"
+    }
+  },
+  "last_auto_export": null
+}

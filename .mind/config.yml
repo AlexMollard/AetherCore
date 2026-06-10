@@ -1,0 +1,11 @@
+# mind autosync config
+
+version: 1
+
+# Spaces to sync with this project
+# To enable a new space, add it below with enabled: true
+# Valid conflictResolution values: db-wins, file-wins, latest-wins
+spaces:
+  projects/aethercore:
+    enabled: true
+    conflictResolution: db-wins
