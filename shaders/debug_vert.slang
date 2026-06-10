@@ -40,8 +40,6 @@ VSOutput main(VSInput input)
     VSOutput output;
     if (pc.tintColor.w >= 1.5)
     {
-        // Diagnostic: pass positions straight through as NDC. Force alpha=1
-        // so blend doesn't multiply-by-alpha and invert the color.
         output.position = float4(input.position, 1.0);
         output.color = float4(input.color.rgb * pc.tintColor.rgb, 1.0);
     }

@@ -136,6 +136,7 @@ namespace aether::io
 		        workingDirectory / "../build/shaders",
 		        workingDirectory / "../../build/shaders",
 		});
+		AE_INFO(LogCategory::FileSystem, "CWD for shader mount: '{}' -> resolved: '{}'", workingDirectory.string(), shaderDirectory.string());
 		Mount("shaders", shaderDirectory);
 
 		// ── config:// ─────────────────────────────────────────────────────────

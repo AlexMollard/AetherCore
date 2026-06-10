@@ -334,20 +334,31 @@ namespace aether
 
 		const VkPipelineDepthStencilStateCreateInfo depthStencil{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		        .depthTestEnable = VK_FALSE,
+		        .depthTestEnable = VK_TRUE,
 		        .depthWriteEnable = VK_FALSE,
+		        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
 		        .depthBoundsTestEnable = VK_FALSE,
 		        .stencilTestEnable = VK_FALSE,
 		};
 
-		const VkViewport kViewport{0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
-		const VkRect2D kScissor{{0, 0}, {1, 1}};
+		// Viewport and scissor are dynamic - the render graph sets them to the
+		// full pass extent via vkCmdSetViewport/vkCmdSetScissor each frame.
 		const VkPipelineViewportStateCreateInfo viewportState{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
 		        .viewportCount = 1,
-		        .pViewports = &kViewport,
+		        .pViewports = nullptr,
 		        .scissorCount = 1,
-		        .pScissors = &kScissor,
+		        .pScissors = nullptr,
+		};
+
+		const std::array<VkDynamicState, 2> kDynamicStates{
+		        VK_DYNAMIC_STATE_VIEWPORT,
+		        VK_DYNAMIC_STATE_SCISSOR,
+		};
+		const VkPipelineDynamicStateCreateInfo dynamicState{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+		        .dynamicStateCount = static_cast<std::uint32_t>(kDynamicStates.size()),
+		        .pDynamicStates = kDynamicStates.data(),
 		};
 
 		const VkPipelineRenderingCreateInfo renderingInfo{
@@ -369,6 +380,7 @@ namespace aether
 		        .pMultisampleState = &multisample,
 		        .pDepthStencilState = &depthStencil,
 		        .pColorBlendState = &colorBlendState,
+		        .pDynamicState = &dynamicState,
 		        .layout = m_pipelineLayout,
 		        .renderPass = VK_NULL_HANDLE,
 		        .subpass = 0,
@@ -707,11 +719,9 @@ namespace aether
 		// (tint.w == 2.0). If this is visible the pipeline is alive and writes
 		// to the swapchain color; the issue is geometry/transform. If not,
 		// the color attachment or pipeline is fundamentally broken.
-		constexpr glm::vec4 kMagenta(1.0f, 0.0f, 1.0f, 1.0f);
-		AddDebugLine(out, glm::vec3(0.0f, 0.9f, 0.0f), glm::vec3(0.9f, 0.0f, 0.0f), kMagenta);
-		AddDebugLine(out, glm::vec3(0.9f, 0.0f, 0.0f), glm::vec3(0.0f, -0.9f, 0.0f), kMagenta);
-		AddDebugLine(out, glm::vec3(0.0f, -0.9f, 0.0f), glm::vec3(-0.9f, 0.0f, 0.0f), kMagenta);
-		AddDebugLine(out, glm::vec3(-0.9f, 0.0f, 0.0f), glm::vec3(0.0f, 0.9f, 0.0f), kMagenta);
+		// World-space sanity pattern: RGB axes + a 1m wireframe AABB at the origin.
+		AddDebugAxes(out, glm::mat4(1.0f), 1.0f);
+		AddDebugAabb(out, glm::vec3(-0.5f), glm::vec3(0.5f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 	}
 
 	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(VmaAllocator allocator, std::uint32_t vertexCount)
@@ -778,20 +788,6 @@ namespace aether
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                static int s_frameCount = 0;
-			                if (s_frameCount < 5)
-			                {
-				                AE_INFO(LogCategory::Render,
-				                        "[$Debug] frame={} enabled={} pipeline={} frameVertices={} selfTest={} world={}",
-				                        s_frameCount,
-				                        s_debugRenderingEnabled,
-				                        m_pipeline != VK_NULL_HANDLE,
-				                        m_frameDebugVertices ? static_cast<int>(m_frameDebugVertices->size()) : -1,
-				                        m_selfTestEnabled,
-				                        m_world != nullptr);
-			                }
-			                ++s_frameCount;
-
 			                if (!s_debugRenderingEnabled || m_pipeline == VK_NULL_HANDLE)
 			                {
 				                return;
@@ -826,7 +822,7 @@ namespace aether
 			                {
 				                if (drawList == nullptr)
 				                {
-					                scratch.reserve(128);
+					                scratch.reserve(64);
 					                drawList = &scratch;
 				                }
 				                AppendSelfTestPattern(*drawList);
@@ -842,25 +838,13 @@ namespace aether
 					                std::memcpy(mapped, drawList->data(), static_cast<std::size_t>(immediateCount) * sizeof(DebugVertex));
 					                vmaUnmapMemory(m_allocator, m_immediateVertexAlloc);
 
-					                // tint.w = 2.0 -> vertex shader bypasses viewProj and treats positions as NDC.
-					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f, 1.0f, 1.0f, 2.0f), glm::mat4(1.0f)};
+					                // White tint, identity model: per-vertex colors pass through unchanged.
+					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f), glm::mat4(1.0f)};
 					                vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
 
 					                constexpr std::uint64_t kBindingOffset = 0;
 					                vkCmdBindVertexBuffers(cmd, 0, 1, &m_immediateVertexBuffer, &kBindingOffset);
 					                vkCmdDraw(cmd, immediateCount, 1, 0, 0);
-
-					                if (s_frameCount <= 5)
-					                {
-						                AE_INFO(LogCategory::Render, "[$Debug] drew {} vertices NDC-bypass (frameAddr=0x{:x})", immediateCount, ctx.frameConstantsAddr);
-					                }
-				                }
-				                else
-				                {
-					                if (s_frameCount <= 5)
-					                {
-						                AE_INFO(LogCategory::Render, "[$Debug] immediate vertex buffer is NULL");
-					                }
 				                }
 			                }
 

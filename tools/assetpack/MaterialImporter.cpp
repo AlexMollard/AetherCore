@@ -178,7 +178,7 @@ namespace MaterialImporter
 			std::ifstream in(outPath);
 			if (in)
 			{
-				const std::string existing(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+				const std::string existing((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 				if (existing == newContent)
 				{
 					return false;
