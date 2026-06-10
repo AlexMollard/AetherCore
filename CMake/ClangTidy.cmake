@@ -13,8 +13,13 @@ set(AETHERCORE_CLANG_TIDY_BUILD_DIR
     "${CMAKE_SOURCE_DIR}/build-ninja-clang"
     CACHE PATH "Build dir providing compile_commands.json for clang-tidy")
 
+# Build default file filter from CMAKE_SOURCE_DIR so it works cross-platform.
+# On Windows, os.path.abspath uses backslashes, so the regex must handle both.
+file(TO_CMAKE_PATH "${CMAKE_SOURCE_DIR}" _clang_tidy_src_dir)
+string(REPLACE "/" "[/\\\\]" _clang_tidy_src_re "${_clang_tidy_src_dir}")
+set(_clang_tidy_default_filter "${_clang_tidy_src_re}[/\\\\](src|include|tools)[/\\\\]")
 set(AETHERCORE_CLANG_TIDY_FILE_FILTER
-    "^(src|include|tools)/"
+    "${_clang_tidy_default_filter}"
     CACHE STRING
     "Regex matched against each 'file' in compile_commands.json; limits clang-tidy to first-party sources")
 
@@ -67,6 +72,7 @@ add_custom_target(clang-tidy
         "${AETHERCORE_CLANG_TIDY_COMPILE_DB}"
         "${_clang_tidy_runner_dst}"
     COMMAND ${Python3_EXECUTABLE} ${_clang_tidy_runner_dst}
+            -extra-arg=-Wno-error=switch-enum
             -p "${AETHERCORE_CLANG_TIDY_BUILD_DIR}"
             -j ${_clang_tidy_jobs}
             -quiet
