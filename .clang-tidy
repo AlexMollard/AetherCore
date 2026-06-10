@@ -143,8 +143,6 @@ Checks: >-
   modernize-redundant-void-arg,
   modernize-use-bool-literals,
   modernize-use-emplace,
-# modernize-use-nodiscard is intentionally disabled: adding [[nodiscard]] to
-# 700+ free functions across the engine is a separate refactor effort.
   modernize-use-noexcept,
   modernize-use-nullptr,
   modernize-use-override,
