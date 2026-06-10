@@ -48,7 +48,7 @@ namespace aether
 		}
 	}
 
-	void AnimationIkSystem::Shutdown(VkDevice device)
+	void AnimationIkSystem::Shutdown(VkDevice /*device*/)
 	{
 		m_ikJobsBuffer.Reset();
 		m_groundResultsBuffer.Reset();
@@ -202,7 +202,7 @@ namespace aether
 
 		std::uint32_t jobIdx = 0;
 
-		for (auto [entity, skinned, ikComp]: view.each())
+		for (const auto& [entity, skinned, ikComp]: view.each())
 		{
 			if (!ikComp.enabled)
 			{

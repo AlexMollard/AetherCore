@@ -21,7 +21,7 @@ namespace aether
 		m_mappedBlendJobs = static_cast<AnimationContracts::AnimatorBlendJob*>(info.pMappedData);
 	}
 
-	void AnimationBlendSystem::Shutdown(VkDevice device)
+	void AnimationBlendSystem::Shutdown(VkDevice /*device*/)
 	{
 		m_blendJobsBuffer.Reset();
 		m_blendJobs.clear();
@@ -32,7 +32,7 @@ namespace aether
 	{
 		auto& reg = world.GetRegistry();
 		auto view = reg.view<AnimationBlendComponent>();
-		for (auto [entity, blendComp]: view.each())
+		for (const auto& [entity, blendComp]: view.each())
 		{
 			if (!blendComp.inTransition)
 			{
@@ -59,7 +59,7 @@ namespace aether
 		auto skinnedView = reg.view<SkinnedMeshComponent>();
 		std::uint32_t jobIdx = 0;
 
-		for (auto [entity, skinned]: skinnedView.each())
+		for (const auto& [entity, skinned]: skinnedView.each())
 		{
 			if (jobIdx >= static_cast<std::uint32_t>(m_blendJobs.size()))
 			{

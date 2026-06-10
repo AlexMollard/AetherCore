@@ -74,7 +74,7 @@ namespace aether
 	// bodyId is a stable 32-bit handle - safe to use as a network replication key.
 	struct RigidBodyComponent
 	{
-		JPH::BodyID bodyId{};
+		JPH::BodyID bodyId;
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
 	};
 

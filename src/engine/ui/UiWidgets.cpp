@@ -82,8 +82,8 @@ namespace aether::ui
 			entityZ = et->zOrder;
 		}
 		const float offset = std::clamp(entityZ - rootZ, 0.f, 9.999f);
-		const std::int32_t rootLayer = static_cast<std::int32_t>(rootZ + 0.5f) * 100000;
-		const std::int32_t offsetLayer = static_cast<std::int32_t>(offset * 10000.f + 0.5f);
+		const std::int32_t rootLayer = static_cast<std::int32_t>(std::lround(rootZ)) * 100000;
+		const std::int32_t offsetLayer = static_cast<std::int32_t>(std::lround(offset * 10000.f));
 		return rootLayer + offsetLayer + subLayer;
 	}
 
@@ -397,7 +397,7 @@ namespace aether::ui
 		}
 
 		float maxZ = 0.f;
-		for (auto [e, t]: world.View<UiTransformComponent>().each())
+		for (const auto& [e, t]: world.View<UiTransformComponent>().each())
 		{
 			const Entity ent = aether::World::FromEntt(e);
 			if (!world.Has<UiParentComponent>(ent))
@@ -408,7 +408,7 @@ namespace aether::ui
 
 		if (maxZ > 1'000'000.f)
 		{
-			for (auto [e, t]: world.View<UiTransformComponent>().each())
+			for (const auto& [e, t]: world.View<UiTransformComponent>().each())
 			{
 				t.zOrder *= 0.5f;
 			}
@@ -606,7 +606,7 @@ namespace aether::ui
 		// EnTT view iteration order.
 		//
 		// Pass 1: child containers (auto-size to content height).
-		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
+		for (const auto& [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);
 			if (world.Has<UiParentComponent>(entity))
@@ -616,7 +616,7 @@ namespace aether::ui
 		}
 		// Pass 2: root containers (position children now that their sizes are
 		// known, then auto-size to fit).
-		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
+		for (const auto& [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);
 			if (!world.Has<UiParentComponent>(entity))
@@ -626,7 +626,7 @@ namespace aether::ui
 		}
 		// Pass 3: child containers again (re-position grandchildren now that the
 		// parent has moved the container to its final position).
-		for (auto [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
+		for (const auto& [e, layout, children]: world.View<UiLayoutComponent, UiChildrenComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);
 			if (world.Has<UiParentComponent>(entity))
@@ -634,7 +634,7 @@ namespace aether::ui
 				ApplyLayout(world, entity, extent);
 			}
 		}
-		for (auto [e, grid, children]: world.View<UiGridLayoutComponent, UiChildrenComponent>().each())
+		for (const auto& [e, grid, children]: world.View<UiGridLayoutComponent, UiChildrenComponent>().each())
 		{
 			ApplyGridLayout(world, aether::World::FromEntt(e), extent);
 		}

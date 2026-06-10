@@ -254,7 +254,7 @@ namespace aether::coro
 			}
 		}
 
-		void set_exception(std::exception_ptr e) noexcept
+		void set_exception(const std::exception_ptr& e) noexcept
 		{
 			auto* st = m_state.get();
 			st->error = std::move(e);

@@ -469,13 +469,13 @@ namespace aether
 
 		for (int i = 0; i < kSegments; ++i)
 		{
-			const float theta1 = static_cast<float>(i * kTwoPi) / kSegments;
-			const float theta2 = static_cast<float>((i + 1) * kTwoPi) / kSegments;
+			const float theta1 = (static_cast<float>(i) * kTwoPi) / kSegments;
+			const float theta2 = (static_cast<float>(i + 1) * kTwoPi) / kSegments;
 
 			for (int j = 0; j < kSegments; ++j)
 			{
-				const float phi1 = static_cast<float>(j * kPi) / kSegments;
-				const float phi2 = static_cast<float>((j + 1) * kPi) / kSegments;
+				const float phi1 = (static_cast<float>(j) * kPi) / kSegments;
+				const float phi2 = (static_cast<float>(j + 1) * kPi) / kSegments;
 
 				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta1), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta1)}, kWhite});
 				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta2), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta2)}, kWhite});
@@ -519,7 +519,7 @@ namespace aether
 		// Meridian lines: north pole → top dome → cylinder → bottom dome → south pole.
 		for (int i = 0; i < kSegments; ++i)
 		{
-			const float theta = static_cast<float>(i * kTwoPi) / kSegments;
+			const float theta = (static_cast<float>(i) * kTwoPi) / kSegments;
 			const float dx = std::cos(theta);
 			const float dz = std::sin(theta);
 
@@ -530,7 +530,7 @@ namespace aether
 			// Top hemisphere: north pole → cylinder top.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
-				const float phi = static_cast<float>(j * kHalfPi) / kDomeSteps;
+				const float phi = (static_cast<float>(j) * kHalfPi) / kDomeSteps;
 				const glm::vec3 p{kRadius * std::sin(phi) * dx, kHalfHeight + kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
 				vertices.push_back(DebugVertex{prev, kWhite});
 				vertices.push_back(DebugVertex{p, kWhite});
@@ -550,7 +550,7 @@ namespace aether
 			// Bottom hemisphere: cylinder bottom → south pole.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
-				const float phi = kHalfPi + static_cast<float>(j * kHalfPi) / kDomeSteps;
+				const float phi = kHalfPi + (static_cast<float>(j) * kHalfPi) / kDomeSteps;
 				const glm::vec3 p{kRadius * std::sin(phi) * dx, -kHalfHeight - kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
 				vertices.push_back(DebugVertex{prev, kWhite});
 				vertices.push_back(DebugVertex{p, kWhite});
@@ -566,8 +566,8 @@ namespace aether
 		// Horizontal rings at cylinder top and bottom.
 		for (int i = 0; i < kSegments; ++i)
 		{
-			const float theta1 = static_cast<float>(i * kTwoPi) / kSegments;
-			const float theta2 = static_cast<float>((i + 1) * kTwoPi) / kSegments;
+			const float theta1 = (static_cast<float>(i) * kTwoPi) / kSegments;
+			const float theta2 = (static_cast<float>(i + 1) * kTwoPi) / kSegments;
 			const float cx1 = kRadius * std::cos(theta1);
 			const float cz1 = kRadius * std::sin(theta1);
 			const float cx2 = kRadius * std::cos(theta2);

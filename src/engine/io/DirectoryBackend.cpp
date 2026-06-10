@@ -261,7 +261,7 @@ namespace aether::io
 
 	std::optional<std::filesystem::path> DirectoryBackend::ResolveInsensitive(std::string_view relativePath, std::string* bestMatch) const
 	{
-		const auto fullPath = Resolve(relativePath);
+		auto fullPath = Resolve(relativePath);
 
 		// Exact match (fast path – works on case-insensitive filesystems).
 		std::error_code ec;
@@ -291,9 +291,13 @@ namespace aether::io
 			{
 				if (bestMatch)
 				{
-					// Reconstruct the virtual path with the correct casing.
-					const auto parentVfs = std::filesystem::path(relativePath).parent_path().generic_string();
-					*bestMatch = parentVfs.empty() ? candidate : parentVfs + "/" + candidate;
+					auto parentVfs = std::filesystem::path(relativePath).parent_path().generic_string();
+					if (!parentVfs.empty())
+					{
+						parentVfs += '/';
+						parentVfs += candidate;
+					}
+					*bestMatch = parentVfs.empty() ? candidate : parentVfs;
 				}
 				return it->path();
 			}
@@ -311,8 +315,13 @@ namespace aether::io
 				if (d < bestDist && d <= static_cast<int>(targetFilename.size()) / 2 + 1)
 				{
 					bestDist = d;
-					const auto parentVfs = std::filesystem::path(relativePath).parent_path().generic_string();
-					*bestMatch = parentVfs.empty() ? candidate : parentVfs + "/" + candidate;
+					auto parentVfs = std::filesystem::path(relativePath).parent_path().generic_string();
+					if (!parentVfs.empty())
+					{
+						parentVfs += '/';
+						parentVfs += candidate;
+					}
+					*bestMatch = parentVfs.empty() ? candidate : parentVfs;
 				}
 			}
 		}

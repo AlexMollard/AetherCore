@@ -3,7 +3,6 @@
 #include <functional>
 #include <array>
 #include <cstdint>
-#include <functional>
 #include <glm/glm.hpp>
 #include <vector>
 #include "vulkan/volk.hpp"
