@@ -8,6 +8,7 @@
 #include "rendering/RenderGraph.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GraphicsDevice.hpp"
+#include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -217,8 +218,18 @@ namespace aether
 		return m_gfx->GetBindlessManager();
 	}
 
+	ResourceRegistry& GpuDevice::GetResourceRegistry()
+	{
+		return m_gfx->GetResourceRegistry();
+	}
+
 	void GpuDevice::AdvanceBindlessFrame(std::uint64_t frameIndex)
 	{
 		m_gfx->GetBindlessManager().AdvanceFrame(frameIndex);
+	}
+
+	void GpuDevice::AdvanceResourceRegistryFrame()
+	{
+		m_gfx->GetResourceRegistry().AdvanceFrame();
 	}
 } // namespace aether

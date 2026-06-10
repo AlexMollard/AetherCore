@@ -16,6 +16,7 @@ namespace aether
 	class CommandRecorder;
 	class GraphicsDevice;
 	class ResourcePool;
+	class ResourceRegistry;
 	class Swapchain;
 	class VulkanContext;
 	struct FrameTarget;
@@ -60,10 +61,18 @@ namespace aether
 
 		void AdvanceBindlessFrame(std::uint64_t frameIndex);
 
+		// Tick the ResourceRegistry deferred-destruction ring forward by one
+		// frame. Call once per frame from the engine thread at the same point
+		// as AdvanceBindlessFrame; the registry destroys resources that were
+		// scheduled for teardown kMaxFramesInFlight frames earlier, by which
+		// point the GPU is guaranteed done with them.
+		void AdvanceResourceRegistryFrame();
+
 		[[nodiscard]] Swapchain& GetSwapchain();
 		[[nodiscard]] VulkanContext& GetVulkanContext();
 		[[nodiscard]] ResourcePool& GetResourcePool();
 		[[nodiscard]] BindlessManager& GetBindlessManager();
+		[[nodiscard]] ResourceRegistry& GetResourceRegistry();
 
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;

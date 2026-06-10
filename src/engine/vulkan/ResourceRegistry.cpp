@@ -1,0 +1,466 @@
+#include "vulkan/ResourceRegistry.hpp"
+
+#include "utils/Assert.hpp"
+#include "utils/Logger.hpp"
+
+namespace aether
+{
+	// The kMaxFramesInFlight sentinel must match the engine-wide frame
+	// pacing constant - see gpu/GpuTypes.hpp. We re-declare it locally
+	// (instead of depending on the header) to keep ResourceRegistry a
+	// self-contained building block.
+	namespace
+	{
+		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;
+		inline constexpr std::uint32_t kGenerationInvalid = 0u;
+		inline constexpr std::uint32_t kGenerationWrap = 256u;
+	}
+
+	ResourceRegistry::~ResourceRegistry()
+	{
+		Shutdown();
+	}
+
+	void ResourceRegistry::Shutdown()
+	{
+		if (m_shutdown)
+		{
+			return;
+		}
+		m_shutdown = true;
+
+		// Drain all pending destruction first so any registered resources
+		// that were scheduled for deferred destruction actually get freed.
+		DrainAll();
+
+		// Any slots still holding entries (i.e. not queued for destruction
+		// and not destroyed by caller code) get a final teardown. In normal
+		// operation Shutdown runs after every subsystem has cleaned up, so
+		// the only entries left are those the engine forgot - log a warning
+		// so it surfaces during development.
+		for (auto& slot : m_textures)
+		{
+			if (slot.entry)
+			{
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live TextureEntry at gen {} (likely engine-side leak).", slot.generation);
+				DestroyTextureEntryNow(*slot.entry);
+				slot.entry.reset();
+			}
+		}
+		for (auto& slot : m_buffers)
+		{
+			if (slot.entry)
+			{
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live BufferEntry at gen {} (likely engine-side leak).", slot.generation);
+				DestroyBufferEntryNow(*slot.entry);
+				slot.entry.reset();
+			}
+		}
+		for (auto& slot : m_pipelines)
+		{
+			if (slot.entry)
+			{
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live PipelineEntry at gen {} (likely engine-side leak).", slot.generation);
+				DestroyPipelineEntryNow(*slot.entry);
+				slot.entry.reset();
+			}
+		}
+	}
+
+	std::uint32_t ResourceRegistry::AcquireTextureSlot()
+	{
+		// First pass: reuse any empty slot.
+		for (std::uint32_t i = 0; i < m_textures.size(); ++i)
+		{
+			if (!m_textures[i].entry)
+			{
+				return i;
+			}
+		}
+		// Second pass: append.
+		if (m_textures.size() < kIndexInvalid)
+		{
+			const std::uint32_t i = static_cast<std::uint32_t>(m_textures.size());
+			m_textures.push_back(TextureSlot{});
+			return i;
+		}
+		// Exhausted - caller will see an invalid handle and AE_ASSERT.
+		AE_ASSERT(false, "ResourceRegistry: out of TextureSlot indices (24-bit address space exhausted).");
+		return kIndexInvalid;
+	}
+
+	std::uint32_t ResourceRegistry::AcquireBufferSlot()
+	{
+		for (std::uint32_t i = 0; i < m_buffers.size(); ++i)
+		{
+			if (!m_buffers[i].entry)
+			{
+				return i;
+			}
+		}
+		if (m_buffers.size() < kIndexInvalid)
+		{
+			const std::uint32_t i = static_cast<std::uint32_t>(m_buffers.size());
+			m_buffers.push_back(BufferSlot{});
+			return i;
+		}
+		AE_ASSERT(false, "ResourceRegistry: out of BufferSlot indices (24-bit address space exhausted).");
+		return kIndexInvalid;
+	}
+
+	std::uint32_t ResourceRegistry::AcquirePipelineSlot()
+	{
+		for (std::uint32_t i = 0; i < m_pipelines.size(); ++i)
+		{
+			if (!m_pipelines[i].entry)
+			{
+				return i;
+			}
+		}
+		if (m_pipelines.size() < kIndexInvalid)
+		{
+			const std::uint32_t i = static_cast<std::uint32_t>(m_pipelines.size());
+			m_pipelines.push_back(PipelineSlot{});
+			return i;
+		}
+		AE_ASSERT(false, "ResourceRegistry: out of PipelineSlot indices (24-bit address space exhausted).");
+		return kIndexInvalid;
+	}
+
+	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry)
+	{
+		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterTexture called after Shutdown.");
+		const std::uint32_t idx = AcquireTextureSlot();
+		if (idx == kIndexInvalid)
+		{
+			return {};
+		}
+		m_textures[idx].entry = entry;
+		const std::uint32_t gen = m_textures[idx].generation;
+		return gpu::TextureHandle::Make(idx, gen);
+	}
+
+	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry)
+	{
+		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterBuffer called after Shutdown.");
+		const std::uint32_t idx = AcquireBufferSlot();
+		if (idx == kIndexInvalid)
+		{
+			return {};
+		}
+		m_buffers[idx].entry = entry;
+		const std::uint32_t gen = m_buffers[idx].generation;
+		return gpu::BufferHandle::Make(idx, gen);
+	}
+
+	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry)
+	{
+		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterPipeline called after Shutdown.");
+		const std::uint32_t idx = AcquirePipelineSlot();
+		if (idx == kIndexInvalid)
+		{
+			return {};
+		}
+		m_pipelines[idx].entry = entry;
+		const std::uint32_t gen = m_pipelines[idx].generation;
+		return gpu::PipelineHandle::Make(idx, gen);
+	}
+
+	void ResourceRegistry::Destroy(gpu::TextureHandle handle)
+	{
+		if (!handle.IsValid())
+		{
+			return;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_textures.size())
+		{
+			return;
+		}
+		auto& slot = m_textures[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return;
+		}
+		const TextureEntry entry = *slot.entry;
+		slot.entry.reset();
+		// Bump generation on reuse so subsequent handles to this slot fail
+		// IsValid() until a fresh RegisterTexture fills it again.
+		slot.generation = (slot.generation + 1u) % kGenerationWrap;
+		if (slot.generation == kGenerationInvalid)
+		{
+			slot.generation = 1u;
+		}
+		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
+		        .slotIndex = idx,
+		        .generation = handle.GetGeneration(),
+		        .fn = [this, entry]() { DestroyTextureEntryNow(entry); },
+		});
+	}
+
+	void ResourceRegistry::Destroy(gpu::BufferHandle handle)
+	{
+		if (!handle.IsValid())
+		{
+			return;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_buffers.size())
+		{
+			return;
+		}
+		auto& slot = m_buffers[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return;
+		}
+		const BufferEntry entry = *slot.entry;
+		slot.entry.reset();
+		slot.generation = (slot.generation + 1u) % kGenerationWrap;
+		if (slot.generation == kGenerationInvalid)
+		{
+			slot.generation = 1u;
+		}
+		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
+		        .slotIndex = idx,
+		        .generation = handle.GetGeneration(),
+		        .fn = [this, entry]() { DestroyBufferEntryNow(entry); },
+		});
+	}
+
+	void ResourceRegistry::Destroy(gpu::PipelineHandle handle)
+	{
+		if (!handle.IsValid())
+		{
+			return;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_pipelines.size())
+		{
+			return;
+		}
+		auto& slot = m_pipelines[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return;
+		}
+		const PipelineEntry entry = *slot.entry;
+		slot.entry.reset();
+		slot.generation = (slot.generation + 1u) % kGenerationWrap;
+		if (slot.generation == kGenerationInvalid)
+		{
+			slot.generation = 1u;
+		}
+		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
+		        .slotIndex = idx,
+		        .generation = handle.GetGeneration(),
+		        .fn = [this, entry]() { DestroyPipelineEntryNow(entry); },
+		});
+	}
+
+	const ResourceRegistry::TextureEntry* ResourceRegistry::Resolve(gpu::TextureHandle handle) const
+	{
+		if (!handle.IsValid())
+		{
+			return nullptr;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_textures.size())
+		{
+			return nullptr;
+		}
+		const auto& slot = m_textures[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return nullptr;
+		}
+		return &*slot.entry;
+	}
+
+	const ResourceRegistry::BufferEntry* ResourceRegistry::Resolve(gpu::BufferHandle handle) const
+	{
+		if (!handle.IsValid())
+		{
+			return nullptr;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_buffers.size())
+		{
+			return nullptr;
+		}
+		const auto& slot = m_buffers[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return nullptr;
+		}
+		return &*slot.entry;
+	}
+
+	const ResourceRegistry::PipelineEntry* ResourceRegistry::Resolve(gpu::PipelineHandle handle) const
+	{
+		if (!handle.IsValid())
+		{
+			return nullptr;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_pipelines.size())
+		{
+			return nullptr;
+		}
+		const auto& slot = m_pipelines[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return nullptr;
+		}
+		return &*slot.entry;
+	}
+
+	ResourceRegistry::TextureEntry* ResourceRegistry::ResolveMutable(gpu::TextureHandle handle)
+	{
+		if (!handle.IsValid())
+		{
+			return nullptr;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_textures.size())
+		{
+			return nullptr;
+		}
+		auto& slot = m_textures[idx];
+		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		{
+			return nullptr;
+		}
+		return &*slot.entry;
+	}
+
+	void ResourceRegistry::AdvanceFrame()
+	{
+		// The "next" frame becomes the current. The ring slot we are about
+		// to retire (m_currentFrame after the increment) holds destroyers
+		// queued kMaxFramesInFlight frames ago, when the GPU was given the
+		// corresponding submission. By the time we reach it, the engine
+		// has called vkDeviceWaitIdle (or the fence/semaphore for that
+		// frame has signalled), so destruction is safe.
+		const std::uint32_t nextFrame = (m_currentFrame + 1u) % kMaxFramesInFlight;
+		RunDestroyersInRing(m_pendingDestructions[nextFrame]);
+		m_currentFrame = nextFrame;
+	}
+
+	void ResourceRegistry::DrainAll()
+	{
+		// After Shutdown we are guaranteed the GPU is idle (GpuDevice::
+		// Shutdown calls m_gfx->Shutdown() which itself calls
+		// vkDeviceWaitIdle), so running *all* queued destroyers is safe.
+		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
+			RunDestroyersInRing(m_pendingDestructions[i]);
+		}
+	}
+
+	void ResourceRegistry::RunDestroyersInRing(std::vector<PendingDestruction>& ring)
+	{
+		// Move out first so a destructor that touches the registry (e.g.
+		// chains Destroy calls into AdvanceFrame paths) does not invalidate
+		// the iteration range.
+		std::vector<PendingDestruction> local;
+		local.swap(ring);
+		for (auto& d : local)
+		{
+			if (d.fn)
+			{
+				d.fn();
+			}
+		}
+	}
+
+	void ResourceRegistry::DestroyTextureEntryNow(const TextureEntry& entry)
+	{
+		if (entry.view != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(entry.device, entry.view, nullptr);
+		}
+		if (entry.storageView != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyImageView(entry.device, entry.storageView, nullptr);
+		}
+		if (entry.image != VK_NULL_HANDLE)
+		{
+			if (entry.ownsAllocation && entry.allocation != VK_NULL_HANDLE)
+			{
+				vmaDestroyImage(entry.allocator, entry.image, entry.allocation);
+			}
+			else if (!entry.ownsAllocation && entry.device != VK_NULL_HANDLE)
+			{
+				vkDestroyImage(entry.device, entry.image, nullptr);
+			}
+		}
+	}
+
+	void ResourceRegistry::DestroyBufferEntryNow(const BufferEntry& entry)
+	{
+		if (entry.buffer == VK_NULL_HANDLE)
+		{
+			return;
+		}
+		if (entry.ownsAllocation && entry.allocation != VK_NULL_HANDLE)
+		{
+			vmaDestroyBuffer(entry.allocator, entry.buffer, entry.allocation);
+		}
+		else if (!entry.ownsAllocation && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyBuffer(entry.device, entry.buffer, nullptr);
+		}
+	}
+
+	void ResourceRegistry::DestroyPipelineEntryNow(const PipelineEntry& entry)
+	{
+		if (entry.pipeline != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(entry.device, entry.pipeline, nullptr);
+		}
+		if (entry.layout != VK_NULL_HANDLE && entry.ownsLayout && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyPipelineLayout(entry.device, entry.layout, nullptr);
+		}
+	}
+
+	std::uint32_t ResourceRegistry::LiveTextureCount() const
+	{
+		std::uint32_t n = 0;
+		for (const auto& slot : m_textures)
+		{
+			if (slot.entry)
+			{
+				++n;
+			}
+		}
+		return n;
+	}
+
+	std::uint32_t ResourceRegistry::LiveBufferCount() const
+	{
+		std::uint32_t n = 0;
+		for (const auto& slot : m_buffers)
+		{
+			if (slot.entry)
+			{
+				++n;
+			}
+		}
+		return n;
+	}
+
+	std::uint32_t ResourceRegistry::LivePipelineCount() const
+	{
+		std::uint32_t n = 0;
+		for (const auto& slot : m_pipelines)
+		{
+			if (slot.entry)
+			{
+				++n;
+			}
+		}
+		return n;
+	}
+} // namespace aether

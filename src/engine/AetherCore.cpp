@@ -379,6 +379,7 @@ namespace aether
 			m_gpu->SubmitAndPresent(0, 0, rmSem, rmVal);
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
+			m_gpu->AdvanceResourceRegistryFrame();
 			return;
 		}
 
@@ -469,6 +470,7 @@ namespace aether
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
+		m_gpu->AdvanceResourceRegistryFrame();
 	}
 
 	GpuFormat AetherCore::GetForwardColorFormat()

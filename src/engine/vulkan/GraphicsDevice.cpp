@@ -25,6 +25,13 @@ namespace aether
 		m_resourcePool.Shutdown();
 		m_bindlessManager.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext->GetDevice().device);
+		// ResourceRegistry::Shutdown must run after every other subsystem
+		// has torn down its resources (so DrainAll can find slots empty)
+		// and before VulkanContext resets, since the registry's queued
+		// destroyers need the VmaAllocator and VkDevice to still be live
+		// (Invariant #1: WaitIdle before any GPU resource destruction;
+		// Invariant #6: VMA outlives all allocations).
+		m_resourceRegistry.Shutdown();
 		m_vulkanContext.reset();
 	}
 } // namespace aether

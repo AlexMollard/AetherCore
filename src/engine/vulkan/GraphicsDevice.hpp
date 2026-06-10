@@ -4,6 +4,7 @@
 
 #include "gpu/BindlessManager.hpp"
 #include "vulkan/ResourcePool.hpp"
+#include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -14,8 +15,9 @@ namespace aether
 
 namespace aether
 {
-	// Owns the core Vulkan resources: context, swapchain, resource pool, and
-	// bindless descriptor manager. Requires Window from the service container.
+	// Owns the core Vulkan resources: context, swapchain, resource pool, bindless
+	// descriptor manager, and the central ResourceRegistry. Requires Window from
+	// the service container.
 	class GraphicsDevice
 	{
 	public:
@@ -48,10 +50,16 @@ namespace aether
 			return m_bindlessManager;
 		}
 
+		[[nodiscard]] ResourceRegistry& GetResourceRegistry()
+		{
+			return m_resourceRegistry;
+		}
+
 	private:
 		std::optional<VulkanContext> m_vulkanContext;
 		Swapchain m_swapchain;
 		ResourcePool m_resourcePool;
 		BindlessManager m_bindlessManager;
+		ResourceRegistry m_resourceRegistry;
 	};
 } // namespace aether
