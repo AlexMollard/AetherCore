@@ -160,7 +160,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
 
     if (job.secondaryClipIndex != 0u && job.blendWeight < 0.9999f)
     {
-        // Both clips active — sample secondary into temp, blend into final
+        // Both clips active - sample secondary into temp, blend into final
         GpuClip secondaryClip = clips[job.secondaryClipIndex];
 
         float invBlend = 1.0f - job.blendWeight;
@@ -176,7 +176,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
 
             uint poseIdx = poseBase + nodeIdx;
 
-            if (channel.animPath == 0u) // Translation — linear lerp
+            if (channel.animPath == 0u) // Translation - linear lerp
             {
                 Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.primaryTime, times);
                 uint valIdx0 = channel.valuesOffset / 16u + bracket.lo;
@@ -192,7 +192,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
 
                 poses[poseIdx].translation = lerp(primaryTrans, secondaryTrans, invBlend);
             }
-            else if (channel.animPath == 1u) // Rotation — Nlerp blend
+            else if (channel.animPath == 1u) // Rotation - Nlerp blend
             {
                 Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.primaryTime, times);
                 uint valIdx0 = channel.valuesOffset / 16u + bracket.lo;
@@ -230,7 +230,7 @@ void main(uint3 dtid : SV_DispatchThreadID)
     }
     else
     {
-        // No secondary clip — copy primary clip directly with fast channel loop
+        // No secondary clip - copy primary clip directly with fast channel loop
         for (uint chIdx = 0u; chIdx < primaryClip.channelCount; ++chIdx)
         {
             uint globalChIdx = primaryClip.channelOffset + chIdx;

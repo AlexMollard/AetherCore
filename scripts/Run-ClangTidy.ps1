@@ -140,5 +140,5 @@ $elapsed = Measure-Command {
 }
 
 $count = $issueFiles.Count
-Write-Host "`nclang-tidy finished in $($elapsed.TotalSeconds.ToString('F1'))s — $count file(s) with issues" -ForegroundColor Cyan
+Write-Host "`nclang-tidy finished in $($elapsed.TotalSeconds.ToString('F1'))s - $count file(s) with issues" -ForegroundColor Cyan
 if ($count -gt 0) { exit 1 }

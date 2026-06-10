@@ -91,7 +91,7 @@ try {
     Write-Host "`nBuilding App (compiles AssetPacker + runs packer via POST_BUILD)..." -ForegroundColor Yellow
     cmake --build --preset $Preset --config $Config --target App *>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Build failed — check errors above"
+        Write-Error "Build failed - check errors above"
         exit 1
     }
 
@@ -108,7 +108,7 @@ try {
             Copy-Item -LiteralPath $SrcDb -Destination $DstDb -Force
             Write-Host "LSP database synced from $BinDir to build-ninja-clang." -ForegroundColor Green
         } else {
-            Write-Warning "compile_commands.json not found at $SrcDb — LSP may show stale diagnostics"
+            Write-Warning "compile_commands.json not found at $SrcDb - LSP may show stale diagnostics"
         }
     }
 

@@ -312,7 +312,7 @@ namespace aether
 		// Per-command-buffer tracking and checkpoints are configured via
 		// VK_NV_device_diagnostics_config / VK_NV_device_diagnostic_checkpoints
 		// at device creation time.  The Aftermath SDK (2025.5.0) does not expose
-		// a separate VK_InitializeDevice for Vulkan — the equivalent is handled
+		// a separate VK_InitializeDevice for Vulkan - the equivalent is handled
 		// through the VkDeviceDiagnosticsConfigCreateInfoNV pNext chain.
 
 		m_device = device;

@@ -32,16 +32,16 @@ cmake --preset default && cmake --build --preset default
 
 ### Config options
 
-- `AETHERCORE_ENABLE_ASAN` — AddressSanitizer (default OFF)
-- `AETHERCORE_FAST_MSVC_DEBUG_INFO` — `/Z7` + `/DEBUG:FASTLINK` (default ON)
-- `AETHERCORE_ENABLE_TRACY` — Tracy profiler (default ON)
-- `AETHERCORE_ENABLE_SLANG` — Slang shader compilation (default ON)
+- `AETHERCORE_ENABLE_ASAN` - AddressSanitizer (default OFF)
+- `AETHERCORE_FAST_MSVC_DEBUG_INFO` - `/Z7` + `/DEBUG:FASTLINK` (default ON)
+- `AETHERCORE_ENABLE_TRACY` - Tracy profiler (default ON)
+- `AETHERCORE_ENABLE_SLANG` - Slang shader compilation (default ON)
 
 ### Targets
 
-- `Engine` — static library, everything under `src/engine/`
-- `App` — executable, `src/app/`, the F5 startup project
-- `AssetPacker` — CLI tool, `tools/assetpack/`
+- `Engine` - static library, everything under `src/engine/`
+- `App` - executable, `src/app/`, the F5 startup project
+- `AssetPacker` - CLI tool, `tools/assetpack/`
 
 There are no registered tests (no `add_test()` calls, no `ctest` targets). The CI workflow references `ctest` but it's a no-op.
 
@@ -49,7 +49,7 @@ There are no registered tests (no `add_test()` calls, no `ctest` targets). The C
 
 ```
 AetherCore/
-├── src/engine/         Static lib "Engine" — all engine subsystems
+├── src/engine/         Static lib "Engine" - all engine subsystems
 │   ├── AetherCore.{hpp,cpp}   Engine orchestrator, frame lifecycle
 │   ├── gpu/              GPU abstraction (GpuDevice, BindlessManager, AsyncComputeContext)
 │   ├── vulkan/           Vulkan impl (VulkanContext, Swapchain, UniqueBuffer, UniqueImage, GpuHeap)
@@ -112,17 +112,17 @@ AetherCore/
 - Always `#pragma once` (never include guards)
 - First include in every `.cpp`: the corresponding `.hpp` header
 - Then STL (alphabetically), then third-party (angle brackets), then project headers (quotes, grouped by subsystem)
-- `.clang-format` has `SortIncludes: Never` — manual ordering is preserved
+- `.clang-format` has `SortIncludes: Never` - manual ordering is preserved
 
 ### Error handling
 
 - `Expected<T>` = `std::expected<T, AetherError>` (defined in `src/engine/utils/Expected.hpp`)
 - `AetherError` carries a `LogCategory`, message string, and optional error code
-- `AE_TRY(var, expr)` — unwrap Expected, return unexpected on failure
-- `AE_EXPECT_OR_THROW(var, expr)` — unwrap or throw typed exception
-- `AE_UNEXPECTED(err)` — short-hand for `return std::unexpected(err)`
-- `AE_ASSERT(expr, msg)` — Debug-only check, logs + throws
-- `AE_ASSERT_ALWAYS(expr, msg)` — Ships in Release, logs + `std::abort()`
+- `AE_TRY(var, expr)` - unwrap Expected, return unexpected on failure
+- `AE_EXPECT_OR_THROW(var, expr)` - unwrap or throw typed exception
+- `AE_UNEXPECTED(err)` - short-hand for `return std::unexpected(err)`
+- `AE_ASSERT(expr, msg)` - Debug-only check, logs + throws
+- `AE_ASSERT_ALWAYS(expr, msg)` - Ships in Release, logs + `std::abort()`
 - Vulkan calls return `Expected<T>`, caller uses `AE_TRY` in init paths
 
 ### Logging
@@ -146,11 +146,11 @@ Categories: `Engine`, `Vulkan`, `Asset`, `Render`, `Scene`, `Camera`, `UI`, `Inp
 ### Formatting
 
 - Tabs for indentation, spaces for alignment (`.clang-format`: `UseTab: ForIndentation`)
-- Brace wrapping on everything — after class, function, namespace, struct, enum, control flow, before else/catch
+- Brace wrapping on everything - after class, function, namespace, struct, enum, control flow, before else/catch
 - Column limit 250
-- `InsertBraces: true` — always wrap if/for/while bodies in braces
+- `InsertBraces: true` - always wrap if/for/while bodies in braces
 - Access modifiers at -4 indent relative to class body
-- No doxygen — use `//` line comments only
+- No doxygen - use `//` line comments only
 - Class-level comments describe purpose and thread safety
 
 ## Vulkan Specifics
@@ -164,10 +164,10 @@ The engine uses a **two-layer abstraction**: engine code touches `gpu/` types on
 
 ### Resource management
 
-- `UniqueBuffer` / `UniqueImage` — RAII, move-only, factory `Create(...)` returns `Expected<T>`
-- `GpuHeap` — device-local arena with sorted free-list, `Alloc<T>(n)` → `GpuSpan<T>`, used during asset loading only (not thread-safe)
-- `GpuSpan<T>` — typed view over GPU buffer with BDA (buffer device address)
-- `ResourcePool` — render-graph virtual resource aliasing
+- `UniqueBuffer` / `UniqueImage` - RAII, move-only, factory `Create(...)` returns `Expected<T>`
+- `GpuHeap` - device-local arena with sorted free-list, `Alloc<T>(n)` → `GpuSpan<T>`, used during asset loading only (not thread-safe)
+- `GpuSpan<T>` - typed view over GPU buffer with BDA (buffer device address)
+- `ResourcePool` - render-graph virtual resource aliasing
 - All Vulkan calls use `volk` (header-only mode, `VK_NO_PROTOTYPES` defined)
 - VMA for all GPU memory (`VMA_DYNAMIC_VULKAN_FUNCTIONS=1`)
 - `vk-bootstrap` for instance/device creation
@@ -175,7 +175,7 @@ The engine uses a **two-layer abstraction**: engine code touches `gpu/` types on
 
 ### Destruction
 
-Always `m_gpu->WaitIdle()` before freeing GPU resources. VMA must outlive all allocations it manages — `GpuDevice::Shutdown()` destroys VMA last.
+Always `m_gpu->WaitIdle()` before freeing GPU resources. VMA must outlive all allocations it manages - `GpuDevice::Shutdown()` destroys VMA last.
 
 ## Dependencies
 
@@ -206,16 +206,16 @@ Third-party sources live under `build/_deps/` (gitignored). Never modify them di
 ## Do Not
 
 - Do not run the game binary directly; no display is available in agent context
-- Do not modify `compile_commands.json` manually — use `/sync-lsp`
+- Do not modify `compile_commands.json` manually - use `/sync-lsp`
 - Do not commit compiled shader SPIR-V binaries (`.spv` files are gitignored)
-- Do not modify files in any `build*/` directory — they're fully regenerated by CMake
-- Do not modify `CMake/CPM.cmake` or `CMake/get_cpm.cmake` — they're third-party
-- Do not change `.clang-format` without explicit user request — it reformats the entire codebase
+- Do not modify files in any `build*/` directory - they're fully regenerated by CMake
+- Do not modify `CMake/CPM.cmake` or `CMake/get_cpm.cmake` - they're third-party
+- Do not change `.clang-format` without explicit user request - it reformats the entire codebase
 - Do not modify third-party sources in `build/_deps/`
 - Do not change the subsystem init/shutdown order in `AetherCore.cpp` without understanding the dependency chain
 - Do not add `.spv` files to the repo
-- Do not use include guards — always `#pragma once`
-- Do not use `SortIncludes` — include order is meaningful and manually maintained
+- Do not use include guards - always `#pragma once`
+- Do not use `SortIncludes` - include order is meaningful and manually maintained
 
 ## graphify
 

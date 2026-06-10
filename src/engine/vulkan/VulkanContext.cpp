@@ -149,8 +149,8 @@ namespace aether
 		// maintenance9 (promoted to 1.4 spec but still KHR in this SDK) allows queue
 		// family ownership transfers to be omitted when both queue families are compatible.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-		// Push descriptors eliminate per-frame VkDescriptorPool allocation — write descriptors
-		// directly into the command buffer at bind time. Core in Vulkan 1.4 — enabled via
+		// Push descriptors eliminate per-frame VkDescriptorPool allocation - write descriptors
+		// directly into the command buffer at bind time. Core in Vulkan 1.4 - enabled via
 		// features14.pushDescriptor below, but the extension name is still required by some
 		// loader/driver paths.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);

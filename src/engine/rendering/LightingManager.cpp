@@ -519,7 +519,7 @@ namespace aether
 		const VkDevice device = m_context->GetDevice().device;
 		const VmaAllocator allocator = m_context->GetAllocator();
 
-		// Retire stale buffers from kMaxFramesInFlight frames ago — this slot is
+		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
 		// guaranteed to have completed all GPU work referencing them.
 		frame.staleBuffers.clear();
 
@@ -545,7 +545,7 @@ namespace aether
 			VmaAllocationCreateInfo allocInfo{};
 			allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-			// Create new buffer BEFORE releasing the old one — avoids use-after-free on creation failure.
+			// Create new buffer BEFORE releasing the old one - avoids use-after-free on creation failure.
 			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::Create(allocator, device, info, allocInfo));
 			// Defer destruction of the old buffer to this slot's next reuse cycle,
 			// ensuring any in-flight GPU work referencing it has completed.

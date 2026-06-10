@@ -380,7 +380,7 @@ namespace
 			}
 			if (oob > 0)
 			{
-				AE_WARN(aether::LogCategory::Animation, "add_animation: {} channels have nodeIndex >= nodeCount({}) after remap — will be skipped on GPU", oob, nodeCount);
+				AE_WARN(aether::LogCategory::Animation, "add_animation: {} channels have nodeIndex >= nodeCount({}) after remap - will be skipped on GPU", oob, nodeCount);
 			}
 			AE_INFO(aether::LogCategory::Animation, "add_animation: {} channels, {} matched by name, {} total nodes in skeleton", anim.channels.size(), matched, nodeCount);
 		}
@@ -722,7 +722,7 @@ namespace aether::app::scripting
 		{
 			das::ModuleLibrary lib(this);
 
-			// Compile — bake pending animations into the AnimationDatabase
+			// Compile - bake pending animations into the AnimationDatabase
 			Bind<das_compile_animations>(lib, "compile_animations", SE::modifyExternal);
 
 			// Loading

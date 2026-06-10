@@ -213,7 +213,7 @@ inline PakFileResult ProcessFile(const std::string& virtualPath, const fs::path&
 
 	if (procResult.skipSource)
 	{
-		// Don't pack the source file — only emit extra files (anims, materials, etc.).
+		// Don't pack the source file - only emit extra files (anims, materials, etc.).
 		result.hasPrimary = false;
 		result.ok = true;
 
