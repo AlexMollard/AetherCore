@@ -27,6 +27,15 @@ include(Dependencies)
 include(TargetDefaults)
 include(SlangShaders)
 
+option(AETHERCORE_ENABLE_CLANG_TIDY_TARGET "Add clang-tidy custom target (uses the clangd preset's compile_commands.json)" OFF)
+if(AETHERCORE_ENABLE_CLANG_TIDY_TARGET)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    set(AETHERCORE_CLANG_TIDY_RUNNER
+        "C:/Program Files/LLVM/bin/run-clang-tidy"
+        CACHE FILEPATH "Path to LLVM's run-clang-tidy (the LLVM Windows install drops it as an extension-less Python script in bin/)")
+    include(${CMAKE_CURRENT_SOURCE_DIR}/CMake/ClangTidy.cmake)
+endif()
+
 add_subdirectory(tools/assetpack)
 add_subdirectory(tools/scripts)
 add_subdirectory(src/engine)
