@@ -109,13 +109,13 @@ namespace
 	// set_physics_debug_enabled(enabled: bool)
 	void das_set_physics_debug_enabled(bool enabled)
 	{
-		aether::SetPhysicsDebugRenderingEnabled(enabled);
+		aether::SetDebugRenderingEnabled(enabled);
 	}
 
 	// is_physics_debug_enabled() -> bool
 	bool das_is_physics_debug_enabled()
 	{
-		return aether::IsPhysicsDebugRenderingEnabled();
+		return aether::IsDebugRenderingEnabled();
 	}
 
 } // namespace

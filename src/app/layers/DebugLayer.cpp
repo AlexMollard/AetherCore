@@ -23,6 +23,7 @@
 #include "ui/UiWidgets.hpp"
 #include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
+#include "passes/ForwardPass.hpp"
 #include "rendering/Renderer.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
@@ -420,6 +421,9 @@ namespace aether::app
 		m_labelRows[Row_PhysicsDebug] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Physics Debug", 2.f));
 		addToPage(Tab_Render, m_labelRows[Row_PhysicsDebug]);
 
+		m_labelRows[Row_ForwardRender] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Forward Render", 2.f));
+		addToPage(Tab_Render, m_labelRows[Row_ForwardRender]);
+
 		m_separators[2] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
 		addToPage(Tab_Camera, m_separators[2]);
 
@@ -490,15 +494,22 @@ namespace aether::app
 
 		if (input.IsKeyPressed(aether::Key::F6))
 		{
-			const bool newState = !aether::IsPhysicsDebugRenderingEnabled();
-			aether::SetPhysicsDebugRenderingEnabled(newState);
-			AE_INFO(aether::LogCategory::App, "Physics debug: {}", newState ? "on" : "off");
+			const bool newState = !aether::IsDebugRenderingEnabled();
+			aether::SetDebugRenderingEnabled(newState);
+			AE_INFO(aether::LogCategory::App, "Debug renderer: {}", newState ? "on" : "off");
 		}
 
 		if (input.IsKeyPressed(aether::Key::F7))
 		{
 			m_debugTestShapes = !m_debugTestShapes;
 			AE_INFO(aether::LogCategory::App, "Debug test shapes: {}", m_debugTestShapes ? "on" : "off");
+		}
+
+		if (input.IsKeyPressed(aether::Key::F8))
+		{
+			const bool newState = !aether::ForwardPass::IsEnabled();
+			aether::ForwardPass::SetEnabled(newState);
+			AE_INFO(aether::LogCategory::App, "Forward render: {}", newState ? "on" : "off");
 		}
 
 		// ── Diagnostic test shapes (F7) ───────────────────────────────────
@@ -747,8 +758,12 @@ namespace aether::app
 		}
 
 		// Physics debug state
-		const bool physDebug = aether::IsPhysicsDebugRenderingEnabled();
+		const bool physDebug = aether::IsDebugRenderingEnabled();
 		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
+
+		// Forward render state
+		const bool fwdRender = aether::ForwardPass::IsEnabled();
+		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// Reload button click detection
 		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))

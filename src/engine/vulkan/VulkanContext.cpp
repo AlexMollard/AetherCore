@@ -128,6 +128,7 @@ namespace aether
 		requiredFeatures10.multiDrawIndirect = VK_TRUE;
 		requiredFeatures10.drawIndirectFirstInstance = VK_TRUE;
 		requiredFeatures10.fillModeNonSolid = VK_TRUE;
+		requiredFeatures10.wideLines = VK_TRUE;
 
 		vkb::PhysicalDeviceSelector selector{*m_instance};
 		selector.set_surface(m_surface).set_minimum_version(1, 4).set_required_features(requiredFeatures10).set_required_features_11(requiredFeatures11).set_required_features_12(requiredFeatures12).set_required_features_13(requiredFeatures13);

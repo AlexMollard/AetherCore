@@ -57,6 +57,7 @@ namespace aether::app
 			Row_SpotLights,
 			Row_SunIntensity,
 			Row_PhysicsDebug,
+			Row_ForwardRender,
 			Row_FirstRenderPass,
 		};
 

@@ -18,6 +18,16 @@ namespace aether
 	class ForwardPass
 	{
 	public:
+		static void SetEnabled(bool enabled)
+		{
+			s_enabled = enabled;
+		}
+
+		[[nodiscard]] static bool IsEnabled()
+		{
+			return s_enabled;
+		}
+
 		void RegisterPass(RenderGraph& graph,
 		        RGImage hdrColor,
 		        RGImage depth,
@@ -26,5 +36,8 @@ namespace aether
 		        std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn,
 		        std::span<const RGImage> shadowMaps = {},
 		        RGImage localShadowAtlas = {});
+
+	private:
+		static bool s_enabled;
 	};
 } // namespace aether

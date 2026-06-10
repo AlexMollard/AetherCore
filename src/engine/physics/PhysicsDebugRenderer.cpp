@@ -34,14 +34,14 @@ namespace aether
 		}
 	} // namespace
 
-	static bool s_debugRenderingEnabled = true; // on by default; F6 toggles from DebugLayer
+	static bool s_debugRenderingEnabled = true; // F6 toggles from DebugLayer
 
-	void SetPhysicsDebugRenderingEnabled(bool enabled)
+	void SetDebugRenderingEnabled(bool enabled)
 	{
 		s_debugRenderingEnabled = enabled;
 	}
 
-	bool IsPhysicsDebugRenderingEnabled()
+	bool IsDebugRenderingEnabled()
 	{
 		return s_debugRenderingEnabled;
 	}
@@ -351,9 +351,10 @@ namespace aether
 		        .pScissors = nullptr,
 		};
 
-		const std::array<VkDynamicState, 2> kDynamicStates{
+		const std::array<VkDynamicState, 3> kDynamicStates{
 		        VK_DYNAMIC_STATE_VIEWPORT,
 		        VK_DYNAMIC_STATE_SCISSOR,
+		        VK_DYNAMIC_STATE_LINE_WIDTH,
 		};
 		const VkPipelineDynamicStateCreateInfo dynamicState{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
@@ -509,34 +510,76 @@ namespace aether
 		std::vector<DebugVertex> vertices;
 		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
 
-		constexpr int kSegments = 8;
+		constexpr int kSegments = 12;
+		constexpr int kDomeSteps = 3;
 		constexpr float kRadius = 0.5f;
 		constexpr float kHalfHeight = 0.5f;
 		constexpr float kTwoPi = 6.28318530718f;
-		constexpr float kPi = 3.14159265359f;
+		constexpr float kHalfPi = 1.57079632679f;
+		// Meridian lines: north pole → top dome → cylinder → bottom dome → south pole.
+		for (int i = 0; i < kSegments; ++i)
+		{
+			const float theta = static_cast<float>(i * kTwoPi) / kSegments;
+			const float dx = std::cos(theta);
+			const float dz = std::sin(theta);
 
+			// Build waypoints: north pole, top dome points, bottom dome points, south pole.
+			// Cylinder top = domePoints[kDomeSteps-1], cylinder bottom = bottomDome[0].
+			glm::vec3 prev = glm::vec3{0.0f, kHalfHeight + kRadius, 0.0f}; // north pole
+
+			// Top hemisphere: north pole → cylinder top.
+			for (int j = 1; j <= kDomeSteps; ++j)
+			{
+				const float phi = static_cast<float>(j * kHalfPi) / kDomeSteps;
+				const glm::vec3 p{kRadius * std::sin(phi) * dx, kHalfHeight + kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
+				vertices.push_back(DebugVertex{prev, kWhite});
+				vertices.push_back(DebugVertex{p, kWhite});
+				prev = p;
+			}
+
+			// Cylinder: top → bottom.
+			for (int j = 0; j < kDomeSteps; ++j)
+			{
+				const float y = kHalfHeight - static_cast<float>(j + 1) * (2.0f * kHalfHeight) / kDomeSteps;
+				const glm::vec3 p{kRadius * dx, y, kRadius * dz};
+				vertices.push_back(DebugVertex{prev, kWhite});
+				vertices.push_back(DebugVertex{p, kWhite});
+				prev = p;
+			}
+
+			// Bottom hemisphere: cylinder bottom → south pole.
+			for (int j = 1; j <= kDomeSteps; ++j)
+			{
+				const float phi = kHalfPi + static_cast<float>(j * kHalfPi) / kDomeSteps;
+				const glm::vec3 p{kRadius * std::sin(phi) * dx, -kHalfHeight - kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
+				vertices.push_back(DebugVertex{prev, kWhite});
+				vertices.push_back(DebugVertex{p, kWhite});
+				prev = p;
+			}
+
+			// South pole (final point closing the meridian).
+			const glm::vec3 southPole{0.0f, -kHalfHeight - kRadius, 0.0f};
+			vertices.push_back(DebugVertex{prev, kWhite});
+			vertices.push_back(DebugVertex{southPole, kWhite});
+		}
+
+		// Horizontal rings at cylinder top and bottom.
 		for (int i = 0; i < kSegments; ++i)
 		{
 			const float theta1 = static_cast<float>(i * kTwoPi) / kSegments;
 			const float theta2 = static_cast<float>((i + 1) * kTwoPi) / kSegments;
+			const float cx1 = kRadius * std::cos(theta1);
+			const float cz1 = kRadius * std::sin(theta1);
+			const float cx2 = kRadius * std::cos(theta2);
+			const float cz2 = kRadius * std::sin(theta2);
 
-			for (int j = 0; j < kSegments / 2; ++j)
-			{
-				const float phi1 = static_cast<float>(j * kPi) / kSegments;
-				const float phi2 = static_cast<float>((j + 1) * kPi) / kSegments;
+			// Top ring.
+			vertices.push_back(DebugVertex{glm::vec3{cx1, kHalfHeight, cz1}, kWhite});
+			vertices.push_back(DebugVertex{glm::vec3{cx2, kHalfHeight, cz2}, kWhite});
 
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi1) * std::cos(theta1), kHalfHeight + kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi1) * std::cos(theta2), kHalfHeight + kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta2)}, kWhite});
-
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi2) * std::cos(theta1), kHalfHeight + kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi2) * std::cos(theta2), kHalfHeight + kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta2)}, kWhite});
-
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi1) * std::cos(theta1), -kHalfHeight - kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi1) * std::cos(theta2), -kHalfHeight - kRadius * std::cos(phi1), kRadius * std::sin(phi1) * std::sin(theta2)}, kWhite});
-
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi2) * std::cos(theta1), -kHalfHeight - kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kRadius * std::sin(phi2) * std::cos(theta2), -kHalfHeight - kRadius * std::cos(phi2), kRadius * std::sin(phi2) * std::sin(theta2)}, kWhite});
-			}
+			// Bottom ring.
+			vertices.push_back(DebugVertex{glm::vec3{cx1, -kHalfHeight, cz1}, kWhite});
+			vertices.push_back(DebugVertex{glm::vec3{cx2, -kHalfHeight, cz2}, kWhite});
 		}
 
 		m_capsuleVertexCount = static_cast<std::uint32_t>(vertices.size());
@@ -806,6 +849,7 @@ namespace aether
 			                static_assert(sizeof(DebugPc) == 88);
 
 			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
+			                vkCmdSetLineWidth(cmd, 2.0f);
 
 			                // 1) Immediate-mode batched debug primitives.
 			                // Combine the per-frame debugVertices (set by the engine from

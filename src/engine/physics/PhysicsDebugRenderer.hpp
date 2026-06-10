@@ -14,8 +14,8 @@ namespace aether
 	class CommandRecorder;
 	class RenderGraph;
 
-	void SetPhysicsDebugRenderingEnabled(bool enabled);
-	bool IsPhysicsDebugRenderingEnabled();
+	void SetDebugRenderingEnabled(bool enabled);
+	bool IsDebugRenderingEnabled();
 
 	enum class PhysicsDebugColorMode : uint8_t
 	{

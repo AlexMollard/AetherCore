@@ -5,6 +5,8 @@
 
 namespace aether
 {
+	bool ForwardPass::s_enabled = true;
+
 	void ForwardPass::RegisterPass(RenderGraph& graph,
 	        RGImage hdrColor,
 	        RGImage depth,
@@ -33,6 +35,11 @@ namespace aether
 		pass->Execute(
 		        [&renderQueue, bindlessSet, pushLightingFn](PassContext& ctx)
 		        {
+			        AE_PROFILE_ZONE();
+			        if (!ForwardPass::s_enabled)
+			        {
+				        return;
+			        }
 			        renderQueue.FlushDrawPush(ctx.recorder, bindlessSet, pushLightingFn);
 			        renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 		        });
