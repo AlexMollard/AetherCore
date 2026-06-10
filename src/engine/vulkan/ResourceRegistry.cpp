@@ -14,7 +14,7 @@ namespace aether
 		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
 		inline constexpr std::uint32_t kGenerationWrap = 256u;
-	}
+	} // namespace
 
 	ResourceRegistry::~ResourceRegistry()
 	{
@@ -38,7 +38,7 @@ namespace aether
 		// operation Shutdown runs after every subsystem has cleaned up, so
 		// the only entries left are those the engine forgot - log a warning
 		// so it surfaces during development.
-		for (auto& slot : m_textures)
+		for (auto& slot: m_textures)
 		{
 			if (slot.entry)
 			{
@@ -47,7 +47,7 @@ namespace aether
 				slot.entry.reset();
 			}
 		}
-		for (auto& slot : m_buffers)
+		for (auto& slot: m_buffers)
 		{
 			if (slot.entry)
 			{
@@ -56,7 +56,7 @@ namespace aether
 				slot.entry.reset();
 			}
 		}
-		for (auto& slot : m_pipelines)
+		for (auto& slot: m_pipelines)
 		{
 			if (slot.entry)
 			{
@@ -365,7 +365,7 @@ namespace aether
 		// the iteration range.
 		std::vector<PendingDestruction> local;
 		local.swap(ring);
-		for (auto& d : local)
+		for (auto& d: local)
 		{
 			if (d.fn)
 			{
@@ -428,7 +428,7 @@ namespace aether
 	std::uint32_t ResourceRegistry::LiveTextureCount() const
 	{
 		std::uint32_t n = 0;
-		for (const auto& slot : m_textures)
+		for (const auto& slot: m_textures)
 		{
 			if (slot.entry)
 			{
@@ -441,7 +441,7 @@ namespace aether
 	std::uint32_t ResourceRegistry::LiveBufferCount() const
 	{
 		std::uint32_t n = 0;
-		for (const auto& slot : m_buffers)
+		for (const auto& slot: m_buffers)
 		{
 			if (slot.entry)
 			{
@@ -454,7 +454,7 @@ namespace aether
 	std::uint32_t ResourceRegistry::LivePipelineCount() const
 	{
 		std::uint32_t n = 0;
-		for (const auto& slot : m_pipelines)
+		for (const auto& slot: m_pipelines)
 		{
 			if (slot.entry)
 			{

@@ -168,7 +168,7 @@ namespace aether
 		const VkPipeline pipeline = m_singlePipeline;
 		const VkPipelineLayout layout = m_singleLayout;
 
-		graph.AddComputePass(passName).ExecuteCompute([&renderQueue, pipeline, layout](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, pipeline, layout, ctx.frameIndex); });
+		graph.AddComputePass(passName).ExecuteCompute([&renderQueue, pipeline, layout](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, pipeline, layout, ctx.frameIndex); });
 	}
 
 } // namespace aether

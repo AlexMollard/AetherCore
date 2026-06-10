@@ -10,7 +10,6 @@
 
 namespace aether
 {
-	enum class GpuFormat : std::uint32_t;
 	struct FrameConstants;
 
 	class AnimationBlendSystem;

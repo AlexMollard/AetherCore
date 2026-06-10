@@ -6,6 +6,7 @@
 #include <stdexcept>
 
 #include "gpu/GpuTypes.hpp"
+#include "gpu/PushConstantsBytes.hpp"
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationIk.hpp"
 #include "rendering/CommandRecorder.hpp"
@@ -116,9 +117,14 @@ namespace aether
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
-	void RenderQueue::PrepareAndDispatch(VkCommandBuffer cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
+	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
+		// TODO(phase5): migrate these raw vkCmd* sites to gpu::CommandList methods.
+		// Transitional shim: the body of this function still uses raw vkCmd*
+		// calls for compute-pipeline bind/dispatch/barrier; unwrap the opaque
+		// command-buffer handle once and reuse it locally.
+		VkCommandBuffer cmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
 		if (m_commands.empty())
 		{
@@ -938,22 +944,22 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDraw(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(recorder, bindlessSet, lightingSet, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, bindlessSet, lightingSet, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(CommandRecorder& recorder, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(recorder, bindlessSet, VK_NULL_HANDLE, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
+		FlushDrawImpl(cmd, bindlessSet, VK_NULL_HANDLE, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(recorder, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
+		FlushDrawImpl(cmd, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
-	void RenderQueue::FlushDrawImpl(CommandRecorder& recorder,
+	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
 	        VkDescriptorSet bindlessSet,
 	        VkDescriptorSet lightingSet,
 	        gpu::DeviceAddress frameAddr,
@@ -966,7 +972,7 @@ namespace aether
 	        const LightingPushFn& pushLightingFn)
 	{
 		AE_PROFILE_ZONE();
-		if (!recorder.IsValid())
+		if (!cmd.IsValid())
 		{
 			return;
 		}
@@ -975,7 +981,7 @@ namespace aether
 			return;
 		}
 
-		recorder.BeginDebugLabel(debugLabel, r, g, b, 1.0f);
+		cmd.BeginDebugLabel(debugLabel, r, g, b, 1.0f);
 
 		const DrawContracts::PushConstants sharedPc{
 		        .frameAddr = frameAddr,
@@ -998,7 +1004,7 @@ namespace aether
 
 			if (activePipeline != nullptr && activePipeline != lastPipeline)
 			{
-				recorder.BindGraphicsPipeline(*activePipeline);
+				cmd.BindPipeline(activePipeline->GetPipeline(), activePipeline->GetLayout());
 				lastPipeline = activePipeline;
 				lastSetPipeline = nullptr;
 				lastLightingSetPipeline = nullptr;
@@ -1006,24 +1012,24 @@ namespace aether
 
 			if (bindlessSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline != lastSetPipeline)
 			{
-				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+				cmd.BindDescriptorSet(activePipeline->GetLayout(), 0, bindlessSet);
 				lastSetPipeline = activePipeline;
 			}
 
 			if (pushLightingFn && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
 			{
-				pushLightingFn(recorder.GetCommandBuffer(), activePipeline->GetLayout());
+				pushLightingFn(cmd, activePipeline->GetLayout());
 				lastLightingSetPipeline = activePipeline;
 			}
 			else if (lightingSet != VK_NULL_HANDLE && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
 			{
-				vkCmdBindDescriptorSets(recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_GRAPHICS, activePipeline->GetLayout(), 1, 1, &lightingSet, 0, nullptr);
+				cmd.BindDescriptorSet(activePipeline->GetLayout(), 1, lightingSet);
 				lastLightingSetPipeline = activePipeline;
 			}
 
 			if (activePipeline != nullptr)
 			{
-				recorder.PushConstants(activePipeline->GetLayout(), sharedPc);
+				cmd.PushConstantsRaw(activePipeline->GetLayout(), gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(sharedPc));
 			}
 
 			if (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration && batch.mesh->GetIndexBuffer() != VK_NULL_HANDLE)
@@ -1032,7 +1038,7 @@ namespace aether
 				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
 				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)
 				{
-					recorder.BindIndexBuffer(indexBuffer, indexOffset);
+					cmd.BindIndexBuffer(indexBuffer, indexOffset);
 					lastIndexBuffer = indexBuffer;
 					lastIndexOffset = indexOffset;
 				}
@@ -1044,16 +1050,16 @@ namespace aether
 				const std::uint32_t indexCount = (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration) ? batch.mesh->GetIndexCount() : 0u;
 				for (std::uint32_t local = 0; local < batch.drawCount; ++local)
 				{
-					recorder.DrawIndexed(indexCount, 1u, 0u, 0, batch.outputStart + local);
+					cmd.DrawIndexed(indexCount, 1u, 0u, 0, batch.outputStart + local);
 				}
 			}
 			else
 			{
-				recorder.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
+				cmd.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
 			}
 		}
 
-		recorder.EndDebugLabel();
+		cmd.EndDebugLabel();
 	}
 
 	void RenderQueue::Clear(std::uint32_t slot)

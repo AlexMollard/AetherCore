@@ -836,8 +836,8 @@ namespace aether
 				                return;
 			                }
 
-			                CommandRecorder& recorder = ctx.recorder;
-			                VkCommandBuffer cmd = recorder.GetCommandBuffer();
+			                gpu::CommandList& recorder = ctx.recorder;
+			                VkCommandBuffer cmd = static_cast<VkCommandBuffer>(recorder.GetCommandBuffer());
 
 			                // Push-constant layout: { uint64 frameAddr, vec4 tint, mat4 model }
 			                struct DebugPc

@@ -249,12 +249,12 @@ namespace aether
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % aether::kMaxFramesInFlight);
-			                CommandRecorder nullRecorder;
-			                m_lightingManager->UpdateForView(frameIdx, nullRecorder, *cam, GpuExtent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
+			                gpu::CommandList nullCmd;
+			                m_lightingManager->UpdateForView(frameIdx, nullCmd, *cam, GpuExtent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
+			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)
@@ -275,11 +275,12 @@ namespace aether
 			                }
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
-			                auto pushLighting = [this, frameIdx](VkCommandBuffer cmd, VkPipelineLayout layout)
+			                auto pushLighting = [this, frameIdx](gpu::CommandList& cmd, VkPipelineLayout layout)
 			                {
 				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
 			                };
-			                rit->second.renderQueue.FlushDrawPush(ctx.recorder, m_bindlessManager->GetSet(), pushLighting);
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                rit->second.renderQueue.FlushDrawPush(cmd, m_bindlessManager->GetSet(), pushLighting);
 			                rit->second.renderQueue.Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}

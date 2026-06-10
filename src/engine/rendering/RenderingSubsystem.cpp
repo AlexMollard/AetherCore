@@ -146,7 +146,7 @@ namespace aether
 		        .mainRenderQueue = m_renderQueue,
 		        .forwardPass = m_forwardPass,
 		        .pushLightingFn =
-		                [this, &lighting](VkCommandBuffer cmd, VkPipelineLayout layout)
+		                [this, &lighting](gpu::CommandList& cmd, VkPipelineLayout layout)
 		        {
 			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
 			        lighting.PushLightingDescriptor(cmd, layout, frameIdx);

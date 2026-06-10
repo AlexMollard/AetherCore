@@ -89,6 +89,9 @@ namespace aether
 
 	Expected<GraphicsPipeline> GraphicsPipeline::Create(VkDevice device, VkPipelineCache pipelineCache, const Desc& desc)
 	{
+		// (Phase 5 work: translate engine-typed Desc fields to Vk* and move this
+		//  factory body to src/engine/vulkan/GraphicsPipelineCreate.cpp.)
+
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())
 		{

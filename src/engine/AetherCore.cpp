@@ -25,6 +25,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/CommandList.hpp"
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "platform/PlatformSubsystem.hpp"
@@ -62,6 +63,7 @@ namespace aether
 		m_services.RegisterOwned(std::make_unique<UISubsystem>());
 		m_services.RegisterOwned(std::make_unique<AsyncComputeContext>());
 		m_gpu = std::make_unique<GpuDevice>();
+		m_services.Register<GpuDevice>(*m_gpu);
 		m_cameras = std::make_unique<CameraSubsystem>();
 		m_rendering = std::make_unique<RenderingSubsystem>();
 
@@ -413,7 +415,7 @@ namespace aether
 				if (asyncCompute.IsEnabled())
 				{
 					asyncCompute.BeginFrame(*m_gpu, frameIdx);
-					CommandRecorder lightingCmd = asyncCompute.GetCommandRecorder(frameIdx);
+					gpu::CommandList lightingCmd = asyncCompute.GetCommandList(frameIdx);
 					m_cameras->GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
 					asyncCompute.EndCommandBuffer(frameIdx);
 					auto result = asyncCompute.Submit(*m_gpu, frameIdx);
@@ -424,7 +426,9 @@ namespace aether
 				{
 					const TracyVkCtx vkCtx = m_gpu->GetVulkanContext().GetTracyVkCtx();
 					AE_PROFILE_GPU_ZONE_T(vkCtx, m_currentRecorder.GetCommandBuffer(), gpuLightingZone, "Lighting.UpdateForView");
-					m_cameras->GetLightingManager().UpdateForView(frameIdx, m_currentRecorder, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
+					// TODO(phase5): m_currentRecorder should already be a gpu::CommandList
+					gpu::CommandList lightingCmd(m_currentRecorder.GetCommandBuffer());
+					m_cameras->GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
 				}
 			}
 		}

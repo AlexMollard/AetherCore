@@ -9,12 +9,13 @@
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
 
-#include "rendering/CommandRecorder.hpp"
+#include "gpu/CommandList.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "vulkan/UniqueImage.hpp"
 
 namespace aether
 {
+	class CommandRecorder;
 	class BindlessManager;
 
 	// Opaque handle to a render-graph-managed image resource.
@@ -53,7 +54,7 @@ namespace aether
 	// Data made available inside pass execute callbacks.
 	struct PassContext
 	{
-		CommandRecorder& recorder;
+		gpu::CommandList& recorder;
 		VkExtent2D extent;
 		std::uint64_t frameConstantsAddr = 0;
 		std::uint32_t frameIndex = 0;
@@ -198,6 +199,11 @@ namespace aether
 		[[nodiscard]] std::vector<PassInfo> GetPasses() const;
 
 		// Execute the compiled frame graph for the current frame.
+		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
+
+		// Transitional: caller still holds a CommandRecorder. Wraps and forwards
+		// to the gpu::CommandList overload. TODO(phase3g): remove when
+		// AetherCore owns a gpu::CommandList directly.
 		void Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
 	private:

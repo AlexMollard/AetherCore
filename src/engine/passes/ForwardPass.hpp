@@ -4,6 +4,7 @@
 #include <span>
 #include "vulkan/volk.hpp"
 
+#include "gpu/CommandList.hpp"
 #include "rendering/RenderGraph.hpp"
 
 namespace aether
@@ -33,7 +34,7 @@ namespace aether
 		        RGImage depth,
 		        RenderQueue& renderQueue,
 		        VkDescriptorSet bindlessSet,
-		        std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn,
+		        std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn,
 		        std::span<const RGImage> shadowMaps = {},
 		        RGImage localShadowAtlas = {});
 

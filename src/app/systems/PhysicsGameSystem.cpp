@@ -170,7 +170,7 @@ namespace aether::app
 
 		// ── Pipeline ──────────────────────────────────────────────────────────────
 		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
-		const VkDescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
+		const VkDescriptorSetLayout lightingLayout = static_cast<VkDescriptorSetLayout>(m_services->Get<LightingManager>().GetSetLayout());
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		AE_EXPECT_OR_THROW(pipeline,

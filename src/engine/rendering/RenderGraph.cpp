@@ -657,7 +657,7 @@ namespace aether
 		EvictStaleCacheEntries();
 	}
 
-	void RenderGraph::Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
+	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
 	{
 		if (m_passes.empty())
 		{
@@ -667,6 +667,14 @@ namespace aether
 		Compile();
 
 		EnsureTransientImages(target);
+
+		// TODO(phase5): migrate these raw vkCmd* sites to gpu::CommandList methods.
+		// Transitional shim: Execute() still uses vkutil::TransitionImages and
+		// vkCmd* for barrier/render-pass begin/end. Unwrap the opaque handle
+		// once for the raw-Vk sites; cmdList (gpu::CommandList&) is used for
+		// debug labels.
+		gpu::CommandList& recorder = cmdList;
+		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 
 		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
@@ -698,7 +706,7 @@ namespace aether
 				        .subresourceRange = {b.aspect, 0, 1, 0, 1},
 				});
 			}
-			vkutil::TransitionImages(recorder.GetCommandBuffer(), m_scratchBarriers.data(), static_cast<uint32_t>(m_scratchBarriers.size()));
+			vkutil::TransitionImages(vkCmd, m_scratchBarriers.data(), static_cast<uint32_t>(m_scratchBarriers.size()));
 
 			m_scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
@@ -741,7 +749,7 @@ namespace aether
 				        .pColorAttachments = m_scratchColorInfos.data(),
 				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
-				vkCmdBeginRendering(recorder.GetCommandBuffer(), &renderInfo);
+				vkCmdBeginRendering(vkCmd, &renderInfo);
 
 				const VkViewport viewport{
 				        .x = 0.0f,
@@ -755,13 +763,13 @@ namespace aether
 				        {0, 0},
 				        passExtent,
 				};
-				vkCmdSetViewport(recorder.GetCommandBuffer(), 0, 1, &viewport);
-				vkCmdSetScissor(recorder.GetCommandBuffer(), 0, 1, &scissor);
+				vkCmdSetViewport(vkCmd, 0, 1, &viewport);
+				vkCmdSetScissor(vkCmd, 0, 1, &scissor);
 			}
 
 			if (pass.execute)
 			{
-				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, recorder.GetCommandBuffer(), gpuPassZone, pass.name.c_str());
+				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, vkCmd, gpuPassZone, pass.name.c_str());
 				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
 				pass.execute(ctx);
@@ -771,13 +779,19 @@ namespace aether
 
 			if (useDynamicRendering)
 			{
-				vkCmdEndRendering(recorder.GetCommandBuffer());
+				vkCmdEndRendering(vkCmd);
 			}
 
 			recorder.EndDebugLabel();
 		}
 
-		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, recorder.GetCommandBuffer());
+		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
+	}
+
+	void RenderGraph::Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
+	{
+		gpu::CommandList cmd(recorder.GetCommandBuffer());
+		Execute(cmd, target, frameConstantsAddr, frameIndex);
 	}
 
 	void RenderGraph::Compile()

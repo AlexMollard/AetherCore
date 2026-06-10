@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "gpu/GpuTypes.hpp"
+#include "gpu/CommandList.hpp"
 
 namespace aether
 {
@@ -55,6 +56,7 @@ namespace aether
 		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0, std::uint64_t asyncComputeTimelineValue = 0, std::uint64_t rootMotionSignalSemaphore = 0, std::uint64_t rootMotionSignalValue = 0);
 
 		[[nodiscard]] CommandRecorder GetCurrentCommandRecorder() const;
+		[[nodiscard]] gpu::CommandList GetCurrentCommandList() const;
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;
 
 		void SetSwapchainRecreatedCallback(std::function<void()> cb);

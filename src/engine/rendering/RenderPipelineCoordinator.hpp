@@ -3,6 +3,7 @@
 #include <functional>
 #include "vulkan/volk.hpp"
 
+#include "gpu/CommandList.hpp"
 #include "rendering/RenderGraph.hpp"
 
 namespace aether
@@ -32,7 +33,7 @@ namespace aether
 		CullPass& cullPass;
 		RenderQueue& mainRenderQueue;
 		ForwardPass& forwardPass;
-		std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn;
+		std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn;
 		RenderTargetService& renderTargetService;
 		PhysicsDebugRenderer& physicsDebug;
 	};

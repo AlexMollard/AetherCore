@@ -6,10 +6,15 @@
 #include <glm/common.hpp>
 #include <vector>
 
-#include "io/FileSystem.hpp"
-#include "utils/Profiler.hpp"
+#include "gpu/DescriptorSetLayoutOps.hpp"
+#include "gpu/GpuDevice.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/PushConstantsBytes.hpp"
+#include "io/FileSystem.hpp"
+#include "rendering/CommandRecorder.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/ShaderUtils.hpp"
 
 namespace aether
@@ -22,45 +27,45 @@ namespace aether
 		glm::uvec4 params2{0u};  // x=maxLightsPerTile
 	};
 
-	void LightingManager::Initialize(const VulkanContext& context)
+	void LightingManager::Initialize(GpuDevice& device, const VulkanContext& context)
 	{
 		AE_PROFILE_ZONE();
+		m_device = &device;
 		m_context = &context;
 		m_renderer = nullptr;
 
-		const VkDevice device = m_context->GetDevice().device;
-
-		const VkDescriptorSetLayoutBinding bindings[] = {
+		const gpu::GpuDescriptorSetLayoutBinding bindings[] = {
 		        {
 		                .binding = 0,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
 		                .descriptorCount = 1,
-		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
 		        },
 		        {
 		                .binding = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
 		                .descriptorCount = 1,
-		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
 		        },
 		        {
 		                .binding = 2,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
 		                .descriptorCount = 1,
-		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT,
+		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
 		        },
 		};
 
-		const VkDescriptorSetLayoutCreateInfo layoutInfo{
-		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		        .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-		        .bindingCount = static_cast<std::uint32_t>(std::size(bindings)),
-		        .pBindings = bindings,
+		const gpu::DescriptorSetLayoutDesc layoutDesc{
+		        .bindings = std::span<const gpu::GpuDescriptorSetLayoutBinding>(bindings, std::size(bindings)),
+		        .flags = gpu::DescriptorSetLayoutFlags::PushDescriptor,
 		};
-		if (vkCreateDescriptorSetLayout(device, &layoutInfo, nullptr, &m_setLayout) != VK_SUCCESS)
+
+		auto result = gpu::CreateDescriptorSetLayout(device, layoutDesc);
+		if (!result)
 		{
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor set layout."));
 		}
+		m_setLayout = *result;
 
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
@@ -107,67 +112,65 @@ namespace aether
 			vkDestroyPipelineLayout(device, m_computeLayout, nullptr);
 			m_computeLayout = VK_NULL_HANDLE;
 		}
-		if (m_setLayout != VK_NULL_HANDLE)
+		if (m_setLayout != nullptr)
 		{
-			vkDestroyDescriptorSetLayout(device, m_setLayout, nullptr);
-			m_setLayout = VK_NULL_HANDLE;
+			gpu::DestroyDescriptorSetLayout(*m_device, m_setLayout);
+			m_setLayout = nullptr;
 		}
 
 		m_context = nullptr;
 		m_renderer = nullptr;
+		m_device = nullptr;
 	}
 
-	VkDescriptorSetLayout LightingManager::GetSetLayout() const
+	gpu::DescriptorSetLayout LightingManager::GetSetLayout() const
 	{
 		return m_setLayout;
 	}
 
-	void LightingManager::PushLightingDescriptor(const VkCommandBuffer cmd, const VkPipelineLayout layout, const std::uint32_t frameSlot) const
+	void LightingManager::PushLightingDescriptor(gpu::CommandList& cmd, void* layout, const std::uint32_t frameSlot) const
 	{
 		auto& frame = m_buffers[frameSlot];
-		const VkDescriptorBufferInfo lightInfo{
+		const gpu::GpuDescriptorBufferInfo lightInfo{
 		        .buffer = frame.lights.Get(),
 		        .offset = 0,
 		        .range = frame.lights.GetSize(),
 		};
-		const VkDescriptorBufferInfo headerInfo{
+		const gpu::GpuDescriptorBufferInfo headerInfo{
 		        .buffer = frame.tileHeaders.Get(),
 		        .offset = 0,
 		        .range = frame.tileHeaders.GetSize(),
 		};
-		const VkDescriptorBufferInfo indexInfo{
+		const gpu::GpuDescriptorBufferInfo indexInfo{
 		        .buffer = frame.tileIndices.Get(),
 		        .offset = 0,
 		        .range = frame.tileIndices.GetSize(),
 		};
-		const VkWriteDescriptorSet writes[] = {
+		const gpu::GpuWriteDescriptorSet writes[] = {
 		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		                .dstBinding = 0,
 		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &lightInfo,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
+		                .bufferInfo = &lightInfo,
 		        },
 		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		                .dstBinding = 1,
 		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &headerInfo,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
+		                .bufferInfo = &headerInfo,
 		        },
 		        {
-		                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		                .dstBinding = 2,
 		                .descriptorCount = 1,
-		                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-		                .pBufferInfo = &indexInfo,
+		                .descriptorType = gpu::DescriptorType::StorageBuffer,
+		                .bufferInfo = &indexInfo,
 		        },
 		};
-		vkCmdPushDescriptorSetKHR(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 1, static_cast<std::uint32_t>(std::size(writes)), writes);
+		cmd.PushDescriptorSet(layout, 1, std::span<const gpu::GpuWriteDescriptorSet>(writes, std::size(writes)));
 	}
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
-	        CommandRecorder& cmd,
+	        gpu::CommandList& cmd,
 	        const Camera& camera,
 	        const GpuExtent2D extent,
 	        FrameConstants& fc,
@@ -190,19 +193,7 @@ namespace aether
 			{
 				// Same queue: explicit compute→fragment barrier required.
 				// Async path: the semaphore wait at DRAW_INDIRECT in SubmitAndPresent covers this.
-				const VkMemoryBarrier2 computeToFragment{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				        .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-				};
-				const VkDependencyInfo dep{
-				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				        .memoryBarrierCount = 1,
-				        .pMemoryBarriers = &computeToFragment,
-				};
-				vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &dep);
+				cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 			return;
 		}
@@ -239,7 +230,8 @@ namespace aether
 	}
 
 	void LightingManager::UpdateForViewGpu(
-	        const std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	        const std::uint32_t frameSlot, gpu::CommandList& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
+	        const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
@@ -268,90 +260,70 @@ namespace aether
 		push.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		push.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
 
-		const VkMemoryBarrier2 hostToCompute{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-		        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		};
-		const VkDependencyInfo hostToComputeDep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &hostToCompute,
-		};
-		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &hostToComputeDep);
+		cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
+		// Bind the InitTiles compute pipeline FIRST so CommandList's cached
+		// bind point (used by the cached PushDescriptorSet overload) is
+		// Compute. This ordering also satisfies the Vulkan spec's
+		// pipeline-layout compatibility check for push descriptors: the
+		// bound pipeline layout must be compatible with the layout passed
+		// to vkCmdPushDescriptorSetKHR. Both are m_computeLayout here.
+		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
+		cmd.BindComputePipeline(m_initPipeline, m_computeLayout);
 		{
 			const auto& buf = m_buffers[frameSlot];
-			const VkDescriptorBufferInfo lightInfo{
+			const gpu::GpuDescriptorBufferInfo lightInfo{
 			        .buffer = buf.lights.Get(),
 			        .offset = 0,
 			        .range = buf.lights.GetSize(),
 			};
-			const VkDescriptorBufferInfo headerInfo{
+			const gpu::GpuDescriptorBufferInfo headerInfo{
 			        .buffer = buf.tileHeaders.Get(),
 			        .offset = 0,
 			        .range = buf.tileHeaders.GetSize(),
 			};
-			const VkDescriptorBufferInfo indexInfo{
+			const gpu::GpuDescriptorBufferInfo indexInfo{
 			        .buffer = buf.tileIndices.Get(),
 			        .offset = 0,
 			        .range = buf.tileIndices.GetSize(),
 			};
-			const VkWriteDescriptorSet writes[] = {
-			        {
-			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			const std::array<gpu::GpuWriteDescriptorSet, 3> writes{
+			        gpu::GpuWriteDescriptorSet{
 			                .dstBinding = 0,
 			                .descriptorCount = 1,
-			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			                .pBufferInfo = &lightInfo,
+			                .descriptorType = gpu::DescriptorType::StorageBuffer,
+			                .bufferInfo = &lightInfo,
 			        },
-			        {
-			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			        gpu::GpuWriteDescriptorSet{
 			                .dstBinding = 1,
 			                .descriptorCount = 1,
-			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			                .pBufferInfo = &headerInfo,
+			                .descriptorType = gpu::DescriptorType::StorageBuffer,
+			                .bufferInfo = &headerInfo,
 			        },
-			        {
-			                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			        gpu::GpuWriteDescriptorSet{
 			                .dstBinding = 2,
 			                .descriptorCount = 1,
-			                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-			                .pBufferInfo = &indexInfo,
+			                .descriptorType = gpu::DescriptorType::StorageBuffer,
+			                .bufferInfo = &indexInfo,
 			        },
 			};
-			vkCmdPushDescriptorSetKHR(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_computeLayout, 0, static_cast<std::uint32_t>(std::size(writes)), writes);
+			cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
 		}
-		vkCmdPushConstants(cmd.GetCommandBuffer(), m_computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), &push);
-
-		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
-		vkCmdBindPipeline(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_initPipeline);
+		{
+			cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(push));
+		}
 		const std::uint32_t tileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
-		vkCmdDispatch(cmd.GetCommandBuffer(), tileGroups, 1, 1);
+		cmd.Dispatch(tileGroups, 1, 1);
 		cmd.EndDebugLabel();
 
-		const VkMemoryBarrier2 computeToCompute{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		};
-		const VkDependencyInfo computeToComputeDep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &computeToCompute,
-		};
-		vkCmdPipelineBarrier2(cmd.GetCommandBuffer(), &computeToComputeDep);
+		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 		cmd.BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
-		vkCmdBindPipeline(cmd.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_cullPipeline);
+		cmd.BindComputePipeline(m_cullPipeline, m_computeLayout);
 		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
 		if (lightGroups > 0u)
 		{
-			vkCmdDispatch(cmd.GetCommandBuffer(), lightGroups, 1, 1);
+			cmd.Dispatch(lightGroups, 1, 1);
 		}
 		cmd.EndDebugLabel();
 
@@ -359,7 +331,7 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	void LightingManager::EmitAcquireBarriers(const std::uint32_t /*frameSlot*/, CommandRecorder& /*graphicsCmd*/, const std::uint32_t /*srcFamily*/, const std::uint32_t /*dstFamily*/) const
+	void LightingManager::EmitAcquireBarriers(const std::uint32_t /*frameSlot*/, gpu::CommandList& /*graphicsCmd*/, const std::uint32_t /*srcFamily*/, const std::uint32_t /*dstFamily*/) const
 	{
 		// maintenance9 eliminates queue family ownership transfers entirely.
 	}
@@ -579,10 +551,11 @@ namespace aether
 		        .offset = 0,
 		        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 		};
+		const VkDescriptorSetLayout setLayoutHandle = static_cast<VkDescriptorSetLayout>(m_setLayout);
 		const VkPipelineLayoutCreateInfo layoutInfo{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		        .setLayoutCount = 1,
-		        .pSetLayouts = &m_setLayout,
+		        .pSetLayouts = &setLayoutHandle,
 		        .pushConstantRangeCount = 1,
 		        .pPushConstantRanges = &pushRange,
 		};

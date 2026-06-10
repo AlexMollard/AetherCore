@@ -10,6 +10,7 @@
 #include "utils/AetherExceptions.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "vulkan/UniqueBuffer.hpp"
+#include "gpu/CommandList.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
@@ -240,6 +241,8 @@ namespace aether
 
 		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")),
 		        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
+		gpu::CommandList::SetDebugLabelFunctions(reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT"))),
+		        reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT"))));
 
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		CommandRecorder::SetObjectNameFunction(setObjectNameFn);
@@ -415,6 +418,7 @@ namespace aether
 		CommandRecorder::SetDebugLabelFunctions(nullptr, nullptr);
 		CommandRecorder::SetObjectNameFunction(nullptr);
 		UniqueBuffer::SetObjectNameFunction(nullptr);
+		gpu::CommandList::SetDebugLabelFunctions(nullptr, nullptr);
 
 		if (m_device.has_value())
 		{

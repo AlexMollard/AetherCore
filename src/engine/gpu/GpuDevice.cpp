@@ -179,6 +179,11 @@ namespace aether
 		return CommandRecorder(m_gfx->GetSwapchain().GetCurrentCommandBuffer());
 	}
 
+	gpu::CommandList GpuDevice::GetCurrentCommandList() const
+	{
+		return gpu::CommandList(m_gfx->GetSwapchain().GetCurrentCommandBuffer());
+	}
+
 	FrameTarget GpuDevice::BuildFrameTarget() const
 	{
 		Swapchain& swapchain = m_gfx->GetSwapchain();

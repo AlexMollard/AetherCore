@@ -47,7 +47,7 @@ namespace aether::app
 	{
 		auto& assets = context.Get<AssetManager>();
 		const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-		const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+		const auto lightingLayout = static_cast<VkDescriptorSetLayout>(context.Get<LightingManager>().GetSetLayout());
 		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
@@ -170,7 +170,7 @@ namespace aether::app
 		// Register effects so script can use set_entity_effect().
 		{
 			const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-			const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+			const auto lightingLayout = static_cast<VkDescriptorSetLayout>(context.Get<LightingManager>().GetSetLayout());
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 

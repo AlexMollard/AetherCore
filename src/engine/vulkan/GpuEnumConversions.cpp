@@ -248,4 +248,111 @@ namespace aether::gpu
 		}
 		return 0u;
 	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// PipelineBindPoint
+	// ─────────────────────────────────────────────────────────────────────────
+
+	VkPipelineBindPoint ToVk(PipelineBindPoint bindPoint) noexcept
+	{
+		switch (bindPoint)
+		{
+			case PipelineBindPoint::Graphics:
+				return VK_PIPELINE_BIND_POINT_GRAPHICS;
+			case PipelineBindPoint::Compute:
+				return VK_PIPELINE_BIND_POINT_COMPUTE;
+		}
+		return VK_PIPELINE_BIND_POINT_GRAPHICS;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// PipelineStage / AccessFlags
+	// ─────────────────────────────────────────────────────────────────────────
+	// Bit values mirror VkPipelineStageFlagBits2 / VkAccessFlagBits2 directly,
+	// so the engine-side enum can forward to the Vk* bitmask without any
+	// per-bit translation. Unknown / unsupported stage bits fall through to
+	// 0 (no stage), which makes any misuse a no-op rather than a crash.
+	VkPipelineStageFlags2 ToVk(PipelineStage stage) noexcept
+	{
+		return static_cast<VkPipelineStageFlags2>(stage);
+	}
+
+	VkAccessFlags2 ToVk(AccessFlags access) noexcept
+	{
+		return static_cast<VkAccessFlags2>(access);
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// DescriptorType
+	// ─────────────────────────────────────────────────────────────────────────
+	VkDescriptorType ToVk(DescriptorType type) noexcept
+	{
+		switch (type)
+		{
+			case DescriptorType::StorageBuffer:
+				return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+		}
+		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ShaderStage
+	// ─────────────────────────────────────────────────────────────────────────
+	VkShaderStageFlags ToVk(ShaderStage stage) noexcept
+	{
+		VkShaderStageFlags out = 0;
+		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Vertex)) != 0)
+		{
+			out |= VK_SHADER_STAGE_VERTEX_BIT;
+		}
+		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Fragment)) != 0)
+		{
+			out |= VK_SHADER_STAGE_FRAGMENT_BIT;
+		}
+		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Compute)) != 0)
+		{
+			out |= VK_SHADER_STAGE_COMPUTE_BIT;
+		}
+		return out;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// DescriptorSetLayoutFlags
+	// ─────────────────────────────────────────────────────────────────────────
+	VkDescriptorSetLayoutCreateFlags ToVk(DescriptorSetLayoutFlags flags) noexcept
+	{
+		VkDescriptorSetLayoutCreateFlags out = 0;
+		if ((static_cast<std::uint32_t>(flags) & static_cast<std::uint32_t>(DescriptorSetLayoutFlags::PushDescriptor)) != 0)
+		{
+			out |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
+		}
+		return out;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// CompareOp
+	// ─────────────────────────────────────────────────────────────────────────
+	VkCompareOp ToVk(CompareOp op) noexcept
+	{
+		switch (op)
+		{
+			case CompareOp::Never:
+				return VK_COMPARE_OP_NEVER;
+			case CompareOp::Less:
+				return VK_COMPARE_OP_LESS;
+			case CompareOp::Equal:
+				return VK_COMPARE_OP_EQUAL;
+			case CompareOp::LessOrEqual:
+				return VK_COMPARE_OP_LESS_OR_EQUAL;
+			case CompareOp::Greater:
+				return VK_COMPARE_OP_GREATER;
+			case CompareOp::NotEqual:
+				return VK_COMPARE_OP_NOT_EQUAL;
+			case CompareOp::GreaterOrEqual:
+				return VK_COMPARE_OP_GREATER_OR_EQUAL;
+			case CompareOp::Always:
+				return VK_COMPARE_OP_ALWAYS;
+		}
+		return VK_COMPARE_OP_LESS;
+	}
 } // namespace aether::gpu

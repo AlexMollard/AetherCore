@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
+#include "gpu/CommandList.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
@@ -20,7 +21,6 @@ namespace aether
 	class AnimationBlendSystem;
 	class AnimationIkSystem;
 	class AnimationRootMotionSystem;
-	class CommandRecorder;
 	class GraphicsPipeline;
 	class Mesh;
 
@@ -188,7 +188,7 @@ namespace aether
 		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
 		// constants addresses; the computePipeline/layout must then be compatible
 		// with CullMultiPushConstants.
-		void PrepareAndDispatch(VkCommandBuffer cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
+		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
 
 		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
 		// used by PrepareAndDispatch to build CullMultiPushConstants.
@@ -217,13 +217,13 @@ namespace aether
 		// Emit graphics draws from indirect output.
 		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
-		void FlushDraw(CommandRecorder& recorder, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
-		void FlushDrawPush(CommandRecorder& recorder, VkDescriptorSet bindlessSet, std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDraw(gpu::CommandList& cmd, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawPush(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(CommandRecorder& recorder, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -288,10 +288,10 @@ namespace aether
 		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu; // bit 0=PoseInit, 1=AnimSample, 2=NodeFlatten, 3=SkinCopy
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
-		using LightingPushFn = std::function<void(VkCommandBuffer, VkPipelineLayout)>;
+		using LightingPushFn = std::function<void(gpu::CommandList&, VkPipelineLayout)>;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
-		void FlushDrawImpl(CommandRecorder& recorder,
+		void FlushDrawImpl(gpu::CommandList& cmd,
 		        VkDescriptorSet bindlessSet,
 		        VkDescriptorSet lightingSet,
 		        gpu::DeviceAddress frameAddr,

@@ -7,8 +7,10 @@
 #include <vector>
 
 #include "camera/Camera.hpp"
+#include "gpu/CommandList.hpp"
+#include "gpu/DescriptorSetLayout.hpp"
+#include "gpu/GpuDevice.hpp"
 #include "gpu/GpuTypes.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/Renderer.hpp"
 #include "vulkan/UniqueBuffer.hpp"
@@ -19,7 +21,7 @@ namespace aether
 	class LightingManager
 	{
 	public:
-		void Initialize(const VulkanContext& context);
+		void Initialize(GpuDevice& device, const VulkanContext& context);
 		void LinkRenderer(const Renderer& renderer);
 		void Shutdown();
 
@@ -48,13 +50,15 @@ namespace aether
 			return m_gpuBinningEnabled;
 		}
 
-		[[nodiscard]] VkDescriptorSetLayout GetSetLayout() const;
-		// Push lighting descriptors (3 storage buffers) directly into the command buffer
+		[[nodiscard]] gpu::DescriptorSetLayout GetSetLayout() const;
+		// Push lighting descriptors (3 storage buffers) directly into the command list
 		// at setIndex in the given pipeline layout. Replaces per-frame VkDescriptorSet allocation.
-		void PushLightingDescriptor(VkCommandBuffer cmd, VkPipelineLayout layout, std::uint32_t frameSlot) const;
+		// The layout pointer is the raw VkPipelineLayout (kept as void* so the
+		// engine-facing signature doesn't expose Vk*).
+		void PushLightingDescriptor(gpu::CommandList& cmd, void* layout, std::uint32_t frameSlot) const;
 
 		void UpdateForView(std::uint32_t frameSlot,
-		        CommandRecorder& cmd,
+		        gpu::CommandList& cmd,
 		        const Camera& camera,
 		        GpuExtent2D extent,
 		        FrameConstants& fc,
@@ -63,7 +67,7 @@ namespace aether
 		        std::span<const Renderer::PointLight> pointLights = {},
 		        std::span<const Renderer::SpotLight> spotLights = {}) const;
 
-		void EmitAcquireBarriers(std::uint32_t frameSlot, CommandRecorder& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
+		void EmitAcquireBarriers(std::uint32_t frameSlot, gpu::CommandList& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
 
 	private:
 		struct GpuLight
@@ -99,12 +103,13 @@ namespace aether
 		static void BuildLightList(std::vector<GpuLight>& outLights, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
 
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
-		void UpdateForViewGpu(std::uint32_t frameSlot, CommandRecorder& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
+		void UpdateForViewGpu(std::uint32_t frameSlot, gpu::CommandList& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void DisableForView(FrameConstants& fc) const;
 
 		const VulkanContext* m_context = nullptr;
 		const Renderer* m_renderer = nullptr;
-		VkDescriptorSetLayout m_setLayout = VK_NULL_HANDLE;
+		GpuDevice* m_device = nullptr;
+		gpu::DescriptorSetLayout m_setLayout = nullptr;
 		mutable VkPipelineLayout m_computeLayout = VK_NULL_HANDLE;
 		mutable VkPipeline m_initPipeline = VK_NULL_HANDLE;
 		mutable VkPipeline m_cullPipeline = VK_NULL_HANDLE;

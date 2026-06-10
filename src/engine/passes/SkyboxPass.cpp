@@ -1,8 +1,9 @@
 #include "passes/SkyboxPass.hpp"
 
-#include "vulkan/volk.hpp"
+#include <cstring>
 
-#include "rendering/CommandRecorder.hpp"
+#include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "rendering/RenderGraph.hpp"
 
 namespace aether
@@ -41,15 +42,26 @@ namespace aether
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
+			                // Phase 3 migration: the pass uses gpu::CommandList
+			                // (a Vulkan-free wrapper) instead of calling
+			                // vkCmd* directly. The CommandList is constructed
+			                // from the same underlying VkCommandBuffer that
+			                // PassContext::recorder currently exposes. When the
+			                // PassContext API itself migrates (a later slice
+			                // of Phase 3) the wrapper construction moves into
+			                // RenderGraph and this body drops a line.
+			                gpu::CommandList& cmd = ctx.recorder;
 
-			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetPipeline());
+			                cmd.BindPipeline(m_pipeline.GetPipeline(), m_pipeline.GetLayout());
 
 			                // Push the BDA of this frame's FrameConstantsData so the
 			                // shader can read view/proj/sun/ambient directly.
-			                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint64_t), &ctx.frameConstantsAddr);
+			                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
+			                std::byte bytes[sizeof(gpu::DeviceAddress)];
+			                std::memcpy(bytes, &frameAddr, sizeof(bytes));
+			                cmd.PushConstantsRaw(m_pipeline.GetLayout(), gpu::ShaderStage::VertexFragment, 0, std::span<const std::byte>(bytes, sizeof(bytes)));
 
-			                vkCmdDraw(cmd, 3, 1, 0, 0);
+			                cmd.Draw(3);
 		                });
 	}
 } // namespace aether

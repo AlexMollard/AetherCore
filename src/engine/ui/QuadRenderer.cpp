@@ -145,6 +145,7 @@ namespace aether
 
 			                std::memcpy(mappedCommands, pending.data(), commandBytes);
 
+			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
 			                const VkMemoryBarrier2 hostToCompute{
 			                        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
 			                        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
@@ -157,7 +158,7 @@ namespace aether
 			                        .memoryBarrierCount = 1,
 			                        .pMemoryBarriers = &hostToCompute,
 			                };
-			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &hostToComputeDep);
+			                vkCmdPipelineBarrier2(vkCmd, &hostToComputeDep);
 
 			                const ComputePush push{
 			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
@@ -165,9 +166,9 @@ namespace aether
 			                        .commandCount = commandCount,
 			                };
 
-			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePush), &push);
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), 1, 1, 1);
+			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+			                vkCmdPushConstants(vkCmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePush), &push);
+			                vkCmdDispatch(vkCmd, 1, 1, 1);
 
 			                // Barrier here (outside any render pass) - compute writes must be
 			                // visible to the subsequent indirect-draw and vertex-shader reads.
@@ -183,7 +184,7 @@ namespace aether
 			                        .memoryBarrierCount = 1,
 			                        .pMemoryBarriers = &computeToGraphics,
 			                };
-			                vkCmdPipelineBarrier2(ctx.recorder.GetCommandBuffer(), &computeToGraphicsDep);
+			                vkCmdPipelineBarrier2(vkCmd, &computeToGraphicsDep);
 		                });
 
 		auto color = m_renderGraph->GetSwapchainColor();
@@ -202,7 +203,7 @@ namespace aether
 				                return;
 			                }
 
-			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
+			                const VkCommandBuffer cmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
 			                const VkExtent2D ext = ctx.extent;
 			                const std::uint32_t frameSlot = readSlot;
 
@@ -218,7 +219,7 @@ namespace aether
 			                vkCmdSetViewport(cmd, 0, 1, &viewport);
 			                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-			                ctx.recorder.BindGraphicsPipeline(m_pipeline);
+			                ctx.recorder.BindPipeline(m_pipeline);
 
 			                // Bind the global bindless descriptor set so textured
 			                // rect draws can sample textures. Always bound even
@@ -233,7 +234,8 @@ namespace aether
 			                };
 			                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &push);
 
-			                ctx.recorder.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1);
+			                gpu::CommandList gpuCmd(cmd);
+			                gpuCmd.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1, sizeof(VkDrawIndirectCommand));
 
 			                m_pendingQuads[readSlot].clear();
 		                });

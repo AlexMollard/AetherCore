@@ -209,9 +209,9 @@ namespace aether
 		CommandRecorder(cmd).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
 	}
 
-	CommandRecorder AsyncComputeContext::GetCommandRecorder(std::uint32_t frameIndex) const
+	gpu::CommandList AsyncComputeContext::GetCommandList(std::uint32_t frameIndex) const
 	{
-		return CommandRecorder(reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer));
+		return gpu::CommandList(reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer));
 	}
 
 	void AsyncComputeContext::EndCommandBuffer(std::uint32_t frameIndex)

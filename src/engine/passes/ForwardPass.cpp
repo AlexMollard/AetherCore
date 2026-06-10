@@ -12,7 +12,7 @@ namespace aether
 	        RGImage depth,
 	        RenderQueue& renderQueue,
 	        VkDescriptorSet bindlessSet,
-	        std::function<void(VkCommandBuffer, VkPipelineLayout)> pushLightingFn,
+	        std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn,
 	        std::span<const RGImage> shadowMaps,
 	        RGImage localShadowAtlas)
 	{

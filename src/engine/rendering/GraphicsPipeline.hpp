@@ -20,8 +20,7 @@ namespace aether
 			VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 			bool depthTestEnable = false;
 			bool depthWriteEnable = false;
-			VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS; // Enable standard src-alpha / one-minus-src-alpha
-			                                                 // blending on color attachment 0.
+			VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
 			bool blendEnable = false;
 			// Override the default DrawPushConstants block. If size is 0 the
 			// default model-matrix + BDA range is used instead.

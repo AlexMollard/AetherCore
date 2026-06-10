@@ -1,8 +1,11 @@
 #include "passes/PostProcessStack.hpp"
 
-#include "vulkan/volk.hpp"
+#include <cstring>
 
-#include "rendering/CommandRecorder.hpp"
+#include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/PushConstantsBytes.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
 
@@ -98,37 +101,35 @@ namespace aether
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
-			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
+			                gpu::CommandList& cmd = ctx.recorder;
 
-			                const VkViewport vp{
-			                        .x = 0.0f,
-			                        .y = 0.0f,
+			                const gpu::Viewport vp{
 			                        .width = static_cast<float>(ctx.extent.width),
 			                        .height = static_cast<float>(ctx.extent.height),
-			                        .minDepth = 0.0f,
-			                        .maxDepth = 1.0f,
 			                };
-			                const VkRect2D scissor{{0, 0}, ctx.extent};
-			                vkCmdSetViewport(cmd, 0, 1, &vp);
-			                vkCmdSetScissor(cmd, 0, 1, &scissor);
+			                const gpu::Rect2D scissor{
+			                        .x = 0,
+			                        .y = 0,
+			                        .width = ctx.extent.width,
+			                        .height = ctx.extent.height,
+			                };
+			                (void) bindless;
 
-			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tonemapPipeline.GetPipeline());
-
-			                const VkDescriptorSet set = bindless.GetSet();
-			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_tonemapPipeline.GetLayout(), 0, 1, &set, 0, nullptr);
+			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline(), m_tonemapPipeline.GetLayout());
+			                cmd.BindDescriptorSet(m_tonemapPipeline.GetLayout(), 0, bindless.GetSet());
 
 			                struct
 			                {
-				                uint32_t hdrSlot;
-				                uint32_t mode;
+				                std::uint32_t hdrSlot;
+				                std::uint32_t mode;
 				                float exposure;
 			                } push;
 			                push.hdrSlot = m_hdrColorImage.GetBindlessSampledSlot();
-			                push.mode = static_cast<uint32_t>(m_tonemapMode);
+			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
 			                push.exposure = m_exposure;
-			                vkCmdPushConstants(cmd, m_tonemapPipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+			                cmd.PushConstantsRaw(m_tonemapPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
 
-			                vkCmdDraw(cmd, 3, 1, 0, 0);
+			                cmd.Draw(3, 1, 0, 0);
 		                });
 
 		graph.AddPass("$FXAA")
@@ -137,35 +138,32 @@ namespace aether
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
-			                const VkCommandBuffer cmd = ctx.recorder.GetCommandBuffer();
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 
-			                const VkViewport vp{
-			                        .x = 0.0f,
-			                        .y = 0.0f,
+			                const gpu::Viewport vp{
 			                        .width = static_cast<float>(ctx.extent.width),
 			                        .height = static_cast<float>(ctx.extent.height),
-			                        .minDepth = 0.0f,
-			                        .maxDepth = 1.0f,
 			                };
-			                const VkRect2D scissor{{0, 0}, ctx.extent};
-			                vkCmdSetViewport(cmd, 0, 1, &vp);
-			                vkCmdSetScissor(cmd, 0, 1, &scissor);
+			                const gpu::Rect2D scissor{
+			                        .width = ctx.extent.width,
+			                        .height = ctx.extent.height,
+			                };
+			                cmd.SetViewport(vp);
+			                cmd.SetScissor(scissor);
 
-			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fxaaPipeline.GetPipeline());
-
-			                const VkDescriptorSet set = bindless.GetSet();
-			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_fxaaPipeline.GetLayout(), 0, 1, &set, 0, nullptr);
+			                cmd.BindPipeline(m_fxaaPipeline.GetPipeline(), m_fxaaPipeline.GetLayout());
+			                cmd.BindDescriptorSet(m_fxaaPipeline.GetLayout(), 0, bindless.GetSet());
 
 			                struct
 			                {
-				                uint32_t ldrSlot;
-				                uint32_t fxaaEnabled;
+				                std::uint32_t ldrSlot;
+				                std::uint32_t fxaaEnabled;
 			                } push;
 			                push.ldrSlot = m_ldrColorImage.GetBindlessSampledSlot();
 			                push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
-			                vkCmdPushConstants(cmd, m_fxaaPipeline.GetLayout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), &push);
+			                cmd.PushConstantsRaw(m_fxaaPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
 
-			                vkCmdDraw(cmd, 3, 1, 0, 0);
+			                cmd.Draw(3, 1, 0, 0);
 		                });
 	}
 } // namespace aether

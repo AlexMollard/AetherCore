@@ -9,6 +9,7 @@
 #include "camera/CameraManager.hpp"
 #include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/CommandList.hpp"
 #include "io/FileSystem.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/Renderer.hpp"
@@ -434,7 +435,7 @@ namespace aether
 				                return;
 			                }
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), cullPass.GetSingleLayout(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), cullPass.GetSingleLayout(), ctx.frameIndex);
 		                });
 
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
@@ -450,6 +451,7 @@ namespace aether
 				                return;
 			                }
 
+			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
 			                for (std::uint32_t li = 0; li < static_cast<std::uint32_t>(m_perLightShadows.size()); ++li)
 			                {
 				                const PerLightShadow& pls = m_perLightShadows[li];
@@ -462,16 +464,17 @@ namespace aether
 				                        .minDepth = 0.0f,
 				                        .maxDepth = 1.0f,
 				                };
-				                vkCmdSetViewport(ctx.recorder.GetCommandBuffer(), 0, 1, &vp);
+				                vkCmdSetViewport(vkCmd, 0, 1, &vp);
 
 				                const VkRect2D scissor{
 				                        .offset = {static_cast<std::int32_t>(pls.region.x), static_cast<std::int32_t>(pls.region.y)},
 				                        .extent = {pls.region.width, pls.region.height},
 				                };
-				                vkCmdSetScissor(ctx.recorder.GetCommandBuffer(), 0, 1, &scissor);
+				                vkCmdSetScissor(vkCmd, 0, 1, &scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, lightFcAddr, &m_shadowPipeline);
+				                gpu::CommandList cmd(vkCmd);
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, VK_NULL_HANDLE, VK_NULL_HANDLE, lightFcAddr, &m_shadowPipeline);
 			                }
 
 			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
@@ -492,7 +495,8 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
-			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
+			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
+			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 
 			                const VkDescriptorImageInfo hStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
@@ -520,12 +524,12 @@ namespace aether
 			                                .pImageInfo = &hSampledInfo,
 			                        },
 			                };
-			                vkCmdPushDescriptorSetKHR(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, hWrites);
+			                vkCmdPushDescriptorSetKHR(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, hWrites);
 
 			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
-			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
+			                vkCmdPushConstants(vkCmd, m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
 
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                vkCmdDispatch(vkCmd, (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 
 		// Vertical blur: read scratch (sampled), write atlas (storage).
@@ -541,7 +545,8 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
-			                vkCmdBindPipeline(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
+			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
+			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
 
 			                const VkDescriptorImageInfo vStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
@@ -569,12 +574,12 @@ namespace aether
 			                                .pImageInfo = &vSampledInfo,
 			                        },
 			                };
-			                vkCmdPushDescriptorSetKHR(ctx.recorder.GetCommandBuffer(), VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, vWrites);
+			                vkCmdPushDescriptorSetKHR(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, vWrites);
 
 			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
-			                vkCmdPushConstants(ctx.recorder.GetCommandBuffer(), m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
+			                vkCmdPushConstants(vkCmd, m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
 
-			                vkCmdDispatch(ctx.recorder.GetCommandBuffer(), (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                vkCmdDispatch(vkCmd, (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 	}
 } // namespace aether

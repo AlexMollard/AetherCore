@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 
+#include "gpu/CommandList.hpp"
 #include "gpu/GpuTypes.hpp"
 
 namespace aether
@@ -27,7 +28,7 @@ namespace aether
 		}
 
 		void BeginFrame(GpuDevice& gpu, std::uint32_t frameIndex);
-		[[nodiscard]] class CommandRecorder GetCommandRecorder(std::uint32_t frameIndex) const;
+		[[nodiscard]] gpu::CommandList GetCommandList(std::uint32_t frameIndex) const;
 		void EndCommandBuffer(std::uint32_t frameIndex);
 
 		struct SubmitResult

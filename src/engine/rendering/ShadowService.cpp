@@ -10,6 +10,7 @@
 #include "animation/AnimationDatabase.hpp"
 #include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/CommandList.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/WorldRenderer.hpp"
@@ -104,7 +105,7 @@ namespace aether
 				                cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
 			                }
 			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder.GetCommandBuffer(), cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
 		                });
 
 		// ── Per-cascade depth passes (read from each cascade's output region) ──
@@ -121,7 +122,8 @@ namespace aether
 			                [this, cascade](PassContext& ctx)
 			                {
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
-				                m_shadowRenderQueue.FlushDraw(ctx.recorder, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
+				                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+				                m_shadowRenderQueue.FlushDraw(cmd, VK_NULL_HANDLE, VK_NULL_HANDLE, &m_shadowPipeline, cascadeOffset);
 				                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			                });
 		}
