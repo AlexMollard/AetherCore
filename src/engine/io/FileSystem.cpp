@@ -291,15 +291,22 @@ namespace aether::io
 		s_backend->ioThread->Submit(priority,
 		        [handle, virtualPathString]()
 		        {
-			        auto result = FileSystem::ReadFile(virtualPathString);
-			        if (result.has_value())
+			        try
 			        {
-				        handle->m_data = std::move(*result);
-				        handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
+				        auto result = FileSystem::ReadFile(virtualPathString);
+				        if (result.has_value())
+				        {
+					        handle->m_data = std::move(*result);
+					        handle->m_state.store(FileRequest::State::Complete, std::memory_order_release);
+				        }
+				        else
+				        {
+					        handle->m_error = result.error().ToString();
+					        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
+				        }
 			        }
-			        else
+			        catch (...)
 			        {
-				        handle->m_error = result.error().ToString();
 				        handle->m_state.store(FileRequest::State::Failed, std::memory_order_release);
 			        }
 		        });
@@ -330,14 +337,21 @@ namespace aether::io
 		s_backend->ioThread->Submit(priority,
 		        [pathStr, source = std::move(pair.second)]() mutable
 		        {
-			        auto result = FileSystem::ReadFile(pathStr);
-			        if (result.has_value())
+			        try
 			        {
-				        source.set_value(std::move(*result));
+				        auto result = FileSystem::ReadFile(pathStr);
+				        if (result.has_value())
+				        {
+					        source.set_value(std::move(*result));
+				        }
+				        else
+				        {
+					        source.set_exception(std::make_exception_ptr(AssetError(result.error().ToString())));
+				        }
 			        }
-			        else
+			        catch (...)
 			        {
-				        source.set_exception(std::make_exception_ptr(AssetError(result.error().ToString())));
+				        source.set_exception(std::current_exception());
 			        }
 		        });
 

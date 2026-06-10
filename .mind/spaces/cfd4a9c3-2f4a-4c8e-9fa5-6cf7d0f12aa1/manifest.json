@@ -2,7 +2,7 @@
   "version": 1,
   "space": "projects/aethercore",
   "space_id": "cfd4a9c3-2f4a-4c8e-9fa5-6cf7d0f12aa1",
-  "manifest_updated_at_utc": "2026-06-10T03:53:56.632Z",
+  "manifest_updated_at_utc": "2026-06-10T04:01:10.529Z",
   "entries": {
     "e098d988-0333-4ec3-b034-80b49d9db9fe": {
       "memory_id": "e098d988-0333-4ec3-b034-80b49d9db9fe",
@@ -27,8 +27,8 @@
       "baseline_combined_hash": "37ad09da6a726a1e740e1b3d3fc07423bfe46c20b4828ab3bdef3bb0edfeab49",
       "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.631Z",
-      "last_synced_at_utc": "2026-06-10T03:53:56.632Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.528Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.529Z"
     },
     "986a9f4c-6913-44a7-937c-c63d7a768cb3": {
       "memory_id": "986a9f4c-6913-44a7-937c-c63d7a768cb3",
@@ -39,8 +39,8 @@
       "baseline_combined_hash": "062da872b117df58f1248f0a52ee9652fc393f2ed2ed77afcae5da0b018d3d36",
       "db_changed_at_utc": "2026-06-10T03:52:48.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:52:48.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.630Z",
-      "last_synced_at_utc": "2026-06-10T03:53:56.630Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.527Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.527Z"
     },
     "a695cf99-d614-49ba-9e2c-e641c515e242": {
       "memory_id": "a695cf99-d614-49ba-9e2c-e641c515e242",
@@ -51,8 +51,8 @@
       "baseline_combined_hash": "88705373f88c0799539585959bfc359f592900174bc0cb4933369a756a938588",
       "db_changed_at_utc": "2026-06-10T03:53:02.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:53:02.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.626Z",
-      "last_synced_at_utc": "2026-06-10T03:53:56.626Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.525Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.525Z"
     },
     "a142d6c1-f941-46c1-974c-bb7ee01f2bd3": {
       "memory_id": "a142d6c1-f941-46c1-974c-bb7ee01f2bd3",
@@ -63,8 +63,32 @@
       "baseline_combined_hash": "b532dededdc064c4bac56d97ab9f3a2284c4dee29363148d30156754e9445667",
       "db_changed_at_utc": "2026-06-10T03:53:56.000Z",
       "frontmatter_changed_at_utc": "2026-06-10T03:53:56.000Z",
-      "last_seen_file_mtime_utc": "2026-06-10T03:53:56.621Z",
-      "last_synced_at_utc": "2026-06-10T03:53:56.622Z"
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.522Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.524Z"
+    },
+    "24e80ed2-cd43-42b1-846d-602f5512f9af": {
+      "memory_id": "24e80ed2-cd43-42b1-846d-602f5512f9af",
+      "memory_name": "checkpoint-2026-06-10T04-00-47-984Z",
+      "path": "checkpoint-2026-06-10T04-00-47-984Z.md",
+      "baseline_content_hash": "5402eca0834bf68a8f83145d55a8d352cb0981dbac7f1d97c882b265d2fbac88",
+      "baseline_metadata_hash": "2dc472b034ef50451aa7a4437ba3c728e477f41c4d74a2acd276ad323dc8e6b4",
+      "baseline_combined_hash": "068ffba0c887efa1734c55540a79c40748efe6adc6ef99b4233f863e9cc56d85",
+      "db_changed_at_utc": "2026-06-10T04:00:47.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:00:47.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.521Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.521Z"
+    },
+    "2003cdb5-9d34-45a5-b462-5ba65c8c98e8": {
+      "memory_id": "2003cdb5-9d34-45a5-b462-5ba65c8c98e8",
+      "memory_name": "session-2026-06-10T04-01-10-233Z-evt_eafb0f45900150qavfcj5joges",
+      "path": "session-2026-06-10T04-01-10-233Z-evt_eafb0f45900150qavfcj5joges.md",
+      "baseline_content_hash": "021fb596db81e6d02bf3d2586ee3981fe519f275c0ac9ca76bbcf2ebb4097d96",
+      "baseline_metadata_hash": "da4a2c27984acdf338bb4baedaac7637515e4c569405254566c83350aa48b28f",
+      "baseline_combined_hash": "da27bc4f7c751ef72076b518d125ea05412da7f8f19bc1c53ce0a8a77349f7c7",
+      "db_changed_at_utc": "2026-06-10T04:01:10.000Z",
+      "frontmatter_changed_at_utc": "2026-06-10T04:01:10.000Z",
+      "last_seen_file_mtime_utc": "2026-06-10T04:01:10.517Z",
+      "last_synced_at_utc": "2026-06-10T04:01:10.517Z"
     }
   },
   "last_auto_export": null
