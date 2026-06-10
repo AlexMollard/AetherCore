@@ -58,6 +58,9 @@ Thumbs.db
 #node modules
 /node_modules/
 
+# Mind memory protocol internal state
+/.mind/
+
 # Knowledge graph (auto-generated, run `graphify update .` to regenerate)
 /graphify-out/
 
