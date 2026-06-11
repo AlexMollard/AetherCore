@@ -837,8 +837,7 @@ namespace aether
 				                return;
 			                }
 
-			                gpu::CommandList& recorder = ctx.recorder;
-			                VkCommandBuffer cmd = static_cast<VkCommandBuffer>(recorder.GetCommandBuffer());
+			                gpu::CommandList& cmd = ctx.recorder;
 
 			                // Push-constant layout: { uint64 frameAddr, vec4 tint, mat4 model }
 			                struct DebugPc
@@ -849,8 +848,8 @@ namespace aether
 			                };
 			                static_assert(sizeof(DebugPc) == 88);
 
-			                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline);
-			                vkCmdSetLineWidth(cmd, 2.0f);
+			                cmd.BindPipeline(static_cast<void*>(m_pipeline), static_cast<void*>(m_pipelineLayout));
+			                cmd.SetLineWidth(2.0f);
 
 			                // 1) Immediate-mode batched debug primitives.
 			                // Combine the per-frame debugVertices (set by the engine from
@@ -885,11 +884,10 @@ namespace aether
 
 					                // White tint, identity model: per-vertex colors pass through unchanged.
 					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f), glm::mat4(1.0f)};
-					                vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+					                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_pipelineLayout), gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
-					                constexpr std::uint64_t kBindingOffset = 0;
-					                vkCmdBindVertexBuffers(cmd, 0, 1, &m_immediateVertexBuffer, &kBindingOffset);
-					                vkCmdDraw(cmd, immediateCount, 1, 0, 0);
+					                cmd.BindVertexBuffer(m_immediateVertexBuffer);
+					                cmd.Draw(immediateCount, 1, 0, 0);
 				                }
 			                }
 
@@ -941,11 +939,10 @@ namespace aether
 					                        }
 
 					                        const DebugPc pc{ctx.frameConstantsAddr, tint, model};
-					                        vkCmdPushConstants(cmd, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pc), &pc);
+					                        cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_pipelineLayout), gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
-					                        constexpr std::uint64_t kBindingOffset = 0;
-					                        vkCmdBindVertexBuffers(cmd, 0, 1, &vertexBuffer, &kBindingOffset);
-					                        vkCmdDraw(cmd, vertexCount, 1, 0, 0);
+					                        cmd.BindVertexBuffer(vertexBuffer);
+					                        cmd.Draw(vertexCount, 1, 0, 0);
 				                        });
 			                }
 		                });

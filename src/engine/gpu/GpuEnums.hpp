@@ -76,11 +76,12 @@ namespace aether::gpu
 	enum class PipelineStage : std::uint64_t
 	{
 		None = 0,
-		Host = 1ull << 7,
-		VertexShader = 1ull << 9,
-		FragmentShader = 1ull << 11,
-		ComputeShader = 1ull << 19,
-		AllCommands = 1ull << 27,
+		DrawIndirect = 1ull << 1,
+		VertexShader = 1ull << 3,
+		Host = 1ull << 14,
+		FragmentShader = 1ull << 7,
+		ComputeShader = 1ull << 11,
+		AllCommands = 1ull << 16,
 	};
 
 	inline PipelineStage operator|(PipelineStage a, PipelineStage b) noexcept
@@ -102,14 +103,18 @@ namespace aether::gpu
 	// Memory access bits for barriers.
 	// Mirrors VkAccessFlagBits2. The engine uses:
 	//   - HostWrite               (VK_ACCESS_2_HOST_WRITE_BIT)
-	//   - ShaderStorageRead       (VK_ACCESS_2_SHADER_STORAGE_READ_BIT)
-	//   - ShaderStorageWrite      (VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)
+	//   - ShaderRead/Write        (VK_ACCESS_2_SHADER_READ_BIT/WRITE_BIT - alias for ShaderStorage* in older versions)
+	//   - IndirectCommandRead     (VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
+	//   - ShaderStorageRead/Write (VK_ACCESS_2_SHADER_STORAGE_READ_BIT/WRITE_BIT)
 	enum class AccessFlags : std::uint64_t
 	{
 		None = 0,
+		IndirectCommandRead = 1ull << 0,
+		ShaderRead = 1ull << 5,
+		ShaderWrite = 1ull << 6,
 		HostWrite = 1ull << 14,
-		ShaderStorageRead = 1ull << 22,
-		ShaderStorageWrite = 1ull << 23,
+		ShaderStorageRead = 1ull << 29,
+		ShaderStorageWrite = 1ull << 30,
 	};
 
 	inline AccessFlags operator|(AccessFlags a, AccessFlags b) noexcept

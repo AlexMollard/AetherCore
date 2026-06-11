@@ -146,20 +146,8 @@ namespace aether
 
 			                std::memcpy(mappedCommands, pending.data(), commandBytes);
 
-			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
-			                const VkMemoryBarrier2 hostToCompute{
-			                        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			                        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-			                        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-			                        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			                        .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT,
-			                };
-			                const VkDependencyInfo hostToComputeDep{
-			                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			                        .memoryBarrierCount = 1,
-			                        .pMemoryBarriers = &hostToCompute,
-			                };
-			                vkCmdPipelineBarrier2(vkCmd, &hostToComputeDep);
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 
 			                const ComputePush push{
 			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
@@ -167,25 +155,14 @@ namespace aether
 			                        .commandCount = commandCount,
 			                };
 
-			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-			                vkCmdPushConstants(vkCmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePush), &push);
-			                vkCmdDispatch(vkCmd, 1, 1, 1);
+			                cmd.BindComputePipeline(static_cast<void*>(computePipeline), static_cast<void*>(computeLayout));
+			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(computeLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&push, 1}));
+			                cmd.Dispatch(1, 1, 1);
 
 			                // Barrier here (outside any render pass) - compute writes must be
 			                // visible to the subsequent indirect-draw and vertex-shader reads.
-			                const VkMemoryBarrier2 computeToGraphics{
-			                        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			                        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			                        .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-			                        .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-			                        .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_2_SHADER_READ_BIT,
-			                };
-			                const VkDependencyInfo computeToGraphicsDep{
-			                        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			                        .memoryBarrierCount = 1,
-			                        .pMemoryBarriers = &computeToGraphics,
-			                };
-			                vkCmdPipelineBarrier2(vkCmd, &computeToGraphicsDep);
+			                cmd.PipelineMemoryBarrier(
+			                        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderWrite, gpu::PipelineStage::DrawIndirect | gpu::PipelineStage::VertexShader, gpu::AccessFlags::IndirectCommandRead | gpu::AccessFlags::ShaderRead);
 		                });
 
 		auto color = m_renderGraph->GetSwapchainColor();
@@ -204,11 +181,11 @@ namespace aether
 				                return;
 			                }
 
-			                const VkCommandBuffer cmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 			                const VkExtent2D ext = ctx.extent;
 			                const std::uint32_t frameSlot = readSlot;
 
-			                const VkViewport viewport{
+			                const gpu::Viewport viewport{
 			                        .x = 0.f,
 			                        .y = 0.f,
 			                        .width = static_cast<float>(ext.width),
@@ -216,27 +193,30 @@ namespace aether
 			                        .minDepth = 0.f,
 			                        .maxDepth = 1.f,
 			                };
-			                const VkRect2D scissor{.offset = {0, 0}, .extent = ext};
-			                vkCmdSetViewport(cmd, 0, 1, &viewport);
-			                vkCmdSetScissor(cmd, 0, 1, &scissor);
+			                const gpu::Rect2D scissor{
+			                        .x = 0,
+			                        .y = 0,
+			                        .width = ext.width,
+			                        .height = ext.height,
+			                };
+			                cmd.SetViewport(viewport);
+			                cmd.SetScissor(scissor);
 
-			                ctx.recorder.BindPipeline(m_pipeline);
+			                cmd.BindPipeline(m_pipeline);
 
 			                // Bind the global bindless descriptor set so textured
 			                // rect draws can sample textures. Always bound even
 			                // for non-textured shapes since the pipeline layout
 			                // declares the set.
-			                const VkDescriptorSet bindlessSet = static_cast<VkDescriptorSet>(m_bindlessMgr->GetSet());
-			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
+			                cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
 
 			                const QuadPush push{
 			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
 			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
 			                };
-			                vkCmdPushConstants(cmd, m_pipeline.GetLayout(), VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(QuadPush), &push);
+			                cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
 
-			                gpu::CommandList gpuCmd(cmd);
-			                gpuCmd.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1, sizeof(VkDrawIndirectCommand));
+			                cmd.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1, sizeof(VkDrawIndirectCommand));
 
 			                m_pendingQuads[readSlot].clear();
 		                });

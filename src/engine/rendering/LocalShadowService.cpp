@@ -453,12 +453,12 @@ namespace aether
 				                return;
 			                }
 
-			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 			                for (std::uint32_t li = 0; li < static_cast<std::uint32_t>(m_perLightShadows.size()); ++li)
 			                {
 				                const PerLightShadow& pls = m_perLightShadows[li];
 
-				                const VkViewport vp{
+				                const gpu::Viewport vp{
 				                        .x = static_cast<float>(pls.region.x),
 				                        .y = static_cast<float>(pls.region.y),
 				                        .width = static_cast<float>(pls.region.width),
@@ -466,16 +466,17 @@ namespace aether
 				                        .minDepth = 0.0f,
 				                        .maxDepth = 1.0f,
 				                };
-				                vkCmdSetViewport(vkCmd, 0, 1, &vp);
+				                cmd.SetViewport(vp);
 
-				                const VkRect2D scissor{
-				                        .offset = {static_cast<std::int32_t>(pls.region.x), static_cast<std::int32_t>(pls.region.y)},
-				                        .extent = {pls.region.width, pls.region.height},
+				                const gpu::Rect2D scissor{
+				                        .x = static_cast<std::int32_t>(pls.region.x),
+				                        .y = static_cast<std::int32_t>(pls.region.y),
+				                        .width = static_cast<std::uint32_t>(pls.region.width),
+				                        .height = static_cast<std::uint32_t>(pls.region.height),
 				                };
-				                vkCmdSetScissor(vkCmd, 0, 1, &scissor);
+				                cmd.SetScissor(scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
-				                gpu::CommandList cmd(vkCmd);
 				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 
@@ -497,8 +498,8 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
-			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
-			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                cmd.BindComputePipeline(static_cast<void*>(m_blurPipeline), static_cast<void*>(m_blurPipelineLayout));
 
 			                const VkDescriptorImageInfo hStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
@@ -526,12 +527,12 @@ namespace aether
 			                                .pImageInfo = &hSampledInfo,
 			                        },
 			                };
-			                vkCmdPushDescriptorSetKHR(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, hWrites);
+			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), 0, 2, hWrites);
 
 			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
-			                vkCmdPushConstants(vkCmd, m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &hPc);
+			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
 
-			                vkCmdDispatch(vkCmd, (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 
 		// Vertical blur: read scratch (sampled), write atlas (storage).
@@ -547,8 +548,8 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
-			                const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(ctx.recorder.GetCommandBuffer());
-			                vkCmdBindPipeline(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipeline);
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                cmd.BindComputePipeline(static_cast<void*>(m_blurPipeline), static_cast<void*>(m_blurPipelineLayout));
 
 			                const VkDescriptorImageInfo vStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
@@ -576,12 +577,12 @@ namespace aether
 			                                .pImageInfo = &vSampledInfo,
 			                        },
 			                };
-			                vkCmdPushDescriptorSetKHR(vkCmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_blurPipelineLayout, 0, 2, vWrites);
+			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), 0, 2, vWrites);
 
 			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
-			                vkCmdPushConstants(vkCmd, m_blurPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(BlurPushConstants), &vPc);
+			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));
 
-			                vkCmdDispatch(vkCmd, (bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 	}
 } // namespace aether

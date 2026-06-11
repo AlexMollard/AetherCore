@@ -95,6 +95,15 @@ namespace aether::gpu
 		// (U16 / U32) - the impl maps it to VkIndexType.
 		void BindIndexBuffer(void* vkBuffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
 
+		// Bind a vertex buffer at a device-address offset. Matches
+		// vkCmdBindVertexBuffers(firstBinding=0, ...).
+		void BindVertexBuffer(void* vkBuffer, DeviceAddress offset = 0) noexcept;
+
+		// Set dynamic line width (vkCmdSetLineWidth). Most engine passes leave
+		// this at the 1.0 default; debug line passes (PhysicsDebugRenderer)
+		// use 2.0.
+		void SetLineWidth(float lineWidth) noexcept;
+
 		// Draw commands. firstVertex / firstInstance default to 0; matches
 		// the vkCmdDraw signature so migration is drop-in.
 		void Draw(std::uint32_t vertexCount, std::uint32_t instanceCount = 1, std::uint32_t firstVertex = 0, std::uint32_t firstInstance = 0);

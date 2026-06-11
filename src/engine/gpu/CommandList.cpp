@@ -193,6 +193,26 @@ namespace aether::gpu
 		vkCmdBindIndexBuffer(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), ToVkIndexType(indexType));
 	}
 
+	void CommandList::BindVertexBuffer(void* vkBuffer, DeviceAddress offset) noexcept
+	{
+		if (m_cmd == nullptr || vkBuffer == nullptr)
+		{
+			return;
+		}
+		const VkBuffer vkBuf = AsVkBuffer(vkBuffer);
+		const VkDeviceSize vkOffset = static_cast<VkDeviceSize>(offset);
+		vkCmdBindVertexBuffers(AsVkCmd(m_cmd), 0, 1, &vkBuf, &vkOffset);
+	}
+
+	void CommandList::SetLineWidth(float lineWidth) noexcept
+	{
+		if (m_cmd == nullptr)
+		{
+			return;
+		}
+		vkCmdSetLineWidth(AsVkCmd(m_cmd), lineWidth);
+	}
+
 	void CommandList::DrawIndirect(void* vkBuffer, DeviceAddress offset, std::uint32_t drawCount, std::uint32_t stride)
 	{
 		if (m_cmd == nullptr || vkBuffer == nullptr)
