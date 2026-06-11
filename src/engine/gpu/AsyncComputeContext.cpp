@@ -5,7 +5,7 @@
 
 #include "gpu/GpuDevice.hpp"
 #include "utils/Profiler.hpp"
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -87,7 +87,7 @@ namespace aether
 		}
 		m_timelineSemaphoreHandle = reinterpret_cast<std::uint64_t>(semaphore);
 		cleanup.timelineSemaphore = semaphore;
-		CommandRecorder::SetObjectName(device, m_timelineSemaphoreHandle, VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
+		vkutil::SetObjectName(device, m_timelineSemaphoreHandle, VK_OBJECT_TYPE_SEMAPHORE, "AsyncCompute.Timeline");
 
 		VkFenceCreateInfo fenceInfo{};
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -132,8 +132,8 @@ namespace aether
 			cleanup.fences.push_back(fence);
 
 			const std::string suffix = "[" + std::to_string(frameI) + "]";
-			CommandRecorder::SetObjectName(device, frame.commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, ("AsyncCompute.Cmd" + suffix).c_str());
-			CommandRecorder::SetObjectName(device, frame.fence, VK_OBJECT_TYPE_FENCE, ("AsyncCompute.Fence" + suffix).c_str());
+			vkutil::SetObjectName(device, frame.commandBuffer, VK_OBJECT_TYPE_COMMAND_BUFFER, ("AsyncCompute.Cmd" + suffix).c_str());
+			vkutil::SetObjectName(device, frame.fence, VK_OBJECT_TYPE_FENCE, ("AsyncCompute.Fence" + suffix).c_str());
 		}
 
 		cleanup.Disarm();
@@ -206,7 +206,7 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to begin command buffer."));
 		}
-		CommandRecorder(cmd).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
+		gpu::CommandList(reinterpret_cast<void*>(frame.commandBuffer)).BeginDebugLabel("AsyncCompute.LightCull", 0.9f, 0.45f, 0.1f);
 	}
 
 	gpu::CommandList AsyncComputeContext::GetCommandList(std::uint32_t frameIndex) const
@@ -216,8 +216,8 @@ namespace aether
 
 	void AsyncComputeContext::EndCommandBuffer(std::uint32_t frameIndex)
 	{
+		gpu::CommandList(reinterpret_cast<void*>(m_frames[frameIndex].commandBuffer)).EndDebugLabel();
 		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer);
-		CommandRecorder(cmd).EndDebugLabel();
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to end command buffer."));

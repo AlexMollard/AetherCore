@@ -244,7 +244,7 @@ namespace aether
 		}
 
 		m_gpu->BeginSwapchainFrame();
-		m_currentRecorder = m_gpu->GetCurrentCommandRecorder();
+		m_currentCmdList = m_gpu->GetCurrentCommandList();
 	}
 
 	std::vector<std::string> AetherCore::GetRenderPassNames() const
@@ -425,10 +425,8 @@ namespace aether
 				else
 				{
 					const TracyVkCtx vkCtx = m_gpu->GetVulkanContext().GetTracyVkCtx();
-					AE_PROFILE_GPU_ZONE_T(vkCtx, m_currentRecorder.GetCommandBuffer(), gpuLightingZone, "Lighting.UpdateForView");
-					// TODO(phase5): m_currentRecorder should already be a gpu::CommandList
-					gpu::CommandList lightingCmd(m_currentRecorder.GetCommandBuffer());
-					m_cameras->GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
+					AE_PROFILE_GPU_ZONE_T(vkCtx, static_cast<VkCommandBuffer>(m_currentCmdList.GetCommandBuffer()), gpuLightingZone, "Lighting.UpdateForView");
+					m_cameras->GetLightingManager().UpdateForView(frameIdx, m_currentCmdList, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
 				}
 			}
 		}
@@ -448,14 +446,17 @@ namespace aether
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
 		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 
-		m_currentRecorder.HostToShaderBarrier();
+		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host,
+		        gpu::AccessFlags::HostWrite,
+		        gpu::PipelineStage::AllCommands,
+		        gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
 
-		m_currentRecorder.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
+		m_currentCmdList.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
-		m_rendering->GetRenderGraph().Execute(m_currentRecorder, frameTarget, frameAddr, frameIdx);
-		m_currentRecorder.EndDebugLabel();
+		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameTarget, frameAddr, frameIdx);
+		m_currentCmdList.EndDebugLabel();
 	}
 
 	void AetherCore::SubmitAndAdvance()

@@ -16,7 +16,6 @@
 
 namespace aether
 {
-	class CommandRecorder;
 	class BindlessManager;
 
 	// Opaque handle to a render-graph-managed image resource.
@@ -194,10 +193,7 @@ namespace aether
 		// Execute the compiled frame graph for the current frame.
 		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
-		// Transitional: caller still holds a CommandRecorder. Wraps and forwards
-		// to the gpu::CommandList overload. TODO(phase3g): remove when
-		// AetherCore owns a gpu::CommandList directly.
-		void Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
+
 
 	private:
 		static constexpr uint32_t kSwapchainColorId = 0u;

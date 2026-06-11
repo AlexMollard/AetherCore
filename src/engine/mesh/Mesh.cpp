@@ -4,7 +4,7 @@
 
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
@@ -110,7 +110,7 @@ namespace aether
 			{
 				Throw(AetherError::Vulkan(static_cast<int32_t>(createResult), "Mesh: failed to create device-local vertex buffer"));
 			}
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(dest), VK_OBJECT_TYPE_BUFFER, debugName ? debugName : "Mesh.Buffer");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(dest), VK_OBJECT_TYPE_BUFFER, debugName ? debugName : "Mesh.Buffer");
 
 			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
 			const VkBufferCopy region{.size = size};

@@ -12,7 +12,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
 #include "io/FileSystem.hpp"
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/ShaderUtils.hpp"
@@ -581,7 +581,7 @@ namespace aether
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
 		}
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
 
 		const VkPipelineShaderStageCreateInfo cullStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -599,7 +599,7 @@ namespace aether
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 			Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
 		}
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}

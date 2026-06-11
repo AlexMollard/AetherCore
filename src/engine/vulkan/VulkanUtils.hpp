@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "vulkan/volk.hpp"
 
 namespace aether::vkutil
@@ -79,5 +81,30 @@ namespace aether::vkutil
 		        .pRegions = &region,
 		};
 		return vkCopyMemoryToImage(device, &copyInfo);
+	}
+	// ── Debug object naming ─────────────────────────────────────────────────────
+
+	// Thread-local storage for the debug-utils function pointer.
+	// Set once at engine init via SetObjectNameFunction.
+	inline PFN_vkSetDebugUtilsObjectNameEXT g_setObjectNameFn = nullptr;
+
+	inline void SetObjectNameFunction(PFN_vkSetDebugUtilsObjectNameEXT fn)
+	{
+		g_setObjectNameFn = fn;
+	}
+
+	inline void SetObjectName(VkDevice device, std::uint64_t handle, VkObjectType type, const char* name)
+	{
+		if (g_setObjectNameFn == nullptr || device == VK_NULL_HANDLE || handle == 0 || name == nullptr)
+		{
+			return;
+		}
+		const VkDebugUtilsObjectNameInfoEXT info{
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		        .objectType = type,
+		        .objectHandle = handle,
+		        .pObjectName = name,
+		};
+		[[maybe_unused]] const VkResult nameResult = g_setObjectNameFn(device, &info);
 	}
 } // namespace aether::vkutil

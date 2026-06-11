@@ -5,7 +5,6 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "platform/Window.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GraphicsDevice.hpp"
@@ -144,11 +143,6 @@ namespace aether
 		VkSemaphore rmSignal = rootMotionSignalSemaphore ? reinterpret_cast<VkSemaphore>(rootMotionSignalSemaphore) : VK_NULL_HANDLE;
 
 		swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, asyncComputeTimelineValue, rmSignal, rootMotionSignalValue);
-	}
-
-	CommandRecorder GpuDevice::GetCurrentCommandRecorder() const
-	{
-		return CommandRecorder(m_gfx->GetSwapchain().GetCurrentCommandBuffer());
 	}
 
 	gpu::CommandList GpuDevice::GetCurrentCommandList() const

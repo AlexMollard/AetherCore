@@ -11,7 +11,6 @@
 namespace aether
 {
 	class World;
-	class CommandRecorder;
 	class RenderGraph;
 
 	void SetDebugRenderingEnabled(bool enabled);

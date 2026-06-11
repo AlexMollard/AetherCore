@@ -6,7 +6,7 @@
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
 
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -70,7 +70,7 @@ namespace aether
 		}
 
 		vkDestroyShaderModule(device, shaderModule, nullptr);
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_computePipeline), VK_OBJECT_TYPE_PIPELINE, "UI.BuildDraws");
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_computePipeline), VK_OBJECT_TYPE_PIPELINE, "UI.BuildDraws");
 	}
 
 	void QuadRenderer::RegisterPass()

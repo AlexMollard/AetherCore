@@ -19,7 +19,7 @@ namespace aether::gpu
 	// CommandList - Phase 3 of the GPU refactor
 	// ─────────────────────────────────────────────────────────────────────────
 	// Engine-facing replacement for the raw VkCommandBuffer work in
-	// rendering/CommandRecorder. This header is Vulkan-free: every Vk* type
+	// rendering/ (CommandRecorder has been removed). This header is Vulkan-free: every Vk* type
 	// stays in gpu/CommandList.cpp. Passes hold a CommandList& and call
 	// methods that take engine handles (BufferHandle, PipelineHandle) or
 	// device-address integers (gpu::DeviceAddress), never raw Vk*.
@@ -30,8 +30,7 @@ namespace aether::gpu
 	// Both forms live for the duration of one frame and are not stored across frames.
 	//
 	// Phase 3 is incremental: this type is added additively, passes are migrated
-	// one at a time, and the existing CommandRecorder stays in place until every
-	// pass and consumer is off it. The first migration (SkyboxPass) uses
+	// one at a time. The first migration (SkyboxPass) uses
 	// BindPipeline(VkPipeline) / PushConstantsRaw(VkPipelineLayout) overloads
 	// that take the raw Vk* void*s but resolve them inside CommandList.cpp.
 	// The end-state API will take engine handles (PipelineHandle, etc.) and
@@ -189,6 +188,17 @@ namespace aether::gpu
 		// in GpuEnums.hpp; the .cpp translates to VkPipelineStageFlags2 /
 		// VkAccessFlags2 via GpuEnumConversions.
 		void PipelineMemoryBarrier(PipelineStage srcStage, AccessFlags srcAccess, PipelineStage dstStage, AccessFlags dstAccess) noexcept;
+
+		// Begin/end dynamic rendering (vkCmdBeginRendering / vkCmdEndRendering).
+		// The transitional overload takes a raw VkRenderingInfo* as void*;
+		// the final overload will take engine-side types once RenderGraph
+		// internal storage migrates (P5(d)).
+		void BeginRendering(const void* vkRenderingInfo);
+		void EndRendering();
+
+		// Write a GPU timestamp (vkCmdWriteTimestamp2). queryPool is an opaque
+		// pointer to a VkQueryPool in the implementation.
+		void WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept;
 
 		// Wire the debug-label function pointers used by BeginDebugLabel /
 		// EndDebugLabel. Called by the backend (VulkanContext) at engine init

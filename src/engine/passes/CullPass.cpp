@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "utils/Profiler.hpp"
 #include "io/FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -106,7 +106,7 @@ namespace aether
 		}
 		m_singlePipeline = static_cast<gpu::Pipeline>(vkPipeline);
 
-		CommandRecorder::SetObjectName(vkDevice, reinterpret_cast<std::uint64_t>(vkPipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDraws");
+		vkutil::SetObjectName(vkDevice, reinterpret_cast<std::uint64_t>(vkPipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDraws");
 
 		vkDestroyShaderModule(vkDevice, shaderModule, nullptr);
 		return {};
@@ -170,7 +170,7 @@ namespace aether
 		}
 		m_multiPipeline = static_cast<gpu::Pipeline>(vkPipeline);
 
-		CommandRecorder::SetObjectName(vkDevice, reinterpret_cast<std::uint64_t>(vkPipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDrawsMulti");
+		vkutil::SetObjectName(vkDevice, reinterpret_cast<std::uint64_t>(vkPipeline), VK_OBJECT_TYPE_PIPELINE, "CullPass.cullDrawsMulti");
 
 		vkDestroyShaderModule(vkDevice, shaderModule, nullptr);
 		return {};

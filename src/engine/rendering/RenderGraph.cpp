@@ -9,7 +9,6 @@
 #include <unordered_map>
 
 #include "gpu/BindlessManager.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -667,11 +666,10 @@ namespace aether
 
 		EnsureTransientImages(target);
 
-		// TODO(phase5): migrate these raw vkCmd* sites to gpu::CommandList methods.
-		// Transitional shim: Execute() still uses vkutil::TransitionImages and
-		// vkCmd* for barrier/render-pass begin/end. Unwrap the opaque handle
-		// once for the raw-Vk sites; cmdList (gpu::CommandList&) is used for
-		// debug labels.
+		// TODO(phase5d): gpu::CommandList methods for barrier/image transitions.
+		// Transitional shim: vkutil::TransitionImages and the barrier structs
+		// still need raw VkCommandBuffer. cmdList handles debug labels, dynamic
+		// rendering, viewport, scissor.
 		gpu::CommandList& recorder = cmdList;
 		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 
@@ -748,9 +746,9 @@ namespace aether
 				        .pColorAttachments = m_scratchColorInfos.data(),
 				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
-				vkCmdBeginRendering(vkCmd, &renderInfo);
+				cmdList.BeginRendering(&renderInfo);
 
-				const VkViewport viewport{
+				const gpu::Viewport viewport{
 				        .x = 0.0f,
 				        .y = 0.0f,
 				        .width = static_cast<float>(passExtent.width),
@@ -758,12 +756,14 @@ namespace aether
 				        .minDepth = 0.0f,
 				        .maxDepth = 1.0f,
 				};
-				const VkRect2D scissor{
-				        {0, 0},
-				        passExtent,
+				const gpu::Rect2D scissor{
+				        .x = 0,
+				        .y = 0,
+				        .width = passExtent.width,
+				        .height = passExtent.height,
 				};
-				vkCmdSetViewport(vkCmd, 0, 1, &viewport);
-				vkCmdSetScissor(vkCmd, 0, 1, &scissor);
+				cmdList.SetViewport(viewport);
+				cmdList.SetScissor(scissor);
 			}
 
 			if (pass.execute)
@@ -778,19 +778,13 @@ namespace aether
 
 			if (useDynamicRendering)
 			{
-				vkCmdEndRendering(vkCmd);
+				cmdList.EndRendering();
 			}
 
 			recorder.EndDebugLabel();
 		}
 
 		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
-	}
-
-	void RenderGraph::Execute(CommandRecorder& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
-	{
-		gpu::CommandList cmd(recorder.GetCommandBuffer());
-		Execute(cmd, target, frameConstantsAddr, frameIndex);
 	}
 
 	void RenderGraph::Compile()

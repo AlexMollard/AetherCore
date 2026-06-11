@@ -9,8 +9,8 @@
 #include "gpu/PushConstantsBytes.hpp"
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationIk.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "io/FileSystem.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "utils/Expected.hpp"
@@ -494,7 +494,7 @@ namespace aether
 				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->animSampleLayout), gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
 				if (m_timestampPool)
 				{
-					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
@@ -503,7 +503,7 @@ namespace aether
 				}
 				if (m_timestampPool)
 				{
-					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 
 				cmdList.EndDebugLabel();
@@ -621,7 +621,7 @@ namespace aether
 
 				if (m_timestampPool && bi == 0 && skinJobCount > 0) // write start if we also have skin jobs
 				{
-					m_tsSlots[frameSlot].nodeFlattenStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].nodeFlattenStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 
 				for (std::uint32_t di = 0; di < depthCount; ++di)
@@ -659,7 +659,7 @@ namespace aether
 
 				if (m_timestampPool && bi == animSampleBatchCount - 1 && skinJobCount > 0)
 				{
-					m_tsSlots[frameSlot].nodeFlattenEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].nodeFlattenEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 			}
 			cmdList.EndDebugLabel();
@@ -724,7 +724,7 @@ namespace aether
 				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->skinCopyLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
 				if (m_timestampPool && bi == 0)
 				{
-					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.BuildSkinPalette");
@@ -733,7 +733,7 @@ namespace aether
 				}
 				if (m_timestampPool && bi == skinPaletteBatchCount - 1)
 				{
-					m_tsSlots[frameSlot].skinPaletteEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].skinPaletteEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 			}
 
@@ -802,7 +802,7 @@ namespace aether
 				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
 				if (m_timestampPool)
 				{
-					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
@@ -811,7 +811,7 @@ namespace aether
 				}
 				if (m_timestampPool)
 				{
-					m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+					m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				cmdList.EndDebugLabel();
 			}
@@ -1000,8 +1000,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopy), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopyLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopy), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopyLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
@@ -1043,8 +1043,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSample), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSampleLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSample), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSampleLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
@@ -1086,8 +1086,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInit), VK_OBJECT_TYPE_PIPELINE, "Animation.PoseInit");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInitLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.PoseInit.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInit), VK_OBJECT_TYPE_PIPELINE, "Animation.PoseInit");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInitLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.PoseInit.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
@@ -1129,8 +1129,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlatten), VK_OBJECT_TYPE_PIPELINE, "Animation.NodeFlatten");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlattenLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.NodeFlatten.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlatten), VK_OBJECT_TYPE_PIPELINE, "Animation.NodeFlatten");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlattenLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.NodeFlatten.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
@@ -1172,8 +1172,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlend), VK_OBJECT_TYPE_PIPELINE, "Animation.AnimBlend");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlendLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.AnimBlend.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlend), VK_OBJECT_TYPE_PIPELINE, "Animation.AnimBlend");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlendLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.AnimBlend.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}
@@ -1215,8 +1215,8 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));
 			}
 
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolve), VK_OBJECT_TYPE_PIPELINE, "Animation.IkSolve");
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolveLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.IkSolve.Layout");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolve), VK_OBJECT_TYPE_PIPELINE, "Animation.IkSolve");
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolveLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.IkSolve.Layout");
 
 			vkDestroyShaderModule(device, shaderModule, nullptr);
 		}

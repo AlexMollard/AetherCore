@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <memory>
 
+#include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "rendering/RenderFramePacket.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/ServiceContainer.hpp"
 
@@ -96,7 +97,7 @@ namespace aether
 		std::unique_ptr<AnimationIkSystem> m_animationIk;
 		std::unique_ptr<AnimationRootMotionSystem> m_rootMotion;
 
-		CommandRecorder m_currentRecorder;
+		gpu::CommandList m_currentCmdList;
 		std::uint64_t m_frameIndex = 0;
 
 		std::uint64_t m_asyncSubmitSemaphore = 0;

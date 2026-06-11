@@ -2,7 +2,7 @@
 
 #include <format>
 
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 #	include "vulkan/AftermathContext.hpp"
@@ -29,7 +29,7 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), std::string(owner) + ": failed to create shader module."));
 		}
 
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, owner);
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, owner);
 
 		return mod;
 	}

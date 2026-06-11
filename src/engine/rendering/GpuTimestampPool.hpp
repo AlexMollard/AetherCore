@@ -2,6 +2,8 @@
 
 #include <cstdint>
 #include <span>
+#include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -39,7 +41,7 @@ namespace aether
 
 		// Record a timestamp into the current frame slot.
 		// Returns the slot index (pass the pair of indices to compute a duration).
-		std::uint32_t Write(VkCommandBuffer cmd, VkPipelineStageFlagBits2 stage);
+		std::uint32_t Write(gpu::CommandList& cmdList, gpu::PipelineStage stage);
 
 		[[nodiscard]] bool IsValid() const
 		{

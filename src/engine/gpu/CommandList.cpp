@@ -78,9 +78,8 @@ namespace aether::gpu
 			return (t == IndexType::U16) ? VK_INDEX_TYPE_UINT16 : VK_INDEX_TYPE_UINT32;
 		}
 
-		// PFN_vkCmd*DebugUtilsLabelEXT are loaded by volk on demand. The
-		// existing CommandRecorder stores the function pointers statically;
-		// we follow the same pattern so the labels keep working when
+		// PFN_vkCmd*DebugUtilsLabelEXT are loaded by volk on demand. They
+		// are stored statically so the labels keep working when
 		// validation layers are enabled. Initialized lazily on first use;
 		// null is a no-op (debug extensions not enabled in this build).
 		inline PFN_vkCmdBeginDebugUtilsLabelEXT& BeginDebugLabelFn() noexcept
@@ -97,7 +96,7 @@ namespace aether::gpu
 	} // namespace
 
 	// Static setter used by GraphicsDevice to wire the debug-label function
-	// pointers at engine init (matches CommandRecorder's pattern).
+	// pointers at engine init.
 	void CommandList::SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept
 	{
 		BeginDebugLabelFn() = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(beginFn);
@@ -472,5 +471,33 @@ namespace aether::gpu
 		        .pImageMemoryBarriers = nullptr,
 		};
 		vkCmdPipelineBarrier2(AsVkCmd(m_cmd), &dep);
+	}
+
+	void CommandList::BeginRendering(const void* vkRenderingInfo)
+	{
+		if (m_cmd == nullptr || vkRenderingInfo == nullptr)
+		{
+			return;
+		}
+		const VkRenderingInfo* info = static_cast<const VkRenderingInfo*>(vkRenderingInfo);
+		vkCmdBeginRendering(AsVkCmd(m_cmd), info);
+	}
+
+	void CommandList::EndRendering()
+	{
+		if (m_cmd == nullptr)
+		{
+			return;
+		}
+		vkCmdEndRendering(AsVkCmd(m_cmd));
+	}
+
+	void CommandList::WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept
+	{
+		if (m_cmd == nullptr || queryPool == nullptr)
+		{
+			return;
+		}
+		vkCmdWriteTimestamp2(AsVkCmd(m_cmd), ToVk(stage), static_cast<VkQueryPool>(queryPool), slot);
 	}
 } // namespace aether::gpu

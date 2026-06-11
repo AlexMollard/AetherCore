@@ -93,7 +93,7 @@ namespace aether
 		return validCount;
 	}
 
-	std::uint32_t GpuTimestampPool::Write(VkCommandBuffer cmd, VkPipelineStageFlagBits2 stage)
+	std::uint32_t GpuTimestampPool::Write(gpu::CommandList& cmdList, gpu::PipelineStage stage)
 	{
 		if (m_device == VK_NULL_HANDLE)
 		{
@@ -106,7 +106,7 @@ namespace aether
 			return slot;
 		}
 
-		vkCmdWriteTimestamp2(cmd, stage, m_pools[m_currentSlot], slot);
+		cmdList.WriteTimestamp(static_cast<void*>(m_pools[m_currentSlot]), slot, stage);
 		m_writeCount[m_currentSlot] = slot + 1;
 		m_hasData[m_currentSlot] = true;
 		return slot;

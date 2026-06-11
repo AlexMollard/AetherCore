@@ -14,7 +14,6 @@ namespace aether
 namespace aether
 {
 	class BindlessManager;
-	class CommandRecorder;
 	class GraphicsDevice;
 	class ResourcePool;
 	class ResourceRegistry;
@@ -55,7 +54,6 @@ namespace aether
 		void RecreateSwapchain(class Window& window, bool enableVsync);
 		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0, std::uint64_t asyncComputeTimelineValue = 0, std::uint64_t rootMotionSignalSemaphore = 0, std::uint64_t rootMotionSignalValue = 0);
 
-		[[nodiscard]] CommandRecorder GetCurrentCommandRecorder() const;
 		[[nodiscard]] gpu::CommandList GetCurrentCommandList() const;
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;
 

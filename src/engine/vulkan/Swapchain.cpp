@@ -11,7 +11,7 @@
 #include "utils/Logger.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -174,15 +174,15 @@ namespace aether
 		{
 			const std::string imgName = std::format("Swapchain.Color[{}]", i);
 			const std::string viewName = std::format("Swapchain.Color[{}].View", i);
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_images[i]), VK_OBJECT_TYPE_IMAGE, imgName.c_str());
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_imageViews[i]), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_images[i]), VK_OBJECT_TYPE_IMAGE, imgName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_imageViews[i]), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
 		}
 		m_depthImage.SetName(device, "Swapchain.Depth");
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_depthView), VK_OBJECT_TYPE_IMAGE_VIEW, "Swapchain.Depth.View");
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_depthView), VK_OBJECT_TYPE_IMAGE_VIEW, "Swapchain.Depth.View");
 		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			const std::string cbName = std::format("Swapchain.CmdBuf[{}]", i);
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_frames[i].commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, cbName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_frames[i].commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, cbName.c_str());
 		}
 
 		AE_INFO(LogCategory::Vulkan, "Swapchain initialized. {}x{} format={}", m_swapchain.extent.width, m_swapchain.extent.height, static_cast<int>(m_swapchain.image_format));

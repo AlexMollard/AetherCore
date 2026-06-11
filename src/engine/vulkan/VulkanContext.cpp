@@ -8,8 +8,8 @@
 #include <GLFW/glfw3.h>
 
 #include "utils/AetherExceptions.hpp"
-#include "rendering/CommandRecorder.hpp"
 #include "vulkan/UniqueBuffer.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -239,25 +239,23 @@ namespace aether
 		}
 		m_presentQueue = presentQueueResult.value();
 
-		CommandRecorder::SetDebugLabelFunctions(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT")),
-		        reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT")));
 		gpu::CommandList::SetDebugLabelFunctions(reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT"))),
 		        reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT"))));
 
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
-		CommandRecorder::SetObjectNameFunction(setObjectNameFn);
+		vkutil::SetObjectNameFunction(setObjectNameFn);
 		UniqueBuffer::SetObjectNameFunction(setObjectNameFn);
 
 		// Name queues immediately so they appear correctly in RenderDoc and validation output.
 		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
-		CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
+		vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
 		if (m_computeQueue != m_graphicsQueue)
 		{
-			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_computeQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Compute");
+			vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_computeQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Compute");
 		}
 		if (m_presentQueue != m_graphicsQueue && m_presentQueue != m_computeQueue)
 		{
-			CommandRecorder::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
+			vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_presentQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Present");
 		}
 
 		// Validate push constant size against hardware limits. Vulkan 1.0 guarantees
@@ -415,8 +413,7 @@ namespace aether
 		}
 #endif
 
-		CommandRecorder::SetDebugLabelFunctions(nullptr, nullptr);
-		CommandRecorder::SetObjectNameFunction(nullptr);
+		vkutil::SetObjectNameFunction(nullptr);
 		UniqueBuffer::SetObjectNameFunction(nullptr);
 		gpu::CommandList::SetDebugLabelFunctions(nullptr, nullptr);
 

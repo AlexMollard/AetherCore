@@ -5,7 +5,7 @@
 
 #include "utils/Expected.hpp"
 #include "gpu/BindlessManager.hpp"
-#include "rendering/CommandRecorder.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
@@ -438,11 +438,11 @@ namespace aether
 		{
 			return;
 		}
-		CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_image), VK_OBJECT_TYPE_IMAGE, name);
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_image), VK_OBJECT_TYPE_IMAGE, name);
 		if (m_defaultView != VK_NULL_HANDLE)
 		{
 			const std::string viewName = std::string(name) + ".View";
-			CommandRecorder::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_defaultView), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_defaultView), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
 		}
 	}
 } // namespace aether
