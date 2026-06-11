@@ -10,12 +10,14 @@
 #include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "io/FileSystem.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/Scene.hpp"
 #include "scene/World.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -423,7 +425,7 @@ namespace aether
 		m_blurScratchImage = graph.RegisterImage(m_blurScratch.Get(), m_blurScratch.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
 
 		// Create a transient depth attachment for the atlas render pass.
-		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat, VkExtent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT);
+		RGImage atlasDepth = graph.CreateTransientDepth(gpu::FromVk(depthFormat), gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
 
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
@@ -440,9 +442,9 @@ namespace aether
 
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
-		        .WriteColor(m_atlasImage, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
-		        .WriteDepth(atlasDepth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
-		        .SetExtent(VkExtent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
+		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
+		        .WriteDepth(atlasDepth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
+		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {

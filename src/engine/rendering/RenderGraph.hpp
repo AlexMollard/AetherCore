@@ -10,6 +10,7 @@
 #include "vulkan/volk.hpp"
 
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "vulkan/UniqueImage.hpp"
 
@@ -32,23 +33,15 @@ namespace aether
 		}
 	};
 
-	// Helpers for constructing VkClearValue without nested brace issues on MSVC.
-	[[nodiscard]] inline VkClearValue ClearColorValue(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
+	// Backward-compatible shims. Prefer gpu::ClearColor / gpu::ClearDepth.
+	[[nodiscard]] inline gpu::ClearValue ClearColorValue(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
 	{
-		VkClearValue v{};
-		v.color.float32[0] = r;
-		v.color.float32[1] = g;
-		v.color.float32[2] = b;
-		v.color.float32[3] = a;
-		return v;
+		return gpu::ClearColor(r, g, b, a);
 	}
 
-	[[nodiscard]] inline VkClearValue ClearDepthValue(float depth = 1.0f, uint32_t stencil = 0u) noexcept
+	[[nodiscard]] inline gpu::ClearValue ClearDepthValue(float depth = 1.0f, uint32_t stencil = 0u) noexcept
 	{
-		VkClearValue v{};
-		v.depthStencil.depth = depth;
-		v.depthStencil.stencil = stencil;
-		return v;
+		return gpu::ClearDepth(depth, stencil);
 	}
 
 	// Data made available inside pass execute callbacks.
@@ -108,10 +101,10 @@ namespace aether
 			PassBuilder& operator=(const PassBuilder&) = delete;
 
 			// Declare a color attachment write.
-			PassBuilder& WriteColor(RGImage image, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE, VkClearValue clearValue = {});
+			PassBuilder& WriteColor(RGImage image, gpu::LoadOp loadOp = gpu::LoadOp::Clear, gpu::StoreOp storeOp = gpu::StoreOp::Store, gpu::ClearValue clearValue = {});
 
 			// Declare a depth/stencil attachment write.
-			PassBuilder& WriteDepth(RGImage image, VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR, VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE, VkClearValue clearValue = {});
+			PassBuilder& WriteDepth(RGImage image, gpu::LoadOp loadOp = gpu::LoadOp::Clear, gpu::StoreOp storeOp = gpu::StoreOp::DontCare, gpu::ClearValue clearValue = {});
 
 			// Declare a sampled texture read.
 			PassBuilder& ReadTexture(RGImage image);
@@ -132,7 +125,7 @@ namespace aether
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
 			// Override pass extent (for render-to-texture and non-swapchain targets).
-			PassBuilder& SetExtent(VkExtent2D extent);
+			PassBuilder& SetExtent(gpu::Extent2D extent);
 
 		private:
 			friend class RenderGraph;
@@ -159,8 +152,8 @@ namespace aether
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
 
 		// Convenience helpers for transient color/depth attachments.
-		[[nodiscard]] RGImage CreateTransientColor(VkFormat format, VkExtent2D extent = {}, VkImageUsageFlags extraUsage = 0);
-		[[nodiscard]] RGImage CreateTransientDepth(VkFormat format, VkExtent2D extent = {}, VkImageUsageFlags extraUsage = 0);
+		[[nodiscard]] RGImage CreateTransientColor(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
+		[[nodiscard]] RGImage CreateTransientDepth(gpu::Format format, gpu::Extent2D extent = {}, gpu::ImageUsage extraUsage = gpu::ImageUsage::None);
 
 		// Ensure a transient image is registered for bindless sampled access.
 		// Returns 0xFFFFFFFF when image is invalid/non-transient/not allocatable.

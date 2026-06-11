@@ -11,10 +11,12 @@
 #include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/Scene.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
@@ -111,13 +113,13 @@ namespace aether
 		// ── Per-cascade depth passes (read from each cascade's output region) ──
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, m_shadowMapExtents[cascade], VK_IMAGE_USAGE_SAMPLED_BIT);
+			m_shadowDepth[cascade] = graph.CreateTransientDepth(gpu::FromVk(depthFormat), gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
 			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, device);
 
 			const std::string idx = std::to_string(cascade);
 			graph.AddPass("$DirectionalShadow_C" + idx)
-			        .WriteDepth(m_shadowDepth[cascade], VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearDepthValue(1.0f))
-			        .SetExtent(m_shadowMapExtents[cascade])
+			        .WriteDepth(m_shadowDepth[cascade], gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
+			        .SetExtent(gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height})
 			        .Execute(
 			                [this, cascade](PassContext& ctx)
 			                {

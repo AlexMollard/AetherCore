@@ -97,7 +97,7 @@ namespace aether
 		// topology stays stable and toggles don't require a graph rebuild.
 		graph.AddPass("$PostProcess")
 		        .ReadTexture(m_hdrColor)
-		        .WriteColor(m_ldrColor, VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, {})
+		        .WriteColor(m_ldrColor, gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
@@ -134,7 +134,7 @@ namespace aether
 
 		graph.AddPass("$FXAA")
 		        .ReadTexture(m_ldrColor)
-		        .WriteColor(graph.GetSwapchainColor(), VK_ATTACHMENT_LOAD_OP_DONT_CARE, VK_ATTACHMENT_STORE_OP_STORE, {})
+		        .WriteColor(graph.GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {

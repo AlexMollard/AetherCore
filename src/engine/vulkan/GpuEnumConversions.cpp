@@ -355,4 +355,128 @@ namespace aether::gpu
 		}
 		return VK_COMPARE_OP_LESS;
 	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// LoadOp
+	// ─────────────────────────────────────────────────────────────────────────
+	VkAttachmentLoadOp ToVk(LoadOp op) noexcept
+	{
+		switch (op)
+		{
+			case LoadOp::Load:
+				return VK_ATTACHMENT_LOAD_OP_LOAD;
+			case LoadOp::Clear:
+				return VK_ATTACHMENT_LOAD_OP_CLEAR;
+			case LoadOp::DontCare:
+				return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+		}
+		return VK_ATTACHMENT_LOAD_OP_CLEAR;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// StoreOp
+	// ─────────────────────────────────────────────────────────────────────────
+	VkAttachmentStoreOp ToVk(StoreOp op) noexcept
+	{
+		switch (op)
+		{
+			case StoreOp::Store:
+				return VK_ATTACHMENT_STORE_OP_STORE;
+			case StoreOp::DontCare:
+				return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+		}
+		return VK_ATTACHMENT_STORE_OP_STORE;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ImageUsage (bit-preserving)
+	// ─────────────────────────────────────────────────────────────────────────
+	VkImageUsageFlags ToVk(ImageUsage usage) noexcept
+	{
+		VkImageUsageFlags out = 0;
+		const std::uint32_t bits = static_cast<std::uint32_t>(usage);
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::TransferSrc)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::TransferDst)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::Sampled)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_SAMPLED_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::Storage)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_STORAGE_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::ColorAttachment)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::DepthStencilAttachment)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+		}
+		return out;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ImageAspect (bit-preserving)
+	// ─────────────────────────────────────────────────────────────────────────
+	VkImageAspectFlags ToVk(ImageAspect aspect) noexcept
+	{
+		VkImageAspectFlags out = 0;
+		const std::uint32_t bits = static_cast<std::uint32_t>(aspect);
+		if ((bits & static_cast<std::uint32_t>(ImageAspect::Color)) != 0)
+		{
+			out |= VK_IMAGE_ASPECT_COLOR_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageAspect::Depth)) != 0)
+		{
+			out |= VK_IMAGE_ASPECT_DEPTH_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(ImageAspect::Stencil)) != 0)
+		{
+			out |= VK_IMAGE_ASPECT_STENCIL_BIT;
+		}
+		return out;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ImageLayout
+	// ─────────────────────────────────────────────────────────────────────────
+	VkImageLayout ToVk(ImageLayout layout) noexcept
+	{
+		switch (layout)
+		{
+			case ImageLayout::Undefined:
+				return VK_IMAGE_LAYOUT_UNDEFINED;
+			case ImageLayout::General:
+				return VK_IMAGE_LAYOUT_GENERAL;
+			case ImageLayout::ColorAttachment:
+				return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+			case ImageLayout::DepthAttachment:
+				return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+			case ImageLayout::ShaderReadOnly:
+				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		}
+		return VK_IMAGE_LAYOUT_UNDEFINED;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// ClearValue
+	// ─────────────────────────────────────────────────────────────────────────
+	VkClearValue ToVk(const ClearValue& value) noexcept
+	{
+		VkClearValue v{};
+		v.color.float32[0] = value.color[0];
+		v.color.float32[1] = value.color[1];
+		v.color.float32[2] = value.color[2];
+		v.color.float32[3] = value.color[3];
+		v.depthStencil.depth = value.depth;
+		v.depthStencil.stencil = value.stencil;
+		return v;
+	}
 } // namespace aether::gpu

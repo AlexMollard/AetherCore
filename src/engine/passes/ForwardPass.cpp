@@ -1,6 +1,7 @@
 #include "passes/ForwardPass.hpp"
 
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "utils/Profiler.hpp"
 
@@ -18,7 +19,7 @@ namespace aether
 		RenderGraph& graph = *frame.graph;
 		const VkDescriptorSet bindlessSet = frame.bindless->GetSet();
 
-		auto* pass = &graph.AddPass("$EngineForward").WriteColor(hdrColor, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE).WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f));
+		auto* pass = &graph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
 
 		for (const RGImage shadowMap: shadowMaps)
 		{

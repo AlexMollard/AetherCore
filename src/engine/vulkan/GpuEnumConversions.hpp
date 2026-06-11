@@ -29,4 +29,21 @@ namespace aether::gpu
 
 	// Depth / stencil compare operation conversion
 	[[nodiscard]] VkCompareOp ToVk(CompareOp op) noexcept;
+
+	// Attachment load / store op conversion
+	[[nodiscard]] VkAttachmentLoadOp ToVk(LoadOp op) noexcept;
+	[[nodiscard]] VkAttachmentStoreOp ToVk(StoreOp op) noexcept;
+
+	// Image usage flag conversion (bit-preserving; engine bits mirror Vk bits).
+	[[nodiscard]] VkImageUsageFlags ToVk(ImageUsage usage) noexcept;
+
+	// Image aspect flag conversion (bit-preserving).
+	[[nodiscard]] VkImageAspectFlags ToVk(ImageAspect aspect) noexcept;
+
+	// Image layout conversion.
+	[[nodiscard]] VkImageLayout ToVk(ImageLayout layout) noexcept;
+
+	// Clear value conversion. The ClearValue struct has a layout-compatible
+	// union with VkClearValue (color[4] floats + depth float + stencil uint).
+	[[nodiscard]] VkClearValue ToVk(const ClearValue& value) noexcept;
 } // namespace aether::gpu

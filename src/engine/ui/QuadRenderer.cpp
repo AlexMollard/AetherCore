@@ -11,6 +11,7 @@
 #include "utils/Expected.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
@@ -189,7 +190,7 @@ namespace aether
 
 		auto color = m_renderGraph->GetSwapchainColor();
 		m_renderGraph->AddPass(m_passName)
-		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
+		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {

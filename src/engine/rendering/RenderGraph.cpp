@@ -15,6 +15,7 @@
 #include "utils/Logger.hpp"
 #include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
 namespace aether
@@ -146,24 +147,24 @@ namespace aether
 	{
 	}
 
-	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteColor(RGImage image, VkAttachmentLoadOp loadOp, VkAttachmentStoreOp storeOp, VkClearValue clearValue)
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteColor(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
 		m_graph.m_passes[m_passIndex].colorWrites.push_back(AttachmentRef{
 		        .image = image,
-		        .loadOp = loadOp,
-		        .storeOp = storeOp,
-		        .clearValue = clearValue,
+		        .loadOp = gpu::ToVk(loadOp),
+		        .storeOp = gpu::ToVk(storeOp),
+		        .clearValue = gpu::ToVk(clearValue),
 		});
 		return *this;
 	}
 
-	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteDepth(RGImage image, VkAttachmentLoadOp loadOp, VkAttachmentStoreOp storeOp, VkClearValue clearValue)
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteDepth(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
 		m_graph.m_passes[m_passIndex].depthWrite = AttachmentRef{
 		        .image = image,
-		        .loadOp = loadOp,
-		        .storeOp = storeOp,
-		        .clearValue = clearValue,
+		        .loadOp = gpu::ToVk(loadOp),
+		        .storeOp = gpu::ToVk(storeOp),
+		        .clearValue = gpu::ToVk(clearValue),
 		};
 		return *this;
 	}
@@ -220,9 +221,9 @@ namespace aether
 		return *this;
 	}
 
-	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(VkExtent2D extent)
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(gpu::Extent2D extent)
 	{
-		m_graph.m_passes[m_passIndex].extentOverride = extent;
+		m_graph.m_passes[m_passIndex].extentOverride = VkExtent2D{extent.width, extent.height};
 		return *this;
 	}
 
@@ -264,23 +265,23 @@ namespace aether
 		return RGImage{id};
 	}
 
-	RGImage RenderGraph::CreateTransientColor(VkFormat format, VkExtent2D extent, VkImageUsageFlags extraUsage)
+	RGImage RenderGraph::CreateTransientColor(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
 	{
 		return CreateTransientImage({
-		        .format = format,
-		        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | extraUsage,
+		        .format = gpu::ToVk(format),
+		        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
 		        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-		        .extent = extent,
+		        .extent = VkExtent2D{extent.width, extent.height},
 		});
 	}
 
-	RGImage RenderGraph::CreateTransientDepth(VkFormat format, VkExtent2D extent, VkImageUsageFlags extraUsage)
+	RGImage RenderGraph::CreateTransientDepth(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
 	{
 		return CreateTransientImage({
-		        .format = format,
-		        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | extraUsage,
+		        .format = gpu::ToVk(format),
+		        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
 		        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
-		        .extent = extent,
+		        .extent = VkExtent2D{extent.width, extent.height},
 		});
 	}
 

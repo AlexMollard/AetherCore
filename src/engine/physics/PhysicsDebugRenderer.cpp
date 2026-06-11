@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "rendering/RenderGraph.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "utils/Logger.hpp"
@@ -826,8 +827,8 @@ namespace aether
 		auto depth = graph.GetSwapchainDepth();
 
 		graph.AddPass("$Debug")
-		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE)
-		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_DONT_CARE)
+		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
+		        .WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::DontCare)
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {

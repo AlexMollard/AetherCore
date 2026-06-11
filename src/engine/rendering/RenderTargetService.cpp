@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include <stdexcept>
 #include <string>
+#include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "camera/CameraManager.hpp"
@@ -78,13 +79,13 @@ namespace aether
 
 		for (auto& [id, rt]: m_targets)
 		{
-			rt.rgColor = m_graph->CreateTransientColor(gpu::ToVk(m_forwardColorFormat), rt.extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+			rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, gpu::Extent2D{rt.extent.width, rt.extent.height}, gpu::ImageUsage::Sampled);
 			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 			if (slot == 0xFFFFFFFFu)
 			{
 				Throw(AetherError::Engine("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id)));
 			}
-			rt.rgDepth = m_graph->CreateTransientDepth(gpu::ToVk(m_depthFormat), rt.extent);
+			rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, gpu::Extent2D{rt.extent.width, rt.extent.height});
 		}
 	}
 
@@ -123,13 +124,13 @@ namespace aether
 		rt.cameraHandleRaw = cameraHandleRaw;
 		rt.extent = extent;
 
-		rt.rgColor = m_graph->CreateTransientColor(gpu::ToVk(m_forwardColorFormat), extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, gpu::Extent2D{extent.width, extent.height}, gpu::ImageUsage::Sampled);
 		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 		if (slot == 0xFFFFFFFFu)
 		{
 			AE_UNEXPECTED(AetherError::Engine("failed to register transient color image as bindless sampled"));
 		}
-		rt.rgDepth = m_graph->CreateTransientDepth(gpu::ToVk(m_depthFormat), extent);
+		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, gpu::Extent2D{extent.width, extent.height});
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
@@ -259,9 +260,9 @@ namespace aether
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)
-		        .WriteColor(color, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
-		        .WriteDepth(depth, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE, ClearDepthValue(1.0f))
-		        .SetExtent(extent)
+		        .WriteColor(color, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
+		        .WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
+		        .SetExtent(gpu::Extent2D{extent.width, extent.height})
 		        .Execute(
 		                [this, id](PassContext& ctx)
 		                {

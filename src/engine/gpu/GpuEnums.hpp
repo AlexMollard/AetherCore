@@ -159,4 +159,119 @@ namespace aether::gpu
 		GreaterOrEqual = 6,
 		Always = 7,
 	};
+
+	// Load operation for color / depth attachments.
+	// Mirrors VkAttachmentLoadOp.
+	enum class LoadOp : std::uint32_t
+	{
+		Load = 0,
+		Clear = 1,
+		DontCare = 2,
+	};
+
+	// Store operation for color / depth attachments.
+	// Mirrors VkAttachmentStoreOp.
+	enum class StoreOp : std::uint32_t
+	{
+		Store = 0,
+		DontCare = 1,
+	};
+
+	// Image usage flags. Mirrors VkImageUsageFlags. Bitwise-OR-able.
+	enum class ImageUsage : std::uint32_t
+	{
+		None = 0,
+		TransferSrc = 1u << 0,
+		TransferDst = 1u << 1,
+		Sampled = 1u << 2,
+		Storage = 1u << 3,
+		ColorAttachment = 1u << 4,
+		DepthStencilAttachment = 1u << 5,
+	};
+
+	inline ImageUsage operator|(ImageUsage a, ImageUsage b) noexcept
+	{
+		return static_cast<ImageUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+	}
+
+	inline ImageUsage& operator|=(ImageUsage& a, ImageUsage b) noexcept
+	{
+		a = a | b;
+		return a;
+	}
+
+	// Image aspect flags. Mirrors VkImageAspectFlags. Bitwise-OR-able.
+	enum class ImageAspect : std::uint32_t
+	{
+		None = 0,
+		Color = 1u << 0,
+		Depth = 1u << 1,
+		Stencil = 1u << 2,
+	};
+
+	inline ImageAspect operator|(ImageAspect a, ImageAspect b) noexcept
+	{
+		return static_cast<ImageAspect>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+	}
+
+	// Image layout. Mirrors VkImageLayout. Only the layouts the engine's
+	// barrier solver emits are enumerated; new layouts force a switch-case
+	// compile error in the backend conversion.
+	enum class ImageLayout : std::uint32_t
+	{
+		Undefined = 0,
+		General = 1,
+		ColorAttachment = 2,
+		DepthAttachment = 3,
+		ShaderReadOnly = 4,
+	};
+
+	// Clear value for a color or depth/stencil attachment. Mirrors
+	// VkClearValue's union layout. Construct with gpu::ClearColor(r,g,b,a) or
+	// gpu::ClearDepth(depth, stencil) factory helpers.
+	struct ClearValue
+	{
+		float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+		float depth = 0.0f;
+		std::uint32_t stencil = 0u;
+	};
+
+	[[nodiscard]] inline ClearValue ClearColor(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
+	{
+		ClearValue v{};
+		v.color[0] = r;
+		v.color[1] = g;
+		v.color[2] = b;
+		v.color[3] = a;
+		return v;
+	}
+
+	[[nodiscard]] inline ClearValue ClearDepth(float depth = 1.0f, std::uint32_t stencil = 0u) noexcept
+	{
+		ClearValue v{};
+		v.depth = depth;
+		v.stencil = stencil;
+		return v;
+	}
+
+	// 2D extent (width, height). Mirrors VkExtent2D. Constructible from any
+	// type exposing .width/.height (including VkExtent2D).
+	struct Extent2D
+	{
+		std::uint32_t width = 0;
+		std::uint32_t height = 0;
+
+		Extent2D() = default;
+
+		Extent2D(std::uint32_t w, std::uint32_t h) noexcept
+		      : width(w), height(h)
+		{
+		}
+
+		template<typename Other>
+		explicit Extent2D(const Other& ext) noexcept
+		      : width(ext.width), height(ext.height)
+		{
+		}
+	};
 } // namespace aether::gpu

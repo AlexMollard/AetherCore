@@ -38,7 +38,7 @@ namespace aether
 	void SkyboxPass::RegisterPass(RenderGraph& graph, RGImage hdrColor)
 	{
 		graph.AddPass("$Skybox")
-		        .WriteColor(hdrColor, VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f))
+		        .WriteColor(hdrColor, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f))
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
