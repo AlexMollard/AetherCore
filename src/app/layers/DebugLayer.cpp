@@ -25,6 +25,7 @@
 #include "passes/PostProcessStack.hpp"
 #include "passes/ForwardPass.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/RenderingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -507,8 +508,9 @@ namespace aether::app
 
 		if (input.IsKeyPressed(aether::Key::F8))
 		{
-			const bool newState = !aether::ForwardPass::IsEnabled();
-			aether::ForwardPass::SetEnabled(newState);
+			auto& forwardPass = context.Get<aether::RenderingSubsystem>().GetForwardPass();
+			const bool newState = !forwardPass.IsEnabled();
+			forwardPass.SetEnabled(newState);
 			AE_INFO(aether::LogCategory::App, "Forward render: {}", newState ? "on" : "off");
 		}
 
@@ -675,7 +677,7 @@ namespace aether::app
 		setRow(Row_SunIntensity, buf.data(), ui::UiTheme::Default().text);
 
 		// Render passes with names, timings, and progress bars
-		if (auto* rg = aether::GetCurrentRenderGraph())
+		if (auto* rg = context.TryGet<aether::RenderGraph>())
 		{
 			auto passes = rg->GetPasses();
 			float totalMs = 0.f;
@@ -762,7 +764,7 @@ namespace aether::app
 		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// Forward render state
-		const bool fwdRender = aether::ForwardPass::IsEnabled();
+		const bool fwdRender = context.Get<aether::RenderingSubsystem>().GetForwardPass().IsEnabled();
 		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// Reload button click detection

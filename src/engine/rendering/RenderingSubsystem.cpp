@@ -25,7 +25,6 @@ namespace aether
 
 		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
 		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
-		RenderGraph::s_current = &m_renderGraph;
 		m_frameConstantsBuffer.Initialize(vk);
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
@@ -71,6 +70,7 @@ namespace aether
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
 		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		});
 
 		m_physicsDebug.Init(vk, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
@@ -91,7 +91,6 @@ namespace aether
 		m_shadowService.Shutdown(vk.GetDevice().device);
 		m_localShadowService.Shutdown(vk.GetDevice().device);
 		m_renderTargetService.Shutdown();
-		RenderGraph::s_current = nullptr;
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
 		m_physicsDebug.Shutdown(vk.GetDevice().device);
@@ -148,6 +147,7 @@ namespace aether
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
 		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};
 
 		const PassRegistrationContext ctx{

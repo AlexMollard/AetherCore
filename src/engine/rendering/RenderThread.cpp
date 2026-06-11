@@ -54,16 +54,14 @@ namespace aether
 		}
 	}
 
-	std::atomic<bool> RenderThread::s_reloadInProgress{false};
-
 	void RenderThread::SetReloadInProgress(bool inProgress)
 	{
-		s_reloadInProgress.store(inProgress, std::memory_order_release);
+		m_reloadInProgress.store(inProgress, std::memory_order_release);
 	}
 
-	bool RenderThread::IsReloadInProgress()
+	bool RenderThread::IsReloadInProgress() const
 	{
-		return s_reloadInProgress.load(std::memory_order_acquire);
+		return m_reloadInProgress.load(std::memory_order_acquire);
 	}
 
 	void RenderThread::ThreadLoop()
@@ -74,7 +72,7 @@ namespace aether
 		{
 			// Check reload flag BEFORE reading new frame.
 			// This ensures we don't start a new frame while reload is in progress.
-			if (RenderThread::IsReloadInProgress())
+			if (IsReloadInProgress())
 			{
 				// Wait for any in-flight frame to complete before going idle.
 				// This prevents threading errors when main thread calls WaitIdle().
@@ -85,7 +83,7 @@ namespace aether
 				}
 
 				// Now idle - spin until reload is done
-				while (RenderThread::IsReloadInProgress())
+				while (IsReloadInProgress())
 				{
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}

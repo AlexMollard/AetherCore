@@ -367,13 +367,5 @@ namespace aether
 
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;
-
-	public:
-		static RenderGraph* s_current;
 	};
-
-	[[nodiscard]] inline RenderGraph* GetCurrentRenderGraph()
-	{
-		return RenderGraph::s_current;
-	}
 } // namespace aether

@@ -145,6 +145,7 @@ namespace aether::app
 		// Start the dedicated render thread early so that loading-screen
 		// frames can be submitted while assets load incrementally.
 		m_renderThread.Start(m_engine);
+		m_engine.GetServiceContainer().Register<aether::RenderThread>(m_renderThread);
 
 		LayerContext attachContext{
 		        .services = m_engine.GetServiceContainer(),

@@ -20,20 +20,20 @@ namespace aether
 	class ForwardPass
 	{
 	public:
-		static void SetEnabled(bool enabled)
+		void SetEnabled(bool enabled)
 		{
-			s_enabled = enabled;
+			m_enabled = enabled;
 		}
 
-		[[nodiscard]] static bool IsEnabled()
+		[[nodiscard]] bool IsEnabled() const
 		{
-			return s_enabled;
+			return m_enabled;
 		}
 
 		void RegisterPass(
 		        const FrameContext& frame, RenderQueue& renderQueue, RGImage hdrColor, RGImage depth, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps = {}, RGImage localShadowAtlas = {});
 
 	private:
-		static bool s_enabled;
+		bool m_enabled = true;
 	};
 } // namespace aether

@@ -42,8 +42,8 @@ namespace aether
 		// Pause/resume render thread during critical sections (e.g. script hot-reload).
 		// When SetReloadInProgress(true) is called, the render thread stops executing
 		// frames after the current one completes. Call SetReloadInProgress(false) to resume.
-		static void SetReloadInProgress(bool inProgress);
-		static bool IsReloadInProgress();
+		void SetReloadInProgress(bool inProgress);
+		[[nodiscard]] bool IsReloadInProgress() const;
 
 	private:
 		void ThreadLoop();
@@ -56,7 +56,7 @@ namespace aether
 		// debugging / statistics).  Not used for per-frame synchronisation.
 		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{0};
 		std::atomic<bool> m_shutdown{false};
-		static std::atomic<bool> s_reloadInProgress;
+		std::atomic<bool> m_reloadInProgress{false};
 
 		// True when render thread is not executing a frame - used to synchronize
 		// with DoReload so we don't call WaitIdle() while a frame is in flight.

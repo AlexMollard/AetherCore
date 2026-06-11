@@ -43,6 +43,15 @@ namespace aether
 			m_frameIndexProvider = std::move(provider);
 		}
 
+		// Mirrors ForwardPass::SetEnabled into the per-frame feature flags
+		// consumed on the render thread via FrameContext. Set from DebugLayer F8
+		// toggle; snapshotted into every FrameContext built by RegisterPasses.
+		void SetForwardPassEnabled(bool enabled)
+		{
+			m_forwardPassEnabled = enabled;
+			m_forwardPass.SetEnabled(enabled);
+		}
+
 		[[nodiscard]] RenderGraph& GetRenderGraph()
 		{
 			return m_renderGraph;
@@ -127,5 +136,6 @@ namespace aether
 		RenderPipelineCoordinator m_renderPipelineCoordinator;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
+		bool m_forwardPassEnabled = true;
 	};
 } // namespace aether

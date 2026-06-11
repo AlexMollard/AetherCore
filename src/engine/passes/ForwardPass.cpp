@@ -7,8 +7,6 @@
 
 namespace aether
 {
-	bool ForwardPass::s_enabled = true;
-
 	void ForwardPass::RegisterPass(
 	        const FrameContext& frame, RenderQueue& renderQueue, RGImage hdrColor, RGImage depth, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps, RGImage localShadowAtlas)
 	{
@@ -35,10 +33,10 @@ namespace aether
 		}
 
 		pass->Execute(
-		        [&renderQueue, bindlessSet, pushLightingFn](PassContext& ctx)
+		        [&renderQueue, bindlessSet, pushLightingFn, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
 		        {
 			        AE_PROFILE_ZONE();
-			        if (!ForwardPass::s_enabled)
+			        if (!forwardEnabled)
 			        {
 				        return;
 			        }

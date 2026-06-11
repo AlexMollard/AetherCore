@@ -20,8 +20,6 @@
 
 namespace aether
 {
-	RenderGraph* RenderGraph::s_current = nullptr;
-
 	void RenderGraph::Initialize(VkDevice device, VmaAllocator allocator)
 	{
 		m_device = device;
