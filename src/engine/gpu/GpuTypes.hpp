@@ -37,6 +37,7 @@ namespace aether
 namespace aether::gpu
 {
 	using DeviceAddress = std::uint64_t;
+	using DeviceSize = std::uint64_t;
 
 	// Viewport state (mirrors VkViewport for the dynamic state path). Floats
 	// are used directly because depth/normalisation semantics are the same
@@ -102,7 +103,11 @@ namespace aether::gpu
 	// backend (vulkan/) defines the same names as their real Vk* types so
 	// the implementations can convert with a single static_cast.
 	using DescriptorSet = void*;
+	using Pipeline = void*;
 	using PipelineLayout = void*;
+	using PipelineCache = void*;
+	using Device = void*;
+	using Allocator = void*;
 	using ImageView = void*;
 	using Sampler = void*;
 } // namespace aether::gpu

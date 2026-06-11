@@ -8,6 +8,7 @@
 #include "gpu/PushConstantsBytes.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -48,9 +49,9 @@ namespace aether
 		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://tonemap.spv",
-		                        .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
+		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
 		                        .pushConstantSize = 3 * sizeof(uint32_t),
-		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                }));
 		stack.m_tonemapPipeline = std::move(tonemapPipeline);
@@ -60,9 +61,9 @@ namespace aether
 		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://fxaa.spv",
-		                        .colorFormat = desc.swapchainFormat,
+		                        .colorFormat = gpu::FromVk(desc.swapchainFormat),
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
-		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
+		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);

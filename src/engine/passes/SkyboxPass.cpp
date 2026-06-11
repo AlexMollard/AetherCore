@@ -5,6 +5,8 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "rendering/RenderGraph.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/volk.hpp"
 
 namespace aether
 {
@@ -23,7 +25,7 @@ namespace aether
 		                        .depthTestEnable = false,
 		                        .depthWriteEnable = false,
 		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
-		                        .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		                        .pushConstantStages = gpu::ShaderStage::VertexFragment,
 		                }));
 		pass.m_pipeline = std::move(pipeline);
 

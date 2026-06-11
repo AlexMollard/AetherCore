@@ -216,8 +216,8 @@ namespace aether
 		const RGImage color = it->second.rgColor;
 		const RGImage depth = it->second.rgDepth;
 		const VkExtent2D extent = it->second.extent;
-		const VkPipeline cullPipeline = m_cullPass->GetSinglePipeline();
-		const VkPipelineLayout cullLayout = m_cullPass->GetSingleLayout();
+		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
+		const gpu::PipelineLayout cullLayout = m_cullPass->GetSingleLayout();
 
 		m_graph->AddComputePass("$CullDraws_RTT_" + idStr)
 		        .ExecuteCompute(

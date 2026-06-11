@@ -8,6 +8,8 @@
 #include "vulkan/volk.hpp"
 
 #include "gpu/GpuHandles.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {
@@ -53,16 +55,18 @@ namespace aether
 			bool ownsAllocation = false;
 		};
 
-		struct BufferEntry
-		{
-			VkBuffer buffer = VK_NULL_HANDLE;
-			VkDevice device = VK_NULL_HANDLE;
-			VmaAllocation allocation = VK_NULL_HANDLE;
-			VmaAllocator allocator = VK_NULL_HANDLE;
-			VkBufferUsageFlags usage = 0;
-			VkDeviceSize size = 0;
-			bool ownsAllocation = false;
-		};
+	struct BufferEntry
+	{
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkDevice device = VK_NULL_HANDLE;
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		VmaAllocator allocator = VK_NULL_HANDLE;
+		VkBufferUsageFlags usage = 0;
+		VkDeviceSize size = 0;
+		bool ownsAllocation = false;
+		void* mappedPtr = nullptr;
+		VkDeviceAddress deviceAddress = 0;
+	};
 
 		struct PipelineEntry
 		{
@@ -124,6 +128,18 @@ namespace aether
 		// empty and the ring has been drained.
 		void DrainAll();
 
+		// Phase-A consolidation: device/allocator back-references so the
+		// registry can allocate and map buffers directly instead of relying
+		// on a parallel side-channel in the gpu/ bridge.
+		void Init(VkDevice device, VmaAllocator allocator) noexcept;
+
+		[[nodiscard]] gpu::BufferHandle CreateBuffer(const gpu::BufferDesc& desc) noexcept;
+		[[nodiscard]] gpu::BufferHandle CreateMappedBuffer(const gpu::MappedBufferDesc& desc) noexcept;
+		[[nodiscard]] gpu::TextureHandle CreateTexture(const gpu::TextureDesc& desc) noexcept;
+
+		[[nodiscard]] gpu::MappedBufferView ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept;
+		void FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
+
 		// Diagnostic counters (not performance-critical, kept simple).
 		[[nodiscard]] std::uint32_t LiveTextureCount() const;
 		[[nodiscard]] std::uint32_t LiveBufferCount() const;
@@ -184,5 +200,8 @@ namespace aether
 		std::uint32_t m_currentFrame = 0;
 
 		bool m_shutdown = false;
+
+		VkDevice m_device = VK_NULL_HANDLE;
+		VmaAllocator m_allocator = VK_NULL_HANDLE;
 	};
 } // namespace aether

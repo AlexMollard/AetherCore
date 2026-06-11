@@ -38,7 +38,7 @@ namespace aether
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
-		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), gpu::ToVk(swapchain.GetDepthFormat()));
+		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), swapchain.GetDepthFormat());
 	}
 
 	void ShadowService::Shutdown(const VkDevice device)
@@ -53,7 +53,7 @@ namespace aether
 		(void) device;
 	}
 
-	void ShadowService::RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, VkFormat depthFormat)
+	void ShadowService::RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowPipeline.Destroy();
@@ -62,11 +62,11 @@ namespace aether
 		                pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://shadow_depth.spv",
-		                        .colorFormat = VK_FORMAT_UNDEFINED,
+		                        .colorFormat = gpu::Format::Undefined,
 		                        .depthFormat = depthFormat,
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
-		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                }));
 		m_shadowPipeline = std::move(shadowPipeline);
 	}

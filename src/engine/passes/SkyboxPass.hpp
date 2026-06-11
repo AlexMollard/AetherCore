@@ -1,6 +1,7 @@
 #pragma once
 
-#include "vulkan/volk.hpp"
+#include "gpu/GpuFormat.hpp"
+#include "gpu/GpuTypes.hpp"
 
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
@@ -26,9 +27,9 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDevice device = VK_NULL_HANDLE;
-			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
-			VkFormat hdrColorFormat = VK_FORMAT_UNDEFINED;
+			gpu::Device device = nullptr;
+			gpu::PipelineCache pipelineCache = nullptr;
+			gpu::Format hdrColorFormat = gpu::Format::Undefined;
 		};
 
 		SkyboxPass() = default;

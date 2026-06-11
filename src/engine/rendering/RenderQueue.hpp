@@ -188,7 +188,7 @@ namespace aether
 		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
 		// constants addresses; the computePipeline/layout must then be compatible
 		// with CullMultiPushConstants.
-		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex);
+		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, gpu::PipelineLayout computeLayout, std::uint32_t frameIndex);
 
 		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
 		// used by PrepareAndDispatch to build CullMultiPushConstants.

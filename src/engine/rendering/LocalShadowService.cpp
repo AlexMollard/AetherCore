@@ -54,17 +54,17 @@ namespace aether
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
-		const VkFormat depthFormat = gpu::ToVk(swapchain.GetDepthFormat());
+		const gpu::Format depthFormat = swapchain.GetDepthFormat();
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
 		                context.GetPipelineCache(),
 		                {
 		                        .shaderVfsPath = "shaders://local_shadow_depth.spv",
-		                        .colorFormat = VK_FORMAT_R32G32_SFLOAT,
+		                        .colorFormat = gpu::Format::R32G32Sfloat,
 		                        .depthFormat = depthFormat,
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
-		                        .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
+		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		                }));
 		m_shadowPipeline = std::move(pipeline);
 

@@ -11,6 +11,7 @@ namespace aether
 		Window& window = services.Get<Window>();
 
 		m_vulkanContext.emplace(window, config.appName);
+		m_resourceRegistry.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetAllocator());
 		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
 		AE_EXPECT_OR_THROW_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourcePool.ConfigureBindlessImages({

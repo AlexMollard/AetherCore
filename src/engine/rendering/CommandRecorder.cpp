@@ -8,7 +8,7 @@ namespace aether
 	void CommandRecorder::BindGraphicsPipeline(const GraphicsPipeline& pipeline)
 	{
 		AE_PROFILE_ZONE_N("CmdRecorder::BindPipeline");
-		vkCmdBindPipeline(m_cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.GetPipeline());
+		vkCmdBindPipeline(m_cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, static_cast<VkPipeline>(pipeline.GetPipeline()));
 	}
 
 	void CommandRecorder::Draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)

@@ -19,8 +19,8 @@ namespace aether::app::effects
 	        aether::AssetManager& assets,
 	        aether::gpu::DescriptorSetLayout bindlessLayout,
 	        aether::gpu::DescriptorSetLayout lightingLayout,
-	        VkFormat colorFormat,
-	        VkFormat depthFormat,
+	        aether::gpu::Format colorFormat,
+	        aether::gpu::Format depthFormat,
 	        const char* shaderVfsPath,
 	        const aether::Material& material)
 	{

@@ -3,6 +3,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "platform/Window.hpp"
 #include "rendering/CommandRecorder.hpp"
 #include "rendering/RenderGraph.hpp"
@@ -26,6 +27,12 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_gfx = new GraphicsDevice();
 		m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync});
+
+		gpu::ResourceRegistryInitDesc regInit{};
+		regInit.vulkanDevice = static_cast<void*>(m_gfx->GetVulkanContext().GetDevice().device);
+		regInit.vmaAllocator = static_cast<void*>(m_gfx->GetVulkanContext().GetAllocator());
+		regInit.backendRegistry = static_cast<void*>(&m_gfx->GetResourceRegistry());
+		gpu::ResourceRegistry::Initialize(regInit);
 
 		services.Register<GpuDevice>(*this);
 		services.Register<VulkanContext>(m_gfx->GetVulkanContext());

@@ -117,14 +117,11 @@ namespace aether
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
-	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, VkPipeline computePipeline, VkPipelineLayout computeLayout, std::uint32_t frameIndex)
+	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, gpu::PipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		// TODO(phase5): migrate these raw vkCmd* sites to gpu::CommandList methods.
-		// Transitional shim: the body of this function still uses raw vkCmd*
-		// calls for compute-pipeline bind/dispatch/barrier; unwrap the opaque
-		// command-buffer handle once and reuse it locally.
-		VkCommandBuffer cmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
+		// Keep the raw VkCommandBuffer for Tracy GPU zones and GpuTimestampPool.
+		const VkCommandBuffer cmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
 		if (m_commands.empty())
 		{
@@ -177,31 +174,21 @@ namespace aether
 			if (m_skinPaletteBuffer)
 			{
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-				vkCmdFillBuffer(cmd, m_skinPaletteBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(static_cast<void*>(m_skinPaletteBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			if (m_sampledPosesBuffer)
 			{
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
-				vkCmdFillBuffer(cmd, m_sampledPosesBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(static_cast<void*>(m_sampledPosesBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			if (m_nodeGlobalTransformsBuffer)
 			{
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
-				vkCmdFillBuffer(cmd, m_nodeGlobalTransformsBuffer.Get(), static_cast<VkDeviceSize>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(static_cast<void*>(m_nodeGlobalTransformsBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
-			const VkMemoryBarrier2 fillToCompute{
-			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-			        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			};
-			const VkDependencyInfo fillToComputeDep{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .memoryBarrierCount = 1,
-			        .pMemoryBarriers = &fillToCompute,
-			};
-			vkCmdPipelineBarrier2(cmd, &fillToComputeDep);
+			cmdList.PipelineMemoryBarrier(
+			        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite,
+			        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
@@ -415,19 +402,10 @@ namespace aether
 		}
 
 		// Ensure host writes are visible to compute/graphics shader reads.
-		const VkMemoryBarrier2 hostToShaders{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-		        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
-		        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		};
-		const VkDependencyInfo hostToShaderDep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &hostToShaders,
-		};
-		vkCmdPipelineBarrier2(cmd, &hostToShaderDep);
+		cmdList.PipelineMemoryBarrier(
+		        gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite,
+		        gpu::PipelineStage::ComputeShader | gpu::PipelineStage::VertexShader | gpu::PipelineStage::FragmentShader,
+		        gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
@@ -440,8 +418,8 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
 
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->poseInit);
-				CommandRecorder(cmd).BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
+				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->poseInit), static_cast<void*>(m_sharedPipelines->poseInitLayout));
+				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
@@ -479,36 +457,26 @@ namespace aether
 					        .jobCount = batch.count,
 					        .nodeCountPerJob = nodeCount,
 					};
-					vkCmdPushConstants(cmd, m_sharedPipelines->poseInitLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(initPc), &initPc);
+					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->poseInitLayout), gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&initPc), sizeof(initPc)));
 
 					const std::uint32_t groupsX = (batch.count + 7u) / 8u;
 					const std::uint32_t groupsY = (nodeCount + 7u) / 8u;
-					vkCmdDispatch(cmd, groupsX, groupsY, 1);
+					cmdList.Dispatch(groupsX, groupsY, 1);
 				}
 
-				const VkMemoryBarrier2 poseInitToAnim{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				};
-				const VkDependencyInfo poseInitToAnimDep{
-				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				        .memoryBarrierCount = 1,
-				        .pMemoryBarriers = &poseInitToAnim,
-				};
-				vkCmdPipelineBarrier2(cmd, &poseInitToAnimDep);
+				cmdList.PipelineMemoryBarrier(
+				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
+				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
-				CommandRecorder(cmd).EndDebugLabel();
+				cmdList.EndDebugLabel();
 			}
 
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
 			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE && sampleJobsThisFrame > 0)
 			{
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animSample);
-				CommandRecorder(cmd).BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
+				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->animSample), static_cast<void*>(m_sharedPipelines->animSampleLayout));
+				cmdList.BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
 				        .animDbClipsAddr = 0,
@@ -523,7 +491,7 @@ namespace aether
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
 				};
-				vkCmdPushConstants(cmd, m_sharedPipelines->animSampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(animPc), &animPc);
+				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->animSampleLayout), gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -531,30 +499,20 @@ namespace aether
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
 					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
-					vkCmdDispatch(cmd, groups, 1, 1);
+					cmdList.Dispatch(groups, 1, 1);
 				}
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 				}
 
-				CommandRecorder(cmd).EndDebugLabel();
+				cmdList.EndDebugLabel();
 
 				// Barrier: make GPU anim_sample writes visible to downstream
 				// compute passes (node_flatten, build_skin_palette).
-				const VkMemoryBarrier2 animToNodeFlatten{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-				};
-				const VkDependencyInfo animToNodeFlattenDep{
-				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				        .memoryBarrierCount = 1,
-				        .pMemoryBarriers = &animToNodeFlatten,
-				};
-				vkCmdPipelineBarrier2(cmd, &animToNodeFlattenDep);
+				cmdList.PipelineMemoryBarrier(
+				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
+				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 
 			// ── Pass 1.3: Animation blend (cross-fade between two clips) ───────────
@@ -565,29 +523,17 @@ namespace aether
 				if (blendJobCount > 0 && blendPc.jobCount > 0)
 				{
 					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
-					vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->animBlend);
-					CommandRecorder(cmd).BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
-					vkCmdPushConstants(cmd, m_sharedPipelines->animBlendLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(blendPc), &blendPc);
+					cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->animBlend), static_cast<void*>(m_sharedPipelines->animBlendLayout));
+					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
+					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->animBlendLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
 						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.AnimBlend");
 						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
-						vkCmdDispatch(cmd, groups, 1, 1);
+						cmdList.Dispatch(groups, 1, 1);
 					}
-					CommandRecorder(cmd).EndDebugLabel();
+					cmdList.EndDebugLabel();
 
-					const VkMemoryBarrier2 blendToFlatten{
-					        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-					        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-					        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-					};
-					const VkDependencyInfo blendDep{
-					        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-					        .memoryBarrierCount = 1,
-					        .pMemoryBarriers = &blendToFlatten,
-					};
-					vkCmdPipelineBarrier2(cmd, &blendDep);
+					cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 				}
 			}
 
@@ -644,8 +590,8 @@ namespace aether
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->nodeFlatten);
-			CommandRecorder(cmd).BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
+			cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->nodeFlatten), static_cast<void*>(m_sharedPipelines->nodeFlattenLayout));
+			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
 			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
@@ -697,29 +643,17 @@ namespace aether
 					        .batchStartJob = batch.startJob,
 					        .batchJobCount = batch.count,
 					};
-					vkCmdPushConstants(cmd, m_sharedPipelines->nodeFlattenLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(flattenPc), &flattenPc);
+					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->nodeFlattenLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&flattenPc), sizeof(flattenPc)));
 
 					const std::uint32_t totalWork = batch.count * range.count;
 					const std::uint32_t groups = (totalWork + 63u) / 64u;
-					vkCmdDispatch(cmd, groups, 1, 1);
+					cmdList.Dispatch(groups, 1, 1);
 
 					// Barrier between depth levels: parent writes from this
 					// dispatch must be visible to the next level's reads.
 					if (di + 1 < depthCount)
 					{
-						const VkMemoryBarrier2 depthBarrier{
-						        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-						        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-						        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-						        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-						};
-						const VkDependencyInfo depthBarrierDep{
-						        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-						        .memoryBarrierCount = 1,
-						        .pMemoryBarriers = &depthBarrier,
-						};
-						vkCmdPipelineBarrier2(cmd, &depthBarrierDep);
+						cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 					}
 				}
 
@@ -728,21 +662,9 @@ namespace aether
 					m_tsSlots[frameSlot].nodeFlattenEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 				}
 			}
-			CommandRecorder(cmd).EndDebugLabel();
+			cmdList.EndDebugLabel();
 
-			const VkMemoryBarrier2 flattenToSkin{
-			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-			};
-			const VkDependencyInfo flattenToSkinDep{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .memoryBarrierCount = 1,
-			        .pMemoryBarriers = &flattenToSkin,
-			};
-			vkCmdPipelineBarrier2(cmd, &flattenToSkinDep);
+			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 		}
 
 		// ── Pass 1.8: IK solve (two-bone leg IK on GPU) ─────────────────────────
@@ -757,29 +679,17 @@ namespace aether
 			if (ikJobCount > 0 && ikPc.jobCount > 0)
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->ikSolve);
-				CommandRecorder(cmd).BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
-				vkCmdPushConstants(cmd, m_sharedPipelines->ikSolveLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ikPc), &ikPc);
+				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->ikSolve), static_cast<void*>(m_sharedPipelines->ikSolveLayout));
+				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
+				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->ikSolveLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.IkSolve");
 					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
-					vkCmdDispatch(cmd, groups, 1, 1);
+					cmdList.Dispatch(groups, 1, 1);
 				}
-				CommandRecorder(cmd).EndDebugLabel();
+				cmdList.EndDebugLabel();
 
-				const VkMemoryBarrier2 ikToSkin{
-				        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-				        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-				        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-				        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-				};
-				const VkDependencyInfo ikDep{
-				        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				        .memoryBarrierCount = 1,
-				        .pMemoryBarriers = &ikToSkin,
-				};
-				vkCmdPipelineBarrier2(cmd, &ikDep);
+				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 		}
 
@@ -787,8 +697,8 @@ namespace aether
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 
-			vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_sharedPipelines->skinCopy);
-			CommandRecorder(cmd).BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
+			cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->skinCopy), static_cast<void*>(m_sharedPipelines->skinCopyLayout));
+			cmdList.BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
 			{
@@ -811,7 +721,7 @@ namespace aether
 				        .skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
 				        .jobCount = batch.count,
 				};
-				vkCmdPushConstants(cmd, m_sharedPipelines->skinCopyLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(skinPc), &skinPc);
+				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->skinCopyLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
 				if (m_timestampPool && bi == 0)
 				{
 					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -819,7 +729,7 @@ namespace aether
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.BuildSkinPalette");
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
-					vkCmdDispatch(cmd, groups, 1, 1);
+					cmdList.Dispatch(groups, 1, 1);
 				}
 				if (m_timestampPool && bi == skinPaletteBatchCount - 1)
 				{
@@ -827,21 +737,9 @@ namespace aether
 				}
 			}
 
-			CommandRecorder(cmd).EndDebugLabel();
+			cmdList.EndDebugLabel();
 
-			const VkMemoryBarrier2 skinToShaders{
-			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-			        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-			        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-			        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-			        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
-			};
-			const VkDependencyInfo skinToShadersDep{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .memoryBarrierCount = 1,
-			        .pMemoryBarriers = &skinToShaders,
-			};
-			vkCmdPipelineBarrier2(cmd, &skinToShadersDep);
+			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader | gpu::PipelineStage::VertexShader, gpu::AccessFlags::ShaderStorageRead);
 		}
 		else if (sampleJobsThisFrame > 0 && m_debugDisableAnimation)
 		{
@@ -874,12 +772,12 @@ namespace aether
 
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.DispatchMulti");
-				CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-				vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(multiPc), &multiPc);
+				cmdList.BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
+				cmdList.BindComputePipeline(computePipeline, computeLayout);
+				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
 				const std::uint32_t groups = (totalDraws + 63u) / 64u;
-				vkCmdDispatch(cmd, groups, 1, 1);
-				CommandRecorder(cmd).EndDebugLabel();
+				cmdList.Dispatch(groups, 1, 1);
+				cmdList.EndDebugLabel();
 			}
 		}
 		else
@@ -899,9 +797,9 @@ namespace aether
 
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
-				CommandRecorder(cmd).BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
-				vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
-				vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+				cmdList.BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
+				cmdList.BindComputePipeline(computePipeline, computeLayout);
+				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -909,30 +807,20 @@ namespace aether
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
 					const std::uint32_t groups = (totalDraws + 63u) / 64u;
-					vkCmdDispatch(cmd, groups, 1, 1);
+					cmdList.Dispatch(groups, 1, 1);
 				}
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 				}
-				CommandRecorder(cmd).EndDebugLabel();
+				cmdList.EndDebugLabel();
 			}
 		}
 
 		// Ensure indirect args are visible before draw-indirect.
-		const VkMemoryBarrier2 computeToIndirect{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-		        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
-		        .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
-		};
-		const VkDependencyInfo computeToIndirectDep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &computeToIndirect,
-		};
-		vkCmdPipelineBarrier2(cmd, &computeToIndirectDep);
+		cmdList.PipelineMemoryBarrier(
+		        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
+		        gpu::PipelineStage::DrawIndirect, gpu::AccessFlags::IndirectCommandRead);
 
 #ifdef TRACY_ENABLE
 		{

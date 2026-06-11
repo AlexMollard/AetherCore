@@ -250,13 +250,13 @@ namespace aether
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://ui_shapes.spv",
-		                .colorFormat = gpu::ToVk(m_swapchain->GetImageFormat()),
-		                .depthFormat = VK_FORMAT_UNDEFINED,
+		                .colorFormat = m_swapchain->GetImageFormat(),
+		                .depthFormat = gpu::Format::Undefined,
 		                .depthTestEnable = false,
 		                .depthWriteEnable = false,
 		                .blendEnable = true,
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
-		                .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+		                .pushConstantStages = gpu::ShaderStage::VertexFragment,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		        }));
 		m_pipeline = std::move(pipeline);

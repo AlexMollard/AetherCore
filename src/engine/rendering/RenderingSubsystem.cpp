@@ -57,7 +57,7 @@ namespace aether
 		m_skyboxPass = SkyboxPass::Create({
 		        .device = vk.GetDevice().device,
 		        .pipelineCache = vk.GetPipelineCache(),
-		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
+		        .hdrColorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
 		});
 
 		m_renderTargetService.BindRuntime(FrameContext{
@@ -104,7 +104,7 @@ namespace aether
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
 
-		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), gpu::ToVk(swapchain.GetDepthFormat()));
+		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), swapchain.GetDepthFormat());
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();

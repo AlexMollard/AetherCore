@@ -78,10 +78,11 @@ namespace aether::gpu
 		None = 0,
 		DrawIndirect = 1ull << 1,
 		VertexShader = 1ull << 3,
-		Host = 1ull << 14,
 		FragmentShader = 1ull << 7,
 		ComputeShader = 1ull << 11,
+		Host = 1ull << 14,
 		AllCommands = 1ull << 16,
+		Transfer = 1ull << 17,
 	};
 
 	inline PipelineStage operator|(PipelineStage a, PipelineStage b) noexcept
@@ -112,6 +113,7 @@ namespace aether::gpu
 		IndirectCommandRead = 1ull << 0,
 		ShaderRead = 1ull << 5,
 		ShaderWrite = 1ull << 6,
+		TransferWrite = 1ull << 8,
 		HostWrite = 1ull << 14,
 		ShaderStorageRead = 1ull << 29,
 		ShaderStorageWrite = 1ull << 30,
@@ -181,6 +183,38 @@ namespace aether::gpu
 		Store = 0,
 		DontCare = 1,
 	};
+
+	// Buffer usage flags. Mirrors VkBufferUsageFlagBits. Bitwise-OR-able.
+	enum class BufferUsage : std::uint32_t
+	{
+		None = 0,
+		TransferSrc = 1u << 0,
+		TransferDst = 1u << 1,
+		UniformTexel = 1u << 2,
+		StorageTexel = 1u << 3,
+		Uniform = 1u << 4,
+		Storage = 1u << 5,
+		Index = 1u << 6,
+		Vertex = 1u << 7,
+		Indirect = 1u << 8,
+		ShaderDeviceAddress = 1u << 17,
+	};
+
+	inline BufferUsage operator|(BufferUsage a, BufferUsage b) noexcept
+	{
+		return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
+	}
+
+	inline BufferUsage& operator|=(BufferUsage& a, BufferUsage b) noexcept
+	{
+		a = a | b;
+		return a;
+	}
+
+	inline BufferUsage operator&(BufferUsage a, BufferUsage b) noexcept
+	{
+		return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
+	}
 
 	// Image usage flags. Mirrors VkImageUsageFlags. Bitwise-OR-able.
 	enum class ImageUsage : std::uint32_t

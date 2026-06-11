@@ -2,6 +2,7 @@
 
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/GpuTypesVk.hpp"
 
 namespace aether
 {
@@ -14,6 +15,21 @@ namespace aether
 		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
 		inline constexpr std::uint32_t kGenerationWrap = 256u;
+
+		[[nodiscard]] VmaAllocationCreateInfo MakeMappedAllocInfo() noexcept
+		{
+			VmaAllocationCreateInfo info{};
+			info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+			info.usage = VMA_MEMORY_USAGE_AUTO;
+			return info;
+		}
+
+		[[nodiscard]] VmaAllocationCreateInfo MakeDeviceLocalAllocInfo() noexcept
+		{
+			VmaAllocationCreateInfo info{};
+			info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+			return info;
+		}
 	} // namespace
 
 	ResourceRegistry::~ResourceRegistry()
@@ -65,6 +81,145 @@ namespace aether
 				slot.entry.reset();
 			}
 		}
+	}
+
+	void ResourceRegistry::Init(VkDevice device, VmaAllocator allocator) noexcept
+	{
+		m_device = device;
+		m_allocator = allocator;
+	}
+
+	gpu::BufferHandle ResourceRegistry::CreateBuffer(const gpu::BufferDesc& desc) noexcept
+	{
+		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+
+		const VkBufferCreateInfo bufInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = desc.size,
+		        .usage = gpu::ToVkBufferUsage(desc.usage),
+		};
+
+		const VmaAllocationCreateInfo allocInfo = MakeDeviceLocalAllocInfo();
+
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		VmaAllocationInfo allocResult{};
+
+		const VkResult result = vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo, &buffer, &allocation, &allocResult);
+		if (result != VK_SUCCESS)
+		{
+			return {};
+		}
+
+		BufferEntry entry{};
+		entry.buffer = buffer;
+		entry.device = m_device;
+		entry.allocation = allocation;
+		entry.allocator = m_allocator;
+		entry.usage = bufInfo.usage;
+		entry.size = desc.size;
+		entry.ownsAllocation = true;
+
+		return RegisterBuffer(entry);
+	}
+
+	gpu::BufferHandle ResourceRegistry::CreateMappedBuffer(const gpu::MappedBufferDesc& desc) noexcept
+	{
+		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+
+		const VkBufferUsageFlags vkUsage = gpu::ToVkBufferUsage(desc.usage);
+
+		const VkBufferCreateInfo bufInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = desc.size,
+		        .usage = vkUsage,
+		};
+
+		const VmaAllocationCreateInfo allocInfo = MakeMappedAllocInfo();
+
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		VmaAllocationInfo allocResult{};
+
+		const VkResult result = vmaCreateBuffer(m_allocator, &bufInfo, &allocInfo, &buffer, &allocation, &allocResult);
+		if (result != VK_SUCCESS)
+		{
+			return {};
+		}
+
+		gpu::DeviceAddress deviceAddress = 0;
+		if ((desc.usage & gpu::BufferUsage::ShaderDeviceAddress) != gpu::BufferUsage::None)
+		{
+			const VkBufferDeviceAddressInfo addrInfo{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .buffer = buffer,
+			};
+			deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+		}
+
+		BufferEntry entry{};
+		entry.buffer = buffer;
+		entry.device = m_device;
+		entry.allocation = allocation;
+		entry.allocator = m_allocator;
+		entry.usage = vkUsage;
+		entry.size = desc.size;
+		entry.ownsAllocation = true;
+		entry.mappedPtr = allocResult.pMappedData;
+		entry.deviceAddress = deviceAddress;
+
+		const gpu::BufferHandle handle = RegisterBuffer(entry);
+		if (!handle.IsValid())
+		{
+			vmaDestroyBuffer(m_allocator, buffer, allocation);
+			return {};
+		}
+
+		return handle;
+	}
+
+	gpu::TextureHandle ResourceRegistry::CreateTexture(const gpu::TextureDesc& /*desc*/) noexcept
+	{
+		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+		return {};
+	}
+
+	gpu::MappedBufferView ResourceRegistry::ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept
+	{
+		if (!handle.IsValid())
+		{
+			return {};
+		}
+
+		const auto* entry = Resolve(handle);
+		if (!entry)
+		{
+			return {};
+		}
+
+		return gpu::MappedBufferView{
+		        .mappedPtr = entry->mappedPtr,
+		        .deviceAddress = entry->deviceAddress,
+		        .size = entry->size,
+		};
+	}
+
+	void ResourceRegistry::FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept
+	{
+		if (!handle.IsValid())
+		{
+			return;
+		}
+
+		const auto* entry = Resolve(handle);
+		if (!entry || entry->allocation == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		vmaFlushAllocation(m_allocator, entry->allocation, offset, size);
 	}
 
 	std::uint32_t ResourceRegistry::AcquireTextureSlot()

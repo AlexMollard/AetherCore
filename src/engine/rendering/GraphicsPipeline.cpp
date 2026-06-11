@@ -9,6 +9,7 @@
 #include "rendering/GpuContracts.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 
 namespace aether
@@ -20,13 +21,13 @@ namespace aether
 	}
 
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-	      : m_device(std::exchange(other.m_device, VK_NULL_HANDLE)),
-	        m_layout(std::exchange(other.m_layout, VK_NULL_HANDLE)),
-	        m_pipeline(std::exchange(other.m_pipeline, VK_NULL_HANDLE)),
-	        m_vertInputLib(std::exchange(other.m_vertInputLib, VK_NULL_HANDLE)),
-	        m_preRasterLib(std::exchange(other.m_preRasterLib, VK_NULL_HANDLE)),
-	        m_fragShaderLib(std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE)),
-	        m_fragOutputLib(std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE)),
+	      : m_device(std::exchange(other.m_device, nullptr)),
+	        m_layout(std::exchange(other.m_layout, nullptr)),
+	        m_pipeline(std::exchange(other.m_pipeline, nullptr)),
+	        m_vertInputLib(std::exchange(other.m_vertInputLib, nullptr)),
+	        m_preRasterLib(std::exchange(other.m_preRasterLib, nullptr)),
+	        m_fragShaderLib(std::exchange(other.m_fragShaderLib, nullptr)),
+	        m_fragOutputLib(std::exchange(other.m_fragOutputLib, nullptr)),
 	        m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
 	{
 	}
@@ -36,13 +37,13 @@ namespace aether
 		if (this != &other)
 		{
 			Destroy();
-			m_device = std::exchange(other.m_device, VK_NULL_HANDLE);
-			m_layout = std::exchange(other.m_layout, VK_NULL_HANDLE);
-			m_pipeline = std::exchange(other.m_pipeline, VK_NULL_HANDLE);
-			m_vertInputLib = std::exchange(other.m_vertInputLib, VK_NULL_HANDLE);
-			m_preRasterLib = std::exchange(other.m_preRasterLib, VK_NULL_HANDLE);
-			m_fragShaderLib = std::exchange(other.m_fragShaderLib, VK_NULL_HANDLE);
-			m_fragOutputLib = std::exchange(other.m_fragOutputLib, VK_NULL_HANDLE);
+			m_device = std::exchange(other.m_device, nullptr);
+			m_layout = std::exchange(other.m_layout, nullptr);
+			m_pipeline = std::exchange(other.m_pipeline, nullptr);
+			m_vertInputLib = std::exchange(other.m_vertInputLib, nullptr);
+			m_preRasterLib = std::exchange(other.m_preRasterLib, nullptr);
+			m_fragShaderLib = std::exchange(other.m_fragShaderLib, nullptr);
+			m_fragOutputLib = std::exchange(other.m_fragOutputLib, nullptr);
 			m_setLayoutCount = std::exchange(other.m_setLayoutCount, 0);
 		}
 		return *this;
@@ -50,48 +51,54 @@ namespace aether
 
 	void GraphicsPipeline::Destroy()
 	{
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
-		if (m_pipeline != VK_NULL_HANDLE)
+		const VkDevice vkDevice = static_cast<VkDevice>(m_device);
+		if (m_pipeline != nullptr)
 		{
-			vkDestroyPipeline(m_device, m_pipeline, nullptr);
-			m_pipeline = VK_NULL_HANDLE;
+			vkDestroyPipeline(vkDevice, static_cast<VkPipeline>(m_pipeline), nullptr);
+			m_pipeline = nullptr;
 		}
-		if (m_vertInputLib != VK_NULL_HANDLE)
+		if (m_vertInputLib != nullptr)
 		{
-			vkDestroyPipeline(m_device, m_vertInputLib, nullptr);
-			m_vertInputLib = VK_NULL_HANDLE;
+			vkDestroyPipeline(vkDevice, static_cast<VkPipeline>(m_vertInputLib), nullptr);
+			m_vertInputLib = nullptr;
 		}
-		if (m_preRasterLib != VK_NULL_HANDLE)
+		if (m_preRasterLib != nullptr)
 		{
-			vkDestroyPipeline(m_device, m_preRasterLib, nullptr);
-			m_preRasterLib = VK_NULL_HANDLE;
+			vkDestroyPipeline(vkDevice, static_cast<VkPipeline>(m_preRasterLib), nullptr);
+			m_preRasterLib = nullptr;
 		}
-		if (m_fragShaderLib != VK_NULL_HANDLE)
+		if (m_fragShaderLib != nullptr)
 		{
-			vkDestroyPipeline(m_device, m_fragShaderLib, nullptr);
-			m_fragShaderLib = VK_NULL_HANDLE;
+			vkDestroyPipeline(vkDevice, static_cast<VkPipeline>(m_fragShaderLib), nullptr);
+			m_fragShaderLib = nullptr;
 		}
-		if (m_fragOutputLib != VK_NULL_HANDLE)
+		if (m_fragOutputLib != nullptr)
 		{
-			vkDestroyPipeline(m_device, m_fragOutputLib, nullptr);
-			m_fragOutputLib = VK_NULL_HANDLE;
+			vkDestroyPipeline(vkDevice, static_cast<VkPipeline>(m_fragOutputLib), nullptr);
+			m_fragOutputLib = nullptr;
 		}
-		if (m_layout != VK_NULL_HANDLE)
+		if (m_layout != nullptr)
 		{
-			vkDestroyPipelineLayout(m_device, m_layout, nullptr);
-			m_layout = VK_NULL_HANDLE;
+			vkDestroyPipelineLayout(vkDevice, static_cast<VkPipelineLayout>(m_layout), nullptr);
+			m_layout = nullptr;
 		}
-		m_device = VK_NULL_HANDLE;
+		m_device = nullptr;
 		m_setLayoutCount = 0;
 	}
 
-	Expected<GraphicsPipeline> GraphicsPipeline::Create(VkDevice device, VkPipelineCache pipelineCache, const Desc& desc)
+	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device gpuDevice, gpu::PipelineCache gpuPipelineCache, const Desc& desc)
 	{
-		// (Phase 5 work: translate engine-typed Desc fields to Vk* and move this
-		//  factory body to src/engine/vulkan/GraphicsPipelineCreate.cpp.)
+		const VkDevice device = static_cast<VkDevice>(gpuDevice);
+		const VkPipelineCache pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
+		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
+		const VkFormat vkDepthFormat = gpu::ToVk(desc.depthFormat);
+		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);
+		const VkShaderStageFlags vkPushConstantStages = gpu::ToVk(desc.pushConstantStages);
+		const bool hasColorAttachment = vkColorFormat != VK_FORMAT_UNDEFINED;
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())
@@ -132,7 +139,7 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
 		        .depthTestEnable = desc.depthTestEnable ? VK_TRUE : VK_FALSE,
 		        .depthWriteEnable = desc.depthWriteEnable ? VK_TRUE : VK_FALSE,
-		        .depthCompareOp = desc.depthCompareOp,
+		        .depthCompareOp = vkDepthCompareOp,
 		        .depthBoundsTestEnable = VK_FALSE,
 		        .stencilTestEnable = VK_FALSE,
 		        .minDepthBounds = 0.0f,
@@ -150,8 +157,8 @@ namespace aether
 		};
 		const VkPipelineColorBlendStateCreateInfo colorBlend{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		        .attachmentCount = desc.colorFormat != VK_FORMAT_UNDEFINED ? 1u : 0u,
-		        .pAttachments = desc.colorFormat != VK_FORMAT_UNDEFINED ? &colorBlendAttach : nullptr,
+		        .attachmentCount = hasColorAttachment ? 1u : 0u,
+		        .pAttachments = hasColorAttachment ? &colorBlendAttach : nullptr,
 		};
 		constexpr VkDynamicState kDynamicStates[] = {
 		        VK_DYNAMIC_STATE_VIEWPORT,
@@ -171,7 +178,7 @@ namespace aether
 		        .size = sizeof(DrawContracts::PushConstants),
 		};
 		const VkPushConstantRange kCustomRange{
-		        .stageFlags = desc.pushConstantStages,
+		        .stageFlags = vkPushConstantStages,
 		        .offset = 0,
 		        .size = desc.pushConstantSize,
 		};
@@ -208,9 +215,8 @@ namespace aether
 		        .pName = fragEntry.c_str(),
 		};
 
-		const bool hasColorAttachment = desc.colorFormat != VK_FORMAT_UNDEFINED;
 		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
-		const VkFormat* pColorFormats = hasColorAttachment ? &desc.colorFormat : nullptr;
+		const VkFormat* pColorFormats = hasColorAttachment ? &vkColorFormat : nullptr;
 
 		VkPipeline pipeline = VK_NULL_HANDLE;
 		VkPipeline vertInputLib = VK_NULL_HANDLE;
@@ -275,7 +281,7 @@ namespace aether
 			        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 			        .colorAttachmentCount = colorAttachmentCount,
 			        .pColorAttachmentFormats = pColorFormats,
-			        .depthAttachmentFormat = desc.depthFormat,
+			        .depthAttachmentFormat = vkDepthFormat,
 			};
 			const VkGraphicsPipelineLibraryCreateInfoEXT gplFragShader{
 			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
@@ -307,7 +313,7 @@ namespace aether
 			        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 			        .colorAttachmentCount = colorAttachmentCount,
 			        .pColorAttachmentFormats = pColorFormats,
-			        .depthAttachmentFormat = desc.depthFormat,
+			        .depthAttachmentFormat = vkDepthFormat,
 			};
 			const VkGraphicsPipelineLibraryCreateInfoEXT gplFragOutput{
 			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
@@ -346,7 +352,7 @@ namespace aether
 			        .pNext = &libLink,
 			        .colorAttachmentCount = colorAttachmentCount,
 			        .pColorAttachmentFormats = pColorFormats,
-			        .depthAttachmentFormat = desc.depthFormat,
+			        .depthAttachmentFormat = vkDepthFormat,
 			};
 			const VkGraphicsPipelineCreateInfo linkInfo{
 			        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,

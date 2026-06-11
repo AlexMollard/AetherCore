@@ -54,8 +54,8 @@ namespace aether::app
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.spv",
-		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		        .depthFormat = gpu::ToVk(context.Get<Swapchain>().GetDepthFormat()),
+		        .colorFormat = gpu::FromVk(aether::PostProcessStack::GetForwardColorFormat()),
+		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
@@ -173,8 +173,8 @@ namespace aether::app
 		{
 			const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
 			const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
-			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
-			const auto depthFormat = gpu::ToVk(context.Get<Swapchain>().GetDepthFormat());
+			const auto colorFormat = gpu::FromVk(aether::PostProcessStack::GetForwardColorFormat());
+			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 
 			aether::Material plasmaMat{};
 			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);

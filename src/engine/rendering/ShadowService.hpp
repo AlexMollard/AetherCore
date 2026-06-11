@@ -34,7 +34,7 @@ namespace aether
 		void Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown(VkDevice device);
 
-		void RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, VkFormat depthFormat);
+		void RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, gpu::Format depthFormat);
 
 		// Set the double-buffer write slot and clear it on the single shadow queue.
 		void PrepareWriteSlot(std::uint32_t drawSlot);
