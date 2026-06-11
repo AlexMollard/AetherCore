@@ -1,15 +1,13 @@
 #include "animation/AnimationRootMotion.hpp"
-#include "gpu/GpuTypes.hpp"
+
+#include "gpu/ResourceRegistry.hpp"
+#include "gpu/Semaphore.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
-#include <cstring>
-#include <stdexcept>
-
-// Transitional: cast opaque void* back to Vulkan types during P5 migration.
-#define AE_VK_DEVICE(ptr)       (static_cast<VkDevice>(ptr))
-#define AE_VK_ALLOCATOR(ptr)    (static_cast<VmaAllocator>(ptr))
-#define AE_VK_SEMAPHORE(ptr)    (static_cast<VkSemaphore>(ptr))
+#include "utils/Assert.hpp"
+#include "utils/Logger.hpp"
+#include "utils/LogCategory.hpp"
 
 namespace aether
 {
@@ -18,67 +16,42 @@ namespace aether
 		m_maxEntities = maxEntities;
 		m_prevPositions.resize(static_cast<std::size_t>(maxEntities) * kSlots, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
-		VmaAllocator vkAllocator = AE_VK_ALLOCATOR(allocator);
-		VkDevice vkDevice = AE_VK_DEVICE(device);
+		(void) allocator;
 
-		const VkBufferCreateInfo stagingInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = static_cast<VkDeviceSize>(maxEntities) * kSlots * sizeof(glm::vec4),
-		        .usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		};
-		VmaAllocationCreateInfo allocInfo{
-		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
-		        .usage = VMA_MEMORY_USAGE_GPU_TO_CPU,
-		};
-		VkBuffer buf = VK_NULL_HANDLE;
-		VmaAllocation vkAlloc = VK_NULL_HANDLE;
-		if (vmaCreateBuffer(vkAllocator, &stagingInfo, &allocInfo, &buf, &vkAlloc, nullptr) != VK_SUCCESS)
-		{
-			AE_ASSERT_ALWAYS(false, "AnimationRootMotionSystem: failed to allocate staging buffer.");
-		}
-		m_stagingBuffer.m_buffer = buf;
-		m_stagingBuffer.m_allocation = vkAlloc;
-		m_stagingBuffer.m_allocator = allocator;
+		const gpu::DeviceSize bufSize = static_cast<gpu::DeviceSize>(maxEntities) * kSlots * sizeof(glm::vec4);
+		m_stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer({
+		        .size = bufSize,
+		        .usage = gpu::BufferUsage::TransferDst,
+		        .memoryUsage = gpu::MappedMemoryUsage::GpuToCpu,
+		        .debugName = "AnimationRootMotion.Staging",
+		});
+		AE_ASSERT_ALWAYS(m_stagingHandle.IsValid(), "AnimationRootMotionSystem: failed to allocate staging buffer.");
 
-		void* mapped = nullptr;
-		vmaMapMemory(vkAllocator, vkAlloc, &mapped);
-		m_stagingBuffer.mMappedData = mapped;
+		const gpu::MappedBufferView view = gpu::ResourceRegistry::ResolveMappedBuffer(m_stagingHandle);
+		m_stagingMappedData = view.mappedPtr;
 
-		VkSemaphoreTypeCreateInfo timelineTypeInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		m_timelineSemaphore = gpu::CreateTimelineSemaphore({
+		        .device = device,
 		        .initialValue = 0,
-		};
-		VkSemaphoreCreateInfo semInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		        .pNext = &timelineTypeInfo,
-		};
-		VkSemaphore sem = VK_NULL_HANDLE;
-		if (vkCreateSemaphore(vkDevice, &semInfo, nullptr, &sem) != VK_SUCCESS)
-		{
-			AE_ASSERT_ALWAYS(false, "AnimationRootMotionSystem: failed to create timeline semaphore.");
-		}
-		m_timelineSemaphore = sem;
+		        .debugName = "AnimationRootMotion.Timeline",
+		});
+		AE_ASSERT_ALWAYS(m_timelineSemaphore != nullptr, "AnimationRootMotionSystem: failed to create timeline semaphore.");
 
 		m_currentTimelineValue = 0;
 	}
 
 	void AnimationRootMotionSystem::Shutdown(void* device)
 	{
-		VkDevice vkDevice = AE_VK_DEVICE(device);
-
 		if (m_timelineSemaphore != nullptr)
 		{
-			vkDestroySemaphore(vkDevice, AE_VK_SEMAPHORE(m_timelineSemaphore), nullptr);
+			gpu::DestroyTimelineSemaphore(device, static_cast<gpu::TimelineSemaphore*>(m_timelineSemaphore));
 			m_timelineSemaphore = nullptr;
 		}
-		if (m_stagingBuffer.m_buffer != nullptr)
+		if (m_stagingHandle.IsValid())
 		{
-			vmaDestroyBuffer(AE_VK_ALLOCATOR(m_stagingBuffer.m_allocator), static_cast<VkBuffer>(m_stagingBuffer.m_buffer), static_cast<VmaAllocation>(m_stagingBuffer.m_allocation));
-			m_stagingBuffer.m_buffer = nullptr;
-			m_stagingBuffer.m_allocation = nullptr;
-			m_stagingBuffer.mMappedData = nullptr;
+			gpu::ResourceRegistry::Destroy(m_stagingHandle);
+			m_stagingHandle = {};
+			m_stagingMappedData = nullptr;
 		}
 		m_prevPositions.clear();
 	}
@@ -90,22 +63,9 @@ namespace aether
 			return;
 		}
 
-		VkDevice vkDevice = AE_VK_DEVICE(device);
-		VkSemaphore sem = AE_VK_SEMAPHORE(m_timelineSemaphore);
-
-		const std::uint64_t waitValue = frameIndex;
-		VkSemaphoreWaitInfo waitInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-		        .flags = 0,
-		        .semaphoreCount = 1,
-		        .pSemaphores = &sem,
-		        .pValues = &waitValue,
-		};
-
-		VkResult res = vkWaitSemaphores(vkDevice, &waitInfo, UINT64_MAX);
-		if (res != VK_SUCCESS && res != VK_TIMEOUT)
+		if (!gpu::WaitTimelineSemaphore(device, static_cast<gpu::TimelineSemaphore*>(m_timelineSemaphore), frameIndex))
 		{
-			AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: vkWaitSemaphores returned {} (expected success or timeout)", static_cast<int>(res));
+			AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: gpu::WaitTimelineSemaphore failed (expected success or timeout).");
 		}
 	}
 

@@ -17,9 +17,10 @@ namespace aether::gpu
 
 	struct MappedBufferDesc
 	{
-		DeviceSize  size      = 0;
-		BufferUsage usage     = BufferUsage::None;
-		const char* debugName = nullptr;
+		DeviceSize          size         = 0;
+		BufferUsage         usage        = BufferUsage::None;
+		MappedMemoryUsage   memoryUsage  = MappedMemoryUsage::Auto;
+		const char*         debugName    = nullptr;
 	};
 
 	struct MappedBufferView

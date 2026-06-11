@@ -268,6 +268,19 @@ namespace aether::gpu
 		ShaderReadOnly = 4,
 	};
 
+	// Mapped buffer memory usage. Selects the backing memory pool and the
+	// VMA host-access flag pattern. Mirrors a subset of VmaMemoryUsage:
+	//   - GpuToCpu: device-local memory with host access (readback)
+	//   - CpuToGpu: host-visible memory optimized for CPU writes (upload)
+	//   - Auto:     let VMA pick (default for the existing CreateMappedBuffer
+	//               usage: ASSET_UPLOAD with HOST_ACCESS_SEQUENTIAL_WRITE)
+	enum class MappedMemoryUsage : std::uint32_t
+	{
+		Auto = 0,
+		CpuToGpu = 1,
+		GpuToCpu = 2,
+	};
+
 	// Texture filter. Mirrors VkFilter. Only the values BindlessManager's
 	// sampler cache emits are enumerated; new filters force a switch-case
 	// compile error in the backend conversion.

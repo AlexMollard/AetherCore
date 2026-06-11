@@ -16,11 +16,25 @@ namespace aether
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
 		inline constexpr std::uint32_t kGenerationWrap = 256u;
 
-		[[nodiscard]] VmaAllocationCreateInfo MakeMappedAllocInfo() noexcept
+		[[nodiscard]] VmaAllocationCreateInfo MakeMappedAllocInfo(gpu::MappedMemoryUsage memUsage) noexcept
 		{
 			VmaAllocationCreateInfo info{};
-			info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-			info.usage = VMA_MEMORY_USAGE_AUTO;
+			switch (memUsage)
+			{
+				case gpu::MappedMemoryUsage::GpuToCpu:
+					info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+					info.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+					break;
+				case gpu::MappedMemoryUsage::CpuToGpu:
+					info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+					info.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+					break;
+				case gpu::MappedMemoryUsage::Auto:
+				default:
+					info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+					info.usage = VMA_MEMORY_USAGE_AUTO;
+					break;
+			}
 			return info;
 		}
 
@@ -137,7 +151,7 @@ namespace aether
 		        .usage = vkUsage,
 		};
 
-		const VmaAllocationCreateInfo allocInfo = MakeMappedAllocInfo();
+		const VmaAllocationCreateInfo allocInfo = MakeMappedAllocInfo(desc.memoryUsage);
 
 		VkBuffer buffer = VK_NULL_HANDLE;
 		VmaAllocation allocation = VK_NULL_HANDLE;

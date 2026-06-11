@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <vector>
 
+#include "gpu/GpuHandles.hpp"
+
 namespace aether
 {
 	class World;
@@ -24,15 +26,8 @@ namespace aether
 		void ApplyDelta(World& world, float dt, std::uint32_t frameIndex);
 
 	private:
-		struct UniqueBuffer
-		{
-			void* m_buffer = nullptr;
-			void* m_allocation = nullptr;
-			void* mMappedData = nullptr;
-			void* m_allocator = nullptr;
-		};
-
-		UniqueBuffer m_stagingBuffer;
+		gpu::BufferHandle m_stagingHandle{};
+		void* m_stagingMappedData = nullptr;
 		std::vector<glm::vec4> m_prevPositions;
 		void* m_timelineSemaphore = nullptr;
 		std::uint32_t m_maxEntities = 0;
