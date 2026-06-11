@@ -6,7 +6,9 @@
 #include <unordered_map>
 #include "vulkan/volk.hpp"
 
+#include "gpu/GpuFormat.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
+#include "rendering/FrameContext.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 
@@ -29,17 +31,7 @@ namespace aether
 		void Initialize(VulkanContext& context, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown();
 
-		void BindRuntime(RenderGraph& graph,
-		        BindlessManager& bindlessManager,
-		        CameraManager& cameraManager,
-		        LightingManager& lightingManager,
-		        Renderer& renderer,
-		        MaterialBuffer& materialBuffer,
-		        const CullPass& cullPass,
-		        std::function<std::uint64_t()> getFrameIndex,
-		        VkDevice device,
-		        VkFormat depthFormat,
-		        VkFormat forwardColorFormat);
+		void BindRuntime(const FrameContext& frame);
 
 		void OnRenderGraphReset(VkDevice device, VkFormat depthFormat, VkFormat forwardColorFormat);
 		void RegisterPasses();
@@ -80,7 +72,7 @@ namespace aether
 		const CullPass* m_cullPass = nullptr;
 		std::function<std::uint64_t()> m_getFrameIndex;
 		VkDevice m_device = VK_NULL_HANDLE;
-		VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
-		VkFormat m_forwardColorFormat = VK_FORMAT_UNDEFINED;
+		gpu::Format m_depthFormat = gpu::Format::Undefined;
+		gpu::Format m_forwardColorFormat = gpu::Format::Undefined;
 	};
 } // namespace aether

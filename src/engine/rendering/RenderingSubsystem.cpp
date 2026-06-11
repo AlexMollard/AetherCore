@@ -3,9 +3,11 @@
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "camera/CameraManager.hpp"
+#include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "material/MaterialBuffer.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -58,18 +60,18 @@ namespace aether
 		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
 		});
 
-		m_renderTargetService.BindRuntime(
-		        m_renderGraph,
-		        bindless,
-		        cameras,
-		        lighting,
-		        m_renderer,
-		        materials,
-		        m_cullPass,
-		        /*frameIndexCallback=*/[this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
-		        vk.GetDevice().device,
-		        swapchain.GetDepthFormat(),
-		        PostProcessStack::GetForwardColorFormat());
+		m_renderTargetService.BindRuntime(FrameContext{
+		        .graph = &m_renderGraph,
+		        .bindless = &bindless,
+		        .cameras = &cameras,
+		        .lighting = &lighting,
+		        .renderer = &m_renderer,
+		        .materials = &materials,
+		        .cullPass = &m_cullPass,
+		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
+		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
+		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		});
 
 		m_physicsDebug.Init(vk, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
 
@@ -132,16 +134,29 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		LightingManager& lighting = services.Get<LightingManager>();
+		BindlessManager& bindless = services.Get<BindlessManager>();
+		Swapchain& swapchain = services.Get<Swapchain>();
+
+		const FrameContext frame{
+		        .graph = &m_renderGraph,
+		        .bindless = &bindless,
+		        .cameras = &services.Get<CameraManager>(),
+		        .lighting = &lighting,
+		        .renderer = &m_renderer,
+		        .materials = &services.Get<MaterialBuffer>(),
+		        .cullPass = &m_cullPass,
+		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
+		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
+		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		};
 
 		const PassRegistrationContext ctx{
-		        .graph = m_renderGraph,
+		        .frame = frame,
+		        .device = services.Get<VulkanContext>().GetDevice().device,
 		        .skyboxPass = m_skyboxPass,
 		        .postProcessStack = m_postProcessStack,
 		        .shadowService = m_shadowService,
 		        .localShadowService = m_localShadowService,
-		        .bindlessManager = services.Get<BindlessManager>(),
-		        .device = services.Get<VulkanContext>().GetDevice().device,
-		        .depthFormat = services.Get<Swapchain>().GetDepthFormat(),
 		        .cullPass = m_cullPass,
 		        .mainRenderQueue = m_renderQueue,
 		        .forwardPass = m_forwardPass,

@@ -4,6 +4,7 @@
 #include "vulkan/volk.hpp"
 
 #include "gpu/CommandList.hpp"
+#include "rendering/FrameContext.hpp"
 #include "rendering/RenderGraph.hpp"
 
 namespace aether
@@ -20,16 +21,18 @@ namespace aether
 	class SkyboxPass;
 
 	// Aggregates all dependencies needed for render graph pass registration.
+	// Wraps a stable FrameContext (runtime references + formats) and adds the
+	// per-registration extras that are not part of every-frame state: the
+	// individual pass services (skybox, shadows, post-process, RTT) and the
+	// lighting push lambda rebuilt each RegisterPasses() call.
 	struct PassRegistrationContext
 	{
-		RenderGraph& graph;
+		FrameContext frame;
+		VkDevice device = VK_NULL_HANDLE;
 		SkyboxPass& skyboxPass;
 		PostProcessStack& postProcessStack;
 		ShadowService& shadowService;
 		LocalShadowService& localShadowService;
-		BindlessManager& bindlessManager;
-		VkDevice device = VK_NULL_HANDLE;
-		VkFormat depthFormat = VK_FORMAT_UNDEFINED;
 		CullPass& cullPass;
 		RenderQueue& mainRenderQueue;
 		ForwardPass& forwardPass;

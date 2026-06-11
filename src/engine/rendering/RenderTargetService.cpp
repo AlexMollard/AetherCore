@@ -13,6 +13,7 @@
 #include "scene/Scene.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
@@ -39,36 +40,36 @@ namespace aether
 		m_targets.clear();
 	}
 
-	void RenderTargetService::BindRuntime(RenderGraph& graph,
-	        BindlessManager& bindlessManager,
-	        CameraManager& cameraManager,
-	        LightingManager& lightingManager,
-	        Renderer& renderer,
-	        MaterialBuffer& materialBuffer,
-	        const CullPass& cullPass,
-	        std::function<std::uint64_t()> getFrameIndex,
-	        const VkDevice device,
-	        const VkFormat depthFormat,
-	        const VkFormat forwardColorFormat)
+	void RenderTargetService::BindRuntime(const FrameContext& frame)
 	{
-		m_graph = &graph;
-		m_bindlessManager = &bindlessManager;
-		m_cameraManager = &cameraManager;
-		m_lightingManager = &lightingManager;
-		m_renderer = &renderer;
-		m_materialBuffer = &materialBuffer;
-		m_cullPass = &cullPass;
-		m_getFrameIndex = std::move(getFrameIndex);
-		m_device = device;
-		m_depthFormat = depthFormat;
-		m_forwardColorFormat = forwardColorFormat;
+		AE_ASSERT(frame.graph != nullptr, "RenderTargetService::BindRuntime: frame.graph is null");
+		AE_ASSERT(frame.bindless != nullptr, "RenderTargetService::BindRuntime: frame.bindless is null");
+		AE_ASSERT(frame.cameras != nullptr, "RenderTargetService::BindRuntime: frame.cameras is null");
+		AE_ASSERT(frame.lighting != nullptr, "RenderTargetService::BindRuntime: frame.lighting is null");
+		AE_ASSERT(frame.renderer != nullptr, "RenderTargetService::BindRuntime: frame.renderer is null");
+		AE_ASSERT(frame.materials != nullptr, "RenderTargetService::BindRuntime: frame.materials is null");
+		AE_ASSERT(frame.cullPass != nullptr, "RenderTargetService::BindRuntime: frame.cullPass is null");
+		AE_ASSERT(frame.frameIndex, "RenderTargetService::BindRuntime: frame.frameIndex is empty");
+		AE_ASSERT(m_context != nullptr, "RenderTargetService::BindRuntime: Initialize() was not called");
+
+		m_graph = frame.graph;
+		m_bindlessManager = frame.bindless;
+		m_cameraManager = frame.cameras;
+		m_lightingManager = frame.lighting;
+		m_renderer = frame.renderer;
+		m_materialBuffer = frame.materials;
+		m_cullPass = frame.cullPass;
+		m_getFrameIndex = frame.frameIndex;
+		m_device = m_context->GetDevice().device;
+		m_depthFormat = frame.depthFormat;
+		m_forwardColorFormat = frame.colorFormat;
 	}
 
 	void RenderTargetService::OnRenderGraphReset(const VkDevice device, const VkFormat depthFormat, const VkFormat forwardColorFormat)
 	{
 		m_device = device;
-		m_depthFormat = depthFormat;
-		m_forwardColorFormat = forwardColorFormat;
+		m_depthFormat = gpu::FromVk(depthFormat);
+		m_forwardColorFormat = gpu::FromVk(forwardColorFormat);
 
 		if (m_graph == nullptr || m_bindlessManager == nullptr)
 		{
@@ -77,13 +78,13 @@ namespace aether
 
 		for (auto& [id, rt]: m_targets)
 		{
-			rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, rt.extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+			rt.rgColor = m_graph->CreateTransientColor(gpu::ToVk(m_forwardColorFormat), rt.extent, VK_IMAGE_USAGE_SAMPLED_BIT);
 			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 			if (slot == 0xFFFFFFFFu)
 			{
 				Throw(AetherError::Engine("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id)));
 			}
-			rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, rt.extent);
+			rt.rgDepth = m_graph->CreateTransientDepth(gpu::ToVk(m_depthFormat), rt.extent);
 		}
 	}
 
@@ -122,13 +123,13 @@ namespace aether
 		rt.cameraHandleRaw = cameraHandleRaw;
 		rt.extent = extent;
 
-		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, extent, VK_IMAGE_USAGE_SAMPLED_BIT);
+		rt.rgColor = m_graph->CreateTransientColor(gpu::ToVk(m_forwardColorFormat), extent, VK_IMAGE_USAGE_SAMPLED_BIT);
 		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 		if (slot == 0xFFFFFFFFu)
 		{
 			AE_UNEXPECTED(AetherError::Engine("failed to register transient color image as bindless sampled"));
 		}
-		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, extent);
+		rt.rgDepth = m_graph->CreateTransientDepth(gpu::ToVk(m_depthFormat), extent);
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
