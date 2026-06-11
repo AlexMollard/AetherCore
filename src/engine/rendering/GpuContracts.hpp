@@ -386,7 +386,7 @@ namespace aether
 		{
 			gpu::DeviceAddress globalTransformsAddr = 0;
 			gpu::DeviceAddress ikJobsAddr = 0;
-			gpu::DeviceAddress ikGroundResultsAddr = 0; // VkBuffer of IkGroundResult entries
+			gpu::DeviceAddress ikGroundResultsAddr = 0; // GPU buffer of IkGroundResult entries
 			gpu::DeviceAddress nodeParentsAddr = 0;
 			gpu::DeviceAddress depthSortedNodesAddr = 0;
 			std::uint32_t jobCount = 0;

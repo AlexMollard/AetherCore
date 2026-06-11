@@ -6,6 +6,7 @@
 #include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -161,7 +162,7 @@ namespace aether
 		        .mainRenderQueue = m_renderQueue,
 		        .forwardPass = m_forwardPass,
 		        .pushLightingFn =
-		                [this, &lighting](gpu::CommandList& cmd, VkPipelineLayout layout)
+		                [this, &lighting](gpu::CommandList& cmd, gpu::PipelineLayout layout)
 		        {
 			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
 			        lighting.PushLightingDescriptor(cmd, layout, frameIdx);

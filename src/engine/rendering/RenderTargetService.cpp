@@ -277,7 +277,7 @@ namespace aether
 			                }
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
-			                auto pushLighting = [this, frameIdx](gpu::CommandList& cmd, VkPipelineLayout layout)
+			                auto pushLighting = [this, frameIdx](gpu::CommandList& cmd, gpu::PipelineLayout layout)
 			                {
 				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
 			                };

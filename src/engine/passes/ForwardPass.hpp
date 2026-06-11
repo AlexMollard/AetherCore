@@ -2,9 +2,9 @@
 
 #include <functional>
 #include <span>
-#include "vulkan/volk.hpp"
 
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/RenderGraph.hpp"
 
@@ -30,8 +30,13 @@ namespace aether
 			return m_enabled;
 		}
 
-		void RegisterPass(
-		        const FrameContext& frame, RenderQueue& renderQueue, RGImage hdrColor, RGImage depth, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps = {}, RGImage localShadowAtlas = {});
+		void RegisterPass(const FrameContext& frame,
+		        RenderQueue& renderQueue,
+		        RGImage hdrColor,
+		        RGImage depth,
+		        std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn,
+		        std::span<const RGImage> shadowMaps = {},
+		        RGImage localShadowAtlas = {});
 
 	private:
 		bool m_enabled = true;

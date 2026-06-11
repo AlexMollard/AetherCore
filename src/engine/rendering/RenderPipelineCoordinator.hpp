@@ -36,7 +36,7 @@ namespace aether
 		CullPass& cullPass;
 		RenderQueue& mainRenderQueue;
 		ForwardPass& forwardPass;
-		std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn;
+		std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn;
 		RenderTargetService& renderTargetService;
 		PhysicsDebugRenderer& physicsDebug;
 	};

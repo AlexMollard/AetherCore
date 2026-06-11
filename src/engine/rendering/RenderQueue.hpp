@@ -217,13 +217,13 @@ namespace aether
 		// Emit graphics draws from indirect output.
 		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
-		void FlushDraw(gpu::CommandList& cmd, VkDescriptorSet bindlessSet = VK_NULL_HANDLE, VkDescriptorSet lightingSet = VK_NULL_HANDLE, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
-		void FlushDrawPush(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, std::function<void(gpu::CommandList&, VkPipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet = nullptr, gpu::DescriptorSet lightingSet = nullptr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, VkDescriptorSet bindlessSet, VkDescriptorSet lightingSet, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, gpu::DescriptorSet lightingSet, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -288,12 +288,12 @@ namespace aether
 		std::uint32_t m_debugAnimPassMask = 0xFFFFFFFFu; // bit 0=PoseInit, 1=AnimSample, 2=NodeFlatten, 3=SkinCopy
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
-		using LightingPushFn = std::function<void(gpu::CommandList&, VkPipelineLayout)>;
+		using LightingPushFn = std::function<void(gpu::CommandList&, gpu::PipelineLayout)>;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
 		void FlushDrawImpl(gpu::CommandList& cmd,
-		        VkDescriptorSet bindlessSet,
-		        VkDescriptorSet lightingSet,
+		        gpu::DescriptorSet bindlessSet,
+		        gpu::DescriptorSet lightingSet,
 		        gpu::DeviceAddress frameAddr,
 		        const GraphicsPipeline* overridePipeline,
 		        std::uint32_t cascadeOffset,

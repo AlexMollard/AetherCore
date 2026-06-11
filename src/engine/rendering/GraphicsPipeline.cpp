@@ -3,6 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "io/FileSystem.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -175,10 +176,16 @@ namespace aether
 		        .size = desc.pushConstantSize,
 		};
 		const bool useCustomPush = desc.pushConstantSize > 0;
+		std::vector<VkDescriptorSetLayout> vkSetLayouts;
+		vkSetLayouts.reserve(desc.setLayouts.size());
+		for (const gpu::DescriptorSetLayout setLayout: desc.setLayouts)
+		{
+			vkSetLayouts.push_back(static_cast<VkDescriptorSetLayout>(setLayout));
+		}
 		const VkPipelineLayoutCreateInfo layoutInfo{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		        .setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size()),
-		        .pSetLayouts = desc.setLayouts.data(),
+		        .setLayoutCount = static_cast<std::uint32_t>(vkSetLayouts.size()),
+		        .pSetLayouts = vkSetLayouts.data(),
 		        .pushConstantRangeCount = 1,
 		        .pPushConstantRanges = useCustomPush ? &kCustomRange : &kModelRange,
 		};

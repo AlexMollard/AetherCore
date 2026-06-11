@@ -4,6 +4,7 @@
 #include <functional>
 
 #include "gpu/GpuFormat.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {

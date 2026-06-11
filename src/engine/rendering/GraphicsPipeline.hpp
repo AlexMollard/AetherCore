@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include "gpu/DescriptorSetLayout.hpp"
 #include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
 
@@ -27,7 +28,7 @@ namespace aether
 			uint32_t pushConstantSize = 0;
 			VkShaderStageFlags pushConstantStages = VK_SHADER_STAGE_ALL_GRAPHICS;
 			// Descriptor set layouts bound into the pipeline layout in order.
-			std::span<const VkDescriptorSetLayout> setLayouts;
+			std::span<const gpu::DescriptorSetLayout> setLayouts;
 		};
 
 		GraphicsPipeline() = default;

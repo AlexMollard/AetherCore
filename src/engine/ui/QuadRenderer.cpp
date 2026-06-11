@@ -226,7 +226,7 @@ namespace aether
 			                // rect draws can sample textures. Always bound even
 			                // for non-textured shapes since the pipeline layout
 			                // declares the set.
-			                const VkDescriptorSet bindlessSet = m_bindlessMgr->GetSet();
+			                const VkDescriptorSet bindlessSet = static_cast<VkDescriptorSet>(m_bindlessMgr->GetSet());
 			                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipeline.GetLayout(), 0, 1, &bindlessSet, 0, nullptr);
 
 			                const QuadPush push{
@@ -264,7 +264,7 @@ namespace aether
 			slot.reserve(256);
 		}
 
-		const VkDescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
+		const aether::gpu::DescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
@@ -276,7 +276,7 @@ namespace aether
 		                .blendEnable = true,
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
 		                .pushConstantStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		                .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		        }));
 		m_pipeline = std::move(pipeline);
 

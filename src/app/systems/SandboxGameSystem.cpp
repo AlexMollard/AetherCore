@@ -95,9 +95,9 @@ namespace aether::app
 		m_world = &world;
 
 		// ── Shared pipeline (fast, do synchronously) ──────────────────────────
-		const VkDescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
-		const VkDescriptorSetLayout lightingLayout = static_cast<VkDescriptorSetLayout>(m_services->Get<LightingManager>().GetSetLayout());
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const aether::gpu::DescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
+		const aether::gpu::DescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
+		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        m_assets->CreateGraphicsPipeline({
@@ -106,7 +106,7 @@ namespace aether::app
 		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
-		                .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		        }));
 		m_pipeline = std::move(pipeline);
 

@@ -103,4 +103,6 @@ namespace aether::gpu
 	// the implementations can convert with a single static_cast.
 	using DescriptorSet = void*;
 	using PipelineLayout = void*;
+	using ImageView = void*;
+	using Sampler = void*;
 } // namespace aether::gpu

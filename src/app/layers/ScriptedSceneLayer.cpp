@@ -8,6 +8,7 @@
 
 #include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
+#include "gpu/DescriptorSetLayout.hpp"
 #include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
@@ -47,8 +48,8 @@ namespace aether::app
 	{
 		auto& assets = context.Get<AssetManager>();
 		const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-		const auto lightingLayout = static_cast<VkDescriptorSetLayout>(context.Get<LightingManager>().GetSetLayout());
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.spv",
@@ -56,7 +57,7 @@ namespace aether::app
 		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 
 		if (!result)
@@ -170,7 +171,7 @@ namespace aether::app
 		// Register effects so script can use set_entity_effect().
 		{
 			const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-			const auto lightingLayout = static_cast<VkDescriptorSetLayout>(context.Get<LightingManager>().GetSetLayout());
+			const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 

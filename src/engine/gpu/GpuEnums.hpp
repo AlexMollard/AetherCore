@@ -226,6 +226,32 @@ namespace aether::gpu
 		ShaderReadOnly = 4,
 	};
 
+	// Texture filter. Mirrors VkFilter. Only the values BindlessManager's
+	// sampler cache emits are enumerated; new filters force a switch-case
+	// compile error in the backend conversion.
+	enum class Filter : std::uint32_t
+	{
+		Nearest = 0,
+		Linear = 1,
+	};
+
+	// Sampler mipmap mode. Mirrors VkSamplerMipmapMode.
+	enum class SamplerMipmapMode : std::uint32_t
+	{
+		Nearest = 0,
+		Linear = 1,
+	};
+
+	// Sampler address mode (UVW wrap mode). Mirrors VkSamplerAddressMode.
+	// Only the values BindlessManager's sampler cache emits are enumerated.
+	enum class SamplerAddressMode : std::uint32_t
+	{
+		Repeat = 0,
+		MirroredRepeat = 1,
+		ClampToEdge = 2,
+		ClampToBorder = 3,
+	};
+
 	// Clear value for a color or depth/stencil attachment. Mirrors
 	// VkClearValue's union layout. Construct with gpu::ClearColor(r,g,b,a) or
 	// gpu::ClearDepth(depth, stencil) factory helpers.

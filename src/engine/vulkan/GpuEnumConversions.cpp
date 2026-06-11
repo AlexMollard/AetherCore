@@ -465,6 +465,89 @@ namespace aether::gpu
 		return VK_IMAGE_LAYOUT_UNDEFINED;
 	}
 
+	ImageLayout FromVk(VkImageLayout layout) noexcept
+	{
+		switch (layout)
+		{
+			case VK_IMAGE_LAYOUT_UNDEFINED:
+				return ImageLayout::Undefined;
+			case VK_IMAGE_LAYOUT_GENERAL:
+				return ImageLayout::General;
+			case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+				return ImageLayout::ColorAttachment;
+			case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL:
+				return ImageLayout::DepthAttachment;
+			case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+				return ImageLayout::ShaderReadOnly;
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+			case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL:
+			case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+			case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+			case VK_IMAGE_LAYOUT_PREINITIALIZED:
+			case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR:
+			case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR:
+			case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR:
+			case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT:
+			case VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR:
+			case VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL_KHR:
+			case VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL_KHR:
+			case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT:
+			case VK_IMAGE_LAYOUT_MAX_ENUM:
+				return ImageLayout::Undefined;
+		}
+		return ImageLayout::Undefined;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// Sampler parameters
+	// ─────────────────────────────────────────────────────────────────────────
+
+	VkFilter ToVk(Filter filter) noexcept
+	{
+		switch (filter)
+		{
+			case Filter::Nearest:
+				return VK_FILTER_NEAREST;
+			case Filter::Linear:
+				return VK_FILTER_LINEAR;
+		}
+		return VK_FILTER_NEAREST;
+	}
+
+	VkSamplerMipmapMode ToVk(SamplerMipmapMode mode) noexcept
+	{
+		switch (mode)
+		{
+			case SamplerMipmapMode::Nearest:
+				return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+			case SamplerMipmapMode::Linear:
+				return VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		}
+		return VK_SAMPLER_MIPMAP_MODE_NEAREST;
+	}
+
+	VkSamplerAddressMode ToVk(SamplerAddressMode mode) noexcept
+	{
+		switch (mode)
+		{
+			case SamplerAddressMode::Repeat:
+				return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			case SamplerAddressMode::MirroredRepeat:
+				return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+			case SamplerAddressMode::ClampToEdge:
+				return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			case SamplerAddressMode::ClampToBorder:
+				return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+		}
+		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	}
+
 	// ─────────────────────────────────────────────────────────────────────────
 	// ClearValue
 	// ─────────────────────────────────────────────────────────────────────────

@@ -42,6 +42,15 @@ namespace aether::gpu
 
 	// Image layout conversion.
 	[[nodiscard]] VkImageLayout ToVk(ImageLayout layout) noexcept;
+	[[nodiscard]] ImageLayout FromVk(VkImageLayout layout) noexcept;
+
+	// Sampler parameter conversions. Mirror VkFilter, VkSamplerMipmapMode,
+	// VkSamplerAddressMode. Only the values BindlessManager's sampler cache
+	// emits are enumerated; new values force a switch-case compile error
+	// in the backend conversion.
+	[[nodiscard]] VkFilter ToVk(Filter filter) noexcept;
+	[[nodiscard]] VkSamplerMipmapMode ToVk(SamplerMipmapMode mode) noexcept;
+	[[nodiscard]] VkSamplerAddressMode ToVk(SamplerAddressMode mode) noexcept;
 
 	// Clear value conversion. The ClearValue struct has a layout-compatible
 	// union with VkClearValue (color[4] floats + depth float + stencil uint).

@@ -41,7 +41,7 @@ namespace aether
 		stack.m_ldrColor = desc.renderGraph->RegisterImage(stack.m_ldrColorImage.Get(), stack.m_ldrColorImage.GetDefaultView());
 		AE_EXPECT_OR_THROW_VOID(stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
-		const VkDescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
+		const aether::gpu::DescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
 		        GraphicsPipeline::Create(desc.device,
@@ -51,7 +51,7 @@ namespace aether
 		                        .colorFormat = VK_FORMAT_R8G8B8A8_UNORM,
 		                        .pushConstantSize = 3 * sizeof(uint32_t),
 		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                }));
 		stack.m_tonemapPipeline = std::move(tonemapPipeline);
 
@@ -63,7 +63,7 @@ namespace aether
 		                        .colorFormat = desc.swapchainFormat,
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
 		                        .pushConstantStages = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                        .setLayouts = std::span<const VkDescriptorSetLayout>(&bindlessLayout, 1),
+		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 

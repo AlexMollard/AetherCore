@@ -4,7 +4,9 @@
 #include <format>
 
 #include "utils/Assert.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "vulkan/volk.hpp"
 
 namespace aether
 {
@@ -212,16 +214,16 @@ namespace aether
 		return m_device != VK_NULL_HANDLE;
 	}
 
-	VkDescriptorSetLayout BindlessManager::GetLayout() const
+	gpu::DescriptorSetLayout BindlessManager::GetLayout() const
 	{
 		std::scoped_lock lock(m_mutex);
-		return m_layout;
+		return static_cast<gpu::DescriptorSetLayout>(m_layout);
 	}
 
-	VkDescriptorSet BindlessManager::GetSet() const
+	gpu::DescriptorSet BindlessManager::GetSet() const
 	{
 		std::scoped_lock lock(m_mutex);
-		return m_set;
+		return static_cast<gpu::DescriptorSet>(m_set);
 	}
 
 	std::uint32_t BindlessManager::GetCapacity() const
@@ -255,7 +257,7 @@ namespace aether
 		return slot;
 	}
 
-	Expected<VkSampler> BindlessManager::GetOrCreateSampler(const VkFilter filter, const VkSamplerMipmapMode mipmapMode, const VkSamplerAddressMode addressMode)
+	Expected<gpu::Sampler> BindlessManager::GetOrCreateSampler(const gpu::Filter filter, const gpu::SamplerMipmapMode mipmapMode, const gpu::SamplerAddressMode addressMode)
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
@@ -267,17 +269,21 @@ namespace aether
 		const auto it = m_samplerCache.find(key);
 		if (it != m_samplerCache.end())
 		{
-			return it->second;
+			return static_cast<gpu::Sampler>(it->second);
 		}
+
+		const VkFilter vkFilter = gpu::ToVk(filter);
+		const VkSamplerMipmapMode vkMipmap = gpu::ToVk(mipmapMode);
+		const VkSamplerAddressMode vkAddress = gpu::ToVk(addressMode);
 
 		const VkSamplerCreateInfo samplerInfo{
 		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		        .magFilter = filter,
-		        .minFilter = filter,
-		        .mipmapMode = mipmapMode,
-		        .addressModeU = addressMode,
-		        .addressModeV = addressMode,
-		        .addressModeW = addressMode,
+		        .magFilter = vkFilter,
+		        .minFilter = vkFilter,
+		        .mipmapMode = vkMipmap,
+		        .addressModeU = vkAddress,
+		        .addressModeV = vkAddress,
+		        .addressModeW = vkAddress,
 		        .mipLodBias = 0.0f,
 		        .anisotropyEnable = VK_FALSE,
 		        .compareEnable = VK_FALSE,
@@ -294,7 +300,7 @@ namespace aether
 		}
 
 		m_samplerCache[key] = sampler;
-		return sampler;
+		return static_cast<gpu::Sampler>(sampler);
 	}
 
 	void BindlessManager::FreeSampledImageSlot(const std::uint32_t slot)
@@ -352,7 +358,7 @@ namespace aether
 		        });
 	}
 
-	Expected<void> BindlessManager::UpdateSampledImage(const std::uint32_t slot, VkImageView imageView, VkSampler sampler, const VkImageLayout imageLayout)
+	Expected<void> BindlessManager::UpdateSampledImage(const std::uint32_t slot, const gpu::ImageView imageView, const gpu::Sampler sampler, const gpu::ImageLayout imageLayout)
 	{
 		std::scoped_lock lock(m_mutex);
 		if (m_device == VK_NULL_HANDLE)
@@ -371,9 +377,9 @@ namespace aether
 		}
 
 		const VkDescriptorImageInfo imageInfo{
-		        .sampler = sampler,
-		        .imageView = imageView,
-		        .imageLayout = imageLayout,
+		        .sampler = static_cast<VkSampler>(sampler),
+		        .imageView = static_cast<VkImageView>(imageView),
+		        .imageLayout = gpu::ToVk(imageLayout),
 		};
 
 		const VkWriteDescriptorSet write{

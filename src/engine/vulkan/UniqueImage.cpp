@@ -6,6 +6,7 @@
 #include "utils/Expected.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "rendering/CommandRecorder.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -259,10 +260,10 @@ namespace aether
 			}
 		}
 
-		const VkFilter vkFilter = (filter == TextureFilter::Nearest) ? VK_FILTER_NEAREST : VK_FILTER_LINEAR;
-		const VkSamplerMipmapMode vkMipmapMode = (filter == TextureFilter::Nearest) ? VK_SAMPLER_MIPMAP_MODE_NEAREST : VK_SAMPLER_MIPMAP_MODE_LINEAR;
+		const gpu::Filter gpuFilter = (filter == TextureFilter::Nearest) ? gpu::Filter::Nearest : gpu::Filter::Linear;
+		const gpu::SamplerMipmapMode gpuMipmapMode = (filter == TextureFilter::Nearest) ? gpu::SamplerMipmapMode::Nearest : gpu::SamplerMipmapMode::Linear;
 
-		Expected<VkSampler> samplerResult = bindlessManager.GetOrCreateSampler(vkFilter, vkMipmapMode, VK_SAMPLER_ADDRESS_MODE_REPEAT);
+		Expected<gpu::Sampler> samplerResult = bindlessManager.GetOrCreateSampler(gpuFilter, gpuMipmapMode, gpu::SamplerAddressMode::Repeat);
 		if (!samplerResult)
 		{
 			if (ownView)
@@ -271,7 +272,7 @@ namespace aether
 			}
 			return Unexpected{AetherError::Vulkan(0, "Failed to get cached sampler for bindless registration")};
 		}
-		VkSampler sampler = *samplerResult;
+		gpu::Sampler sampler = *samplerResult;
 
 		// Allocate bindless slot - if this fails, clean up view.
 		Expected<std::uint32_t> slotResult = bindlessManager.AllocateSampledImageSlot();
@@ -285,7 +286,7 @@ namespace aether
 		}
 
 		// Update descriptor - if this fails, free the slot and clean up view.
-		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, view, sampler, descriptorLayout);
+		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), sampler, gpu::FromVk(descriptorLayout));
 		if (!updateResult)
 		{
 			bindlessManager.FreeSampledImageSlot(*slotResult);
@@ -299,7 +300,7 @@ namespace aether
 		m_bindlessManager = &bindlessManager;
 		m_bindlessDevice = device;
 		m_defaultView = view;
-		m_defaultSampler = sampler;
+		m_defaultSampler = static_cast<VkSampler>(sampler);
 		m_bindlessSlot = *slotResult;
 		return {};
 	}

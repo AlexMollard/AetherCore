@@ -15,10 +15,16 @@ namespace aether::app::effects
 		m_effects[name] = std::move(data);
 	}
 
-	bool EffectManager::CreateAndRegister(
-	        const char* name, aether::AssetManager& assets, VkDescriptorSetLayout bindlessLayout, VkDescriptorSetLayout lightingLayout, VkFormat colorFormat, VkFormat depthFormat, const char* shaderVfsPath, const aether::Material& material)
+	bool EffectManager::CreateAndRegister(const char* name,
+	        aether::AssetManager& assets,
+	        aether::gpu::DescriptorSetLayout bindlessLayout,
+	        aether::gpu::DescriptorSetLayout lightingLayout,
+	        VkFormat colorFormat,
+	        VkFormat depthFormat,
+	        const char* shaderVfsPath,
+	        const aether::Material& material)
 	{
-		const std::array<VkDescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = shaderVfsPath,
@@ -26,7 +32,7 @@ namespace aether::app::effects
 		        .depthFormat = depthFormat,
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const VkDescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		});
 
 		if (!result)

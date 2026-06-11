@@ -476,7 +476,7 @@ namespace aether
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
 				                gpu::CommandList cmd(vkCmd);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, VK_NULL_HANDLE, VK_NULL_HANDLE, lightFcAddr, &m_shadowPipeline);
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 
 			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
