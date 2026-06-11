@@ -200,6 +200,10 @@ namespace aether::gpu
 		// pointer to a VkQueryPool in the implementation.
 		void WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept;
 
+		// Copy region from one buffer to another (vkCmdCopyBuffer).
+		// src/dst are opaque pointers to VkBuffer in the implementation.
+		void CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept;
+
 		// Wire the debug-label function pointers used by BeginDebugLabel /
 		// EndDebugLabel. Called by the backend (VulkanContext) at engine init
 		// with the addresses of vkCmdBeginDebugUtilsLabelEXT and

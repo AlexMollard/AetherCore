@@ -1,13 +1,7 @@
 #pragma once
 
-#include "vulkan/volk.hpp"
-#include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
 #include <cstdint>
-#include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
-#include <vk_mem_alloc.h>
-#include <glm/glm.hpp>
 #include <vector>
 
 namespace aether
@@ -17,16 +11,12 @@ namespace aether
 	class AnimationRootMotionSystem
 	{
 	public:
-		void Init(VmaAllocator allocator, VkDevice device, std::uint32_t maxEntities);
-		void Shutdown(VkDevice device);
+		void Init(void* allocator, void* device, std::uint32_t maxEntities);
+		void Shutdown(void* device);
 
-		void BeginFrame(VkDevice device, std::uint32_t frameIndex);
+		void BeginFrame(void* device, std::uint32_t frameIndex);
 
-		void RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, gpu::DeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex);
-
-		VkTimelineSemaphoreSubmitInfo GetSignalSemaphoreSubmitInfo(std::uint32_t frameIndex) const;
-
-		VkSemaphore GetTimelineSemaphore() const
+		void* GetTimelineSemaphore() const
 		{
 			return m_timelineSemaphore;
 		}
@@ -36,15 +26,15 @@ namespace aether
 	private:
 		struct UniqueBuffer
 		{
-			VkBuffer m_buffer = VK_NULL_HANDLE;
-			VmaAllocation m_allocation = VK_NULL_HANDLE;
+			void* m_buffer = nullptr;
+			void* m_allocation = nullptr;
 			void* mMappedData = nullptr;
-			VmaAllocator m_allocator = VK_NULL_HANDLE;
+			void* m_allocator = nullptr;
 		};
 
 		UniqueBuffer m_stagingBuffer;
 		std::vector<glm::vec4> m_prevPositions;
-		VkSemaphore m_timelineSemaphore = VK_NULL_HANDLE;
+		void* m_timelineSemaphore = nullptr;
 		std::uint32_t m_maxEntities = 0;
 		std::uint64_t m_currentTimelineValue = 0;
 

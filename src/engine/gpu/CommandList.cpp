@@ -500,4 +500,18 @@ namespace aether::gpu
 		}
 		vkCmdWriteTimestamp2(AsVkCmd(m_cmd), ToVk(stage), static_cast<VkQueryPool>(queryPool), slot);
 	}
+
+	void CommandList::CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept
+	{
+		if (m_cmd == nullptr)
+		{
+			return;
+		}
+		const VkBufferCopy region{
+		        .srcOffset = static_cast<VkDeviceSize>(srcOffset),
+		        .dstOffset = static_cast<VkDeviceSize>(dstOffset),
+		        .size = static_cast<VkDeviceSize>(size),
+		};
+		vkCmdCopyBuffer(AsVkCmd(m_cmd), static_cast<VkBuffer>(src), static_cast<VkBuffer>(dst), 1, &region);
+	}
 } // namespace aether::gpu

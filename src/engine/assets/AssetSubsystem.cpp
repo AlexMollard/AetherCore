@@ -5,6 +5,7 @@
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/CommandList.hpp"
 #include "rendering/ShadowService.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
@@ -79,7 +80,8 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to begin command buffer."));
 		}
-		m_meshUploadQueue.Flush(cmd);
+		gpu::CommandList uploadCmdList(static_cast<void*>(cmd));
+		m_meshUploadQueue.Flush(uploadCmdList);
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "AssetSubsystem: failed to end command buffer."));

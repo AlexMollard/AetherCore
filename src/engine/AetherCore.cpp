@@ -154,7 +154,7 @@ namespace aether
 
 		m_animationBlend->Init(allocator, device, 256, 128);
 		m_animationIk->Init(allocator, device, 256);
-		m_rootMotion->Init(allocator, device, 256);
+		m_rootMotion->Init(static_cast<void*>(allocator), static_cast<void*>(device), 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
 		m_services.Register<AnimationIkSystem>(*m_animationIk);
@@ -199,7 +199,7 @@ namespace aether
 		// Animation systems (reverse of init order).
 		{
 			VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
-			m_rootMotion->Shutdown(device);
+			m_rootMotion->Shutdown(static_cast<void*>(device));
 			m_animationIk->Shutdown(device);
 			m_animationBlend->Shutdown(device);
 		}
@@ -346,7 +346,7 @@ namespace aether
 		BeginFrame();
 
 		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
-		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
+		m_rootMotion->BeginFrame(static_cast<void*>(device), static_cast<std::uint32_t>(m_frameIndex));
 
 		if (m_animationIk)
 		{

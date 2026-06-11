@@ -77,6 +77,7 @@ namespace aether::gpu
 	{
 		None = 0,
 		DrawIndirect = 1ull << 1,
+		VertexInput = 1ull << 4,
 		VertexShader = 1ull << 3,
 		FragmentShader = 1ull << 7,
 		ComputeShader = 1ull << 11,
@@ -111,6 +112,8 @@ namespace aether::gpu
 	{
 		None = 0,
 		IndirectCommandRead = 1ull << 0,
+		IndexRead = 1ull << 2,
+		VertexAttributeRead = 1ull << 3,
 		ShaderRead = 1ull << 5,
 		ShaderWrite = 1ull << 6,
 		TransferWrite = 1ull << 8,

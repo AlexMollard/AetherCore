@@ -25,7 +25,7 @@ namespace aether
 		m_ringHead = 0;
 	}
 
-	bool MeshUploadQueue::Upload(const void* vertexData, VkDeviceSize vertexBytes, VkBuffer destVertexBuffer, VkDeviceSize destVertexOffset, const void* indexData, VkDeviceSize indexBytes, VkBuffer destIndexBuffer, VkDeviceSize destIndexOffset)
+	bool MeshUploadQueue::Upload(const void* vertexData, std::uint64_t vertexBytes, void* destVertexBuffer, std::uint64_t destVertexOffset, const void* indexData, std::uint64_t indexBytes, void* destIndexBuffer, std::uint64_t destIndexOffset)
 	{
 		AE_PROFILE_ZONE();
 		const VkDeviceSize totalBytes = vertexBytes + indexBytes;
@@ -37,17 +37,17 @@ namespace aether
 		auto* mapped = static_cast<std::uint8_t*>(m_staging.GetAllocationInfo().pMappedData);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
-		m_pendingCopies.push_back({m_staging.Get(), m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
+		m_pendingCopies.push_back({static_cast<void*>(m_staging.Get()), m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
 		m_ringHead += vertexBytes;
 
 		std::memcpy(mapped + m_ringHead, indexData, static_cast<std::size_t>(indexBytes));
-		m_pendingCopies.push_back({m_staging.Get(), m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
+		m_pendingCopies.push_back({static_cast<void*>(m_staging.Get()), m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
 		m_ringHead += indexBytes;
 
 		return true;
 	}
 
-	void MeshUploadQueue::Flush(VkCommandBuffer cmd)
+	void MeshUploadQueue::Flush(gpu::CommandList& cmdList)
 	{
 		AE_PROFILE_ZONE();
 		if (m_pendingCopies.empty())
@@ -60,28 +60,13 @@ namespace aether
 
 		for (const PendingCopy& copy: m_pendingCopies)
 		{
-			const VkBufferCopy region{
-			        .srcOffset = copy.srcOffset,
-			        .dstOffset = copy.dstOffset,
-			        .size = copy.size,
-			};
-			vkCmdCopyBuffer(cmd, copy.srcBuffer, copy.dstBuffer, 1, &region);
+			cmdList.CopyBuffer(copy.srcBuffer, copy.dstBuffer, copy.srcOffset, copy.dstOffset, copy.size);
 		}
 
 		// Barrier: transfer-write -> vertex-attribute-read and index-read.
-		const VkMemoryBarrier2 barrier{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
-		        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
-		        .dstAccessMask = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT | VK_ACCESS_2_INDEX_READ_BIT,
-		};
-		const VkDependencyInfo depInfo{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &barrier,
-		};
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+		cmdList.PipelineMemoryBarrier(
+		        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite,
+		        gpu::PipelineStage::VertexInput, gpu::AccessFlags::VertexAttributeRead | gpu::AccessFlags::IndexRead);
 
 		m_pendingCopies.clear();
 		m_ringHead = 0;

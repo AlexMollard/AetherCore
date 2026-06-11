@@ -6,12 +6,20 @@
 #include <cstring>
 #include <stdexcept>
 
+// Transitional: cast opaque void* back to Vulkan types during P5 migration.
+#define AE_VK_DEVICE(ptr)       (static_cast<VkDevice>(ptr))
+#define AE_VK_ALLOCATOR(ptr)    (static_cast<VmaAllocator>(ptr))
+#define AE_VK_SEMAPHORE(ptr)    (static_cast<VkSemaphore>(ptr))
+
 namespace aether
 {
-	void AnimationRootMotionSystem::Init(VmaAllocator allocator, VkDevice device, std::uint32_t maxEntities)
+	void AnimationRootMotionSystem::Init(void* allocator, void* device, std::uint32_t maxEntities)
 	{
 		m_maxEntities = maxEntities;
 		m_prevPositions.resize(static_cast<std::size_t>(maxEntities) * kSlots, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+
+		VmaAllocator vkAllocator = AE_VK_ALLOCATOR(allocator);
+		VkDevice vkDevice = AE_VK_DEVICE(device);
 
 		const VkBufferCreateInfo stagingInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -24,17 +32,17 @@ namespace aether
 		        .usage = VMA_MEMORY_USAGE_GPU_TO_CPU,
 		};
 		VkBuffer buf = VK_NULL_HANDLE;
-		VmaAllocation alloc = VK_NULL_HANDLE;
-		if (vmaCreateBuffer(allocator, &stagingInfo, &allocInfo, &buf, &alloc, nullptr) != VK_SUCCESS)
+		VmaAllocation vkAlloc = VK_NULL_HANDLE;
+		if (vmaCreateBuffer(vkAllocator, &stagingInfo, &allocInfo, &buf, &vkAlloc, nullptr) != VK_SUCCESS)
 		{
 			AE_ASSERT_ALWAYS(false, "AnimationRootMotionSystem: failed to allocate staging buffer.");
 		}
 		m_stagingBuffer.m_buffer = buf;
-		m_stagingBuffer.m_allocation = alloc;
+		m_stagingBuffer.m_allocation = vkAlloc;
 		m_stagingBuffer.m_allocator = allocator;
 
 		void* mapped = nullptr;
-		vmaMapMemory(allocator, alloc, &mapped);
+		vmaMapMemory(vkAllocator, vkAlloc, &mapped);
 		m_stagingBuffer.mMappedData = mapped;
 
 		VkSemaphoreTypeCreateInfo timelineTypeInfo{
@@ -46,94 +54,59 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
 		        .pNext = &timelineTypeInfo,
 		};
-		if (vkCreateSemaphore(device, &semInfo, nullptr, &m_timelineSemaphore) != VK_SUCCESS)
+		VkSemaphore sem = VK_NULL_HANDLE;
+		if (vkCreateSemaphore(vkDevice, &semInfo, nullptr, &sem) != VK_SUCCESS)
 		{
 			AE_ASSERT_ALWAYS(false, "AnimationRootMotionSystem: failed to create timeline semaphore.");
 		}
+		m_timelineSemaphore = sem;
 
 		m_currentTimelineValue = 0;
 	}
 
-	void AnimationRootMotionSystem::Shutdown(VkDevice device)
+	void AnimationRootMotionSystem::Shutdown(void* device)
 	{
-		if (m_timelineSemaphore != VK_NULL_HANDLE)
+		VkDevice vkDevice = AE_VK_DEVICE(device);
+
+		if (m_timelineSemaphore != nullptr)
 		{
-			vkDestroySemaphore(device, m_timelineSemaphore, nullptr);
-			m_timelineSemaphore = VK_NULL_HANDLE;
+			vkDestroySemaphore(vkDevice, AE_VK_SEMAPHORE(m_timelineSemaphore), nullptr);
+			m_timelineSemaphore = nullptr;
 		}
-		if (m_stagingBuffer.m_buffer != VK_NULL_HANDLE)
+		if (m_stagingBuffer.m_buffer != nullptr)
 		{
-			vmaDestroyBuffer(m_stagingBuffer.m_allocator, m_stagingBuffer.m_buffer, m_stagingBuffer.m_allocation);
-			m_stagingBuffer.m_buffer = VK_NULL_HANDLE;
-			m_stagingBuffer.m_allocation = VK_NULL_HANDLE;
+			vmaDestroyBuffer(AE_VK_ALLOCATOR(m_stagingBuffer.m_allocator), static_cast<VkBuffer>(m_stagingBuffer.m_buffer), static_cast<VmaAllocation>(m_stagingBuffer.m_allocation));
+			m_stagingBuffer.m_buffer = nullptr;
+			m_stagingBuffer.m_allocation = nullptr;
 			m_stagingBuffer.mMappedData = nullptr;
 		}
 		m_prevPositions.clear();
 	}
 
-	void AnimationRootMotionSystem::BeginFrame(VkDevice device, std::uint32_t frameIndex)
+	void AnimationRootMotionSystem::BeginFrame(void* device, std::uint32_t frameIndex)
 	{
 		if (frameIndex == 0)
 		{
 			return;
 		}
 
+		VkDevice vkDevice = AE_VK_DEVICE(device);
+		VkSemaphore sem = AE_VK_SEMAPHORE(m_timelineSemaphore);
+
 		const std::uint64_t waitValue = frameIndex;
 		VkSemaphoreWaitInfo waitInfo{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
 		        .flags = 0,
 		        .semaphoreCount = 1,
-		        .pSemaphores = &m_timelineSemaphore,
+		        .pSemaphores = &sem,
 		        .pValues = &waitValue,
 		};
 
-		VkResult res = vkWaitSemaphores(device, &waitInfo, UINT64_MAX);
+		VkResult res = vkWaitSemaphores(vkDevice, &waitInfo, UINT64_MAX);
 		if (res != VK_SUCCESS && res != VK_TIMEOUT)
 		{
 			AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: vkWaitSemaphores returned {} (expected success or timeout)", static_cast<int>(res));
 		}
-	}
-
-	void AnimationRootMotionSystem::RecordCopyHipsPosition(VkCommandBuffer cmd, std::uint32_t hipNodeIdx, gpu::DeviceAddress nodeGlobalTransformsAddr, std::uint32_t frameIndex)
-	{
-		const std::uint32_t slot = frameIndex % kSlots;
-		const VkDeviceSize dstOffset = static_cast<VkDeviceSize>(slot * m_maxEntities) * sizeof(glm::vec4);
-		const VkDeviceSize srcOffset = nodeGlobalTransformsAddr + static_cast<VkDeviceSize>(hipNodeIdx) * 64;
-
-		VkBufferCopy copyRegion{
-		        .srcOffset = srcOffset,
-		        .dstOffset = dstOffset,
-		        .size = static_cast<VkDeviceSize>(m_maxEntities) * sizeof(glm::vec4),
-		};
-
-		vkCmdCopyBuffer(cmd, VK_NULL_HANDLE, m_stagingBuffer.m_buffer, 1, &copyRegion);
-
-		const VkMemoryBarrier2 transferBarrier{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-		        .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-		        .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-		        .dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-		        .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT,
-		};
-		VkDependencyInfo dep{
-		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .memoryBarrierCount = 1,
-		        .pMemoryBarriers = &transferBarrier,
-		};
-		vkCmdPipelineBarrier2(cmd, &dep);
-
-		m_currentTimelineValue = frameIndex + 1;
-	}
-
-	VkTimelineSemaphoreSubmitInfo AnimationRootMotionSystem::GetSignalSemaphoreSubmitInfo(std::uint32_t /*frameIndex*/) const
-	{
-		return VkTimelineSemaphoreSubmitInfo{
-		        .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		        .waitSemaphoreValueCount = 0,
-		        .pWaitSemaphoreValues = nullptr,
-		        .signalSemaphoreValueCount = 1,
-		        .pSignalSemaphoreValues = &m_currentTimelineValue,
-		};
 	}
 
 	void AnimationRootMotionSystem::ApplyDelta(World& world, float /*dt*/, std::uint32_t frameIndex)

@@ -2,9 +2,8 @@
 
 #include <cstdint>
 #include <vector>
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
+#include "gpu/CommandList.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
@@ -27,7 +26,7 @@ namespace aether
 	{
 	public:
 		// 64 MB staging budget per frame.  Increase for higher chunk-spawn rates.
-		static constexpr VkDeviceSize kStagingCapacity = 64ull * 1024 * 1024;
+		static constexpr std::uint64_t kStagingCapacity = 64ull * 1024 * 1024;
 
 		void Initialize(const VulkanContext& ctx);
 		void Shutdown();
@@ -36,12 +35,12 @@ namespace aether
 		// destination buffers.
 		// Returns false if the staging ring would overflow - caller should retry
 		// next frame.
-		bool Upload(const void* vertexData, VkDeviceSize vertexBytes, VkBuffer destVertexBuffer, VkDeviceSize destVertexOffset, const void* indexData, VkDeviceSize indexBytes, VkBuffer destIndexBuffer, VkDeviceSize destIndexOffset);
+		bool Upload(const void* vertexData, std::uint64_t vertexBytes, void* destVertexBuffer, std::uint64_t destVertexOffset, const void* indexData, std::uint64_t indexBytes, void* destIndexBuffer, std::uint64_t destIndexOffset);
 
 		// Record all pending copy commands into cmd, then insert a
 		// transfer-write -> vertex-input/index-read barrier.
 		// Call this once per frame before the cull compute pass.
-		void Flush(VkCommandBuffer cmd);
+		void Flush(gpu::CommandList& cmdList);
 
 		[[nodiscard]] bool HasPendingUploads() const
 		{
@@ -51,15 +50,15 @@ namespace aether
 	private:
 		struct PendingCopy
 		{
-			VkBuffer srcBuffer;
-			VkDeviceSize srcOffset;
-			VkBuffer dstBuffer;
-			VkDeviceSize dstOffset;
-			VkDeviceSize size;
+			void* srcBuffer;
+			std::uint64_t srcOffset;
+			void* dstBuffer;
+			std::uint64_t dstOffset;
+			std::uint64_t size;
 		};
 
 		UniqueBuffer m_staging;
-		VkDeviceSize m_ringHead = 0;
+		std::uint64_t m_ringHead = 0;
 		std::vector<PendingCopy> m_pendingCopies;
 	};
 } // namespace aether
