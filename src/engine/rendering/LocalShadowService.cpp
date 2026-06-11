@@ -54,7 +54,7 @@ namespace aether
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
-		const VkFormat depthFormat = swapchain.GetDepthFormat();
+		const VkFormat depthFormat = gpu::ToVk(swapchain.GetDepthFormat());
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
 		                context.GetPipelineCache(),

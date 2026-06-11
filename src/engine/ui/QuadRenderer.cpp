@@ -18,6 +18,7 @@
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -249,7 +250,7 @@ namespace aether
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://ui_shapes.spv",
-		                .colorFormat = m_swapchain->GetImageFormat(),
+		                .colorFormat = gpu::ToVk(m_swapchain->GetImageFormat()),
 		                .depthFormat = VK_FORMAT_UNDEFINED,
 		                .depthTestEnable = false,
 		                .depthWriteEnable = false,

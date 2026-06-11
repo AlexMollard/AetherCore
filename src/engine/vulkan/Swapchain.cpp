@@ -12,6 +12,7 @@
 #include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
 #include "rendering/CommandRecorder.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "platform/Window.hpp"
@@ -20,7 +21,7 @@ namespace aether
 {
 	namespace
 	{
-		VkFormat PickDepthFormat(const VkPhysicalDevice physicalDevice)
+		gpu::Format PickDepthFormat(const VkPhysicalDevice physicalDevice)
 		{
 			constexpr VkFormat kCandidates[] = {
 			        VK_FORMAT_D32_SFLOAT,
@@ -33,7 +34,7 @@ namespace aether
 				vkGetPhysicalDeviceFormatProperties(physicalDevice, format, &props);
 				if ((props.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0)
 				{
-					return format;
+					return gpu::FromVk(format);
 				}
 			}
 
@@ -81,7 +82,7 @@ namespace aether
 		const VkImageCreateInfo depthImageInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		        .imageType = VK_IMAGE_TYPE_2D,
-		        .format = m_depthFormat,
+		        .format = gpu::ToVk(m_depthFormat),
 		        .extent =
 		                {
 		                        .width = m_swapchain.extent.width,
@@ -105,7 +106,7 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		        .image = m_depthImage.Get(),
 		        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-		        .format = m_depthFormat,
+		        .format = gpu::ToVk(m_depthFormat),
 		        .subresourceRange =
 		                {
 		                        .aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT,
@@ -200,7 +201,7 @@ namespace aether
 			m_depthView = VK_NULL_HANDLE;
 		}
 		m_depthImage.Reset();
-		m_depthFormat = VK_FORMAT_UNDEFINED;
+		m_depthFormat = gpu::Format::Undefined;
 
 		for (auto& frame: m_frames)
 		{
@@ -465,12 +466,12 @@ namespace aether
 		return m_swapchain.extent;
 	}
 
-	VkFormat Swapchain::GetImageFormat() const
+	gpu::Format Swapchain::GetImageFormat() const
 	{
-		return m_swapchain.image_format;
+		return gpu::FromVk(m_swapchain.image_format);
 	}
 
-	VkFormat Swapchain::GetDepthFormat() const
+	gpu::Format Swapchain::GetDepthFormat() const
 	{
 		return m_depthFormat;
 	}

@@ -5,6 +5,7 @@
 #include <VkBootstrap.h>
 #include "vulkan/volk.hpp"
 
+#include "gpu/GpuFormat.hpp"
 #include "vulkan/UniqueImage.hpp"
 
 namespace aether
@@ -36,8 +37,8 @@ namespace aether
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] VkExtent2D GetExtent() const;
-		[[nodiscard]] VkFormat GetImageFormat() const;
-		[[nodiscard]] VkFormat GetDepthFormat() const;
+		[[nodiscard]] gpu::Format GetImageFormat() const;
+		[[nodiscard]] gpu::Format GetDepthFormat() const;
 		// Per-frame image/view accessors used by RenderGraph::Execute.
 		[[nodiscard]] VkImage GetCurrentImage() const;
 		[[nodiscard]] VkImageView GetCurrentImageView() const;
@@ -61,7 +62,7 @@ namespace aether
 		std::vector<VkImageView> m_imageViews;
 		UniqueImage m_depthImage;
 		VkImageView m_depthView = VK_NULL_HANDLE;
-		VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
+		gpu::Format m_depthFormat = gpu::Format::Undefined;
 		// One renderFinished semaphore per swapchain image: by the time an image is
 		// re-acquired, the presentation engine must have consumed its semaphore.
 		std::vector<VkSemaphore> m_renderFinishedSemaphores;

@@ -8,6 +8,7 @@
 #include "rendering/RenderGraph.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GraphicsDevice.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -70,48 +71,12 @@ namespace aether
 
 	GpuFormat GpuDevice::GetSwapchainColorFormat() const
 	{
-#ifdef __clang__
-#	pragma clang diagnostic push
-#	pragma clang diagnostic ignored "-Wswitch-enum"
-#endif
-		switch (m_gfx->GetSwapchain().GetImageFormat())
-		{
-			case VK_FORMAT_R8G8B8A8_UNORM:
-				return GpuFormat::R8G8B8A8Unorm;
-			case VK_FORMAT_B8G8R8A8_SRGB:
-				return GpuFormat::B8G8R8A8Srgb;
-			case VK_FORMAT_R16G16B16A16_SFLOAT:
-				return GpuFormat::R16G16B16A16Sfloat;
-			case VK_FORMAT_D32_SFLOAT:
-				return GpuFormat::D32Sfloat;
-			case VK_FORMAT_D24_UNORM_S8_UINT:
-				return GpuFormat::D24UnormS8Uint;
-			default:
-				return GpuFormat::Undefined;
-		}
-#ifdef __clang__
-#	pragma clang diagnostic pop
-#endif
+		return m_gfx->GetSwapchain().GetImageFormat();
 	}
 
 	GpuFormat GpuDevice::GetSwapchainDepthFormat() const
 	{
-#ifdef __clang__
-#	pragma clang diagnostic push
-#	pragma clang diagnostic ignored "-Wswitch-enum"
-#endif
-		switch (m_gfx->GetSwapchain().GetDepthFormat())
-		{
-			case VK_FORMAT_D32_SFLOAT:
-				return GpuFormat::D32Sfloat;
-			case VK_FORMAT_D24_UNORM_S8_UINT:
-				return GpuFormat::D24UnormS8Uint;
-			default:
-				return GpuFormat::Undefined;
-		}
-#ifdef __clang__
-#	pragma clang diagnostic pop
-#endif
+		return m_gfx->GetSwapchain().GetDepthFormat();
 	}
 
 	GpuExtent2D GpuDevice::GetSwapchainExtent() const
@@ -192,8 +157,8 @@ namespace aether
 		        .colorView = swapchain.GetCurrentImageView(),
 		        .depthImage = swapchain.GetDepthImage(),
 		        .depthView = swapchain.GetDepthImageView(),
-		        .colorFormat = swapchain.GetImageFormat(),
-		        .depthFormat = swapchain.GetDepthFormat(),
+		        .colorFormat = gpu::ToVk(swapchain.GetImageFormat()),
+		        .depthFormat = gpu::ToVk(swapchain.GetDepthFormat()),
 		        .extent = swapchain.GetExtent(),
 		};
 	}

@@ -17,6 +17,7 @@
 #include "platform/Window.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/gtx/quaternion.hpp>
 
@@ -232,7 +233,7 @@ namespace aether::app
 		        m_services->Get<AssetManager>().CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://gltf_mesh.spv",
 		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
+		                .depthFormat = gpu::ToVk(m_services->Get<Swapchain>().GetDepthFormat()),
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),

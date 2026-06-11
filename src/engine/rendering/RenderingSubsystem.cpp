@@ -47,7 +47,7 @@ namespace aether
 		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
-		        .swapchainFormat = swapchain.GetImageFormat(),
+		        .swapchainFormat = gpu::ToVk(swapchain.GetImageFormat()),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
@@ -69,12 +69,12 @@ namespace aether
 		        .materials = &materials,
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
-		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
+		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		});
 
-		m_physicsDebug.Init(vk, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
+		m_physicsDebug.Init(vk, gpu::ToVk(swapchain.GetImageFormat()), gpu::ToVk(swapchain.GetDepthFormat()));
 
 		RegisterPasses(services);
 	}
@@ -104,7 +104,7 @@ namespace aether
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
 
-		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), swapchain.GetDepthFormat());
+		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), gpu::ToVk(swapchain.GetDepthFormat()));
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
@@ -117,7 +117,7 @@ namespace aether
 		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
-		        .swapchainFormat = swapchain.GetImageFormat(),
+		        .swapchainFormat = gpu::ToVk(swapchain.GetImageFormat()),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
@@ -125,7 +125,7 @@ namespace aether
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 
-		m_renderTargetService.OnRenderGraphReset(vk.GetDevice().device, swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
+		m_renderTargetService.OnRenderGraphReset(vk.GetDevice().device, gpu::ToVk(swapchain.GetDepthFormat()), PostProcessStack::GetForwardColorFormat());
 
 		RegisterPasses(services);
 	}
@@ -146,7 +146,7 @@ namespace aether
 		        .materials = &services.Get<MaterialBuffer>(),
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
-		        .depthFormat = gpu::FromVk(swapchain.GetDepthFormat()),
+		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};

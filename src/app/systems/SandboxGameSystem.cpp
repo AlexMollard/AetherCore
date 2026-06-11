@@ -14,6 +14,8 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/RenderTargetService.hpp"
+#include "vulkan/Swapchain.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
@@ -103,7 +105,7 @@ namespace aether::app
 		        m_assets->CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://gltf_mesh.spv",
 		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
+		                .depthFormat = gpu::ToVk(m_services->Get<Swapchain>().GetDepthFormat()),
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
@@ -119,7 +121,7 @@ namespace aether::app
 			plasmaMat.roughnessFactor = 2.0f;
 			plasmaMat.occlusionStrength = 0.8f;
 
-			const bool ok = m_effectManager.CreateAndRegister("plasma", *m_assets, bindlessLayout, lightingLayout, aether::PostProcessStack::GetForwardColorFormat(), m_services->Get<Swapchain>().GetDepthFormat(), "shaders://plasma.spv", plasmaMat);
+			const bool ok = m_effectManager.CreateAndRegister("plasma", *m_assets, bindlessLayout, lightingLayout, aether::PostProcessStack::GetForwardColorFormat(), gpu::ToVk(m_services->Get<Swapchain>().GetDepthFormat()), "shaders://plasma.spv", plasmaMat);
 			if (!ok)
 			{
 				AE_WARN(aether::LogCategory::App, "SandboxGameSystem: failed to create plasma pipeline");

@@ -38,7 +38,7 @@ namespace aether
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
-		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), swapchain.GetDepthFormat());
+		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), gpu::ToVk(swapchain.GetDepthFormat()));
 	}
 
 	void ShadowService::Shutdown(const VkDevice device)

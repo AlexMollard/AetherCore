@@ -18,6 +18,7 @@
 #include "utils/Logger.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "physics/PhysicsComponents.hpp"
 
 namespace aether::app
@@ -177,7 +178,7 @@ namespace aether::app
 		        m_assets->CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://gltf_mesh.spv",
 		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
+		                .depthFormat = gpu::ToVk(m_services->Get<Swapchain>().GetDepthFormat()),
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
