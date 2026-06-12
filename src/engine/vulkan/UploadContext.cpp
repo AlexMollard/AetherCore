@@ -119,4 +119,14 @@ namespace aether::gpu
 			AE_ERROR(LogCategory::Vulkan, "UploadContext::CopyBuffer: failed to submit OneShotCmd.");
 		}
 	}
+
+	void* UploadContext::GetCommandPool() const
+	{
+		if (m_impl == nullptr)
+		{
+			return nullptr;
+		}
+		Impl* impl = static_cast<Impl*>(m_impl);
+		return static_cast<void*>(impl->commandPool);
+	}
 } // namespace aether::gpu

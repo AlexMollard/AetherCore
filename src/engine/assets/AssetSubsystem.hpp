@@ -1,8 +1,8 @@
 #pragma once
 
 #include <cstdint>
-#include "vulkan/volk.hpp"
 
+#include "gpu/UploadContext.hpp"
 #include "mesh/MeshArena.hpp"
 #include "mesh/MeshUploadQueue.hpp"
 #include "material/MaterialBuffer.hpp"
@@ -57,9 +57,9 @@ namespace aether
 			return m_primitiveMeshes;
 		}
 
-		[[nodiscard]] VkCommandPool GetUploadPool() const
+		[[nodiscard]] gpu::UploadContext& GetUploadContext()
 		{
-			return m_uploadPool;
+			return m_uploadContext;
 		}
 
 		// Flush pending mesh uploads via a one-shot command buffer.
@@ -71,7 +71,7 @@ namespace aether
 		MeshUploadQueue m_meshUploadQueue;
 		MaterialBuffer m_materialBuffer;
 		PrimitiveMeshes m_primitiveMeshes;
-		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
+		gpu::UploadContext m_uploadContext;
 		VulkanContext* m_context = nullptr;
 	};
 } // namespace aether

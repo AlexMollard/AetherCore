@@ -7,7 +7,7 @@
 
 namespace aether
 {
-	void PrimitiveMeshes::Initialize(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool)
+	void PrimitiveMeshes::Initialize(gpu::UploadContext& uploadContext)
 	{
 		// -----------------------------------------------------------------------
 		// Triangle  (CCW, facing +Z)
@@ -105,9 +105,9 @@ namespace aether
 		        23, // -Y
 		};
 
-		m_triangle = Mesh::Create(device, allocator, uploadQueue, uploadPool, kTriangleVerts, kTriangleIndices);
-		m_quad = Mesh::Create(device, allocator, uploadQueue, uploadPool, kQuadVerts, kQuadIndices);
-		m_cube = Mesh::Create(device, allocator, uploadQueue, uploadPool, kCubeVerts, kCubeIndices);
+		m_triangle = Mesh::Create(uploadContext, kTriangleVerts, kTriangleIndices);
+		m_quad = Mesh::Create(uploadContext, kQuadVerts, kQuadIndices);
+		m_cube = Mesh::Create(uploadContext, kCubeVerts, kCubeIndices);
 
 		// -----------------------------------------------------------------------
 		// Plane  - default 20×20 subdivided grid via MeshGen.
@@ -115,12 +115,12 @@ namespace aether
 		// -----------------------------------------------------------------------
 		{
 			const MeshGen::MeshData plane = MeshGen::GeneratePlane({.segmentsX = 20, .segmentsY = 20, .uvScale = 1.0f});
-			m_plane = Mesh::Create(device, allocator, uploadQueue, uploadPool, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices));
+			m_plane = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices));
 		}
 
 		{
 			const MeshGen::MeshData sphere = MeshGen::GenerateUVSphere({.stacks = 16, .slices = 32});
-			m_sphere = Mesh::Create(device, allocator, uploadQueue, uploadPool, std::span<const Mesh::Vertex>(sphere.vertices), std::span<const std::uint32_t>(sphere.indices));
+			m_sphere = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(sphere.vertices), std::span<const std::uint32_t>(sphere.indices));
 		}
 	}
 

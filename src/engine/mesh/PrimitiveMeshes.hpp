@@ -1,7 +1,6 @@
 #pragma once
 
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
+#include "gpu/UploadContext.hpp"
 
 #include "mesh/Mesh.hpp"
 
@@ -20,7 +19,7 @@ namespace aether
 	class PrimitiveMeshes
 	{
 	public:
-		void Initialize(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool);
+		void Initialize(gpu::UploadContext& uploadContext);
 		void Destroy();
 		[[nodiscard]] const Mesh& Get(PrimitiveMesh primitive) const;
 
