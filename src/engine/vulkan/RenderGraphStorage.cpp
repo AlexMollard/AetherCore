@@ -57,7 +57,10 @@ namespace aether
 	{
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
 
+		m_lastFrameStats = FrameStats{};
+
 		auto& toDestroy = m_pendingDestructions[m_currentFrame];
+		m_lastFrameStats.pendingDestructions = static_cast<std::uint32_t>(toDestroy.size());
 		for (auto& pending: toDestroy)
 		{
 			pending.image.Reset();
@@ -71,6 +74,9 @@ namespace aether
 	{
 		const uint32_t idx = static_cast<uint32_t>(m_externalImages.size());
 		m_externalImages.push_back({image, view, aspect});
+#ifndef NDEBUG
+		SetTrackedLayout(image, VK_IMAGE_LAYOUT_UNDEFINED);
+#endif
 		return idx;
 	}
 
@@ -254,6 +260,12 @@ namespace aether
 		auto& entry = m_transientImages[idx];
 		if (entry.bindlessRequested)
 		{
+#ifndef NDEBUG
+			if (entry.image)
+			{
+				EraseTrackedLayout(entry.image.Get());
+			}
+#endif
 			PendingDestruction pending{};
 			pending.entryIndex = idx;
 			pending.image = std::move(entry.image);
@@ -294,6 +306,9 @@ namespace aether
 		{
 			return;
 		}
+#ifndef NDEBUG
+		EraseTrackedLayout(entry.image.Get());
+#endif
 		const ImageCacheKey key = MakeCacheKey(entry, entry.allocatedExtent);
 		m_imageCache[key].push_back(CachedImage{
 		        .image = std::move(entry.image),
@@ -376,6 +391,10 @@ namespace aether
 			{
 				entry.image = std::move(cached);
 				entry.allocatedExtent = entry.extent;
+				m_lastFrameStats.transientCacheHit++;
+#ifndef NDEBUG
+				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+#endif
 			}
 			else
 			{
@@ -389,13 +408,23 @@ namespace aether
 				                }));
 				entry.image = std::move(newImage);
 				entry.allocatedExtent = entry.extent;
-				const std::string entryName = entry.bindlessRequested
-				        ? std::format("RenderGraph.Transient.Bindless[{}]", idx)
-				        : std::format("RenderGraph.Transient[{}]", idx);
+				m_lastFrameStats.transientAllocated++;
+				m_lastFrameStats.transientCacheMiss++;
+				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
 				entry.image.SetName(m_device, entryName.c_str());
+#ifndef NDEBUG
+				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+#endif
 			}
 		}
 
 		EvictStaleCacheEntries();
+
+		// Compute total cache occupancy.
+		m_lastFrameStats.cacheSize = 0;
+		for (const auto& [key, entries]: m_imageCache)
+		{
+			m_lastFrameStats.cacheSize += entries.size();
+		}
 	}
 } // namespace aether

@@ -59,10 +59,15 @@ namespace aether::app
 			Row_PhysicsDebug,
 			Row_ForwardRender,
 			Row_FirstRenderPass,
+			Row_RgPassCount,
+			Row_RgBarriers,
+			Row_RgTransientHit,
+			Row_RgTransientMiss,
+			Row_RgCacheSize,
 		};
 
 		static constexpr std::size_t kMaxRenderPassRows = 16;
-		static constexpr std::size_t kLabelRowCount = Row_FirstRenderPass + kMaxRenderPassRows;
+		static constexpr std::size_t kLabelRowCount = Row_RgCacheSize + 1;
 
 		enum Tab : std::size_t
 		{

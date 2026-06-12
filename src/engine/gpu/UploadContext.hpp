@@ -25,10 +25,10 @@ namespace aether::gpu
 		UploadContext& operator=(UploadContext&& other) noexcept;
 
 		// Allocate a command pool on the given queue family.
-		// device           — opaque VkDevice pointer (gpu::Device)
-		// queueFamilyIndex — queue family that will submit the copy
-		// queue            — opaque VkQueue that will be used for submits
-		// backendRegistry  — opaque pointer to aether::ResourceRegistry
+		// device           - opaque VkDevice pointer (gpu::Device)
+		// queueFamilyIndex - queue family that will submit the copy
+		// queue            - opaque VkQueue that will be used for submits
+		// backendRegistry  - opaque pointer to aether::ResourceRegistry
 		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry);
 
 		// Tear down the command pool and release internal state.

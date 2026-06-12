@@ -73,7 +73,7 @@ namespace aether::gpu
 		{
 			return PipelineHandle{};
 		}
-		return s_reg->RegisterPipeline(entryExp.value());
+		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
 	PipelineHandle ResourceRegistry::CreateGraphicsPipeline(Device device, PipelineCache pipelineCache, const GraphicsPipelineDesc& desc) noexcept
@@ -103,7 +103,7 @@ namespace aether::gpu
 		{
 			return PipelineHandle{};
 		}
-		return s_reg->RegisterPipeline(entryExp.value());
+		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
 	ResourceRegistry::ResolvedPipeline ResourceRegistry::ResolvePipeline(PipelineHandle h) noexcept

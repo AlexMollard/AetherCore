@@ -137,21 +137,34 @@ namespace aether
 
 	// ── Pass management ──────────────────────────────────────────────────────
 
-	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
+	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
 	{
-		m_passes.push_back(PassRecord{.name = std::move(name)});
+		PassRecord rec{};
+		rec.name = std::move(name);
+#ifndef NDEBUG
+		rec.declaredAt = loc;
+#endif
+		m_passes.push_back(std::move(rec));
 		m_compileDirty = true;
 		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
-	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name)
+	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name, std::source_location loc)
 	{
-		m_passes.push_back(PassRecord{
-		        .name = std::move(name),
-		        .kind = PassKind::Compute,
-		});
+		PassRecord rec{};
+		rec.name = std::move(name);
+		rec.kind = PassKind::Compute;
+#ifndef NDEBUG
+		rec.declaredAt = loc;
+#endif
+		m_passes.push_back(std::move(rec));
 		m_compileDirty = true;
 		return PassBuilder{*this, m_passes.size() - 1};
+	}
+
+	const FrameStats& RenderGraph::GetFrameStats() const
+	{
+		return m_storage->GetLastFrameStats();
 	}
 
 	void RenderGraph::RemovePass(const std::string& name)
@@ -364,22 +377,22 @@ namespace aether
 						break;
 					}
 				}
-			if (!dependent && m_passes[i].depthWrite.has_value() && passAccesses(j, m_passes[i].depthWrite->image.id))
-			{
-				dependent = true;
-			}
-			if (!dependent)
-			{
-				for (const ImageAccessRef& ia: m_passes[i].imageAccesses)
+				if (!dependent && m_passes[i].depthWrite.has_value() && passAccesses(j, m_passes[i].depthWrite->image.id))
 				{
-					if (ia.type == ImageAccessType::StorageWrite && passAccesses(j, ia.image.id))
+					dependent = true;
+				}
+				if (!dependent)
+				{
+					for (const ImageAccessRef& ia: m_passes[i].imageAccesses)
 					{
-						dependent = true;
-						break;
+						if (ia.type == ImageAccessType::StorageWrite && passAccesses(j, ia.image.id))
+						{
+							dependent = true;
+							break;
+						}
 					}
 				}
-			}
-			if (dependent)
+				if (dependent)
 				{
 					adj[i].push_back(j);
 					++inDegree[j];
@@ -414,7 +427,28 @@ namespace aether
 
 		if (sortedIndices.size() != N)
 		{
+#ifndef NDEBUG
+			// Find first pass involved in the cycle for diagnostic output.
+			// sortedIndices contains whatever made it through; the first gap
+			// or the first unsorted pass are good candidates to report.
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				const auto it = std::find(sortedIndices.begin(), sortedIndices.end(), static_cast<uint32_t>(i));
+				if (it == sortedIndices.end())
+				{
+					const auto& p = m_passes[i];
+					AE_WARN(LogCategory::Engine,
+					        "RenderGraph: cycle detected - falling back to declaration order. "
+					        "Unreachable pass '{}' declared at {}:{}",
+					        p.name,
+					        p.declaredAt.file_name(),
+					        p.declaredAt.line());
+					break;
+				}
+			}
+#else
 			AE_WARN(LogCategory::Engine, "RenderGraph: cycle detected - falling back to declaration order.");
+#endif
 			sortedIndices.resize(N);
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}
@@ -665,6 +699,8 @@ namespace aether
 		// Ensure transient images are allocated before building barriers.
 		m_storage->EnsureTransientImages(target);
 
+		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
+
 		gpu::CommandList& recorder = cmdList;
 		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
@@ -705,6 +741,25 @@ namespace aether
 					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
 					continue;
 				}
+
+				m_storage->GetLastFrameStats().barrierCount++;
+
+#ifndef NDEBUG
+				{
+					const VkImageLayout tracked = m_storage->GetTrackedLayout(image);
+					if (tracked != VK_IMAGE_LAYOUT_UNDEFINED && tracked != gpu::ToVk(b.oldLayout))
+					{
+						AE_WARN(LogCategory::Vulkan,
+						        "RenderGraph: layout mismatch on image id={} in pass '{}': "
+						        "compiled oldLayout={:#x} but oracle tracks {:#x}.",
+						        b.resourceId,
+						        pass.name,
+						        static_cast<uint32_t>(gpu::ToVk(b.oldLayout)),
+						        static_cast<uint32_t>(tracked));
+					}
+				}
+				m_storage->SetTrackedLayout(image, gpu::ToVk(b.newLayout));
+#endif
 
 				scratchBarriers.push_back({
 				        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,

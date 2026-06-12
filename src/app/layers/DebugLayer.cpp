@@ -28,6 +28,7 @@
 #include "rendering/RenderingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
+#include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "AetherCore.hpp"
@@ -425,6 +426,17 @@ namespace aether::app
 		m_labelRows[Row_ForwardRender] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Forward Render", 2.f));
 		addToPage(Tab_Render, m_labelRows[Row_ForwardRender]);
 
+		// RenderGraph stats
+		m_separators[5] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
+		addToPage(Tab_Render, m_separators[5]);
+
+		const char* rgLabels[] = {"Passes", "Barriers", "Cache Hit", "Cache Miss", "Cache Size"};
+		for (std::size_t i = 0; i < 5; ++i)
+		{
+			m_labelRows[Row_RgPassCount + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), rgLabels[i], 2.f));
+			addToPage(Tab_Render, m_labelRows[Row_RgPassCount + i]);
+		}
+
 		m_separators[2] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
 		addToPage(Tab_Camera, m_separators[2]);
 
@@ -766,6 +778,34 @@ namespace aether::app
 		// Forward render state
 		const bool fwdRender = context.Get<aether::RenderingSubsystem>().GetForwardPass().IsEnabled();
 		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
+
+		// RenderGraph frame statistics
+		if (auto* rg = context.TryGet<aether::RenderGraph>())
+		{
+			const auto& stats = rg->GetFrameStats();
+			std::snprintf(buf.data(), buf.size(), "%u", stats.passCount);
+			setRow(Row_RgPassCount, buf.data(), ui::UiTheme::Default().text);
+
+			std::snprintf(buf.data(), buf.size(), "%u", stats.barrierCount);
+			setRow(Row_RgBarriers, buf.data(), ui::UiTheme::Default().text);
+
+			std::snprintf(buf.data(), buf.size(), "%u", stats.transientCacheHit);
+			setRow(Row_RgTransientHit, buf.data(), ui::UiTheme::Default().good);
+
+			std::snprintf(buf.data(), buf.size(), "%u", stats.transientCacheMiss);
+			setRow(Row_RgTransientMiss, buf.data(), stats.transientCacheMiss == 0 ? ui::UiTheme::Default().good : ui::UiTheme::Default().warn);
+
+			std::snprintf(buf.data(), buf.size(), "%zu", stats.cacheSize);
+			setRow(Row_RgCacheSize, buf.data(), ui::UiTheme::Default().text);
+		}
+		else
+		{
+			setRow(Row_RgPassCount, "", {});
+			setRow(Row_RgBarriers, "", {});
+			setRow(Row_RgTransientHit, "", {});
+			setRow(Row_RgTransientMiss, "", {});
+			setRow(Row_RgCacheSize, "", {});
+		}
 
 		// Reload button click detection
 		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))

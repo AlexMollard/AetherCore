@@ -34,8 +34,8 @@ namespace aether::gpu
 		OneShotCmd& operator=(OneShotCmd&& other) noexcept;
 
 		// Allocate + begin a one-time command buffer from the given pool.
-		// device  — opaque pointer to VkDevice
-		// pool    — opaque pointer to VkCommandPool
+		// device  - opaque pointer to VkDevice
+		// pool    - opaque pointer to VkCommandPool
 		[[nodiscard]] bool Begin(void* device, void* pool);
 
 		// Access the gpu::CommandList for recording commands.
@@ -43,7 +43,7 @@ namespace aether::gpu
 		[[nodiscard]] gpu::CommandList& CmdList();
 
 		// End the command buffer, submit to queue, wait for fence, and free.
-		// queue — opaque pointer to VkQueue
+		// queue - opaque pointer to VkQueue
 		// Returns false if the object is empty or if any step fails.
 		[[nodiscard]] bool EndAndSubmit(void* queue);
 

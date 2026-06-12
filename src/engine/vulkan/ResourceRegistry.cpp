@@ -73,7 +73,11 @@ namespace aether
 		{
 			if (slot.entry)
 			{
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live TextureEntry at gen {} (likely engine-side leak).", slot.generation);
+#ifndef NDEBUG
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+#else
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' (gen {}).", slot.debugName, slot.generation);
+#endif
 				DestroyTextureEntryNow(*slot.entry);
 				slot.entry.reset();
 			}
@@ -82,7 +86,11 @@ namespace aether
 		{
 			if (slot.entry)
 			{
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live BufferEntry at gen {} (likely engine-side leak).", slot.generation);
+#ifndef NDEBUG
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+#else
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' (gen {}).", slot.debugName, slot.generation);
+#endif
 				DestroyBufferEntryNow(*slot.entry);
 				slot.entry.reset();
 			}
@@ -91,7 +99,11 @@ namespace aether
 		{
 			if (slot.entry)
 			{
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: live PipelineEntry at gen {} (likely engine-side leak).", slot.generation);
+#ifndef NDEBUG
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+#else
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' (gen {}).", slot.debugName, slot.generation);
+#endif
 				DestroyPipelineEntryNow(*slot.entry);
 				slot.entry.reset();
 			}
@@ -147,7 +159,7 @@ namespace aether
 		entry.ownsAllocation = true;
 		entry.deviceAddress = deviceAddress;
 
-		const gpu::BufferHandle handle = RegisterBuffer(entry);
+		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 		if (!handle.IsValid())
 		{
 			vmaDestroyBuffer(m_allocator, buffer, allocation);
@@ -202,7 +214,7 @@ namespace aether
 		entry.mappedPtr = allocResult.pMappedData;
 		entry.deviceAddress = deviceAddress;
 
-		const gpu::BufferHandle handle = RegisterBuffer(entry);
+		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 		if (!handle.IsValid())
 		{
 			vmaDestroyBuffer(m_allocator, buffer, allocation);
@@ -275,7 +287,7 @@ namespace aether
 		entry.allocator = m_allocator;
 		entry.ownsAllocation = true;
 
-		const gpu::TextureHandle handle = RegisterTexture(entry);
+		const gpu::TextureHandle handle = RegisterTexture(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 		if (!handle.IsValid())
 		{
 			vkDestroyImageView(m_device, view, nullptr);
@@ -377,7 +389,7 @@ namespace aether
 		return kIndexInvalid;
 	}
 
-	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry)
+	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterTexture called after Shutdown.");
 		const std::uint32_t idx = AcquireTextureSlot();
@@ -386,11 +398,15 @@ namespace aether
 			return {};
 		}
 		m_textures[idx].entry = entry;
+		m_textures[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+#ifndef NDEBUG
+		m_textures[idx].allocSite = loc;
+#endif
 		const std::uint32_t gen = m_textures[idx].generation;
 		return gpu::TextureHandle::Make(idx, gen);
 	}
 
-	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry)
+	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterBuffer called after Shutdown.");
 		const std::uint32_t idx = AcquireBufferSlot();
@@ -399,11 +415,15 @@ namespace aether
 			return {};
 		}
 		m_buffers[idx].entry = entry;
+		m_buffers[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+#ifndef NDEBUG
+		m_buffers[idx].allocSite = loc;
+#endif
 		const std::uint32_t gen = m_buffers[idx].generation;
 		return gpu::BufferHandle::Make(idx, gen);
 	}
 
-	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry)
+	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterPipeline called after Shutdown.");
 		const std::uint32_t idx = AcquirePipelineSlot();
@@ -412,6 +432,10 @@ namespace aether
 			return {};
 		}
 		m_pipelines[idx].entry = entry;
+		m_pipelines[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+#ifndef NDEBUG
+		m_pipelines[idx].allocSite = loc;
+#endif
 		const std::uint32_t gen = m_pipelines[idx].generation;
 		return gpu::PipelineHandle::Make(idx, gen);
 	}
@@ -517,8 +541,15 @@ namespace aether
 			return nullptr;
 		}
 		const auto& slot = m_textures[idx];
-		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		if (slot.generation != handle.GetGeneration())
 		{
+			return nullptr;
+		}
+		if (!slot.entry)
+		{
+#ifndef NDEBUG
+			AE_WARN(LogCategory::Vulkan, "Resolve: handle index={} gen={} points to destroyed slot '{}' - use-after-free.", idx, handle.GetGeneration(), m_textures[idx].debugName);
+#endif
 			return nullptr;
 		}
 		return &*slot.entry;
@@ -536,8 +567,15 @@ namespace aether
 			return nullptr;
 		}
 		const auto& slot = m_buffers[idx];
-		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		if (slot.generation != handle.GetGeneration())
 		{
+			return nullptr;
+		}
+		if (!slot.entry)
+		{
+#ifndef NDEBUG
+			AE_WARN(LogCategory::Vulkan, "Resolve: handle index={} gen={} points to destroyed buffer slot '{}' - use-after-free.", idx, handle.GetGeneration(), m_buffers[idx].debugName);
+#endif
 			return nullptr;
 		}
 		return &*slot.entry;
@@ -555,8 +593,15 @@ namespace aether
 			return nullptr;
 		}
 		const auto& slot = m_pipelines[idx];
-		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		if (slot.generation != handle.GetGeneration())
 		{
+			return nullptr;
+		}
+		if (!slot.entry)
+		{
+#ifndef NDEBUG
+			AE_WARN(LogCategory::Vulkan, "Resolve: handle index={} gen={} points to destroyed pipeline slot '{}' - use-after-free.", idx, handle.GetGeneration(), m_pipelines[idx].debugName);
+#endif
 			return nullptr;
 		}
 		return &*slot.entry;
@@ -574,8 +619,15 @@ namespace aether
 			return nullptr;
 		}
 		auto& slot = m_textures[idx];
-		if (slot.generation != handle.GetGeneration() || !slot.entry)
+		if (slot.generation != handle.GetGeneration())
 		{
+			return nullptr;
+		}
+		if (!slot.entry)
+		{
+#ifndef NDEBUG
+			AE_WARN(LogCategory::Vulkan, "ResolveMutable: handle index={} gen={} points to destroyed slot '{}' - use-after-free.", idx, handle.GetGeneration(), m_textures[idx].debugName);
+#endif
 			return nullptr;
 		}
 		return &*slot.entry;

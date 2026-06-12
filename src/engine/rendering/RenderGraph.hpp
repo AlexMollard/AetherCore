@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <source_location>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -17,8 +18,9 @@ namespace aether
 {
 	class BindlessManager;
 
-	// Forward declaration - Vk internals live in vulkan/RenderGraphStorage.hpp
+	// Forward declarations - live in vulkan/RenderGraphStorage.hpp
 	struct RenderGraphStorage;
+	struct FrameStats;
 
 	// Opaque handle to a render-graph-managed image resource.
 	// Acquired from RenderGraph::GetSwapchainColor/Depth or future
@@ -166,14 +168,17 @@ namespace aether
 		void ReleaseImage(RGImage image);
 
 		// Register a graphics pass.
-		[[nodiscard]] PassBuilder AddPass(std::string name);
+		[[nodiscard]] PassBuilder AddPass(std::string name, std::source_location loc = std::source_location::current());
 
 		// Register a compute pass.
-		[[nodiscard]] PassBuilder AddComputePass(std::string name);
+		[[nodiscard]] PassBuilder AddComputePass(std::string name, std::source_location loc = std::source_location::current());
 
 		void RemovePass(const std::string& name);
 		[[nodiscard]] bool HasPass(std::string_view name) const;
 		void Clear();
+
+		// Per-frame allocation and execution statistics.
+		[[nodiscard]] const FrameStats& GetFrameStats() const;
 
 		[[nodiscard]] bool IsEmpty() const
 		{
@@ -269,6 +274,9 @@ namespace aether
 			std::function<void(PassContext&)> execute;
 			std::optional<gpu::Extent2D> extentOverride;
 			float lastCpuTimeMs = 0.f;
+#ifndef NDEBUG
+			std::source_location declaredAt;
+#endif
 		};
 
 		// External image entry (opaque handles).

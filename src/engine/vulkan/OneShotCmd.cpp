@@ -120,7 +120,7 @@ namespace aether::gpu
 		(void) vkWaitForFences(vkDevice, 1, &fence, VK_TRUE, UINT64_MAX);
 		vkDestroyFence(vkDevice, fence, nullptr);
 
-		// Clean up the command buffer — it has completed execution.
+		// Clean up the command buffer - it has completed execution.
 		Release();
 		return true;
 	}

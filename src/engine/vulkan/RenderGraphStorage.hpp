@@ -16,6 +16,18 @@ namespace aether
 	class BindlessManager;
 	struct FrameTarget;
 
+	// Per-frame allocation and execution statistics.
+	struct FrameStats
+	{
+		std::uint32_t passCount = 0;
+		std::uint32_t barrierCount = 0;
+		std::uint32_t transientAllocated = 0;  // new GPU allocs this frame
+		std::uint32_t transientCacheHit = 0;   // pulled from cache
+		std::uint32_t transientCacheMiss = 0;  // had to allocate fresh
+		std::uint32_t pendingDestructions = 0; // destroyed this BeginFrame
+		std::size_t cacheSize = 0;             // total cached images
+	};
+
 	// Holds all Vulkan-internal state for RenderGraph.
 	// RenderGraph.hpp sees only an opaque forward declaration; the
 	// implementation in RenderGraph.cpp accesses members through this class.
@@ -60,11 +72,42 @@ namespace aether
 		// ── Release / cache ────────────────────────────────────────────────
 		void ReleaseTransient(uint32_t idx, std::uint32_t currentFrame);
 
+		// ── Image layout oracle (debug) ────────────────────────────────────
+#ifndef NDEBUG
+		void SetTrackedLayout(VkImage image, VkImageLayout layout)
+		{
+			m_trackedLayouts[image] = layout;
+		}
+
+		[[nodiscard]] VkImageLayout GetTrackedLayout(VkImage image) const
+		{
+			const auto it = m_trackedLayouts.find(image);
+			return it != m_trackedLayouts.end() ? it->second : VK_IMAGE_LAYOUT_UNDEFINED;
+		}
+
+		void EraseTrackedLayout(VkImage image)
+		{
+			m_trackedLayouts.erase(image);
+		}
+#endif
+
+		// ── Frame statistics ────────────────────────────────────────────
+		[[nodiscard]] const FrameStats& GetLastFrameStats() const
+		{
+			return m_lastFrameStats;
+		}
+
+		[[nodiscard]] FrameStats& GetLastFrameStats()
+		{
+			return m_lastFrameStats;
+		}
+
 		// ── Scratch (reused across Execute calls) ──────────────────────────
 		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
 		{
 			return m_scratchColorInfos;
 		}
+
 		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchBarriers()
 		{
 			return m_scratchBarriers;
@@ -156,5 +199,23 @@ namespace aether
 		// Scratch buffers reused across Execute calls within a single frame.
 		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
 		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
+
+		// Per-frame allocation statistics (populated during Execute).
+		FrameStats m_lastFrameStats;
+
+#ifndef NDEBUG
+		// Debug-only layout oracle: tracks last-known layout for every image
+		// known to the render graph. Seeded with UNDEFINED on allocation;
+		// checked before each barrier in Execute() to catch layout mismatches.
+		struct VkImageHash
+		{
+			std::size_t operator()(VkImage img) const noexcept
+			{
+				return std::hash<uint64_t>{}(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(img)));
+			}
+		};
+
+		std::unordered_map<VkImage, VkImageLayout, VkImageHash> m_trackedLayouts;
+#endif
 	};
 } // namespace aether

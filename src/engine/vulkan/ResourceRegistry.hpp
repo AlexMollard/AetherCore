@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <source_location>
+#include <string>
+#include <string_view>
 #include <vector>
 #include <vk_mem_alloc.h>
 #include "vulkan/volk.hpp"
@@ -97,14 +100,14 @@ namespace aether
 		// VkImage/VkImageView by default (ownsAllocation=false); pass
 		// ownsAllocation=true when the caller wants the registry to destroy
 		// them via Destroy(handle) -> WaitIdle-aware deferred path.
-		gpu::TextureHandle RegisterTexture(const TextureEntry& entry);
+		gpu::TextureHandle RegisterTexture(const TextureEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
 		// Buffer registration. Same ownership semantics as TextureEntry.
-		gpu::BufferHandle RegisterBuffer(const BufferEntry& entry);
+		gpu::BufferHandle RegisterBuffer(const BufferEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
 		// Pipeline registration. Layouts may be shared; the registry destroys
 		// them only when ownsLayout is true.
-		gpu::PipelineHandle RegisterPipeline(const PipelineEntry& entry);
+		gpu::PipelineHandle RegisterPipeline(const PipelineEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
 		// Schedule destruction of the resource backing the handle. The actual
 		// destruction runs kMaxFramesInFlight frames later (in AdvanceFrame).
@@ -174,18 +177,30 @@ namespace aether
 		{
 			std::uint32_t generation = 1; // start at 1 so 0 is "never used"
 			std::optional<TextureEntry> entry;
+			std::string debugName;
+#ifndef NDEBUG
+			std::source_location allocSite;
+#endif
 		};
 
 		struct BufferSlot
 		{
 			std::uint32_t generation = 1;
 			std::optional<BufferEntry> entry;
+			std::string debugName;
+#ifndef NDEBUG
+			std::source_location allocSite;
+#endif
 		};
 
 		struct PipelineSlot
 		{
 			std::uint32_t generation = 1;
 			std::optional<PipelineEntry> entry;
+			std::string debugName;
+#ifndef NDEBUG
+			std::source_location allocSite;
+#endif
 		};
 
 		// Find an empty slot, or pick a victim for reuse. Returns ~0u when
