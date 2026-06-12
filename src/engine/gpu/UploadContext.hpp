@@ -27,8 +27,9 @@ namespace aether::gpu
 		// Allocate a command pool on the given queue family.
 		// device           — opaque VkDevice pointer (gpu::Device)
 		// queueFamilyIndex — queue family that will submit the copy
+		// queue            — opaque VkQueue that will be used for submits
 		// backendRegistry  — opaque pointer to aether::ResourceRegistry
-		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, void* backendRegistry);
+		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry);
 
 		// Tear down the command pool and release internal state.
 		void Destroy();
@@ -39,8 +40,8 @@ namespace aether::gpu
 		}
 
 		// Record a one-shot vkCmdCopyBuffer between two registry buffers
-		// and submit it to the provided queue, blocking until completion.
-		void CopyBuffer(Queue queue, BufferHandle src, BufferHandle dst, DeviceSize size);
+		// using the stored queue, blocking until completion.
+		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
 
 	private:
 		void* m_impl = nullptr;

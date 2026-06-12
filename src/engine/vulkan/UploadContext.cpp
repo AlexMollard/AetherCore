@@ -16,6 +16,7 @@ namespace aether::gpu
 	{
 		VkDevice device = VK_NULL_HANDLE;
 		VkCommandPool commandPool = VK_NULL_HANDLE;
+		VkQueue queue = VK_NULL_HANDLE;
 		aether::ResourceRegistry* backendRegistry = nullptr;
 	};
 
@@ -39,7 +40,7 @@ namespace aether::gpu
 		return *this;
 	}
 
-	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, void* backendRegistry)
+	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry)
 	{
 		const VkDevice vkDevice = static_cast<VkDevice>(device);
 
@@ -60,6 +61,7 @@ namespace aether::gpu
 		Impl* impl = new Impl{};
 		impl->device = vkDevice;
 		impl->commandPool = pool;
+		impl->queue = static_cast<VkQueue>(queue);
 		impl->backendRegistry = static_cast<aether::ResourceRegistry*>(backendRegistry);
 
 		UploadContext ctx;
@@ -84,7 +86,7 @@ namespace aether::gpu
 		m_impl = nullptr;
 	}
 
-	void UploadContext::CopyBuffer(Queue queue, BufferHandle src, BufferHandle dst, DeviceSize size)
+	void UploadContext::CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size)
 	{
 		if (m_impl == nullptr)
 		{
@@ -112,7 +114,7 @@ namespace aether::gpu
 
 		cmd.CmdList().CopyBuffer(static_cast<void*>(srcEntry->buffer), static_cast<void*>(dstEntry->buffer), 0, 0, size);
 
-		if (!cmd.EndAndSubmit(queue))
+		if (!cmd.EndAndSubmit(static_cast<void*>(impl->queue)))
 		{
 			AE_ERROR(LogCategory::Vulkan, "UploadContext::CopyBuffer: failed to submit OneShotCmd.");
 		}
