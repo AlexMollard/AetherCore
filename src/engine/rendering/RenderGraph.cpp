@@ -518,6 +518,7 @@ namespace aether
 						        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
 						        .aspect = gpu::ImageAspect::Color,
 						        .isCrossFrame = s.isCrossFrame,
+						        .isWAR = isWAR,
 						});
 					}
 				}
@@ -577,6 +578,7 @@ namespace aether
 						        .dstAccess = loadRead ? kDepthReadWrite : kDepthWrite,
 						        .aspect = gpu::ImageAspect::Depth,
 						        .isCrossFrame = s.isCrossFrame,
+						        .isWAR = isWAR,
 						});
 					}
 				}
@@ -646,6 +648,7 @@ namespace aether
 				std::uint64_t srcAccess;
 				gpu::ImageLayout oldLayout;
 				bool barrierCrossFrame = false;
+				bool isWAR = false;
 
 				if (it != states.end())
 				{
@@ -653,7 +656,7 @@ namespace aether
 					oldLayout = s.layout;
 					barrierCrossFrame = s.isCrossFrame;
 
-					const bool isWAR = (s.writeStage == 0 && s.readStages != 0);
+					isWAR = (s.writeStage == 0 && s.readStages != 0);
 					if (isWAR)
 					{
 						srcStage = s.readStages;
@@ -705,6 +708,7 @@ namespace aether
 				        .dstAccess = dstAccess,
 				        .aspect = aspect,
 				        .isCrossFrame = barrierCrossFrame,
+				        .isWAR = isWAR,
 				});
 
 				if (isRead)
@@ -764,7 +768,7 @@ namespace aether
 					});
 				}
 
-				if (b.oldLayout != b.newLayout && b.srcAccess == 0 && b.srcStage != static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT))
+				if (b.oldLayout != b.newLayout && b.srcAccess == 0 && b.srcStage != static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT) && !b.isWAR)
 				{
 					issues.push_back({
 					        .kind = BarrierIssue::Kind::MissingAccessMask,

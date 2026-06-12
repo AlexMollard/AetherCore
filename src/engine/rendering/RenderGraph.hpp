@@ -242,6 +242,7 @@ namespace aether
 			std::uint64_t dstAccess = 0;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			bool isCrossFrame = false;
+			bool isWAR = false;
 		};
 
 		struct CompiledPass
