@@ -189,6 +189,19 @@ namespace aether::gpu
 		// VkAccessFlags2 via GpuEnumConversions.
 		void PipelineMemoryBarrier(PipelineStage srcStage, AccessFlags srcAccess, PipelineStage dstStage, AccessFlags dstAccess) noexcept;
 
+		// Insert an image memory barrier (vkCmdPipelineBarrier2 with
+		// VkImageMemoryBarrier2). Used for layout transitions after image upload.
+		// image is an opaque pointer to VkImage in the implementation.
+		// aspect is the subresource aspect mask (e.g., ImageAspect::Color).
+		// oldLayout/newLayout are engine-side ImageLayout values.
+		// Stage and access values are the engine-side bit flags from GpuEnums.hpp.
+		void ImageMemoryBarrier(
+			void* image,
+			ImageLayout oldLayout, ImageLayout newLayout,
+			ImageAspect aspect,
+			PipelineStage srcStage, AccessFlags srcAccess,
+			PipelineStage dstStage, AccessFlags dstAccess) noexcept;
+
 		// Begin/end dynamic rendering (vkCmdBeginRendering / vkCmdEndRendering).
 		// The transitional overload takes a raw VkRenderingInfo* as void*;
 		// the final overload will take engine-side types once RenderGraph
