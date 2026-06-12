@@ -118,4 +118,29 @@ namespace aether::gpu
 		out.layout = static_cast<PipelineLayout>(entry->layout);
 		return out;
 	}
+
+	ResourceRegistry::ResolvedTexture ResourceRegistry::ResolveTexture(TextureHandle h) noexcept
+	{
+		const ::aether::ResourceRegistry::TextureEntry* entry = s_reg->Resolve(h);
+		if (entry == nullptr)
+		{
+			return {};
+		}
+		ResolvedTexture out{};
+		out.view = static_cast<ImageView>(entry->view);
+		return out;
+	}
+
+	ResourceRegistry::ResolvedBuffer ResourceRegistry::ResolveBuffer(BufferHandle h) noexcept
+	{
+		const ::aether::ResourceRegistry::BufferEntry* entry = s_reg->Resolve(h);
+		if (entry == nullptr)
+		{
+			return {};
+		}
+		ResolvedBuffer out{};
+		out.deviceAddress = entry->deviceAddress;
+		out.size = entry->size;
+		return out;
+	}
 } // namespace aether::gpu

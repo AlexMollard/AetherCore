@@ -108,6 +108,7 @@ namespace aether::gpu
 	using PipelineCache = void*;
 	using Device = void*;
 	using Allocator = void*;
+	using CommandPool = void*;
 	using ImageView = void*;
 	using Sampler = void*;
 } // namespace aether::gpu

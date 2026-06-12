@@ -138,7 +138,20 @@ namespace aether::gpu
 			PipelineLayout layout = nullptr;
 		};
 
+		struct ResolvedTexture
+		{
+			ImageView view = nullptr;
+		};
+
+		struct ResolvedBuffer
+		{
+			DeviceAddress deviceAddress = 0;
+			DeviceSize size = 0;
+		};
+
 		[[nodiscard]] static ResolvedPipeline ResolvePipeline(PipelineHandle handle) noexcept;
+		[[nodiscard]] static ResolvedTexture ResolveTexture(TextureHandle handle) noexcept;
+		[[nodiscard]] static ResolvedBuffer ResolveBuffer(BufferHandle handle) noexcept;
 	};
 
 	template<typename T>
