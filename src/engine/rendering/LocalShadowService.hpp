@@ -11,6 +11,7 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/ShadowAtlasManager.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
@@ -129,8 +130,8 @@ namespace aether
 		std::vector<glm::vec2> m_lightShadowIndices;
 
 		// ── VSM blur resources ──────────────────────────────────────────────
-		VkPipeline m_blurPipeline = VK_NULL_HANDLE;
-		VkPipelineLayout m_blurPipelineLayout = VK_NULL_HANDLE;
+		gpu::PipelineHandle m_blurPipelineHandle;
+		gpu::PipelineLayout m_blurPipelineLayout = nullptr;
 		VkDescriptorSetLayout m_blurDescriptorSetLayout = VK_NULL_HANDLE;
 		VkSampler m_blurSampler = VK_NULL_HANDLE;
 		UniqueImage m_blurScratch;

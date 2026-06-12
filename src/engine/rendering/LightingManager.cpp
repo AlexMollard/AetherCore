@@ -11,6 +11,7 @@
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "io/FileSystem.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "utils/Expected.hpp"
@@ -97,20 +98,20 @@ namespace aether
 			frame.indicesCapacity = 0;
 		}
 
-		if (m_initPipeline != VK_NULL_HANDLE)
+		if (m_initPipelineHandle.IsValid())
 		{
-			vkDestroyPipeline(device, m_initPipeline, nullptr);
-			m_initPipeline = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_initPipelineHandle);
+			m_initPipelineHandle = {};
 		}
-		if (m_cullPipeline != VK_NULL_HANDLE)
+		if (m_cullPipelineHandle.IsValid())
 		{
-			vkDestroyPipeline(device, m_cullPipeline, nullptr);
-			m_cullPipeline = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_cullPipelineHandle);
+			m_cullPipelineHandle = {};
 		}
-		if (m_computeLayout != VK_NULL_HANDLE)
+		if (m_computeLayout != nullptr)
 		{
-			vkDestroyPipelineLayout(device, m_computeLayout, nullptr);
-			m_computeLayout = VK_NULL_HANDLE;
+			vkDestroyPipelineLayout(device, static_cast<VkPipelineLayout>(m_computeLayout), nullptr);
+			m_computeLayout = nullptr;
 		}
 		if (m_setLayout != nullptr)
 		{
@@ -269,7 +270,10 @@ namespace aether
 		// bound pipeline layout must be compatible with the layout passed
 		// to vkCmdPushDescriptorSetKHR. Both are m_computeLayout here.
 		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
-		cmd.BindComputePipeline(m_initPipeline, m_computeLayout);
+		{
+			const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_initPipelineHandle);
+			cmd.BindComputePipeline(resolved.pipeline, resolved.layout);
+		}
 		{
 			const auto& buf = m_buffers[frameSlot];
 			const gpu::GpuDescriptorBufferInfo lightInfo{
@@ -319,7 +323,10 @@ namespace aether
 		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 		cmd.BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
-		cmd.BindComputePipeline(m_cullPipeline, m_computeLayout);
+		{
+			const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
+			cmd.BindComputePipeline(resolved.pipeline, resolved.layout);
+		}
 		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
 		if (lightGroups > 0u)
 		{
@@ -536,72 +543,73 @@ namespace aether
 	void LightingManager::EnsureComputePipeline() const
 	{
 		AE_PROFILE_ZONE();
-		if (m_computeLayout != VK_NULL_HANDLE && m_initPipeline != VK_NULL_HANDLE && m_cullPipeline != VK_NULL_HANDLE)
+		if (m_computeLayout != VK_NULL_HANDLE && m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
 		{
 			return;
 		}
 
 		const VkDevice device = m_context->GetDevice().device;
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://tiled_light_cull.spv"));
+		const VkPipelineCache pipelineCache = m_context->GetPipelineCache();
 
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "LightingManager"));
-
-		const VkPushConstantRange pushRange{
-		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .offset = 0,
-		        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
-		};
-		const VkDescriptorSetLayout setLayoutHandle = static_cast<VkDescriptorSetLayout>(m_setLayout);
-		const VkPipelineLayoutCreateInfo layoutInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		        .setLayoutCount = 1,
-		        .pSetLayouts = &setLayoutHandle,
-		        .pushConstantRangeCount = 1,
-		        .pPushConstantRanges = &pushRange,
-		};
-		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computeLayout) != VK_SUCCESS)
+		// Create shared layout once.
+		if (m_computeLayout == nullptr)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to create compute pipeline layout."));
+			const VkPushConstantRange pushRange{
+			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			        .offset = 0,
+			        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
+			};
+			const VkDescriptorSetLayout setLayoutHandle = static_cast<VkDescriptorSetLayout>(m_setLayout);
+			const VkPipelineLayoutCreateInfo layoutInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			        .setLayoutCount = 1,
+			        .pSetLayouts = &setLayoutHandle,
+			        .pushConstantRangeCount = 1,
+			        .pPushConstantRanges = &pushRange,
+			};
+			VkPipelineLayout vkLayout = VK_NULL_HANDLE;
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(0, "LightingManager: failed to create compute pipeline layout."));
+			}
+			m_computeLayout = static_cast<gpu::PipelineLayout>(vkLayout);
 		}
 
-		const VkPipelineShaderStageCreateInfo initStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .module = shaderModule,
-		        .pName = "initTiles",
-		};
-		const VkComputePipelineCreateInfo initInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		        .stage = initStage,
-		        .layout = m_computeLayout,
-		};
-		if (vkCreateComputePipelines(device, m_context->GetPipelineCache(), 1, &initInfo, nullptr, &m_initPipeline) != VK_SUCCESS)
+		if (!m_initPipelineHandle.IsValid())
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
+			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
+			        static_cast<gpu::Device>(device),
+			        static_cast<gpu::PipelineCache>(pipelineCache),
+			        gpu::ComputePipelineDesc{
+			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
+			                .shaderEntry = "initTiles",
+			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
+			                .debugName = "LightCull.InitTiles",
+			                .existingLayout = m_computeLayout,
+			        });
+			if (!m_initPipelineHandle.IsValid())
+			{
+				Throw(AetherError::Vulkan(0, "LightingManager: failed to create initTiles compute pipeline."));
+			}
 		}
-		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_initPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.InitTiles");
 
-		const VkPipelineShaderStageCreateInfo cullStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .module = shaderModule,
-		        .pName = "binLights",
-		};
-		const VkComputePipelineCreateInfo cullInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		        .stage = cullStage,
-		        .layout = m_computeLayout,
-		};
-		if (vkCreateComputePipelines(device, m_context->GetPipelineCache(), 1, &cullInfo, nullptr, &m_cullPipeline) != VK_SUCCESS)
+		if (!m_cullPipelineHandle.IsValid())
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
+			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
+			        static_cast<gpu::Device>(device),
+			        static_cast<gpu::PipelineCache>(pipelineCache),
+			        gpu::ComputePipelineDesc{
+			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
+			                .shaderEntry = "binLights",
+			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
+			                .debugName = "LightCull.BinLights",
+			                .existingLayout = m_computeLayout,
+			        });
+			if (!m_cullPipelineHandle.IsValid())
+			{
+				Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
+			}
 		}
-		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_cullPipeline), VK_OBJECT_TYPE_PIPELINE, "LightCull.BinLights");
-
-		vkDestroyShaderModule(device, shaderModule, nullptr);
 	}
 
 	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)

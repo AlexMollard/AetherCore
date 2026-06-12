@@ -66,6 +66,7 @@ namespace aether::gpu
 		        .shaderEntry = desc.shaderEntry,
 		        .pushConstantSize = desc.pushConstantSize,
 		        .debugName = desc.debugName,
+		        .existingLayout = static_cast<VkPipelineLayout>(desc.existingLayout),
 		};
 		const auto entryExp = vkutil::CreateComputePipelineEntry(device, pipelineCache, vkDesc);
 		if (!entryExp.has_value())

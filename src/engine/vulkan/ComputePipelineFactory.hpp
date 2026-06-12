@@ -22,6 +22,7 @@ namespace aether::vkutil
 		const char* shaderEntry = "main";
 		std::uint32_t pushConstantSize = 0;
 		const char* debugName = nullptr;
+		VkPipelineLayout existingLayout = VK_NULL_HANDLE;
 	};
 
 	[[nodiscard]] Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device device, gpu::PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;

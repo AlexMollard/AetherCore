@@ -11,6 +11,8 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "io/FileSystem.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/Renderer.hpp"
@@ -101,9 +103,6 @@ namespace aether
 		m_blurScratch = std::move(scratchImg);
 
 		// ── Create VSM blur compute pipeline ───────────────────────────────
-		AE_EXPECT_OR_THROW(spirvBytes, io::FileSystem::ReadFile("shaders://vsm_blur.spv"));
-		AE_EXPECT_OR_THROW(blurModule, vkutil::CreateShaderModule(device, spirvBytes, "vsm_blur"));
-
 		// Descriptor set layout: binding 0 = RWTexture2D (storage), binding 1 = Texture2D (combined sampler).
 		{
 			VkDescriptorSetLayoutBinding bindings[2]{};
@@ -135,21 +134,24 @@ namespace aether
 			plci.pSetLayouts = &m_blurDescriptorSetLayout;
 			plci.pushConstantRangeCount = 1;
 			plci.pPushConstantRanges = &pcRange;
-			AE_ASSERT_ALWAYS(vkCreatePipelineLayout(device, &plci, nullptr, &m_blurPipelineLayout) == VK_SUCCESS, "Failed to create blur pipeline layout");
+
+			VkPipelineLayout vkLayout = VK_NULL_HANDLE;
+			AE_ASSERT_ALWAYS(vkCreatePipelineLayout(device, &plci, nullptr, &vkLayout) == VK_SUCCESS, "Failed to create blur pipeline layout");
+			m_blurPipelineLayout = static_cast<gpu::PipelineLayout>(vkLayout);
 		}
 
-		// Compute pipeline.
+		// Compute pipeline via resource registry.
+		m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), context.GetPipelineCache(), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://vsm_blur.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(BlurPushConstants)),
+		        .debugName = "VSMBlur",
+		        .existingLayout = m_blurPipelineLayout,
+		});
+		if (!m_blurPipelineHandle.IsValid())
 		{
-			VkComputePipelineCreateInfo cpci{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
-			cpci.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			cpci.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-			cpci.stage.module = blurModule;
-			cpci.stage.pName = "main";
-			cpci.layout = m_blurPipelineLayout;
-			AE_ASSERT_ALWAYS(vkCreateComputePipelines(device, context.GetPipelineCache(), 1, &cpci, nullptr, &m_blurPipeline) == VK_SUCCESS, "Failed to create blur compute pipeline");
+			AE_ASSERT_ALWAYS(false, "Failed to create VSM blur compute pipeline");
 		}
-
-		vkDestroyShaderModule(device, blurModule, nullptr);
 
 		// Sampler for blur input (nearest clamp-to-edge - texel fetch, sampler unused).
 		{
@@ -184,6 +186,16 @@ namespace aether
 
 		m_blurScratch.Reset();
 
+		if (m_blurPipelineHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_blurPipelineHandle);
+			m_blurPipelineHandle = {};
+		}
+		if (m_blurPipelineLayout != nullptr)
+		{
+			vkDestroyPipelineLayout(device, static_cast<VkPipelineLayout>(m_blurPipelineLayout), nullptr);
+			m_blurPipelineLayout = nullptr;
+		}
 		if (m_blurSampler != VK_NULL_HANDLE)
 		{
 			vkDestroySampler(device, m_blurSampler, nullptr);
@@ -498,39 +510,41 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-			                cmd.BindComputePipeline(static_cast<void*>(m_blurPipeline), static_cast<void*>(m_blurPipelineLayout));
+			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
-			                const VkDescriptorImageInfo hStorageInfo{
-			                        .sampler = VK_NULL_HANDLE,
-			                        .imageView = m_blurScratch.GetDefaultView(),
-			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-			                };
-			                const VkDescriptorImageInfo hSampledInfo{
-			                        .sampler = m_blurSampler,
-			                        .imageView = m_atlasManager.GetAtlasView(),
-			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-			                };
-			                const VkWriteDescriptorSet hWrites[]{
-			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			                                .dstBinding = 0,
-			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			                                .pImageInfo = &hStorageInfo,
-			                        },
-			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			                                .dstBinding = 1,
-			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			                                .pImageInfo = &hSampledInfo,
-			                        },
-			                };
-			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), 0, 2, hWrites);
+		                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+		                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
-			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
-			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
+		                const VkDescriptorImageInfo hStorageInfo{
+		                        .sampler = VK_NULL_HANDLE,
+		                        .imageView = m_blurScratch.GetDefaultView(),
+		                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+		                };
+		                const VkDescriptorImageInfo hSampledInfo{
+		                        .sampler = m_blurSampler,
+		                        .imageView = m_atlasManager.GetAtlasView(),
+		                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+		                };
+		                const VkWriteDescriptorSet hWrites[]{
+		                        {
+		                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                                .dstBinding = 0,
+		                                .descriptorCount = 1,
+		                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+		                                .pImageInfo = &hStorageInfo,
+		                        },
+		                        {
+		                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+		                                .dstBinding = 1,
+		                                .descriptorCount = 1,
+		                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+		                                .pImageInfo = &hSampledInfo,
+		                        },
+		                };
+		                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, 2, hWrites);
+
+		                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
+		                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
@@ -548,8 +562,10 @@ namespace aether
 				                return; // Nothing allocated, skip blur
 			                }
 
+			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
+
 			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-			                cmd.BindComputePipeline(static_cast<void*>(m_blurPipeline), static_cast<void*>(m_blurPipelineLayout));
+			                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
 			                const VkDescriptorImageInfo vStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
@@ -577,10 +593,10 @@ namespace aether
 			                                .pImageInfo = &vSampledInfo,
 			                        },
 			                };
-			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), 0, 2, vWrites);
+			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, 2, vWrites);
 
 			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
-			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(m_blurPipelineLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));
+			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });

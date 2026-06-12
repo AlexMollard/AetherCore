@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 #include <vector>
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "vulkan/volk.hpp"
 
@@ -28,18 +29,12 @@ namespace aether
 	// Create one, initialize it once, then pass a const reference to each RenderQueue::Initialize().
 	struct RenderQueueSharedPipelines
 	{
-		VkPipeline skinCopy = VK_NULL_HANDLE;
-		VkPipelineLayout skinCopyLayout = VK_NULL_HANDLE;
-		VkPipeline animSample = VK_NULL_HANDLE;
-		VkPipelineLayout animSampleLayout = VK_NULL_HANDLE;
-		VkPipeline nodeFlatten = VK_NULL_HANDLE;
-		VkPipelineLayout nodeFlattenLayout = VK_NULL_HANDLE;
-		VkPipeline poseInit = VK_NULL_HANDLE;
-		VkPipelineLayout poseInitLayout = VK_NULL_HANDLE;
-		VkPipeline animBlend = VK_NULL_HANDLE;
-		VkPipelineLayout animBlendLayout = VK_NULL_HANDLE;
-		VkPipeline ikSolve = VK_NULL_HANDLE;
-		VkPipelineLayout ikSolveLayout = VK_NULL_HANDLE;
+		gpu::PipelineHandle skinCopy;
+		gpu::PipelineHandle animSample;
+		gpu::PipelineHandle nodeFlatten;
+		gpu::PipelineHandle poseInit;
+		gpu::PipelineHandle animBlend;
+		gpu::PipelineHandle ikSolve;
 
 		void Initialize(VkDevice device, VkPipelineCache pipelineCache);
 		void Shutdown(VkDevice device);

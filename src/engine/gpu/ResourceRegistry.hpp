@@ -52,6 +52,11 @@ namespace aether::gpu
 		const char* shaderEntry = "main";
 		std::uint32_t pushConstantSize = 0;
 		const char* debugName = nullptr;
+		// Optional borrowed pipeline layout. When non-null the factory skips
+		// vkCreatePipelineLayout and uses this layout directly (ownsLayout=false).
+		// Useful when the layout includes descriptor set layouts or is shared
+		// across multiple pipelines.
+		PipelineLayout existingLayout = nullptr;
 	};
 
 	// Graphics-pipeline description. Mirrors rendering::GraphicsPipeline::Desc

@@ -10,6 +10,7 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/DescriptorSetLayout.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/Renderer.hpp"
@@ -110,9 +111,9 @@ namespace aether
 		const Renderer* m_renderer = nullptr;
 		GpuDevice* m_device = nullptr;
 		gpu::DescriptorSetLayout m_setLayout = nullptr;
-		mutable VkPipelineLayout m_computeLayout = VK_NULL_HANDLE;
-		mutable VkPipeline m_initPipeline = VK_NULL_HANDLE;
-		mutable VkPipeline m_cullPipeline = VK_NULL_HANDLE;
+		mutable gpu::PipelineLayout m_computeLayout = nullptr;
+		mutable gpu::PipelineHandle m_initPipelineHandle;
+		mutable gpu::PipelineHandle m_cullPipelineHandle;
 		mutable std::array<FrameLightingBuffers, kMaxFramesInFlight> m_buffers;
 		bool m_rttBinningEnabled = false;
 		bool m_gpuBinningEnabled = true;

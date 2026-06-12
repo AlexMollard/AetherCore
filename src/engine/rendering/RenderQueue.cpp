@@ -7,6 +7,7 @@
 
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationIk.hpp"
 #include "io/FileSystem.hpp"
@@ -411,12 +412,13 @@ namespace aether
 			// ── Pass 0: Parallel bind-pose initialization ──
 			// Dispatched before animation sampling to write all node bind poses
 			// in parallel (each thread handles one (job, node) pair).
-			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit != VK_NULL_HANDLE)
+			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit.IsValid())
 			{
+				const auto poseInitPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->poseInit);
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
 
-				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->poseInit), static_cast<void*>(m_sharedPipelines->poseInitLayout));
+				cmdList.BindComputePipeline(poseInitPipe.pipeline, poseInitPipe.layout);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
@@ -455,7 +457,7 @@ namespace aether
 					        .jobCount = batch.count,
 					        .nodeCountPerJob = nodeCount,
 					};
-					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->poseInitLayout), gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&initPc), sizeof(initPc)));
+					cmdList.PushConstantsRaw(poseInitPipe.layout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&initPc), sizeof(initPc)));
 
 					const std::uint32_t groupsX = (batch.count + 7u) / 8u;
 					const std::uint32_t groupsY = (nodeCount + 7u) / 8u;
@@ -469,9 +471,10 @@ namespace aether
 
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
 
-			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample != VK_NULL_HANDLE && sampleJobsThisFrame > 0)
+			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
 			{
-				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->animSample), static_cast<void*>(m_sharedPipelines->animSampleLayout));
+				const auto animSamplePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animSample);
+				cmdList.BindComputePipeline(animSamplePipe.pipeline, animSamplePipe.layout);
 				cmdList.BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
@@ -487,7 +490,7 @@ namespace aether
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
 				};
-				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->animSampleLayout), gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
+				cmdList.PushConstantsRaw(animSamplePipe.layout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
 				if (m_timestampPool)
 				{
 					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
@@ -517,9 +520,10 @@ namespace aether
 				if (blendJobCount > 0 && blendPc.jobCount > 0)
 				{
 					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
-					cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->animBlend), static_cast<void*>(m_sharedPipelines->animBlendLayout));
+					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
+					cmdList.BindComputePipeline(animBlendPipe.pipeline, animBlendPipe.layout);
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
-					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->animBlendLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
+					cmdList.PushConstantsRaw(animBlendPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
 						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.AnimBlend");
 						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
@@ -579,12 +583,13 @@ namespace aether
 
 		// ── Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) ──
 		std::uint32_t firstBatchNodeCount = 0;
-		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten != VK_NULL_HANDLE)
+		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
 		{
+			const auto nodeFlattenPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->nodeFlatten);
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
-			cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->nodeFlatten), static_cast<void*>(m_sharedPipelines->nodeFlattenLayout));
+			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline, nodeFlattenPipe.layout);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
 			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
@@ -637,7 +642,7 @@ namespace aether
 					        .batchStartJob = batch.startJob,
 					        .batchJobCount = batch.count,
 					};
-					cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->nodeFlattenLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&flattenPc), sizeof(flattenPc)));
+					cmdList.PushConstantsRaw(nodeFlattenPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&flattenPc), sizeof(flattenPc)));
 
 					const std::uint32_t totalWork = batch.count * range.count;
 					const std::uint32_t groups = (totalWork + 63u) / 64u;
@@ -662,7 +667,7 @@ namespace aether
 		}
 
 		// ── Pass 1.8: IK solve (two-bone leg IK on GPU) ─────────────────────────
-		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve != VK_NULL_HANDLE)
+		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve.IsValid())
 		{
 			if (m_cachedNodeGlobalTransformsAddr != 0)
 			{
@@ -672,10 +677,11 @@ namespace aether
 			const std::uint32_t ikJobCount = m_animationIkSystem->GetIkJobCount();
 			if (ikJobCount > 0 && ikPc.jobCount > 0)
 			{
+				const auto ikSolvePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->ikSolve);
 				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
-				cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->ikSolve), static_cast<void*>(m_sharedPipelines->ikSolveLayout));
+				cmdList.BindComputePipeline(ikSolvePipe.pipeline, ikSolvePipe.layout);
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
-				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->ikSolveLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
+				cmdList.PushConstantsRaw(ikSolvePipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
 					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.IkSolve");
 					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
@@ -691,7 +697,8 @@ namespace aether
 		{
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 
-			cmdList.BindComputePipeline(static_cast<void*>(m_sharedPipelines->skinCopy), static_cast<void*>(m_sharedPipelines->skinCopyLayout));
+			const auto skinPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->skinCopy);
+			cmdList.BindComputePipeline(skinPipe.pipeline, skinPipe.layout);
 			cmdList.BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
@@ -715,7 +722,7 @@ namespace aether
 				        .skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
 				        .jobCount = batch.count,
 				};
-				cmdList.PushConstantsRaw(static_cast<void*>(m_sharedPipelines->skinCopyLayout), gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
+				cmdList.PushConstantsRaw(skinPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
 				if (m_timestampPool && bi == 0)
 				{
 					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
@@ -955,326 +962,105 @@ namespace aether
 
 	void RenderQueueSharedPipelines::Initialize(VkDevice device, VkPipelineCache pipelineCache)
 	{
+		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://skin_palette_build.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::SkinPalettePush)),
+		        .debugName = "Animation.BuildSkinPalette",
+		});
+		if (!skinCopy.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://skin_palette_build.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::SkinPalettePush), // 72 bytes
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &skinCopyLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = skinCopyLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &skinCopy) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopy), VK_OBJECT_TYPE_PIPELINE, "Animation.BuildSkinPalette");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(skinCopyLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.BuildSkinPalette.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
 		}
 
+		animSample = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://animation_sample.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationSamplePush)),
+		        .debugName = "Animation.SampleClips",
+		});
+		if (!animSample.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://animation_sample.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::AnimationSamplePush),
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animSampleLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = animSampleLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &animSample) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSample), VK_OBJECT_TYPE_PIPELINE, "Animation.SampleClips");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animSampleLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.SampleClips.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
 		}
 
+		poseInit = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://pose_init.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::PoseInitPush)),
+		        .debugName = "Animation.PoseInit",
+		});
+		if (!poseInit.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://pose_init.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::PoseInitPush),
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &poseInitLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = poseInitLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &poseInit) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInit), VK_OBJECT_TYPE_PIPELINE, "Animation.PoseInit");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(poseInitLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.PoseInit.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
 		}
 
+		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://node_flatten.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::NodeFlattenPush)),
+		        .debugName = "Animation.NodeFlatten",
+		});
+		if (!nodeFlatten.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://node_flatten.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::NodeFlattenPush),
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &nodeFlattenLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = nodeFlattenLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &nodeFlatten) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlatten), VK_OBJECT_TYPE_PIPELINE, "Animation.NodeFlatten");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(nodeFlattenLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.NodeFlatten.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
 		}
 
+		animBlend = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://anim_blend.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationBlendPush)),
+		        .debugName = "Animation.AnimBlend",
+		});
+		if (!animBlend.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://anim_blend.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::AnimationBlendPush),
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &animBlendLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = animBlendLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &animBlend) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlend), VK_OBJECT_TYPE_PIPELINE, "Animation.AnimBlend");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(animBlendLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.AnimBlend.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 		}
 
+		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
+		        .shaderVfsPath = "shaders://ik_solve.spv",
+		        .shaderEntry = "main",
+		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::IkSolvePush)),
+		        .debugName = "Animation.IkSolve",
+		});
+		if (!ikSolve.IsValid())
 		{
-			AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ik_solve.spv"));
-			AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "RenderQueueShared"));
-
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .offset = 0,
-			        .size = sizeof(AnimationContracts::IkSolvePush),
-			};
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &ikSolveLayout) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve pipeline layout."));
-			}
-
-			const VkPipelineShaderStageCreateInfo stage{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-			        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-			        .module = shaderModule,
-			        .pName = "main",
-			};
-			const VkComputePipelineCreateInfo pipelineInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			        .stage = stage,
-			        .layout = ikSolveLayout,
-			};
-			if (vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &ikSolve) != VK_SUCCESS)
-			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
-				Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));
-			}
-
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolve), VK_OBJECT_TYPE_PIPELINE, "Animation.IkSolve");
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(ikSolveLayout), VK_OBJECT_TYPE_PIPELINE_LAYOUT, "Animation.IkSolve.Layout");
-
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));
 		}
 	}
 
 	void RenderQueueSharedPipelines::Shutdown(VkDevice device)
 	{
-		if (skinCopy != VK_NULL_HANDLE)
+		(void) device;
+		if (skinCopy.IsValid())
 		{
-			vkDestroyPipeline(device, skinCopy, nullptr);
-			skinCopy = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(skinCopy);
+			skinCopy = {};
 		}
-		if (skinCopyLayout != VK_NULL_HANDLE)
+		if (animSample.IsValid())
 		{
-			vkDestroyPipelineLayout(device, skinCopyLayout, nullptr);
-			skinCopyLayout = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(animSample);
+			animSample = {};
 		}
-		if (animSample != VK_NULL_HANDLE)
+		if (nodeFlatten.IsValid())
 		{
-			vkDestroyPipeline(device, animSample, nullptr);
-			animSample = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(nodeFlatten);
+			nodeFlatten = {};
 		}
-		if (animSampleLayout != VK_NULL_HANDLE)
+		if (poseInit.IsValid())
 		{
-			vkDestroyPipelineLayout(device, animSampleLayout, nullptr);
-			animSampleLayout = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(poseInit);
+			poseInit = {};
 		}
-		if (nodeFlatten != VK_NULL_HANDLE)
+		if (animBlend.IsValid())
 		{
-			vkDestroyPipeline(device, nodeFlatten, nullptr);
-			nodeFlatten = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(animBlend);
+			animBlend = {};
 		}
-		if (nodeFlattenLayout != VK_NULL_HANDLE)
+		if (ikSolve.IsValid())
 		{
-			vkDestroyPipelineLayout(device, nodeFlattenLayout, nullptr);
-			nodeFlattenLayout = VK_NULL_HANDLE;
-		}
-		if (poseInit != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(device, poseInit, nullptr);
-			poseInit = VK_NULL_HANDLE;
-		}
-		if (poseInitLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(device, poseInitLayout, nullptr);
-			poseInitLayout = VK_NULL_HANDLE;
-		}
-		if (animBlend != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(device, animBlend, nullptr);
-			animBlend = VK_NULL_HANDLE;
-		}
-		if (animBlendLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(device, animBlendLayout, nullptr);
-			animBlendLayout = VK_NULL_HANDLE;
-		}
-		if (ikSolve != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(device, ikSolve, nullptr);
-			ikSolve = VK_NULL_HANDLE;
-		}
-		if (ikSolveLayout != VK_NULL_HANDLE)
-		{
-			vkDestroyPipelineLayout(device, ikSolveLayout, nullptr);
-			ikSolveLayout = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(ikSolve);
+			ikSolve = {};
 		}
 	}
 } // namespace aether

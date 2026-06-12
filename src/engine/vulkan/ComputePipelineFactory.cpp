@@ -24,23 +24,26 @@ namespace aether::vkutil
 		const std::string owner = desc.debugName ? desc.debugName : "ComputePipeline";
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, *spirv, owner.c_str()));
 
-		VkPipelineLayout vkLayout = VK_NULL_HANDLE;
-		VkPushConstantRange pushRange{};
-		VkPipelineLayoutCreateInfo layoutInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		};
-		if (desc.pushConstantSize > 0)
+		VkPipelineLayout vkLayout = desc.existingLayout;
+		if (vkLayout == VK_NULL_HANDLE)
 		{
-			pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-			pushRange.offset = 0;
-			pushRange.size = desc.pushConstantSize;
-			layoutInfo.pushConstantRangeCount = 1;
-			layoutInfo.pPushConstantRanges = &pushRange;
-		}
-		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
-		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(0, "ComputePipeline: failed to create pipeline layout for " + owner));
+			VkPushConstantRange pushRange{};
+			VkPipelineLayoutCreateInfo layoutInfo{
+			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+			};
+			if (desc.pushConstantSize > 0)
+			{
+				pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+				pushRange.offset = 0;
+				pushRange.size = desc.pushConstantSize;
+				layoutInfo.pushConstantRangeCount = 1;
+				layoutInfo.pPushConstantRanges = &pushRange;
+			}
+			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
+			{
+				vkDestroyShaderModule(device, shaderModule, nullptr);
+				AE_UNEXPECTED(AetherError::Vulkan(0, "ComputePipeline: failed to create pipeline layout for " + owner));
+			}
 		}
 
 		const std::string entry(desc.shaderEntry);
@@ -74,7 +77,7 @@ namespace aether::vkutil
 		entryOut.pipeline = vkPipeline;
 		entryOut.layout = vkLayout;
 		entryOut.device = device;
-		entryOut.ownsLayout = true;
+		entryOut.ownsLayout = (desc.existingLayout == VK_NULL_HANDLE);
 		return entryOut;
 	}
 } // namespace aether::vkutil
