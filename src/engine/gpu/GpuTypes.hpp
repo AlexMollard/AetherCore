@@ -7,10 +7,8 @@
 
 namespace aether
 {
-	// aether::GpuFormat is provided as a backward-compatible alias for
-	// aether::gpu::Format - see GpuFormat.hpp. New code should use
-	// aether::gpu::Format directly; the old 6-value enum that previously lived
-	// here has been superseded by the full enum in GpuFormat.hpp.
+	// aether::GpuFormat is a short-form alias for aether::gpu::Format -
+	// see GpuFormat.hpp for the full format enum.
 
 	inline constexpr std::uint32_t kMaxFramesInFlight = 3;
 

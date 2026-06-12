@@ -43,7 +43,7 @@ namespace aether::gpu
 		// using the stored queue, blocking until completion.
 		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
 
-		// Expose internal VkCommandPool for legacy upload code (temporary).
+		// Expose internal VkCommandPool for code paths that need it.
 		[[nodiscard]] void* GetCommandPool() const;
 
 	private:

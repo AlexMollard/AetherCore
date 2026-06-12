@@ -16,29 +16,21 @@ namespace aether
 namespace aether::gpu
 {
 	// ─────────────────────────────────────────────────────────────────────────
-	// CommandList - Phase 3 of the GPU refactor
+	// CommandList - Engine-facing command buffer wrapper
 	// ─────────────────────────────────────────────────────────────────────────
-	// Engine-facing replacement for the raw VkCommandBuffer work in
-	// rendering/ (CommandRecorder has been removed). This header is Vulkan-free: every Vk* type
-	// stays in gpu/CommandList.cpp. Passes hold a CommandList& and call
-	// methods that take engine handles (BufferHandle, PipelineHandle) or
-	// device-address integers (gpu::DeviceAddress), never raw Vk*.
+	// Replaces raw VkCommandBuffer usage in rendering/ passes with a
+	// Vulkan-free API. Passes hold a CommandList& and call methods that take
+	// engine handles (BufferHandle, PipelineHandle) or device-address integers
+	// (gpu::DeviceAddress), never raw Vk*.
 	//
 	// Construction: a CommandList is created by GpuDevice::GetCurrentCommandList
 	// wrapping the swapchain's current VkCommandBuffer, or by
 	// AsyncComputeContext::GetCommandList wrapping an async-compute VkCommandBuffer.
 	// Both forms live for the duration of one frame and are not stored across frames.
 	//
-	// Phase 3 is incremental: this type is added additively, passes are migrated
-	// one at a time. The first migration (SkyboxPass) uses
-	// BindPipeline(VkPipeline) / PushConstantsRaw(VkPipelineLayout) overloads
-	// that take the raw Vk* void*s but resolve them inside CommandList.cpp.
-	// The end-state API will take engine handles (PipelineHandle, etc.) and
-	// look them up in the ResourceRegistry; that arrives with the GraphicsPipeline
-	// migration in Phase 5.
-	//
-	// Barriers (vkCmdPipelineBarrier2) belong in RenderGraph (Phase 5), not here,
-	// so this type deliberately does not expose a barrier method.
+	// Barriers: inline PipelineMemoryBarrier / ImageMemoryBarrier helpers
+	// exist for sites that need them (LightingManager, AsyncComputeContext).
+	// The primary barrier insertion path is RenderGraph::Compile.
 	class CommandList
 	{
 	public:
@@ -67,13 +59,11 @@ namespace aether::gpu
 			return m_cmd;
 		}
 
-		// Bind a graphics pipeline. The first overload takes a raw VkPipeline
-		// void* for the first-migration slice; the second (handle-based) is
-		// the end-state API and is the only one new code should use; the
-		// third takes a rendering::GraphicsPipeline& for the transitional
-		// slice used by QuadRenderer and similar UI passes. All three store
-		// the pipeline layout internally for the next PushConstantsRaw call
-		// (matches the existing SkyboxPass pattern of bind-then-push).
+		// Bind a graphics pipeline. All overloads store the pipeline layout
+		// internally for the next PushConstantsRaw call (bind-then-push).
+		// The void* overloads take raw Vulkan handles; the PipelineHandle
+		// overload resolves through the ResourceRegistry; the
+		// GraphicsPipeline& overload is used by QuadRenderer and UI passes.
 		void BindPipeline(void* vkPipeline, void* vkPipelineLayout) noexcept;
 		void BindPipeline(PipelineHandle pipeline);
 		void BindPipeline(GraphicsPipeline& pipeline);

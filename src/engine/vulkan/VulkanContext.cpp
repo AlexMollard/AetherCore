@@ -152,7 +152,7 @@ namespace aether
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
 		// Push descriptors eliminate per-frame VkDescriptorPool allocation - write descriptors
 		// directly into the command buffer at bind time. Core in Vulkan 1.4 - enabled via
-		// features14.pushDescriptor below, but the extension name is still required by some
+		// features14.pushDescriptor above, but the extension name is still required by some
 		// loader/driver paths.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 		// Graphics pipeline libraries allow pre-compiling shader stages independently,

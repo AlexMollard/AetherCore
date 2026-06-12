@@ -8,8 +8,7 @@ namespace aether::gpu
 	// treats this as void* (or a wrapped handle) and never sees vk* types.
 	using TimelineSemaphore = void;
 
-	// Create a binary-or-timeline semaphore. For timeline semaphores pass
-	// initialValue > 0 via the desc. The device is a void* (VkDevice) that
+	// Create a timeline semaphore. The device is a void* (VkDevice) that
 	// the backend casts. Returns nullptr on failure.
 	struct TimelineSemaphoreDesc
 	{

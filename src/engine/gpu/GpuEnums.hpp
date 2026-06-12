@@ -8,14 +8,10 @@
 // ─────────────────────────────────────────────────────────────────────────
 // GpuEnums - Vulkan-free engine-facing RHI enums
 // ─────────────────────────────────────────────────────────────────────────
-// Phase 1 introduced gpu::Format. Phase 3 needs a few more: the index-buffer
-// element type (used by CommandList::BindIndexBuffer) and shader-stage flags
-// (used by CommandList::PushConstantsRaw). All live in namespace aether::gpu
-// and are mapped to Vk* in vulkan/GpuEnumConversions.cpp alongside ToVk(Format).
-//
-// These types are intentionally additive: nothing in the engine depends on
-// them yet, so adding them is non-breaking. Callers are migrated one at a
-// time (Phase 3 = passes, Phase 5 = RenderGraph barriers).
+// Engine-facing RHI enums for pipeline stages, access flags, shader stages,
+// descriptor types, image layouts, and related types. Each enum lives in
+// namespace aether::gpu and is mapped to its Vk* equivalent in
+// vulkan/GpuEnumConversions.cpp via ToVk() / FromVk().
 
 namespace aether::gpu
 {
@@ -71,9 +67,9 @@ namespace aether::gpu
 		U32 = 1,
 	};
 
-	// Shader stage(s) for push-constant ranges. Mirrors VkShaderStageFlagBits
-	// subset the engine actually uses; the backend maps the bitwise union
-	// straight to VkShaderStageFlags.
+	// Shader stage(s) for push-constant ranges. Mapped to VkShaderStageFlags
+	// in the backend via a manual bit-test; bit positions do NOT match
+	// VkShaderStageFlagBits.
 	enum class ShaderStage : std::uint32_t
 	{
 		None = 0,
@@ -98,13 +94,8 @@ namespace aether::gpu
 	};
 
 	// Pipeline stage bits for memory barriers.
-	// Mirrors VkPipelineStageFlagBits2. The engine uses a small subset:
-	//   - Host            (mapped from VK_PIPELINE_STAGE_2_HOST_BIT)
-	//   - ComputeShader   (mapped from VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT)
-	//   - FragmentShader  (mapped from VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT)
-	//   - AllCommands     (mapped from VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-	//                      used for "anything before" pseudo-stages)
-	// The backend maps these straight to VkPipelineStageFlags2.
+	// Mapped to VkPipelineStageFlags2 in the backend. Enumerates the
+	// subset of VkPipelineStageFlagBits2 the engine actually uses.
 	enum class PipelineStage : std::uint64_t
 	{
 		None = 0,
@@ -119,11 +110,8 @@ namespace aether::gpu
 	};
 
 	// Memory access bits for barriers.
-	// Mirrors VkAccessFlagBits2. The engine uses:
-	//   - HostWrite               (VK_ACCESS_2_HOST_WRITE_BIT)
-	//   - ShaderRead/Write        (VK_ACCESS_2_SHADER_READ_BIT/WRITE_BIT - alias for ShaderStorage* in older versions)
-	//   - IndirectCommandRead     (VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT)
-	//   - ShaderStorageRead/Write (VK_ACCESS_2_SHADER_STORAGE_READ_BIT/WRITE_BIT)
+	// Mapped to VkAccessFlags2 in the backend. Enumerates the
+	// subset of VkAccessFlagBits2 the engine actually uses.
 	enum class AccessFlags : std::uint64_t
 	{
 		None = 0,
@@ -155,9 +143,7 @@ namespace aether::gpu
 		PushDescriptor = 1u << 0,
 	};
 
-	// Depth / stencil compare operations.
-	// Mirrors VkCompareOp. The engine only ever uses Less / LessOrEqual -
-	// add more if a future pass needs them.
+	// Depth / stencil compare operations. Mapped to VkCompareOp.
 	enum class CompareOp : std::uint32_t
 	{
 		Never = 0,

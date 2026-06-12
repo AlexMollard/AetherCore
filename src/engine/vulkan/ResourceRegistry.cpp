@@ -8,10 +8,8 @@
 
 namespace aether
 {
-	// The kMaxFramesInFlight sentinel must match the engine-wide frame
-	// pacing constant - see gpu/GpuTypes.hpp. We re-declare it locally
-	// (instead of depending on the header) to keep ResourceRegistry a
-	// self-contained building block.
+	// The kMaxFramesInFlight constant (defined in ResourceRegistry.hpp)
+	// must match the engine-wide frame pacing constant - see gpu/GpuTypes.hpp.
 	namespace
 	{
 		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;

@@ -11,7 +11,7 @@ namespace aether
 namespace aether::gpu
 {
 	// Backend helpers for creating / destroying a descriptor set layout.
-	// Engine code calls these through GpuDevice to avoid leaking Vk* into
+	// Engine code calls these directly to avoid leaking Vk* into
 	// the engine seam. The current implementation is Vulkan; a future
 	// D3D12 / Metal backend would provide its own .cpp.
 	[[nodiscard]] Expected<DescriptorSetLayout> CreateDescriptorSetLayout(GpuDevice& device, const DescriptorSetLayoutDesc& desc) noexcept;

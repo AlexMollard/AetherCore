@@ -52,8 +52,8 @@ namespace aether::gpu
 	[[nodiscard]] VkSamplerMipmapMode ToVk(SamplerMipmapMode mode) noexcept;
 	[[nodiscard]] VkSamplerAddressMode ToVk(SamplerAddressMode mode) noexcept;
 
-	// Clear value conversion. The ClearValue struct has a layout-compatible
-	// union with VkClearValue (color[4] floats + depth float + stencil uint).
+	// Clear value conversion. The backend copies the color or depth/stencil
+	// fields into the VkClearValue union.
 	[[nodiscard]] VkClearValue ToVk(const ClearValue& value) noexcept;
 
 	// Primitive topology and polygon mode conversions.

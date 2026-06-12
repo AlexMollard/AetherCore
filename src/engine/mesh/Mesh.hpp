@@ -121,7 +121,7 @@ namespace aether
 			return m_vertexDeviceAddress;
 		}
 
-		// Buffer device address of the index data (for future BDA index fetch if needed).
+		// Buffer device address of the index data - pass to indirect draw structures.
 		[[nodiscard]] gpu::DeviceAddress GetIndexDeviceAddress() const
 		{
 			return m_indexDeviceAddress;

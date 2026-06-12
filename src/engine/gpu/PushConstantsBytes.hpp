@@ -22,8 +22,7 @@ namespace aether::gpu
 	}
 
 	// Mutable overload: for the rare case where the caller wants to fill
-	// a buffer in place and then push it (currently unused; provided for
-	// symmetry / future use).
+	// a buffer in place and then push it (provided for symmetry).
 	template<typename T>
 	[[nodiscard]] std::span<std::byte> AsPushConstantBytes(T& value) noexcept
 	{

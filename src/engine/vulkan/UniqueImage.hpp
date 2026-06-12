@@ -21,7 +21,7 @@ namespace aether
 	{
 	public:
 		// Concise description for the common-case Create overload.
-		// Aspect and sampler are deduced automatically from the format and usage.
+		// Aspect is deduced from the format; sampler is not created automatically.
 		struct Desc
 		{
 			gpu::Extent2D extent = {};

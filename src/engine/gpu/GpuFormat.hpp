@@ -44,9 +44,9 @@ namespace aether::gpu
 	inline constexpr std::uint32_t kFormatCount = static_cast<std::uint32_t>(Format::BC7SrgbBlock) + 1u;
 } // namespace aether::gpu
 
-// Backward-compatible alias. New code should use aether::gpu::Format.
-// Kept so existing GpuFormat usages in GpuDevice.hpp / .cpp still compile
-// until they are migrated in a later phase of the refactor.
+// Short-form alias for engine-facing format enum.
+// aether::GpuFormat and aether::gpu::Format are the same type; prefer
+// aether::gpu::Format in new code to avoid the legacy alias.
 namespace aether
 {
 	using GpuFormat = gpu::Format;

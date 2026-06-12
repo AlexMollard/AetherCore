@@ -22,12 +22,14 @@ namespace aether
 		void Initialize(const VulkanContext& ctx, const Window& window, bool enableVsync);
 		void Shutdown(VkDevice device);
 
-		// Acquires next image and begins the command buffer + dynamic rendering.
+		// Acquires next image, resets command pool, begins the command buffer,
+		// and performs swapchain-image / depth layout transitions.
 		// Sets IsFrameValid() to false if the swapchain is out of date (skip
 		// EndFrame).
 		void BeginFrame(VkDevice device);
 
-		// Ends dynamic rendering, submits, and presents. No-op if !IsFrameValid().
+		// Transitions to present layout, ends command buffer, submits, and
+		// presents. No-op if !IsFrameValid().
 		void EndFrame(VkQueue graphicsQueue,
 		        VkQueue presentQueue,
 		        VkSemaphore extraWaitSemaphore = VK_NULL_HANDLE,

@@ -4,7 +4,7 @@
 #include "utils/Logger.hpp"
 
 // AE_DELETE_MSG: Compiler-portable delete("reason") for C++26.
-// Clang supports = delete("message") (P2518R2); MSVC does not yet.
+// Clang supports = delete("message") (P2518R2); MSVC falls back to plain "delete".
 // Use as: Foo(const Foo&) = AE_DELETE_MSG("reason");
 // On Clang this expands to: Foo(const Foo&) = delete("reason");
 // On MSVC this expands to: Foo(const Foo&) = delete;
