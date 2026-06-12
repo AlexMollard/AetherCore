@@ -874,7 +874,7 @@ namespace aether
 #ifndef NDEBUG
 				{
 					const VkImageLayout tracked = m_storage->GetTrackedLayout(image);
-					if (tracked != VK_IMAGE_LAYOUT_UNDEFINED && tracked != gpu::ToVk(b.oldLayout))
+					if (tracked != VK_IMAGE_LAYOUT_UNDEFINED && gpu::ToVk(b.oldLayout) != VK_IMAGE_LAYOUT_UNDEFINED && tracked != gpu::ToVk(b.oldLayout))
 					{
 						AE_WARN(LogCategory::Vulkan,
 						        "RenderGraph: layout mismatch on image id={} in pass '{}': "
