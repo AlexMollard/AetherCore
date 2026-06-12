@@ -100,13 +100,13 @@ namespace aether::gpu
 	{
 		None = 0,
 		DrawIndirect = 1ull << 1,
-		VertexInput = 1ull << 4,
+		VertexInput = 1ull << 2,
 		VertexShader = 1ull << 3,
 		FragmentShader = 1ull << 7,
 		ComputeShader = 1ull << 11,
 		Host = 1ull << 14,
 		AllCommands = 1ull << 16,
-		Transfer = 1ull << 17,
+		Transfer = 1ull << 12,
 	};
 
 	// Memory access bits for barriers.
