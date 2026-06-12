@@ -16,6 +16,10 @@ namespace aether
 		struct Desc
 		{
 			std::string_view shaderVfsPath;
+			// Optional separate fragment path. When non-empty, the fragment
+			// SPIR-V is loaded from this path instead of sharing the vertex
+			// module. Default (empty) keeps the existing single-module behavior.
+			std::string_view fragmentVfsPath = {};
 			std::string_view vertexEntry = "vertexMain";
 			std::string_view fragmentEntry = "fragmentMain";
 			gpu::Format colorFormat = gpu::Format::Undefined;
@@ -30,6 +34,13 @@ namespace aether
 			gpu::ShaderStage pushConstantStages = gpu::ShaderStage::AllGraphics;
 			// Descriptor set layouts bound into the pipeline layout in order.
 			std::span<const gpu::DescriptorSetLayout> setLayouts;
+			// Graphics-pipeline state overrides for non-default pipelines.
+			// Defaults match the standard MeshDraw path.
+			gpu::PrimitiveTopology topology = gpu::PrimitiveTopology::TriangleList;
+			gpu::PolygonMode polygonMode = gpu::PolygonMode::Fill;
+			std::span<const gpu::VertexInputBinding> vertexBindings;
+			std::span<const gpu::VertexInputAttribute> vertexAttributes;
+			bool lineWidthDynamic = false;
 		};
 
 		GraphicsPipeline() = default;

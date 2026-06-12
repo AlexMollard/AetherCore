@@ -80,6 +80,7 @@ namespace aether::gpu
 	{
 		GraphicsPipeline::Desc vkDesc{
 		        .shaderVfsPath = desc.shaderVfsPath,
+		        .fragmentVfsPath = desc.fragmentVfsPath != nullptr ? std::string_view(desc.fragmentVfsPath) : std::string_view{},
 		        .vertexEntry = desc.vertexEntry,
 		        .fragmentEntry = desc.fragmentEntry,
 		        .colorFormat = desc.colorFormat,
@@ -91,6 +92,11 @@ namespace aether::gpu
 		        .pushConstantSize = desc.pushConstantSize,
 		        .pushConstantStages = desc.pushConstantStages,
 		        .setLayouts = desc.setLayouts,
+		        .topology = desc.topology,
+		        .polygonMode = desc.polygonMode,
+		        .vertexBindings = desc.vertexBindings,
+		        .vertexAttributes = desc.vertexAttributes,
+		        .lineWidthDynamic = desc.lineWidthDynamic,
 		};
 		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, pipelineCache, vkDesc);
 		if (!entryExp.has_value())

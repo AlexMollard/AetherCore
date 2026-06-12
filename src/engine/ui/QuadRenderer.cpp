@@ -12,6 +12,7 @@
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "assets/AssetManager.hpp"
 #include "utils/Logger.hpp"
@@ -24,53 +25,20 @@ namespace aether
 {
 	void QuadRenderer::EnsureComputePipeline()
 	{
-		if (m_vkCtx == nullptr || m_computePipeline != VK_NULL_HANDLE)
+		if (m_vkCtx == nullptr || m_computePipelineHandle.IsValid())
 		{
 			return;
 		}
 
-		const VkDevice device = m_vkCtx->GetDevice().device;
-		AE_EXPECT_OR_THROW(spirv, io::FileSystem::ReadFile("shaders://ui_build_draws.spv"));
-
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, spirv, "QuadRenderer"));
-
-		const VkPushConstantRange pushRange{
-		        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .offset = 0,
-		        .size = sizeof(ComputePush),
+		const gpu::ComputePipelineDesc desc{
+		        .shaderVfsPath = "shaders://ui_build_draws.spv",
+		        .pushConstantSize = sizeof(ComputePush),
+		        .debugName = "UI.BuildDraws",
 		};
-		const VkPipelineLayoutCreateInfo layoutInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		        .pushConstantRangeCount = 1,
-		        .pPushConstantRanges = &pushRange,
-		};
-		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &m_computePipelineLayout) != VK_SUCCESS)
-		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline layout."));
-		}
-
-		const VkPipelineShaderStageCreateInfo stage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .module = shaderModule,
-		        .pName = "main",
-		};
-		const VkComputePipelineCreateInfo pipelineInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		        .stage = stage,
-		        .layout = m_computePipelineLayout,
-		};
-		if (vkCreateComputePipelines(device, m_vkCtx->GetPipelineCache(), 1, &pipelineInfo, nullptr, &m_computePipeline) != VK_SUCCESS)
-		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
-			vkDestroyPipelineLayout(device, m_computePipelineLayout, nullptr);
-			m_computePipelineLayout = VK_NULL_HANDLE;
-			Throw(AetherError::Vulkan(0, "QuadRenderer: failed to create compute pipeline."));
-		}
-
-		vkDestroyShaderModule(device, shaderModule, nullptr);
-		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_computePipeline), VK_OBJECT_TYPE_PIPELINE, "UI.BuildDraws");
+		m_computePipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
+		        static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
+		        static_cast<gpu::PipelineCache>(m_vkCtx->GetPipelineCache()),
+		        desc);
 	}
 
 	void QuadRenderer::RegisterPass()
@@ -82,11 +50,10 @@ namespace aether
 		EnsureComputePipeline();
 
 		m_buildPassName = m_passName + ".Build";
-		const VkPipeline computePipeline = m_computePipeline;
-		const VkPipelineLayout computeLayout = m_computePipelineLayout;
+		const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_computePipelineHandle);
 		m_renderGraph->AddComputePass(m_buildPassName)
 		        .ExecuteCompute(
-		                [this, computePipeline, computeLayout](PassContext& ctx)
+		                [this, pipeline = resolved.pipeline, layout = resolved.layout](PassContext& ctx)
 		                {
 			                if (m_vkCtx == nullptr)
 			                {
@@ -156,8 +123,8 @@ namespace aether
 			                        .commandCount = commandCount,
 			                };
 
-			                cmd.BindComputePipeline(static_cast<void*>(computePipeline), static_cast<void*>(computeLayout));
-			                cmd.PushConstantsRaw(static_cast<gpu::PipelineLayout>(computeLayout), gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&push, 1}));
+			                cmd.BindComputePipeline(pipeline, layout);
+			                cmd.PushConstantsRaw(layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&push, 1}));
 			                cmd.Dispatch(1, 1, 1);
 
 			                // Barrier here (outside any render pass) - compute writes must be
@@ -273,15 +240,10 @@ namespace aether
 			services.Get<RenderGraph>().RemovePass(m_buildPassName);
 			services.Get<RenderGraph>().RemovePass(m_passName);
 			m_pipeline.Destroy();
-			if (m_computePipeline != VK_NULL_HANDLE)
+			if (m_computePipelineHandle.IsValid())
 			{
-				vkDestroyPipeline(services.Get<VulkanContext>().GetDevice().device, m_computePipeline, nullptr);
-				m_computePipeline = VK_NULL_HANDLE;
-			}
-			if (m_computePipelineLayout != VK_NULL_HANDLE)
-			{
-				vkDestroyPipelineLayout(services.Get<VulkanContext>().GetDevice().device, m_computePipelineLayout, nullptr);
-				m_computePipelineLayout = VK_NULL_HANDLE;
+				gpu::ResourceRegistry::Destroy(m_computePipelineHandle);
+				m_computePipelineHandle = {};
 			}
 			for (auto& slot: m_pendingQuads)
 			{

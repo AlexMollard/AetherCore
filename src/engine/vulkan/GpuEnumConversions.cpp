@@ -570,4 +570,35 @@ namespace aether::gpu
 		v.depthStencil.stencil = value.stencil;
 		return v;
 	}
+	// ─────────────────────────────────────────────────────────────────────────
+	// PrimitiveTopology
+	// ─────────────────────────────────────────────────────────────────────────
+	VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept
+	{
+		switch (topology)
+		{
+			case PrimitiveTopology::PointList:
+				return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+			case PrimitiveTopology::LineList:
+				return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+			case PrimitiveTopology::TriangleList:
+				return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+		}
+		return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	}
+
+	// ─────────────────────────────────────────────────────────────────────────
+	// PolygonMode
+	// ─────────────────────────────────────────────────────────────────────────
+	VkPolygonMode ToVk(PolygonMode mode) noexcept
+	{
+		switch (mode)
+		{
+			case PolygonMode::Fill:
+				return VK_POLYGON_MODE_FILL;
+			case PolygonMode::Line:
+				return VK_POLYGON_MODE_LINE;
+		}
+		return VK_POLYGON_MODE_FILL;
+	}
 } // namespace aether::gpu

@@ -6,12 +6,16 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "vulkan/VulkanContext.hpp"
+#include "gpu/GpuHandles.hpp"
+#include "gpu/GpuEnums.hpp"
 #include "physics/PhysicsComponents.hpp"
 
 namespace aether
 {
 	class World;
 	class RenderGraph;
+
+	class GpuDevice;
 
 	void SetDebugRenderingEnabled(bool enabled);
 	bool IsDebugRenderingEnabled();
@@ -51,8 +55,8 @@ namespace aether
 		PhysicsDebugRenderer(PhysicsDebugRenderer&&) noexcept;
 		PhysicsDebugRenderer& operator=(PhysicsDebugRenderer&&) noexcept;
 
-		void Init(VulkanContext& ctx, VkFormat colorFormat, VkFormat depthFormat);
-		void Shutdown(VkDevice device);
+		void Init(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat);
+		void Shutdown();
 
 		void SetEnabled(bool enabled)
 		{
@@ -107,7 +111,7 @@ namespace aether
 		}
 
 	private:
-		void CreateWireframePipeline(VulkanContext& ctx, VkFormat colorFormat, VkFormat depthFormat);
+		void CreateWireframePipeline(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat);
 		void CreateBoxGeometry(VmaAllocator allocator);
 		void CreateSphereGeometry(VmaAllocator allocator);
 		void CreateCapsuleGeometry(VmaAllocator allocator);
@@ -120,7 +124,6 @@ namespace aether
 		// to `out`. Used to verify the pipeline end-to-end.
 		void AppendSelfTestPattern(std::vector<DebugVertex>& out) const;
 
-		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		bool m_enabled = false;
 		bool m_selfTestEnabled = true; // on by default to surface the pipeline immediately
@@ -128,11 +131,10 @@ namespace aether
 
 		World* m_world = nullptr;
 		const std::vector<DebugVertex>* m_frameDebugVertices = nullptr;
-		VkFormat m_colorFormat = VK_FORMAT_UNDEFINED;
-		VkFormat m_depthFormat = VK_FORMAT_UNDEFINED;
+		gpu::Format m_colorFormat = gpu::Format::Undefined;
+		gpu::Format m_depthFormat = gpu::Format::Undefined;
 
-		VkPipeline m_pipeline = VK_NULL_HANDLE;
-		VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
+		gpu::PipelineHandle m_pipelineHandle = {};
 
 		// Pre-baked unit geometries for the per-shape (physics) draw path. These
 		// are positioned by a per-draw MVP push constant.

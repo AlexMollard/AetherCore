@@ -55,4 +55,8 @@ namespace aether::gpu
 	// Clear value conversion. The ClearValue struct has a layout-compatible
 	// union with VkClearValue (color[4] floats + depth float + stencil uint).
 	[[nodiscard]] VkClearValue ToVk(const ClearValue& value) noexcept;
+
+	// Primitive topology and polygon mode conversions.
+	[[nodiscard]] VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept;
+	[[nodiscard]] VkPolygonMode ToVk(PolygonMode mode) noexcept;
 } // namespace aether::gpu

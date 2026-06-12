@@ -2,6 +2,8 @@
 
 #include <cstdint>
 
+#include "gpu/GpuFormat.hpp"
+
 // ─────────────────────────────────────────────────────────────────────────
 // GpuEnums - Vulkan-free engine-facing RHI enums
 // ─────────────────────────────────────────────────────────────────────────
@@ -354,5 +356,40 @@ namespace aether::gpu
 		      : width(ext.width), height(ext.height)
 		{
 		}
+	};
+	// Primitive topology. Mirrors VkPrimitiveTopology. Only the topologies the
+	// engine's pipeline factory emits are enumerated.
+	enum class PrimitiveTopology : std::uint32_t
+	{
+		PointList = 0,
+		LineList = 1,
+		TriangleList = 2,
+	};
+
+	// Polygon fill mode. Mirrors VkPolygonMode.
+	enum class PolygonMode : std::uint32_t
+	{
+		Fill = 0,
+		Line = 1,
+	};
+
+	// Per-vertex input binding description. Mirrors
+	// VkVertexInputBindingDescription. The engine does not expose vertex-input
+	// rate enums in the gpu/ layer; just use 0 for per-vertex, 1 for per-instance
+	// (matching the VK_VERTEX_INPUT_RATE_* values).
+	struct VertexInputBinding
+	{
+		std::uint32_t binding = 0;
+		std::uint32_t stride = 0;
+		std::uint32_t inputRate = 0; // 0=VERTEX, 1=INSTANCE
+	};
+
+	// Per-vertex attribute description. Mirrors VkVertexInputAttributeDescription.
+	struct VertexInputAttribute
+	{
+		std::uint32_t location = 0;
+		std::uint32_t binding = 0;
+		Format format = Format::Undefined;
+		std::uint32_t offset = 0;
 	};
 } // namespace aether::gpu

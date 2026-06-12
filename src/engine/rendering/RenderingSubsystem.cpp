@@ -6,6 +6,7 @@
 #include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuDevice.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -23,6 +24,7 @@ namespace aether
 		CameraManager& cameras = services.Get<CameraManager>();
 		LightingManager& lighting = services.Get<LightingManager>();
 		MaterialBuffer& materials = services.Get<MaterialBuffer>();
+		GpuDevice& gpu = services.Get<GpuDevice>();
 
 		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
 		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
@@ -74,7 +76,7 @@ namespace aether
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		});
 
-		m_physicsDebug.Init(vk, gpu::ToVk(swapchain.GetImageFormat()), gpu::ToVk(swapchain.GetDepthFormat()));
+		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
 
 		RegisterPasses(services);
 	}
@@ -94,7 +96,7 @@ namespace aether
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
-		m_physicsDebug.Shutdown(vk.GetDevice().device);
+		m_physicsDebug.Shutdown();
 	}
 
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)

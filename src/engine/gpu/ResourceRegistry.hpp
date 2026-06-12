@@ -66,6 +66,10 @@ namespace aether::gpu
 	struct GraphicsPipelineDesc
 	{
 		const char* shaderVfsPath = nullptr;
+		// Optional separate fragment path. When non-null, the fragment SPIR-V
+		// is loaded from this file instead of sharing the vertex module. The
+		// default (nullptr) keeps the existing single-module behavior.
+		const char* fragmentVfsPath = nullptr;
 		const char* vertexEntry = "vertexMain";
 		const char* fragmentEntry = "fragmentMain";
 		Format colorFormat = Format::Undefined;
@@ -80,6 +84,13 @@ namespace aether::gpu
 		// alive for the duration of the call (BindlessManager layouts are
 		// engine-global and live the whole frame).
 		std::span<const DescriptorSetLayout> setLayouts;
+		// Graphics-pipeline state overrides for non-default pipelines
+		// (debug renderers, etc.). Defaults match the standard MeshDraw path.
+		PrimitiveTopology topology = PrimitiveTopology::TriangleList;
+		PolygonMode polygonMode = PolygonMode::Fill;
+		std::span<const VertexInputBinding> vertexBindings;
+		std::span<const VertexInputAttribute> vertexAttributes;
+		bool lineWidthDynamic = false;
 	};
 
 	struct ResourceRegistryInitDesc

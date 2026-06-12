@@ -8,6 +8,7 @@
 #include <vector>
 #include "vulkan/volk.hpp"
 
+#include "gpu/GpuHandles.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "ui/UiLayout.hpp"
@@ -135,8 +136,7 @@ namespace aether
 		BindlessManager* m_bindlessMgr = nullptr;
 		Swapchain* m_swapchain = nullptr;
 		GraphicsPipeline m_pipeline;
-		VkPipeline m_computePipeline = VK_NULL_HANDLE;
-		VkPipelineLayout m_computePipelineLayout = VK_NULL_HANDLE;
+		gpu::PipelineHandle m_computePipelineHandle{};
 		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
 		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
 		std::array<std::vector<PendingQuad>, Swapchain::kMaxFramesInFlight> m_pendingQuads;

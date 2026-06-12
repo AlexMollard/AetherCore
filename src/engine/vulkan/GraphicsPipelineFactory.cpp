@@ -30,18 +30,79 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath)));
 		}
 
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, *spirv, "GraphicsPipeline"));
+		AE_EXPECT_OR_THROW(vertModule, vkutil::CreateShaderModule(device, *spirv, "GraphicsPipeline"));
+
+		VkShaderModule fragModule = VK_NULL_HANDLE;
+		const bool hasSeparateFragment = !desc.fragmentVfsPath.empty();
+		if (hasSeparateFragment)
+		{
+			AE_TRY(fragSpirv, io::FileSystem::ReadFile(desc.fragmentVfsPath));
+			if (fragSpirv->empty())
+			{
+				vkDestroyShaderModule(device, vertModule, nullptr);
+				AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: fragment shader not found: " + std::string(desc.fragmentVfsPath)));
+			}
+			{
+				auto fragResult = vkutil::CreateShaderModule(device, *fragSpirv, "GraphicsPipeline.Fragment");
+				AE_EXPECT_OR_THROW_VOID(fragResult);
+				fragModule = std::move(*fragResult);
+			}
+		}
+		else
+		{
+			fragModule = vertModule;
+		}
+
+		auto destroyModules = [&]()
+		{
+			if (hasSeparateFragment && fragModule != VK_NULL_HANDLE)
+			{
+				vkDestroyShaderModule(device, fragModule, nullptr);
+			}
+			vkDestroyShaderModule(device, vertModule, nullptr);
+		};
 
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);
 
-		// ── Common graphics state shared by vertex library and final link ────
+		// ── Vertex input (bindings + attributes) ────────────────────────────
+		// Use caller-provided vertex bindings/attributes when non-empty, else
+		// an empty vertex input (no vertex buffers needed).
+		const bool hasVertexInput = !desc.vertexBindings.empty();
+		std::vector<VkVertexInputBindingDescription> vkVkBindings;
+		std::vector<VkVertexInputAttributeDescription> vkVkAttribs;
+		if (hasVertexInput)
+		{
+			vkVkBindings.reserve(desc.vertexBindings.size());
+			for (const gpu::VertexInputBinding& b: desc.vertexBindings)
+			{
+				vkVkBindings.push_back(VkVertexInputBindingDescription{
+				        .binding = b.binding,
+				        .stride = b.stride,
+				        .inputRate = static_cast<VkVertexInputRate>(b.inputRate),
+				});
+			}
+			vkVkAttribs.reserve(desc.vertexAttributes.size());
+			for (const gpu::VertexInputAttribute& a: desc.vertexAttributes)
+			{
+				vkVkAttribs.push_back(VkVertexInputAttributeDescription{
+				        .location = a.location,
+				        .binding = a.binding,
+				        .format = gpu::ToVk(a.format),
+				        .offset = a.offset,
+				});
+			}
+		}
 		const VkPipelineVertexInputStateCreateInfo vertexInput{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		        .vertexBindingDescriptionCount = static_cast<std::uint32_t>(vkVkBindings.size()),
+		        .pVertexBindingDescriptions = vkVkBindings.data(),
+		        .vertexAttributeDescriptionCount = static_cast<std::uint32_t>(vkVkAttribs.size()),
+		        .pVertexAttributeDescriptions = vkVkAttribs.data(),
 		};
 		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+		        .topology = gpu::ToVk(desc.topology),
 		};
 		const VkPipelineViewportStateCreateInfo viewportState{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
@@ -50,7 +111,7 @@ namespace aether::vkutil
 		};
 		const VkPipelineRasterizationStateCreateInfo rasterizer{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		        .polygonMode = VK_POLYGON_MODE_FILL,
+		        .polygonMode = gpu::ToVk(desc.polygonMode),
 		        .cullMode = VK_CULL_MODE_NONE,
 		        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
 		        .lineWidth = 1.0f,
@@ -84,14 +145,20 @@ namespace aether::vkutil
 		        .attachmentCount = hasColorAttachment ? 1u : 0u,
 		        .pAttachments = hasColorAttachment ? &colorBlendAttach : nullptr,
 		};
-		constexpr VkDynamicState kDynamicStates[] = {
+		const VkDynamicState kBaseDynamicStates[] = {
 		        VK_DYNAMIC_STATE_VIEWPORT,
 		        VK_DYNAMIC_STATE_SCISSOR,
 		};
+		const VkDynamicState kDynamicStatesWithLineWidth[] = {
+		        VK_DYNAMIC_STATE_VIEWPORT,
+		        VK_DYNAMIC_STATE_SCISSOR,
+		        VK_DYNAMIC_STATE_LINE_WIDTH,
+		};
+		const bool hasLineWidthDynamic = desc.lineWidthDynamic;
 		const VkPipelineDynamicStateCreateInfo dynamicState{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		        .dynamicStateCount = 2,
-		        .pDynamicStates = kDynamicStates,
+		        .dynamicStateCount = hasLineWidthDynamic ? 3u : 2u,
+		        .pDynamicStates = hasLineWidthDynamic ? kDynamicStatesWithLineWidth : kBaseDynamicStates,
 		};
 
 		// ── Pipeline layout ──────────────────────────────────────────────────
@@ -122,20 +189,20 @@ namespace aether::vkutil
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			destroyModules();
 			AE_UNEXPECTED(AetherError::Vulkan(0, "Failed to create pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo vertStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-		        .module = shaderModule,
+		        .module = vertModule,
 		        .pName = vertEntry.c_str(),
 		};
 		const VkPipelineShaderStageCreateInfo fragStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		        .module = shaderModule,
+		        .module = fragModule,
 		        .pName = fragEntry.c_str(),
 		};
 
@@ -168,7 +235,7 @@ namespace aether::vkutil
 		VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			destroyModules();
 			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
 		}
@@ -195,7 +262,7 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			destroyModules();
 			// Best-effort cleanup; the entry was never returned to the
 			// registry so the registry won't double-free these.
 			vkDestroyPipeline(device, vertInputLib, nullptr);
@@ -229,7 +296,7 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragShaderLibInfo, nullptr, &fragShaderLib);
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			destroyModules();
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipelineLayout(device, layout, nullptr);
@@ -261,7 +328,7 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragOutputLibInfo, nullptr, &fragOutputLib);
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyShaderModule(device, shaderModule, nullptr);
+			destroyModules();
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipeline(device, fragShaderLib, nullptr);
@@ -294,7 +361,7 @@ namespace aether::vkutil
 		VkPipeline pipeline = VK_NULL_HANDLE;
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
 
-		vkDestroyShaderModule(device, shaderModule, nullptr);
+		destroyModules();
 
 		if (result != VK_SUCCESS)
 		{
