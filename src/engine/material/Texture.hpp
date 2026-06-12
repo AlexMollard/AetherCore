@@ -4,9 +4,8 @@
 #include <filesystem>
 #include <span>
 #include <string_view>
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
+#include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/UniqueImage.hpp"
 
@@ -39,16 +38,16 @@ namespace aether
 		// Load an image from disk and upload it to the GPU.
 		// uploadQueue + uploadPool are used for a one-time synchronous transfer.
 		// The call blocks until the GPU copy is complete.
-		[[nodiscard]] static Expected<Texture> LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] static Expected<Texture> LoadFromFile(std::string_view path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		// Load a texture from raw file bytes (already read from disk).
 		// Useful after an async I/O operation - the GPU upload still happens
 		// synchronously on the calling thread (requires a valid Vulkan context).
 		[[nodiscard]] static Expected<Texture> LoadFromFileData(
-		        std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
+		        std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		[[nodiscard]] static Expected<Texture> LoadFromDiskPath(
-		        const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
+		        const std::filesystem::path& path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter = TextureFilter::Linear);
 
 		void Destroy();
 

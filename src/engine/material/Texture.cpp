@@ -6,8 +6,10 @@
 #include <string>
 #include <vector>
 
-#include "vulkan/volk.hpp"
 #include "vulkan/VulkanUtils.hpp"
+
+#include "gpu/OneShotCmd.hpp"
+#include "gpu/CommandList.hpp"
 
 // stb_image - single-header image loader.
 // STB_IMAGE_IMPLEMENTATION must be defined in exactly one compilation unit.
@@ -124,11 +126,14 @@ namespace aether
 		}
 
 		UniqueImage UploadRgbaToGpuImage(
-		        const stbi_uc* pixels, int width, int height, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter, const char* debugName = nullptr)
+		        const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter, const char* debugName = nullptr)
 		{
+			// TODO(phase5b): remove static_casts once UniqueImage moves to gpu handles.
+			auto* vkDevice = static_cast<VkDevice>(device);
+			auto* vmaAllocator = static_cast<VmaAllocator>(allocator);
 			AE_EXPECT_OR_THROW(image,
-			        UniqueImage::Create(device,
-			                allocator,
+			        UniqueImage::Create(vkDevice,
+			                vmaAllocator,
 			                {
 			                        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
 			                        .format = VK_FORMAT_R8G8B8A8_SRGB,
@@ -137,21 +142,29 @@ namespace aether
 			                }));
 
 			{
-				const VkResult copyResult = vkutil::HostCopyToImage(device, image.Get(), pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+				const VkResult copyResult = vkutil::HostCopyToImage(vkDevice, image.Get(), pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 				if (copyResult != VK_SUCCESS)
 				{
 					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadRgbaToGpuImage: HostCopyToImage failed"));
 				}
 			}
 
-			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
+			gpu::OneShotCmd cmd;
+			if (!cmd.Begin(device, uploadPool))
+			{
+				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
+			}
+			cmd.CmdList().ImageMemoryBarrier(image.Get(),
+			        gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly,
+			        gpu::ImageAspect::Color,
+			        gpu::PipelineStage::AllCommands, gpu::AccessFlags::None,
+			        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			if (!cmd.EndAndSubmit(uploadQueue))
+			{
+				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
+			}
 
-			TransitionImageLayout(
-			        cmd, image.Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-
-			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
-
-			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, vkDevice, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
 
 			return image;
 		}
@@ -206,8 +219,11 @@ namespace aether
 			}
 		}
 
-		Expected<UniqueImage> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+		Expected<UniqueImage> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
+			// TODO(phase5b): remove static_casts once UniqueImage moves to gpu handles.
+			auto* vkDevice = static_cast<VkDevice>(device);
+			auto* vmaAllocator = static_cast<VmaAllocator>(allocator);
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
 			{
@@ -236,8 +252,8 @@ namespace aether
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
 			AE_TRY(image,
-			        UniqueImage::Create(device,
-			                allocator,
+			        UniqueImage::Create(vkDevice,
+			                vmaAllocator,
 			                {
 			                        .extent = {width, height},
 			                        .format = vkFmt,
@@ -245,26 +261,34 @@ namespace aether
 			                }));
 
 			{
-				const VkResult copyResult = vkutil::HostCopyToImage(device, image->Get(), p, width, height);
+				const VkResult copyResult = vkutil::HostCopyToImage(vkDevice, image->Get(), p, width, height);
 				if (copyResult != VK_SUCCESS)
 				{
 					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadBcnDds: HostCopyToImage failed"));
 				}
 			}
 
-			VkCommandBuffer cmd = BeginOneTimeBuffer(device, uploadPool);
+			gpu::OneShotCmd cmd;
+			if (!cmd.Begin(device, uploadPool))
+			{
+				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
+			}
+			cmd.CmdList().ImageMemoryBarrier(image->Get(),
+			        gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly,
+			        gpu::ImageAspect::Color,
+			        gpu::PipelineStage::AllCommands, gpu::AccessFlags::None,
+			        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			if (!cmd.EndAndSubmit(uploadQueue))
+			{
+				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
+			}
 
-			TransitionImageLayout(
-			        cmd, image->Get(), VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-
-			EndAndSubmitOneTimeBuffer(device, uploadPool, uploadQueue, cmd);
-
-			AE_EXPECT_OR_THROW_VOID(image->EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			AE_EXPECT_OR_THROW_VOID(image->EnsureBindlessSampled(bindless, vkDevice, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
 			return image;
 		}
 	} // namespace
 
-	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		if (fileData.size() < 4)
 		{
@@ -303,7 +327,7 @@ namespace aether
 		return texture;
 	}
 
-	Expected<Texture> Texture::LoadFromFile(std::string_view path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
@@ -349,7 +373,7 @@ namespace aether
 		return LoadFromFileData(fileData, pathStr, device, allocator, uploadQueue, uploadPool, bindless, filter);
 	}
 
-	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		int width = 0;
 		int height = 0;
