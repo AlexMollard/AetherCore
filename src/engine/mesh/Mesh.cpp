@@ -2,137 +2,21 @@
 
 #include <cstring>
 
-#include "utils/Expected.hpp"
+#include "gpu/ResourceRegistry.hpp"
+#include "gpu/UploadContext.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/VulkanUtils.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		// Allocate + begin a one-time command buffer from the given pool.
-		VkCommandBuffer BeginOneTimeBuffer(VkDevice device, VkCommandPool pool)
-		{
-			const VkCommandBufferAllocateInfo allocInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			        .commandPool = pool,
-			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			        .commandBufferCount = 1,
-			};
-			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
-			if (allocResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "Mesh: failed to allocate one-time command buffer"));
-			}
-
-			const VkCommandBufferBeginInfo beginInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			};
-			const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
-			if (beginResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "Mesh: failed to begin one-time command buffer"));
-			}
-			return cmd;
-		}
-
-		// Submit and block until the queue is idle, then free the buffer.
-		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
-		{
-			const VkResult endResult = vkEndCommandBuffer(cmd);
-			if (endResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Mesh: failed to end one-time command buffer"));
-			}
-			const VkCommandBufferSubmitInfo cbInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			        .commandBuffer = cmd,
-			};
-			const VkSubmitInfo2 submitInfo{
-			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			        .commandBufferInfoCount = 1,
-			        .pCommandBufferInfos = &cbInfo,
-			};
-			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-			VkFence fence = VK_NULL_HANDLE;
-			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(0, "Mesh: failed to create upload fence"));
-			}
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
-			if (submitResult != VK_SUCCESS)
-			{
-				vkDestroyFence(device, fence, nullptr);
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Mesh: failed to submit one-time command buffer"));
-			}
-			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-			vkDestroyFence(device, fence, nullptr);
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-		}
-
-		// Upload arbitrary bytes to a new device-local buffer via a transient staging buffer.
-		// Returns the device-local buffer and its BDA; the staging buffer is destroyed after submit.
-		VkBuffer UploadToDeviceLocal(VkDevice device,
-		        VmaAllocator allocator,
-		        VkQueue queue,
-		        VkCommandPool pool,
-		        VkBufferUsageFlags usage,
-		        const void* data,
-		        VkDeviceSize size,
-		        VmaAllocation& outAllocation,
-		        gpu::DeviceAddress& outDeviceAddress,
-		        const char* debugName = nullptr)
-		{
-			// Staging: mapped, host-sequential-write.
-			AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(allocator, device, size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-			std::memcpy(staging.GetAllocationInfo().pMappedData, data, static_cast<std::size_t>(size));
-			AE_EXPECT_OR_THROW_VOID(staging.FlushMapped());
-
-			// Destination: device-local with shader device address support.
-			const VkBufferCreateInfo destInfo{
-			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			        .size = size,
-			        .usage = usage | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			};
-			const VmaAllocationCreateInfo destAllocInfo{
-			        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
-			};
-			VkBuffer dest = VK_NULL_HANDLE;
-			const VkResult createResult = vmaCreateBuffer(allocator, &destInfo, &destAllocInfo, &dest, &outAllocation, nullptr);
-			if (createResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(createResult), "Mesh: failed to create device-local vertex buffer"));
-			}
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(dest), VK_OBJECT_TYPE_BUFFER, debugName ? debugName : "Mesh.Buffer");
-
-			VkCommandBuffer cmd = BeginOneTimeBuffer(device, pool);
-			const VkBufferCopy region{.size = size};
-			vkCmdCopyBuffer(cmd, staging.Get(), dest, 1, &region);
-			EndAndSubmitOneTimeBuffer(device, pool, queue, cmd);
-
-			const VkBufferDeviceAddressInfo addrInfo{
-			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-			        .buffer = dest,
-			};
-			outDeviceAddress = vkGetBufferDeviceAddress(device, &addrInfo);
-
-			return dest;
-		}
-	} // namespace
-
 	Mesh Mesh::CreateView(
-	        VkBuffer vertexBuffer, VkBuffer indexBuffer, std::uint32_t vertexCount, std::uint32_t indexCount, VkDeviceSize vertexByteOffset, VkDeviceSize indexByteOffset, gpu::DeviceAddress vertexDeviceAddress, gpu::DeviceAddress indexDeviceAddress)
+	        gpu::BufferHandle vertexBuffer, gpu::BufferHandle indexBuffer,
+	        std::uint32_t vertexCount, std::uint32_t indexCount,
+	        gpu::DeviceSize vertexByteOffset, gpu::DeviceSize indexByteOffset,
+	        gpu::DeviceAddress vertexDeviceAddress, gpu::DeviceAddress indexDeviceAddress)
 	{
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
-		// m_allocator intentionally left null - Destroy() skips vmaDestroyBuffer for views.
+		// m_allocator intentionally left null - Destroy() uses ResourceRegistry.
 		mesh.m_buffer = vertexBuffer;
 		mesh.m_vertexCount = vertexCount;
 		mesh.m_vertexByteOffset = vertexByteOffset;
@@ -144,23 +28,62 @@ namespace aether
 		return mesh;
 	}
 
-	Mesh Mesh::Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices)
+	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices)
 	{
 		AE_PROFILE_ZONE_N("Mesh::Upload");
-		Mesh mesh;
-		mesh.m_device = device;
-		mesh.m_allocator = allocator;
-		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
+		const gpu::DeviceSize size = sizeof(Vertex) * vertices.size();
 
-		const VkDeviceSize size = sizeof(Vertex) * vertices.size();
-		mesh.m_buffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, vertices.data(), size, mesh.m_allocation, mesh.m_vertexDeviceAddress, "Mesh.Vertex");
+		// Staging mapped buffer
+		gpu::MappedBufferDesc stagingDesc{};
+		stagingDesc.size = size;
+		stagingDesc.usage = gpu::BufferUsage::TransferSrc;
+		stagingDesc.debugName = "Mesh.Staging";
+		gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
+		if (!stagingHandle.IsValid())
+		{
+			return {};
+		}
+
+		gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
+		if (stagingView.mappedPtr == nullptr)
+		{
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+			return {};
+		}
+
+		std::memcpy(stagingView.mappedPtr, vertices.data(), static_cast<std::size_t>(size));
+		gpu::ResourceRegistry::FlushMappedBuffer(stagingHandle, 0, size);
+
+		// Device-local buffer with BDA
+		gpu::BufferDesc bufferDesc{};
+		bufferDesc.size = size;
+		bufferDesc.usage = gpu::BufferUsage::Vertex | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+		bufferDesc.debugName = "Mesh.Vertex";
+		gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
+		if (!bufferHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+			return {};
+		}
+
+		// Copy staging → device-local
+		uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
+
+		// Free staging
+		gpu::ResourceRegistry::Destroy(stagingHandle);
+
+		// Retrieve device address
+		gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
+
+		Mesh mesh;
+		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
+		mesh.m_buffer = bufferHandle;
+		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
+		mesh.m_vertexDeviceAddress = resolved.deviceAddress;
 		return mesh;
 	}
 
-	Mesh Mesh::Create(VkDevice device,
-	        VmaAllocator allocator,
-	        VkQueue uploadQueue,
-	        VkCommandPool uploadPool,
+	Mesh Mesh::Create(gpu::UploadContext& uploadContext,
 	        std::span<const Vertex> vertices,
 	        std::span<const std::uint32_t> indices,
 	        const float* aabbMin,
@@ -168,24 +91,54 @@ namespace aether
 	        const float* sphereCenter,
 	        float sphereRadius)
 	{
-		Mesh mesh = Create(device, allocator, uploadQueue, uploadPool, vertices);
+		Mesh mesh = Create(uploadContext, vertices);
 		mesh.m_indexCount = static_cast<std::uint32_t>(indices.size());
 
-		const VkDeviceSize size = sizeof(std::uint32_t) * indices.size();
-		mesh.m_indexBuffer = UploadToDeviceLocal(device, allocator, uploadQueue, uploadPool, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, indices.data(), size, mesh.m_indexAllocation, mesh.m_indexDeviceAddress, "Mesh.Index");
+		const gpu::DeviceSize indexSize = sizeof(std::uint32_t) * indices.size();
 
-		if (aabbMin)
+		// Staging mapped buffer for indices
+		gpu::MappedBufferDesc stagingDesc{};
+		stagingDesc.size = indexSize;
+		stagingDesc.usage = gpu::BufferUsage::TransferSrc;
+		stagingDesc.debugName = "Mesh.IndexStaging";
+		gpu::BufferHandle stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(stagingDesc);
+		if (!stagingHandle.IsValid())
 		{
-			mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
+			return mesh;
 		}
-		if (aabbMax)
+
+		gpu::MappedBufferView stagingView = gpu::ResourceRegistry::ResolveMappedBuffer(stagingHandle);
+		if (stagingView.mappedPtr == nullptr)
 		{
-			mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+			return mesh;
 		}
-		if (sphereCenter)
+
+		std::memcpy(stagingView.mappedPtr, indices.data(), static_cast<std::size_t>(indexSize));
+		gpu::ResourceRegistry::FlushMappedBuffer(stagingHandle, 0, indexSize);
+
+		gpu::BufferDesc bufferDesc{};
+		bufferDesc.size = indexSize;
+		bufferDesc.usage = gpu::BufferUsage::Index | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+		bufferDesc.debugName = "Mesh.Index";
+		gpu::BufferHandle bufferHandle = gpu::ResourceRegistry::CreateBuffer(bufferDesc);
+		if (!bufferHandle.IsValid())
 		{
-			mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
+			gpu::ResourceRegistry::Destroy(stagingHandle);
+			return mesh;
 		}
+
+		uploadContext.CopyBuffer(stagingHandle, bufferHandle, indexSize);
+		gpu::ResourceRegistry::Destroy(stagingHandle);
+
+		gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
+
+		mesh.m_indexBuffer = bufferHandle;
+		mesh.m_indexDeviceAddress = resolved.deviceAddress;
+
+		if (aabbMin) mesh.m_aabbMin = glm::vec3(aabbMin[0], aabbMin[1], aabbMin[2]);
+		if (aabbMax) mesh.m_aabbMax = glm::vec3(aabbMax[0], aabbMax[1], aabbMax[2]);
+		if (sphereCenter) mesh.m_boundingSphere = glm::vec4(sphereCenter[0], sphereCenter[1], sphereCenter[2], sphereRadius);
 
 		return mesh;
 	}
@@ -198,11 +151,9 @@ namespace aether
 	Mesh::Mesh(Mesh&& other) noexcept
 	      : m_device(other.m_device),
 	        m_allocator(other.m_allocator),
-	        m_buffer(other.m_buffer),
-	        m_allocation(other.m_allocation),
+	        m_buffer(std::move(other.m_buffer)),
 	        m_vertexCount(other.m_vertexCount),
-	        m_indexBuffer(other.m_indexBuffer),
-	        m_indexAllocation(other.m_indexAllocation),
+	        m_indexBuffer(std::move(other.m_indexBuffer)),
 	        m_indexCount(other.m_indexCount),
 	        m_vertexByteOffset(other.m_vertexByteOffset),
 	        m_indexByteOffset(other.m_indexByteOffset),
@@ -214,13 +165,11 @@ namespace aether
 	        m_aliveSentinel(other.m_aliveSentinel),
 	        m_generation(other.m_generation)
 	{
-		other.m_device = VK_NULL_HANDLE;
+		other.m_device = nullptr;
 		other.m_allocator = nullptr;
-		other.m_buffer = VK_NULL_HANDLE;
-		other.m_allocation = nullptr;
+		other.m_buffer = {};
 		other.m_vertexCount = 0;
-		other.m_indexBuffer = VK_NULL_HANDLE;
-		other.m_indexAllocation = nullptr;
+		other.m_indexBuffer = {};
 		other.m_indexCount = 0;
 		other.m_vertexByteOffset = 0;
 		other.m_indexByteOffset = 0;
@@ -241,11 +190,9 @@ namespace aether
 
 			m_device = other.m_device;
 			m_allocator = other.m_allocator;
-			m_buffer = other.m_buffer;
-			m_allocation = other.m_allocation;
+			m_buffer = std::move(other.m_buffer);
 			m_vertexCount = other.m_vertexCount;
-			m_indexBuffer = other.m_indexBuffer;
-			m_indexAllocation = other.m_indexAllocation;
+			m_indexBuffer = std::move(other.m_indexBuffer);
 			m_indexCount = other.m_indexCount;
 			m_vertexByteOffset = other.m_vertexByteOffset;
 			m_indexByteOffset = other.m_indexByteOffset;
@@ -257,13 +204,11 @@ namespace aether
 			m_aliveSentinel = other.m_aliveSentinel;
 			m_generation = other.m_generation;
 
-			other.m_device = VK_NULL_HANDLE;
+			other.m_device = nullptr;
 			other.m_allocator = nullptr;
-			other.m_buffer = VK_NULL_HANDLE;
-			other.m_allocation = nullptr;
+			other.m_buffer = {};
 			other.m_vertexCount = 0;
-			other.m_indexBuffer = VK_NULL_HANDLE;
-			other.m_indexAllocation = nullptr;
+			other.m_indexBuffer = {};
 			other.m_indexCount = 0;
 			other.m_vertexByteOffset = 0;
 			other.m_indexByteOffset = 0;
@@ -281,24 +226,19 @@ namespace aether
 	void Mesh::Destroy()
 	{
 		++m_generation;
-		if (m_indexBuffer != VK_NULL_HANDLE && m_allocator != nullptr)
+		if (m_indexBuffer.IsValid())
 		{
-			vmaDestroyBuffer(m_allocator, m_indexBuffer, m_indexAllocation);
-			m_indexBuffer = VK_NULL_HANDLE;
-			m_indexAllocation = nullptr;
+			gpu::ResourceRegistry::Destroy(m_indexBuffer);
+			m_indexBuffer = {};
 		}
 		m_indexCount = 0;
-		if (m_buffer != VK_NULL_HANDLE && m_allocator != nullptr)
+		if (m_buffer.IsValid())
 		{
-			vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
-			m_buffer = VK_NULL_HANDLE;
-			m_allocation = nullptr;
+			gpu::ResourceRegistry::Destroy(m_buffer);
+			m_buffer = {};
 		}
-		m_device = VK_NULL_HANDLE;
 		m_allocator = nullptr;
 		m_vertexCount = 0;
-		m_vertexByteOffset = 0;
-		m_indexByteOffset = 0;
-		m_aliveSentinel = 0;
+		// device intentionally left valid; the engine may still query it.
 	}
 } // namespace aether

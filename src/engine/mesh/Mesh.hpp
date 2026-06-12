@@ -5,6 +5,7 @@
 #include <span>
 #include "gpu/GpuTypes.hpp"
 #include "gpu/GpuHandles.hpp"
+#include "gpu/UploadContext.hpp"
 
 namespace aether
 {
@@ -49,11 +50,8 @@ namespace aether
 		// Engine-internal factory used by AetherCore::CreateMesh.
 		// Uploads via a staging buffer to device-local memory; call after the upload
 		// pool is created (blocks until the queue is idle).
-		static Mesh Create(gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, std::span<const Vertex> vertices);
-		static Mesh Create(gpu::Device device,
-		        gpu::Allocator allocator,
-		        gpu::Queue uploadQueue,
-		        gpu::CommandPool uploadPool,
+		static Mesh Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices);
+		static Mesh Create(gpu::UploadContext& uploadContext,
 		        std::span<const Vertex> vertices,
 		        std::span<const std::uint32_t> indices,
 		        const float* aabbMin = nullptr,
@@ -77,12 +75,12 @@ namespace aether
 
 		[[nodiscard]] bool IsValid() const
 		{
-			return m_buffer != VK_NULL_HANDLE;
+			return m_buffer.IsValid();
 		}
 
 		[[nodiscard]] bool IsIndexed() const
 		{
-			return m_indexBuffer != VK_NULL_HANDLE;
+			return m_indexBuffer.IsValid();
 		}
 
 		[[nodiscard]] gpu::BufferHandle GetBuffer() const
@@ -148,12 +146,10 @@ namespace aether
 
 	private:
 		gpu::Device m_device = nullptr;
-		VmaAllocator m_allocator = nullptr;
-		gpu::BufferHandle m_buffer = VK_NULL_HANDLE;
-		VmaAllocation m_allocation = nullptr;
+		gpu::Allocator m_allocator = nullptr;
+		gpu::BufferHandle m_buffer{};
 		std::uint32_t m_vertexCount = 0;
-		gpu::BufferHandle m_indexBuffer = VK_NULL_HANDLE;
-		VmaAllocation m_indexAllocation = nullptr;
+		gpu::BufferHandle m_indexBuffer{};
 		std::uint32_t m_indexCount = 0;
 		gpu::DeviceSize m_vertexByteOffset = 0;
 		gpu::DeviceSize m_indexByteOffset = 0;
