@@ -180,7 +180,7 @@ namespace aether::app
 	void InventoryLayer::OnUpdate(LayerContext& context)
 	{
 		auto& world = context.Get<World>();
-		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
+		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 
 		// ── Anchor grid container below the panel header ───────────────────────
 		// The panel can be dragged, so we re-derive the grid position from the

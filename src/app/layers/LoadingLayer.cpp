@@ -20,7 +20,7 @@ namespace aether::app
 		}
 
 		UIRenderer& ui = context.Get<UIRenderer>();
-		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
+		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 
 		const float w = static_cast<float>(extent.width);
 		const float h = static_cast<float>(extent.height);

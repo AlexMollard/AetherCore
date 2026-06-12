@@ -461,9 +461,9 @@ namespace aether
 		return m_frames[m_currentFrame].commandBuffer;
 	}
 
-	VkExtent2D Swapchain::GetExtent() const
+	gpu::Extent2D Swapchain::GetExtent() const
 	{
-		return m_swapchain.extent;
+		return gpu::Extent2D(m_swapchain.extent);
 	}
 
 	gpu::Format Swapchain::GetImageFormat() const

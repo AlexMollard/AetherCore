@@ -119,7 +119,7 @@ namespace aether
 		const VkImageCreateInfo imageInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		        .imageType = VK_IMAGE_TYPE_2D,
-		        .format = desc.format,
+		        .format = gpu::ToVk(desc.format),
 		        .extent = {desc.extent.width, desc.extent.height, 1u},
 		        .mipLevels = desc.mipLevels,
 		        .arrayLayers = desc.arrayLayers,
@@ -141,12 +141,12 @@ namespace aether
 		// Create the default view so callers can use GetDefaultView() immediately
 		// without a separate vkCreateImageView call. The device is stored so
 		// Reset() (via ReleaseBindlessSampled) can destroy the view.
-		const VkImageAspectFlags aspect = DeduceAspect(desc.format);
+		const VkImageAspectFlags aspect = DeduceAspect(gpu::ToVk(desc.format));
 		const VkImageViewCreateInfo viewInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		        .image = out->m_image,
 		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
-		        .format = desc.format,
+		        .format = gpu::ToVk(desc.format),
 		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
 		};
 		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &out->m_defaultView);

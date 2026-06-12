@@ -639,7 +639,7 @@ namespace aether::app
 		const bool fxaa = renderer.IsFxaaEnabled();
 		setRow(Row_Fxaa, fxaa ? "On" : "Off", fxaa ? ui::UiTheme::Default().good : (ui::UiTheme::Default().textLabel * glm::vec4{1.f, 1.f, 1.f, 0.5f}));
 
-		const VkExtent2D ext = context.Get<Swapchain>().GetExtent();
+		const gpu::Extent2D ext = context.Get<Swapchain>().GetExtent();
 		std::snprintf(buf.data(), buf.size(), "%u x %u", ext.width, ext.height);
 		setRow(Row_Resolution, buf.data(), ui::UiTheme::Default().text);
 
@@ -810,7 +810,7 @@ namespace aether::app
 	{
 		UIRenderer& ui = context.Get<UIRenderer>();
 		const Input& input = context.Get<Input>();
-		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
+		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 		const float sw = static_cast<float>(extent.width);
 		const float sh = static_cast<float>(extent.height);
 		const ui::UiTheme& theme = ui::UiTheme::Default();

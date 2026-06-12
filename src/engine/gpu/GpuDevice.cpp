@@ -87,7 +87,7 @@ namespace aether
 
 	GpuExtent2D GpuDevice::GetSwapchainExtent() const
 	{
-		const VkExtent2D extent = m_gfx->GetSwapchain().GetExtent();
+		const gpu::Extent2D extent = m_gfx->GetSwapchain().GetExtent();
 		return {extent.width, extent.height};
 	}
 

@@ -81,7 +81,6 @@ namespace aether::gpu
 		}
 
 		const VkDevice vkDevice = static_cast<VkDevice>(m_device);
-		const VkCommandPool vkPool = static_cast<VkCommandPool>(m_pool);
 		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(m_cmd);
 		const VkQueue vkQueue = static_cast<VkQueue>(queue);
 

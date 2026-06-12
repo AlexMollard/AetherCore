@@ -5,6 +5,7 @@
 
 #include "vulkan/UniqueImage.hpp"
 #include "vulkan/volk.hpp"
+#include "gpu/GpuFormat.hpp"
 
 namespace aether
 {

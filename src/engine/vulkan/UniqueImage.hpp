@@ -5,6 +5,7 @@
 
 #include "utils/Assert.hpp"
 #include "vulkan/volk.hpp"
+#include "gpu/GpuEnums.hpp"
 
 namespace aether
 {
@@ -23,8 +24,8 @@ namespace aether
 		// Aspect and sampler are deduced automatically from the format and usage.
 		struct Desc
 		{
-			VkExtent2D extent = {};
-			VkFormat format = VK_FORMAT_UNDEFINED;
+			gpu::Extent2D extent = {};
+			gpu::Format format = gpu::Format::Undefined;
 			VkImageUsageFlags usage = 0;
 			std::uint32_t mipLevels = 1;
 			std::uint32_t arrayLayers = 1;

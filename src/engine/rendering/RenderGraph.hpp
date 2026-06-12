@@ -47,7 +47,7 @@ namespace aether
 	struct PassContext
 	{
 		gpu::CommandList& recorder;
-		VkExtent2D extent;
+		gpu::Extent2D extent;
 		std::uint64_t frameConstantsAddr = 0;
 		std::uint32_t frameIndex = 0;
 	};
@@ -61,7 +61,7 @@ namespace aether
 		VkImageView depthView = VK_NULL_HANDLE;
 		VkFormat colorFormat = VK_FORMAT_UNDEFINED;
 		VkFormat depthFormat = VK_FORMAT_UNDEFINED;
-		VkExtent2D extent{};
+		gpu::Extent2D extent{};
 	};
 
 	// Frame graph with pass/resource declarations and automatic image barriers.
@@ -73,7 +73,7 @@ namespace aether
 			VkFormat format = VK_FORMAT_UNDEFINED;
 			VkImageUsageFlags usage = 0;
 			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-			VkExtent2D extent{}; // {0,0} = match FrameTarget extent at Execute()
+			gpu::Extent2D extent{}; // {0,0} = match FrameTarget extent at Execute()
 		};
 
 		void Initialize(VkDevice device, VmaAllocator allocator);
@@ -214,7 +214,7 @@ namespace aether
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			UniqueImage image;
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu; // index of entry we alias (when image is null)
-			VkExtent2D allocatedExtent{};
+			gpu::Extent2D allocatedExtent{};
 		};
 
 		struct AttachmentRef
@@ -252,7 +252,7 @@ namespace aether
 			std::optional<AttachmentRef> depthWrite;
 			std::vector<ImageAccessRef> imageAccesses;
 			std::function<void(PassContext&)> execute;
-			std::optional<VkExtent2D> extentOverride; // if set, overrides target.extent
+			std::optional<gpu::Extent2D> extentOverride; // if set, overrides target.extent
 			float lastCpuTimeMs = 0.f;
 		};
 
@@ -322,7 +322,7 @@ namespace aether
 		void MoveToCache(TransientImageEntry& entry);
 		UniqueImage TryPullFromCache(const ImageCacheKey& key);
 		void EvictStaleCacheEntries();
-		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageDesc& desc, VkExtent2D extent) const;
+		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageDesc& desc, gpu::Extent2D extent) const;
 
 		void Compile();
 		void EnsureTransientImages(const FrameTarget& target);

@@ -300,7 +300,7 @@ namespace aether
 			return;
 		}
 
-		const VkExtent2D ext = m_swapchain->GetExtent();
+		const gpu::Extent2D ext = m_swapchain->GetExtent();
 		const glm::vec2 p0 = ResolveUiPointPx(ext, start);
 		const glm::vec2 p1 = ResolveUiPointPx(ext, end);
 		if (glm::length(p1 - p0) <= 0.5f)

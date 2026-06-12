@@ -7,6 +7,7 @@
 
 #include "gpu/GpuFormat.hpp"
 #include "vulkan/UniqueImage.hpp"
+#include "gpu/GpuEnums.hpp"
 
 namespace aether
 {
@@ -36,7 +37,7 @@ namespace aether
 		        std::uint64_t extraSignalValue = 0);
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
-		[[nodiscard]] VkExtent2D GetExtent() const;
+		[[nodiscard]] gpu::Extent2D GetExtent() const;
 		[[nodiscard]] gpu::Format GetImageFormat() const;
 		[[nodiscard]] gpu::Format GetDepthFormat() const;
 		// Per-frame image/view accessors used by RenderGraph::Execute.

@@ -229,7 +229,7 @@ namespace aether::app
 	{
 		auto& world = context.Get<World>();
 		UIRenderer& ui = context.Get<UIRenderer>();
-		const VkExtent2D extent = context.Get<Swapchain>().GetExtent();
+		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();
 
 		// ── Flex Toolbar ──────────────────────────────────────────────────────

@@ -74,7 +74,7 @@ namespace aether
 		toDestroy.clear();
 	}
 
-	RenderGraph::ImageCacheKey RenderGraph::MakeCacheKey(const TransientImageDesc& desc, VkExtent2D extent) const
+	RenderGraph::ImageCacheKey RenderGraph::MakeCacheKey(const TransientImageDesc& desc, gpu::Extent2D extent) const
 	{
 		return ImageCacheKey{
 		        .format = desc.format,
@@ -220,7 +220,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(gpu::Extent2D extent)
 	{
-		m_graph.m_passes[m_passIndex].extentOverride = VkExtent2D{extent.width, extent.height};
+		m_graph.m_passes[m_passIndex].extentOverride = gpu::Extent2D{extent.width, extent.height};
 		return *this;
 	}
 
@@ -268,7 +268,7 @@ namespace aether
 		        .format = gpu::ToVk(format),
 		        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
 		        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-		        .extent = VkExtent2D{extent.width, extent.height},
+		        .extent = gpu::Extent2D{extent.width, extent.height},
 		});
 	}
 
@@ -278,7 +278,7 @@ namespace aether
 		        .format = gpu::ToVk(format),
 		        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
 		        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
-		        .extent = VkExtent2D{extent.width, extent.height},
+		        .extent = gpu::Extent2D{extent.width, extent.height},
 		});
 	}
 
@@ -479,7 +479,7 @@ namespace aether
 			}
 		}
 
-		std::vector<VkExtent2D> requestedExtents(m_transientImages.size());
+		std::vector<gpu::Extent2D> requestedExtents(m_transientImages.size());
 		std::vector<std::uint32_t> candidates;
 		candidates.reserve(m_transientImages.size());
 
@@ -488,7 +488,7 @@ namespace aether
 			TransientImageEntry& entry = m_transientImages[idx];
 			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 
-			const VkExtent2D reqExt = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
+			const gpu::Extent2D reqExt = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
 			requestedExtents[idx] = reqExt;
 
 			if (entry.bindlessRequested)
@@ -519,7 +519,7 @@ namespace aether
 		for (const std::uint32_t idx: candidates)
 		{
 			TransientImageEntry& entry = m_transientImages[idx];
-			const VkExtent2D reqExt = requestedExtents[idx];
+			const gpu::Extent2D reqExt = requestedExtents[idx];
 			const int firstUse = lifetimes[idx].first;
 			const int lastUse = lifetimes[idx].last;
 
@@ -612,7 +612,7 @@ namespace aether
 				continue;
 			}
 
-			const VkExtent2D reqExt = requestedExtents[entryIdx];
+			const gpu::Extent2D reqExt = requestedExtents[entryIdx];
 			const bool needsCreate = !entry.image || entry.allocatedExtent.width != reqExt.width || entry.allocatedExtent.height != reqExt.height;
 			if (!needsCreate)
 			{
@@ -734,7 +734,7 @@ namespace aether
 				};
 			}
 
-			const VkExtent2D passExtent = pass.extentOverride.value_or(target.extent);
+			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
 			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!m_scratchColorInfos.empty() || hasDepth);
 			if (useDynamicRendering)
 			{
