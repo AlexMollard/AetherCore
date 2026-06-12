@@ -508,12 +508,12 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = isWAR ? s.readStages
-						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
-						                : s.writeStage,
-						        .srcAccess = isWAR ? 0u
-						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
-						                : s.writeAccess,
+						        .srcStage = isWAR            ? s.readStages
+						                    : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
+						                                     : s.writeStage,
+						        .srcAccess = isWAR            ? 0u
+						                     : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
+						                                      : s.writeAccess,
 						        .dstStage = kDstStage,
 						        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
 						        .aspect = gpu::ImageAspect::Color,
@@ -567,12 +567,12 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = isWAR ? s.readStages
-						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
-						                : s.writeStage,
-						        .srcAccess = isWAR ? 0u
-						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
-						                : s.writeAccess,
+						        .srcStage = isWAR            ? s.readStages
+						                    : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
+						                                     : s.writeStage,
+						        .srcAccess = isWAR            ? 0u
+						                     : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
+						                                      : s.writeAccess,
 						        .dstStage = kDepthStages,
 						        .dstAccess = loadRead ? kDepthReadWrite : kDepthWrite,
 						        .aspect = gpu::ImageAspect::Depth,
@@ -595,13 +595,13 @@ namespace aether
 					});
 				}
 
-			states[resId] = {
-			        .layout = kTarget,
-			        .writeStage = kDepthStages,
-			        .writeAccess = kDepthWrite,
-			        .readStages = 0,
-			        .isCrossFrame = false,
-			};
+				states[resId] = {
+				        .layout = kTarget,
+				        .writeStage = kDepthStages,
+				        .writeAccess = kDepthWrite,
+				        .readStages = 0,
+				        .isCrossFrame = false,
+				};
 			}
 
 			for (const ImageAccessRef& r: pass.imageAccesses)
@@ -636,9 +636,7 @@ namespace aether
 				auto it = states.find(resId);
 
 				// RAR: already in the right layout and only reads since last write -> no barrier
-				if (isRead && it != states.end()
-					&& it->second.layout == targetLayout
-					&& it->second.writeStage == 0)
+				if (isRead && it != states.end() && it->second.layout == targetLayout && it->second.writeStage == 0)
 				{
 					it->second.readStages |= dstStage;
 					continue;
@@ -738,7 +736,7 @@ namespace aether
 
 #ifndef NDEBUG
 		const auto issues = EvaluateBarriers();
-		for (const auto& issue : issues)
+		for (const auto& issue: issues)
 		{
 			AE_WARN(LogCategory::Vulkan, "{}", issue.message);
 		}
@@ -750,67 +748,58 @@ namespace aether
 	{
 		std::vector<BarrierIssue> issues;
 
-		for (const CompiledPass& cp : m_compiled)
+		for (const CompiledPass& cp: m_compiled)
 		{
 			const PassRecord& pass = m_passes[cp.passIndex];
 
-			for (const CompiledBarrier& b : cp.preBarriers)
+			for (const CompiledBarrier& b: cp.preBarriers)
 			{
-				if (b.oldLayout == b.newLayout
-					&& b.srcStage == b.dstStage
-					&& b.srcAccess == b.dstAccess)
+				if (b.oldLayout == b.newLayout && b.srcStage == b.dstStage && b.srcAccess == b.dstAccess)
 				{
 					issues.push_back({
-						.kind       = BarrierIssue::Kind::Redundant,
-						.passIndex  = cp.passIndex,
-						.resourceId = b.resourceId,
-						.message    = std::format(
-							"Pass '{}': redundant barrier on resource {} — layout and stage unchanged",
-							pass.name, b.resourceId),
+					        .kind = BarrierIssue::Kind::Redundant,
+					        .passIndex = cp.passIndex,
+					        .resourceId = b.resourceId,
+					        .message = std::format("Pass '{}': redundant barrier on resource {} — layout and stage unchanged", pass.name, b.resourceId),
 					});
 				}
 
-				if (b.oldLayout != b.newLayout
-					&& b.srcAccess == 0
-					&& b.srcStage != static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT))
+				if (b.oldLayout != b.newLayout && b.srcAccess == 0 && b.srcStage != static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT))
 				{
 					issues.push_back({
-						.kind       = BarrierIssue::Kind::MissingAccessMask,
-						.passIndex  = cp.passIndex,
-						.resourceId = b.resourceId,
-						.message    = std::format(
-							"Pass '{}': layout transition on resource {} has srcAccess=0 "
-							"but srcStage is not TOP_OF_PIPE — possible RAW hazard.",
-							pass.name, b.resourceId),
+					        .kind = BarrierIssue::Kind::MissingAccessMask,
+					        .passIndex = cp.passIndex,
+					        .resourceId = b.resourceId,
+					        .message = std::format("Pass '{}': layout transition on resource {} has srcAccess=0 "
+					                               "but srcStage is not TOP_OF_PIPE — possible RAW hazard.",
+					                pass.name,
+					                b.resourceId),
 					});
 				}
 
-				if (b.srcStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
-					&& !b.isCrossFrame)
+				if (b.srcStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) && !b.isCrossFrame)
 				{
 					issues.push_back({
-						.kind       = BarrierIssue::Kind::PipelineStall,
-						.passIndex  = cp.passIndex,
-						.resourceId = b.resourceId,
-						.message    = std::format(
-							"Pass '{}': resource {} uses ALL_COMMANDS_BIT "
-							"but isCrossFrame is false — unnecessarily conservative.",
-							pass.name, b.resourceId),
+					        .kind = BarrierIssue::Kind::PipelineStall,
+					        .passIndex = cp.passIndex,
+					        .resourceId = b.resourceId,
+					        .message = std::format("Pass '{}': resource {} uses ALL_COMMANDS_BIT "
+					                               "but isCrossFrame is false — unnecessarily conservative.",
+					                pass.name,
+					                b.resourceId),
 					});
 				}
 
-				if (b.newLayout == gpu::ImageLayout::ShaderReadOnly
-					&& b.dstStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT)
-					&& pass.kind == PassKind::Graphics)
+				if (b.newLayout == gpu::ImageLayout::ShaderReadOnly && b.dstStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT) && pass.kind == PassKind::Graphics)
 				{
 					issues.push_back({
-						.kind       = BarrierIssue::Kind::VertexSamplingGap,
-						.passIndex  = cp.passIndex,
-						.resourceId = b.resourceId,
-						.message    = std::format(
-							"Pass '{}': resource {} transitions to ShaderReadOnly "
-							"with only FRAGMENT_SHADER stage — vertex shader sampling will race.",
-							pass.name, b.resourceId),
+					        .kind = BarrierIssue::Kind::VertexSamplingGap,
+					        .passIndex = cp.passIndex,
+					        .resourceId = b.resourceId,
+					        .message = std::format("Pass '{}': resource {} transitions to ShaderReadOnly "
+					                               "with only FRAGMENT_SHADER stage — vertex shader sampling will race.",
+					                pass.name,
+					                b.resourceId),
 					});
 				}
 			}

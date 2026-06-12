@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <type_traits>
 
 #include "gpu/GpuFormat.hpp"
 
@@ -18,6 +19,51 @@
 
 namespace aether::gpu
 {
+	// ─────────────────────────────────────────────────────────────────────
+	// GENERIC BITWISE OPERATORS
+	// ─────────────────────────────────────────────────────────────────────
+	// Automatically handles 32-bit and 64-bit enums safely without manual casts.
+	// (Requires C++17 for std::is_enum_v.)
+
+	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	constexpr Enum operator|(Enum lhs, Enum rhs) noexcept
+	{
+		using Underlying = std::underlying_type_t<Enum>;
+		return static_cast<Enum>(static_cast<Underlying>(lhs) | static_cast<Underlying>(rhs));
+	}
+
+	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	constexpr Enum& operator|=(Enum& lhs, Enum rhs) noexcept
+	{
+		lhs = lhs | rhs;
+		return lhs;
+	}
+
+	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	constexpr Enum operator&(Enum lhs, Enum rhs) noexcept
+	{
+		using Underlying = std::underlying_type_t<Enum>;
+		return static_cast<Enum>(static_cast<Underlying>(lhs) & static_cast<Underlying>(rhs));
+	}
+
+	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	constexpr Enum& operator&=(Enum& lhs, Enum rhs) noexcept
+	{
+		lhs = lhs & rhs;
+		return lhs;
+	}
+
+	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	constexpr Enum operator~(Enum rhs) noexcept
+	{
+		using Underlying = std::underlying_type_t<Enum>;
+		return static_cast<Enum>(~static_cast<Underlying>(rhs));
+	}
+
+	// ─────────────────────────────────────────────────────────────────────
+	// ENUMS & STRUCTS
+	// ─────────────────────────────────────────────────────────────────────
+
 	// Element type of a bound index buffer.
 	enum class IndexType : std::uint32_t
 	{
@@ -39,22 +85,6 @@ namespace aether::gpu
 		AllGraphics = Vertex | Fragment,
 		All = Vertex | Fragment | Compute,
 	};
-
-	inline ShaderStage operator|(ShaderStage a, ShaderStage b) noexcept
-	{
-		return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
-	}
-
-	inline ShaderStage& operator|=(ShaderStage& a, ShaderStage b) noexcept
-	{
-		a = a | b;
-		return a;
-	}
-
-	inline ShaderStage operator&(ShaderStage a, ShaderStage b) noexcept
-	{
-		return static_cast<ShaderStage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
-	}
 
 	// Pipeline bind point for vkCmdBindPipeline / vkCmdPushDescriptorSet*.
 	// Mirrors VkPipelineBindPoint; the backend maps to VK_PIPELINE_BIND_POINT_*.
@@ -88,22 +118,6 @@ namespace aether::gpu
 		Transfer = 1ull << 17,
 	};
 
-	inline PipelineStage operator|(PipelineStage a, PipelineStage b) noexcept
-	{
-		return static_cast<PipelineStage>(static_cast<std::uint64_t>(a) | static_cast<std::uint64_t>(b));
-	}
-
-	inline PipelineStage& operator|=(PipelineStage& a, PipelineStage b) noexcept
-	{
-		a = a | b;
-		return a;
-	}
-
-	inline PipelineStage operator&(PipelineStage a, PipelineStage b) noexcept
-	{
-		return static_cast<PipelineStage>(static_cast<std::uint64_t>(a) & static_cast<std::uint64_t>(b));
-	}
-
 	// Memory access bits for barriers.
 	// Mirrors VkAccessFlagBits2. The engine uses:
 	//   - HostWrite               (VK_ACCESS_2_HOST_WRITE_BIT)
@@ -123,22 +137,6 @@ namespace aether::gpu
 		ShaderStorageRead = 1ull << 33,
 		ShaderStorageWrite = 1ull << 34,
 	};
-
-	inline AccessFlags operator|(AccessFlags a, AccessFlags b) noexcept
-	{
-		return static_cast<AccessFlags>(static_cast<std::uint64_t>(a) | static_cast<std::uint64_t>(b));
-	}
-
-	inline AccessFlags& operator|=(AccessFlags& a, AccessFlags b) noexcept
-	{
-		a = a | b;
-		return a;
-	}
-
-	inline AccessFlags operator&(AccessFlags a, AccessFlags b) noexcept
-	{
-		return static_cast<AccessFlags>(static_cast<std::uint64_t>(a) & static_cast<std::uint64_t>(b));
-	}
 
 	// Descriptor type bits used in push-descriptor writes.
 	// Mirrors VkDescriptorType. The engine uses:
@@ -205,22 +203,6 @@ namespace aether::gpu
 		ShaderDeviceAddress = 1u << 17,
 	};
 
-	inline BufferUsage operator|(BufferUsage a, BufferUsage b) noexcept
-	{
-		return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
-	}
-
-	inline BufferUsage& operator|=(BufferUsage& a, BufferUsage b) noexcept
-	{
-		a = a | b;
-		return a;
-	}
-
-	inline BufferUsage operator&(BufferUsage a, BufferUsage b) noexcept
-	{
-		return static_cast<BufferUsage>(static_cast<std::uint32_t>(a) & static_cast<std::uint32_t>(b));
-	}
-
 	// Image usage flags. Mirrors VkImageUsageFlags. Bitwise-OR-able.
 	enum class ImageUsage : std::uint32_t
 	{
@@ -233,17 +215,6 @@ namespace aether::gpu
 		DepthStencilAttachment = 1u << 5,
 	};
 
-	inline ImageUsage operator|(ImageUsage a, ImageUsage b) noexcept
-	{
-		return static_cast<ImageUsage>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
-	}
-
-	inline ImageUsage& operator|=(ImageUsage& a, ImageUsage b) noexcept
-	{
-		a = a | b;
-		return a;
-	}
-
 	// Image aspect flags. Mirrors VkImageAspectFlags. Bitwise-OR-able.
 	enum class ImageAspect : std::uint32_t
 	{
@@ -252,11 +223,6 @@ namespace aether::gpu
 		Depth = 1u << 1,
 		Stencil = 1u << 2,
 	};
-
-	inline ImageAspect operator|(ImageAspect a, ImageAspect b) noexcept
-	{
-		return static_cast<ImageAspect>(static_cast<std::uint32_t>(a) | static_cast<std::uint32_t>(b));
-	}
 
 	// Image layout. Mirrors VkImageLayout. Only the layouts the engine's
 	// barrier solver emits are enumerated; new layouts force a switch-case
@@ -357,6 +323,7 @@ namespace aether::gpu
 		{
 		}
 	};
+
 	// Primitive topology. Mirrors VkPrimitiveTopology. Only the topologies the
 	// engine's pipeline factory emits are enumerated.
 	enum class PrimitiveTopology : std::uint32_t
