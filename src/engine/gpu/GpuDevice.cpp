@@ -38,6 +38,8 @@ namespace aether
 		services.Register<Swapchain>(m_gfx->GetSwapchain());
 		services.Register<ResourcePool>(m_gfx->GetResourcePool());
 		services.Register<BindlessManager>(m_gfx->GetBindlessManager());
+		services.Register<ResourceRegistry>(m_gfx->GetResourceRegistry());
+
 	}
 
 	void GpuDevice::Shutdown()
