@@ -3,9 +3,8 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <span>
-#include <vk_mem_alloc.h>
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
+#include "gpu/GpuHandles.hpp"
 
 namespace aether
 {
@@ -50,11 +49,11 @@ namespace aether
 		// Engine-internal factory used by AetherCore::CreateMesh.
 		// Uploads via a staging buffer to device-local memory; call after the upload
 		// pool is created (blocks until the queue is idle).
-		static Mesh Create(VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, VkCommandPool uploadPool, std::span<const Vertex> vertices);
-		static Mesh Create(VkDevice device,
-		        VmaAllocator allocator,
-		        VkQueue uploadQueue,
-		        VkCommandPool uploadPool,
+		static Mesh Create(gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, std::span<const Vertex> vertices);
+		static Mesh Create(gpu::Device device,
+		        gpu::Allocator allocator,
+		        gpu::Queue uploadQueue,
+		        gpu::CommandPool uploadPool,
 		        std::span<const Vertex> vertices,
 		        std::span<const std::uint32_t> indices,
 		        const float* aabbMin = nullptr,
@@ -65,12 +64,12 @@ namespace aether
 		// Create a non-owning view into an externally managed buffer (e.g. MeshArena / GpuHeap).
 		// The returned Mesh does NOT free the backing memory when destroyed (allocator is null).
 		// Pass device addresses so the vertex shader can fetch vertices via BDA.
-		static Mesh CreateView(VkBuffer vertexBuffer,
-		        VkBuffer indexBuffer,
+		static Mesh CreateView(gpu::BufferHandle vertexBuffer,
+		        gpu::BufferHandle indexBuffer,
 		        std::uint32_t vertexCount,
 		        std::uint32_t indexCount,
-		        VkDeviceSize vertexByteOffset = 0,
-		        VkDeviceSize indexByteOffset = 0,
+		        gpu::DeviceSize vertexByteOffset = 0,
+		        gpu::DeviceSize indexByteOffset = 0,
 		        gpu::DeviceAddress vertexDeviceAddress = 0,
 		        gpu::DeviceAddress indexDeviceAddress = 0);
 
@@ -86,12 +85,12 @@ namespace aether
 			return m_indexBuffer != VK_NULL_HANDLE;
 		}
 
-		[[nodiscard]] VkBuffer GetBuffer() const
+		[[nodiscard]] gpu::BufferHandle GetBuffer() const
 		{
 			return m_buffer;
 		}
 
-		[[nodiscard]] VkBuffer GetIndexBuffer() const
+		[[nodiscard]] gpu::BufferHandle GetIndexBuffer() const
 		{
 			return m_indexBuffer;
 		}
@@ -107,13 +106,13 @@ namespace aether
 		}
 
 		// Byte offset within the vertex buffer (for MeshArena views).
-		[[nodiscard]] VkDeviceSize GetVertexByteOffset() const
+		[[nodiscard]] gpu::DeviceSize GetVertexByteOffset() const
 		{
 			return m_vertexByteOffset;
 		}
 
 		// Byte offset within the index buffer (for MeshArena / GpuHeap views).
-		[[nodiscard]] VkDeviceSize GetIndexByteOffset() const
+		[[nodiscard]] gpu::DeviceSize GetIndexByteOffset() const
 		{
 			return m_indexByteOffset;
 		}
@@ -148,16 +147,16 @@ namespace aether
 		}
 
 	private:
-		VkDevice m_device = VK_NULL_HANDLE;
+		gpu::Device m_device = nullptr;
 		VmaAllocator m_allocator = nullptr;
-		VkBuffer m_buffer = VK_NULL_HANDLE;
+		gpu::BufferHandle m_buffer = VK_NULL_HANDLE;
 		VmaAllocation m_allocation = nullptr;
 		std::uint32_t m_vertexCount = 0;
-		VkBuffer m_indexBuffer = VK_NULL_HANDLE;
+		gpu::BufferHandle m_indexBuffer = VK_NULL_HANDLE;
 		VmaAllocation m_indexAllocation = nullptr;
 		std::uint32_t m_indexCount = 0;
-		VkDeviceSize m_vertexByteOffset = 0;
-		VkDeviceSize m_indexByteOffset = 0;
+		gpu::DeviceSize m_vertexByteOffset = 0;
+		gpu::DeviceSize m_indexByteOffset = 0;
 		gpu::DeviceAddress m_vertexDeviceAddress = 0;
 		gpu::DeviceAddress m_indexDeviceAddress = 0;
 
