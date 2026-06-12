@@ -1,6 +1,6 @@
 #pragma once
 
-#include "vulkan/volk.hpp"
+#include "gpu/GpuEnums.hpp"
 
 namespace aether
 {
@@ -31,13 +31,13 @@ namespace aether::ui
 	{
 	public:
 		// deltaTime - seconds since last frame; used for hover/press animation lerp.
-		void BeginFrame(aether::World& world, Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime = 0.f);
-		void RenderAll(aether::World& world, UIRenderer& ui, const Input& input, VkExtent2D extent);
+		void BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime = 0.f);
+		void RenderAll(aether::World& world, UIRenderer& ui, const Input& input, gpu::Extent2D extent);
 		void EndFrame(aether::World& world, UiContext& ctx);
 
 	private:
-		void HitTest(aether::World& world, UiContext& ctx, VkExtent2D extent);
-		void UpdateDrag(aether::World& world, UiContext& ctx, VkExtent2D extent);
+		void HitTest(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
+		void UpdateDrag(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
 		void FlushWidgetStates(aether::World& world, UiContext& ctx);
 		// Lerps hoverT/pressT on every UiInputComponent toward their target [0..1].
 		void UpdateTransitions(aether::World& world, float deltaTime);

@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <string_view>
-#include "vulkan/volk.hpp"
+#include "gpu/GpuEnums.hpp"
 
 #include "scene/Entity.hpp"
 #include "scene/World.hpp"
@@ -32,41 +32,41 @@ namespace aether::ui
 	// Use the Spawn* helpers below to create fully-configured entities in one call.
 
 	// Button: draws background + centred label, returns true the frame it's clicked.
-	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Slider: draws track / fill / knob.  Handles horizontal drag via Input.
 	// Updates UiSliderComponent::value and returns the new value.
-	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Checkbox: draws box + tick + inline label, toggles on click, returns current state.
-	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Progress bar: read-only fill rect proportional to UiSliderComponent::value in [min,max].
-	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Panel: draws background + header + title.
 	// Returns true if the panel body should be rendered (false when collapsed).
-	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Label row: draws static label (left) + dynamic value (right, coloured).
-	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Section separator: draws a thin horizontal line.
-	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Text input: draws background, text/placeholder, and a blinking cursor when focused.
 	// UiSystem feeds typed characters when this entity has keyboard focus.
 	// Returns true for ONE frame when the user submits with Enter.
-	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Item slot: draws rarity border, hover/press overlay, icon placeholder,
 	// and a quantity badge.  Returns true the frame the slot is clicked.
-	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Graph: draws a time-series bar chart with background, reference lines,
 	// and a legend label.  Supports UiInputComponent for hover interaction
 	// (optional - omit for a read-only plot).
-	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// ── Z-order management ────────────────────────────────────────────────────
 
@@ -84,15 +84,15 @@ namespace aether::ui
 	// Positions all direct children of `container` according to its
 	// UiLayoutComponent (VStack / HStack).  Must be called before drawing
 	// children so their UiTransformComponent rects are up to date.
-	void ApplyLayout(aether::World& world, Entity container, VkExtent2D extent);
+	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent);
 
 	// Positions UiChildrenComponent children of `container` into a uniform
 	// column grid and auto-sizes the container height to wrap all rows.
-	void ApplyGridLayout(aether::World& world, Entity container, VkExtent2D extent);
+	void ApplyGridLayout(aether::World& world, Entity container, gpu::Extent2D extent);
 
 	// Convenience: runs both ApplyLayout and ApplyGridLayout on every
 	// eligible entity in the world.
-	void RunLayouts(aether::World& world, VkExtent2D extent);
+	void RunLayouts(aether::World& world, gpu::Extent2D extent);
 
 	// Wires `child` into `parent`'s UiChildrenComponent and stamps a
 	// UiParentComponent on `child`.  parent must already have UiChildrenComponent.
@@ -137,7 +137,7 @@ namespace aether::ui
 	// Tab bar: draws the tab strip background, each tab button with active/inactive
 	// styling, and a bottom separator. Tab state (click detection, page show/hide)
 	// is managed by UiSystem::ProcessTabBars which runs before layout.
-	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme = UiTheme::Default());
+	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Creates a tab page container entity with vertical layout and auto-size.
 	Entity SpawnTabPage(aether::World& world, float zOrder = 2.f);

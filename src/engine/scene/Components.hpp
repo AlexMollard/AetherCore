@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <vector>
 #include <glm/glm.hpp>
-#include "vulkan/volk.hpp"
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"

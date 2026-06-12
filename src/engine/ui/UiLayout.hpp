@@ -28,14 +28,14 @@ namespace aether
 		glm::vec2 offsetMaxPx{0.0f, 0.0f};
 	};
 
-	[[nodiscard]] inline glm::vec2 ResolveUiPointPx(VkExtent2D extent, const UiPoint& point)
+	[[nodiscard]] inline glm::vec2 ResolveUiPointPx(gpu::Extent2D extent, const UiPoint& point)
 	{
 		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		return point.anchor * sizePx + point.offsetPx;
 	}
 
 	// Returns x, y, width, height in pixels. Width/height are clamped to >= 0.
-	[[nodiscard]] inline glm::vec4 ResolveUiRectPx(VkExtent2D extent, const UiRect& rect)
+	[[nodiscard]] inline glm::vec4 ResolveUiRectPx(gpu::Extent2D extent, const UiRect& rect)
 	{
 		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		const glm::vec2 minPos = rect.anchorMin * sizePx + rect.offsetMinPx;
