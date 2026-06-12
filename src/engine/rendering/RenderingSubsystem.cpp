@@ -49,7 +49,7 @@ namespace aether
 		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
-		        .swapchainFormat = gpu::ToVk(swapchain.GetImageFormat()),
+		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
@@ -119,7 +119,7 @@ namespace aether
 		        .pipelineCache = vk.GetPipelineCache(),
 		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
-		        .swapchainFormat = gpu::ToVk(swapchain.GetImageFormat()),
+		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});

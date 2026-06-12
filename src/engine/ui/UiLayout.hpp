@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <glm/glm.hpp>
 
-#include "vulkan/volk.hpp"
+#include "gpu/GpuEnums.hpp"
 
 namespace aether
 {
