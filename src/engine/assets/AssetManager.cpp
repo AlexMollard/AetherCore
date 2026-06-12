@@ -758,7 +758,7 @@ namespace aether
 		if (!source.skins.empty() && !source.animations.empty())
 		{
 			AE_VERBOSE(LogCategory::Engine, "  Creating animation database: {} skins, {} animations, {} nodes", source.skins.size(), source.animations.size(), source.nodes.size());
-			loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadPool, source);
+			loaded.animationDb = AnimationDatabase::Create(*m_context, m_uploadContext->GetCommandPool(), source);
 			if (loaded.animationDb.IsValid())
 			{
 				AE_VERBOSE(LogCategory::Engine, "  Animation database created: {} clips, {} nodes, {} skins", loaded.animationDb.GetClipCount(), loaded.animationDb.GetNodeCount(), loaded.animationDb.GetSkinCount());
