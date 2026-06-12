@@ -4,6 +4,7 @@
 #include <span>
 #include <string_view>
 #include "gpu/DescriptorSetLayout.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Assert.hpp"
 
@@ -34,29 +35,34 @@ namespace aether
 		GraphicsPipeline() = default;
 		~GraphicsPipeline();
 
-		GraphicsPipeline(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline owns a VkPipeline - use std::move");
-		GraphicsPipeline& operator=(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline owns a VkPipeline - use std::move");
+		GraphicsPipeline(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline holds an opaque handle - use std::move");
+		GraphicsPipeline& operator=(const GraphicsPipeline&) = AE_DELETE_MSG("GraphicsPipeline holds an opaque handle - use std::move");
 
 		GraphicsPipeline(GraphicsPipeline&&) noexcept;
 		GraphicsPipeline& operator=(GraphicsPipeline&&) noexcept;
 
+		// Creates the pipeline + GPL libraries and registers them with the
+		// gpu::ResourceRegistry. The returned handle owns the deferred-
+		// destruction path (3-frame ring). On Shutdown / destruction of
+		// this object the handle is released and the registry tears down
+		// the linked pipeline + libraries + layout kMaxFramesInFlight
+		// frames later.
 		static Expected<GraphicsPipeline> Create(gpu::Device device, gpu::PipelineCache pipelineCache, const Desc& desc);
+
+		// Explicit teardown that schedules the underlying pipelines for
+		// deferred destruction immediately, then resets the handle so the
+		// destructor is a no-op. Callers that want to release GPU memory
+		// before the owning object goes out of scope can use this; the
+		// destructor will still fire on scope exit and is also safe.
 		void Destroy();
 
 		[[nodiscard]] bool IsValid() const
 		{
-			return m_pipeline != nullptr;
+			return m_handle.IsValid();
 		}
 
-		[[nodiscard]] gpu::Pipeline GetPipeline() const
-		{
-			return m_pipeline;
-		}
-
-		[[nodiscard]] gpu::PipelineLayout GetLayout() const
-		{
-			return m_layout;
-		}
+		[[nodiscard]] gpu::Pipeline GetPipeline() const;
+		[[nodiscard]] gpu::PipelineLayout GetLayout() const;
 
 		[[nodiscard]] std::uint32_t GetSetLayoutCount() const
 		{
@@ -64,13 +70,7 @@ namespace aether
 		}
 
 	private:
-		void* m_device = nullptr;
-		void* m_layout = nullptr;
-		void* m_pipeline = nullptr;
-		void* m_vertInputLib = nullptr;
-		void* m_preRasterLib = nullptr;
-		void* m_fragShaderLib = nullptr;
-		void* m_fragOutputLib = nullptr;
+		gpu::PipelineHandle m_handle{};
 		std::uint32_t m_setLayoutCount = 0;
 	};
 } // namespace aether

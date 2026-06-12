@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 
@@ -16,25 +17,12 @@ namespace aether
 		void Shutdown();
 		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
 
-		[[nodiscard]] gpu::Pipeline GetSinglePipeline() const
-		{
-			return m_singlePipeline;
-		}
-
-		[[nodiscard]] gpu::PipelineLayout GetSingleLayout() const
-		{
-			return m_singleLayout;
-		}
-
-		[[nodiscard]] gpu::Pipeline GetMultiPipeline() const
-		{
-			return m_multiPipeline;
-		}
-
-		[[nodiscard]] gpu::PipelineLayout GetMultiLayout() const
-		{
-			return m_multiLayout;
-		}
+		// Bound each frame in PrepareAndDispatch. Returns the gpu::Pipeline /
+		// gpu::PipelineLayout currently registered for the single-pass path.
+		[[nodiscard]] gpu::Pipeline GetSinglePipeline() const;
+		[[nodiscard]] gpu::PipelineLayout GetSingleLayout() const;
+		[[nodiscard]] gpu::Pipeline GetMultiPipeline() const;
+		[[nodiscard]] gpu::PipelineLayout GetMultiLayout() const;
 
 	private:
 		Expected<void> EnsureSinglePipeline();
@@ -42,9 +30,7 @@ namespace aether
 
 		gpu::Device m_device = nullptr;
 		gpu::PipelineCache m_pipelineCache = nullptr;
-		gpu::Pipeline m_singlePipeline = nullptr;
-		gpu::PipelineLayout m_singleLayout = nullptr;
-		gpu::Pipeline m_multiPipeline = nullptr;
-		gpu::PipelineLayout m_multiLayout = nullptr;
+		gpu::PipelineHandle m_singleHandle{};
+		gpu::PipelineHandle m_multiHandle{};
 	};
 } // namespace aether

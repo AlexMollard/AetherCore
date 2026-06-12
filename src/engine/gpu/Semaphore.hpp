@@ -13,9 +13,9 @@ namespace aether::gpu
 	// the backend casts. Returns nullptr on failure.
 	struct TimelineSemaphoreDesc
 	{
-		void*         device      = nullptr;
+		void* device = nullptr;
 		std::uint64_t initialValue = 0;
-		const char*   debugName    = nullptr;
+		const char* debugName = nullptr;
 	};
 
 	[[nodiscard]] TimelineSemaphore* CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept;

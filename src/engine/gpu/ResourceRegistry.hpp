@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
+#include "gpu/DescriptorSetLayout.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
@@ -10,39 +12,75 @@ namespace aether::gpu
 {
 	struct BufferDesc
 	{
-		DeviceSize  size      = 0;
-		BufferUsage usage     = BufferUsage::None;
+		DeviceSize size = 0;
+		BufferUsage usage = BufferUsage::None;
 		const char* debugName = nullptr;
 	};
 
 	struct MappedBufferDesc
 	{
-		DeviceSize          size         = 0;
-		BufferUsage         usage        = BufferUsage::None;
-		MappedMemoryUsage   memoryUsage  = MappedMemoryUsage::Auto;
-		const char*         debugName    = nullptr;
+		DeviceSize size = 0;
+		BufferUsage usage = BufferUsage::None;
+		MappedMemoryUsage memoryUsage = MappedMemoryUsage::Auto;
+		const char* debugName = nullptr;
 	};
 
 	struct MappedBufferView
 	{
-		void*         mappedPtr     = nullptr;
+		void* mappedPtr = nullptr;
 		DeviceAddress deviceAddress = 0;
-		DeviceSize    size          = 0;
+		DeviceSize size = 0;
 	};
 
 	struct TextureDesc
 	{
-		Format      format    = Format::Undefined;
-		Extent2D    extent    = {};
-		ImageUsage  usage     = ImageUsage::None;
-		ImageAspect aspect    = ImageAspect::Color;
+		Format format = Format::Undefined;
+		Extent2D extent = {};
+		ImageUsage usage = ImageUsage::None;
+		ImageAspect aspect = ImageAspect::Color;
+		std::uint32_t mipLevels = 1;
+		std::uint32_t arrayLayers = 1;
 		const char* debugName = nullptr;
+	};
+
+	// Compute-pipeline description. Lives in the gpu/ facade so passes do not
+	// need to know about vkutil::ComputePipelineDesc. The backend factory
+	// mirrors this struct field-for-field.
+	struct ComputePipelineDesc
+	{
+		const char* shaderVfsPath = nullptr;
+		const char* shaderEntry = "main";
+		std::uint32_t pushConstantSize = 0;
+		const char* debugName = nullptr;
+	};
+
+	// Graphics-pipeline description. Mirrors rendering::GraphicsPipeline::Desc
+	// but lives in the gpu/ facade so ResourceRegistry callers do not need to
+	// depend on the rendering layer. The facade translates to the rendering
+	// type when forwarding to the Vulkan factory.
+	struct GraphicsPipelineDesc
+	{
+		const char* shaderVfsPath = nullptr;
+		const char* vertexEntry = "vertexMain";
+		const char* fragmentEntry = "fragmentMain";
+		Format colorFormat = Format::Undefined;
+		Format depthFormat = Format::Undefined;
+		bool depthTestEnable = false;
+		bool depthWriteEnable = false;
+		CompareOp depthCompareOp = CompareOp::Less;
+		bool blendEnable = false;
+		std::uint32_t pushConstantSize = 0;
+		ShaderStage pushConstantStages = ShaderStage::AllGraphics;
+		// Borrowed. The caller is responsible for keeping these layout handles
+		// alive for the duration of the call (BindlessManager layouts are
+		// engine-global and live the whole frame).
+		std::span<const DescriptorSetLayout> setLayouts;
 	};
 
 	struct ResourceRegistryInitDesc
 	{
-		void* vulkanDevice    = nullptr;
-		void* vmaAllocator    = nullptr;
+		void* vulkanDevice = nullptr;
+		void* vmaAllocator = nullptr;
 		void* backendRegistry = nullptr;
 	};
 
@@ -60,8 +98,31 @@ namespace aether::gpu
 
 		static void Destroy(BufferHandle handle) noexcept;
 		static void Destroy(TextureHandle handle) noexcept;
+		static void Destroy(PipelineHandle handle) noexcept;
 
 		[[nodiscard]] static TextureHandle CreateTexture(const TextureDesc& desc) noexcept;
+
+		// Compute-pipeline: factory + register. Returns an opaque
+		// PipelineHandle. Layout is owned by the registry entry (when the
+		// factory sets ownsLayout=true) and is destroyed when the handle is.
+		[[nodiscard]] static PipelineHandle CreateComputePipeline(Device device, PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;
+
+		// Graphics-pipeline: factory + register. Returns an opaque
+		// PipelineHandle bound to the linked VkPipeline + VkPipelineLayout.
+		// The 4 GPL libraries used during linking are also tracked by the
+		// registry entry and destroyed alongside the linked pipeline.
+		[[nodiscard]] static PipelineHandle CreateGraphicsPipeline(Device device, PipelineCache pipelineCache, const struct GraphicsPipelineDesc& desc) noexcept;
+
+		// Resolve a PipelineHandle to an opaque gpu::Pipeline pointer (the
+		// VkPipeline handle) and a gpu::PipelineLayout pointer. Returns
+		// {nullptr, nullptr} if the handle is stale or the slot is empty.
+		struct ResolvedPipeline
+		{
+			Pipeline pipeline = nullptr;
+			PipelineLayout layout = nullptr;
+		};
+
+		[[nodiscard]] static ResolvedPipeline ResolvePipeline(PipelineHandle handle) noexcept;
 	};
 
 	template<typename T>

@@ -1,10 +1,10 @@
 #pragma once
 
 // GPU profiling macros (Tracy Vulkan zones).
-// Include this ONLY from translation units that already pull in Vulkan headers,
-// or let this header pull volk in for you - it includes volk.hpp when TRACY_ENABLE
-// is set so TracyVulkan.hpp has the Vulkan symbols it requires.
-// For CPU-only profiling use Profiler.hpp instead.
+// When TRACY_ENABLE is on, this header pulls in vulkan/volk.hpp because
+// TracyVulkan.hpp has a hard #error guard requiring Vulkan headers to be
+// visible first. CPU-only profiling (AE_PROFILE_ZONE / AE_PROFILE_PLOT) lives
+// in Profiler.hpp and does not require Vulkan.
 
 #ifdef TRACY_ENABLE
 #	include <cstring>
@@ -20,8 +20,10 @@
 // Falls back to TracyPlot on the CPU timeline when the GPU context isn't available.
 #	define AE_PROFILE_GPU_PLOT(name, val) TracyPlot(name, val)
 #else
-// Provide the type even when Tracy is disabled so headers that store TracyVkCtx
-// members compile without pulling in any Vulkan headers.
+// Provide a forward-compatible alias for headers that store TracyVkCtx members
+// even when Tracy is disabled. The Tracy header itself defines the real type
+// when included; this stub keeps translation units that don't include Tracy
+// compiling.
 using TracyVkCtx = void*;
 
 #	define AE_PROFILE_GPU_ZONE(ctx, cmdbuf, name) (void) 0

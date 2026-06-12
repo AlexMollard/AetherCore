@@ -64,9 +64,7 @@ namespace aether
 		}
 
 		// Barrier: transfer-write -> vertex-attribute-read and index-read.
-		cmdList.PipelineMemoryBarrier(
-		        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite,
-		        gpu::PipelineStage::VertexInput, gpu::AccessFlags::VertexAttributeRead | gpu::AccessFlags::IndexRead);
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::VertexInput, gpu::AccessFlags::VertexAttributeRead | gpu::AccessFlags::IndexRead);
 
 		m_pendingCopies.clear();
 		m_ringHead = 0;

@@ -186,9 +186,7 @@ namespace aether
 				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
 				cmdList.FillBuffer(static_cast<void*>(m_nodeGlobalTransformsBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
-			cmdList.PipelineMemoryBarrier(
-			        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite,
-			        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
@@ -402,8 +400,8 @@ namespace aether
 		}
 
 		// Ensure host writes are visible to compute/graphics shader reads.
-		cmdList.PipelineMemoryBarrier(
-		        gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite,
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host,
+		        gpu::AccessFlags::HostWrite,
 		        gpu::PipelineStage::ComputeShader | gpu::PipelineStage::VertexShader | gpu::PipelineStage::FragmentShader,
 		        gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
@@ -464,9 +462,7 @@ namespace aether
 					cmdList.Dispatch(groupsX, groupsY, 1);
 				}
 
-				cmdList.PipelineMemoryBarrier(
-				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
-				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 				cmdList.EndDebugLabel();
 			}
@@ -510,9 +506,7 @@ namespace aether
 
 				// Barrier: make GPU anim_sample writes visible to downstream
 				// compute passes (node_flatten, build_skin_palette).
-				cmdList.PipelineMemoryBarrier(
-				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
-				        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
+				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 
 			// ── Pass 1.3: Animation blend (cross-fade between two clips) ───────────
@@ -818,9 +812,7 @@ namespace aether
 		}
 
 		// Ensure indirect args are visible before draw-indirect.
-		cmdList.PipelineMemoryBarrier(
-		        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
-		        gpu::PipelineStage::DrawIndirect, gpu::AccessFlags::IndirectCommandRead);
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::DrawIndirect, gpu::AccessFlags::IndirectCommandRead);
 
 #ifdef TRACY_ENABLE
 		{

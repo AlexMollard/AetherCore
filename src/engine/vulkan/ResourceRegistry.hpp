@@ -55,18 +55,18 @@ namespace aether
 			bool ownsAllocation = false;
 		};
 
-	struct BufferEntry
-	{
-		VkBuffer buffer = VK_NULL_HANDLE;
-		VkDevice device = VK_NULL_HANDLE;
-		VmaAllocation allocation = VK_NULL_HANDLE;
-		VmaAllocator allocator = VK_NULL_HANDLE;
-		VkBufferUsageFlags usage = 0;
-		VkDeviceSize size = 0;
-		bool ownsAllocation = false;
-		void* mappedPtr = nullptr;
-		VkDeviceAddress deviceAddress = 0;
-	};
+		struct BufferEntry
+		{
+			VkBuffer buffer = VK_NULL_HANDLE;
+			VkDevice device = VK_NULL_HANDLE;
+			VmaAllocation allocation = VK_NULL_HANDLE;
+			VmaAllocator allocator = VK_NULL_HANDLE;
+			VkBufferUsageFlags usage = 0;
+			VkDeviceSize size = 0;
+			bool ownsAllocation = false;
+			void* mappedPtr = nullptr;
+			VkDeviceAddress deviceAddress = 0;
+		};
 
 		struct PipelineEntry
 		{
@@ -74,6 +74,15 @@ namespace aether
 			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkDevice device = VK_NULL_HANDLE;
 			bool ownsLayout = false;
+			// Optional GPL libraries. VK_NULL_HANDLE for compute / non-GPL
+			// pipelines. Destroyed alongside the linked pipeline in
+			// DestroyPipelineEntryNow. The linked `pipeline` is always
+			// independent of these (linking copies the state, not the
+			// VkPipeline handle).
+			VkPipeline vertInputLib = VK_NULL_HANDLE;
+			VkPipeline preRasterLib = VK_NULL_HANDLE;
+			VkPipeline fragShaderLib = VK_NULL_HANDLE;
+			VkPipeline fragOutputLib = VK_NULL_HANDLE;
 		};
 
 		ResourceRegistry() = default;

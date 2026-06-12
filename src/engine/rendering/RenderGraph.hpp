@@ -193,8 +193,6 @@ namespace aether
 		// Execute the compiled frame graph for the current frame.
 		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
-
-
 	private:
 		static constexpr uint32_t kSwapchainColorId = 0u;
 		static constexpr uint32_t kSwapchainDepthId = 1u;

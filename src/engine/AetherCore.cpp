@@ -446,10 +446,7 @@ namespace aether
 		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
 		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 
-		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host,
-		        gpu::AccessFlags::HostWrite,
-		        gpu::PipelineStage::AllCommands,
-		        gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
+		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
 

@@ -2,6 +2,7 @@
 
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuTypesVk.hpp"
 
 namespace aether
@@ -194,10 +195,78 @@ namespace aether
 		return handle;
 	}
 
-	gpu::TextureHandle ResourceRegistry::CreateTexture(const gpu::TextureDesc& /*desc*/) noexcept
+	gpu::TextureHandle ResourceRegistry::CreateTexture(const gpu::TextureDesc& desc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
-		return {};
+		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+
+		const VkImageCreateInfo imageInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = gpu::ToVk(desc.format),
+		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .mipLevels = desc.mipLevels,
+		        .arrayLayers = desc.arrayLayers,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = gpu::ToVk(desc.usage),
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		const VmaAllocationCreateInfo allocInfo{
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		};
+
+		VkImage image = VK_NULL_HANDLE;
+		VmaAllocation allocation = VK_NULL_HANDLE;
+		VmaAllocationInfo allocResult{};
+
+		const VkResult createResult = vmaCreateImage(m_allocator, &imageInfo, &allocInfo, &image, &allocation, &allocResult);
+		if (createResult != VK_SUCCESS)
+		{
+			AE_ERROR(LogCategory::Vulkan, "ResourceRegistry::CreateTexture: vmaCreateImage failed (VkResult={}).", static_cast<int32_t>(createResult));
+			return {};
+		}
+
+		const VkImageViewCreateInfo viewInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = image,
+		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+		        .format = imageInfo.format,
+		        .subresourceRange = {gpu::ToVk(desc.aspect), 0, desc.mipLevels, 0, desc.arrayLayers},
+		};
+		VkImageView view = VK_NULL_HANDLE;
+		const VkResult viewResult = vkCreateImageView(m_device, &viewInfo, nullptr, &view);
+		if (viewResult != VK_SUCCESS)
+		{
+			vmaDestroyImage(m_allocator, image, allocation);
+			AE_ERROR(LogCategory::Vulkan, "ResourceRegistry::CreateTexture: vkCreateImageView failed (VkResult={}).", static_cast<int32_t>(viewResult));
+			return {};
+		}
+
+		TextureEntry entry{};
+		entry.image = image;
+		entry.view = view;
+		entry.storageView = VK_NULL_HANDLE;
+		entry.format = imageInfo.format;
+		entry.extent = {desc.extent.width, desc.extent.height};
+		entry.usage = imageInfo.usage;
+		entry.aspect = gpu::ToVk(desc.aspect);
+		entry.device = m_device;
+		entry.allocation = allocation;
+		entry.allocator = m_allocator;
+		entry.ownsAllocation = true;
+
+		const gpu::TextureHandle handle = RegisterTexture(entry);
+		if (!handle.IsValid())
+		{
+			vkDestroyImageView(m_device, view, nullptr);
+			vmaDestroyImage(m_allocator, image, allocation);
+			return {};
+		}
+
+		return handle;
 	}
 
 	gpu::MappedBufferView ResourceRegistry::ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept
@@ -584,11 +653,33 @@ namespace aether
 
 	void ResourceRegistry::DestroyPipelineEntryNow(const PipelineEntry& entry)
 	{
-		if (entry.pipeline != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		if (entry.device == VK_NULL_HANDLE)
+		{
+			return;
+		}
+		// Linked pipeline first - the libraries it was built from can go
+		// immediately after (the linked pipeline retained its own state copy).
+		if (entry.pipeline != VK_NULL_HANDLE)
 		{
 			vkDestroyPipeline(entry.device, entry.pipeline, nullptr);
 		}
-		if (entry.layout != VK_NULL_HANDLE && entry.ownsLayout && entry.device != VK_NULL_HANDLE)
+		if (entry.vertInputLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(entry.device, entry.vertInputLib, nullptr);
+		}
+		if (entry.preRasterLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(entry.device, entry.preRasterLib, nullptr);
+		}
+		if (entry.fragShaderLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(entry.device, entry.fragShaderLib, nullptr);
+		}
+		if (entry.fragOutputLib != VK_NULL_HANDLE)
+		{
+			vkDestroyPipeline(entry.device, entry.fragOutputLib, nullptr);
+		}
+		if (entry.layout != VK_NULL_HANDLE && entry.ownsLayout)
 		{
 			vkDestroyPipelineLayout(entry.device, entry.layout, nullptr);
 		}

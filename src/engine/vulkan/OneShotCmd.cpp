@@ -12,10 +12,7 @@ namespace aether::gpu
 	}
 
 	OneShotCmd::OneShotCmd(OneShotCmd&& other) noexcept
-	      : m_device(std::exchange(other.m_device, nullptr)),
-	        m_pool(std::exchange(other.m_pool, nullptr)),
-	        m_cmd(std::exchange(other.m_cmd, nullptr)),
-	        m_cmdList(std::move(other.m_cmdList))
+	      : m_device(std::exchange(other.m_device, nullptr)), m_pool(std::exchange(other.m_pool, nullptr)), m_cmd(std::exchange(other.m_cmd, nullptr)), m_cmdList(std::move(other.m_cmdList))
 	{
 	}
 
