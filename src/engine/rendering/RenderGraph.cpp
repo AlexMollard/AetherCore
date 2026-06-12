@@ -137,7 +137,7 @@ namespace aether
 
 	// ── Pass management ──────────────────────────────────────────────────────
 
-	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
+	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, [[maybe_unused]] std::source_location loc)
 	{
 		PassRecord rec{};
 		rec.name = std::move(name);
@@ -149,7 +149,7 @@ namespace aether
 		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
-	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name, std::source_location loc)
+	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name, [[maybe_unused]] std::source_location loc)
 	{
 		PassRecord rec{};
 		rec.name = std::move(name);

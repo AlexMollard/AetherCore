@@ -1,6 +1,7 @@
 #include "vulkan/ResourceRegistry.hpp"
 
 #include "utils/Assert.hpp"
+#include "utils/Backtrace.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuTypesVk.hpp"
@@ -16,6 +17,48 @@ namespace aether
 		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
 		inline constexpr std::uint32_t kGenerationWrap = 256u;
+		inline constexpr int kAllocFrames = 4;
+		inline constexpr int kBacktraceDepth = 9;
+
+#ifndef NDEBUG
+		// Build a multi-line frame list from the slot's ring buffer.
+		template<typename Slot>
+		static std::string FormatAllocFrames(const Slot& slot) noexcept
+		{
+			if (slot.allocSiteCount == 0)
+			{
+				return {};
+			}
+
+			std::string result;
+			const int start = std::max(0, slot.allocSiteCount - kAllocFrames);
+			for (int i = start; i < slot.allocSiteCount; i++)
+			{
+				const auto& frame = slot.allocFrames[i % kAllocFrames];
+				if (frame.site.line() == 0)
+				{
+					continue;
+				}
+				result += "\n  #";
+				result += std::to_string(i);
+				result += ": ";
+				result += ShortenPath(frame.site.file_name());
+				result += ":";
+				result += std::to_string(frame.site.line());
+
+				for (int f = 0; f < frame.frameCount; f++)
+				{
+					std::string trace = ResolveAddress(frame.addresses[f]);
+					if (!trace.empty())
+					{
+						result += "\n    ";
+						result += trace;
+					}
+				}
+			}
+			return result;
+		}
+#endif // !NDEBUG
 
 		[[nodiscard]] VmaAllocationCreateInfo MakeMappedAllocInfo(gpu::MappedMemoryUsage memUsage) noexcept
 		{
@@ -74,7 +117,7 @@ namespace aether
 			if (slot.entry)
 			{
 #ifndef NDEBUG
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' (gen {}).{}", slot.debugName, slot.generation, FormatAllocFrames(slot));
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
@@ -87,7 +130,7 @@ namespace aether
 			if (slot.entry)
 			{
 #ifndef NDEBUG
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' (gen {}).{}", slot.debugName, slot.generation, FormatAllocFrames(slot));
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
@@ -100,7 +143,7 @@ namespace aether
 			if (slot.entry)
 			{
 #ifndef NDEBUG
-				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' registered at {}:{}", slot.debugName, slot.allocSite.file_name(), slot.allocSite.line());
+				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' (gen {}).{}", slot.debugName, slot.generation, FormatAllocFrames(slot));
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
@@ -116,7 +159,7 @@ namespace aether
 		m_allocator = allocator;
 	}
 
-	gpu::BufferHandle ResourceRegistry::CreateBuffer(const gpu::BufferDesc& desc) noexcept
+	gpu::BufferHandle ResourceRegistry::CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -159,7 +202,7 @@ namespace aether
 		entry.ownsAllocation = true;
 		entry.deviceAddress = deviceAddress;
 
-		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
+		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{}, loc);
 		if (!handle.IsValid())
 		{
 			vmaDestroyBuffer(m_allocator, buffer, allocation);
@@ -168,7 +211,7 @@ namespace aether
 		return handle;
 	}
 
-	gpu::BufferHandle ResourceRegistry::CreateMappedBuffer(const gpu::MappedBufferDesc& desc) noexcept
+	gpu::BufferHandle ResourceRegistry::CreateMappedBuffer(const gpu::MappedBufferDesc& desc, std::source_location loc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -214,7 +257,7 @@ namespace aether
 		entry.mappedPtr = allocResult.pMappedData;
 		entry.deviceAddress = deviceAddress;
 
-		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
+		const gpu::BufferHandle handle = RegisterBuffer(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{}, loc);
 		if (!handle.IsValid())
 		{
 			vmaDestroyBuffer(m_allocator, buffer, allocation);
@@ -224,7 +267,7 @@ namespace aether
 		return handle;
 	}
 
-	gpu::TextureHandle ResourceRegistry::CreateTexture(const gpu::TextureDesc& desc) noexcept
+	gpu::TextureHandle ResourceRegistry::CreateTexture(const gpu::TextureDesc& desc, std::source_location loc) noexcept
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -287,7 +330,7 @@ namespace aether
 		entry.allocator = m_allocator;
 		entry.ownsAllocation = true;
 
-		const gpu::TextureHandle handle = RegisterTexture(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
+		const gpu::TextureHandle handle = RegisterTexture(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{}, loc);
 		if (!handle.IsValid())
 		{
 			vkDestroyImageView(m_device, view, nullptr);
@@ -389,7 +432,7 @@ namespace aether
 		return kIndexInvalid;
 	}
 
-	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry, std::string_view debugName, std::source_location loc)
+	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterTexture called after Shutdown.");
 		const std::uint32_t idx = AcquireTextureSlot();
@@ -400,13 +443,19 @@ namespace aether
 		m_textures[idx].entry = entry;
 		m_textures[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
-		m_textures[idx].allocSite = loc;
+		{
+			auto& s = m_textures[idx];
+			const int i = s.allocSiteCount % kAllocFrames;
+			s.allocFrames[i].site = loc;
+			s.allocFrames[i].frameCount = aether::CaptureBacktrace(s.allocFrames[i].addresses.data(), kBacktraceDepth, 1);
+			s.allocSiteCount++;
+		}
 #endif
 		const std::uint32_t gen = m_textures[idx].generation;
 		return gpu::TextureHandle::Make(idx, gen);
 	}
 
-	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry, std::string_view debugName, std::source_location loc)
+	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterBuffer called after Shutdown.");
 		const std::uint32_t idx = AcquireBufferSlot();
@@ -417,13 +466,19 @@ namespace aether
 		m_buffers[idx].entry = entry;
 		m_buffers[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
-		m_buffers[idx].allocSite = loc;
+		{
+			auto& s = m_buffers[idx];
+			const int i = s.allocSiteCount % kAllocFrames;
+			s.allocFrames[i].site = loc;
+			s.allocFrames[i].frameCount = aether::CaptureBacktrace(s.allocFrames[i].addresses.data(), kBacktraceDepth, 1);
+			s.allocSiteCount++;
+		}
 #endif
 		const std::uint32_t gen = m_buffers[idx].generation;
 		return gpu::BufferHandle::Make(idx, gen);
 	}
 
-	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry, std::string_view debugName, std::source_location loc)
+	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterPipeline called after Shutdown.");
 		const std::uint32_t idx = AcquirePipelineSlot();
@@ -434,7 +489,13 @@ namespace aether
 		m_pipelines[idx].entry = entry;
 		m_pipelines[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
-		m_pipelines[idx].allocSite = loc;
+		{
+			auto& s = m_pipelines[idx];
+			const int i = s.allocSiteCount % kAllocFrames;
+			s.allocFrames[i].site = loc;
+			s.allocFrames[i].frameCount = aether::CaptureBacktrace(s.allocFrames[i].addresses.data(), kBacktraceDepth, 1);
+			s.allocSiteCount++;
+		}
 #endif
 		const std::uint32_t gen = m_pipelines[idx].generation;
 		return gpu::PipelineHandle::Make(idx, gen);

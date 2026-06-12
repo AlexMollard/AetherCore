@@ -19,19 +19,19 @@ namespace aether::gpu
 		AE_ASSERT(s_reg != nullptr, "ResourceRegistry forwarding pointer is null.");
 	}
 
-	BufferHandle ResourceRegistry::CreateBuffer(const BufferDesc& d) noexcept
+	BufferHandle ResourceRegistry::CreateBuffer(const BufferDesc& d, std::source_location loc) noexcept
 	{
-		return s_reg->CreateBuffer(d);
+		return s_reg->CreateBuffer(d, loc);
 	}
 
-	BufferHandle ResourceRegistry::CreateMappedBuffer(const MappedBufferDesc& d) noexcept
+	BufferHandle ResourceRegistry::CreateMappedBuffer(const MappedBufferDesc& d, std::source_location loc) noexcept
 	{
-		return s_reg->CreateMappedBuffer(d);
+		return s_reg->CreateMappedBuffer(d, loc);
 	}
 
-	TextureHandle ResourceRegistry::CreateTexture(const TextureDesc& d) noexcept
+	TextureHandle ResourceRegistry::CreateTexture(const TextureDesc& d, std::source_location loc) noexcept
 	{
-		return s_reg->CreateTexture(d);
+		return s_reg->CreateTexture(d, loc);
 	}
 
 	MappedBufferView ResourceRegistry::ResolveMappedBuffer(BufferHandle h) noexcept

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -145,9 +146,9 @@ namespace aether
 		// on a parallel side-channel in the gpu/ bridge.
 		void Init(VkDevice device, VmaAllocator allocator) noexcept;
 
-		[[nodiscard]] gpu::BufferHandle CreateBuffer(const gpu::BufferDesc& desc) noexcept;
-		[[nodiscard]] gpu::BufferHandle CreateMappedBuffer(const gpu::MappedBufferDesc& desc) noexcept;
-		[[nodiscard]] gpu::TextureHandle CreateTexture(const gpu::TextureDesc& desc) noexcept;
+		[[nodiscard]] gpu::BufferHandle CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
+		[[nodiscard]] gpu::BufferHandle CreateMappedBuffer(const gpu::MappedBufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
+		[[nodiscard]] gpu::TextureHandle CreateTexture(const gpu::TextureDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 
 		[[nodiscard]] gpu::MappedBufferView ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept;
 		void FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
@@ -170,16 +171,29 @@ namespace aether
 			DestructionFn fn;
 		};
 
+		static constexpr int kAllocFrames = 4;
+		static constexpr int kBacktraceDepth = 9;
+
 		// Per-slot storage. std::optional so an empty slot costs only the
 		// size of the bool + alignment padding. Generation lives next to the
 		// payload so any reuse bumps the generation atomically.
+#ifndef NDEBUG
+		struct AllocFrame
+		{
+			std::source_location site;
+			std::array<void*, kBacktraceDepth> addresses{};
+			int frameCount = 0;
+		};
+#endif
+
 		struct TextureSlot
 		{
 			std::uint32_t generation = 1; // start at 1 so 0 is "never used"
 			std::optional<TextureEntry> entry;
 			std::string debugName;
 #ifndef NDEBUG
-			std::source_location allocSite;
+			std::array<AllocFrame, kAllocFrames> allocFrames{};
+			int allocSiteCount = 0; // total pushes (may exceed kAllocFrames)
 #endif
 		};
 
@@ -189,7 +203,8 @@ namespace aether
 			std::optional<BufferEntry> entry;
 			std::string debugName;
 #ifndef NDEBUG
-			std::source_location allocSite;
+			std::array<AllocFrame, kAllocFrames> allocFrames{};
+			int allocSiteCount = 0;
 #endif
 		};
 
@@ -199,7 +214,8 @@ namespace aether
 			std::optional<PipelineEntry> entry;
 			std::string debugName;
 #ifndef NDEBUG
-			std::source_location allocSite;
+			std::array<AllocFrame, kAllocFrames> allocFrames{};
+			int allocSiteCount = 0;
 #endif
 		};
 

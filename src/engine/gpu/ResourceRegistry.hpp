@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <source_location>
 #include <span>
 
 #include "gpu/DescriptorSetLayout.hpp"
@@ -106,8 +107,8 @@ namespace aether::gpu
 	public:
 		static void Initialize(const ResourceRegistryInitDesc& desc) noexcept;
 
-		[[nodiscard]] static BufferHandle CreateBuffer(const BufferDesc& desc) noexcept;
-		[[nodiscard]] static BufferHandle CreateMappedBuffer(const MappedBufferDesc& desc) noexcept;
+		[[nodiscard]] static BufferHandle CreateBuffer(const BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
+		[[nodiscard]] static BufferHandle CreateMappedBuffer(const MappedBufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 
 		[[nodiscard]] static MappedBufferView ResolveMappedBuffer(BufferHandle handle) noexcept;
 
@@ -117,7 +118,7 @@ namespace aether::gpu
 		static void Destroy(TextureHandle handle) noexcept;
 		static void Destroy(PipelineHandle handle) noexcept;
 
-		[[nodiscard]] static TextureHandle CreateTexture(const TextureDesc& desc) noexcept;
+		[[nodiscard]] static TextureHandle CreateTexture(const TextureDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 
 		// Compute-pipeline: factory + register. Returns an opaque
 		// PipelineHandle. Layout is owned by the registry entry (when the
