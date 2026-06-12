@@ -204,11 +204,6 @@ namespace aether
 		}
 #endif
 
-		bool ShouldShowFrame(const LogLevel level)
-		{
-			return level == LogLevel::Warn || level == LogLevel::Error;
-		}
-
 		bool ShouldShowSourceLocation(const LogLevel level)
 		{
 			return level != LogLevel::Info;
@@ -266,28 +261,14 @@ namespace aether
 
 			std::cerr << " " << ToMessageColor(entry.level) << entry.message << kAnsiReset;
 
-			if (entry.showFrame || entry.showSourceLocation)
+			if (entry.showFrame)
 			{
-				std::cerr << " " << kAnsiGray << "(";
+				std::cerr << " " << kAnsiGray << "(F" << entry.frameNumber << ")" << kAnsiReset;
+			}
 
-				bool hasPreviousDetail = false;
-				if (entry.showFrame)
-				{
-					std::cerr << "F" << entry.frameNumber;
-					hasPreviousDetail = true;
-				}
-
-				if (entry.showSourceLocation)
-				{
-					if (hasPreviousDetail)
-					{
-						std::cerr << " ";
-					}
-
-					std::cerr << fileName << ":" << entry.line;
-				}
-
-				std::cerr << ")" << kAnsiReset;
+			if (entry.showSourceLocation)
+			{
+				std::cerr << " " << kAnsiGray << "(" << fileName << ":" << entry.line << ")" << kAnsiReset;
 			}
 
 			std::cerr << kAnsiReset << "\n";
@@ -303,28 +284,14 @@ namespace aether
 
 				fileStream << ' ' << entry.message;
 
-				if (entry.showFrame || entry.showSourceLocation)
+				if (entry.showFrame)
 				{
-					fileStream << " (";
+					fileStream << " (F" << entry.frameNumber << ')';
+				}
 
-					bool hasPreviousDetail = false;
-					if (entry.showFrame)
-					{
-						fileStream << 'F' << entry.frameNumber;
-						hasPreviousDetail = true;
-					}
-
-					if (entry.showSourceLocation)
-					{
-						if (hasPreviousDetail)
-						{
-							fileStream << ' ';
-						}
-
-						fileStream << fileName << ':' << entry.line;
-					}
-
-					fileStream << ')';
+				if (entry.showSourceLocation)
+				{
+					fileStream << " (" << fileName << ':' << entry.line << ')';
 				}
 
 				fileStream << '\n';
@@ -627,7 +594,7 @@ namespace aether
 		EnsureInitialized();
 		LoggerBackend& backend = GetBackend();
 		const std::uint64_t frameNumber = g_frameNumber.load(std::memory_order_relaxed);
-		const bool shouldShowFrame = ShouldShowFrame(level) && frameNumber != kInvalidFrameNumber;
+		const bool shouldShowFrame = frameNumber != kInvalidFrameNumber;
 		const bool shouldShowSourceLocation = ShouldShowSourceLocation(level);
 
 		LogEntry entry;
