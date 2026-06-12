@@ -503,15 +503,21 @@ namespace aether
 					const bool loadRead = (a.loadOp == gpu::LoadOp::Load);
 					if (layoutChange || loadRead)
 					{
+						const bool isWAR = (s.writeStage == 0 && s.readStages != 0);
 						cp.preBarriers.push_back({
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) : s.writeStage,
-						        .srcAccess = s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT) : s.writeAccess,
+						        .srcStage = isWAR ? s.readStages
+						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
+						                : s.writeStage,
+						        .srcAccess = isWAR ? 0u
+						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
+						                : s.writeAccess,
 						        .dstStage = kDstStage,
 						        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
 						        .aspect = gpu::ImageAspect::Color,
+						        .isCrossFrame = s.isCrossFrame,
 						});
 					}
 				}
@@ -526,6 +532,7 @@ namespace aether
 					        .dstStage = kDstStage,
 					        .dstAccess = kDstWrite,
 					        .aspect = gpu::ImageAspect::Color,
+					        .isCrossFrame = false,
 					});
 				}
 
@@ -533,6 +540,7 @@ namespace aether
 				        .layout = kTarget,
 				        .writeStage = kDstStage,
 				        .writeAccess = kDstWrite,
+				        .readStages = 0,
 				        .isCrossFrame = false,
 				};
 			}
@@ -554,15 +562,21 @@ namespace aether
 					const bool loadRead = (da.loadOp == gpu::LoadOp::Load);
 					if (layoutChange || loadRead)
 					{
+						const bool isWAR = (s.writeStage == 0 && s.readStages != 0);
 						cp.preBarriers.push_back({
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) : s.writeStage,
-						        .srcAccess = s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT) : s.writeAccess,
+						        .srcStage = isWAR ? s.readStages
+						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
+						                : s.writeStage,
+						        .srcAccess = isWAR ? 0u
+						                : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
+						                : s.writeAccess,
 						        .dstStage = kDepthStages,
 						        .dstAccess = loadRead ? kDepthReadWrite : kDepthWrite,
 						        .aspect = gpu::ImageAspect::Depth,
+						        .isCrossFrame = s.isCrossFrame,
 						});
 					}
 				}
@@ -577,15 +591,17 @@ namespace aether
 					        .dstStage = kDepthStages,
 					        .dstAccess = kDepthWrite,
 					        .aspect = gpu::ImageAspect::Depth,
+					        .isCrossFrame = false,
 					});
 				}
 
-				states[resId] = {
-				        .layout = kTarget,
-				        .writeStage = kDepthStages,
-				        .writeAccess = kDepthWrite,
-				        .isCrossFrame = false,
-				};
+			states[resId] = {
+			        .layout = kTarget,
+			        .writeStage = kDepthStages,
+			        .writeAccess = kDepthWrite,
+			        .readStages = 0,
+			        .isCrossFrame = false,
+			};
 			}
 
 			for (const ImageAccessRef& r: pass.imageAccesses)
@@ -615,16 +631,37 @@ namespace aether
 						break;
 				}
 
-				const auto it = states.find(resId);
+				const bool isRead = (r.type != ImageAccessType::StorageWrite);
+
+				auto it = states.find(resId);
+
+				// RAR: already in the right layout and only reads since last write -> no barrier
+				if (isRead && it != states.end()
+					&& it->second.layout == targetLayout
+					&& it->second.writeStage == 0)
+				{
+					it->second.readStages |= dstStage;
+					continue;
+				}
+
 				std::uint64_t srcStage;
 				std::uint64_t srcAccess;
 				gpu::ImageLayout oldLayout;
+				bool barrierCrossFrame = false;
 
 				if (it != states.end())
 				{
 					const ResourceState& s = it->second;
 					oldLayout = s.layout;
-					if (s.isCrossFrame)
+					barrierCrossFrame = s.isCrossFrame;
+
+					const bool isWAR = (s.writeStage == 0 && s.readStages != 0);
+					if (isWAR)
+					{
+						srcStage = s.readStages;
+						srcAccess = 0;
+					}
+					else if (s.isCrossFrame)
 					{
 						srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 						srcAccess = static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT);
@@ -669,21 +706,118 @@ namespace aether
 				        .dstStage = dstStage,
 				        .dstAccess = dstAccess,
 				        .aspect = aspect,
+				        .isCrossFrame = barrierCrossFrame,
 				});
 
-				states[resId] = {
-				        .layout = targetLayout,
-				        .writeStage = dstStage,
-				        .writeAccess = dstAccess,
-				        .isCrossFrame = false,
-				};
+				if (isRead)
+				{
+					states[resId] = {
+					        .layout = targetLayout,
+					        .writeStage = 0,
+					        .writeAccess = 0,
+					        .readStages = dstStage,
+					        .isCrossFrame = false,
+					};
+				}
+				else
+				{
+					states[resId] = {
+					        .layout = targetLayout,
+					        .writeStage = dstStage,
+					        .writeAccess = dstAccess,
+					        .readStages = 0,
+					        .isCrossFrame = false,
+					};
+				}
 			}
 
 			m_compiled.push_back(std::move(cp));
 		}
 
 		std::swap(m_lastImageStates, states);
+
+#ifndef NDEBUG
+		const auto issues = EvaluateBarriers();
+		for (const auto& issue : issues)
+		{
+			AE_WARN(LogCategory::Vulkan, "{}", issue.message);
+		}
+#endif
 	}
+
+#ifndef NDEBUG
+	std::vector<RenderGraph::BarrierIssue> RenderGraph::EvaluateBarriers() const
+	{
+		std::vector<BarrierIssue> issues;
+
+		for (const CompiledPass& cp : m_compiled)
+		{
+			const PassRecord& pass = m_passes[cp.passIndex];
+
+			for (const CompiledBarrier& b : cp.preBarriers)
+			{
+				if (b.oldLayout == b.newLayout
+					&& b.srcStage == b.dstStage
+					&& b.srcAccess == b.dstAccess)
+				{
+					issues.push_back({
+						.kind       = BarrierIssue::Kind::Redundant,
+						.passIndex  = cp.passIndex,
+						.resourceId = b.resourceId,
+						.message    = std::format(
+							"Pass '{}': redundant barrier on resource {} — layout and stage unchanged",
+							pass.name, b.resourceId),
+					});
+				}
+
+				if (b.oldLayout != b.newLayout
+					&& b.srcAccess == 0
+					&& b.srcStage != static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT))
+				{
+					issues.push_back({
+						.kind       = BarrierIssue::Kind::MissingAccessMask,
+						.passIndex  = cp.passIndex,
+						.resourceId = b.resourceId,
+						.message    = std::format(
+							"Pass '{}': layout transition on resource {} has srcAccess=0 "
+							"but srcStage is not TOP_OF_PIPE — possible RAW hazard.",
+							pass.name, b.resourceId),
+					});
+				}
+
+				if (b.srcStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
+					&& !b.isCrossFrame)
+				{
+					issues.push_back({
+						.kind       = BarrierIssue::Kind::PipelineStall,
+						.passIndex  = cp.passIndex,
+						.resourceId = b.resourceId,
+						.message    = std::format(
+							"Pass '{}': resource {} uses ALL_COMMANDS_BIT "
+							"but isCrossFrame is false — unnecessarily conservative.",
+							pass.name, b.resourceId),
+					});
+				}
+
+				if (b.newLayout == gpu::ImageLayout::ShaderReadOnly
+					&& b.dstStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT)
+					&& pass.kind == PassKind::Graphics)
+				{
+					issues.push_back({
+						.kind       = BarrierIssue::Kind::VertexSamplingGap,
+						.passIndex  = cp.passIndex,
+						.resourceId = b.resourceId,
+						.message    = std::format(
+							"Pass '{}': resource {} transitions to ShaderReadOnly "
+							"with only FRAGMENT_SHADER stage — vertex shader sampling will race.",
+							pass.name, b.resourceId),
+					});
+				}
+			}
+		}
+		return issues;
+	}
+#endif
 
 	// ── Execution ────────────────────────────────────────────────────────────
 

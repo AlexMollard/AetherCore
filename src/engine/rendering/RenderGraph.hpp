@@ -241,6 +241,7 @@ namespace aether
 			std::uint64_t dstStage = 0;
 			std::uint64_t dstAccess = 0;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
+			bool isCrossFrame = false;
 		};
 
 		struct CompiledPass
@@ -255,6 +256,7 @@ namespace aether
 			gpu::ImageLayout layout = gpu::ImageLayout::Undefined;
 			std::uint64_t writeStage = 0;
 			std::uint64_t writeAccess = 0;
+			std::uint64_t readStages = 0;
 			bool isCrossFrame = false;
 		};
 
@@ -288,6 +290,27 @@ namespace aether
 		};
 
 		void Compile();
+
+#ifndef NDEBUG
+		struct BarrierIssue
+		{
+			enum class Kind
+			{
+				Redundant,
+				PipelineStall,
+				MissingAccessMask,
+				NeedsTopOfPipe,
+				VertexSamplingGap,
+			};
+
+			Kind kind;
+			std::size_t passIndex;
+			uint32_t resourceId;
+			std::string message;
+		};
+
+		[[nodiscard]] std::vector<BarrierIssue> EvaluateBarriers() const;
+#endif
 
 		[[nodiscard]] bool IsTransientId(uint32_t resourceId) const
 		{
