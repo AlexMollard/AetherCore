@@ -127,6 +127,16 @@ namespace aether
 			return {};
 		}
 
+		gpu::DeviceAddress deviceAddress = 0;
+		if ((desc.usage & gpu::BufferUsage::ShaderDeviceAddress) != gpu::BufferUsage::None)
+		{
+			const VkBufferDeviceAddressInfo addrInfo{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .buffer = buffer,
+			};
+			deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+		}
+
 		BufferEntry entry{};
 		entry.buffer = buffer;
 		entry.device = m_device;
@@ -135,6 +145,7 @@ namespace aether
 		entry.usage = bufInfo.usage;
 		entry.size = desc.size;
 		entry.ownsAllocation = true;
+		entry.deviceAddress = deviceAddress;
 
 		return RegisterBuffer(entry);
 	}
