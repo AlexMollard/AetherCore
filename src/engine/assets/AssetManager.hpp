@@ -9,6 +9,7 @@
 #include "mesh/Mesh.hpp"
 #include "material/Texture.hpp"
 #include "utils/coro/Task.hpp"
+#include "gpu/UploadContext.hpp"
 
 namespace aether
 {
@@ -69,7 +70,7 @@ namespace aether
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId = 0, float scale = 1.0f);
 
 		// Bind runtime dependencies once during engine startup.
-		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, VkCommandPool uploadPool);
+		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, gpu::UploadContext& uploadContext);
 
 		// Shared finalisation step for both synchronous and async model loading.
 		void FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path);
@@ -98,6 +99,6 @@ namespace aether
 		ShadowService* m_shadowService = nullptr;
 		RenderTargetService* m_renderTargetService = nullptr;
 		World* m_world = nullptr;
-		VkCommandPool m_uploadPool = VK_NULL_HANDLE;
+		gpu::UploadContext* m_uploadContext = nullptr;
 	};
 } // namespace aether

@@ -259,33 +259,33 @@ namespace aether
 		}
 	} // namespace
 
-	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, const VkCommandPool uploadPool)
+	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, gpu::UploadContext& uploadContext)
 	{
 		m_context = &context;
 		m_bindlessManager = &bindlessManager;
 		m_materialBuffer = &materialBuffer;
 		m_world = &world;
-		m_uploadPool = uploadPool;
+		m_uploadContext = &uploadContext;
 	}
 
 	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices)
 	{
-		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices);
+		return Mesh::Create(*m_uploadContext, vertices);
 	}
 
 	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices)
 	{
-		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices);
+		return Mesh::Create(*m_uploadContext, vertices, indices);
 	}
 
 	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius)
 	{
-		return Mesh::Create(m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, vertices, indices, aabbMin, aabbMax, sphereCenter, sphereRadius);
+		return Mesh::Create(*m_uploadContext, vertices, indices, aabbMin, aabbMax, sphereCenter, sphereRadius);
 	}
 
 	Expected<Texture> AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
 	{
-		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
+		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool(), *m_bindlessManager, filter);
 	}
 
 	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path, TextureFilter filter)
@@ -297,7 +297,7 @@ namespace aether
 		// GPU upload must happen on the game thread (owns the Vulkan context).
 		// After co_await resumes, we're back on the game thread via the default
 		// executor, so this is safe.
-		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadPool, *m_bindlessManager, filter);
+		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool(), *m_bindlessManager, filter);
 	}
 
 	Expected<GraphicsPipeline> AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
