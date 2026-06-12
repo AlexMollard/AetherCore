@@ -66,11 +66,11 @@ namespace aether
 		m_forwardColorFormat = frame.colorFormat;
 	}
 
-	void RenderTargetService::OnRenderGraphReset(const VkDevice device, const VkFormat depthFormat, const VkFormat forwardColorFormat)
+	void RenderTargetService::OnRenderGraphReset(const VkDevice device, const gpu::Format depthFormat, const gpu::Format forwardColorFormat)
 	{
 		m_device = device;
-		m_depthFormat = gpu::FromVk(depthFormat);
-		m_forwardColorFormat = gpu::FromVk(forwardColorFormat);
+		m_depthFormat = depthFormat;
+		m_forwardColorFormat = forwardColorFormat;
 
 		if (m_graph == nullptr || m_bindlessManager == nullptr)
 		{

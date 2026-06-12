@@ -33,7 +33,7 @@ namespace aether
 
 		void BindRuntime(const FrameContext& frame);
 
-		void OnRenderGraphReset(VkDevice device, VkFormat depthFormat, VkFormat forwardColorFormat);
+		void OnRenderGraphReset(VkDevice device, gpu::Format depthFormat, gpu::Format forwardColorFormat);
 		void RegisterPasses();
 
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);

@@ -127,7 +127,7 @@ namespace aether
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 
-		m_renderTargetService.OnRenderGraphReset(vk.GetDevice().device, gpu::ToVk(swapchain.GetDepthFormat()), PostProcessStack::GetForwardColorFormat());
+		m_renderTargetService.OnRenderGraphReset(vk.GetDevice().device, swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
 
 		RegisterPasses(services);
 	}
