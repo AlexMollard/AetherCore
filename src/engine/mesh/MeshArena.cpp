@@ -1,6 +1,7 @@
 #include "mesh/MeshArena.hpp"
 
 #include "vulkan/VulkanContext.hpp"
+#include "gpu/GpuHandles.hpp"
 
 namespace aether
 {
@@ -12,6 +13,8 @@ namespace aether
 		                .capacityBytes = desc.indexCapacityBytes,
 		                .additionalUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		        });
+		m_vertexHandle = gpu::BufferHandle::Make(0, 1);
+		m_indexHandle  = gpu::BufferHandle::Make(1, 1);
 	}
 
 	void MeshArena::Shutdown()
@@ -20,7 +23,7 @@ namespace aether
 		m_indexHeap.Shutdown();
 	}
 
-	MeshArena::Alloc MeshArena::Allocate(VkDeviceSize vertexBytes, std::uint32_t vertexCount, VkDeviceSize indexBytes, std::uint32_t indexCount)
+	MeshArena::Alloc MeshArena::Allocate(gpu::DeviceSize vertexBytes, std::uint32_t vertexCount, gpu::DeviceSize indexBytes, std::uint32_t indexCount)
 	{
 		GpuSpan<std::byte> vs = m_vertexHeap.Alloc<std::byte>(static_cast<std::uint32_t>(vertexBytes));
 		if (!vs.IsValid())
@@ -67,8 +70,8 @@ namespace aether
 
 	Mesh MeshArena::CreateView(const Alloc& alloc) const
 	{
-		return Mesh::CreateView(m_vertexHeap.GetBuffer(),
-		        m_indexHeap.GetBuffer(),
+		return Mesh::CreateView(m_vertexHandle,
+		        m_indexHandle,
 		        alloc.vertexCount,
 		        alloc.indexCount,
 		        alloc.vertexByteOffset,

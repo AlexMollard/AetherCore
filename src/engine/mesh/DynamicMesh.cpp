@@ -39,8 +39,8 @@ namespace aether
 		FreeAlloc();
 		m_arena = &arena;
 
-		const VkDeviceSize vertexBytes = static_cast<VkDeviceSize>(vertexCount) * vertexStride;
-		const VkDeviceSize indexBytes = static_cast<VkDeviceSize>(indexCount) * sizeof(std::uint32_t);
+		const gpu::DeviceSize vertexBytes = static_cast<gpu::DeviceSize>(vertexCount) * vertexStride;
+		const gpu::DeviceSize indexBytes  = static_cast<gpu::DeviceSize>(indexCount) * sizeof(std::uint32_t);
 
 		m_alloc = arena.Allocate(vertexBytes, vertexCount, indexBytes, indexCount);
 		if (!m_alloc.IsValid())
@@ -50,7 +50,7 @@ namespace aether
 			return false;
 		}
 
-		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, static_cast<void*>(arena.GetVertexBuffer()), m_alloc.vertexByteOffset, indices, indexBytes, static_cast<void*>(arena.GetIndexBuffer()), m_alloc.indexByteOffset);
+		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, static_cast<void*>(arena.GetVertexBufferRaw()), m_alloc.vertexByteOffset, indices, indexBytes, static_cast<void*>(arena.GetIndexBufferRaw()), m_alloc.indexByteOffset);
 		if (!queued)
 		{
 			// Staging ring full this frame - release the arena slot immediately so

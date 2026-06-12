@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
+#include "gpu/GpuHandles.hpp"
 
 #include "vulkan/GpuHeap.hpp"
 #include "mesh/Mesh.hpp"
@@ -28,20 +28,20 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDeviceSize vertexCapacityBytes = 256ull * 1024 * 1024; // 256 MB vertex pool
-			VkDeviceSize indexCapacityBytes = 128ull * 1024 * 1024;  // 128 MB index pool
+			gpu::DeviceSize vertexCapacityBytes = 256ull * 1024 * 1024;
+			gpu::DeviceSize indexCapacityBytes  = 128ull * 1024 * 1024;
 		};
 
 		struct Alloc
 		{
-			VkDeviceSize vertexByteOffset = 0;
-			std::uint32_t vertexCount = 0;
-			VkDeviceSize indexByteOffset = 0;
-			std::uint32_t indexCount = 0;
+			gpu::DeviceSize vertexByteOffset = 0;
+			std::uint32_t   vertexCount      = 0;
+			gpu::DeviceSize indexByteOffset  = 0;
+			std::uint32_t   indexCount       = 0;
 
 			// Internal accounting - keep these to hand the bytes back to the heap.
-			VkDeviceSize vertexByteSize = 0;
-			VkDeviceSize indexByteSize = 0;
+			gpu::DeviceSize vertexByteSize = 0;
+			gpu::DeviceSize indexByteSize  = 0;
 
 			[[nodiscard]] bool IsValid() const
 			{
@@ -54,7 +54,7 @@ namespace aether
 
 		// Allocate a contiguous sub-region from both pools.
 		// Returns an invalid Alloc ({}) when either pool is exhausted.
-		[[nodiscard]] Alloc Allocate(VkDeviceSize vertexBytes, std::uint32_t vertexCount, VkDeviceSize indexBytes, std::uint32_t indexCount);
+		[[nodiscard]] Alloc Allocate(gpu::DeviceSize vertexBytes, std::uint32_t vertexCount, gpu::DeviceSize indexBytes, std::uint32_t indexCount);
 
 		// Return a sub-region to the free list and coalesce adjacent blocks.
 		void Free(Alloc& alloc);
@@ -63,12 +63,22 @@ namespace aether
 		// The view is invalidated the moment Free(alloc) is called.
 		[[nodiscard]] Mesh CreateView(const Alloc& alloc) const;
 
-		[[nodiscard]] VkBuffer GetVertexBuffer() const
+		[[nodiscard]] gpu::BufferHandle GetVertexBuffer() const
+		{
+			return m_vertexHandle;
+		}
+
+		[[nodiscard]] gpu::BufferHandle GetIndexBuffer() const
+		{
+			return m_indexHandle;
+		}
+
+		[[nodiscard]] VkBuffer GetVertexBufferRaw() const
 		{
 			return m_vertexHeap.GetBuffer();
 		}
 
-		[[nodiscard]] VkBuffer GetIndexBuffer() const
+		[[nodiscard]] VkBuffer GetIndexBufferRaw() const
 		{
 			return m_indexHeap.GetBuffer();
 		}
@@ -86,5 +96,7 @@ namespace aether
 	private:
 		GpuHeap m_vertexHeap;
 		GpuHeap m_indexHeap;
+		gpu::BufferHandle m_vertexHandle{};
+		gpu::BufferHandle m_indexHandle{};
 	};
 } // namespace aether

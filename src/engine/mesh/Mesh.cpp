@@ -226,13 +226,13 @@ namespace aether
 	void Mesh::Destroy()
 	{
 		++m_generation;
-		if (m_indexBuffer.IsValid())
+		if (m_indexBuffer.IsValid() && m_allocator != nullptr)
 		{
 			gpu::ResourceRegistry::Destroy(m_indexBuffer);
 			m_indexBuffer = {};
 		}
 		m_indexCount = 0;
-		if (m_buffer.IsValid())
+		if (m_buffer.IsValid() && m_allocator != nullptr)
 		{
 			gpu::ResourceRegistry::Destroy(m_buffer);
 			m_buffer = {};
