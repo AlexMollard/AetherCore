@@ -72,7 +72,7 @@ namespace aether
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),
-		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		});
 
