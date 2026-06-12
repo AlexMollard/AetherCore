@@ -746,7 +746,7 @@ namespace aether::ui
 	{
 		auto* children = world.TryGet<UiChildrenComponent>(parent);
 		children->children.push_back(child);
-		world.Emplace<UiParentComponent>(child, UiParentComponent{parent});
+		world.EmplaceOrReplace<UiParentComponent>(child, UiParentComponent{parent});
 
 		if (auto* parentTransform = world.TryGet<UiTransformComponent>(parent))
 		{
