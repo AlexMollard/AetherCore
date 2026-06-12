@@ -304,6 +304,7 @@ namespace aether
 		std::vector<CompiledPass> m_compiled;
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
+		std::uint32_t m_frameIndex = 0;
 		TracyVkCtx m_tracyVkCtx = nullptr;
 		bool m_compileDirty = true;
 	};

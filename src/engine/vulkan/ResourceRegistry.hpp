@@ -164,8 +164,6 @@ namespace aether
 
 		struct PendingDestruction
 		{
-			std::uint32_t slotIndex = 0;
-			std::uint32_t generation = 0;
 			DestructionFn fn;
 		};
 
@@ -204,6 +202,10 @@ namespace aether
 		std::vector<TextureSlot> m_textures;
 		std::vector<BufferSlot> m_buffers;
 		std::vector<PipelineSlot> m_pipelines;
+
+		std::vector<std::uint32_t> m_freeTextureSlots;
+		std::vector<std::uint32_t> m_freeBufferSlots;
+		std::vector<std::uint32_t> m_freePipelineSlots;
 
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;

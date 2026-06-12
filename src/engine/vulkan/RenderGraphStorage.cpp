@@ -42,6 +42,7 @@ namespace aether
 			}
 		}
 		m_imageCache.clear();
+		m_freeTransientSlots.clear();
 
 		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
@@ -95,6 +96,19 @@ namespace aether
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
 			AE_WARN(LogCategory::Engine, "RenderGraphStorage: AddTransientSlot called before Initialize().");
+		}
+
+		if (!m_freeTransientSlots.empty())
+		{
+			const uint32_t idx = m_freeTransientSlots.back();
+			m_freeTransientSlots.pop_back();
+			auto& entry = m_transientImages[idx];
+			entry = {};
+			entry.format = format;
+			entry.usage = usage;
+			entry.aspect = aspect;
+			entry.extent = extent;
+			return idx;
 		}
 
 		TransientImageEntry entry{};
@@ -256,6 +270,7 @@ namespace aether
 		entry.usage = 0;
 		entry.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		entry.extent = {};
+		m_freeTransientSlots.push_back(idx);
 	}
 
 	// ── Cache helpers ────────────────────────────────────────────────────────
@@ -335,28 +350,10 @@ namespace aether
 			return;
 		}
 
-		struct Lifetime
-		{
-			int first = std::numeric_limits<int>::max();
-			int last = -1;
-		};
-
-		// Note: lifetime tracking requires pass information that lives in
-		// RenderGraph, not storage. The lifetime-first/last computation and
-		// aliasing decisions make sense only with the full pass list.
-		// We store the pre-computed lifetimes and aliasing decisions that
-		// RenderGraph passes in. For now we do a simple pass:
-		// just create images for any transient slot that doesn't have one.
-		// Full aliasing will be reintegrated when the pass list is available.
-
 		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
 		{
 			auto& entry = m_transientImages[idx];
 			if (entry.image)
-			{
-				continue;
-			}
-			if (entry.bindlessRequested)
 			{
 				continue;
 			}
@@ -372,10 +369,6 @@ namespace aether
 			{
 				continue;
 			}
-
-			// Alias check: try to find a compatible image whose lifetime doesn't overlap
-			// For now, skip aliasing and just create the image directly.
-			// Full lifetime-based aliasing will be restored from the pass list.
 
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
 			UniqueImage cached = TryPullFromCache(key);
@@ -396,58 +389,11 @@ namespace aether
 				                }));
 				entry.image = std::move(newImage);
 				entry.allocatedExtent = entry.extent;
-				const std::string entryName = std::format("RenderGraph.Transient[{}]", idx);
+				const std::string entryName = entry.bindlessRequested
+				        ? std::format("RenderGraph.Transient.Bindless[{}]", idx)
+				        : std::format("RenderGraph.Transient[{}]", idx);
 				entry.image.SetName(m_device, entryName.c_str());
 			}
-		}
-
-		// Handle bindless-requested transients
-		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
-		{
-			auto& entry = m_transientImages[idx];
-			if (!entry.bindlessRequested)
-			{
-				continue;
-			}
-			if (entry.image)
-			{
-				continue;
-			}
-			if (entry.format == VK_FORMAT_UNDEFINED || entry.usage == 0)
-			{
-				continue;
-			}
-			if (entry.extent.width == 0 || entry.extent.height == 0)
-			{
-				entry.extent = target.extent;
-			}
-			if (entry.extent.width == 0 || entry.extent.height == 0)
-			{
-				continue;
-			}
-
-			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
-			UniqueImage cached = TryPullFromCache(key);
-			if (cached)
-			{
-				entry.image = std::move(cached);
-				entry.allocatedExtent = entry.extent;
-			}
-			else
-			{
-				AE_EXPECT_OR_THROW(newImage,
-				        UniqueImage::Create(m_device,
-				                m_allocator,
-				                {
-				                        .extent = entry.extent,
-				                        .format = gpu::FromVk(entry.format),
-				                        .usage = entry.usage,
-				                }));
-				entry.image = std::move(newImage);
-				entry.allocatedExtent = entry.extent;
-			}
-			const std::string entryName = std::format("RenderGraph.Transient.Bindless[{}]", idx);
-			entry.image.SetName(m_device, entryName.c_str());
 		}
 
 		EvictStaleCacheEntries();

@@ -147,7 +147,13 @@ namespace aether
 		entry.ownsAllocation = true;
 		entry.deviceAddress = deviceAddress;
 
-		return RegisterBuffer(entry);
+		const gpu::BufferHandle handle = RegisterBuffer(entry);
+		if (!handle.IsValid())
+		{
+			vmaDestroyBuffer(m_allocator, buffer, allocation);
+			return {};
+		}
+		return handle;
 	}
 
 	gpu::BufferHandle ResourceRegistry::CreateMappedBuffer(const gpu::MappedBufferDesc& desc) noexcept
@@ -318,15 +324,12 @@ namespace aether
 
 	std::uint32_t ResourceRegistry::AcquireTextureSlot()
 	{
-		// First pass: reuse any empty slot.
-		for (std::uint32_t i = 0; i < m_textures.size(); ++i)
+		if (!m_freeTextureSlots.empty())
 		{
-			if (!m_textures[i].entry)
-			{
-				return i;
-			}
+			const std::uint32_t i = m_freeTextureSlots.back();
+			m_freeTextureSlots.pop_back();
+			return i;
 		}
-		// Second pass: append.
 		if (m_textures.size() < kIndexInvalid)
 		{
 			const std::uint32_t i = static_cast<std::uint32_t>(m_textures.size());
@@ -340,12 +343,11 @@ namespace aether
 
 	std::uint32_t ResourceRegistry::AcquireBufferSlot()
 	{
-		for (std::uint32_t i = 0; i < m_buffers.size(); ++i)
+		if (!m_freeBufferSlots.empty())
 		{
-			if (!m_buffers[i].entry)
-			{
-				return i;
-			}
+			const std::uint32_t i = m_freeBufferSlots.back();
+			m_freeBufferSlots.pop_back();
+			return i;
 		}
 		if (m_buffers.size() < kIndexInvalid)
 		{
@@ -359,12 +361,11 @@ namespace aether
 
 	std::uint32_t ResourceRegistry::AcquirePipelineSlot()
 	{
-		for (std::uint32_t i = 0; i < m_pipelines.size(); ++i)
+		if (!m_freePipelineSlots.empty())
 		{
-			if (!m_pipelines[i].entry)
-			{
-				return i;
-			}
+			const std::uint32_t i = m_freePipelineSlots.back();
+			m_freePipelineSlots.pop_back();
+			return i;
 		}
 		if (m_pipelines.size() < kIndexInvalid)
 		{
@@ -440,9 +441,8 @@ namespace aether
 		{
 			slot.generation = 1u;
 		}
+		m_freeTextureSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .slotIndex = idx,
-		        .generation = handle.GetGeneration(),
 		        .fn = [this, entry]() { DestroyTextureEntryNow(entry); },
 		});
 	}
@@ -470,9 +470,8 @@ namespace aether
 		{
 			slot.generation = 1u;
 		}
+		m_freeBufferSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .slotIndex = idx,
-		        .generation = handle.GetGeneration(),
 		        .fn = [this, entry]() { DestroyBufferEntryNow(entry); },
 		});
 	}
@@ -500,9 +499,8 @@ namespace aether
 		{
 			slot.generation = 1u;
 		}
+		m_freePipelineSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .slotIndex = idx,
-		        .generation = handle.GetGeneration(),
 		        .fn = [this, entry]() { DestroyPipelineEntryNow(entry); },
 		});
 	}
@@ -633,15 +631,11 @@ namespace aether
 		{
 			vkDestroyImageView(entry.device, entry.storageView, nullptr);
 		}
-		if (entry.image != VK_NULL_HANDLE)
+		if (entry.image != VK_NULL_HANDLE && entry.ownsAllocation)
 		{
-			if (entry.ownsAllocation && entry.allocation != VK_NULL_HANDLE)
+			if (entry.allocation != VK_NULL_HANDLE)
 			{
 				vmaDestroyImage(entry.allocator, entry.image, entry.allocation);
-			}
-			else if (!entry.ownsAllocation && entry.device != VK_NULL_HANDLE)
-			{
-				vkDestroyImage(entry.device, entry.image, nullptr);
 			}
 		}
 	}

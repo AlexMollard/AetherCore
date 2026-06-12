@@ -61,8 +61,14 @@ namespace aether
 		void ReleaseTransient(uint32_t idx, std::uint32_t currentFrame);
 
 		// ── Scratch (reused across Execute calls) ──────────────────────────
-		std::vector<VkRenderingAttachmentInfo> scratchColorInfos;
-		std::vector<VkImageMemoryBarrier2> scratchBarriers;
+		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
+		{
+			return m_scratchColorInfos;
+		}
+		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchBarriers()
+		{
+			return m_scratchBarriers;
+		}
 
 	private:
 		// ── Internal types ─────────────────────────────────────────────────
@@ -141,9 +147,14 @@ namespace aether
 
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<TransientImageEntry> m_transientImages;
+		std::vector<std::uint32_t> m_freeTransientSlots;
 		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
 
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;
+
+		// Scratch buffers reused across Execute calls within a single frame.
+		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
+		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
 	};
 } // namespace aether

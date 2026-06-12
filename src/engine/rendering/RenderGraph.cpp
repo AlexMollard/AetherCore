@@ -47,6 +47,7 @@ namespace aether
 
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
+		m_frameIndex = frameIndex;
 		m_storage->BeginFrame(frameIndex);
 	}
 
@@ -94,7 +95,6 @@ namespace aether
 		        .image = image,
 		        .type = ImageAccessType::SampledRead,
 		});
-		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		return *this;
 	}
 
@@ -104,7 +104,6 @@ namespace aether
 		        .image = image,
 		        .type = ImageAccessType::StorageRead,
 		});
-		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		return *this;
 	}
 
@@ -114,7 +113,6 @@ namespace aether
 		        .image = image,
 		        .type = ImageAccessType::StorageWrite,
 		});
-		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		return *this;
 	}
 
@@ -180,7 +178,7 @@ namespace aether
 				const uint32_t idx = TransientIndex(id);
 				if (idx < m_storage->GetTransientCount())
 				{
-					m_storage->ReleaseTransient(idx, 0);
+					m_storage->ReleaseTransient(idx, m_frameIndex);
 				}
 			}
 		}
@@ -286,7 +284,7 @@ namespace aether
 		if (IsTransientId(image.id))
 		{
 			const uint32_t idx = TransientIndex(image.id);
-			m_storage->ReleaseTransient(idx, 0);
+			m_storage->ReleaseTransient(idx, m_frameIndex);
 			return;
 		}
 
@@ -366,11 +364,22 @@ namespace aether
 						break;
 					}
 				}
-				if (!dependent && m_passes[i].depthWrite.has_value() && passAccesses(j, m_passes[i].depthWrite->image.id))
+			if (!dependent && m_passes[i].depthWrite.has_value() && passAccesses(j, m_passes[i].depthWrite->image.id))
+			{
+				dependent = true;
+			}
+			if (!dependent)
+			{
+				for (const ImageAccessRef& ia: m_passes[i].imageAccesses)
 				{
-					dependent = true;
+					if (ia.type == ImageAccessType::StorageWrite && passAccesses(j, ia.image.id))
+					{
+						dependent = true;
+						break;
+					}
 				}
-				if (dependent)
+			}
+			if (dependent)
 				{
 					adj[i].push_back(j);
 					++inDegree[j];
@@ -550,13 +559,13 @@ namespace aether
 				const uint32_t resId = r.image.id;
 
 				gpu::ImageLayout targetLayout = gpu::ImageLayout::ShaderReadOnly;
-				std::uint64_t dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+				std::uint64_t dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 				std::uint64_t dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 				switch (r.type)
 				{
 					case ImageAccessType::SampledRead:
-						dstStage = (pass.kind == PassKind::Compute) ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT) : static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+						dstStage = (pass.kind == PassKind::Compute) ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT) : static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 						targetLayout = gpu::ImageLayout::ShaderReadOnly;
 						break;
@@ -668,7 +677,7 @@ namespace aether
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
 			// ── Barriers ────────────────────────────────────────────────────
-			auto& scratchBarriers = m_storage->scratchBarriers;
+			auto& scratchBarriers = m_storage->GetScratchBarriers();
 			scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
@@ -712,7 +721,7 @@ namespace aether
 			vkutil::TransitionImages(vkCmd, scratchBarriers.data(), static_cast<uint32_t>(scratchBarriers.size()));
 
 			// ── Dynamic rendering ───────────────────────────────────────────
-			auto& scratchColorInfos = m_storage->scratchColorInfos;
+			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
