@@ -23,14 +23,14 @@ namespace aether::ui
 	// ── Private pixel-space helpers ───────────────────────────────────────────
 
 	// Resolved pixel rect of an entity's transform.
-	static glm::vec4 PixelRect(const UiTransformComponent& t, VkExtent2D ext)
+	static glm::vec4 PixelRect(const UiTransformComponent& t, gpu::Extent2D ext)
 	{
 		return ResolveUiRectPx(ext, t.rect);
 	}
 
 	// Builds a UiRect that lands on the given pixel rect, using the entity's
 	// anchor so subsequent UIRenderer draws are consistent.
-	static UiRect PixelToUiRect(const UiTransformComponent& t, glm::vec4 px, VkExtent2D ext)
+	static UiRect PixelToUiRect(const UiTransformComponent& t, glm::vec4 px, gpu::Extent2D ext)
 	{
 		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
@@ -43,7 +43,7 @@ namespace aether::ui
 	}
 
 	// A UiPoint centred on a pixel rect, using the entity's anchor.
-	static UiPoint CentrePoint(const UiTransformComponent& t, glm::vec4 px, VkExtent2D ext)
+	static UiPoint CentrePoint(const UiTransformComponent& t, glm::vec4 px, gpu::Extent2D ext)
 	{
 		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
@@ -54,7 +54,7 @@ namespace aether::ui
 	}
 
 	// UiPoint at a specific pixel position, using the entity's anchor.
-	static UiPoint PixelPoint(const UiTransformComponent& t, glm::vec2 px, VkExtent2D ext)
+	static UiPoint PixelPoint(const UiTransformComponent& t, glm::vec2 px, gpu::Extent2D ext)
 	{
 		const glm::vec2 sizePx{static_cast<float>(ext.width), static_cast<float>(ext.height)};
 		const glm::vec2 anchorPx = t.rect.anchorMin * sizePx;
@@ -89,7 +89,7 @@ namespace aether::ui
 
 	// ── Button ────────────────────────────────────────────────────────────────
 
-	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* btn = world.TryGet<UiButtonComponent>(entity);
@@ -128,7 +128,7 @@ namespace aether::ui
 
 	// ── Slider ────────────────────────────────────────────────────────────────
 
-	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slider = world.TryGet<UiSliderComponent>(entity);
@@ -183,7 +183,7 @@ namespace aether::ui
 
 	// ── Checkbox ─────────────────────────────────────────────────────────────
 
-	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* cb = world.TryGet<UiCheckboxComponent>(entity);
@@ -235,7 +235,7 @@ namespace aether::ui
 
 	// ── Progress bar ──────────────────────────────────────────────────────────
 
-	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slider = world.TryGet<UiSliderComponent>(entity);
@@ -262,7 +262,7 @@ namespace aether::ui
 
 	// ── Panel ─────────────────────────────────────────────────────────────────
 
-	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* panel = world.TryGet<UiPanelComponent>(entity);
@@ -435,7 +435,7 @@ namespace aether::ui
 
 	// ── Layout ───────────────────────────────────────────────────────────────
 
-	void ApplyLayout(aether::World& world, Entity container, VkExtent2D extent)
+	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
 		auto* layout = world.TryGet<UiLayoutComponent>(container);
 		auto* children = world.TryGet<UiChildrenComponent>(container);
@@ -554,7 +554,7 @@ namespace aether::ui
 		}
 	}
 
-	void ApplyGridLayout(aether::World& world, Entity container, VkExtent2D extent)
+	void ApplyGridLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
 		auto* grid = world.TryGet<UiGridLayoutComponent>(container);
 		auto* children = world.TryGet<UiChildrenComponent>(container);
@@ -600,7 +600,7 @@ namespace aether::ui
 		}
 	}
 
-	void RunLayouts(aether::World& world, VkExtent2D extent)
+	void RunLayouts(aether::World& world, gpu::Extent2D extent)
 	{
 		// Three-pass layout to handle nested containers correctly regardless of
 		// EnTT view iteration order.
@@ -677,7 +677,7 @@ namespace aether::ui
 
 	// ── Text Input ────────────────────────────────────────────────────────────
 
-	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* ti = world.TryGet<UiTextInputComponent>(entity);
@@ -761,7 +761,7 @@ namespace aether::ui
 
 	// ── Item Slot ─────────────────────────────────────────────────────────────
 
-	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* slot = world.TryGet<UiItemSlotComponent>(entity);
@@ -880,7 +880,7 @@ namespace aether::ui
 
 	// ── Label row ──────────────────────────────────────────────────────────────
 
-	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* row = world.TryGet<UiLabelRowComponent>(entity);
@@ -912,7 +912,7 @@ namespace aether::ui
 
 	// ── Section separator ──────────────────────────────────────────────────────
 
-	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		if (!t)
@@ -937,7 +937,7 @@ namespace aether::ui
 
 	// ── Tab bar ────────────────────────────────────────────────────────────────
 
-	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* tabComp = world.TryGet<UiTabComponent>(entity);
 		auto* transform = world.TryGet<UiTransformComponent>(entity);
@@ -1052,7 +1052,7 @@ namespace aether::ui
 
 	// ── Graph ──────────────────────────────────────────────────────────────────
 
-	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, VkExtent2D extent, const UiTheme& theme)
+	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
 		auto* t = world.TryGet<UiTransformComponent>(entity);
 		auto* graph = world.TryGet<UiGraphComponent>(entity);

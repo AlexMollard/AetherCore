@@ -35,10 +35,7 @@ namespace aether
 		        .pushConstantSize = sizeof(ComputePush),
 		        .debugName = "UI.BuildDraws",
 		};
-		m_computePipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
-		        static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
-		        static_cast<gpu::PipelineCache>(m_vkCtx->GetPipelineCache()),
-		        desc);
+		m_computePipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(m_vkCtx->GetDevice().device), static_cast<gpu::PipelineCache>(m_vkCtx->GetPipelineCache()), desc);
 	}
 
 	void QuadRenderer::RegisterPass()
@@ -150,7 +147,7 @@ namespace aether
 			                }
 
 			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-			                const VkExtent2D ext = ctx.extent;
+			                const gpu::Extent2D ext = ctx.extent;
 			                const std::uint32_t frameSlot = readSlot;
 
 			                const gpu::Viewport viewport{

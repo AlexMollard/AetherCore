@@ -152,6 +152,7 @@ namespace aether::gpu
 		[[nodiscard]] static ResolvedPipeline ResolvePipeline(PipelineHandle handle) noexcept;
 		[[nodiscard]] static ResolvedTexture ResolveTexture(TextureHandle handle) noexcept;
 		[[nodiscard]] static ResolvedBuffer ResolveBuffer(BufferHandle handle) noexcept;
+		[[nodiscard]] static void* ResolveBufferVkHandle(BufferHandle handle) noexcept;
 	};
 
 	template<typename T>

@@ -254,7 +254,7 @@ namespace aether
 				++batchEnd;
 			}
 
-			if (batchMesh == nullptr || !batchMesh->IsAlive() || !batchMesh->IsValid() || batchMesh->GetIndexBuffer() == VK_NULL_HANDLE)
+			if (batchMesh == nullptr || !batchMesh->IsAlive() || !batchMesh->IsValid() || !batchMesh->GetIndexBuffer().IsValid())
 			{
 				i = batchEnd;
 				continue;
@@ -269,7 +269,7 @@ namespace aether
 			{
 				const DrawCommand& dc = m_commands[j];
 
-				if (dc.mesh && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || dc.mesh->GetIndexBuffer() == VK_NULL_HANDLE))
+				if (dc.mesh && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || !dc.mesh->GetIndexBuffer().IsValid()))
 				{
 					continue;
 				}
@@ -879,8 +879,8 @@ namespace aether
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		const Mesh* lastMesh = nullptr;
-		VkBuffer lastIndexBuffer = VK_NULL_HANDLE;
-		VkDeviceSize lastIndexOffset = ~0ull;
+		gpu::BufferHandle lastIndexBuffer{};
+		gpu::DeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
@@ -919,14 +919,14 @@ namespace aether
 				cmd.PushConstantsRaw(activePipeline->GetLayout(), gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(sharedPc));
 			}
 
-			if (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration && batch.mesh->GetIndexBuffer() != VK_NULL_HANDLE)
+			if (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration && batch.mesh->GetIndexBuffer().IsValid())
 			{
-				const VkBuffer indexBuffer = batch.mesh->GetIndexBuffer();
-				const VkDeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
-				if (indexBuffer != lastIndexBuffer || indexOffset != lastIndexOffset)
+				const gpu::BufferHandle indexBufferHandle = batch.mesh->GetIndexBuffer();
+				const gpu::DeviceSize indexOffset = batch.mesh->GetIndexByteOffset();
+				if (indexBufferHandle != lastIndexBuffer || indexOffset != lastIndexOffset)
 				{
-					cmd.BindIndexBuffer(indexBuffer, indexOffset);
-					lastIndexBuffer = indexBuffer;
+					cmd.BindIndexBuffer(indexBufferHandle, indexOffset);
+					lastIndexBuffer = indexBufferHandle;
 					lastIndexOffset = indexOffset;
 				}
 				lastMesh = batch.mesh;
@@ -962,67 +962,79 @@ namespace aether
 
 	void RenderQueueSharedPipelines::Initialize(VkDevice device, VkPipelineCache pipelineCache)
 	{
-		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://skin_palette_build.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::SkinPalettePush)),
-		        .debugName = "Animation.BuildSkinPalette",
-		});
+		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://skin_palette_build.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::SkinPalettePush)),
+		                .debugName = "Animation.BuildSkinPalette",
+		        });
 		if (!skinCopy.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
 		}
 
-		animSample = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://animation_sample.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationSamplePush)),
-		        .debugName = "Animation.SampleClips",
-		});
+		animSample = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://animation_sample.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationSamplePush)),
+		                .debugName = "Animation.SampleClips",
+		        });
 		if (!animSample.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
 		}
 
-		poseInit = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://pose_init.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::PoseInitPush)),
-		        .debugName = "Animation.PoseInit",
-		});
+		poseInit = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://pose_init.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::PoseInitPush)),
+		                .debugName = "Animation.PoseInit",
+		        });
 		if (!poseInit.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
 		}
 
-		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://node_flatten.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::NodeFlattenPush)),
-		        .debugName = "Animation.NodeFlatten",
-		});
+		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://node_flatten.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::NodeFlattenPush)),
+		                .debugName = "Animation.NodeFlatten",
+		        });
 		if (!nodeFlatten.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
 		}
 
-		animBlend = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://anim_blend.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationBlendPush)),
-		        .debugName = "Animation.AnimBlend",
-		});
+		animBlend = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://anim_blend.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationBlendPush)),
+		                .debugName = "Animation.AnimBlend",
+		        });
 		if (!animBlend.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 		}
 
-		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device), static_cast<gpu::PipelineCache>(pipelineCache), gpu::ComputePipelineDesc{
-		        .shaderVfsPath = "shaders://ik_solve.spv",
-		        .shaderEntry = "main",
-		        .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::IkSolvePush)),
-		        .debugName = "Animation.IkSolve",
-		});
+		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		        static_cast<gpu::PipelineCache>(pipelineCache),
+		        gpu::ComputePipelineDesc{
+		                .shaderVfsPath = "shaders://ik_solve.spv",
+		                .shaderEntry = "main",
+		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::IkSolvePush)),
+		                .debugName = "Animation.IkSolve",
+		        });
 		if (!ikSolve.IsValid())
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));

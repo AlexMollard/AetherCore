@@ -177,7 +177,7 @@ namespace aether::app
 		AE_EXPECT_OR_THROW(pipeline,
 		        m_assets->CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://gltf_mesh.spv",
-		                .colorFormat = gpu::FromVk(aether::PostProcessStack::GetForwardColorFormat()),
+		                .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
 		                .depthFormat = m_services->Get<Swapchain>().GetDepthFormat(),
 		                .depthTestEnable = true,
 		                .depthWriteEnable = true,

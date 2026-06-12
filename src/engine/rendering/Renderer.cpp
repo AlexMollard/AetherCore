@@ -172,18 +172,14 @@ namespace aether
 		return glm::vec3(m_skyVoidColor);
 	}
 
-	VkFormat Renderer::GetColorFormat() const
+	gpu::Format Renderer::GetColorFormat() const
 	{
-		// This is a static query (from PostProcessStack).
 		return PostProcessStack::GetForwardColorFormat();
 	}
 
-	VkFormat Renderer::GetDepthFormat() const
+	gpu::Format Renderer::GetDepthFormat() const
 	{
-		// Would be obtained from Swapchain via AetherCore, but for now return a
-		// placeholder. In practice, this is passed to the app via LayerContext during
-		// initialization.
-		return VK_FORMAT_D32_SFLOAT;
+		return gpu::Format::D32Sfloat;
 	}
 
 	VkExtent2D Renderer::GetExtent() const

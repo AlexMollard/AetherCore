@@ -29,12 +29,7 @@ namespace aether
 
 		// Create a one-shot upload context backed by the resource registry
 		auto& registry = services.Get<aether::ResourceRegistry>();
-		m_uploadContext = gpu::UploadContext::Create(
-			static_cast<void*>(vk.GetDevice().device),
-			vk.GetGraphicsQueueFamily(),
-			static_cast<void*>(vk.GetGraphicsQueue()),
-			static_cast<void*>(&registry)
-		);
+		m_uploadContext = gpu::UploadContext::Create(static_cast<void*>(vk.GetDevice().device), vk.GetGraphicsQueueFamily(), static_cast<void*>(vk.GetGraphicsQueue()), static_cast<void*>(&registry));
 
 		m_materialBuffer.Initialize(vk);
 		m_meshArena.Initialize(vk, {});

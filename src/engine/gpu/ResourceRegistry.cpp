@@ -143,4 +143,14 @@ namespace aether::gpu
 		out.size = entry->size;
 		return out;
 	}
+
+	void* ResourceRegistry::ResolveBufferVkHandle(BufferHandle handle) noexcept
+	{
+		const ::aether::ResourceRegistry::BufferEntry* entry = s_reg->Resolve(handle);
+		if (entry == nullptr)
+		{
+			return nullptr;
+		}
+		return static_cast<void*>(entry->buffer);
+	}
 } // namespace aether::gpu

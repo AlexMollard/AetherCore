@@ -29,19 +29,19 @@ namespace aether
 		struct Desc
 		{
 			gpu::DeviceSize vertexCapacityBytes = 256ull * 1024 * 1024;
-			gpu::DeviceSize indexCapacityBytes  = 128ull * 1024 * 1024;
+			gpu::DeviceSize indexCapacityBytes = 128ull * 1024 * 1024;
 		};
 
 		struct Alloc
 		{
 			gpu::DeviceSize vertexByteOffset = 0;
-			std::uint32_t   vertexCount      = 0;
-			gpu::DeviceSize indexByteOffset  = 0;
-			std::uint32_t   indexCount       = 0;
+			std::uint32_t vertexCount = 0;
+			gpu::DeviceSize indexByteOffset = 0;
+			std::uint32_t indexCount = 0;
 
 			// Internal accounting - keep these to hand the bytes back to the heap.
 			gpu::DeviceSize vertexByteSize = 0;
-			gpu::DeviceSize indexByteSize  = 0;
+			gpu::DeviceSize indexByteSize = 0;
 
 			[[nodiscard]] bool IsValid() const
 			{

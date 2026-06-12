@@ -577,8 +577,7 @@ namespace aether
 
 		if (!m_initPipelineHandle.IsValid())
 		{
-			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
-			        static_cast<gpu::Device>(device),
+			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
 			        static_cast<gpu::PipelineCache>(pipelineCache),
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
@@ -595,8 +594,7 @@ namespace aether
 
 		if (!m_cullPipelineHandle.IsValid())
 		{
-			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(
-			        static_cast<gpu::Device>(device),
+			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
 			        static_cast<gpu::PipelineCache>(pipelineCache),
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",

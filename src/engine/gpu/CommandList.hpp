@@ -93,6 +93,7 @@ namespace aether::gpu
 		// Bind an index buffer. indexType is the engine-side IndexType
 		// (U16 / U32) - the impl maps it to VkIndexType.
 		void BindIndexBuffer(void* vkBuffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
+		void BindIndexBuffer(BufferHandle buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
 
 		// Bind a vertex buffer at a device-address offset. Matches
 		// vkCmdBindVertexBuffers(firstBinding=0, ...).
@@ -195,12 +196,7 @@ namespace aether::gpu
 		// aspect is the subresource aspect mask (e.g., ImageAspect::Color).
 		// oldLayout/newLayout are engine-side ImageLayout values.
 		// Stage and access values are the engine-side bit flags from GpuEnums.hpp.
-		void ImageMemoryBarrier(
-			void* image,
-			ImageLayout oldLayout, ImageLayout newLayout,
-			ImageAspect aspect,
-			PipelineStage srcStage, AccessFlags srcAccess,
-			PipelineStage dstStage, AccessFlags dstAccess) noexcept;
+		void ImageMemoryBarrier(void* image, ImageLayout oldLayout, ImageLayout newLayout, ImageAspect aspect, PipelineStage srcStage, AccessFlags srcAccess, PipelineStage dstStage, AccessFlags dstAccess) noexcept;
 
 		// Begin/end dynamic rendering (vkCmdBeginRendering / vkCmdEndRendering).
 		// The transitional overload takes a raw VkRenderingInfo* as void*;

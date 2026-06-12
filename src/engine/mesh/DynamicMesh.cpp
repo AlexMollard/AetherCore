@@ -40,7 +40,7 @@ namespace aether
 		m_arena = &arena;
 
 		const gpu::DeviceSize vertexBytes = static_cast<gpu::DeviceSize>(vertexCount) * vertexStride;
-		const gpu::DeviceSize indexBytes  = static_cast<gpu::DeviceSize>(indexCount) * sizeof(std::uint32_t);
+		const gpu::DeviceSize indexBytes = static_cast<gpu::DeviceSize>(indexCount) * sizeof(std::uint32_t);
 
 		m_alloc = arena.Allocate(vertexBytes, vertexCount, indexBytes, indexCount);
 		if (!m_alloc.IsValid())

@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
 #include "gpu/OneShotCmd.hpp"
@@ -136,7 +137,7 @@ namespace aether
 			                vmaAllocator,
 			                {
 			                        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
-			                        .format = VK_FORMAT_R8G8B8A8_SRGB,
+			                        .format = gpu::Format::R8G8B8A8Srgb,
 			                        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			                        .debugName = debugName,
 			                }));
@@ -154,11 +155,8 @@ namespace aether
 			{
 				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
 			}
-			cmd.CmdList().ImageMemoryBarrier(image.Get(),
-			        gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly,
-			        gpu::ImageAspect::Color,
-			        gpu::PipelineStage::AllCommands, gpu::AccessFlags::None,
-			        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			cmd.CmdList().ImageMemoryBarrier(
+			        image.Get(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
 			if (!cmd.EndAndSubmit(uploadQueue))
 			{
 				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
@@ -219,7 +217,8 @@ namespace aether
 			}
 		}
 
-		Expected<UniqueImage> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+		Expected<UniqueImage> UploadBcnDds(
+		        std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
 			// TODO(phase5b): remove static_casts once UniqueImage moves to gpu handles.
 			auto* vkDevice = static_cast<VkDevice>(device);
@@ -256,7 +255,7 @@ namespace aether
 			                vmaAllocator,
 			                {
 			                        .extent = {width, height},
-			                        .format = vkFmt,
+			                        .format = gpu::FromVk(vkFmt),
 			                        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			                }));
 
@@ -273,11 +272,8 @@ namespace aether
 			{
 				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
 			}
-			cmd.CmdList().ImageMemoryBarrier(image->Get(),
-			        gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly,
-			        gpu::ImageAspect::Color,
-			        gpu::PipelineStage::AllCommands, gpu::AccessFlags::None,
-			        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			cmd.CmdList().ImageMemoryBarrier(
+			        image->Get(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
 			if (!cmd.EndAndSubmit(uploadQueue))
 			{
 				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
@@ -288,7 +284,8 @@ namespace aether
 		}
 	} // namespace
 
-	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFileData(
+	        std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 	{
 		if (fileData.size() < 4)
 		{

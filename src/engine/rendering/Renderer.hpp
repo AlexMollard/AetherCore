@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <span>
 #include <vector>
+#include "gpu/GpuFormat.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -121,8 +122,8 @@ namespace aether
 		}
 
 		// Swapchain format queries for pipeline creation.
-		[[nodiscard]] VkFormat GetColorFormat() const;
-		[[nodiscard]] VkFormat GetDepthFormat() const;
+		[[nodiscard]] gpu::Format GetColorFormat() const;
+		[[nodiscard]] gpu::Format GetDepthFormat() const;
 		[[nodiscard]] VkExtent2D GetExtent() const;
 
 	private:

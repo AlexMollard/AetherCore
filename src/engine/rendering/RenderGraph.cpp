@@ -316,7 +316,7 @@ namespace aether
 			                m_allocator,
 			                {
 			                        .extent = entry.desc.extent,
-			                        .format = entry.desc.format,
+			                        .format = gpu::FromVk(entry.desc.format),
 			                        .usage = entry.desc.usage,
 			                }));
 			entry.image = std::move(newImage);
@@ -581,7 +581,7 @@ namespace aether
 						                m_allocator,
 						                {
 						                        .extent = reqExt,
-						                        .format = entry.desc.format,
+						                        .format = gpu::FromVk(entry.desc.format),
 						                        .usage = entry.desc.usage,
 						                }));
 						entry.image = std::move(newImage);
@@ -642,7 +642,7 @@ namespace aether
 				                m_allocator,
 				                {
 				                        .extent = reqExt,
-				                        .format = entry.desc.format,
+				                        .format = gpu::FromVk(entry.desc.format),
 				                        .usage = entry.desc.usage,
 				                }));
 				entry.image = std::move(newImage);
@@ -740,7 +740,7 @@ namespace aether
 			{
 				const VkRenderingInfo renderInfo{
 				        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				        .renderArea = {{0, 0}, passExtent},
+				        .renderArea = {{0, 0}, {passExtent.width, passExtent.height}},
 				        .layerCount = 1,
 				        .colorAttachmentCount = static_cast<uint32_t>(m_scratchColorInfos.size()),
 				        .pColorAttachments = m_scratchColorInfos.data(),

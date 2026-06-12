@@ -14,7 +14,7 @@ namespace aether
 		                .additionalUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
 		        });
 		m_vertexHandle = gpu::BufferHandle::Make(0, 1);
-		m_indexHandle  = gpu::BufferHandle::Make(1, 1);
+		m_indexHandle = gpu::BufferHandle::Make(1, 1);
 	}
 
 	void MeshArena::Shutdown()
@@ -70,13 +70,7 @@ namespace aether
 
 	Mesh MeshArena::CreateView(const Alloc& alloc) const
 	{
-		return Mesh::CreateView(m_vertexHandle,
-		        m_indexHandle,
-		        alloc.vertexCount,
-		        alloc.indexCount,
-		        alloc.vertexByteOffset,
-		        alloc.indexByteOffset,
-		        m_vertexHeap.GetBaseAddress() + alloc.vertexByteOffset,
-		        m_indexHeap.GetBaseAddress() + alloc.indexByteOffset);
+		return Mesh::CreateView(
+		        m_vertexHandle, m_indexHandle, alloc.vertexCount, alloc.indexCount, alloc.vertexByteOffset, alloc.indexByteOffset, m_vertexHeap.GetBaseAddress() + alloc.vertexByteOffset, m_indexHeap.GetBaseAddress() + alloc.indexByteOffset);
 	}
 } // namespace aether

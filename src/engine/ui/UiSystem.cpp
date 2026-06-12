@@ -34,7 +34,7 @@ namespace aether::ui
 
 	// Runs before RunLayouts. Checks tab button clicks, updates selection,
 	// and toggles UiLayoutComponent::autoSize + visible per page.
-	static void ProcessTabBars(aether::World& world, VkExtent2D extent)
+	static void ProcessTabBars(aether::World& world, gpu::Extent2D extent)
 	{
 		(void) extent;
 		for (auto [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
@@ -96,7 +96,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::BeginFrame(aether::World& world, Input& input, UiContext& ctx, VkExtent2D extent, float deltaTime)
+	void UiSystem::BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime)
 	{
 		AE_PROFILE_ZONE();
 		// ── Mouse state ────────────────────────────────────────────────────────
@@ -164,7 +164,7 @@ namespace aether::ui
 	namespace
 	{
 		// Dispatch drawing of a non-panel widget by its component type.
-		void DrawWidget(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+		void DrawWidget(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 		{
 			if (world.Has<UiPanelComponent>(entity))
 			{
@@ -217,7 +217,7 @@ namespace aether::ui
 		}
 
 		// Recursively draw all children of a parent entity.
-		void DrawChildren(aether::World& world, Entity parent, UIRenderer& ui, const Input& input, VkExtent2D extent, const UiTheme& theme)
+		void DrawChildren(aether::World& world, Entity parent, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 		{
 			const auto* children = world.TryGet<UiChildrenComponent>(parent);
 			if (!children)
@@ -257,7 +257,7 @@ namespace aether::ui
 		}
 	} // namespace
 
-	void UiSystem::RenderAll(aether::World& world, UIRenderer& ui, const Input& input, VkExtent2D extent)
+	void UiSystem::RenderAll(aether::World& world, UIRenderer& ui, const Input& input, gpu::Extent2D extent)
 	{
 		const UiTheme& theme = UiTheme::Default();
 
@@ -308,7 +308,7 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::HitTest(aether::World& world, UiContext& ctx, VkExtent2D extent)
+	void UiSystem::HitTest(aether::World& world, UiContext& ctx, gpu::Extent2D extent)
 	{
 		const glm::vec2 mp = ctx.mousePos;
 		Entity bestEntity;
@@ -342,7 +342,7 @@ namespace aether::ui
 		ctx.hotEntity = bestEntity;
 	}
 
-	void UiSystem::UpdateDrag(aether::World& world, UiContext& ctx, VkExtent2D extent)
+	void UiSystem::UpdateDrag(aether::World& world, UiContext& ctx, gpu::Extent2D extent)
 	{
 		// Start drag: left button just pressed over a draggable panel's title bar.
 		if (ctx.mousePressed && ctx.hotEntity.IsValid())

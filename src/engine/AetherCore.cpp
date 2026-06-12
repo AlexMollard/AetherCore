@@ -92,7 +92,7 @@ namespace aether
 		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
 		m_services.Register<AssetSubsystem>(assetsSub);
 
-		SetAnimationCompilePool(assetsSub.GetUploadPool());
+		SetAnimationCompilePool(assetsSub.GetUploadContext().GetCommandPool());
 
 		// ── 5. Cameras ──────────────────────────────────────────────────────
 		m_cameras->Init(m_services);

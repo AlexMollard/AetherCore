@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/volk.hpp"
@@ -190,6 +191,16 @@ namespace aether::gpu
 			return;
 		}
 		vkCmdBindIndexBuffer(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), ToVkIndexType(indexType));
+	}
+
+	void CommandList::BindIndexBuffer(BufferHandle buffer, DeviceAddress offset, IndexType indexType) noexcept
+	{
+		void* native = ResourceRegistry::ResolveBufferVkHandle(buffer);
+		if (native == nullptr)
+		{
+			return;
+		}
+		BindIndexBuffer(native, offset, indexType);
 	}
 
 	void CommandList::BindVertexBuffer(void* vkBuffer, DeviceAddress offset) noexcept
@@ -473,47 +484,43 @@ namespace aether::gpu
 		vkCmdPipelineBarrier2(AsVkCmd(m_cmd), &dep);
 	}
 
-	void CommandList::ImageMemoryBarrier(
-		void* image,
-		ImageLayout oldLayout, ImageLayout newLayout,
-		ImageAspect aspect,
-		PipelineStage srcStage, AccessFlags srcAccess,
-		PipelineStage dstStage, AccessFlags dstAccess) noexcept
+	void CommandList::ImageMemoryBarrier(void* image, ImageLayout oldLayout, ImageLayout newLayout, ImageAspect aspect, PipelineStage srcStage, AccessFlags srcAccess, PipelineStage dstStage, AccessFlags dstAccess) noexcept
 	{
 		if (m_cmd == nullptr || image == nullptr)
 		{
 			return;
 		}
 		const VkImageMemoryBarrier2 barrier{
-			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			.pNext = nullptr,
-			.srcStageMask = ToVk(srcStage),
-			.srcAccessMask = ToVk(srcAccess),
-			.dstStageMask = ToVk(dstStage),
-			.dstAccessMask = ToVk(dstAccess),
-			.oldLayout = ToVk(oldLayout),
-			.newLayout = ToVk(newLayout),
-			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			.image = static_cast<VkImage>(image),
-			.subresourceRange = {
-				.aspectMask = static_cast<VkImageAspectFlags>(ToVk(aspect)),
-				.baseMipLevel   = 0,
-				.levelCount     = 1,
-				.baseArrayLayer = 0,
-				.layerCount     = 1,
-			},
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		        .pNext = nullptr,
+		        .srcStageMask = ToVk(srcStage),
+		        .srcAccessMask = ToVk(srcAccess),
+		        .dstStageMask = ToVk(dstStage),
+		        .dstAccessMask = ToVk(dstAccess),
+		        .oldLayout = ToVk(oldLayout),
+		        .newLayout = ToVk(newLayout),
+		        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .image = static_cast<VkImage>(image),
+		        .subresourceRange =
+		                {
+		                        .aspectMask = static_cast<VkImageAspectFlags>(ToVk(aspect)),
+		                        .baseMipLevel = 0,
+		                        .levelCount = 1,
+		                        .baseArrayLayer = 0,
+		                        .layerCount = 1,
+		                },
 		};
 		const VkDependencyInfo dep{
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.pNext = nullptr,
-			.dependencyFlags = 0,
-			.memoryBarrierCount = 0,
-			.pMemoryBarriers = nullptr,
-			.bufferMemoryBarrierCount = 0,
-			.pBufferMemoryBarriers = nullptr,
-			.imageMemoryBarrierCount = 1,
-			.pImageMemoryBarriers = &barrier,
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .pNext = nullptr,
+		        .dependencyFlags = 0,
+		        .memoryBarrierCount = 0,
+		        .pMemoryBarriers = nullptr,
+		        .bufferMemoryBarrierCount = 0,
+		        .pBufferMemoryBarriers = nullptr,
+		        .imageMemoryBarrierCount = 1,
+		        .pImageMemoryBarriers = &barrier,
 		};
 		vkCmdPipelineBarrier2(AsVkCmd(m_cmd), &dep);
 	}
