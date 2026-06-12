@@ -271,7 +271,7 @@ namespace aether::io
 			}
 		}
 
-		// Fuzzy (Levenshtein) – only on explicit request.
+		// Fuzzy (Levenshtein) -- only on explicit request.
 		if (bestMatch)
 		{
 			*bestMatch = {};

@@ -131,7 +131,7 @@ namespace aether::app
 		Logger::SetFrameNumber(0);
 
 		// Set the coroutine default executor - all cross-thread continuation
-		// resumptions (e.g. I/O thread → game thread) go through this queue
+		// resumptions (e.g. I/O thread -> game thread) go through this queue
 		// and are drained at the top of each frame.
 		// This is set up early so that any async operations during loading
 		// dispatch correctly.

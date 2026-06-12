@@ -12,7 +12,7 @@
 
 namespace aether::ui
 {
-	// ── Theme singleton ───────────────────────────────────────────────────────
+	// -- Theme singleton -------------------------------------------------------
 
 	const UiTheme& UiTheme::Default()
 	{
@@ -20,7 +20,7 @@ namespace aether::ui
 		return s_default;
 	}
 
-	// ── Private pixel-space helpers ───────────────────────────────────────────
+	// -- Private pixel-space helpers -------------------------------------------
 
 	// Resolved pixel rect of an entity's transform.
 	static glm::vec4 PixelRect(const UiTransformComponent& t, gpu::Extent2D ext)
@@ -87,7 +87,7 @@ namespace aether::ui
 		return rootLayer + offsetLayer + subLayer;
 	}
 
-	// ── Button ────────────────────────────────────────────────────────────────
+	// -- Button ----------------------------------------------------------------
 
 	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -111,8 +111,8 @@ namespace aether::ui
 
 		// Centred label.
 		// label.position is the baseline in screen space; the glyph cap-height sits
-		// at baseline - bearingY*fontSize (≈ baseline - 0.7*fs).  Visual centre of
-		// caps ≈ baseline - 0.35*fs, so baseline = widgetCentreY + 0.35*fontSize.
+		// at baseline - bearingY*fontSize (~ baseline - 0.7*fs).  Visual centre of
+		// caps ~ baseline - 0.35*fs, so baseline = widgetCentreY + 0.35*fontSize.
 		// Horizontally: MeasureText gives total advance; shift left by half so the
 		// string is centred rather than starting at the widget centre.
 		if (!btn->label.empty())
@@ -126,7 +126,7 @@ namespace aether::ui
 		return inp->clicked;
 	}
 
-	// ── Slider ────────────────────────────────────────────────────────────────
+	// -- Slider ----------------------------------------------------------------
 
 	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -181,7 +181,7 @@ namespace aether::ui
 		return slider->value;
 	}
 
-	// ── Checkbox ─────────────────────────────────────────────────────────────
+	// -- Checkbox -------------------------------------------------------------
 
 	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -233,7 +233,7 @@ namespace aether::ui
 		return cb->checked;
 	}
 
-	// ── Progress bar ──────────────────────────────────────────────────────────
+	// -- Progress bar ----------------------------------------------------------
 
 	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -260,7 +260,7 @@ namespace aether::ui
 		ui.SetLayer(prevLayer);
 	}
 
-	// ── Panel ─────────────────────────────────────────────────────────────────
+	// -- Panel -----------------------------------------------------------------
 
 	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -369,7 +369,7 @@ namespace aether::ui
 		return !panel->collapsed;
 	}
 
-	// ── Z-order management ────────────────────────────────────────────────────
+	// -- Z-order management ----------------------------------------------------
 
 	// Recursively adds `delta` to the z-order of `entity` and every descendant
 	// reachable through UiChildrenComponent.
@@ -433,7 +433,7 @@ namespace aether::ui
 		}
 	}
 
-	// ── Layout ───────────────────────────────────────────────────────────────
+	// -- Layout ---------------------------------------------------------------
 
 	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
@@ -450,7 +450,7 @@ namespace aether::ui
 		const float spacing = layout->spacing;
 		const bool isVertical = (layout->direction == UiLayoutComponent::Direction::Vertical);
 
-		// ── Pass 1: measure fixed children, sum flex weights ─────────────────
+		// -- Pass 1: measure fixed children, sum flex weights -----------------
 		float fixedTotal = 0.f;
 		float flexWeightTotal = 0.f;
 		int childCount = 0;
@@ -480,7 +480,7 @@ namespace aether::ui
 		const float available = isVertical ? (parentPx.w - 2.f * pad) : (parentPx.z - 2.f * pad);
 		const float flexPool = std::max(0.f, available - fixedTotal - totalGaps);
 
-		// ── Pass 2: position all children ────────────────────────────────────
+		// -- Pass 2: position all children ------------------------------------
 		const float crossSize = isVertical ? (parentPx.z - 2.f * pad) : (parentPx.w - 2.f * pad);
 		float cursor = isVertical ? (parentPx.y + pad) : (parentPx.x + pad);
 
@@ -534,7 +534,7 @@ namespace aether::ui
 			cursor += mainSize + spacing;
 		}
 
-		// ── Auto-size: shrink/grow container to wrap content ──────────────────
+		// -- Auto-size: shrink/grow container to wrap content ------------------
 		// cursor is now: start + pad + sum(sizes) + N*spacing.
 		// Desired container size: 2*pad + sum(sizes) + (N-1)*spacing = cursor - start - spacing + pad.
 		if (layout->autoSize && childCount > 0)
@@ -640,7 +640,7 @@ namespace aether::ui
 		}
 	}
 
-	// ── Spawn helpers ─────────────────────────────────────────────────────────
+	// -- Spawn helpers ---------------------------------------------------------
 
 	Entity SpawnButton(aether::World& world, UiRect rect, std::string_view label, float zOrder)
 	{
@@ -675,7 +675,7 @@ namespace aether::ui
 		        .entity();
 	}
 
-	// ── Text Input ────────────────────────────────────────────────────────────
+	// -- Text Input ------------------------------------------------------------
 
 	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -740,7 +740,7 @@ namespace aether::ui
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{.placeholder = std::string(placeholder)}).entity();
 	}
 
-	// ── Hierarchy helper ──────────────────────────────────────────────────────
+	// -- Hierarchy helper ------------------------------------------------------
 
 	void AddChild(aether::World& world, Entity parent, Entity child)
 	{
@@ -759,7 +759,7 @@ namespace aether::ui
 		}
 	}
 
-	// ── Item Slot ─────────────────────────────────────────────────────────────
+	// -- Item Slot -------------------------------------------------------------
 
 	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -878,7 +878,7 @@ namespace aether::ui
 		return container;
 	}
 
-	// ── Label row ──────────────────────────────────────────────────────────────
+	// -- Label row --------------------------------------------------------------
 
 	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -910,7 +910,7 @@ namespace aether::ui
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiLabelRowComponent>(UiLabelRowComponent{.label = std::string(label)}).entity();
 	}
 
-	// ── Section separator ──────────────────────────────────────────────────────
+	// -- Section separator ------------------------------------------------------
 
 	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -935,7 +935,7 @@ namespace aether::ui
 		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSectionComponent>().entity();
 	}
 
-	// ── Tab bar ────────────────────────────────────────────────────────────────
+	// -- Tab bar ----------------------------------------------------------------
 
 	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
@@ -1050,7 +1050,7 @@ namespace aether::ui
 		return bar;
 	}
 
-	// ── Graph ──────────────────────────────────────────────────────────────────
+	// -- Graph ------------------------------------------------------------------
 
 	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{

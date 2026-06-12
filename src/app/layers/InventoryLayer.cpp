@@ -12,7 +12,7 @@
 
 namespace aether::app
 {
-	// ── GW2-style rarity colours ──────────────────────────────────────────────
+	// -- GW2-style rarity colours ----------------------------------------------
 	static constexpr glm::vec4 kRarityJunk{0.60f, 0.60f, 0.60f, 1.f};
 	static constexpr glm::vec4 kRarityFine{0.27f, 0.45f, 0.83f, 1.f};
 	static constexpr glm::vec4 kRarityMasterwork{0.15f, 0.55f, 0.20f, 1.f};
@@ -101,7 +101,7 @@ namespace aether::app
 	static constexpr float kPanelW = kGridW + 2.f * kGridPad;
 	static constexpr float kPanelH = kHeaderH + kGridPad + kGridH + kGridPad;
 
-	// ── OnAttach ─────────────────────────────────────────────────────────────
+	// -- OnAttach -------------------------------------------------------------
 
 	void InventoryLayer::OnAttach(LayerContext& context)
 	{
@@ -162,7 +162,7 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "InventoryLayer attached ({} entities).", m_entities.size());
 	}
 
-	// ── OnDetach ─────────────────────────────────────────────────────────────
+	// -- OnDetach -------------------------------------------------------------
 
 	void InventoryLayer::OnDetach(LayerContext& context)
 	{
@@ -175,14 +175,14 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "InventoryLayer detached.");
 	}
 
-	// ── OnUpdate ───────────────────────────────────────────────────────────────
+	// -- OnUpdate ---------------------------------------------------------------
 
 	void InventoryLayer::OnUpdate(LayerContext& context)
 	{
 		auto& world = context.Get<World>();
 		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 
-		// ── Anchor grid container below the panel header ───────────────────────
+		// -- Anchor grid container below the panel header -----------------------
 		// The panel can be dragged, so we re-derive the grid position from the
 		// panel's current resolved pixel rect each frame.
 		if (const auto* pt = world.TryGet<ui::UiTransformComponent>(m_panel))
@@ -202,7 +202,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Slot interaction ──────────────────────────────────────────────────
+		// -- Slot interaction --------------------------------------------------
 		// Detect clicks and sync selected state (UiItemSlotComponent::selected
 		// is read by DrawItemSlot during auto-rendering).
 		for (int i = 0; i < kInventorySlots; ++i)
@@ -221,7 +221,7 @@ namespace aether::app
 		}
 	}
 
-	// ── OnGui (no manual ECS UI drawing needed - handled by UiSystem::RenderAll)
+	// -- OnGui (no manual ECS UI drawing needed - handled by UiSystem::RenderAll)
 
 	void InventoryLayer::OnGui(LayerContext& context)
 	{

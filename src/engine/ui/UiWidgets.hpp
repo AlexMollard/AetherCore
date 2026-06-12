@@ -19,7 +19,7 @@ namespace aether::ui
 {
 	struct UiContext;
 
-	// ── Draw functions ────────────────────────────────────────────────────────
+	// -- Draw functions --------------------------------------------------------
 	// Each function reads the entity's ECS components, draws via UIRenderer,
 	// and returns the relevant state.  Pass `extent` (from AetherCore::GetSwapchainExtent)
 	// so pixel-space math (slider knob, checkbox box) works correctly.
@@ -68,7 +68,7 @@ namespace aether::ui
 	// (optional - omit for a read-only plot).
 	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
-	// ── Z-order management ────────────────────────────────────────────────────
+	// -- Z-order management ----------------------------------------------------
 
 	// Computes the GPU sort layer for an entity by combining its root panel's
 	// z-order with the entity's offset within the panel hierarchy.
@@ -79,7 +79,7 @@ namespace aether::ui
 	// child widget, the entire root panel is raised.
 	void BringToFront(aether::World& world, Entity entity);
 
-	// ── Layout ───────────────────────────────────────────────────────────────
+	// -- Layout ---------------------------------------------------------------
 
 	// Positions all direct children of `container` according to its
 	// UiLayoutComponent (VStack / HStack).  Must be called before drawing
@@ -98,7 +98,7 @@ namespace aether::ui
 	// UiParentComponent on `child`.  parent must already have UiChildrenComponent.
 	void AddChild(aether::World& world, Entity parent, Entity child);
 
-	// ── Spawn helpers ─────────────────────────────────────────────────────────
+	// -- Spawn helpers ---------------------------------------------------------
 	// Create a fully-configured widget entity in one call.
 
 	Entity SpawnButton(aether::World& world, UiRect rect, std::string_view label, float zOrder = 0.f);

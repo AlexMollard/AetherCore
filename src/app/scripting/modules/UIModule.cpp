@@ -6,13 +6,13 @@
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
 
-// ── Binding functions ─────────────────────────────────────────────────────────
+// -- Binding functions ---------------------------------------------------------
 
 namespace
 {
 	using namespace aether::app::scripting;
 
-	// ── Conversion helpers ────────────────────────────────────────────────────
+	// -- Conversion helpers ----------------------------------------------------
 
 	inline das::float4 ToDas(glm::vec4 v)
 	{
@@ -35,7 +35,7 @@ namespace
 		return aether::UiRect{{0.f, 0.f}, {0.f, 0.f}, {x, y}, {x + w, y + h}};
 	}
 
-	// ── Factory helpers ───────────────────────────────────────────────────────
+	// -- Factory helpers -------------------------------------------------------
 	// Convenience functions that create a fully-configured UI entity and return
 	// its id. They push to sceneEntities so the engine cleans up on reload.
 
@@ -174,7 +174,7 @@ namespace
 		w->Get<aether::ui::UiParentComponent>(child).parent = parent;
 	}
 
-	// ── UiTransformComponent ──────────────────────────────────────────────────
+	// -- UiTransformComponent --------------------------------------------------
 
 	void das_set_ui_rect(aether::World* w, uint32_t id, float anchorMinX, float anchorMinY, float anchorMaxX, float anchorMaxY, float offsetMinX, float offsetMinY, float offsetMaxX, float offsetMaxY)
 	{
@@ -205,7 +205,7 @@ namespace
 		}
 	}
 
-	// ── UiRenderComponent ─────────────────────────────────────────────────────
+	// -- UiRenderComponent -----------------------------------------------------
 
 	void das_set_ui_color(aether::World* w, uint32_t id, das::float4 color)
 	{
@@ -259,7 +259,7 @@ namespace
 		return c && c->visible;
 	}
 
-	// ── UiTextComponent ───────────────────────────────────────────────────────
+	// -- UiTextComponent -------------------------------------------------------
 
 	void das_set_ui_text(aether::World* w, uint32_t id, const char* text)
 	{
@@ -291,7 +291,7 @@ namespace
 		}
 	}
 
-	// ── UiInputComponent (read-only - written by UiSystem each frame) ─────────
+	// -- UiInputComponent (read-only - written by UiSystem each frame) ---------
 
 	bool das_get_ui_hovered(aether::World* w, uint32_t id)
 	{
@@ -329,7 +329,7 @@ namespace
 		return c ? c->pressT : 0.f;
 	}
 
-	// ── UiPanelComponent ──────────────────────────────────────────────────────
+	// -- UiPanelComponent ------------------------------------------------------
 
 	void das_set_ui_panel_title(aether::World* w, uint32_t id, const char* title)
 	{
@@ -367,7 +367,7 @@ namespace
 		}
 	}
 
-	// ── UiButtonComponent ─────────────────────────────────────────────────────
+	// -- UiButtonComponent -----------------------------------------------------
 
 	void das_set_ui_button_label(aether::World* w, uint32_t id, const char* label)
 	{
@@ -415,7 +415,7 @@ namespace
 		}
 	}
 
-	// ── UiSliderComponent ─────────────────────────────────────────────────────
+	// -- UiSliderComponent -----------------------------------------------------
 
 	float das_get_ui_slider_value(aether::World* w, uint32_t id)
 	{
@@ -446,7 +446,7 @@ namespace
 		return c && c->isDragging;
 	}
 
-	// ── UiCheckboxComponent ───────────────────────────────────────────────────
+	// -- UiCheckboxComponent ---------------------------------------------------
 
 	bool das_get_ui_checked(aether::World* w, uint32_t id)
 	{
@@ -476,7 +476,7 @@ namespace
 		return c ? c->label.c_str() : "";
 	}
 
-	// ── UiImageComponent ──────────────────────────────────────────────────────
+	// -- UiImageComponent ------------------------------------------------------
 
 	void das_set_ui_image_slot(aether::World* w, uint32_t id, uint32_t slot)
 	{
@@ -502,7 +502,7 @@ namespace
 		}
 	}
 
-	// ── UiLayoutComponent ─────────────────────────────────────────────────────
+	// -- UiLayoutComponent -----------------------------------------------------
 
 	void das_set_ui_layout_vertical(aether::World* w, uint32_t id)
 	{
@@ -544,7 +544,7 @@ namespace
 		}
 	}
 
-	// ── UiTextInputComponent ──────────────────────────────────────────────────
+	// -- UiTextInputComponent --------------------------------------------------
 
 	const char* das_get_ui_input_text(aether::World* w, uint32_t id)
 	{
@@ -581,7 +581,7 @@ namespace
 		return c && c->submitted;
 	}
 
-	// ── UiGridLayoutComponent ─────────────────────────────────────────────────
+	// -- UiGridLayoutComponent -------------------------------------------------
 
 	void das_set_ui_grid_columns(aether::World* w, uint32_t id, int columns)
 	{
@@ -607,7 +607,7 @@ namespace
 		}
 	}
 
-	// ── UiItemSlotComponent ───────────────────────────────────────────────────
+	// -- UiItemSlotComponent ---------------------------------------------------
 
 	void das_set_ui_item_slot(aether::World* w, uint32_t id, uint32_t textureSlot, int quantity)
 	{
@@ -638,7 +638,7 @@ namespace
 		}
 	}
 
-	// ── UiParentComponent ─────────────────────────────────────────────────────
+	// -- UiParentComponent -----------------------------------------------------
 
 	uint32_t das_get_ui_parent(aether::World* w, uint32_t id)
 	{
@@ -656,7 +656,7 @@ namespace
 
 } // namespace
 
-// ── Module ────────────────────────────────────────────────────────────────────
+// -- Module --------------------------------------------------------------------
 
 namespace aether::app::scripting
 {
@@ -668,7 +668,7 @@ namespace aether::app::scripting
 			das::ModuleLibrary lib(this);
 			lib.addModule(das::Module::require("world")); // World* used in all bindings
 
-			// ── Factory helpers ───────────────────────────────────────────────
+			// -- Factory helpers -----------------------------------------------
 			Bind<das_create_ui_panel>(lib, "create_ui_panel", SE::modifyExternal);
 			Bind<das_create_ui_button>(lib, "create_ui_button", SE::modifyExternal);
 			Bind<das_create_ui_label>(lib, "create_ui_label", SE::modifyExternal);
@@ -677,13 +677,13 @@ namespace aether::app::scripting
 			Bind<das_create_ui_image>(lib, "create_ui_image", SE::modifyExternal);
 			Bind<das_add_ui_child>(lib, "add_ui_child", SE::modifyExternal);
 
-			// ── UiTransformComponent ──────────────────────────────────────────
+			// -- UiTransformComponent ------------------------------------------
 			BIND_COMPONENT("ui_transform", aether::ui::UiTransformComponent)
 			Bind<das_set_ui_rect>(lib, "set_ui_rect", SE::modifyExternal);
 			Bind<das_set_ui_z_order>(lib, "set_ui_z_order", SE::modifyExternal);
 			Bind<das_set_ui_flex_grow>(lib, "set_ui_flex_grow", SE::modifyExternal);
 
-			// ── UiRenderComponent ─────────────────────────────────────────────
+			// -- UiRenderComponent ---------------------------------------------
 			BIND_COMPONENT("ui_render", aether::ui::UiRenderComponent)
 			Bind<das_set_ui_color>(lib, "set_ui_color", SE::modifyExternal);
 			Bind<das_get_ui_color>(lib, "get_ui_color", SE::accessExternal);
@@ -693,14 +693,14 @@ namespace aether::app::scripting
 			Bind<das_set_ui_visible>(lib, "set_ui_visible", SE::modifyExternal);
 			Bind<das_get_ui_visible>(lib, "get_ui_visible", SE::accessExternal);
 
-			// ── UiTextComponent ───────────────────────────────────────────────
+			// -- UiTextComponent -----------------------------------------------
 			BIND_COMPONENT("ui_text", aether::ui::UiTextComponent)
 			Bind<das_set_ui_text>(lib, "set_ui_text", SE::modifyExternal);
 			Bind<das_get_ui_text>(lib, "get_ui_text", SE::accessExternal);
 			Bind<das_set_ui_font_size>(lib, "set_ui_font_size", SE::modifyExternal);
 			Bind<das_set_ui_text_color>(lib, "set_ui_text_color", SE::modifyExternal);
 
-			// ── UiInputComponent ──────────────────────────────────────────────
+			// -- UiInputComponent ----------------------------------------------
 			BIND_COMPONENT("ui_input", aether::ui::UiInputComponent)
 			Bind<das_get_ui_hovered>(lib, "get_ui_hovered", SE::accessExternal);
 			Bind<das_get_ui_pressed>(lib, "get_ui_pressed", SE::accessExternal);
@@ -709,7 +709,7 @@ namespace aether::app::scripting
 			Bind<das_get_ui_hover_t>(lib, "get_ui_hover_t", SE::accessExternal);
 			Bind<das_get_ui_press_t>(lib, "get_ui_press_t", SE::accessExternal);
 
-			// ── UiPanelComponent ──────────────────────────────────────────────
+			// -- UiPanelComponent ----------------------------------------------
 			BIND_COMPONENT("ui_panel", aether::ui::UiPanelComponent)
 			Bind<das_set_ui_panel_title>(lib, "set_ui_panel_title", SE::modifyExternal);
 			Bind<das_get_ui_panel_title>(lib, "get_ui_panel_title", SE::accessExternal);
@@ -717,7 +717,7 @@ namespace aether::app::scripting
 			Bind<das_set_ui_panel_collapsible>(lib, "set_ui_panel_collapsible", SE::modifyExternal);
 			Bind<das_get_ui_panel_collapsed>(lib, "get_ui_panel_collapsed", SE::accessExternal);
 
-			// ── UiButtonComponent ─────────────────────────────────────────────
+			// -- UiButtonComponent ---------------------------------------------
 			BIND_COMPONENT("ui_button", aether::ui::UiButtonComponent)
 			Bind<das_set_ui_button_label>(lib, "set_ui_button_label", SE::modifyExternal);
 			Bind<das_get_ui_button_label>(lib, "get_ui_button_label", SE::accessExternal);
@@ -726,27 +726,27 @@ namespace aether::app::scripting
 			Bind<das_set_ui_button_press_color>(lib, "set_ui_button_press_color", SE::modifyExternal);
 			Bind<das_set_ui_button_text_color>(lib, "set_ui_button_text_color", SE::modifyExternal);
 
-			// ── UiSliderComponent ─────────────────────────────────────────────
+			// -- UiSliderComponent ---------------------------------------------
 			BIND_COMPONENT("ui_slider", aether::ui::UiSliderComponent)
 			Bind<das_get_ui_slider_value>(lib, "get_ui_slider_value", SE::accessExternal);
 			Bind<das_set_ui_slider_value>(lib, "set_ui_slider_value", SE::modifyExternal);
 			Bind<das_set_ui_slider_range>(lib, "set_ui_slider_range", SE::modifyExternal);
 			Bind<das_get_ui_slider_dragging>(lib, "get_ui_slider_dragging", SE::accessExternal);
 
-			// ── UiCheckboxComponent ───────────────────────────────────────────
+			// -- UiCheckboxComponent -------------------------------------------
 			BIND_COMPONENT("ui_checkbox", aether::ui::UiCheckboxComponent)
 			Bind<das_get_ui_checked>(lib, "get_ui_checked", SE::accessExternal);
 			Bind<das_set_ui_checked>(lib, "set_ui_checked", SE::modifyExternal);
 			Bind<das_set_ui_checkbox_label>(lib, "set_ui_checkbox_label", SE::modifyExternal);
 			Bind<das_get_ui_checkbox_label>(lib, "get_ui_checkbox_label", SE::accessExternal);
 
-			// ── UiImageComponent ──────────────────────────────────────────────
+			// -- UiImageComponent ----------------------------------------------
 			BIND_COMPONENT("ui_image", aether::ui::UiImageComponent)
 			Bind<das_set_ui_image_slot>(lib, "set_ui_image_slot", SE::modifyExternal);
 			Bind<das_set_ui_image_tint>(lib, "set_ui_image_tint", SE::modifyExternal);
 			Bind<das_set_ui_image_uv>(lib, "set_ui_image_uv", SE::modifyExternal);
 
-			// ── UiLayoutComponent ─────────────────────────────────────────────
+			// -- UiLayoutComponent ---------------------------------------------
 			BIND_COMPONENT("ui_layout", aether::ui::UiLayoutComponent)
 			Bind<das_set_ui_layout_vertical>(lib, "set_ui_layout_vertical", SE::modifyExternal);
 			Bind<das_set_ui_layout_horizontal>(lib, "set_ui_layout_horizontal", SE::modifyExternal);
@@ -754,7 +754,7 @@ namespace aether::app::scripting
 			Bind<das_set_ui_layout_padding>(lib, "set_ui_layout_padding", SE::modifyExternal);
 			Bind<das_set_ui_auto_size>(lib, "set_ui_auto_size", SE::modifyExternal);
 
-			// ── UiTextInputComponent ──────────────────────────────────────────
+			// -- UiTextInputComponent ------------------------------------------
 			BIND_COMPONENT("ui_text_input", aether::ui::UiTextInputComponent)
 			Bind<das_get_ui_input_text>(lib, "get_ui_input_text", SE::accessExternal);
 			Bind<das_set_ui_input_text>(lib, "set_ui_input_text", SE::modifyExternal);
@@ -762,23 +762,23 @@ namespace aether::app::scripting
 			Bind<das_set_ui_input_placeholder>(lib, "set_ui_input_placeholder", SE::modifyExternal);
 			Bind<das_get_ui_input_submitted>(lib, "get_ui_input_submitted", SE::accessExternal);
 
-			// ── UiGridLayoutComponent ─────────────────────────────────────────
+			// -- UiGridLayoutComponent -----------------------------------------
 			BIND_COMPONENT("ui_grid_layout", aether::ui::UiGridLayoutComponent)
 			Bind<das_set_ui_grid_columns>(lib, "set_ui_grid_columns", SE::modifyExternal);
 			Bind<das_set_ui_grid_slot_size>(lib, "set_ui_grid_slot_size", SE::modifyExternal);
 			Bind<das_set_ui_grid_spacing>(lib, "set_ui_grid_spacing", SE::modifyExternal);
 
-			// ── UiItemSlotComponent ───────────────────────────────────────────
+			// -- UiItemSlotComponent -------------------------------------------
 			BIND_COMPONENT("ui_item_slot", aether::ui::UiItemSlotComponent)
 			Bind<das_set_ui_item_slot>(lib, "set_ui_item_slot", SE::modifyExternal);
 			Bind<das_get_ui_item_quantity>(lib, "get_ui_item_quantity", SE::accessExternal);
 			Bind<das_get_ui_item_selected>(lib, "get_ui_item_selected", SE::accessExternal);
 			Bind<das_set_ui_item_rarity_color>(lib, "set_ui_item_rarity_color", SE::modifyExternal);
 
-			// ── UiClipComponent ───────────────────────────────────────────────
+			// -- UiClipComponent -----------------------------------------------
 			BIND_COMPONENT("ui_clip", aether::ui::UiClipComponent)
 
-			// ── UiChildrenComponent / UiParentComponent ───────────────────────
+			// -- UiChildrenComponent / UiParentComponent -----------------------
 			BIND_COMPONENT("ui_children", aether::ui::UiChildrenComponent)
 			BIND_COMPONENT("ui_parent", aether::ui::UiParentComponent)
 			Bind<das_get_ui_parent>(lib, "get_ui_parent", SE::accessExternal);

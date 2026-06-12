@@ -49,7 +49,7 @@ namespace aether
 		return glm::vec4(x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0));
 	}
 
-	// ── Anchor presets ────────────────────────────────────────────────────────
+	// -- Anchor presets --------------------------------------------------------
 	// Factory helpers that produce a UiRect from a named anchor point + size.
 	//
 	// Fixed presets (anchorMin == anchorMax -> widget does not resize with screen):
@@ -74,7 +74,7 @@ namespace aether
 			return UiRect{anchor, anchor, offsetMinPx, offsetMinPx + sizePx};
 		}
 
-		// ── Fixed-position presets ─────────────────────────────────────────────
+		// -- Fixed-position presets ---------------------------------------------
 
 		[[nodiscard]] inline UiRect TopLeft(glm::vec2 marginPx, glm::vec2 sizePx)
 		{
@@ -125,7 +125,7 @@ namespace aether
 			return Fixed({1.f, 1.f}, glm::vec2{-sizePx.x - marginPx.x, -sizePx.y - marginPx.y}, sizePx);
 		}
 
-		// ── Stretch presets ────────────────────────────────────────────────────
+		// -- Stretch presets ----------------------------------------------------
 
 		// Fills the screen; `inset` shrinks each edge uniformly.
 		[[nodiscard]] inline UiRect StretchFull(float inset = 0.f)

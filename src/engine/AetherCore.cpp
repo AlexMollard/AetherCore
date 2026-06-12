@@ -71,20 +71,20 @@ namespace aether
 		auto& sceneSub = m_services.Get<SceneSubsystem>();
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
-		// ── 1. Platform ─────────────────────────────────────────────────────
+		// -- 1. Platform -----------------------------------------------------
 		platform.Init({.appName = config.appName, .width = config.width, .height = config.height});
 		m_services.Register<Window>(platform.GetWindow());
 		m_services.Register<Input>(platform.GetInput());
 
-		// ── 2. Graphics device ──────────────────────────────────────────────
+		// -- 2. Graphics device ----------------------------------------------
 		m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync});
 
-		// ── 3. Scene (ECS + legacy) ─────────────────────────────────────────
+		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();
 		m_services.Register<World>(sceneSub.GetWorld());
 		m_services.Register<Scene>(sceneSub.GetScene());
 
-		// ── 4. Assets ───────────────────────────────────────────────────────
+		// -- 4. Assets -------------------------------------------------------
 		assetsSub.Init(m_services);
 		m_services.Register<AssetManager>(assetsSub.GetAssetManager());
 		m_services.Register<MeshArena>(assetsSub.GetMeshArena());
@@ -94,12 +94,12 @@ namespace aether
 
 		SetAnimationCompilePool(assetsSub.GetUploadContext().GetCommandPool());
 
-		// ── 5. Cameras ──────────────────────────────────────────────────────
+		// -- 5. Cameras ------------------------------------------------------
 		m_cameras->Init(m_services);
 		m_services.Register<CameraManager>(m_cameras->GetCameraManager());
 		m_services.Register<LightingManager>(m_cameras->GetLightingManager());
 
-		// ── 6. Rendering ────────────────────────────────────────────────────
+		// -- 6. Rendering ----------------------------------------------------
 		m_rendering->Init(m_services);
 		m_rendering->SetFrameIndexProvider([this]() { return m_frameIndex; });
 		m_services.Register<RenderingSubsystem>(*m_rendering);
@@ -109,7 +109,7 @@ namespace aether
 		m_services.Register<ShadowService>(m_rendering->GetShadowService());
 		m_services.Register<RenderTargetService>(m_rendering->GetRenderTargetService());
 
-		// ── 7. UI ──────────────────────────────────────────────────────────
+		// -- 7. UI ----------------------------------------------------------
 		if (config.uiFontPath != nullptr && config.uiFontPath[0] != '\0')
 		{
 			auto& ui = m_services.Get<UISubsystem>();
@@ -123,12 +123,12 @@ namespace aether
 		m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
 		assetsSub.LinkRenderingDeps(m_services);
 
-		// ── 8. Create default main camera ───────────────────────────────────
+		// -- 8. Create default main camera -----------------------------------
 		CameraManager& cameras = m_services.Get<CameraManager>();
 		const CameraHandle mainCam = cameras.Create(CameraDesc{});
 		cameras.SetMainCamera(mainCam);
 
-		// ── 9. Async compute (optional) ─────────────────────────────────────
+		// -- 9. Async compute (optional) -------------------------------------
 		bool enableAsyncCompute = m_settings.graphics.asyncCompute && m_gpu->HasDedicatedComputeQueue();
 		if (!m_settings.graphics.asyncCompute)
 		{
@@ -144,7 +144,7 @@ namespace aether
 			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
 		}
 
-		// ── 11. Animation systems ───────────────────────────────────────────
+		// -- 11. Animation systems -------------------------------------------
 		m_animationBlend = std::make_unique<AnimationBlendSystem>();
 		m_animationIk = std::make_unique<AnimationIkSystem>();
 		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
@@ -166,7 +166,7 @@ namespace aether
 		rq.SetRootMotionSystem(m_rootMotion.get());
 		rq.SetHipsNodeIndex(0);
 
-		// ── 10. Swapchain recreation callback ──────────────────────────────
+		// -- 10. Swapchain recreation callback ------------------------------
 		m_gpu->SetSwapchainRecreatedCallback(
 		        [this]()
 		        {

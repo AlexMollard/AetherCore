@@ -16,7 +16,7 @@ namespace aether
 		return Entity{static_cast<std::uint32_t>(entt::to_integral(entity))};
 	}
 
-	// ── Entity lifecycle ──────────────────────────────────────────────────────
+	// -- Entity lifecycle ------------------------------------------------------
 
 	Entity World::Create()
 	{

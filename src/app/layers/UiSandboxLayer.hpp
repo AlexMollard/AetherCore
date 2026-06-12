@@ -28,7 +28,7 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		// ── Widget Gallery panel (draggable, collapsible) ─────────────────────
+		// -- Widget Gallery panel (draggable, collapsible) ---------------------
 		Entity m_galleryPanel;
 		Entity m_clickButton;
 		Entity m_slider;
@@ -38,26 +38,26 @@ namespace aether::app
 		int m_clickCount = 0;
 		float m_progressTime = 0.f;
 
-		// ── Text Input panel ──────────────────────────────────────────────────
+		// -- Text Input panel --------------------------------------------------
 		Entity m_inputPanel;
 		Entity m_textInput;
 		std::string m_lastSubmitted = "(none)";
 
-		// ── Flex toolbar (standalone strip, no panel header) ──────────────────
+		// -- Flex toolbar (standalone strip, no panel header) ------------------
 		// Demonstrates UiTransformComponent::flexGrow pushing buttons to edges.
 		Entity m_flexContainer;
 		Entity m_flexLeft;
 		Entity m_flexSpacer; // transform-only, flexGrow=1
 		Entity m_flexRight;
 
-		// ── Auto-size panel (draggable, collapsible) ──────────────────────────
+		// -- Auto-size panel (draggable, collapsible) --------------------------
 		// UiLayoutComponent::autoSize=true shrinks the panel to wrap its children.
 		Entity m_autoPanel;
 		Entity m_autoItem1;
 		Entity m_autoItem2;
 		Entity m_autoItem3;
 
-		// ── Corner anchor demonstrations ──────────────────────────────────────
+		// -- Corner anchor demonstrations --------------------------------------
 		Entity m_cornerTL;
 		Entity m_cornerTR;
 		Entity m_cornerBL;

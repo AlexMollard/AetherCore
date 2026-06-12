@@ -9,7 +9,7 @@
 
 namespace aether::app::scripting
 {
-	// ── VfsFileSystem ─────────────────────────────────────────────────────────────
+	// -- VfsFileSystem -------------------------------------------------------------
 
 	das::FileInfo* VfsFileSystem::tryOpenFile(const das::string& fileName)
 	{
@@ -64,7 +64,7 @@ namespace aether::app::scripting
 		return nullptr;
 	}
 
-	// ── VfsFileAccess ─────────────────────────────────────────────────────────────
+	// -- VfsFileAccess -------------------------------------------------------------
 
 	VfsFileAccess::VfsFileAccess()
 	      : das::FsFileAccess()

@@ -79,7 +79,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	// ── Stat helpers ──────────────────────────────────────────────────────────
+	// -- Stat helpers ----------------------------------------------------------
 
 	const char* DebugLayer::GetTonemapModeName(aether::TonemapMode mode)
 	{
@@ -96,7 +96,7 @@ namespace aether::app
 		}
 	}
 
-	// ── Script error location ─────────────────────────────────────────────────
+	// -- Script error location -------------------------------------------------
 
 	void DebugLayer::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
@@ -287,7 +287,7 @@ namespace aether::app
 		}
 	}
 
-	// ── AppLayer overrides ────────────────────────────────────────────────────
+	// -- AppLayer overrides ----------------------------------------------------
 
 	void DebugLayer::OnAttach(LayerContext& context)
 	{
@@ -476,7 +476,7 @@ namespace aether::app
 		auto& world = context.Get<World>();
 		const Input& input = context.Get<Input>();
 
-		// ── Toggle visibility ───────────────────────────────────────────────
+		// -- Toggle visibility -----------------------------------------------
 		if (input.IsKeyPressed(aether::Key::F1))
 		{
 			m_visible = !m_visible;
@@ -526,7 +526,7 @@ namespace aether::app
 			AE_INFO(aether::LogCategory::App, "Forward render: {}", newState ? "on" : "off");
 		}
 
-		// ── Diagnostic test shapes (F7) ───────────────────────────────────
+		// -- Diagnostic test shapes (F7) -----------------------------------
 		// Drawn into the per-frame packet's debug vertex vector; the $Debug
 		// pass consumes them on the render thread. No locks - the channel transfer
 		// of the packet is the synchronization point.
@@ -563,7 +563,7 @@ namespace aether::app
 
 		PollScriptErrors(context);
 
-		// ── Update data ─────────────────────────────────────────────────────
+		// -- Update data -----------------------------------------------------
 		const float frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
 
 		// Push frame time to graph
@@ -855,7 +855,7 @@ namespace aether::app
 		const float sh = static_cast<float>(extent.height);
 		const ui::UiTheme& theme = ui::UiTheme::Default();
 
-		// ── Error notification bar (always visible) ──────────────────────────
+		// -- Error notification bar (always visible) --------------------------
 		if (!m_errorToasts.empty())
 		{
 			constexpr float kBarHeight = 44.f;
@@ -902,7 +902,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Panel visibility toggle ──────────────────────────────────────────
+		// -- Panel visibility toggle ------------------------------------------
 		// Move the panel on/off-screen so the auto-renderer skips it.
 		if (m_debugPanel.IsValid())
 		{

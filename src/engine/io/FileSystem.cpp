@@ -97,7 +97,7 @@ namespace aether::io
 
 		const auto workingDirectory = std::filesystem::current_path();
 
-		// ── assets:// ─────────────────────────────────────────────────────────
+		// -- assets:// ---------------------------------------------------------
 		// Prefer a compiled pak produced by AssetPacker at build time.
 		// Fall back to a loose assets/ directory if the pak does not yet exist
 		// (e.g., clean checkout before first build).
@@ -127,7 +127,7 @@ namespace aether::io
 			Mount("assets", assetsDirectory);
 		}
 
-		// ── shaders:// ────────────────────────────────────────────────────────
+		// -- shaders:// --------------------------------------------------------
 		const auto shaderDirectory = ResolveMountedDirectory({
 		        workingDirectory / "shaders",
 		        workingDirectory / "build/shaders",
@@ -139,7 +139,7 @@ namespace aether::io
 		AE_INFO(LogCategory::FileSystem, "CWD for shader mount: '{}' -> resolved: '{}'", workingDirectory.string(), shaderDirectory.string());
 		Mount("shaders", shaderDirectory);
 
-		// ── config:// ─────────────────────────────────────────────────────────
+		// -- config:// ---------------------------------------------------------
 		// Settings/config files are deployed to data/config at build time.
 		const auto configDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/config",
@@ -151,7 +151,7 @@ namespace aether::io
 		});
 		Mount("config", configDirectory);
 
-		// ── data:// ────────────────────────────────────────────────────────────
+		// -- data:// ------------------------------------------------------------
 		// Game data files (JSON configs, NPC definitions, dialogues, etc.)
 		const auto dataDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/data",
@@ -160,7 +160,7 @@ namespace aether::io
 		});
 		Mount("data", dataDirectory);
 
-		// ── scripts:// ──────────────────────────────────────────────────────────
+		// -- scripts:// ----------------------------------------------------------
 		// Scene scripts copied from resources/scripts/ at build time.
 		const auto scriptsDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/scripts",
@@ -169,7 +169,7 @@ namespace aether::io
 		});
 		Mount("scripts", scriptsDirectory);
 
-		// ── logs:// ───────────────────────────────────────────────────────────
+		// -- logs:// -----------------------------------------------------------
 		Mount("logs", workingDirectory / "logs");
 	}
 

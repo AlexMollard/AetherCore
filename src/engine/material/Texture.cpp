@@ -343,7 +343,7 @@ namespace aether
 			return {};
 		};
 
-		// Derive the .texture sibling path (e.g. "assets://foo/bar.png" -> "…/bar.texture")
+		// Derive the .texture sibling path (e.g. "assets://foo/bar.png" -> ".../bar.texture")
 		const std::string pathStr(path);
 		std::string texturePath;
 		{

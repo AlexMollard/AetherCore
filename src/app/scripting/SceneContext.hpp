@@ -58,7 +58,7 @@ namespace aether::app::scripting
 		// Unregistered from World on scene unload/reload.
 		std::vector<std::string> registeredSystems;
 
-		// ── Primitive mesh cache (for create_mesh / add_mesh) ─────────────────
+		// -- Primitive mesh cache (for create_mesh / add_mesh) -----------------
 		struct CachedMesh
 		{
 			const aether::Mesh* mesh = nullptr;

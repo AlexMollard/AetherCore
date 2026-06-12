@@ -29,7 +29,7 @@ namespace aether
 	{
 	}
 
-	// ── Direction helpers ─────────────────────────────────────────────────────
+	// -- Direction helpers -----------------------------------------------------
 
 	glm::vec3 Camera::GetPosition() const
 	{
@@ -70,7 +70,7 @@ namespace aether
 		return glm::normalize(glm::cross(GetRight(), GetForward()));
 	}
 
-	// ── Setters with clamping ─────────────────────────────────────────────────
+	// -- Setters with clamping -------------------------------------------------
 
 	void Camera::SetYawPitch(float yaw, float pitch)
 	{
@@ -89,7 +89,7 @@ namespace aether
 		m_orbitPitch = std::clamp(pitch, -kPitchLimit, kPitchLimit);
 	}
 
-	// ── Matrices ──────────────────────────────────────────────────────────────
+	// -- Matrices --------------------------------------------------------------
 
 	glm::mat4 Camera::GetViewMatrix() const
 	{
@@ -122,7 +122,7 @@ namespace aether
 		return GetProjectionMatrix(aspect) * GetViewMatrix();
 	}
 
-	// ── Per-frame update ──────────────────────────────────────────────────────
+	// -- Per-frame update ------------------------------------------------------
 
 	void Camera::Update(const Input& input, float dt)
 	{

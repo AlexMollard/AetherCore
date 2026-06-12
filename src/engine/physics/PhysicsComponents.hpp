@@ -26,7 +26,7 @@ namespace aether
 		Dynamic,   // Fully simulated by the physics engine
 	};
 
-	// ── Shape descriptor components ───────────────────────────────────────────
+	// -- Shape descriptor components -------------------------------------------
 	//
 	// Emplace one of these on an entity (alongside a TransformComponent) to
 	// request a physics body. PhysicsSystem::Update consumes the descriptor the
@@ -68,7 +68,7 @@ namespace aether
 		glm::vec3 initialVelocity{0.f, 0.f, 0.f};
 	};
 
-	// ── Runtime components (managed by PhysicsSystem) ─────────────────────────
+	// -- Runtime components (managed by PhysicsSystem) -------------------------
 
 	// Attached to any entity that participates in physics simulation.
 	// bodyId is a stable 32-bit handle - safe to use as a network replication key.

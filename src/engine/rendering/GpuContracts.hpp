@@ -12,9 +12,9 @@ namespace aether
 	// Must match kShadowCascadeCount in FrameConstants.hpp.
 	inline constexpr std::uint32_t kCullMultiFrustumCount = 3u;
 
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Draw Contracts
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Per-instance payload and push constants for mesh rendering.
 	// Sync with shaders/include/RenderContracts.slangh.
 
@@ -53,9 +53,9 @@ namespace aether
 		static_assert(offsetof(PushConstants, skinPaletteAddr) == 16);
 	} // namespace DrawContracts
 
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Cull Contracts
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Compute-based frustum culling input/output and push constants.
 	// Sync with shaders/cull_draws.slang and cull_draws_multi.slang.
 
@@ -148,9 +148,9 @@ namespace aether
 		inline constexpr std::uint32_t kDebugForceVisibleBit = 1u << 0;
 	} // namespace CullContracts
 
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Animation Contracts
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// GPU-driven animation skinning: clip sampling, pose flattening, skin palette.
 	// Sync with shaders/include/AnimationContracts.slangh.
 

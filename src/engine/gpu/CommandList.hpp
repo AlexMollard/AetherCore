@@ -15,9 +15,9 @@ namespace aether
 
 namespace aether::gpu
 {
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// CommandList - Engine-facing command buffer wrapper
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Replaces raw VkCommandBuffer usage in rendering/ passes with a
 	// Vulkan-free API. Passes hold a CommandList& and call methods that take
 	// engine handles (BufferHandle, PipelineHandle) or device-address integers

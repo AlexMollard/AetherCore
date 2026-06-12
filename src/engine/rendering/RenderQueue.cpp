@@ -409,7 +409,7 @@ namespace aether
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
 			AE_VERBOSE(LogCategory::Animation, "Animation dispatch enabled: {} sampleJobs, {} skinJobs", sampleJobsThisFrame, skinJobCount);
-			// ── Pass 0: Parallel bind-pose initialization ──
+			// -- Pass 0: Parallel bind-pose initialization --
 			// Dispatched before animation sampling to write all node bind poses
 			// in parallel (each thread handles one (job, node) pair).
 			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit.IsValid())
@@ -512,7 +512,7 @@ namespace aether
 				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			}
 
-			// ── Pass 1.3: Animation blend (cross-fade between two clips) ───────────
+			// -- Pass 1.3: Animation blend (cross-fade between two clips) -----------
 			if (m_animationBlendSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && (m_debugAnimPassMask & 2u))
 			{
 				const AnimationContracts::AnimationBlendPush& blendPc = m_animationBlendSystem->GetBlendPush();
@@ -581,7 +581,7 @@ namespace aether
 			}
 		}
 
-		// ── Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) ──
+		// -- Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) --
 		std::uint32_t firstBatchNodeCount = 0;
 		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
 		{
@@ -666,7 +666,7 @@ namespace aether
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 		}
 
-		// ── Pass 1.8: IK solve (two-bone leg IK on GPU) ─────────────────────────
+		// -- Pass 1.8: IK solve (two-bone leg IK on GPU) -------------------------
 		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve.IsValid())
 		{
 			if (m_cachedNodeGlobalTransformsAddr != 0)
@@ -747,7 +747,7 @@ namespace aether
 			AE_WARN(LogCategory::Animation, "Animation dispatch DISABLED by debug flag ({} sampleJobs, {} skinJobs skipped)", sampleJobsThisFrame, skinJobCount);
 		}
 
-		// ── Cull dispatch: single or multi-frustum ──
+		// -- Cull dispatch: single or multi-frustum --
 		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
 		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullContracts::Batch);
 

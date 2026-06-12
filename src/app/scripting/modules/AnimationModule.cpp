@@ -21,7 +21,7 @@ namespace
 
 	aether::AnimationIkSystem* s_animationIkSystem = nullptr;
 
-	// ── Helpers ───────────────────────────────────────────────────────────────
+	// -- Helpers ---------------------------------------------------------------
 
 	const aether::SkinnedMeshComponent* FindSmcOrSpawned(const aether::World* w, uint32_t id)
 	{
@@ -85,11 +85,11 @@ namespace
 		return name;
 	}
 
-	// Build bone name → node index map from AnimationDatabase's skeleton.
+	// Build bone name -> node index map from AnimationDatabase's skeleton.
 	// Registers:
-	//   - The full skeleton name (e.g. "mixamorig_Hips" → nodeIdx)
-	//   - The stripped name  (e.g. "Hips" → same nodeIdx)
-	//   - Alternate prefix forms  (e.g. "mixamorig:Hips" → same nodeIdx)
+	//   - The full skeleton name (e.g. "mixamorig_Hips" -> nodeIdx)
+	//   - The stripped name  (e.g. "Hips" -> same nodeIdx)
+	//   - Alternate prefix forms  (e.g. "mixamorig:Hips" -> same nodeIdx)
 	std::unordered_map<std::string, std::uint32_t> BuildBoneNameMap(const aether::AnimationDatabase* animDb)
 	{
 		std::unordered_map<std::string, std::uint32_t> boneMap;
@@ -195,7 +195,7 @@ namespace
 		}
 	}
 
-	// ── Compile ───────────────────────────────────────────────────────────────
+	// -- Compile ---------------------------------------------------------------
 
 	// Bake all pending animation clips into the model's AnimationDatabase.
 	// Delegates to the engine-level CompileAnimations.
@@ -204,7 +204,7 @@ namespace
 		aether::CompileAnimations(*w, id);
 	}
 
-	// ── Loading ───────────────────────────────────────────────────────────────
+	// -- Loading ---------------------------------------------------------------
 
 	// Forward declaration for the wrapper below.
 	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath, bool lockRoot = false);
@@ -411,7 +411,7 @@ namespace
 		ForEachSpawnedSmc(w, id, clearFn);
 	}
 
-	// ── Playback control ──────────────────────────────────────────────────────
+	// -- Playback control ------------------------------------------------------
 
 	void das_set_animation(aether::World* w, uint32_t id, int32_t clipIndex)
 	{
@@ -468,7 +468,7 @@ namespace
 		return smc ? smc->animTime : 0.f;
 	}
 
-	// ── Clip queries (checks both compiled DB clips and pending clips) ─────────
+	// -- Clip queries (checks both compiled DB clips and pending clips) ---------
 
 	int32_t das_get_animation_count(aether::World* w, uint32_t id)
 	{
@@ -559,7 +559,7 @@ namespace
 		return -1;
 	}
 
-	// ── Entity iteration ──────────────────────────────────────────────────────
+	// -- Entity iteration ------------------------------------------------------
 
 	void das_for_each_with_animator(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
 	{
@@ -572,7 +572,7 @@ namespace
 		}
 	}
 
-	// ── Animation blend ──────────────────────────────────────────────────────
+	// -- Animation blend ------------------------------------------------------
 
 	void das_set_animation_blend(aether::World* w, uint32_t id, int32_t secondaryClipIndex, float transitionSpeed)
 	{
@@ -605,7 +605,7 @@ namespace
 		        });
 	}
 
-	// ── IK ───────────────────────────────────────────────────────────────────
+	// -- IK -------------------------------------------------------------------
 
 	void das_set_ik_enabled(aether::World* w, uint32_t id, bool enabled)
 	{
@@ -663,7 +663,7 @@ namespace
 		s_animationIkSystem->InitEntity(*w, id, *smc->animDb);
 	}
 
-	// ── Root motion ──────────────────────────────────────────────────────────
+	// -- Root motion ----------------------------------------------------------
 
 	void das_set_root_motion_enabled(aether::World* w, uint32_t id, bool enabled)
 	{

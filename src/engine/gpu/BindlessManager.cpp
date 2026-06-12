@@ -31,7 +31,7 @@ namespace aether
 		m_currentFrame = 0;
 		m_pendingSlotFrees.clear();
 
-		// ── Immutable linear sampler (binding 1) ──────────────────────────────
+		// -- Immutable linear sampler (binding 1) ------------------------------
 		// Created before the layout so the handle can be embedded as immutable.
 		const VkSamplerCreateInfo samplerInfo{
 		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
@@ -55,7 +55,7 @@ namespace aether
 			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.")};
 		}
 
-		// ── Descriptor pool ───────────────────────────────────────────────────
+		// -- Descriptor pool ---------------------------------------------------
 		const VkDescriptorPoolSize poolSizes[2] = {
 		        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity},
 		        {VK_DESCRIPTOR_TYPE_SAMPLER, 1},
@@ -79,7 +79,7 @@ namespace aether
 			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.")};
 		}
 
-		// ── Descriptor set layout ─────────────────────────────────────────────
+		// -- Descriptor set layout ---------------------------------------------
 		// binding 0 - COMBINED_IMAGE_SAMPLER array (bindless image array)
 		// binding 1 - SAMPLER (immutable linear sampler, shared by most draws)
 		const VkDescriptorSetLayoutBinding bindings[2] = {

@@ -32,7 +32,7 @@
 namespace aether
 {
 
-	// ── Object / broadphase layer definitions ────────────────────────────────────
+	// -- Object / broadphase layer definitions ------------------------------------
 
 	namespace Layers
 	{
@@ -49,7 +49,7 @@ namespace aether
 		static constexpr uint32_t kNumLayers = 2;
 	} // namespace BroadPhaseLayers
 
-	// ── PhysicsSystem internal Jolt interface implementations ────────────────────
+	// -- PhysicsSystem internal Jolt interface implementations --------------------
 
 	struct PhysicsSystem::BPLayerInterface final : public JPH::BroadPhaseLayerInterface
 	{
@@ -126,7 +126,7 @@ namespace aether
 		}
 	};
 
-	// ── Helpers ───────────────────────────────────────────────────────────────────
+	// -- Helpers -------------------------------------------------------------------
 
 	static JPH::ObjectLayer ToJoltLayer(PhysicsLayer layer)
 	{
@@ -181,7 +181,7 @@ namespace aether
 		return glm::scale(glm::translate(glm::mat4(1.f), pos) * glm::mat4_cast(rot), scale);
 	}
 
-	// ── PhysicsSystem ─────────────────────────────────────────────────────────────
+	// -- PhysicsSystem -------------------------------------------------------------
 
 	PhysicsSystem::PhysicsSystem() = default;
 	PhysicsSystem::~PhysicsSystem() = default;
@@ -241,7 +241,7 @@ namespace aether
 		JPH::Factory::sInstance = nullptr;
 	}
 
-	// ── Fixed-step update ─────────────────────────────────────────────────────────
+	// -- Fixed-step update ---------------------------------------------------------
 
 	void PhysicsSystem::Update(World& world, float dt)
 	{
@@ -301,7 +301,7 @@ namespace aether
 		}
 	}
 
-	// ── Body factory ──────────────────────────────────────────────────────────────
+	// -- Body factory --------------------------------------------------------------
 
 	static glm::vec3 ExtractPosition(const TransformComponent& t)
 	{
@@ -370,7 +370,7 @@ namespace aether
 			}
 		};
 
-		// ── Box ───────────────────────────────────────────────────────────────────
+		// -- Box -------------------------------------------------------------------
 		for (auto [entity, desc]: world.View<BoxBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
@@ -414,7 +414,7 @@ namespace aether
 			}
 		}
 
-		// ── Sphere ────────────────────────────────────────────────────────────────
+		// -- Sphere ----------------------------------------------------------------
 		for (auto [entity, desc]: world.View<SphereBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
@@ -457,7 +457,7 @@ namespace aether
 			}
 		}
 
-		// ── Capsule ───────────────────────────────────────────────────────────────
+		// -- Capsule ---------------------------------------------------------------
 		for (auto [entity, desc]: world.View<CapsuleBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
@@ -543,7 +543,7 @@ namespace aether
 		bodyInterface.DestroyBody(rigid->bodyId);
 	}
 
-	// ── Body control ──────────────────────────────────────────────────────────────
+	// -- Body control --------------------------------------------------------------
 
 	void PhysicsSystem::SetLinearVelocity(JPH::BodyID id, glm::vec3 v)
 	{
@@ -585,7 +585,7 @@ namespace aether
 		m_physics->GetBodyInterface().SetRotation(id, ToJolt(rot), JPH::EActivation::Activate);
 	}
 
-	// ── Raycasting ──────────────────────────────────────────────────────────────
+	// -- Raycasting --------------------------------------------------------------
 
 	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance, PhysicsLayer /*layer*/)
 	{

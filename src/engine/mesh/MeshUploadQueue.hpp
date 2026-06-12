@@ -20,7 +20,7 @@ namespace aether
 	// data is missing until the next successful flush).
 	//
 	// Usage per frame:
-	//   1. Call Upload(…) for each dirty chunk that produced new geometry.
+	//   1. Call Upload(...) for each dirty chunk that produced new geometry.
 	//   2. Call Flush(cmd) once - before the cull compute pass runs.
 	class MeshUploadQueue
 	{

@@ -80,7 +80,7 @@ namespace
 		ActiveContext().renderer->SetSkyVoidColor({color.x, color.y, color.z});
 	}
 
-	// ── Day/Night cycle controls ──────────────────────────────────────────────
+	// -- Day/Night cycle controls ----------------------------------------------
 
 	void das_set_day_night_enabled(bool enabled)
 	{

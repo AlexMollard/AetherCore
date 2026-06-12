@@ -8,9 +8,9 @@
 
 namespace aether::vkutil
 {
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// ComputePipelineFactory - Vulkan implementation of compute-pipeline Create
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Lives under src/engine/vulkan/ so engine-facing code (CullPass etc.) does
 	// not need to know about vkCreateComputePipelines. The factory produces a
 	// ResourceRegistry::PipelineEntry; the caller is responsible for handing

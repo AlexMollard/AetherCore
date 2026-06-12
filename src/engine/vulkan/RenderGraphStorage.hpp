@@ -39,7 +39,7 @@ namespace aether
 		void Shutdown();
 		void BeginFrame(std::uint32_t frameIndex);
 
-		// ── External images ────────────────────────────────────────────────
+		// -- External images ------------------------------------------------
 		uint32_t RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect);
 		[[nodiscard]] VkImage GetExternalImage(uint32_t idx) const;
 		[[nodiscard]] VkImageView GetExternalView(uint32_t idx) const;
@@ -50,7 +50,7 @@ namespace aether
 			return m_externalImages.size();
 		}
 
-		// ── Transient image slots ──────────────────────────────────────────
+		// -- Transient image slots ------------------------------------------
 		uint32_t AddTransientSlot(VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, gpu::Extent2D extent);
 		void EnsureTransientImages(const FrameTarget& target);
 
@@ -65,14 +65,14 @@ namespace aether
 			return m_transientImages.size();
 		}
 
-		// ── Bindless ───────────────────────────────────────────────────────
+		// -- Bindless -------------------------------------------------------
 		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout);
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
 
-		// ── Release / cache ────────────────────────────────────────────────
+		// -- Release / cache ------------------------------------------------
 		void ReleaseTransient(uint32_t idx, std::uint32_t currentFrame);
 
-		// ── Image layout oracle (debug) ────────────────────────────────────
+		// -- Image layout oracle (debug) ------------------------------------
 #ifndef NDEBUG
 		void SetTrackedLayout(VkImage image, VkImageLayout layout)
 		{
@@ -91,7 +91,7 @@ namespace aether
 		}
 #endif
 
-		// ── Frame statistics ────────────────────────────────────────────
+		// -- Frame statistics --------------------------------------------
 		[[nodiscard]] const FrameStats& GetLastFrameStats() const
 		{
 			return m_lastFrameStats;
@@ -102,7 +102,7 @@ namespace aether
 			return m_lastFrameStats;
 		}
 
-		// ── Scratch (reused across Execute calls) ──────────────────────────
+		// -- Scratch (reused across Execute calls) --------------------------
 		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
 		{
 			return m_scratchColorInfos;
@@ -114,7 +114,7 @@ namespace aether
 		}
 
 	private:
-		// ── Internal types ─────────────────────────────────────────────────
+		// -- Internal types -------------------------------------------------
 		struct ExternalImageEntry
 		{
 			VkImage image = VK_NULL_HANDLE;
@@ -178,13 +178,13 @@ namespace aether
 			UniqueImage image;
 		};
 
-		// ── Cache helpers ──────────────────────────────────────────────────
+		// -- Cache helpers --------------------------------------------------
 		void MoveToCache(TransientImageEntry& entry);
 		UniqueImage TryPullFromCache(const ImageCacheKey& key);
 		void EvictStaleCacheEntries();
 		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const;
 
-		// ── Member state ───────────────────────────────────────────────────
+		// -- Member state ---------------------------------------------------
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 

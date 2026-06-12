@@ -18,7 +18,7 @@
 
 namespace aether
 {
-	// ── Lifecycle ────────────────────────────────────────────────────────────
+	// -- Lifecycle ------------------------------------------------------------
 
 	RenderGraph::RenderGraph()
 	      : m_storage(std::make_unique<RenderGraphStorage>())
@@ -51,7 +51,7 @@ namespace aether
 		m_storage->BeginFrame(frameIndex);
 	}
 
-	// ── PassBuilder ──────────────────────────────────────────────────────────
+	// -- PassBuilder ----------------------------------------------------------
 
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
 	      : m_graph(graph), m_passIndex(passIndex)
@@ -135,7 +135,7 @@ namespace aether
 		return *this;
 	}
 
-	// ── Pass management ──────────────────────────────────────────────────────
+	// -- Pass management ------------------------------------------------------
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, [[maybe_unused]] std::source_location loc)
 	{
@@ -218,7 +218,7 @@ namespace aether
 		return result;
 	}
 
-	// ── Image registration ───────────────────────────────────────────────────
+	// -- Image registration ---------------------------------------------------
 
 	RGImage RenderGraph::RegisterImage(void* image, void* view, gpu::ImageAspect aspect)
 	{
@@ -263,7 +263,7 @@ namespace aether
 		});
 	}
 
-	// ── Bindless ─────────────────────────────────────────────────────────────
+	// -- Bindless -------------------------------------------------------------
 
 	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, void* device, gpu::ImageLayout descriptorLayout)
 	{
@@ -308,7 +308,7 @@ namespace aether
 		}
 	}
 
-	// ── Compilation ──────────────────────────────────────────────────────────
+	// -- Compilation ----------------------------------------------------------
 
 	void RenderGraph::Compile()
 	{
@@ -760,7 +760,7 @@ namespace aether
 					        .kind = BarrierIssue::Kind::Redundant,
 					        .passIndex = cp.passIndex,
 					        .resourceId = b.resourceId,
-					        .message = std::format("Pass '{}': redundant barrier on resource {} — layout and stage unchanged", pass.name, b.resourceId),
+					        .message = std::format("Pass '{}': redundant barrier on resource {} -- layout and stage unchanged", pass.name, b.resourceId),
 					});
 				}
 
@@ -771,7 +771,7 @@ namespace aether
 					        .passIndex = cp.passIndex,
 					        .resourceId = b.resourceId,
 					        .message = std::format("Pass '{}': layout transition on resource {} has srcAccess=0 "
-					                               "but srcStage is not TOP_OF_PIPE — possible RAW hazard.",
+					                               "but srcStage is not TOP_OF_PIPE -- possible RAW hazard.",
 					                pass.name,
 					                b.resourceId),
 					});
@@ -784,7 +784,7 @@ namespace aether
 					        .passIndex = cp.passIndex,
 					        .resourceId = b.resourceId,
 					        .message = std::format("Pass '{}': resource {} uses ALL_COMMANDS_BIT "
-					                               "but isCrossFrame is false — unnecessarily conservative.",
+					                               "but isCrossFrame is false -- unnecessarily conservative.",
 					                pass.name,
 					                b.resourceId),
 					});
@@ -797,7 +797,7 @@ namespace aether
 					        .passIndex = cp.passIndex,
 					        .resourceId = b.resourceId,
 					        .message = std::format("Pass '{}': resource {} transitions to ShaderReadOnly "
-					                               "with only FRAGMENT_SHADER stage — vertex shader sampling will race.",
+					                               "with only FRAGMENT_SHADER stage -- vertex shader sampling will race.",
 					                pass.name,
 					                b.resourceId),
 					});
@@ -808,7 +808,7 @@ namespace aether
 	}
 #endif
 
-	// ── Execution ────────────────────────────────────────────────────────────
+	// -- Execution ------------------------------------------------------------
 
 	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
 	{
@@ -835,7 +835,7 @@ namespace aether
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
-			// ── Barriers ────────────────────────────────────────────────────
+			// -- Barriers ----------------------------------------------------
 			auto& scratchBarriers = m_storage->GetScratchBarriers();
 			scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
@@ -898,7 +898,7 @@ namespace aether
 			}
 			vkutil::TransitionImages(vkCmd, scratchBarriers.data(), static_cast<uint32_t>(scratchBarriers.size()));
 
-			// ── Dynamic rendering ───────────────────────────────────────────
+			// -- Dynamic rendering -------------------------------------------
 			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)

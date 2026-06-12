@@ -27,7 +27,7 @@ namespace aether
 	//
 	// Uses multi-frustum culling: one cull dispatch tests each draw against
 	// all 3 cascade view-proj matrices, writing 3 independent output regions.
-	// This replaces 3× per-cascade queues that each duplicated the same draw data.
+	// This replaces 3x per-cascade queues that each duplicated the same draw data.
 	class ShadowService
 	{
 	public:

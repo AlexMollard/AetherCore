@@ -23,7 +23,7 @@ namespace aether
 {
 	class World;
 
-	// ── PhysicsSystem ─────────────────────────────────────────────────────────
+	// -- PhysicsSystem ---------------------------------------------------------
 	//
 	// Owns the Jolt physics world and drives it with a fixed timestep.
 	// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
@@ -69,7 +69,7 @@ namespace aether
 		// bodies when entities are destroyed outside of RemoveBody().
 		void OnRigidBodyDestroyed(entt::registry& registry, entt::entity enttEntity);
 
-		// ── Body control ──────────────────────────────────────────────────────
+		// -- Body control ------------------------------------------------------
 
 		void SetLinearVelocity(JPH::BodyID id, glm::vec3 velocity);
 		glm::vec3 GetLinearVelocity(JPH::BodyID id) const;
@@ -82,7 +82,7 @@ namespace aether
 		void SetPosition(JPH::BodyID id, glm::vec3 position);
 		void SetRotation(JPH::BodyID id, glm::quat rotation);
 
-		// ── Raycasting ──────────────────────────────────────────────────────────
+		// -- Raycasting ----------------------------------------------------------
 
 		// Result of a single raycast query.
 		struct RaycastResult

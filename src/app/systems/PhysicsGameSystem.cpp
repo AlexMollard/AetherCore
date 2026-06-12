@@ -39,7 +39,7 @@ namespace aether::app
 		};
 	} // namespace
 
-	// ── Init ──────────────────────────────────────────────────────────────────────
+	// -- Init ----------------------------------------------------------------------
 
 	void PhysicsGameSystem::Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input)
 	{
@@ -49,14 +49,14 @@ namespace aether::app
 		m_input = &input;
 	}
 
-	// ── Scene construction ────────────────────────────────────────────────────────
+	// -- Scene construction --------------------------------------------------------
 
 	void PhysicsGameSystem::BuildScene(aether::World& world)
 	{
 		const aether::Mesh& cube = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Cube);
 		const aether::Mesh& sphere = m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Sphere);
 
-		// ── Ground ────────────────────────────────────────────────────────────────
+		// -- Ground ----------------------------------------------------------------
 		{
 			aether::EntityHandle ground = aether::ecs::SpawnMesh(world, m_pipeline, cube, m_groundMaterial, glm::translate(glm::mat4(1.f), {0.f, -kGroundThickness, 0.f}));
 			ground.Add<PhysicsSceneTag>();
@@ -68,7 +68,7 @@ namespace aether::app
 			m_sceneEntities.push_back(ground);
 		}
 
-		// ── Boundary walls (4 sides, static) ─────────────────────────────────────
+		// -- Boundary walls (4 sides, static) -------------------------------------
 		const float wallH = 4.f;
 		const float wallHalf = kGroundHalfExtent;
 		const float wallT = 0.4f;
@@ -98,7 +98,7 @@ namespace aether::app
 			m_sceneEntities.push_back(wall);
 		}
 
-		// ── Stacked boxes ─────────────────────────────────────────────────────────
+		// -- Stacked boxes ---------------------------------------------------------
 		const float boxHalf = 0.5f;
 		for (int row = 0; row < kStackHeight; ++row)
 		{
@@ -118,7 +118,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Scattered spheres ─────────────────────────────────────────────────────
+		// -- Scattered spheres -----------------------------------------------------
 		std::uniform_real_distribution<float> posDist(-kGroundHalfExtent * 0.65f, kGroundHalfExtent * 0.65f);
 		std::uniform_real_distribution<float> heightDist(3.f, 14.f);
 		std::uniform_real_distribution<float> radiusDist(0.25f, 0.55f);
@@ -153,7 +153,7 @@ namespace aether::app
 		m_projectileCount = 0;
 	}
 
-	// ── OnRegister ────────────────────────────────────────────────────────────────
+	// -- OnRegister ----------------------------------------------------------------
 
 	void PhysicsGameSystem::OnRegister(aether::World& world)
 	{
@@ -169,7 +169,7 @@ namespace aether::app
 			return;
 		}
 
-		// ── Pipeline ──────────────────────────────────────────────────────────────
+		// -- Pipeline --------------------------------------------------------------
 		const aether::gpu::DescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
 		const aether::gpu::DescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
@@ -185,7 +185,7 @@ namespace aether::app
 		        }));
 		m_pipeline = std::move(pipeline);
 
-		// ── Materials ─────────────────────────────────────────────────────────────
+		// -- Materials -------------------------------------------------------------
 		m_groundMaterial = {};
 		m_groundMaterial.baseColorFactor = glm::vec4(0.45f, 0.45f, 0.42f, 1.f);
 		m_groundMaterial.roughnessFactor = 0.9f;
@@ -216,10 +216,10 @@ namespace aether::app
 		m_projectileMaterial.metallicFactor = 0.8f;
 		m_assets->RegisterMaterial(m_projectileMaterial);
 
-		// ── Scene ─────────────────────────────────────────────────────────────────
+		// -- Scene -----------------------------------------------------------------
 		BuildScene(world);
 
-		// ── Cameras ───────────────────────────────────────────────────────────────
+		// -- Cameras ---------------------------------------------------------------
 		m_orbitCamera = m_cameras->Create({
 		        .mode = aether::CameraMode::Orbit,
 		        .orbitTarget = {0.f, 4.f, 0.f},
@@ -240,7 +240,7 @@ namespace aether::app
 		m_cameras->SetMainCamera(m_orbitCamera);
 	}
 
-	// ── Projectile ────────────────────────────────────────────────────────────────
+	// -- Projectile ----------------------------------------------------------------
 
 	void PhysicsGameSystem::FireProjectile(aether::World& world)
 	{
@@ -265,7 +265,7 @@ namespace aether::app
 		++m_projectileCount;
 	}
 
-	// ── Update ────────────────────────────────────────────────────────────────────
+	// -- Update --------------------------------------------------------------------
 
 	void PhysicsGameSystem::Update(aether::World& world, float dt)
 	{
@@ -287,7 +287,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Input ─────────────────────────────────────────────────────────────────
+		// -- Input -----------------------------------------------------------------
 
 		// Space = fire a projectile (rate-limited)
 		if (m_input->IsKeyPressed(aether::Key::Space) && m_projectileCooldown <= 0.f)
@@ -315,7 +315,7 @@ namespace aether::app
 		}
 	}
 
-	// ── OnUnregister ──────────────────────────────────────────────────────────────
+	// -- OnUnregister --------------------------------------------------------------
 
 	void PhysicsGameSystem::OnUnregister(aether::World& world)
 	{

@@ -17,7 +17,7 @@
 #include "scripting/SceneContext.hpp"
 #include "utils/Logger.hpp"
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// -- Helpers -------------------------------------------------------------------
 
 namespace
 {
@@ -33,13 +33,13 @@ namespace
 	}
 } // namespace
 
-// ── Binding functions ─────────────────────────────────────────────────────────
+// -- Binding functions ---------------------------------------------------------
 
 namespace
 {
 	using namespace aether::app::scripting;
 
-	// ── Entity lifecycle ──────────────────────────────────────────────────────
+	// -- Entity lifecycle ------------------------------------------------------
 
 	// entity_create(world) -> uint
 	uint32_t das_entity_create(aether::World* w)
@@ -61,7 +61,7 @@ namespace
 		return id != 0;
 	}
 
-	// ── TransformComponent field access ───────────────────────────────────────
+	// -- TransformComponent field access ---------------------------------------
 	// Individual float3 accessors avoid needing das::cast<> for large structs.
 
 	// get_position(world, entity_id) -> float3
@@ -197,7 +197,7 @@ namespace
 		}
 	}
 
-	// ── Model loading ─────────────────────────────────────────────────────────
+	// -- Model loading ---------------------------------------------------------
 
 	// load_model(world, entity_id, path)
 	void das_load_model(aether::World* w, uint32_t id, const char* path)
@@ -277,7 +277,7 @@ namespace
 		}
 	}
 
-	// ── Entity iteration ──────────────────────────────────────────────────────
+	// -- Entity iteration ------------------------------------------------------
 
 	// for_each_with_transform(world) <| $(e : uint) { ... }
 	void das_for_each_with_transform(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
@@ -291,7 +291,7 @@ namespace
 		}
 	}
 
-	// ── Dynamic Tags ─────────────────────────────────────────────────────────
+	// -- Dynamic Tags ---------------------------------------------------------
 
 	// DAS binding functions - delegate to TagSlots.cpp implementation
 
@@ -340,7 +340,7 @@ namespace
 		        });
 	}
 
-	// ── Primitive mesh caching ───────────────────────────────────────────────
+	// -- Primitive mesh caching -----------------------------------------------
 	// create_mesh(world, type_string) -> uint
 	// Caches a primitive mesh by type ("cube", "sphere", "plane", "quad", "triangle")
 	// and returns a handle that can be passed to add_mesh.
@@ -424,7 +424,7 @@ namespace
 
 } // namespace
 
-// ── Module ────────────────────────────────────────────────────────────────────
+// -- Module --------------------------------------------------------------------
 
 namespace aether::app::scripting
 {

@@ -10,7 +10,7 @@
 
 namespace aether::ui
 {
-	// ── Transform ─────────────────────────────────────────────────────────────
+	// -- Transform -------------------------------------------------------------
 	// Screen-space position, size, and Z ordering for a UI entity.
 	struct UiTransformComponent
 	{
@@ -19,7 +19,7 @@ namespace aether::ui
 		float flexGrow = 0.f; // 0 = fixed size; > 0 = takes proportional share of remaining layout space
 	};
 
-	// ── Visuals ────────────────────────────────────────────────────────────────
+	// -- Visuals ----------------------------------------------------------------
 	// Background quad appearance.
 	struct UiRenderComponent
 	{
@@ -38,7 +38,7 @@ namespace aether::ui
 		glm::vec4 color{1.f, 1.f, 1.f, 1.f};
 	};
 
-	// ── Interaction ────────────────────────────────────────────────────────────
+	// -- Interaction ------------------------------------------------------------
 	// Marks an entity as interactive. UiSystem writes hover/press/clicked state
 	// here every frame; widgets read it in OnGui to drive visual changes.
 	struct UiInputComponent
@@ -60,7 +60,7 @@ namespace aether::ui
 		float pressT = 0.f;
 	};
 
-	// ── Panel ──────────────────────────────────────────────────────────────────
+	// -- Panel ------------------------------------------------------------------
 	// Attaches panel semantics (title bar, drag, collapse) to any entity that
 	// also has UiTransformComponent + UiInputComponent.
 	struct UiPanelComponent
@@ -79,7 +79,7 @@ namespace aether::ui
 		glm::vec2 dragStartMax{};
 	};
 
-	// ── Button ─────────────────────────────────────────────────────────────────
+	// -- Button -----------------------------------------------------------------
 	struct UiButtonComponent
 	{
 		std::string label;
@@ -89,7 +89,7 @@ namespace aether::ui
 		glm::vec4 textColor{0.88f, 0.91f, 0.93f, 1.f};
 	};
 
-	// ── Slider ─────────────────────────────────────────────────────────────────
+	// -- Slider -----------------------------------------------------------------
 	struct UiSliderComponent
 	{
 		float min = 0.f;
@@ -98,14 +98,14 @@ namespace aether::ui
 		bool isDragging = false;
 	};
 
-	// ── Checkbox ───────────────────────────────────────────────────────────────
+	// -- Checkbox ---------------------------------------------------------------
 	struct UiCheckboxComponent
 	{
 		bool checked = false;
 		std::string label;
 	};
 
-	// ── Image ──────────────────────────────────────────────────────────────────
+	// -- Image ------------------------------------------------------------------
 	// Displays a bindless texture on a quad.
 	struct UiImageComponent
 	{
@@ -114,7 +114,7 @@ namespace aether::ui
 		glm::vec4 tint{1.f, 1.f, 1.f, 1.f};
 	};
 
-	// ── Clip ───────────────────────────────────────────────────────────────────
+	// -- Clip -------------------------------------------------------------------
 	// Marks a container as clipping its children; currently performs CPU-side
 	// culling in UIRenderer. Scroll offset shifts child content.
 	struct UiClipComponent
@@ -123,7 +123,7 @@ namespace aether::ui
 		glm::vec2 scrollOffset{0.f};
 	};
 
-	// ── Layout ─────────────────────────────────────────────────────────────────
+	// -- Layout -----------------------------------------------------------------
 	// Drives automatic child positioning within a container.
 	struct UiLayoutComponent
 	{
@@ -152,7 +152,7 @@ namespace aether::ui
 		Alignment crossAlignment = Alignment::Stretch;
 	};
 
-	// ── Text Input ─────────────────────────────────────────────────────────────
+	// -- Text Input -------------------------------------------------------------
 	// Editable single-line text field.  UiSystem feeds typed characters and key
 	// events when this entity has keyboard focus (UiInputComponent::focused).
 	struct UiTextInputComponent
@@ -166,7 +166,7 @@ namespace aether::ui
 		bool submitted = false; // true for ONE frame when Enter is pressed; DrawTextInput clears it
 	};
 
-	// ── Grid Layout ────────────────────────────────────────────────────────────
+	// -- Grid Layout ------------------------------------------------------------
 	// Positions UiChildrenComponent children in a uniform cell grid and
 	// auto-sizes the container height to wrap all rows.
 	struct UiGridLayoutComponent
@@ -177,7 +177,7 @@ namespace aether::ui
 		float padding = 8.f;   // inset from the container edge on all sides
 	};
 
-	// ── Item Slot ───────────────────────────────────────────────────────────────
+	// -- Item Slot ---------------------------------------------------------------
 	// Represents one inventory cell drawn by DrawItemSlot.
 	// quantity == 0 means the slot is empty.
 	// rarityColor.a == 0 means no rarity tint (use the default slot border instead).
@@ -189,7 +189,7 @@ namespace aether::ui
 		glm::vec4 rarityColor{0.f, 0.f, 0.f, 0.f};
 	};
 
-	// ── Label row ──────────────────────────────────────────────────────────────
+	// -- Label row --------------------------------------------------------------
 	// A two-column row: static label on the left, dynamic value on the right.
 	struct UiLabelRowComponent
 	{
@@ -198,14 +198,14 @@ namespace aether::ui
 		glm::vec4 valueColor{1.f, 1.f, 1.f, 1.f};
 	};
 
-	// ── Section separator ──────────────────────────────────────────────────────
+	// -- Section separator ------------------------------------------------------
 	// DrawSection renders a horizontal separator line for this entity.
 	struct UiSectionComponent
 	{
 		bool _present = false; // dummy field - some EnTT versions return void from emplace for empty types
 	};
 
-	// ── Graph ──────────────────────────────────────────────────────────────────
+	// -- Graph ------------------------------------------------------------------
 	// Time-series bar graph widget.  Renders a background rect, proportional bars,
 	// reference lines (e.g. 60/30 fps), and a legend label below.
 	struct UiGraphComponent
@@ -221,13 +221,13 @@ namespace aether::ui
 		std::string label;
 	};
 
-	// ── Hierarchy ──────────────────────────────────────────────────────────────
+	// -- Hierarchy --------------------------------------------------------------
 	struct UiChildrenComponent
 	{
 		std::vector<Entity> children;
 	};
 
-	// ── Tab bar ───────────────────────────────────────────────────────────────
+	// -- Tab bar ---------------------------------------------------------------
 	// Horizontal tab bar. Each tab is a button entity in the children list.
 	// selectedTab = index into children that is currently active.
 	// tabPages = one page entity per tab; DrawTabBar shows/hides them automatically.

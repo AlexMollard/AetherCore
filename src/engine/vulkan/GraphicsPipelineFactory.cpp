@@ -65,7 +65,7 @@ namespace aether::vkutil
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);
 
-		// ── Vertex input (bindings + attributes) ────────────────────────────
+		// -- Vertex input (bindings + attributes) ----------------------------
 		// Use caller-provided vertex bindings/attributes when non-empty, else
 		// an empty vertex input (no vertex buffers needed).
 		const bool hasVertexInput = !desc.vertexBindings.empty();
@@ -161,7 +161,7 @@ namespace aether::vkutil
 		        .pDynamicStates = hasLineWidthDynamic ? kDynamicStatesWithLineWidth : kBaseDynamicStates,
 		};
 
-		// ── Pipeline layout ──────────────────────────────────────────────────
+		// -- Pipeline layout --------------------------------------------------
 		VkPipelineLayout layout = VK_NULL_HANDLE;
 		const VkPushConstantRange kModelRange{
 		        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -209,7 +209,7 @@ namespace aether::vkutil
 		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
 		const VkFormat* pColorFormats = hasColorAttachment ? &vkColorFormat : nullptr;
 
-		// ── The entry we will return. The 4 GPL libraries are filled in below
+		// -- The entry we will return. The 4 GPL libraries are filled in below
 		//    and destroyed in unison with the linked pipeline by the registry.
 		ResourceRegistry::PipelineEntry entry{};
 		entry.device = device;
@@ -218,7 +218,7 @@ namespace aether::vkutil
 
 		AE_ASSERT(layout != VK_NULL_HANDLE, "GraphicsPipeline: layout must be valid for GPL creation.");
 
-		// ── GPL: vertex input interface library ──────────────────────────────
+		// -- GPL: vertex input interface library ------------------------------
 		const VkGraphicsPipelineLibraryCreateInfoEXT gplVertexInput{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
@@ -241,7 +241,7 @@ namespace aether::vkutil
 		}
 		entry.vertInputLib = vertInputLib;
 
-		// ── GPL: pre-rasterization library (vertex stage) ────────────────────
+		// -- GPL: pre-rasterization library (vertex stage) --------------------
 		const VkGraphicsPipelineLibraryCreateInfoEXT gplPreRaster{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
@@ -271,7 +271,7 @@ namespace aether::vkutil
 		}
 		entry.preRasterLib = preRasterLib;
 
-		// ── GPL: fragment shader library ─────────────────────────────────────
+		// -- GPL: fragment shader library -------------------------------------
 		const VkPipelineRenderingCreateInfo fragShaderRenderingInfo{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		        .colorAttachmentCount = colorAttachmentCount,
@@ -304,7 +304,7 @@ namespace aether::vkutil
 		}
 		entry.fragShaderLib = fragShaderLib;
 
-		// ── GPL: fragment output interface library ───────────────────────────
+		// -- GPL: fragment output interface library ---------------------------
 		const VkPipelineRenderingCreateInfo fragOutputRenderingInfo{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
 		        .colorAttachmentCount = colorAttachmentCount,
@@ -337,7 +337,7 @@ namespace aether::vkutil
 		}
 		entry.fragOutputLib = fragOutputLib;
 
-		// ── GPL: link all libraries into final pipeline ──────────────────────
+		// -- GPL: link all libraries into final pipeline ----------------------
 		const VkPipeline kLibs[] = {vertInputLib, preRasterLib, fragShaderLib, fragOutputLib};
 		const VkPipelineLibraryCreateInfoKHR libLink{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,

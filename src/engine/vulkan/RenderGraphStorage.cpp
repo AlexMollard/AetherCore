@@ -68,7 +68,7 @@ namespace aether
 		toDestroy.clear();
 	}
 
-	// ── External images ──────────────────────────────────────────────────────
+	// -- External images ------------------------------------------------------
 
 	uint32_t RenderGraphStorage::RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
 	{
@@ -95,7 +95,7 @@ namespace aether
 		return (idx < m_externalImages.size()) ? m_externalImages[idx].aspect : VK_IMAGE_ASPECT_COLOR_BIT;
 	}
 
-	// ── Transient images ─────────────────────────────────────────────────────
+	// -- Transient images -----------------------------------------------------
 
 	uint32_t RenderGraphStorage::AddTransientSlot(VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, gpu::Extent2D extent)
 	{
@@ -192,7 +192,7 @@ namespace aether
 		return entry.image || entry.aliasedEntryIndex < m_transientImages.size();
 	}
 
-	// ── Bindless ─────────────────────────────────────────────────────────────
+	// -- Bindless -------------------------------------------------------------
 
 	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout)
 	{
@@ -248,7 +248,7 @@ namespace aether
 		return entry.image.GetBindlessSampledSlot();
 	}
 
-	// ── Release / cache ──────────────────────────────────────────────────────
+	// -- Release / cache ------------------------------------------------------
 
 	void RenderGraphStorage::ReleaseTransient(uint32_t idx, std::uint32_t currentFrame)
 	{
@@ -285,7 +285,7 @@ namespace aether
 		m_freeTransientSlots.push_back(idx);
 	}
 
-	// ── Cache helpers ────────────────────────────────────────────────────────
+	// -- Cache helpers --------------------------------------------------------
 
 	RenderGraphStorage::ImageCacheKey RenderGraphStorage::MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const
 	{
@@ -355,7 +355,7 @@ namespace aether
 		}
 	}
 
-	// ── EnsureTransientImages ────────────────────────────────────────────────
+	// -- EnsureTransientImages ------------------------------------------------
 
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
 	{

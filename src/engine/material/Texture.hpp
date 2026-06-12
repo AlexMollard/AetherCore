@@ -13,7 +13,7 @@ namespace aether
 {
 	class BindlessManager;
 
-	// GPU texture loaded from a file (PNG, JPG, BMP, TGA, HDR, …).
+	// GPU texture loaded from a file (PNG, JPG, BMP, TGA, HDR, ...).
 	//
 	// The image is stored as R8G8B8A8_SRGB so the hardware automatically
 	// converts from sRGB storage to linear colour when sampled - which is

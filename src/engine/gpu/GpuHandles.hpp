@@ -6,9 +6,9 @@
 
 namespace aether::gpu
 {
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Opaque resource handles
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Engine-facing replacements for raw Vk* handles at the public API.
 	// Each handle pairs a 24-bit slot index with an 8-bit generation counter
 	// incremented on slot reuse. The generation check makes stale-handle use

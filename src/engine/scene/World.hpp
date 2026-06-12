@@ -23,7 +23,7 @@ namespace aether
 	public:
 		using Registry = entt::registry;
 
-		// ── Entity lifecycle ──────────────────────────────────────────────────
+		// -- Entity lifecycle --------------------------------------------------
 		[[nodiscard]] Entity Create();
 		void Destroy(Entity entity);
 
@@ -33,7 +33,7 @@ namespace aether
 		// Wraps an existing entity in a handle.
 		[[nodiscard]] EntityHandle Handle(Entity entity);
 
-		// ── Generic ENTT helpers ──────────────────────────────────────────────
+		// -- Generic ENTT helpers ----------------------------------------------
 		template<typename T, typename... Args>
 		T& Emplace(Entity entity, Args&&... args)
 		{
@@ -104,7 +104,7 @@ namespace aether
 			return m_registry;
 		}
 
-		// ── Systems (game logic layers operating on the world) ──────────────────
+		// -- Systems (game logic layers operating on the world) ------------------
 		// Register a system to be updated each frame.
 		void RegisterSystem(std::unique_ptr<System> system);
 		// Remove a system by name.

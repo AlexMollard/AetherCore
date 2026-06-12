@@ -58,7 +58,7 @@ namespace aether
 			AE_VERBOSE(LogCategory::Engine, "AnimationDatabase: all channels valid (numNodes={}, {} clips, {} skins)", numNodes, asset.animations.size(), asset.skins.size());
 		}
 
-		// ── Build CPU arrays ─────────────────────────────────────────────────
+		// -- Build CPU arrays -------------------------------------------------
 		std::vector<GpuClip> gpuClips;
 		std::vector<GpuChannel> gpuChannels;
 		std::vector<float> allTimes;
@@ -137,14 +137,14 @@ namespace aether
 			bindScales.emplace_back(n.scale, 0.0f);
 		}
 
-		// ── Store node names for cross-skeleton remapping ──────────────────
+		// -- Store node names for cross-skeleton remapping ------------------
 		db.m_nodeNames.reserve(asset.nodes.size());
 		for (const auto& n: asset.nodes)
 		{
 			db.m_nodeNames.push_back(n.name);
 		}
 
-		// ── Compute node depths for level-by-level flatten ──────────────────
+		// -- Compute node depths for level-by-level flatten ------------------
 		static constexpr std::uint32_t kUnsetDepth = UINT32_MAX;
 		std::vector<std::uint32_t> nodeDepth(nodeParents.size(), kUnsetDepth);
 		for (std::size_t i = 0; i < nodeParents.size(); ++i)
@@ -225,7 +225,7 @@ namespace aether
 			skinMetas.push_back(meta);
 		}
 
-		// ── Size the heap and upload all arrays ──────────────────────────────
+		// -- Size the heap and upload all arrays ------------------------------
 		// GpuHeap::AllocBytes enforces a 16-byte minimum alignment, so each term
 		// must be rounded up to a 16-byte boundary to guarantee enough capacity.
 		const auto align16 = [](VkDeviceSize v) -> VkDeviceSize
@@ -383,7 +383,7 @@ namespace aether
 
 		const std::uint32_t firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
 
-		// ── Adjust and append clip data ────────────────────────────────
+		// -- Adjust and append clip data --------------------------------
 		const std::uint32_t channelBase = static_cast<std::uint32_t>(m_channels.size());
 		const std::uint32_t timesBase = static_cast<std::uint32_t>(m_times.size());
 		const std::uint32_t valuesBase = static_cast<std::uint32_t>(m_values.size());
@@ -411,7 +411,7 @@ namespace aether
 		m_values.insert(m_values.end(), newValues.begin(), newValues.end());
 		m_clipNames += newClipNames;
 
-		// ── Rebuild GPU heap with combined data ────────────────────────
+		// -- Rebuild GPU heap with combined data ------------------------
 		VkDevice device = m_ctx->GetDevice().device;
 		VkQueue queue = m_ctx->GetGraphicsQueue();
 

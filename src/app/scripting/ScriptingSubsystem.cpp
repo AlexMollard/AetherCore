@@ -12,7 +12,7 @@
 
 #include <filesystem>
 
-// ── Module registration ────────────────────────────────────────────────────────
+// -- Module registration --------------------------------------------------------
 // Modules self-register via AETHER_DAS_MODULE in their own .cpp files.
 // Adding a new module requires zero changes here.
 
@@ -31,7 +31,7 @@ static void EnsureModulesRegistered()
 	das::Module::Initialize();
 }
 
-// ── ScriptingSubsystem ─────────────────────────────────────────────────────────
+// -- ScriptingSubsystem ---------------------------------------------------------
 
 namespace aether::app::scripting
 {

@@ -13,7 +13,7 @@ namespace aether
 	class GraphicsPipeline;
 	class Mesh;
 
-	// ── ECS component types ────────────────────────────────────────────────
+	// -- ECS component types ------------------------------------------------
 	// Each is a plain-data struct; the World owns all component storage.
 
 	// World-space transform (model matrix).
@@ -28,7 +28,7 @@ namespace aether
 		const Mesh* mesh = nullptr;
 	};
 
-	// Surface shading properties (textures, tint, …).
+	// Surface shading properties (textures, tint, ...).
 	struct MaterialComponent
 	{
 		Material material{};
@@ -68,7 +68,7 @@ namespace aether
 		std::vector<std::uint32_t> entityIds;
 	};
 
-	// ── Animation blend ─────────────────────────────────────────────────────
+	// -- Animation blend -----------------------------------------------------
 
 	// Drives cross-fade blending between two animation clips.
 	// primaryClip is the currently playing clip (managed by SkinnedMeshComponent).
@@ -85,7 +85,7 @@ namespace aether
 		bool inTransition = false;
 	};
 
-	// ── IK targets ─────────────────────────────────────────────────────────
+	// -- IK targets ---------------------------------------------------------
 
 	// Per-entity IK state for foot-planting and ground snapping.
 	// Populated once at spawn from bone name lookups, then updated per-frame
@@ -125,7 +125,7 @@ namespace aether
 		bool enabled = true;
 	};
 
-	// ── Root motion ─────────────────────────────────────────────────────────
+	// -- Root motion ---------------------------------------------------------
 
 	// Tracks root bone motion state for physics-driven character movement.
 	// Each frame the AnimationRootMotionSystem reads the Hips node's world position

@@ -5,9 +5,9 @@
 
 #include "gpu/GpuFormat.hpp"
 
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 // GpuEnums - Vulkan-free engine-facing RHI enums
-// ─────────────────────────────────────────────────────────────────────────
+// -------------------------------------------------------------------------
 // Engine-facing RHI enums for pipeline stages, access flags, shader stages,
 // descriptor types, image layouts, and related types. Each enum lives in
 // namespace aether::gpu and is mapped to its Vk* equivalent in
@@ -15,9 +15,9 @@
 
 namespace aether::gpu
 {
-	// ─────────────────────────────────────────────────────────────────────
+	// ---------------------------------------------------------------------
 	// GENERIC BITWISE OPERATORS
-	// ─────────────────────────────────────────────────────────────────────
+	// ---------------------------------------------------------------------
 	// Automatically handles 32-bit and 64-bit enums safely without manual casts.
 	// (Requires C++17 for std::is_enum_v.)
 
@@ -56,9 +56,9 @@ namespace aether::gpu
 		return static_cast<Enum>(~static_cast<Underlying>(rhs));
 	}
 
-	// ─────────────────────────────────────────────────────────────────────
+	// ---------------------------------------------------------------------
 	// ENUMS & STRUCTS
-	// ─────────────────────────────────────────────────────────────────────
+	// ---------------------------------------------------------------------
 
 	// Element type of a bound index buffer.
 	enum class IndexType : std::uint32_t

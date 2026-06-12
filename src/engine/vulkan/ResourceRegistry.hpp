@@ -17,9 +17,9 @@
 
 namespace aether
 {
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// ResourceRegistry - Phase 2 of the GPU refactor
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Owns opaque handles for engine-facing GPU resources and centralizes
 	// deferred destruction (3-frame WaitIdle-aware ring).
 	//

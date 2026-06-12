@@ -68,7 +68,7 @@ namespace aether
 		m_pendingChars.clear();
 	}
 
-	// ── Keyboard ─────────────────────────────────────────────────────────────
+	// -- Keyboard -------------------------------------------------------------
 
 	bool Input::IsKeyDown(Key key) const
 	{
@@ -100,7 +100,7 @@ namespace aether
 		return !m_currKeys[k] && m_prevKeys[k];
 	}
 
-	// ── Mouse buttons ─────────────────────────────────────────────────────────
+	// -- Mouse buttons ---------------------------------------------------------
 
 	bool Input::IsMouseButtonDown(MouseButton btn) const
 	{
@@ -132,7 +132,7 @@ namespace aether
 		return !m_currMouseButtons[b] && m_prevMouseButtons[b];
 	}
 
-	// ── Mouse cursor ──────────────────────────────────────────────────────────
+	// -- Mouse cursor ----------------------------------------------------------
 
 	glm::vec2 Input::GetMousePos() const
 	{
@@ -154,7 +154,7 @@ namespace aether
 		return m_typedChars;
 	}
 
-	// ── GLFW callbacks ────────────────────────────────────────────────────────
+	// -- GLFW callbacks --------------------------------------------------------
 
 	void Input::OnScroll(GLFWwindow* window, double xOffset, double yOffset)
 	{

@@ -90,7 +90,7 @@ namespace aether
 			}
 		}
 
-		// ── Create blur scratch image ──────────────────────────────────────
+		// -- Create blur scratch image --------------------------------------
 		AE_EXPECT_OR_THROW(scratchImg,
 		        UniqueImage::Create(device,
 		                allocator,
@@ -102,7 +102,7 @@ namespace aether
 		                }));
 		m_blurScratch = std::move(scratchImg);
 
-		// ── Create VSM blur compute pipeline ───────────────────────────────
+		// -- Create VSM blur compute pipeline -------------------------------
 		// Descriptor set layout: binding 0 = RWTexture2D (storage), binding 1 = Texture2D (combined sampler).
 		{
 			VkDescriptorSetLayoutBinding bindings[2]{};
@@ -497,7 +497,7 @@ namespace aether
 			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 		                });
 
-		// ── VSM blur passes ────────────────────────────────────────────────
+		// -- VSM blur passes ------------------------------------------------
 		// Horizontal blur: read atlas (sampled), write scratch (storage).
 		// Descriptors set up once in Initialize() - no per-frame updates needed.
 		graph.AddComputePass("$VSMBlurH")

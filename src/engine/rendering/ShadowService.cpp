@@ -31,7 +31,7 @@ namespace aether
 			shadowConstants.Initialize(context);
 		}
 
-		// Single shadow queue with 3× output capacity for multi-frustum culling.
+		// Single shadow queue with 3x output capacity for multi-frustum culling.
 		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
 		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
 		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
@@ -95,7 +95,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 
-		// ── Multi-frustum cull pass (replaces 3× per-cascade cull dispatches) ──
+		// -- Multi-frustum cull pass (replaces 3x per-cascade cull dispatches) --
 		graph.AddComputePass("$CullDraws_Shadow")
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
@@ -110,7 +110,7 @@ namespace aether
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
 		                });
 
-		// ── Per-cascade depth passes (read from each cascade's output region) ──
+		// -- Per-cascade depth passes (read from each cascade's output region) --
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);

@@ -149,7 +149,7 @@ namespace aether
 		// Called every frame by AetherCore::BeginFrame() before layers run.
 		void Update();
 
-		// ── Keyboard ─────────────────────────────────────────────────────────
+		// -- Keyboard ---------------------------------------------------------
 
 		// True every frame the key is physically held down.
 		[[nodiscard]] bool IsKeyDown(Key key) const;
@@ -160,13 +160,13 @@ namespace aether
 		// True only on the first frame the key transitions from down to up.
 		[[nodiscard]] bool IsKeyReleased(Key key) const;
 
-		// ── Mouse buttons ─────────────────────────────────────────────────────
+		// -- Mouse buttons -----------------------------------------------------
 
 		[[nodiscard]] bool IsMouseButtonDown(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonPressed(MouseButton btn) const;
 		[[nodiscard]] bool IsMouseButtonReleased(MouseButton btn) const;
 
-		// ── Mouse cursor ──────────────────────────────────────────────────────
+		// -- Mouse cursor ------------------------------------------------------
 
 		// Cursor position in screen-space pixels, origin at top-left.
 		[[nodiscard]] glm::vec2 GetMousePos() const;
@@ -174,20 +174,20 @@ namespace aether
 		// Frame-over-frame cursor displacement in pixels.
 		[[nodiscard]] glm::vec2 GetMouseDelta() const;
 
-		// ── Scroll wheel ──────────────────────────────────────────────────────
+		// -- Scroll wheel ------------------------------------------------------
 
 		// Scroll offset accumulated since the last frame (zeroed each Update).
 		// x = horizontal, y = vertical.
 		[[nodiscard]] glm::vec2 GetScrollDelta() const;
 
-		// ── Text input ────────────────────────────────────────────────────────
+		// -- Text input --------------------------------------------------------
 
 		// Returns printable Unicode characters typed this frame as a UTF-8 string.
 		// Populated by GLFW's character callback, which correctly handles keyboard
 		// layout, dead keys, and IME - far more reliable than manual key->char mapping.
 		[[nodiscard]] const std::string& GetTypedChars() const;
 
-		// ── Mouse capture ──────────────────────────────────────────────────────
+		// -- Mouse capture ------------------------------------------------------
 		// Set by UiSystem when the UI is actively consuming mouse input.
 		// Camera and other systems should skip their own mouse processing
 		// while this is true to prevent conflicts (e.g. orbiting while dragging a panel).

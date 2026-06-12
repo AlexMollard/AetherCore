@@ -31,7 +31,7 @@ namespace aether
 		constexpr std::uint32_t kQuadIndices[] = {0, 1, 2, 0, 2, 3};
 
 		// -----------------------------------------------------------------------
-		// Cube  - 24 unique verts (4 per face), 36 indices (2 tris per face × 6)
+		// Cube  - 24 unique verts (4 per face), 36 indices (2 tris per face x 6)
 		// Each face has its own normal and tangent.
 		// -----------------------------------------------------------------------
 		constexpr Mesh::Vertex kCubeVerts[] = {
@@ -110,8 +110,8 @@ namespace aether
 		m_cube = Mesh::Create(uploadContext, kCubeVerts, kCubeIndices);
 
 		// -----------------------------------------------------------------------
-		// Plane  - default 20×20 subdivided grid via MeshGen.
-		// UVs tile 20× per axis (1 UV unit per segment).
+		// Plane  - default 20x20 subdivided grid via MeshGen.
+		// UVs tile 20x per axis (1 UV unit per segment).
 		// -----------------------------------------------------------------------
 		{
 			const MeshGen::MeshData plane = MeshGen::GeneratePlane({.segmentsX = 20, .segmentsY = 20, .uvScale = 1.0f});

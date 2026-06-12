@@ -20,9 +20,9 @@ namespace aether::app
 	// Generic scene layer that drives a .das script.
 	//
 	// Lifecycle:
-	//   OnAttach  → compile script, create default pipeline, call on_attach()
-	//   OnUpdate  → call on_update(); handle hot-reload if requested
-	//   OnDetach  → call on_detach(), destroy scene entities, unload systems
+	//   OnAttach  -> compile script, create default pipeline, call on_attach()
+	//   OnUpdate  -> call on_update(); handle hot-reload if requested
+	//   OnDetach  -> call on_detach(), destroy scene entities, unload systems
 	class ScriptedSceneLayer final : public AppLayer
 	{
 	public:

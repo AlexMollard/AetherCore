@@ -69,7 +69,7 @@ namespace aether
 			return {};
 		}
 
-		// Copy staging → device-local
+		// Copy staging -> device-local
 		uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
 
 		// Free staging

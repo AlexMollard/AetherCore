@@ -192,7 +192,7 @@ namespace aether
 			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, pointLights, spotLights);
 			if (!isAsyncCompute)
 			{
-				// Same queue: explicit compute→fragment barrier required.
+				// Same queue: explicit compute->fragment barrier required.
 				// Async path: the semaphore wait at DRAW_INDIRECT in SubmitAndPresent covers this.
 				cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderStorageRead);
 			}

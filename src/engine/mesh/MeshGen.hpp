@@ -5,7 +5,7 @@
 
 #include "mesh/Mesh.hpp"
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // MeshGen - procedural CPU-side geometry generation.
 //
 // Each function returns a MeshData (vertices + indices) that can be uploaded
@@ -13,7 +13,7 @@
 //
 // All primitives are unit-sized (extent +-0.5 along each relevant axis) and
 // centered at the origin.  Scale via the entity transform.
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 namespace aether::MeshGen
 {
@@ -24,14 +24,14 @@ namespace aether::MeshGen
 		std::vector<std::uint32_t> indices;
 	};
 
-	// ── Plane ─────────────────────────────────────────────────────────────────
+	// -- Plane -----------------------------------------------------------------
 	// Faces +Z.  UV origin is at the bottom-left corner of the mesh.
 	//
-	//   segmentsX / segmentsY  - number of quads along each axis (≥ 1).
+	//   segmentsX / segmentsY  - number of quads along each axis (>= 1).
 	//   uvScale                - UV units per segment.
 	//                            1.0 = one texture tile per segment quad.
 	//                            With REPEAT addressing the texture tiles across
-	//                            the full plane segmentsX × segmentsY times.
+	//                            the full plane segmentsX x segmentsY times.
 	struct PlaneDesc
 	{
 		int segmentsX = 10;
@@ -41,11 +41,11 @@ namespace aether::MeshGen
 
 	[[nodiscard]] MeshData GeneratePlane(const PlaneDesc& desc);
 
-	// ── UV Sphere ─────────────────────────────────────────────────────────────
+	// -- UV Sphere -------------------------------------------------------------
 	// Latitude/longitude sphere, radius 0.5, +Y = north pole.
 	//
-	//   stacks  - latitude bands (≥ 2).
-	//   slices  - longitude segments (≥ 3).
+	//   stacks  - latitude bands (>= 2).
+	//   slices  - longitude segments (>= 3).
 	//   uvScale - UV scale applied to both axes (1.0 = full 0->1 wrap).
 	struct UVSphereDesc
 	{
@@ -56,10 +56,10 @@ namespace aether::MeshGen
 
 	[[nodiscard]] MeshData GenerateUVSphere(const UVSphereDesc& desc);
 
-	// ── Cylinder ─────────────────────────────────────────────────────────────
+	// -- Cylinder -------------------------------------------------------------
 	// Aligned along Y.  Radius 0.5, height 1.0 (Y = -0.5 to +0.5).
 	//
-	//   segments      - circumference divisions (≥ 3).
+	//   segments      - circumference divisions (>= 3).
 	//   caps          - whether to generate top and bottom disc caps.
 	//   uvScaleRadial - U scale along the circumference (1.0 = 0->1 once around).
 	//   uvScaleAxial  - V scale along the height    (1.0 = 0->1 bottom to top).

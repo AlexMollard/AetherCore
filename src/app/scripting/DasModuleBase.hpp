@@ -5,13 +5,13 @@
 
 #include <vector>
 
-// ── World type factory ────────────────────────────────────────────────────────
+// -- World type factory --------------------------------------------------------
 // Makes aether::World* usable as the 'World' type in daScript function signatures.
 // WorldModule registers the matching DummyTypeAnnotation named "World".
 
 MAKE_TYPE_FACTORY(World, aether::World)
 
-// ── Auto-registration ──────────────────────────────────────────────────────────
+// -- Auto-registration ----------------------------------------------------------
 // Each module .cpp ends with AETHER_DAS_MODULE(ClassName, namespace), which
 // self-registers via a static initialiser. ScriptingSubsystem::EnsureModulesRegistered
 // just iterates GetModuleRegistrars() - no manual include or call needed there.
@@ -33,7 +33,7 @@ inline std::vector<void (*)()>& GetModuleRegistrars()
 		}();                                                                   \
 	}
 
-// ── Generic component operation templates ─────────────────────────────────────
+// -- Generic component operation templates -------------------------------------
 // Written once; instantiated per component type via BIND_COMPONENT.
 // Scripts receive World as an explicit first argument, matching aether::World*.
 
@@ -55,7 +55,7 @@ static void world_remove_component(aether::World* w, uint32_t id)
 	w->Remove<C>(aether::Entity{id});
 }
 
-// ── DasModuleBase ──────────────────────────────────────────────────────────────
+// -- DasModuleBase --------------------------------------------------------------
 // Inherit from this instead of das::Module directly.
 
 namespace aether::app::scripting
@@ -82,8 +82,8 @@ namespace aether::app::scripting
 	};
 } // namespace aether::app::scripting
 
-// ── Generic per-component-type iteration ───────────────────────────────────────
-// for_each<Components...>(world, block)  →  iterates entities via EnTT view
+// -- Generic per-component-type iteration ---------------------------------------
+// for_each<Components...>(world, block)  ->  iterates entities via EnTT view
 template<typename... Components>
 static void for_each_components(aether::World* w, const das::TBlock<void, uint32_t>& block, das::Context* ctx, das::LineInfoArg* at)
 {

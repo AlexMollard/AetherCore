@@ -31,11 +31,11 @@ namespace aether
 	class CameraManager
 	{
 	public:
-		// ── Camera lifecycle ──────────────────────────────────────────────────
+		// -- Camera lifecycle --------------------------------------------------
 		[[nodiscard]] CameraHandle Create(const CameraDesc& desc = {});
 		void Destroy(CameraHandle handle);
 
-		// ── Camera access ─────────────────────────────────────────────────────
+		// -- Camera access -----------------------------------------------------
 		[[nodiscard]] Camera& Get(CameraHandle handle);
 		[[nodiscard]] const Camera& Get(CameraHandle handle) const;
 
@@ -43,7 +43,7 @@ namespace aether
 		[[nodiscard]] Camera* TryGet(CameraHandle handle);
 		[[nodiscard]] const Camera* TryGet(CameraHandle handle) const;
 
-		// ── Main camera ───────────────────────────────────────────────────────
+		// -- Main camera -------------------------------------------------------
 		void SetMainCamera(CameraHandle handle);
 
 		[[nodiscard]] CameraHandle GetMainCamera() const
@@ -59,13 +59,13 @@ namespace aether
 		[[nodiscard]] Camera* TryGetMainCamera();
 		[[nodiscard]] const Camera* TryGetMainCamera() const;
 
-		// ── Convenience matrix getters ────────────────────────────────────────
+		// -- Convenience matrix getters ----------------------------------------
 		// All return identity when no main camera is set.
 		[[nodiscard]] glm::mat4 GetMainViewProjection(float aspect) const;
 		[[nodiscard]] glm::mat4 GetMainView() const;
 		[[nodiscard]] glm::mat4 GetMainProjection(float aspect) const;
 
-		// ── Per-frame update ──────────────────────────────────────────────────
+		// -- Per-frame update --------------------------------------------------
 		// Advances all non-Manual cameras by dt seconds.
 		// Called by AetherCore::Tick(); not typically called directly from app code.
 		void Update(const Input& input, float dt);

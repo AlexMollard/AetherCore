@@ -27,7 +27,7 @@ namespace aether::app
 
 	} // namespace
 
-	// ── OnAttach ─────────────────────────────────────────────────────────────────
+	// -- OnAttach -----------------------------------------------------------------
 
 	void UiSandboxLayer::OnAttach(LayerContext& context)
 	{
@@ -40,7 +40,7 @@ namespace aether::app
 			return e;
 		};
 
-		// ── Widget Gallery ─────────────────────────────────────────────────────
+		// -- Widget Gallery -----------------------------------------------------
 		// padding=58 clears the 48px panel header and adds an 10px inner margin.
 		// For a 300px-wide panel the content area is 300 - 2*58 = 184px wide.
 		m_galleryPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({120.f, 20.f}, {300.f, 355.f}), "Widget Gallery", /*draggable=*/true, /*collapsible=*/true, 1.f));
@@ -65,7 +65,7 @@ namespace aether::app
 		ui::AddChild(world, m_galleryPanel, m_checkB);
 		ui::AddChild(world, m_galleryPanel, m_progressBar);
 
-		// ── Text Input ─────────────────────────────────────────────────────────
+		// -- Text Input ---------------------------------------------------------
 		m_inputPanel = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({120.f, 395.f}, {300.f, 120.f}), "Text Input", /*draggable=*/false, /*collapsible=*/false, 1.f));
 
 		world.Emplace<ui::UiLayoutComponent>(m_inputPanel,
@@ -79,7 +79,7 @@ namespace aether::app
 		m_textInput = reg(ui::SpawnTextInput(world, HeightRect(32.f), "Type and press Enter...", 2.f));
 		ui::AddChild(world, m_inputPanel, m_textInput);
 
-		// ── Flex Toolbar ───────────────────────────────────────────────────────
+		// -- Flex Toolbar -------------------------------------------------------
 		// A standalone full-width horizontal strip near the bottom of the screen.
 		// No panel header - a plain background rect is drawn in OnGui.
 		// anchorMin/Max = {0,1}/{1,1} -> anchors both horizontal edges to the
@@ -129,7 +129,7 @@ namespace aether::app
 		ui::AddChild(world, m_flexContainer, m_flexSpacer);
 		ui::AddChild(world, m_flexContainer, m_flexRight);
 
-		// ── Auto-size panel ────────────────────────────────────────────────────
+		// -- Auto-size panel ----------------------------------------------------
 		// The initial height (80px) is a placeholder.  Each frame RunLayouts runs
 		// ApplyLayout with autoSize=true, which shrinks/grows the panel to exactly
 		// wrap its three children plus padding.
@@ -152,7 +152,7 @@ namespace aether::app
 		ui::AddChild(world, m_autoPanel, m_autoItem2);
 		ui::AddChild(world, m_autoPanel, m_autoItem3);
 
-		// ── Corner anchor mini-panels ──────────────────────────────────────────
+		// -- Corner anchor mini-panels ------------------------------------------
 		// Each one demonstrates a different UiAnchors preset.
 		// They are non-draggable / non-collapsible so they stay put as reference.
 		m_cornerTL = reg(ui::SpawnPanel(world, UiAnchors::TopLeft({8.f, 8.f}, {95.f, 36.f}), "TopLeft", false, false, 0.5f));
@@ -163,7 +163,7 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "UiSandboxLayer attached ({} entities).", m_entities.size());
 	}
 
-	// ── OnDetach ─────────────────────────────────────────────────────────────────
+	// -- OnDetach -----------------------------------------------------------------
 
 	void UiSandboxLayer::OnDetach(LayerContext& context)
 	{
@@ -176,7 +176,7 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "UiSandboxLayer detached.");
 	}
 
-	// ── OnUpdate ─────────────────────────────────────────────────────────────────
+	// -- OnUpdate -----------------------------------------------------------------
 
 	void UiSandboxLayer::OnUpdate(LayerContext& context)
 	{
@@ -223,7 +223,7 @@ namespace aether::app
 		}
 	}
 
-	// ── OnGui ─────────────────────────────────────────────────────────────────────
+	// -- OnGui ---------------------------------------------------------------------
 
 	void UiSandboxLayer::OnGui(LayerContext& context)
 	{
@@ -232,7 +232,7 @@ namespace aether::app
 		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
 		const ui::UiTheme& theme = ui::UiTheme::Default();
 
-		// ── Flex Toolbar ──────────────────────────────────────────────────────
+		// -- Flex Toolbar ------------------------------------------------------
 		// The toolbar has no panel entity, so we draw its background manually.
 		if (const auto* ct = world.TryGet<ui::UiTransformComponent>(m_flexContainer))
 		{

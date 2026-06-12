@@ -726,7 +726,7 @@ namespace aether::assets
 						maxVert = std::max(maxVert, idx);
 					}
 
-					// Build vertex remap: old index → local index.
+					// Build vertex remap: old index -> local index.
 					const uint32_t vertRange = maxVert - minVert + 1;
 					std::vector<uint32_t> remap(vertRange, UINT32_MAX);
 					uint32_t localVerts = 0;

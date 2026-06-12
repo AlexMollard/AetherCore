@@ -7,7 +7,7 @@
 
 namespace
 {
-	// ── Helper: deep-copy into a persistent string ──────────────────────────
+	// -- Helper: deep-copy into a persistent string --------------------------
 	// daScript's das::string_view is borrowed memory; we must deep-copy into
 	// the component's std::string for lifetime safety.
 
@@ -36,7 +36,7 @@ namespace
 		c.currentNodeId.assign(s ? s : "");
 	}
 
-	// ── NpcComponent field accessors ────────────────────────────────────────
+	// -- NpcComponent field accessors ----------------------------------------
 
 	char* get_npc_id(aether::World* w, uint32_t id, das::Context* context)
 	{
@@ -115,7 +115,7 @@ namespace
 		}
 	}
 
-	// ── HealthComponent field accessors ─────────────────────────────────────
+	// -- HealthComponent field accessors -------------------------------------
 
 	float get_health_current(aether::World* w, uint32_t id)
 	{
@@ -145,7 +145,7 @@ namespace
 		}
 	}
 
-	// ── DialogueStateComponent field accessors ──────────────────────────────
+	// -- DialogueStateComponent field accessors ------------------------------
 
 	char* get_dialogue_state_npc_id(aether::World* w, uint32_t id, das::Context* context)
 	{
@@ -199,12 +199,12 @@ namespace aether::app::scripting
 		{
 			das::ModuleLibrary lib(this);
 
-			// ── Component lifecycle ops (add / has / remove) ────────────────
+			// -- Component lifecycle ops (add / has / remove) ----------------
 			BIND_COMPONENT("health", aether::HealthComponent)
 			BIND_COMPONENT("npc", aether::NpcComponent)
 			BIND_COMPONENT("dialogue_state", aether::DialogueStateComponent)
 
-			// ── NpcComponent field accessors ────────────────────────────────
+			// -- NpcComponent field accessors --------------------------------
 			Bind<get_npc_id>(lib, "get_npc_npc_id", SE::accessExternal);
 			Bind<set_npc_id>(lib, "set_npc_npc_id", SE::modifyExternal);
 			Bind<get_npc_display_name>(lib, "get_npc_display_name", SE::accessExternal);
@@ -214,19 +214,19 @@ namespace aether::app::scripting
 			Bind<get_npc_interaction_radius>(lib, "get_npc_interaction_radius", SE::accessExternal);
 			Bind<set_npc_interaction_radius>(lib, "set_npc_interaction_radius", SE::modifyExternal);
 
-			// ── HealthComponent field accessors ─────────────────────────────
+			// -- HealthComponent field accessors -----------------------------
 			Bind<get_health_current>(lib, "get_health_current", SE::accessExternal);
 			Bind<set_health_current>(lib, "set_health_current", SE::modifyExternal);
 			Bind<get_health_max>(lib, "get_health_max", SE::accessExternal);
 			Bind<set_health_max>(lib, "set_health_max", SE::modifyExternal);
 
-			// ── DialogueStateComponent field accessors ──────────────────────
+			// -- DialogueStateComponent field accessors ----------------------
 			Bind<get_dialogue_state_npc_id>(lib, "get_dialogue_state_npc_id", SE::accessExternal);
 			Bind<set_dialogue_state_npc_id>(lib, "set_dialogue_state_npc_id", SE::modifyExternal);
 			Bind<get_dialogue_state_current_node_id>(lib, "get_dialogue_state_current_node_id", SE::accessExternal);
 			Bind<set_dialogue_state_current_node_id>(lib, "set_dialogue_state_current_node_id", SE::modifyExternal);
 
-			// ── Iteration helpers ───────────────────────────────────────────
+			// -- Iteration helpers -------------------------------------------
 			BIND_FOR_EACH("npc", aether::NpcComponent)
 			BIND_FOR_EACH("npc_transform", aether::NpcComponent, aether::TransformComponent)
 			BIND_FOR_EACH("health", aether::HealthComponent)

@@ -17,7 +17,7 @@ namespace aether
 	class Renderer;
 
 	// Per-frame feature flags. Replaces the previous static-bool feature
-	// toggles (ForwardPass::s_enabled, etc.) - see plan doc §6. The struct
+	// toggles (ForwardPass::s_enabled, etc.) - see plan doc S6. The struct
 	// is owned by RenderingSubsystem, snapshotted into FrameContext per
 	// frame, and consumed on the render thread via the immutable context.
 	struct RenderFeatureFlags
@@ -28,7 +28,7 @@ namespace aether
 	// Stable per-frame/runtime references shared by every render-graph pass
 	// registration site (RenderTargetService, ForwardPass, ...). Replaces
 	// the previous 8-11 argument lists that suffered from argument-ordering
-	// bugs and pointer-defaulting hazards. Defined in plan doc §4.
+	// bugs and pointer-defaulting hazards. Defined in plan doc S4.
 	struct FrameContext
 	{
 		RenderGraph* graph = nullptr;

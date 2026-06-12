@@ -119,7 +119,7 @@ namespace aether
 		}
 	} // namespace
 
-	// ── Move semantics ────────────────────────────────────────────────────────
+	// -- Move semantics --------------------------------------------------------
 
 	FontAtlas::FontAtlas(FontAtlas&& o) noexcept
 	      : m_allocator(std::exchange(o.m_allocator, nullptr)),
@@ -163,13 +163,13 @@ namespace aether
 		Destroy();
 	}
 
-	// ── Build ─────────────────────────────────────────────────────────────────
+	// -- Build -----------------------------------------------------------------
 
 	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, uint32_t uploadQueueFamily, BindlessManager& bindless)
 	{
 		m_bindlessMgr = &bindless;
 
-		// ── 1. Initialise FreeType ────────────────────────────────────────────
+		// -- 1. Initialise FreeType --------------------------------------------
 		FT_Library ft{};
 		if (FT_Init_FreeType(&ft) != 0)
 		{
@@ -190,7 +190,7 @@ namespace aether
 		FT_UInt spread = static_cast<FT_UInt>(kSdfSpread);
 		FT_Property_Set(ft, "sdf", "spread", &spread);
 
-		// ── 2. Render all glyphs into a CPU-side atlas ────────────────────────
+		// -- 2. Render all glyphs into a CPU-side atlas ------------------------
 		const int cellSize = atlasGlyphSize + 2 * kSdfSpread;
 
 		const int cols = static_cast<int>(std::sqrt(static_cast<double>(kGlyphCount))) + 1;
@@ -291,7 +291,7 @@ namespace aether
 		m_device = device;
 		m_allocator = allocator;
 
-		// ── 3. Upload atlas to GPU via host image copy (Vulkan 1.4) ─────────────
+		// -- 3. Upload atlas to GPU via host image copy (Vulkan 1.4) -------------
 		const VkImageCreateInfo imgInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		        .imageType = VK_IMAGE_TYPE_2D,
@@ -382,7 +382,7 @@ namespace aether
 		EndAndSubmit(device, uploadPool, uploadQueue, cmd);
 		vkDestroyCommandPool(device, uploadPool, nullptr);
 
-		// ── 4. Register in the bindless descriptor set ────────────────────────
+		// -- 4. Register in the bindless descriptor set ------------------------
 		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());
 		m_bindlessSlot = slotResult;
 		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler);
@@ -396,7 +396,7 @@ namespace aether
 		AE_INFO(LogCategory::Asset, "FontAtlas built: {} glyphs, atlas {}x{}, bindless slot {}.", kGlyphCount, atlasW, atlasH, m_bindlessSlot);
 	}
 
-	// ── Destroy ───────────────────────────────────────────────────────────────
+	// -- Destroy ---------------------------------------------------------------
 
 	void FontAtlas::Destroy()
 	{
@@ -431,7 +431,7 @@ namespace aether
 		m_allocator = nullptr;
 	}
 
-	// ── Queries ───────────────────────────────────────────────────────────────
+	// -- Queries ---------------------------------------------------------------
 
 	bool FontAtlas::IsValid() const
 	{

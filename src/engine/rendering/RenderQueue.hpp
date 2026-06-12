@@ -47,7 +47,7 @@ namespace aether
 		const Mesh* mesh = nullptr; // must be indexed; null draws are not supported
 		std::uint32_t instanceCount = 1;
 		glm::mat4 modelMatrix{1.0f};               // per-object world transform
-		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF… = fallback
+		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF... = fallback
 		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase; -1 = not skinned
 		std::uint32_t skinJointCount = 0;          // number of joints in the skin
 		std::uint32_t animClipIndex = 0;           // active clip for GPU sampling

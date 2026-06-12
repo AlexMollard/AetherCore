@@ -43,7 +43,7 @@ namespace aether::app
 	{
 	}
 
-	// ── Helpers ───────────────────────────────────────────────────────────────
+	// -- Helpers ---------------------------------------------------------------
 
 	void ScriptedSceneLayer::BuildDefaultPipeline(LayerContext& context)
 	{
@@ -156,7 +156,7 @@ namespace aether::app
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
 	}
 
-	// ── AppLayer overrides ────────────────────────────────────────────────────
+	// -- AppLayer overrides ----------------------------------------------------
 
 	void ScriptedSceneLayer::OnAttach(LayerContext& context)
 	{

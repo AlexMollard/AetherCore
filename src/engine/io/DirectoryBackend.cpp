@@ -263,7 +263,7 @@ namespace aether::io
 	{
 		auto fullPath = Resolve(relativePath);
 
-		// Exact match (fast path – works on case-insensitive filesystems).
+		// Exact match (fast path -- works on case-insensitive filesystems).
 		std::error_code ec;
 		if (std::filesystem::exists(fullPath, ec))
 		{
@@ -276,7 +276,7 @@ namespace aether::io
 
 		if (!std::filesystem::exists(parent, ec))
 		{
-			// Can't scan – pass through to fuzzy search below via bestMatch.
+			// Can't scan -- pass through to fuzzy search below via bestMatch.
 			if (bestMatch)
 			{
 				*bestMatch = {};
@@ -303,7 +303,7 @@ namespace aether::io
 			}
 		}
 
-		// Fuzzy (Levenshtein) – only on explicit request.
+		// Fuzzy (Levenshtein) -- only on explicit request.
 		if (bestMatch)
 		{
 			*bestMatch = {};

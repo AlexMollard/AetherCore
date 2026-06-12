@@ -99,25 +99,25 @@ namespace aether::ui
 	void UiSystem::BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime)
 	{
 		AE_PROFILE_ZONE();
-		// ── Mouse state ────────────────────────────────────────────────────────
+		// -- Mouse state --------------------------------------------------------
 		ctx.mousePos = input.GetMousePos();
 		ctx.mouseDelta = input.GetMouseDelta();
 		ctx.mousePressed = input.IsMouseButtonPressed(MouseButton::Left);
 		ctx.mouseDown = input.IsMouseButtonDown(MouseButton::Left);
 		ctx.mouseReleased = input.IsMouseButtonReleased(MouseButton::Left);
 
-		// ── Feed keyboard events into focused text input ───────────────────────
+		// -- Feed keyboard events into focused text input -----------------------
 		// Must run before hit-test so Enter/Escape can clear focusedEntity before
 		// the new hot entity is resolved.
 		ProcessTextInput(world, ctx, input, deltaTime);
 
-		// ── Drag ──────────────────────────────────────────────────────────────
+		// -- Drag --------------------------------------------------------------
 		// UpdateDrag runs BEFORE we clear hotEntity so it can see the previous
 		// frame's hot entity for drag-start detection.  It must also run before
 		// HitTest so the dragged rect is at its new position when hit-tested.
 		UpdateDrag(world, ctx, extent);
 
-		// ── Clear per-frame transient flags ───────────────────────────────────
+		// -- Clear per-frame transient flags -----------------------------------
 		// Cleared AFTER UpdateDrag (which needs last frame's hotEntity) and
 		// BEFORE HitTest (which will repopulate hotEntity for this frame).
 		ctx.hotEntity = {};
@@ -142,7 +142,7 @@ namespace aether::ui
 		input.SetMouseCaptured(ctx.activeEntity.IsValid());
 	}
 
-	// ── Private helpers used by BeginFrame and RenderAll ─────────────────────
+	// -- Private helpers used by BeginFrame and RenderAll ---------------------
 
 	// Returns true if any ancestor panel of `entity` is collapsed, meaning the
 	// entity is in the hidden body of that panel and should not receive input.
@@ -264,7 +264,7 @@ namespace aether::ui
 		// 0. Process tab bar state (clicks, selection, autoSize toggles).
 		ProcessTabBars(world, extent);
 
-		// 1. Three-pass layout: children auto-size → parents position → children
+		// 1. Three-pass layout: children auto-size -> parents position -> children
 		//    re-layout at new positions. See RunLayouts for details.
 		RunLayouts(world, extent);
 

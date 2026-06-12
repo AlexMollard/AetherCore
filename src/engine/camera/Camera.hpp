@@ -21,18 +21,18 @@ namespace aether
 		float nearPlane = 0.1f;
 		float farPlane = 1000.0f;
 
-		// ── Free mode starting pose ───────────────────────────────────────────
+		// -- Free mode starting pose -------------------------------------------
 		glm::vec3 position = {0.0f, 3.0f, 7.0f};
 		float yaw = 0.0f;     // degrees, rotation around world Y axis
 		float pitch = -20.0f; // degrees, up/down tilt (+-89 clamped)
 
-		// ── Orbit mode starting pose ──────────────────────────────────────────
+		// -- Orbit mode starting pose ------------------------------------------
 		glm::vec3 orbitTarget = {0.0f, 0.0f, 0.0f};
 		float orbitDistance = 7.0f;
 		float orbitYaw = 0.0f;    // degrees around target's Y axis
 		float orbitPitch = 20.0f; // degrees above/below horizon
 
-		// ── Control speeds ────────────────────────────────────────────────────
+		// -- Control speeds ----------------------------------------------------
 		float moveSpeed = 5.0f;  // world units / second (Free)
 		float lookSpeed = 0.15f; // degrees per pixel delta (Free RMB drag)
 		float orbitSpeed = 0.3f; // degrees per pixel delta (Orbit LMB drag)
@@ -46,12 +46,12 @@ namespace aether
 	public:
 		explicit Camera(const CameraDesc& desc = {});
 
-		// ── View / projection matrices ────────────────────────────────────────
+		// -- View / projection matrices ----------------------------------------
 		[[nodiscard]] glm::mat4 GetViewMatrix() const;
 		[[nodiscard]] glm::mat4 GetProjectionMatrix(float aspect) const;
 		[[nodiscard]] glm::mat4 GetViewProjectionMatrix(float aspect) const;
 
-		// ── Free mode pose ────────────────────────────────────────────────────
+		// -- Free mode pose ----------------------------------------------------
 		[[nodiscard]] glm::vec3 GetPosition() const;
 
 		[[nodiscard]] float GetYaw() const
@@ -75,7 +75,7 @@ namespace aether
 
 		void SetYawPitch(float yaw, float pitch);
 
-		// ── Orbit mode pose ───────────────────────────────────────────────────
+		// -- Orbit mode pose ---------------------------------------------------
 		[[nodiscard]] glm::vec3 GetOrbitTarget() const
 		{
 			return m_orbitTarget;
@@ -104,7 +104,7 @@ namespace aether
 		void SetOrbitDistance(float dist);
 		void SetOrbitYawPitch(float yaw, float pitch);
 
-		// ── Projection params ─────────────────────────────────────────────────
+		// -- Projection params -------------------------------------------------
 		[[nodiscard]] float GetFovDegrees() const
 		{
 			return m_fovDeg;
@@ -135,7 +135,7 @@ namespace aether
 			m_far = f;
 		}
 
-		// ── Mode ──────────────────────────────────────────────────────────────
+		// -- Mode --------------------------------------------------------------
 		[[nodiscard]] CameraMode GetMode() const
 		{
 			return m_mode;
@@ -146,7 +146,7 @@ namespace aether
 			m_mode = mode;
 		}
 
-		// ── Speeds ────────────────────────────────────────────────────────────
+		// -- Speeds ------------------------------------------------------------
 		[[nodiscard]] float GetMoveSpeed() const
 		{
 			return m_moveSpeed;

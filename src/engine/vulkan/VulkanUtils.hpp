@@ -83,7 +83,7 @@ namespace aether::vkutil
 		return vkCopyMemoryToImage(device, &copyInfo);
 	}
 
-	// ── Debug object naming ─────────────────────────────────────────────────────
+	// -- Debug object naming -----------------------------------------------------
 
 	// Thread-local storage for the debug-utils function pointer.
 	// Set once at engine init via SetObjectNameFunction.

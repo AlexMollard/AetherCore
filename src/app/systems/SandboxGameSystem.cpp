@@ -96,7 +96,7 @@ namespace aether::app
 
 		m_world = &world;
 
-		// ── Shared pipeline (fast, do synchronously) ──────────────────────────
+		// -- Shared pipeline (fast, do synchronously) --------------------------
 		const aether::gpu::DescriptorSetLayout bindlessLayout = m_services->Get<BindlessManager>().GetLayout();
 		const aether::gpu::DescriptorSetLayout lightingLayout = m_services->Get<LightingManager>().GetSetLayout();
 		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
@@ -112,7 +112,7 @@ namespace aether::app
 		        }));
 		m_pipeline = std::move(pipeline);
 
-		// ── Plasma effect pipeline ─────────────────────────────────────────────
+		// -- Plasma effect pipeline ---------------------------------------------
 		{
 			aether::Material plasmaMat{};
 			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -132,7 +132,7 @@ namespace aether::app
 		m_quadMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Quad);
 		m_planeMesh = &m_services->Get<PrimitiveMeshes>().Get(aether::PrimitiveMesh::Plane);
 
-		// ── Deferred loading tasks ────────────────────────────────────────────
+		// -- Deferred loading tasks --------------------------------------------
 		// Obtain the shared LoadingManager registered by Application.
 		m_loadingManager = &m_services->Get<LoadingManager>();
 
@@ -147,7 +147,7 @@ namespace aether::app
 		m_loadingManager->AddTask([this] { CreatePointLights(); }, "Creating lights");
 	}
 
-	// ── Deferred loading helpers ─────────────────────────────────────────────
+	// -- Deferred loading helpers ---------------------------------------------
 	// These are invoked one-per-frame by LoadingManager from Update().
 
 	void SandboxGameSystem::LoadMaterials()
@@ -232,14 +232,14 @@ namespace aether::app
 			return;
 		}
 
-		// ── Ground: large tiling plane ────────────────────────────────────────
+		// -- Ground: large tiling plane ----------------------------------------
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_planeMesh, m_debugTexturedMaterial);
 			m_groundEntity = e;
 			m_sandboxEntities.push_back(e);
 		}
 
-		// ── Foxes ─────────────────────────────────────────────────────────────
+		// -- Foxes -------------------------------------------------------------
 		if (m_foxModel.has_value())
 		{
 			std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
@@ -283,7 +283,7 @@ namespace aether::app
 			AE_INFO(aether::LogCategory::App, "Spawned {} fox instances.", kFoxCount);
 		}
 
-		// ── Sky cubes ─────────────────────────────────────────────────────────
+		// -- Sky cubes ---------------------------------------------------------
 		// Centre spinning cube
 		{
 			const aether::Entity e = aether::ecs::SpawnMesh(*world, m_pipeline, *m_cubeMesh, m_debugTexturedMaterial);
@@ -410,7 +410,7 @@ namespace aether::app
 
 		m_time += dt;
 
-		// ── Ground: large flat quad, 56×56 units, lying at Y=0 ───────────────
+		// -- Ground: large flat quad, 56x56 units, lying at Y=0 ---------------
 		{
 			glm::mat4 m = glm::rotate(glm::mat4{1.0f}, glm::radians(-90.0f), {1.0f, 0.0f, 0.0f});
 			const float groundSize = 2.0f * kGroundHalfExtent;
@@ -421,7 +421,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Fox autonomous wander ─────────────────────────────────────────────
+		// -- Fox autonomous wander ---------------------------------------------
 		if (!m_foxInstances.empty())
 		{
 			std::uniform_real_distribution<float> posDist(-kGroundHalfExtent, kGroundHalfExtent);
@@ -523,7 +523,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Sky: centre cube spinning at kSkyHeight ───────────────────────────
+		// -- Sky: centre cube spinning at kSkyHeight ---------------------------
 		{
 			glm::mat4 m = glm::translate(glm::mat4{1.0f}, {0.0f, kSkyHeight, 0.0f});
 			m = glm::rotate(m, m_time * glm::radians(22.0f), {0.0f, 1.0f, 0.0f});
@@ -535,7 +535,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Sky: ring of cubes revolving at kSkyHeight ────────────────────────
+		// -- Sky: ring of cubes revolving at kSkyHeight ------------------------
 		{
 			constexpr float kRingRadius = 10.0f;
 			const float kStep = glm::radians(360.0f / static_cast<float>(kRingCount));
@@ -554,7 +554,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Sky: wide-orbit pair at kSkyHeight + 3 ────────────────────────────
+		// -- Sky: wide-orbit pair at kSkyHeight + 3 ----------------------------
 		{
 			const glm::vec3 diagAxis = glm::normalize(glm::vec3{1.0f, 1.0f, 0.3f});
 			auto oView = world.View<OrbitComponent, aether::TransformComponent>();
@@ -572,7 +572,7 @@ namespace aether::app
 			}
 		}
 
-		// ── Point-light markers: small cubes tinted to each light's color ────
+		// -- Point-light markers: small cubes tinted to each light's color ----
 		{
 			auto markerView = world.View<PointLightMarkerComponent, aether::TransformComponent>();
 			for (auto e: markerView)
@@ -605,7 +605,7 @@ namespace aether::app
 			m_services->Get<Renderer>().SetPointLights(m_pointLights);
 		}
 
-		// ── Input: C = swap camera ────────
+		// -- Input: C = swap camera --------
 		{
 			if (m_input->IsKeyPressed(aether::Key::C))
 			{
@@ -616,13 +616,13 @@ namespace aether::app
 			}
 		}
 
-		// ── RTT camera slowly orbits looking down at the fox field ────────────
+		// -- RTT camera slowly orbits looking down at the fox field ------------
 		if (aether::Camera* cam = m_cameras->TryGet(m_rttCamera))
 		{
 			cam->SetOrbitYawPitch(m_time * 12.0f, 68.0f);
 		}
 
-		// ── Feed RTT output into the orbit cube ───────────────────────────────
+		// -- Feed RTT output into the orbit cube -------------------------------
 		const uint32_t rtSlot = m_services->Get<RenderTargetService>().GetRenderTargetBindlessSlot(m_rttTargetId);
 		if (rtSlot != aether::Material::kNoTexture)
 		{

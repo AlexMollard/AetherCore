@@ -129,7 +129,7 @@ namespace aether
 		// x=shadowDataIndex(-1=none), y=shadowStrength.
 		std::vector<glm::vec2> m_lightShadowIndices;
 
-		// ── VSM blur resources ──────────────────────────────────────────────
+		// -- VSM blur resources ----------------------------------------------
 		gpu::PipelineHandle m_blurPipelineHandle;
 		gpu::PipelineLayout m_blurPipelineLayout = nullptr;
 		VkDescriptorSetLayout m_blurDescriptorSetLayout = VK_NULL_HANDLE;

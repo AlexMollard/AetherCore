@@ -330,7 +330,7 @@ namespace aether
 		constexpr float kHalfHeight = 0.5f;
 		constexpr float kTwoPi = 6.28318530718f;
 		constexpr float kHalfPi = 1.57079632679f;
-		// Meridian lines: north pole → top dome → cylinder → bottom dome → south pole.
+		// Meridian lines: north pole -> top dome -> cylinder -> bottom dome -> south pole.
 		for (int i = 0; i < kSegments; ++i)
 		{
 			const float theta = (static_cast<float>(i) * kTwoPi) / kSegments;
@@ -341,7 +341,7 @@ namespace aether
 			// Cylinder top = domePoints[kDomeSteps-1], cylinder bottom = bottomDome[0].
 			glm::vec3 prev = glm::vec3{0.0f, kHalfHeight + kRadius, 0.0f}; // north pole
 
-			// Top hemisphere: north pole → cylinder top.
+			// Top hemisphere: north pole -> cylinder top.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
 				const float phi = (static_cast<float>(j) * kHalfPi) / kDomeSteps;
@@ -351,7 +351,7 @@ namespace aether
 				prev = p;
 			}
 
-			// Cylinder: top → bottom.
+			// Cylinder: top -> bottom.
 			for (int j = 0; j < kDomeSteps; ++j)
 			{
 				const float y = kHalfHeight - static_cast<float>(j + 1) * (2.0f * kHalfHeight) / kDomeSteps;
@@ -361,7 +361,7 @@ namespace aether
 				prev = p;
 			}
 
-			// Bottom hemisphere: cylinder bottom → south pole.
+			// Bottom hemisphere: cylinder bottom -> south pole.
 			for (int j = 1; j <= kDomeSteps; ++j)
 			{
 				const float phi = kHalfPi + (static_cast<float>(j) * kHalfPi) / kDomeSteps;
@@ -416,7 +416,7 @@ namespace aether
 		vmaUnmapMemory(allocator, m_capsuleVertexAlloc);
 	}
 
-	// ── Free-function debug primitive builders ───────────────────────────────
+	// -- Free-function debug primitive builders -------------------------------
 
 	void AddDebugLine(std::vector<DebugVertex>& out, const glm::vec3& a, const glm::vec3& b, const glm::vec4& color)
 	{

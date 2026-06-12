@@ -6,9 +6,9 @@
 
 namespace aether
 {
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// GraphicsPipelineFactory - Vulkan implementation of GraphicsPipeline::Create
-	// ─────────────────────────────────────────────────────────────────────────
+	// -------------------------------------------------------------------------
 	// Lives under src/engine/vulkan/ so the engine-facing rendering/GraphicsPipeline
 	// translation unit can stay Vulkan-free. Builds the pipeline + 4 GPL
 	// libraries + pipeline layout + linked final pipeline, and returns a

@@ -33,7 +33,7 @@ namespace
 		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{.material = effect->material});
 	}
 
-	// ── Effect parameter setters ─────────────────────────────────────────────
+	// -- Effect parameter setters ---------------------------------------------
 	// These update fields on the entity's MaterialComponent. The shader
 	// reinterprets the material fields for effect-specific meaning.
 
