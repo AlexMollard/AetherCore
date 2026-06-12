@@ -114,14 +114,14 @@ namespace aether::gpu
 	{
 		None = 0,
 		IndirectCommandRead = 1ull << 0,
-		IndexRead = 1ull << 2,
-		VertexAttributeRead = 1ull << 3,
+		IndexRead = 1ull << 1,
+		VertexAttributeRead = 1ull << 2,
 		ShaderRead = 1ull << 5,
 		ShaderWrite = 1ull << 6,
-		TransferWrite = 1ull << 8,
+		TransferWrite = 1ull << 12,
 		HostWrite = 1ull << 14,
-		ShaderStorageRead = 1ull << 29,
-		ShaderStorageWrite = 1ull << 30,
+		ShaderStorageRead = 1ull << 33,
+		ShaderStorageWrite = 1ull << 34,
 	};
 
 	inline AccessFlags operator|(AccessFlags a, AccessFlags b) noexcept
