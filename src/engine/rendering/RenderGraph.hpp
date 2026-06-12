@@ -2,21 +2,23 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
 #include "gpu/CommandList.hpp"
+#include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "utils/GpuProfiler.hpp"
-#include "vulkan/UniqueImage.hpp"
 
 namespace aether
 {
 	class BindlessManager;
+
+	// Forward declaration - Vk internals live in vulkan/RenderGraphStorage.hpp
+	struct RenderGraphStorage;
 
 	// Opaque handle to a render-graph-managed image resource.
 	// Acquired from RenderGraph::GetSwapchainColor/Depth or future
@@ -52,31 +54,27 @@ namespace aether
 		std::uint32_t frameIndex = 0;
 	};
 
-	// Per-frame swapchain handles supplied to RenderGraph::Execute by AetherCore.
-	struct FrameTarget
-	{
-		VkImage colorImage = VK_NULL_HANDLE;
-		VkImageView colorView = VK_NULL_HANDLE;
-		VkImage depthImage = VK_NULL_HANDLE;
-		VkImageView depthView = VK_NULL_HANDLE;
-		VkFormat colorFormat = VK_FORMAT_UNDEFINED;
-		VkFormat depthFormat = VK_FORMAT_UNDEFINED;
-		gpu::Extent2D extent{};
-	};
-
 	// Frame graph with pass/resource declarations and automatic image barriers.
 	class RenderGraph
 	{
 	public:
 		struct TransientImageDesc
 		{
-			VkFormat format = VK_FORMAT_UNDEFINED;
-			VkImageUsageFlags usage = 0;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			gpu::Format format = gpu::Format::Undefined;
+			gpu::ImageUsage usage = gpu::ImageUsage::None;
+			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent{}; // {0,0} = match FrameTarget extent at Execute()
 		};
 
-		void Initialize(VkDevice device, VmaAllocator allocator);
+		RenderGraph();
+		~RenderGraph();
+
+		RenderGraph(const RenderGraph&) = delete;
+		RenderGraph& operator=(const RenderGraph&) = delete;
+		RenderGraph(RenderGraph&&) noexcept;
+		RenderGraph& operator=(RenderGraph&&) noexcept;
+
+		void Initialize(void* device, void* allocator);
 		void Shutdown();
 
 		// Begin a new frame - must be called before Execute() to process
@@ -145,7 +143,8 @@ namespace aether
 		}
 
 		// Register an externally-owned image and return an RGImage handle.
-		[[nodiscard]] RGImage RegisterImage(VkImage image, VkImageView view, VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT);
+		// image/view are opaque Vulkan handles (VkImage/VkImageView) passed as void*.
+		[[nodiscard]] RGImage RegisterImage(void* image, void* view, gpu::ImageAspect aspect = gpu::ImageAspect::Color);
 
 		// Create a render-graph-owned transient image.
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
@@ -156,7 +155,8 @@ namespace aether
 
 		// Ensure a transient image is registered for bindless sampled access.
 		// Returns 0xFFFFFFFF when image is invalid/non-transient/not allocatable.
-		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		// device is an opaque Vulkan device handle (VkDevice) passed as void*.
+		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, void* device, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 
 		// Returns bindless slot for a transient image if already registered.
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(RGImage image) const;
@@ -199,32 +199,16 @@ namespace aether
 		static constexpr uint32_t kFirstExternalId = 2u;
 		static constexpr uint32_t kFirstTransientId = 0x40000000u;
 
-		// Entry for each image registered via RegisterImage().
-		struct ExternalImageEntry
-		{
-			VkImage image = VK_NULL_HANDLE;
-			VkImageView view = VK_NULL_HANDLE;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-		};
-
-		struct TransientImageEntry
-		{
-			TransientImageDesc desc{};
-			bool bindlessRequested = false;
-			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			UniqueImage image;
-			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu; // index of entry we alias (when image is null)
-			gpu::Extent2D allocatedExtent{};
-		};
-
+		// Attachment reference using engine-side enums (Vulkan-free).
 		struct AttachmentRef
 		{
 			RGImage image{};
-			VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-			VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-			VkClearValue clearValue{};
+			gpu::LoadOp loadOp = gpu::LoadOp::Clear;
+			gpu::StoreOp storeOp = gpu::StoreOp::Store;
+			gpu::ClearValue clearValue{};
 		};
 
+		// Per-resource access type for image barrier compilation.
 		enum class ImageAccessType
 		{
 			SampledRead,
@@ -236,6 +220,37 @@ namespace aether
 		{
 			RGImage image{};
 			ImageAccessType type = ImageAccessType::SampledRead;
+		};
+
+		// Barrier description with engine-side enums.
+		// Stage/access bits use raw uint64_t (set from VkPipelineStageFlags2 /
+		// VkAccessFlags2 values at compile time) to avoid depending on Vulkan
+		// types in the header.
+		struct CompiledBarrier
+		{
+			uint32_t resourceId = 0;
+			gpu::ImageLayout oldLayout = gpu::ImageLayout::Undefined;
+			gpu::ImageLayout newLayout = gpu::ImageLayout::Undefined;
+			std::uint64_t srcStage = 0;
+			std::uint64_t srcAccess = 0;
+			std::uint64_t dstStage = 0;
+			std::uint64_t dstAccess = 0;
+			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
+		};
+
+		struct CompiledPass
+		{
+			std::size_t passIndex = 0;
+			std::vector<CompiledBarrier> preBarriers;
+		};
+
+		// Tracking state for barrier compilation (engine-side enums + raw bits).
+		struct ResourceState
+		{
+			gpu::ImageLayout layout = gpu::ImageLayout::Undefined;
+			std::uint64_t writeStage = 0;
+			std::uint64_t writeAccess = 0;
+			bool isCrossFrame = false;
 		};
 
 		enum class PassKind
@@ -252,114 +267,44 @@ namespace aether
 			std::optional<AttachmentRef> depthWrite;
 			std::vector<ImageAccessRef> imageAccesses;
 			std::function<void(PassContext&)> execute;
-			std::optional<gpu::Extent2D> extentOverride; // if set, overrides target.extent
+			std::optional<gpu::Extent2D> extentOverride;
 			float lastCpuTimeMs = 0.f;
 		};
 
-		struct CompiledBarrier
+		// External image entry (opaque handles).
+		struct ExternalImageEntry
 		{
-			uint32_t resourceId = 0;
-			VkImageLayout oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			VkImageLayout newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-			VkPipelineStageFlags2 srcStage = VK_PIPELINE_STAGE_2_NONE;
-			VkAccessFlags2 srcAccess = VK_ACCESS_2_NONE;
-			VkPipelineStageFlags2 dstStage = VK_PIPELINE_STAGE_2_NONE;
-			VkAccessFlags2 dstAccess = VK_ACCESS_2_NONE;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			void* image = nullptr;
+			void* view = nullptr;
+			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 		};
-
-		struct CompiledPass
-		{
-			std::size_t passIndex = 0;
-			std::vector<CompiledBarrier> preBarriers;
-		};
-
-		struct ResourceState
-		{
-			VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
-			VkPipelineStageFlags2 writeStage = VK_PIPELINE_STAGE_2_NONE;
-			VkAccessFlags2 writeAccess = VK_ACCESS_2_NONE;
-			bool isCrossFrame = false;
-		};
-
-		struct ImageCacheKey
-		{
-			VkFormat format = VK_FORMAT_UNDEFINED;
-			VkImageUsageFlags usage = 0;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
-			uint32_t width = 0;
-			uint32_t height = 0;
-			uint32_t mipLevels = 1;
-			VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT;
-
-			bool operator==(const ImageCacheKey& other) const noexcept
-			{
-				return format == other.format && usage == other.usage && aspect == other.aspect && width == other.width && height == other.height && mipLevels == other.mipLevels && samples == other.samples;
-			}
-		};
-
-		struct ImageCacheKeyHash
-		{
-			std::size_t operator()(const ImageCacheKey& k) const noexcept
-			{
-				std::size_t h = std::hash<uint32_t>{}(static_cast<uint32_t>(k.format));
-				h ^= std::hash<uint32_t>{}(k.usage) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(k.aspect) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(k.width) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(k.height) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(k.mipLevels) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(static_cast<uint32_t>(k.samples)) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				return h;
-			}
-		};
-
-		struct CachedImage
-		{
-			UniqueImage image;
-			std::uint32_t lastUsedFrame = 0;
-		};
-
-		void MoveToCache(TransientImageEntry& entry);
-		UniqueImage TryPullFromCache(const ImageCacheKey& key);
-		void EvictStaleCacheEntries();
-		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageDesc& desc, gpu::Extent2D extent) const;
 
 		void Compile();
-		void EnsureTransientImages(const FrameTarget& target);
 
-		[[nodiscard]] VkImage ResolveImage(uint32_t resourceId, const FrameTarget& target) const;
-		[[nodiscard]] VkImageView ResolveView(uint32_t resourceId, const FrameTarget& target) const;
-		[[nodiscard]] VkImageAspectFlags ResolveAspect(uint32_t resourceId) const;
-		[[nodiscard]] bool IsTransientId(uint32_t resourceId) const;
+		[[nodiscard]] bool IsTransientId(uint32_t resourceId) const
+		{
+			return resourceId >= kFirstTransientId;
+		}
 
+		[[nodiscard]] uint32_t ExternalIndex(uint32_t resourceId) const
+		{
+			return resourceId - kFirstExternalId;
+		}
+
+		[[nodiscard]] uint32_t TransientIndex(uint32_t resourceId) const
+		{
+			return resourceId - kFirstTransientId;
+		}
+
+		// Opaque storage for all Vulkan-internal state.
+		std::unique_ptr<RenderGraphStorage> m_storage;
+
+		// Pass graph state (Vulkan-free).
 		std::vector<PassRecord> m_passes;
 		std::vector<CompiledPass> m_compiled;
-		std::vector<ExternalImageEntry> m_externalImages;   // indexed by (id - kFirstExternalId)
-		std::vector<TransientImageEntry> m_transientImages; // indexed by (id - kFirstTransientId)
+		std::vector<ExternalImageEntry> m_externalImages;
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
-		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
-		VkDevice m_device = VK_NULL_HANDLE;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		TracyVkCtx m_tracyVkCtx = nullptr;
-
 		bool m_compileDirty = true;
-
-		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
-		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
-
-		// Deferred destruction: images are queued for destruction and only
-		// actually destroyed when the GPU has finished the frame they were
-		// used in. Indexed by frame index % kMaxFramesInFlight.
-		static constexpr std::size_t kMaxFramesInFlight = 3;
-		static constexpr std::uint32_t kCacheMaxStaleFrames = 10;
-
-		struct PendingDestruction
-		{
-			std::uint32_t entryIndex = 0xFFFFFFFFu;
-			UniqueImage image;
-		};
-
-		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
-		std::uint32_t m_currentFrame = 0;
 	};
 } // namespace aether

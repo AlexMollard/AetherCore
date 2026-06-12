@@ -6,138 +6,51 @@
 #include <limits>
 #include <numeric>
 #include <queue>
-#include <unordered_map>
 
 #include "gpu/BindlessManager.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
-#include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
 namespace aether
 {
-	void RenderGraph::Initialize(VkDevice device, VmaAllocator allocator)
+	// ── Lifecycle ────────────────────────────────────────────────────────────
+
+	RenderGraph::RenderGraph()
+	      : m_storage(std::make_unique<RenderGraphStorage>())
 	{
-		m_device = device;
-		m_allocator = allocator;
+	}
+
+	RenderGraph::~RenderGraph() = default;
+
+	RenderGraph::RenderGraph(RenderGraph&&) noexcept = default;
+	RenderGraph& RenderGraph::operator=(RenderGraph&&) noexcept = default;
+
+	void RenderGraph::Initialize(void* device, void* allocator)
+	{
+		m_storage->Initialize(static_cast<VkDevice>(device), static_cast<VmaAllocator>(allocator));
 	}
 
 	void RenderGraph::Shutdown()
 	{
-		for (TransientImageEntry& entry: m_transientImages)
-		{
-			entry.image.Reset();
-			entry.aliasedEntryIndex = 0xFFFFFFFFu;
-			entry.allocatedExtent = {};
-		}
-		m_transientImages.clear();
+		m_storage->Shutdown();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
-
-		for (auto& [key, cachedList]: m_imageCache)
-		{
-			for (CachedImage& ci: cachedList)
-			{
-				ci.image.Reset();
-			}
-		}
-		m_imageCache.clear();
-
-		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
-		{
-			m_pendingDestructions[i].clear();
-		}
-
 		m_lastImageStates.clear();
 		m_compileDirty = true;
-		m_device = VK_NULL_HANDLE;
-		m_allocator = VK_NULL_HANDLE;
 	}
 
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
-		m_currentFrame = frameIndex % kMaxFramesInFlight;
-
-		// Destroy images from the frame that the GPU has now finished with.
-		// Since we have kMaxFramesInFlight frames, the GPU should be done
-		// with frame (currentFrame) by the time we start a new frame with
-		// the same index.
-		std::vector<PendingDestruction>& toDestroy = m_pendingDestructions[m_currentFrame];
-		for (PendingDestruction& pending: toDestroy)
-		{
-			pending.image.Reset();
-		}
-		toDestroy.clear();
+		m_storage->BeginFrame(frameIndex);
 	}
 
-	RenderGraph::ImageCacheKey RenderGraph::MakeCacheKey(const TransientImageDesc& desc, gpu::Extent2D extent) const
-	{
-		return ImageCacheKey{
-		        .format = desc.format,
-		        .usage = desc.usage,
-		        .aspect = desc.aspect,
-		        .width = extent.width,
-		        .height = extent.height,
-		        .mipLevels = 1,
-		        .samples = VK_SAMPLE_COUNT_1_BIT,
-		};
-	}
-
-	void RenderGraph::MoveToCache(TransientImageEntry& entry)
-	{
-		if (!entry.image)
-		{
-			return;
-		}
-		const ImageCacheKey key = MakeCacheKey(entry.desc, entry.allocatedExtent);
-		m_imageCache[key].push_back(CachedImage{
-		        .image = std::move(entry.image),
-		        .lastUsedFrame = m_currentFrame,
-		});
-		entry.allocatedExtent = {};
-	}
-
-	UniqueImage RenderGraph::TryPullFromCache(const ImageCacheKey& key)
-	{
-		auto it = m_imageCache.find(key);
-		if (it == m_imageCache.end() || it->second.empty())
-		{
-			return {};
-		}
-		UniqueImage img = std::move(it->second.back().image);
-		it->second.pop_back();
-		if (it->second.empty())
-		{
-			m_imageCache.erase(it);
-		}
-		return img;
-	}
-
-	void RenderGraph::EvictStaleCacheEntries()
-	{
-		for (auto it = m_imageCache.begin(); it != m_imageCache.end();)
-		{
-			auto& list = it->second;
-			std::erase_if(list,
-			        [&](const CachedImage& ci)
-			        {
-				        const std::uint32_t age = (m_currentFrame >= ci.lastUsedFrame) ? (m_currentFrame - ci.lastUsedFrame) : (kMaxFramesInFlight + m_currentFrame - ci.lastUsedFrame);
-				        return age > kCacheMaxStaleFrames;
-			        });
-			if (list.empty())
-			{
-				it = m_imageCache.erase(it);
-			}
-			else
-			{
-				++it;
-			}
-		}
-	}
+	// ── PassBuilder ──────────────────────────────────────────────────────────
 
 	RenderGraph::PassBuilder::PassBuilder(RenderGraph& graph, std::size_t passIndex)
 	      : m_graph(graph), m_passIndex(passIndex)
@@ -148,9 +61,9 @@ namespace aether
 	{
 		m_graph.m_passes[m_passIndex].colorWrites.push_back(AttachmentRef{
 		        .image = image,
-		        .loadOp = gpu::ToVk(loadOp),
-		        .storeOp = gpu::ToVk(storeOp),
-		        .clearValue = gpu::ToVk(clearValue),
+		        .loadOp = loadOp,
+		        .storeOp = storeOp,
+		        .clearValue = clearValue,
 		});
 		return *this;
 	}
@@ -159,9 +72,9 @@ namespace aether
 	{
 		m_graph.m_passes[m_passIndex].depthWrite = AttachmentRef{
 		        .image = image,
-		        .loadOp = gpu::ToVk(loadOp),
-		        .storeOp = gpu::ToVk(storeOp),
-		        .clearValue = gpu::ToVk(clearValue),
+		        .loadOp = loadOp,
+		        .storeOp = storeOp,
+		        .clearValue = clearValue,
 		};
 		return *this;
 	}
@@ -224,6 +137,8 @@ namespace aether
 		return *this;
 	}
 
+	// ── Pass management ──────────────────────────────────────────────────────
+
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name)
 	{
 		m_passes.push_back(PassRecord{.name = std::move(name)});
@@ -239,152 +154,6 @@ namespace aether
 		});
 		m_compileDirty = true;
 		return PassBuilder{*this, m_passes.size() - 1};
-	}
-
-	RGImage RenderGraph::RegisterImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
-	{
-		const uint32_t id = kFirstExternalId + static_cast<uint32_t>(m_externalImages.size());
-		m_externalImages.push_back({image, view, aspect});
-		return RGImage{id};
-	}
-
-	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
-	{
-		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
-		{
-			AE_WARN(LogCategory::Engine, "RenderGraph: CreateTransientImage called before Initialize().");
-		}
-
-		TransientImageEntry entry{};
-		entry.desc = desc;
-		m_transientImages.push_back(std::move(entry));
-		const uint32_t id = kFirstTransientId + static_cast<uint32_t>(m_transientImages.size() - 1);
-		return RGImage{id};
-	}
-
-	RGImage RenderGraph::CreateTransientColor(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
-	{
-		return CreateTransientImage({
-		        .format = gpu::ToVk(format),
-		        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
-		        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
-		        .extent = gpu::Extent2D{extent.width, extent.height},
-		});
-	}
-
-	RGImage RenderGraph::CreateTransientDepth(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
-	{
-		return CreateTransientImage({
-		        .format = gpu::ToVk(format),
-		        .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | gpu::ToVk(extraUsage),
-		        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
-		        .extent = gpu::Extent2D{extent.width, extent.height},
-		});
-	}
-
-	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout)
-	{
-		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
-		{
-			return 0xFFFFFFFFu;
-		}
-		if (!IsTransientId(image.id))
-		{
-			return 0xFFFFFFFFu;
-		}
-
-		const uint32_t idx = image.id - kFirstTransientId;
-		if (idx >= m_transientImages.size())
-		{
-			return 0xFFFFFFFFu;
-		}
-
-		TransientImageEntry& entry = m_transientImages[idx];
-		entry.bindlessRequested = true;
-		entry.bindlessLayout = descriptorLayout;
-		entry.aliasedEntryIndex = 0xFFFFFFFFu;
-
-		if (!entry.image)
-		{
-			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || entry.desc.extent.width == 0 || entry.desc.extent.height == 0)
-			{
-				return 0xFFFFFFFFu;
-			}
-
-			AE_EXPECT_OR_THROW(newImage,
-			        UniqueImage::Create(m_device,
-			                m_allocator,
-			                {
-			                        .extent = entry.desc.extent,
-			                        .format = gpu::FromVk(entry.desc.format),
-			                        .usage = entry.desc.usage,
-			                }));
-			entry.image = std::move(newImage);
-			entry.allocatedExtent = entry.desc.extent;
-		}
-
-		AE_EXPECT_OR_THROW_VOID(entry.image.EnsureBindlessSampled(bindlessManager, device, entry.desc.aspect, descriptorLayout));
-		return entry.image.GetBindlessSampledSlot();
-	}
-
-	std::uint32_t RenderGraph::GetBindlessSampledSlot(RGImage image) const
-	{
-		if (!IsTransientId(image.id))
-		{
-			return 0xFFFFFFFFu;
-		}
-
-		const uint32_t idx = image.id - kFirstTransientId;
-		if (idx >= m_transientImages.size())
-		{
-			return 0xFFFFFFFFu;
-		}
-
-		const TransientImageEntry& entry = m_transientImages[idx];
-		if (!entry.image.HasBindlessSampled())
-		{
-			return 0xFFFFFFFFu;
-		}
-		return entry.image.GetBindlessSampledSlot();
-	}
-
-	void RenderGraph::ReleaseImage(const RGImage image)
-	{
-		if (image.id == kSwapchainColorId || image.id == kSwapchainDepthId || image.id == RGImage::kInvalid)
-		{
-			return;
-		}
-
-		if (IsTransientId(image.id))
-		{
-			const uint32_t idx = image.id - kFirstTransientId;
-			if (idx < m_transientImages.size())
-			{
-				TransientImageEntry& entry = m_transientImages[idx];
-				if (entry.bindlessRequested)
-				{
-					PendingDestruction pending{};
-					pending.entryIndex = idx;
-					pending.image = std::move(entry.image);
-					m_pendingDestructions[m_currentFrame].push_back(std::move(pending));
-				}
-				else
-				{
-					MoveToCache(entry);
-				}
-				entry.bindlessRequested = false;
-				entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				entry.aliasedEntryIndex = 0xFFFFFFFFu;
-				entry.desc = {};
-			}
-			return;
-		}
-
-		const uint32_t idx = image.id - kFirstExternalId;
-		if (idx < m_externalImages.size())
-		{
-			m_externalImages[idx] = {};
-		}
 	}
 
 	void RenderGraph::RemovePass(const std::string& name)
@@ -404,15 +173,21 @@ namespace aether
 
 	void RenderGraph::Clear()
 	{
-		for (TransientImageEntry& entry: m_transientImages)
+		for (auto& [id, state]: m_lastImageStates)
 		{
-			MoveToCache(entry);
-			entry.aliasedEntryIndex = 0xFFFFFFFFu;
+			if (IsTransientId(id))
+			{
+				const uint32_t idx = TransientIndex(id);
+				if (idx < m_storage->GetTransientCount())
+				{
+					m_storage->ReleaseTransient(idx, 0);
+				}
+			}
 		}
-		m_transientImages.clear();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
+		m_lastImageStates.clear();
 		m_compileDirty = true;
 	}
 
@@ -432,360 +207,97 @@ namespace aether
 		return result;
 	}
 
-	void RenderGraph::EnsureTransientImages(const FrameTarget& target)
+	// ── Image registration ───────────────────────────────────────────────────
+
+	RGImage RenderGraph::RegisterImage(void* image, void* view, gpu::ImageAspect aspect)
 	{
-		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
-		{
-			AE_WARN(LogCategory::Engine, "RenderGraph: transient images require Initialize(device, allocator).");
-			return;
-		}
-
-		struct Lifetime
-		{
-			int first = std::numeric_limits<int>::max();
-			int last = -1;
-		};
-
-		std::vector<Lifetime> lifetimes(m_transientImages.size());
-		auto touch = [&](const uint32_t resourceId, const int passOrder)
-		{
-			if (!IsTransientId(resourceId))
-			{
-				return;
-			}
-			const uint32_t idx = resourceId - kFirstTransientId;
-			if (idx >= m_transientImages.size())
-			{
-				return;
-			}
-			lifetimes[idx].first = std::min(lifetimes[idx].first, passOrder);
-			lifetimes[idx].last = std::max(lifetimes[idx].last, passOrder);
-		};
-
-		for (std::size_t order = 0; order < m_compiled.size(); ++order)
-		{
-			const PassRecord& pass = m_passes[m_compiled[order].passIndex];
-			for (const AttachmentRef& a: pass.colorWrites)
-			{
-				touch(a.image.id, static_cast<int>(order));
-			}
-			if (pass.depthWrite.has_value())
-			{
-				touch(pass.depthWrite->image.id, static_cast<int>(order));
-			}
-			for (const ImageAccessRef& access: pass.imageAccesses)
-			{
-				touch(access.image.id, static_cast<int>(order));
-			}
-		}
-
-		std::vector<gpu::Extent2D> requestedExtents(m_transientImages.size());
-		std::vector<std::uint32_t> candidates;
-		candidates.reserve(m_transientImages.size());
-
-		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
-		{
-			TransientImageEntry& entry = m_transientImages[idx];
-			entry.aliasedEntryIndex = 0xFFFFFFFFu;
-
-			const gpu::Extent2D reqExt = (entry.desc.extent.width == 0 || entry.desc.extent.height == 0) ? target.extent : entry.desc.extent;
-			requestedExtents[idx] = reqExt;
-
-			if (entry.bindlessRequested)
-			{
-				continue;
-			}
-
-			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || reqExt.width == 0 || reqExt.height == 0)
-			{
-				MoveToCache(entry);
-				continue;
-			}
-
-			if (lifetimes[idx].last >= lifetimes[idx].first)
-			{
-				candidates.push_back(idx);
-			}
-			else
-			{
-				MoveToCache(entry);
-			}
-		}
-
-		std::sort(candidates.begin(), candidates.end(), [&](const std::uint32_t a, const std::uint32_t b) { return lifetimes[a].first < lifetimes[b].first; });
-
-		std::vector<int> entryLastUse(m_transientImages.size(), -1);
-
-		for (const std::uint32_t idx: candidates)
-		{
-			TransientImageEntry& entry = m_transientImages[idx];
-			const gpu::Extent2D reqExt = requestedExtents[idx];
-			const int firstUse = lifetimes[idx].first;
-			const int lastUse = lifetimes[idx].last;
-
-			const bool needsCreate = !entry.image || entry.allocatedExtent.width != reqExt.width || entry.allocatedExtent.height != reqExt.height;
-
-			std::uint32_t chosen = 0xFFFFFFFFu;
-
-			if (needsCreate)
-			{
-				for (std::uint32_t e = 0; e < m_transientImages.size(); ++e)
-				{
-					if (e == idx)
-					{
-						continue;
-					}
-					const TransientImageEntry& candidate = m_transientImages[e];
-					if (candidate.aliasedEntryIndex != 0xFFFFFFFFu)
-					{
-						continue;
-					}
-					if (!candidate.image)
-					{
-						continue;
-					}
-					if (candidate.desc.format != entry.desc.format || candidate.desc.usage != entry.desc.usage || candidate.desc.aspect != entry.desc.aspect)
-					{
-						continue;
-					}
-					if (candidate.allocatedExtent.width != reqExt.width || candidate.allocatedExtent.height != reqExt.height)
-					{
-						continue;
-					}
-					if (entryLastUse[e] >= firstUse)
-					{
-						continue;
-					}
-
-					chosen = e;
-					break;
-				}
-
-				if (chosen == 0xFFFFFFFFu)
-				{
-					chosen = idx;
-					const ImageCacheKey key = MakeCacheKey(entry.desc, reqExt);
-					UniqueImage cached = TryPullFromCache(key);
-
-					if (cached)
-					{
-						MoveToCache(entry);
-						entry.image = std::move(cached);
-						entry.allocatedExtent = reqExt;
-					}
-					else
-					{
-						MoveToCache(entry);
-						AE_EXPECT_OR_THROW(newImage,
-						        UniqueImage::Create(m_device,
-						                m_allocator,
-						                {
-						                        .extent = reqExt,
-						                        .format = gpu::FromVk(entry.desc.format),
-						                        .usage = entry.desc.usage,
-						                }));
-						entry.image = std::move(newImage);
-						entry.allocatedExtent = reqExt;
-						const std::string entryName = std::format("RenderGraph.Transient[{}]", idx);
-						entry.image.SetName(m_device, entryName.c_str());
-					}
-				}
-				else
-				{
-					MoveToCache(entry);
-					entry.aliasedEntryIndex = chosen;
-					entry.allocatedExtent = reqExt;
-				}
-			}
-			else
-			{
-				chosen = idx;
-			}
-			entryLastUse[chosen] = lastUse;
-		}
-
-		for (std::uint32_t entryIdx = 0; entryIdx < m_transientImages.size(); ++entryIdx)
-		{
-			TransientImageEntry& entry = m_transientImages[entryIdx];
-			if (!entry.bindlessRequested)
-			{
-				continue;
-			}
-
-			const gpu::Extent2D reqExt = requestedExtents[entryIdx];
-			const bool needsCreate = !entry.image || entry.allocatedExtent.width != reqExt.width || entry.allocatedExtent.height != reqExt.height;
-			if (!needsCreate)
-			{
-				continue;
-			}
-
-			if (entry.desc.format == VK_FORMAT_UNDEFINED || entry.desc.usage == 0 || reqExt.width == 0 || reqExt.height == 0)
-			{
-				MoveToCache(entry);
-				continue;
-			}
-
-			const ImageCacheKey key = MakeCacheKey(entry.desc, reqExt);
-			UniqueImage cached = TryPullFromCache(key);
-
-			if (cached)
-			{
-				MoveToCache(entry);
-				entry.image = std::move(cached);
-				entry.allocatedExtent = reqExt;
-			}
-			else
-			{
-				MoveToCache(entry);
-				AE_EXPECT_OR_THROW(newImage,
-				        UniqueImage::Create(m_device,
-				                m_allocator,
-				                {
-				                        .extent = reqExt,
-				                        .format = gpu::FromVk(entry.desc.format),
-				                        .usage = entry.desc.usage,
-				                }));
-				entry.image = std::move(newImage);
-				entry.allocatedExtent = reqExt;
-			}
-			const std::string entryName = std::format("RenderGraph.Transient.Bindless[{}]", entryIdx);
-			entry.image.SetName(m_device, entryName.c_str());
-		}
-
-		EvictStaleCacheEntries();
+		const uint32_t id = kFirstExternalId + static_cast<uint32_t>(m_externalImages.size());
+		m_externalImages.push_back(ExternalImageEntry{
+		        .image = image,
+		        .view = view,
+		        .aspect = aspect,
+		});
+		m_storage->RegisterExternalImage(static_cast<VkImage>(image), static_cast<VkImageView>(view), gpu::ToVk(aspect));
+		return RGImage{id};
 	}
 
-	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
+	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
 	{
-		if (m_passes.empty())
+		const VkFormat vkFormat = gpu::ToVk(desc.format);
+		const VkImageUsageFlags vkUsage = gpu::ToVk(desc.usage);
+		const VkImageAspectFlags vkAspect = gpu::ToVk(desc.aspect);
+
+		const uint32_t idx = m_storage->AddTransientSlot(vkFormat, vkUsage, vkAspect, desc.extent);
+		const uint32_t id = kFirstTransientId + idx;
+		return RGImage{id};
+	}
+
+	RGImage RenderGraph::CreateTransientColor(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
+	{
+		return CreateTransientImage({
+		        .format = format,
+		        .usage = gpu::ImageUsage::ColorAttachment | extraUsage,
+		        .aspect = gpu::ImageAspect::Color,
+		        .extent = extent,
+		});
+	}
+
+	RGImage RenderGraph::CreateTransientDepth(gpu::Format format, gpu::Extent2D extent, gpu::ImageUsage extraUsage)
+	{
+		return CreateTransientImage({
+		        .format = format,
+		        .usage = gpu::ImageUsage::DepthStencilAttachment | extraUsage,
+		        .aspect = gpu::ImageAspect::Depth,
+		        .extent = extent,
+		});
+	}
+
+	// ── Bindless ─────────────────────────────────────────────────────────────
+
+	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, void* device, gpu::ImageLayout descriptorLayout)
+	{
+		if (!IsTransientId(image.id))
+		{
+			return 0xFFFFFFFFu;
+		}
+
+		const uint32_t idx = TransientIndex(image.id);
+		return m_storage->EnsureBindlessSampled(idx, bindlessManager, static_cast<VkDevice>(device), gpu::ToVk(descriptorLayout));
+	}
+
+	std::uint32_t RenderGraph::GetBindlessSampledSlot(RGImage image) const
+	{
+		if (!IsTransientId(image.id))
+		{
+			return 0xFFFFFFFFu;
+		}
+
+		const uint32_t idx = image.id - kFirstTransientId;
+		return m_storage->GetBindlessSampledSlot(idx);
+	}
+
+	void RenderGraph::ReleaseImage(RGImage image)
+	{
+		if (image.id == kSwapchainColorId || image.id == kSwapchainDepthId || image.id == RGImage::kInvalid)
 		{
 			return;
 		}
 
-		Compile();
-
-		EnsureTransientImages(target);
-
-		// TODO(phase5d): gpu::CommandList methods for barrier/image transitions.
-		// Transitional shim: vkutil::TransitionImages and the barrier structs
-		// still need raw VkCommandBuffer. cmdList handles debug labels, dynamic
-		// rendering, viewport, scissor.
-		gpu::CommandList& recorder = cmdList;
-		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
-
-		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
-
-		for (const CompiledPass& cp: m_compiled)
+		if (IsTransientId(image.id))
 		{
-			PassRecord& pass = m_passes[cp.passIndex];
-			AE_PROFILE_ZONE_N("RenderPass");
-			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
-			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
-
-			m_scratchBarriers.clear();
-			for (const CompiledBarrier& b: cp.preBarriers)
-			{
-				const VkImage image = ResolveImage(b.resourceId, target);
-				if (image == VK_NULL_HANDLE)
-				{
-					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
-					continue;
-				}
-				m_scratchBarriers.push_back({
-				        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				        .srcStageMask = b.srcStage,
-				        .srcAccessMask = b.srcAccess,
-				        .dstStageMask = b.dstStage,
-				        .dstAccessMask = b.dstAccess,
-				        .oldLayout = b.oldLayout,
-				        .newLayout = b.newLayout,
-				        .image = image,
-				        .subresourceRange = {b.aspect, 0, 1, 0, 1},
-				});
-			}
-			vkutil::TransitionImages(vkCmd, m_scratchBarriers.data(), static_cast<uint32_t>(m_scratchBarriers.size()));
-
-			m_scratchColorInfos.clear();
-			for (const AttachmentRef& a: pass.colorWrites)
-			{
-				m_scratchColorInfos.push_back({
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-				        .imageView = ResolveView(a.image.id, target),
-				        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				        .loadOp = a.loadOp,
-				        .storeOp = a.storeOp,
-				        .clearValue = a.clearValue,
-				});
-			}
-
-			VkRenderingAttachmentInfo depthInfo{};
-			bool hasDepth = false;
-			if (pass.depthWrite.has_value())
-			{
-				hasDepth = true;
-				const AttachmentRef& da = *pass.depthWrite;
-				depthInfo = {
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-				        .imageView = ResolveView(da.image.id, target),
-				        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-				        .loadOp = da.loadOp,
-				        .storeOp = da.storeOp,
-				        .clearValue = da.clearValue,
-				};
-			}
-
-			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
-			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!m_scratchColorInfos.empty() || hasDepth);
-			if (useDynamicRendering)
-			{
-				const VkRenderingInfo renderInfo{
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				        .renderArea = {{0, 0}, {passExtent.width, passExtent.height}},
-				        .layerCount = 1,
-				        .colorAttachmentCount = static_cast<uint32_t>(m_scratchColorInfos.size()),
-				        .pColorAttachments = m_scratchColorInfos.data(),
-				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
-				};
-				cmdList.BeginRendering(&renderInfo);
-
-				const gpu::Viewport viewport{
-				        .x = 0.0f,
-				        .y = 0.0f,
-				        .width = static_cast<float>(passExtent.width),
-				        .height = static_cast<float>(passExtent.height),
-				        .minDepth = 0.0f,
-				        .maxDepth = 1.0f,
-				};
-				const gpu::Rect2D scissor{
-				        .x = 0,
-				        .y = 0,
-				        .width = passExtent.width,
-				        .height = passExtent.height,
-				};
-				cmdList.SetViewport(viewport);
-				cmdList.SetScissor(scissor);
-			}
-
-			if (pass.execute)
-			{
-				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, vkCmd, gpuPassZone, pass.name.c_str());
-				const auto t0 = std::chrono::high_resolution_clock::now();
-				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
-				pass.execute(ctx);
-				const auto t1 = std::chrono::high_resolution_clock::now();
-				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
-			}
-
-			if (useDynamicRendering)
-			{
-				cmdList.EndRendering();
-			}
-
-			recorder.EndDebugLabel();
+			const uint32_t idx = TransientIndex(image.id);
+			m_storage->ReleaseTransient(idx, 0);
+			return;
 		}
 
-		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
+		const uint32_t idx = ExternalIndex(image.id);
+		if (idx < m_externalImages.size())
+		{
+			m_externalImages[idx] = {};
+		}
 	}
+
+	// ── Compilation ──────────────────────────────────────────────────────────
 
 	void RenderGraph::Compile()
 	{
@@ -903,39 +415,27 @@ namespace aether
 		{
 			if (IsTransientId(id))
 			{
-				const uint32_t idx = id - kFirstTransientId;
-				if (idx >= m_transientImages.size())
-				{
-					continue;
-				}
-				const TransientImageEntry& entry = m_transientImages[idx];
-				if (!entry.image && entry.aliasedEntryIndex == 0xFFFFFFFFu)
+				const uint32_t idx = TransientIndex(id);
+				if (!m_storage->IsTransientSlotValid(idx))
 				{
 					continue;
 				}
 			}
-			states[id] = {
-			        s.layout,
-			        s.writeStage,
-			        s.writeAccess,
-			        true,
-			};
+			states[id] = s;
 		}
 
-		// Pre-seed swapchain images with their resting layout. Overrides any
-		// loaded state - swapchain images are re-acquired each frame and their
-		// layout is managed externally.
+		// Pre-seed swapchain images with their resting layout.
 		states[kSwapchainColorId] = {
-		        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-		        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-		        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-		        false, // isCrossFrame
+		        .layout = gpu::ImageLayout::ColorAttachment,
+		        .writeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT),
+		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT),
+		        .isCrossFrame = false,
 		};
 		states[kSwapchainDepthId] = {
-		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-		        VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-		        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-		        false, // isCrossFrame
+		        .layout = gpu::ImageLayout::DepthAttachment,
+		        .writeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT),
+		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT),
+		        .isCrossFrame = false,
 		};
 
 		for (const std::size_t idx: sortedIndices)
@@ -947,25 +447,28 @@ namespace aether
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
 				const uint32_t resId = a.image.id;
-				constexpr VkImageLayout kTarget = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+				constexpr gpu::ImageLayout kTarget = gpu::ImageLayout::ColorAttachment;
+				constexpr std::uint64_t kDstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+				constexpr std::uint64_t kDstWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+				constexpr std::uint64_t kDstReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 				const auto it = states.find(resId);
 				if (it != states.end())
 				{
 					const ResourceState& s = it->second;
 					const bool layoutChange = (s.layout != kTarget);
-					const bool loadRead = (a.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD);
+					const bool loadRead = (a.loadOp == gpu::LoadOp::Load);
 					if (layoutChange || loadRead)
 					{
 						cp.preBarriers.push_back({
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.isCrossFrame ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : s.writeStage,
-						        .srcAccess = s.isCrossFrame ? VK_ACCESS_2_MEMORY_WRITE_BIT : s.writeAccess,
-						        .dstStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-						        .dstAccess = loadRead ? (VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT) : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-						        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+						        .srcStage = s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) : s.writeStage,
+						        .srcAccess = s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT) : s.writeAccess,
+						        .dstStage = kDstStage,
+						        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
+						        .aspect = gpu::ImageAspect::Color,
 						});
 					}
 				}
@@ -973,21 +476,21 @@ namespace aether
 				{
 					cp.preBarriers.push_back({
 					        .resourceId = resId,
-					        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					        .oldLayout = gpu::ImageLayout::Undefined,
 					        .newLayout = kTarget,
-					        .srcStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-					        .srcAccess = VK_ACCESS_2_NONE,
-					        .dstStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-					        .dstAccess = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-					        .aspect = VK_IMAGE_ASPECT_COLOR_BIT,
+					        .srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT),
+					        .srcAccess = 0,
+					        .dstStage = kDstStage,
+					        .dstAccess = kDstWrite,
+					        .aspect = gpu::ImageAspect::Color,
 					});
 				}
 
 				states[resId] = {
-				        kTarget,
-				        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-				        VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-				        false, // isCrossFrame
+				        .layout = kTarget,
+				        .writeStage = kDstStage,
+				        .writeAccess = kDstWrite,
+				        .isCrossFrame = false,
 				};
 			}
 
@@ -995,26 +498,28 @@ namespace aether
 			{
 				const AttachmentRef& da = *pass.depthWrite;
 				const uint32_t resId = da.image.id;
-				constexpr VkImageLayout kTarget = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
-				constexpr VkPipelineStageFlags2 kDepthStages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+				constexpr gpu::ImageLayout kTarget = gpu::ImageLayout::DepthAttachment;
+				constexpr std::uint64_t kDepthStages = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
+				constexpr std::uint64_t kDepthWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+				constexpr std::uint64_t kDepthReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
 				const auto it = states.find(resId);
 				if (it != states.end())
 				{
 					const ResourceState& s = it->second;
 					const bool layoutChange = (s.layout != kTarget);
-					const bool loadRead = (da.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD);
+					const bool loadRead = (da.loadOp == gpu::LoadOp::Load);
 					if (layoutChange || loadRead)
 					{
 						cp.preBarriers.push_back({
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = s.isCrossFrame ? VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT : s.writeStage,
-						        .srcAccess = s.isCrossFrame ? VK_ACCESS_2_MEMORY_WRITE_BIT : s.writeAccess,
+						        .srcStage = s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) : s.writeStage,
+						        .srcAccess = s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT) : s.writeAccess,
 						        .dstStage = kDepthStages,
-						        .dstAccess = loadRead ? (VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT) : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-						        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
+						        .dstAccess = loadRead ? kDepthReadWrite : kDepthWrite,
+						        .aspect = gpu::ImageAspect::Depth,
 						});
 					}
 				}
@@ -1022,21 +527,21 @@ namespace aether
 				{
 					cp.preBarriers.push_back({
 					        .resourceId = resId,
-					        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+					        .oldLayout = gpu::ImageLayout::Undefined,
 					        .newLayout = kTarget,
-					        .srcStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-					        .srcAccess = VK_ACCESS_2_NONE,
+					        .srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT),
+					        .srcAccess = 0,
 					        .dstStage = kDepthStages,
-					        .dstAccess = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-					        .aspect = VK_IMAGE_ASPECT_DEPTH_BIT,
+					        .dstAccess = kDepthWrite,
+					        .aspect = gpu::ImageAspect::Depth,
 					});
 				}
 
 				states[resId] = {
-				        kTarget,
-				        kDepthStages,
-				        VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-				        false, // isCrossFrame
+				        .layout = kTarget,
+				        .writeStage = kDepthStages,
+				        .writeAccess = kDepthWrite,
+				        .isCrossFrame = false,
 				};
 			}
 
@@ -1044,33 +549,33 @@ namespace aether
 			{
 				const uint32_t resId = r.image.id;
 
-				VkImageLayout targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-				VkPipelineStageFlags2 dstStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-				VkAccessFlags2 dstAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+				gpu::ImageLayout targetLayout = gpu::ImageLayout::ShaderReadOnly;
+				std::uint64_t dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+				std::uint64_t dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 				switch (r.type)
 				{
 					case ImageAccessType::SampledRead:
-						dstStage = (pass.kind == PassKind::Compute) ? VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT : VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-						dstAccess = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-						targetLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+						dstStage = (pass.kind == PassKind::Compute) ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT) : static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+						targetLayout = gpu::ImageLayout::ShaderReadOnly;
 						break;
 					case ImageAccessType::StorageRead:
-						dstStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-						dstAccess = VK_ACCESS_2_SHADER_STORAGE_READ_BIT;
-						targetLayout = VK_IMAGE_LAYOUT_GENERAL;
+						dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+						targetLayout = gpu::ImageLayout::General;
 						break;
 					case ImageAccessType::StorageWrite:
-						dstStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-						dstAccess = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-						targetLayout = VK_IMAGE_LAYOUT_GENERAL;
+						dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+						targetLayout = gpu::ImageLayout::General;
 						break;
 				}
 
 				const auto it = states.find(resId);
-				VkPipelineStageFlags2 srcStage;
-				VkAccessFlags2 srcAccess;
-				VkImageLayout oldLayout;
+				std::uint64_t srcStage;
+				std::uint64_t srcAccess;
+				gpu::ImageLayout oldLayout;
 
 				if (it != states.end())
 				{
@@ -1078,8 +583,8 @@ namespace aether
 					oldLayout = s.layout;
 					if (s.isCrossFrame)
 					{
-						srcStage = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-						srcAccess = VK_ACCESS_2_MEMORY_WRITE_BIT;
+						srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+						srcAccess = static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT);
 					}
 					else
 					{
@@ -1089,9 +594,27 @@ namespace aether
 				}
 				else
 				{
-					oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-					srcStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-					srcAccess = VK_ACCESS_2_NONE;
+					oldLayout = gpu::ImageLayout::Undefined;
+					srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+					srcAccess = 0;
+				}
+
+				gpu::ImageAspect aspect = gpu::ImageAspect::Color;
+				if (IsTransientId(resId))
+				{
+					aspect = static_cast<gpu::ImageAspect>(m_storage->ResolveTransientAspect(TransientIndex(resId)));
+				}
+				else if (resId == kSwapchainDepthId)
+				{
+					aspect = gpu::ImageAspect::Depth;
+				}
+				else
+				{
+					const uint32_t extIdx = ExternalIndex(resId);
+					if (extIdx < m_externalImages.size())
+					{
+						aspect = m_externalImages[extIdx].aspect;
+					}
 				}
 
 				cp.preBarriers.push_back({
@@ -1102,121 +625,201 @@ namespace aether
 				        .srcAccess = srcAccess,
 				        .dstStage = dstStage,
 				        .dstAccess = dstAccess,
-				        .aspect = ResolveAspect(resId),
+				        .aspect = aspect,
 				});
 
 				states[resId] = {
-				        targetLayout,
-				        dstStage,
-				        dstAccess,
-				        false, // isCrossFrame
+				        .layout = targetLayout,
+				        .writeStage = dstStage,
+				        .writeAccess = dstAccess,
+				        .isCrossFrame = false,
 				};
 			}
 
 			m_compiled.push_back(std::move(cp));
 		}
 
-		// AE_INFO(LogCategory::Engine, "RenderGraph compiled: {} pass(es).", m_compiled.size());
 		std::swap(m_lastImageStates, states);
 	}
 
-	VkImage RenderGraph::ResolveImage(uint32_t resourceId, const FrameTarget& target) const
-	{
-		if (resourceId == kSwapchainColorId)
-		{
-			return target.colorImage;
-		}
-		if (resourceId == kSwapchainDepthId)
-		{
-			return target.depthImage;
-		}
-		if (IsTransientId(resourceId))
-		{
-			const uint32_t idx = resourceId - kFirstTransientId;
-			if (idx < m_transientImages.size())
-			{
-				const TransientImageEntry& entry = m_transientImages[idx];
-				if (entry.image)
-				{
-					return entry.image.Get();
-				}
-				if (entry.aliasedEntryIndex < m_transientImages.size())
-				{
-					AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-					return m_transientImages[entry.aliasedEntryIndex].image.Get();
-				}
-			}
-			return VK_NULL_HANDLE;
-		}
-		const uint32_t idx = resourceId - kFirstExternalId;
-		if (idx < m_externalImages.size())
-		{
-			return m_externalImages[idx].image;
-		}
-		return VK_NULL_HANDLE;
-	}
+	// ── Execution ────────────────────────────────────────────────────────────
 
-	VkImageView RenderGraph::ResolveView(uint32_t resourceId, const FrameTarget& target) const
+	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
 	{
-		if (resourceId == kSwapchainColorId)
+		if (m_passes.empty())
 		{
-			return target.colorView;
+			return;
 		}
-		if (resourceId == kSwapchainDepthId)
-		{
-			return target.depthView;
-		}
-		if (IsTransientId(resourceId))
-		{
-			const uint32_t idx = resourceId - kFirstTransientId;
-			if (idx < m_transientImages.size())
-			{
-				const TransientImageEntry& entry = m_transientImages[idx];
-				if (entry.image)
-				{
-					return entry.image.GetDefaultView();
-				}
-				if (entry.aliasedEntryIndex < m_transientImages.size())
-				{
-					AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-					return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
-				}
-			}
-			return VK_NULL_HANDLE;
-		}
-		const uint32_t idx = resourceId - kFirstExternalId;
-		if (idx < m_externalImages.size())
-		{
-			return m_externalImages[idx].view;
-		}
-		return VK_NULL_HANDLE;
-	}
 
-	VkImageAspectFlags RenderGraph::ResolveAspect(uint32_t resourceId) const
-	{
-		if (resourceId == kSwapchainDepthId)
-		{
-			return VK_IMAGE_ASPECT_DEPTH_BIT;
-		}
-		if (IsTransientId(resourceId))
-		{
-			const uint32_t idx = resourceId - kFirstTransientId;
-			if (idx < m_transientImages.size())
-			{
-				return m_transientImages[idx].desc.aspect;
-			}
-			return VK_IMAGE_ASPECT_COLOR_BIT;
-		}
-		const uint32_t idx = resourceId - kFirstExternalId;
-		if (idx < m_externalImages.size())
-		{
-			return m_externalImages[idx].aspect;
-		}
-		return VK_IMAGE_ASPECT_COLOR_BIT;
-	}
+		Compile();
 
-	bool RenderGraph::IsTransientId(const uint32_t resourceId) const
-	{
-		return resourceId >= kFirstTransientId;
+		// Ensure transient images are allocated before building barriers.
+		m_storage->EnsureTransientImages(target);
+
+		gpu::CommandList& recorder = cmdList;
+		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
+		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
+
+		for (const CompiledPass& cp: m_compiled)
+		{
+			PassRecord& pass = m_passes[cp.passIndex];
+			AE_PROFILE_ZONE_N("RenderPass");
+			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
+			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
+
+			// ── Barriers ────────────────────────────────────────────────────
+			auto& scratchBarriers = m_storage->scratchBarriers;
+			scratchBarriers.clear();
+			for (const CompiledBarrier& b: cp.preBarriers)
+			{
+				VkImage image = VK_NULL_HANDLE;
+				if (b.resourceId == kSwapchainColorId)
+				{
+					image = static_cast<VkImage>(target.colorImage);
+				}
+				else if (b.resourceId == kSwapchainDepthId)
+				{
+					image = static_cast<VkImage>(target.depthImage);
+				}
+				else if (IsTransientId(b.resourceId))
+				{
+					image = m_storage->ResolveTransientImage(TransientIndex(b.resourceId));
+				}
+				else
+				{
+					const uint32_t extIdx = ExternalIndex(b.resourceId);
+					image = m_storage->GetExternalImage(extIdx);
+				}
+
+				if (image == VK_NULL_HANDLE)
+				{
+					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
+					continue;
+				}
+
+				scratchBarriers.push_back({
+				        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+				        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
+				        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
+				        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
+				        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
+				        .oldLayout = gpu::ToVk(b.oldLayout),
+				        .newLayout = gpu::ToVk(b.newLayout),
+				        .image = image,
+				        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+				});
+			}
+			vkutil::TransitionImages(vkCmd, scratchBarriers.data(), static_cast<uint32_t>(scratchBarriers.size()));
+
+			// ── Dynamic rendering ───────────────────────────────────────────
+			auto& scratchColorInfos = m_storage->scratchColorInfos;
+			scratchColorInfos.clear();
+			for (const AttachmentRef& a: pass.colorWrites)
+			{
+				VkImageView view = VK_NULL_HANDLE;
+				if (a.image.id == kSwapchainColorId)
+				{
+					view = static_cast<VkImageView>(target.colorView);
+				}
+				else if (IsTransientId(a.image.id))
+				{
+					view = m_storage->ResolveTransientView(TransientIndex(a.image.id));
+				}
+				else
+				{
+					view = m_storage->GetExternalView(ExternalIndex(a.image.id));
+				}
+
+				scratchColorInfos.push_back({
+				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				        .imageView = view,
+				        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+				        .loadOp = gpu::ToVk(a.loadOp),
+				        .storeOp = gpu::ToVk(a.storeOp),
+				        .clearValue = gpu::ToVk(a.clearValue),
+				});
+			}
+
+			VkRenderingAttachmentInfo depthInfo{};
+			bool hasDepth = false;
+			if (pass.depthWrite.has_value())
+			{
+				hasDepth = true;
+				const AttachmentRef& da = *pass.depthWrite;
+				VkImageView depthView = VK_NULL_HANDLE;
+				if (da.image.id == kSwapchainDepthId)
+				{
+					depthView = static_cast<VkImageView>(target.depthView);
+				}
+				else if (IsTransientId(da.image.id))
+				{
+					depthView = m_storage->ResolveTransientView(TransientIndex(da.image.id));
+				}
+				else
+				{
+					depthView = m_storage->GetExternalView(ExternalIndex(da.image.id));
+				}
+
+				depthInfo = {
+				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				        .imageView = depthView,
+				        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+				        .loadOp = gpu::ToVk(da.loadOp),
+				        .storeOp = gpu::ToVk(da.storeOp),
+				        .clearValue = gpu::ToVk(da.clearValue),
+				};
+			}
+
+			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
+			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || hasDepth);
+			if (useDynamicRendering)
+			{
+				const VkRenderingInfo renderInfo{
+				        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+				        .renderArea = {{0, 0}, {passExtent.width, passExtent.height}},
+				        .layerCount = 1,
+				        .colorAttachmentCount = static_cast<uint32_t>(scratchColorInfos.size()),
+				        .pColorAttachments = scratchColorInfos.data(),
+				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
+				};
+				cmdList.BeginRendering(&renderInfo);
+
+				const gpu::Viewport viewport{
+				        .x = 0.0f,
+				        .y = 0.0f,
+				        .width = static_cast<float>(passExtent.width),
+				        .height = static_cast<float>(passExtent.height),
+				        .minDepth = 0.0f,
+				        .maxDepth = 1.0f,
+				};
+				const gpu::Rect2D scissor{
+				        .x = 0,
+				        .y = 0,
+				        .width = passExtent.width,
+				        .height = passExtent.height,
+				};
+				cmdList.SetViewport(viewport);
+				cmdList.SetScissor(scissor);
+			}
+
+			if (pass.execute)
+			{
+				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, vkCmd, gpuPassZone, pass.name.c_str());
+				const auto t0 = std::chrono::high_resolution_clock::now();
+				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
+				pass.execute(ctx);
+				const auto t1 = std::chrono::high_resolution_clock::now();
+				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+			}
+
+			if (useDynamicRendering)
+			{
+				cmdList.EndRendering();
+			}
+
+			recorder.EndDebugLabel();
+		}
+
+		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
 	}
 } // namespace aether

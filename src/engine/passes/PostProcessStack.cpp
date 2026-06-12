@@ -25,7 +25,7 @@ namespace aether
 		                        .debugName = "PostProcess.HdrColor",
 		                }));
 		stack.m_hdrColorImage = std::move(hdrImage);
-		stack.m_hdrColor = desc.renderGraph->RegisterImage(stack.m_hdrColorImage.Get(), stack.m_hdrColorImage.GetDefaultView());
+		stack.m_hdrColor = desc.renderGraph->RegisterImage(static_cast<void*>(stack.m_hdrColorImage.Get()), static_cast<void*>(stack.m_hdrColorImage.GetDefaultView()));
 		AE_EXPECT_OR_THROW_VOID(stack.m_hdrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
 		AE_EXPECT_OR_THROW(ldrImage,
@@ -38,7 +38,7 @@ namespace aether
 		                        .debugName = "PostProcess.LdrColor",
 		                }));
 		stack.m_ldrColorImage = std::move(ldrImage);
-		stack.m_ldrColor = desc.renderGraph->RegisterImage(stack.m_ldrColorImage.Get(), stack.m_ldrColorImage.GetDefaultView());
+		stack.m_ldrColor = desc.renderGraph->RegisterImage(static_cast<void*>(stack.m_ldrColorImage.Get()), static_cast<void*>(stack.m_ldrColorImage.GetDefaultView()));
 		AE_EXPECT_OR_THROW_VOID(stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
 		const aether::gpu::DescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();

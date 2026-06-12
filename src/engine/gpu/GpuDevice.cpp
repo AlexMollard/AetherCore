@@ -39,7 +39,6 @@ namespace aether
 		services.Register<ResourcePool>(m_gfx->GetResourcePool());
 		services.Register<BindlessManager>(m_gfx->GetBindlessManager());
 		services.Register<ResourceRegistry>(m_gfx->GetResourceRegistry());
-
 	}
 
 	void GpuDevice::Shutdown()
@@ -156,12 +155,12 @@ namespace aether
 	{
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		return FrameTarget{
-		        .colorImage = swapchain.GetCurrentImage(),
-		        .colorView = swapchain.GetCurrentImageView(),
-		        .depthImage = swapchain.GetDepthImage(),
-		        .depthView = swapchain.GetDepthImageView(),
-		        .colorFormat = gpu::ToVk(swapchain.GetImageFormat()),
-		        .depthFormat = gpu::ToVk(swapchain.GetDepthFormat()),
+		        .colorImage = static_cast<void*>(swapchain.GetCurrentImage()),
+		        .colorView = static_cast<void*>(swapchain.GetCurrentImageView()),
+		        .depthImage = static_cast<void*>(swapchain.GetDepthImage()),
+		        .depthView = static_cast<void*>(swapchain.GetDepthImageView()),
+		        .colorFormat = swapchain.GetImageFormat(),
+		        .depthFormat = swapchain.GetDepthFormat(),
 		        .extent = swapchain.GetExtent(),
 		};
 	}

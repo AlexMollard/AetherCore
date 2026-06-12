@@ -26,7 +26,7 @@ namespace aether
 		MaterialBuffer& materials = services.Get<MaterialBuffer>();
 		GpuDevice& gpu = services.Get<GpuDevice>();
 
-		m_renderGraph.Initialize(vk.GetDevice().device, vk.GetAllocator());
+		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
 		m_frameConstantsBuffer.Initialize(vk);
 

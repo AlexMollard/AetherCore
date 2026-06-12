@@ -433,10 +433,10 @@ namespace aether
 		(void) bindless;
 		(void) device;
 		// Register the atlas as an external image in the render graph.
-		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage().Get(), m_atlasManager.GetAtlasView(), VK_IMAGE_ASPECT_COLOR_BIT);
+		m_atlasImage = graph.RegisterImage(static_cast<void*>(m_atlasManager.GetAtlasImage().Get()), static_cast<void*>(m_atlasManager.GetAtlasView()), gpu::ImageAspect::Color);
 
 		// Register the blur scratch image.
-		m_blurScratchImage = graph.RegisterImage(m_blurScratch.Get(), m_blurScratch.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
+		m_blurScratchImage = graph.RegisterImage(static_cast<void*>(m_blurScratch.Get()), static_cast<void*>(m_blurScratch.GetDefaultView()), gpu::ImageAspect::Color);
 
 		// Create a transient depth attachment for the atlas render pass.
 		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);

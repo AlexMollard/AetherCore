@@ -114,7 +114,7 @@ namespace aether
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
-			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, device);
+			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, static_cast<void*>(device));
 
 			const std::string idx = std::to_string(cascade);
 			graph.AddPass("$DirectionalShadow_C" + idx)
