@@ -109,6 +109,7 @@ namespace aether::gpu
 	using Device = void*;
 	using Allocator = void*;
 	using CommandPool = void*;
+	using Queue = void*;
 	using ImageView = void*;
 	using Sampler = void*;
 } // namespace aether::gpu
