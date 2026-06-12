@@ -6,7 +6,6 @@
 #include <string_view>
 #include <vector>
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
 
 #include "assets/GltfAsset.hpp"
 #include "utils/Expected.hpp"
@@ -91,7 +90,7 @@ namespace aether
 
 		// Build database from a glTF asset's animation collection.
 		// ctx / uploadPool must outlive the Create call (not stored).
-		static AnimationDatabase Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset);
+		static AnimationDatabase Create(const VulkanContext& ctx, gpu::CommandPool uploadPool, const assets::GltfAsset& asset);
 
 		// Append runtime-loaded animation clips to this database.
 		// The channels must already be remapped to this skeleton's node indices.
@@ -99,7 +98,7 @@ namespace aether
 		// Returns the clip index of the first newly-added clip.
 		// uploadPool must be a valid compute-capable command pool.
 		Expected<std::uint32_t> AppendAnimations(
-		        VkCommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
+		        gpu::CommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames);
 
 		void Destroy();
 

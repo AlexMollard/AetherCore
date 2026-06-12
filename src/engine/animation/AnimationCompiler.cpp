@@ -15,17 +15,17 @@ namespace aether
 {
 	namespace
 	{
-		static VkCommandPool s_uploadPool = VK_NULL_HANDLE;
+		static gpu::CommandPool s_uploadPool = nullptr;
 	} // namespace
 
-	void SetAnimationCompilePool(VkCommandPool pool)
+	void SetAnimationCompilePool(gpu::CommandPool pool)
 	{
 		s_uploadPool = pool;
 	}
 
 	void CompileAnimations(World& world, std::uint32_t entityId)
 	{
-		if (s_uploadPool == VK_NULL_HANDLE)
+		if (s_uploadPool == nullptr)
 		{
 			AE_WARN(LogCategory::Animation, "CompileAnimations: no upload pool set - call SetAnimationCompilePool during app init");
 			return;
@@ -142,7 +142,7 @@ namespace aether
 				clips.push_back(clip);
 			}
 
-			auto result = smc.animDb->AppendAnimations(s_uploadPool, clips, channels, times, values, clipNames);
+			auto result = smc.animDb->AppendAnimations(static_cast<VkCommandPool>(s_uploadPool), clips, channels, times, values, clipNames);
 			if (result)
 			{
 				AE_VERBOSE(LogCategory::Animation, "CompileAnimations: baked {} clip(s) into DB (first at index {})", clips.size(), *result);

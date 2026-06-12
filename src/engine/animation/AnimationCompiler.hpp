@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-#include "vulkan/volk.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {
@@ -11,7 +11,7 @@ namespace aether
 	// Set the command pool used by CompileAnimations to upload GPU data.
 	// Must be called once during app init (main thread only) before any
 	// compile_animations daScript call.
-	void SetAnimationCompilePool(VkCommandPool pool);
+	void SetAnimationCompilePool(gpu::CommandPool pool);
 
 	// Bake all pendingExternalAnims on every SkinnedMeshComponent spawned
 	// under entityId into their respective AnimationDatabase GPU buffers.

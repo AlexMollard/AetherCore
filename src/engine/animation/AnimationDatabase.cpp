@@ -11,7 +11,7 @@ namespace aether
 	// Helper: upload a non-empty CPU array into the heap and return its device address.
 	// Returns 0 when the input span is empty (no allocation made).
 	template<typename T>
-	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, VkCommandPool pool)
+	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, gpu::CommandPool pool)
 	{
 		if (data.empty())
 		{
@@ -19,11 +19,11 @@ namespace aether
 		}
 		GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
 		assert(span.IsValid() && "GpuHeap allocation failed - heap capacity insufficient");
-		heap.Upload(span, std::span<const T>(data), device, queue, pool);
+		heap.Upload(span, std::span<const T>(data), device, queue, static_cast<VkCommandPool>(pool));
 		return span.address;
 	}
 
-	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, VkCommandPool uploadPool, const assets::GltfAsset& asset)
+	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, gpu::CommandPool uploadPool, const assets::GltfAsset& asset)
 	{
 		AnimationDatabase db;
 		db.m_ctx = &ctx;
@@ -325,7 +325,7 @@ namespace aether
 		if (!allStrings.empty())
 		{
 			GpuSpan<char> span = db.m_heap.Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
-			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
+			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, static_cast<VkCommandPool>(uploadPool));
 			db.m_stringsAddr = span.address;
 		}
 
@@ -374,7 +374,7 @@ namespace aether
 	}
 
 	Expected<std::uint32_t> AnimationDatabase::AppendAnimations(
-	        VkCommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames)
+	        gpu::CommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames)
 	{
 		if (newClips.empty() || !m_ctx)
 		{
@@ -459,7 +459,7 @@ namespace aether
 		if (!m_clipNames.empty())
 		{
 			GpuSpan<char> span = m_heap.Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
-			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
+			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, static_cast<VkCommandPool>(uploadPool));
 			m_stringsAddr = span.address;
 		}
 
