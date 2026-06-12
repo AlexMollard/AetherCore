@@ -91,7 +91,7 @@ namespace aether
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
-	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, VkFormat depthFormat)
+	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
 
@@ -113,7 +113,7 @@ namespace aether
 		// ── Per-cascade depth passes (read from each cascade's output region) ──
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			m_shadowDepth[cascade] = graph.CreateTransientDepth(gpu::FromVk(depthFormat), gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
+			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
 			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, device);
 
 			const std::string idx = std::to_string(cascade);

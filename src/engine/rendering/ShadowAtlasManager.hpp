@@ -23,7 +23,7 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kAtlasWidth = 8192u;
 		static constexpr std::uint32_t kAtlasHeight = 8192u;
-		static constexpr VkFormat kAtlasFormat = VK_FORMAT_R32G32_SFLOAT;
+		static constexpr gpu::Format kAtlasFormat = gpu::Format::R32G32Sfloat;
 
 		struct Region
 		{

@@ -43,7 +43,7 @@ namespace aether
 			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 			VmaAllocator allocator = VK_NULL_HANDLE;
 			VkExtent2D extent = {};
-			VkFormat swapchainFormat = VK_FORMAT_UNDEFINED;
+			gpu::Format swapchainFormat = gpu::Format::Undefined;
 			BindlessManager* bindlessManager = nullptr; // non-owning
 			RenderGraph* renderGraph = nullptr;         // non-owning
 		};
@@ -61,9 +61,9 @@ namespace aether
 
 		// Format the engine's forward pass must use when writing the HDR buffer.
 		// Game-layer pipelines that render scene geometry must match this format.
-		[[nodiscard]] static constexpr VkFormat GetForwardColorFormat()
+		[[nodiscard]] static constexpr gpu::Format GetForwardColorFormat()
 		{
-			return VK_FORMAT_R16G16B16A16_SFLOAT;
+			return gpu::Format::R16G16B16A16Sfloat;
 		}
 
 		// RenderGraph handle for the HDR buffer - pass to the forward pass's
@@ -119,7 +119,7 @@ namespace aether
 		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM - tonemap output
 		RGImage m_ldrColor{};
 		GraphicsPipeline m_fxaaPipeline; // LDR -> swapchain (FXAA, can passthrough when disabled)
-		VkFormat m_swapchainFormat = VK_FORMAT_UNDEFINED;
+		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
 		float m_exposure = 1.0f;

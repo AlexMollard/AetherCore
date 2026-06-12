@@ -21,10 +21,10 @@ namespace aether
 		ctx.skyboxPass.RegisterPass(*frame.graph, ctx.postProcessStack.GetHdrColor());
 
 		// Passes 2..N: shadow cascades (directional CSM).
-		ctx.shadowService.RegisterPasses(*frame.graph, *frame.bindless, ctx.device, ctx.cullPass, gpu::ToVk(frame.depthFormat));
+		ctx.shadowService.RegisterPasses(*frame.graph, *frame.bindless, ctx.device, ctx.cullPass, frame.depthFormat);
 
 		// Local shadow passes: atlas setup, cull, render, blur.
-		ctx.localShadowService.RegisterPasses(*frame.graph, *frame.bindless, ctx.device, ctx.cullPass, gpu::ToVk(frame.depthFormat));
+		ctx.localShadowService.RegisterPasses(*frame.graph, *frame.bindless, ctx.device, ctx.cullPass, frame.depthFormat);
 
 		// Main camera cull pass.
 		ctx.cullPass.RegisterPass(*frame.graph, ctx.mainRenderQueue);

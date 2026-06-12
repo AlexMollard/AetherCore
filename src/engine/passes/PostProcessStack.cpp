@@ -61,7 +61,7 @@ namespace aether
 		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://fxaa.spv",
-		                        .colorFormat = gpu::FromVk(desc.swapchainFormat),
+		                        .colorFormat = desc.swapchainFormat,
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),

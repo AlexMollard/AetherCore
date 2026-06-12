@@ -59,7 +59,7 @@ namespace aether
 		m_skyboxPass = SkyboxPass::Create({
 		        .device = vk.GetDevice().device,
 		        .pipelineCache = vk.GetPipelineCache(),
-		        .hdrColorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
 		});
 
 		m_renderTargetService.BindRuntime(FrameContext{
@@ -149,7 +149,7 @@ namespace aether
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),
-		        .colorFormat = gpu::FromVk(PostProcessStack::GetForwardColorFormat()),
+		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};
 

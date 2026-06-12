@@ -6,8 +6,6 @@
 #include "gpu/GpuEnums.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
-#include "vulkan/volk.hpp"
-
 namespace aether
 {
 	SkyboxPass SkyboxPass::Create(const Desc& desc)

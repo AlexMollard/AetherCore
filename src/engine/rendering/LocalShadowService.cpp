@@ -425,7 +425,7 @@ namespace aether
 		fc.shadowLightDataAddr = m_shadowDataAddr[bufSlot];
 	}
 
-	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, VkFormat depthFormat)
+	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
 		(void) bindless;
@@ -437,7 +437,7 @@ namespace aether
 		m_blurScratchImage = graph.RegisterImage(m_blurScratch.Get(), m_blurScratch.GetDefaultView(), VK_IMAGE_ASPECT_COLOR_BIT);
 
 		// Create a transient depth attachment for the atlas render pass.
-		RGImage atlasDepth = graph.CreateTransientDepth(gpu::FromVk(depthFormat), gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
+		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
 
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
