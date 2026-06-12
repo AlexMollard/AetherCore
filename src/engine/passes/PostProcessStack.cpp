@@ -8,7 +8,6 @@
 #include "gpu/PushConstantsBytes.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
-#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -21,7 +20,7 @@ namespace aether
 		                desc.allocator,
 		                {
 		                        .extent = desc.extent,
-		                        .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+		                        .format = gpu::Format::R16G16B16A16Sfloat,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		                        .debugName = "PostProcess.HdrColor",
 		                }));
@@ -34,7 +33,7 @@ namespace aether
 		                desc.allocator,
 		                {
 		                        .extent = desc.extent,
-		                        .format = VK_FORMAT_R8G8B8A8_UNORM,
+		                        .format = gpu::Format::R8G8B8A8Unorm,
 		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 		                        .debugName = "PostProcess.LdrColor",
 		                }));

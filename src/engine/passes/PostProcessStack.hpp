@@ -42,7 +42,7 @@ namespace aether
 			VkDevice device = VK_NULL_HANDLE;
 			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
 			VmaAllocator allocator = VK_NULL_HANDLE;
-			VkExtent2D extent = {};
+			gpu::Extent2D extent = {};
 			gpu::Format swapchainFormat = gpu::Format::Undefined;
 			BindlessManager* bindlessManager = nullptr; // non-owning
 			RenderGraph* renderGraph = nullptr;         // non-owning
