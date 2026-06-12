@@ -40,7 +40,7 @@ namespace aether
 		m_meshArena.Initialize(vk, {});
 		m_meshUploadQueue.Initialize(vk);
 		m_primitiveMeshes.Initialize(m_uploadContext);
-		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadContext.GetCommandPool());
+		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadContext);
 	}
 
 	void AssetSubsystem::LinkRenderingDeps(ServiceContainer& services)
