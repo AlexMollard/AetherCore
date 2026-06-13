@@ -423,6 +423,17 @@ namespace aether
 		m_compiled.clear();
 		m_compiled.reserve(N);
 
+		if (m_asyncComputeEnabled)
+		{
+			for (auto& pass: m_passes)
+			{
+				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value())
+				{
+					pass.queueClass = QueueClass::AsyncCompute;
+				}
+			}
+		}
+
 		std::vector<std::vector<std::size_t>> adj(N);
 		std::vector<std::size_t> inDegree(N, 0);
 
@@ -526,7 +537,36 @@ namespace aether
 			}
 		}
 
-		std::queue<std::size_t> ready;
+		struct ReadyCompare
+		{
+			const std::vector<PassRecord>& passes;
+			const std::vector<std::vector<std::size_t>>& adj;
+
+			[[nodiscard]] bool operator()(std::size_t a, std::size_t b) const
+			{
+				// Async compute passes have highest priority - run all AC work
+				// before any graphics work to maximize GPU queue overlap.
+				const bool aAC = passes[a].queueClass == QueueClass::AsyncCompute;
+				const bool bAC = passes[b].queueClass == QueueClass::AsyncCompute;
+				if (aAC != bAC)
+				{
+					return bAC; // true → b has higher priority
+				}
+				
+				const auto aConsumers = adj[a].size();
+				const auto bConsumers = adj[b].size();
+				if (aConsumers != bConsumers)
+				{
+					return aConsumers < bConsumers; // true → b has more consumers
+				}
+
+				// Tiebreaker: declaration order (deterministic).
+				return a > b;
+			}
+		};
+
+		ReadyCompare readyCmp{m_passes, adj};
+		std::priority_queue<std::size_t, std::vector<std::size_t>, ReadyCompare> ready(readyCmp);
 		for (std::size_t i = 0; i < N; ++i)
 		{
 			if (inDegree[i] == 0)
@@ -539,7 +579,7 @@ namespace aether
 		sortedIndices.reserve(N);
 		while (!ready.empty())
 		{
-			const std::size_t cur = ready.front();
+			const std::size_t cur = ready.top();
 			ready.pop();
 			sortedIndices.push_back(cur);
 			for (const std::size_t next: adj[cur])
@@ -718,25 +758,12 @@ namespace aether
 			}
 		}
 
-		// Auto-detect async compute eligibility: when async compute is enabled,
-		// any compute pass without color/depth attachments is eligible for the
-		// async compute queue unless explicitly set to Graphics. Passes that end
-		// up interleaved with graphics passes will be demoted by the grouping
-		// validation below.
-		if (m_asyncComputeEnabled)
-		{
-			for (auto& pass: m_passes)
-			{
-				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value())
-				{
-					pass.queueClass = QueueClass::AsyncCompute;
-				}
-			}
-		}
-
 		// Validate queue grouping: all async-compute passes must come before
 		// all graphics passes in topological order. Interleaving would require
 		// multiple submissions per queue per frame, which we intentionally avoid.
+		// The priority-queue topological sort already maximizes AC grouping;
+		// this pass only demotes AC passes that were interleaved due to
+		// unavoidable dependency ordering.
 		{
 			bool seenGraphics = false;
 			for (const std::size_t idx: sortedIndices)

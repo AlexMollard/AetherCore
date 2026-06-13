@@ -322,7 +322,7 @@ namespace aether
 			bool isWAR = false;
 		};
 
-		// Buffer barrier — image-free, just stage/access tracking.
+		// Buffer barrier - image-free, just stage/access tracking.
 		struct CompiledBufferBarrier
 		{
 			uint32_t resourceId = 0;
