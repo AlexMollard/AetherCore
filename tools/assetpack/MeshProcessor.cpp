@@ -245,10 +245,10 @@ namespace MeshProcessor
 
 		struct Bounds
 		{
-			float aabbMin[3];
-			float aabbMax[3];
-			float sphereCenter[3];
-			float sphereRadius;
+			float aabbMin[3] = {0, 0, 0};
+			float aabbMax[3] = {0, 0, 0};
+			float sphereCenter[3] = {0, 0, 0};
+			float sphereRadius = 0.0f;
 		};
 
 		Bounds ComputeBounds(const std::vector<DiskMeshVertex>& verts)
@@ -886,16 +886,16 @@ namespace MeshProcessor
 						out.bounds.sphereCenter[1] = (Qp.y + Rp.y) * 0.5f;
 						out.bounds.sphereCenter[2] = (Qp.z + Rp.z) * 0.5f;
 						out.bounds.sphereRadius = glm::length(Rp - Vec3{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]});
-						Vec3 center{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]};
 						for (std::size_t r = 0; r < n; ++r)
 						{
 							Vec3 vr{verts[r].position[0], verts[r].position[1], verts[r].position[2]};
-							float d = glm::length(vr - center);
+							Vec3 currentCenter{out.bounds.sphereCenter[0], out.bounds.sphereCenter[1], out.bounds.sphereCenter[2]};
+							float d = glm::length(vr - currentCenter);
 							if (d > out.bounds.sphereRadius)
 							{
 								const float half = (d - out.bounds.sphereRadius) * 0.5f;
 								out.bounds.sphereRadius += half;
-								Vec3 dir = (vr - center) / d;
+								Vec3 dir = (vr - currentCenter) / d;
 								out.bounds.sphereCenter[0] += half * dir.x;
 								out.bounds.sphereCenter[1] += half * dir.y;
 								out.bounds.sphereCenter[2] += half * dir.z;

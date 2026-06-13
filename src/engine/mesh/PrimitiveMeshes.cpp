@@ -105,9 +105,21 @@ namespace aether
 		        23, // -Y
 		};
 
-		m_triangle = Mesh::Create(uploadContext, kTriangleVerts, kTriangleIndices);
-		m_quad = Mesh::Create(uploadContext, kQuadVerts, kQuadIndices);
-		m_cube = Mesh::Create(uploadContext, kCubeVerts, kCubeIndices);
+		// AABB and bounding sphere for triangle (extends ±0.5 in X/Y, Z=0).
+		constexpr float kTriAabbMin[3] = {-0.5f, -0.5f, 0.0f};
+		constexpr float kTriAabbMax[3] = {0.5f, 0.5f, 0.0f};
+		constexpr float kTriSphereCenter[3] = {0.0f, 0.0f, 0.0f};
+		constexpr float kTriSphereRadius = 0.70710678f; // sqrt(0.5)
+
+		m_triangle = Mesh::Create(uploadContext, kTriangleVerts, kTriangleIndices, kTriAabbMin, kTriAabbMax, kTriSphereCenter, kTriSphereRadius);
+		m_quad = Mesh::Create(uploadContext, kQuadVerts, kQuadIndices, kTriAabbMin, kTriAabbMax, kTriSphereCenter, kTriSphereRadius);
+
+		constexpr float kCubeAabbMin[3] = {-0.5f, -0.5f, -0.5f};
+		constexpr float kCubeAabbMax[3] = {0.5f, 0.5f, 0.5f};
+		constexpr float kCubeSphereCenter[3] = {0.0f, 0.0f, 0.0f};
+		constexpr float kCubeSphereRadius = 0.8660254f; // sqrt(0.75)
+
+		m_cube = Mesh::Create(uploadContext, kCubeVerts, kCubeIndices, kCubeAabbMin, kCubeAabbMax, kCubeSphereCenter, kCubeSphereRadius);
 
 		// -----------------------------------------------------------------------
 		// Plane  - default 20x20 subdivided grid via MeshGen.
@@ -115,12 +127,20 @@ namespace aether
 		// -----------------------------------------------------------------------
 		{
 			const MeshGen::MeshData plane = MeshGen::GeneratePlane({.segmentsX = 20, .segmentsY = 20, .uvScale = 1.0f});
-			m_plane = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices));
+			constexpr float kPlaneAabbMin[3] = {-0.5f, -0.5f, 0.0f};
+			constexpr float kPlaneAabbMax[3] = {0.5f, 0.5f, 0.0f};
+			constexpr float kPlaneSphereCenter[3] = {0.0f, 0.0f, 0.0f};
+			constexpr float kPlaneSphereRadius = 0.70710678f;
+			m_plane = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(plane.vertices), std::span<const std::uint32_t>(plane.indices), kPlaneAabbMin, kPlaneAabbMax, kPlaneSphereCenter, kPlaneSphereRadius);
 		}
 
 		{
 			const MeshGen::MeshData sphere = MeshGen::GenerateUVSphere({.stacks = 16, .slices = 32});
-			m_sphere = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(sphere.vertices), std::span<const std::uint32_t>(sphere.indices));
+			constexpr float kSphereAabbMin[3] = {-0.5f, -0.5f, -0.5f};
+			constexpr float kSphereAabbMax[3] = {0.5f, 0.5f, 0.5f};
+			constexpr float kSphereSphereCenter[3] = {0.0f, 0.0f, 0.0f};
+			constexpr float kSphereSphereRadius = 0.5f;
+			m_sphere = Mesh::Create(uploadContext, std::span<const Mesh::Vertex>(sphere.vertices), std::span<const std::uint32_t>(sphere.indices), kSphereAabbMin, kSphereAabbMax, kSphereSphereCenter, kSphereSphereRadius);
 		}
 	}
 

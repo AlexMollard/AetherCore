@@ -69,6 +69,15 @@ namespace aether
 				}
 			}
 
+			// Skinned meshes animate beyond their bind-pose bounding sphere.
+			// Apply a conservative margin to prevent false culling during animation.
+			constexpr float kSkinnedMeshSphereMargin = 2.0f;
+			glm::vec4 localSphere = meshComp.mesh->GetBoundingSphere();
+			if (world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity) && localSphere.w > 0.0f)
+			{
+				localSphere.w *= kSkinnedMeshSphereMargin;
+			}
+
 			queue.Submit({
 			        .pipeline = pipelineComp.pipeline,
 			        .mesh = meshComp.mesh,
@@ -78,7 +87,7 @@ namespace aether
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,
 			        .animTime = animTime,
-			        .worldBoundingSphere = TransformBoundingSphere(meshComp.mesh->GetBoundingSphere(), transformComp.localToWorld),
+			        .worldBoundingSphere = TransformBoundingSphere(localSphere, transformComp.localToWorld),
 			        .animDb = animDb,
 			        .animDbGeneration = animDb ? animDb->GetGeneration() : 0,
 			        .meshGeneration = meshComp.mesh ? meshComp.mesh->GetGeneration() : 0,
@@ -91,12 +100,14 @@ namespace aether
 		AE_PROFILE_ZONE();
 		for (const auto& [id, obj]: scene.m_objects)
 		{
+			const glm::vec4 localSphere = obj.desc.mesh ? obj.desc.mesh->GetBoundingSphere() : glm::vec4(0.0f);
 			queue.Submit({
 			        .pipeline = obj.desc.pipeline,
 			        .mesh = obj.desc.mesh,
 			        .instanceCount = 1,
 			        .modelMatrix = obj.transform,
 			        .materialIndex = obj.desc.materialIndex,
+			        .worldBoundingSphere = TransformBoundingSphere(localSphere, obj.transform),
 			        .meshGeneration = obj.desc.mesh ? obj.desc.mesh->GetGeneration() : 0,
 			});
 		}

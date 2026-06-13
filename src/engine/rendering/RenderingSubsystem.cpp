@@ -33,7 +33,7 @@ namespace aether
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
 		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueueConfig{.maxDraws = 65536});
-		m_renderQueue.SetDebugForceVisible(false);
+		m_renderQueue.SetDebugForceVisible(true); // TODO: DISABLE THIS WHEN CULLING IS FIXED
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);
 		m_renderQueue.SetDebugAnimPassMask(0xFu);

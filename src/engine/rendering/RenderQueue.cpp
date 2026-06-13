@@ -139,6 +139,16 @@ namespace aether
 		const std::uint32_t batchBase = frameSlot * m_maxBatches;
 		const std::uint32_t animJobBase = frameSlot * m_maxAnimationDraws;
 
+		// Clear the slot's instance data to zero-bounds (w=0 = always visible) so
+		// that any entries not overwritten by this frame don't carry stale sphere data
+		// from a previous frame that had more draws.
+		std::memset(m_instanceDataMapped + drawBase, 0, m_maxDraws * sizeof(DrawContracts::InstanceData));
+		std::memset(m_cullInputMapped + drawBase, 0, m_maxDraws * sizeof(CullContracts::DrawInput));
+		std::memset(m_batchDescMapped + batchBase, 0, m_maxBatches * sizeof(CullContracts::Batch));
+		AE_EXPECT_OR_THROW_VOID(m_instanceDataBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_cullInputBuffer.FlushMapped());
+		AE_EXPECT_OR_THROW_VOID(m_batchDescBuffer.FlushMapped());
+
 		// GPU timestamp readback: read results from kFramesInFlight frames ago, reset slot for this frame.
 		if (m_timestampPool && m_timestampPool->IsValid())
 		{
