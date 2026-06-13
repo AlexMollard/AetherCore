@@ -24,6 +24,55 @@
 
 namespace
 {
+	const char* ObjectTypeToString(VkObjectType type)
+	{
+		switch (static_cast<int>(type))
+		{
+			case VK_OBJECT_TYPE_IMAGE:
+				return "Image";
+			case VK_OBJECT_TYPE_IMAGE_VIEW:
+				return "ImageView";
+			case VK_OBJECT_TYPE_BUFFER:
+				return "Buffer";
+			case VK_OBJECT_TYPE_BUFFER_VIEW:
+				return "BufferView";
+			case VK_OBJECT_TYPE_SHADER_MODULE:
+				return "ShaderModule";
+			case VK_OBJECT_TYPE_PIPELINE:
+				return "Pipeline";
+			case VK_OBJECT_TYPE_PIPELINE_LAYOUT:
+				return "PipelineLayout";
+			case VK_OBJECT_TYPE_DESCRIPTOR_SET:
+				return "DescriptorSet";
+			case VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT:
+				return "DescriptorSetLayout";
+			case VK_OBJECT_TYPE_SAMPLER:
+				return "Sampler";
+			case VK_OBJECT_TYPE_COMMAND_BUFFER:
+				return "CommandBuffer";
+			case VK_OBJECT_TYPE_RENDER_PASS:
+				return "RenderPass";
+			case VK_OBJECT_TYPE_FRAMEBUFFER:
+				return "Framebuffer";
+			case VK_OBJECT_TYPE_DEVICE:
+				return "Device";
+			case VK_OBJECT_TYPE_QUEUE:
+				return "Queue";
+			case VK_OBJECT_TYPE_SEMAPHORE:
+				return "Semaphore";
+			case VK_OBJECT_TYPE_FENCE:
+				return "Fence";
+			case VK_OBJECT_TYPE_SWAPCHAIN_KHR:
+				return "Swapchain";
+			case VK_OBJECT_TYPE_SURFACE_KHR:
+				return "Surface";
+			case VK_OBJECT_TYPE_INSTANCE:
+				return "Instance";
+			default:
+				return "Unknown";
+		}
+	}
+
 	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
 	{
 		(void) userData;
@@ -31,17 +80,42 @@ namespace
 		const char* type = vkb::to_string_message_type(messageType);
 		const char* message = callbackData != nullptr && callbackData->pMessage != nullptr ? callbackData->pMessage : "Unknown validation layer message.";
 
+		std::string objects;
+		if (callbackData != nullptr && callbackData->objectCount > 0 && callbackData->pObjects != nullptr)
+		{
+			objects = " (objects: ";
+			for (uint32_t i = 0; i < callbackData->objectCount; ++i)
+			{
+				if (i > 0)
+				{
+					objects += ", ";
+				}
+				const auto& obj = callbackData->pObjects[i];
+				if (obj.pObjectName != nullptr && obj.pObjectName[0] != '\0')
+				{
+					objects += obj.pObjectName;
+				}
+				else
+				{
+					objects += ObjectTypeToString(obj.objectType);
+				}
+			}
+			objects += ")";
+		}
+
+		const std::string decorated = std::string(type) + ": " + message + objects;
+
 		if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT) != 0)
 		{
-			aether::Logger::ErrorAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::ErrorAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
 		}
 		else if ((messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) != 0)
 		{
-			aether::Logger::WarnAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::WarnAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
 		}
 		else
 		{
-			aether::Logger::VerboseAt(aether::LogCategory::Validation, std::source_location::current(), "{}: {}", type, message);
+			aether::Logger::VerboseAt(aether::LogCategory::Validation, std::source_location::current(), "{}", decorated);
 		}
 
 		return VK_FALSE;

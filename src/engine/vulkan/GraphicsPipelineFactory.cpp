@@ -30,7 +30,8 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath)));
 		}
 
-		AE_EXPECT_OR_THROW(vertModule, vkutil::CreateShaderModule(device, *spirv, "GraphicsPipeline"));
+		const std::string vertName = std::string(desc.shaderVfsPath) + ".vert";
+		AE_EXPECT_OR_THROW(vertModule, vkutil::CreateShaderModule(device, *spirv, vertName.c_str()));
 
 		VkShaderModule fragModule = VK_NULL_HANDLE;
 		const bool hasSeparateFragment = !desc.fragmentVfsPath.empty();
@@ -42,8 +43,9 @@ namespace aether::vkutil
 				vkDestroyShaderModule(device, vertModule, nullptr);
 				AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: fragment shader not found: " + std::string(desc.fragmentVfsPath)));
 			}
+			const std::string fragName = std::string(desc.fragmentVfsPath) + ".frag";
 			{
-				auto fragResult = vkutil::CreateShaderModule(device, *fragSpirv, "GraphicsPipeline.Fragment");
+				auto fragResult = vkutil::CreateShaderModule(device, *fragSpirv, fragName.c_str());
 				AE_EXPECT_OR_THROW_VOID(fragResult);
 				fragModule = std::move(*fragResult);
 			}
@@ -240,6 +242,10 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
 		}
 		entry.vertInputLib = vertInputLib;
+		{
+			const std::string libName = std::string(desc.shaderVfsPath) + ".VertexInput";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(vertInputLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
+		}
 
 		// -- GPL: pre-rasterization library (vertex stage) --------------------
 		const VkGraphicsPipelineLibraryCreateInfoEXT gplPreRaster{
@@ -270,6 +276,10 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create pre-rasterization GPL library."));
 		}
 		entry.preRasterLib = preRasterLib;
+		{
+			const std::string libName = std::string(desc.shaderVfsPath) + ".PreRaster";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(preRasterLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
+		}
 
 		// -- GPL: fragment shader library -------------------------------------
 		const VkPipelineRenderingCreateInfo fragShaderRenderingInfo{
@@ -303,6 +313,10 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-shader GPL library."));
 		}
 		entry.fragShaderLib = fragShaderLib;
+		{
+			const std::string libName = std::string(desc.shaderVfsPath) + ".FragShader";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragShaderLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
+		}
 
 		// -- GPL: fragment output interface library ---------------------------
 		const VkPipelineRenderingCreateInfo fragOutputRenderingInfo{
@@ -336,6 +350,10 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-output GPL library."));
 		}
 		entry.fragOutputLib = fragOutputLib;
+		{
+			const std::string libName = std::string(desc.shaderVfsPath) + ".FragOutput";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragOutputLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
+		}
 
 		// -- GPL: link all libraries into final pipeline ----------------------
 		const VkPipeline kLibs[] = {vertInputLib, preRasterLib, fragShaderLib, fragOutputLib};
@@ -374,6 +392,10 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to link GPL pipeline."));
 		}
 		entry.pipeline = pipeline;
+		{
+			const std::string libName = std::string(desc.shaderVfsPath) + ".Linked";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(pipeline), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
+		}
 
 		return entry;
 	}
