@@ -142,7 +142,13 @@ namespace aether
 		if (enableAsyncCompute)
 		{
 			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
+			VulkanContext& vk = m_gpu->GetVulkanContext();
+			m_rendering->GetRenderGraph().EnableAsyncCompute(reinterpret_cast<void*>(vk.GetComputeQueue()), vk.GetComputeQueueFamily());
 		}
+
+		// Register lighting compute passes in the render graph (after async
+		// compute enable so they can be scheduled on the async compute queue).
+		m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
 
 		// -- 11. Animation systems -------------------------------------------
 		m_animationBlend = std::make_unique<AnimationBlendSystem>();
@@ -171,9 +177,7 @@ namespace aether
 		        [this]()
 		        {
 			        m_rendering->RecreateSwapchainResources(m_services);
-			        // UI render graph passes are cleared by the reset above;
-			        // eagerly re-register them so the lazy-check is skipped on
-			        // every subsequent Draw* call.
+			        m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
 			        if (auto* ui = m_services.TryGet<UIRenderer>())
 			        {
 				        ui->ReRegisterPass();
@@ -378,7 +382,7 @@ namespace aether
 		{
 			const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
 			const auto rmVal = m_frameIndex + 1;
-			m_gpu->SubmitAndPresent(0, 0, rmSem, rmVal);
+			m_gpu->SubmitAndPresent(0, 0, 0, 0, rmSem, rmVal);
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
@@ -411,23 +415,16 @@ namespace aether
 			const Camera* cam = m_cameras->GetCameraManager().TryGetMainCamera();
 			if (cam)
 			{
-				auto& asyncCompute = m_services.Get<AsyncComputeContext>();
-				if (asyncCompute.IsEnabled())
+				auto& lightingMgr = m_cameras->GetLightingManager();
+				const bool lightDataReady = lightingMgr.PrepareForRenderGraph(frameIdx, *cam, m_gpu->GetSwapchainExtent(), fc, packet.pointLights, packet.spotLights);
+
+				if (!lightDataReady)
 				{
-					asyncCompute.BeginFrame(*m_gpu, frameIdx);
-					gpu::CommandList lightingCmd = asyncCompute.GetCommandList(frameIdx);
-					m_cameras->GetLightingManager().UpdateForView(frameIdx, lightingCmd, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/true, packet.pointLights, packet.spotLights);
-					asyncCompute.EndCommandBuffer(frameIdx);
-					auto result = asyncCompute.Submit(*m_gpu, frameIdx);
-					m_asyncSubmitSemaphore = result.semaphoreHandle;
-					m_asyncSubmitTimeline = result.timelineValue;
+					m_rendering->GetFrameComposer().ApplyNoCameraLightingFallback(fc);
 				}
-				else
-				{
-					const TracyVkCtx vkCtx = m_gpu->GetVulkanContext().GetTracyVkCtx();
-					AE_PROFILE_GPU_ZONE_T(vkCtx, static_cast<VkCommandBuffer>(m_currentCmdList.GetCommandBuffer()), gpuLightingZone, "Lighting.UpdateForView");
-					m_cameras->GetLightingManager().UpdateForView(frameIdx, m_currentCmdList, *cam, m_gpu->GetSwapchainExtent(), fc, true, /*isAsyncCompute=*/false, packet.pointLights, packet.spotLights);
-				}
+
+				// Update render graph buffer handles for the current frame's lighting buffers.
+				lightingMgr.UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
 			}
 		}
 		else
@@ -461,14 +458,11 @@ namespace aether
 		const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
 		const auto rmVal = m_frameIndex + 1;
 
-		if (m_services.Get<AsyncComputeContext>().IsEnabled())
-		{
-			m_gpu->SubmitAndPresent(m_asyncSubmitSemaphore, m_asyncSubmitTimeline, rmSem, rmVal);
-		}
-		else
-		{
-			m_gpu->SubmitAndPresent(0, 0, rmSem, rmVal);
-		}
+		auto& renderGraph = m_rendering->GetRenderGraph();
+		const std::uint64_t graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : 0;
+		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
+
+		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, 0, 0, rmSem, rmVal);
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);

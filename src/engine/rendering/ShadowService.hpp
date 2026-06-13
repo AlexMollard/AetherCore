@@ -43,6 +43,9 @@ namespace aether
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, gpu::Format depthFormat);
+		void SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, gpu::Format depthFormat);
+		void RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass);
+		void RegisterGraphicsPasses(RenderGraph& graph);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
 
 		void ClearAllQueues()

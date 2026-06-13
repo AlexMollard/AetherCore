@@ -635,4 +635,143 @@ namespace aether
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);
 	}
+
+	void LightingManager::RegisterPasses(RenderGraph& graph)
+	{
+		EnsureComputePipeline();
+
+		// Register external buffer handles. Actual buffers are updated per-frame via UpdateBufferHandles.
+		m_rgLights = graph.RegisterBuffer(nullptr);
+		m_rgTileHeaders = graph.RegisterBuffer(nullptr);
+		m_rgTileIndices = graph.RegisterBuffer(nullptr);
+
+		const auto initResolved = gpu::ResourceRegistry::ResolvePipeline(m_initPipelineHandle);
+		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
+
+		graph.AddComputePass("$Lighting.InitTiles")
+		        .ReadBuffer(m_rgLights)
+		        .WriteBuffer(m_rgTileHeaders)
+		        .WriteBuffer(m_rgTileIndices)
+		        .ExecuteCompute(
+		                [this, initPipeline = initResolved.pipeline, initLayout = initResolved.layout](PassContext& ctx)
+		                {
+			                if (!m_lightDataReady)
+			                {
+				                return;
+			                }
+			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
+			                auto& frame = m_buffers[frameSlot];
+
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+
+			                // Host-write visibility barrier for the light data buffer.
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+
+			                cmd.BindComputePipeline(initPipeline, initLayout);
+
+			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lights.Get(), .offset = 0, .range = frame.lights.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeaders.Get(), .offset = 0, .range = frame.tileHeaders.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndices.Get(), .offset = 0, .range = frame.tileIndices.GetSize()};
+			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
+			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
+			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
+			                        {.dstBinding = 2, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &indexInfo},
+			                }};
+			                cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
+			                cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.Dispatch(m_lightTileGroups, 1, 1);
+		                });
+
+		graph.AddComputePass("$Lighting.BinLights")
+		        .ReadBuffer(m_rgLights)
+		        .ReadWriteBuffer(m_rgTileHeaders)
+		        .ReadWriteBuffer(m_rgTileIndices)
+		        .ExecuteCompute(
+		                [this, cullPipeline = cullResolved.pipeline, cullLayout = cullResolved.layout](PassContext& ctx)
+		                {
+			                if (!m_lightDataReady || m_lightLightGroups == 0)
+			                {
+				                return;
+			                }
+			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
+			                auto& frame = m_buffers[frameSlot];
+
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                cmd.BindComputePipeline(cullPipeline, cullLayout);
+
+			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lights.Get(), .offset = 0, .range = frame.lights.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeaders.Get(), .offset = 0, .range = frame.tileHeaders.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndices.Get(), .offset = 0, .range = frame.tileIndices.GetSize()};
+			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
+			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
+			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
+			                        {.dstBinding = 2, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &indexInfo},
+			                }};
+			                cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
+			                cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.Dispatch(m_lightLightGroups, 1, 1);
+		                });
+
+		m_rgPassesRegistered = true;
+	}
+
+	bool LightingManager::PrepareForRenderGraph(
+	        const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
+	{
+		if (extent.width == 0 || extent.height == 0)
+		{
+			DisableForView(fc);
+			m_lightDataReady = false;
+			return false;
+		}
+
+		std::vector<GpuLight> lights;
+		BuildLightList(lights, pointLights, spotLights);
+
+		if (lights.empty() && pointLights.empty() && spotLights.empty())
+		{
+			DisableForView(fc);
+			m_lightDataReady = false;
+			return false;
+		}
+
+		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
+		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
+		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
+		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
+
+		EnsureBuffers(frameSlot, lights.size(), tileCount, indexCount);
+		auto& frame = m_buffers[frameSlot];
+		if (!lights.empty())
+		{
+			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
+		}
+		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
+
+		EnsureComputePipeline();
+
+		const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
+		m_lightPush.viewProj = proj * camera.GetViewMatrix();
+		m_lightPush.params0 = glm::vec4(camera.GetNearPlane(), 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
+		m_lightPush.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
+		m_lightPush.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
+
+		m_lightTileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
+		m_lightLightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
+		m_lightDataReady = true;
+
+		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
+		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
+
+		return true;
+	}
+
+	void LightingManager::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot) const
+	{
+		auto& frame = m_buffers[frameSlot];
+		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(frame.lights.Get()));
+		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(frame.tileHeaders.Get()));
+		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(frame.tileIndices.Get()));
+	}
 } // namespace aether

@@ -89,15 +89,6 @@ namespace aether
 		return *this;
 	}
 
-	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadTextureCompute(RGImage image)
-	{
-		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
-		        .image = image,
-		        .type = ImageAccessType::SampledRead,
-		});
-		return *this;
-	}
-
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadStorageImage(RGImage image)
 	{
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
@@ -112,6 +103,33 @@ namespace aether
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::StorageWrite,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBuffer(RGBuffer buffer)
+	{
+		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
+		        .buffer = buffer,
+		        .type = BufferAccessType::StorageRead,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBuffer(RGBuffer buffer)
+	{
+		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
+		        .buffer = buffer,
+		        .type = BufferAccessType::StorageWrite,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadWriteBuffer(RGBuffer buffer)
+	{
+		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
+		        .buffer = buffer,
+		        .type = BufferAccessType::StorageReadWrite,
 		});
 		return *this;
 	}
@@ -135,6 +153,12 @@ namespace aether
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetQueueClass(QueueClass qc)
+	{
+		m_graph.m_passes[m_passIndex].queueClass = qc;
+		return *this;
+	}
+
 	// -- Pass management ------------------------------------------------------
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, [[maybe_unused]] std::source_location loc)
@@ -154,6 +178,20 @@ namespace aether
 		PassRecord rec{};
 		rec.name = std::move(name);
 		rec.kind = PassKind::Compute;
+#ifndef NDEBUG
+		rec.declaredAt = loc;
+#endif
+		m_passes.push_back(std::move(rec));
+		m_compileDirty = true;
+		return PassBuilder{*this, m_passes.size() - 1};
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddAsyncComputePass(std::string name, [[maybe_unused]] std::source_location loc)
+	{
+		PassRecord rec{};
+		rec.name = std::move(name);
+		rec.kind = PassKind::Compute;
+		rec.queueClass = QueueClass::AsyncCompute;
 #ifndef NDEBUG
 		rec.declaredAt = loc;
 #endif
@@ -213,10 +251,43 @@ namespace aether
 			        .name = pass.name,
 			        .isGraphics = pass.kind == PassKind::Graphics,
 			        .isCompute = pass.kind == PassKind::Compute,
+			        .isAsyncCompute = pass.queueClass == QueueClass::AsyncCompute,
 			        .lastCpuTimeMs = pass.lastCpuTimeMs,
 			});
 		}
 		return result;
+	}
+
+	void RenderGraph::EnableAsyncCompute(void* computeQueue, std::uint32_t computeQueueFamily)
+	{
+		m_storage->EnableAsyncCompute(static_cast<VkQueue>(computeQueue), computeQueueFamily);
+		m_asyncComputeEnabled = true;
+	}
+
+	bool RenderGraph::HasAsyncComputeWork() const
+	{
+		if (!m_asyncComputeEnabled)
+		{
+			return false;
+		}
+		for (const auto& cp: m_compiled)
+		{
+			if (cp.queueClass == QueueClass::AsyncCompute)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	std::uint64_t RenderGraph::GetComputeTimelineSemaphore() const
+	{
+		return m_storage->GetCrossQueueTimelineSemaphore();
+	}
+
+	std::uint64_t RenderGraph::GetComputeTimelineValue() const
+	{
+		return m_storage->GetCrossQueueTimelineValue();
 	}
 
 	// -- Image registration ---------------------------------------------------
@@ -235,6 +306,28 @@ namespace aether
 		};
 		const uint32_t id = kFirstExternalId + idx;
 		return RGImage{id};
+	}
+
+	RGBuffer RenderGraph::RegisterBuffer(void* buffer)
+	{
+		const uint32_t idx = m_storage->RegisterExternalBuffer(static_cast<VkBuffer>(buffer));
+		if (idx >= m_externalBuffers.size())
+		{
+			m_externalBuffers.resize(idx + 1, nullptr);
+		}
+		m_externalBuffers[idx] = buffer;
+		const uint32_t id = kFirstExternalId + idx;
+		return RGBuffer{id};
+	}
+
+	void RenderGraph::UpdateExternalBuffer(RGBuffer buffer, void* newBuffer)
+	{
+		const uint32_t idx = ExternalIndex(buffer.id);
+		m_storage->UpdateExternalBuffer(idx, static_cast<VkBuffer>(newBuffer));
+		if (idx < m_externalBuffers.size())
+		{
+			m_externalBuffers[idx] = newBuffer;
+		}
 	}
 
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
@@ -353,6 +446,13 @@ namespace aether
 					return true;
 				}
 			}
+			for (const BufferAccessRef& a: m_passes[idx].bufferAccesses)
+			{
+				if (a.buffer.id == resId && a.type == BufferAccessType::StorageWrite)
+				{
+					return true;
+				}
+			}
 			return false;
 		};
 
@@ -365,6 +465,13 @@ namespace aether
 			for (const ImageAccessRef& r: m_passes[idx].imageAccesses)
 			{
 				if (r.image.id == resId)
+				{
+					return true;
+				}
+			}
+			for (const BufferAccessRef& r: m_passes[idx].bufferAccesses)
+			{
+				if (r.buffer.id == resId)
 				{
 					return true;
 				}
@@ -394,6 +501,17 @@ namespace aether
 					for (const ImageAccessRef& ia: m_passes[i].imageAccesses)
 					{
 						if (ia.type == ImageAccessType::StorageWrite && passAccesses(j, ia.image.id))
+						{
+							dependent = true;
+							break;
+						}
+					}
+				}
+				if (!dependent)
+				{
+					for (const BufferAccessRef& ba: m_passes[i].bufferAccesses)
+					{
+						if (ba.type == BufferAccessType::StorageWrite && passAccesses(j, ba.buffer.id))
 						{
 							dependent = true;
 							break;
@@ -525,6 +643,13 @@ namespace aether
 						writeTargets.push_back(ia.image.id);
 					}
 				}
+				for (const BufferAccessRef& ba: pass.bufferAccesses)
+				{
+					if (ba.type == BufferAccessType::StorageWrite)
+					{
+						writeTargets.push_back(ba.buffer.id);
+					}
+				}
 
 				// No tracked image writes → can't prove no side effects (buffers, external state)
 				if (writeTargets.empty())
@@ -593,6 +718,51 @@ namespace aether
 			}
 		}
 
+		// Auto-detect async compute eligibility: when async compute is enabled,
+		// any compute pass without color/depth attachments is eligible for the
+		// async compute queue unless explicitly set to Graphics. Passes that end
+		// up interleaved with graphics passes will be demoted by the grouping
+		// validation below.
+		if (m_asyncComputeEnabled)
+		{
+			for (auto& pass: m_passes)
+			{
+				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value())
+				{
+					pass.queueClass = QueueClass::AsyncCompute;
+				}
+			}
+		}
+
+		// Validate queue grouping: all async-compute passes must come before
+		// all graphics passes in topological order. Interleaving would require
+		// multiple submissions per queue per frame, which we intentionally avoid.
+		{
+			bool seenGraphics = false;
+			for (const std::size_t idx: sortedIndices)
+			{
+				if (passCulledByPassIdx[idx])
+				{
+					continue;
+				}
+				const auto qc = m_passes[idx].queueClass;
+				if (qc == QueueClass::Graphics)
+				{
+					seenGraphics = true;
+				}
+				else if (qc == QueueClass::AsyncCompute && seenGraphics)
+				{
+					AE_WARN(LogCategory::Engine,
+					        "RenderGraph: async-compute pass '{}' appears after a graphics pass. "
+					        "All async-compute passes must be declared before graphics passes for "
+					        "single-submission-per-queue scheduling. Falling back to graphics queue.",
+					        m_passes[idx].name);
+					// Demote to graphics queue to maintain correctness.
+					m_passes[idx].queueClass = QueueClass::Graphics;
+				}
+			}
+		}
+
 		std::unordered_map<uint32_t, ResourceState> states;
 		for (const auto& [id, s]: m_lastImageStates)
 		{
@@ -619,6 +789,13 @@ namespace aether
 		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT),
 		};
 
+		// Restore buffer state from the previous frame.
+		std::unordered_map<uint32_t, BufferState> bufferStates;
+		for (const auto& [id, s]: m_lastBufferStates)
+		{
+			bufferStates[id] = s;
+		}
+
 		for (const std::size_t idx: sortedIndices)
 		{
 			if (passCulledByPassIdx[idx])
@@ -629,6 +806,7 @@ namespace aether
 			const PassRecord& pass = m_passes[idx];
 			CompiledPass cp;
 			cp.passIndex = idx;
+			cp.queueClass = pass.queueClass;
 
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
@@ -852,10 +1030,72 @@ namespace aether
 				}
 			}
 
+			// -- Buffer barrier compilation ---------------------------------
+			for (const BufferAccessRef& r: pass.bufferAccesses)
+			{
+				const uint32_t resId = r.buffer.id;
+
+				const bool isComputePass = (pass.kind == PassKind::Compute);
+				constexpr std::uint64_t kComputeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				constexpr std::uint64_t kGraphicsStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+				constexpr std::uint64_t kStorageRead = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+				constexpr std::uint64_t kStorageWrite = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+
+				const std::uint64_t dstStage = isComputePass ? kComputeStage : kGraphicsStage;
+				const bool isRead = (r.type == BufferAccessType::StorageRead);
+				const bool isReadWrite = (r.type == BufferAccessType::StorageReadWrite);
+				const std::uint64_t dstAccess = isRead ? kStorageRead : kStorageWrite;
+
+				auto it = bufferStates.find(resId);
+
+				// RAR: already in a read-only state → no barrier
+				if (isRead && it != bufferStates.end() && it->second.writeStage == 0)
+				{
+					it->second.readStages |= dstStage;
+					continue;
+				}
+
+				std::uint64_t srcStage;
+				std::uint64_t srcAccess;
+				bool isWAR = false;
+
+				if (it != bufferStates.end())
+				{
+					const BufferState& s = it->second;
+					isWAR = (s.writeStage == 0 && s.readStages != 0);
+					srcStage = isWAR ? s.readStages : s.writeStage;
+					srcAccess = isWAR ? 0u : s.writeAccess;
+				}
+				else
+				{
+					srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+					srcAccess = 0;
+				}
+
+				cp.bufferBarriers.push_back({
+				        .resourceId = resId,
+				        .srcStage = srcStage,
+				        .srcAccess = srcAccess,
+				        .dstStage = dstStage,
+				        .dstAccess = dstAccess,
+				        .isWAR = isWAR,
+				});
+
+				if (isRead && !isReadWrite)
+				{
+					bufferStates[resId] = {.writeStage = 0, .writeAccess = 0, .readStages = dstStage};
+				}
+				else
+				{
+					bufferStates[resId] = {.writeStage = dstStage, .writeAccess = dstAccess, .readStages = 0};
+				}
+			}
+
 			m_compiled.push_back(std::move(cp));
 		}
 
 		std::swap(m_lastImageStates, states);
+		std::swap(m_lastBufferStates, bufferStates);
 
 		// -- Split barrier post-processing ---------------------------------
 		// Build a map: resource -> last compiled-pass index that wrote it.
@@ -912,6 +1152,14 @@ namespace aether
 				}
 
 				const std::size_t producerCi = lwIt->second;
+
+				// Split barriers (VkEvent) cannot cross queue boundaries.
+				// Timeline semaphores handle cross-queue sync at submission level.
+				if (m_compiled[producerCi].queueClass != m_compiled[ci].queueClass)
+				{
+					unsplittable.push_back(b);
+					continue;
+				}
 
 				// Adjacent passes gain nothing from the event overhead.
 				if (producerCi + 1 >= ci)
@@ -1075,8 +1323,6 @@ namespace aether
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
-		gpu::CommandList& recorder = cmdList;
-		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
 		// Image resolution helper shared by pre-, wait-, and signal-barriers.
@@ -1098,7 +1344,14 @@ namespace aether
 			return m_storage->GetExternalImage(extIdx);
 		};
 
-		for (const CompiledPass& cp: m_compiled)
+		auto resolveBuffer = [&](uint32_t resourceId) -> VkBuffer
+		{
+			const uint32_t extIdx = ExternalIndex(resourceId);
+			return m_storage->GetExternalBuffer(extIdx);
+		};
+
+		// Execute a single compiled pass on the given command list + VkCommandBuffer.
+		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, VkCommandBuffer vkCmd)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
@@ -1195,6 +1448,30 @@ namespace aether
 			}
 			vkutil::TransitionImages(vkCmd, scratchBarriers.data(), static_cast<uint32_t>(scratchBarriers.size()));
 
+			// -- Buffer barriers --------------------------------------------
+			auto& scratchBufBars = m_storage->GetScratchBufferBarriers();
+			scratchBufBars.clear();
+			for (const CompiledBufferBarrier& b: cp.bufferBarriers)
+			{
+				VkBuffer buffer = resolveBuffer(b.resourceId);
+				if (buffer == VK_NULL_HANDLE)
+				{
+					continue;
+				}
+
+				scratchBufBars.push_back({
+				        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+				        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
+				        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
+				        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
+				        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
+				        .buffer = buffer,
+				        .offset = 0,
+				        .size = VK_WHOLE_SIZE,
+				});
+			}
+			m_storage->CmdBufferBarriers(vkCmd, scratchBufBars.data(), static_cast<uint32_t>(scratchBufBars.size()));
+
 			// -- Dynamic rendering -------------------------------------------
 			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
@@ -1266,7 +1543,7 @@ namespace aether
 				        .pColorAttachments = scratchColorInfos.data(),
 				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
 				};
-				cmdList.BeginRendering(&renderInfo);
+				recorder.BeginRendering(&renderInfo);
 
 				const gpu::Viewport viewport{
 				        .x = 0.0f,
@@ -1282,8 +1559,8 @@ namespace aether
 				        .width = passExtent.width,
 				        .height = passExtent.height,
 				};
-				cmdList.SetViewport(viewport);
-				cmdList.SetScissor(scissor);
+				recorder.SetViewport(viewport);
+				recorder.SetScissor(scissor);
 			}
 
 			if (pass.execute)
@@ -1298,7 +1575,7 @@ namespace aether
 
 			if (useDynamicRendering)
 			{
-				cmdList.EndRendering();
+				recorder.EndRendering();
 			}
 
 			// -- Split barrier signals (set events for later consumers) --------
@@ -1344,6 +1621,57 @@ namespace aether
 			}
 
 			recorder.EndDebugLabel();
+		};
+
+		const bool hasAsyncCompute = HasAsyncComputeWork();
+
+		// Phase 1: Execute async-compute passes on the dedicated compute queue.
+		if (hasAsyncCompute)
+		{
+			m_storage->BeginComputeCommandBuffer(frameIndex);
+			VkCommandBuffer computeVkCmd = m_storage->GetComputeCommandBuffer(frameIndex);
+			gpu::CommandList computeRecorder(reinterpret_cast<void*>(computeVkCmd));
+			computeRecorder.BeginDebugLabel("Frame.RenderGraph.AsyncCompute", 0.90f, 0.45f, 0.10f, 1.0f);
+
+			for (const CompiledPass& cp: m_compiled)
+			{
+				if (cp.queueClass != QueueClass::AsyncCompute)
+				{
+					break; // validated: all async-compute passes precede graphics
+				}
+				executePassOn(cp, computeRecorder, computeVkCmd);
+			}
+
+			computeRecorder.EndDebugLabel();
+			m_storage->EndComputeCommandBuffer(frameIndex);
+			m_storage->SubmitComputeQueue(frameIndex);
+		}
+
+		// Phase 2: Execute graphics passes on the main graphics command list.
+		{
+			gpu::CommandList& gfxRecorder = cmdList;
+			VkCommandBuffer gfxVkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
+			gfxRecorder.BeginDebugLabel("Frame.RenderGraph.Graphics", 0.35f, 0.55f, 0.95f, 1.0f);
+
+			bool foundGraphics = false;
+			for (const CompiledPass& cp: m_compiled)
+			{
+				if (cp.queueClass == QueueClass::AsyncCompute)
+				{
+					continue; // skip async-compute passes (already executed)
+				}
+				foundGraphics = true;
+				executePassOn(cp, gfxRecorder, gfxVkCmd);
+			}
+
+			gfxRecorder.EndDebugLabel();
+
+			// Tracy GPU collection only from the graphics command buffer
+			// since it's the one that gets submitted via SubmitAndPresent.
+			if (foundGraphics)
+			{
+				AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, gfxVkCmd);
+			}
 		}
 
 		// Transient heap trace logging.
@@ -1358,7 +1686,5 @@ namespace aether
 		        stats.aliasedBufferCount,
 		        stats.transientCacheHit,
 		        stats.cacheSize);
-
-		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
 	}
 } // namespace aether

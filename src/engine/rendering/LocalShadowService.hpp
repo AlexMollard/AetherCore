@@ -75,6 +75,9 @@ namespace aether
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, gpu::Format depthFormat);
+		void SetupPassResources(RenderGraph& graph, gpu::Format depthFormat);
+		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
+		void RegisterGraphicsPasses(RenderGraph& graph);
 
 		[[nodiscard]] RGImage GetAtlasRGImage() const
 		{
@@ -111,6 +114,7 @@ namespace aether
 		RenderQueue m_shadowRenderQueue;
 		GraphicsPipeline m_shadowPipeline;
 		RGImage m_atlasImage{};
+		RGImage m_atlasDepthImage{};
 		std::uint32_t m_atlasBindlessSlot = 0xFFFFFFFFu;
 
 		// Per-light shadow data (CPU side, rebuilt each frame).

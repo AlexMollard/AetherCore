@@ -134,16 +134,31 @@ namespace aether
 		AE_INFO(LogCategory::Engine, "Swapchain recreated.");
 	}
 
-	void GpuDevice::SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue, std::uint64_t rootMotionSignalSemaphore, std::uint64_t rootMotionSignalValue)
+	void GpuDevice::SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle,
+	        std::uint64_t asyncComputeTimelineValue,
+	        std::uint64_t asyncComputeSemaphoreHandle2,
+	        std::uint64_t asyncComputeTimelineValue2,
+	        std::uint64_t rootMotionSignalSemaphore,
+	        std::uint64_t rootMotionSignalValue)
 	{
 		AE_PROFILE_ZONE();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 
 		VkSemaphore computeFinished = asyncComputeSemaphoreHandle ? reinterpret_cast<VkSemaphore>(asyncComputeSemaphoreHandle) : VK_NULL_HANDLE;
+		VkSemaphore computeFinished2 = asyncComputeSemaphoreHandle2 ? reinterpret_cast<VkSemaphore>(asyncComputeSemaphoreHandle2) : VK_NULL_HANDLE;
 		VkSemaphore rmSignal = rootMotionSignalSemaphore ? reinterpret_cast<VkSemaphore>(rootMotionSignalSemaphore) : VK_NULL_HANDLE;
 
-		swapchain.EndFrame(vk.GetGraphicsQueue(), vk.GetPresentQueue(), computeFinished, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, asyncComputeTimelineValue, rmSignal, rootMotionSignalValue);
+		swapchain.EndFrame(vk.GetGraphicsQueue(),
+		        vk.GetPresentQueue(),
+		        computeFinished,
+		        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+		        asyncComputeTimelineValue,
+		        computeFinished2,
+		        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+		        asyncComputeTimelineValue2,
+		        rmSignal,
+		        rootMotionSignalValue);
 	}
 
 	gpu::CommandList GpuDevice::GetCurrentCommandList() const

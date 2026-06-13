@@ -52,7 +52,12 @@ namespace aether
 
 		void BeginSwapchainFrame();
 		void RecreateSwapchain(class Window& window, bool enableVsync);
-		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0, std::uint64_t asyncComputeTimelineValue = 0, std::uint64_t rootMotionSignalSemaphore = 0, std::uint64_t rootMotionSignalValue = 0);
+		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0,
+		        std::uint64_t asyncComputeTimelineValue = 0,
+		        std::uint64_t asyncComputeSemaphoreHandle2 = 0,
+		        std::uint64_t asyncComputeTimelineValue2 = 0,
+		        std::uint64_t rootMotionSignalSemaphore = 0,
+		        std::uint64_t rootMotionSignalValue = 0);
 
 		[[nodiscard]] gpu::CommandList GetCurrentCommandList() const;
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;

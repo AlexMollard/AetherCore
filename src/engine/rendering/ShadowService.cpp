@@ -93,9 +93,22 @@ namespace aether
 
 	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, gpu::Format depthFormat)
 	{
-		AE_PROFILE_ZONE();
+		SetupPassResources(graph, bindlessManager, device, depthFormat);
+		RegisterComputePasses(graph, cullPass);
+		RegisterGraphicsPasses(graph);
+	}
 
-		// -- Multi-frustum cull pass (replaces 3x per-cascade cull dispatches) --
+	void ShadowService::SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, gpu::Format depthFormat)
+	{
+		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
+		{
+			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
+			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, static_cast<void*>(device));
+		}
+	}
+
+	void ShadowService::RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass)
+	{
 		graph.AddComputePass("$CullDraws_Shadow")
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
@@ -109,13 +122,12 @@ namespace aether
 			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
 		                });
+	}
 
-		// -- Per-cascade depth passes (read from each cascade's output region) --
+	void ShadowService::RegisterGraphicsPasses(RenderGraph& graph)
+	{
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
-			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, static_cast<void*>(device));
-
 			const std::string idx = std::to_string(cascade);
 			graph.AddPass("$DirectionalShadow_C" + idx)
 			        .WriteDepth(m_shadowDepth[cascade], gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))

@@ -30,11 +30,16 @@ namespace aether
 
 		// Transitions to present layout, ends command buffer, submits, and
 		// presents. No-op if !IsFrameValid().
+		// Up to two extra wait timeline semaphores are supported; pass
+		// VK_NULL_HANDLE for unused slots.
 		void EndFrame(VkQueue graphicsQueue,
 		        VkQueue presentQueue,
 		        VkSemaphore extraWaitSemaphore = VK_NULL_HANDLE,
 		        VkPipelineStageFlags2 extraWaitStage = VK_PIPELINE_STAGE_2_NONE,
 		        std::uint64_t extraWaitValue = 0,
+		        VkSemaphore extraWaitSemaphore2 = VK_NULL_HANDLE,
+		        VkPipelineStageFlags2 extraWaitStage2 = VK_PIPELINE_STAGE_2_NONE,
+		        std::uint64_t extraWaitValue2 = 0,
 		        VkSemaphore extraSignalSemaphore = VK_NULL_HANDLE,
 		        std::uint64_t extraSignalValue = 0);
 

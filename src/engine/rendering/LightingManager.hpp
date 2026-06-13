@@ -14,11 +14,15 @@
 #include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/RenderGraph.hpp"
 #include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
+	class RenderGraph;
+	struct RGBuffer;
+
 	class LightingManager
 	{
 	public:
@@ -57,6 +61,20 @@ namespace aether
 		// The layout pointer is the raw VkPipelineLayout (kept as void* so the
 		// engine-facing signature doesn't expose Vk*).
 		void PushLightingDescriptor(gpu::CommandList& cmd, void* layout, std::uint32_t frameSlot) const;
+
+		// Register lighting compute passes (InitTiles + BinLights) in the render
+		// graph. Must be called after Initialize() and before the first frame.
+		// Passes run on the async compute queue when available.
+		void RegisterPasses(RenderGraph& graph);
+
+		// Prepare light data for the render graph passes. Builds the light list,
+		// ensures GPU buffers, copies data, and stores per-frame push constants.
+		// Call before RenderGraph::Execute() each frame.
+		// Returns true if lighting should run (lights exist).
+		[[nodiscard]] bool PrepareForRenderGraph(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
+
+		// Update the render graph's external buffer handles for the current frame.
+		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot) const;
 
 		void UpdateForView(std::uint32_t frameSlot,
 		        gpu::CommandList& cmd,
@@ -107,6 +125,16 @@ namespace aether
 		void UpdateForViewGpu(std::uint32_t frameSlot, gpu::CommandList& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void DisableForView(FrameConstants& fc) const;
 
+		// Per-frame push constants for the lighting compute passes (filled by
+		// PrepareForRenderGraph, consumed by the render graph pass callback).
+		struct LightingComputePush
+		{
+			glm::mat4 viewProj{1.0f};
+			glm::vec4 params0{0.0f};
+			glm::uvec4 params1{0u};
+			glm::uvec4 params2{0u};
+		};
+
 		const VulkanContext* m_context = nullptr;
 		const Renderer* m_renderer = nullptr;
 		GpuDevice* m_device = nullptr;
@@ -116,7 +144,17 @@ namespace aether
 		mutable gpu::PipelineHandle m_cullPipelineHandle;
 		mutable std::array<FrameLightingBuffers, kMaxFramesInFlight> m_buffers;
 		bool m_rttBinningEnabled = false;
-		bool m_gpuBinningEnabled = true;
+		bool m_gpuBinningEnabled = false;
+
+		// Render graph integration state.
+		mutable LightingComputePush m_lightPush; // set by PrepareForRenderGraph
+		mutable uint32_t m_lightTileGroups = 0;  // dispatch group count
+		mutable uint32_t m_lightLightGroups = 0; // dispatch group count
+		mutable bool m_lightDataReady = false;   // true when PrepareForRenderGraph was called this frame
+		RGBuffer m_rgLights{};                   // render graph handle for lights buffer
+		RGBuffer m_rgTileHeaders{};              // render graph handle for tile headers buffer
+		RGBuffer m_rgTileIndices{};              // render graph handle for tile indices buffer
+		bool m_rgPassesRegistered = false;       // true after RegisterPasses() called
 		std::uint32_t m_maxLightsPerTile = 128;
 		static constexpr std::uint32_t kTileSizePx = 16;
 	};

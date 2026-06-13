@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -46,6 +47,51 @@ namespace aether
 		void Shutdown();
 		void BeginFrame(std::uint32_t frameIndex);
 
+		// -- Async compute multi-queue support -------------------------------
+		// Call once after Initialize() when a dedicated compute queue is
+		// available. Creates per-frame compute command pools/buffers/fences
+		// and a cross-queue timeline semaphore.
+		void EnableAsyncCompute(VkQueue computeQueue, std::uint32_t computeQueueFamily);
+
+		// Begin recording async compute passes. Must be called before any
+		// compute-queue pass executes. Signals the per-frame fence from the
+		// previous frame, resets it, resets the command pool, and begins the
+		// command buffer with ONE_TIME_SUBMIT_BIT.
+		void BeginComputeCommandBuffer(std::uint32_t frameIndex);
+
+		// Returns the VkCommandBuffer for async compute passes (valid after
+		// BeginComputeCommandBuffer).
+		[[nodiscard]] VkCommandBuffer GetComputeCommandBuffer(std::uint32_t frameIndex) const;
+
+		// Ends the async compute command buffer.
+		void EndComputeCommandBuffer(std::uint32_t frameIndex);
+
+		// Submits the compute command buffer to the dedicated compute queue.
+		// Signals m_crossQueueTimeline at the next timeline value (m_crossQueueTimelineValue + 1).
+		// The caller passes the returned semaphore + value to the graphics
+		// queue submission as a wait.
+		void SubmitComputeQueue(std::uint32_t frameIndex);
+
+		// Timeline semaphore handle (reinterpret_cast to VkSemaphore) and
+		// current signal value. Valid after SubmitComputeQueue() when
+		// async compute is enabled.
+		[[nodiscard]] std::uint64_t GetCrossQueueTimelineSemaphore() const
+		{
+			return reinterpret_cast<std::uint64_t>(m_crossQueueTimeline);
+		}
+
+		[[nodiscard]] std::uint64_t GetCrossQueueTimelineValue() const
+		{
+			return m_crossQueueTimelineValue;
+		}
+
+		[[nodiscard]] bool IsAsyncComputeEnabled() const
+		{
+			return m_asyncComputeEnabled;
+		}
+
+		void ShutdownComputeResources();
+
 		// -- External images ------------------------------------------------
 		uint32_t RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect);
 		[[nodiscard]] VkImage GetExternalImage(uint32_t idx) const;
@@ -57,6 +103,17 @@ namespace aether
 		[[nodiscard]] std::size_t GetExternalImageCount() const
 		{
 			return m_externalImages.size();
+		}
+
+		// -- External buffers ------------------------------------------------
+		uint32_t RegisterExternalBuffer(VkBuffer buffer);
+		void UpdateExternalBuffer(uint32_t idx, VkBuffer buffer);
+		[[nodiscard]] VkBuffer GetExternalBuffer(uint32_t idx) const;
+		void ReleaseExternalBuffer(uint32_t idx);
+
+		[[nodiscard]] std::size_t GetExternalBufferCount() const
+		{
+			return m_externalBuffers.size();
 		}
 
 		// -- Transient image slots ------------------------------------------
@@ -138,6 +195,9 @@ namespace aether
 		void CmdSetEvent2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
 		void CmdWaitEvents2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
 
+		// Emit buffer memory barriers via vkCmdPipelineBarrier2.
+		void CmdBufferBarriers(VkCommandBuffer cmd, const VkBufferMemoryBarrier2* barriers, uint32_t count);
+
 		// -- Scratch (reused across Execute calls) --------------------------
 		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
 		{
@@ -152,6 +212,11 @@ namespace aether
 		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchSignalBarriers()
 		{
 			return m_scratchSignalBarriers;
+		}
+
+		[[nodiscard]] std::vector<VkBufferMemoryBarrier2>& GetScratchBufferBarriers()
+		{
+			return m_scratchBufferBarriers;
 		}
 
 	private:
@@ -259,6 +324,8 @@ namespace aether
 
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<std::uint32_t> m_freeExternalSlots;
+		std::vector<VkBuffer> m_externalBuffers;
+		std::vector<std::uint32_t> m_freeExternalBufferSlots;
 		std::vector<TransientImageEntry> m_transientImages;
 		std::vector<std::uint32_t> m_freeTransientSlots;
 		std::vector<TransientBufferEntry> m_transientBuffers;
@@ -272,6 +339,7 @@ namespace aether
 		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
 		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
 		std::vector<VkImageMemoryBarrier2> m_scratchSignalBarriers;
+		std::vector<VkBufferMemoryBarrier2> m_scratchBufferBarriers;
 
 		// Event pool for split barriers.
 		std::vector<VkEvent> m_events;
@@ -284,6 +352,21 @@ namespace aether
 
 		// Per-frame allocation statistics (populated during Execute).
 		FrameStats m_lastFrameStats;
+
+		// -- Async compute multi-queue state ---------------------------------
+		struct ComputeFrameResources
+		{
+			VkCommandPool commandPool = VK_NULL_HANDLE;
+			VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+			VkFence fence = VK_NULL_HANDLE;
+		};
+
+		std::array<ComputeFrameResources, kMaxFramesInFlight> m_computeFrames{};
+		VkQueue m_computeQueue = VK_NULL_HANDLE;
+		std::uint32_t m_computeQueueFamily = 0;
+		VkSemaphore m_crossQueueTimeline = VK_NULL_HANDLE;
+		std::uint64_t m_crossQueueTimelineValue = 0;
+		bool m_asyncComputeEnabled = false;
 
 #ifndef NDEBUG
 		// Debug-only layout oracle: tracks last-known layout for every image

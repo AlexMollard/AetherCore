@@ -25,6 +25,8 @@ namespace aether
 
 	void RenderGraphStorage::Shutdown()
 	{
+		ShutdownComputeResources();
+
 		for (auto& entry: m_transientImages)
 		{
 			entry.image.Reset();
@@ -74,6 +76,177 @@ namespace aether
 
 		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
+	}
+
+	void RenderGraphStorage::EnableAsyncCompute(VkQueue computeQueue, std::uint32_t computeQueueFamily)
+	{
+		AE_ASSERT_ALWAYS(m_device != VK_NULL_HANDLE, "RenderGraphStorage: Initialize() must be called before EnableAsyncCompute().");
+		AE_ASSERT_ALWAYS(computeQueue != VK_NULL_HANDLE, "RenderGraphStorage: computeQueue must be valid.");
+
+		m_computeQueue = computeQueue;
+		m_computeQueueFamily = computeQueueFamily;
+
+		const VkSemaphoreTypeCreateInfo timelineTypeInfo{
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+		        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		        .initialValue = 0,
+		};
+		const VkSemaphoreCreateInfo semInfo{
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		        .pNext = &timelineTypeInfo,
+		};
+		if (vkCreateSemaphore(m_device, &semInfo, nullptr, &m_crossQueueTimeline) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to create cross-queue timeline semaphore."));
+		}
+		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_crossQueueTimeline), VK_OBJECT_TYPE_SEMAPHORE, "RenderGraph.CrossQueueTimeline");
+
+		VkFenceCreateInfo fenceInfo{};
+		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+		fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+		for (std::size_t frameI = 0; frameI < m_computeFrames.size(); ++frameI)
+		{
+			auto& frame = m_computeFrames[frameI];
+
+			const VkCommandPoolCreateInfo poolInfo{
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+			        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			        .queueFamilyIndex = m_computeQueueFamily,
+			};
+			if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to create async compute command pool."));
+			}
+
+			const VkCommandBufferAllocateInfo allocInfo{
+			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+			        .commandPool = frame.commandPool,
+			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+			        .commandBufferCount = 1,
+			};
+			if (vkAllocateCommandBuffers(m_device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to allocate async compute command buffer."));
+			}
+
+			if (vkCreateFence(m_device, &fenceInfo, nullptr, &frame.fence) != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to create async compute fence."));
+			}
+
+			const std::string suffix = "[" + std::to_string(frameI) + "]";
+			vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(frame.commandBuffer), VK_OBJECT_TYPE_COMMAND_BUFFER, ("RenderGraph.AsyncCompute.Cmd" + suffix).c_str());
+			vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(frame.fence), VK_OBJECT_TYPE_FENCE, ("RenderGraph.AsyncCompute.Fence" + suffix).c_str());
+		}
+
+		m_asyncComputeEnabled = true;
+	}
+
+	void RenderGraphStorage::BeginComputeCommandBuffer(std::uint32_t frameIndex)
+	{
+		AE_ASSERT(m_asyncComputeEnabled, "RenderGraphStorage: async compute not enabled.");
+		auto& frame = m_computeFrames[frameIndex % kMaxFramesInFlight];
+
+		if (vkWaitForFences(m_device, 1, &frame.fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to wait for compute fence."));
+		}
+		if (vkResetFences(m_device, 1, &frame.fence) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to reset compute fence."));
+		}
+		if (vkResetCommandPool(m_device, frame.commandPool, 0) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to reset compute command pool."));
+		}
+
+		const VkCommandBufferBeginInfo beginInfo{
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+		};
+		if (vkBeginCommandBuffer(frame.commandBuffer, &beginInfo) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to begin compute command buffer."));
+		}
+	}
+
+	VkCommandBuffer RenderGraphStorage::GetComputeCommandBuffer(std::uint32_t frameIndex) const
+	{
+		return m_computeFrames[frameIndex % kMaxFramesInFlight].commandBuffer;
+	}
+
+	void RenderGraphStorage::EndComputeCommandBuffer(std::uint32_t frameIndex)
+	{
+		VkCommandBuffer cmd = m_computeFrames[frameIndex % kMaxFramesInFlight].commandBuffer;
+		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to end compute command buffer."));
+		}
+	}
+
+	void RenderGraphStorage::SubmitComputeQueue(std::uint32_t frameIndex)
+	{
+		AE_ASSERT(m_asyncComputeEnabled, "RenderGraphStorage: async compute not enabled.");
+		auto& frame = m_computeFrames[frameIndex % kMaxFramesInFlight];
+		const std::uint64_t signalValue = ++m_crossQueueTimelineValue;
+
+		const VkCommandBufferSubmitInfo cmdInfo{
+		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+		        .commandBuffer = frame.commandBuffer,
+		};
+
+		const VkSemaphoreSubmitInfo signalInfo{
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = m_crossQueueTimeline,
+		        .value = signalValue,
+		        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		};
+
+		const VkSubmitInfo2 submitInfo{
+		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+		        .commandBufferInfoCount = 1,
+		        .pCommandBufferInfos = &cmdInfo,
+		        .signalSemaphoreInfoCount = 1,
+		        .pSignalSemaphoreInfos = &signalInfo,
+		};
+
+		if (vkQueueSubmit2(m_computeQueue, 1, &submitInfo, frame.fence) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to submit compute queue."));
+		}
+	}
+
+	void RenderGraphStorage::ShutdownComputeResources()
+	{
+		if (!m_asyncComputeEnabled)
+		{
+			return;
+		}
+
+		for (auto& frame: m_computeFrames)
+		{
+			if (frame.fence != VK_NULL_HANDLE)
+			{
+				vkDestroyFence(m_device, frame.fence, nullptr);
+				frame.fence = VK_NULL_HANDLE;
+			}
+			if (frame.commandPool != VK_NULL_HANDLE)
+			{
+				vkDestroyCommandPool(m_device, frame.commandPool, nullptr);
+				frame.commandPool = VK_NULL_HANDLE;
+				frame.commandBuffer = VK_NULL_HANDLE;
+			}
+		}
+
+		if (m_crossQueueTimeline != VK_NULL_HANDLE)
+		{
+			vkDestroySemaphore(m_device, m_crossQueueTimeline, nullptr);
+			m_crossQueueTimeline = VK_NULL_HANDLE;
+		}
+
+		m_crossQueueTimelineValue = 0;
+		m_asyncComputeEnabled = false;
 	}
 
 	void RenderGraphStorage::BeginFrame(std::uint32_t frameIndex)
@@ -156,6 +329,49 @@ namespace aether
 #endif
 		m_externalImages.clear();
 		m_freeExternalSlots.clear();
+	}
+
+	// -- External buffers -----------------------------------------------------
+
+	uint32_t RenderGraphStorage::RegisterExternalBuffer(VkBuffer buffer)
+	{
+		if (!m_freeExternalBufferSlots.empty())
+		{
+			const uint32_t idx = m_freeExternalBufferSlots.back();
+			m_freeExternalBufferSlots.pop_back();
+			m_externalBuffers[idx] = buffer;
+			return idx;
+		}
+		const uint32_t idx = static_cast<uint32_t>(m_externalBuffers.size());
+		m_externalBuffers.push_back(buffer);
+		return idx;
+	}
+
+	void RenderGraphStorage::UpdateExternalBuffer(uint32_t idx, VkBuffer buffer)
+	{
+		if (idx >= m_externalBuffers.size())
+		{
+			m_externalBuffers.resize(idx + 1, VK_NULL_HANDLE);
+		}
+		m_externalBuffers[idx] = buffer;
+	}
+
+	VkBuffer RenderGraphStorage::GetExternalBuffer(uint32_t idx) const
+	{
+		if (idx >= m_externalBuffers.size())
+		{
+			return VK_NULL_HANDLE;
+		}
+		return m_externalBuffers[idx];
+	}
+
+	void RenderGraphStorage::ReleaseExternalBuffer(uint32_t idx)
+	{
+		if (idx < m_externalBuffers.size())
+		{
+			m_externalBuffers[idx] = VK_NULL_HANDLE;
+			m_freeExternalBufferSlots.push_back(idx);
+		}
 	}
 
 	// -- Transient images -----------------------------------------------------
@@ -514,6 +730,21 @@ namespace aether
 		        .pImageMemoryBarriers = barriers,
 		};
 		vkCmdWaitEvents2(cmd, 1, &event, &depInfo);
+	}
+
+	void RenderGraphStorage::CmdBufferBarriers(VkCommandBuffer cmd, const VkBufferMemoryBarrier2* barriers, uint32_t count)
+	{
+		if (count == 0)
+		{
+			return;
+		}
+
+		const VkDependencyInfo depInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .bufferMemoryBarrierCount = count,
+		        .pBufferMemoryBarriers = barriers,
+		};
+		vkCmdPipelineBarrier2(cmd, &depInfo);
 	}
 
 	// -- Transient heap -------------------------------------------------------

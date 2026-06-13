@@ -100,9 +100,6 @@ namespace aether
 		gpu::CommandList m_currentCmdList;
 		std::uint64_t m_frameIndex = 0;
 
-		std::uint64_t m_asyncSubmitSemaphore = 0;
-		std::uint64_t m_asyncSubmitTimeline = 0;
-
 		EngineSettings m_settings{};
 	};
 } // namespace aether

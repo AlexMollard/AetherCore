@@ -333,7 +333,16 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::EndFrame(VkQueue graphicsQueue, VkQueue presentQueue, VkSemaphore extraWaitSemaphore, VkPipelineStageFlags2 extraWaitStage, std::uint64_t extraWaitValue, VkSemaphore extraSignalSemaphore, std::uint64_t extraSignalValue)
+	void Swapchain::EndFrame(VkQueue graphicsQueue,
+	        VkQueue presentQueue,
+	        VkSemaphore extraWaitSemaphore,
+	        VkPipelineStageFlags2 extraWaitStage,
+	        std::uint64_t extraWaitValue,
+	        VkSemaphore extraWaitSemaphore2,
+	        VkPipelineStageFlags2 extraWaitStage2,
+	        std::uint64_t extraWaitValue2,
+	        VkSemaphore extraSignalSemaphore,
+	        std::uint64_t extraSignalValue)
 	{
 		if (!m_frameValid)
 		{
@@ -375,11 +384,22 @@ namespace aether
 		        .stageMask = extraWaitStage,
 		};
 
-		VkSemaphoreSubmitInfo waitInfos[2] = {imageWait, extraWait};
+		VkSemaphoreSubmitInfo extraWait2{
+		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+		        .semaphore = extraWaitSemaphore2,
+		        .value = extraWaitValue2,
+		        .stageMask = extraWaitStage2,
+		};
+
+		VkSemaphoreSubmitInfo waitInfos[3] = {imageWait, extraWait, extraWait2};
 		std::uint32_t waitCount = 1;
 		if (extraWaitSemaphore != VK_NULL_HANDLE)
 		{
 			waitCount = 2;
+			if (extraWaitSemaphore2 != VK_NULL_HANDLE)
+			{
+				waitCount = 3;
+			}
 		}
 
 		VkCommandBufferSubmitInfo cmdInfo{

@@ -429,9 +429,13 @@ namespace aether
 
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, gpu::Format depthFormat)
 	{
-		AE_PROFILE_ZONE();
-		(void) bindless;
-		(void) device;
+		SetupPassResources(graph, depthFormat);
+		RegisterComputePasses(graph, cullPass);
+		RegisterGraphicsPasses(graph);
+	}
+
+	void LocalShadowService::SetupPassResources(RenderGraph& graph, gpu::Format depthFormat)
+	{
 		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(static_cast<void*>(m_atlasManager.GetAtlasImage().Get()), static_cast<void*>(m_atlasManager.GetAtlasView()), gpu::ImageAspect::Color);
 
@@ -439,8 +443,11 @@ namespace aether
 		m_blurScratchImage = graph.RegisterImage(static_cast<void*>(m_blurScratch.Get()), static_cast<void*>(m_blurScratch.GetDefaultView()), gpu::ImageAspect::Color);
 
 		// Create a transient depth attachment for the atlas render pass.
-		RGImage atlasDepth = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
+		m_atlasDepthImage = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
+	}
 
+	void LocalShadowService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)
+	{
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
 		        .ExecuteCompute(
@@ -453,11 +460,14 @@ namespace aether
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), cullPass.GetSingleLayout(), ctx.frameIndex);
 		                });
+	}
 
+	void LocalShadowService::RegisterGraphicsPasses(RenderGraph& graph)
+	{
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
 		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
-		        .WriteDepth(atlasDepth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
+		        .WriteDepth(m_atlasDepthImage, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
 		        .Execute(
 		                [this](PassContext& ctx)
