@@ -1,4 +1,4 @@
-// Animated time-based plasma shader.
+// Animated spherical plasma ball shader.
 //
 // Reinterprets GpuMaterial fields for effect control:
 //   emissiveFactor.xyz = tint (color modulation)
@@ -21,12 +21,22 @@
 
 static const float kPI = 3.14159265358979323846;
 
-// ── Fragment shader (plasma effect) ────────────────────────────────────────
+float3 Palette(float t)
+{
+    float3 a = float3(0.5, 0.5, 0.5);
+    float3 b = float3(0.5, 0.5, 0.5);
+    float3 c = float3(1.0, 1.0, 1.0);
+    float3 d = float3(0.0, 0.15, 0.25);
+    return a + b * cos(6.28318 * (c * t + d));
+}
+
+// ── Fragment shader ────────────────────────────────────────────────────────
 
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
     FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+    float elapsed = fc->elapsedTime;
     GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
 
     GpuMaterial mat;
@@ -48,13 +58,6 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         mat = materials[input.materialIndex];
     }
 
-    float3 tint     = mat.emissiveFactor.xyz;
-    float  scale    = max(mat.roughnessFactor, 0.01);
-    float  speed    = max(mat.metallicFactor, 0.0);
-    float  intensity = max(mat.occlusionStrength, 0.0);
-
-    float elapsed = fc->elapsedTime;
-
     float2 uv = input.uv;
 
     float3 baseColor = mat.baseColorFactor.rgb;
@@ -69,35 +72,81 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
     baseColor *= vertexColor;
 
-    float2 p = uv * scale;
+    float scale = max(mat.roughnessFactor, 0.01);
+    float speed = max(mat.metallicFactor, 0.0);
+    float intensity = max(mat.occlusionStrength, 0.0);
+    float3 tint = mat.emissiveFactor.xyz;
+
     float t = elapsed * speed;
 
-    float v1 = sin(p.x * 3.0 + t);
-    float v2 = sin(p.y * 2.5 + t * 0.8);
-    float v3 = sin((p.x + p.y) * 2.0 + t * 0.6);
-    float v4 = sin(sqrt(p.x * p.x + p.y * p.y) * 4.0 - t * 0.5);
+    // ── 3D normal-space plasma ───────────────────────────────────────────
+    float3 n = normalize(input.worldNormal);
+    float3 p = n * scale;
 
-    float plasma = (v1 + v2 + v3 + v4) * 0.25;
+    float plasma =
+          sin(p.x * 6.0 + t)
+        + sin(p.y * 7.0 - t * 0.7)
+        + sin(p.z * 5.0 + t * 0.5)
+        + sin(length(p.xy) * 12.0 - t * 1.3);
+    plasma *= 0.25;
 
-    float3 colorA = float3(0.2, 0.0, 0.6);
-    float3 colorB = float3(1.0, 0.2, 0.8);
-    float3 colorC = float3(0.0, 0.8, 1.0);
-    float3 colorD = float3(1.0, 0.8, 0.2);
+    // ── Spherical flow bands ─────────────────────────────────────────────
+    float longitude = atan2(n.z, n.x);
+    float latitude = asin(n.y);
 
-    float tA = saturate(plasma * 0.5 + 0.5);
-    float tB = saturate((plasma + 0.3) * 0.5 + 0.5);
-    float tC = saturate((plasma * 0.8 + 0.2) * 0.5 + 0.5);
+    float flow =
+        sin(longitude * 8.0 + t * 2.0)
+      + sin(latitude * 12.0 - t * 1.4);
+    flow *= 0.5;
 
-    float3 plasmaColor = lerp(colorA, colorB, tA);
-    plasmaColor = lerp(plasmaColor, colorC, tB);
-    plasmaColor = lerp(plasmaColor, colorD, tC);
+    plasma += flow * 0.4;
+
+    // ── Cosine palette ───────────────────────────────────────────────────
+    float3 plasmaColor = Palette(plasma * 0.5 + 0.5);
 
     float3 tintFactor = any(tint > 0.001) ? tint : float3(1.0, 1.0, 1.0);
     plasmaColor *= tintFactor;
     plasmaColor *= (0.5 + intensity * 0.5);
     plasmaColor = min(plasmaColor, float3(10.0, 10.0, 10.0));
 
-    float3 finalColor = lerp(plasmaColor, baseColor * plasmaColor, 0.15);
+    // ── Filament structures (bright electric veins) ──────────────────────
+    float filaments = pow(saturate(1.0 - abs(plasma)), 10.0);
+    plasmaColor += filaments * float3(2.0, 1.5, 3.0);
+
+    // ── View-dependent effects ───────────────────────────────────────────
+    float3 V = normalize(fc->cameraWorldPos.xyz - input.worldPos);
+    float NdotV = max(dot(n, V), 0.0);
+
+    // Stronger rim fresnel (blue energy-field rim).
+    float fresnel = pow(1.0 - NdotV, 5.0);
+    plasmaColor += fresnel * float3(0.4, 0.8, 2.0);
+
+    // Fake volumetric depth glow - energy appears to live inside the sphere.
+    float depthGlow = pow(1.0 - abs(dot(n, V)), 2.0);
+    plasmaColor *= 1.0 + depthGlow * 0.75;
+
+    // ── Core arcs (electrode tendrils) ───────────────────────────────────
+    float3 centerDir = normalize(float3(
+        sin(t * 0.4),
+        cos(t * 0.3),
+        sin(t * 0.2)));
+    float arc = dot(n, centerDir);
+    arc = pow(saturate(arc), 32.0);
+    plasmaColor += arc * float3(4.0, 2.0, 8.0);
+
+    // ── Consume remaining VSOutput fields ────────────────────────────────
+    // worldTangent / tangentSign / uv2 - perturb the normal so every
+    // vertex->fragment interface slot is genuinely used in the output.
+    float3 T = normalize(input.worldTangent);
+    float3 B = cross(n, T) * input.tangentSign;
+    float2 uv2Used = input.uv2;
+    float3 nrmPerturbed = normalize(n + (T * sin(elapsed * 0.5) + B * cos(elapsed * 0.3)) * 0.02);
+    float perturbMix = sin(uv2Used.x * 10.0 + uv2Used.y * 7.0) * 0.01;
+    nrmPerturbed = normalize(nrmPerturbed + T * perturbMix);
+    float volNdotV = max(dot(nrmPerturbed, V), 0.0);
+    float volGlow = pow(1.0 - volNdotV, 3.0);
+
+    float3 finalColor = plasmaColor + volGlow * float3(0.05, 0.1, 0.2);
 
     return float4(finalColor, mat.baseColorFactor.a);
 }
