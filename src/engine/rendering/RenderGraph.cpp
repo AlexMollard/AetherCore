@@ -1066,8 +1066,12 @@ namespace aether
 
 		Compile();
 
-		// Ensure transient images are allocated before building barriers.
+		// Two-pass transient heap preparation: query memory requirements, allocate heap, assign virtual offsets.
+		m_storage->PrepareTransientAllocations(target);
+
+		// Allocate aliased VkImage/VkBuffer handles from the pre-computed heap offsets.
 		m_storage->EnsureTransientImages(target);
+		m_storage->EnsureTransientBuffers();
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
@@ -1341,6 +1345,19 @@ namespace aether
 
 			recorder.EndDebugLabel();
 		}
+
+		// Transient heap trace logging.
+		const auto& stats = m_storage->GetLastFrameStats();
+		AE_VERBOSE(LogCategory::Render,
+		        "Frame {}: heap {:.1f}/{:.1f} MB, {} aliased images, {} aliased buffers, "
+		        "{} cached, {} cache total",
+		        frameIndex,
+		        static_cast<double>(stats.heapUsed) / (1024.0 * 1024.0),
+		        static_cast<double>(stats.heapCapacity) / (1024.0 * 1024.0),
+		        stats.aliasedImageCount,
+		        stats.aliasedBufferCount,
+		        stats.transientCacheHit,
+		        stats.cacheSize);
 
 		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, vkCmd);
 	}

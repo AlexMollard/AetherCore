@@ -52,6 +52,11 @@ namespace aether
 		// No default view is created; callers manage their own VkImageViews.
 		static Expected<UniqueImage> Create(VmaAllocator allocator, const VkImageCreateInfo& imageCreateInfo, const VmaAllocationCreateInfo& allocationCreateInfo);
 
+		// Create an image aliased to an existing VmaAllocation at a given memory offset.
+		// The image is created with VK_IMAGE_CREATE_ALIAS_BIT and bound via
+		// vkBindImageMemory2. The caller owns the VmaAllocation lifetime.
+		static Expected<UniqueImage> CreateAliased(VkDevice device, VmaAllocator allocator, const Desc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset);
+
 		void Reset();
 		Expected<void> EnsureBindlessSampled(
 		        BindlessManager& bindlessManager, VkDevice device, VkImageAspectFlags aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, VkImageLayout descriptorLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, TextureFilter filter = TextureFilter::Linear);
@@ -91,6 +96,7 @@ namespace aether
 		VkImage m_image = VK_NULL_HANDLE;
 		VmaAllocation m_allocation = VK_NULL_HANDLE;
 		VmaAllocationInfo m_allocationInfo{};
+		bool m_ownsAllocation = true;
 		VkExtent3D m_extent{};
 		VkFormat m_format = VK_FORMAT_UNDEFINED;
 		VkImageUsageFlags m_usage = 0;

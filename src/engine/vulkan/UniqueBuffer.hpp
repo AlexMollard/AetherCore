@@ -30,6 +30,10 @@ namespace aether
 		// Convenience factory: device-local, GPU-optimal. Caller must upload via staging.
 		static Expected<UniqueBuffer> CreateDeviceLocal(VmaAllocator allocator, VkDevice device, VkDeviceSize size, VkBufferUsageFlags usage, const char* debugName = nullptr);
 
+		// Create a buffer aliased to an existing VmaAllocation at a given memory offset.
+		// The buffer is bound via vkBindBufferMemory2. The caller owns the VmaAllocation lifetime.
+		static Expected<UniqueBuffer> CreateAliased(VkDevice device, VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset);
+
 		void Reset();
 
 		// Flushes host-visible memory to the device.
@@ -65,6 +69,7 @@ namespace aether
 		VkBuffer m_buffer = VK_NULL_HANDLE;
 		VmaAllocation m_allocation = VK_NULL_HANDLE;
 		VmaAllocationInfo m_allocationInfo{};
+		bool m_ownsAllocation = true;
 		VkBufferUsageFlags m_usage = 0;
 		VkDeviceSize m_size = 0;
 		gpu::DeviceAddress m_deviceAddress = 0;

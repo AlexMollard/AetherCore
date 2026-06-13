@@ -20,6 +20,7 @@ namespace aether
 	        m_image(std::exchange(other.m_image, VK_NULL_HANDLE)),
 	        m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
 	        m_allocationInfo(other.m_allocationInfo),
+	        m_ownsAllocation(std::exchange(other.m_ownsAllocation, true)),
 	        m_extent(other.m_extent),
 	        m_format(other.m_format),
 	        m_usage(other.m_usage),
@@ -58,6 +59,7 @@ namespace aether
 		m_image = std::exchange(other.m_image, VK_NULL_HANDLE);
 		m_allocation = std::exchange(other.m_allocation, VK_NULL_HANDLE);
 		m_allocationInfo = other.m_allocationInfo;
+		m_ownsAllocation = std::exchange(other.m_ownsAllocation, true);
 		m_extent = other.m_extent;
 		m_format = other.m_format;
 		m_usage = other.m_usage;
@@ -183,19 +185,108 @@ namespace aether
 		return out;
 	}
 
+	Expected<UniqueImage> UniqueImage::CreateAliased(VkDevice device, VmaAllocator allocator, const Desc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset)
+	{
+		UniqueImage out;
+		out.m_allocator = allocator;
+		out.m_ownsAllocation = false;
+
+		const VkImageCreateInfo imageInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = gpu::ToVk(desc.format),
+		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .mipLevels = desc.mipLevels,
+		        .arrayLayers = desc.arrayLayers,
+		        .samples = desc.samples,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = desc.usage,
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		VkResult result = vkCreateImage(device, &imageInfo, nullptr, &out.m_image);
+		if (result != VK_SUCCESS)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "UniqueImage::CreateAliased: vkCreateImage failed"));
+		}
+
+		VmaAllocationInfo existingAllocInfo;
+		vmaGetAllocationInfo(allocator, existingAllocation, &existingAllocInfo);
+
+		const VkBindImageMemoryInfo bindInfo{
+		        .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+		        .image = out.m_image,
+		        .memory = existingAllocInfo.deviceMemory,
+		        .memoryOffset = memoryOffset,
+		};
+
+		result = vkBindImageMemory2(device, 1, &bindInfo);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyImage(device, out.m_image, nullptr);
+			out.m_image = VK_NULL_HANDLE;
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "UniqueImage::CreateAliased: vkBindImageMemory2 failed"));
+		}
+
+		out.m_allocation = existingAllocation;
+		out.m_extent = imageInfo.extent;
+		out.m_format = imageInfo.format;
+		out.m_usage = imageInfo.usage;
+		out.m_mipLevels = imageInfo.mipLevels;
+		out.m_arrayLayers = imageInfo.arrayLayers;
+		out.m_lastKnownLayout = imageInfo.initialLayout;
+
+		// Create default view
+		const VkImageAspectFlags aspect = DeduceAspect(imageInfo.format);
+		const VkImageViewCreateInfo viewInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = out.m_image,
+		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+		        .format = imageInfo.format,
+		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
+		};
+		result = vkCreateImageView(device, &viewInfo, nullptr, &out.m_defaultView);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyImage(device, out.m_image, nullptr);
+			out.m_image = VK_NULL_HANDLE;
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "UniqueImage::CreateAliased: failed to create default view"));
+		}
+		out.m_bindlessDevice = device;
+
+		if (desc.debugName)
+		{
+			out.SetName(device, desc.debugName);
+		}
+
+		return out;
+	}
+
 	void UniqueImage::Reset()
 	{
 		ReleaseBindlessSampled();
 
-		if (m_image != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE && m_allocator != VK_NULL_HANDLE)
+		if (m_image != VK_NULL_HANDLE && m_allocator != VK_NULL_HANDLE)
 		{
-			vmaDestroyImage(m_allocator, m_image, m_allocation);
+			if (m_ownsAllocation && m_allocation != VK_NULL_HANDLE)
+			{
+				vmaDestroyImage(m_allocator, m_image, m_allocation);
+			}
+			else
+			{
+				VmaAllocatorInfo allocInfo;
+				vmaGetAllocatorInfo(m_allocator, &allocInfo);
+				vkDestroyImage(allocInfo.device, m_image, nullptr);
+			}
 		}
 
 		m_image = VK_NULL_HANDLE;
 		m_allocation = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
 		m_allocationInfo = {};
+		m_ownsAllocation = true;
 		m_extent = {};
 		m_format = VK_FORMAT_UNDEFINED;
 		m_usage = 0;

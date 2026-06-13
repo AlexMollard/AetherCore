@@ -9,6 +9,7 @@
 
 #include "vulkan/volk.hpp"
 #include "vulkan/UniqueImage.hpp"
+#include "vulkan/UniqueBuffer.hpp"
 #include "gpu/GpuEnums.hpp"
 
 namespace aether
@@ -26,6 +27,10 @@ namespace aether
 		std::uint32_t transientCacheMiss = 0;  // had to allocate fresh
 		std::uint32_t pendingDestructions = 0; // destroyed this BeginFrame
 		std::size_t cacheSize = 0;             // total cached images
+		std::size_t aliasedImageCount = 0;     // transient images from heap
+		std::size_t aliasedBufferCount = 0;    // transient buffers from heap
+		VkDeviceSize heapCapacity = 0;         // total transient heap size
+		VkDeviceSize heapUsed = 0;             // bytes used in transient heap
 	};
 
 	// Holds all Vulkan-internal state for RenderGraph.
@@ -35,6 +40,8 @@ namespace aether
 	{
 		static constexpr std::size_t kMaxFramesInFlight = 3;
 		static constexpr std::uint32_t kCacheMaxStaleFrames = 10;
+		static constexpr VkDeviceSize kTransientHeapCapacity = 256ull * 1024 * 1024; // 256 MB
+		static constexpr VkDeviceSize kTransientHeapAlignment = 65536u;
 		void Initialize(VkDevice device, VmaAllocator allocator);
 		void Shutdown();
 		void BeginFrame(std::uint32_t frameIndex);
@@ -70,6 +77,23 @@ namespace aether
 		// -- Bindless -------------------------------------------------------
 		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout);
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
+
+		// -- Transient buffer slots ------------------------------------------
+		uint32_t AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags usage);
+		void EnsureTransientBuffers();
+
+		[[nodiscard]] VkBuffer ResolveTransientBuffer(uint32_t idx) const;
+		[[nodiscard]] bool IsTransientBufferSlotValid(uint32_t idx) const;
+
+		[[nodiscard]] std::size_t GetTransientBufferCount() const
+		{
+			return m_transientBuffers.size();
+		}
+
+		void ReleaseTransientBuffer(uint32_t idx);
+
+		// -- Two-pass transient heap preparation (called after Compile). ----
+		void PrepareTransientAllocations(const FrameTarget& target);
 
 		// -- Release / cache ------------------------------------------------
 		void ReleaseTransient(uint32_t idx, std::uint32_t currentFrame);
@@ -139,6 +163,8 @@ namespace aether
 			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 		};
 
+		using VirtualAllocationHandle = VmaVirtualAllocation;
+
 		struct TransientImageEntry
 		{
 			VkFormat format = VK_FORMAT_UNDEFINED;
@@ -146,10 +172,29 @@ namespace aether
 			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
 			gpu::Extent2D extent{};
 			bool bindlessRequested = false;
+			bool fromHeap = false; // true if allocated from transient heap
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			UniqueImage image;
 			gpu::Extent2D allocatedExtent{};
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu;
+			// Filled by PrepareTransientAllocations (two-pass).
+			VkDeviceSize memReqSize = 0;
+			VkDeviceSize memReqAlignment = 0;
+			VkDeviceSize heapOffset = VK_WHOLE_SIZE; // offset into transient heap
+			VirtualAllocationHandle m_virtualAlloc = nullptr;
+		};
+
+		struct TransientBufferEntry
+		{
+			VkDeviceSize size = 0;
+			VkBufferUsageFlags usage = 0;
+			bool fromHeap = false;
+			UniqueBuffer buffer;
+			// Filled by PrepareTransientAllocations (two-pass).
+			VkDeviceSize memReqSize = 0;
+			VkDeviceSize memReqAlignment = 0;
+			VkDeviceSize heapOffset = VK_WHOLE_SIZE; // offset into transient heap
+			VirtualAllocationHandle m_virtualAlloc = nullptr;
 		};
 
 		struct ImageCacheKey
@@ -201,6 +246,13 @@ namespace aether
 		void EvictStaleCacheEntries();
 		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const;
 
+		static VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment)
+		{
+			return (value + alignment - 1) & ~(alignment - 1);
+		}
+
+		void AllocateTransientHeap(VkDeviceSize requiredSize);
+
 		// -- Member state ---------------------------------------------------
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
@@ -209,6 +261,8 @@ namespace aether
 		std::vector<std::uint32_t> m_freeExternalSlots;
 		std::vector<TransientImageEntry> m_transientImages;
 		std::vector<std::uint32_t> m_freeTransientSlots;
+		std::vector<TransientBufferEntry> m_transientBuffers;
+		std::vector<std::uint32_t> m_freeTransientBufferSlots;
 		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
 
 		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
@@ -222,6 +276,11 @@ namespace aether
 		// Event pool for split barriers.
 		std::vector<VkEvent> m_events;
 		std::vector<std::uint32_t> m_freeEventSlots;
+
+		// Transient heap for VRAM-aliased images and buffers (VmaVirtualBlock).
+		VmaAllocation m_transientHeapAllocation = VK_NULL_HANDLE;
+		VmaVirtualBlock m_virtualBlock = VK_NULL_HANDLE;
+		VkDeviceSize m_transientHeapCapacity = 0;
 
 		// Per-frame allocation statistics (populated during Execute).
 		FrameStats m_lastFrameStats;

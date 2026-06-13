@@ -19,6 +19,7 @@ namespace aether
 	        m_buffer(std::exchange(other.m_buffer, VK_NULL_HANDLE)),
 	        m_allocation(std::exchange(other.m_allocation, VK_NULL_HANDLE)),
 	        m_allocationInfo(other.m_allocationInfo),
+	        m_ownsAllocation(std::exchange(other.m_ownsAllocation, true)),
 	        m_usage(other.m_usage),
 	        m_size(other.m_size),
 	        m_deviceAddress(other.m_deviceAddress),
@@ -45,6 +46,7 @@ namespace aether
 		m_buffer = std::exchange(other.m_buffer, VK_NULL_HANDLE);
 		m_allocation = std::exchange(other.m_allocation, VK_NULL_HANDLE);
 		m_allocationInfo = other.m_allocationInfo;
+		m_ownsAllocation = std::exchange(other.m_ownsAllocation, true);
 		m_usage = other.m_usage;
 		m_size = other.m_size;
 		m_deviceAddress = other.m_deviceAddress;
@@ -79,6 +81,57 @@ namespace aether
 			const VkBufferDeviceAddressInfo addressInfo{
 			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 			        .pNext = nullptr,
+			        .buffer = out.m_buffer,
+			};
+			out.m_deviceAddress = vkGetBufferDeviceAddress(device, &addressInfo);
+		}
+
+		return out;
+	}
+
+	Expected<UniqueBuffer> UniqueBuffer::CreateAliased(VkDevice device, VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset)
+	{
+		UniqueBuffer out;
+		out.m_allocator = allocator;
+		out.m_device = device;
+		out.m_ownsAllocation = false;
+		out.m_usage = usage;
+		out.m_size = size;
+
+		const VkBufferCreateInfo bufInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = size,
+		        .usage = usage,
+		};
+		VkResult result = vkCreateBuffer(device, &bufInfo, nullptr, &out.m_buffer);
+		if (result != VK_SUCCESS)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "UniqueBuffer::CreateAliased: vkCreateBuffer failed"));
+		}
+
+		VmaAllocationInfo existingAllocInfo;
+		vmaGetAllocationInfo(allocator, existingAllocation, &existingAllocInfo);
+
+		const VkBindBufferMemoryInfo bindInfo{
+		        .sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO,
+		        .buffer = out.m_buffer,
+		        .memory = existingAllocInfo.deviceMemory,
+		        .memoryOffset = memoryOffset,
+		};
+		result = vkBindBufferMemory2(device, 1, &bindInfo);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyBuffer(device, out.m_buffer, nullptr);
+			out.m_buffer = VK_NULL_HANDLE;
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "UniqueBuffer::CreateAliased: vkBindBufferMemory2 failed"));
+		}
+
+		out.m_allocation = existingAllocation;
+
+		if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
+		{
+			const VkBufferDeviceAddressInfo addressInfo{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 			        .buffer = out.m_buffer,
 			};
 			out.m_deviceAddress = vkGetBufferDeviceAddress(device, &addressInfo);
@@ -146,9 +199,18 @@ namespace aether
 
 	void UniqueBuffer::Reset()
 	{
-		if (m_buffer != VK_NULL_HANDLE && m_allocation != VK_NULL_HANDLE && m_allocator != VK_NULL_HANDLE)
+		if (m_buffer != VK_NULL_HANDLE && m_allocator != VK_NULL_HANDLE)
 		{
-			vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
+			if (m_ownsAllocation && m_allocation != VK_NULL_HANDLE)
+			{
+				vmaDestroyBuffer(m_allocator, m_buffer, m_allocation);
+			}
+			else
+			{
+				VmaAllocatorInfo allocInfo;
+				vmaGetAllocatorInfo(m_allocator, &allocInfo);
+				vkDestroyBuffer(allocInfo.device, m_buffer, nullptr);
+			}
 		}
 
 		m_buffer = VK_NULL_HANDLE;
@@ -156,6 +218,7 @@ namespace aether
 		m_allocator = VK_NULL_HANDLE;
 		m_device = VK_NULL_HANDLE;
 		m_allocationInfo = {};
+		m_ownsAllocation = true;
 		m_usage = 0;
 		m_size = 0;
 		m_deviceAddress = 0;

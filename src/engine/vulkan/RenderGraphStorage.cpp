@@ -50,6 +50,18 @@ namespace aether
 			m_pendingDestructions[i].clear();
 		}
 
+		if (m_virtualBlock != VK_NULL_HANDLE)
+		{
+			vmaDestroyVirtualBlock(m_virtualBlock);
+			m_virtualBlock = VK_NULL_HANDLE;
+		}
+		if (m_transientHeapAllocation != VK_NULL_HANDLE)
+		{
+			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
+			m_transientHeapAllocation = VK_NULL_HANDLE;
+		}
+		m_transientHeapCapacity = 0;
+
 		for (VkEvent event: m_events)
 		{
 			if (event != VK_NULL_HANDLE)
@@ -309,7 +321,14 @@ namespace aether
 		}
 
 		auto& entry = m_transientImages[idx];
-		if (entry.bindlessRequested)
+
+		if (entry.fromHeap)
+		{
+			// Heap-backed images are not cached; destroy the VkImage handle.
+			// The persistent heap allocation is reused next frame.
+			entry.image.Reset();
+		}
+		else if (entry.bindlessRequested)
 		{
 #ifndef NDEBUG
 			if (entry.image)
@@ -329,6 +348,7 @@ namespace aether
 		entry.bindlessRequested = false;
 		entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
+		entry.fromHeap = false;
 		entry.format = VK_FORMAT_UNDEFINED;
 		entry.usage = 0;
 		entry.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -353,7 +373,7 @@ namespace aether
 
 	void RenderGraphStorage::MoveToCache(TransientImageEntry& entry)
 	{
-		if (!entry.image)
+		if (!entry.image || entry.fromHeap)
 		{
 			return;
 		}
@@ -496,6 +516,269 @@ namespace aether
 		vkCmdWaitEvents2(cmd, 1, &event, &depInfo);
 	}
 
+	// -- Transient heap -------------------------------------------------------
+
+	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize)
+	{
+		// Destroy old heap + virtual block if they exist.
+		if (m_virtualBlock != VK_NULL_HANDLE)
+		{
+			vmaDestroyVirtualBlock(m_virtualBlock);
+			m_virtualBlock = VK_NULL_HANDLE;
+		}
+		if (m_transientHeapAllocation != VK_NULL_HANDLE)
+		{
+			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
+			m_transientHeapAllocation = VK_NULL_HANDLE;
+		}
+		m_transientHeapCapacity = 0;
+
+		if (requiredSize == 0)
+		{
+			return;
+		}
+
+		const VkMemoryRequirements memReqs{
+		        .size = requiredSize,
+		        .alignment = kTransientHeapAlignment,
+		        .memoryTypeBits = std::numeric_limits<std::uint32_t>::max(),
+		};
+		const VmaAllocationCreateInfo allocInfo{
+		        .usage = VMA_MEMORY_USAGE_UNKNOWN,
+		        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+		};
+		if (vmaAllocateMemory(m_allocator, &memReqs, &allocInfo, &m_transientHeapAllocation, nullptr) != VK_SUCCESS)
+		{
+			AE_ERROR(LogCategory::Vulkan, "RenderGraph: failed to allocate {} byte transient heap for VRAM aliasing.", requiredSize);
+			m_transientHeapAllocation = VK_NULL_HANDLE;
+			return;
+		}
+		m_transientHeapCapacity = requiredSize;
+
+		const VmaVirtualBlockCreateInfo blockInfo{
+		        .size = requiredSize,
+		};
+		if (vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
+		{
+			AE_ERROR(LogCategory::Vulkan, "RenderGraph: failed to create VmaVirtualBlock.");
+			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
+			m_transientHeapAllocation = VK_NULL_HANDLE;
+			m_transientHeapCapacity = 0;
+		}
+	}
+
+	// -- Two-pass transient heap preparation ----------------------------------
+
+	void RenderGraphStorage::PrepareTransientAllocations(const FrameTarget& target)
+	{
+		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		// Reset all transient entries' heap state from previous frame.
+		for (auto& entry: m_transientImages)
+		{
+			entry.fromHeap = false;
+			entry.m_virtualAlloc = nullptr;
+			entry.heapOffset = VK_WHOLE_SIZE;
+			entry.memReqSize = 0;
+			entry.memReqAlignment = 0;
+		}
+		for (auto& entry: m_transientBuffers)
+		{
+			entry.fromHeap = false;
+			entry.m_virtualAlloc = nullptr;
+			entry.heapOffset = VK_WHOLE_SIZE;
+			entry.memReqSize = 0;
+			entry.memReqAlignment = 0;
+		}
+
+		// Phase 1: Query memory requirements for all transient images.
+		for (auto& entry: m_transientImages)
+		{
+			if (entry.image)
+			{
+				continue;
+			}
+			if (entry.format == VK_FORMAT_UNDEFINED || entry.usage == 0)
+			{
+				continue;
+			}
+			if (entry.extent.width == 0 || entry.extent.height == 0)
+			{
+				entry.extent = target.extent;
+			}
+			if (entry.extent.width == 0 || entry.extent.height == 0)
+			{
+				continue;
+			}
+
+			const VkImageCreateInfo tempInfo{
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+			        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
+			        .imageType = VK_IMAGE_TYPE_2D,
+			        .format = entry.format,
+			        .extent = {entry.extent.width, entry.extent.height, 1u},
+			        .mipLevels = 1,
+			        .arrayLayers = 1,
+			        .samples = VK_SAMPLE_COUNT_1_BIT,
+			        .tiling = VK_IMAGE_TILING_OPTIMAL,
+			        .usage = entry.usage,
+			        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+			        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			};
+			VkImage tempImage = VK_NULL_HANDLE;
+			if (vkCreateImage(m_device, &tempInfo, nullptr, &tempImage) == VK_SUCCESS)
+			{
+				VkMemoryRequirements reqs{};
+				vkGetImageMemoryRequirements(m_device, tempImage, &reqs);
+				vkDestroyImage(m_device, tempImage, nullptr);
+				entry.memReqSize = reqs.size;
+				entry.memReqAlignment = reqs.alignment;
+			}
+		}
+
+		// Phase 2: Query memory requirements for all transient buffers.
+		for (auto& entry: m_transientBuffers)
+		{
+			if (entry.buffer)
+			{
+				continue;
+			}
+			if (entry.size == 0)
+			{
+				continue;
+			}
+
+			const VkBufferCreateInfo tempInfo{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			        .size = entry.size,
+			        .usage = entry.usage,
+			};
+			VkBuffer tempBuffer = VK_NULL_HANDLE;
+			if (vkCreateBuffer(m_device, &tempInfo, nullptr, &tempBuffer) == VK_SUCCESS)
+			{
+				VkMemoryRequirements reqs{};
+				vkGetBufferMemoryRequirements(m_device, tempBuffer, &reqs);
+				vkDestroyBuffer(m_device, tempBuffer, nullptr);
+				entry.memReqSize = reqs.size;
+				entry.memReqAlignment = reqs.alignment;
+			}
+		}
+
+		// Phase 3: Calculate total size needed.
+		VkDeviceSize totalSize = 0;
+
+		// Helper: accumulate aligned.
+		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
+		{
+			if (size == 0)
+			{
+				return current;
+			}
+			const VkDeviceSize aligned = AlignUp(current, alignment);
+			return aligned + size;
+		};
+
+		for (auto& entry: m_transientImages)
+		{
+			if (!entry.image && entry.memReqSize > 0)
+			{
+				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
+			}
+		}
+		for (auto& entry: m_transientBuffers)
+		{
+			if (!entry.buffer && entry.memReqSize > 0)
+			{
+				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
+			}
+		}
+
+		// Phase 4: Allocate heap and virtual block if needed.
+		if (totalSize > m_transientHeapCapacity)
+		{
+			AllocateTransientHeap(totalSize);
+		}
+		else if (m_virtualBlock != VK_NULL_HANDLE)
+		{
+			vmaClearVirtualBlock(m_virtualBlock);
+		}
+
+		if (m_virtualBlock == VK_NULL_HANDLE)
+		{
+			return; // heap allocation failed; everything falls back to VMA
+		}
+
+		// Phase 5: Allocate virtual offsets for each resource from the virtual block.
+		for (auto& entry: m_transientImages)
+		{
+			if (entry.image || entry.memReqSize == 0)
+			{
+				continue;
+			}
+			VmaVirtualAllocationCreateInfo allocInfo{
+			        .size = entry.memReqSize,
+			        .alignment = entry.memReqAlignment,
+			};
+			VkDeviceSize offset = VK_WHOLE_SIZE;
+			if (vmaVirtualAllocate(m_virtualBlock, &allocInfo, &entry.m_virtualAlloc, &offset) == VK_SUCCESS)
+			{
+				entry.fromHeap = true;
+				entry.heapOffset = offset;
+			}
+		}
+
+		for (auto& entry: m_transientBuffers)
+		{
+			if (entry.buffer || entry.memReqSize == 0)
+			{
+				continue;
+			}
+			VmaVirtualAllocationCreateInfo allocInfo{
+			        .size = entry.memReqSize,
+			        .alignment = entry.memReqAlignment,
+			};
+			VkDeviceSize offset = VK_WHOLE_SIZE;
+			if (vmaVirtualAllocate(m_virtualBlock, &allocInfo, &entry.m_virtualAlloc, &offset) == VK_SUCCESS)
+			{
+				entry.fromHeap = true;
+				entry.heapOffset = offset;
+			}
+		}
+
+		// Update heap stats.
+		VmaStatistics blockStats{};
+		vmaGetVirtualBlockStatistics(m_virtualBlock, &blockStats);
+		m_lastFrameStats.heapCapacity = m_transientHeapCapacity;
+		m_lastFrameStats.heapUsed = blockStats.allocationBytes;
+		m_lastFrameStats.aliasedImageCount = 0;
+		m_lastFrameStats.aliasedBufferCount = 0;
+		for (auto& entry: m_transientImages)
+		{
+			if (entry.fromHeap)
+			{
+				m_lastFrameStats.aliasedImageCount++;
+			}
+		}
+		for (auto& entry: m_transientBuffers)
+		{
+			if (entry.fromHeap)
+			{
+				m_lastFrameStats.aliasedBufferCount++;
+			}
+		}
+
+		AE_VERBOSE(LogCategory::Vulkan,
+		        "Transient heap: {:.1f} MB total, {:.1f} MB used, {} aliased images, {} aliased buffers, {} cache images",
+		        static_cast<double>(m_lastFrameStats.heapCapacity) / (1024.0 * 1024.0),
+		        static_cast<double>(m_lastFrameStats.heapUsed) / (1024.0 * 1024.0),
+		        m_lastFrameStats.aliasedImageCount,
+		        m_lastFrameStats.aliasedBufferCount,
+		        m_lastFrameStats.cacheSize);
+	}
+
 	// -- EnsureTransientImages ------------------------------------------------
 
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
@@ -526,6 +809,7 @@ namespace aether
 				continue;
 			}
 
+			// Check cache first.
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
 			UniqueImage cached = TryPullFromCache(key);
 			if (cached)
@@ -536,27 +820,52 @@ namespace aether
 #ifndef NDEBUG
 				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
 #endif
+				continue;
 			}
-			else
+
+			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
+			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
 				AE_EXPECT_OR_THROW(newImage,
-				        UniqueImage::Create(m_device,
+				        UniqueImage::CreateAliased(m_device,
 				                m_allocator,
 				                {
 				                        .extent = entry.extent,
 				                        .format = gpu::FromVk(entry.format),
 				                        .usage = entry.usage,
-				                }));
+				                },
+				                m_transientHeapAllocation,
+				                entry.heapOffset));
 				entry.image = std::move(newImage);
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientAllocated++;
 				m_lastFrameStats.transientCacheMiss++;
-				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
+				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
 				entry.image.SetName(m_device, entryName.c_str());
 #ifndef NDEBUG
 				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
 #endif
+				continue;
 			}
+
+			// Fallback: VMA-backed allocation.
+			AE_EXPECT_OR_THROW(newImage,
+			        UniqueImage::Create(m_device,
+			                m_allocator,
+			                {
+			                        .extent = entry.extent,
+			                        .format = gpu::FromVk(entry.format),
+			                        .usage = entry.usage,
+			                }));
+			entry.image = std::move(newImage);
+			entry.allocatedExtent = entry.extent;
+			m_lastFrameStats.transientAllocated++;
+			m_lastFrameStats.transientCacheMiss++;
+			const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
+			entry.image.SetName(m_device, entryName.c_str());
+#ifndef NDEBUG
+			SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+#endif
 		}
 
 		EvictStaleCacheEntries();
@@ -567,5 +876,117 @@ namespace aether
 		{
 			m_lastFrameStats.cacheSize += entries.size();
 		}
+	}
+
+	// -- Transient buffers ----------------------------------------------------
+
+	uint32_t RenderGraphStorage::AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags usage)
+	{
+		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
+		{
+			AE_WARN(LogCategory::Engine, "RenderGraphStorage: AddTransientBufferSlot called before Initialize().");
+		}
+
+		if (!m_freeTransientBufferSlots.empty())
+		{
+			const uint32_t idx = m_freeTransientBufferSlots.back();
+			m_freeTransientBufferSlots.pop_back();
+			auto& entry = m_transientBuffers[idx];
+			entry = {};
+			entry.size = size;
+			entry.usage = usage;
+			return idx;
+		}
+
+		TransientBufferEntry entry{};
+		entry.size = size;
+		entry.usage = usage;
+		m_transientBuffers.push_back(std::move(entry));
+		return static_cast<uint32_t>(m_transientBuffers.size() - 1);
+	}
+
+	void RenderGraphStorage::EnsureTransientBuffers()
+	{
+		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
+		{
+			AE_WARN(LogCategory::Engine, "RenderGraphStorage: transient buffers require Initialize(device, allocator).");
+			return;
+		}
+
+		for (std::uint32_t idx = 0; idx < m_transientBuffers.size(); ++idx)
+		{
+			auto& entry = m_transientBuffers[idx];
+			if (entry.buffer)
+			{
+				continue;
+			}
+			if (entry.size == 0)
+			{
+				continue;
+			}
+
+			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
+			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
+			{
+				AE_EXPECT_OR_THROW(newBuffer, UniqueBuffer::CreateAliased(m_device, m_allocator, entry.size, entry.usage, m_transientHeapAllocation, entry.heapOffset));
+				entry.buffer = std::move(newBuffer);
+				m_lastFrameStats.transientAllocated++;
+				const std::string entryName = std::format("RenderGraph.Transient.Buffer.Aliased[{}]", idx);
+				entry.buffer.SetName(entryName.c_str());
+				continue;
+			}
+
+			// Fallback: VMA-backed buffer.
+			AE_EXPECT_OR_THROW(newBuffer, UniqueBuffer::CreateDeviceLocal(m_allocator, m_device, entry.size, entry.usage));
+			entry.buffer = std::move(newBuffer);
+			m_lastFrameStats.transientAllocated++;
+			const std::string entryName = std::format("RenderGraph.Transient.Buffer[{}]", idx);
+			entry.buffer.SetName(entryName.c_str());
+		}
+	}
+
+	VkBuffer RenderGraphStorage::ResolveTransientBuffer(uint32_t idx) const
+	{
+		if (idx < m_transientBuffers.size())
+		{
+			return m_transientBuffers[idx].buffer.Get();
+		}
+		return VK_NULL_HANDLE;
+	}
+
+	bool RenderGraphStorage::IsTransientBufferSlotValid(uint32_t idx) const
+	{
+		if (idx >= m_transientBuffers.size())
+		{
+			return false;
+		}
+		return static_cast<bool>(m_transientBuffers[idx].buffer);
+	}
+
+	void RenderGraphStorage::ReleaseTransientBuffer(uint32_t idx)
+	{
+		if (idx >= m_transientBuffers.size())
+		{
+			return;
+		}
+
+		auto& entry = m_transientBuffers[idx];
+
+		if (entry.fromHeap)
+		{
+			if (entry.m_virtualAlloc)
+			{
+				vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
+				entry.m_virtualAlloc = nullptr;
+			}
+			entry.buffer.Reset();
+		}
+		else if (entry.buffer)
+		{
+			entry.buffer.Reset();
+		}
+
+		entry = {};
+		m_freeTransientBufferSlots.push_back(idx);
 	}
 } // namespace aether
