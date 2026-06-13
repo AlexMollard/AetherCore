@@ -262,6 +262,13 @@ namespace aether
 		[[nodiscard]] std::uint64_t GetComputeTimelineSemaphore() const;
 		[[nodiscard]] std::uint64_t GetComputeTimelineValue() const;
 
+		// Submit the async compute command buffer to the dedicated compute queue.
+		// Must be called after Execute() and before the graphics queue submission.
+		// Signals the cross-queue timeline semaphore at the next value. The caller
+		// must pass the returned semaphore + value to the graphics submission as a
+		// wait to ensure proper ordering.
+		void SubmitComputeWork(std::uint32_t frameIndex);
+
 	private:
 		static constexpr uint32_t kSwapchainColorId = 0u;
 		static constexpr uint32_t kSwapchainDepthId = 1u;

@@ -7,8 +7,16 @@
 
 namespace aether
 {
-	void ForwardPass::RegisterPass(
-	        const FrameContext& frame, RenderQueue& renderQueue, RGImage hdrColor, RGImage depth, std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn, std::span<const RGImage> shadowMaps, RGImage localShadowAtlas)
+	void ForwardPass::RegisterPass(const FrameContext& frame,
+	        RenderQueue& renderQueue,
+	        RGImage hdrColor,
+	        RGImage depth,
+	        std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn,
+	        std::span<const RGImage> shadowMaps,
+	        RGImage localShadowAtlas,
+	        RGBuffer lightsBuffer,
+	        RGBuffer tileHeadersBuffer,
+	        RGBuffer tileIndicesBuffer)
 	{
 		AE_PROFILE_ZONE();
 		AE_ASSERT(frame.graph != nullptr, "ForwardPass::RegisterPass: frame.graph is null");
@@ -30,6 +38,21 @@ namespace aether
 		if (localShadowAtlas.IsValid())
 		{
 			pass->ReadTexture(localShadowAtlas);
+		}
+
+		// Declare lighting buffer reads so the render graph emits barriers
+		// between the lighting compute passes and this forward pass.
+		if (lightsBuffer.IsValid())
+		{
+			pass->ReadBuffer(lightsBuffer);
+		}
+		if (tileHeadersBuffer.IsValid())
+		{
+			pass->ReadBuffer(tileHeadersBuffer);
+		}
+		if (tileIndicesBuffer.IsValid())
+		{
+			pass->ReadBuffer(tileIndicesBuffer);
 		}
 
 		pass->Execute(

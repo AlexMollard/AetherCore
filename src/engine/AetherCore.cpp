@@ -455,10 +455,16 @@ namespace aether
 
 	void AetherCore::SubmitAndAdvance()
 	{
+		auto& renderGraph = m_rendering->GetRenderGraph();
 		const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
 		const auto rmVal = m_frameIndex + 1;
 
-		auto& renderGraph = m_rendering->GetRenderGraph();
+		// Submit the async compute command buffer now, right before the graphics
+		// submission, so both queues are dispatched to the GPU simultaneously.
+		// The graphics submission waits on the compute timeline semaphore,
+		// ensuring the GPU sees compute results before draw-indirect.
+		renderGraph.SubmitComputeWork(static_cast<std::uint32_t>(m_frameIndex % kMaxFramesInFlight));
+
 		const std::uint64_t graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : 0;
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
 

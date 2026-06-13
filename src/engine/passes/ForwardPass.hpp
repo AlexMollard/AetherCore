@@ -36,7 +36,10 @@ namespace aether
 		        RGImage depth,
 		        std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn,
 		        std::span<const RGImage> shadowMaps = {},
-		        RGImage localShadowAtlas = {});
+		        RGImage localShadowAtlas = {},
+		        RGBuffer lightsBuffer = {},
+		        RGBuffer tileHeadersBuffer = {},
+		        RGBuffer tileIndicesBuffer = {});
 
 	private:
 		bool m_enabled = true;

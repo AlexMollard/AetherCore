@@ -5,6 +5,7 @@
 #include "passes/PostProcessStack.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/LocalShadowService.hpp"
+#include "rendering/LightingManager.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
@@ -37,7 +38,16 @@ namespace aether
 		ctx.localShadowService.RegisterGraphicsPasses(*frame.graph);
 
 		// Main camera forward lighting pass.
-		ctx.forwardPass.RegisterPass(frame, ctx.mainRenderQueue, ctx.postProcessStack.GetHdrColor(), frame.graph->GetSwapchainDepth(), std::move(ctx.pushLightingFn), ctx.shadowService.GetShadowDepthImages(), ctx.localShadowService.GetAtlasRGImage());
+		ctx.forwardPass.RegisterPass(frame,
+		        ctx.mainRenderQueue,
+		        ctx.postProcessStack.GetHdrColor(),
+		        frame.graph->GetSwapchainDepth(),
+		        std::move(ctx.pushLightingFn),
+		        ctx.shadowService.GetShadowDepthImages(),
+		        ctx.localShadowService.GetAtlasRGImage(),
+		        frame.lighting ? frame.lighting->GetLightsBufferHandle() : RGBuffer{},
+		        frame.lighting ? frame.lighting->GetTileHeadersBufferHandle() : RGBuffer{},
+		        frame.lighting ? frame.lighting->GetTileIndicesBufferHandle() : RGBuffer{});
 
 		// RTT camera pass set.
 		ctx.renderTargetService.RegisterPasses();

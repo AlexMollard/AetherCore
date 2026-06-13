@@ -290,6 +290,14 @@ namespace aether
 		return m_storage->GetCrossQueueTimelineValue();
 	}
 
+	void RenderGraph::SubmitComputeWork(std::uint32_t frameIndex)
+	{
+		if (HasAsyncComputeWork())
+		{
+			m_storage->SubmitComputeQueue(frameIndex);
+		}
+	}
+
 	// -- Image registration ---------------------------------------------------
 
 	RGImage RenderGraph::RegisterImage(void* image, void* view, gpu::ImageAspect aspect)
@@ -328,6 +336,10 @@ namespace aether
 		{
 			m_externalBuffers[idx] = newBuffer;
 		}
+		// Reset buffer state — the backing VkBuffer has been replaced, so the
+		// previous frame's barrier tracking is stale. The next Compile() will
+		// emit a fresh TOP_OF_PIPE barrier for this buffer.
+		m_lastBufferStates.erase(buffer.id);
 	}
 
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
@@ -552,7 +564,7 @@ namespace aether
 				{
 					return bAC; // true → b has higher priority
 				}
-				
+
 				const auto aConsumers = adj[a].size();
 				const auto bConsumers = adj[b].size();
 				if (aConsumers != bConsumers)
@@ -1671,7 +1683,9 @@ namespace aether
 
 			computeRecorder.EndDebugLabel();
 			m_storage->EndComputeCommandBuffer(frameIndex);
-			m_storage->SubmitComputeQueue(frameIndex);
+			// Compute queue submission is deferred to SubmitComputeWork(),
+			// called by the frame orchestrator right before graphics submission
+			// so both queues are submitted back-to-back for maximum GPU overlap.
 		}
 
 		// Phase 2: Execute graphics passes on the main graphics command list.

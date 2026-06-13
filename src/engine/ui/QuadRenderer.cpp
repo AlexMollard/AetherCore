@@ -124,10 +124,11 @@ namespace aether
 			                cmd.PushConstantsRaw(layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&push, 1}));
 			                cmd.Dispatch(1, 1, 1);
 
-			                // Barrier here (outside any render pass) - compute writes must be
-			                // visible to the subsequent indirect-draw and vertex-shader reads.
-			                cmd.PipelineMemoryBarrier(
-			                        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderWrite, gpu::PipelineStage::DrawIndirect | gpu::PipelineStage::VertexShader, gpu::AccessFlags::IndirectCommandRead | gpu::AccessFlags::ShaderRead);
+			                // Cross-queue visibility handled by the render graph's timeline
+			                // semaphore (compute submission signals at COMPUTE_SHADER_BIT,
+			                // graphics submission waits at DRAW_INDIRECT_BIT). No inline
+			                // barrier needed — and DRAW_INDIRECT/ VERTEX_SHADER stages
+			                // are invalid on a dedicated compute queue anyway.
 		                });
 
 		auto color = m_renderGraph->GetSwapchainColor();

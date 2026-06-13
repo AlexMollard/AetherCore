@@ -76,15 +76,24 @@ namespace aether
 		// Update the render graph's external buffer handles for the current frame.
 		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot) const;
 
-		void UpdateForView(std::uint32_t frameSlot,
-		        gpu::CommandList& cmd,
-		        const Camera& camera,
-		        GpuExtent2D extent,
-		        FrameConstants& fc,
-		        bool enableBinningForView,
-		        bool isAsyncCompute = false,
-		        std::span<const Renderer::PointLight> pointLights = {},
-		        std::span<const Renderer::SpotLight> spotLights = {}) const;
+		// Accessors for render graph buffer handles (for forward pass declarations).
+		[[nodiscard]] RGBuffer GetLightsBufferHandle() const
+		{
+			return m_rgLights;
+		}
+
+		[[nodiscard]] RGBuffer GetTileHeadersBufferHandle() const
+		{
+			return m_rgTileHeaders;
+		}
+
+		[[nodiscard]] RGBuffer GetTileIndicesBufferHandle() const
+		{
+			return m_rgTileIndices;
+		}
+
+		void UpdateForView(
+		        std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, bool enableBinningForView, std::span<const Renderer::PointLight> pointLights = {}, std::span<const Renderer::SpotLight> spotLights = {}) const;
 
 		void EmitAcquireBarriers(std::uint32_t frameSlot, gpu::CommandList& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
 
@@ -122,7 +131,6 @@ namespace aether
 		static void BuildLightList(std::vector<GpuLight>& outLights, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
 
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
-		void UpdateForViewGpu(std::uint32_t frameSlot, gpu::CommandList& cmd, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		void DisableForView(FrameConstants& fc) const;
 
 		// Per-frame push constants for the lighting compute passes (filled by

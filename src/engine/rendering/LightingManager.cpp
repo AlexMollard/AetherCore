@@ -171,12 +171,10 @@ namespace aether
 	}
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
-	        gpu::CommandList& cmd,
 	        const Camera& camera,
 	        const GpuExtent2D extent,
 	        FrameConstants& fc,
 	        const bool enableBinningForView,
-	        const bool isAsyncCompute,
 	        const std::span<const Renderer::PointLight> pointLights,
 	        const std::span<const Renderer::SpotLight> spotLights) const
 	{
@@ -184,18 +182,6 @@ namespace aether
 		if (!enableBinningForView || extent.width == 0 || extent.height == 0)
 		{
 			DisableForView(fc);
-			return;
-		}
-
-		if (m_gpuBinningEnabled && cmd.IsValid())
-		{
-			UpdateForViewGpu(frameSlot, cmd, camera, extent, fc, pointLights, spotLights);
-			if (!isAsyncCompute)
-			{
-				// Same queue: explicit compute->fragment barrier required.
-				// Async path: the semaphore wait at DRAW_INDIRECT in SubmitAndPresent covers this.
-				cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderStorageRead);
-			}
 			return;
 		}
 
@@ -228,114 +214,6 @@ namespace aether
 			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-	}
-
-	void LightingManager::UpdateForViewGpu(
-	        const std::uint32_t frameSlot, gpu::CommandList& cmd, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
-	        const
-	{
-		AE_PROFILE_ZONE();
-		std::vector<GpuLight> lights;
-		BuildLightList(lights, pointLights, spotLights);
-
-		const std::uint32_t tilesX = (extent.width + kTileSizePx - 1u) / kTileSizePx;
-		const std::uint32_t tilesY = (extent.height + kTileSizePx - 1u) / kTileSizePx;
-		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
-		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
-
-		EnsureBuffers(frameSlot, lights.size(), tileCount, indexCount);
-		auto& frame = m_buffers[frameSlot];
-		if (!lights.empty())
-		{
-			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
-		}
-		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
-
-		EnsureComputePipeline();
-
-		const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
-		LightingComputePush push{};
-		push.viewProj = proj * camera.GetViewMatrix();
-		push.params0 = glm::vec4(camera.GetNearPlane(), 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
-		push.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		push.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
-
-		cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
-
-		// Bind the InitTiles compute pipeline FIRST so CommandList's cached
-		// bind point (used by the cached PushDescriptorSet overload) is
-		// Compute. This ordering also satisfies the Vulkan spec's
-		// pipeline-layout compatibility check for push descriptors: the
-		// bound pipeline layout must be compatible with the layout passed
-		// to vkCmdPushDescriptorSetKHR. Both are m_computeLayout here.
-		cmd.BeginDebugLabel("LightCull.InitTiles", 0.9f, 0.65f, 0.1f);
-		{
-			const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_initPipelineHandle);
-			cmd.BindComputePipeline(resolved.pipeline, resolved.layout);
-		}
-		{
-			const auto& buf = m_buffers[frameSlot];
-			const gpu::GpuDescriptorBufferInfo lightInfo{
-			        .buffer = buf.lights.Get(),
-			        .offset = 0,
-			        .range = buf.lights.GetSize(),
-			};
-			const gpu::GpuDescriptorBufferInfo headerInfo{
-			        .buffer = buf.tileHeaders.Get(),
-			        .offset = 0,
-			        .range = buf.tileHeaders.GetSize(),
-			};
-			const gpu::GpuDescriptorBufferInfo indexInfo{
-			        .buffer = buf.tileIndices.Get(),
-			        .offset = 0,
-			        .range = buf.tileIndices.GetSize(),
-			};
-			const std::array<gpu::GpuWriteDescriptorSet, 3> writes{
-			        gpu::GpuWriteDescriptorSet{
-			                .dstBinding = 0,
-			                .descriptorCount = 1,
-			                .descriptorType = gpu::DescriptorType::StorageBuffer,
-			                .bufferInfo = &lightInfo,
-			        },
-			        gpu::GpuWriteDescriptorSet{
-			                .dstBinding = 1,
-			                .descriptorCount = 1,
-			                .descriptorType = gpu::DescriptorType::StorageBuffer,
-			                .bufferInfo = &headerInfo,
-			        },
-			        gpu::GpuWriteDescriptorSet{
-			                .dstBinding = 2,
-			                .descriptorCount = 1,
-			                .descriptorType = gpu::DescriptorType::StorageBuffer,
-			                .bufferInfo = &indexInfo,
-			        },
-			};
-			cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
-		}
-		{
-			cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(push));
-		}
-		const std::uint32_t tileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
-		cmd.Dispatch(tileGroups, 1, 1);
-		cmd.EndDebugLabel();
-
-		cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
-
-		cmd.BeginDebugLabel("LightCull.BinLights", 0.9f, 0.3f, 0.1f);
-		{
-			const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
-			cmd.BindComputePipeline(resolved.pipeline, resolved.layout);
-		}
-		const std::uint32_t lightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
-		if (lightGroups > 0u)
-		{
-			cmd.Dispatch(lightGroups, 1, 1);
-		}
-		cmd.EndDebugLabel();
-
-		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
 	void LightingManager::EmitAcquireBarriers(const std::uint32_t /*frameSlot*/, gpu::CommandList& /*graphicsCmd*/, const std::uint32_t /*srcFamily*/, const std::uint32_t /*dstFamily*/) const
