@@ -1,5 +1,6 @@
 #include "ui/QuadRenderer.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <glm/geometric.hpp>
 #include <vector>
@@ -23,54 +24,38 @@
 
 namespace aether
 {
-	void QuadRenderer::EnsureComputePipeline()
-	{
-		if (m_vkCtx == nullptr || m_computePipelineHandle.IsValid())
-		{
-			return;
-		}
-
-		const gpu::ComputePipelineDesc desc{
-		        .shaderVfsPath = "shaders://ui_build_draws.spv",
-		        .pushConstantSize = sizeof(ComputePush),
-		        .debugName = "UI.BuildDraws",
-		};
-		m_computePipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(m_vkCtx->GetDevice().device), static_cast<gpu::PipelineCache>(m_vkCtx->GetPipelineCache()), desc);
-	}
-
 	void QuadRenderer::RegisterPass()
 	{
 		if (m_vkCtx == nullptr)
 		{
 			return;
 		}
-		EnsureComputePipeline();
 
-		m_buildPassName = m_passName + ".Build";
-		const auto resolved = gpu::ResourceRegistry::ResolvePipeline(m_computePipelineHandle);
-		m_renderGraph->AddComputePass(m_buildPassName)
-		        .ExecuteCompute(
-		                [this, pipeline = resolved.pipeline, layout = resolved.layout](PassContext& ctx)
+		auto color = m_renderGraph->GetSwapchainColor();
+		m_renderGraph->AddPass(m_passName)
+		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
+		        .Execute(
+		                [this](PassContext& ctx)
 		                {
 			                if (m_vkCtx == nullptr)
 			                {
 				                return;
 			                }
-
 			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
-			                const auto& pending = m_pendingQuads[readSlot];
-			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
-			                if (commandCount == 0)
+			                if (m_pendingQuads[readSlot].empty())
 			                {
 				                return;
 			                }
 
 			                const std::uint32_t frameSlot = readSlot;
-			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(pending.size() * sizeof(DrawCommandData));
+			                auto& pending = m_pendingQuads[readSlot];
+			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
+			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(commandCount * sizeof(DrawCommandData));
+
+			                // Ensure GPU buffers are allocated.
 			                if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
 			                {
 				                m_commandBuffers[frameSlot].Reset();
-
 				                const VkDeviceSize allocSize = commandBytes * 2;
 				                VkBufferCreateInfo bufferInfo{
 				                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -78,11 +63,9 @@ namespace aether
 				                        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
 				                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 				                };
-
 				                VmaAllocationCreateInfo allocInfo{};
 				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
 				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-
 				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
 				                m_commandBuffers[frameSlot] = std::move(buf);
 				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
@@ -103,53 +86,34 @@ namespace aether
 				                m_indirectBuffers[frameSlot] = std::move(buf);
 			                }
 
+			                // Sort by layer on CPU. Use stable_sort to preserve insertion
+			                // order for elements at the same layer (original insertion
+			                // sort was also stable).
+			                std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
+
+			                // Upload sorted command data to the GPU buffer.
 			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
 			                if (mappedCommands == nullptr)
 			                {
 				                return;
 			                }
-
 			                std::memcpy(mappedCommands, pending.data(), commandBytes);
+			                AE_EXPECT_OR_THROW_VOID(m_commandBuffers[frameSlot].FlushMapped());
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
-
-			                const ComputePush push{
-			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
-			                        .indirectCmdAddr = m_indirectBuffers[frameSlot].GetDeviceAddress(),
-			                        .commandCount = commandCount,
-			                };
-
-			                cmd.BindComputePipeline(pipeline, layout);
-			                cmd.PushConstantsRaw(layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&push, 1}));
-			                cmd.Dispatch(1, 1, 1);
-
-			                // Cross-queue visibility handled by the render graph's timeline
-			                // semaphore (compute submission signals at COMPUTE_SHADER_BIT,
-			                // graphics submission waits at DRAW_INDIRECT_BIT). No inline
-			                // barrier needed — and DRAW_INDIRECT/ VERTEX_SHADER stages
-			                // are invalid on a dedicated compute queue anyway.
-		                });
-
-		auto color = m_renderGraph->GetSwapchainColor();
-		m_renderGraph->AddPass(m_passName)
-		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
-		        .Execute(
-		                [this](PassContext& ctx)
-		                {
-			                if (m_vkCtx == nullptr)
+			                // Write DrawIndirectCommand directly to host-visible buffer.
+			                void* mappedIndirect = m_indirectBuffers[frameSlot].GetAllocationInfo().pMappedData;
+			                if (mappedIndirect != nullptr)
 			                {
-				                return;
-			                }
-			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
-			                if (m_pendingQuads[readSlot].empty())
-			                {
-				                return;
+				                VkDrawIndirectCommand* indirect = static_cast<VkDrawIndirectCommand*>(mappedIndirect);
+				                indirect->vertexCount = 6;
+				                indirect->instanceCount = commandCount;
+				                indirect->firstVertex = 0;
+				                indirect->firstInstance = 0;
+				                AE_EXPECT_OR_THROW_VOID(m_indirectBuffers[frameSlot].FlushMapped());
 			                }
 
 			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 			                const gpu::Extent2D ext = ctx.extent;
-			                const std::uint32_t frameSlot = readSlot;
 
 			                const gpu::Viewport viewport{
 			                        .x = 0.f,
@@ -169,11 +133,6 @@ namespace aether
 			                cmd.SetScissor(scissor);
 
 			                cmd.BindPipeline(m_pipeline);
-
-			                // Bind the global bindless descriptor set so textured
-			                // rect draws can sample textures. Always bound even
-			                // for non-textured shapes since the pipeline layout
-			                // declares the set.
 			                cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
 
 			                const QuadPush push{
@@ -235,14 +194,8 @@ namespace aether
 	{
 		if (m_ready)
 		{
-			services.Get<RenderGraph>().RemovePass(m_buildPassName);
 			services.Get<RenderGraph>().RemovePass(m_passName);
 			m_pipeline.Destroy();
-			if (m_computePipelineHandle.IsValid())
-			{
-				gpu::ResourceRegistry::Destroy(m_computePipelineHandle);
-				m_computePipelineHandle = {};
-			}
 			for (auto& slot: m_pendingQuads)
 			{
 				slot.clear();
@@ -256,7 +209,6 @@ namespace aether
 				buffer.Reset();
 			}
 			m_commandBufferCapacities.fill(0);
-			m_buildPassName.clear();
 			m_vkCtx = nullptr;
 			m_renderGraph = nullptr;
 			m_bindlessMgr = nullptr;

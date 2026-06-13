@@ -93,11 +93,13 @@ namespace aether
 		{
 			uint64_t commandDataAddr = 0;
 			uint64_t indirectCmdAddr = 0;
-			uint32_t commandCount = 0;
-			uint32_t _pad0 = 0;
+			uint32_t N = 0;           // padded element count (next power of two)
+			uint32_t stage = 0;       // bitonic stage (2,4,8,...,N) or 0 for write-indirect
+			uint32_t step = 0;        // compare distance within stage
+			uint32_t actualCount = 0; // original count for DrawIndirectCommand
 		};
 
-		static_assert(sizeof(ComputePush) == 24, "ComputePush must match ui_build_draws.slang push constant block.");
+		static_assert(sizeof(ComputePush) == 32, "ComputePush must match ui_build_draws.slang push constant block.");
 
 		struct DrawCommandData
 		{
@@ -117,7 +119,6 @@ namespace aether
 			DrawCommandData cmd;
 		};
 
-		void EnsureComputePipeline();
 		void RegisterPass();
 
 		struct ClipState
@@ -130,13 +131,11 @@ namespace aether
 		[[nodiscard]] bool IsClipped(glm::vec4 pxRect) const;
 
 		std::string m_passName;
-		std::string m_buildPassName;
 		VulkanContext* m_vkCtx = nullptr;
 		RenderGraph* m_renderGraph = nullptr;
 		BindlessManager* m_bindlessMgr = nullptr;
 		Swapchain* m_swapchain = nullptr;
 		GraphicsPipeline m_pipeline;
-		gpu::PipelineHandle m_computePipelineHandle{};
 		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
 		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
 		std::array<std::vector<PendingQuad>, Swapchain::kMaxFramesInFlight> m_pendingQuads;
