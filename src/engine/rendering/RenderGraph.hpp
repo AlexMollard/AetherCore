@@ -273,6 +273,7 @@ namespace aether
 		static constexpr uint32_t kSwapchainColorId = 0u;
 		static constexpr uint32_t kSwapchainDepthId = 1u;
 		static constexpr uint32_t kFirstExternalId = 2u;
+		static constexpr uint32_t kFirstExternalBufferId = 0x20000000u;
 		static constexpr uint32_t kFirstTransientId = 0x40000000u;
 
 		// Attachment reference using engine-side enums (Vulkan-free).
@@ -436,6 +437,11 @@ namespace aether
 		[[nodiscard]] uint32_t ExternalIndex(uint32_t resourceId) const
 		{
 			return resourceId - kFirstExternalId;
+		}
+
+		[[nodiscard]] uint32_t ExternalBufferIndex(uint32_t resourceId) const
+		{
+			return resourceId - kFirstExternalBufferId;
 		}
 
 		[[nodiscard]] uint32_t TransientIndex(uint32_t resourceId) const

@@ -400,11 +400,8 @@ namespace aether
 			AE_EXPECT_OR_THROW_VOID(m_animationSampleJobsBuffer.FlushMapped());
 		}
 
-		// Ensure host writes are visible to compute/graphics shader reads.
-		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host,
-		        gpu::AccessFlags::HostWrite,
-		        gpu::PipelineStage::ComputeShader | gpu::PipelineStage::VertexShader | gpu::PipelineStage::FragmentShader,
-		        gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+		// Ensure host writes are visible to subsequent shader reads.
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 		if (sampleJobsThisFrame > 0 && !m_debugDisableAnimation)
 		{
@@ -740,7 +737,7 @@ namespace aether
 
 			cmdList.EndDebugLabel();
 
-			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader | gpu::PipelineStage::VertexShader, gpu::AccessFlags::ShaderStorageRead);
+			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderStorageRead);
 		}
 		else if (sampleJobsThisFrame > 0 && m_debugDisableAnimation)
 		{
@@ -819,7 +816,7 @@ namespace aether
 		}
 
 		// Ensure indirect args are visible before draw-indirect.
-		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::DrawIndirect, gpu::AccessFlags::IndirectCommandRead);
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::IndirectCommandRead);
 
 #ifdef TRACY_ENABLE
 		{

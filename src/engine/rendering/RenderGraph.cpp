@@ -324,13 +324,13 @@ namespace aether
 			m_externalBuffers.resize(idx + 1, nullptr);
 		}
 		m_externalBuffers[idx] = buffer;
-		const uint32_t id = kFirstExternalId + idx;
+		const uint32_t id = kFirstExternalBufferId + idx;
 		return RGBuffer{id};
 	}
 
 	void RenderGraph::UpdateExternalBuffer(RGBuffer buffer, void* newBuffer)
 	{
-		const uint32_t idx = ExternalIndex(buffer.id);
+		const uint32_t idx = ExternalBufferIndex(buffer.id);
 		m_storage->UpdateExternalBuffer(idx, static_cast<VkBuffer>(newBuffer));
 		if (idx < m_externalBuffers.size())
 		{
@@ -439,7 +439,7 @@ namespace aether
 		{
 			for (auto& pass: m_passes)
 			{
-				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value())
+				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value() && pass.imageAccesses.empty())
 				{
 					pass.queueClass = QueueClass::AsyncCompute;
 				}
@@ -1385,7 +1385,7 @@ namespace aether
 
 		auto resolveBuffer = [&](uint32_t resourceId) -> VkBuffer
 		{
-			const uint32_t extIdx = ExternalIndex(resourceId);
+			const uint32_t extIdx = ExternalBufferIndex(resourceId);
 			return m_storage->GetExternalBuffer(extIdx);
 		};
 
