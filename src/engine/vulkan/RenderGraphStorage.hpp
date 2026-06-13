@@ -44,6 +44,8 @@ namespace aether
 		[[nodiscard]] VkImage GetExternalImage(uint32_t idx) const;
 		[[nodiscard]] VkImageView GetExternalView(uint32_t idx) const;
 		[[nodiscard]] VkImageAspectFlags GetExternalAspect(uint32_t idx) const;
+		void ReleaseExternal(uint32_t idx);
+		void ClearExternalImages();
 
 		[[nodiscard]] std::size_t GetExternalImageCount() const
 		{
@@ -102,6 +104,16 @@ namespace aether
 			return m_lastFrameStats;
 		}
 
+		// -- Split barrier events ------------------------------------------------
+		std::uint32_t AllocateEvent();
+		[[nodiscard]] VkEvent GetEvent(std::uint32_t eventIndex) const;
+		void ReleaseEvent(std::uint32_t eventIndex);
+		void ResetEvents();
+
+		// Emit Vulkan commands for split barriers (vkCmdSetEvent2 / vkCmdWaitEvents2).
+		void CmdSetEvent2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
+		void CmdWaitEvents2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
+
 		// -- Scratch (reused across Execute calls) --------------------------
 		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
 		{
@@ -111,6 +123,11 @@ namespace aether
 		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchBarriers()
 		{
 			return m_scratchBarriers;
+		}
+
+		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchSignalBarriers()
+		{
+			return m_scratchSignalBarriers;
 		}
 
 	private:
@@ -189,6 +206,7 @@ namespace aether
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 
 		std::vector<ExternalImageEntry> m_externalImages;
+		std::vector<std::uint32_t> m_freeExternalSlots;
 		std::vector<TransientImageEntry> m_transientImages;
 		std::vector<std::uint32_t> m_freeTransientSlots;
 		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
@@ -199,6 +217,11 @@ namespace aether
 		// Scratch buffers reused across Execute calls within a single frame.
 		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
 		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
+		std::vector<VkImageMemoryBarrier2> m_scratchSignalBarriers;
+
+		// Event pool for split barriers.
+		std::vector<VkEvent> m_events;
+		std::vector<std::uint32_t> m_freeEventSlots;
 
 		// Per-frame allocation statistics (populated during Execute).
 		FrameStats m_lastFrameStats;

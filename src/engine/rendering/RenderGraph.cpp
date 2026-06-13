@@ -195,6 +195,7 @@ namespace aether
 				}
 			}
 		}
+		m_storage->ClearExternalImages();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
@@ -222,13 +223,17 @@ namespace aether
 
 	RGImage RenderGraph::RegisterImage(void* image, void* view, gpu::ImageAspect aspect)
 	{
-		const uint32_t id = kFirstExternalId + static_cast<uint32_t>(m_externalImages.size());
-		m_externalImages.push_back(ExternalImageEntry{
+		const uint32_t idx = m_storage->RegisterExternalImage(static_cast<VkImage>(image), static_cast<VkImageView>(view), gpu::ToVk(aspect));
+		if (idx >= m_externalImages.size())
+		{
+			m_externalImages.resize(idx + 1);
+		}
+		m_externalImages[idx] = ExternalImageEntry{
 		        .image = image,
 		        .view = view,
 		        .aspect = aspect,
-		});
-		m_storage->RegisterExternalImage(static_cast<VkImage>(image), static_cast<VkImageView>(view), gpu::ToVk(aspect));
+		};
+		const uint32_t id = kFirstExternalId + idx;
 		return RGImage{id};
 	}
 
@@ -305,6 +310,7 @@ namespace aether
 		if (idx < m_externalImages.size())
 		{
 			m_externalImages[idx] = {};
+			m_storage->ReleaseExternal(idx);
 		}
 	}
 
@@ -317,6 +323,8 @@ namespace aether
 			return;
 		}
 		m_compileDirty = false;
+
+		m_storage->ResetEvents();
 
 		const std::size_t N = m_passes.size();
 		m_compiled.clear();
@@ -472,13 +480,11 @@ namespace aether
 		        .layout = gpu::ImageLayout::ColorAttachment,
 		        .writeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT),
 		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT),
-		        .isCrossFrame = false,
 		};
 		states[kSwapchainDepthId] = {
 		        .layout = gpu::ImageLayout::DepthAttachment,
 		        .writeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT),
 		        .writeAccess = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT),
-		        .isCrossFrame = false,
 		};
 
 		for (const std::size_t idx: sortedIndices)
@@ -508,16 +514,11 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = isWAR            ? s.readStages
-						                    : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
-						                                     : s.writeStage,
-						        .srcAccess = isWAR            ? 0u
-						                     : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
-						                                      : s.writeAccess,
+						        .srcStage = isWAR ? s.readStages : s.writeStage,
+						        .srcAccess = isWAR ? 0u : s.writeAccess,
 						        .dstStage = kDstStage,
 						        .dstAccess = loadRead ? kDstReadWrite : kDstWrite,
 						        .aspect = gpu::ImageAspect::Color,
-						        .isCrossFrame = s.isCrossFrame,
 						        .isWAR = isWAR,
 						});
 					}
@@ -533,7 +534,6 @@ namespace aether
 					        .dstStage = kDstStage,
 					        .dstAccess = kDstWrite,
 					        .aspect = gpu::ImageAspect::Color,
-					        .isCrossFrame = false,
 					});
 				}
 
@@ -542,7 +542,6 @@ namespace aether
 				        .writeStage = kDstStage,
 				        .writeAccess = kDstWrite,
 				        .readStages = 0,
-				        .isCrossFrame = false,
 				};
 			}
 
@@ -568,16 +567,11 @@ namespace aether
 						        .resourceId = resId,
 						        .oldLayout = s.layout,
 						        .newLayout = kTarget,
-						        .srcStage = isWAR            ? s.readStages
-						                    : s.isCrossFrame ? static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT)
-						                                     : s.writeStage,
-						        .srcAccess = isWAR            ? 0u
-						                     : s.isCrossFrame ? static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT)
-						                                      : s.writeAccess,
+						        .srcStage = isWAR ? s.readStages : s.writeStage,
+						        .srcAccess = isWAR ? 0u : s.writeAccess,
 						        .dstStage = kDepthStages,
 						        .dstAccess = loadRead ? kDepthReadWrite : kDepthWrite,
 						        .aspect = gpu::ImageAspect::Depth,
-						        .isCrossFrame = s.isCrossFrame,
 						        .isWAR = isWAR,
 						});
 					}
@@ -593,7 +587,6 @@ namespace aether
 					        .dstStage = kDepthStages,
 					        .dstAccess = kDepthWrite,
 					        .aspect = gpu::ImageAspect::Depth,
-					        .isCrossFrame = false,
 					});
 				}
 
@@ -602,7 +595,6 @@ namespace aether
 				        .writeStage = kDepthStages,
 				        .writeAccess = kDepthWrite,
 				        .readStages = 0,
-				        .isCrossFrame = false,
 				};
 			}
 
@@ -647,25 +639,18 @@ namespace aether
 				std::uint64_t srcStage;
 				std::uint64_t srcAccess;
 				gpu::ImageLayout oldLayout;
-				bool barrierCrossFrame = false;
 				bool isWAR = false;
 
 				if (it != states.end())
 				{
 					const ResourceState& s = it->second;
 					oldLayout = s.layout;
-					barrierCrossFrame = s.isCrossFrame;
 
 					isWAR = (s.writeStage == 0 && s.readStages != 0);
 					if (isWAR)
 					{
 						srcStage = s.readStages;
 						srcAccess = 0;
-					}
-					else if (s.isCrossFrame)
-					{
-						srcStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-						srcAccess = static_cast<std::uint64_t>(VK_ACCESS_2_MEMORY_WRITE_BIT);
 					}
 					else
 					{
@@ -707,7 +692,6 @@ namespace aether
 				        .dstStage = dstStage,
 				        .dstAccess = dstAccess,
 				        .aspect = aspect,
-				        .isCrossFrame = barrierCrossFrame,
 				        .isWAR = isWAR,
 				});
 
@@ -718,7 +702,6 @@ namespace aether
 					        .writeStage = 0,
 					        .writeAccess = 0,
 					        .readStages = dstStage,
-					        .isCrossFrame = false,
 					};
 				}
 				else
@@ -728,7 +711,6 @@ namespace aether
 					        .writeStage = dstStage,
 					        .writeAccess = dstAccess,
 					        .readStages = 0,
-					        .isCrossFrame = false,
 					};
 				}
 			}
@@ -737,6 +719,143 @@ namespace aether
 		}
 
 		std::swap(m_lastImageStates, states);
+
+		// -- Split barrier post-processing ---------------------------------
+		// Build a map: resource -> last compiled-pass index that wrote it.
+		std::unordered_map<uint32_t, std::size_t> resLastWriterCi;
+		for (std::size_t ci = 0; ci < m_compiled.size(); ++ci)
+		{
+			const PassRecord& pass = m_passes[m_compiled[ci].passIndex];
+
+			auto recordWrite = [&](uint32_t resId)
+			{
+				resLastWriterCi[resId] = ci;
+			};
+
+			for (const AttachmentRef& a: pass.colorWrites)
+			{
+				recordWrite(a.image.id);
+			}
+			if (pass.depthWrite.has_value())
+			{
+				recordWrite(pass.depthWrite->image.id);
+			}
+			for (const ImageAccessRef& ia: pass.imageAccesses)
+			{
+				if (ia.type == ImageAccessType::StorageWrite)
+				{
+					recordWrite(ia.image.id);
+				}
+			}
+		}
+
+		// Eligible barrier check: producers must be ≥2 apart, no intermediate
+		// writer, and not cross-frame / WAR.
+		for (std::size_t ci = 0; ci < m_compiled.size(); ++ci)
+		{
+			auto& cp = m_compiled[ci];
+
+			std::vector<CompiledBarrier> unsplittable;
+			unsplittable.reserve(cp.preBarriers.size());
+
+			for (const CompiledBarrier& b: cp.preBarriers)
+			{
+				// WAR barriers cannot be split.
+				if (b.isWAR)
+				{
+					unsplittable.push_back(b);
+					continue;
+				}
+
+				const auto lwIt = resLastWriterCi.find(b.resourceId);
+				if (lwIt == resLastWriterCi.end())
+				{
+					unsplittable.push_back(b);
+					continue;
+				}
+
+				const std::size_t producerCi = lwIt->second;
+
+				// Adjacent passes gain nothing from the event overhead.
+				if (producerCi + 1 >= ci)
+				{
+					unsplittable.push_back(b);
+					continue;
+				}
+
+				// Ensure no intermediate pass writes the same resource.
+				bool intermediateWrite = false;
+				for (std::size_t ic = producerCi + 1; ic < ci; ++ic)
+				{
+					const PassRecord& ipass = m_passes[m_compiled[ic].passIndex];
+
+					auto checkWrite = [&](uint32_t resId) -> bool
+					{
+						return resId == b.resourceId;
+					};
+
+					for (const AttachmentRef& a: ipass.colorWrites)
+					{
+						if (checkWrite(a.image.id))
+						{
+							intermediateWrite = true;
+							break;
+						}
+					}
+					if (!intermediateWrite && ipass.depthWrite.has_value() && checkWrite(ipass.depthWrite->image.id))
+					{
+						intermediateWrite = true;
+					}
+					if (!intermediateWrite)
+					{
+						for (const ImageAccessRef& ia: ipass.imageAccesses)
+						{
+							if (ia.type == ImageAccessType::StorageWrite && checkWrite(ia.image.id))
+							{
+								intermediateWrite = true;
+								break;
+							}
+						}
+					}
+					if (intermediateWrite)
+					{
+						break;
+					}
+				}
+
+				if (intermediateWrite)
+				{
+					unsplittable.push_back(b);
+					continue;
+				}
+
+				// Barrier is eligible for splitting.
+				auto& producerCp = m_compiled[producerCi];
+				if (producerCp.splitEventIndex == UINT32_MAX)
+				{
+					producerCp.splitEventIndex = m_storage->AllocateEvent();
+				}
+
+				producerCp.signalBarriers.push_back(b);
+
+				// Group waits by event to minimise vkCmdWaitEvents2 calls.
+				auto waitIt = std::find_if(cp.waits.begin(), cp.waits.end(), [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
+
+				if (waitIt != cp.waits.end())
+				{
+					waitIt->barriers.push_back(b);
+				}
+				else
+				{
+					cp.waits.push_back(CompiledWait{
+					        .eventIndex = producerCp.splitEventIndex,
+					        .barriers = {b},
+					});
+				}
+			}
+
+			cp.preBarriers = std::move(unsplittable);
+		}
 
 #ifndef NDEBUG
 		const auto issues = EvaluateBarriers();
@@ -781,19 +900,6 @@ namespace aether
 					});
 				}
 
-				if (b.srcStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) && !b.isCrossFrame)
-				{
-					issues.push_back({
-					        .kind = BarrierIssue::Kind::PipelineStall,
-					        .passIndex = cp.passIndex,
-					        .resourceId = b.resourceId,
-					        .message = std::format("Pass '{}': resource {} uses ALL_COMMANDS_BIT "
-					                               "but isCrossFrame is false -- unnecessarily conservative.",
-					                pass.name,
-					                b.resourceId),
-					});
-				}
-
 				if (b.newLayout == gpu::ImageLayout::ShaderReadOnly && b.dstStage == static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT) && pass.kind == PassKind::Graphics)
 				{
 					issues.push_back({
@@ -832,6 +938,25 @@ namespace aether
 		VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
 		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
+		// Image resolution helper shared by pre-, wait-, and signal-barriers.
+		auto resolveImage = [&](uint32_t resourceId) -> VkImage
+		{
+			if (resourceId == kSwapchainColorId)
+			{
+				return static_cast<VkImage>(target.colorImage);
+			}
+			if (resourceId == kSwapchainDepthId)
+			{
+				return static_cast<VkImage>(target.depthImage);
+			}
+			if (IsTransientId(resourceId))
+			{
+				return m_storage->ResolveTransientImage(TransientIndex(resourceId));
+			}
+			const uint32_t extIdx = ExternalIndex(resourceId);
+			return m_storage->GetExternalImage(extIdx);
+		};
+
 		for (const CompiledPass& cp: m_compiled)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
@@ -839,29 +964,56 @@ namespace aether
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
-			// -- Barriers ----------------------------------------------------
+			// -- Split barrier waits (consume events from producers) -----------
+			auto& scratchEventBars = m_storage->GetScratchSignalBarriers();
+			for (const CompiledWait& w: cp.waits)
+			{
+				if (w.barriers.empty())
+				{
+					continue;
+				}
+
+				VkEvent event = m_storage->GetEvent(w.eventIndex);
+				if (event == VK_NULL_HANDLE)
+				{
+					continue;
+				}
+
+				scratchEventBars.clear();
+				for (const CompiledBarrier& b: w.barriers)
+				{
+					VkImage image = resolveImage(b.resourceId);
+					if (image == VK_NULL_HANDLE)
+					{
+						AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for split wait in pass '{}'.", b.resourceId, pass.name);
+						continue;
+					}
+
+					scratchEventBars.push_back({
+					        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+					        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
+					        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
+					        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
+					        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
+					        .oldLayout = gpu::ToVk(b.oldLayout),
+					        .newLayout = gpu::ToVk(b.newLayout),
+					        .image = image,
+					        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+					});
+				}
+
+				if (!scratchEventBars.empty())
+				{
+					m_storage->CmdWaitEvents2(vkCmd, event, scratchEventBars.data(), static_cast<uint32_t>(scratchEventBars.size()));
+				}
+			}
+
+			// -- Barriers (unsplittable) ------------------------------------
 			auto& scratchBarriers = m_storage->GetScratchBarriers();
 			scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
-				VkImage image = VK_NULL_HANDLE;
-				if (b.resourceId == kSwapchainColorId)
-				{
-					image = static_cast<VkImage>(target.colorImage);
-				}
-				else if (b.resourceId == kSwapchainDepthId)
-				{
-					image = static_cast<VkImage>(target.depthImage);
-				}
-				else if (IsTransientId(b.resourceId))
-				{
-					image = m_storage->ResolveTransientImage(TransientIndex(b.resourceId));
-				}
-				else
-				{
-					const uint32_t extIdx = ExternalIndex(b.resourceId);
-					image = m_storage->GetExternalImage(extIdx);
-				}
+				VkImage image = resolveImage(b.resourceId);
 
 				if (image == VK_NULL_HANDLE)
 				{
@@ -1006,6 +1158,48 @@ namespace aether
 			if (useDynamicRendering)
 			{
 				cmdList.EndRendering();
+			}
+
+			// -- Split barrier signals (set events for later consumers) --------
+			if (!cp.signalBarriers.empty())
+			{
+				VkEvent event = m_storage->GetEvent(cp.splitEventIndex);
+				if (event != VK_NULL_HANDLE)
+				{
+					scratchEventBars.clear();
+					for (const CompiledBarrier& b: cp.signalBarriers)
+					{
+						VkImage image = resolveImage(b.resourceId);
+						if (image == VK_NULL_HANDLE)
+						{
+							AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for split signal in pass '{}'.", b.resourceId, pass.name);
+							continue;
+						}
+
+						m_storage->GetLastFrameStats().barrierCount++;
+
+#ifndef NDEBUG
+						m_storage->SetTrackedLayout(image, gpu::ToVk(b.newLayout));
+#endif
+
+						scratchEventBars.push_back({
+						        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+						        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
+						        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
+						        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage), // ignored by set
+						        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),      // ignored by set
+						        .oldLayout = gpu::ToVk(b.oldLayout),
+						        .newLayout = gpu::ToVk(b.newLayout),
+						        .image = image,
+						        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+						});
+					}
+
+					if (!scratchEventBars.empty())
+					{
+						m_storage->CmdSetEvent2(vkCmd, event, scratchEventBars.data(), static_cast<uint32_t>(scratchEventBars.size()));
+					}
+				}
 			}
 
 			recorder.EndDebugLabel();

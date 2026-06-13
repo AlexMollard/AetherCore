@@ -43,11 +43,22 @@ namespace aether
 		}
 		m_imageCache.clear();
 		m_freeTransientSlots.clear();
+		m_freeExternalSlots.clear();
 
 		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			m_pendingDestructions[i].clear();
 		}
+
+		for (VkEvent event: m_events)
+		{
+			if (event != VK_NULL_HANDLE)
+			{
+				vkDestroyEvent(m_device, event, nullptr);
+			}
+		}
+		m_events.clear();
+		m_freeEventSlots.clear();
 
 		m_device = VK_NULL_HANDLE;
 		m_allocator = VK_NULL_HANDLE;
@@ -72,8 +83,18 @@ namespace aether
 
 	uint32_t RenderGraphStorage::RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect)
 	{
-		const uint32_t idx = static_cast<uint32_t>(m_externalImages.size());
-		m_externalImages.push_back({image, view, aspect});
+		uint32_t idx;
+		if (!m_freeExternalSlots.empty())
+		{
+			idx = m_freeExternalSlots.back();
+			m_freeExternalSlots.pop_back();
+			m_externalImages[idx] = {image, view, aspect};
+		}
+		else
+		{
+			idx = static_cast<uint32_t>(m_externalImages.size());
+			m_externalImages.push_back({image, view, aspect});
+		}
 #ifndef NDEBUG
 		SetTrackedLayout(image, VK_IMAGE_LAYOUT_UNDEFINED);
 #endif
@@ -93,6 +114,36 @@ namespace aether
 	VkImageAspectFlags RenderGraphStorage::GetExternalAspect(uint32_t idx) const
 	{
 		return (idx < m_externalImages.size()) ? m_externalImages[idx].aspect : VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
+	void RenderGraphStorage::ReleaseExternal(uint32_t idx)
+	{
+		if (idx < m_externalImages.size())
+		{
+#ifndef NDEBUG
+			if (m_externalImages[idx].image != VK_NULL_HANDLE)
+			{
+				EraseTrackedLayout(m_externalImages[idx].image);
+			}
+#endif
+			m_externalImages[idx] = {};
+			m_freeExternalSlots.push_back(idx);
+		}
+	}
+
+	void RenderGraphStorage::ClearExternalImages()
+	{
+#ifndef NDEBUG
+		for (const auto& entry: m_externalImages)
+		{
+			if (entry.image != VK_NULL_HANDLE)
+			{
+				EraseTrackedLayout(entry.image);
+			}
+		}
+#endif
+		m_externalImages.clear();
+		m_freeExternalSlots.clear();
 	}
 
 	// -- Transient images -----------------------------------------------------
@@ -353,6 +404,96 @@ namespace aether
 				++it;
 			}
 		}
+	}
+
+	// -- Split barrier events --------------------------------------------------
+
+	std::uint32_t RenderGraphStorage::AllocateEvent()
+	{
+		if (m_device == VK_NULL_HANDLE)
+		{
+			AE_WARN(LogCategory::Vulkan, "RenderGraph: AllocateEvent called before Initialize.");
+			return UINT32_MAX;
+		}
+
+		if (!m_freeEventSlots.empty())
+		{
+			const uint32_t idx = m_freeEventSlots.back();
+			m_freeEventSlots.pop_back();
+			return idx;
+		}
+
+		const uint32_t idx = static_cast<uint32_t>(m_events.size());
+		VkEvent event = VK_NULL_HANDLE;
+		const VkEventCreateInfo info{
+		        .sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO,
+		};
+		if (vkCreateEvent(m_device, &info, nullptr, &event) != VK_SUCCESS)
+		{
+			AE_WARN(LogCategory::Vulkan, "RenderGraph: failed to create VkEvent for split barrier.");
+			return UINT32_MAX;
+		}
+		m_events.push_back(event);
+		return idx;
+	}
+
+	VkEvent RenderGraphStorage::GetEvent(std::uint32_t eventIndex) const
+	{
+		if (eventIndex < m_events.size())
+		{
+			return m_events[eventIndex];
+		}
+		return VK_NULL_HANDLE;
+	}
+
+	void RenderGraphStorage::ReleaseEvent(std::uint32_t eventIndex)
+	{
+		if (eventIndex < m_events.size())
+		{
+			m_freeEventSlots.push_back(eventIndex);
+		}
+	}
+
+	void RenderGraphStorage::ResetEvents()
+	{
+		m_freeEventSlots.clear();
+		m_freeEventSlots.reserve(m_events.size());
+		for (std::uint32_t i = 0; i < m_events.size(); ++i)
+		{
+			m_freeEventSlots.push_back(i);
+		}
+	}
+
+	void RenderGraphStorage::CmdSetEvent2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count)
+	{
+		if (count == 0)
+		{
+			return;
+		}
+
+		vkCmdResetEvent2(cmd, event, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+
+		const VkDependencyInfo depInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .imageMemoryBarrierCount = count,
+		        .pImageMemoryBarriers = barriers,
+		};
+		vkCmdSetEvent2(cmd, event, &depInfo);
+	}
+
+	void RenderGraphStorage::CmdWaitEvents2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count)
+	{
+		if (count == 0)
+		{
+			return;
+		}
+
+		const VkDependencyInfo depInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .imageMemoryBarrierCount = count,
+		        .pImageMemoryBarriers = barriers,
+		};
+		vkCmdWaitEvents2(cmd, 1, &event, &depInfo);
 	}
 
 	// -- EnsureTransientImages ------------------------------------------------

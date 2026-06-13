@@ -241,14 +241,23 @@ namespace aether
 			std::uint64_t dstStage = 0;
 			std::uint64_t dstAccess = 0;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
-			bool isCrossFrame = false;
 			bool isWAR = false;
+		};
+
+		// A set of wait barriers sharing a single event.
+		struct CompiledWait
+		{
+			std::uint32_t eventIndex = UINT32_MAX;
+			std::vector<CompiledBarrier> barriers;
 		};
 
 		struct CompiledPass
 		{
 			std::size_t passIndex = 0;
-			std::vector<CompiledBarrier> preBarriers;
+			std::vector<CompiledBarrier> preBarriers;    // non-split barriers
+			std::vector<CompiledBarrier> signalBarriers; // emitted as vkCmdSetEvent2 at end of producer
+			std::uint32_t splitEventIndex = UINT32_MAX;  // event this pass signals (VkEvent index in storage)
+			std::vector<CompiledWait> waits;             // events/barriers to wait on at start of consumer
 		};
 
 		// Tracking state for barrier compilation (engine-side enums + raw bits).
@@ -258,7 +267,6 @@ namespace aether
 			std::uint64_t writeStage = 0;
 			std::uint64_t writeAccess = 0;
 			std::uint64_t readStages = 0;
-			bool isCrossFrame = false;
 		};
 
 		enum class PassKind
