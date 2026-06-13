@@ -306,7 +306,6 @@ namespace aether
 			enum class Kind
 			{
 				Redundant,
-				PipelineStall,
 				MissingAccessMask,
 				NeedsTopOfPipe,
 				VertexSamplingGap,

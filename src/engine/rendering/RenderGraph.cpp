@@ -461,6 +461,138 @@ namespace aether
 			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
 		}
 
+		// -- Dead Store Elimination -----------------------------------------------
+		// A pass is dead if none of its image outputs are read by any later pass,
+		// and it has no side effects (swapchain writes, external image writes).
+		// Culled passes are skipped entirely - no barriers are compiled for them,
+		// and Execute() never dispatches their work.
+
+		std::vector<bool> passCulledByPassIdx(N, false);
+		{
+			// Build map: resourceId → sorted positions of passes that read it
+			std::unordered_map<uint32_t, std::vector<std::size_t>> resourceReaders;
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				const std::size_t passIdx = sortedIndices[i];
+				const PassRecord& pass = m_passes[passIdx];
+
+				auto recordRead = [&](uint32_t resId)
+				{
+					resourceReaders[resId].push_back(i);
+				};
+
+				for (const ImageAccessRef& r: pass.imageAccesses)
+				{
+					if (r.type != ImageAccessType::StorageWrite)
+					{
+						recordRead(r.image.id);
+					}
+				}
+
+				for (const AttachmentRef& a: pass.colorWrites)
+				{
+					if (a.loadOp == gpu::LoadOp::Load)
+					{
+						recordRead(a.image.id);
+					}
+				}
+
+				if (pass.depthWrite.has_value() && pass.depthWrite->loadOp == gpu::LoadOp::Load)
+				{
+					recordRead(pass.depthWrite->image.id);
+				}
+			}
+
+			for (std::size_t i = 0; i < N; ++i)
+			{
+				const std::size_t passIdx = sortedIndices[i];
+				const PassRecord& pass = m_passes[passIdx];
+
+				// Collect write targets
+				std::vector<uint32_t> writeTargets;
+				for (const AttachmentRef& a: pass.colorWrites)
+				{
+					writeTargets.push_back(a.image.id);
+				}
+				if (pass.depthWrite.has_value())
+				{
+					writeTargets.push_back(pass.depthWrite->image.id);
+				}
+				for (const ImageAccessRef& ia: pass.imageAccesses)
+				{
+					if (ia.type == ImageAccessType::StorageWrite)
+					{
+						writeTargets.push_back(ia.image.id);
+					}
+				}
+
+				// No tracked image writes → can't prove no side effects (buffers, external state)
+				if (writeTargets.empty())
+				{
+					continue;
+				}
+
+				// Side-effect targets are never dead
+				auto isSideEffect = [&](uint32_t resId) -> bool
+				{
+					return resId == kSwapchainColorId || resId == kSwapchainDepthId || (resId >= kFirstExternalId && resId < kFirstTransientId);
+				};
+
+				bool hasSideEffect = false;
+				for (uint32_t resId: writeTargets)
+				{
+					if (isSideEffect(resId))
+					{
+						hasSideEffect = true;
+						break;
+					}
+				}
+				if (hasSideEffect)
+				{
+					continue;
+				}
+
+				// Check if any write is read by a later pass
+				bool anyReaderFound = false;
+				for (uint32_t resId: writeTargets)
+				{
+					const auto it = resourceReaders.find(resId);
+					if (it != resourceReaders.end())
+					{
+						for (std::size_t readerPos: it->second)
+						{
+							if (readerPos > i)
+							{
+								anyReaderFound = true;
+								break;
+							}
+						}
+					}
+					if (anyReaderFound)
+					{
+						break;
+					}
+				}
+
+				if (!anyReaderFound)
+				{
+					passCulledByPassIdx[passIdx] = true;
+#ifndef NDEBUG
+					std::string deadResources;
+					for (uint32_t resId: writeTargets)
+					{
+						if (!deadResources.empty())
+						{
+							deadResources += ", ";
+						}
+						deadResources += std::to_string(resId);
+					}
+					AE_WARN(LogCategory::Engine, "Pass '{}' writes to RGImage(s) {}, but no subsequent pass reads {}. Culled from execution.", pass.name, deadResources, writeTargets.size() > 1 ? "them" : "it");
+#endif
+				}
+			}
+		}
+
 		std::unordered_map<uint32_t, ResourceState> states;
 		for (const auto& [id, s]: m_lastImageStates)
 		{
@@ -489,6 +621,11 @@ namespace aether
 
 		for (const std::size_t idx: sortedIndices)
 		{
+			if (passCulledByPassIdx[idx])
+			{
+				continue;
+			}
+
 			const PassRecord& pass = m_passes[idx];
 			CompiledPass cp;
 			cp.passIndex = idx;

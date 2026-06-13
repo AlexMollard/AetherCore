@@ -272,15 +272,15 @@ def on_attach(world : World?)
 	g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim", true);
 	if (g_player_walk_clip >= 0)
 	{
-		print("Walking animation added as clip {g_player_walk_clip}\n");
+		// print("Walking animation added as clip {g_player_walk_clip}\n");
 		compile_animations(world, g_player);
 		init_entity_ik(world, g_player);
 		set_ik_enabled(world, g_player, true);
-		print("IK foot planting enabled for player\n");
+		// print("IK foot planting enabled for player\n");
 	}
 	else
 	{
-		print("Failed to add walking animation\n");
+		// print("Failed to add walking animation\n");
 	}
 
 	init_default_bindings();
@@ -483,7 +483,7 @@ def on_update(world : World?)
 		set_ik_enabled(world, g_player, g_player_ik_enabled);
 		var ikState = g_player_ik_enabled ? "ENABLED" : "DISABLED";
 		var footContact = get_foot_contact(world, g_player, 0) ? "L foot planted" : "L foot in air";
-		print("IK {ikState} ({footContact})\n");
+		// print("IK {ikState} ({footContact})\n");
 	}
 }
 
