@@ -80,6 +80,7 @@ namespace aether
 
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
+		mesh.m_allocator = reinterpret_cast<gpu::Allocator>(static_cast<std::uintptr_t>(1));
 		mesh.m_buffer = bufferHandle;
 		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
 		mesh.m_vertexDeviceAddress = resolved.deviceAddress;
