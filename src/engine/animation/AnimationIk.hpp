@@ -29,8 +29,8 @@ namespace aether
 	class AnimationIkSystem
 	{
 	public:
-		void Init(VmaAllocator allocator, VkDevice device, VkDeviceSize maxEntities);
-		void Shutdown(VkDevice device);
+		void Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxEntities);
+		void Shutdown(gpu::Device device);
 
 		// One-time per-entity setup: looks up bone indices and computes leg lengths.
 		// Call once when entity is spawned with a skeleton.
@@ -86,7 +86,7 @@ namespace aether
 		AnimationContracts::IkSolvePush m_ikPush{};
 		AnimationContracts::IkSolveJob* m_mappedIkJobs = nullptr;
 		AnimationContracts::IkGroundResult* m_mappedGroundResults = nullptr;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		gpu::Allocator m_allocator = nullptr;
 		std::uint32_t m_entityCount = 0;
 		std::uint32_t m_maxEntities = 0;
 		std::uint32_t m_nodeCount = 0;

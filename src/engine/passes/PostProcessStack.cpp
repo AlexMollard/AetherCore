@@ -8,6 +8,7 @@
 #include "gpu/PushConstantsBytes.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
+#include "vulkan/UniqueImage.hpp"
 
 namespace aether
 {
@@ -21,12 +22,12 @@ namespace aether
 		                {
 		                        .extent = desc.extent,
 		                        .format = gpu::Format::R16G16B16A16Sfloat,
-		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		                        .debugName = "PostProcess.HdrColor",
 		                }));
 		stack.m_hdrColorImage = std::move(hdrImage);
 		stack.m_hdrColor = desc.renderGraph->RegisterImage(static_cast<void*>(stack.m_hdrColorImage.Get()), static_cast<void*>(stack.m_hdrColorImage.GetDefaultView()));
-		AE_EXPECT_OR_THROW_VOID(stack.m_hdrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+		AE_EXPECT_OR_THROW_VOID(stack.m_hdrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly));
 
 		AE_EXPECT_OR_THROW(ldrImage,
 		        UniqueImage::Create(desc.device,
@@ -34,12 +35,12 @@ namespace aether
 		                {
 		                        .extent = desc.extent,
 		                        .format = gpu::Format::R8G8B8A8Unorm,
-		                        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		                        .debugName = "PostProcess.LdrColor",
 		                }));
 		stack.m_ldrColorImage = std::move(ldrImage);
-		stack.m_ldrColor = desc.renderGraph->RegisterImage(static_cast<void*>(stack.m_ldrColorImage.Get()), static_cast<void*>(stack.m_ldrColorImage.GetDefaultView()));
-		AE_EXPECT_OR_THROW_VOID(stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+		stack.m_hdrColor = desc.renderGraph->RegisterImage(static_cast<void*>(stack.m_hdrColorImage.Get()), static_cast<void*>(stack.m_hdrColorImage.GetDefaultView()));
+		AE_EXPECT_OR_THROW_VOID(stack.m_ldrColorImage.EnsureBindlessSampled(*desc.bindlessManager, desc.device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly));
 
 		const aether::gpu::DescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 

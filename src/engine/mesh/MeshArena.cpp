@@ -11,7 +11,7 @@ namespace aether
 		m_indexHeap.Initialize(ctx,
 		        {
 		                .capacityBytes = desc.indexCapacityBytes,
-		                .additionalUsage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		                .additionalUsage = gpu::BufferUsage::Index,
 		        });
 		m_vertexHandle = gpu::BufferHandle::Make(0, 1);
 		m_indexHandle = gpu::BufferHandle::Make(1, 1);

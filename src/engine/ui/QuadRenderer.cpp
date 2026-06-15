@@ -4,8 +4,6 @@
 #include <cstring>
 #include <glm/geometric.hpp>
 #include <vector>
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
 #include "vulkan/VulkanUtils.hpp"
 #include "io/FileSystem.hpp"
@@ -20,7 +18,6 @@
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
-#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -47,101 +44,92 @@ namespace aether
 				                return;
 			                }
 
-			                const std::uint32_t frameSlot = readSlot;
-			                auto& pending = m_pendingQuads[readSlot];
-			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
-			                const VkDeviceSize commandBytes = static_cast<VkDeviceSize>(commandCount * sizeof(DrawCommandData));
+				const std::uint32_t frameSlot = readSlot;
+				auto& pending = m_pendingQuads[readSlot];
+				const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
+				const gpu::DeviceSize commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
 
-			                // Ensure GPU buffers are allocated.
-			                if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
-			                {
-				                m_commandBuffers[frameSlot].Reset();
-				                const VkDeviceSize allocSize = commandBytes * 2;
-				                VkBufferCreateInfo bufferInfo{
-				                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				                        .size = allocSize,
-				                        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-				                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-				                };
-				                VmaAllocationCreateInfo allocInfo{};
-				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, bufferInfo, allocInfo));
-				                m_commandBuffers[frameSlot] = std::move(buf);
-				                m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
-			                }
+				// Ensure GPU buffers are allocated.
+				if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
+				{
+					m_commandBuffers[frameSlot].Reset();
+					const gpu::DeviceSize allocSize = commandBytes * 2;
+					AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(
+					                static_cast<gpu::Allocator>(m_vkCtx->GetAllocator()),
+					                static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
+					                allocSize,
+					                gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+					                "QuadRenderer.Commands"));
+					m_commandBuffers[frameSlot] = std::move(buf);
+					m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
+				}
 
-			                if (!m_indirectBuffers[frameSlot])
-			                {
-				                const VkBufferCreateInfo indirectInfo{
-				                        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-				                        .size = sizeof(VkDrawIndirectCommand),
-				                        .usage = VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
-				                        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-				                };
-				                VmaAllocationCreateInfo allocInfo{};
-				                allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-				                allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
-				                AE_EXPECT_OR_THROW(buf, UniqueBuffer::Create(m_vkCtx->GetAllocator(), m_vkCtx->GetDevice().device, indirectInfo, allocInfo));
-				                m_indirectBuffers[frameSlot] = std::move(buf);
-			                }
+				if (!m_indirectBuffers[frameSlot])
+				{
+					AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(
+					                static_cast<gpu::Allocator>(m_vkCtx->GetAllocator()),
+					                static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
+					                sizeof(gpu::DrawIndirectCommand),
+					                gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+					                "QuadRenderer.Indirect"));
+					m_indirectBuffers[frameSlot] = std::move(buf);
+				}
 
-			                // Sort by layer on CPU. Use stable_sort to preserve insertion
-			                // order for elements at the same layer (original insertion
-			                // sort was also stable).
-			                std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
+				// Sort by layer on CPU. Use stable_sort to preserve insertion
+				// order for elements at the same layer (original insertion
+				// sort was also stable).
+				std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
 
-			                // Upload sorted command data to the GPU buffer.
-			                void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
-			                if (mappedCommands == nullptr)
-			                {
-				                return;
-			                }
-			                std::memcpy(mappedCommands, pending.data(), commandBytes);
-			                AE_EXPECT_OR_THROW_VOID(m_commandBuffers[frameSlot].FlushMapped());
+				// Upload sorted command data to the GPU buffer.
+				void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
+				if (mappedCommands == nullptr)
+				{
+					return;
+				}
+				std::memcpy(mappedCommands, pending.data(), commandBytes);
+				AE_EXPECT_OR_THROW_VOID(m_commandBuffers[frameSlot].FlushMapped());
 
-			                // Write DrawIndirectCommand directly to host-visible buffer.
-			                void* mappedIndirect = m_indirectBuffers[frameSlot].GetAllocationInfo().pMappedData;
-			                if (mappedIndirect != nullptr)
-			                {
-				                VkDrawIndirectCommand* indirect = static_cast<VkDrawIndirectCommand*>(mappedIndirect);
-				                indirect->vertexCount = 6;
-				                indirect->instanceCount = commandCount;
-				                indirect->firstVertex = 0;
-				                indirect->firstInstance = 0;
-				                AE_EXPECT_OR_THROW_VOID(m_indirectBuffers[frameSlot].FlushMapped());
-			                }
+				// Write DrawIndirectCommand directly to host-visible buffer.
+				gpu::DrawIndirectCommand* indirect = static_cast<gpu::DrawIndirectCommand*>(m_indirectBuffers[frameSlot].GetAllocationInfo().pMappedData);
+				if (indirect != nullptr)
+				{
+					indirect->vertexCount = 6;
+					indirect->instanceCount = commandCount;
+					indirect->firstVertex = 0;
+					indirect->firstInstance = 0;
+					AE_EXPECT_OR_THROW_VOID(m_indirectBuffers[frameSlot].FlushMapped());
+				}
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-			                const gpu::Extent2D ext = ctx.extent;
+				gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+				const gpu::Extent2D ext = ctx.extent;
 
-			                const gpu::Viewport viewport{
-			                        .x = 0.f,
-			                        .y = 0.f,
-			                        .width = static_cast<float>(ext.width),
-			                        .height = static_cast<float>(ext.height),
-			                        .minDepth = 0.f,
-			                        .maxDepth = 1.f,
-			                };
-			                const gpu::Rect2D scissor{
-			                        .x = 0,
-			                        .y = 0,
-			                        .width = ext.width,
-			                        .height = ext.height,
-			                };
-			                cmd.SetViewport(viewport);
-			                cmd.SetScissor(scissor);
+				const gpu::Viewport viewport{
+				        .x = 0.f,
+				        .y = 0.f,
+				        .width = static_cast<float>(ext.width),
+				        .height = static_cast<float>(ext.height),
+				        .minDepth = 0.f,
+				        .maxDepth = 1.f,
+				};
+				const gpu::Rect2D scissor{
+				        .x = 0,
+				        .y = 0,
+				        .width = ext.width,
+				        .height = ext.height,
+				};
+				cmd.SetViewport(viewport);
+				cmd.SetScissor(scissor);
 
-			                cmd.BindPipeline(m_pipeline);
-			                cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
+				cmd.BindPipeline(m_pipeline);
+				cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
 
-			                const QuadPush push{
-			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
-			                        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
-			                };
-			                cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
+				const QuadPush push{
+				        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
+				        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
+				};
+				cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
 
-			                cmd.DrawIndirect(m_indirectBuffers[frameSlot].Get(), 0, 1, sizeof(VkDrawIndirectCommand));
+				cmd.DrawIndirect(m_indirectBuffers[frameSlot].GetBuffer(), 0, 1, sizeof(gpu::DrawIndirectCommand));
 
 			                m_pendingQuads[readSlot].clear();
 		                });

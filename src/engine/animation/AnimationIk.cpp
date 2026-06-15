@@ -20,7 +20,7 @@ namespace aether
 		return hash;
 	}
 
-	void AnimationIkSystem::Init(VmaAllocator allocator, VkDevice device, VkDeviceSize maxEntities)
+	void AnimationIkSystem::Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxEntities)
 	{
 		m_allocator = allocator;
 		m_maxEntities = static_cast<std::uint32_t>(maxEntities);
@@ -32,23 +32,23 @@ namespace aether
 		{
 			AE_EXPECT_OR_THROW(buffer,
 			        UniqueBuffer::CreateMapped(
-			                m_allocator, device, static_cast<VkDeviceSize>(maxEntities) * sizeof(AnimationContracts::IkSolveJob), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "AnimationIk.IkJobs"));
+			                m_allocator, device, maxEntities * sizeof(AnimationContracts::IkSolveJob), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationIk.IkJobs"));
 			m_ikJobsBuffer = std::move(buffer);
-			VmaAllocationInfo info = m_ikJobsBuffer.GetAllocationInfo();
+			const auto info = m_ikJobsBuffer.GetAllocationInfo();
 			m_mappedIkJobs = static_cast<AnimationContracts::IkSolveJob*>(info.pMappedData);
 		}
 
 		{
 			AE_EXPECT_OR_THROW(buffer,
 			        UniqueBuffer::CreateMapped(
-			                m_allocator, device, static_cast<VkDeviceSize>(maxEntities) * 2 * sizeof(AnimationContracts::IkGroundResult), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "AnimationIk.GroundResults"));
+			                m_allocator, device, maxEntities * 2 * sizeof(AnimationContracts::IkGroundResult), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationIk.GroundResults"));
 			m_groundResultsBuffer = std::move(buffer);
-			VmaAllocationInfo info = m_groundResultsBuffer.GetAllocationInfo();
+			const auto info = m_groundResultsBuffer.GetAllocationInfo();
 			m_mappedGroundResults = static_cast<AnimationContracts::IkGroundResult*>(info.pMappedData);
 		}
 	}
 
-	void AnimationIkSystem::Shutdown(VkDevice /*device*/)
+	void AnimationIkSystem::Shutdown(gpu::Device /*device*/)
 	{
 		m_ikJobsBuffer.Reset();
 		m_groundResultsBuffer.Reset();
@@ -294,7 +294,7 @@ namespace aether
 			job.rightKneeBendSign = ikComp.rightKneeBendSign;
 			job.entityId = entityId;
 			job.globalTransformsAddr = 0;
-			job.ikResultsAddr = m_groundResultsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(groundResultBase) * sizeof(AnimationContracts::IkGroundResult);
+			job.ikResultsAddr = m_groundResultsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(groundResultBase) * sizeof(AnimationContracts::IkGroundResult);
 
 			m_mappedIkJobs[jobIdx] = job;
 			++jobIdx;

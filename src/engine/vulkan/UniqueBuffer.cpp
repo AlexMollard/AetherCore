@@ -3,11 +3,55 @@
 #include <format>
 #include <utility>
 
+#include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
+	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate
+	// to the Vulkan-internal overload. Keeps the bridge in one place.
+
+	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, const char* debugName)
+	{
+		return CreateMapped(
+		        static_cast<VmaAllocator>(allocator),
+		        static_cast<VkDevice>(device),
+		        static_cast<VkDeviceSize>(size),
+		        gpu::ToVk(usage),
+		        debugName);
+	}
+
+	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, gpu::MappedMemoryUsage memoryUsage, const char* debugName)
+	{
+		const VkBufferCreateInfo bufferInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = static_cast<VkDeviceSize>(size),
+		        .usage = gpu::ToVk(usage),
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		};
+		const VmaAllocationCreateInfo allocInfo{
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
+		};
+		return Create(
+		        static_cast<VmaAllocator>(allocator),
+		        static_cast<VkDevice>(device),
+		        bufferInfo,
+		        allocInfo);
+	}
+
+	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, const char* debugName)
+	{
+		return CreateDeviceLocal(
+		        static_cast<VmaAllocator>(allocator),
+		        static_cast<VkDevice>(device),
+		        static_cast<VkDeviceSize>(size),
+		        gpu::ToVk(usage),
+		        debugName);
+	}
+
 	UniqueBuffer::~UniqueBuffer()
 	{
 		Reset();
@@ -225,9 +269,9 @@ namespace aether
 		m_virtualResourceId = 0;
 	}
 
-	Expected<void> UniqueBuffer::FlushMapped(VkDeviceSize offset, VkDeviceSize size) const
+	Expected<void> UniqueBuffer::FlushMapped(gpu::DeviceSize offset, gpu::DeviceSize size) const
 	{
-		const VkResult result = vmaFlushAllocation(m_allocator, m_allocation, offset, size);
+		const VkResult result = vmaFlushAllocation(m_allocator, m_allocation, static_cast<VkDeviceSize>(offset), static_cast<VkDeviceSize>(size));
 		if (result != VK_SUCCESS)
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "vmaFlushAllocation failed"));

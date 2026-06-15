@@ -11,8 +11,8 @@ namespace aether
 	class AnimationBlendSystem
 	{
 	public:
-		void Init(VmaAllocator allocator, VkDevice device, VkDeviceSize maxBlendJobCount, std::uint32_t nodeCount);
-		void Shutdown(VkDevice device);
+		void Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount);
+		void Shutdown(gpu::Device device);
 
 		void UpdateBlendWeights(World& world, float dt);
 

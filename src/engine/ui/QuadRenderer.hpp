@@ -6,7 +6,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "vulkan/volk.hpp"
 
 #include "gpu/GpuHandles.hpp"
 #include "rendering/GraphicsPipeline.hpp"

@@ -30,9 +30,9 @@ namespace aether
 	RenderGraph::RenderGraph(RenderGraph&&) noexcept = default;
 	RenderGraph& RenderGraph::operator=(RenderGraph&&) noexcept = default;
 
-	void RenderGraph::Initialize(void* device, void* allocator)
+	void RenderGraph::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
-		m_storage->Initialize(static_cast<VkDevice>(device), static_cast<VmaAllocator>(allocator));
+		m_storage->Initialize(device, allocator);
 	}
 
 	void RenderGraph::Shutdown()
@@ -258,9 +258,9 @@ namespace aether
 		return result;
 	}
 
-	void RenderGraph::EnableAsyncCompute(void* computeQueue, std::uint32_t computeQueueFamily)
+	void RenderGraph::EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily)
 	{
-		m_storage->EnableAsyncCompute(static_cast<VkQueue>(computeQueue), computeQueueFamily);
+		m_storage->EnableAsyncCompute(computeQueue, computeQueueFamily);
 		m_asyncComputeEnabled = true;
 	}
 
@@ -300,9 +300,9 @@ namespace aether
 
 	// -- Image registration ---------------------------------------------------
 
-	RGImage RenderGraph::RegisterImage(void* image, void* view, gpu::ImageAspect aspect)
+	RGImage RenderGraph::RegisterImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect)
 	{
-		const uint32_t idx = m_storage->RegisterExternalImage(static_cast<VkImage>(image), static_cast<VkImageView>(view), gpu::ToVk(aspect));
+		const uint32_t idx = m_storage->RegisterExternalImage(image, view, aspect);
 		if (idx >= m_externalImages.size())
 		{
 			m_externalImages.resize(idx + 1);
@@ -316,9 +316,9 @@ namespace aether
 		return RGImage{id};
 	}
 
-	RGBuffer RenderGraph::RegisterBuffer(void* buffer)
+	RGBuffer RenderGraph::RegisterBuffer(gpu::Buffer buffer)
 	{
-		const uint32_t idx = m_storage->RegisterExternalBuffer(static_cast<VkBuffer>(buffer));
+		const uint32_t idx = m_storage->RegisterExternalBuffer(buffer);
 		if (idx >= m_externalBuffers.size())
 		{
 			m_externalBuffers.resize(idx + 1, nullptr);
@@ -328,15 +328,15 @@ namespace aether
 		return RGBuffer{id};
 	}
 
-	void RenderGraph::UpdateExternalBuffer(RGBuffer buffer, void* newBuffer)
+	void RenderGraph::UpdateExternalBuffer(RGBuffer buffer, gpu::Buffer newBuffer)
 	{
 		const uint32_t idx = ExternalBufferIndex(buffer.id);
-		m_storage->UpdateExternalBuffer(idx, static_cast<VkBuffer>(newBuffer));
+		m_storage->UpdateExternalBuffer(idx, newBuffer);
 		if (idx < m_externalBuffers.size())
 		{
 			m_externalBuffers[idx] = newBuffer;
 		}
-		// Reset buffer state — the backing VkBuffer has been replaced, so the
+		// Reset buffer state — the backing buffer has been replaced, so the
 		// previous frame's barrier tracking is stale. The next Compile() will
 		// emit a fresh TOP_OF_PIPE barrier for this buffer.
 		m_lastBufferStates.erase(buffer.id);
@@ -345,10 +345,8 @@ namespace aether
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
 	{
 		const VkFormat vkFormat = gpu::ToVk(desc.format);
-		const VkImageUsageFlags vkUsage = gpu::ToVk(desc.usage);
-		const VkImageAspectFlags vkAspect = gpu::ToVk(desc.aspect);
 
-		const uint32_t idx = m_storage->AddTransientSlot(vkFormat, vkUsage, vkAspect, desc.extent);
+		const uint32_t idx = m_storage->AddTransientSlot(vkFormat, desc.usage, desc.aspect, desc.extent);
 		const uint32_t id = kFirstTransientId + idx;
 		return RGImage{id};
 	}
@@ -375,7 +373,7 @@ namespace aether
 
 	// -- Bindless -------------------------------------------------------------
 
-	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, void* device, gpu::ImageLayout descriptorLayout)
+	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout)
 	{
 		if (!IsTransientId(image.id))
 		{
@@ -383,7 +381,7 @@ namespace aether
 		}
 
 		const uint32_t idx = TransientIndex(image.id);
-		return m_storage->EnsureBindlessSampled(idx, bindlessManager, static_cast<VkDevice>(device), gpu::ToVk(descriptorLayout));
+		return m_storage->EnsureBindlessSampled(idx, bindlessManager, device, descriptorLayout);
 	}
 
 	std::uint32_t RenderGraph::GetBindlessSampledSlot(RGImage image) const

@@ -10,8 +10,8 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_bindless = &bindless;
-		const VkDevice device = ctx.GetDevice().device;
-		const VmaAllocator allocator = ctx.GetAllocator();
+		const gpu::Device device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		const gpu::Allocator allocator = static_cast<gpu::Allocator>(ctx.GetAllocator());
 
 		AE_EXPECT_OR_THROW(img,
 		        UniqueImage::Create(device,
@@ -19,12 +19,12 @@ namespace aether
 		                {
 		                        .extent = {kAtlasWidth, kAtlasHeight},
 		                        .format = kAtlasFormat,
-		                        .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+		                        .usage = gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage | gpu::ImageUsage::ColorAttachment,
 		                        .debugName = "ShadowAtlas",
 		                }));
 		m_atlas = std::move(img);
 
-		AE_EXPECT_OR_THROW_VOID(m_atlas.EnsureBindlessSampled(bindless, device, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+		AE_EXPECT_OR_THROW_VOID(m_atlas.EnsureBindlessSampled(bindless, device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly));
 		m_bindlessSlot = m_atlas.GetBindlessSampledSlot();
 	}
 

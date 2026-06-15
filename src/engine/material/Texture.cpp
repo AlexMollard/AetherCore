@@ -21,132 +21,29 @@
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
 	namespace
 	{
-		// Allocate + begin a one-time command buffer from the supplied pool.
-		VkCommandBuffer BeginOneTimeBuffer(VkDevice device, VkCommandPool pool)
-		{
-			const VkCommandBufferAllocateInfo allocInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			        .commandPool = pool,
-			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			        .commandBufferCount = 1,
-			};
-			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			const VkResult allocResult = vkAllocateCommandBuffers(device, &allocInfo, &cmd);
-			if (allocResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), "Texture: failed to allocate upload command buffer"));
-			}
-
-			const VkCommandBufferBeginInfo beginInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			};
-			const VkResult beginResult = vkBeginCommandBuffer(cmd, &beginInfo);
-			if (beginResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), "Texture: failed to begin upload command buffer"));
-			}
-			return cmd;
-		}
-
-		// Submit a command buffer, wait for the submission fence, then free the buffer.
-		void EndAndSubmitOneTimeBuffer(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
-		{
-			const VkResult endResult = vkEndCommandBuffer(cmd);
-			if (endResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), "Texture: failed to end upload command buffer"));
-			}
-
-			const VkCommandBufferSubmitInfo cbInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			        .commandBuffer = cmd,
-			};
-			const VkSubmitInfo2 submitInfo{
-			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			        .commandBufferInfoCount = 1,
-			        .pCommandBufferInfos = &cbInfo,
-			};
-			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-			VkFence fence = VK_NULL_HANDLE;
-			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(0, "Texture: failed to create upload fence"));
-			}
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &submitInfo, fence);
-			if (submitResult != VK_SUCCESS)
-			{
-				vkDestroyFence(device, fence, nullptr);
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "Texture: failed to submit upload command buffer"));
-			}
-			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-			vkDestroyFence(device, fence, nullptr);
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-		}
-
-		// Transition an image between two layouts using a pipeline barrier.
-		void TransitionImageLayout(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
-		{
-			const VkImageMemoryBarrier2 barrier{
-			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			        .srcStageMask = srcStage,
-			        .srcAccessMask = srcAccess,
-			        .dstStageMask = dstStage,
-			        .dstAccessMask = dstAccess,
-			        .oldLayout = oldLayout,
-			        .newLayout = newLayout,
-			        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			        .image = image,
-			        .subresourceRange =
-			                {
-			                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			                        .baseMipLevel = 0,
-			                        .levelCount = 1,
-			                        .baseArrayLayer = 0,
-			                        .layerCount = 1,
-			                },
-			};
-
-			const VkDependencyInfo depInfo{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .imageMemoryBarrierCount = 1,
-			        .pImageMemoryBarriers = &barrier,
-			};
-			vkCmdPipelineBarrier2(cmd, &depInfo);
-		}
-
 		UniqueImage UploadRgbaToGpuImage(
 		        const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter, const char* debugName = nullptr)
 		{
-			// TODO(phase5b): remove static_casts once UniqueImage moves to gpu handles.
-			auto* vkDevice = static_cast<VkDevice>(device);
-			auto* vmaAllocator = static_cast<VmaAllocator>(allocator);
 			AE_EXPECT_OR_THROW(image,
-			        UniqueImage::Create(vkDevice,
-			                vmaAllocator,
-			                {
-			                        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
-			                        .format = gpu::Format::R8G8B8A8Srgb,
-			                        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			                        .debugName = debugName,
-			                }));
+			        UniqueImage::Create(device,
+		                allocator,
+		                {
+		                        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
+		                        .format = gpu::Format::R8G8B8A8Srgb,
+		                        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
+		                        .debugName = debugName,
+		                }));
 
 			{
-				const VkResult copyResult = vkutil::HostCopyToImage(vkDevice, image.Get(), pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-				if (copyResult != VK_SUCCESS)
+				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image.GetImageView(), pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+				if (copyResult != 0)
 				{
-					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadRgbaToGpuImage: HostCopyToImage failed"));
+					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyToImage failed"));
 				}
 			}
 
@@ -156,13 +53,13 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to begin OneShotCmd"));
 			}
 			cmd.CmdList().ImageMemoryBarrier(
-			        image.Get(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			        image.GetImageView(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
 			if (!cmd.EndAndSubmit(uploadQueue))
 			{
 				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
 			}
 
-			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, vkDevice, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(bindless, device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly, filter));
 
 			return image;
 		}
@@ -202,27 +99,26 @@ namespace aether
 
 #pragma pack(pop)
 
-		VkFormat DxgiToVkFormat(uint32_t dxgi)
+		// DXGI -> gpu::Format. The result maps one-for-one through
+		// gpu::ToVk on the backend; the engine only sees the engine-side enum.
+		gpu::Format DxgiToGpuFormat(uint32_t dxgi)
 		{
 			switch (dxgi)
 			{
 				case DXGI_BC4_UNORM:
-					return VK_FORMAT_BC4_UNORM_BLOCK;
+					return gpu::Format::BC4UnormBlock;
 				case DXGI_BC7_UNORM:
-					return VK_FORMAT_BC7_UNORM_BLOCK;
+					return gpu::Format::BC7UnormBlock;
 				case DXGI_BC7_UNORM_SRGB:
-					return VK_FORMAT_BC7_SRGB_BLOCK;
+					return gpu::Format::BC7SrgbBlock;
 				default:
-					return VK_FORMAT_UNDEFINED;
+					return gpu::Format::Undefined;
 			}
 		}
 
 		Expected<UniqueImage> UploadBcnDds(
 		        std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
 		{
-			// TODO(phase5b): remove static_casts once UniqueImage moves to gpu handles.
-			auto* vkDevice = static_cast<VkDevice>(device);
-			auto* vmaAllocator = static_cast<VmaAllocator>(allocator);
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
 			{
@@ -242,8 +138,8 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("only DX10-extended DDS files are supported: " + std::string(debugPath)));
 			}
 
-			const VkFormat vkFmt = DxgiToVkFormat(dx10.dxgiFormat);
-			if (vkFmt == VK_FORMAT_UNDEFINED)
+			const gpu::Format gpuFmt = DxgiToGpuFormat(dx10.dxgiFormat);
+			if (gpuFmt == gpu::Format::Undefined)
 			{
 				AE_UNEXPECTED(AetherError::Vulkan(0, "unsupported DXGI format " + std::to_string(dx10.dxgiFormat) + " in: " + std::string(debugPath)));
 			}
@@ -251,19 +147,19 @@ namespace aether
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
 			AE_TRY(image,
-			        UniqueImage::Create(vkDevice,
-			                vmaAllocator,
-			                {
-			                        .extent = {width, height},
-			                        .format = gpu::FromVk(vkFmt),
-			                        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			                }));
+			        UniqueImage::Create(device,
+		                allocator,
+		                {
+		                        .extent = {width, height},
+		                        .format = gpuFmt,
+		                        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
+		                }));
 
 			{
-				const VkResult copyResult = vkutil::HostCopyToImage(vkDevice, image->Get(), p, width, height);
-				if (copyResult != VK_SUCCESS)
+				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image->GetImageView(), p, width, height);
+				if (copyResult != 0)
 				{
-					Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), "UploadBcnDds: HostCopyToImage failed"));
+					Throw(AetherError::Vulkan(copyResult, "UploadBcnDds: HostCopyToImage failed"));
 				}
 			}
 
@@ -273,13 +169,13 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to begin OneShotCmd"));
 			}
 			cmd.CmdList().ImageMemoryBarrier(
-			        image->Get(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			        image->GetImageView(), gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
 			if (!cmd.EndAndSubmit(uploadQueue))
 			{
 				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
 			}
 
-			AE_EXPECT_OR_THROW_VOID(image->EnsureBindlessSampled(bindless, vkDevice, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, filter));
+			AE_EXPECT_OR_THROW_VOID(image->EnsureBindlessSampled(bindless, device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly, filter));
 			return image;
 		}
 	} // namespace

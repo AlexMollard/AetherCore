@@ -22,7 +22,7 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
+	void RenderQueue::Initialize(gpu::Device device, gpu::Allocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
 	{
 		m_device = device;
 		m_allocator = allocator;
@@ -35,39 +35,39 @@ namespace aether
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
 		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 
-		constexpr VkBufferUsageFlags kSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
-		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxDraws) * sizeof(DrawContracts::InstanceData), kSsboFlags, "RenderQueue.InstanceData"));
+		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(DrawContracts::InstanceData), kSsboFlags, "RenderQueue.InstanceData"));
 		m_instanceDataBuffer = std::move(b0);
 		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
 
-		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxDraws) * sizeof(CullContracts::DrawInput), kSsboFlags, "RenderQueue.CullInput"));
+		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(CullContracts::DrawInput), kSsboFlags, "RenderQueue.CullInput"));
 		m_cullInputBuffer = std::move(b1);
 		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
 
-		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(config.maxBatches) * sizeof(CullContracts::Batch), kSsboFlags, "RenderQueue.BatchDesc"));
+		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxBatches) * sizeof(CullContracts::Batch), kSsboFlags, "RenderQueue.BatchDesc"));
 		m_batchDescBuffer = std::move(b2);
 		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
 
 		if (m_maxAnimationDraws > 0u)
 		{
-			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
+			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
 			m_skinCopyJobBuffer = std::move(b3);
 			m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
 
-			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
+			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
 			m_animationSampleJobsBuffer = std::move(b4);
 			m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
 
-			constexpr VkBufferUsageFlags kAnimationSsboFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
 
-			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.SkinPalette"));
+			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.SkinPalette"));
 			m_skinPaletteBuffer = std::move(b5);
 
-			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
+			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
 			m_sampledPosesBuffer = std::move(b6);
 
-			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
+			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
 			m_nodeGlobalTransformsBuffer = std::move(b7);
 			AE_INFO(LogCategory::Render,
 			        "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses=0x{:x}, nodeGlobalTransforms=0x{:x}",
@@ -79,8 +79,8 @@ namespace aether
 		AE_EXPECT_OR_THROW(b8,
 		        UniqueBuffer::CreateDeviceLocal(allocator,
 		                device,
-		                kFramesInFlight * static_cast<VkDeviceSize>(m_outputDrawCapacity) * sizeof(VkDrawIndexedIndirectCommand),
-		                VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+		                kFramesInFlight * static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand),
+		                gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
 		                "RenderQueue.IndirectOutput"));
 		m_outputIndirectBuffer = std::move(b8);
 	}
@@ -109,8 +109,8 @@ namespace aether
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
-		m_allocator = VK_NULL_HANDLE;
-		m_device = VK_NULL_HANDLE;
+		m_allocator = nullptr;
+		m_device = nullptr;
 	}
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
@@ -121,8 +121,11 @@ namespace aether
 	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, gpu::PipelineLayout computeLayout, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		// Keep the raw VkCommandBuffer for Tracy GPU zones and GpuTimestampPool.
-		const VkCommandBuffer cmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
+		// Keep the raw command buffer for Tracy GPU zones and GpuTimestampPool.
+		// The cast to VkCommandBuffer at the Tracy call sites is the one
+		// documented allowlist exception (see gpu-abstraction-rendering-audit.md
+		// §7.3.0) - Tracy's API requires a raw Vulkan handle.
+		void* const rawCmd = cmdList.GetCommandBuffer();
 		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
 		if (m_commands.empty())
 		{
@@ -184,28 +187,28 @@ namespace aether
 			m_animationSlotCleared[frameSlot] = true;
 			if (m_skinPaletteBuffer)
 			{
-				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-				cmdList.FillBuffer(static_cast<void*>(m_skinPaletteBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
+				cmdList.FillBuffer(m_skinPaletteBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			if (m_sampledPosesBuffer)
 			{
-				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
-				cmdList.FillBuffer(static_cast<void*>(m_sampledPosesBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
+				cmdList.FillBuffer(m_sampledPosesBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			if (m_nodeGlobalTransformsBuffer)
 			{
-				const VkDeviceSize slotSize = static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
-				cmdList.FillBuffer(static_cast<void*>(m_nodeGlobalTransformsBuffer.Get()), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
+				cmdList.FillBuffer(m_nodeGlobalTransformsBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
-		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
-		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
+		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
 		const gpu::DeviceAddress currSampledPosesAddr =
-		        (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
-		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(frameSlot) * static_cast<VkDeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+		        (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
+		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
@@ -327,7 +330,7 @@ namespace aether
 						m_animationSampleJobsMapped[animJobBase + sampleJobsThisFrame] = animJob;
 
 						m_skinCopyJobsMapped[animJobBase + skinJobCount] = AnimationContracts::SkinCopyJob{
-						        .sampledPosesAddr = currSampledPosesAddr + static_cast<VkDeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
+						        .sampledPosesAddr = currSampledPosesAddr + static_cast<gpu::DeviceSize>(nodePoseCursor) * sizeof(AnimationContracts::SampledNodePose),
 						        .dstPaletteOffset = skinPaletteOffset,
 						        .jointCount = dc.skinJointCount,
 						        .skinIndex = static_cast<std::uint32_t>(dc.skinIndex),
@@ -428,7 +431,7 @@ namespace aether
 				cmdList.BindComputePipeline(poseInitPipe.pipeline, poseInitPipe.layout);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
-				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 				{
@@ -459,7 +462,7 @@ namespace aether
 					        .bindTranslationsAddr = batch.db->GetBindTranslationsAddr(),
 					        .bindRotationsAddr = batch.db->GetBindRotationsAddr(),
 					        .bindScalesAddr = batch.db->GetBindScalesAddr(),
-					        .animatorJobsAddr = animJobsBDAForInit + static_cast<VkDeviceSize>(batch.startJob) * sizeof(AnimationContracts::AnimatorSampleJob),
+					        .animatorJobsAddr = animJobsBDAForInit + static_cast<gpu::DeviceSize>(batch.startJob) * sizeof(AnimationContracts::AnimatorSampleJob),
 					        .sampledPosesAddr = currSampledPosesAddr,
 					        .jobCount = batch.count,
 					        .nodeCountPerJob = nodeCount,
@@ -492,7 +495,7 @@ namespace aether
 				        .bindTranslationsAddr = 0,
 				        .bindRotationsAddr = 0,
 				        .bindScalesAddr = 0,
-				        .animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
+				        .animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
 				        .sampledPosesAddr = currSampledPosesAddr,
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
@@ -503,7 +506,7 @@ namespace aether
 					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.SampleClips");
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.SampleClips");
 					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -532,7 +535,7 @@ namespace aether
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
 					cmdList.PushConstantsRaw(animBlendPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
-						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.AnimBlend");
+						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.AnimBlend");
 						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
 						cmdList.Dispatch(groups, 1, 1);
 					}
@@ -599,7 +602,7 @@ namespace aether
 			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline, nodeFlattenPipe.layout);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
-			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
@@ -690,7 +693,7 @@ namespace aether
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
 				cmdList.PushConstantsRaw(ikSolvePipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.IkSolve");
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.IkSolve");
 					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -721,7 +724,7 @@ namespace aether
 					continue;
 				}
 				const AnimationContracts::SkinPalettePush skinPc{
-				        .jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<VkDeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
+				        .jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
 				        .dstPaletteAddr = currSkinPaletteAddr,
 				        .globalTransformsAddr = currNodeGlobalTransformsAddr,
 				        .skinMetasAddr = batch.db->GetSkinMetasAddr(),
@@ -735,7 +738,7 @@ namespace aether
 					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "Animation.BuildSkinPalette");
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.BuildSkinPalette");
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -755,17 +758,17 @@ namespace aether
 		}
 
 		// -- Cull dispatch: single or multi-frustum --
-		const VkDeviceSize inputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
-		const VkDeviceSize batchDescOffset = static_cast<VkDeviceSize>(batchBase) * sizeof(CullContracts::Batch);
+		const gpu::DeviceSize inputCmdOffset = static_cast<gpu::DeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
+		const gpu::DeviceSize batchDescOffset = static_cast<gpu::DeviceSize>(batchBase) * sizeof(CullContracts::Batch);
 
 		if (m_outputDrawCapacity > m_maxDraws)
 		{
 			// Multi-frustum mode (shadow cascades): test each draw against 3 VP matrices,
 			// write 3 independent output regions.  The 3 frame constant BDAs must have
 			// been set via SetMultiCullFrameAddrs() before this call.
-			const VkDeviceSize outputBase = static_cast<VkDeviceSize>(frameSlot) * m_outputDrawCapacity;
-			const VkDeviceSize outputCmdOffset = outputBase * sizeof(VkDrawIndexedIndirectCommand);
-			const VkDeviceSize cascadeStride = static_cast<VkDeviceSize>(m_maxDraws) * sizeof(VkDrawIndexedIndirectCommand);
+			const gpu::DeviceSize outputBase = static_cast<gpu::DeviceSize>(frameSlot) * m_outputDrawCapacity;
+			const gpu::DeviceSize outputCmdOffset = outputBase * sizeof(gpu::DrawIndexedIndirectCommand);
+			const gpu::DeviceSize cascadeStride = static_cast<gpu::DeviceSize>(m_maxDraws) * sizeof(gpu::DrawIndexedIndirectCommand);
 
 			const CullContracts::MultiPushConstants multiPc{
 			        .frameAddrs = {m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2]},
@@ -791,7 +794,7 @@ namespace aether
 		else
 		{
 			// Single-frustum mode (main camera, local shadows).
-			const VkDeviceSize outputCmdOffset = static_cast<VkDeviceSize>(drawBase) * sizeof(VkDrawIndexedIndirectCommand);
+			const gpu::DeviceSize outputCmdOffset = static_cast<gpu::DeviceSize>(drawBase) * sizeof(gpu::DrawIndexedIndirectCommand);
 			const CullContracts::PushConstants pc{
 			        .frameAddr = frameAddr,
 			        .instanceDataAddr = m_cachedInstanceDataAddr,
@@ -813,7 +816,7 @@ namespace aether
 					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, cmd, "CullPass.cullDraws");
+					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "CullPass.cullDraws");
 					const std::uint32_t groups = (totalDraws + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -834,7 +837,7 @@ namespace aether
 			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
 			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
-		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, cmd);
+		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd));
 #endif
 	}
 
@@ -949,7 +952,7 @@ namespace aether
 			}
 			else
 			{
-				cmd.DrawIndexedIndirect(m_outputIndirectBuffer.Get(), static_cast<VkDeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(VkDrawIndexedIndirectCommand), batch.drawCount, sizeof(VkDrawIndexedIndirectCommand));
+				cmd.DrawIndexedIndirect(m_outputIndirectBuffer.GetBuffer(), static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand), batch.drawCount, sizeof(gpu::DrawIndexedIndirectCommand));
 			}
 		}
 
@@ -967,10 +970,10 @@ namespace aether
 		return m_commandSlots[slot % kFramesInFlight].empty();
 	}
 
-	void RenderQueueSharedPipelines::Initialize(VkDevice device, VkPipelineCache pipelineCache)
+	void RenderQueueSharedPipelines::Initialize(gpu::Device device, gpu::PipelineCache pipelineCache)
 	{
-		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://skin_palette_build.spv",
 		                .shaderEntry = "main",
@@ -1048,7 +1051,7 @@ namespace aether
 		}
 	}
 
-	void RenderQueueSharedPipelines::Shutdown(VkDevice device)
+	void RenderQueueSharedPipelines::Shutdown(gpu::Device device)
 	{
 		(void) device;
 		if (skinCopy.IsValid())

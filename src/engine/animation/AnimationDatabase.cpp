@@ -11,7 +11,7 @@ namespace aether
 	// Helper: upload a non-empty CPU array into the heap and return its device address.
 	// Returns 0 when the input span is empty (no allocation made).
 	template<typename T>
-	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, VkDevice device, VkQueue queue, gpu::CommandPool pool)
+	static gpu::DeviceAddress UploadArray(GpuHeap& heap, const std::vector<T>& data, gpu::Device device, gpu::Queue queue, gpu::CommandPool pool)
 	{
 		if (data.empty())
 		{
@@ -19,7 +19,7 @@ namespace aether
 		}
 		GpuSpan<T> span = heap.Alloc<T>(static_cast<std::uint32_t>(data.size()));
 		assert(span.IsValid() && "GpuHeap allocation failed - heap capacity insufficient");
-		heap.Upload(span, std::span<const T>(data), device, queue, static_cast<VkCommandPool>(pool));
+		heap.Upload(span, std::span<const T>(data), device, queue, pool);
 		return span.address;
 	}
 
@@ -228,11 +228,11 @@ namespace aether
 		// -- Size the heap and upload all arrays ------------------------------
 		// GpuHeap::AllocBytes enforces a 16-byte minimum alignment, so each term
 		// must be rounded up to a 16-byte boundary to guarantee enough capacity.
-		const auto align16 = [](VkDeviceSize v) -> VkDeviceSize
+		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
-			return (v + 15) & ~VkDeviceSize(15);
+			return (v + 15) & ~gpu::DeviceSize(15);
 		};
-		VkDeviceSize totalBytes = align16(gpuClips.size() * sizeof(GpuClip));
+		gpu::DeviceSize totalBytes = align16(gpuClips.size() * sizeof(GpuClip));
 		totalBytes += align16(gpuChannels.size() * sizeof(GpuChannel));
 		totalBytes += align16(allTimes.size() * sizeof(float));
 		totalBytes += align16(allValues.size() * sizeof(glm::vec4));
@@ -249,8 +249,8 @@ namespace aether
 
 		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		VkDevice device = ctx.GetDevice().device;
-		VkQueue queue = ctx.GetGraphicsQueue();
+		const gpu::Device device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		const gpu::Queue queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
 
 		db.m_clipsAddr = UploadArray(db.m_heap, gpuClips, device, queue, uploadPool);
 		db.m_channelsAddr = UploadArray(db.m_heap, gpuChannels, device, queue, uploadPool);
@@ -325,7 +325,7 @@ namespace aether
 		if (!allStrings.empty())
 		{
 			GpuSpan<char> span = db.m_heap.Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
-			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, static_cast<VkCommandPool>(uploadPool));
+			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
 			db.m_stringsAddr = span.address;
 		}
 
@@ -412,15 +412,14 @@ namespace aether
 		m_clipNames += newClipNames;
 
 		// -- Rebuild GPU heap with combined data ------------------------
-		VkDevice device = m_ctx->GetDevice().device;
-		VkQueue queue = m_ctx->GetGraphicsQueue();
+		const gpu::Device device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
+		const gpu::Queue queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
 
-		const auto align16 = [](VkDeviceSize v) -> VkDeviceSize
+		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
-			return (v + 15) & ~VkDeviceSize(15);
+			return (v + 15) & ~gpu::DeviceSize(15);
 		};
-
-		VkDeviceSize totalBytes = align16(m_clips.size() * sizeof(GpuClip));
+		gpu::DeviceSize totalBytes = align16(m_clips.size() * sizeof(GpuClip));
 		totalBytes += align16(m_channels.size() * sizeof(GpuChannel));
 		totalBytes += align16(m_times.size() * sizeof(float));
 		totalBytes += align16(m_values.size() * sizeof(glm::vec4));
@@ -459,7 +458,7 @@ namespace aether
 		if (!m_clipNames.empty())
 		{
 			GpuSpan<char> span = m_heap.Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
-			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, static_cast<VkCommandPool>(uploadPool));
+			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
 			m_stringsAddr = span.address;
 		}
 

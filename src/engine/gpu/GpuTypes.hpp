@@ -100,6 +100,13 @@ namespace aether::gpu
 	// API takes these directly so the call site never mentions Vk*. The
 	// backend (vulkan/) defines the same names as their real Vk* types so
 	// the implementations can convert with a single static_cast.
+	//
+	// Borrowing rule (see gpu-abstraction-rendering-audit.md §2): borrowed
+	// primitives that are never engine-owned (Device, Queue, Allocator,
+	// CommandPool) live as raw void*; engine-owned resources use typed
+	// handles from GpuHandles.hpp. The aliases below cover the borrowed
+	// primitives plus Image and ImageView which are commonly passed across
+	// the boundary even when owned elsewhere.
 	using DescriptorSet = void*;
 	using Pipeline = void*;
 	using PipelineLayout = void*;
@@ -108,6 +115,33 @@ namespace aether::gpu
 	using Allocator = void*;
 	using CommandPool = void*;
 	using Queue = void*;
+	using Image = void*;
 	using ImageView = void*;
+	using Buffer = void*;
 	using Sampler = void*;
+
+	// Indirect-draw command struct mirror. Mirrors the layout of
+	// VkDrawIndexedIndirectCommand (5 * uint32_t). Defined in the gpu/
+	// facade so engine code can take sizeof() of it without including
+	// vulkan/volk.hpp. The backend writes the same bytes to the GPU.
+	struct DrawIndexedIndirectCommand
+	{
+		std::uint32_t indexCount = 0;
+		std::uint32_t instanceCount = 0;
+		std::uint32_t firstIndex = 0;
+		std::int32_t vertexOffset = 0;
+		std::uint32_t firstInstance = 0;
+	};
+	static_assert(sizeof(DrawIndexedIndirectCommand) == 20, "DrawIndexedIndirectCommand must match VkDrawIndexedIndirectCommand layout");
+
+	// Indirect-draw command struct mirror (non-indexed). Mirrors
+	// VkDrawIndirectCommand (4 * uint32_t).
+	struct DrawIndirectCommand
+	{
+		std::uint32_t vertexCount = 0;
+		std::uint32_t instanceCount = 0;
+		std::uint32_t firstVertex = 0;
+		std::uint32_t firstInstance = 0;
+	};
+	static_assert(sizeof(DrawIndirectCommand) == 16, "DrawIndirectCommand must match VkDrawIndirectCommand layout");
 } // namespace aether::gpu

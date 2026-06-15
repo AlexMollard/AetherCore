@@ -3,9 +3,7 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-#include <vk_mem_alloc.h>
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
 
 #include "material/GpuMaterial.hpp"
 #include "vulkan/UniqueBuffer.hpp"
@@ -31,7 +29,7 @@ namespace aether
 
 		[[nodiscard]] bool IsInitialized() const
 		{
-			return m_device != VK_NULL_HANDLE;
+			return m_device != nullptr;
 		}
 
 		[[nodiscard]] std::uint32_t AllocateSlot();
@@ -52,8 +50,8 @@ namespace aether
 
 	private:
 		mutable std::mutex m_mutex;
-		VkDevice m_device = VK_NULL_HANDLE;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		gpu::Device m_device = nullptr;
+		gpu::Allocator m_allocator = nullptr;
 		UniqueBuffer m_buffer;
 		GpuMaterial* m_mapped = nullptr;
 		gpu::DeviceAddress m_address = 0;

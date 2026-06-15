@@ -2,16 +2,25 @@
 
 #include <array>
 #include <cstdint>
-#include <vk_mem_alloc.h>
 
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/FrameConstants.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
 	class VulkanContext;
 
+	// Per-frame uniform buffer for the frame constants block.
+	//
+	// Storage path: stores gpu::BufferHandle per frame in m_frames (8 bytes
+	// each, typed, generation-checked). Allocated through
+	// gpu::ResourceRegistry::CreateMappedBuffer which uses the registry's
+	// 3-frame deferred-destruction ring. CPU writes go through
+	// ResolveMappedBuffer().mappedPtr; GPU addresses through
+	// ResolveBuffer().deviceAddress; record-time binding through
+	// ResolveBufferVkHandle(). No raw VkBuffer is held.
 	class FrameConstantsBuffer
 	{
 	public:
@@ -34,13 +43,12 @@ namespace aether
 
 		struct PerFrame
 		{
-			UniqueBuffer buffer;
+			gpu::BufferHandle handle{};
 			void* mapped = nullptr;
 			gpu::DeviceAddress address = 0;
 		};
 
-		VkDevice m_device = VK_NULL_HANDLE;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		std::array<PerFrame, kFrameCount> m_frames{};
+		bool m_initialized = false;
 	};
 } // namespace aether

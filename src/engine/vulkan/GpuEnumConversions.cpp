@@ -423,6 +423,56 @@ namespace aether::gpu
 	}
 
 	// -------------------------------------------------------------------------
+	// BufferUsage (bit-preserving)
+	// -------------------------------------------------------------------------
+	VkBufferUsageFlags ToVk(BufferUsage usage) noexcept
+	{
+		VkBufferUsageFlags out = 0;
+		const std::uint32_t bits = static_cast<std::uint32_t>(usage);
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::TransferSrc)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::TransferDst)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::UniformTexel)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::StorageTexel)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::Uniform)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::Storage)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::Index)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::Vertex)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::Indirect)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::ShaderDeviceAddress)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		}
+		return out;
+	}
+
+	// -------------------------------------------------------------------------
 	// ImageAspect (bit-preserving)
 	// -------------------------------------------------------------------------
 	VkImageAspectFlags ToVk(ImageAspect aspect) noexcept

@@ -39,8 +39,8 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDeviceSize capacityBytes = 256ull * 1024 * 1024;
-			VkBufferUsageFlags additionalUsage = 0;
+			gpu::DeviceSize capacityBytes = 256ull * 1024 * 1024;
+			gpu::BufferUsage additionalUsage = gpu::BufferUsage::None;
 			const char* debugName = nullptr;
 		};
 
@@ -77,6 +77,15 @@ namespace aether
 
 		// Synchronous upload: creates a transient staging buffer, copies, submits, waits idle.
 		// Intended for static load-time geometry. For streaming uploads use MeshUploadQueue instead.
+		// Engine-side overload: opaque gpu::Device / gpu::Queue / gpu::CommandPool.
+		template<typename T>
+		void Upload(GpuSpan<T> dst, std::span<const T> src, gpu::Device device, gpu::Queue queue, gpu::CommandPool pool)
+		{
+			UploadBytes(dst.address, src.data(), static_cast<VkDeviceSize>(src.size()) * sizeof(T),
+			        static_cast<VkDevice>(device), static_cast<VkQueue>(queue), static_cast<VkCommandPool>(pool));
+		}
+
+		// Vulkan-internal overload: raw Vk* for callers that already have them.
 		template<typename T>
 		void Upload(GpuSpan<T> dst, std::span<const T> src, VkDevice device, VkQueue queue, VkCommandPool pool)
 		{

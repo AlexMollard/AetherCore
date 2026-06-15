@@ -15,20 +15,16 @@ namespace aether
 
 	void MaterialBuffer::Initialize(const VulkanContext& ctx)
 	{
-		m_device = ctx.GetDevice().device;
-		m_allocator = ctx.GetAllocator();
+		m_device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		m_allocator = static_cast<gpu::Allocator>(ctx.GetAllocator());
 
-		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(m_allocator, m_device, sizeof(GpuMaterial) * kMaxMaterials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "MaterialBuffer"));
+		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(m_allocator, m_device, sizeof(GpuMaterial) * kMaxMaterials, gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "MaterialBuffer"));
 		m_buffer = std::move(buf);
 
-		const VmaAllocationInfo& allocInfo = m_buffer.GetAllocationInfo();
+		const auto& allocInfo = m_buffer.GetAllocationInfo();
 		m_mapped = static_cast<GpuMaterial*>(allocInfo.pMappedData);
 
-		const VkBufferDeviceAddressInfo addrInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-		        .buffer = m_buffer.Get(),
-		};
-		m_address = vkGetBufferDeviceAddress(m_device, &addrInfo);
+		m_address = m_buffer.GetDeviceAddress();
 
 		m_freeSlots.reserve(kMaxMaterials);
 		for (std::uint32_t i = kMaxMaterials; i-- > 0;)
@@ -39,7 +35,7 @@ namespace aether
 
 	void MaterialBuffer::Shutdown()
 	{
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
@@ -48,8 +44,8 @@ namespace aether
 
 		m_mapped = nullptr;
 		m_address = 0;
-		m_device = VK_NULL_HANDLE;
-		m_allocator = VK_NULL_HANDLE;
+		m_device = nullptr;
+		m_allocator = nullptr;
 		m_freeSlots.clear();
 	}
 
@@ -82,6 +78,6 @@ namespace aether
 			return;
 		}
 		m_mapped[slot] = material;
-		AE_EXPECT_OR_THROW_VOID(m_buffer.FlushMapped(static_cast<VkDeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial)));
+		AE_EXPECT_OR_THROW_VOID(m_buffer.FlushMapped(static_cast<gpu::DeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial)));
 	}
 } // namespace aether

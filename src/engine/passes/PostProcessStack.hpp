@@ -2,10 +2,9 @@
 
 #include <cstdint>
 #include <span>
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
 
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "vulkan/UniqueImage.hpp"
@@ -39,9 +38,9 @@ namespace aether
 	public:
 		struct Desc
 		{
-			VkDevice device = VK_NULL_HANDLE;
-			VkPipelineCache pipelineCache = VK_NULL_HANDLE;
-			VmaAllocator allocator = VK_NULL_HANDLE;
+			gpu::Device device = nullptr;
+			gpu::PipelineCache pipelineCache = nullptr;
+			gpu::Allocator allocator = nullptr;
 			gpu::Extent2D extent = {};
 			gpu::Format swapchainFormat = gpu::Format::Undefined;
 			BindlessManager* bindlessManager = nullptr; // non-owning

@@ -8,21 +8,21 @@
 
 namespace aether
 {
-	void AnimationBlendSystem::Init(VmaAllocator allocator, VkDevice device, VkDeviceSize maxBlendJobCount, std::uint32_t nodeCount)
+	void AnimationBlendSystem::Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount)
 	{
 		m_nodeCount = nodeCount;
 		m_blendJobs.resize(static_cast<std::size_t>(maxBlendJobCount));
 
 		AE_EXPECT_OR_THROW(buffer,
 		        UniqueBuffer::CreateMapped(
-		                allocator, device, static_cast<VkDeviceSize>(maxBlendJobCount) * sizeof(AnimationContracts::AnimatorBlendJob), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT, "AnimationBlend.Jobs"));
+		                allocator, device, maxBlendJobCount * sizeof(AnimationContracts::AnimatorBlendJob), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationBlend.Jobs"));
 		m_blendJobsBuffer = std::move(buffer);
 
 		VmaAllocationInfo info = m_blendJobsBuffer.GetAllocationInfo();
 		m_mappedBlendJobs = static_cast<AnimationContracts::AnimatorBlendJob*>(info.pMappedData);
 	}
 
-	void AnimationBlendSystem::Shutdown(VkDevice /*device*/)
+	void AnimationBlendSystem::Shutdown(gpu::Device /*device*/)
 	{
 		m_blendJobsBuffer.Reset();
 		m_blendJobs.clear();

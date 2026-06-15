@@ -5,7 +5,7 @@
 #include <span>
 #include <vector>
 #include "gpu/GpuFormat.hpp"
-#include "vulkan/volk.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {
@@ -124,7 +124,7 @@ namespace aether
 		// Swapchain format queries for pipeline creation.
 		[[nodiscard]] gpu::Format GetColorFormat() const;
 		[[nodiscard]] gpu::Format GetDepthFormat() const;
-		[[nodiscard]] VkExtent2D GetExtent() const;
+		[[nodiscard]] gpu::Extent2D GetExtent() const;
 
 	private:
 		PostProcessStack* m_postProcessStack = nullptr;

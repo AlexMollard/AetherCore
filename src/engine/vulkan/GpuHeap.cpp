@@ -15,7 +15,7 @@ namespace aether
 		m_allocatorRef = ctx.GetAllocator();
 		m_deviceRef = ctx.GetDevice().device;
 
-		constexpr VkBufferUsageFlags kBaseUsage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		constexpr gpu::BufferUsage kBaseUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
 
 		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage, desc.debugName));
 		m_buffer = std::move(buffer);

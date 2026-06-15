@@ -61,12 +61,12 @@ namespace aether
 		m_materialBuffer = frame.materials;
 		m_cullPass = frame.cullPass;
 		m_getFrameIndex = frame.frameIndex;
-		m_device = m_context->GetDevice().device;
+		m_device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		m_depthFormat = frame.depthFormat;
 		m_forwardColorFormat = frame.colorFormat;
 	}
 
-	void RenderTargetService::OnRenderGraphReset(const VkDevice device, const gpu::Format depthFormat, const gpu::Format forwardColorFormat)
+	void RenderTargetService::OnRenderGraphReset(const gpu::Device device, const gpu::Format depthFormat, const gpu::Format forwardColorFormat)
 	{
 		m_device = device;
 		m_depthFormat = depthFormat;
@@ -80,7 +80,7 @@ namespace aether
 		for (auto& [id, rt]: m_targets)
 		{
 			rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, gpu::Extent2D{rt.extent.width, rt.extent.height}, gpu::ImageUsage::Sampled);
-			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, static_cast<void*>(m_device));
+			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 			if (slot == 0xFFFFFFFFu)
 			{
 				Throw(AetherError::Engine("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id)));
@@ -116,7 +116,7 @@ namespace aether
 		}
 	}
 
-	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const VkExtent2D extent)
+	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const gpu::Extent2D extent)
 	{
 		AE_ASSERT_ALWAYS(m_context != nullptr && m_graph != nullptr && m_bindlessManager != nullptr, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
 
@@ -124,13 +124,13 @@ namespace aether
 		rt.cameraHandleRaw = cameraHandleRaw;
 		rt.extent = extent;
 
-		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, gpu::Extent2D{extent.width, extent.height}, gpu::ImageUsage::Sampled);
-		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, static_cast<void*>(m_device));
+		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, extent, gpu::ImageUsage::Sampled);
+		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
 		if (slot == 0xFFFFFFFFu)
 		{
 			AE_UNEXPECTED(AetherError::Engine("failed to register transient color image as bindless sampled"));
 		}
-		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, gpu::Extent2D{extent.width, extent.height});
+		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, extent);
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
@@ -215,7 +215,7 @@ namespace aether
 		const std::string idStr = std::to_string(id);
 		const RGImage color = it->second.rgColor;
 		const RGImage depth = it->second.rgDepth;
-		const VkExtent2D extent = it->second.extent;
+		const gpu::Extent2D extent = it->second.extent;
 		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
 		const gpu::PipelineLayout cullLayout = m_cullPass->GetSingleLayout();
 

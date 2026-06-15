@@ -5,7 +5,6 @@
 
 #include "passes/PostProcessStack.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/Swapchain.hpp"
 
 namespace aether
 {
@@ -182,11 +181,11 @@ namespace aether
 		return gpu::Format::D32Sfloat;
 	}
 
-	VkExtent2D Renderer::GetExtent() const
+	gpu::Extent2D Renderer::GetExtent() const
 	{
 		// Would come from Swapchain, but we need a reference to it.
 		// For now, return a placeholder - this should be updated when we have
 		// Swapchain access.
-		return VkExtent2D{1280, 720};
+		return gpu::Extent2D{1280, 720};
 	}
 } // namespace aether

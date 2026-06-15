@@ -4,9 +4,9 @@
 #include <functional>
 #include <memory>
 #include <unordered_map>
-#include "vulkan/volk.hpp"
 
 #include "gpu/GpuFormat.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/RenderGraph.hpp"
@@ -33,13 +33,13 @@ namespace aether
 
 		void BindRuntime(const FrameContext& frame);
 
-		void OnRenderGraphReset(VkDevice device, gpu::Format depthFormat, gpu::Format forwardColorFormat);
+		void OnRenderGraphReset(gpu::Device device, gpu::Format depthFormat, gpu::Format forwardColorFormat);
 		void RegisterPasses();
 
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
-		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, VkExtent2D extent);
+		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, gpu::Extent2D extent);
 		void DestroyCameraRenderTarget(std::uint32_t id);
 		[[nodiscard]] RGImage GetRenderTargetColorImage(std::uint32_t id) const;
 		[[nodiscard]] std::uint32_t GetRenderTargetBindlessSlot(std::uint32_t id) const;
@@ -49,7 +49,7 @@ namespace aether
 		struct Entry
 		{
 			std::uint32_t cameraHandleRaw = 0;
-			VkExtent2D extent{};
+			gpu::Extent2D extent{};
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
@@ -71,7 +71,7 @@ namespace aether
 		MaterialBuffer* m_materialBuffer = nullptr;
 		const CullPass* m_cullPass = nullptr;
 		std::function<std::uint64_t()> m_getFrameIndex;
-		VkDevice m_device = VK_NULL_HANDLE;
+		gpu::Device m_device = nullptr;
 		gpu::Format m_depthFormat = gpu::Format::Undefined;
 		gpu::Format m_forwardColorFormat = gpu::Format::Undefined;
 	};

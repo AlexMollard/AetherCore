@@ -116,6 +116,11 @@ namespace aether
 		}
 	} // anonymous namespace
 
+	Expected<UniqueImage> UniqueImage::Create(gpu::Device device, gpu::Allocator allocator, const Desc& desc)
+	{
+		return Create(static_cast<VkDevice>(device), static_cast<VmaAllocator>(allocator), desc);
+	}
+
 	Expected<UniqueImage> UniqueImage::Create(VkDevice device, VmaAllocator allocator, const Desc& desc)
 	{
 		const VkImageCreateInfo imageInfo{
@@ -127,7 +132,7 @@ namespace aether
 		        .arrayLayers = desc.arrayLayers,
 		        .samples = desc.samples,
 		        .tiling = VK_IMAGE_TILING_OPTIMAL,
-		        .usage = desc.usage,
+		        .usage = gpu::ToVk(desc.usage),
 		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
@@ -201,7 +206,7 @@ namespace aether
 		        .arrayLayers = desc.arrayLayers,
 		        .samples = desc.samples,
 		        .tiling = VK_IMAGE_TILING_OPTIMAL,
-		        .usage = desc.usage,
+		        .usage = gpu::ToVk(desc.usage),
 		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		};
@@ -295,6 +300,16 @@ namespace aether
 		m_lastKnownLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		m_queueFamilyOwner = VK_QUEUE_FAMILY_IGNORED;
 		m_virtualResourceId = 0;
+	}
+
+	Expected<void> UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const gpu::Device device, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter)
+	{
+		return EnsureBindlessSampled(
+		        bindlessManager,
+		        static_cast<VkDevice>(device),
+		        gpu::ToVk(aspectMask),
+		        gpu::ToVk(descriptorLayout),
+		        filter);
 	}
 
 	Expected<void> UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout, const TextureFilter filter)

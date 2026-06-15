@@ -142,7 +142,7 @@ namespace aether
 				clips.push_back(clip);
 			}
 
-			auto result = smc.animDb->AppendAnimations(static_cast<VkCommandPool>(s_uploadPool), clips, channels, times, values, clipNames);
+			auto result = smc.animDb->AppendAnimations(s_uploadPool, clips, channels, times, values, clipNames);
 			if (result)
 			{
 				AE_VERBOSE(LogCategory::Animation, "CompileAnimations: baked {} clip(s) into DB (first at index {})", clips.size(), *result);

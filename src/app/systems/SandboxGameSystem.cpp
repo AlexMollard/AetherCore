@@ -342,7 +342,7 @@ namespace aether::app
 		});
 
 		m_cameras->SetMainCamera(m_orbitCamera);
-		AE_EXPECT_OR_THROW(targetId, m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, {512, 512}));
+		AE_EXPECT_OR_THROW(targetId, m_services->Get<RenderTargetService>().CreateCameraRenderTarget(m_rttCamera.id, aether::gpu::Extent2D{512, 512}));
 		m_rttTargetId = targetId;
 	}
 

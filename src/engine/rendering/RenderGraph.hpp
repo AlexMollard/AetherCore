@@ -95,7 +95,7 @@ namespace aether
 		RenderGraph(RenderGraph&&) noexcept;
 		RenderGraph& operator=(RenderGraph&&) noexcept;
 
-		void Initialize(void* device, void* allocator);
+		void Initialize(gpu::Device device, gpu::Allocator allocator);
 		void Shutdown();
 
 		// Begin a new frame - must be called before Execute() to process
@@ -180,16 +180,17 @@ namespace aether
 		}
 
 		// Register an externally-owned image and return an RGImage handle.
-		// image/view are opaque Vulkan handles (VkImage/VkImageView) passed as void*.
-		[[nodiscard]] RGImage RegisterImage(void* image, void* view, gpu::ImageAspect aspect = gpu::ImageAspect::Color);
+		// image/view are opaque engine handles (gpu::Image / gpu::ImageView) cast
+		// to the underlying Vulkan type at the seam.
+		[[nodiscard]] RGImage RegisterImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect = gpu::ImageAspect::Color);
 
 		// Register an externally-owned buffer and return an RGBuffer handle.
-		// buffer is an opaque Vulkan handle (VkBuffer) passed as void*.
-		[[nodiscard]] RGBuffer RegisterBuffer(void* buffer);
+		// buffer is an opaque engine handle (gpu::Buffer) cast to VkBuffer at the seam.
+		[[nodiscard]] RGBuffer RegisterBuffer(gpu::Buffer buffer);
 
 		// Update the Vulkan buffer backing an existing RGBuffer handle.
 		// Used when per-frame buffers change (e.g. triple-buffered lighting data).
-		void UpdateExternalBuffer(RGBuffer buffer, void* newBuffer);
+		void UpdateExternalBuffer(RGBuffer buffer, gpu::Buffer newBuffer);
 
 		// Create a render-graph-owned transient image.
 		[[nodiscard]] RGImage CreateTransientImage(const TransientImageDesc& desc);
@@ -200,8 +201,8 @@ namespace aether
 
 		// Ensure a transient image is registered for bindless sampled access.
 		// Returns 0xFFFFFFFF when image is invalid/non-transient/not allocatable.
-		// device is an opaque Vulkan device handle (VkDevice) passed as void*.
-		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, void* device, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
+		// device is an opaque engine handle (gpu::Device) cast to VkDevice at the seam.
+		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 
 		// Returns bindless slot for a transient image if already registered.
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(RGImage image) const;
@@ -247,9 +248,9 @@ namespace aether
 		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
 
 		// Enable async compute scheduling. Call once after Initialize() when a
-		// dedicated compute queue is available. computeQueue and queueFamily are
-		// opaque Vulkan handles passed as void*.
-		void EnableAsyncCompute(void* computeQueue, std::uint32_t computeQueueFamily);
+		// dedicated compute queue is available. computeQueue is an opaque engine
+		// handle (gpu::Queue) cast to VkQueue at the seam.
+		void EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily);
 
 		// Returns true if any compiled passes were assigned to the async compute
 		// queue during the most recent Compile().
@@ -399,11 +400,11 @@ namespace aether
 #endif
 		};
 
-		// External image entry (opaque handles).
+		// External image entry (typed engine handles).
 		struct ExternalImageEntry
 		{
-			void* image = nullptr;
-			void* view = nullptr;
+			gpu::Image image = nullptr;
+			gpu::ImageView view = nullptr;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 		};
 
@@ -456,7 +457,7 @@ namespace aether
 		std::vector<PassRecord> m_passes;
 		std::vector<CompiledPass> m_compiled;
 		std::vector<ExternalImageEntry> m_externalImages;
-		std::vector<void*> m_externalBuffers;
+		std::vector<gpu::Buffer> m_externalBuffers;
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;
 		std::uint32_t m_frameIndex = 0;

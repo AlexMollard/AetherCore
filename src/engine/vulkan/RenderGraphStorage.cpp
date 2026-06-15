@@ -17,6 +17,46 @@
 
 namespace aether
 {
+	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate
+	// to the Vulkan-internal overload. Keeps the bridge in one place.
+
+	void RenderGraphStorage::Initialize(gpu::Device device, gpu::Allocator allocator)
+	{
+		Initialize(static_cast<VkDevice>(device), static_cast<VmaAllocator>(allocator));
+	}
+
+	void RenderGraphStorage::EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily)
+	{
+		EnableAsyncCompute(static_cast<VkQueue>(computeQueue), computeQueueFamily);
+	}
+
+	uint32_t RenderGraphStorage::RegisterExternalImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect)
+	{
+		return RegisterExternalImage(
+		        static_cast<VkImage>(image),
+		        static_cast<VkImageView>(view),
+		        gpu::ToVk(aspect));
+	}
+
+	uint32_t RenderGraphStorage::RegisterExternalBuffer(gpu::Buffer buffer)
+	{
+		return RegisterExternalBuffer(static_cast<VkBuffer>(buffer));
+	}
+
+	void RenderGraphStorage::UpdateExternalBuffer(uint32_t idx, gpu::Buffer buffer)
+	{
+		UpdateExternalBuffer(idx, static_cast<VkBuffer>(buffer));
+	}
+
+	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout)
+	{
+		return EnsureBindlessSampled(
+		        transientIdx,
+		        bindlessManager,
+		        static_cast<VkDevice>(device),
+		        gpu::ToVk(descriptorLayout));
+	}
+
 	void RenderGraphStorage::Initialize(VkDevice device, VmaAllocator allocator)
 	{
 		m_device = device;
@@ -376,7 +416,7 @@ namespace aether
 
 	// -- Transient images -----------------------------------------------------
 
-	uint32_t RenderGraphStorage::AddTransientSlot(VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, gpu::Extent2D extent)
+	uint32_t RenderGraphStorage::AddTransientSlot(VkFormat format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
@@ -447,7 +487,7 @@ namespace aether
 	{
 		if (idx < m_transientImages.size())
 		{
-			return m_transientImages[idx].aspect;
+			return gpu::ToVk(m_transientImages[idx].aspect);
 		}
 		return VK_IMAGE_ASPECT_COLOR_BIT;
 	}
@@ -491,7 +531,7 @@ namespace aether
 
 		if (!entry.image)
 		{
-			if (entry.format == VK_FORMAT_UNDEFINED || entry.usage == 0 || entry.extent.width == 0 || entry.extent.height == 0)
+			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0 || entry.extent.width == 0 || entry.extent.height == 0)
 			{
 				return 0xFFFFFFFFu;
 			}
@@ -508,7 +548,7 @@ namespace aether
 			entry.allocatedExtent = entry.extent;
 		}
 
-		AE_EXPECT_OR_THROW_VOID(entry.image.EnsureBindlessSampled(bindlessManager, device, entry.aspect, descriptorLayout));
+		AE_EXPECT_OR_THROW_VOID(entry.image.EnsureBindlessSampled(bindlessManager, device, entry.aspect, gpu::FromVk(descriptorLayout)));
 		return entry.image.GetBindlessSampledSlot();
 	}
 
@@ -566,8 +606,8 @@ namespace aether
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 		entry.fromHeap = false;
 		entry.format = VK_FORMAT_UNDEFINED;
-		entry.usage = 0;
-		entry.aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+		entry.usage = gpu::ImageUsage::None;
+		entry.aspect = gpu::ImageAspect::Color;
 		entry.extent = {};
 		m_freeTransientSlots.push_back(idx);
 	}
@@ -832,7 +872,7 @@ namespace aether
 			{
 				continue;
 			}
-			if (entry.format == VK_FORMAT_UNDEFINED || entry.usage == 0)
+			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0)
 			{
 				continue;
 			}
@@ -855,7 +895,7 @@ namespace aether
 			        .arrayLayers = 1,
 			        .samples = VK_SAMPLE_COUNT_1_BIT,
 			        .tiling = VK_IMAGE_TILING_OPTIMAL,
-			        .usage = entry.usage,
+			        .usage = gpu::ToVk(entry.usage),
 			        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 			        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			};
@@ -1027,7 +1067,7 @@ namespace aether
 			{
 				continue;
 			}
-			if (entry.format == VK_FORMAT_UNDEFINED || entry.usage == 0)
+			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0)
 			{
 				continue;
 			}

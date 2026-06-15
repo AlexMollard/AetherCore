@@ -44,6 +44,8 @@ namespace aether
 		static constexpr VkDeviceSize kTransientHeapCapacity = 256ull * 1024 * 1024; // 256 MB
 		static constexpr VkDeviceSize kTransientHeapAlignment = 65536u;
 		void Initialize(VkDevice device, VmaAllocator allocator);
+		// Engine-side overload: opaque gpu::Device / gpu::Allocator.
+		void Initialize(gpu::Device device, gpu::Allocator allocator);
 		void Shutdown();
 		void BeginFrame(std::uint32_t frameIndex);
 
@@ -52,6 +54,8 @@ namespace aether
 		// available. Creates per-frame compute command pools/buffers/fences
 		// and a cross-queue timeline semaphore.
 		void EnableAsyncCompute(VkQueue computeQueue, std::uint32_t computeQueueFamily);
+		// Engine-side overload: opaque gpu::Queue.
+		void EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily);
 
 		// Begin recording async compute passes. Must be called before any
 		// compute-queue pass executes. Signals the per-frame fence from the
@@ -94,6 +98,8 @@ namespace aether
 
 		// -- External images ------------------------------------------------
 		uint32_t RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect);
+		// Engine-side overload: opaque gpu::Image / gpu::ImageView / gpu::ImageAspect.
+		uint32_t RegisterExternalImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect);
 		[[nodiscard]] VkImage GetExternalImage(uint32_t idx) const;
 		[[nodiscard]] VkImageView GetExternalView(uint32_t idx) const;
 		[[nodiscard]] VkImageAspectFlags GetExternalAspect(uint32_t idx) const;
@@ -107,7 +113,11 @@ namespace aether
 
 		// -- External buffers ------------------------------------------------
 		uint32_t RegisterExternalBuffer(VkBuffer buffer);
+		// Engine-side overload: opaque gpu::Buffer.
+		uint32_t RegisterExternalBuffer(gpu::Buffer buffer);
 		void UpdateExternalBuffer(uint32_t idx, VkBuffer buffer);
+		// Engine-side overload: opaque gpu::Buffer.
+		void UpdateExternalBuffer(uint32_t idx, gpu::Buffer buffer);
 		[[nodiscard]] VkBuffer GetExternalBuffer(uint32_t idx) const;
 		void ReleaseExternalBuffer(uint32_t idx);
 
@@ -117,7 +127,7 @@ namespace aether
 		}
 
 		// -- Transient image slots ------------------------------------------
-		uint32_t AddTransientSlot(VkFormat format, VkImageUsageFlags usage, VkImageAspectFlags aspect, gpu::Extent2D extent);
+		uint32_t AddTransientSlot(VkFormat format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent);
 		void EnsureTransientImages(const FrameTarget& target);
 
 		[[nodiscard]] VkImage ResolveTransientImage(uint32_t idx) const;
@@ -133,6 +143,8 @@ namespace aether
 
 		// -- Bindless -------------------------------------------------------
 		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout);
+		// Engine-side overload: opaque gpu::Device / gpu::ImageLayout.
+		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout);
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
 
 		// -- Transient buffer slots ------------------------------------------
@@ -233,8 +245,8 @@ namespace aether
 		struct TransientImageEntry
 		{
 			VkFormat format = VK_FORMAT_UNDEFINED;
-			VkImageUsageFlags usage = 0;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			gpu::ImageUsage usage = gpu::ImageUsage::None;
+			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent{};
 			bool bindlessRequested = false;
 			bool fromHeap = false; // true if allocated from transient heap
@@ -265,8 +277,8 @@ namespace aether
 		struct ImageCacheKey
 		{
 			VkFormat format = VK_FORMAT_UNDEFINED;
-			VkImageUsageFlags usage = 0;
-			VkImageAspectFlags aspect = VK_IMAGE_ASPECT_COLOR_BIT;
+			gpu::ImageUsage usage = gpu::ImageUsage::None;
+			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			uint32_t width = 0;
 			uint32_t height = 0;
 			uint32_t mipLevels = 1;
@@ -283,8 +295,8 @@ namespace aether
 			std::size_t operator()(const ImageCacheKey& k) const noexcept
 			{
 				std::size_t h = std::hash<uint32_t>{}(static_cast<uint32_t>(k.format));
-				h ^= std::hash<uint32_t>{}(k.usage) + 0x9e3779b9 + (h << 6) + (h >> 2);
-				h ^= std::hash<uint32_t>{}(k.aspect) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(static_cast<uint32_t>(k.usage)) + 0x9e3779b9 + (h << 6) + (h >> 2);
+				h ^= std::hash<uint32_t>{}(static_cast<uint32_t>(k.aspect)) + 0x9e3779b9 + (h << 6) + (h >> 2);
 				h ^= std::hash<uint32_t>{}(k.width) + 0x9e3779b9 + (h << 6) + (h >> 2);
 				h ^= std::hash<uint32_t>{}(k.height) + 0x9e3779b9 + (h << 6) + (h >> 2);
 				h ^= std::hash<uint32_t>{}(k.mipLevels) + 0x9e3779b9 + (h << 6) + (h >> 2);

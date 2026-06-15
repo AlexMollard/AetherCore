@@ -97,7 +97,7 @@ namespace aether
 		                {
 		                        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
 		                        .format = ShadowAtlasManager::kAtlasFormat,
-		                        .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		                        .usage = gpu::ImageUsage::Storage | gpu::ImageUsage::Sampled,
 		                        .debugName = "ShadowBlurScratch",
 		                }));
 		m_blurScratch = std::move(scratchImg);

@@ -36,8 +36,8 @@ namespace aether
 		gpu::PipelineHandle animBlend;
 		gpu::PipelineHandle ikSolve;
 
-		void Initialize(VkDevice device, VkPipelineCache pipelineCache);
-		void Shutdown(VkDevice device);
+		void Initialize(gpu::Device device, gpu::PipelineCache pipelineCache);
+		void Shutdown(gpu::Device device);
 	};
 
 	// Per-draw submission payload.
@@ -80,7 +80,7 @@ namespace aether
 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
 		// Initialize with configuration struct.
-		void Initialize(VkDevice device, VmaAllocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config = {});
+		void Initialize(gpu::Device device, gpu::Allocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config = {});
 		void Shutdown();
 
 		// Optional animation database for GPU sampling.
@@ -229,8 +229,8 @@ namespace aether
 		// Per-frame queued draw commands.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
-		VkDevice m_device = VK_NULL_HANDLE;
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		gpu::Device m_device = nullptr;
+		gpu::Allocator m_allocator = nullptr;
 
 		// CPU-written per-frame inputs.
 		UniqueBuffer m_instanceDataBuffer; // DrawContracts::InstanceData[]  - SSBO + BDA
