@@ -5,9 +5,10 @@
 #include <span>
 #include <string_view>
 
+#include "gpu/GpuEnums.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
-#include "vulkan/UniqueImage.hpp"
 
 namespace aether
 {
@@ -21,6 +22,11 @@ namespace aether
 	//
 	// After loading, the texture is registered in the BindlessManager and
 	// its slot can be placed into a Material for use by the forward shader.
+	//
+	// Storage path: stores a single gpu::TextureHandle (8 bytes, typed,
+	// generation-checked). Allocated through gpu::ResourceRegistry::
+	// CreateTexture which uses the registry's 3-frame deferred-destruction
+	// ring.
 	//
 	// Lifetime: call Destroy() (or let move-assign from a default-constructed
 	// Texture) before or alongside engine shutdown.
@@ -60,12 +66,13 @@ namespace aether
 
 		[[nodiscard]] bool IsValid() const
 		{
-			return m_image.Get() != VK_NULL_HANDLE;
+			return m_handle.IsValid();
 		}
 
 		[[nodiscard]] std::uint32_t GetBindlessSlot() const;
 
 	private:
-		UniqueImage m_image;
+		gpu::TextureHandle m_handle{};
+		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
 	};
 } // namespace aether

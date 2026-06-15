@@ -155,6 +155,10 @@ namespace aether::gpu
 		[[nodiscard]] static ResolvedTexture ResolveTexture(TextureHandle handle) noexcept;
 		[[nodiscard]] static ResolvedBuffer ResolveBuffer(BufferHandle handle) noexcept;
 		[[nodiscard]] static void* ResolveBufferVkHandle(BufferHandle handle) noexcept;
+		// Engine-side accessor: returns the texture image as an opaque
+		// gpu::Image. Used at the render-graph boundary to register external
+		// images. Backend resolves to the underlying VkImage at the seam.
+		[[nodiscard]] static gpu::Image ResolveTextureImage(TextureHandle handle) noexcept;
 	};
 
 	template<typename T>

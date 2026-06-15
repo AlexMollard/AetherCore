@@ -437,7 +437,7 @@ namespace aether
 	void LocalShadowService::SetupPassResources(RenderGraph& graph, gpu::Format depthFormat)
 	{
 		// Register the atlas as an external image in the render graph.
-		m_atlasImage = graph.RegisterImage(static_cast<void*>(m_atlasManager.GetAtlasImage().Get()), static_cast<void*>(m_atlasManager.GetAtlasView()), gpu::ImageAspect::Color);
+		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
 		// Register the blur scratch image.
 		m_blurScratchImage = graph.RegisterImage(static_cast<void*>(m_blurScratch.Get()), static_cast<void*>(m_blurScratch.GetDefaultView()), gpu::ImageAspect::Color);
@@ -534,7 +534,7 @@ namespace aether
 			                };
 			                const VkDescriptorImageInfo hSampledInfo{
 			                        .sampler = m_blurSampler,
-			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageView = static_cast<VkImageView>(m_atlasManager.GetAtlasView()),
 			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
 			                };
 			                const VkWriteDescriptorSet hWrites[]{
@@ -581,7 +581,7 @@ namespace aether
 
 			                const VkDescriptorImageInfo vStorageInfo{
 			                        .sampler = VK_NULL_HANDLE,
-			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageView = static_cast<VkImageView>(m_atlasManager.GetAtlasView()),
 			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
 			                };
 			                const VkDescriptorImageInfo vSampledInfo{

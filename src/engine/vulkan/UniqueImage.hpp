@@ -12,12 +12,6 @@ namespace aether
 {
 	class BindlessManager;
 
-	enum class TextureFilter
-	{
-		Linear,
-		Nearest,
-	};
-
 	class UniqueImage
 	{
 	public:
@@ -40,6 +34,8 @@ namespace aether
 			VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 			const char* debugName = nullptr;
 		};
+		// TextureFilter moved to gpu/GpuEnums.hpp so engine code can use it
+		// without including the vulkan backend header.
 
 		UniqueImage() = default;
 		~UniqueImage();

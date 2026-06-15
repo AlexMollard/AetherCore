@@ -137,10 +137,22 @@ namespace aether
 		GraphicsPipeline m_pipeline;
 		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
 		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
+		struct PerFrameMapped
+		{
+			gpu::BufferHandle handle{};
+			void* mapped = nullptr;
+			gpu::DeviceAddress address = 0;
+			std::size_t capacity = 0;
+		};
+		struct PerFrameDevice
+		{
+			gpu::BufferHandle handle{};
+			gpu::DeviceAddress address = 0;
+		};
+
 		std::array<std::vector<PendingQuad>, Swapchain::kMaxFramesInFlight> m_pendingQuads;
-		std::array<UniqueBuffer, Swapchain::kMaxFramesInFlight> m_commandBuffers;
-		std::array<std::size_t, Swapchain::kMaxFramesInFlight> m_commandBufferCapacities{};
-		std::array<UniqueBuffer, Swapchain::kMaxFramesInFlight> m_indirectBuffers;
+		std::array<PerFrameMapped, Swapchain::kMaxFramesInFlight> m_commandBuffers;
+		PerFrameDevice m_indirectBuffer;
 		std::uint32_t m_writeSlot = 0;
 		ClipState m_clipState{};
 		bool m_ready = false;

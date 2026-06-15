@@ -8,14 +8,13 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/volk.hpp"
+#include "gpu/ResourceRegistry.hpp"
 
 #include "utils/GpuProfiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GpuTimestampPool.hpp"
 #include "vulkan/Swapchain.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
@@ -171,7 +170,7 @@ namespace aether
 			m_rootMotionSystem = sys;
 		}
 
-		// Hips node index for root motion copy: vkCmdCopyBuffer reads from
+		// Hips node index for root motion copy: copy-buffer reads from
 		// global transforms buffer at (hipNodeIdx * 64) bytes offset.
 		void SetHipsNodeIndex(std::uint32_t hipsNodeIdx)
 		{
@@ -206,11 +205,13 @@ namespace aether
 
 		[[nodiscard]] gpu::DeviceAddress GetSkinPaletteBufferAddress() const
 		{
-			return m_skinPaletteBuffer.GetDeviceAddress();
+			// Single device-local buffer shared across all frames. The cached
+			// address is set on the first frame and remains stable.
+			return m_skinPaletteAddress;
 		}
 
 		// Emit graphics draws from indirect output.
-		// cascadeOffset is added to the output buffer offset (in VkDrawIndexedIndirectCommand units);
+		// cascadeOffset is added to the output buffer offset (in gpu::DrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
 		void FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet = nullptr, gpu::DescriptorSet lightingSet = nullptr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 		void FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
@@ -229,24 +230,49 @@ namespace aether
 		// Per-frame queued draw commands.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
-		gpu::Device m_device = nullptr;
-		gpu::Allocator m_allocator = nullptr;
 
-		// CPU-written per-frame inputs.
-		UniqueBuffer m_instanceDataBuffer; // DrawContracts::InstanceData[]  - SSBO + BDA
-		UniqueBuffer m_cullInputBuffer;    // CullContracts::DrawInput[]     - SSBO + BDA
-		UniqueBuffer m_batchDescBuffer;    // CullContracts::Batch[]         - SSBO + BDA
+		// ------------------------------------------------------------------------
+		// Buffer storage
+		//
+		// All buffers are owned by gpu::ResourceRegistry and live as
+		// gpu::BufferHandle slots (8 bytes each, generation-checked). Per-frame
+		// data is mirrored by std::array<Handle, kFramesInFlight>. The cached
+		// pointers / device-addresses are refreshed after CreateMappedBuffer /
+		// ResolveBuffer so the hot path doesn't need to re-resolve every frame.
+		// ------------------------------------------------------------------------
 
+		// Per-frame CPU-written mapped SSBOs.
+		struct MappedPerFrame
+		{
+			gpu::BufferHandle handle{};
+			void* mapped = nullptr;       // CPU write pointer
+			gpu::DeviceAddress address = 0; // GPU read pointer
+		};
+		std::array<MappedPerFrame, kFramesInFlight> m_instanceData;
+		std::array<MappedPerFrame, kFramesInFlight> m_cullInput;
+		std::array<MappedPerFrame, kFramesInFlight> m_batchDesc;
+		std::array<MappedPerFrame, kFramesInFlight> m_skinCopyJobs;
+		std::array<MappedPerFrame, kFramesInFlight> m_animationSampleJobs;
+
+		// Per-frame device-local buffers (GPU-written outputs, no mapped ptr).
+		struct DevicePerFrame
+		{
+			gpu::BufferHandle handle{};
+			gpu::DeviceAddress address = 0;
+		};
+		std::array<DevicePerFrame, kFramesInFlight> m_outputIndirect;
+		std::array<DevicePerFrame, kFramesInFlight> m_sampledPoses;
+		std::array<DevicePerFrame, kFramesInFlight> m_nodeGlobalTransforms;
+
+		// Single device-local buffer shared across all frames (no per-frame
+		// aliasing - the contents are frame-atomic by convention).
+		gpu::BufferHandle m_skinPaletteHandle{};
+		gpu::DeviceAddress m_skinPaletteAddress = 0;
+
+		// CPU-write typed view cached on Init for hot-path access.
 		DrawContracts::InstanceData* m_instanceDataMapped = nullptr;
 		CullContracts::DrawInput* m_cullInputMapped = nullptr;
 		CullContracts::Batch* m_batchDescMapped = nullptr;
-
-		// Device-local outputs consumed by draw/compute.
-		UniqueBuffer m_outputIndirectBuffer;       // VkDrawIndexedIndirectCommand[] - INDIRECT + BDA
-		UniqueBuffer m_skinPaletteBuffer;          // glm::mat4[] global skin palette pool (device-local)
-		UniqueBuffer m_skinCopyJobBuffer;          // AnimationContracts::SkinCopyJob[] CPU-mapped per-frame copy/blend jobs
-		UniqueBuffer m_nodeGlobalTransformsBuffer; // float4x4[] per-node global transforms (flatten pass output)
-
 		AnimationContracts::SkinCopyJob* m_skinCopyJobsMapped = nullptr;
 		AnimationContracts::AnimatorSampleJob* m_animationSampleJobsMapped = nullptr;
 
@@ -277,6 +303,10 @@ namespace aether
 		gpu::DeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
 		gpu::DeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
 		gpu::DeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
+		// Cached handle for the current frame's indirect buffer; resolved in
+		// PrepareAndDispatch (when frameSlot is known) and consumed in
+		// FlushDrawImpl where the per-frame slot is no longer in scope.
+		gpu::BufferHandle m_cachedIndirectHandle{};
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		bool m_debugDisableAnimation = false;
@@ -301,8 +331,6 @@ namespace aether
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 
 		const AnimationDatabase* m_animationDb = nullptr;
-		UniqueBuffer m_animationSampleJobsBuffer; // AnimationContracts::AnimatorSampleJob[] CPU-mapped
-		UniqueBuffer m_sampledPosesBuffer;        // AnimationContracts::SampledNodePose[] GPU-written
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 		TracyVkCtx m_tracyVkCtx = nullptr;

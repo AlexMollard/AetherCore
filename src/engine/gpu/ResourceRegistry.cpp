@@ -153,4 +153,18 @@ namespace aether::gpu
 		}
 		return static_cast<void*>(entry->buffer);
 	}
+
+	gpu::Image ResourceRegistry::ResolveTextureImage(TextureHandle handle) noexcept
+	{
+		if (s_reg == nullptr)
+		{
+			return nullptr;
+		}
+		const ::aether::ResourceRegistry::TextureEntry* entry = s_reg->Resolve(handle);
+		if (entry == nullptr)
+		{
+			return nullptr;
+		}
+		return static_cast<gpu::Image>(entry->image);
+	}
 } // namespace aether::gpu

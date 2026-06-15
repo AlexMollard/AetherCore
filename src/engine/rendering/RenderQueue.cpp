@@ -24,8 +24,8 @@ namespace aether
 {
 	void RenderQueue::Initialize(gpu::Device device, gpu::Allocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
 	{
-		m_device = device;
-		m_allocator = allocator;
+		(void) device;
+		(void) allocator;
 		m_sharedPipelines = &pipelines;
 		m_maxDraws = config.maxDraws;
 		m_maxBatches = config.maxBatches;
@@ -37,71 +37,225 @@ namespace aether
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
-		AE_EXPECT_OR_THROW(b0, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(DrawContracts::InstanceData), kSsboFlags, "RenderQueue.InstanceData"));
-		m_instanceDataBuffer = std::move(b0);
-		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceDataBuffer.GetAllocationInfo().pMappedData);
+		// All buffers route through gpu::ResourceRegistry, which owns the
+		// deferred-destruction ring. Per-frame data is mirrored by
+		// std::array<Handle, kFramesInFlight> for the hot path.
 
-		AE_EXPECT_OR_THROW(b1, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(CullContracts::DrawInput), kSsboFlags, "RenderQueue.CullInput"));
-		m_cullInputBuffer = std::move(b1);
-		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInputBuffer.GetAllocationInfo().pMappedData);
+		// m_instanceData (kFramesInFlight * maxDraws entries)
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(DrawContracts::InstanceData),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.InstanceData",
+			};
+			m_instanceData[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_instanceData[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: InstanceData CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_instanceData[i].handle);
+			m_instanceData[i].mapped = view.mappedPtr;
+			m_instanceData[i].address = view.deviceAddress;
+		}
 
-		AE_EXPECT_OR_THROW(b2, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(config.maxBatches) * sizeof(CullContracts::Batch), kSsboFlags, "RenderQueue.BatchDesc"));
-		m_batchDescBuffer = std::move(b2);
-		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDescBuffer.GetAllocationInfo().pMappedData);
+		// m_cullInput
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(config.maxDraws) * sizeof(CullContracts::DrawInput),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.CullInput",
+			};
+			m_cullInput[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_cullInput[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: CullInput CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_cullInput[i].handle);
+			m_cullInput[i].mapped = view.mappedPtr;
+			m_cullInput[i].address = view.deviceAddress;
+		}
+
+		// m_batchDesc
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(config.maxBatches) * sizeof(CullContracts::Batch),
+			        .usage = kSsboFlags,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "RenderQueue.BatchDesc",
+			};
+			m_batchDesc[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_batchDesc[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: BatchDesc CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_batchDesc[i].handle);
+			m_batchDesc[i].mapped = view.mappedPtr;
+			m_batchDesc[i].address = view.deviceAddress;
+		}
 
 		if (m_maxAnimationDraws > 0u)
 		{
-			AE_EXPECT_OR_THROW(b3, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob), kSsboFlags, "RenderQueue.SkinCopyJobs"));
-			m_skinCopyJobBuffer = std::move(b3);
-			m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobBuffer.GetAllocationInfo().pMappedData);
+			// m_skinCopyJobs
+			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			{
+				const gpu::MappedBufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::SkinCopyJob),
+				        .usage = kSsboFlags,
+				        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+				        .debugName = "RenderQueue.SkinCopyJobs",
+				};
+				m_skinCopyJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				if (!m_skinCopyJobs[i].handle.IsValid())
+				{
+					Throw(AetherError::Engine("RenderQueue: SkinCopyJobs CreateMappedBuffer failed"));
+				}
+				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_skinCopyJobs[i].handle);
+				m_skinCopyJobs[i].mapped = view.mappedPtr;
+				m_skinCopyJobs[i].address = view.deviceAddress;
+			}
 
-			AE_EXPECT_OR_THROW(b4, UniqueBuffer::CreateMapped(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob), kSsboFlags, "RenderQueue.AnimSampleJobs"));
-			m_animationSampleJobsBuffer = std::move(b4);
-			m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobsBuffer.GetAllocationInfo().pMappedData);
+			// m_animationSampleJobs
+			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			{
+				const gpu::MappedBufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(m_maxAnimationDraws) * sizeof(AnimationContracts::AnimatorSampleJob),
+				        .usage = kSsboFlags,
+				        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+				        .debugName = "RenderQueue.AnimSampleJobs",
+				};
+				m_animationSampleJobs[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				if (!m_animationSampleJobs[i].handle.IsValid())
+				{
+					Throw(AetherError::Engine("RenderQueue: AnimSampleJobs CreateMappedBuffer failed"));
+				}
+				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_animationSampleJobs[i].handle);
+				m_animationSampleJobs[i].mapped = view.mappedPtr;
+				m_animationSampleJobs[i].address = view.deviceAddress;
+			}
 
 			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
 
-			AE_EXPECT_OR_THROW(b5, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.SkinPalette"));
-			m_skinPaletteBuffer = std::move(b5);
+			// m_skinPalette (single buffer shared across frames).
+			{
+				const gpu::BufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
+				        .usage = kAnimationSsboFlags,
+				        .debugName = "RenderQueue.SkinPalette",
+				};
+				m_skinPaletteHandle = gpu::ResourceRegistry::CreateBuffer(desc);
+				if (!m_skinPaletteHandle.IsValid())
+				{
+					Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
+				}
+				m_skinPaletteAddress = gpu::ResourceRegistry::ResolveBuffer(m_skinPaletteHandle).deviceAddress;
+			}
 
-			AE_EXPECT_OR_THROW(b6, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose), kAnimationSsboFlags, "RenderQueue.SampledPoses"));
-			m_sampledPosesBuffer = std::move(b6);
+			// m_sampledPoses (per-frame device-local).
+			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			{
+				const gpu::BufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose),
+				        .usage = kAnimationSsboFlags,
+				        .debugName = "RenderQueue.SampledPoses",
+				};
+				m_sampledPoses[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+				if (!m_sampledPoses[i].handle.IsValid())
+				{
+					Throw(AetherError::Engine("RenderQueue: SampledPoses CreateBuffer failed"));
+				}
+				m_sampledPoses[i].address = gpu::ResourceRegistry::ResolveBuffer(m_sampledPoses[i].handle).deviceAddress;
+			}
 
-			AE_EXPECT_OR_THROW(b7, UniqueBuffer::CreateDeviceLocal(allocator, device, kFramesInFlight * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4), kAnimationSsboFlags, "RenderQueue.NodeGlobalTransforms"));
-			m_nodeGlobalTransformsBuffer = std::move(b7);
+			// m_nodeGlobalTransforms (per-frame device-local).
+			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+			{
+				const gpu::BufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4),
+				        .usage = kAnimationSsboFlags,
+				        .debugName = "RenderQueue.NodeGlobalTransforms",
+				};
+				m_nodeGlobalTransforms[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+				if (!m_nodeGlobalTransforms[i].handle.IsValid())
+				{
+					Throw(AetherError::Engine("RenderQueue: NodeGlobalTransforms CreateBuffer failed"));
+				}
+				m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
+			}
+
 			AE_INFO(LogCategory::Render,
-			        "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses=0x{:x}, nodeGlobalTransforms=0x{:x}",
-			        m_skinPaletteBuffer.GetDeviceAddress(),
-			        m_sampledPosesBuffer.GetDeviceAddress(),
-			        m_nodeGlobalTransformsBuffer.GetDeviceAddress());
+			        "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}",
+			        m_skinPaletteAddress,
+			        m_sampledPoses[0].address,
+			        m_nodeGlobalTransforms[0].address);
 		}
 
-		AE_EXPECT_OR_THROW(b8,
-		        UniqueBuffer::CreateDeviceLocal(allocator,
-		                device,
-		                kFramesInFlight * static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand),
-		                gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-		                "RenderQueue.IndirectOutput"));
-		m_outputIndirectBuffer = std::move(b8);
+		// m_outputIndirect (per-frame device-local INDIRECT + BDA).
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			const gpu::BufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand),
+			        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+			        .debugName = "RenderQueue.IndirectOutput",
+			};
+			m_outputIndirect[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+			if (!m_outputIndirect[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderQueue: IndirectOutput CreateBuffer failed"));
+			}
+			m_outputIndirect[i].address = gpu::ResourceRegistry::ResolveBuffer(m_outputIndirect[i].handle).deviceAddress;
+		}
+
+		// Cache the frame-0 mapped pointers for hot-path access (the hot path
+		// uses frameIndex % kFramesInFlight to pick the slot).
+		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[0].mapped);
+		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[0].mapped);
+		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[0].mapped);
+		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[0].mapped);
+		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[0].mapped);
 	}
 
 	void RenderQueue::Shutdown()
 	{
 		m_sharedPipelines = nullptr;
-		m_sampledPosesBuffer.Reset();
-		m_animationSampleJobsBuffer.Reset();
-		m_outputIndirectBuffer.Reset();
-		m_skinPaletteBuffer.Reset();
-		m_skinCopyJobBuffer.Reset();
-		m_nodeGlobalTransformsBuffer.Reset();
-		m_batchDescBuffer.Reset();
-		m_cullInputBuffer.Reset();
-		m_instanceDataBuffer.Reset();
-		m_animationSampleJobsMapped = nullptr;
-		m_skinCopyJobsMapped = nullptr;
+
+		auto DestroyAll = [](auto& arr)
+		{
+			for (auto& e: arr)
+			{
+				if (e.handle.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(e.handle);
+				}
+				e = {};
+			}
+		};
+		DestroyAll(m_instanceData);
+		DestroyAll(m_cullInput);
+		DestroyAll(m_batchDesc);
+		DestroyAll(m_skinCopyJobs);
+		DestroyAll(m_animationSampleJobs);
+		DestroyAll(m_outputIndirect);
+		DestroyAll(m_sampledPoses);
+		DestroyAll(m_nodeGlobalTransforms);
+
+		if (m_skinPaletteHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_skinPaletteHandle);
+			m_skinPaletteHandle = {};
+		}
+		m_skinPaletteAddress = 0;
+
 		m_instanceDataMapped = nullptr;
 		m_cullInputMapped = nullptr;
 		m_batchDescMapped = nullptr;
+		m_skinCopyJobsMapped = nullptr;
+		m_animationSampleJobsMapped = nullptr;
+
 		m_maxDraws = 0;
 		m_outputDrawCapacity = 0;
 		m_maxBatches = 0;
@@ -109,9 +263,7 @@ namespace aether
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
-		m_allocator = nullptr;
-		m_device = nullptr;
-	}
+			}
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
@@ -148,9 +300,9 @@ namespace aether
 		std::memset(m_instanceDataMapped + drawBase, 0, m_maxDraws * sizeof(DrawContracts::InstanceData));
 		std::memset(m_cullInputMapped + drawBase, 0, m_maxDraws * sizeof(CullContracts::DrawInput));
 		std::memset(m_batchDescMapped + batchBase, 0, m_maxBatches * sizeof(CullContracts::Batch));
-		AE_EXPECT_OR_THROW_VOID(m_instanceDataBuffer.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(m_cullInputBuffer.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(m_batchDescBuffer.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 
 		// GPU timestamp readback: read results from kFramesInFlight frames ago, reset slot for this frame.
 		if (m_timestampPool && m_timestampPool->IsValid())
@@ -185,30 +337,31 @@ namespace aether
 		if (!m_animationSlotCleared[frameSlot])
 		{
 			m_animationSlotCleared[frameSlot] = true;
-			if (m_skinPaletteBuffer)
+			if (m_skinPaletteHandle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-				cmdList.FillBuffer(m_skinPaletteBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_skinPaletteHandle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
-			if (m_sampledPosesBuffer)
+			if (m_sampledPoses[frameSlot].handle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
-				cmdList.FillBuffer(m_sampledPosesBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_sampledPoses[frameSlot].handle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
-			if (m_nodeGlobalTransformsBuffer)
+			if (m_nodeGlobalTransforms[frameSlot].handle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
-				cmdList.FillBuffer(m_nodeGlobalTransformsBuffer.GetBuffer(), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_nodeGlobalTransforms[frameSlot].handle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
 		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
 		m_cachedBatchBase = batchBase;
-		m_cachedInstanceDataAddr = m_instanceDataBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
-		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
+		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address + static_cast<gpu::DeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
+		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteAddress + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
 		const gpu::DeviceAddress currSampledPosesAddr =
-		        (m_maxSampledPoses > 0u) ? m_sampledPosesBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
-		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransformsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+		        (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
+		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
@@ -401,16 +554,16 @@ namespace aether
 		}
 
 		// Flush mapped writes before GPU reads.
-		AE_EXPECT_OR_THROW_VOID(m_instanceDataBuffer.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(m_cullInputBuffer.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(m_batchDescBuffer.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		if (m_skinCopyJobsMapped != nullptr)
 		{
-			AE_EXPECT_OR_THROW_VOID(m_skinCopyJobBuffer.FlushMapped());
+			gpu::ResourceRegistry::FlushMappedBuffer(m_skinCopyJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		}
 		if (sampleJobsThisFrame > 0)
 		{
-			AE_EXPECT_OR_THROW_VOID(m_animationSampleJobsBuffer.FlushMapped());
+			gpu::ResourceRegistry::FlushMappedBuffer(m_animationSampleJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		}
 
 		// Ensure host writes are visible to subsequent shader reads.
@@ -426,12 +579,12 @@ namespace aether
 			{
 				const auto poseInitPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->poseInit);
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
-				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobsBuffer.GetDeviceAddress());
+				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobs[frameSlot].address);
 
 				cmdList.BindComputePipeline(poseInitPipe.pipeline, poseInitPipe.layout);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
-				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 				{
@@ -495,7 +648,7 @@ namespace aether
 				        .bindTranslationsAddr = 0,
 				        .bindRotationsAddr = 0,
 				        .bindScalesAddr = 0,
-				        .animatorJobsAddr = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
+				        .animatorJobsAddr = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
 				        .sampledPosesAddr = currSampledPosesAddr,
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
@@ -602,7 +755,7 @@ namespace aether
 			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline, nodeFlattenPipe.layout);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
-			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
 
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
@@ -724,7 +877,7 @@ namespace aether
 					continue;
 				}
 				const AnimationContracts::SkinPalettePush skinPc{
-				        .jobsAddr = m_skinCopyJobBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
+				        .jobsAddr = m_skinCopyJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
 				        .dstPaletteAddr = currSkinPaletteAddr,
 				        .globalTransformsAddr = currNodeGlobalTransformsAddr,
 				        .skinMetasAddr = batch.db->GetSkinMetasAddr(),
@@ -773,9 +926,9 @@ namespace aether
 			const CullContracts::MultiPushConstants multiPc{
 			        .frameAddrs = {m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2]},
 			        .instanceDataAddr = m_cachedInstanceDataAddr,
-			        .inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
-			        .outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
-			        .batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+			        .inputCmdAddr = m_cullInput[frameSlot].address + inputCmdOffset,
+			        .outputCmdAddr = m_outputIndirect[frameSlot].address + outputCmdOffset,
+			        .batchDescAddr = m_batchDesc[frameSlot].address + batchDescOffset,
 			        .totalDrawCount = totalDraws,
 			        .outputCascadeStride = static_cast<std::uint32_t>(cascadeStride),
 			        .debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
@@ -798,9 +951,9 @@ namespace aether
 			const CullContracts::PushConstants pc{
 			        .frameAddr = frameAddr,
 			        .instanceDataAddr = m_cachedInstanceDataAddr,
-			        .inputCmdAddr = m_cullInputBuffer.GetDeviceAddress() + inputCmdOffset,
-			        .outputCmdAddr = m_outputIndirectBuffer.GetDeviceAddress() + outputCmdOffset,
-			        .batchDescAddr = m_batchDescBuffer.GetDeviceAddress() + batchDescOffset,
+			        .inputCmdAddr = m_cullInput[frameSlot].address + inputCmdOffset,
+			        .outputCmdAddr = m_outputIndirect[frameSlot].address + outputCmdOffset,
+			        .batchDescAddr = m_batchDesc[frameSlot].address + batchDescOffset,
 			        .batchCountAddr = 0,
 			        .totalDrawCount = totalDraws,
 			        .debugFlags = m_debugForceVisible ? CullContracts::kDebugForceVisibleBit : 0u,
@@ -952,7 +1105,7 @@ namespace aether
 			}
 			else
 			{
-				cmd.DrawIndexedIndirect(m_outputIndirectBuffer.GetBuffer(), static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand), batch.drawCount, sizeof(gpu::DrawIndexedIndirectCommand));
+				cmd.DrawIndexedIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_cachedIndirectHandle), static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand), batch.drawCount, sizeof(gpu::DrawIndexedIndirectCommand));
 			}
 		}
 

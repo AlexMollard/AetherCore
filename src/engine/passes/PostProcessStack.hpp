@@ -111,12 +111,14 @@ namespace aether
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
 
 	private:
-		UniqueImage m_hdrColorImage; // R16G16B16A16_SFLOAT - forward output
+		gpu::TextureHandle m_hdrColorHandle; // R16G16B16A16_SFLOAT - forward output
 		RGImage m_hdrColor{};
+		std::uint32_t m_hdrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_tonemapPipeline; // HDR -> LDR
 
-		UniqueImage m_ldrColorImage; // R8G8B8A8_UNORM - tonemap output
+		gpu::TextureHandle m_ldrColorHandle; // R8G8B8A8_UNORM - tonemap output
 		RGImage m_ldrColor{};
+		std::uint32_t m_ldrBindlessSlot = 0xFFFFFFFFu;
 		GraphicsPipeline m_fxaaPipeline; // LDR -> swapchain (FXAA, can passthrough when disabled)
 		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
 

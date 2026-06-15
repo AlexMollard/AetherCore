@@ -3,15 +3,24 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 
 #include "material/GpuMaterial.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
 	class VulkanContext;
 
+	// Persistently-mapped SSBO holding the engine's material table.
+	//
+	// Storage path: stores a single gpu::BufferHandle (8 bytes, typed,
+	// generation-checked). Allocated through gpu::ResourceRegistry::
+	// CreateMappedBuffer which uses the registry's 3-frame deferred-
+	// destruction ring. CPU writes go through ResolveMappedBuffer().mappedPtr;
+	// GPU addresses through ResolveBuffer().deviceAddress. No raw VkBuffer
+	// is held, no UniqueBuffer member, no engine-side vk* token.
 	class MaterialBuffer
 	{
 	public:
@@ -29,7 +38,7 @@ namespace aether
 
 		[[nodiscard]] bool IsInitialized() const
 		{
-			return m_device != nullptr;
+			return m_handle.IsValid();
 		}
 
 		[[nodiscard]] std::uint32_t AllocateSlot();
@@ -50,9 +59,7 @@ namespace aether
 
 	private:
 		mutable std::mutex m_mutex;
-		gpu::Device m_device = nullptr;
-		gpu::Allocator m_allocator = nullptr;
-		UniqueBuffer m_buffer;
+		gpu::BufferHandle m_handle{};
 		GpuMaterial* m_mapped = nullptr;
 		gpu::DeviceAddress m_address = 0;
 		std::vector<uint32_t> m_freeSlots;

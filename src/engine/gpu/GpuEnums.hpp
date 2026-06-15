@@ -346,3 +346,15 @@ namespace aether::gpu
 		std::uint32_t offset = 0;
 	};
 } // namespace aether::gpu
+
+namespace aether
+{
+	// Engine-side texture filter. Moved here from vulkan/UniqueImage.hpp
+	// so engine code can include GpuEnums.hpp without dragging in the
+	// Vulkan backend.
+	enum class TextureFilter
+	{
+		Linear,
+		Nearest,
+	};
+} // namespace aether

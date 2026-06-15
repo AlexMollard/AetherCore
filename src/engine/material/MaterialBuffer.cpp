@@ -15,16 +15,23 @@ namespace aether
 
 	void MaterialBuffer::Initialize(const VulkanContext& ctx)
 	{
-		m_device = static_cast<gpu::Device>(ctx.GetDevice().device);
-		m_allocator = static_cast<gpu::Allocator>(ctx.GetAllocator());
+		(void) ctx;
 
-		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(m_allocator, m_device, sizeof(GpuMaterial) * kMaxMaterials, gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "MaterialBuffer"));
-		m_buffer = std::move(buf);
+		const gpu::MappedBufferDesc desc{
+		        .size = sizeof(GpuMaterial) * kMaxMaterials,
+		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "MaterialBuffer",
+		};
+		m_handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!m_handle.IsValid())
+		{
+			Throw(AetherError::Engine("MaterialBuffer: CreateMappedBuffer failed"));
+		}
 
-		const auto& allocInfo = m_buffer.GetAllocationInfo();
-		m_mapped = static_cast<GpuMaterial*>(allocInfo.pMappedData);
-
-		m_address = m_buffer.GetDeviceAddress();
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_handle);
+		m_mapped = static_cast<GpuMaterial*>(view.mappedPtr);
+		m_address = view.deviceAddress;
 
 		m_freeSlots.reserve(kMaxMaterials);
 		for (std::uint32_t i = kMaxMaterials; i-- > 0;)
@@ -35,17 +42,15 @@ namespace aether
 
 	void MaterialBuffer::Shutdown()
 	{
-		if (m_device == nullptr)
+		if (!m_handle.IsValid())
 		{
 			return;
 		}
 
-		m_buffer.Reset();
-
+		gpu::ResourceRegistry::Destroy(m_handle);
+		m_handle = {};
 		m_mapped = nullptr;
 		m_address = 0;
-		m_device = nullptr;
-		m_allocator = nullptr;
 		m_freeSlots.clear();
 	}
 
@@ -78,6 +83,6 @@ namespace aether
 			return;
 		}
 		m_mapped[slot] = material;
-		AE_EXPECT_OR_THROW_VOID(m_buffer.FlushMapped(static_cast<gpu::DeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial)));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_handle, static_cast<gpu::DeviceSize>(slot) * sizeof(GpuMaterial), sizeof(GpuMaterial));
 	}
 } // namespace aether

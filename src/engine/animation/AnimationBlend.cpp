@@ -3,28 +3,41 @@
 #include "gpu/GpuTypes.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include <entt/entt.hpp>
 
 namespace aether
 {
 	void AnimationBlendSystem::Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount)
 	{
+		(void) allocator;
+		(void) device;
 		m_nodeCount = nodeCount;
 		m_blendJobs.resize(static_cast<std::size_t>(maxBlendJobCount));
 
-		AE_EXPECT_OR_THROW(buffer,
-		        UniqueBuffer::CreateMapped(
-		                allocator, device, maxBlendJobCount * sizeof(AnimationContracts::AnimatorBlendJob), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationBlend.Jobs"));
-		m_blendJobsBuffer = std::move(buffer);
-
-		VmaAllocationInfo info = m_blendJobsBuffer.GetAllocationInfo();
-		m_mappedBlendJobs = static_cast<AnimationContracts::AnimatorBlendJob*>(info.pMappedData);
+		const gpu::MappedBufferDesc desc{
+		        .size = maxBlendJobCount * sizeof(AnimationContracts::AnimatorBlendJob),
+		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "AnimationBlend.Jobs",
+		};
+		m_handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!m_handle.IsValid())
+		{
+			Throw(AetherError::Engine("AnimationBlendSystem: CreateMappedBuffer failed"));
+		}
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_handle);
+		m_mappedBlendJobs = static_cast<AnimationContracts::AnimatorBlendJob*>(view.mappedPtr);
+		m_address = view.deviceAddress;
 	}
 
 	void AnimationBlendSystem::Shutdown(gpu::Device /*device*/)
 	{
-		m_blendJobsBuffer.Reset();
+		if (m_handle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_handle);
+		}
+		m_handle = {};
+		m_address = 0;
 		m_blendJobs.clear();
 		m_mappedBlendJobs = nullptr;
 	}
@@ -95,7 +108,7 @@ namespace aether
 			++m_writtenJobCount;
 		}
 
-		AE_EXPECT_OR_THROW_VOID(m_blendJobsBuffer.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_handle, 0, static_cast<gpu::DeviceSize>(-1));
 	}
 
 	void AnimationBlendSystem::BuildBlendPush(const AnimationDatabase& animDb, gpu::DeviceAddress sampledPosesAddr)
@@ -108,7 +121,7 @@ namespace aether
 		        .bindTranslationsAddr = animDb.GetBindTranslationsAddr(),
 		        .bindRotationsAddr = animDb.GetBindRotationsAddr(),
 		        .bindScalesAddr = animDb.GetBindScalesAddr(),
-		        .blendJobsAddr = m_blendJobsBuffer.GetDeviceAddress(),
+		        .blendJobsAddr = m_address,
 		        .sampledPosesAddr = sampledPosesAddr,
 		        .jobCount = m_writtenJobCount,
 		};

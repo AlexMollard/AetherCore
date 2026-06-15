@@ -1,10 +1,10 @@
 #pragma once
 
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/GpuContracts.hpp"
-#include "vulkan/UniqueBuffer.hpp"
-#include <vk_mem_alloc.h>
 #include <glm/glm.hpp>
 #include <cstdint>
 #include <vector>
@@ -26,6 +26,12 @@ namespace aether
 	//   - CPU raycast (Jolt CastRay) for each foot against static geometry
 	//   - Write IkGroundResult entries to a GPU-visible staging buffer
 	//   - Populate IkSolveJob array for GPU dispatch
+	//
+	// Storage path: stores two gpu::BufferHandle (8 bytes each, typed,
+	// generation-checked). Allocated through gpu::ResourceRegistry::
+	// CreateMappedBuffer which uses the registry's 3-frame deferred-
+	// destruction ring. CPU writes go through ResolveMappedBuffer().mappedPtr;
+	// GPU addresses through ResolveBuffer().deviceAddress.
 	class AnimationIkSystem
 	{
 	public:
@@ -52,12 +58,12 @@ namespace aether
 
 		gpu::DeviceAddress GetIkJobsDeviceAddress() const
 		{
-			return m_ikJobsBuffer.GetDeviceAddress();
+			return m_ikJobsAddress;
 		}
 
 		gpu::DeviceAddress GetGroundResultsDeviceAddress() const
 		{
-			return m_groundResultsBuffer.GetDeviceAddress();
+			return m_groundResultsAddress;
 		}
 
 		std::uint32_t GetGroundResultCount() const
@@ -79,8 +85,10 @@ namespace aether
 		}
 
 	private:
-		UniqueBuffer m_ikJobsBuffer;
-		UniqueBuffer m_groundResultsBuffer;
+		gpu::BufferHandle m_ikJobsHandle{};
+		gpu::BufferHandle m_groundResultsHandle{};
+		gpu::DeviceAddress m_ikJobsAddress = 0;
+		gpu::DeviceAddress m_groundResultsAddress = 0;
 		std::vector<AnimationContracts::IkSolveJob> m_ikJobs;
 		std::vector<AnimationContracts::IkGroundResult> m_groundResults;
 		AnimationContracts::IkSolvePush m_ikPush{};

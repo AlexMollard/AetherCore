@@ -50,29 +50,45 @@ namespace aether
 				const gpu::DeviceSize commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
 
 				// Ensure GPU buffers are allocated.
-				if (!m_commandBuffers[frameSlot] || m_commandBufferCapacities[frameSlot] < static_cast<std::size_t>(commandBytes))
+				if (!m_commandBuffers[frameSlot].handle.IsValid() || m_commandBuffers[frameSlot].capacity < static_cast<std::size_t>(commandBytes))
 				{
-					m_commandBuffers[frameSlot].Reset();
+					if (m_commandBuffers[frameSlot].handle.IsValid())
+					{
+						gpu::ResourceRegistry::Destroy(m_commandBuffers[frameSlot].handle);
+					}
 					const gpu::DeviceSize allocSize = commandBytes * 2;
-					AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(
-					                static_cast<gpu::Allocator>(m_vkCtx->GetAllocator()),
-					                static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
-					                allocSize,
-					                gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-					                "QuadRenderer.Commands"));
-					m_commandBuffers[frameSlot] = std::move(buf);
-					m_commandBufferCapacities[frameSlot] = static_cast<std::size_t>(allocSize);
+					const gpu::MappedBufferDesc desc{
+					        .size = allocSize,
+					        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+					        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+					        .debugName = "QuadRenderer.Commands",
+					};
+					m_commandBuffers[frameSlot].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+					if (!m_commandBuffers[frameSlot].handle.IsValid())
+					{
+						Throw(AetherError::Engine("QuadRenderer: Commands CreateMappedBuffer failed"));
+					}
+					const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_commandBuffers[frameSlot].handle);
+					m_commandBuffers[frameSlot].mapped = view.mappedPtr;
+					m_commandBuffers[frameSlot].address = view.deviceAddress;
+					m_commandBuffers[frameSlot].capacity = static_cast<std::size_t>(view.size);
 				}
 
-				if (!m_indirectBuffers[frameSlot])
+				if (!m_indirectBuffer.handle.IsValid())
 				{
-					AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(
-					                static_cast<gpu::Allocator>(m_vkCtx->GetAllocator()),
-					                static_cast<gpu::Device>(m_vkCtx->GetDevice().device),
-					                sizeof(gpu::DrawIndirectCommand),
-					                gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-					                "QuadRenderer.Indirect"));
-					m_indirectBuffers[frameSlot] = std::move(buf);
+					const gpu::MappedBufferDesc desc{
+					        .size = sizeof(gpu::DrawIndirectCommand),
+					        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+					        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+					        .debugName = "QuadRenderer.Indirect",
+					};
+					m_indirectBuffer.handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+					if (!m_indirectBuffer.handle.IsValid())
+					{
+						Throw(AetherError::Engine("QuadRenderer: Indirect CreateMappedBuffer failed"));
+					}
+					const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle);
+					m_indirectBuffer.address = view.deviceAddress;
 				}
 
 				// Sort by layer on CPU. Use stable_sort to preserve insertion
@@ -81,23 +97,23 @@ namespace aether
 				std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
 
 				// Upload sorted command data to the GPU buffer.
-				void* mappedCommands = m_commandBuffers[frameSlot].GetAllocationInfo().pMappedData;
+				void* mappedCommands = m_commandBuffers[frameSlot].mapped;
 				if (mappedCommands == nullptr)
 				{
 					return;
 				}
 				std::memcpy(mappedCommands, pending.data(), commandBytes);
-				AE_EXPECT_OR_THROW_VOID(m_commandBuffers[frameSlot].FlushMapped());
+				gpu::ResourceRegistry::FlushMappedBuffer(m_commandBuffers[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 
 				// Write DrawIndirectCommand directly to host-visible buffer.
-				gpu::DrawIndirectCommand* indirect = static_cast<gpu::DrawIndirectCommand*>(m_indirectBuffers[frameSlot].GetAllocationInfo().pMappedData);
+				gpu::DrawIndirectCommand* indirect = static_cast<gpu::DrawIndirectCommand*>(gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle).mappedPtr);
 				if (indirect != nullptr)
 				{
 					indirect->vertexCount = 6;
 					indirect->instanceCount = commandCount;
 					indirect->firstVertex = 0;
 					indirect->firstInstance = 0;
-					AE_EXPECT_OR_THROW_VOID(m_indirectBuffers[frameSlot].FlushMapped());
+					gpu::ResourceRegistry::FlushMappedBuffer(m_indirectBuffer.handle, 0, static_cast<gpu::DeviceSize>(-1));
 				}
 
 				gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
@@ -125,11 +141,11 @@ namespace aether
 
 				const QuadPush push{
 				        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
-				        .commandDataAddr = m_commandBuffers[frameSlot].GetDeviceAddress(),
+				        .commandDataAddr = m_commandBuffers[frameSlot].address,
 				};
 				cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
 
-				cmd.DrawIndirect(m_indirectBuffers[frameSlot].GetBuffer(), 0, 1, sizeof(gpu::DrawIndirectCommand));
+				cmd.DrawIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_indirectBuffer.handle), 0, 1, sizeof(gpu::DrawIndirectCommand));
 
 			                m_pendingQuads[readSlot].clear();
 		                });
@@ -188,15 +204,19 @@ namespace aether
 			{
 				slot.clear();
 			}
-			for (auto& buffer: m_commandBuffers)
+			for (auto& frame: m_commandBuffers)
 			{
-				buffer.Reset();
+				if (frame.handle.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(frame.handle);
+				}
+				frame = {};
 			}
-			for (auto& buffer: m_indirectBuffers)
+			if (m_indirectBuffer.handle.IsValid())
 			{
-				buffer.Reset();
+				gpu::ResourceRegistry::Destroy(m_indirectBuffer.handle);
 			}
-			m_commandBufferCapacities.fill(0);
+			m_indirectBuffer = {};
 			m_vkCtx = nullptr;
 			m_renderGraph = nullptr;
 			m_bindlessMgr = nullptr;

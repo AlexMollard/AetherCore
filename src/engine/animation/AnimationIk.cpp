@@ -22,36 +22,59 @@ namespace aether
 
 	void AnimationIkSystem::Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxEntities)
 	{
-		m_allocator = allocator;
+		(void) allocator;
+		(void) device;
 		m_maxEntities = static_cast<std::uint32_t>(maxEntities);
 		m_entityCount = 0;
 
 		m_ikJobs.resize(static_cast<std::size_t>(maxEntities));
 		m_groundResults.resize(static_cast<std::size_t>(maxEntities) * 2);
 
+		const gpu::MappedBufferDesc ikDesc{
+		        .size = maxEntities * sizeof(AnimationContracts::IkSolveJob),
+		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "AnimationIk.IkJobs",
+		};
+		m_ikJobsHandle = gpu::ResourceRegistry::CreateMappedBuffer(ikDesc);
+		if (!m_ikJobsHandle.IsValid())
 		{
-			AE_EXPECT_OR_THROW(buffer,
-			        UniqueBuffer::CreateMapped(
-			                m_allocator, device, maxEntities * sizeof(AnimationContracts::IkSolveJob), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationIk.IkJobs"));
-			m_ikJobsBuffer = std::move(buffer);
-			const auto info = m_ikJobsBuffer.GetAllocationInfo();
-			m_mappedIkJobs = static_cast<AnimationContracts::IkSolveJob*>(info.pMappedData);
+			Throw(AetherError::Engine("AnimationIkSystem: IkJobs CreateMappedBuffer failed"));
 		}
+		const auto ikView = gpu::ResourceRegistry::ResolveMappedBuffer(m_ikJobsHandle);
+		m_mappedIkJobs = static_cast<AnimationContracts::IkSolveJob*>(ikView.mappedPtr);
+		m_ikJobsAddress = ikView.deviceAddress;
 
+		const gpu::MappedBufferDesc grDesc{
+		        .size = maxEntities * 2 * sizeof(AnimationContracts::IkGroundResult),
+		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "AnimationIk.GroundResults",
+		};
+		m_groundResultsHandle = gpu::ResourceRegistry::CreateMappedBuffer(grDesc);
+		if (!m_groundResultsHandle.IsValid())
 		{
-			AE_EXPECT_OR_THROW(buffer,
-			        UniqueBuffer::CreateMapped(
-			                m_allocator, device, maxEntities * 2 * sizeof(AnimationContracts::IkGroundResult), gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress, "AnimationIk.GroundResults"));
-			m_groundResultsBuffer = std::move(buffer);
-			const auto info = m_groundResultsBuffer.GetAllocationInfo();
-			m_mappedGroundResults = static_cast<AnimationContracts::IkGroundResult*>(info.pMappedData);
+			Throw(AetherError::Engine("AnimationIkSystem: GroundResults CreateMappedBuffer failed"));
 		}
+		const auto grView = gpu::ResourceRegistry::ResolveMappedBuffer(m_groundResultsHandle);
+		m_mappedGroundResults = static_cast<AnimationContracts::IkGroundResult*>(grView.mappedPtr);
+		m_groundResultsAddress = grView.deviceAddress;
 	}
 
 	void AnimationIkSystem::Shutdown(gpu::Device /*device*/)
 	{
-		m_ikJobsBuffer.Reset();
-		m_groundResultsBuffer.Reset();
+		if (m_ikJobsHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_ikJobsHandle);
+		}
+		if (m_groundResultsHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_groundResultsHandle);
+		}
+		m_ikJobsHandle = {};
+		m_groundResultsHandle = {};
+		m_ikJobsAddress = 0;
+		m_groundResultsAddress = 0;
 		m_ikJobs.clear();
 		m_groundResults.clear();
 		m_mappedIkJobs = nullptr;
@@ -294,14 +317,14 @@ namespace aether
 			job.rightKneeBendSign = ikComp.rightKneeBendSign;
 			job.entityId = entityId;
 			job.globalTransformsAddr = 0;
-			job.ikResultsAddr = m_groundResultsBuffer.GetDeviceAddress() + static_cast<gpu::DeviceSize>(groundResultBase) * sizeof(AnimationContracts::IkGroundResult);
+			job.ikResultsAddr = m_groundResultsAddress + static_cast<gpu::DeviceSize>(groundResultBase) * sizeof(AnimationContracts::IkGroundResult);
 
 			m_mappedIkJobs[jobIdx] = job;
 			++jobIdx;
 			++m_writtenIkJobCount;
 		}
 
-		AE_EXPECT_OR_THROW_VOID(m_groundResultsBuffer.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_groundResultsHandle, 0, static_cast<gpu::DeviceSize>(-1));
 	}
 
 	void AnimationIkSystem::BuildIkSolvePush(gpu::DeviceAddress globalTransformsAddr, gpu::DeviceAddress nodeParentsAddr, gpu::DeviceAddress depthSortedNodesAddr, std::uint32_t nodeCount)
@@ -317,8 +340,8 @@ namespace aether
 		}
 		m_ikPush = AnimationContracts::IkSolvePush{
 		        .globalTransformsAddr = globalTransformsAddr,
-		        .ikJobsAddr = m_ikJobsBuffer.GetDeviceAddress(),
-		        .ikGroundResultsAddr = m_groundResultsBuffer.GetDeviceAddress(),
+		        .ikJobsAddr = m_ikJobsAddress,
+		        .ikGroundResultsAddr = m_groundResultsAddress,
 		        .nodeParentsAddr = nodeParentsAddr,
 		        .depthSortedNodesAddr = depthSortedNodesAddr,
 		        .jobCount = GetIkJobCount(),

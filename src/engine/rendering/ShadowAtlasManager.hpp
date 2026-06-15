@@ -3,9 +3,10 @@
 #include <cstdint>
 #include <vector>
 
-#include "vulkan/UniqueImage.hpp"
-#include "vulkan/volk.hpp"
 #include "gpu/GpuFormat.hpp"
+#include "gpu/GpuHandles.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 
 namespace aether
 {
@@ -19,6 +20,11 @@ namespace aether
 	// Shelf-packing: shelves are rows of a fixed height series. Each shelf
 	// fills left-to-right. When a shelf overflows, a new shelf is created
 	// below.
+	//
+	// Storage path: stores a single gpu::TextureHandle (8 bytes, typed,
+	// generation-checked). Allocated through gpu::ResourceRegistry::
+	// CreateTexture which uses the registry's 3-frame deferred-destruction
+	// ring. The cached image/view handles are resolved once at Init.
 	class ShadowAtlasManager
 	{
 	public:
@@ -58,14 +64,14 @@ namespace aether
 		}
 
 		// Access the atlas image for render graph registration.
-		[[nodiscard]] UniqueImage& GetAtlasImage()
+		[[nodiscard]] gpu::Image GetAtlasImage() const
 		{
-			return m_atlas;
+			return m_atlasImage;
 		}
 
-		[[nodiscard]] VkImageView GetAtlasView() const
+		[[nodiscard]] gpu::ImageView GetAtlasView() const
 		{
-			return m_atlas.GetDefaultView();
+			return m_atlasView;
 		}
 
 		[[nodiscard]] std::uint32_t GetBindlessSlot() const
@@ -81,9 +87,11 @@ namespace aether
 			std::uint32_t cursorX = 0;
 		};
 
-		UniqueImage m_atlas;
-		BindlessManager* m_bindless = nullptr;
+		gpu::TextureHandle m_atlasHandle{};
+		gpu::Image m_atlasImage = nullptr; // cached for render-graph registration
+		gpu::ImageView m_atlasView = nullptr; // cached for shader bindings
 		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
+		BindlessManager* m_bindless = nullptr;
 		std::vector<Shelf> m_shelves;
 		Region m_usedBounds{}; // Bounding box of all allocated regions this frame
 	};

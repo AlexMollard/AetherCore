@@ -9,23 +9,43 @@ namespace aether
 	void ShadowAtlasManager::Initialize(const VulkanContext& ctx, BindlessManager& bindless)
 	{
 		AE_PROFILE_ZONE();
+		(void) ctx;
 		m_bindless = &bindless;
-		const gpu::Device device = static_cast<gpu::Device>(ctx.GetDevice().device);
-		const gpu::Allocator allocator = static_cast<gpu::Allocator>(ctx.GetAllocator());
 
-		AE_EXPECT_OR_THROW(img,
-		        UniqueImage::Create(device,
-		                allocator,
-		                {
-		                        .extent = {kAtlasWidth, kAtlasHeight},
-		                        .format = kAtlasFormat,
-		                        .usage = gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage | gpu::ImageUsage::ColorAttachment,
-		                        .debugName = "ShadowAtlas",
-		                }));
-		m_atlas = std::move(img);
+		const gpu::TextureDesc desc{
+		        .format = kAtlasFormat,
+		        .extent = {kAtlasWidth, kAtlasHeight},
+		        .usage = gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage | gpu::ImageUsage::ColorAttachment,
+		        .aspect = gpu::ImageAspect::Color,
+		        .debugName = "ShadowAtlas",
+		};
+		m_atlasHandle = gpu::ResourceRegistry::CreateTexture(desc);
+		if (!m_atlasHandle.IsValid())
+		{
+			Throw(AetherError::Engine("ShadowAtlasManager: CreateTexture failed"));
+		}
 
-		AE_EXPECT_OR_THROW_VOID(m_atlas.EnsureBindlessSampled(bindless, device, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly));
-		m_bindlessSlot = m_atlas.GetBindlessSampledSlot();
+		m_atlasImage = gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle);
+		m_atlasView = gpu::ResourceRegistry::ResolveTexture(m_atlasHandle).view;
+
+		// Bindless registration: acquire a slot, then update the descriptor
+		// with the resolved image view + a linear sampler.
+		const auto slotResult = bindless.AllocateSampledImageSlot();
+		if (!slotResult)
+		{
+			Throw(AetherError::Engine("ShadowAtlasManager: AllocateSampledImageSlot failed"));
+		}
+		m_bindlessSlot = *slotResult;
+		const auto samplerResult = bindless.GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge);
+		if (!samplerResult)
+		{
+			Throw(AetherError::Engine("ShadowAtlasManager: GetOrCreateSampler failed"));
+		}
+		const auto updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_atlasView, *samplerResult, gpu::ImageLayout::ShaderReadOnly);
+		if (!updateResult)
+		{
+			Throw(AetherError::Engine("ShadowAtlasManager: UpdateSampledImage failed"));
+		}
 	}
 
 	void ShadowAtlasManager::Shutdown()
@@ -33,9 +53,15 @@ namespace aether
 		AE_PROFILE_ZONE();
 		if (m_bindlessSlot != 0xFFFFFFFFu && m_bindless != nullptr)
 		{
-			m_atlas.ReleaseBindlessSampled();
+			m_bindless->FreeSampledImageSlot(m_bindlessSlot);
 		}
-		m_atlas.Reset();
+		if (m_atlasHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_atlasHandle);
+		}
+		m_atlasHandle = {};
+		m_atlasImage = nullptr;
+		m_atlasView = nullptr;
 		m_bindless = nullptr;
 		m_bindlessSlot = 0xFFFFFFFFu;
 		m_shelves.clear();
