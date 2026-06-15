@@ -29,6 +29,27 @@ namespace aether
 			}
 			return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow fallback
 		}
+
+		// Engine-side wrapper around gpu::ResourceRegistry::CreateMappedBuffer
+		// for a static vertex buffer. The buffer is host-visible and uploaded
+		// once at creation. Returns the handle (caller stores it as a member).
+		gpu::BufferHandle CreateStaticVertexBuffer(std::span<const DebugVertex> vertices, const char* debugName)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(vertices.size() * sizeof(DebugVertex)),
+			        .usage = gpu::BufferUsage::Vertex,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = debugName,
+			};
+			gpu::BufferHandle handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!handle.IsValid())
+			{
+				return handle;
+			}
+			const auto mapped = gpu::ResourceRegistry::ResolveMappedBuffer(handle);
+			std::memcpy(mapped.mappedPtr, vertices.data(), vertices.size() * sizeof(DebugVertex));
+			return handle;
+		}
 	} // namespace
 
 	static bool s_debugRenderingEnabled = true; // F6 toggles from DebugLayer
@@ -49,36 +70,28 @@ namespace aether
 	}
 
 	PhysicsDebugRenderer::PhysicsDebugRenderer(PhysicsDebugRenderer&& rhs) noexcept
-	      : m_allocator(rhs.m_allocator),
-	        m_enabled(rhs.m_enabled),
+	      : m_enabled(rhs.m_enabled),
 	        m_selfTestEnabled(rhs.m_selfTestEnabled),
 	        m_colorMode(rhs.m_colorMode),
 	        m_world(rhs.m_world),
+	        m_frameDebugVertices(rhs.m_frameDebugVertices),
 	        m_colorFormat(rhs.m_colorFormat),
 	        m_depthFormat(rhs.m_depthFormat),
 	        m_pipelineHandle(rhs.m_pipelineHandle),
-	        m_boxVertexBuffer(rhs.m_boxVertexBuffer),
-	        m_boxVertexAlloc(rhs.m_boxVertexAlloc),
+	        m_boxVertexHandle(rhs.m_boxVertexHandle),
 	        m_boxVertexCount(rhs.m_boxVertexCount),
-	        m_sphereVertexBuffer(rhs.m_sphereVertexBuffer),
-	        m_sphereVertexAlloc(rhs.m_sphereVertexAlloc),
+	        m_sphereVertexHandle(rhs.m_sphereVertexHandle),
 	        m_sphereVertexCount(rhs.m_sphereVertexCount),
-	        m_capsuleVertexBuffer(rhs.m_capsuleVertexBuffer),
-	        m_capsuleVertexAlloc(rhs.m_capsuleVertexAlloc),
+	        m_capsuleVertexHandle(rhs.m_capsuleVertexHandle),
 	        m_capsuleVertexCount(rhs.m_capsuleVertexCount),
-	        m_immediateVertexBuffer(rhs.m_immediateVertexBuffer),
-	        m_immediateVertexAlloc(rhs.m_immediateVertexAlloc),
+	        m_immediateVertexHandle(rhs.m_immediateVertexHandle),
 	        m_immediateCapacity(rhs.m_immediateCapacity)
 	{
 		rhs.m_pipelineHandle = {};
-		rhs.m_boxVertexBuffer = VK_NULL_HANDLE;
-		rhs.m_boxVertexAlloc = VK_NULL_HANDLE;
-		rhs.m_sphereVertexBuffer = VK_NULL_HANDLE;
-		rhs.m_sphereVertexAlloc = VK_NULL_HANDLE;
-		rhs.m_capsuleVertexBuffer = VK_NULL_HANDLE;
-		rhs.m_capsuleVertexAlloc = VK_NULL_HANDLE;
-		rhs.m_immediateVertexBuffer = VK_NULL_HANDLE;
-		rhs.m_immediateVertexAlloc = VK_NULL_HANDLE;
+		rhs.m_boxVertexHandle = {};
+		rhs.m_sphereVertexHandle = {};
+		rhs.m_capsuleVertexHandle = {};
+		rhs.m_immediateVertexHandle = {};
 		rhs.m_immediateCapacity = 0;
 	}
 
@@ -87,36 +100,28 @@ namespace aether
 		if (this != &rhs)
 		{
 			Shutdown();
-			m_allocator = rhs.m_allocator;
 			m_enabled = rhs.m_enabled;
 			m_selfTestEnabled = rhs.m_selfTestEnabled;
 			m_colorMode = rhs.m_colorMode;
 			m_world = rhs.m_world;
+			m_frameDebugVertices = rhs.m_frameDebugVertices;
 			m_colorFormat = rhs.m_colorFormat;
 			m_depthFormat = rhs.m_depthFormat;
 			m_pipelineHandle = rhs.m_pipelineHandle;
-			m_boxVertexBuffer = rhs.m_boxVertexBuffer;
-			m_boxVertexAlloc = rhs.m_boxVertexAlloc;
+			m_boxVertexHandle = rhs.m_boxVertexHandle;
 			m_boxVertexCount = rhs.m_boxVertexCount;
-			m_sphereVertexBuffer = rhs.m_sphereVertexBuffer;
-			m_sphereVertexAlloc = rhs.m_sphereVertexAlloc;
+			m_sphereVertexHandle = rhs.m_sphereVertexHandle;
 			m_sphereVertexCount = rhs.m_sphereVertexCount;
-			m_capsuleVertexBuffer = rhs.m_capsuleVertexBuffer;
-			m_capsuleVertexAlloc = rhs.m_capsuleVertexAlloc;
+			m_capsuleVertexHandle = rhs.m_capsuleVertexHandle;
 			m_capsuleVertexCount = rhs.m_capsuleVertexCount;
-			m_immediateVertexBuffer = rhs.m_immediateVertexBuffer;
-			m_immediateVertexAlloc = rhs.m_immediateVertexAlloc;
+			m_immediateVertexHandle = rhs.m_immediateVertexHandle;
 			m_immediateCapacity = rhs.m_immediateCapacity;
 
 			rhs.m_pipelineHandle = {};
-			rhs.m_boxVertexBuffer = VK_NULL_HANDLE;
-			rhs.m_boxVertexAlloc = VK_NULL_HANDLE;
-			rhs.m_sphereVertexBuffer = VK_NULL_HANDLE;
-			rhs.m_sphereVertexAlloc = VK_NULL_HANDLE;
-			rhs.m_capsuleVertexBuffer = VK_NULL_HANDLE;
-			rhs.m_capsuleVertexAlloc = VK_NULL_HANDLE;
-			rhs.m_immediateVertexBuffer = VK_NULL_HANDLE;
-			rhs.m_immediateVertexAlloc = VK_NULL_HANDLE;
+			rhs.m_boxVertexHandle = {};
+			rhs.m_sphereVertexHandle = {};
+			rhs.m_capsuleVertexHandle = {};
+			rhs.m_immediateVertexHandle = {};
 			rhs.m_immediateCapacity = 0;
 		}
 		return *this;
@@ -124,13 +129,12 @@ namespace aether
 
 	void PhysicsDebugRenderer::Init(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat)
 	{
-		m_allocator = gpu.GetVulkanContext().GetAllocator();
 		m_colorFormat = colorFormat;
 		m_depthFormat = depthFormat;
 		CreateWireframePipeline(gpu, colorFormat, depthFormat);
-		CreateBoxGeometry(m_allocator);
-		CreateSphereGeometry(m_allocator);
-		CreateCapsuleGeometry(m_allocator);
+		CreateBoxGeometry();
+		CreateSphereGeometry();
+		CreateCapsuleGeometry();
 		m_immediateCapacity = 0;
 		m_enabled = true;
 		m_colorMode = PhysicsDebugColorMode::ByMotionType;
@@ -138,22 +142,22 @@ namespace aether
 
 	void PhysicsDebugRenderer::Shutdown()
 	{
-		if (m_boxVertexBuffer != VK_NULL_HANDLE)
+		if (m_boxVertexHandle.IsValid())
 		{
-			vmaDestroyBuffer(m_allocator, m_boxVertexBuffer, m_boxVertexAlloc);
-			m_boxVertexBuffer = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_boxVertexHandle);
+			m_boxVertexHandle = {};
 		}
-		if (m_sphereVertexBuffer != VK_NULL_HANDLE)
+		if (m_sphereVertexHandle.IsValid())
 		{
-			vmaDestroyBuffer(m_allocator, m_sphereVertexBuffer, m_sphereVertexAlloc);
-			m_sphereVertexBuffer = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_sphereVertexHandle);
+			m_sphereVertexHandle = {};
 		}
-		if (m_capsuleVertexBuffer != VK_NULL_HANDLE)
+		if (m_capsuleVertexHandle.IsValid())
 		{
-			vmaDestroyBuffer(m_allocator, m_capsuleVertexBuffer, m_capsuleVertexAlloc);
-			m_capsuleVertexBuffer = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_capsuleVertexHandle);
+			m_capsuleVertexHandle = {};
 		}
-		DestroyImmediateBuffer(m_allocator);
+		DestroyImmediateBuffer();
 		if (m_pipelineHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_pipelineHandle);
@@ -206,12 +210,10 @@ namespace aether
 		        .lineWidthDynamic = true,
 		};
 
-		const auto device = static_cast<gpu::Device>(gpu.GetVulkanContext().GetDevice().device);
-		const auto cache = static_cast<gpu::PipelineCache>(gpu.GetVulkanContext().GetPipelineCache());
-		m_pipelineHandle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, cache, desc);
+		m_pipelineHandle = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), gpu.GetPipelineCache(), desc);
 	}
 
-	void PhysicsDebugRenderer::CreateBoxGeometry(VmaAllocator allocator)
+	void PhysicsDebugRenderer::CreateBoxGeometry()
 	{
 		const std::array<glm::vec3, 24> kBoxEdges = {
 		        // Bottom face (4 edges)
@@ -251,26 +253,10 @@ namespace aether
 		}
 
 		m_boxVertexCount = static_cast<std::uint32_t>(vertices.size());
-
-		const VkBufferCreateInfo bufferInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = sizeof(vertices),
-		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		};
-
-		VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-		};
-
-		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_boxVertexBuffer, &m_boxVertexAlloc, nullptr);
-
-		void* data = nullptr;
-		vmaMapMemory(allocator, m_boxVertexAlloc, &data);
-		std::memcpy(data, vertices.data(), sizeof(vertices));
-		vmaUnmapMemory(allocator, m_boxVertexAlloc);
+		m_boxVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.BoxGeometry");
 	}
 
-	void PhysicsDebugRenderer::CreateSphereGeometry(VmaAllocator allocator)
+	void PhysicsDebugRenderer::CreateSphereGeometry()
 	{
 		std::vector<DebugVertex> vertices;
 		vertices.reserve(64 * 3);
@@ -300,26 +286,10 @@ namespace aether
 		}
 
 		m_sphereVertexCount = static_cast<std::uint32_t>(vertices.size());
-
-		const VkBufferCreateInfo bufferInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = vertices.size() * sizeof(DebugVertex),
-		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		};
-
-		VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-		};
-
-		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_sphereVertexBuffer, &m_sphereVertexAlloc, nullptr);
-
-		void* data = nullptr;
-		vmaMapMemory(allocator, m_sphereVertexAlloc, &data);
-		std::memcpy(data, vertices.data(), vertices.size() * sizeof(DebugVertex));
-		vmaUnmapMemory(allocator, m_sphereVertexAlloc);
+		m_sphereVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.SphereGeometry");
 	}
 
-	void PhysicsDebugRenderer::CreateCapsuleGeometry(VmaAllocator allocator)
+	void PhysicsDebugRenderer::CreateCapsuleGeometry()
 	{
 		std::vector<DebugVertex> vertices;
 		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
@@ -397,23 +367,7 @@ namespace aether
 		}
 
 		m_capsuleVertexCount = static_cast<std::uint32_t>(vertices.size());
-
-		const VkBufferCreateInfo bufferInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = vertices.size() * sizeof(DebugVertex),
-		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		};
-
-		VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-		};
-
-		vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_capsuleVertexBuffer, &m_capsuleVertexAlloc, nullptr);
-
-		void* data = nullptr;
-		vmaMapMemory(allocator, m_capsuleVertexAlloc, &data);
-		std::memcpy(data, vertices.data(), vertices.size() * sizeof(DebugVertex));
-		vmaUnmapMemory(allocator, m_capsuleVertexAlloc);
+		m_capsuleVertexHandle = CreateStaticVertexBuffer(vertices, "PhysicsDebug.CapsuleGeometry");
 	}
 
 	// -- Free-function debug primitive builders -------------------------------
@@ -531,8 +485,8 @@ namespace aether
 		        glm::vec4{-1.0f, 1.0f, -1.0f, 1.0f},
 		        glm::vec4{-1.0f, -1.0f, 1.0f, 1.0f},
 		        glm::vec4{1.0f, -1.0f, 1.0f, 1.0f},
-		        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
 		        glm::vec4{-1.0f, 1.0f, 1.0f, 1.0f},
+		        glm::vec4{1.0f, 1.0f, 1.0f, 1.0f},
 		};
 
 		std::array<glm::vec3, 8> world;
@@ -581,11 +535,11 @@ namespace aether
 		AddDebugAabb(out, glm::vec3(-0.5f), glm::vec3(0.5f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
 	}
 
-	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(VmaAllocator allocator, std::uint32_t vertexCount)
+	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(std::uint32_t vertexCount)
 	{
 		constexpr std::uint32_t kInitialImmediateCapacity = 4096;
 
-		if (m_immediateCapacity >= vertexCount)
+		if (m_immediateCapacity >= vertexCount && m_immediateVertexHandle.IsValid())
 		{
 			return;
 		}
@@ -597,35 +551,30 @@ namespace aether
 			newCapacity *= 2;
 		}
 
-		DestroyImmediateBuffer(allocator);
+		DestroyImmediateBuffer();
 
-		const VkBufferCreateInfo bufferInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = static_cast<VkDeviceSize>(newCapacity) * sizeof(DebugVertex),
-		        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		const gpu::MappedBufferDesc desc{
+		        .size = static_cast<gpu::DeviceSize>(newCapacity) * sizeof(DebugVertex),
+		        .usage = gpu::BufferUsage::Vertex,
+		        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+		        .debugName = "PhysicsDebug.Immediate",
 		};
-
-		VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_CPU_TO_GPU,
-		};
-
-		const VkResult res = vmaCreateBuffer(allocator, &bufferInfo, &allocInfo, &m_immediateVertexBuffer, &m_immediateVertexAlloc, nullptr);
-		if (res != VK_SUCCESS)
+		m_immediateVertexHandle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!m_immediateVertexHandle.IsValid())
 		{
-			AE_ERROR(LogCategory::Render, "PhysicsDebugRenderer: failed to allocate immediate vertex buffer ({} verts), error {}", newCapacity, static_cast<int>(res));
+			AE_ERROR(LogCategory::Render, "PhysicsDebugRenderer: failed to allocate immediate vertex buffer ({} verts)", newCapacity);
 			m_immediateCapacity = 0;
 			return;
 		}
 		m_immediateCapacity = newCapacity;
 	}
 
-	void PhysicsDebugRenderer::DestroyImmediateBuffer(VmaAllocator allocator)
+	void PhysicsDebugRenderer::DestroyImmediateBuffer()
 	{
-		if (m_immediateVertexBuffer != VK_NULL_HANDLE)
+		if (m_immediateVertexHandle.IsValid())
 		{
-			vmaDestroyBuffer(allocator, m_immediateVertexBuffer, m_immediateVertexAlloc);
-			m_immediateVertexBuffer = VK_NULL_HANDLE;
-			m_immediateVertexAlloc = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_immediateVertexHandle);
+			m_immediateVertexHandle = {};
 		}
 	}
 
@@ -688,19 +637,25 @@ namespace aether
 			                if (drawList != nullptr && !drawList->empty())
 			                {
 				                const std::uint32_t immediateCount = static_cast<std::uint32_t>(drawList->size());
-				                EnsureImmediateBufferCapacity(m_allocator, immediateCount);
-				                if (m_immediateVertexBuffer != VK_NULL_HANDLE)
+				                EnsureImmediateBufferCapacity(immediateCount);
+				                if (m_immediateVertexHandle.IsValid())
 				                {
-					                void* mapped = nullptr;
-					                vmaMapMemory(m_allocator, m_immediateVertexAlloc, &mapped);
-					                std::memcpy(mapped, drawList->data(), static_cast<std::size_t>(immediateCount) * sizeof(DebugVertex));
-					                vmaUnmapMemory(m_allocator, m_immediateVertexAlloc);
+					                const auto mapped = gpu::ResourceRegistry::ResolveMappedBuffer(m_immediateVertexHandle);
+					                std::memcpy(mapped.mappedPtr, drawList->data(), static_cast<std::size_t>(immediateCount) * sizeof(DebugVertex));
+					                // Host-visible Coherent memory doesn't strictly need a
+					                // flush, but the registry's helper is a no-op in that
+					                // case and flushes the MAPPED range for non-coherent
+					                // pools, so it's safe to call unconditionally.
+					                gpu::ResourceRegistry::FlushMappedBuffer(
+					                        m_immediateVertexHandle,
+					                        0,
+					                        static_cast<gpu::DeviceSize>(immediateCount) * sizeof(DebugVertex));
 
 					                // White tint, identity model: per-vertex colors pass through unchanged.
 					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f), glm::mat4(1.0f)};
 					                cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
-					                cmd.BindVertexBuffer(m_immediateVertexBuffer);
+					                cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_immediateVertexHandle));
 					                cmd.Draw(immediateCount, 1, 0, 0);
 				                }
 			                }
@@ -722,32 +677,32 @@ namespace aether
 
 					                        const glm::mat4 model = glm::translate(glm::mat4(1.0f), state.currPosition) * glm::mat4(state.currRotation) * glm::mat4(glm::scale(glm::mat4(1.0f), state.scale));
 
-					                        VkBuffer vertexBuffer = VK_NULL_HANDLE;
+					                        gpu::BufferHandle vertexHandle{};
 					                        std::uint32_t vertexCount = 0;
 
 					                        switch (shape.shapeType)
 					                        {
 						                        case PhysicsShapeType::Box:
 						                        {
-							                        vertexBuffer = m_boxVertexBuffer;
+							                        vertexHandle = m_boxVertexHandle;
 							                        vertexCount = m_boxVertexCount;
 							                        break;
 						                        }
 						                        case PhysicsShapeType::Sphere:
 						                        {
-							                        vertexBuffer = m_sphereVertexBuffer;
+							                        vertexHandle = m_sphereVertexHandle;
 							                        vertexCount = m_sphereVertexCount;
 							                        break;
 						                        }
 						                        case PhysicsShapeType::Capsule:
 						                        {
-							                        vertexBuffer = m_capsuleVertexBuffer;
+							                        vertexHandle = m_capsuleVertexHandle;
 							                        vertexCount = m_capsuleVertexCount;
 							                        break;
 						                        }
 					                        }
 
-					                        if (vertexBuffer == VK_NULL_HANDLE || vertexCount == 0)
+					                        if (!vertexHandle.IsValid() || vertexCount == 0)
 					                        {
 						                        return;
 					                        }
@@ -755,7 +710,7 @@ namespace aether
 					                        const DebugPc pc{ctx.frameConstantsAddr, tint, model};
 					                        cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
-					                        cmd.BindVertexBuffer(vertexBuffer);
+					                        cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(vertexHandle));
 					                        cmd.Draw(vertexCount, 1, 0, 0);
 				                        });
 			                }

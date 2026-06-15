@@ -5,7 +5,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "vulkan/VulkanContext.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "physics/PhysicsComponents.hpp"
@@ -112,19 +111,20 @@ namespace aether
 
 	private:
 		void CreateWireframePipeline(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat);
-		void CreateBoxGeometry(VmaAllocator allocator);
-		void CreateSphereGeometry(VmaAllocator allocator);
-		void CreateCapsuleGeometry(VmaAllocator allocator);
+		void CreateBoxGeometry();
+		void CreateSphereGeometry();
+		void CreateCapsuleGeometry();
 
-		// Ensure m_immediateVertexBuffer can hold `vertexCount` vertices; reallocates if needed.
-		void EnsureImmediateBufferCapacity(VmaAllocator allocator, std::uint32_t vertexCount);
-		void DestroyImmediateBuffer(VmaAllocator allocator);
+		// Ensure the immediate vertex buffer can hold `vertexCount` vertices;
+		// reallocates (destroy + create) if needed. The handle is owned by the
+		// ResourceRegistry; this function's responsibility is the size policy.
+		void EnsureImmediateBufferCapacity(std::uint32_t vertexCount);
+		void DestroyImmediateBuffer();
 
 		// Append a self-test pattern (axis gizmo at origin + 1m world AABB + camera frustum)
 		// to `out`. Used to verify the pipeline end-to-end.
 		void AppendSelfTestPattern(std::vector<DebugVertex>& out) const;
 
-		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		bool m_enabled = false;
 		bool m_selfTestEnabled = true; // on by default to surface the pipeline immediately
 		PhysicsDebugColorMode m_colorMode = PhysicsDebugColorMode::None;
@@ -137,23 +137,20 @@ namespace aether
 		gpu::PipelineHandle m_pipelineHandle = {};
 
 		// Pre-baked unit geometries for the per-shape (physics) draw path. These
-		// are positioned by a per-draw MVP push constant.
-		VkBuffer m_boxVertexBuffer = VK_NULL_HANDLE;
-		VmaAllocation m_boxVertexAlloc = VK_NULL_HANDLE;
+		// are positioned by a per-draw MVP push constant. Lifetime is owned by
+		// the ResourceRegistry (single m_pendingDestructions ring).
+		gpu::BufferHandle m_boxVertexHandle = {};
 		std::uint32_t m_boxVertexCount = 0;
 
-		VkBuffer m_sphereVertexBuffer = VK_NULL_HANDLE;
-		VmaAllocation m_sphereVertexAlloc = VK_NULL_HANDLE;
+		gpu::BufferHandle m_sphereVertexHandle = {};
 		std::uint32_t m_sphereVertexCount = 0;
 
-		VkBuffer m_capsuleVertexBuffer = VK_NULL_HANDLE;
-		VmaAllocation m_capsuleVertexAlloc = VK_NULL_HANDLE;
+		gpu::BufferHandle m_capsuleVertexHandle = {};
 		std::uint32_t m_capsuleVertexCount = 0;
 
-		// Batched vertex buffer for the per-frame vertex vector. Host-visible; uploaded
-		// once per frame and drawn in a single vkCmdDraw.
-		VkBuffer m_immediateVertexBuffer = VK_NULL_HANDLE;
-		VmaAllocation m_immediateVertexAlloc = VK_NULL_HANDLE;
+		// Batched vertex buffer for the per-frame vertex vector. Host-visible
+		// (CpuToGpu memory); uploaded once per frame and drawn in a single draw.
+		gpu::BufferHandle m_immediateVertexHandle = {};
 		std::uint32_t m_immediateCapacity = 0;
 	};
 } // namespace aether

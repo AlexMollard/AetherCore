@@ -126,12 +126,40 @@ namespace aether::gpu
 	// backend (vulkan/) defines the same names as their real Vk* types so
 	// the implementations can convert with a single static_cast.
 	//
-	// Borrowing rule (see gpu-abstraction-rendering-audit.md §2): borrowed
-	// primitives that are never engine-owned (Device, Queue, Allocator,
-	// CommandPool) live as raw void*; engine-owned resources use typed
-	// handles from GpuHandles.hpp. The aliases below cover the borrowed
-	// primitives plus Image and ImageView which are commonly passed across
-	// the boundary even when owned elsewhere.
+	// -------------------------------------------------------------------------
+	// BORROWED-vs-OWNED rule (audit §2, §4 - P4.1)
+	// -------------------------------------------------------------------------
+	// **Borrowed** primitives (never engine-owned, lifetime managed by the
+	// gpu/ facade or service container) live as `void*` typedefs in this
+	// header. The engine code stores them by value and never destroys them.
+	// **Owned** resources (engine code creates and destroys them) use typed
+	// handles from `gpu/GpuHandles.hpp` (generation-checked, 8 bytes).
+	//
+	// | Type                | Status   | Why                                         |
+	// |---------------------|----------|---------------------------------------------|
+	// | Device              | borrowed | owned by GpuDevice                          |
+	// | PhysicalDevice      | borrowed | owned by GpuDevice / VulkanContext          |
+	// | Queue               | borrowed | owned by VulkanContext                      |
+	// | Allocator           | borrowed | owned by GpuDevice (VMA)                    |
+	// | CommandPool         | borrowed | transient, owned by call site (Factory)     |
+	// | PipelineCache       | borrowed | owned by VulkanContext                      |
+	// | DescriptorPool      | borrowed | owned by BindlessManager                    |
+	// | Image               | borrowed | owned by ResourceRegistry                   |
+	// | ImageView           | borrowed | owned by ResourceRegistry (resolved view)   |
+	// | DescriptorSetLayout | borrowed | owned by BindlessManager / Factory          |
+	// | DescriptorSet       | borrowed | owned by BindlessManager                    |
+	// | Pipeline            | borrowed | owned by PipelineFactory (registry)         |
+	// | PipelineLayout      | borrowed | owned by PipelineFactory / Factory          |
+	// | Sampler             | borrowed | owned by BindlessManager's cache            |
+	// | BufferHandle        | OWNED    | created via ResourceRegistry                 |
+	// | TextureHandle       | OWNED    | created via ResourceRegistry                 |
+	// | PipelineHandle      | OWNED    | created via PipelineFactory / registry      |
+	// | SamplerHandle       | OWNED    | created via BindlessManager (engine-owned)  |
+	// -------------------------------------------------------------------------
+	//
+	// The aliases below cover the borrowed primitives plus Image / ImageView
+	// (commonly passed across the boundary even when owned elsewhere).
+	// Adding a new alias here requires updating the table above.
 	using DescriptorSet = void*;
 	using DescriptorSetLayout = void*;
 	using DescriptorPool = void*;
