@@ -514,6 +514,24 @@ namespace aether::gpu
 		return out;
 	}
 
+	ImageAspect FromVk(VkImageAspectFlags aspect) noexcept
+	{
+		std::uint32_t bits = 0;
+		if ((aspect & VK_IMAGE_ASPECT_COLOR_BIT) != 0)
+		{
+			bits |= static_cast<std::uint32_t>(ImageAspect::Color);
+		}
+		if ((aspect & VK_IMAGE_ASPECT_DEPTH_BIT) != 0)
+		{
+			bits |= static_cast<std::uint32_t>(ImageAspect::Depth);
+		}
+		if ((aspect & VK_IMAGE_ASPECT_STENCIL_BIT) != 0)
+		{
+			bits |= static_cast<std::uint32_t>(ImageAspect::Stencil);
+		}
+		return static_cast<ImageAspect>(bits);
+	}
+
 	// -------------------------------------------------------------------------
 	// ImageLayout
 	// -------------------------------------------------------------------------
@@ -693,5 +711,79 @@ namespace aether::gpu
 				return VK_POLYGON_MODE_LINE;
 		}
 		return VK_POLYGON_MODE_FILL;
+	}
+
+	// -------------------------------------------------------------------------
+	// Barrier + dynamic-rendering conversions (P5(d))
+	// -------------------------------------------------------------------------
+	// The engine-side barrier structs hold opaque gpu::Image / gpu::Buffer
+	// handles; the storage knows the actual VkImage / VkBuffer to plug in.
+	// The translation here is otherwise a one-for-one field copy.
+
+	VkImageMemoryBarrier2 ToVk(const ImageMemoryBarrier& barrier, VkImage resolvedImage) noexcept
+	{
+		return VkImageMemoryBarrier2{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+		        .srcStageMask = ToVk(barrier.srcStage),
+		        .srcAccessMask = ToVk(barrier.srcAccess),
+		        .dstStageMask = ToVk(barrier.dstStage),
+		        .dstAccessMask = ToVk(barrier.dstAccess),
+		        .oldLayout = ToVk(barrier.oldLayout),
+		        .newLayout = ToVk(barrier.newLayout),
+		        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .image = resolvedImage,
+		        .subresourceRange = {
+		                .aspectMask = ToVk(barrier.aspect),
+		                .baseMipLevel = barrier.baseMipLevel,
+		                .levelCount = barrier.levelCount,
+		                .baseArrayLayer = barrier.baseArrayLayer,
+		                .layerCount = barrier.layerCount,
+		        },
+		};
+	}
+
+	VkBufferMemoryBarrier2 ToVk(const BufferMemoryBarrier& barrier, VkBuffer resolvedBuffer) noexcept
+	{
+		return VkBufferMemoryBarrier2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+		        .srcStageMask = ToVk(barrier.srcStage),
+		        .srcAccessMask = ToVk(barrier.srcAccess),
+		        .dstStageMask = ToVk(barrier.dstStage),
+		        .dstAccessMask = ToVk(barrier.dstAccess),
+		        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+		        .buffer = resolvedBuffer,
+		        .offset = barrier.offset,
+		        .size = barrier.size,
+		};
+	}
+
+	VkRenderingAttachmentInfo ToVk(const RenderingAttachmentInfo& info) noexcept
+	{
+		return VkRenderingAttachmentInfo{
+		        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+		        .imageView = static_cast<VkImageView>(info.imageView),
+		        .imageLayout = ToVk(info.imageLayout),
+		        .loadOp = ToVk(info.loadOp),
+		        .storeOp = ToVk(info.storeOp),
+		        .clearValue = ToVk(info.clearValue),
+		};
+	}
+
+	VkRenderingInfo ToVk(
+	        const RenderingInfo& info,
+	        const VkRenderingAttachmentInfo* vkColorAttachments,
+	        std::uint32_t colorAttachmentCount,
+	        const VkRenderingAttachmentInfo* vkDepthAttachment) noexcept
+	{
+		return VkRenderingInfo{
+		        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+		        .renderArea = {{0, 0}, {info.width, info.height}},
+		        .layerCount = info.layerCount,
+		        .colorAttachmentCount = colorAttachmentCount,
+		        .pColorAttachments = vkColorAttachments,
+		        .pDepthAttachment = vkDepthAttachment,
+		};
 	}
 } // namespace aether::gpu

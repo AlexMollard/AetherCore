@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <span>
 
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuFormat.hpp"
@@ -144,8 +145,10 @@ namespace aether::gpu
 	// | CommandPool         | borrowed | transient, owned by call site (Factory)     |
 	// | PipelineCache       | borrowed | owned by VulkanContext                      |
 	// | DescriptorPool      | borrowed | owned by BindlessManager                    |
-	// | Image               | borrowed | owned by ResourceRegistry                   |
+	// | Image                | borrowed | owned by ResourceRegistry                   |
 	// | ImageView           | borrowed | owned by ResourceRegistry (resolved view)   |
+	// | Buffer              | borrowed | owned by ResourceRegistry (resolved buffer)  |
+	// | Event               | borrowed | owned by RenderGraphStorage (event pool)     |
 	// | DescriptorSetLayout | borrowed | owned by BindlessManager / Factory          |
 	// | DescriptorSet       | borrowed | owned by BindlessManager                    |
 	// | Pipeline            | borrowed | owned by PipelineFactory (registry)         |
@@ -171,8 +174,11 @@ namespace aether::gpu
 	using Allocator = void*;
 	using CommandPool = void*;
 	using Queue = void*;
+	using CommandBuffer = void*;
 	using Image = void*;
 	using ImageView = void*;
+	using Buffer = void*;
+	using Event = void*;
 	using Buffer = void*;
 	using Sampler = void*;
 	using QueryPool = void*;
@@ -204,4 +210,66 @@ namespace aether::gpu
 	};
 
 	static_assert(sizeof(DrawIndirectCommand) == 16, "DrawIndirectCommand must match VkDrawIndirectCommand layout");
+
+	// -------------------------------------------------------------------------
+	// Image + buffer barriers (P5(d) - RenderGraph barrier solver migration)
+	// -------------------------------------------------------------------------
+	// Mirrors of VkImageMemoryBarrier2 / VkBufferMemoryBarrier2. Engine code
+	// accumulates these; the backend (vulkan/RenderGraphStorage) translates to
+	// Vk* and calls vkCmdPipelineBarrier2. The `image` / `buffer` fields are
+	// opaque gpu::Image / gpu::Buffer handles resolved by the storage; layout
+	// and access values are the engine-side enums from GpuEnums.hpp.
+
+	struct ImageMemoryBarrier
+	{
+		Image image = nullptr;
+		ImageLayout oldLayout = ImageLayout::Undefined;
+		ImageLayout newLayout = ImageLayout::Undefined;
+		ImageAspect aspect = ImageAspect::Color;
+		std::uint32_t baseMipLevel = 0;
+		std::uint32_t levelCount = 1;
+		std::uint32_t baseArrayLayer = 0;
+		std::uint32_t layerCount = 1;
+		PipelineStage srcStage = PipelineStage::None;
+		AccessFlags srcAccess = AccessFlags::None;
+		PipelineStage dstStage = PipelineStage::None;
+		AccessFlags dstAccess = AccessFlags::None;
+	};
+
+	struct BufferMemoryBarrier
+	{
+		Buffer buffer = nullptr;
+		DeviceSize offset = 0;
+		DeviceSize size = static_cast<DeviceSize>(-1); // VK_WHOLE_SIZE
+		PipelineStage srcStage = PipelineStage::None;
+		AccessFlags srcAccess = AccessFlags::None;
+		PipelineStage dstStage = PipelineStage::None;
+		AccessFlags dstAccess = AccessFlags::None;
+	};
+
+	// -------------------------------------------------------------------------
+	// Dynamic rendering (P5(d))
+	// -------------------------------------------------------------------------
+	// Mirrors of VkRenderingAttachmentInfo / VkRenderingInfo. Used by
+	// RenderGraph::Execute to describe the per-pass color / depth attachments
+	// and the render area. The backend (gpu/CommandList.cpp) translates to
+	// Vk* and calls vkCmdBeginRendering.
+
+	struct RenderingAttachmentInfo
+	{
+		ImageView imageView = nullptr;
+		ImageLayout imageLayout = ImageLayout::Undefined;
+		LoadOp loadOp = LoadOp::Load;
+		StoreOp storeOp = StoreOp::Store;
+		ClearValue clearValue{};
+	};
+
+	struct RenderingInfo
+	{
+		std::uint32_t width = 0;
+		std::uint32_t height = 0;
+		std::uint32_t layerCount = 1;
+		std::span<const RenderingAttachmentInfo> colorAttachments{};
+		const RenderingAttachmentInfo* depthAttachment = nullptr;
+	};
 } // namespace aether::gpu

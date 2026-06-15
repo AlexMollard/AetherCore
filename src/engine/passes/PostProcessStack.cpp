@@ -184,7 +184,7 @@ namespace aether
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 
 			                const gpu::Viewport vp{
 			                        .width = static_cast<float>(ctx.extent.width),

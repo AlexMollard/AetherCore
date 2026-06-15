@@ -483,7 +483,7 @@ namespace aether
 				                return;
 			                }
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                for (std::uint32_t li = 0; li < static_cast<std::uint32_t>(m_perLightShadows.size()); ++li)
 			                {
 				                const PerLightShadow& pls = m_perLightShadows[li];
@@ -530,7 +530,7 @@ namespace aether
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
 			                const auto scratchResolved = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle);
@@ -581,7 +581,7 @@ namespace aether
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
 			                const auto scratchResolvedV = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle);

@@ -18,6 +18,7 @@
 #include "utils/Logger.hpp"
 #include "mesh/Mesh.hpp"
 #include "utils/Profiler.hpp"
+#include "gpu/GpuProfiler.hpp"
 #include "vulkan/ShaderUtils.hpp"
 
 namespace aether
@@ -273,7 +274,7 @@ namespace aether
 		// The cast to VkCommandBuffer at the Tracy call sites is the one
 		// documented allowlist exception (see gpu-abstraction-rendering-audit.md
 		// §7.3.0) - Tracy's API requires a raw Vulkan handle.
-		void* const rawCmd = cmdList.GetCommandBuffer();
+		const gpu::CommandBuffer rawCmd = cmdList.GetCommandBuffer();
 		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
 		if (m_commands.empty())
 		{
@@ -655,7 +656,7 @@ namespace aether
 					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.SampleClips");
+					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.SampleClips");
 					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -684,7 +685,7 @@ namespace aether
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
 					cmdList.PushConstantsRaw(animBlendPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
-						AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.AnimBlend");
+						AE_GPU_ZONE_SCOPED(rawCmd, "Animation.AnimBlend");
 						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
 						cmdList.Dispatch(groups, 1, 1);
 					}
@@ -842,7 +843,7 @@ namespace aether
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
 				cmdList.PushConstantsRaw(ikSolvePipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.IkSolve");
+					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.IkSolve");
 					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -887,7 +888,7 @@ namespace aether
 					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "Animation.BuildSkinPalette");
+					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.BuildSkinPalette");
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -965,7 +966,7 @@ namespace aether
 					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				{
-					AE_PROFILE_GPU_ZONE(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd), "CullPass.cullDraws");
+					AE_GPU_ZONE_SCOPED(rawCmd, "CullPass.cullDraws");
 					const std::uint32_t groups = (totalDraws + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
@@ -986,7 +987,7 @@ namespace aether
 			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
 			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
-		AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, reinterpret_cast<VkCommandBuffer>(rawCmd));
+		::aether::gpu::GpuProfiler::Get().Collect(rawCmd);
 #endif
 	}
 

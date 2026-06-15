@@ -12,6 +12,7 @@
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "gpu/GpuProfiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -1363,15 +1364,18 @@ namespace aether
 		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
 		// Image resolution helper shared by pre-, wait-, and signal-barriers.
-		auto resolveImage = [&](uint32_t resourceId) -> VkImage
+		// Returns the opaque gpu::Image (the actual VkImage is obtained
+		// in the storage via static_cast at emit time). P5(d) barrier
+		// solver migration: the engine code never names VkImage.
+		auto resolveImage = [&](uint32_t resourceId) -> gpu::Image
 		{
 			if (resourceId == kSwapchainColorId)
 			{
-				return static_cast<VkImage>(target.colorImage);
+				return target.colorImage;
 			}
 			if (resourceId == kSwapchainDepthId)
 			{
-				return static_cast<VkImage>(target.depthImage);
+				return target.depthImage;
 			}
 			if (IsTransientId(resourceId))
 			{
@@ -1381,14 +1385,17 @@ namespace aether
 			return m_storage->GetExternalImage(extIdx);
 		};
 
-		auto resolveBuffer = [&](uint32_t resourceId) -> VkBuffer
+		auto resolveBuffer = [&](uint32_t resourceId) -> gpu::Buffer
 		{
 			const uint32_t extIdx = ExternalBufferIndex(resourceId);
 			return m_storage->GetExternalBuffer(extIdx);
 		};
 
-		// Execute a single compiled pass on the given command list + VkCommandBuffer.
-		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, VkCommandBuffer vkCmd)
+		// Execute a single compiled pass on the given command list.
+		// vkCmd is the opaque gpu::CommandBuffer (the actual VkCommandBuffer
+		// is obtained in the storage via static_cast at emit time). P5(d)
+		// barrier solver migration: the engine code never names VkCommandBuffer.
+		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer vkCmd)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
@@ -1396,6 +1403,9 @@ namespace aether
 			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
 
 			// -- Split barrier waits (consume events from producers) -----------
+			// P5(d) barrier solver migration: all barriers are engine-side
+			// structs (gpu::ImageMemoryBarrier / gpu::BufferMemoryBarrier).
+			// The storage translates to Vk* and calls vkCmd*Event2.
 			auto& scratchEventBars = m_storage->GetScratchSignalBarriers();
 			for (const CompiledWait& w: cp.waits)
 			{
@@ -1404,8 +1414,8 @@ namespace aether
 					continue;
 				}
 
-				VkEvent event = m_storage->GetEvent(w.eventIndex);
-				if (event == VK_NULL_HANDLE)
+				const gpu::Event event = m_storage->GetEvent(w.eventIndex);
+				if (event == nullptr)
 				{
 					continue;
 				}
@@ -1413,29 +1423,28 @@ namespace aether
 				scratchEventBars.clear();
 				for (const CompiledBarrier& b: w.barriers)
 				{
-					VkImage image = resolveImage(b.resourceId);
-					if (image == VK_NULL_HANDLE)
+					const gpu::Image image = resolveImage(b.resourceId);
+					if (image == nullptr)
 					{
 						AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for split wait in pass '{}'.", b.resourceId, pass.name);
 						continue;
 					}
 
-					scratchEventBars.push_back({
-					        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-					        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
-					        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
-					        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
-					        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
-					        .oldLayout = gpu::ToVk(b.oldLayout),
-					        .newLayout = gpu::ToVk(b.newLayout),
+					scratchEventBars.push_back(gpu::ImageMemoryBarrier{
 					        .image = image,
-					        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+					        .oldLayout = b.oldLayout,
+					        .newLayout = b.newLayout,
+					        .aspect = b.aspect,
+					        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
+					        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
+					        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage),
+					        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 					});
 				}
 
 				if (!scratchEventBars.empty())
 				{
-					m_storage->CmdWaitEvents2(vkCmd, event, scratchEventBars.data(), static_cast<uint32_t>(scratchEventBars.size()));
+					m_storage->CmdWaitEvents2(vkCmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
 				}
 			}
 
@@ -1444,9 +1453,9 @@ namespace aether
 			scratchBarriers.clear();
 			for (const CompiledBarrier& b: cp.preBarriers)
 			{
-				VkImage image = resolveImage(b.resourceId);
+				const gpu::Image image = resolveImage(b.resourceId);
 
-				if (image == VK_NULL_HANDLE)
+				if (image == nullptr)
 				{
 					AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for barrier in pass '{}'.", b.resourceId, pass.name);
 					continue;
@@ -1456,68 +1465,69 @@ namespace aether
 
 #ifndef NDEBUG
 				{
-					const VkImageLayout tracked = m_storage->GetTrackedLayout(image);
-					if (tracked != VK_IMAGE_LAYOUT_UNDEFINED && gpu::ToVk(b.oldLayout) != VK_IMAGE_LAYOUT_UNDEFINED && tracked != gpu::ToVk(b.oldLayout))
+					const gpu::ImageLayout tracked = m_storage->GetTrackedLayout(image);
+					if (tracked != gpu::ImageLayout::Undefined && b.oldLayout != gpu::ImageLayout::Undefined && tracked != b.oldLayout)
 					{
 						AE_WARN(LogCategory::Vulkan,
 						        "RenderGraph: layout mismatch on image id={} in pass '{}': "
-						        "compiled oldLayout={:#x} but oracle tracks {:#x}.",
+						        "compiled oldLayout={} but oracle tracks {}.",
 						        b.resourceId,
 						        pass.name,
-						        static_cast<uint32_t>(gpu::ToVk(b.oldLayout)),
-						        static_cast<uint32_t>(tracked));
+						        static_cast<int>(b.oldLayout),
+						        static_cast<int>(tracked));
 					}
 				}
-				m_storage->SetTrackedLayout(image, gpu::ToVk(b.newLayout));
+				m_storage->SetTrackedLayout(image, b.newLayout);
 #endif
 
-				scratchBarriers.push_back({
-				        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-				        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
-				        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
-				        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
-				        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
-				        .oldLayout = gpu::ToVk(b.oldLayout),
-				        .newLayout = gpu::ToVk(b.newLayout),
+				scratchBarriers.push_back(gpu::ImageMemoryBarrier{
 				        .image = image,
-				        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+				        .oldLayout = b.oldLayout,
+				        .newLayout = b.newLayout,
+				        .aspect = b.aspect,
+				        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
+				        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
+				        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage),
+				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			vkutil::TransitionImages(vkCmd, scratchBarriers.data(), static_cast<uint32_t>(scratchBarriers.size()));
+			m_storage->CmdImageBarriers(vkCmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers), resolveImage);
 
 			// -- Buffer barriers --------------------------------------------
 			auto& scratchBufBars = m_storage->GetScratchBufferBarriers();
 			scratchBufBars.clear();
 			for (const CompiledBufferBarrier& b: cp.bufferBarriers)
 			{
-				VkBuffer buffer = resolveBuffer(b.resourceId);
-				if (buffer == VK_NULL_HANDLE)
+				const gpu::Buffer buffer = resolveBuffer(b.resourceId);
+				if (buffer == nullptr)
 				{
 					continue;
 				}
 
-				scratchBufBars.push_back({
-				        .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-				        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
-				        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
-				        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage),
-				        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),
+				scratchBufBars.push_back(gpu::BufferMemoryBarrier{
 				        .buffer = buffer,
 				        .offset = 0,
-				        .size = VK_WHOLE_SIZE,
+				        .size = static_cast<gpu::DeviceSize>(-1), // VK_WHOLE_SIZE
+				        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
+				        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
+				        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage),
+				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdBufferBarriers(vkCmd, scratchBufBars.data(), static_cast<uint32_t>(scratchBufBars.size()));
+			m_storage->CmdBufferBarriers(vkCmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars), resolveBuffer);
 
 			// -- Dynamic rendering -------------------------------------------
+			// P5(d) barrier solver migration: build engine-side
+			// gpu::RenderingAttachmentInfo + gpu::RenderingInfo. The storage
+			// translates to Vk* and calls vkCmdBeginRendering.
 			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
 			{
-				VkImageView view = VK_NULL_HANDLE;
+				gpu::ImageView view = nullptr;
 				if (a.image.id == kSwapchainColorId)
 				{
-					view = static_cast<VkImageView>(target.colorView);
+					view = target.colorView;
 				}
 				else if (IsTransientId(a.image.id))
 				{
@@ -1528,26 +1538,23 @@ namespace aether
 					view = m_storage->GetExternalView(ExternalIndex(a.image.id));
 				}
 
-				scratchColorInfos.push_back({
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				scratchColorInfos.push_back(gpu::RenderingAttachmentInfo{
 				        .imageView = view,
-				        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-				        .loadOp = gpu::ToVk(a.loadOp),
-				        .storeOp = gpu::ToVk(a.storeOp),
-				        .clearValue = gpu::ToVk(a.clearValue),
+				        .imageLayout = gpu::ImageLayout::ColorAttachment,
+				        .loadOp = a.loadOp,
+				        .storeOp = a.storeOp,
+				        .clearValue = a.clearValue,
 				});
 			}
 
-			VkRenderingAttachmentInfo depthInfo{};
-			bool hasDepth = false;
+			std::optional<gpu::RenderingAttachmentInfo> depthInfo;
 			if (pass.depthWrite.has_value())
 			{
-				hasDepth = true;
 				const AttachmentRef& da = *pass.depthWrite;
-				VkImageView depthView = VK_NULL_HANDLE;
+				gpu::ImageView depthView = nullptr;
 				if (da.image.id == kSwapchainDepthId)
 				{
-					depthView = static_cast<VkImageView>(target.depthView);
+					depthView = target.depthView;
 				}
 				else if (IsTransientId(da.image.id))
 				{
@@ -1558,29 +1565,27 @@ namespace aether
 					depthView = m_storage->GetExternalView(ExternalIndex(da.image.id));
 				}
 
-				depthInfo = {
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+				depthInfo = gpu::RenderingAttachmentInfo{
 				        .imageView = depthView,
-				        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
-				        .loadOp = gpu::ToVk(da.loadOp),
-				        .storeOp = gpu::ToVk(da.storeOp),
-				        .clearValue = gpu::ToVk(da.clearValue),
+				        .imageLayout = gpu::ImageLayout::DepthAttachment,
+				        .loadOp = da.loadOp,
+				        .storeOp = da.storeOp,
+				        .clearValue = da.clearValue,
 				};
 			}
 
 			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
-			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || hasDepth);
+			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
 			if (useDynamicRendering)
 			{
-				const VkRenderingInfo renderInfo{
-				        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-				        .renderArea = {{0, 0}, {passExtent.width, passExtent.height}},
+				const gpu::RenderingInfo renderInfo{
+				        .width = passExtent.width,
+				        .height = passExtent.height,
 				        .layerCount = 1,
-				        .colorAttachmentCount = static_cast<uint32_t>(scratchColorInfos.size()),
-				        .pColorAttachments = scratchColorInfos.data(),
-				        .pDepthAttachment = hasDepth ? &depthInfo : nullptr,
+				        .colorAttachments = std::span<const gpu::RenderingAttachmentInfo>(scratchColorInfos),
+				        .depthAttachment = depthInfo.has_value() ? &depthInfo.value() : nullptr,
 				};
-				recorder.BeginRendering(&renderInfo);
+				recorder.BeginRendering(renderInfo);
 
 				const gpu::Viewport viewport{
 				        .x = 0.0f,
@@ -1602,7 +1607,10 @@ namespace aether
 
 			if (pass.execute)
 			{
-				AE_PROFILE_GPU_ZONE_T(m_tracyVkCtx, vkCmd, gpuPassZone, pass.name.c_str());
+				// Tracy GPU zone. The engine-side macro captures
+				// __FILE__/__LINE__ at this call site; the cast and
+				// Tracy plumbing live in vulkan/GpuProfiler.cpp.
+				AE_GPU_ZONE_SCOPED(vkCmd, pass.name.c_str());
 				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
 				pass.execute(ctx);
@@ -1618,14 +1626,14 @@ namespace aether
 			// -- Split barrier signals (set events for later consumers) --------
 			if (!cp.signalBarriers.empty())
 			{
-				VkEvent event = m_storage->GetEvent(cp.splitEventIndex);
-				if (event != VK_NULL_HANDLE)
+				const gpu::Event event = m_storage->GetEvent(cp.splitEventIndex);
+				if (event != nullptr)
 				{
 					scratchEventBars.clear();
 					for (const CompiledBarrier& b: cp.signalBarriers)
 					{
-						VkImage image = resolveImage(b.resourceId);
-						if (image == VK_NULL_HANDLE)
+						const gpu::Image image = resolveImage(b.resourceId);
+						if (image == nullptr)
 						{
 							AE_WARN(LogCategory::Vulkan, "RenderGraph: could not resolve image id={} for split signal in pass '{}'.", b.resourceId, pass.name);
 							continue;
@@ -1634,25 +1642,24 @@ namespace aether
 						m_storage->GetLastFrameStats().barrierCount++;
 
 #ifndef NDEBUG
-						m_storage->SetTrackedLayout(image, gpu::ToVk(b.newLayout));
+						m_storage->SetTrackedLayout(image, b.newLayout);
 #endif
 
-						scratchEventBars.push_back({
-						        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-						        .srcStageMask = static_cast<VkPipelineStageFlags2>(b.srcStage),
-						        .srcAccessMask = static_cast<VkAccessFlags2>(b.srcAccess),
-						        .dstStageMask = static_cast<VkPipelineStageFlags2>(b.dstStage), // ignored by set
-						        .dstAccessMask = static_cast<VkAccessFlags2>(b.dstAccess),      // ignored by set
-						        .oldLayout = gpu::ToVk(b.oldLayout),
-						        .newLayout = gpu::ToVk(b.newLayout),
+						scratchEventBars.push_back(gpu::ImageMemoryBarrier{
 						        .image = image,
-						        .subresourceRange = {gpu::ToVk(b.aspect), 0, 1, 0, 1},
+						        .oldLayout = b.oldLayout,
+						        .newLayout = b.newLayout,
+						        .aspect = b.aspect,
+						        .srcStage = static_cast<gpu::PipelineStage>(b.srcStage),
+						        .srcAccess = static_cast<gpu::AccessFlags>(b.srcAccess),
+						        .dstStage = static_cast<gpu::PipelineStage>(b.dstStage), // ignored by set
+						        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess), // ignored by set
 						});
 					}
 
 					if (!scratchEventBars.empty())
 					{
-						m_storage->CmdSetEvent2(vkCmd, event, scratchEventBars.data(), static_cast<uint32_t>(scratchEventBars.size()));
+						m_storage->CmdSetEvent2(vkCmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
 					}
 				}
 			}
@@ -1689,7 +1696,12 @@ namespace aether
 		// Phase 2: Execute graphics passes on the main graphics command list.
 		{
 			gpu::CommandList& gfxRecorder = cmdList;
-			VkCommandBuffer gfxVkCmd = static_cast<VkCommandBuffer>(cmdList.GetCommandBuffer());
+			// P5(d) barrier solver migration: pass the opaque
+			// gpu::CommandBuffer to executePassOn; the storage casts to
+			// VkCommandBuffer at emit time. The raw VkCommandBuffer is
+			// only needed for Tracy's GPU collection (audit §7.3.0
+			// allowlist exception).
+			const gpu::CommandBuffer gfxCmd = cmdList.GetCommandBuffer();
 			gfxRecorder.BeginDebugLabel("Frame.RenderGraph.Graphics", 0.35f, 0.55f, 0.95f, 1.0f);
 
 			bool foundGraphics = false;
@@ -1700,7 +1712,7 @@ namespace aether
 					continue; // skip async-compute passes (already executed)
 				}
 				foundGraphics = true;
-				executePassOn(cp, gfxRecorder, gfxVkCmd);
+				executePassOn(cp, gfxRecorder, gfxCmd);
 			}
 
 			gfxRecorder.EndDebugLabel();
@@ -1709,7 +1721,7 @@ namespace aether
 			// since it's the one that gets submitted via SubmitAndPresent.
 			if (foundGraphics)
 			{
-				AE_PROFILE_GPU_COLLECT(m_tracyVkCtx, gfxVkCmd);
+				gpu::GpuProfiler::Get().Collect(gfxCmd);
 			}
 		}
 

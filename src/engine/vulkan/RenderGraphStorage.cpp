@@ -314,24 +314,39 @@ namespace aether
 			m_externalImages.push_back({image, view, aspect});
 		}
 #ifndef NDEBUG
-		SetTrackedLayout(image, VK_IMAGE_LAYOUT_UNDEFINED);
+		SetTrackedLayout(static_cast<gpu::Image>(image), gpu::ImageLayout::Undefined);
 #endif
 		return idx;
 	}
 
-	VkImage RenderGraphStorage::GetExternalImage(uint32_t idx) const
+	VkImage RenderGraphStorage::GetExternalImageVk(uint32_t idx) const
 	{
 		return (idx < m_externalImages.size()) ? m_externalImages[idx].image : VK_NULL_HANDLE;
 	}
 
-	VkImageView RenderGraphStorage::GetExternalView(uint32_t idx) const
+	gpu::Image RenderGraphStorage::GetExternalImage(uint32_t idx) const
+	{
+		return GetExternalImageVk(idx);
+	}
+
+	VkImageView RenderGraphStorage::GetExternalViewVk(uint32_t idx) const
 	{
 		return (idx < m_externalImages.size()) ? m_externalImages[idx].view : VK_NULL_HANDLE;
 	}
 
-	VkImageAspectFlags RenderGraphStorage::GetExternalAspect(uint32_t idx) const
+	gpu::ImageView RenderGraphStorage::GetExternalView(uint32_t idx) const
+	{
+		return GetExternalViewVk(idx);
+	}
+
+	VkImageAspectFlags RenderGraphStorage::GetExternalAspectVk(uint32_t idx) const
 	{
 		return (idx < m_externalImages.size()) ? m_externalImages[idx].aspect : VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
+	gpu::ImageAspect RenderGraphStorage::GetExternalAspect(uint32_t idx) const
+	{
+		return gpu::FromVk(GetExternalAspectVk(idx));
 	}
 
 	void RenderGraphStorage::ReleaseExternal(uint32_t idx)
@@ -341,7 +356,7 @@ namespace aether
 #ifndef NDEBUG
 			if (m_externalImages[idx].image != VK_NULL_HANDLE)
 			{
-				EraseTrackedLayout(m_externalImages[idx].image);
+				EraseTrackedLayout(static_cast<gpu::Image>(m_externalImages[idx].image));
 			}
 #endif
 			m_externalImages[idx] = {};
@@ -356,7 +371,7 @@ namespace aether
 		{
 			if (entry.image != VK_NULL_HANDLE)
 			{
-				EraseTrackedLayout(entry.image);
+				EraseTrackedLayout(static_cast<gpu::Image>(entry.image));
 			}
 		}
 #endif
@@ -389,13 +404,18 @@ namespace aether
 		m_externalBuffers[idx] = buffer;
 	}
 
-	VkBuffer RenderGraphStorage::GetExternalBuffer(uint32_t idx) const
+	VkBuffer RenderGraphStorage::GetExternalBufferVk(uint32_t idx) const
 	{
 		if (idx >= m_externalBuffers.size())
 		{
 			return VK_NULL_HANDLE;
 		}
 		return m_externalBuffers[idx];
+	}
+
+	gpu::Buffer RenderGraphStorage::GetExternalBuffer(uint32_t idx) const
+	{
+		return GetExternalBufferVk(idx);
 	}
 
 	void RenderGraphStorage::ReleaseExternalBuffer(uint32_t idx)
@@ -438,7 +458,7 @@ namespace aether
 		return static_cast<uint32_t>(m_transientImages.size() - 1);
 	}
 
-	VkImage RenderGraphStorage::ResolveTransientImage(uint32_t idx) const
+	VkImage RenderGraphStorage::ResolveTransientImageVk(uint32_t idx) const
 	{
 		if (idx >= m_transientImages.size())
 		{
@@ -457,7 +477,7 @@ namespace aether
 		return VK_NULL_HANDLE;
 	}
 
-	VkImageView RenderGraphStorage::ResolveTransientView(uint32_t idx) const
+	VkImageView RenderGraphStorage::ResolveTransientViewVk(uint32_t idx) const
 	{
 		if (idx >= m_transientImages.size())
 		{
@@ -476,13 +496,28 @@ namespace aether
 		return VK_NULL_HANDLE;
 	}
 
-	VkImageAspectFlags RenderGraphStorage::ResolveTransientAspect(uint32_t idx) const
+	VkImageAspectFlags RenderGraphStorage::ResolveTransientAspectVk(uint32_t idx) const
 	{
 		if (idx < m_transientImages.size())
 		{
 			return gpu::ToVk(m_transientImages[idx].aspect);
 		}
 		return VK_IMAGE_ASPECT_COLOR_BIT;
+	}
+
+	gpu::ImageAspect RenderGraphStorage::ResolveTransientAspect(uint32_t idx) const
+	{
+		return m_transientImages[idx].aspect;
+	}
+
+	gpu::Image RenderGraphStorage::ResolveTransientImage(uint32_t idx) const
+	{
+		return ResolveTransientImageVk(idx);
+	}
+
+	gpu::ImageView RenderGraphStorage::ResolveTransientView(uint32_t idx) const
+	{
+		return ResolveTransientViewVk(idx);
 	}
 
 	gpu::Extent2D RenderGraphStorage::GetTransientAllocatedExtent(uint32_t idx) const
@@ -582,7 +617,7 @@ namespace aether
 #ifndef NDEBUG
 			if (entry.image)
 			{
-				EraseTrackedLayout(entry.image.Get());
+				EraseTrackedLayout(static_cast<gpu::Image>(entry.image.Get()));
 			}
 #endif
 			PendingDestruction pending{};
@@ -627,7 +662,7 @@ namespace aether
 			return;
 		}
 #ifndef NDEBUG
-		EraseTrackedLayout(entry.image.Get());
+		EraseTrackedLayout(static_cast<gpu::Image>(entry.image.Get()));
 #endif
 		const ImageCacheKey key = MakeCacheKey(entry, entry.allocatedExtent);
 		m_imageCache[key].push_back(CachedImage{
@@ -706,13 +741,18 @@ namespace aether
 		return idx;
 	}
 
-	VkEvent RenderGraphStorage::GetEvent(std::uint32_t eventIndex) const
+	VkEvent RenderGraphStorage::GetEventVk(std::uint32_t eventIndex) const
 	{
 		if (eventIndex < m_events.size())
 		{
 			return m_events[eventIndex];
 		}
 		return VK_NULL_HANDLE;
+	}
+
+	gpu::Event RenderGraphStorage::GetEvent(std::uint32_t eventIndex) const
+	{
+		return GetEventVk(eventIndex);
 	}
 
 	void RenderGraphStorage::ReleaseEvent(std::uint32_t eventIndex)
@@ -733,53 +773,123 @@ namespace aether
 		}
 	}
 
-	void RenderGraphStorage::CmdSetEvent2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count)
+	void RenderGraphStorage::CmdSetEvent2(
+	        gpu::CommandBuffer cmd,
+	        gpu::Event event,
+	        std::span<const gpu::ImageMemoryBarrier> barriers,
+	        const std::function<gpu::Image(uint32_t)>& resolveImage)
 	{
-		if (count == 0)
+		if (barriers.empty())
 		{
 			return;
 		}
+		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const VkEvent vkEvent = static_cast<VkEvent>(event);
 
-		vkCmdResetEvent2(cmd, event, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
+		// Translate the engine-side barrier span to a stack VkImageMemoryBarrier2
+		// array. P5(d) barrier solver migration: the engine-side
+		// ImageMemoryBarrier holds an opaque gpu::Image, the storage
+		// resolves it to the actual VkImage here.
+		std::vector<VkImageMemoryBarrier2> vkBarriers;
+		vkBarriers.reserve(barriers.size());
+		for (const auto& b: barriers)
+		{
+			const gpu::Image resolved = resolveImage(b.image ? static_cast<uint32_t>(reinterpret_cast<std::uintptr_t>(b.image) & 0xFFFFFFFFu) : 0);
+			// The barrier's `image` field IS the resolved VkImage (the
+			// engine code already populated it via the resolver). Convert
+			// directly:
+			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
+		}
+
+		vkCmdResetEvent2(vkCmd, vkEvent, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .imageMemoryBarrierCount = count,
-		        .pImageMemoryBarriers = barriers,
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
+		        .pImageMemoryBarriers = vkBarriers.data(),
 		};
-		vkCmdSetEvent2(cmd, event, &depInfo);
+		vkCmdSetEvent2(vkCmd, vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdWaitEvents2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count)
+	void RenderGraphStorage::CmdWaitEvents2(
+	        gpu::CommandBuffer cmd,
+	        gpu::Event event,
+	        std::span<const gpu::ImageMemoryBarrier> barriers,
+	        const std::function<gpu::Image(uint32_t)>& resolveImage)
 	{
-		if (count == 0)
+		if (barriers.empty())
 		{
 			return;
+		}
+		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const VkEvent vkEvent = static_cast<VkEvent>(event);
+
+		std::vector<VkImageMemoryBarrier2> vkBarriers;
+		vkBarriers.reserve(barriers.size());
+		for (const auto& b: barriers)
+		{
+			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .imageMemoryBarrierCount = count,
-		        .pImageMemoryBarriers = barriers,
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
+		        .pImageMemoryBarriers = vkBarriers.data(),
 		};
-		vkCmdWaitEvents2(cmd, 1, &event, &depInfo);
+		vkCmdWaitEvents2(vkCmd, 1, &vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdBufferBarriers(VkCommandBuffer cmd, const VkBufferMemoryBarrier2* barriers, uint32_t count)
+	void RenderGraphStorage::CmdBufferBarriers(
+	        gpu::CommandBuffer cmd,
+	        std::span<const gpu::BufferMemoryBarrier> barriers,
+	        const std::function<gpu::Buffer(uint32_t)>& resolveBuffer)
 	{
-		if (count == 0)
+		if (barriers.empty())
 		{
 			return;
+		}
+		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+
+		std::vector<VkBufferMemoryBarrier2> vkBarriers;
+		vkBarriers.reserve(barriers.size());
+		for (const auto& b: barriers)
+		{
+			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkBuffer>(b.buffer)));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .bufferMemoryBarrierCount = count,
-		        .pBufferMemoryBarriers = barriers,
+		        .bufferMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
+		        .pBufferMemoryBarriers = vkBarriers.data(),
 		};
-		vkCmdPipelineBarrier2(cmd, &depInfo);
+		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
 
+	void RenderGraphStorage::CmdImageBarriers(
+	        gpu::CommandBuffer cmd,
+	        std::span<const gpu::ImageMemoryBarrier> barriers,
+	        const std::function<gpu::Image(uint32_t)>& resolveImage)
+	{
+		if (barriers.empty())
+		{
+			return;
+		}
+		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+
+		std::vector<VkImageMemoryBarrier2> vkBarriers;
+		vkBarriers.reserve(barriers.size());
+		for (const auto& b: barriers)
+		{
+			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
+		}
+
+		const VkDependencyInfo depInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
+		        .pImageMemoryBarriers = vkBarriers.data(),
+		};
+		vkCmdPipelineBarrier2(vkCmd, &depInfo);
+	}
 	// -- Transient heap -------------------------------------------------------
 
 	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize)
@@ -1082,7 +1192,7 @@ namespace aether
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientCacheHit++;
 #ifndef NDEBUG
-				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+				SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
 #endif
 				continue;
 			}
@@ -1107,7 +1217,7 @@ namespace aether
 				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
 				entry.image.SetName(m_device, entryName.c_str());
 #ifndef NDEBUG
-				SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+				SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
 #endif
 				continue;
 			}
@@ -1128,7 +1238,7 @@ namespace aether
 			const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
 			entry.image.SetName(m_device, entryName.c_str());
 #ifndef NDEBUG
-			SetTrackedLayout(entry.image.Get(), VK_IMAGE_LAYOUT_UNDEFINED);
+			SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
 #endif
 		}
 
@@ -1209,13 +1319,18 @@ namespace aether
 		}
 	}
 
-	VkBuffer RenderGraphStorage::ResolveTransientBuffer(uint32_t idx) const
+	VkBuffer RenderGraphStorage::ResolveTransientBufferVk(uint32_t idx) const
 	{
 		if (idx < m_transientBuffers.size())
 		{
 			return m_transientBuffers[idx].buffer.Get();
 		}
 		return VK_NULL_HANDLE;
+	}
+
+	gpu::Buffer RenderGraphStorage::ResolveTransientBuffer(uint32_t idx) const
+	{
+		return ResolveTransientBufferVk(idx);
 	}
 
 	bool RenderGraphStorage::IsTransientBufferSlotValid(uint32_t idx) const

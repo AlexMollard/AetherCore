@@ -100,9 +100,17 @@ namespace aether
 		uint32_t RegisterExternalImage(VkImage image, VkImageView view, VkImageAspectFlags aspect);
 		// Engine-side overload: opaque gpu::Image / gpu::ImageView / gpu::ImageAspect.
 		uint32_t RegisterExternalImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect);
-		[[nodiscard]] VkImage GetExternalImage(uint32_t idx) const;
-		[[nodiscard]] VkImageView GetExternalView(uint32_t idx) const;
-		[[nodiscard]] VkImageAspectFlags GetExternalAspect(uint32_t idx) const;
+		// Engine-side resolution (P5(d)). Returns the opaque gpu::Image /
+		// gpu::ImageView / gpu::ImageAspect; the storage's typed result is
+		// the same numeric value as the underlying Vk* (the audit's
+		// borrowed-vs-owned rule: Image / ImageView are borrowed opaque
+		// handles, not typed handles).
+		[[nodiscard]] gpu::Image GetExternalImage(uint32_t idx) const;
+		[[nodiscard]] gpu::ImageView GetExternalView(uint32_t idx) const;
+		[[nodiscard]] gpu::ImageAspect GetExternalAspect(uint32_t idx) const;
+		[[nodiscard]] VkImage GetExternalImageVk(uint32_t idx) const;
+		[[nodiscard]] VkImageView GetExternalViewVk(uint32_t idx) const;
+		[[nodiscard]] VkImageAspectFlags GetExternalAspectVk(uint32_t idx) const;
 		void ReleaseExternal(uint32_t idx);
 		void ClearExternalImages();
 
@@ -118,7 +126,8 @@ namespace aether
 		void UpdateExternalBuffer(uint32_t idx, VkBuffer buffer);
 		// Engine-side overload: opaque gpu::Buffer.
 		void UpdateExternalBuffer(uint32_t idx, gpu::Buffer buffer);
-		[[nodiscard]] VkBuffer GetExternalBuffer(uint32_t idx) const;
+		[[nodiscard]] gpu::Buffer GetExternalBuffer(uint32_t idx) const;
+		[[nodiscard]] VkBuffer GetExternalBufferVk(uint32_t idx) const;
 		void ReleaseExternalBuffer(uint32_t idx);
 
 		[[nodiscard]] std::size_t GetExternalBufferCount() const
@@ -130,9 +139,13 @@ namespace aether
 		uint32_t AddTransientSlot(VkFormat format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent);
 		void EnsureTransientImages(const FrameTarget& target);
 
-		[[nodiscard]] VkImage ResolveTransientImage(uint32_t idx) const;
-		[[nodiscard]] VkImageView ResolveTransientView(uint32_t idx) const;
-		[[nodiscard]] VkImageAspectFlags ResolveTransientAspect(uint32_t idx) const;
+		// Engine-side resolution (P5(d)).
+		[[nodiscard]] gpu::Image ResolveTransientImage(uint32_t idx) const;
+		[[nodiscard]] gpu::ImageView ResolveTransientView(uint32_t idx) const;
+		[[nodiscard]] gpu::ImageAspect ResolveTransientAspect(uint32_t idx) const;
+		[[nodiscard]] VkImage ResolveTransientImageVk(uint32_t idx) const;
+		[[nodiscard]] VkImageView ResolveTransientViewVk(uint32_t idx) const;
+		[[nodiscard]] VkImageAspectFlags ResolveTransientAspectVk(uint32_t idx) const;
 		[[nodiscard]] gpu::Extent2D GetTransientAllocatedExtent(uint32_t idx) const;
 		[[nodiscard]] bool IsTransientSlotValid(uint32_t idx) const;
 
@@ -151,7 +164,8 @@ namespace aether
 		uint32_t AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags usage);
 		void EnsureTransientBuffers();
 
-		[[nodiscard]] VkBuffer ResolveTransientBuffer(uint32_t idx) const;
+		[[nodiscard]] gpu::Buffer ResolveTransientBuffer(uint32_t idx) const;
+		[[nodiscard]] VkBuffer ResolveTransientBufferVk(uint32_t idx) const;
 		[[nodiscard]] bool IsTransientBufferSlotValid(uint32_t idx) const;
 
 		[[nodiscard]] std::size_t GetTransientBufferCount() const
@@ -169,20 +183,24 @@ namespace aether
 
 		// -- Image layout oracle (debug) ------------------------------------
 #ifndef NDEBUG
-		void SetTrackedLayout(VkImage image, VkImageLayout layout)
+		void SetTrackedLayout(gpu::Image image, gpu::ImageLayout layout)
 		{
-			m_trackedLayouts[image] = layout;
+			m_trackedLayouts[static_cast<VkImage>(image)] = ToVk(layout);
 		}
 
-		[[nodiscard]] VkImageLayout GetTrackedLayout(VkImage image) const
+		[[nodiscard]] gpu::ImageLayout GetTrackedLayout(gpu::Image image) const
 		{
-			const auto it = m_trackedLayouts.find(image);
-			return it != m_trackedLayouts.end() ? it->second : VK_IMAGE_LAYOUT_UNDEFINED;
+			const auto it = m_trackedLayouts.find(static_cast<VkImage>(image));
+			if (it == m_trackedLayouts.end())
+			{
+				return gpu::ImageLayout::Undefined;
+			}
+			return FromVk(it->second);
 		}
 
-		void EraseTrackedLayout(VkImage image)
+		void EraseTrackedLayout(gpu::Image image)
 		{
-			m_trackedLayouts.erase(image);
+			m_trackedLayouts.erase(static_cast<VkImage>(image));
 		}
 #endif
 
@@ -199,34 +217,64 @@ namespace aether
 
 		// -- Split barrier events ------------------------------------------------
 		std::uint32_t AllocateEvent();
-		[[nodiscard]] VkEvent GetEvent(std::uint32_t eventIndex) const;
+		[[nodiscard]] gpu::Event GetEvent(std::uint32_t eventIndex) const;
+		[[nodiscard]] VkEvent GetEventVk(std::uint32_t eventIndex) const;
 		void ReleaseEvent(std::uint32_t eventIndex);
 		void ResetEvents();
 
 		// Emit Vulkan commands for split barriers (vkCmdSetEvent2 / vkCmdWaitEvents2).
-		void CmdSetEvent2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
-		void CmdWaitEvents2(VkCommandBuffer cmd, VkEvent event, const VkImageMemoryBarrier2* barriers, uint32_t count);
+		// Engine-side: takes gpu::ImageMemoryBarrier span + resolved VkImage
+		// lookup callback. The barrier's opaque gpu::Image field is mapped to
+		// the actual VkImage via `resolveImage` before translation.
+		void CmdSetEvent2(
+		        gpu::CommandBuffer cmd,
+		        gpu::Event event,
+		        std::span<const gpu::ImageMemoryBarrier> barriers,
+		        const std::function<gpu::Image(uint32_t)>& resolveImage);
+		void CmdWaitEvents2(
+		        gpu::CommandBuffer cmd,
+		        gpu::Event event,
+		        std::span<const gpu::ImageMemoryBarrier> barriers,
+		        const std::function<gpu::Image(uint32_t)>& resolveImage);
 
-		// Emit buffer memory barriers via vkCmdPipelineBarrier2.
-		void CmdBufferBarriers(VkCommandBuffer cmd, const VkBufferMemoryBarrier2* barriers, uint32_t count);
+		// Emit buffer memory barriers via vkCmdPipelineBarrier2. Engine-side:
+		// takes gpu::BufferMemoryBarrier span + resolved VkBuffer lookup.
+		void CmdBufferBarriers(
+		        gpu::CommandBuffer cmd,
+		        std::span<const gpu::BufferMemoryBarrier> barriers,
+		        const std::function<gpu::Buffer(uint32_t)>& resolveBuffer);
+
+		// Emit image memory barriers via vkCmdPipelineBarrier2. Engine-side:
+		// takes gpu::ImageMemoryBarrier span + resolved VkImage lookup. The
+		// barrier's opaque gpu::Image field is mapped to the actual VkImage
+		// here (the engine code populates barrier.image with the resolved
+		// VkImage cast to gpu::Image).
+		void CmdImageBarriers(
+		        gpu::CommandBuffer cmd,
+		        std::span<const gpu::ImageMemoryBarrier> barriers,
+		        const std::function<gpu::Image(uint32_t)>& resolveImage);
 
 		// -- Scratch (reused across Execute calls) --------------------------
-		[[nodiscard]] std::vector<VkRenderingAttachmentInfo>& GetScratchColorInfos()
+		// Engine-side scratch arrays (P5(d)). The barrier emitter methods
+		// above accept a std::span, so callers (RenderGraph.cpp) build local
+		// std::vector<gpu::ImageMemoryBarrier> and pass a span. These scratch
+		// accessors are kept for callers that prefer storage-owned scratch.
+		[[nodiscard]] std::vector<gpu::RenderingAttachmentInfo>& GetScratchColorInfos()
 		{
 			return m_scratchColorInfos;
 		}
 
-		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchBarriers()
+		[[nodiscard]] std::vector<gpu::ImageMemoryBarrier>& GetScratchBarriers()
 		{
 			return m_scratchBarriers;
 		}
 
-		[[nodiscard]] std::vector<VkImageMemoryBarrier2>& GetScratchSignalBarriers()
+		[[nodiscard]] std::vector<gpu::ImageMemoryBarrier>& GetScratchSignalBarriers()
 		{
 			return m_scratchSignalBarriers;
 		}
 
-		[[nodiscard]] std::vector<VkBufferMemoryBarrier2>& GetScratchBufferBarriers()
+		[[nodiscard]] std::vector<gpu::BufferMemoryBarrier>& GetScratchBufferBarriers()
 		{
 			return m_scratchBufferBarriers;
 		}
@@ -348,10 +396,10 @@ namespace aether
 		std::uint32_t m_currentFrame = 0;
 
 		// Scratch buffers reused across Execute calls within a single frame.
-		std::vector<VkRenderingAttachmentInfo> m_scratchColorInfos;
-		std::vector<VkImageMemoryBarrier2> m_scratchBarriers;
-		std::vector<VkImageMemoryBarrier2> m_scratchSignalBarriers;
-		std::vector<VkBufferMemoryBarrier2> m_scratchBufferBarriers;
+		std::vector<gpu::RenderingAttachmentInfo> m_scratchColorInfos;
+		std::vector<gpu::ImageMemoryBarrier> m_scratchBarriers;
+		std::vector<gpu::ImageMemoryBarrier> m_scratchSignalBarriers;
+		std::vector<gpu::BufferMemoryBarrier> m_scratchBufferBarriers;
 
 		// Event pool for split barriers.
 		std::vector<VkEvent> m_events;

@@ -537,7 +537,7 @@ namespace aether
 			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
 			                auto& frame = m_buffers[frameSlot];
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 
 			                // Host-write visibility barrier for the light data buffer.
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
@@ -571,7 +571,7 @@ namespace aether
 			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
 			                auto& frame = m_buffers[frameSlot];
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(cullPipeline, cullLayout);
 
 			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lights.Get(), .offset = 0, .range = frame.lights.GetSize()};

@@ -116,7 +116,7 @@ namespace aether
 				                gpu::ResourceRegistry::FlushMappedBuffer(m_indirectBuffer.handle, 0, static_cast<gpu::DeviceSize>(-1));
 			                }
 
-			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                const gpu::Extent2D ext = ctx.extent;
 
 			                const gpu::Viewport viewport{

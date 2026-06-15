@@ -11,6 +11,8 @@
 #include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuProfiler.hpp"
+#include "vulkan/TracyGpuProfiler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
@@ -434,6 +436,11 @@ namespace aether
 
 			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
 			AE_PROFILE_GPU_CONTEXT_NAME(m_tracyVkCtx, "AetherCore GPU");
+			// Build the engine-side pImpl via the vulkan-side factory
+			// and hand it to the engine singleton. Engine code never
+			// sees `tracy::VkCtx*` or any other `Vk*`-named type.
+			m_tracyProfilerHandle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
+			gpu::GpuProfiler::Get().Initialize({ m_tracyProfilerHandle });
 		}
 #endif
 
@@ -482,6 +489,12 @@ namespace aether
 #ifdef TRACY_ENABLE
 		if (m_tracyVkCtx)
 		{
+			// Drop the engine-side reference before destroying the
+			// Tracy context so any in-flight GpuZoneScope sees a
+			// null context and becomes a no-op.
+			gpu::GpuProfiler::Get().Shutdown();
+			aether::vulkan::DestroyTracyGpuProfilerContext(m_tracyProfilerHandle);
+			m_tracyProfilerHandle = nullptr;
 			TracyVkDestroy(m_tracyVkCtx);
 			m_tracyVkCtx = nullptr;
 		}

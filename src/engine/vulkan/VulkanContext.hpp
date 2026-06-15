@@ -3,6 +3,7 @@
 #include <optional>
 #include "utils/Assert.hpp"
 #include "utils/GpuProfiler.hpp"
+#include "gpu/GpuProfiler.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
@@ -31,6 +32,11 @@ namespace aether
 		[[nodiscard]] TracyVkCtx GetTracyVkCtx() const
 		{
 			return m_tracyVkCtx;
+		}
+
+		[[nodiscard]] gpu::ProfilerContextHandle GetTracyProfilerHandle() const
+		{
+			return m_tracyProfilerHandle;
 		}
 
 		[[nodiscard]] VkSurfaceKHR GetSurface() const;
@@ -66,6 +72,7 @@ namespace aether
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
 		TracyVkCtx m_tracyVkCtx = nullptr;
+		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		AftermathContext m_aftermathContext;

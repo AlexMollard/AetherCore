@@ -51,10 +51,30 @@ namespace aether::gpu
 			return m_cmd != nullptr;
 		}
 
+		// Returns a sibling CommandList that shares the underlying
+		// VkCommandBuffer but resets the bound layout / bind-point. Use this
+		// for the "re-fork" pattern where one record path needs a fresh
+		// layout cache (e.g. a sub-pass that binds its own pipeline without
+		// inheriting the parent's bound layout). The returned CommandList is
+		// cheap to construct and shares no ownership with this instance.
+		[[nodiscard]] CommandList View() const noexcept
+		{
+			CommandList out{};
+			out.m_cmd = m_cmd;
+			// m_boundLayout, m_boundBindPoint are default-initialized (none
+			// bound). Caller is expected to BindPipeline / PushConstants
+			// before issuing draw commands.
+			return out;
+		}
+
 		// Returns the raw Vulkan command-buffer handle. Backend-only - engine
-		// code should not need to use this. RenderGraph::Execute() needs it to
-		// pass into vkutil helpers + Tracy GPU zones.
-		[[nodiscard]] void* GetCommandBuffer() const noexcept
+		// code should prefer the engine-side API (View, Bind*, Draw*, ...).
+		// The two legitimate engine-side callers are RenderGraph::Execute()
+		// (passes the raw handle into vkutil helpers and Tracy GPU zones)
+		// and RenderQueue (Tracy's API requires a raw VkCommandBuffer).
+		// Both files are listed as the allowlist exception in
+		// gpu-abstraction-rendering-audit.md §7.3.0.
+		[[nodiscard]] gpu::CommandBuffer GetCommandBuffer() const noexcept
 		{
 			return m_cmd;
 		}
@@ -190,9 +210,10 @@ namespace aether::gpu
 
 		// Begin/end dynamic rendering (vkCmdBeginRendering / vkCmdEndRendering).
 		// The transitional overload takes a raw VkRenderingInfo* as void*;
-		// the final overload will take engine-side types once RenderGraph
-		// internal storage migrates (P5(d)).
+		// the engine-side overload takes the gpu::RenderingInfo mirror struct
+		// and translates to Vk* at the seam (P5(d) barrier solver migration).
 		void BeginRendering(const void* vkRenderingInfo);
+		void BeginRendering(const gpu::RenderingInfo& info);
 		void EndRendering();
 
 		// Write a GPU timestamp (vkCmdWriteTimestamp2). queryPool is an opaque

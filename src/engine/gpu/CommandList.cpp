@@ -560,6 +560,34 @@ namespace aether::gpu
 		vkCmdBeginRendering(AsVkCmd(m_cmd), info);
 	}
 
+	void CommandList::BeginRendering(const gpu::RenderingInfo& info)
+	{
+		if (m_cmd == nullptr)
+		{
+			return;
+		}
+		// P5(d) barrier solver migration: translate the engine-side
+		// gpu::RenderingInfo + its color attachment span to Vk* at the
+		// seam, then call vkCmdBeginRendering. The color attachment span
+		// is translated one-for-one via gpu::ToVk; the depth attachment
+		// is translated on demand (it's a single attachment, not a span).
+		std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
+		vkColorAttachments.reserve(info.colorAttachments.size());
+		for (const auto& a: info.colorAttachments)
+		{
+			vkColorAttachments.push_back(gpu::ToVk(a));
+		}
+		VkRenderingAttachmentInfo depthAttachmentVk{};
+		const VkRenderingAttachmentInfo* pDepthAttachment = nullptr;
+		if (info.depthAttachment != nullptr)
+		{
+			depthAttachmentVk = gpu::ToVk(*info.depthAttachment);
+			pDepthAttachment = &depthAttachmentVk;
+		}
+		const VkRenderingInfo vkInfo = gpu::ToVk(info, vkColorAttachments.data(), static_cast<std::uint32_t>(vkColorAttachments.size()), pDepthAttachment);
+		vkCmdBeginRendering(AsVkCmd(m_cmd), &vkInfo);
+	}
+
 	void CommandList::EndRendering()
 	{
 		if (m_cmd == nullptr)
