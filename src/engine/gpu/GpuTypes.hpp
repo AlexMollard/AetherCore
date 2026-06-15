@@ -96,6 +96,15 @@ namespace aether::gpu
 		ShaderStage stageFlags = ShaderStage::None;
 	};
 
+	// Push-constant range for a pipeline layout. Mirrors
+	// VkPushConstantRange.
+	struct PushConstantRange
+	{
+		ShaderStage stageFlags = ShaderStage::None;
+		std::uint32_t offset = 0;
+		std::uint32_t size = 0;
+	};
+
 	// Opaque engine-facing aliases for opaque Vulkan handles. The CommandList
 	// API takes these directly so the call site never mentions Vk*. The
 	// backend (vulkan/) defines the same names as their real Vk* types so
@@ -108,6 +117,7 @@ namespace aether::gpu
 	// primitives plus Image and ImageView which are commonly passed across
 	// the boundary even when owned elsewhere.
 	using DescriptorSet = void*;
+	using DescriptorSetLayout = void*;
 	using Pipeline = void*;
 	using PipelineLayout = void*;
 	using PipelineCache = void*;
@@ -119,6 +129,8 @@ namespace aether::gpu
 	using ImageView = void*;
 	using Buffer = void*;
 	using Sampler = void*;
+	using QueryPool = void*;
+	using Fence = void*;
 
 	// Indirect-draw command struct mirror. Mirrors the layout of
 	// VkDrawIndexedIndirectCommand (5 * uint32_t). Defined in the gpu/
