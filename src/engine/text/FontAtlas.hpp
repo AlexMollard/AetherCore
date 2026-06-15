@@ -5,7 +5,7 @@
 #include <glm/glm.hpp>
 #include <string_view>
 #include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
+#include <vulkan/volk.hpp>
 
 namespace aether
 {
@@ -27,6 +27,11 @@ namespace aether
 	//
 	// Covers ASCII 0x20-0x7E (printable characters).
 	// Call Build() once and Destroy() when done.
+	//
+	// TODO(audit/P2.1): migrate the upload path through gpu::ResourceRegistry
+	// + gpu::OneShotCmd once the engine-side command-pool / fence factories
+	// land (Phase 2.1 of the GPU refactor). Until then the file uses raw Vk*
+	// types for command pool, fence, image view, and sampler creation.
 	class FontAtlas
 	{
 	public:
@@ -80,7 +85,6 @@ namespace aether
 		VmaAllocation m_allocation = VK_NULL_HANDLE;
 		uint32_t m_bindlessSlot = 0xFFFFFFFFu;
 		BindlessManager* m_bindlessMgr = nullptr;
-
 		uint32_t m_atlasWidth = 0;
 		uint32_t m_atlasHeight = 0;
 		int m_glyphSize = 0;

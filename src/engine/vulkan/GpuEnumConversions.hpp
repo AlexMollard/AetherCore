@@ -47,6 +47,9 @@ namespace aether::gpu
 	[[nodiscard]] VkImageLayout ToVk(ImageLayout layout) noexcept;
 	[[nodiscard]] ImageLayout FromVk(VkImageLayout layout) noexcept;
 
+	// Component swizzle conversion. Mirrors VkComponentSwizzle.
+	[[nodiscard]] VkComponentSwizzle ToVk(ComponentSwizzle s) noexcept;
+
 	// Sampler parameter conversions. Mirror VkFilter, VkSamplerMipmapMode,
 	// VkSamplerAddressMode. Only the values BindlessManager's sampler cache
 	// emits are enumerated; new values force a switch-case compile error

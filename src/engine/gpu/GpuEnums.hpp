@@ -222,6 +222,22 @@ namespace aether::gpu
 		ShaderReadOnly = 4,
 	};
 
+	// Component swizzle applied at view-creation time. Mirrors
+	// VkComponentSwizzle. Identity preserves the format; Zero returns 0
+	// in that channel; One returns 1; R/G/B/A select a specific source
+	// channel. Used to expand R8_UNORM to RGBA8 in bindless descriptors
+	// (e.g. font SDF atlases).
+	enum class ComponentSwizzle : std::uint32_t
+	{
+		Identity = 0,
+		Zero = 1,
+		One = 2,
+		R = 3,
+		G = 4,
+		B = 5,
+		A = 6,
+	};
+
 	// Mapped buffer memory usage. Selects the backing memory pool and the
 	// VMA host-access flag pattern. Mirrors a subset of VmaMemoryUsage:
 	//   - GpuToCpu: device-local memory with host access (readback)

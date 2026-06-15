@@ -41,6 +41,14 @@ namespace aether::gpu
 		ImageAspect aspect = ImageAspect::Color;
 		std::uint32_t mipLevels = 1;
 		std::uint32_t arrayLayers = 1;
+		// Component swizzle applied at view-creation time. Mirrors
+		// VkComponentMapping (4 VkComponentSwizzle entries: r, g, b, a).
+		// Defaults to identity swizzle. Useful for expanding R8_UNORM to
+		// RGBA8 in the bindless descriptor (e.g. font SDF).
+		gpu::ComponentSwizzle r = gpu::ComponentSwizzle::Identity;
+		gpu::ComponentSwizzle g = gpu::ComponentSwizzle::Identity;
+		gpu::ComponentSwizzle b = gpu::ComponentSwizzle::Identity;
+		gpu::ComponentSwizzle a = gpu::ComponentSwizzle::Identity;
 		const char* debugName = nullptr;
 	};
 

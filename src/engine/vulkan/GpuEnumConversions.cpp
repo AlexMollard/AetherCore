@@ -562,6 +562,28 @@ namespace aether::gpu
 		return ImageLayout::Undefined;
 	}
 
+	VkComponentSwizzle ToVk(ComponentSwizzle s) noexcept
+	{
+		switch (s)
+		{
+			case ComponentSwizzle::Identity:
+				return VK_COMPONENT_SWIZZLE_IDENTITY;
+			case ComponentSwizzle::Zero:
+				return VK_COMPONENT_SWIZZLE_ZERO;
+			case ComponentSwizzle::One:
+				return VK_COMPONENT_SWIZZLE_ONE;
+			case ComponentSwizzle::R:
+				return VK_COMPONENT_SWIZZLE_R;
+			case ComponentSwizzle::G:
+				return VK_COMPONENT_SWIZZLE_G;
+			case ComponentSwizzle::B:
+				return VK_COMPONENT_SWIZZLE_B;
+			case ComponentSwizzle::A:
+				return VK_COMPONENT_SWIZZLE_A;
+		}
+		return VK_COMPONENT_SWIZZLE_IDENTITY;
+	}
+
 	// -------------------------------------------------------------------------
 	// Sampler parameters
 	// -------------------------------------------------------------------------
