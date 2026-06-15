@@ -30,9 +30,7 @@ namespace aether
 		{
 			Throw(AetherError::Engine("PostProcessStack: HdrColor CreateTexture failed"));
 		}
-		stack.m_hdrColor = desc.renderGraph->RegisterImage(
-		        gpu::ResourceRegistry::ResolveTextureImage(stack.m_hdrColorHandle),
-		        gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view);
+		stack.m_hdrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_hdrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view);
 		{
 			const auto slot = desc.bindlessManager->AllocateSampledImageSlot();
 			if (!slot)
@@ -60,9 +58,7 @@ namespace aether
 		{
 			Throw(AetherError::Engine("PostProcessStack: LdrColor CreateTexture failed"));
 		}
-		stack.m_ldrColor = desc.renderGraph->RegisterImage(
-		        gpu::ResourceRegistry::ResolveTextureImage(stack.m_ldrColorHandle),
-		        gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view);
+		stack.m_ldrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_ldrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view);
 		{
 			const auto slot = desc.bindlessManager->AllocateSampledImageSlot();
 			if (!slot)
@@ -174,7 +170,7 @@ namespace aether
 				                std::uint32_t mode;
 				                float exposure;
 			                } push;
-				push.hdrSlot = m_hdrBindlessSlot;
+			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
 			                push.exposure = m_exposure;
 			                cmd.PushConstantsRaw(m_tonemapPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
@@ -209,7 +205,7 @@ namespace aether
 				                std::uint32_t ldrSlot;
 				                std::uint32_t fxaaEnabled;
 			                } push;
-				push.ldrSlot = m_ldrBindlessSlot;
+			                push.ldrSlot = m_ldrBindlessSlot;
 			                push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
 			                cmd.PushConstantsRaw(m_fxaaPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
 

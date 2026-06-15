@@ -34,6 +34,7 @@ namespace aether
 			VmaMemoryUsage memoryUsage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 			const char* debugName = nullptr;
 		};
+
 		// TextureFilter moved to gpu/GpuEnums.hpp so engine code can use it
 		// without including the vulkan backend header.
 
@@ -92,6 +93,7 @@ namespace aether
 		void ReleaseBindlessSampled(bool deferSlotFree = true);
 
 		[[nodiscard]] VkImage Get() const;
+
 		// Engine-side accessor: returns the image handle as an opaque
 		// gpu::ImageView so engine callers can pass it to engine-side
 		// factories without mentioning Vk*.
@@ -99,6 +101,7 @@ namespace aether
 		{
 			return static_cast<gpu::ImageView>(m_image);
 		}
+
 		[[nodiscard]] VmaAllocation GetAllocation() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
 		[[nodiscard]] const VmaAllocationInfo& GetAllocationInfo() const;

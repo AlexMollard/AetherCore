@@ -245,9 +245,10 @@ namespace aether
 		struct MappedPerFrame
 		{
 			gpu::BufferHandle handle{};
-			void* mapped = nullptr;       // CPU write pointer
+			void* mapped = nullptr;         // CPU write pointer
 			gpu::DeviceAddress address = 0; // GPU read pointer
 		};
+
 		std::array<MappedPerFrame, kFramesInFlight> m_instanceData;
 		std::array<MappedPerFrame, kFramesInFlight> m_cullInput;
 		std::array<MappedPerFrame, kFramesInFlight> m_batchDesc;
@@ -260,6 +261,7 @@ namespace aether
 			gpu::BufferHandle handle{};
 			gpu::DeviceAddress address = 0;
 		};
+
 		std::array<DevicePerFrame, kFramesInFlight> m_outputIndirect;
 		std::array<DevicePerFrame, kFramesInFlight> m_sampledPoses;
 		std::array<DevicePerFrame, kFramesInFlight> m_nodeGlobalTransforms;

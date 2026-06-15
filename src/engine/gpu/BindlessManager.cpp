@@ -87,7 +87,7 @@ namespace aether
 		                .binding = bindless::kSampledImageBinding, // 0
 		                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
 		                .descriptorCount = m_capacity,
-		                .stageFlags = bindless::kDefaultStages,
+		                .stageFlags = VK_SHADER_STAGE_ALL,
 		                .pImmutableSamplers = nullptr,
 		        },
 		        {

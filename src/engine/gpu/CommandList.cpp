@@ -31,6 +31,16 @@ namespace aether::gpu
 			return static_cast<VkBuffer>(p);
 		}
 
+		inline VkImageView AsVkImageView(void* p) noexcept
+		{
+			return static_cast<VkImageView>(p);
+		}
+
+		inline VkSampler AsVkSampler(void* p) noexcept
+		{
+			return static_cast<VkSampler>(p);
+		}
+
 		inline VkDescriptorSet AsVkDescriptorSet(void* p) noexcept
 		{
 			return static_cast<VkDescriptorSet>(p);
@@ -287,13 +297,21 @@ namespace aether::gpu
 		// VkWriteDescriptorSet must point at caller-side memory; we keep
 		// small arrays alive on the stack (heap-fallback for large n).
 		const std::size_t n = writes.size();
-		VkDescriptorBufferInfo stackInfos[16];
-		std::vector<VkDescriptorBufferInfo> heapInfos;
-		VkDescriptorBufferInfo* infos = stackInfos;
-		if (n > std::size(stackInfos))
+		VkDescriptorBufferInfo stackBufInfos[16];
+		std::vector<VkDescriptorBufferInfo> heapBufInfos;
+		VkDescriptorBufferInfo* bufInfos = stackBufInfos;
+		if (n > std::size(stackBufInfos))
 		{
-			heapInfos.resize(n);
-			infos = heapInfos.data();
+			heapBufInfos.resize(n);
+			bufInfos = heapBufInfos.data();
+		}
+		VkDescriptorImageInfo stackImgInfos[16];
+		std::vector<VkDescriptorImageInfo> heapImgInfos;
+		VkDescriptorImageInfo* imgInfos = stackImgInfos;
+		if (n > std::size(stackImgInfos))
+		{
+			heapImgInfos.resize(n);
+			imgInfos = heapImgInfos.data();
 		}
 		VkWriteDescriptorSet stackWrites[16];
 		std::vector<VkWriteDescriptorSet> heapWrites;
@@ -314,10 +332,17 @@ namespace aether::gpu
 			dst.descriptorType = ToVk(src.descriptorType);
 			if (src.bufferInfo != nullptr)
 			{
-				infos[i].buffer = AsVkBuffer(src.bufferInfo->buffer);
-				infos[i].offset = static_cast<VkDeviceSize>(src.bufferInfo->offset);
-				infos[i].range = static_cast<VkDeviceSize>(src.bufferInfo->range);
-				dst.pBufferInfo = &infos[i];
+				bufInfos[i].buffer = AsVkBuffer(src.bufferInfo->buffer);
+				bufInfos[i].offset = static_cast<VkDeviceSize>(src.bufferInfo->offset);
+				bufInfos[i].range = static_cast<VkDeviceSize>(src.bufferInfo->range);
+				dst.pBufferInfo = &bufInfos[i];
+			}
+			else if (src.imageInfo != nullptr)
+			{
+				imgInfos[i].sampler = AsVkSampler(src.imageInfo->sampler);
+				imgInfos[i].imageView = AsVkImageView(src.imageInfo->imageView);
+				imgInfos[i].imageLayout = ToVk(src.imageInfo->imageLayout);
+				dst.pImageInfo = &imgInfos[i];
 			}
 		}
 		vkCmdPushDescriptorSetKHR(AsVkCmd(m_cmd), ToVk(bindPoint), AsVkPipelineLayout(vkPipelineLayout), set, static_cast<std::uint32_t>(n), vkWrites);

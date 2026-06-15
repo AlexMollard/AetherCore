@@ -88,7 +88,7 @@ namespace aether
 		};
 
 		gpu::TextureHandle m_atlasHandle{};
-		gpu::Image m_atlasImage = nullptr; // cached for render-graph registration
+		gpu::Image m_atlasImage = nullptr;    // cached for render-graph registration
 		gpu::ImageView m_atlasView = nullptr; // cached for shader bindings
 		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
 		BindlessManager* m_bindless = nullptr;

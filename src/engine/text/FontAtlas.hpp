@@ -4,8 +4,9 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <string_view>
-#include <vk_mem_alloc.h>
-#include <vulkan/volk.hpp>
+
+#include "gpu/GpuTypes.hpp"
+#include "gpu/GpuHandles.hpp"
 
 namespace aether
 {
@@ -28,10 +29,10 @@ namespace aether
 	// Covers ASCII 0x20-0x7E (printable characters).
 	// Call Build() once and Destroy() when done.
 	//
-	// TODO(audit/P2.1): migrate the upload path through gpu::ResourceRegistry
-	// + gpu::OneShotCmd once the engine-side command-pool / fence factories
-	// land (Phase 2.1 of the GPU refactor). Until then the file uses raw Vk*
-	// types for command pool, fence, image view, and sampler creation.
+	// The atlas is uploaded to the GPU via gpu::ResourceRegistry +
+	// gpu::OneShotCmd; the R8_UNORM channel is expanded to RGBA8 in the
+	// bindless descriptor via a (R, 0, 0, 1) component swizzle on the
+	// registry-created view.
 	class FontAtlas
 	{
 	public:
@@ -52,7 +53,10 @@ namespace aether
 		// Load font from the given VFS path (e.g. "assets://fonts/Roboto.ttf")
 		// and bake an SDF atlas at `atlasGlyphSize` pixels per glyph cell.
 		// Uploads the atlas to the GPU immediately (synchronous).
-		void Build(std::string_view fontVfsPath, int atlasGlyphSize, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, uint32_t uploadQueueFamily, BindlessManager& bindless);
+		// All GPU primitives are passed as opaque `gpu::` types; the call
+		// site (TextRenderer) is the only place that resolves them from
+		// the engine-side GpuDevice accessors.
+		void Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless);
 
 		void Destroy();
 
@@ -77,16 +81,18 @@ namespace aether
 		[[nodiscard]] const GlyphInfo& GetGlyph(char cp) const;
 
 	private:
-		VmaAllocator m_allocator = nullptr;
-		VkDevice m_device = VK_NULL_HANDLE;
-		VkImage m_image = VK_NULL_HANDLE;
-		VkImageView m_view = VK_NULL_HANDLE;
-		VkSampler m_sampler = VK_NULL_HANDLE;
-		VmaAllocation m_allocation = VK_NULL_HANDLE;
-		uint32_t m_bindlessSlot = 0xFFFFFFFFu;
+		gpu::TextureHandle m_atlasHandle{};
+		gpu::ImageView m_view = nullptr;
+		gpu::Sampler m_sampler = nullptr;
+		// Upload context is rebuilt on every Build() and torn down on
+		// Destroy(). The pool is owned by the factory (not the registry)
+		// so it is destroyed immediately when no longer needed.
+		gpu::Device m_device = nullptr;
+		gpu::CommandPool m_uploadPool = nullptr;
+		std::uint32_t m_bindlessSlot = 0xFFFFFFFFu;
 		BindlessManager* m_bindlessMgr = nullptr;
-		uint32_t m_atlasWidth = 0;
-		uint32_t m_atlasHeight = 0;
+		std::uint32_t m_atlasWidth = 0;
+		std::uint32_t m_atlasHeight = 0;
 		int m_glyphSize = 0;
 
 		std::array<GlyphInfo, kGlyphCount> m_glyphs{};

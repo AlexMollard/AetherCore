@@ -10,6 +10,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "material/BindlessContract.hpp"
 #include "utils/Assert.hpp"
+#include "vulkan/volk.hpp"
 
 namespace aether
 {

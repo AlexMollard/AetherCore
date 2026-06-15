@@ -304,12 +304,7 @@ namespace aether
 
 	Expected<void> UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const gpu::Device device, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter)
 	{
-		return EnsureBindlessSampled(
-		        bindlessManager,
-		        static_cast<VkDevice>(device),
-		        gpu::ToVk(aspectMask),
-		        gpu::ToVk(descriptorLayout),
-		        filter);
+		return EnsureBindlessSampled(bindlessManager, static_cast<VkDevice>(device), gpu::ToVk(aspectMask), gpu::ToVk(descriptorLayout), filter);
 	}
 
 	Expected<void> UniqueImage::EnsureBindlessSampled(BindlessManager& bindlessManager, const VkDevice device, const VkImageAspectFlags aspectMask, const VkImageLayout descriptorLayout, const TextureFilter filter)

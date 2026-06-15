@@ -304,12 +304,13 @@ namespace aether
 		        .image = image,
 		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 		        .format = imageInfo.format,
-		        .components = {
-		                .r = gpu::ToVk(desc.r),
-		                .g = gpu::ToVk(desc.g),
-		                .b = gpu::ToVk(desc.b),
-		                .a = gpu::ToVk(desc.a),
-		        },
+		        .components =
+		                {
+		                        .r = gpu::ToVk(desc.r),
+		                        .g = gpu::ToVk(desc.g),
+		                        .b = gpu::ToVk(desc.b),
+		                        .a = gpu::ToVk(desc.a),
+		                },
 		        .subresourceRange = {gpu::ToVk(desc.aspect), 0, desc.mipLevels, 0, desc.arrayLayers},
 		};
 		VkImageView view = VK_NULL_HANDLE;

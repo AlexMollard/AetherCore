@@ -8,6 +8,7 @@
 
 #include "gpu/DescriptorSetLayoutOps.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
@@ -110,7 +111,7 @@ namespace aether
 		}
 		if (m_computeLayout != nullptr)
 		{
-			vkDestroyPipelineLayout(device, static_cast<VkPipelineLayout>(m_computeLayout), nullptr);
+			gpu::Factory::DestroyPipelineLayout(static_cast<gpu::Device>(device), m_computeLayout);
 			m_computeLayout = nullptr;
 		}
 		if (m_setLayout != nullptr)
@@ -432,25 +433,21 @@ namespace aether
 		// Create shared layout once.
 		if (m_computeLayout == nullptr)
 		{
-			const VkPushConstantRange pushRange{
-			        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+			const gpu::PushConstantRange pushRange{
+			        .stageFlags = gpu::ShaderStage::Compute,
 			        .offset = 0,
 			        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			};
-			const VkDescriptorSetLayout setLayoutHandle = static_cast<VkDescriptorSetLayout>(m_setLayout);
-			const VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			        .setLayoutCount = 1,
-			        .pSetLayouts = &setLayoutHandle,
-			        .pushConstantRangeCount = 1,
-			        .pPushConstantRanges = &pushRange,
-			};
-			VkPipelineLayout vkLayout = VK_NULL_HANDLE;
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
+			const std::array<gpu::DescriptorSetLayout, 1> setLayoutHandles{m_setLayout};
+			m_computeLayout = gpu::Factory::CreatePipelineLayout(static_cast<gpu::Device>(device),
+			        {
+			                .setLayouts = setLayoutHandles,
+			                .pushConstantRanges = std::span<const gpu::PushConstantRange>(&pushRange, 1),
+			        });
+			if (m_computeLayout == nullptr)
 			{
 				Throw(AetherError::Vulkan(0, "LightingManager: failed to create compute pipeline layout."));
 			}
-			m_computeLayout = static_cast<gpu::PipelineLayout>(vkLayout);
 		}
 
 		if (!m_initPipelineHandle.IsValid())

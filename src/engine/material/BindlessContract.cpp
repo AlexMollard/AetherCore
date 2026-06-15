@@ -2,18 +2,19 @@
 
 #include <format>
 
+#include "gpu/GpuDeviceFactory.hpp"
 #include "utils/Assert.hpp"
 
 namespace aether::bindless
 {
-	std::vector<VkDescriptorSetLayout> ComposePipelineSetLayouts(std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, const std::uint32_t bindlessSetIndex)
+	std::vector<gpu::DescriptorSetLayout> ComposePipelineSetLayouts(std::span<const gpu::DescriptorSetLayout> pipelineLayouts, gpu::DescriptorSetLayout bindlessLayout, const std::uint32_t bindlessSetIndex)
 	{
-		AE_ASSERT_ALWAYS(bindlessLayout != VK_NULL_HANDLE, "Bindless descriptor set layout is null.");
+		AE_ASSERT_ALWAYS(bindlessLayout != nullptr, "Bindless descriptor set layout is null.");
 
 		const std::size_t requiredCount = static_cast<std::size_t>(bindlessSetIndex) + 1;
 		const std::size_t outputCount = std::max(requiredCount, pipelineLayouts.size());
 
-		std::vector<VkDescriptorSetLayout> out(outputCount, VK_NULL_HANDLE);
+		std::vector<gpu::DescriptorSetLayout> out(outputCount, nullptr);
 		for (std::size_t i = 0; i < pipelineLayouts.size(); ++i)
 		{
 			out[i] = pipelineLayouts[i];
@@ -23,29 +24,16 @@ namespace aether::bindless
 		return out;
 	}
 
-	Expected<VkPipelineLayout> CreatePipelineLayoutWithBindless(
-	        VkDevice device, std::span<const VkDescriptorSetLayout> pipelineLayouts, VkDescriptorSetLayout bindlessLayout, std::span<const VkPushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
+	Expected<gpu::PipelineLayout> CreatePipelineLayoutWithBindless(
+	        gpu::Device device, std::span<const gpu::DescriptorSetLayout> pipelineLayouts, gpu::DescriptorSetLayout bindlessLayout, std::span<const gpu::PushConstantRange> pushConstantRanges, const std::uint32_t bindlessSetIndex)
 	{
-		AE_ASSERT_ALWAYS(device != VK_NULL_HANDLE, "Cannot create pipeline layout: VkDevice is null.");
+		AE_ASSERT_ALWAYS(device != nullptr, "Cannot create pipeline layout: device is null.");
 
 		const auto setLayouts = ComposePipelineSetLayouts(pipelineLayouts, bindlessLayout, bindlessSetIndex);
-		const VkPipelineLayoutCreateInfo createInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		        .pNext = nullptr,
-		        .flags = 0,
-		        .setLayoutCount = static_cast<std::uint32_t>(setLayouts.size()),
-		        .pSetLayouts = setLayouts.data(),
-		        .pushConstantRangeCount = static_cast<std::uint32_t>(pushConstantRanges.size()),
-		        .pPushConstantRanges = pushConstantRanges.data(),
+		const gpu::Factory::PipelineLayoutDesc desc{
+		        .setLayouts = setLayouts,
+		        .pushConstantRanges = pushConstantRanges,
 		};
-
-		VkPipelineLayout layout = VK_NULL_HANDLE;
-		const VkResult result = vkCreatePipelineLayout(device, &createInfo, nullptr, &layout);
-		if (result != VK_SUCCESS)
-		{
-			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create bindless-aware pipeline layout.")};
-		}
-
-		return layout;
+		return gpu::Factory::CreatePipelineLayout(device, desc);
 	}
 } // namespace aether::bindless

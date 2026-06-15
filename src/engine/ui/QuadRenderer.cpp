@@ -44,108 +44,108 @@ namespace aether
 				                return;
 			                }
 
-				const std::uint32_t frameSlot = readSlot;
-				auto& pending = m_pendingQuads[readSlot];
-				const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
-				const gpu::DeviceSize commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
+			                const std::uint32_t frameSlot = readSlot;
+			                auto& pending = m_pendingQuads[readSlot];
+			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
+			                const gpu::DeviceSize commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
 
-				// Ensure GPU buffers are allocated.
-				if (!m_commandBuffers[frameSlot].handle.IsValid() || m_commandBuffers[frameSlot].capacity < static_cast<std::size_t>(commandBytes))
-				{
-					if (m_commandBuffers[frameSlot].handle.IsValid())
-					{
-						gpu::ResourceRegistry::Destroy(m_commandBuffers[frameSlot].handle);
-					}
-					const gpu::DeviceSize allocSize = commandBytes * 2;
-					const gpu::MappedBufferDesc desc{
-					        .size = allocSize,
-					        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-					        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-					        .debugName = "QuadRenderer.Commands",
-					};
-					m_commandBuffers[frameSlot].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-					if (!m_commandBuffers[frameSlot].handle.IsValid())
-					{
-						Throw(AetherError::Engine("QuadRenderer: Commands CreateMappedBuffer failed"));
-					}
-					const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_commandBuffers[frameSlot].handle);
-					m_commandBuffers[frameSlot].mapped = view.mappedPtr;
-					m_commandBuffers[frameSlot].address = view.deviceAddress;
-					m_commandBuffers[frameSlot].capacity = static_cast<std::size_t>(view.size);
-				}
+			                // Ensure GPU buffers are allocated.
+			                if (!m_commandBuffers[frameSlot].handle.IsValid() || m_commandBuffers[frameSlot].capacity < static_cast<std::size_t>(commandBytes))
+			                {
+				                if (m_commandBuffers[frameSlot].handle.IsValid())
+				                {
+					                gpu::ResourceRegistry::Destroy(m_commandBuffers[frameSlot].handle);
+				                }
+				                const gpu::DeviceSize allocSize = commandBytes * 2;
+				                const gpu::MappedBufferDesc desc{
+				                        .size = allocSize,
+				                        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+				                        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+				                        .debugName = "QuadRenderer.Commands",
+				                };
+				                m_commandBuffers[frameSlot].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				                if (!m_commandBuffers[frameSlot].handle.IsValid())
+				                {
+					                Throw(AetherError::Engine("QuadRenderer: Commands CreateMappedBuffer failed"));
+				                }
+				                const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_commandBuffers[frameSlot].handle);
+				                m_commandBuffers[frameSlot].mapped = view.mappedPtr;
+				                m_commandBuffers[frameSlot].address = view.deviceAddress;
+				                m_commandBuffers[frameSlot].capacity = static_cast<std::size_t>(view.size);
+			                }
 
-				if (!m_indirectBuffer.handle.IsValid())
-				{
-					const gpu::MappedBufferDesc desc{
-					        .size = sizeof(gpu::DrawIndirectCommand),
-					        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
-					        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
-					        .debugName = "QuadRenderer.Indirect",
-					};
-					m_indirectBuffer.handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
-					if (!m_indirectBuffer.handle.IsValid())
-					{
-						Throw(AetherError::Engine("QuadRenderer: Indirect CreateMappedBuffer failed"));
-					}
-					const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle);
-					m_indirectBuffer.address = view.deviceAddress;
-				}
+			                if (!m_indirectBuffer.handle.IsValid())
+			                {
+				                const gpu::MappedBufferDesc desc{
+				                        .size = sizeof(gpu::DrawIndirectCommand),
+				                        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+				                        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+				                        .debugName = "QuadRenderer.Indirect",
+				                };
+				                m_indirectBuffer.handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				                if (!m_indirectBuffer.handle.IsValid())
+				                {
+					                Throw(AetherError::Engine("QuadRenderer: Indirect CreateMappedBuffer failed"));
+				                }
+				                const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle);
+				                m_indirectBuffer.address = view.deviceAddress;
+			                }
 
-				// Sort by layer on CPU. Use stable_sort to preserve insertion
-				// order for elements at the same layer (original insertion
-				// sort was also stable).
-				std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
+			                // Sort by layer on CPU. Use stable_sort to preserve insertion
+			                // order for elements at the same layer (original insertion
+			                // sort was also stable).
+			                std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
 
-				// Upload sorted command data to the GPU buffer.
-				void* mappedCommands = m_commandBuffers[frameSlot].mapped;
-				if (mappedCommands == nullptr)
-				{
-					return;
-				}
-				std::memcpy(mappedCommands, pending.data(), commandBytes);
-				gpu::ResourceRegistry::FlushMappedBuffer(m_commandBuffers[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+			                // Upload sorted command data to the GPU buffer.
+			                void* mappedCommands = m_commandBuffers[frameSlot].mapped;
+			                if (mappedCommands == nullptr)
+			                {
+				                return;
+			                }
+			                std::memcpy(mappedCommands, pending.data(), commandBytes);
+			                gpu::ResourceRegistry::FlushMappedBuffer(m_commandBuffers[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 
-				// Write DrawIndirectCommand directly to host-visible buffer.
-				gpu::DrawIndirectCommand* indirect = static_cast<gpu::DrawIndirectCommand*>(gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle).mappedPtr);
-				if (indirect != nullptr)
-				{
-					indirect->vertexCount = 6;
-					indirect->instanceCount = commandCount;
-					indirect->firstVertex = 0;
-					indirect->firstInstance = 0;
-					gpu::ResourceRegistry::FlushMappedBuffer(m_indirectBuffer.handle, 0, static_cast<gpu::DeviceSize>(-1));
-				}
+			                // Write DrawIndirectCommand directly to host-visible buffer.
+			                gpu::DrawIndirectCommand* indirect = static_cast<gpu::DrawIndirectCommand*>(gpu::ResourceRegistry::ResolveMappedBuffer(m_indirectBuffer.handle).mappedPtr);
+			                if (indirect != nullptr)
+			                {
+				                indirect->vertexCount = 6;
+				                indirect->instanceCount = commandCount;
+				                indirect->firstVertex = 0;
+				                indirect->firstInstance = 0;
+				                gpu::ResourceRegistry::FlushMappedBuffer(m_indirectBuffer.handle, 0, static_cast<gpu::DeviceSize>(-1));
+			                }
 
-				gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
-				const gpu::Extent2D ext = ctx.extent;
+			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
+			                const gpu::Extent2D ext = ctx.extent;
 
-				const gpu::Viewport viewport{
-				        .x = 0.f,
-				        .y = 0.f,
-				        .width = static_cast<float>(ext.width),
-				        .height = static_cast<float>(ext.height),
-				        .minDepth = 0.f,
-				        .maxDepth = 1.f,
-				};
-				const gpu::Rect2D scissor{
-				        .x = 0,
-				        .y = 0,
-				        .width = ext.width,
-				        .height = ext.height,
-				};
-				cmd.SetViewport(viewport);
-				cmd.SetScissor(scissor);
+			                const gpu::Viewport viewport{
+			                        .x = 0.f,
+			                        .y = 0.f,
+			                        .width = static_cast<float>(ext.width),
+			                        .height = static_cast<float>(ext.height),
+			                        .minDepth = 0.f,
+			                        .maxDepth = 1.f,
+			                };
+			                const gpu::Rect2D scissor{
+			                        .x = 0,
+			                        .y = 0,
+			                        .width = ext.width,
+			                        .height = ext.height,
+			                };
+			                cmd.SetViewport(viewport);
+			                cmd.SetScissor(scissor);
 
-				cmd.BindPipeline(m_pipeline);
-				cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
+			                cmd.BindPipeline(m_pipeline);
+			                cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
 
-				const QuadPush push{
-				        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
-				        .commandDataAddr = m_commandBuffers[frameSlot].address,
-				};
-				cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
+			                const QuadPush push{
+			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
+			                        .commandDataAddr = m_commandBuffers[frameSlot].address,
+			                };
+			                cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
 
-				cmd.DrawIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_indirectBuffer.handle), 0, 1, sizeof(gpu::DrawIndirectCommand));
+			                cmd.DrawIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_indirectBuffer.handle), 0, 1, sizeof(gpu::DrawIndirectCommand));
 
 			                m_pendingQuads[readSlot].clear();
 		                });

@@ -2,11 +2,13 @@
 
 #include "vulkan/volk.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 #include "utils/Assert.hpp"
 
 namespace aether::gpu
 {
+
 	namespace Factory
 	{
 		// -----------------------------------------------------------------
@@ -126,10 +128,7 @@ namespace aether::gpu
 			}
 			if (debugName != nullptr)
 			{
-				// Late bind to avoid a circular include on VulkanUtils.hpp
-				// (the helper itself transitively includes this file).
-				extern void SetObjectName(VkDevice, std::uint64_t, VkObjectType, const char*);
-				SetObjectName(static_cast<VkDevice>(device), reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, debugName);
+				vkutil::SetObjectName(static_cast<VkDevice>(device), reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, debugName);
 			}
 			return static_cast<Pipeline>(mod);
 		}
@@ -153,7 +152,7 @@ namespace aether::gpu
 
 			std::vector<VkDescriptorSetLayoutBinding> vkBindings;
 			vkBindings.reserve(desc.bindings.size());
-			for (const auto& b : desc.bindings)
+			for (const auto& b: desc.bindings)
 			{
 				vkBindings.push_back(VkDescriptorSetLayoutBinding{
 				        .binding = b.binding,
@@ -164,8 +163,10 @@ namespace aether::gpu
 				});
 			}
 
+			const VkDescriptorSetLayoutCreateFlags flags = desc.pushDescriptor ? VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT : 0u;
 			const VkDescriptorSetLayoutCreateInfo info{
 			        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			        .flags = flags,
 			        .bindingCount = static_cast<std::uint32_t>(vkBindings.size()),
 			        .pBindings = vkBindings.data(),
 			};
@@ -197,7 +198,7 @@ namespace aether::gpu
 
 			std::vector<VkPushConstantRange> vkRanges;
 			vkRanges.reserve(desc.pushConstantRanges.size());
-			for (const auto& r : desc.pushConstantRanges)
+			for (const auto& r: desc.pushConstantRanges)
 			{
 				vkRanges.push_back(VkPushConstantRange{
 				        .stageFlags = gpu::ToVk(r.stageFlags),
@@ -278,6 +279,80 @@ namespace aether::gpu
 				return;
 			}
 			vkResetFences(static_cast<VkDevice>(device), 1, reinterpret_cast<VkFence*>(&fence));
+		}
+
+		// -----------------------------------------------------------------
+		// PhysicalDevice queries
+		// -----------------------------------------------------------------
+
+		PhysicalDeviceProperties GetPhysicalDeviceProperties(PhysicalDevice physicalDevice) noexcept
+		{
+			AE_ASSERT(physicalDevice != nullptr, "GetPhysicalDeviceProperties: physicalDevice is null");
+			PhysicalDeviceProperties out{};
+			VkPhysicalDeviceProperties props{};
+			vkGetPhysicalDeviceProperties(static_cast<VkPhysicalDevice>(physicalDevice), &props);
+			out.limits.timestampComputeAndGraphics = (props.limits.timestampComputeAndGraphics == VK_TRUE);
+			out.limits.timestampPeriod = props.limits.timestampPeriod;
+			return out;
+		}
+
+		std::uint32_t GetQueryPoolResults(Device device, QueryPool pool, std::uint32_t firstQuery, std::uint32_t queryCount, std::span<std::uint64_t> outTicks) noexcept
+		{
+			if (pool == nullptr || queryCount == 0)
+			{
+				return 0;
+			}
+			const std::uint32_t readable = std::min(queryCount, static_cast<std::uint32_t>(outTicks.size()));
+			if (readable == 0)
+			{
+				return 0;
+			}
+			const VkResult result = vkGetQueryPoolResults(static_cast<VkDevice>(device), static_cast<VkQueryPool>(pool), firstQuery, readable, readable * sizeof(std::uint64_t), outTicks.data(), sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT);
+			return result == VK_SUCCESS ? readable : 0;
+		}
+
+		// -----------------------------------------------------------------
+		// HostCopyToImage
+		// -----------------------------------------------------------------
+		// Synchronous host-to-device-image copy for the one-shot upload
+		// path. Performs layout transition (UNDEFINED -> GENERAL) and the
+		// memory-to-image copy in one call. Returns the VkResult as a
+		// plain int32 (0 = VK_SUCCESS). Mirrors the engine-side
+		// overload of vkutil::HostCopyToImage but takes the actual
+		// VkImage (gpu::Image) rather than a VkImageView.
+		std::int32_t HostCopyToImage(Device device, Image dstImage, const void* hostData, std::uint32_t width, std::uint32_t height) noexcept
+		{
+			const VkHostImageLayoutTransitionInfo transition{
+			        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
+			        .image = static_cast<VkImage>(dstImage),
+			        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+			        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+			        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+			};
+			VkResult result = vkTransitionImageLayout(static_cast<VkDevice>(device), 1, &transition);
+			if (result != VK_SUCCESS)
+			{
+				return static_cast<std::int32_t>(result);
+			}
+
+			const VkMemoryToImageCopy region{
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
+			        .pHostPointer = hostData,
+			        .memoryRowLength = 0,
+			        .memoryImageHeight = 0,
+			        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+			        .imageOffset = {0, 0, 0},
+			        .imageExtent = {width, height, 1},
+			};
+			const VkCopyMemoryToImageInfo copyInfo{
+			        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
+			        .dstImage = static_cast<VkImage>(dstImage),
+			        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			        .regionCount = 1,
+			        .pRegions = &region,
+			};
+			result = vkCopyMemoryToImage(static_cast<VkDevice>(device), &copyInfo);
+			return static_cast<std::int32_t>(result);
 		}
 	} // namespace Factory
 } // namespace aether::gpu

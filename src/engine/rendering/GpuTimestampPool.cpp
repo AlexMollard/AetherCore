@@ -1,42 +1,43 @@
 #include "rendering/GpuTimestampPool.hpp"
 
+#include <algorithm>
+
+#include "gpu/GpuDeviceFactory.hpp"
 #include "utils/Logger.hpp"
 #include "utils/LogCategory.hpp"
 
 namespace aether
 {
-	void GpuTimestampPool::Initialize(VkDevice device, VkPhysicalDevice physDevice)
+	void GpuTimestampPool::Initialize(gpu::Device device, gpu::PhysicalDevice physDevice)
 	{
 		m_device = device;
 
-		VkPhysicalDeviceProperties props{};
-		vkGetPhysicalDeviceProperties(physDevice, &props);
+		const auto props = gpu::Factory::GetPhysicalDeviceProperties(physDevice);
 
-		if (props.limits.timestampComputeAndGraphics == VK_FALSE)
+		if (!props.limits.timestampComputeAndGraphics)
 		{
 			AE_WARN(LogCategory::Vulkan, "GpuTimestampPool: device does not support timestamps on all queues - pool disabled.");
-			m_device = VK_NULL_HANDLE;
+			m_device = nullptr;
 			return;
 		}
 
 		m_periodNs = props.limits.timestampPeriod;
 
-		const VkQueryPoolCreateInfo createInfo{
-		        .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
-		        .queryType = VK_QUERY_TYPE_TIMESTAMP,
-		        .queryCount = kMaxTimestamps,
-		};
-
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
-			if (vkCreateQueryPool(device, &createInfo, nullptr, &m_pools[i]) != VK_SUCCESS)
+			m_pools[i] = gpu::Factory::CreateQueryPool(device,
+			        {
+			                .type = gpu::Factory::QueryType::Timestamp,
+			                .count = kMaxTimestamps,
+			        });
+			if (m_pools[i] == nullptr)
 			{
 				AE_WARN(LogCategory::Vulkan, "GpuTimestampPool: failed to create query pool [{}] - pool disabled.", i);
 				Shutdown();
 				return;
 			}
 			// Initial host-side reset so the pool is in a defined state before first use.
-			vkResetQueryPool(device, m_pools[i], 0, kMaxTimestamps);
+			gpu::Factory::ResetQueryPool(device, m_pools[i], 0, kMaxTimestamps);
 		}
 	}
 
@@ -44,20 +45,20 @@ namespace aether
 	{
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
-			if (m_pools[i] != VK_NULL_HANDLE)
+			if (m_pools[i] != nullptr)
 			{
-				vkDestroyQueryPool(m_device, m_pools[i], nullptr);
-				m_pools[i] = VK_NULL_HANDLE;
+				gpu::Factory::DestroyQueryPool(m_device, m_pools[i]);
+				m_pools[i] = nullptr;
 			}
 			m_writeCount[i] = 0;
 			m_hasData[i] = false;
 		}
-		m_device = VK_NULL_HANDLE;
+		m_device = nullptr;
 	}
 
 	std::uint32_t GpuTimestampPool::BeginFrame(std::uint32_t frameIndex, std::span<float> outMs)
 	{
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return 0;
 		}
@@ -72,21 +73,21 @@ namespace aether
 			if (count > 0)
 			{
 				std::uint64_t rawTicks[kMaxTimestamps]{};
-				const VkResult result = vkGetQueryPoolResults(m_device, m_pools[m_currentSlot], 0, count, count * sizeof(std::uint64_t), rawTicks, sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT);
+				const std::uint32_t read = gpu::Factory::GetQueryPoolResults(m_device, m_pools[m_currentSlot], 0, count, std::span<std::uint64_t>(rawTicks, count));
 
-				if (result == VK_SUCCESS)
+				if (read > 0)
 				{
-					for (std::uint32_t i = 0; i < count; ++i)
+					for (std::uint32_t i = 0; i < read; ++i)
 					{
 						outMs[i] = static_cast<float>(rawTicks[i]) * m_periodNs * 1e-6f;
 					}
-					validCount = count;
+					validCount = read;
 				}
 			}
 		}
 
 		// Reset this slot for new writes.
-		vkResetQueryPool(m_device, m_pools[m_currentSlot], 0, kMaxTimestamps);
+		gpu::Factory::ResetQueryPool(m_device, m_pools[m_currentSlot], 0, kMaxTimestamps);
 		m_writeCount[m_currentSlot] = 0;
 		m_hasData[m_currentSlot] = false;
 
@@ -95,7 +96,7 @@ namespace aether
 
 	std::uint32_t GpuTimestampPool::Write(gpu::CommandList& cmdList, gpu::PipelineStage stage)
 	{
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return 0;
 		}

@@ -11,123 +11,25 @@
 #include FT_FREETYPE_H
 #include FT_MODULE_H
 
-#include <vk_mem_alloc.h>
-#include "vulkan/volk.hpp"
-#include "vulkan/VulkanUtils.hpp"
-
 #include "gpu/BindlessManager.hpp"
+#include "gpu/CommandList.hpp"
+#include "gpu/GpuDeviceFactory.hpp"
+#include "gpu/OneShotCmd.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 
 namespace aether
 {
-	namespace
-	{
-		void TransitionImage(VkCommandBuffer cmd, VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout, VkPipelineStageFlags2 srcStage, VkAccessFlags2 srcAccess, VkPipelineStageFlags2 dstStage, VkAccessFlags2 dstAccess)
-		{
-			const VkImageMemoryBarrier2 barrier{
-			        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-			        .srcStageMask = srcStage,
-			        .srcAccessMask = srcAccess,
-			        .dstStageMask = dstStage,
-			        .dstAccessMask = dstAccess,
-			        .oldLayout = oldLayout,
-			        .newLayout = newLayout,
-			        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-			        .image = image,
-			        .subresourceRange =
-			                {
-			                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			                        .baseMipLevel = 0,
-			                        .levelCount = 1,
-			                        .baseArrayLayer = 0,
-			                        .layerCount = 1,
-			                },
-			};
-			const VkDependencyInfo dep{
-			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			        .imageMemoryBarrierCount = 1,
-			        .pImageMemoryBarriers = &barrier,
-			};
-			vkCmdPipelineBarrier2(cmd, &dep);
-		}
-
-		VkCommandBuffer BeginOneShot(VkDevice device, VkCommandPool pool)
-		{
-			const VkCommandBufferAllocateInfo ai{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-			        .commandPool = pool,
-			        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-			        .commandBufferCount = 1,
-			};
-			VkCommandBuffer cmd = VK_NULL_HANDLE;
-			const VkResult allocResult = vkAllocateCommandBuffers(device, &ai, &cmd);
-			if (allocResult != VK_SUCCESS)
-			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(allocResult), std::format("FontAtlas: vkAllocateCommandBuffers failed. VkResult={}", static_cast<int>(allocResult))));
-			}
-
-			const VkCommandBufferBeginInfo bi{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-			        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-			};
-			const VkResult beginResult = vkBeginCommandBuffer(cmd, &bi);
-			if (beginResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(beginResult), std::format("FontAtlas: vkBeginCommandBuffer failed. VkResult={}", static_cast<int>(beginResult))));
-			}
-			return cmd;
-		}
-
-		void EndAndSubmit(VkDevice device, VkCommandPool pool, VkQueue queue, VkCommandBuffer cmd)
-		{
-			const VkResult endResult = vkEndCommandBuffer(cmd);
-			if (endResult != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(endResult), std::format("FontAtlas: vkEndCommandBuffer failed. VkResult={}", static_cast<int>(endResult))));
-			}
-			const VkCommandBufferSubmitInfo cbInfo{
-			        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-			        .commandBuffer = cmd,
-			};
-			const VkSubmitInfo2 si{
-			        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-			        .commandBufferInfoCount = 1,
-			        .pCommandBufferInfos = &cbInfo,
-			};
-			const VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-			VkFence fence = VK_NULL_HANDLE;
-			if (vkCreateFence(device, &fenceInfo, nullptr, &fence) != VK_SUCCESS)
-			{
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(0, std::format("FontAtlas: vkCreateFence failed.")));
-			}
-			const VkResult submitResult = vkQueueSubmit2(queue, 1, &si, fence);
-			if (submitResult != VK_SUCCESS)
-			{
-				vkDestroyFence(device, fence, nullptr);
-				vkFreeCommandBuffers(device, pool, 1, &cmd);
-				Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), std::format("FontAtlas: vkQueueSubmit2 failed. VkResult={}", static_cast<int>(submitResult))));
-			}
-			(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
-			vkDestroyFence(device, fence, nullptr);
-			vkFreeCommandBuffers(device, pool, 1, &cmd);
-		}
-	} // namespace
-
 	// -- Move semantics --------------------------------------------------------
 
 	FontAtlas::FontAtlas(FontAtlas&& o) noexcept
-	      : m_allocator(std::exchange(o.m_allocator, nullptr)),
-	        m_device(std::exchange(o.m_device, VK_NULL_HANDLE)),
-	        m_image(std::exchange(o.m_image, VK_NULL_HANDLE)),
-	        m_view(std::exchange(o.m_view, VK_NULL_HANDLE)),
-	        m_sampler(std::exchange(o.m_sampler, VK_NULL_HANDLE)),
-	        m_allocation(std::exchange(o.m_allocation, VK_NULL_HANDLE)),
+	      : m_atlasHandle(std::exchange(o.m_atlasHandle, {})),
+	        m_view(std::exchange(o.m_view, nullptr)),
+	        m_sampler(std::exchange(o.m_sampler, nullptr)),
+	        m_device(std::exchange(o.m_device, nullptr)),
+	        m_uploadPool(std::exchange(o.m_uploadPool, nullptr)),
 	        m_bindlessSlot(std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu)),
 	        m_bindlessMgr(std::exchange(o.m_bindlessMgr, nullptr)),
 	        m_atlasWidth(std::exchange(o.m_atlasWidth, 0u)),
@@ -142,12 +44,11 @@ namespace aether
 		if (this != &o)
 		{
 			Destroy();
-			m_allocator = std::exchange(o.m_allocator, nullptr);
-			m_device = std::exchange(o.m_device, VK_NULL_HANDLE);
-			m_image = std::exchange(o.m_image, VK_NULL_HANDLE);
-			m_view = std::exchange(o.m_view, VK_NULL_HANDLE);
-			m_sampler = std::exchange(o.m_sampler, VK_NULL_HANDLE);
-			m_allocation = std::exchange(o.m_allocation, VK_NULL_HANDLE);
+			m_atlasHandle = std::exchange(o.m_atlasHandle, {});
+			m_view = std::exchange(o.m_view, nullptr);
+			m_sampler = std::exchange(o.m_sampler, nullptr);
+			m_device = std::exchange(o.m_device, nullptr);
+			m_uploadPool = std::exchange(o.m_uploadPool, nullptr);
 			m_bindlessSlot = std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu);
 			m_bindlessMgr = std::exchange(o.m_bindlessMgr, nullptr);
 			m_atlasWidth = std::exchange(o.m_atlasWidth, 0u);
@@ -165,9 +66,11 @@ namespace aether
 
 	// -- Build -----------------------------------------------------------------
 
-	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, VkDevice device, VmaAllocator allocator, VkQueue uploadQueue, uint32_t uploadQueueFamily, BindlessManager& bindless)
+	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless)
 	{
+		(void) allocator;
 		m_bindlessMgr = &bindless;
+		m_device = device;
 
 		// -- 1. Initialise FreeType --------------------------------------------
 		FT_Library ft{};
@@ -288,104 +191,99 @@ namespace aether
 		m_glyphSize = atlasGlyphSize;
 		m_atlasWidth = atlasW;
 		m_atlasHeight = atlasH;
-		m_device = device;
-		m_allocator = allocator;
 
-		// -- 3. Upload atlas to GPU via host image copy (Vulkan 1.4) -------------
-		const VkImageCreateInfo imgInfo{
-		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		        .imageType = VK_IMAGE_TYPE_2D,
-		        .format = VK_FORMAT_R8_UNORM,
-		        .extent = {atlasW, atlasH, 1},
-		        .mipLevels = 1,
-		        .arrayLayers = 1,
-		        .samples = VK_SAMPLE_COUNT_1_BIT,
-		        .tiling = VK_IMAGE_TILING_OPTIMAL,
-		        .usage = VK_IMAGE_USAGE_HOST_TRANSFER_BIT_EXT | VK_IMAGE_USAGE_SAMPLED_BIT,
-		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		// -- 3. Create the atlas texture via the registry ---------------------
+		// The R8_UNORM channel is expanded to RGBA8 in the bindless
+		// descriptor via a (R, 0, 0, 1) component swizzle on the
+		// registry-created view (see gpu::ComponentSwizzle). The shader
+		// reads .rgba as if the format were RGBA8.
+		const gpu::TextureDesc atlasDesc{
+		        .extent = {atlasW, atlasH},
+		        .format = gpu::Format::R8Unorm,
+		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
+		        .aspect = gpu::ImageAspect::Color,
+		        .r = gpu::ComponentSwizzle::R,
+		        .g = gpu::ComponentSwizzle::Zero,
+		        .b = gpu::ComponentSwizzle::Zero,
+		        .a = gpu::ComponentSwizzle::One,
+		        .debugName = "FontAtlas",
 		};
-		const VmaAllocationCreateInfo imgAllocInfo{.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE};
-		const VkResult imageResult = vmaCreateImage(allocator, &imgInfo, &imgAllocInfo, &m_image, &m_allocation, nullptr);
-		if (imageResult != VK_SUCCESS)
+		m_atlasHandle = gpu::ResourceRegistry::CreateTexture(atlasDesc);
+		if (!m_atlasHandle.IsValid())
 		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(imageResult), std::format("FontAtlas: vmaCreateImage failed for atlas image. VkResult={}", static_cast<int>(imageResult))));
+			Throw(AetherError::Engine("FontAtlas: CreateTexture failed"));
 		}
 
+		// -- 4. Host copy: synchronously writes the SDF atlas pixels --------
 		{
-			const VkResult copyResult = vkutil::HostCopyToImage(device, m_image, atlasPixels.data(), atlasW, atlasH);
-			if (copyResult != VK_SUCCESS)
+			const std::int32_t copyResult = gpu::Factory::HostCopyToImage(device, gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle), atlasPixels.data(), atlasW, atlasH);
+			if (copyResult != 0)
 			{
-				Throw(AetherError::Vulkan(static_cast<int32_t>(copyResult), std::format("FontAtlas: HostCopyToImage failed. VkResult={}", static_cast<int>(copyResult))));
+				gpu::ResourceRegistry::Destroy(m_atlasHandle);
+				m_atlasHandle = {};
+				Throw(AetherError::Vulkan(copyResult, "FontAtlas: HostCopyToImage failed"));
 			}
 		}
 
-		const VkImageViewCreateInfo viewInfo{
-		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		        .image = m_image,
-		        .viewType = VK_IMAGE_VIEW_TYPE_2D,
-		        .format = VK_FORMAT_R8_UNORM,
-		        .components =
-		                {
-		                        VK_COMPONENT_SWIZZLE_R,
-		                        VK_COMPONENT_SWIZZLE_ZERO,
-		                        VK_COMPONENT_SWIZZLE_ZERO,
-		                        VK_COMPONENT_SWIZZLE_ONE,
-		                },
-		        .subresourceRange =
-		                {
-		                        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-		                        .baseMipLevel = 0,
-		                        .levelCount = 1,
-		                        .baseArrayLayer = 0,
-		                        .layerCount = 1,
-		                },
-		};
-		const VkResult viewResult = vkCreateImageView(device, &viewInfo, nullptr, &m_view);
-		if (viewResult != VK_SUCCESS)
+		// -- 5. Resolve the swizzled view (registry created it) -------------
+		m_view = gpu::ResourceRegistry::ResolveTexture(m_atlasHandle).view;
+
+		// -- 6. Acquire a linear/clamp sampler from the bindless cache -------
+		AE_EXPECT_OR_THROW(samplerResult, bindless.GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge));
+		m_sampler = samplerResult;
+
+		// -- 7. Layout transition via the one-shot upload path --------------
+		m_uploadPool = gpu::Factory::CreateCommandPool(device,
+		        gpu::Factory::CommandPoolDesc{
+		                .queueFamilyIndex = uploadQueueFamily,
+		                .transient = true,
+		        });
+		if (m_uploadPool == nullptr)
 		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(viewResult), std::format("FontAtlas: vkCreateImageView failed. VkResult={}", static_cast<int>(viewResult))));
+			gpu::ResourceRegistry::Destroy(m_atlasHandle);
+			m_atlasHandle = {};
+			Throw(AetherError::Engine("FontAtlas: CreateCommandPool failed"));
 		}
 
-		const VkSamplerCreateInfo samplerInfo{
-		        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-		        .magFilter = VK_FILTER_LINEAR,
-		        .minFilter = VK_FILTER_LINEAR,
-		        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
-		        .maxLod = VK_LOD_CLAMP_NONE,
-		};
-		const VkResult samplerResult = vkCreateSampler(device, &samplerInfo, nullptr, &m_sampler);
-		if (samplerResult != VK_SUCCESS)
 		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(samplerResult), std::format("FontAtlas: vkCreateSampler failed. VkResult={}", static_cast<int>(samplerResult))));
+			gpu::OneShotCmd cmd;
+			if (!cmd.Begin(device, m_uploadPool))
+			{
+				gpu::Factory::DestroyCommandPool(device, m_uploadPool);
+				m_uploadPool = nullptr;
+				gpu::ResourceRegistry::Destroy(m_atlasHandle);
+				m_atlasHandle = {};
+				Throw(AetherError::Engine("FontAtlas: OneShotCmd::Begin failed"));
+			}
+			cmd.CmdList().ImageMemoryBarrier(gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle),
+			        gpu::ImageLayout::General,
+			        gpu::ImageLayout::ShaderReadOnly,
+			        gpu::ImageAspect::Color,
+			        gpu::PipelineStage::AllCommands,
+			        gpu::AccessFlags::None,
+			        gpu::PipelineStage::FragmentShader,
+			        gpu::AccessFlags::ShaderRead);
+			if (!cmd.EndAndSubmit(uploadQueue))
+			{
+				gpu::Factory::DestroyCommandPool(device, m_uploadPool);
+				m_uploadPool = nullptr;
+				gpu::ResourceRegistry::Destroy(m_atlasHandle);
+				m_atlasHandle = {};
+				Throw(AetherError::Engine("FontAtlas: OneShotCmd::EndAndSubmit failed"));
+			}
 		}
 
-		const VkCommandPoolCreateInfo poolInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-		        .queueFamilyIndex = uploadQueueFamily,
-		};
-		VkCommandPool uploadPool{};
-		const VkResult poolResult = vkCreateCommandPool(device, &poolInfo, nullptr, &uploadPool);
-		if (poolResult != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(poolResult), std::format("FontAtlas: vkCreateCommandPool failed. VkResult={}", static_cast<int>(poolResult))));
-		}
+		// Upload pool is single-use; tear it down eagerly. The image /
+		// view / sampler lifetime is owned by the registry / bindless
+		// cache, so they outlive Destroy() until registry.AdvanceFrame
+		// and bindless cache eviction.
+		gpu::Factory::DestroyCommandPool(device, m_uploadPool);
+		m_uploadPool = nullptr;
 
-		VkCommandBuffer cmd = BeginOneShot(device, uploadPool);
-
-		TransitionImage(cmd, m_image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_ACCESS_2_NONE, VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-
-		EndAndSubmit(device, uploadPool, uploadQueue, cmd);
-		vkDestroyCommandPool(device, uploadPool, nullptr);
-
-		// -- 4. Register in the bindless descriptor set ------------------------
+		// -- 8. Register in the bindless descriptor set --------------------
 		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());
 		m_bindlessSlot = slotResult;
-		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler);
+		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler, gpu::ImageLayout::ShaderReadOnly);
 		if (!updateResult)
 		{
 			bindless.FreeSampledImageSlot(m_bindlessSlot);
@@ -400,7 +298,7 @@ namespace aether
 
 	void FontAtlas::Destroy()
 	{
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
@@ -410,32 +308,29 @@ namespace aether
 			m_bindlessMgr->FreeSampledImageSlot(m_bindlessSlot);
 			m_bindlessSlot = 0xFFFFFFFFu;
 		}
-		if (m_sampler != VK_NULL_HANDLE)
+		// m_sampler is owned by BindlessManager's cache; no destroy.
+		m_sampler = nullptr;
+		// m_view is owned by the registry's resolved view; no destroy.
+		m_view = nullptr;
+		if (m_atlasHandle.IsValid())
 		{
-			vkDestroySampler(m_device, m_sampler, nullptr);
-			m_sampler = VK_NULL_HANDLE;
+			gpu::ResourceRegistry::Destroy(m_atlasHandle);
+			m_atlasHandle = {};
 		}
-		if (m_view != VK_NULL_HANDLE)
+		if (m_uploadPool != nullptr)
 		{
-			vkDestroyImageView(m_device, m_view, nullptr);
-			m_view = VK_NULL_HANDLE;
-		}
-		if (m_image != VK_NULL_HANDLE && m_allocator != nullptr)
-		{
-			vmaDestroyImage(m_allocator, m_image, m_allocation);
-			m_image = VK_NULL_HANDLE;
-			m_allocation = VK_NULL_HANDLE;
+			gpu::Factory::DestroyCommandPool(m_device, m_uploadPool);
+			m_uploadPool = nullptr;
 		}
 		m_bindlessMgr = nullptr;
-		m_device = VK_NULL_HANDLE;
-		m_allocator = nullptr;
+		m_device = nullptr;
 	}
 
 	// -- Queries ---------------------------------------------------------------
 
 	bool FontAtlas::IsValid() const
 	{
-		return m_image != VK_NULL_HANDLE;
+		return m_atlasHandle.IsValid();
 	}
 
 	uint32_t FontAtlas::GetBindlessSlot() const

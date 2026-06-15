@@ -36,7 +36,7 @@ namespace aether::gpu
 		struct CommandPoolDesc
 		{
 			std::uint32_t queueFamilyIndex = 0;
-			bool transient = false;     // VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+			bool transient = false;          // VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
 			bool resetCommandBuffer = false; // VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
 		};
 
@@ -89,6 +89,7 @@ namespace aether::gpu
 		struct DescriptorSetLayoutDesc
 		{
 			std::span<const GpuDescriptorSetLayoutBinding> bindings;
+			bool pushDescriptor = false; // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT
 		};
 
 		[[nodiscard]] DescriptorSetLayout CreateDescriptorSetLayout(Device device, const DescriptorSetLayoutDesc& desc) noexcept;
@@ -132,5 +133,47 @@ namespace aether::gpu
 		// VK_SWAPCHAIN_CREATE_PRESENT_TIMELINE_BIT. Sites that need
 		// cross-frame sync (AsyncComputeContext, AnimationRootMotion,
 		// RenderGraphStorage) all use the timeline factory instead.
+
+		// -----------------------------------------------------------------
+		// PhysicalDevice queries
+		// -----------------------------------------------------------------
+		// Engine-facing mirror of the subset of VkPhysicalDeviceProperties
+		// the engine currently consumes. Extend with new fields as needed
+		// (mirroring the VkPhysicalDeviceProperties layout one-for-one).
+
+		struct PhysicalDeviceLimits
+		{
+			bool timestampComputeAndGraphics = false;
+			float timestampPeriod = 1.0f;
+		};
+
+		struct PhysicalDeviceProperties
+		{
+			PhysicalDeviceLimits limits{};
+		};
+
+		[[nodiscard]] PhysicalDeviceProperties GetPhysicalDeviceProperties(PhysicalDevice physicalDevice) noexcept;
+
+		// -----------------------------------------------------------------
+		// QueryPool result readback
+		// -----------------------------------------------------------------
+		// Read `queryCount` 64-bit timestamp values from a query pool.
+		// Returns the number of values actually written into `outTicks`
+		// (0 on failure). Mirrors vkGetQueryPoolResults with the
+		// VK_QUERY_RESULT_64_BIT flag.
+		[[nodiscard]] std::uint32_t GetQueryPoolResults(Device device, QueryPool pool, std::uint32_t firstQuery, std::uint32_t queryCount, std::span<std::uint64_t> outTicks) noexcept;
+
+		// -----------------------------------------------------------------
+		// Host-to-image upload
+		// -----------------------------------------------------------------
+		// Synchronous host-to-device-image copy used by the engine's
+		// one-shot upload path (Texture, FontAtlas). Translates the
+		// layout to GENERAL, performs the copy, and returns the VkResult
+		// as a plain int32 (0 = VK_SUCCESS). Mirrors the engine-side
+		// overload of vkutil::HostCopyToImage but takes `gpu::Image`
+		// (the actual VkImage from ResolveTextureImage) rather than
+		// `gpu::ImageView`. The backend implementation lives in
+		// vulkan/GpuDeviceFactory.cpp.
+		[[nodiscard]] std::int32_t HostCopyToImage(Device device, Image dstImage, const void* hostData, std::uint32_t width, std::uint32_t height) noexcept;
 	} // namespace Factory
 } // namespace aether::gpu

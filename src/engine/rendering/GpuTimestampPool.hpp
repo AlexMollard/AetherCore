@@ -4,13 +4,13 @@
 #include <span>
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
-#include "vulkan/volk.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether
 {
 	// Lightweight per-frame GPU timestamp pool.
 	//
-	// One VkQueryPool per frame-in-flight slot. Each slot is reset, written, and
+	// One query pool per frame-in-flight slot. Each slot is reset, written, and
 	// read back in a ring: by the time BeginFrame(N) runs, the CPU has already
 	// waited on the fence for slot N % kFramesInFlight (3 frames ago), so reading
 	// and resetting that slot is safe without any extra synchronization.
@@ -20,8 +20,8 @@ namespace aether
 	//   // each frame:
 	//   float results[GpuTimestampPool::kMaxTimestamps];
 	//   uint32_t count = pool.BeginFrame(frameIndex, results); // read previous, reset slot
-	//   pool.Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);  // returns slot index
-	//   pool.Write(cmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+	//   pool.Write(cmd, gpu::PipelineStage::ComputeShader);
+	//   pool.Write(cmd, gpu::PipelineStage::ComputeShader);
 	//   // ...submit command buffer...
 	class GpuTimestampPool
 	{
@@ -29,7 +29,7 @@ namespace aether
 		static constexpr std::uint32_t kMaxTimestamps = 16;
 		static constexpr std::uint32_t kFramesInFlight = 3;
 
-		void Initialize(VkDevice device, VkPhysicalDevice physDevice);
+		void Initialize(gpu::Device device, gpu::PhysicalDevice physDevice);
 		void Shutdown();
 
 		// Call at the start of each frame before recording commands.
@@ -45,12 +45,12 @@ namespace aether
 
 		[[nodiscard]] bool IsValid() const
 		{
-			return m_device != VK_NULL_HANDLE;
+			return m_device != nullptr;
 		}
 
 	private:
-		VkDevice m_device = VK_NULL_HANDLE;
-		VkQueryPool m_pools[kFramesInFlight]{};
+		gpu::Device m_device = nullptr;
+		gpu::QueryPool m_pools[kFramesInFlight]{};
 		float m_periodNs = 1.f;
 		std::uint32_t m_writeCount[kFramesInFlight]{};
 		bool m_hasData[kFramesInFlight]{};

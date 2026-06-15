@@ -63,6 +63,7 @@ namespace aether
 		Expected<void> FlushMapped(gpu::DeviceSize offset = 0, gpu::DeviceSize size = VK_WHOLE_SIZE) const;
 
 		[[nodiscard]] VkBuffer Get() const;
+
 		// Engine-side accessor: returns the buffer handle as an opaque
 		// gpu::Buffer so engine callers can pass it to engine-side
 		// factories without mentioning Vk*.
@@ -70,6 +71,7 @@ namespace aether
 		{
 			return static_cast<gpu::Buffer>(m_buffer);
 		}
+
 		[[nodiscard]] VmaAllocation GetAllocation() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
 		[[nodiscard]] const VmaAllocationInfo& GetAllocationInfo() const;

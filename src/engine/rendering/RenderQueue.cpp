@@ -187,11 +187,7 @@ namespace aether
 				m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
 			}
 
-			AE_INFO(LogCategory::Render,
-			        "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}",
-			        m_skinPaletteAddress,
-			        m_sampledPoses[0].address,
-			        m_nodeGlobalTransforms[0].address);
+			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}", m_skinPaletteAddress, m_sampledPoses[0].address, m_nodeGlobalTransforms[0].address);
 		}
 
 		// m_outputIndirect (per-frame device-local INDIRECT + BDA).
@@ -263,7 +259,7 @@ namespace aether
 		m_maxSkinJoints = 0;
 		m_maxSampledPoses = 0;
 		m_animationSlotCleared = {};
-			}
+	}
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
@@ -1105,7 +1101,10 @@ namespace aether
 			}
 			else
 			{
-				cmd.DrawIndexedIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_cachedIndirectHandle), static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand), batch.drawCount, sizeof(gpu::DrawIndexedIndirectCommand));
+				cmd.DrawIndexedIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_cachedIndirectHandle),
+				        static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand),
+				        batch.drawCount,
+				        sizeof(gpu::DrawIndexedIndirectCommand));
 			}
 		}
 

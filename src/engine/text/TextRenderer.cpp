@@ -1,9 +1,8 @@
 #include "text/TextRenderer.hpp"
 
 #include "utils/ServiceContainer.hpp"
-#include "vulkan/VulkanContext.hpp"
-#include "vulkan/Swapchain.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "gpu/GpuDevice.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Logger.hpp"
 #include "ui/QuadRenderer.hpp"
@@ -12,9 +11,9 @@ namespace aether
 {
 	void TextRenderer::Init(ServiceContainer& services, std::string_view fontVfsPath, int glyphSize)
 	{
-		m_vkCtx = &services.Get<VulkanContext>();
 		m_bindlessMgr = &services.Get<BindlessManager>();
-		m_swapchain = &services.Get<Swapchain>();
+		m_gpu = &services.Get<GpuDevice>();
+		GpuDevice& gpu = *m_gpu;
 
 		if (!io::FileSystem::Exists(fontVfsPath))
 		{
@@ -25,8 +24,10 @@ namespace aether
 			return;
 		}
 
-		const VulkanContext& vk = *m_vkCtx;
-		m_fontAtlas.Build(fontVfsPath, glyphSize, vk.GetDevice().device, vk.GetAllocator(), vk.GetGraphicsQueue(), vk.GetGraphicsQueueFamily(), *m_bindlessMgr);
+		// GpuDevice exposes opaque gpu::Device / gpu::Allocator / gpu::Queue
+		// accessors. The FontAtlas (and any other engine-side consumer)
+		// never sees raw Vk* types.
+		m_fontAtlas.Build(fontVfsPath, glyphSize, gpu.GetDevice(), gpu.GetAllocator(), gpu.GetGraphicsQueue(), gpu.GetGraphicsQueueFamily(), *m_bindlessMgr);
 
 		m_ready = true;
 		AE_INFO(LogCategory::Engine, "TextRenderer: font atlas ready.");
@@ -35,20 +36,19 @@ namespace aether
 	void TextRenderer::Shutdown()
 	{
 		m_fontAtlas.Destroy();
-		m_vkCtx = nullptr;
 		m_bindlessMgr = nullptr;
-		m_swapchain = nullptr;
+		m_gpu = nullptr;
 		m_ready = false;
 	}
 
 	void TextRenderer::DrawTextLayered(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color, std::int32_t layer, QuadRenderer& qr)
 	{
-		if (m_vkCtx == nullptr || !m_ready || !m_fontAtlas.IsValid() || text.empty())
+		if (m_gpu == nullptr || !m_ready || !m_fontAtlas.IsValid() || text.empty())
 		{
 			return;
 		}
 
-		const glm::vec2 origin = ResolveUiPointPx(m_swapchain->GetExtent(), point);
+		const glm::vec2 origin = ResolveUiPointPx(m_gpu->GetSwapchainExtent(), point);
 		float cursorX = origin.x;
 		const std::uint32_t atlasSlot = m_fontAtlas.GetBindlessSlot();
 

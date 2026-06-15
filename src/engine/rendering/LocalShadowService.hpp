@@ -136,9 +136,9 @@ namespace aether
 		// -- VSM blur resources ----------------------------------------------
 		gpu::PipelineHandle m_blurPipelineHandle;
 		gpu::PipelineLayout m_blurPipelineLayout = nullptr;
-		VkDescriptorSetLayout m_blurDescriptorSetLayout = VK_NULL_HANDLE;
-		VkSampler m_blurSampler = VK_NULL_HANDLE;
-		UniqueImage m_blurScratch;
+		gpu::DescriptorSetLayout m_blurDescriptorSetLayout = nullptr;
+		gpu::Sampler m_blurSampler = nullptr;
+		gpu::TextureHandle m_blurScratchHandle;
 		RGImage m_blurScratchImage{};
 	};
 } // namespace aether

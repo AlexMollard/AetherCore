@@ -73,16 +73,32 @@ namespace aether::gpu
 		DeviceAddress range = 0;
 	};
 
-	// Engine-facing push-descriptor write payload. Only the storage-buffer
-	// path is supported today (DescriptorType::StorageBuffer); the image
-	// variants are added when the engine needs them. Mirrors the layout of
-	// VkWriteDescriptorSet; the backend translates one-for-one in CommandList.
+	// Engine-facing descriptor image info for push-descriptor writes.
+	// Mirrors VkDescriptorImageInfo. `sampler` may be nullptr for
+	// STORAGE_IMAGE / SAMPLED_IMAGE writes. The backend translates the
+	// void* to VkImageView / VkSampler at the seam in CommandList.
+	// Forward-declared as opaque pointers so the struct can appear
+	// before the `using` aliases below.
+	struct GpuDescriptorImageInfo
+	{
+		void* sampler = nullptr;
+		void* imageView = nullptr;
+		ImageLayout imageLayout = ImageLayout::Undefined;
+	};
+
+	// Engine-facing push-descriptor write payload. Supports storage-buffer,
+	// storage-image, and combined-image-sampler paths today; other types
+	// (uniform buffer, texel buffer) are added when the engine needs them.
+	// Mirrors the layout of VkWriteDescriptorSet; the backend translates
+	// one-for-one in CommandList. Exactly one of `bufferInfo` or `imageInfo`
+	// is set based on `descriptorType`.
 	struct GpuWriteDescriptorSet
 	{
 		std::uint32_t dstBinding = 0;
 		std::uint32_t descriptorCount = 0;
 		DescriptorType descriptorType = DescriptorType::StorageBuffer;
 		const GpuDescriptorBufferInfo* bufferInfo = nullptr;
+		const GpuDescriptorImageInfo* imageInfo = nullptr;
 	};
 
 	// One binding inside a descriptor-set layout. Mirrors the subset of
@@ -118,10 +134,12 @@ namespace aether::gpu
 	// the boundary even when owned elsewhere.
 	using DescriptorSet = void*;
 	using DescriptorSetLayout = void*;
+	using DescriptorPool = void*;
 	using Pipeline = void*;
 	using PipelineLayout = void*;
 	using PipelineCache = void*;
 	using Device = void*;
+	using PhysicalDevice = void*;
 	using Allocator = void*;
 	using CommandPool = void*;
 	using Queue = void*;
@@ -144,6 +162,7 @@ namespace aether::gpu
 		std::int32_t vertexOffset = 0;
 		std::uint32_t firstInstance = 0;
 	};
+
 	static_assert(sizeof(DrawIndexedIndirectCommand) == 20, "DrawIndexedIndirectCommand must match VkDrawIndexedIndirectCommand layout");
 
 	// Indirect-draw command struct mirror (non-indexed). Mirrors
@@ -155,5 +174,6 @@ namespace aether::gpu
 		std::uint32_t firstVertex = 0;
 		std::uint32_t firstInstance = 0;
 	};
+
 	static_assert(sizeof(DrawIndirectCommand) == 16, "DrawIndirectCommand must match VkDrawIndirectCommand layout");
 } // namespace aether::gpu

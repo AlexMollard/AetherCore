@@ -1,6 +1,7 @@
 #include "rendering/LocalShadowService.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -10,6 +11,7 @@
 #include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -74,70 +76,70 @@ namespace aether
 		m_lightShadowIndices.reserve(4096);
 
 		// Allocate per-frame GPU buffers for per-light shadow data and light constants (double-buffered).
-		constexpr VkBufferUsageFlags kSsboBda = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+		constexpr gpu::BufferUsage kSsboBda = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			{
-				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
+				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
 				m_shadowDataBuffer[i] = std::move(sdBuf);
 				m_shadowDataAddr[i] = m_shadowDataBuffer[i].GetDeviceAddress();
 			}
 			{
-				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<VkDeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
+				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
 				m_lightConstantsBuffer[i] = std::move(lcBuf);
 				m_lightConstantsAddr[i] = m_lightConstantsBuffer[i].GetDeviceAddress();
 			}
 		}
 
 		// -- Create blur scratch image --------------------------------------
-		AE_EXPECT_OR_THROW(scratchImg,
-		        UniqueImage::Create(device,
-		                allocator,
-		                {
-		                        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
-		                        .format = ShadowAtlasManager::kAtlasFormat,
-		                        .usage = gpu::ImageUsage::Storage | gpu::ImageUsage::Sampled,
-		                        .debugName = "ShadowBlurScratch",
-		                }));
-		m_blurScratch = std::move(scratchImg);
+		m_blurScratchHandle = gpu::ResourceRegistry::CreateTexture({
+		        .format = ShadowAtlasManager::kAtlasFormat,
+		        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
+		        .usage = gpu::ImageUsage::Storage | gpu::ImageUsage::Sampled,
+		        .aspect = gpu::ImageAspect::Color,
+		        .debugName = "ShadowBlurScratch",
+		});
 
 		// -- Create VSM blur compute pipeline -------------------------------
 		// Descriptor set layout: binding 0 = RWTexture2D (storage), binding 1 = Texture2D (combined sampler).
 		{
-			VkDescriptorSetLayoutBinding bindings[2]{};
-			bindings[0].binding = 0;
-			bindings[0].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			bindings[0].descriptorCount = 1;
-			bindings[0].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-			bindings[1].binding = 1;
-			bindings[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			bindings[1].descriptorCount = 1;
-			bindings[1].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-
-			VkDescriptorSetLayoutCreateInfo dslci{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-			dslci.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-			dslci.bindingCount = 2;
-			dslci.pBindings = bindings;
-			AE_ASSERT_ALWAYS(vkCreateDescriptorSetLayout(device, &dslci, nullptr, &m_blurDescriptorSetLayout) == VK_SUCCESS, "Failed to create blur descriptor set layout");
+			const gpu::GpuDescriptorSetLayoutBinding bindings[2] = {
+			        {
+			                .binding = 0,
+			                .descriptorType = gpu::DescriptorType::StorageImage,
+			                .descriptorCount = 1,
+			                .stageFlags = gpu::ShaderStage::Compute,
+			        },
+			        {
+			                .binding = 1,
+			                .descriptorType = gpu::DescriptorType::CombinedImageSampler,
+			                .descriptorCount = 1,
+			                .stageFlags = gpu::ShaderStage::Compute,
+			        },
+			};
+			m_blurDescriptorSetLayout = gpu::Factory::CreateDescriptorSetLayout(static_cast<gpu::Device>(device),
+			        {
+			                .bindings = bindings,
+			                .pushDescriptor = true,
+			        });
+			AE_ASSERT_ALWAYS(m_blurDescriptorSetLayout != nullptr, "Failed to create blur descriptor set layout");
 		}
 
 		// Pipeline layout with push constants.
 		{
-			VkPushConstantRange pcRange{};
-			pcRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-			pcRange.offset = 0;
-			pcRange.size = sizeof(BlurPushConstants);
-
-			VkPipelineLayoutCreateInfo plci{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-			plci.setLayoutCount = 1;
-			plci.pSetLayouts = &m_blurDescriptorSetLayout;
-			plci.pushConstantRangeCount = 1;
-			plci.pPushConstantRanges = &pcRange;
-
-			VkPipelineLayout vkLayout = VK_NULL_HANDLE;
-			AE_ASSERT_ALWAYS(vkCreatePipelineLayout(device, &plci, nullptr, &vkLayout) == VK_SUCCESS, "Failed to create blur pipeline layout");
-			m_blurPipelineLayout = static_cast<gpu::PipelineLayout>(vkLayout);
+			const gpu::PushConstantRange pcRange{
+			        .stageFlags = gpu::ShaderStage::Compute,
+			        .offset = 0,
+			        .size = sizeof(BlurPushConstants),
+			};
+			const std::array<gpu::DescriptorSetLayout, 1> setLayouts{m_blurDescriptorSetLayout};
+			m_blurPipelineLayout = gpu::Factory::CreatePipelineLayout(static_cast<gpu::Device>(device),
+			        {
+			                .setLayouts = setLayouts,
+			                .pushConstantRanges = std::span<const gpu::PushConstantRange>(&pcRange, 1),
+			        });
+			AE_ASSERT_ALWAYS(m_blurPipelineLayout != nullptr, "Failed to create blur pipeline layout");
 		}
 
 		// Compute pipeline via resource registry.
@@ -156,14 +158,11 @@ namespace aether
 		}
 
 		// Sampler for blur input (nearest clamp-to-edge - texel fetch, sampler unused).
+		// Cached in BindlessManager - one entry for the lifetime of the bindless pool.
 		{
-			VkSamplerCreateInfo sci{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
-			sci.magFilter = VK_FILTER_NEAREST;
-			sci.minFilter = VK_FILTER_NEAREST;
-			sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-			sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-			sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-			AE_ASSERT_ALWAYS(vkCreateSampler(device, &sci, nullptr, &m_blurSampler) == VK_SUCCESS, "Failed to create blur sampler");
+			const auto samplerResult = bindless.GetOrCreateSampler(gpu::Filter::Nearest, gpu::SamplerMipmapMode::Nearest, gpu::SamplerAddressMode::ClampToEdge);
+			AE_ASSERT_ALWAYS(samplerResult, "Failed to create blur sampler");
+			m_blurSampler = samplerResult.value();
 		}
 
 		// Descriptor pool.
@@ -186,7 +185,11 @@ namespace aether
 		}
 		m_atlasManager.Shutdown();
 
-		m_blurScratch.Reset();
+		if (m_blurScratchHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_blurScratchHandle);
+			m_blurScratchHandle = {};
+		}
 
 		if (m_blurPipelineHandle.IsValid())
 		{
@@ -195,18 +198,19 @@ namespace aether
 		}
 		if (m_blurPipelineLayout != nullptr)
 		{
-			vkDestroyPipelineLayout(device, static_cast<VkPipelineLayout>(m_blurPipelineLayout), nullptr);
+			gpu::Factory::DestroyPipelineLayout(static_cast<gpu::Device>(device), m_blurPipelineLayout);
 			m_blurPipelineLayout = nullptr;
 		}
-		if (m_blurSampler != VK_NULL_HANDLE)
+		if (m_blurSampler != nullptr)
 		{
-			vkDestroySampler(device, m_blurSampler, nullptr);
-			m_blurSampler = VK_NULL_HANDLE;
+			// Cached in BindlessManager - no explicit destroy needed; lives for the
+			// lifetime of the bindless pool. Clear the handle to indicate "not owned".
+			m_blurSampler = nullptr;
 		}
-		if (m_blurDescriptorSetLayout != VK_NULL_HANDLE)
+		if (m_blurDescriptorSetLayout != nullptr)
 		{
-			vkDestroyDescriptorSetLayout(device, m_blurDescriptorSetLayout, nullptr);
-			m_blurDescriptorSetLayout = VK_NULL_HANDLE;
+			gpu::Factory::DestroyDescriptorSetLayout(static_cast<gpu::Device>(device), m_blurDescriptorSetLayout);
+			m_blurDescriptorSetLayout = nullptr;
 		}
 	}
 
@@ -440,7 +444,9 @@ namespace aether
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
 		// Register the blur scratch image.
-		m_blurScratchImage = graph.RegisterImage(static_cast<void*>(m_blurScratch.Get()), static_cast<void*>(m_blurScratch.GetDefaultView()), gpu::ImageAspect::Color);
+		const auto scratchView = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle).view;
+		const auto scratchImage = gpu::ResourceRegistry::ResolveTextureImage(m_blurScratchHandle);
+		m_blurScratchImage = graph.RegisterImage(scratchImage, scratchView, gpu::ImageAspect::Color);
 
 		// Create a transient depth attachment for the atlas render pass.
 		m_atlasDepthImage = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
@@ -500,7 +506,7 @@ namespace aether
 				                };
 				                cmd.SetScissor(scissor);
 
-				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<VkDeviceSize>(li) * sizeof(FrameConstants);
+				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
 				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 
@@ -527,33 +533,32 @@ namespace aether
 			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 			                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
-			                const VkDescriptorImageInfo hStorageInfo{
-			                        .sampler = VK_NULL_HANDLE,
-			                        .imageView = m_blurScratch.GetDefaultView(),
-			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			                const auto scratchResolved = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle);
+			                const gpu::GpuDescriptorImageInfo hStorageInfo{
+			                        .sampler = nullptr,
+			                        .imageView = scratchResolved.view,
+			                        .imageLayout = gpu::ImageLayout::General,
 			                };
-			                const VkDescriptorImageInfo hSampledInfo{
+			                const gpu::GpuDescriptorImageInfo hSampledInfo{
 			                        .sampler = m_blurSampler,
-			                        .imageView = static_cast<VkImageView>(m_atlasManager.GetAtlasView()),
-			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageLayout = gpu::ImageLayout::ShaderReadOnly,
 			                };
-			                const VkWriteDescriptorSet hWrites[]{
+			                const gpu::GpuWriteDescriptorSet hWrites[]{
 			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			                                .dstBinding = 0,
 			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			                                .pImageInfo = &hStorageInfo,
+			                                .descriptorType = gpu::DescriptorType::StorageImage,
+			                                .imageInfo = &hStorageInfo,
 			                        },
 			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			                                .dstBinding = 1,
 			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			                                .pImageInfo = &hSampledInfo,
+			                                .descriptorType = gpu::DescriptorType::CombinedImageSampler,
+			                                .imageInfo = &hSampledInfo,
 			                        },
 			                };
-			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, 2, hWrites);
+			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(hWrites));
 
 			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
 			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
@@ -579,33 +584,32 @@ namespace aether
 			                gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 			                cmd.BindComputePipeline(blurPipeline.pipeline, blurPipeline.layout);
 
-			                const VkDescriptorImageInfo vStorageInfo{
-			                        .sampler = VK_NULL_HANDLE,
-			                        .imageView = static_cast<VkImageView>(m_atlasManager.GetAtlasView()),
-			                        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+			                const auto scratchResolvedV = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle);
+			                const gpu::GpuDescriptorImageInfo vStorageInfo{
+			                        .sampler = nullptr,
+			                        .imageView = m_atlasManager.GetAtlasView(),
+			                        .imageLayout = gpu::ImageLayout::General,
 			                };
-			                const VkDescriptorImageInfo vSampledInfo{
+			                const gpu::GpuDescriptorImageInfo vSampledInfo{
 			                        .sampler = m_blurSampler,
-			                        .imageView = m_blurScratch.GetDefaultView(),
-			                        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+			                        .imageView = scratchResolvedV.view,
+			                        .imageLayout = gpu::ImageLayout::ShaderReadOnly,
 			                };
-			                const VkWriteDescriptorSet vWrites[]{
+			                const gpu::GpuWriteDescriptorSet vWrites[]{
 			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			                                .dstBinding = 0,
 			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			                                .pImageInfo = &vStorageInfo,
+			                                .descriptorType = gpu::DescriptorType::StorageImage,
+			                                .imageInfo = &vStorageInfo,
 			                        },
 			                        {
-			                                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			                                .dstBinding = 1,
 			                                .descriptorCount = 1,
-			                                .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-			                                .pImageInfo = &vSampledInfo,
+			                                .descriptorType = gpu::DescriptorType::CombinedImageSampler,
+			                                .imageInfo = &vSampledInfo,
 			                        },
 			                };
-			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, 2, vWrites);
+			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(vWrites));
 
 			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
 			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));

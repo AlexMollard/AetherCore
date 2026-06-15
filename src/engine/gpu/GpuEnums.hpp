@@ -131,7 +131,17 @@ namespace aether::gpu
 	//   - StorageBuffer        (VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
 	enum class DescriptorType : std::uint32_t
 	{
+		Sampler = 0,
+		CombinedImageSampler = 1,
+		SampledImage = 2,
+		StorageImage = 3,
+		UniformTexelBuffer = 4,
+		StorageTexelBuffer = 5,
 		StorageBuffer = 6,
+		UniformBuffer = 7,
+		UniformBufferDynamic = 8,
+		StorageBufferDynamic = 9,
+		InputAttachment = 10,
 	};
 
 	// Bitflags for descriptor-set layout creation (mirrors
@@ -226,7 +236,8 @@ namespace aether::gpu
 	// VkComponentSwizzle. Identity preserves the format; Zero returns 0
 	// in that channel; One returns 1; R/G/B/A select a specific source
 	// channel. Used to expand R8_UNORM to RGBA8 in bindless descriptors
-	// (e.g. font SDF atlases).
+	// (e.g. font SDF atlases). The ToVk() conversion lives in
+	// vulkan/GpuEnumConversions.hpp.
 	enum class ComponentSwizzle : std::uint32_t
 	{
 		Identity = 0,
@@ -306,7 +317,11 @@ namespace aether::gpu
 	}
 
 	// 2D extent (width, height). Mirrors VkExtent2D. Constructible from any
-	// type exposing .width/.height (including VkExtent2D).
+	// type exposing .width/.height (including VkExtent2D and the legacy
+	// aether::GpuExtent2D typedef). The templated converting constructor
+	// is intentionally non-explicit so engine code can pass
+	// GpuDevice::GetSwapchainExtent() (which returns GpuExtent2D)
+	// directly to functions that take gpu::Extent2D.
 	struct Extent2D
 	{
 		std::uint32_t width = 0;
@@ -320,7 +335,7 @@ namespace aether::gpu
 		}
 
 		template<typename Other>
-		explicit Extent2D(const Other& ext) noexcept
+		Extent2D(const Other& ext) noexcept
 		      : width(ext.width), height(ext.height)
 		{
 		}

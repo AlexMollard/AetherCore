@@ -82,6 +82,16 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 
+		// Engine-side accessors that return opaque `gpu::*` types. These
+		// are the preferred way for engine code to obtain device, queue,
+		// and allocator handles; reaching through GetVulkanContext()
+		// pulls the raw Vk* types into the caller and forces a
+		// `static_cast<gpu::*>` back to opaque. Use these accessors
+		// instead.
+		[[nodiscard]] gpu::Device GetDevice() const noexcept;
+		[[nodiscard]] gpu::Allocator GetAllocator() const noexcept;
+		[[nodiscard]] gpu::Queue GetGraphicsQueue() const noexcept;
+
 		[[nodiscard]] static constexpr GpuFormat GetForwardColorFormat()
 		{
 			return GpuFormat::R16G16B16A16Sfloat;

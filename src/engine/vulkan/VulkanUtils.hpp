@@ -90,12 +90,7 @@ namespace aether::vkutil
 	// Returns the raw VkResult so callers can still throw AetherError::Vulkan.
 	inline std::int32_t HostCopyToImage(gpu::Device device, gpu::ImageView dstImage, const void* hostData, uint32_t width, uint32_t height)
 	{
-		return static_cast<std::int32_t>(HostCopyToImage(
-		        static_cast<VkDevice>(device),
-		        static_cast<VkImage>(dstImage),
-		        hostData,
-		        width,
-		        height));
+		return static_cast<std::int32_t>(HostCopyToImage(static_cast<VkDevice>(device), static_cast<VkImage>(dstImage), hostData, width, height));
 	}
 
 	// -- Debug object naming -----------------------------------------------------

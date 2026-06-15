@@ -135,6 +135,7 @@ namespace aether
 		BindlessManager* m_bindlessMgr = nullptr;
 		Swapchain* m_swapchain = nullptr;
 		GraphicsPipeline m_pipeline;
+
 		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
 		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
 		struct PerFrameMapped
@@ -144,6 +145,7 @@ namespace aether
 			gpu::DeviceAddress address = 0;
 			std::size_t capacity = 0;
 		};
+
 		struct PerFrameDevice
 		{
 			gpu::BufferHandle handle{};

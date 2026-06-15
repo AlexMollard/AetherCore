@@ -14,9 +14,8 @@ namespace aether
 namespace aether
 {
 	class QuadRenderer;
-	class VulkanContext;
 	class BindlessManager;
-	class Swapchain;
+	class GpuDevice;
 
 	// Manages an SDF font atlas and provides glyph decomposition for layer-sorted
 	// text rendering via QuadRenderer.  No dedicated render pass or pipeline -
@@ -49,9 +48,8 @@ namespace aether
 		}
 
 	private:
-		VulkanContext* m_vkCtx = nullptr;
 		BindlessManager* m_bindlessMgr = nullptr;
-		Swapchain* m_swapchain = nullptr;
+		GpuDevice* m_gpu = nullptr;
 		FontAtlas m_fontAtlas;
 		bool m_ready = false;
 	};

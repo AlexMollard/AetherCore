@@ -15,12 +15,7 @@ namespace aether
 
 	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, const char* debugName)
 	{
-		return CreateMapped(
-		        static_cast<VmaAllocator>(allocator),
-		        static_cast<VkDevice>(device),
-		        static_cast<VkDeviceSize>(size),
-		        gpu::ToVk(usage),
-		        debugName);
+		return CreateMapped(static_cast<VmaAllocator>(allocator), static_cast<VkDevice>(device), static_cast<VkDeviceSize>(size), gpu::ToVk(usage), debugName);
 	}
 
 	Expected<UniqueBuffer> UniqueBuffer::CreateMapped(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, gpu::MappedMemoryUsage memoryUsage, const char* debugName)
@@ -35,21 +30,12 @@ namespace aether
 		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
 		        .usage = VMA_MEMORY_USAGE_AUTO,
 		};
-		return Create(
-		        static_cast<VmaAllocator>(allocator),
-		        static_cast<VkDevice>(device),
-		        bufferInfo,
-		        allocInfo);
+		return Create(static_cast<VmaAllocator>(allocator), static_cast<VkDevice>(device), bufferInfo, allocInfo);
 	}
 
 	Expected<UniqueBuffer> UniqueBuffer::CreateDeviceLocal(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, gpu::BufferUsage usage, const char* debugName)
 	{
-		return CreateDeviceLocal(
-		        static_cast<VmaAllocator>(allocator),
-		        static_cast<VkDevice>(device),
-		        static_cast<VkDeviceSize>(size),
-		        gpu::ToVk(usage),
-		        debugName);
+		return CreateDeviceLocal(static_cast<VmaAllocator>(allocator), static_cast<VkDevice>(device), static_cast<VkDeviceSize>(size), gpu::ToVk(usage), debugName);
 	}
 
 	UniqueBuffer::~UniqueBuffer()

@@ -32,10 +32,7 @@ namespace aether
 
 	uint32_t RenderGraphStorage::RegisterExternalImage(gpu::Image image, gpu::ImageView view, gpu::ImageAspect aspect)
 	{
-		return RegisterExternalImage(
-		        static_cast<VkImage>(image),
-		        static_cast<VkImageView>(view),
-		        gpu::ToVk(aspect));
+		return RegisterExternalImage(static_cast<VkImage>(image), static_cast<VkImageView>(view), gpu::ToVk(aspect));
 	}
 
 	uint32_t RenderGraphStorage::RegisterExternalBuffer(gpu::Buffer buffer)
@@ -50,11 +47,7 @@ namespace aether
 
 	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout)
 	{
-		return EnsureBindlessSampled(
-		        transientIdx,
-		        bindlessManager,
-		        static_cast<VkDevice>(device),
-		        gpu::ToVk(descriptorLayout));
+		return EnsureBindlessSampled(transientIdx, bindlessManager, static_cast<VkDevice>(device), gpu::ToVk(descriptorLayout));
 	}
 
 	void RenderGraphStorage::Initialize(VkDevice device, VmaAllocator allocator)
