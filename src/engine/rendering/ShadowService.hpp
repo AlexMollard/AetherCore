@@ -3,8 +3,8 @@
 #include <array>
 #include <cstdint>
 #include <span>
-#include "vulkan/volk.hpp"
 
+#include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GraphicsPipeline.hpp"
@@ -32,9 +32,9 @@ namespace aether
 	{
 	public:
 		void Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
-		void Shutdown(VkDevice device);
+		void Shutdown(gpu::Device device);
 
-		void RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, gpu::Format depthFormat);
+		void RecreatePipeline(gpu::Device device, gpu::PipelineCache pipelineCache, gpu::Format depthFormat);
 
 		// Set the double-buffer write slot and clear it on the single shadow queue.
 		void PrepareWriteSlot(std::uint32_t drawSlot);
@@ -42,8 +42,8 @@ namespace aether
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
-		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, gpu::Format depthFormat);
-		void SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, gpu::Format depthFormat);
+		void RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat);
+		void SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, gpu::Format depthFormat);
 		void RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
@@ -68,10 +68,10 @@ namespace aether
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
-		std::array<VkExtent2D, kShadowCascadeCount> m_shadowMapExtents{
-		        VkExtent2D{4096u, 4096u},
-		        VkExtent2D{2048u, 2048u},
-		        VkExtent2D{1024u, 1024u},
+		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
+		        gpu::Extent2D{4096u, 4096u},
+		        gpu::Extent2D{2048u, 2048u},
+		        gpu::Extent2D{1024u, 1024u},
 		};
 		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
 	};

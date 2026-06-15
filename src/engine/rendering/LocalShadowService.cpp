@@ -46,8 +46,8 @@ namespace aether
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		const VkDevice device = context.GetDevice().device;
-		const VmaAllocator allocator = context.GetAllocator();
+		const gpu::Device device = static_cast<gpu::Device>(context.GetDevice().device);
+		const gpu::Allocator allocator = static_cast<gpu::Allocator>(context.GetAllocator());
 
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
@@ -55,7 +55,6 @@ namespace aether
 		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
-		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 
 		// Create the shadow depth pipeline (reads VP from per-light FrameConstants via BDA).
 		const gpu::Format depthFormat = swapchain.GetDepthFormat();
@@ -170,7 +169,7 @@ namespace aether
 		}
 	}
 
-	void LocalShadowService::Shutdown(VkDevice device)
+	void LocalShadowService::Shutdown(gpu::Device device)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
@@ -431,7 +430,7 @@ namespace aether
 		fc.shadowLightDataAddr = m_shadowDataAddr[bufSlot];
 	}
 
-	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, gpu::Format depthFormat)
+	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat)
 	{
 		SetupPassResources(graph, depthFormat);
 		RegisterComputePasses(graph, cullPass);

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <functional>
-#include "vulkan/volk.hpp"
 
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/RenderGraph.hpp"
 
@@ -28,7 +28,7 @@ namespace aether
 	struct PassRegistrationContext
 	{
 		FrameContext frame;
-		VkDevice device = VK_NULL_HANDLE;
+		gpu::Device device = nullptr;
 		SkyboxPass& skyboxPass;
 		PostProcessStack& postProcessStack;
 		ShadowService& shadowService;

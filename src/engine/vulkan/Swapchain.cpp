@@ -9,7 +9,6 @@
 #include "utils/AetherExceptions.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
-#include "utils/GpuProfiler.hpp"
 #include "utils/Profiler.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "vulkan/GpuEnumConversions.hpp"

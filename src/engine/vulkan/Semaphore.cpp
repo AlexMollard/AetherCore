@@ -6,9 +6,20 @@
 #include "utils/LogCategory.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
+namespace aether::gpu::detail
+{
+	// pImpl data: the real definition is here, where `VkSemaphore` is
+	// visible. The engine side only sees a pointer to this struct, so
+	// the engine never touches a `VkSemaphore` or a `void*` payload.
+	struct TimelineSemaphoreData
+	{
+		VkSemaphore semaphore = VK_NULL_HANDLE;
+	};
+} // namespace aether::gpu::detail
+
 namespace aether::gpu
 {
-	TimelineSemaphore* CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept
+	TimelineSemaphoreHandle CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept
 	{
 		VkDevice device = static_cast<VkDevice>(desc.device);
 		if (device == VK_NULL_HANDLE)
@@ -26,25 +37,30 @@ namespace aether::gpu
 		        .pNext = &timelineTypeInfo,
 		};
 
-		VkSemaphore semaphore = VK_NULL_HANDLE;
-		if (vkCreateSemaphore(device, &semInfo, nullptr, &semaphore) != VK_SUCCESS)
+		auto* data = new detail::TimelineSemaphoreData;
+		if (vkCreateSemaphore(device, &semInfo, nullptr, &data->semaphore) != VK_SUCCESS)
 		{
 			AE_ERROR(LogCategory::Vulkan, "gpu::CreateTimelineSemaphore: vkCreateSemaphore failed.");
+			delete data;
 			return nullptr;
 		}
 
 		if (desc.debugName != nullptr)
 		{
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(semaphore), VK_OBJECT_TYPE_SEMAPHORE, desc.debugName);
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(data->semaphore), VK_OBJECT_TYPE_SEMAPHORE, desc.debugName);
 		}
 
-		return reinterpret_cast<TimelineSemaphore*>(semaphore);
+		return data;
 	}
 
-	bool WaitTimelineSemaphore(void* device, TimelineSemaphore* sem, std::uint64_t value) noexcept
+	bool WaitTimelineSemaphore(Device device, TimelineSemaphoreHandle sem, std::uint64_t value) noexcept
 	{
 		VkDevice vkDevice = static_cast<VkDevice>(device);
-		VkSemaphore vkSem = reinterpret_cast<VkSemaphore>(sem);
+		if (sem == nullptr)
+		{
+			return false;
+		}
+		VkSemaphore vkSem = sem->semaphore;
 		if (vkDevice == VK_NULL_HANDLE || vkSem == VK_NULL_HANDLE)
 		{
 			return false;
@@ -67,17 +83,17 @@ namespace aether::gpu
 		return true;
 	}
 
-	void DestroyTimelineSemaphore(void* device, TimelineSemaphore* sem) noexcept
+	void DestroyTimelineSemaphore(Device device, TimelineSemaphoreHandle sem) noexcept
 	{
 		if (sem == nullptr)
 		{
 			return;
 		}
 		VkDevice vkDevice = static_cast<VkDevice>(device);
-		VkSemaphore vkSem = reinterpret_cast<VkSemaphore>(sem);
-		if (vkDevice != VK_NULL_HANDLE)
+		if (vkDevice != VK_NULL_HANDLE && sem->semaphore != VK_NULL_HANDLE)
 		{
-			vkDestroySemaphore(vkDevice, vkSem, nullptr);
+			vkDestroySemaphore(vkDevice, sem->semaphore, nullptr);
 		}
+		delete sem;
 	}
 } // namespace aether::gpu

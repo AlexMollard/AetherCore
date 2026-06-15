@@ -7,7 +7,6 @@
 #include "gpu/GpuTypes.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
-#include "vulkan/UniqueImage.hpp"
 
 namespace aether
 {

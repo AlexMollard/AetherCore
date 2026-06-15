@@ -12,7 +12,6 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
-#include "utils/GpuProfiler.hpp"
 
 namespace aether
 {
@@ -103,10 +102,6 @@ namespace aether
 		void BeginFrame(std::uint32_t frameIndex);
 
 		// Optional Tracy GPU context for GPU-zone instrumentation of render passes.
-		void SetTracyVkCtx(TracyVkCtx ctx)
-		{
-			m_tracyVkCtx = ctx;
-		}
 
 		// Fluent pass builder; use immediately, do not store.
 		class PassBuilder
@@ -461,7 +456,6 @@ namespace aether
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;
 		std::uint32_t m_frameIndex = 0;
-		TracyVkCtx m_tracyVkCtx = nullptr;
 		bool m_compileDirty = true;
 		bool m_asyncComputeEnabled = false;
 	};

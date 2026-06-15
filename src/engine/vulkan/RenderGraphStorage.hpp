@@ -63,9 +63,9 @@ namespace aether
 		// command buffer with ONE_TIME_SUBMIT_BIT.
 		void BeginComputeCommandBuffer(std::uint32_t frameIndex);
 
-		// Returns the VkCommandBuffer for async compute passes (valid after
-		// BeginComputeCommandBuffer).
-		[[nodiscard]] VkCommandBuffer GetComputeCommandBuffer(std::uint32_t frameIndex) const;
+		// Returns the engine-side handle for the async compute command buffer
+		// (valid after BeginComputeCommandBuffer).
+		[[nodiscard]] gpu::CommandBuffer GetComputeCommandBuffer(std::uint32_t frameIndex) const;
 
 		// Ends the async compute command buffer.
 		void EndComputeCommandBuffer(std::uint32_t frameIndex);
@@ -136,7 +136,7 @@ namespace aether
 		}
 
 		// -- Transient image slots ------------------------------------------
-		uint32_t AddTransientSlot(VkFormat format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent);
+		uint32_t AddTransientSlot(gpu::Format format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent);
 		void EnsureTransientImages(const FrameTarget& target);
 
 		// Engine-side resolution (P5(d)).
@@ -226,33 +226,19 @@ namespace aether
 		// Engine-side: takes gpu::ImageMemoryBarrier span + resolved VkImage
 		// lookup callback. The barrier's opaque gpu::Image field is mapped to
 		// the actual VkImage via `resolveImage` before translation.
-		void CmdSetEvent2(
-		        gpu::CommandBuffer cmd,
-		        gpu::Event event,
-		        std::span<const gpu::ImageMemoryBarrier> barriers,
-		        const std::function<gpu::Image(uint32_t)>& resolveImage);
-		void CmdWaitEvents2(
-		        gpu::CommandBuffer cmd,
-		        gpu::Event event,
-		        std::span<const gpu::ImageMemoryBarrier> barriers,
-		        const std::function<gpu::Image(uint32_t)>& resolveImage);
+		void CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
+		void CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
 
 		// Emit buffer memory barriers via vkCmdPipelineBarrier2. Engine-side:
 		// takes gpu::BufferMemoryBarrier span + resolved VkBuffer lookup.
-		void CmdBufferBarriers(
-		        gpu::CommandBuffer cmd,
-		        std::span<const gpu::BufferMemoryBarrier> barriers,
-		        const std::function<gpu::Buffer(uint32_t)>& resolveBuffer);
+		void CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers, const std::function<gpu::Buffer(uint32_t)>& resolveBuffer);
 
 		// Emit image memory barriers via vkCmdPipelineBarrier2. Engine-side:
 		// takes gpu::ImageMemoryBarrier span + resolved VkImage lookup. The
 		// barrier's opaque gpu::Image field is mapped to the actual VkImage
 		// here (the engine code populates barrier.image with the resolved
 		// VkImage cast to gpu::Image).
-		void CmdImageBarriers(
-		        gpu::CommandBuffer cmd,
-		        std::span<const gpu::ImageMemoryBarrier> barriers,
-		        const std::function<gpu::Image(uint32_t)>& resolveImage);
+		void CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
 
 		// -- Scratch (reused across Execute calls) --------------------------
 		// Engine-side scratch arrays (P5(d)). The barrier emitter methods
@@ -292,7 +278,7 @@ namespace aether
 
 		struct TransientImageEntry
 		{
-			VkFormat format = VK_FORMAT_UNDEFINED;
+			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent{};
@@ -324,7 +310,7 @@ namespace aether
 
 		struct ImageCacheKey
 		{
-			VkFormat format = VK_FORMAT_UNDEFINED;
+			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			uint32_t width = 0;

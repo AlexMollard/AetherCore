@@ -345,9 +345,7 @@ namespace aether
 
 	RGImage RenderGraph::CreateTransientImage(const TransientImageDesc& desc)
 	{
-		const VkFormat vkFormat = gpu::ToVk(desc.format);
-
-		const uint32_t idx = m_storage->AddTransientSlot(vkFormat, desc.usage, desc.aspect, desc.extent);
+		const uint32_t idx = m_storage->AddTransientSlot(desc.format, desc.usage, desc.aspect, desc.extent);
 		const uint32_t id = kFirstTransientId + idx;
 		return RGImage{id};
 	}
@@ -1673,8 +1671,8 @@ namespace aether
 		if (hasAsyncCompute)
 		{
 			m_storage->BeginComputeCommandBuffer(frameIndex);
-			VkCommandBuffer computeVkCmd = m_storage->GetComputeCommandBuffer(frameIndex);
-			gpu::CommandList computeRecorder(reinterpret_cast<void*>(computeVkCmd));
+			const gpu::CommandBuffer computeCmd = m_storage->GetComputeCommandBuffer(frameIndex);
+			gpu::CommandList computeRecorder(computeCmd);
 			computeRecorder.BeginDebugLabel("Frame.RenderGraph.AsyncCompute", 0.90f, 0.45f, 0.10f, 1.0f);
 
 			for (const CompiledPass& cp: m_compiled)
@@ -1683,7 +1681,7 @@ namespace aether
 				{
 					break; // validated: all async-compute passes precede graphics
 				}
-				executePassOn(cp, computeRecorder, computeVkCmd);
+				executePassOn(cp, computeRecorder, computeCmd);
 			}
 
 			computeRecorder.EndDebugLabel();

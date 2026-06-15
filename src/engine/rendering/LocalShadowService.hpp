@@ -53,7 +53,7 @@ namespace aether
 	{
 	public:
 		void Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
-		void Shutdown(VkDevice device);
+		void Shutdown(gpu::Device device);
 
 		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
 
@@ -74,7 +74,7 @@ namespace aether
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, Scene& scene, World& world, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
-		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless, VkDevice device, CullPass& cullPass, gpu::Format depthFormat);
+		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat);
 		void SetupPassResources(RenderGraph& graph, gpu::Format depthFormat);
 		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph);

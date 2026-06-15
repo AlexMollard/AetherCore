@@ -11,12 +11,10 @@
 
 namespace aether
 {
-	void AnimationRootMotionSystem::Init(void* allocator, void* device, std::uint32_t maxEntities)
+	void AnimationRootMotionSystem::Init(gpu::Device device, std::uint32_t maxEntities)
 	{
 		m_maxEntities = maxEntities;
 		m_prevPositions.resize(static_cast<std::size_t>(maxEntities) * kSlots, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
-
-		(void) allocator;
 
 		const gpu::DeviceSize bufSize = static_cast<gpu::DeviceSize>(maxEntities) * kSlots * sizeof(glm::vec4);
 		m_stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer({
@@ -40,11 +38,11 @@ namespace aether
 		m_currentTimelineValue = 0;
 	}
 
-	void AnimationRootMotionSystem::Shutdown(void* device)
+	void AnimationRootMotionSystem::Shutdown(gpu::Device device)
 	{
 		if (m_timelineSemaphore != nullptr)
 		{
-			gpu::DestroyTimelineSemaphore(device, static_cast<gpu::TimelineSemaphore*>(m_timelineSemaphore));
+			gpu::DestroyTimelineSemaphore(device, m_timelineSemaphore);
 			m_timelineSemaphore = nullptr;
 		}
 		if (m_stagingHandle.IsValid())
@@ -56,14 +54,14 @@ namespace aether
 		m_prevPositions.clear();
 	}
 
-	void AnimationRootMotionSystem::BeginFrame(void* device, std::uint32_t frameIndex)
+	void AnimationRootMotionSystem::BeginFrame(gpu::Device device, std::uint32_t frameIndex)
 	{
 		if (frameIndex == 0)
 		{
 			return;
 		}
 
-		if (!gpu::WaitTimelineSemaphore(device, static_cast<gpu::TimelineSemaphore*>(m_timelineSemaphore), frameIndex))
+		if (!gpu::WaitTimelineSemaphore(device, m_timelineSemaphore, frameIndex))
 		{
 			AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: gpu::WaitTimelineSemaphore failed (expected success or timeout).");
 		}

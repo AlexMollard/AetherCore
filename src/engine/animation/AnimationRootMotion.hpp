@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "gpu/GpuHandles.hpp"
+#include "gpu/Semaphore.hpp"
 
 namespace aether
 {
@@ -13,12 +14,12 @@ namespace aether
 	class AnimationRootMotionSystem
 	{
 	public:
-		void Init(void* allocator, void* device, std::uint32_t maxEntities);
-		void Shutdown(void* device);
+		void Init(gpu::Device device, std::uint32_t maxEntities);
+		void Shutdown(gpu::Device device);
 
-		void BeginFrame(void* device, std::uint32_t frameIndex);
+		void BeginFrame(gpu::Device device, std::uint32_t frameIndex);
 
-		void* GetTimelineSemaphore() const
+		[[nodiscard]] gpu::TimelineSemaphoreHandle GetTimelineSemaphore() const noexcept
 		{
 			return m_timelineSemaphore;
 		}
@@ -29,7 +30,7 @@ namespace aether
 		gpu::BufferHandle m_stagingHandle{};
 		void* m_stagingMappedData = nullptr;
 		std::vector<glm::vec4> m_prevPositions;
-		void* m_timelineSemaphore = nullptr;
+		gpu::TimelineSemaphoreHandle m_timelineSemaphore = nullptr;
 		std::uint32_t m_maxEntities = 0;
 		std::uint64_t m_currentTimelineValue = 0;
 

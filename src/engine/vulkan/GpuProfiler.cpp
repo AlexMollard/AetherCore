@@ -37,9 +37,9 @@ namespace aether::vulkan
 	aether::gpu::ProfilerContextHandle CreateTracyGpuProfilerContext(tracy::VkCtx* ctx) noexcept
 	{
 #ifdef TRACY_ENABLE
-		return new aether::gpu::detail::ProfilerContextData{ .ctx = ctx };
+		return new aether::gpu::detail::ProfilerContextData{.ctx = ctx};
 #else
-		(void)ctx;
+		(void) ctx;
 		return nullptr;
 #endif
 	}
@@ -49,7 +49,7 @@ namespace aether::vulkan
 #ifdef TRACY_ENABLE
 		delete handle;
 #else
-		(void)handle;
+		(void) handle;
 #endif
 	}
 } // namespace aether::vulkan
@@ -72,9 +72,20 @@ namespace aether::gpu
 		m_context = nullptr;
 	}
 
-	GpuZoneScope GpuProfiler::BeginZoneScopedImpl(gpu::CommandBuffer cmd, std::string_view name,
-	                                              const char* file, std::uint32_t line,
-	                                              const char* func) noexcept
+	void GpuProfiler::SetName(std::string_view name) noexcept
+	{
+#ifdef TRACY_ENABLE
+		if (m_context == nullptr)
+		{
+			return;
+		}
+		TracyVkContextName(m_context->ctx, name.data(), static_cast<std::uint16_t>(name.size()));
+#else
+		(void) name;
+#endif
+	}
+
+	GpuZoneScope GpuProfiler::BeginZoneScopedImpl(gpu::CommandBuffer cmd, std::string_view name, const char* file, std::uint32_t line, const char* func) noexcept
 	{
 #ifdef TRACY_ENABLE
 		if (m_context == nullptr)
@@ -91,25 +102,24 @@ namespace aether::gpu
 		// parameterized), so we placement-new in place.
 		auto* storage = ::operator new(sizeof(detail::ProfilerScopeData));
 		auto* scope_data = reinterpret_cast<detail::ProfilerScopeData*>(storage);
-		new (&scope_data->scope) tracy::VkCtxScope(
-			m_context->ctx,
-			line,
-			file,
-			std::strlen(file),
-			func,
-			std::strlen(func),
-			name.data(),
-			static_cast<std::size_t>(name.size()),
-			reinterpret_cast<VkCommandBuffer>(cmd),
-			0,    // depth
-			true); // is_active
+		new (&scope_data->scope) tracy::VkCtxScope(m_context->ctx,
+		        line,
+		        file,
+		        std::strlen(file),
+		        func,
+		        std::strlen(func),
+		        name.data(),
+		        static_cast<std::size_t>(name.size()),
+		        reinterpret_cast<VkCommandBuffer>(cmd),
+		        0,     // depth
+		        true); // is_active
 		return GpuZoneScope(scope_data);
 #else
-		(void)cmd;
-		(void)name;
-		(void)file;
-		(void)line;
-		(void)func;
+		(void) cmd;
+		(void) name;
+		(void) file;
+		(void) line;
+		(void) func;
 		return GpuZoneScope();
 #endif
 	}
@@ -123,7 +133,7 @@ namespace aether::gpu
 		}
 		TracyVkCollect(m_context->ctx, reinterpret_cast<VkCommandBuffer>(cmd));
 #else
-		(void)cmd;
+		(void) cmd;
 #endif
 	}
 

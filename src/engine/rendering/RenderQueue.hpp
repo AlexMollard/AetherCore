@@ -10,7 +10,6 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/ResourceRegistry.hpp"
 
-#include "utils/GpuProfiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "rendering/GpuContracts.hpp"
 #include "rendering/GpuTimestampPool.hpp"
@@ -147,11 +146,8 @@ namespace aether
 		}
 
 		// Optional Tracy GPU context for CPU-correlated GPU timeline zones.
-		// Pass VulkanContext::GetTracyVkCtx() after initialization.
-		void SetTracyVkCtx(TracyVkCtx ctx)
-		{
-			m_tracyVkCtx = ctx;
-		}
+		// Wired through the engine-side GpuProfiler singleton - no
+		// Tracy type or `Vk*` token is exposed on the public API.
 
 		// Optional animation extension systems. When set, the blend/IK/root-motion
 		// passes are dispatched after the standard animation pipeline.
@@ -335,7 +331,6 @@ namespace aether
 		const AnimationDatabase* m_animationDb = nullptr;
 		std::uint32_t m_animationSampleJobCount = 0;
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
-		TracyVkCtx m_tracyVkCtx = nullptr;
 
 		AnimationBlendSystem* m_animationBlendSystem = nullptr;
 		AnimationIkSystem* m_animationIkSystem = nullptr;

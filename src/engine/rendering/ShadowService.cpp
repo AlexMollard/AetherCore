@@ -34,14 +34,13 @@ namespace aether
 		// Single shadow queue with 3x output capacity for multi-frustum culling.
 		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
 		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
-		m_shadowRenderQueue.SetTracyVkCtx(context.GetTracyVkCtx());
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
 		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), swapchain.GetDepthFormat());
 	}
 
-	void ShadowService::Shutdown(const VkDevice device)
+	void ShadowService::Shutdown(const gpu::Device device)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
@@ -53,7 +52,7 @@ namespace aether
 		(void) device;
 	}
 
-	void ShadowService::RecreatePipeline(VkDevice device, VkPipelineCache pipelineCache, gpu::Format depthFormat)
+	void ShadowService::RecreatePipeline(gpu::Device device, gpu::PipelineCache pipelineCache, gpu::Format depthFormat)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowPipeline.Destroy();
@@ -91,19 +90,19 @@ namespace aether
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
-	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, const CullPass& cullPass, gpu::Format depthFormat)
+	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat)
 	{
 		SetupPassResources(graph, bindlessManager, device, depthFormat);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
 	}
 
-	void ShadowService::SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, VkDevice device, gpu::Format depthFormat)
+	void ShadowService::SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, gpu::Format depthFormat)
 	{
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
-			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, static_cast<void*>(device));
+			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager, device);
 		}
 	}
 

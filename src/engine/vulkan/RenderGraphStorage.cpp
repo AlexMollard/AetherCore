@@ -204,7 +204,7 @@ namespace aether
 		}
 	}
 
-	VkCommandBuffer RenderGraphStorage::GetComputeCommandBuffer(std::uint32_t frameIndex) const
+	gpu::CommandBuffer RenderGraphStorage::GetComputeCommandBuffer(std::uint32_t frameIndex) const
 	{
 		return m_computeFrames[frameIndex % kMaxFramesInFlight].commandBuffer;
 	}
@@ -429,7 +429,7 @@ namespace aether
 
 	// -- Transient images -----------------------------------------------------
 
-	uint32_t RenderGraphStorage::AddTransientSlot(VkFormat format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent)
+	uint32_t RenderGraphStorage::AddTransientSlot(gpu::Format format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
@@ -559,7 +559,7 @@ namespace aether
 
 		if (!entry.image)
 		{
-			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0 || entry.extent.width == 0 || entry.extent.height == 0)
+			if (entry.format == gpu::Format::Undefined || static_cast<std::uint32_t>(entry.usage) == 0 || entry.extent.width == 0 || entry.extent.height == 0)
 			{
 				return 0xFFFFFFFFu;
 			}
@@ -569,7 +569,7 @@ namespace aether
 			                m_allocator,
 			                {
 			                        .extent = entry.extent,
-			                        .format = gpu::FromVk(entry.format),
+			                        .format = entry.format,
 			                        .usage = entry.usage,
 			                }));
 			entry.image = std::move(newImage);
@@ -633,7 +633,7 @@ namespace aether
 		entry.bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 		entry.fromHeap = false;
-		entry.format = VK_FORMAT_UNDEFINED;
+		entry.format = gpu::Format::Undefined;
 		entry.usage = gpu::ImageUsage::None;
 		entry.aspect = gpu::ImageAspect::Color;
 		entry.extent = {};
@@ -773,11 +773,7 @@ namespace aether
 		}
 	}
 
-	void RenderGraphStorage::CmdSetEvent2(
-	        gpu::CommandBuffer cmd,
-	        gpu::Event event,
-	        std::span<const gpu::ImageMemoryBarrier> barriers,
-	        const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
 	{
 		if (barriers.empty())
 		{
@@ -811,11 +807,7 @@ namespace aether
 		vkCmdSetEvent2(vkCmd, vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdWaitEvents2(
-	        gpu::CommandBuffer cmd,
-	        gpu::Event event,
-	        std::span<const gpu::ImageMemoryBarrier> barriers,
-	        const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
 	{
 		if (barriers.empty())
 		{
@@ -839,10 +831,7 @@ namespace aether
 		vkCmdWaitEvents2(vkCmd, 1, &vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdBufferBarriers(
-	        gpu::CommandBuffer cmd,
-	        std::span<const gpu::BufferMemoryBarrier> barriers,
-	        const std::function<gpu::Buffer(uint32_t)>& resolveBuffer)
+	void RenderGraphStorage::CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers, const std::function<gpu::Buffer(uint32_t)>& resolveBuffer)
 	{
 		if (barriers.empty())
 		{
@@ -865,10 +854,7 @@ namespace aether
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdImageBarriers(
-	        gpu::CommandBuffer cmd,
-	        std::span<const gpu::ImageMemoryBarrier> barriers,
-	        const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
 	{
 		if (barriers.empty())
 		{
@@ -890,6 +876,7 @@ namespace aether
 		};
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
+
 	// -- Transient heap -------------------------------------------------------
 
 	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize)
@@ -975,7 +962,7 @@ namespace aether
 			{
 				continue;
 			}
-			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0)
+			if (entry.format == gpu::Format::Undefined || static_cast<std::uint32_t>(entry.usage) == 0)
 			{
 				continue;
 			}
@@ -992,7 +979,7 @@ namespace aether
 			        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 			        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
 			        .imageType = VK_IMAGE_TYPE_2D,
-			        .format = entry.format,
+			        .format = gpu::ToVk(entry.format),
 			        .extent = {entry.extent.width, entry.extent.height, 1u},
 			        .mipLevels = 1,
 			        .arrayLayers = 1,
@@ -1170,7 +1157,7 @@ namespace aether
 			{
 				continue;
 			}
-			if (entry.format == VK_FORMAT_UNDEFINED || static_cast<std::uint32_t>(entry.usage) == 0)
+			if (entry.format == gpu::Format::Undefined || static_cast<std::uint32_t>(entry.usage) == 0)
 			{
 				continue;
 			}
@@ -1205,7 +1192,7 @@ namespace aether
 				                m_allocator,
 				                {
 				                        .extent = entry.extent,
-				                        .format = gpu::FromVk(entry.format),
+				                        .format = entry.format,
 				                        .usage = entry.usage,
 				                },
 				                m_transientHeapAllocation,
@@ -1228,7 +1215,7 @@ namespace aether
 			                m_allocator,
 			                {
 			                        .extent = entry.extent,
-			                        .format = gpu::FromVk(entry.format),
+			                        .format = entry.format,
 			                        .usage = entry.usage,
 			                }));
 			entry.image = std::move(newImage);

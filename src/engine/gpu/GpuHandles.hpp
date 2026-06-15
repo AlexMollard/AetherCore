@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "utils/Assert.hpp"
+#include "gpu/GpuTypes.hpp"
 
 namespace aether::gpu
 {

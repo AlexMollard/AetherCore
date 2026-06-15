@@ -37,7 +37,6 @@
 #include "scene/World.hpp"
 #include "ui/UISubsystem.hpp"
 #include "vulkan/Swapchain.hpp"
-#include "utils/GpuProfiler.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
@@ -142,8 +141,7 @@ namespace aether
 		if (enableAsyncCompute)
 		{
 			m_services.Get<AsyncComputeContext>().Init(*m_gpu);
-			VulkanContext& vk = m_gpu->GetVulkanContext();
-			m_rendering->GetRenderGraph().EnableAsyncCompute(reinterpret_cast<void*>(vk.GetComputeQueue()), vk.GetComputeQueueFamily());
+			m_rendering->GetRenderGraph().EnableAsyncCompute(m_gpu->GetComputeQueue(), m_gpu->GetComputeQueueFamily());
 		}
 
 		// Register lighting compute passes in the render graph (after async
@@ -155,12 +153,11 @@ namespace aether
 		m_animationIk = std::make_unique<AnimationIkSystem>();
 		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
 
-		VmaAllocator allocator = m_gpu->GetVulkanContext().GetAllocator();
-		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
+		const gpu::Device device = m_gpu->GetDevice();
 
-		m_animationBlend->Init(allocator, device, 256, 128);
-		m_animationIk->Init(allocator, device, 256);
-		m_rootMotion->Init(static_cast<void*>(allocator), static_cast<void*>(device), 256);
+		m_animationBlend->Init(gpu::Allocator{}, device, 256, 128);
+		m_animationIk->Init(gpu::Allocator{}, device, 256);
+		m_rootMotion->Init(device, 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
 		m_services.Register<AnimationIkSystem>(*m_animationIk);
@@ -202,8 +199,8 @@ namespace aether
 
 		// Animation systems (reverse of init order).
 		{
-			VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
-			m_rootMotion->Shutdown(static_cast<void*>(device));
+			const gpu::Device device = m_gpu->GetDevice();
+			m_rootMotion->Shutdown(device);
 			m_animationIk->Shutdown(device);
 			m_animationBlend->Shutdown(device);
 		}
@@ -349,8 +346,8 @@ namespace aether
 		m_frameIndex = packet.frameIndex;
 		BeginFrame();
 
-		VkDevice device = m_gpu->GetVulkanContext().GetDevice().device;
-		m_rootMotion->BeginFrame(static_cast<void*>(device), static_cast<std::uint32_t>(m_frameIndex));
+		const gpu::Device device = m_gpu->GetDevice();
+		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
 
 		if (m_animationIk)
 		{

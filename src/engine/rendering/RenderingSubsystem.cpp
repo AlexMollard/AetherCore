@@ -27,7 +27,6 @@ namespace aether
 		GpuDevice& gpu = services.Get<GpuDevice>();
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
-		m_renderGraph.SetTracyVkCtx(vk.GetTracyVkCtx());
 		m_frameConstantsBuffer.Initialize(vk);
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
@@ -37,7 +36,6 @@ namespace aether
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);
 		m_renderQueue.SetDebugAnimPassMask(0xFu);
-		m_renderQueue.SetTracyVkCtx(vk.GetTracyVkCtx());
 
 		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
@@ -85,14 +83,15 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		VulkanContext& vk = services.Get<VulkanContext>();
+		GpuDevice& gpu = services.Get<GpuDevice>();
 
 		m_postProcessStack.Destroy();
 		m_skyboxPass.Destroy();
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
-		m_shadowService.Shutdown(vk.GetDevice().device);
-		m_localShadowService.Shutdown(vk.GetDevice().device);
+		m_shadowService.Shutdown(gpu.GetDevice());
+		m_localShadowService.Shutdown(gpu.GetDevice());
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
@@ -102,11 +101,11 @@ namespace aether
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		VulkanContext& vk = services.Get<VulkanContext>();
+		GpuDevice& gpu = services.Get<GpuDevice>();
 		Swapchain& swapchain = services.Get<Swapchain>();
 		BindlessManager& bindless = services.Get<BindlessManager>();
 
-		m_shadowService.RecreatePipeline(vk.GetDevice().device, vk.GetPipelineCache(), swapchain.GetDepthFormat());
+		m_shadowService.RecreatePipeline(gpu.GetDevice(), gpu.GetPipelineCache(), swapchain.GetDepthFormat());
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
@@ -115,9 +114,9 @@ namespace aether
 		m_postProcessStack.Destroy();
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
-		        .device = vk.GetDevice().device,
-		        .pipelineCache = vk.GetPipelineCache(),
-		        .allocator = vk.GetAllocator(),
+		        .device = gpu.GetDevice(),
+		        .pipelineCache = gpu.GetPipelineCache(),
+		        .allocator = gpu.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
@@ -127,7 +126,7 @@ namespace aether
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 
-		m_renderTargetService.OnRenderGraphReset(static_cast<gpu::Device>(vk.GetDevice().device), swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
+		m_renderTargetService.OnRenderGraphReset(gpu.GetDevice(), swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
 
 		RegisterPasses(services);
 	}

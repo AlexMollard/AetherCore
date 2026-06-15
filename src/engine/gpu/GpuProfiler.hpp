@@ -63,18 +63,38 @@ namespace aether::gpu
 		GpuZoneScope(const GpuZoneScope&) = delete;
 		GpuZoneScope& operator=(const GpuZoneScope&) = delete;
 
-		GpuZoneScope(GpuZoneScope&& o) noexcept : m_handle(o.m_handle) { o.m_handle = nullptr; }
+		GpuZoneScope(GpuZoneScope&& o) noexcept
+		      : m_handle(o.m_handle)
+		{
+			o.m_handle = nullptr;
+		}
+
 		GpuZoneScope& operator=(GpuZoneScope&& o) noexcept
 		{
-			if (this != &o) { Reset(); m_handle = o.m_handle; o.m_handle = nullptr; }
+			if (this != &o)
+			{
+				Reset();
+				m_handle = o.m_handle;
+				o.m_handle = nullptr;
+			}
 			return *this;
 		}
-		~GpuZoneScope() { Reset(); }
+
+		~GpuZoneScope()
+		{
+			Reset();
+		}
+
 		void Reset() noexcept;
 
 	private:
 		friend class GpuProfiler;
-		explicit GpuZoneScope(ProfilerScopeHandle handle) noexcept : m_handle(handle) {}
+
+		explicit GpuZoneScope(ProfilerScopeHandle handle) noexcept
+		      : m_handle(handle)
+		{
+		}
+
 		ProfilerScopeHandle m_handle = nullptr;
 	};
 
@@ -88,11 +108,13 @@ namespace aether::gpu
 		void Initialize(const GpuProfilerInit& init) noexcept;
 		void Shutdown() noexcept;
 
+		// Set the human-readable name shown in Tracy's timeline.
+		// Trivial no-op when the context isn't initialized.
+		void SetName(std::string_view name) noexcept;
+
 		// Source location is passed in by the `AE_GPU_ZONE_SCOPED`
 		// macro. Returns a `GpuZoneScope` ready to use.
-		GpuZoneScope BeginZoneScopedImpl(gpu::CommandBuffer cmd, std::string_view name,
-		                                  const char* file, std::uint32_t line,
-		                                  const char* func) noexcept;
+		GpuZoneScope BeginZoneScopedImpl(gpu::CommandBuffer cmd, std::string_view name, const char* file, std::uint32_t line, const char* func) noexcept;
 
 		void Collect(gpu::CommandBuffer cmd) noexcept;
 

@@ -733,13 +733,14 @@ namespace aether::gpu
 		        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
 		        .image = resolvedImage,
-		        .subresourceRange = {
-		                .aspectMask = ToVk(barrier.aspect),
-		                .baseMipLevel = barrier.baseMipLevel,
-		                .levelCount = barrier.levelCount,
-		                .baseArrayLayer = barrier.baseArrayLayer,
-		                .layerCount = barrier.layerCount,
-		        },
+		        .subresourceRange =
+		                {
+		                        .aspectMask = ToVk(barrier.aspect),
+		                        .baseMipLevel = barrier.baseMipLevel,
+		                        .levelCount = barrier.levelCount,
+		                        .baseArrayLayer = barrier.baseArrayLayer,
+		                        .layerCount = barrier.layerCount,
+		                },
 		};
 	}
 
@@ -771,11 +772,7 @@ namespace aether::gpu
 		};
 	}
 
-	VkRenderingInfo ToVk(
-	        const RenderingInfo& info,
-	        const VkRenderingAttachmentInfo* vkColorAttachments,
-	        std::uint32_t colorAttachmentCount,
-	        const VkRenderingAttachmentInfo* vkDepthAttachment) noexcept
+	VkRenderingInfo ToVk(const RenderingInfo& info, const VkRenderingAttachmentInfo* vkColorAttachments, std::uint32_t colorAttachmentCount, const VkRenderingAttachmentInfo* vkDepthAttachment) noexcept
 	{
 		return VkRenderingInfo{
 		        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,

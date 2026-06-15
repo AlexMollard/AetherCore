@@ -2,29 +2,44 @@
 
 #include <cstdint>
 
+#include "gpu/GpuTypes.hpp"
+
 namespace aether::gpu
 {
-	// Opaque timeline semaphore. Backend owns the VkSemaphore; engine code
-	// treats this as void* (or a wrapped handle) and never sees vk* types.
-	using TimelineSemaphore = void;
+	// Engine-side handle for a timeline semaphore. The full definition
+	// lives in the vulkan backend (`vulkan/Semaphore.cpp`); the engine
+	// only ever sees this forward-declared pImpl pointer, never a
+	// `VkSemaphore` or a `void*` payload.
+	namespace detail
+	{
+		struct TimelineSemaphoreData;
+	} // namespace detail
 
-	// Create a timeline semaphore. The device is a void* (VkDevice) that
-	// the backend casts. Returns nullptr on failure.
+	using TimelineSemaphore = detail::TimelineSemaphoreData;
+
+	// Opaque typed handle returned by CreateTimelineSemaphore. The
+	// engine treats it as the only valid way to refer to a semaphore.
+	using TimelineSemaphoreHandle = TimelineSemaphore*;
+
 	struct TimelineSemaphoreDesc
 	{
-		void* device = nullptr;
+		Device device = nullptr;
 		std::uint64_t initialValue = 0;
 		const char* debugName = nullptr;
 	};
 
-	[[nodiscard]] TimelineSemaphore* CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept;
+	// Create a timeline semaphore. The `device` field of `desc` must be
+	// a valid `gpu::Device` obtained from `GpuDevice::GetDevice()`.
+	// Returns `nullptr` on failure.
+	[[nodiscard]] TimelineSemaphoreHandle CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept;
 
-	// Wait for a timeline semaphore to reach the given value. The device is
-	// the same one passed to CreateTimelineSemaphore. Returns true on
-	// success or timeout, false on error.
-	[[nodiscard]] bool WaitTimelineSemaphore(void* device, TimelineSemaphore* sem, std::uint64_t value) noexcept;
+	// Wait for a timeline semaphore to reach the given value. The
+	// `device` must be the same one passed to `CreateTimelineSemaphore`.
+	// Returns true on success or timeout, false on error.
+	[[nodiscard]] bool WaitTimelineSemaphore(Device device, TimelineSemaphoreHandle sem, std::uint64_t value) noexcept;
 
-	// Destroy a timeline semaphore. The device is the same one passed to
-	// CreateTimelineSemaphore. The handle is invalid after this call.
-	void DestroyTimelineSemaphore(void* device, TimelineSemaphore* sem) noexcept;
+	// Destroy a timeline semaphore. The `device` must be the same one
+	// passed to `CreateTimelineSemaphore`. The handle is invalid after
+	// this call.
+	void DestroyTimelineSemaphore(Device device, TimelineSemaphoreHandle sem) noexcept;
 } // namespace aether::gpu

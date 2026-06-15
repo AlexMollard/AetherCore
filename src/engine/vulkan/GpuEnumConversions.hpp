@@ -77,16 +77,8 @@ namespace aether::gpu
 	// caller passes in the resolved Vulkan handle via the helper functions
 	// below (the engine-side struct holds the opaque type, the storage knows
 	// the actual VkImage / VkBuffer to populate).
-	[[nodiscard]] VkImageMemoryBarrier2 ToVk(
-	        const ImageMemoryBarrier& barrier,
-	        VkImage resolvedImage) noexcept;
-	[[nodiscard]] VkBufferMemoryBarrier2 ToVk(
-	        const BufferMemoryBarrier& barrier,
-	        VkBuffer resolvedBuffer) noexcept;
+	[[nodiscard]] VkImageMemoryBarrier2 ToVk(const ImageMemoryBarrier& barrier, VkImage resolvedImage) noexcept;
+	[[nodiscard]] VkBufferMemoryBarrier2 ToVk(const BufferMemoryBarrier& barrier, VkBuffer resolvedBuffer) noexcept;
 	[[nodiscard]] VkRenderingAttachmentInfo ToVk(const RenderingAttachmentInfo& info) noexcept;
-	[[nodiscard]] VkRenderingInfo ToVk(
-	        const RenderingInfo& info,
-	        const VkRenderingAttachmentInfo* vkColorAttachments,
-	        std::uint32_t colorAttachmentCount,
-	        const VkRenderingAttachmentInfo* vkDepthAttachment) noexcept;
+	[[nodiscard]] VkRenderingInfo ToVk(const RenderingInfo& info, const VkRenderingAttachmentInfo* vkColorAttachments, std::uint32_t colorAttachmentCount, const VkRenderingAttachmentInfo* vkDepthAttachment) noexcept;
 } // namespace aether::gpu

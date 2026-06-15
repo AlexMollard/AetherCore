@@ -2,11 +2,19 @@
 
 #include <optional>
 #include "utils/Assert.hpp"
-#include "utils/GpuProfiler.hpp"
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
+
+// Forward declaration of Tracy's VkCtx so the raw Tracy context
+// pointer can be stored as a member without dragging TracyVulkan.hpp
+// into every translation unit that includes this header. The full
+// type is needed only in VulkanContext.cpp.
+namespace tracy
+{
+	struct VkCtx;
+}
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 #	include "vulkan/AftermathContext.hpp"
@@ -28,11 +36,6 @@ namespace aether
 		[[nodiscard]] const vkb::Instance& GetInstance() const;
 		[[nodiscard]] const vkb::Device& GetDevice() const;
 		[[nodiscard]] VkPhysicalDevice GetPhysicalDevice() const;
-
-		[[nodiscard]] TracyVkCtx GetTracyVkCtx() const
-		{
-			return m_tracyVkCtx;
-		}
 
 		[[nodiscard]] gpu::ProfilerContextHandle GetTracyProfilerHandle() const
 		{
@@ -71,7 +74,7 @@ namespace aether
 		VkQueue m_presentQueue = VK_NULL_HANDLE;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
-		TracyVkCtx m_tracyVkCtx = nullptr;
+		tracy::VkCtx* m_tracyVkCtx = nullptr;
 		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH

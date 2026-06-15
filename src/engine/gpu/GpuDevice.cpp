@@ -210,6 +210,11 @@ namespace aether
 		return static_cast<gpu::Queue>(m_gfx->GetVulkanContext().GetGraphicsQueue());
 	}
 
+	gpu::Queue GpuDevice::GetComputeQueue() const noexcept
+	{
+		return static_cast<gpu::Queue>(m_gfx->GetVulkanContext().GetComputeQueue());
+	}
+
 	gpu::PipelineCache GpuDevice::GetPipelineCache() const noexcept
 	{
 		return static_cast<gpu::PipelineCache>(m_gfx->GetVulkanContext().GetPipelineCache());

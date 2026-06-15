@@ -88,7 +88,7 @@ namespace aether
 			return;
 		}
 
-		const VkDevice device = m_context->GetDevice().device;
+		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		for (auto& frame: m_buffers)
 		{
 			frame.lights.Reset();
@@ -370,6 +370,11 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
+	// TODO(audit/P1.1): EnsureBuffers is a buffer-pool helper that calls
+	// vulkan/ UniqueBuffer / VMA directly, which is why the body is full
+	// of VkBufferCreateInfo / VmaAllocationCreateInfo / VkDeviceSize. It
+	// should move to vulkan/LightingManagerBuffers.cpp so the engine
+	// version of LightingManager stays vulkan-free.
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
 		AE_PROFILE_ZONE();
@@ -427,8 +432,8 @@ namespace aether
 			return;
 		}
 
-		const VkDevice device = m_context->GetDevice().device;
-		const VkPipelineCache pipelineCache = m_context->GetPipelineCache();
+		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		const gpu::PipelineCache pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
 
 		// Create shared layout once.
 		if (m_computeLayout == nullptr)

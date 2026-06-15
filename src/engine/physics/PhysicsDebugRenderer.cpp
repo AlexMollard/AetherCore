@@ -646,10 +646,7 @@ namespace aether
 					                // flush, but the registry's helper is a no-op in that
 					                // case and flushes the MAPPED range for non-coherent
 					                // pools, so it's safe to call unconditionally.
-					                gpu::ResourceRegistry::FlushMappedBuffer(
-					                        m_immediateVertexHandle,
-					                        0,
-					                        static_cast<gpu::DeviceSize>(immediateCount) * sizeof(DebugVertex));
+					                gpu::ResourceRegistry::FlushMappedBuffer(m_immediateVertexHandle, 0, static_cast<gpu::DeviceSize>(immediateCount) * sizeof(DebugVertex));
 
 					                // White tint, identity model: per-vertex colors pass through unchanged.
 					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f), glm::mat4(1.0f)};

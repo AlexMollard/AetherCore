@@ -13,6 +13,9 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/TracyGpuProfiler.hpp"
+#ifdef TRACY_ENABLE
+#	include <tracy/TracyVulkan.hpp>
+#endif
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "platform/Window.hpp"
@@ -435,12 +438,12 @@ namespace aether
 			}
 
 			m_tracyVkCtx = TracyVkContextHostCalibrated(physicalDeviceResult.value().physical_device, m_device->device, qpreset, gpdctd, gct);
-			AE_PROFILE_GPU_CONTEXT_NAME(m_tracyVkCtx, "AetherCore GPU");
 			// Build the engine-side pImpl via the vulkan-side factory
 			// and hand it to the engine singleton. Engine code never
 			// sees `tracy::VkCtx*` or any other `Vk*`-named type.
 			m_tracyProfilerHandle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
-			gpu::GpuProfiler::Get().Initialize({ m_tracyProfilerHandle });
+			gpu::GpuProfiler::Get().Initialize({m_tracyProfilerHandle});
+			gpu::GpuProfiler::Get().SetName("AetherCore GPU");
 		}
 #endif
 
