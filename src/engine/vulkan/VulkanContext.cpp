@@ -8,7 +8,6 @@
 #include <GLFW/glfw3.h>
 
 #include "utils/AetherExceptions.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuProfiler.hpp"
@@ -323,7 +322,6 @@ namespace aether
 
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		vkutil::SetObjectNameFunction(setObjectNameFn);
-		UniqueBuffer::SetObjectNameFunction(setObjectNameFn);
 
 		// Name queues immediately so they appear correctly in RenderDoc and validation output.
 		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
@@ -504,7 +502,6 @@ namespace aether
 #endif
 
 		vkutil::SetObjectNameFunction(nullptr);
-		UniqueBuffer::SetObjectNameFunction(nullptr);
 		gpu::CommandList::SetDebugLabelFunctions(nullptr, nullptr);
 
 		if (m_device.has_value())

@@ -9,6 +9,11 @@
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 
+namespace aether
+{
+	class BindlessManager;
+}
+
 namespace aether::gpu
 {
 	struct BufferDesc
@@ -128,6 +133,11 @@ namespace aether::gpu
 
 		[[nodiscard]] static TextureHandle CreateTexture(const TextureDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
 
+		// Aliased creation (transient heap sub-allocation). The existingAllocation
+		// pointer (VmaAllocation) is cast through void* at the facade.
+		[[nodiscard]] static TextureHandle CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr);
+		[[nodiscard]] static BufferHandle CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr);
+
 		// Compute-pipeline: factory + register. Returns an opaque
 		// PipelineHandle. Layout is owned by the registry entry (when the
 		// factory sets ownsLayout=true) and is destroyed when the handle is.
@@ -151,12 +161,18 @@ namespace aether::gpu
 		struct ResolvedTexture
 		{
 			ImageView view = nullptr;
+			Format format = Format::Undefined;
+			Extent2D extent{};
+			std::uint32_t mipLevels = 0;
+			std::uint32_t arrayLayers = 0;
+			ImageUsage usage = ImageUsage::None;
 		};
 
 		struct ResolvedBuffer
 		{
 			DeviceAddress deviceAddress = 0;
 			DeviceSize size = 0;
+			BufferUsage usage = BufferUsage::None;
 		};
 
 		[[nodiscard]] static ResolvedPipeline ResolvePipeline(PipelineHandle handle) noexcept;
@@ -167,6 +183,34 @@ namespace aether::gpu
 		// gpu::Image. Used at the render-graph boundary to register external
 		// images. Backend resolves to the underlying VkImage at the seam.
 		[[nodiscard]] static gpu::Image ResolveTextureImage(TextureHandle handle) noexcept;
+
+		// Naming
+		static void SetBufferName(BufferHandle handle, const char* name);
+		static void SetTextureName(TextureHandle handle, const char* name);
+
+		// Bindless support
+		// EnsureBindlessSampled stores the bindless manager pointer in the
+		// backend registry for deferred slot-free during Destroy.
+		static void SetBindlessManager(class aether::BindlessManager* mgr);
+		static void EnsureBindlessSampled(TextureHandle handle,
+		        class aether::BindlessManager& bindlessManager,
+		        ImageAspect aspectMask = ImageAspect::Color,
+		        ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly,
+		        TextureFilter filter = TextureFilter::Linear,
+		        SamplerAddressMode addressMode = SamplerAddressMode::Repeat);
+		[[nodiscard]] static bool HasBindlessSampled(TextureHandle handle);
+		[[nodiscard]] static std::uint32_t GetBindlessSampledSlot(TextureHandle handle);
+
+		// Texture property queries
+		[[nodiscard]] static Format GetTextureFormat(TextureHandle handle);
+		[[nodiscard]] static Extent2D GetTextureExtent(TextureHandle handle);
+		[[nodiscard]] static std::uint32_t GetTextureMipLevels(TextureHandle handle);
+		[[nodiscard]] static std::uint32_t GetTextureArrayLayers(TextureHandle handle);
+		[[nodiscard]] static ImageUsage GetTextureUsage(TextureHandle handle);
+
+		// Buffer property queries
+		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);
+		[[nodiscard]] static BufferUsage GetBufferUsage(BufferHandle handle);
 	};
 
 	template<typename T>

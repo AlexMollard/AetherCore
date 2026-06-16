@@ -11,7 +11,6 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "ui/UiLayout.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {

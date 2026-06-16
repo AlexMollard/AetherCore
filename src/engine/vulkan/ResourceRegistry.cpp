@@ -2,9 +2,12 @@
 
 #include "utils/Assert.hpp"
 #include "utils/Backtrace.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "gpu/BindlessManager.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuTypesVk.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 namespace aether
 {
@@ -12,11 +15,9 @@ namespace aether
 	// must match the engine-wide frame pacing constant - see gpu/GpuTypes.hpp.
 	namespace
 	{
-		inline constexpr std::uint32_t kIndexInvalid = 0x00FFFFFFu;
+		inline constexpr std::uint32_t kIndexInvalid = 0x0000FFFFu;
 		inline constexpr std::uint32_t kGenerationInvalid = 0u;
-		inline constexpr std::uint32_t kGenerationWrap = 256u;
-		inline constexpr int kAllocFrames = 4;
-		inline constexpr int kBacktraceDepth = 9;
+		inline constexpr std::uint32_t kGenerationWrap = 65536u;
 
 #ifndef NDEBUG
 		// Build a multi-line frame list from the slot's ring buffer.
@@ -29,10 +30,10 @@ namespace aether
 			}
 
 			std::string result;
-			const int start = std::max(0, slot.allocSiteCount - kAllocFrames);
+			const int start = std::max(0, slot.allocSiteCount - ResourceRegistry::kAllocFrames);
 			for (int i = start; i < slot.allocSiteCount; i++)
 			{
-				const auto& frame = slot.allocFrames[i % kAllocFrames];
+				const auto& frame = slot.allocFrames[i % ResourceRegistry::kAllocFrames];
 				if (frame.site.line() == 0)
 				{
 					continue;
@@ -86,6 +87,31 @@ namespace aether
 			info.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
 			return info;
 		}
+
+		// Deduces the canonical VkImageAspectFlags for a given format.
+		[[nodiscard]] VkImageAspectFlags DeduceAspect(VkFormat format)
+		{
+#ifdef __clang__
+#	pragma clang diagnostic push
+#	pragma clang diagnostic ignored "-Wswitch-enum"
+#endif
+			switch (format)
+			{
+				case VK_FORMAT_D16_UNORM:
+				case VK_FORMAT_D32_SFLOAT:
+				case VK_FORMAT_X8_D24_UNORM_PACK32:
+					return VK_IMAGE_ASPECT_DEPTH_BIT;
+				case VK_FORMAT_D16_UNORM_S8_UINT:
+				case VK_FORMAT_D24_UNORM_S8_UINT:
+				case VK_FORMAT_D32_SFLOAT_S8_UINT:
+					return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+				default:
+					return VK_IMAGE_ASPECT_COLOR_BIT;
+			}
+#ifdef __clang__
+#	pragma clang diagnostic pop
+#endif
+		}
 	} // namespace
 
 	ResourceRegistry::~ResourceRegistry()
@@ -119,7 +145,12 @@ namespace aether
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked texture '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
+				if (slot.entry->hasBindlessSampled && m_bindlessManager)
+				{
+					m_bindlessManager->FreeSampledImageSlotDeferred(slot.entry->bindlessSampledSlot);
+				}
 				DestroyTextureEntryNow(*slot.entry);
+				--m_liveTextureCount;
 				slot.entry.reset();
 			}
 		}
@@ -133,6 +164,7 @@ namespace aether
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
 				DestroyBufferEntryNow(*slot.entry);
+				--m_liveBufferCount;
 				slot.entry.reset();
 			}
 		}
@@ -146,6 +178,7 @@ namespace aether
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked pipeline '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
 				DestroyPipelineEntryNow(*slot.entry);
+				--m_livePipelineCount;
 				slot.entry.reset();
 			}
 		}
@@ -155,6 +188,9 @@ namespace aether
 	{
 		m_device = device;
 		m_allocator = allocator;
+		m_textures.reserve(1024);
+		m_buffers.reserve(1024);
+		m_pipelines.reserve(256);
 	}
 
 	gpu::BufferHandle ResourceRegistry::CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc) noexcept
@@ -334,6 +370,8 @@ namespace aether
 		entry.allocation = allocation;
 		entry.allocator = m_allocator;
 		entry.ownsAllocation = true;
+		entry.mipLevels = desc.mipLevels;
+		entry.arrayLayers = desc.arrayLayers;
 
 		const gpu::TextureHandle handle = RegisterTexture(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{}, loc);
 		if (!handle.IsValid())
@@ -380,6 +418,313 @@ namespace aether
 		}
 
 		vmaFlushAllocation(m_allocator, entry->allocation, offset, size);
+	}
+
+	void ResourceRegistry::SetBufferName(gpu::BufferHandle handle, const char* name)
+	{
+		const BufferEntry* entry = Resolve(handle);
+		if (!entry || entry->buffer == VK_NULL_HANDLE || !name)
+		{
+			return;
+		}
+		vkutil::SetObjectName(entry->device, reinterpret_cast<std::uint64_t>(entry->buffer), VK_OBJECT_TYPE_BUFFER, name);
+	}
+
+	void ResourceRegistry::SetTextureName(gpu::TextureHandle handle, const char* name)
+	{
+		const TextureEntry* entry = Resolve(handle);
+		if (!entry || entry->image == VK_NULL_HANDLE || !name)
+		{
+			return;
+		}
+		vkutil::SetObjectName(entry->device, reinterpret_cast<std::uint64_t>(entry->image), VK_OBJECT_TYPE_IMAGE, name);
+		if (entry->view != VK_NULL_HANDLE)
+		{
+			const std::string viewName = std::string(name) + ".View";
+			vkutil::SetObjectName(entry->device, reinterpret_cast<std::uint64_t>(entry->view), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
+		}
+	}
+
+	void ResourceRegistry::SetBindlessManager(BindlessManager* mgr)
+	{
+		m_bindlessManager = mgr;
+	}
+
+	gpu::BufferHandle ResourceRegistry::CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName)
+	{
+		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+
+		const VkBufferCreateInfo bufInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = size,
+		        .usage = usage,
+		};
+
+		VkBuffer buffer = VK_NULL_HANDLE;
+		VkResult result = vkCreateBuffer(m_device, &bufInfo, nullptr, &buffer);
+		if (result != VK_SUCCESS)
+		{
+			return {};
+		}
+
+		VmaAllocationInfo existingAllocInfo;
+		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
+
+		const VkBindBufferMemoryInfo bindInfo{
+		        .sType = VK_STRUCTURE_TYPE_BIND_BUFFER_MEMORY_INFO,
+		        .buffer = buffer,
+		        .memory = existingAllocInfo.deviceMemory,
+		        .memoryOffset = memoryOffset,
+		};
+		result = vkBindBufferMemory2(m_device, 1, &bindInfo);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyBuffer(m_device, buffer, nullptr);
+			return {};
+		}
+
+		BufferEntry entry{};
+		entry.buffer = buffer;
+		entry.device = m_device;
+		entry.allocation = existingAllocation;
+		entry.allocator = m_allocator;
+		entry.usage = usage;
+		entry.size = size;
+		entry.ownsAllocation = false;
+
+		if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
+		{
+			const VkBufferDeviceAddressInfo addrInfo{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			        .buffer = buffer,
+			};
+			entry.deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+		}
+
+		return RegisterBuffer(entry, debugName.empty() ? std::string_view{} : debugName);
+	}
+
+	gpu::TextureHandle ResourceRegistry::CreateAliasedTexture(const gpu::TextureDesc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName)
+	{
+		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
+
+		const VkImageCreateInfo imageInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
+		        .imageType = VK_IMAGE_TYPE_2D,
+		        .format = gpu::ToVk(desc.format),
+		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .mipLevels = desc.mipLevels,
+		        .arrayLayers = desc.arrayLayers,
+		        .samples = VK_SAMPLE_COUNT_1_BIT,
+		        .tiling = VK_IMAGE_TILING_OPTIMAL,
+		        .usage = gpu::ToVk(desc.usage),
+		        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+		        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+		};
+
+		VkImage image = VK_NULL_HANDLE;
+		VkResult result = vkCreateImage(m_device, &imageInfo, nullptr, &image);
+		if (result != VK_SUCCESS)
+		{
+			return {};
+		}
+
+		VmaAllocationInfo existingAllocInfo;
+		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
+
+		const VkBindImageMemoryInfo bindInfo{
+		        .sType = VK_STRUCTURE_TYPE_BIND_IMAGE_MEMORY_INFO,
+		        .image = image,
+		        .memory = existingAllocInfo.deviceMemory,
+		        .memoryOffset = memoryOffset,
+		};
+		result = vkBindImageMemory2(m_device, 1, &bindInfo);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyImage(m_device, image, nullptr);
+			return {};
+		}
+
+		const VkImageAspectFlags aspect = DeduceAspect(imageInfo.format);
+		const VkImageViewCreateInfo viewInfo{
+		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+		        .image = image,
+		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+		        .format = imageInfo.format,
+		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
+		};
+
+		VkImageView view = VK_NULL_HANDLE;
+		result = vkCreateImageView(m_device, &viewInfo, nullptr, &view);
+		if (result != VK_SUCCESS)
+		{
+			vkDestroyImage(m_device, image, nullptr);
+			return {};
+		}
+
+		TextureEntry entry{};
+		entry.image = image;
+		entry.view = view;
+		entry.storageView = VK_NULL_HANDLE;
+		entry.format = imageInfo.format;
+		entry.extent = {desc.extent.width, desc.extent.height};
+		entry.usage = imageInfo.usage;
+		entry.aspect = aspect;
+		entry.device = m_device;
+		entry.allocation = existingAllocation;
+		entry.allocator = m_allocator;
+		entry.ownsAllocation = false;
+		entry.mipLevels = desc.mipLevels;
+		entry.arrayLayers = desc.arrayLayers;
+
+		return RegisterTexture(entry, debugName.empty() ? std::string_view{} : debugName);
+	}
+
+	Expected<void> ResourceRegistry::EnsureBindlessSampled(
+	        gpu::TextureHandle handle, BindlessManager& bindlessManager, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter, const gpu::SamplerAddressMode addressMode)
+	{
+		TextureEntry* entry = ResolveMutable(handle);
+		if (!entry)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "EnsureBindlessSampled: invalid handle"));
+		}
+
+		if (entry->hasBindlessSampled)
+		{
+			return {};
+		}
+
+		if (entry->image == VK_NULL_HANDLE)
+		{
+			AE_UNEXPECTED(AetherError::Vulkan(0, "EnsureBindlessSampled: no image backing handle"));
+		}
+
+		// Use existing view or create one
+		const bool makeView = (entry->view == VK_NULL_HANDLE);
+		VkImageView view = entry->view;
+
+		if (makeView)
+		{
+			const VkImageViewCreateInfo viewCreateInfo{
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			        .image = entry->image,
+			        .viewType = entry->arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
+			        .format = entry->format,
+			        .subresourceRange =
+			                {
+			                        .aspectMask = gpu::ToVk(aspectMask),
+			                        .baseMipLevel = 0,
+			                        .levelCount = entry->mipLevels,
+			                        .baseArrayLayer = 0,
+			                        .layerCount = entry->arrayLayers,
+			                },
+			};
+			const VkResult viewResult = vkCreateImageView(entry->device, &viewCreateInfo, nullptr, &view);
+			if (viewResult != VK_SUCCESS)
+			{
+				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "Failed to create image view for bindless registration"));
+			}
+		}
+
+		const gpu::Filter gpuFilter = (filter == TextureFilter::Nearest) ? gpu::Filter::Nearest : gpu::Filter::Linear;
+		const gpu::SamplerMipmapMode gpuMipmapMode = (filter == TextureFilter::Nearest) ? gpu::SamplerMipmapMode::Nearest : gpu::SamplerMipmapMode::Linear;
+
+		Expected<gpu::Sampler> samplerResult = bindlessManager.GetOrCreateSampler(gpuFilter, gpuMipmapMode, addressMode);
+		if (!samplerResult)
+		{
+			if (makeView)
+			{
+				vkDestroyImageView(entry->device, view, nullptr);
+			}
+			AE_UNEXPECTED(samplerResult.error());
+		}
+
+		Expected<std::uint32_t> slotResult = bindlessManager.AllocateSampledImageSlot();
+		if (!slotResult)
+		{
+			if (makeView)
+			{
+				vkDestroyImageView(entry->device, view, nullptr);
+			}
+			AE_UNEXPECTED(slotResult.error());
+		}
+
+		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), gpu::Sampler(*samplerResult), gpu::FromVk(gpu::ToVk(descriptorLayout)));
+		if (!updateResult)
+		{
+			bindlessManager.FreeSampledImageSlot(*slotResult);
+			if (makeView)
+			{
+				vkDestroyImageView(entry->device, view, nullptr);
+			}
+			AE_UNEXPECTED(updateResult.error());
+		}
+
+		entry->view = view;
+		if (makeView)
+		{
+			entry->ownsView = true;
+		}
+		entry->bindlessSampledSlot = *slotResult;
+		entry->hasBindlessSampled = true;
+		return {};
+	}
+
+	bool ResourceRegistry::HasBindlessSampled(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? entry->hasBindlessSampled : false;
+	}
+
+	std::uint32_t ResourceRegistry::GetBindlessSampledSlot(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? entry->bindlessSampledSlot : TextureEntry::kInvalidBindlessSlot;
+	}
+
+	gpu::Format ResourceRegistry::GetTextureFormat(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? gpu::FromVk(entry->format) : gpu::Format::Undefined;
+	}
+
+	gpu::Extent2D ResourceRegistry::GetTextureExtent(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? gpu::Extent2D{entry->extent.width, entry->extent.height} : gpu::Extent2D{};
+	}
+
+	std::uint32_t ResourceRegistry::GetTextureMipLevels(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? entry->mipLevels : 0;
+	}
+
+	std::uint32_t ResourceRegistry::GetTextureArrayLayers(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? entry->arrayLayers : 0;
+	}
+
+	gpu::ImageUsage ResourceRegistry::GetTextureUsage(gpu::TextureHandle handle) const
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? static_cast<gpu::ImageUsage>(entry->usage) : gpu::ImageUsage::None;
+	}
+
+	gpu::DeviceSize ResourceRegistry::GetBufferSize(gpu::BufferHandle handle) const
+	{
+		const BufferEntry* entry = Resolve(handle);
+		return entry ? entry->size : 0;
+	}
+
+	gpu::BufferUsage ResourceRegistry::GetBufferUsage(gpu::BufferHandle handle) const
+	{
+		const BufferEntry* entry = Resolve(handle);
+		return entry ? static_cast<gpu::BufferUsage>(entry->usage) : gpu::BufferUsage::None;
 	}
 
 	std::uint32_t ResourceRegistry::AcquireTextureSlot()
@@ -445,6 +790,7 @@ namespace aether
 		{
 			return {};
 		}
+		++m_liveTextureCount;
 		m_textures[idx].entry = entry;
 		m_textures[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
@@ -468,6 +814,7 @@ namespace aether
 		{
 			return {};
 		}
+		++m_liveBufferCount;
 		m_buffers[idx].entry = entry;
 		m_buffers[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
@@ -491,6 +838,7 @@ namespace aether
 		{
 			return {};
 		}
+		++m_livePipelineCount;
 		m_pipelines[idx].entry = entry;
 		m_pipelines[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
 #ifndef NDEBUG
@@ -523,6 +871,7 @@ namespace aether
 			return;
 		}
 		const TextureEntry entry = *slot.entry;
+		--m_liveTextureCount;
 		slot.entry.reset();
 		// Bump generation on reuse so subsequent handles to this slot fail
 		// IsValid() until a fresh RegisterTexture fills it again.
@@ -533,7 +882,15 @@ namespace aether
 		}
 		m_freeTextureSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .fn = [this, entry]() { DestroyTextureEntryNow(entry); },
+		        .fn =
+		                [this, entry]()
+		        {
+			        if (entry.hasBindlessSampled && m_bindlessManager)
+			        {
+				        m_bindlessManager->FreeSampledImageSlotDeferred(entry.bindlessSampledSlot);
+			        }
+			        DestroyTextureEntryNow(entry);
+		        },
 		});
 	}
 
@@ -554,6 +911,7 @@ namespace aether
 			return;
 		}
 		const BufferEntry entry = *slot.entry;
+		--m_liveBufferCount;
 		slot.entry.reset();
 		slot.generation = (slot.generation + 1u) % kGenerationWrap;
 		if (slot.generation == kGenerationInvalid)
@@ -583,6 +941,7 @@ namespace aether
 			return;
 		}
 		const PipelineEntry entry = *slot.entry;
+		--m_livePipelineCount;
 		slot.entry.reset();
 		slot.generation = (slot.generation + 1u) % kGenerationWrap;
 		if (slot.generation == kGenerationInvalid)
@@ -699,6 +1058,32 @@ namespace aether
 		return &*slot.entry;
 	}
 
+	ResourceRegistry::BufferEntry* ResourceRegistry::ResolveMutable(gpu::BufferHandle handle)
+	{
+		if (!handle.IsValid())
+		{
+			return nullptr;
+		}
+		const std::uint32_t idx = handle.GetIndex();
+		if (idx >= m_buffers.size())
+		{
+			return nullptr;
+		}
+		auto& slot = m_buffers[idx];
+		if (slot.generation != handle.GetGeneration())
+		{
+			return nullptr;
+		}
+		if (!slot.entry)
+		{
+#ifndef NDEBUG
+			AE_WARN(LogCategory::Vulkan, "ResolveMutable: handle index={} gen={} points to destroyed buffer slot '{}' - use-after-free.", idx, handle.GetGeneration(), m_buffers[idx].debugName);
+#endif
+			return nullptr;
+		}
+		return &*slot.entry;
+	}
+
 	void ResourceRegistry::AdvanceFrame()
 	{
 		// The "next" frame becomes the current. The ring slot we are about
@@ -741,11 +1126,11 @@ namespace aether
 
 	void ResourceRegistry::DestroyTextureEntryNow(const TextureEntry& entry)
 	{
-		if (entry.view != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		if (entry.view != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE && entry.ownsView)
 		{
 			vkDestroyImageView(entry.device, entry.view, nullptr);
 		}
-		if (entry.storageView != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE)
+		if (entry.storageView != VK_NULL_HANDLE && entry.device != VK_NULL_HANDLE && entry.ownsStorageView)
 		{
 			vkDestroyImageView(entry.device, entry.storageView, nullptr);
 		}
@@ -755,6 +1140,10 @@ namespace aether
 			{
 				vmaDestroyImage(entry.allocator, entry.image, entry.allocation);
 			}
+		}
+		else if (entry.image != VK_NULL_HANDLE && !entry.ownsAllocation && entry.device != VK_NULL_HANDLE)
+		{
+			vkDestroyImage(entry.device, entry.image, nullptr);
 		}
 	}
 
@@ -810,40 +1199,16 @@ namespace aether
 
 	std::uint32_t ResourceRegistry::LiveTextureCount() const
 	{
-		std::uint32_t n = 0;
-		for (const auto& slot: m_textures)
-		{
-			if (slot.entry)
-			{
-				++n;
-			}
-		}
-		return n;
+		return m_liveTextureCount;
 	}
 
 	std::uint32_t ResourceRegistry::LiveBufferCount() const
 	{
-		std::uint32_t n = 0;
-		for (const auto& slot: m_buffers)
-		{
-			if (slot.entry)
-			{
-				++n;
-			}
-		}
-		return n;
+		return m_liveBufferCount;
 	}
 
 	std::uint32_t ResourceRegistry::LivePipelineCount() const
 	{
-		std::uint32_t n = 0;
-		for (const auto& slot: m_pipelines)
-		{
-			if (slot.entry)
-			{
-				++n;
-			}
-		}
-		return n;
+		return m_livePipelineCount;
 	}
 } // namespace aether

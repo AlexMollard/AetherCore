@@ -15,7 +15,6 @@
 #include "rendering/FrameConstants.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderGraph.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -120,13 +119,22 @@ namespace aether
 
 		struct FrameLightingBuffers
 		{
-			UniqueBuffer lights;
-			UniqueBuffer tileHeaders;
-			UniqueBuffer tileIndices;
+			gpu::BufferHandle lightsHandle{};
+			gpu::BufferHandle tileHeadersHandle{};
+			gpu::BufferHandle tileIndicesHandle{};
+			void* lightsMapped = nullptr;
+			void* tileHeadersMapped = nullptr;
+			void* tileIndicesMapped = nullptr;
+			gpu::Buffer lightsBuffer = nullptr;
+			gpu::Buffer tileHeadersBuffer = nullptr;
+			gpu::Buffer tileIndicesBuffer = nullptr;
+			gpu::DeviceSize lightsSize = 0;
+			gpu::DeviceSize tileHeadersSize = 0;
+			gpu::DeviceSize tileIndicesSize = 0;
 			std::size_t lightsCapacity = 0;
 			std::size_t headersCapacity = 0;
 			std::size_t indicesCapacity = 0;
-			std::vector<UniqueBuffer> staleBuffers;
+			std::vector<gpu::BufferHandle> staleBuffers;
 		};
 
 		void EnsureBuffers(std::uint32_t frameSlot, std::size_t lightCount, std::size_t tileCount, std::size_t indexCount) const;

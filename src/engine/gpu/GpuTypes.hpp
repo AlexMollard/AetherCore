@@ -88,7 +88,7 @@ namespace aether::gpu
 	// the raw VkBuffer (void*); the backend translates via reinterpret_cast
 	// in the same way the existing CommandList binding methods do. This
 	// keeps the header Vulkan-free while letting callers build descriptor
-	// write payloads from local UniqueBuffer / buffer-table sources.
+	// write payloads from local buffer-table sources.
 	struct GpuDescriptorBufferInfo
 	{
 		Buffer buffer = nullptr;

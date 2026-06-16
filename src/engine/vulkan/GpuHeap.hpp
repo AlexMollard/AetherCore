@@ -7,7 +7,6 @@
 
 #include "gpu/GpuTypes.hpp"
 #include "vulkan/GpuSpan.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether
@@ -58,7 +57,7 @@ namespace aether
 			}
 			GpuSpan<T> span;
 			span.data = nullptr; // device-local, no CPU pointer
-			span.address = m_buffer.GetDeviceAddress() + offset;
+			span.address = m_baseAddress + offset;
 			span.count = count;
 			return span;
 		}
@@ -70,7 +69,7 @@ namespace aether
 			{
 				return;
 			}
-			const VkDeviceSize offset = span.address - m_buffer.GetDeviceAddress();
+			const VkDeviceSize offset = static_cast<VkDeviceSize>(span.address - m_baseAddress);
 			FreeBytes(offset, span.ByteSize());
 			span = {};
 		}
@@ -93,12 +92,12 @@ namespace aether
 
 		[[nodiscard]] VkBuffer GetBuffer() const
 		{
-			return m_buffer.Get();
+			return m_buffer;
 		}
 
 		[[nodiscard]] gpu::DeviceAddress GetBaseAddress() const
 		{
-			return m_buffer.GetDeviceAddress();
+			return m_baseAddress;
 		}
 
 		// Returns the byte offset of a span's start within this heap's buffer.
@@ -106,7 +105,7 @@ namespace aether
 		template<typename T>
 		[[nodiscard]] VkDeviceSize GetOffset(GpuSpan<T> span) const
 		{
-			return span.address - m_buffer.GetDeviceAddress();
+			return static_cast<VkDeviceSize>(span.address - m_baseAddress);
 		}
 
 	private:
@@ -118,7 +117,9 @@ namespace aether
 			VkDeviceSize size;
 		};
 
-		UniqueBuffer m_buffer;
+		VkBuffer m_buffer = VK_NULL_HANDLE;
+		VmaAllocation m_bufferAllocation = VK_NULL_HANDLE;
+		gpu::DeviceAddress m_baseAddress = 0;
 		VmaAllocator m_allocatorRef = nullptr;
 		VkDevice m_deviceRef = VK_NULL_HANDLE;
 		std::vector<FreeBlock> m_freeList;

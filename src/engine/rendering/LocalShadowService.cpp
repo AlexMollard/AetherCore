@@ -80,14 +80,30 @@ namespace aether
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
 			{
-				AE_EXPECT_OR_THROW(sdBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData), kSsboBda, "LocalShadow.ShadowData"));
-				m_shadowDataBuffer[i] = std::move(sdBuf);
-				m_shadowDataAddr[i] = m_shadowDataBuffer[i].GetDeviceAddress();
+				const gpu::MappedBufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(ShadowLightData),
+				        .usage = kSsboBda,
+				        .memoryUsage = gpu::MappedMemoryUsage::Auto,
+				        .debugName = "LocalShadow.ShadowData",
+				};
+				m_shadowDataBuffer[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				AE_ASSERT_ALWAYS(m_shadowDataBuffer[i].handle.IsValid(), "LocalShadowService: CreateMappedBuffer(ShadowData) failed");
+				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_shadowDataBuffer[i].handle);
+				m_shadowDataBuffer[i].mapped = view.mappedPtr;
+				m_shadowDataBuffer[i].address = view.deviceAddress;
 			}
 			{
-				AE_EXPECT_OR_THROW(lcBuf, UniqueBuffer::CreateMapped(allocator, device, static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants), kSsboBda, "LocalShadow.LightConstants"));
-				m_lightConstantsBuffer[i] = std::move(lcBuf);
-				m_lightConstantsAddr[i] = m_lightConstantsBuffer[i].GetDeviceAddress();
+				const gpu::MappedBufferDesc desc{
+				        .size = static_cast<gpu::DeviceSize>(kMaxLocalShadows) * sizeof(FrameConstants),
+				        .usage = kSsboBda,
+				        .memoryUsage = gpu::MappedMemoryUsage::Auto,
+				        .debugName = "LocalShadow.LightConstants",
+				};
+				m_lightConstantsBuffer[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+				AE_ASSERT_ALWAYS(m_lightConstantsBuffer[i].handle.IsValid(), "LocalShadowService: CreateMappedBuffer(LightConstants) failed");
+				const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_lightConstantsBuffer[i].handle);
+				m_lightConstantsBuffer[i].mapped = view.mappedPtr;
+				m_lightConstantsBuffer[i].address = view.deviceAddress;
 			}
 		}
 
@@ -176,11 +192,23 @@ namespace aether
 		m_shadowPipeline.Destroy();
 		for (auto& buf: m_shadowDataBuffer)
 		{
-			buf.Reset();
+			if (buf.handle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(buf.handle);
+				buf.handle = {};
+			}
+			buf.mapped = nullptr;
+			buf.address = 0;
 		}
 		for (auto& buf: m_lightConstantsBuffer)
 		{
-			buf.Reset();
+			if (buf.handle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(buf.handle);
+				buf.handle = {};
+			}
+			buf.mapped = nullptr;
+			buf.address = 0;
 		}
 		m_atlasManager.Shutdown();
 
@@ -400,7 +428,7 @@ namespace aether
 		// Write ShadowLightData to per-frame GPU buffer.
 		const std::uint32_t shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
 		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
-		ShadowLightData* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].GetAllocationInfo().pMappedData);
+		ShadowLightData* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
@@ -413,21 +441,21 @@ namespace aether
 			mapped[i].normalBias = pls.normalBias;
 			mapped[i].lightType = pls.lightType;
 		}
-		AE_EXPECT_OR_THROW_VOID(m_shadowDataBuffer[bufSlot].FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_shadowDataBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(ShadowLightData));
 
 		// Write per-light frame constants (just viewProj) for atlas rendering.
-		FrameConstants* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].GetAllocationInfo().pMappedData);
+		FrameConstants* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
 			lightFc[i].cameraWorldPos = glm::vec4(camPos, 1.0f);
 		}
-		AE_EXPECT_OR_THROW_VOID(m_lightConstantsBuffer[bufSlot].FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));
 
 		// Fill FrameConstants for the shader.
 		fc.shadowAtlasSlot = m_atlasBindlessSlot;
 		fc.shadowLightCount = shadowCount;
-		fc.shadowLightDataAddr = m_shadowDataAddr[bufSlot];
+		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}
 
 	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat)
@@ -505,7 +533,7 @@ namespace aether
 				                };
 				                cmd.SetScissor(scissor);
 
-				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsAddr[ctx.frameIndex % kMaxFramesInFlight] + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
+				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
 				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 

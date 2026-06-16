@@ -17,6 +17,11 @@
 
 namespace aether
 {
+	class BindlessManager;
+}
+
+namespace aether
+{
 	// -------------------------------------------------------------------------
 	// ResourceRegistry - Phase 2 of the GPU refactor
 	// -------------------------------------------------------------------------
@@ -44,6 +49,10 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
+		// Debug backtrace constants (public so namespace-scope helpers can use them).
+		static constexpr int kAllocFrames = 4;
+		static constexpr int kBacktraceDepth = 9;
+
 		struct TextureEntry
 		{
 			VkImage image = VK_NULL_HANDLE;
@@ -57,6 +66,13 @@ namespace aether
 			VmaAllocation allocation = VK_NULL_HANDLE;
 			VmaAllocator allocator = VK_NULL_HANDLE;
 			bool ownsAllocation = false;
+			bool ownsView = true;
+			bool ownsStorageView = false;
+			std::uint32_t mipLevels = 1;
+			std::uint32_t arrayLayers = 1;
+			static constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
+			std::uint32_t bindlessSampledSlot = kInvalidBindlessSlot;
+			bool hasBindlessSampled = false;
 		};
 
 		struct BufferEntry
@@ -128,6 +144,7 @@ namespace aether
 		// storage views after registration (e.g. when a transient image gets
 		// promoted to bindless-sampled).
 		[[nodiscard]] TextureEntry* ResolveMutable(gpu::TextureHandle handle);
+		[[nodiscard]] BufferEntry* ResolveMutable(gpu::BufferHandle handle);
 
 		// Tick the deferred-destruction ring forward by one frame. Must be
 		// called once per frame by GpuDevice::BeginSwapchainFrame. After this
@@ -153,6 +170,38 @@ namespace aether
 		[[nodiscard]] gpu::MappedBufferView ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept;
 		void FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
 
+		// Naming - uses the debug-utils extension if available.
+		void SetBufferName(gpu::BufferHandle handle, const char* name);
+		void SetTextureName(gpu::TextureHandle handle, const char* name);
+
+		// Aliased creation - the caller owns the VmaAllocation lifetime.
+		[[nodiscard]] gpu::BufferHandle CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
+		[[nodiscard]] gpu::TextureHandle CreateAliasedTexture(const gpu::TextureDesc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
+
+		// Bindless registrations & queries.
+		// The registry stores a BindlessManager pointer for deferred slot-free
+		// during Destroy(TextureHandle). Set via SetBindlessManager() at init.
+		void SetBindlessManager(BindlessManager* mgr);
+		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle,
+		        BindlessManager& bindlessManager,
+		        gpu::ImageAspect aspectMask = gpu::ImageAspect::Color,
+		        gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly,
+		        TextureFilter filter = TextureFilter::Linear,
+		        gpu::SamplerAddressMode addressMode = gpu::SamplerAddressMode::Repeat);
+		[[nodiscard]] bool HasBindlessSampled(gpu::TextureHandle handle) const;
+		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(gpu::TextureHandle handle) const;
+
+		// Texture property queries.
+		[[nodiscard]] gpu::Format GetTextureFormat(gpu::TextureHandle handle) const;
+		[[nodiscard]] gpu::Extent2D GetTextureExtent(gpu::TextureHandle handle) const;
+		[[nodiscard]] std::uint32_t GetTextureMipLevels(gpu::TextureHandle handle) const;
+		[[nodiscard]] std::uint32_t GetTextureArrayLayers(gpu::TextureHandle handle) const;
+		[[nodiscard]] gpu::ImageUsage GetTextureUsage(gpu::TextureHandle handle) const;
+
+		// Buffer property queries.
+		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
+		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;
+
 		// Diagnostic counters (not performance-critical, kept simple).
 		[[nodiscard]] std::uint32_t LiveTextureCount() const;
 		[[nodiscard]] std::uint32_t LiveBufferCount() const;
@@ -170,9 +219,6 @@ namespace aether
 		{
 			DestructionFn fn;
 		};
-
-		static constexpr int kAllocFrames = 4;
-		static constexpr int kBacktraceDepth = 9;
 
 		// Per-slot storage. std::optional so an empty slot costs only the
 		// size of the bool + alignment padding. Generation lives next to the
@@ -245,5 +291,10 @@ namespace aether
 
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		BindlessManager* m_bindlessManager = nullptr;
+
+		std::uint32_t m_liveTextureCount = 0;
+		std::uint32_t m_liveBufferCount = 0;
+		std::uint32_t m_livePipelineCount = 0;
 	};
 } // namespace aether

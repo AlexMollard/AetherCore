@@ -54,15 +54,15 @@ sampler/descriptor-set-layout creation.
 
 | Category | Count | Examples |
 |---|---|---|
-| Non-vulkan/non-gpu headers that include `volk.hpp` | 0 | (none — `vulkan/volk.hpp` is only included from `.cpp` files in `src/engine/vulkan/`. All `gpu/*.hpp` headers are vulkan-free; pure engine code in `material/`, `passes/`, `rendering/`, `text/`, `ui/`, etc. is now vulkan-free.) |
-| Non-vulkan/non-gpu `.cpp` files calling `vk*` | 0 | (none — the last `vkutil::TransitionImages` call in `rendering/RenderGraph.cpp` was replaced with `m_storage->CmdImageBarriers` in P5(d)) |
-| Engine-side fields of raw `VkDevice`/`VmaAllocator` | 0 classes | (none — all migrated to `gpu::Device` / `gpu::Allocator` typed fields; ownership handled by the ResourceRegistry / GpuDevice service container) |
-| Engine-side public API with `Vk*` types | 0 files | (none — all engine `Vk*` and `vk*` / `Vk*` identifiers now live in `src/engine/vulkan/` or in comments. The `EnsureBuffers` helper in `rendering/LightingManager.cpp` now goes through `UniqueBuffer::CreateStorageBuffer(allocator, device, size, debugName)` (typed `gpu::*` handles), so the only `Vk*` types it ever names are in the call to that typed helper. Same pattern for the cast helpers `gpu::ToVk` in the implementation.) |
-| `static_cast<Vk*>` outside `gpu/` + `vulkan/` (architectural) | 0 sites | (none — the 2 Tracy `static_cast<VkCommandBuffer>` sites in `rendering/RenderGraph.cpp:1613, 1725` and the 6 `reinterpret_cast<VkCommandBuffer>` sites in `rendering/RenderQueue.cpp:659, 688, 846, 891, 969, 990` were all migrated to engine-side `_ENG` macros in `utils/GpuProfilerEngine.hpp`, which performs the `reinterpret_cast` at the macro boundary. The cast is now confined to one header.) |
-| `GetCommandBuffer() → VkCommandBuffer` "re-fork" pattern | 0 sites | (none — all 9 sites migrated to `CommandList::View()`; the 2 backend-only allowlist sites that still call `GetCommandBuffer()` directly are listed in `GetCommandBuffer()` row below) |
-| Hot-path `void*` payloads | 0 | (none — `gpu::GpuDescriptorBufferInfo.buffer` is now `gpu::Buffer` (P6.1). The `gpu::TimelineSemaphore` was a `void*` payload in the old `gpu/Semaphore.hpp`; P1.1 typed it as `gpu::TimelineSemaphoreHandle` (a pImpl pointer). 0 remaining `void*` payloads in the GPU facade. The `void*` typedefs in `gpu::GpuTypes.hpp` are deliberate opaque-handle aliases (documented in the borrowed-vs-owned table) — they are not payloads.) |
-| `static_cast<Vk*>` / `reinterpret_cast<Vk*>` in `gpu/` | 0 | (none — the previous boundary-layer `.cpp` files in `gpu/` (`BindlessManager.cpp`, `CommandList.cpp`, `AsyncComputeContext.cpp`, `ResourceRegistry.cpp`) have all been moved to `vulkan/`. The `gpu/` dir is now 100% vulkan-free: no headers include vulkan, no `.cpp` files contain `static_cast<Vk*>` / `reinterpret_cast<Vk*>`. The engine-side `GpuDevice::SubmitAndPresent` now takes typed `gpu::TimelineSemaphoreHandle` parameters; the `VkSemaphore` extraction happens via the new `gpu::ResolveTimelineSemaphoreVk` helper inside `vulkan/Swapchain.cpp::SubmitAndPresent`. `RenderGraphStorage::m_crossQueueTimeline` is now a typed `gpu::TimelineSemaphoreHandle`; the previous `reinterpret_cast<std::uint64_t>` is gone.) |
-| Inconsistent vocabulary | 1 | `GpuTypes.hpp:103-112` defines `void*` typedefs for `DescriptorSet`, `Pipeline`, `PipelineLayout`, `PipelineCache`, `Device`, `Allocator`, `CommandPool`, `Queue`, `ImageView`, `Sampler` — coexists with typed `BufferHandle`/`TextureHandle`/`PipelineHandle`/`SamplerHandle` in `GpuHandles.hpp` with no documented rule. |
+| Non-vulkan/non-gpu headers that include `volk.hpp` | 0 | (none - `vulkan/volk.hpp` is only included from `.cpp` files in `src/engine/vulkan/`. All `gpu/*.hpp` headers are vulkan-free; pure engine code in `material/`, `passes/`, `rendering/`, `text/`, `ui/`, etc. is now vulkan-free.) |
+| Non-vulkan/non-gpu `.cpp` files calling `vk*` | 0 | (none - the last `vkutil::TransitionImages` call in `rendering/RenderGraph.cpp` was replaced with `m_storage->CmdImageBarriers` in P5(d)) |
+| Engine-side fields of raw `VkDevice`/`VmaAllocator` | 0 classes | (none - all migrated to `gpu::Device` / `gpu::Allocator` typed fields; ownership handled by the ResourceRegistry / GpuDevice service container) |
+| Engine-side public API with `Vk*` types | 0 files | (none - all engine `Vk*` and `vk*` / `Vk*` identifiers now live in `src/engine/vulkan/` or in comments. The `EnsureBuffers` helper in `rendering/LightingManager.cpp` now goes through `UniqueBuffer::CreateStorageBuffer(allocator, device, size, debugName)` (typed `gpu::*` handles), so the only `Vk*` types it ever names are in the call to that typed helper. Same pattern for the cast helpers `gpu::ToVk` in the implementation.) |
+| `static_cast<Vk*>` outside `gpu/` + `vulkan/` (architectural) | 0 sites | (none - the 2 Tracy `static_cast<VkCommandBuffer>` sites in `rendering/RenderGraph.cpp:1613, 1725` and the 6 `reinterpret_cast<VkCommandBuffer>` sites in `rendering/RenderQueue.cpp:659, 688, 846, 891, 969, 990` were all migrated to engine-side `_ENG` macros in `utils/GpuProfilerEngine.hpp`, which performs the `reinterpret_cast` at the macro boundary. The cast is now confined to one header.) |
+| `GetCommandBuffer() → VkCommandBuffer` "re-fork" pattern | 0 sites | (none - all 9 sites migrated to `CommandList::View()`; the 2 backend-only allowlist sites that still call `GetCommandBuffer()` directly are listed in `GetCommandBuffer()` row below) |
+| Hot-path `void*` payloads | 0 | (none - `gpu::GpuDescriptorBufferInfo.buffer` is now `gpu::Buffer` (P6.1). The `gpu::TimelineSemaphore` was a `void*` payload in the old `gpu/Semaphore.hpp`; P1.1 typed it as `gpu::TimelineSemaphoreHandle` (a pImpl pointer). 0 remaining `void*` payloads in the GPU facade. The `void*` typedefs in `gpu::GpuTypes.hpp` are deliberate opaque-handle aliases (documented in the borrowed-vs-owned table) - they are not payloads.) |
+| `static_cast<Vk*>` / `reinterpret_cast<Vk*>` in `gpu/` | 0 | (none - the previous boundary-layer `.cpp` files in `gpu/` (`BindlessManager.cpp`, `CommandList.cpp`, `AsyncComputeContext.cpp`, `ResourceRegistry.cpp`) have all been moved to `vulkan/`. The `gpu/` dir is now 100% vulkan-free: no headers include vulkan, no `.cpp` files contain `static_cast<Vk*>` / `reinterpret_cast<Vk*>`. The engine-side `GpuDevice::SubmitAndPresent` now takes typed `gpu::TimelineSemaphoreHandle` parameters; the `VkSemaphore` extraction happens via the new `gpu::ResolveTimelineSemaphoreVk` helper inside `vulkan/Swapchain.cpp::SubmitAndPresent`. `RenderGraphStorage::m_crossQueueTimeline` is now a typed `gpu::TimelineSemaphoreHandle`; the previous `reinterpret_cast<std::uint64_t>` is gone.) |
+| Inconsistent vocabulary | 1 | `GpuTypes.hpp:103-112` defines `void*` typedefs for `DescriptorSet`, `Pipeline`, `PipelineLayout`, `PipelineCache`, `Device`, `Allocator`, `CommandPool`, `Queue`, `ImageView`, `Sampler` - coexists with typed `BufferHandle`/`TextureHandle`/`PipelineHandle`/`SamplerHandle` in `GpuHandles.hpp` with no documented rule. |
 | Two deferred-destruction rings | 2 (not 3) | `vulkan/RenderGraphStorage.cpp:258,555-558` and `vulkan/ResourceRegistry.cpp:528,557,586,704,715` both maintain `m_pendingDestructions[kMaxFramesInFlight]`. No third found. |
 | Missing doc | 1 | `docs/plans/resource-registry-consolidation.md` was referenced by the old plan but doesn't exist. |
 
@@ -85,7 +85,7 @@ Recommended rule (pick one):
   `DescriptorSetHandle`, `PipelineLayoutHandle`, `ImageViewHandle`, etc.
   Replaces every `void*` alias in `GpuTypes.hpp`.
 - **(b) Borrowed-vs-owned.** Keep `void*` for **borrowed** primitives
-  (`Device`, `Queue`, `Allocator`, `CommandPool` — never engine-owned) and
+  (`Device`, `Queue`, `Allocator`, `CommandPool` - never engine-owned) and
   use typed handles for **owned** resources (`DescriptorSet`,
   `PipelineLayout`, `ImageView`, `Sampler`). Add the rule as a comment in
   `GpuTypes.hpp`.
@@ -104,7 +104,7 @@ gpu::CommandList cmd(ctx.recorder.GetCommandBuffer());
 ```
 
 The pattern exists because `CommandList` caches `m_boundLayout` on the
-*instance* — when a site needs a sibling with a different bound layout (or
+*instance* - when a site needs a sibling with a different bound layout (or
 no layout bound), it has to reach through the raw void*. The same pattern
 also appears in `RenderGraph.cpp:1694` (`VkCommandBuffer gfxVkCmd = ...`)
 and `RenderQueue.cpp:125`.
@@ -120,7 +120,7 @@ the layout reset, and migrate the 9 + 2 = 11 sites. Then mark
 ## 4. The "engine-side owner of raw Vk*" problem
 
 8 classes still store `VkDevice` and/or `VmaAllocator` as member fields.
-This isn't only `UniqueBuffer`/`UniqueImage` (which the P2b plan covered) —
+This isn't only `UniqueBuffer`/`UniqueImage` (which the P2b plan covered) -
 it's the `m_device`/`m_allocator` fields used to call raw `vk*` and VMA
 APIs. The biggest offender is `text/FontAtlas.hpp:75-79` (6 raw handles:
 allocator, device, image, view, sampler, allocation).
@@ -161,18 +161,18 @@ single file.
 
 These are headers where the public API still names `Vk*` types:
 
-- **`passes/PostProcessStack.hpp:42-44`** — `Desc` struct holds
+- **`passes/PostProcessStack.hpp:42-44`** - `Desc` struct holds
   `VkDevice device`, `VkPipelineCache pipelineCache`,
   `VmaAllocator allocator`. Replace with `gpu::Device`,
   `gpu::PipelineCache`, `gpu::Allocator` (or a `GpuDevice&`).
-- **`rendering/RenderTargetService.hpp:36,42,52,74`** —
+- **`rendering/RenderTargetService.hpp:36,42,52,74`** -
   `OnRenderGraphReset(VkDevice, ...)`, `CreateCameraRenderTarget(...,
   VkExtent2D)`, `Entry::extent` is `VkExtent2D`, `m_device` is
   `VkDevice`. Replace with `gpu::Device` / `gpu::Extent2D` / accessor.
-- **`rendering/Renderer.hpp:127`** — `VkExtent2D GetExtent() const`.
+- **`rendering/Renderer.hpp:127`** - `VkExtent2D GetExtent() const`.
   Replace with `gpu::Extent2D`. This is the only reason
   `Renderer.hpp:8` includes volk.
-- **`text/FontAtlas.hpp:50`** — `Build(... VkDevice, VmaAllocator,
+- **`text/FontAtlas.hpp:50`** - `Build(... VkDevice, VmaAllocator,
   VkQueue, uint32_t, BindlessManager&)`. Replace with `gpu::Device`,
   `gpu::Allocator`, `gpu::Queue`.
 
@@ -182,7 +182,7 @@ All four are mechanical. None is risky.
 
 ## 7. Remaining work (prioritised)
 
-### Priority 1 — Public API surface (cheap, unblocks everything else)
+### Priority 1 - Public API surface (cheap, unblocks everything else)
 
 **Status: DONE (2026-06-15).**
 
@@ -193,36 +193,36 @@ All four are mechanical. None is risky.
   **Done as a wider P1.1 sweep.** All 4 audit-mentioned files were
   already migrated in earlier P2 work, so the explicit fix list
   collapsed. The broader sweep covered:
-  - `passes/PostProcessStack.hpp` — `Desc` already uses
+  - `passes/PostProcessStack.hpp` - `Desc` already uses
     `gpu::Device`/`gpu::PipelineCache`/`gpu::Allocator`; dropped the
     dead `#include "vulkan/UniqueImage.hpp"`.
-  - `rendering/Renderer.hpp` — `GetExtent()` already returns
+  - `rendering/Renderer.hpp` - `GetExtent()` already returns
     `gpu::Extent2D`.
-  - `rendering/RenderTargetService.hpp` — all public fields already
+  - `rendering/RenderTargetService.hpp` - all public fields already
     `gpu::*`; no volk include.
-  - `text/FontAtlas.hpp` — `Build()` already takes `gpu::Device`/
+  - `text/FontAtlas.hpp` - `Build()` already takes `gpu::Device`/
     `gpu::Allocator`/`gpu::Queue`; no volk include.
-  - `rendering/ShadowService.{hpp,cpp}` — `VkDevice`/`VkPipelineCache`/
+  - `rendering/ShadowService.{hpp,cpp}` - `VkDevice`/`VkPipelineCache`/
     `VkExtent2D` → `gpu::Device`/`gpu::PipelineCache`/`gpu::Extent2D`;
     volk include dropped.
-  - `rendering/LocalShadowService.{hpp,cpp}` — `VkDevice` → `gpu::Device`.
-  - `rendering/RenderPipelineCoordinator.hpp` — `PassRegistrationContext::device`
+  - `rendering/LocalShadowService.{hpp,cpp}` - `VkDevice` → `gpu::Device`.
+  - `rendering/RenderPipelineCoordinator.hpp` - `PassRegistrationContext::device`
     `VkDevice` → `gpu::Device`; volk include dropped.
-  - `rendering/RenderGraphStorage.hpp` — `AddTransientSlot(VkFormat, ...)`
+  - `rendering/RenderGraphStorage.hpp` - `AddTransientSlot(VkFormat, ...)`
     → `AddTransientSlot(gpu::Format, ...)`;
     `GetComputeCommandBuffer()` returns `gpu::CommandBuffer` (was
     `VkCommandBuffer`); the `TransientImageEntry::format` field is now
     `gpu::Format` (was `VkFormat`).
-  - `AetherCore.cpp` — 3 `VkDevice`/`VmaAllocator` declarations and
+  - `AetherCore.cpp` - 3 `VkDevice`/`VmaAllocator` declarations and
     the `m_gpu->GetVulkanContext()` reach-through replaced with the
     `m_gpu->GetDevice()` / `GetAllocator()` / `GetComputeQueue()` /
     `GetPipelineCache()` accessors. Added `GpuDevice::GetComputeQueue()`
     to the `gpu/` facade for symmetry with the existing
     `GetGraphicsQueue()`.
-  - `animation/AnimationRootMotion.{hpp,cpp}` — `void*` parameters
+  - `animation/AnimationRootMotion.{hpp,cpp}` - `void*` parameters
     typed as `gpu::Device`; `m_timelineSemaphore` typed as
     `gpu::TimelineSemaphoreHandle` (new pImpl, was `void*`).
-  - `gpu/Semaphore.hpp` — replaced the `void*` payload `TimelineSemaphore`
+  - `gpu/Semaphore.hpp` - replaced the `void*` payload `TimelineSemaphore`
     with a pImpl `TimelineSemaphoreData` defined in `vulkan/Semaphore.cpp`
     and exposed as `gpu::TimelineSemaphoreHandle`. The `desc.device` field
     is now `gpu::Device` (was `void*`).
@@ -238,7 +238,7 @@ All four are mechanical. None is risky.
   **Done.** `Renderer::GetExtent()` already returns `gpu::Extent2D`
   (no volk include in `Renderer.hpp`).
 
-### Priority 2 — Factory pattern for remaining engine-side creators
+### Priority 2 - Factory pattern for remaining engine-side creators
 
 **Status: DONE (2026-06-15).**
 
@@ -264,9 +264,9 @@ All four are mechanical. None is risky.
   `GetPhysicalDeviceProperties`, `GetQueryPoolResults`,
   `HostCopyToImage`.
 
-  Samplers are NOT in the factory — they go through
+  Samplers are NOT in the factory - they go through
   `BindlessManager::GetOrCreateSampler` (cached, no duplicates).
-  Binary semaphores are NOT in the factory — they stay in
+  Binary semaphores are NOT in the factory - they stay in
   `vulkan/Swapchain.cpp` for WSI; engine code uses
   `gpu::CreateTimelineSemaphore` from `gpu/Semaphore.hpp`.
 
@@ -295,7 +295,7 @@ All four are mechanical. None is risky.
   `gpu::Extent2D` conversion is now implicit (the templated converting
   constructor on `gpu::Extent2D` lost its `explicit` qualifier).
 
-### Priority 3 — Upload-context consolidation
+### Priority 3 - Upload-context consolidation
 
 - **P3.1** Confirm `gpu::OneShotCmd` / `gpu::UploadContext` (already
   exist as primitives in `gpu/`) cover the fence+submit+wait pattern.
@@ -304,7 +304,7 @@ All four are mechanical. None is risky.
 - **P3.3** Same for `assets/AssetSubsystem.cpp` upload path
   (already in the old plan §7.3).
 
-### Priority 4 — Engine-side `m_device` / `m_allocator` field migration
+### Priority 4 - Engine-side `m_device` / `m_allocator` field migration
 
 **Status: DONE (2026-06-15).**
 
@@ -348,9 +348,9 @@ All four are mechanical. None is risky.
 - **P4.3** `FontAtlas` is the worst case; treat it as its own sub-scope
   (6 raw handle fields + 16 `vk*` calls).
 
-  **Done as part of P2.2** — see P2.2 entry above.
+  **Done as part of P2.2** - see P2.2 entry above.
 
-### Priority 5 — CommandList ergonomics
+### Priority 5 - CommandList ergonomics
 
 **Status: DONE (2026-06-15).**
 
@@ -371,7 +371,7 @@ All four are mechanical. None is risky.
   `gpu::CommandList cmd = ctx.recorder.View()`. The 2 direct-cast
   sites (`RenderGraph.cpp:1695` and `RenderQueue.cpp:276`) still call
   `GetCommandBuffer()` because they need the raw `VkCommandBuffer` for
-  `vkutil` helpers and Tracy GPU zones — these are the documented
+  `vkutil` helpers and Tracy GPU zones - these are the documented
   allowlist exception in §7.3.0.
 
 - **P5.3** Mark `CommandList::GetCommandBuffer()` as backend-only or
@@ -396,7 +396,7 @@ All four are mechanical. None is risky.
   translates to `Vk*` at submit time. This is a structural change to
   the render-graph public API and was deferred to its own phase.
 
-### Priority 6 — `GpuDescriptorBufferInfo` typed buffer
+### Priority 6 - `GpuDescriptorBufferInfo` typed buffer
 
 **Status: DONE (2026-06-15).**
 
@@ -420,16 +420,15 @@ All four are mechanical. None is risky.
   already pass `gpu::PipelineLayout`, so the `void*` was just an
   unnecessarily-weak signature.
 
-  **Note: long-term direction is the resource registry.** `UniqueBuffer`
-  / `UniqueImage` are slated for deletion in the P2b registry
-  consolidation phase (see `resource-registry-consolidation.md` - to be
-  recreated under P7.1). New engine code should prefer
-  `gpu::ResourceRegistry::CreateBuffer` / `CreateMappedBuffer` /
-  `ResolveBuffer` over holding a `UniqueBuffer` member; the few
-  remaining sites in `LightingManager` (which still stores
-  `UniqueBuffer` per-frame pool members) are a future task.
+   **P2b Phase B done (2026-06-16).** All engine-side `UniqueBuffer`/`UniqueImage`
+   usage in `LightingManager`, `LocalShadowService`, `MeshUploadQueue`,
+   `QuadRenderer`, `VulkanContext`, `Swapchain`, `GpuHeap`, `RenderGraphStorage`,
+   and `ResourcePool` has been migrated to `gpu::BufferHandle`/`gpu::TextureHandle`
+   via `gpu::ResourceRegistry`. `UniqueBuffer.hpp`/`.cpp` and `UniqueImage.hpp`/`.cpp`
+   are **deleted**. All RAII resource management now goes through the registry's
+   deferred-destruction ring.
 
-### Priority 7 — Documentation + enforcement
+### Priority 7 - Documentation + enforcement
 
 **Status: DONE (2026-06-15).**
 
@@ -455,10 +454,10 @@ All four are mechanical. None is risky.
 - **P7.3** Add a CI/pre-submit grep gate.
 
   **Done.** Added two artifacts:
-  - `scripts/check-gpu-abstraction.ps1` — local pre-submit hook
+  - `scripts/check-gpu-abstraction.ps1` - local pre-submit hook
     (mirrors the CI gate). Run `pwsh scripts/check-gpu-abstraction.ps1`
     from the repo root before pushing.
-  - `.github/workflows/gpu-abstraction-guard.yml` — new CI job that
+  - `.github/workflows/gpu-abstraction-guard.yml` - new CI job that
     runs the same checks on every PR. The six guards are:
     1. No `<vulkan/*>`, `volk.hpp`, or `vk_mem_alloc.h` includes in
        non-gpu, non-vulkan engine code.
@@ -508,7 +507,7 @@ All four are mechanical. None is risky.
   Gates (1)-(3) cover the surface; (4) covers Priority 4; (5) covers
   Priority 5.
 
-### Priority 8 — Binary semaphore elimination (timeline-only WSI sync)
+### Priority 8 - Binary semaphore elimination (timeline-only WSI sync)
 
 **Status: DONE (2026-06-15).**
 
@@ -542,7 +541,7 @@ the command buffer. No further changes needed.
 
 ## 8. Out of scope (intentionally)
 
-- Switching graphics APIs (no D3D12/Metal backend now — but the RHI seam
+- Switching graphics APIs (no D3D12/Metal backend now - but the RHI seam
   this plan is part of is the prerequisite).
 - Rewriting shaders or the bindless model.
 - Changing the render-thread / `RenderFramePacket` double-buffering
@@ -554,37 +553,42 @@ the command buffer. No further changes needed.
 
 ### Note on ResourceRegistry vs UniqueBuffer/UniqueImage RAII
 
-The engine-side UniqueBuffer::CreateMapped/UniqueImage::Create overloads added in this batch are a **bridge migration**, not a registry migration. They fix the k* token leak at the call site (the oid* ↔ Vk* cast now lives inside ulkan/UniqueBuffer.cpp / ulkan/UniqueImage.cpp), but the engine code still uses the UniqueBuffer RAII path with its own 3-frame deferred-destruction ring.
+**P2b Phase B done (2026-06-16).** All engine-side `UniqueBuffer` usage has been migrated to `gpu::BufferHandle` via `gpu::ResourceRegistry`.
 
-The proper end-state is P2b Phase B (docs/plans/resource-registry-consolidation.md):
-- Engine classes store gpu::BufferHandle / gpu::TextureHandle (8 bytes, typed, generation-checked) instead of UniqueBuffer / UniqueImage (~80 bytes, raw VkBuffer / VkImage member).
-- Init calls gpu::ResourceRegistry::CreateMappedBuffer(MappedBufferDesc) / CreateTexture(TextureDesc) to get the handle.
-- CPU writes use ResolveMappedBuffer(handle).mappedPtr; GPU addresses use ResolveBuffer(handle).deviceAddress.
-- Record-time binding uses ResolveBufferVkHandle(handle) for the raw VkBuffer.
-- Lifetime is one m_pendingDestructions[kMaxFramesInFlight] ring (in ResourceRegistry), not three.
+The migration pattern:
+- Engine classes store `gpu::BufferHandle` (8 bytes, typed, generation-checked) instead of `UniqueBuffer` (~80 bytes, raw VkBuffer member).
+- Init calls `gpu::ResourceRegistry::CreateMappedBuffer(MappedBufferDesc)` to get the handle.
+- CPU writes use `ResolveMappedBuffer(handle).mappedPtr`; GPU addresses use `ResolveBuffer(handle).deviceAddress`.
+- Record-time binding uses `ResolveBufferVkHandle(handle)` for the raw VkBuffer.
+- Lifetime is one `m_pendingDestructions[kMaxFramesInFlight]` ring in `ResourceRegistry`.
 
-Each engine-side overload added in this batch has a // TODO(audit/P2b) comment marking it for the registry migration. New engine code should prefer gpu::ResourceRegistry factories directly.
+`UniqueBuffer.hpp` and `UniqueImage.hpp` are **deleted** (2026-06-16). All `vulkan/` internal code now uses `gpu::ResourceRegistry` factories directly. New engine code should use `gpu::ResourceRegistry::CreateBuffer` / `CreateMappedBuffer` / `CreateTexture`.
 ## 9. What was deleted from the old plan
 
 The old plan at `docs/plans/gpu-abstraction-rendering-refactor.md` was
 deleted. The following items from it are **already done** and don't need
 to be tracked here:
 
-- P1 — `gpu::Format` enum and `vulkan/GpuEnumConversions.cpp`.
-- P2a — Typed handles in `gpu/GpuHandles.hpp`.
-- P2b Phase A — `ResourceRegistry` consolidation
+- P1 - `gpu::Format` enum and `vulkan/GpuEnumConversions.cpp`.
+- P2a - Typed handles in `gpu/GpuHandles.hpp`.
+- P2b Phase A - `ResourceRegistry` consolidation
   (`gpu/ResourceRegistry.cpp` is a thin forwarder; `vulkan/ResourceRegistry.cpp`
   owns VMA).
-- P3 — `CommandList` exists; `CommandRecorder` files deleted.
-- P4 — `FrameContext` consumed by `BindRuntime` and `RegisterPass`.
-- P6 — No mutable global singletons; `RenderThread` in `ServiceContainer`.
-- P7 — `GpuContracts.hpp` decoupled from Vulkan headers.
-- P5(a) — Pass bodies clean.
-- P5(c) (graphics + compute pipelines only) — Factory split done.
-- P5(e) — `BindlessManager` clean; `GetLayout()` / `GetSet()` return
+- P2b Phase B - All `UniqueBuffer`/`UniqueImage` migration to
+  `gpu::BufferHandle`/`gpu::TextureHandle` via `ResourceRegistry` (engine-side +
+  vulkan internal: LightingManager, LocalShadowService, MeshUploadQueue,
+  QuadRenderer, VulkanContext, Swapchain, GpuHeap, RenderGraphStorage,
+  ResourcePool). `UniqueBuffer.hpp`/`.cpp` and `UniqueImage.hpp`/`.cpp` deleted.
+- P3 - `CommandList` exists; `CommandRecorder` files deleted.
+- P4 - `FrameContext` consumed by `BindRuntime` and `RegisterPass`.
+- P6 - No mutable global singletons; `RenderThread` in `ServiceContainer`.
+- P7 - `GpuContracts.hpp` decoupled from Vulkan headers.
+- P5(a) - Pass bodies clean.
+- P5(c) (graphics + compute pipelines only) - Factory split done.
+- P5(e) - `BindlessManager` clean; `GetLayout()` / `GetSet()` return
   `gpu::*`.
-- P5(f) — Swapchain getters return `gpu::Format`.
-- P5(g) — `CommandRecorder` deleted; `AsyncComputeContext` migrated to
+- P5(f) - Swapchain getters return `gpu::Format`.
+- P5(g) - `CommandRecorder` deleted; `AsyncComputeContext` migrated to
   `gpu::CommandList`.
 
 The remaining work is enumerated in §7.

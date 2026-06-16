@@ -198,7 +198,7 @@ namespace aether
 		// Ensure a transient image is registered for bindless sampled access.
 		// Returns 0xFFFFFFFF when image is invalid/non-transient/not allocatable.
 		// device is an opaque engine handle (gpu::Device) cast to VkDevice at the seam.
-		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
+		[[nodiscard]] std::uint32_t EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 
 		// Returns bindless slot for a transient image if already registered.
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(RGImage image) const;

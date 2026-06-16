@@ -337,7 +337,7 @@ namespace aether
 		{
 			m_externalBuffers[idx] = newBuffer;
 		}
-		// Reset buffer state — the backing buffer has been replaced, so the
+		// Reset buffer state - the backing buffer has been replaced, so the
 		// previous frame's barrier tracking is stale. The next Compile() will
 		// emit a fresh TOP_OF_PIPE barrier for this buffer.
 		m_lastBufferStates.erase(buffer.id);
@@ -372,7 +372,7 @@ namespace aether
 
 	// -- Bindless -------------------------------------------------------------
 
-	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout)
+	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout)
 	{
 		if (!IsTransientId(image.id))
 		{
@@ -380,7 +380,7 @@ namespace aether
 		}
 
 		const uint32_t idx = TransientIndex(image.id);
-		return m_storage->EnsureBindlessSampled(idx, bindlessManager, device, descriptorLayout);
+		return m_storage->EnsureBindlessSampled(idx, bindlessManager, descriptorLayout);
 	}
 
 	std::uint32_t RenderGraph::GetBindlessSampledSlot(RGImage image) const

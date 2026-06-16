@@ -7,6 +7,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 namespace aether
 {
@@ -16,15 +17,45 @@ namespace aether
 		m_deviceRef = ctx.GetDevice().device;
 
 		constexpr gpu::BufferUsage kBaseUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
+		const VkBufferUsageFlags vkUsage = static_cast<VkBufferUsageFlags>(kBaseUsage | desc.additionalUsage);
 
-		AE_EXPECT_OR_THROW(buffer, UniqueBuffer::CreateDeviceLocal(m_allocatorRef, m_deviceRef, desc.capacityBytes, kBaseUsage | desc.additionalUsage, desc.debugName));
-		m_buffer = std::move(buffer);
+		const VkBufferCreateInfo bufferInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = desc.capacityBytes,
+		        .usage = vkUsage,
+		};
+		const VmaAllocationCreateInfo allocInfo{
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+		};
+		VmaAllocationInfo vmaInfo{};
+		if (vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create device-local buffer"));
+		}
+
+		const VkBufferDeviceAddressInfo addrInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		        .buffer = m_buffer,
+		};
+		m_baseAddress = vkGetBufferDeviceAddress(m_deviceRef, &addrInfo);
+
+		if (desc.debugName != nullptr)
+		{
+			vkutil::SetObjectName(m_deviceRef, reinterpret_cast<std::uint64_t>(m_buffer), VK_OBJECT_TYPE_BUFFER, desc.debugName);
+		}
+
 		m_freeList.push_back({0, desc.capacityBytes});
 	}
 
 	void GpuHeap::Shutdown()
 	{
-		m_buffer.Reset();
+		if (m_buffer != VK_NULL_HANDLE)
+		{
+			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);
+			m_buffer = VK_NULL_HANDLE;
+			m_bufferAllocation = VK_NULL_HANDLE;
+		}
 		m_freeList.clear();
 	}
 
@@ -107,13 +138,28 @@ namespace aether
 
 	void GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)
 	{
-		assert(dstAddr >= m_buffer.GetDeviceAddress());
-		const VkDeviceSize dstOffset = dstAddr - m_buffer.GetDeviceAddress();
+		assert(dstAddr >= m_baseAddress);
+		const VkDeviceSize dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
 
 		// Transient host-visible staging buffer.
-		AE_EXPECT_OR_THROW(staging, UniqueBuffer::CreateMapped(m_allocatorRef, device, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-		std::memcpy(staging.GetAllocationInfo().pMappedData, src, static_cast<std::size_t>(bytes));
-		AE_EXPECT_OR_THROW_VOID(staging.FlushMapped());
+		const VkBufferCreateInfo stagingInfo{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = bytes,
+		        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		};
+		const VmaAllocationCreateInfo stagingAllocInfo{
+		        .usage = VMA_MEMORY_USAGE_AUTO,
+		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		};
+		VkBuffer stagingBuffer = VK_NULL_HANDLE;
+		VmaAllocation stagingAllocation = VK_NULL_HANDLE;
+		VmaAllocationInfo stagingVmaInfo{};
+		if (vmaCreateBuffer(m_allocatorRef, &stagingInfo, &stagingAllocInfo, &stagingBuffer, &stagingAllocation, &stagingVmaInfo) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create staging buffer"));
+		}
+		std::memcpy(stagingVmaInfo.pMappedData, src, static_cast<std::size_t>(bytes));
+		vmaFlushAllocation(m_allocatorRef, stagingAllocation, 0, bytes);
 
 		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{
@@ -141,7 +187,7 @@ namespace aether
 		}
 
 		const VkBufferCopy region{.srcOffset = 0, .dstOffset = dstOffset, .size = bytes};
-		vkCmdCopyBuffer(cmd, staging.Get(), m_buffer.Get(), 1, &region);
+		vkCmdCopyBuffer(cmd, stagingBuffer, m_buffer, 1, &region);
 
 		const VkResult endResult = vkEndCommandBuffer(cmd);
 		if (endResult != VK_SUCCESS)
@@ -176,5 +222,6 @@ namespace aether
 		(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
 		vkDestroyFence(device, fence, nullptr);
 		vkFreeCommandBuffers(device, pool, 1, &cmd);
+		vmaDestroyBuffer(m_allocatorRef, stagingBuffer, stagingAllocation);
 	}
 } // namespace aether

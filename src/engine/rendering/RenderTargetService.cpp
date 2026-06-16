@@ -80,7 +80,7 @@ namespace aether
 		for (auto& [id, rt]: m_targets)
 		{
 			rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, gpu::Extent2D{rt.extent.width, rt.extent.height}, gpu::ImageUsage::Sampled);
-			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
+			const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager);
 			if (slot == 0xFFFFFFFFu)
 			{
 				Throw(AetherError::Engine("RenderTargetService: failed to bindless-register transient RTT color for target id=" + std::to_string(id)));
@@ -125,7 +125,7 @@ namespace aether
 		rt.extent = extent;
 
 		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, extent, gpu::ImageUsage::Sampled);
-		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager, m_device);
+		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor, *m_bindlessManager);
 		if (slot == 0xFFFFFFFFu)
 		{
 			AE_UNEXPECTED(AetherError::Engine("failed to register transient color image as bindless sampled"));

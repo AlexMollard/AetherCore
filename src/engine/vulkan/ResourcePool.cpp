@@ -3,7 +3,9 @@
 #include <algorithm>
 
 #include "gpu/BindlessManager.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "utils/Assert.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 
 namespace aether
 {
@@ -218,7 +220,7 @@ namespace aether
 		return true;
 	}
 
-	UniqueBuffer& ResourcePool::MaterializeBuffer(const VirtualBufferHandle handle, const BufferFactory& factory)
+	gpu::BufferHandle ResourcePool::MaterializeBuffer(const VirtualBufferHandle handle, const BufferFactory& factory)
 	{
 		auto& record = RequireBufferRecord(handle);
 
@@ -235,7 +237,7 @@ namespace aether
 				AE_ASSERT_ALWAYS(false, "Aliased buffer resources have overlapping lifetime windows.");
 			}
 
-			auto& sourceResource = MaterializeBuffer(sourceHandle, factory);
+			auto sourceResource = MaterializeBuffer(sourceHandle, factory);
 			record.physicalId = sourceRecord.physicalId;
 			if (record.physicalId.has_value())
 			{
@@ -284,19 +286,19 @@ namespace aether
 			}
 		}
 
-		UniqueBuffer resource = factory(record.desc);
+		gpu::BufferHandle resource = factory(record.desc);
 		m_physicalBuffers.push_back(BufferPhysicalRecord{
-		        .resource = std::move(resource),
+		        .resource = resource,
 		        .owners = {handle.id - 1},
 		        .visibility = record.contract.visibility,
 		        .queue = record.contract.lifetime.queue,
 		});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalBuffers.size() - 1);
-		return m_physicalBuffers.back().resource;
+		return resource;
 	}
 
-	UniqueImage& ResourcePool::MaterializeImage(const VirtualImageHandle handle, const ImageFactory& factory)
+	gpu::TextureHandle ResourcePool::MaterializeImage(const VirtualImageHandle handle, const ImageFactory& factory)
 	{
 		auto& record = RequireImageRecord(handle);
 
@@ -313,7 +315,7 @@ namespace aether
 				AE_ASSERT_ALWAYS(false, "Aliased image resources have overlapping lifetime windows.");
 			}
 
-			auto& sourceResource = MaterializeImage(sourceHandle, factory);
+			auto sourceResource = MaterializeImage(sourceHandle, factory);
 			record.physicalId = sourceRecord.physicalId;
 			if (record.physicalId.has_value())
 			{
@@ -329,7 +331,7 @@ namespace aether
 
 		if (record.physicalId.has_value())
 		{
-			auto& existing = m_physicalImages[*record.physicalId].resource;
+			auto existing = m_physicalImages[*record.physicalId].resource;
 			EnsureImageVisibilityBindings(existing, record.contract);
 			return existing;
 		}
@@ -366,39 +368,39 @@ namespace aether
 			}
 		}
 
-		UniqueImage resource = factory(record.desc);
+		gpu::TextureHandle resource = factory(record.desc);
 		EnsureImageVisibilityBindings(resource, record.contract);
 		m_physicalImages.push_back(ImagePhysicalRecord{
-		        .resource = std::move(resource),
+		        .resource = resource,
 		        .owners = {handle.id - 1},
 		        .visibility = record.contract.visibility,
 		        .queue = record.contract.lifetime.queue,
 		});
 
 		record.physicalId = static_cast<std::uint32_t>(m_physicalImages.size() - 1);
-		return m_physicalImages.back().resource;
+		return resource;
 	}
 
-	const UniqueBuffer* ResourcePool::TryGetBuffer(const VirtualBufferHandle handle) const
+	gpu::BufferHandle ResourcePool::TryGetBuffer(const VirtualBufferHandle handle) const
 	{
 		const auto& record = RequireBufferRecord(handle);
 		if (!record.physicalId.has_value())
 		{
-			return nullptr;
+			return {};
 		}
 
-		return &m_physicalBuffers[*record.physicalId].resource;
+		return m_physicalBuffers[*record.physicalId].resource;
 	}
 
-	const UniqueImage* ResourcePool::TryGetImage(const VirtualImageHandle handle) const
+	gpu::TextureHandle ResourcePool::TryGetImage(const VirtualImageHandle handle) const
 	{
 		const auto& record = RequireImageRecord(handle);
 		if (!record.physicalId.has_value())
 		{
-			return nullptr;
+			return {};
 		}
 
-		return &m_physicalImages[*record.physicalId].resource;
+		return m_physicalImages[*record.physicalId].resource;
 	}
 
 	ResourcePool::BufferVirtualRecord& ResourcePool::RequireBufferRecord(const VirtualBufferHandle handle)
@@ -499,55 +501,55 @@ namespace aether
 		return true;
 	}
 
-	void ResourcePool::EnsureImageVisibilityBindings(UniqueImage& image, const ResourceContract& contract)
+	void ResourcePool::EnsureImageVisibilityBindings(gpu::TextureHandle image, const ResourceContract& contract)
 	{
 		if (contract.visibility == ResourceVisibility::BindlessSampled)
 		{
-			AE_ASSERT_ALWAYS(m_bindlessImageConfig.manager != nullptr && m_bindlessImageConfig.device != VK_NULL_HANDLE, "Bindless sampled image requested, but ResourcePool bindless image config is not set.");
+			AE_ASSERT_ALWAYS(m_bindlessImageConfig.manager != nullptr, "Bindless sampled image requested, but ResourcePool bindless image config is not set.");
 
-			AE_EXPECT_OR_THROW_VOID(image.EnsureBindlessSampled(*m_bindlessImageConfig.manager, m_bindlessImageConfig.device, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout));
+			gpu::ResourceRegistry::EnsureBindlessSampled(image, *m_bindlessImageConfig.manager, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout);
 		}
 	}
 
-	bool ResourcePool::IsBufferCompatible(const BufferResourceDesc& requested, const UniqueBuffer& existing)
+	bool ResourcePool::IsBufferCompatible(const BufferResourceDesc& requested, gpu::BufferHandle existing)
 	{
-		if (!existing)
+		if (!existing.IsValid())
 		{
 			return false;
 		}
 
-		if (requested.size > existing.GetSize())
+		if (requested.size > gpu::ResourceRegistry::GetBufferSize(existing))
 		{
 			return false;
 		}
 
-		return (requested.usage & ~existing.GetUsage()) == 0;
+		return (requested.usage & ~gpu::ToVk(gpu::ResourceRegistry::GetBufferUsage(existing))) == 0;
 	}
 
-	bool ResourcePool::IsImageCompatible(const ImageResourceDesc& requested, const UniqueImage& existing)
+	bool ResourcePool::IsImageCompatible(const ImageResourceDesc& requested, gpu::TextureHandle existing)
 	{
-		if (!existing)
+		if (!existing.IsValid())
 		{
 			return false;
 		}
 
-		const auto extent = existing.GetExtent();
-		if (requested.extent.width > extent.width || requested.extent.height > extent.height || requested.extent.depth > extent.depth)
+		const auto extent = gpu::ResourceRegistry::GetTextureExtent(existing);
+		if (requested.extent.width > extent.width || requested.extent.height > extent.height)
 		{
 			return false;
 		}
 
-		if (requested.format != existing.GetFormat())
+		if (requested.format != gpu::ToVk(gpu::ResourceRegistry::GetTextureFormat(existing)))
 		{
 			return false;
 		}
 
-		if (requested.mipLevels > existing.GetMipLevels() || requested.arrayLayers > existing.GetArrayLayers())
+		if (requested.mipLevels > gpu::ResourceRegistry::GetTextureMipLevels(existing) || requested.arrayLayers > gpu::ResourceRegistry::GetTextureArrayLayers(existing))
 		{
 			return false;
 		}
 
-		return (requested.usage & ~existing.GetUsage()) == 0;
+		return (requested.usage & ~gpu::ToVk(gpu::ResourceRegistry::GetTextureUsage(existing))) == 0;
 	}
 
 	void ResourcePool::Shutdown()

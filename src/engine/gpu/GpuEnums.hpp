@@ -380,7 +380,7 @@ namespace aether::gpu
 
 namespace aether
 {
-	// Engine-side texture filter. Moved here from vulkan/UniqueImage.hpp
+	// Engine-side texture filter.
 	// so engine code can include GpuEnums.hpp without dragging in the
 	// Vulkan backend.
 	enum class TextureFilter

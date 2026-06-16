@@ -8,7 +8,7 @@
 #include "gpu/GpuFormat.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/Semaphore.hpp"
-#include "vulkan/UniqueImage.hpp"
+#include <vk_mem_alloc.h>
 #include "gpu/GpuEnums.hpp"
 
 namespace aether
@@ -86,7 +86,9 @@ namespace aether
 		vkb::Swapchain m_swapchain{};
 		std::vector<VkImage> m_images;
 		std::vector<VkImageView> m_imageViews;
-		UniqueImage m_depthImage;
+		VkImage m_depthImage = VK_NULL_HANDLE;
+		VmaAllocation m_depthAllocation = VK_NULL_HANDLE;
+		VmaAllocator m_allocator = nullptr;
 		VkImageView m_depthView = VK_NULL_HANDLE;
 		gpu::Format m_depthFormat = gpu::Format::Undefined;
 		// One renderFinished semaphore per swapchain image: by the time an image is

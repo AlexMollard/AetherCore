@@ -16,7 +16,6 @@ namespace aether
 		AE_EXPECT_OR_THROW_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourcePool.ConfigureBindlessImages({
 		        .manager = &m_bindlessManager,
-		        .device = m_vulkanContext->GetDevice().device,
 		});
 	}
 

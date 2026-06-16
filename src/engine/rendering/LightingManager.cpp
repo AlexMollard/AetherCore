@@ -91,9 +91,34 @@ namespace aether
 		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		for (auto& frame: m_buffers)
 		{
-			frame.lights.Reset();
-			frame.tileHeaders.Reset();
-			frame.tileIndices.Reset();
+			auto destroyBuf = [](gpu::BufferHandle& h)
+			{
+				if (h.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(h);
+					h = {};
+				}
+			};
+			destroyBuf(frame.lightsHandle);
+			destroyBuf(frame.tileHeadersHandle);
+			destroyBuf(frame.tileIndicesHandle);
+			for (auto& stale: frame.staleBuffers)
+			{
+				if (stale.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(stale);
+				}
+			}
+			frame.staleBuffers.clear();
+			frame.lightsMapped = nullptr;
+			frame.tileHeadersMapped = nullptr;
+			frame.tileIndicesMapped = nullptr;
+			frame.lightsBuffer = nullptr;
+			frame.tileHeadersBuffer = nullptr;
+			frame.tileIndicesBuffer = nullptr;
+			frame.lightsSize = 0;
+			frame.tileHeadersSize = 0;
+			frame.tileIndicesSize = 0;
 			frame.lightsCapacity = 0;
 			frame.headersCapacity = 0;
 			frame.indicesCapacity = 0;
@@ -134,19 +159,19 @@ namespace aether
 	{
 		auto& frame = m_buffers[frameSlot];
 		const gpu::GpuDescriptorBufferInfo lightInfo{
-		        .buffer = frame.lights.Get(),
+		        .buffer = frame.lightsBuffer,
 		        .offset = 0,
-		        .range = frame.lights.GetSize(),
+		        .range = frame.lightsSize,
 		};
 		const gpu::GpuDescriptorBufferInfo headerInfo{
-		        .buffer = frame.tileHeaders.Get(),
+		        .buffer = frame.tileHeadersBuffer,
 		        .offset = 0,
-		        .range = frame.tileHeaders.GetSize(),
+		        .range = frame.tileHeadersSize,
 		};
 		const gpu::GpuDescriptorBufferInfo indexInfo{
-		        .buffer = frame.tileIndices.Get(),
+		        .buffer = frame.tileIndicesBuffer,
 		        .offset = 0,
-		        .range = frame.tileIndices.GetSize(),
+		        .range = frame.tileIndicesSize,
 		};
 		const gpu::GpuWriteDescriptorSet writes[] = {
 		        {
@@ -352,41 +377,44 @@ namespace aether
 		auto& frame = m_buffers[frameSlot];
 		if (!lights.empty())
 		{
-			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
+			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
 		}
 		if (!headers.empty())
 		{
-			std::memcpy(frame.tileHeaders.GetAllocationInfo().pMappedData, headers.data(), headers.size() * sizeof(TileHeader));
+			std::memcpy(frame.tileHeadersMapped, headers.data(), headers.size() * sizeof(TileHeader));
 		}
 		if (!indices.empty())
 		{
-			std::memcpy(frame.tileIndices.GetAllocationInfo().pMappedData, indices.data(), indices.size() * sizeof(std::uint32_t));
+			std::memcpy(frame.tileIndicesMapped, indices.data(), indices.size() * sizeof(std::uint32_t));
 		}
-		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(frame.tileHeaders.FlushMapped());
-		AE_EXPECT_OR_THROW_VOID(frame.tileIndices.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(lights.size()) * sizeof(GpuLight));
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.tileHeadersHandle, 0, static_cast<gpu::DeviceSize>(headers.size()) * sizeof(TileHeader));
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.tileIndicesHandle, 0, static_cast<gpu::DeviceSize>(indices.size()) * sizeof(std::uint32_t));
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	// Buffer-pool helper. The actual backend call (Vulkan) happens in
-	// `UniqueBuffer::CreateStorageBuffer` so this method stays vulkan-free.
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
 		AE_PROFILE_ZONE();
 		auto& frame = m_buffers[frameSlot];
-		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
-		const gpu::Allocator allocator = static_cast<gpu::Allocator>(m_context->GetAllocator());
 
 		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
 		// guaranteed to have completed all GPU work referencing them.
+		for (auto& stale: frame.staleBuffers)
+		{
+			if (stale.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(stale);
+			}
+		}
 		frame.staleBuffers.clear();
 
-		auto ensureBuffer = [&](UniqueBuffer& buffer, std::size_t& capacity, const std::size_t required, const std::size_t stride)
+		auto ensureBuffer = [&](gpu::BufferHandle& handle, void*& mapped, gpu::Buffer& buffer, gpu::DeviceSize& size, std::size_t& capacity, const std::size_t required, const std::size_t stride)
 		{
 			const std::size_t safeRequired = std::max<std::size_t>(required, 1u);
-			if (buffer && capacity >= safeRequired)
+			if (handle.IsValid() && capacity >= safeRequired)
 			{
 				return;
 			}
@@ -397,24 +425,39 @@ namespace aether
 				capacity = safeRequired;
 			}
 
-			// Create new buffer BEFORE releasing the old one - avoids use-after-free on creation failure.
-			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::CreateStorageBuffer(allocator, device, static_cast<gpu::DeviceSize>(stride * capacity), "LightingManager.FrameBuffer"));
-			if (buffer)
+			const gpu::MappedBufferDesc desc{
+			        .size = static_cast<gpu::DeviceSize>(stride * capacity),
+			        .usage = gpu::BufferUsage::Storage,
+			        .memoryUsage = gpu::MappedMemoryUsage::Auto,
+			        .debugName = "LightingManager.FrameBuffer",
+			};
+			const auto newHandle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!newHandle.IsValid())
 			{
-				frame.staleBuffers.push_back(std::move(buffer));
+				Throw(AetherError::Engine("LightingManager: CreateMappedBuffer failed"));
 			}
-			buffer = std::move(newBuf);
+
+			if (handle.IsValid())
+			{
+				frame.staleBuffers.push_back(handle);
+			}
+			handle = newHandle;
+
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(handle);
+			mapped = view.mappedPtr;
+			size = view.size;
+			buffer = static_cast<gpu::Buffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(handle));
 		};
 
-		ensureBuffer(frame.lights, frame.lightsCapacity, lightCount, sizeof(GpuLight));
-		ensureBuffer(frame.tileHeaders, frame.headersCapacity, tileCount, sizeof(TileHeader));
-		ensureBuffer(frame.tileIndices, frame.indicesCapacity, indexCount, sizeof(std::uint32_t));
+		ensureBuffer(frame.lightsHandle, frame.lightsMapped, frame.lightsBuffer, frame.lightsSize, frame.lightsCapacity, lightCount, sizeof(GpuLight));
+		ensureBuffer(frame.tileHeadersHandle, frame.tileHeadersMapped, frame.tileHeadersBuffer, frame.tileHeadersSize, frame.headersCapacity, tileCount, sizeof(TileHeader));
+		ensureBuffer(frame.tileIndicesHandle, frame.tileIndicesMapped, frame.tileIndicesBuffer, frame.tileIndicesSize, frame.indicesCapacity, indexCount, sizeof(std::uint32_t));
 	}
 
 	void LightingManager::EnsureComputePipeline() const
 	{
 		AE_PROFILE_ZONE();
-		if (m_computeLayout != VK_NULL_HANDLE && m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
+		if (m_computeLayout != nullptr && m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
 		{
 			return;
 		}
@@ -481,20 +524,20 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		auto& frame = m_buffers[frameSlot];
-		if (!frame.lights || shadowIndices.empty())
+		if (!frame.lightsHandle.IsValid() || shadowIndices.empty())
 		{
 			return;
 		}
 
-		const std::size_t lightCount = frame.lights.GetSize() / sizeof(GpuLight);
+		const std::size_t lightCount = frame.lightsSize / sizeof(GpuLight);
 		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
-		GpuLight* mapped = static_cast<GpuLight*>(frame.lights.GetAllocationInfo().pMappedData);
+		GpuLight* mapped = static_cast<GpuLight*>(frame.lightsMapped);
 		for (std::size_t i = 0; i < applyCount; ++i)
 		{
 			mapped[i].shadowIndex.x = shadowIndices[i].x; // shadowIndex
 			mapped[i].shadowIndex.y = shadowIndices[i].y; // shadowStrength
 		}
-		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(applyCount) * sizeof(GpuLight));
 	}
 
 	void LightingManager::DisableForView(FrameConstants& fc) const
@@ -536,9 +579,9 @@ namespace aether
 
 			                cmd.BindComputePipeline(initPipeline, initLayout);
 
-			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lights.Get(), .offset = 0, .range = frame.lights.GetSize()};
-			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeaders.Get(), .offset = 0, .range = frame.tileHeaders.GetSize()};
-			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndices.Get(), .offset = 0, .range = frame.tileIndices.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lightsBuffer, .offset = 0, .range = frame.lightsSize};
+			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeadersBuffer, .offset = 0, .range = frame.tileHeadersSize};
+			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndicesBuffer, .offset = 0, .range = frame.tileIndicesSize};
 			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
 			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
 			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
@@ -566,9 +609,9 @@ namespace aether
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(cullPipeline, cullLayout);
 
-			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lights.Get(), .offset = 0, .range = frame.lights.GetSize()};
-			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeaders.Get(), .offset = 0, .range = frame.tileHeaders.GetSize()};
-			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndices.Get(), .offset = 0, .range = frame.tileIndices.GetSize()};
+			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lightsBuffer, .offset = 0, .range = frame.lightsSize};
+			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeadersBuffer, .offset = 0, .range = frame.tileHeadersSize};
+			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndicesBuffer, .offset = 0, .range = frame.tileIndicesSize};
 			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
 			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
 			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
@@ -611,9 +654,9 @@ namespace aether
 		auto& frame = m_buffers[frameSlot];
 		if (!lights.empty())
 		{
-			std::memcpy(frame.lights.GetAllocationInfo().pMappedData, lights.data(), lights.size() * sizeof(GpuLight));
+			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
 		}
-		AE_EXPECT_OR_THROW_VOID(frame.lights.FlushMapped());
+		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(lights.size()) * sizeof(GpuLight));
 
 		EnsureComputePipeline();
 
@@ -637,8 +680,8 @@ namespace aether
 	void LightingManager::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot) const
 	{
 		auto& frame = m_buffers[frameSlot];
-		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(frame.lights.Get()));
-		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(frame.tileHeaders.Get()));
-		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(frame.tileIndices.Get()));
+		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(frame.lightsBuffer));
+		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(frame.tileHeadersBuffer));
+		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(frame.tileIndicesBuffer));
 	}
 } // namespace aether

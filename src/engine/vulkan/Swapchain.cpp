@@ -74,6 +74,7 @@ namespace aether
 		m_images = m_swapchain.get_images().value();
 		m_imageViews = m_swapchain.get_image_views().value();
 		m_depthFormat = PickDepthFormat(ctx.GetDevice().physical_device);
+		m_allocator = ctx.GetAllocator();
 		m_graphicsQueueFamily = ctx.GetGraphicsQueueFamily();
 
 		VkDevice device = ctx.GetDevice().device;
@@ -98,12 +99,16 @@ namespace aether
 		const VmaAllocationCreateInfo depthAllocInfo{
 		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
-		AE_EXPECT_OR_THROW(depthImage, UniqueImage::Create(ctx.GetAllocator(), depthImageInfo, depthAllocInfo));
-		m_depthImage = std::move(depthImage);
+		VmaAllocationInfo allocInfo{};
+		const VkResult depthResult = vmaCreateImage(m_allocator, &depthImageInfo, &depthAllocInfo, &m_depthImage, &m_depthAllocation, &allocInfo);
+		if (depthResult != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(static_cast<int32_t>(depthResult), "Failed to create depth image."));
+		}
 
 		const VkImageViewCreateInfo depthViewInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		        .image = m_depthImage.Get(),
+		        .image = m_depthImage,
 		        .viewType = VK_IMAGE_VIEW_TYPE_2D,
 		        .format = gpu::ToVk(m_depthFormat),
 		        .subresourceRange =
@@ -176,7 +181,7 @@ namespace aether
 			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_images[i]), VK_OBJECT_TYPE_IMAGE, imgName.c_str());
 			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_imageViews[i]), VK_OBJECT_TYPE_IMAGE_VIEW, viewName.c_str());
 		}
-		m_depthImage.SetName(device, "Swapchain.Depth");
+		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_depthImage), VK_OBJECT_TYPE_IMAGE, "Swapchain.Depth");
 		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(m_depthView), VK_OBJECT_TYPE_IMAGE_VIEW, "Swapchain.Depth.View");
 		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
@@ -199,7 +204,12 @@ namespace aether
 			vkDestroyImageView(device, m_depthView, nullptr);
 			m_depthView = VK_NULL_HANDLE;
 		}
-		m_depthImage.Reset();
+		if (m_depthImage != VK_NULL_HANDLE)
+		{
+			vmaDestroyImage(m_allocator, m_depthImage, m_depthAllocation);
+			m_depthImage = VK_NULL_HANDLE;
+			m_depthAllocation = VK_NULL_HANDLE;
+		}
 		m_depthFormat = gpu::Format::Undefined;
 
 		for (auto& frame: m_frames)
@@ -319,7 +329,7 @@ namespace aether
 		const VkPipelineStageFlags2 depthSrcStage = depthIsFirstFrame ? VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT : (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
 		const VkAccessFlags2 depthSrcAccess = depthIsFirstFrame ? VK_ACCESS_2_NONE : VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 		vkutil::TransitionImage(frame.commandBuffer,
-		        m_depthImage.Get(),
+		        m_depthImage,
 		        m_depthLayout,
 		        VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
 		        depthSrcStage,
@@ -529,7 +539,7 @@ namespace aether
 
 	VkImage Swapchain::GetDepthImage() const
 	{
-		return m_depthImage.Get();
+		return m_depthImage;
 	}
 
 	VkImageView Swapchain::GetDepthImageView() const

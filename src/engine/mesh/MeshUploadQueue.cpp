@@ -12,15 +12,35 @@ namespace aether
 	void MeshUploadQueue::Initialize(const VulkanContext& ctx)
 	{
 		AE_PROFILE_ZONE();
-		AE_EXPECT_OR_THROW(buf, UniqueBuffer::CreateMapped(ctx.GetAllocator(), ctx.GetDevice().device, kStagingCapacity, VK_BUFFER_USAGE_TRANSFER_SRC_BIT));
-		m_staging = std::move(buf);
+		(void) ctx;
+
+		const gpu::MappedBufferDesc desc{
+		        .size = kStagingCapacity,
+		        .usage = gpu::BufferUsage::TransferSrc,
+		        .memoryUsage = gpu::MappedMemoryUsage::Auto,
+		        .debugName = "MeshUploadQueue.Staging",
+		};
+		m_stagingHandle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+		if (!m_stagingHandle.IsValid())
+		{
+			Throw(AetherError::Engine("MeshUploadQueue: CreateMappedBuffer failed"));
+		}
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_stagingHandle);
+		m_stagingMapped = view.mappedPtr;
+		m_stagingBuffer = static_cast<gpu::Buffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(m_stagingHandle));
 		m_ringHead = 0;
 	}
 
 	void MeshUploadQueue::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		m_staging.Reset();
+		if (m_stagingHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_stagingHandle);
+			m_stagingHandle = {};
+		}
+		m_stagingMapped = nullptr;
+		m_stagingBuffer = nullptr;
 		m_pendingCopies.clear();
 		m_ringHead = 0;
 	}
@@ -35,14 +55,14 @@ namespace aether
 			return false; // staging full - retry next frame
 		}
 
-		auto* mapped = static_cast<std::uint8_t*>(m_staging.GetAllocationInfo().pMappedData);
+		auto* mapped = static_cast<std::uint8_t*>(m_stagingMapped);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
-		m_pendingCopies.push_back({m_staging.GetBuffer(), m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
+		m_pendingCopies.push_back({m_stagingBuffer, m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
 		m_ringHead += vertexBytes;
 
 		std::memcpy(mapped + m_ringHead, indexData, static_cast<std::size_t>(indexBytes));
-		m_pendingCopies.push_back({m_staging.GetBuffer(), m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
+		m_pendingCopies.push_back({m_stagingBuffer, m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
 		m_ringHead += indexBytes;
 
 		return true;
@@ -57,7 +77,7 @@ namespace aether
 		}
 
 		// Flush the host-written staging bytes before the GPU reads them.
-		AE_EXPECT_OR_THROW_VOID(m_staging.FlushMapped(0, m_ringHead));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_stagingHandle, 0, m_ringHead);
 
 		for (const PendingCopy& copy: m_pendingCopies)
 		{

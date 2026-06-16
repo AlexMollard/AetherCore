@@ -8,10 +8,9 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 
+#include "gpu/ResourceRegistry.hpp"
 #include "gpu/Semaphore.hpp"
 #include "vulkan/volk.hpp"
-#include "vulkan/UniqueImage.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include "gpu/GpuEnums.hpp"
 
 namespace aether
@@ -157,9 +156,8 @@ namespace aether
 		}
 
 		// -- Bindless -------------------------------------------------------
-		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout);
-		// Engine-side overload: opaque gpu::Device / gpu::ImageLayout.
-		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout);
+		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkImageLayout descriptorLayout);
+		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout);
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
 
 		// -- Transient buffer slots ------------------------------------------
@@ -287,7 +285,7 @@ namespace aether
 			bool bindlessRequested = false;
 			bool fromHeap = false; // true if allocated from transient heap
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			UniqueImage image;
+			gpu::TextureHandle image;
 			gpu::Extent2D allocatedExtent{};
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu;
 			// Filled by PrepareTransientAllocations (two-pass).
@@ -302,7 +300,7 @@ namespace aether
 			VkDeviceSize size = 0;
 			VkBufferUsageFlags usage = 0;
 			bool fromHeap = false;
-			UniqueBuffer buffer;
+			gpu::BufferHandle buffer;
 			// Filled by PrepareTransientAllocations (two-pass).
 			VkDeviceSize memReqSize = 0;
 			VkDeviceSize memReqAlignment = 0;
@@ -343,19 +341,13 @@ namespace aether
 
 		struct CachedImage
 		{
-			UniqueImage image;
+			gpu::TextureHandle handle;
 			std::uint32_t lastUsedFrame = 0;
-		};
-
-		struct PendingDestruction
-		{
-			std::uint32_t entryIndex = 0xFFFFFFFFu;
-			UniqueImage image;
 		};
 
 		// -- Cache helpers --------------------------------------------------
 		void MoveToCache(TransientImageEntry& entry);
-		UniqueImage TryPullFromCache(const ImageCacheKey& key);
+		gpu::TextureHandle TryPullFromCache(const ImageCacheKey& key);
 		void EvictStaleCacheEntries();
 		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const;
 
@@ -380,7 +372,6 @@ namespace aether
 		std::vector<std::uint32_t> m_freeTransientBufferSlots;
 		std::unordered_map<ImageCacheKey, std::vector<CachedImage>, ImageCacheKeyHash> m_imageCache;
 
-		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
 		std::uint32_t m_currentFrame = 0;
 
 		// Scratch buffers reused across Execute calls within a single frame.

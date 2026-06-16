@@ -3,7 +3,6 @@
 #include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 #include <entt/entt.hpp>
 #include <glm/geometric.hpp>
 

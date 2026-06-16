@@ -3,8 +3,11 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "utils/Assert.hpp"
 #include "vulkan/ComputePipelineFactory.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GraphicsPipelineFactory.hpp"
 #include "vulkan/ResourceRegistry.hpp"
+
+#include <vk_mem_alloc.h>
 
 namespace
 {
@@ -32,6 +35,16 @@ namespace aether::gpu
 	TextureHandle ResourceRegistry::CreateTexture(const TextureDesc& d, std::source_location loc) noexcept
 	{
 		return s_reg->CreateTexture(d, loc);
+	}
+
+	TextureHandle ResourceRegistry::CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName) noexcept
+	{
+		return s_reg->CreateAliasedTexture(desc, static_cast<VmaAllocation>(existingAllocation), static_cast<VkDeviceSize>(memoryOffset), debugName ? std::string_view(debugName) : std::string_view{});
+	}
+
+	BufferHandle ResourceRegistry::CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName) noexcept
+	{
+		return s_reg->CreateAliasedBuffer(static_cast<VkDeviceSize>(size), gpu::ToVk(usage), static_cast<VmaAllocation>(existingAllocation), static_cast<VkDeviceSize>(memoryOffset), debugName ? std::string_view(debugName) : std::string_view{});
 	}
 
 	MappedBufferView ResourceRegistry::ResolveMappedBuffer(BufferHandle h) noexcept
@@ -128,6 +141,11 @@ namespace aether::gpu
 		}
 		ResolvedTexture out{};
 		out.view = static_cast<ImageView>(entry->view);
+		out.format = gpu::FromVk(entry->format);
+		out.extent = gpu::Extent2D{entry->extent.width, entry->extent.height};
+		out.mipLevels = entry->mipLevels;
+		out.arrayLayers = entry->arrayLayers;
+		out.usage = static_cast<ImageUsage>(entry->usage);
 		return out;
 	}
 
@@ -141,6 +159,7 @@ namespace aether::gpu
 		ResolvedBuffer out{};
 		out.deviceAddress = entry->deviceAddress;
 		out.size = entry->size;
+		out.usage = static_cast<BufferUsage>(entry->usage);
 		return out;
 	}
 
@@ -166,5 +185,74 @@ namespace aether::gpu
 			return nullptr;
 		}
 		return static_cast<gpu::Image>(entry->image);
+	}
+
+	void ResourceRegistry::SetBufferName(BufferHandle handle, const char* name)
+	{
+		s_reg->SetBufferName(handle, name);
+	}
+
+	void ResourceRegistry::SetTextureName(TextureHandle handle, const char* name)
+	{
+		s_reg->SetTextureName(handle, name);
+	}
+
+	void ResourceRegistry::SetBindlessManager(aether::BindlessManager* mgr)
+	{
+		s_reg->SetBindlessManager(mgr);
+	}
+
+	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, aether::BindlessManager& bindlessManager, ImageAspect aspectMask, ImageLayout descriptorLayout, TextureFilter filter, SamplerAddressMode addressMode)
+	{
+		auto result = s_reg->EnsureBindlessSampled(handle, bindlessManager, aspectMask, descriptorLayout, filter, addressMode);
+		if (!result)
+		{
+			// Log or assert - the function itself logs on failure
+		}
+	}
+
+	bool ResourceRegistry::HasBindlessSampled(TextureHandle handle)
+	{
+		return s_reg->HasBindlessSampled(handle);
+	}
+
+	std::uint32_t ResourceRegistry::GetBindlessSampledSlot(TextureHandle handle)
+	{
+		return s_reg->GetBindlessSampledSlot(handle);
+	}
+
+	Format ResourceRegistry::GetTextureFormat(TextureHandle handle)
+	{
+		return s_reg->GetTextureFormat(handle);
+	}
+
+	Extent2D ResourceRegistry::GetTextureExtent(TextureHandle handle)
+	{
+		return s_reg->GetTextureExtent(handle);
+	}
+
+	std::uint32_t ResourceRegistry::GetTextureMipLevels(TextureHandle handle)
+	{
+		return s_reg->GetTextureMipLevels(handle);
+	}
+
+	std::uint32_t ResourceRegistry::GetTextureArrayLayers(TextureHandle handle)
+	{
+		return s_reg->GetTextureArrayLayers(handle);
+	}
+
+	ImageUsage ResourceRegistry::GetTextureUsage(TextureHandle handle)
+	{
+		return s_reg->GetTextureUsage(handle);
+	}
+
+	DeviceSize ResourceRegistry::GetBufferSize(BufferHandle handle)
+	{
+		return s_reg->GetBufferSize(handle);
+	}
+
+	BufferUsage ResourceRegistry::GetBufferUsage(BufferHandle handle)
+	{
+		return s_reg->GetBufferUsage(handle);
 	}
 } // namespace aether::gpu

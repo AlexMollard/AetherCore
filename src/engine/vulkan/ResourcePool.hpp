@@ -6,8 +6,7 @@
 #include <vector>
 #include "vulkan/volk.hpp"
 
-#include "vulkan/UniqueBuffer.hpp"
-#include "vulkan/UniqueImage.hpp"
+#include "gpu/GpuHandles.hpp"
 
 namespace aether
 {
@@ -108,13 +107,12 @@ namespace aether
 		struct BindlessImageConfig
 		{
 			BindlessManager* manager = nullptr;
-			VkDevice device = VK_NULL_HANDLE;
-			VkImageAspectFlags sampledAspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			VkImageLayout sampledLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			gpu::ImageAspect sampledAspectMask = gpu::ImageAspect::Color;
+			gpu::ImageLayout sampledLayout = gpu::ImageLayout::ShaderReadOnly;
 		};
 
-		using BufferFactory = std::function<UniqueBuffer(const BufferResourceDesc&)>;
-		using ImageFactory = std::function<UniqueImage(const ImageResourceDesc&)>;
+		using BufferFactory = std::function<gpu::BufferHandle(const BufferResourceDesc&)>;
+		using ImageFactory = std::function<gpu::TextureHandle(const ImageResourceDesc&)>;
 
 		[[nodiscard]] VirtualBufferHandle CreateVirtualBuffer(const BufferResourceDesc& desc, const ResourceContract& contract);
 
@@ -132,11 +130,11 @@ namespace aether
 		bool AliasBuffer(VirtualBufferHandle aliasHandle, VirtualBufferHandle sourceHandle);
 		bool AliasImage(VirtualImageHandle aliasHandle, VirtualImageHandle sourceHandle);
 
-		UniqueBuffer& MaterializeBuffer(VirtualBufferHandle handle, const BufferFactory& factory);
-		UniqueImage& MaterializeImage(VirtualImageHandle handle, const ImageFactory& factory);
+		gpu::BufferHandle MaterializeBuffer(VirtualBufferHandle handle, const BufferFactory& factory);
+		gpu::TextureHandle MaterializeImage(VirtualImageHandle handle, const ImageFactory& factory);
 
-		[[nodiscard]] const UniqueBuffer* TryGetBuffer(VirtualBufferHandle handle) const;
-		[[nodiscard]] const UniqueImage* TryGetImage(VirtualImageHandle handle) const;
+		[[nodiscard]] gpu::BufferHandle TryGetBuffer(VirtualBufferHandle handle) const;
+		[[nodiscard]] gpu::TextureHandle TryGetImage(VirtualImageHandle handle) const;
 
 	private:
 		struct BufferVirtualRecord
@@ -159,7 +157,7 @@ namespace aether
 
 		struct BufferPhysicalRecord
 		{
-			UniqueBuffer resource;
+			gpu::BufferHandle resource;
 			std::vector<std::uint32_t> owners;
 			ResourceVisibility visibility = ResourceVisibility::LocalOnly;
 			ResourceQueueClass queue = ResourceQueueClass::Graphics;
@@ -167,7 +165,7 @@ namespace aether
 
 		struct ImagePhysicalRecord
 		{
-			UniqueImage resource;
+			gpu::TextureHandle resource;
 			std::vector<std::uint32_t> owners;
 			ResourceVisibility visibility = ResourceVisibility::LocalOnly;
 			ResourceQueueClass queue = ResourceQueueClass::Graphics;
@@ -182,10 +180,10 @@ namespace aether
 
 		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records) const;
 
-		static bool IsBufferCompatible(const BufferResourceDesc& requested, const UniqueBuffer& existing);
-		static bool IsImageCompatible(const ImageResourceDesc& requested, const UniqueImage& existing);
+		static bool IsBufferCompatible(const BufferResourceDesc& requested, gpu::BufferHandle existing);
+		static bool IsImageCompatible(const ImageResourceDesc& requested, gpu::TextureHandle existing);
 
-		void EnsureImageVisibilityBindings(UniqueImage& image, const ResourceContract& contract);
+		void EnsureImageVisibilityBindings(gpu::TextureHandle image, const ResourceContract& contract);
 
 		BindlessImageConfig m_bindlessImageConfig{};
 		std::vector<BufferVirtualRecord> m_virtualBuffers;

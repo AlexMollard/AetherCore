@@ -4,8 +4,9 @@
 #include <vector>
 
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
-#include "vulkan/UniqueBuffer.hpp"
+#include "gpu/ResourceRegistry.hpp"
 
 namespace aether
 {
@@ -48,7 +49,9 @@ namespace aether
 			std::uint64_t size = 0;
 		};
 
-		UniqueBuffer m_staging;
+		gpu::BufferHandle m_stagingHandle{};
+		void* m_stagingMapped = nullptr;
+		gpu::Buffer m_stagingBuffer = nullptr;
 		std::uint64_t m_ringHead = 0;
 		std::vector<PendingCopy> m_pendingCopies;
 	};

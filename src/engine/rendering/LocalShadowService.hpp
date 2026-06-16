@@ -12,7 +12,6 @@
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/ShadowAtlasManager.hpp"
 #include "gpu/GpuHandles.hpp"
-#include "vulkan/UniqueBuffer.hpp"
 
 namespace aether
 {
@@ -120,14 +119,19 @@ namespace aether
 		// Per-light shadow data (CPU side, rebuilt each frame).
 		std::vector<PerLightShadow> m_perLightShadows;
 
+		struct PerFrameMapping
+		{
+			gpu::BufferHandle handle{};
+			void* mapped = nullptr;
+			gpu::DeviceAddress address = 0;
+		};
+
 		// Per-frame GPU buffer for ShadowLightData array (double-buffered for kMaxFramesInFlight).
-		std::array<UniqueBuffer, kMaxFramesInFlight> m_shadowDataBuffer;
-		std::array<gpu::DeviceAddress, kMaxFramesInFlight> m_shadowDataAddr{};
+		std::array<PerFrameMapping, kMaxFramesInFlight> m_shadowDataBuffer;
 
 		// Per-frame small per-light frame constants buffer for atlas rendering.
 		// Each light gets a full FrameConstants-sized block.
-		std::array<UniqueBuffer, kMaxFramesInFlight> m_lightConstantsBuffer;
-		std::array<gpu::DeviceAddress, kMaxFramesInFlight> m_lightConstantsAddr{};
+		std::array<PerFrameMapping, kMaxFramesInFlight> m_lightConstantsBuffer;
 
 		// Shadow index for each light in GpuLight buffer order:
 		// x=shadowDataIndex(-1=none), y=shadowStrength.

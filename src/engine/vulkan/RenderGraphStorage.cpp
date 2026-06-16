@@ -9,6 +9,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "gpu/Semaphore.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
@@ -46,9 +47,9 @@ namespace aether
 		UpdateExternalBuffer(idx, static_cast<VkBuffer>(buffer));
 	}
 
-	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::Device device, gpu::ImageLayout descriptorLayout)
+	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout)
 	{
-		return EnsureBindlessSampled(transientIdx, bindlessManager, static_cast<VkDevice>(device), gpu::ToVk(descriptorLayout));
+		return EnsureBindlessSampled(transientIdx, bindlessManager, gpu::ToVk(descriptorLayout));
 	}
 
 	void RenderGraphStorage::Initialize(VkDevice device, VmaAllocator allocator)
@@ -63,7 +64,10 @@ namespace aether
 
 		for (auto& entry: m_transientImages)
 		{
-			entry.image.Reset();
+			if (entry.image.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(entry.image);
+			}
 			entry.aliasedEntryIndex = 0xFFFFFFFFu;
 			entry.allocatedExtent = {};
 		}
@@ -74,17 +78,15 @@ namespace aether
 		{
 			for (auto& ci: cachedList)
 			{
-				ci.image.Reset();
+				if (ci.handle.IsValid())
+				{
+					gpu::ResourceRegistry::Destroy(ci.handle);
+				}
 			}
 		}
 		m_imageCache.clear();
 		m_freeTransientSlots.clear();
 		m_freeExternalSlots.clear();
-
-		for (std::size_t i = 0; i < kMaxFramesInFlight; ++i)
-		{
-			m_pendingDestructions[i].clear();
-		}
 
 		if (m_virtualBlock != VK_NULL_HANDLE)
 		{
@@ -282,16 +284,7 @@ namespace aether
 	void RenderGraphStorage::BeginFrame(std::uint32_t frameIndex)
 	{
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
-
 		m_lastFrameStats = FrameStats{};
-
-		auto& toDestroy = m_pendingDestructions[m_currentFrame];
-		m_lastFrameStats.pendingDestructions = static_cast<std::uint32_t>(toDestroy.size());
-		for (auto& pending: toDestroy)
-		{
-			pending.image.Reset();
-		}
-		toDestroy.clear();
 	}
 
 	// -- External images ------------------------------------------------------
@@ -462,14 +455,15 @@ namespace aether
 			return VK_NULL_HANDLE;
 		}
 		const auto& entry = m_transientImages[idx];
-		if (entry.image)
+		if (entry.image.IsValid())
 		{
-			return entry.image.Get();
+			return static_cast<VkImage>(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
 		}
 		if (entry.aliasedEntryIndex < m_transientImages.size())
 		{
-			AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-			return m_transientImages[entry.aliasedEntryIndex].image.Get();
+			const auto& aliased = m_transientImages[entry.aliasedEntryIndex];
+			AE_ASSERT(aliased.image.IsValid(), "Alias target must own image - check aliasing logic");
+			return static_cast<VkImage>(gpu::ResourceRegistry::ResolveTextureImage(aliased.image));
 		}
 		return VK_NULL_HANDLE;
 	}
@@ -481,14 +475,15 @@ namespace aether
 			return VK_NULL_HANDLE;
 		}
 		const auto& entry = m_transientImages[idx];
-		if (entry.image)
+		if (entry.image.IsValid())
 		{
-			return entry.image.GetDefaultView();
+			return static_cast<VkImageView>(gpu::ResourceRegistry::ResolveTexture(entry.image).view);
 		}
 		if (entry.aliasedEntryIndex < m_transientImages.size())
 		{
-			AE_ASSERT(m_transientImages[entry.aliasedEntryIndex].image, "Alias target must own image - check aliasing logic");
-			return m_transientImages[entry.aliasedEntryIndex].image.GetDefaultView();
+			const auto& aliased = m_transientImages[entry.aliasedEntryIndex];
+			AE_ASSERT(aliased.image.IsValid(), "Alias target must own image - check aliasing logic");
+			return static_cast<VkImageView>(gpu::ResourceRegistry::ResolveTexture(aliased.image).view);
 		}
 		return VK_NULL_HANDLE;
 	}
@@ -533,12 +528,12 @@ namespace aether
 			return false;
 		}
 		const auto& entry = m_transientImages[idx];
-		return entry.image || entry.aliasedEntryIndex < m_transientImages.size();
+		return entry.image.IsValid() || entry.aliasedEntryIndex < m_transientImages.size();
 	}
 
 	// -- Bindless -------------------------------------------------------------
 
-	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkDevice device, VkImageLayout descriptorLayout)
+	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkImageLayout descriptorLayout)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
@@ -554,27 +549,30 @@ namespace aether
 		entry.bindlessLayout = descriptorLayout;
 		entry.aliasedEntryIndex = 0xFFFFFFFFu;
 
-		if (!entry.image)
+		if (!entry.image.IsValid())
 		{
 			if (entry.format == gpu::Format::Undefined || static_cast<std::uint32_t>(entry.usage) == 0 || entry.extent.width == 0 || entry.extent.height == 0)
 			{
 				return 0xFFFFFFFFu;
 			}
 
-			AE_EXPECT_OR_THROW(newImage,
-			        UniqueImage::Create(m_device,
-			                m_allocator,
-			                {
-			                        .extent = entry.extent,
-			                        .format = entry.format,
-			                        .usage = entry.usage,
-			                }));
-			entry.image = std::move(newImage);
+			entry.image = gpu::ResourceRegistry::CreateTexture(gpu::TextureDesc{
+			        .format = entry.format,
+			        .extent = entry.extent,
+			        .usage = entry.usage,
+			        .aspect = entry.aspect,
+			        .mipLevels = 1,
+			        .arrayLayers = 1,
+			});
+			if (!entry.image.IsValid())
+			{
+				return 0xFFFFFFFFu;
+			}
 			entry.allocatedExtent = entry.extent;
 		}
 
-		AE_EXPECT_OR_THROW_VOID(entry.image.EnsureBindlessSampled(bindlessManager, device, entry.aspect, gpu::FromVk(descriptorLayout)));
-		return entry.image.GetBindlessSampledSlot();
+		gpu::ResourceRegistry::EnsureBindlessSampled(entry.image, bindlessManager, entry.aspect, gpu::FromVk(descriptorLayout));
+		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
 	}
 
 	std::uint32_t RenderGraphStorage::GetBindlessSampledSlot(uint32_t transientIdx) const
@@ -585,11 +583,11 @@ namespace aether
 		}
 
 		const auto& entry = m_transientImages[transientIdx];
-		if (!entry.image.HasBindlessSampled())
+		if (!gpu::ResourceRegistry::HasBindlessSampled(entry.image))
 		{
 			return 0xFFFFFFFFu;
 		}
-		return entry.image.GetBindlessSampledSlot();
+		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
 	}
 
 	// -- Release / cache ------------------------------------------------------
@@ -605,22 +603,23 @@ namespace aether
 
 		if (entry.fromHeap)
 		{
-			// Heap-backed images are not cached; destroy the VkImage handle.
-			// The persistent heap allocation is reused next frame.
-			entry.image.Reset();
+			if (entry.image.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(entry.image);
+			}
 		}
 		else if (entry.bindlessRequested)
 		{
 #ifndef NDEBUG
-			if (entry.image)
+			if (entry.image.IsValid())
 			{
-				EraseTrackedLayout(static_cast<gpu::Image>(entry.image.Get()));
+				EraseTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
 			}
 #endif
-			PendingDestruction pending{};
-			pending.entryIndex = idx;
-			pending.image = std::move(entry.image);
-			m_pendingDestructions[currentFrame % kMaxFramesInFlight].push_back(std::move(pending));
+			if (entry.image.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(entry.image);
+			}
 		}
 		else
 		{
@@ -654,35 +653,36 @@ namespace aether
 
 	void RenderGraphStorage::MoveToCache(TransientImageEntry& entry)
 	{
-		if (!entry.image || entry.fromHeap)
+		if (!entry.image.IsValid() || entry.fromHeap)
 		{
 			return;
 		}
 #ifndef NDEBUG
-		EraseTrackedLayout(static_cast<gpu::Image>(entry.image.Get()));
+		EraseTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image));
 #endif
 		const ImageCacheKey key = MakeCacheKey(entry, entry.allocatedExtent);
 		m_imageCache[key].push_back(CachedImage{
-		        .image = std::move(entry.image),
+		        .handle = entry.image,
 		        .lastUsedFrame = m_currentFrame,
 		});
+		entry.image = {};
 		entry.allocatedExtent = {};
 	}
 
-	UniqueImage RenderGraphStorage::TryPullFromCache(const ImageCacheKey& key)
+	gpu::TextureHandle RenderGraphStorage::TryPullFromCache(const ImageCacheKey& key)
 	{
 		auto it = m_imageCache.find(key);
 		if (it == m_imageCache.end() || it->second.empty())
 		{
 			return {};
 		}
-		UniqueImage img = std::move(it->second.back().image);
+		gpu::TextureHandle h = it->second.back().handle;
 		it->second.pop_back();
 		if (it->second.empty())
 		{
 			m_imageCache.erase(it);
 		}
-		return img;
+		return h;
 	}
 
 	void RenderGraphStorage::EvictStaleCacheEntries()
@@ -690,12 +690,22 @@ namespace aether
 		for (auto it = m_imageCache.begin(); it != m_imageCache.end();)
 		{
 			auto& list = it->second;
-			std::erase_if(list,
-			        [&](const CachedImage& ci)
-			        {
-				        const std::uint32_t age = (m_currentFrame >= ci.lastUsedFrame) ? (m_currentFrame - ci.lastUsedFrame) : (kMaxFramesInFlight + m_currentFrame - ci.lastUsedFrame);
-				        return age > kCacheMaxStaleFrames;
-			        });
+			for (auto ciIt = list.begin(); ciIt != list.end();)
+			{
+				const std::uint32_t age = (m_currentFrame >= ciIt->lastUsedFrame) ? (m_currentFrame - ciIt->lastUsedFrame) : (kMaxFramesInFlight + m_currentFrame - ciIt->lastUsedFrame);
+				if (age > kCacheMaxStaleFrames)
+				{
+					if (ciIt->handle.IsValid())
+					{
+						gpu::ResourceRegistry::Destroy(ciIt->handle);
+					}
+					ciIt = list.erase(ciIt);
+				}
+				else
+				{
+					++ciIt;
+				}
+			}
 			if (list.empty())
 			{
 				it = m_imageCache.erase(it);
@@ -955,7 +965,7 @@ namespace aether
 		// Phase 1: Query memory requirements for all transient images.
 		for (auto& entry: m_transientImages)
 		{
-			if (entry.image)
+			if (entry.image.IsValid())
 			{
 				continue;
 			}
@@ -1000,7 +1010,7 @@ namespace aether
 		// Phase 2: Query memory requirements for all transient buffers.
 		for (auto& entry: m_transientBuffers)
 		{
-			if (entry.buffer)
+			if (entry.buffer.IsValid())
 			{
 				continue;
 			}
@@ -1041,14 +1051,14 @@ namespace aether
 
 		for (auto& entry: m_transientImages)
 		{
-			if (!entry.image && entry.memReqSize > 0)
+			if (!entry.image.IsValid() && entry.memReqSize > 0)
 			{
 				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
 			}
 		}
 		for (auto& entry: m_transientBuffers)
 		{
-			if (!entry.buffer && entry.memReqSize > 0)
+			if (!entry.buffer.IsValid() && entry.memReqSize > 0)
 			{
 				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
 			}
@@ -1072,7 +1082,7 @@ namespace aether
 		// Phase 5: Allocate virtual offsets for each resource from the virtual block.
 		for (auto& entry: m_transientImages)
 		{
-			if (entry.image || entry.memReqSize == 0)
+			if (entry.image.IsValid() || entry.memReqSize == 0)
 			{
 				continue;
 			}
@@ -1090,7 +1100,7 @@ namespace aether
 
 		for (auto& entry: m_transientBuffers)
 		{
-			if (entry.buffer || entry.memReqSize == 0)
+			if (entry.buffer.IsValid() || entry.memReqSize == 0)
 			{
 				continue;
 			}
@@ -1150,7 +1160,7 @@ namespace aether
 		for (std::uint32_t idx = 0; idx < m_transientImages.size(); ++idx)
 		{
 			auto& entry = m_transientImages[idx];
-			if (entry.image)
+			if (entry.image.IsValid())
 			{
 				continue;
 			}
@@ -1169,14 +1179,14 @@ namespace aether
 
 			// Check cache first.
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
-			UniqueImage cached = TryPullFromCache(key);
-			if (cached)
+			gpu::TextureHandle cached = TryPullFromCache(key);
+			if (cached.IsValid())
 			{
-				entry.image = std::move(cached);
+				entry.image = cached;
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientCacheHit++;
 #ifndef NDEBUG
-				SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
+				SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif
 				continue;
 			}
@@ -1184,45 +1194,52 @@ namespace aether
 			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
-				AE_EXPECT_OR_THROW(newImage,
-				        UniqueImage::CreateAliased(m_device,
-				                m_allocator,
-				                {
-				                        .extent = entry.extent,
-				                        .format = entry.format,
-				                        .usage = entry.usage,
-				                },
-				                m_transientHeapAllocation,
-				                entry.heapOffset));
-				entry.image = std::move(newImage);
+				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
+				entry.image = gpu::ResourceRegistry::CreateAliasedTexture(
+				        gpu::TextureDesc{
+				                .format = entry.format,
+				                .extent = entry.extent,
+				                .usage = entry.usage,
+				                .aspect = entry.aspect,
+				                .mipLevels = 1,
+				                .arrayLayers = 1,
+				        },
+				        static_cast<void*>(m_transientHeapAllocation),
+				        static_cast<gpu::DeviceSize>(entry.heapOffset),
+				        entryName.c_str());
+				if (!entry.image.IsValid())
+				{
+					continue;
+				}
 				entry.allocatedExtent = entry.extent;
 				m_lastFrameStats.transientAllocated++;
 				m_lastFrameStats.transientCacheMiss++;
-				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
-				entry.image.SetName(m_device, entryName.c_str());
 #ifndef NDEBUG
-				SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
+				SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif
 				continue;
 			}
 
 			// Fallback: VMA-backed allocation.
-			AE_EXPECT_OR_THROW(newImage,
-			        UniqueImage::Create(m_device,
-			                m_allocator,
-			                {
-			                        .extent = entry.extent,
-			                        .format = entry.format,
-			                        .usage = entry.usage,
-			                }));
-			entry.image = std::move(newImage);
+			const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
+			entry.image = gpu::ResourceRegistry::CreateTexture(gpu::TextureDesc{
+			        .format = entry.format,
+			        .extent = entry.extent,
+			        .usage = entry.usage,
+			        .aspect = entry.aspect,
+			        .mipLevels = 1,
+			        .arrayLayers = 1,
+			        .debugName = entryName.c_str(),
+			});
+			if (!entry.image.IsValid())
+			{
+				continue;
+			}
 			entry.allocatedExtent = entry.extent;
 			m_lastFrameStats.transientAllocated++;
 			m_lastFrameStats.transientCacheMiss++;
-			const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
-			entry.image.SetName(m_device, entryName.c_str());
 #ifndef NDEBUG
-			SetTrackedLayout(static_cast<gpu::Image>(entry.image.Get()), gpu::ImageLayout::Undefined);
+			SetTrackedLayout(gpu::ResourceRegistry::ResolveTextureImage(entry.image), gpu::ImageLayout::Undefined);
 #endif
 		}
 
@@ -1274,7 +1291,7 @@ namespace aether
 		for (std::uint32_t idx = 0; idx < m_transientBuffers.size(); ++idx)
 		{
 			auto& entry = m_transientBuffers[idx];
-			if (entry.buffer)
+			if (entry.buffer.IsValid())
 			{
 				continue;
 			}
@@ -1286,20 +1303,29 @@ namespace aether
 			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
-				AE_EXPECT_OR_THROW(newBuffer, UniqueBuffer::CreateAliased(m_device, m_allocator, entry.size, entry.usage, m_transientHeapAllocation, entry.heapOffset));
-				entry.buffer = std::move(newBuffer);
-				m_lastFrameStats.transientAllocated++;
 				const std::string entryName = std::format("RenderGraph.Transient.Buffer.Aliased[{}]", idx);
-				entry.buffer.SetName(entryName.c_str());
+				entry.buffer = gpu::ResourceRegistry::CreateAliasedBuffer(
+				        static_cast<gpu::DeviceSize>(entry.size), static_cast<gpu::BufferUsage>(entry.usage), static_cast<void*>(m_transientHeapAllocation), static_cast<gpu::DeviceSize>(entry.heapOffset), entryName.c_str());
+				if (!entry.buffer.IsValid())
+				{
+					continue;
+				}
+				m_lastFrameStats.transientAllocated++;
 				continue;
 			}
 
 			// Fallback: VMA-backed buffer.
-			AE_EXPECT_OR_THROW(newBuffer, UniqueBuffer::CreateDeviceLocal(m_allocator, m_device, entry.size, entry.usage));
-			entry.buffer = std::move(newBuffer);
-			m_lastFrameStats.transientAllocated++;
 			const std::string entryName = std::format("RenderGraph.Transient.Buffer[{}]", idx);
-			entry.buffer.SetName(entryName.c_str());
+			entry.buffer = gpu::ResourceRegistry::CreateBuffer(gpu::BufferDesc{
+			        .size = static_cast<gpu::DeviceSize>(entry.size),
+			        .usage = static_cast<gpu::BufferUsage>(entry.usage),
+			        .debugName = entryName.c_str(),
+			});
+			if (!entry.buffer.IsValid())
+			{
+				continue;
+			}
+			m_lastFrameStats.transientAllocated++;
 		}
 	}
 
@@ -1307,7 +1333,7 @@ namespace aether
 	{
 		if (idx < m_transientBuffers.size())
 		{
-			return m_transientBuffers[idx].buffer.Get();
+			return static_cast<VkBuffer>(gpu::ResourceRegistry::ResolveBufferVkHandle(m_transientBuffers[idx].buffer));
 		}
 		return VK_NULL_HANDLE;
 	}
@@ -1323,7 +1349,7 @@ namespace aether
 		{
 			return false;
 		}
-		return static_cast<bool>(m_transientBuffers[idx].buffer);
+		return m_transientBuffers[idx].buffer.IsValid();
 	}
 
 	void RenderGraphStorage::ReleaseTransientBuffer(uint32_t idx)
@@ -1335,18 +1361,14 @@ namespace aether
 
 		auto& entry = m_transientBuffers[idx];
 
-		if (entry.fromHeap)
+		if (entry.fromHeap && entry.m_virtualAlloc)
 		{
-			if (entry.m_virtualAlloc)
-			{
-				vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
-				entry.m_virtualAlloc = nullptr;
-			}
-			entry.buffer.Reset();
+			vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
+			entry.m_virtualAlloc = nullptr;
 		}
-		else if (entry.buffer)
+		if (entry.buffer.IsValid())
 		{
-			entry.buffer.Reset();
+			gpu::ResourceRegistry::Destroy(entry.buffer);
 		}
 
 		entry = {};

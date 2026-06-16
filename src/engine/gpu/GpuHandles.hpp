@@ -30,7 +30,7 @@ namespace aether::gpu
 	// practical engine needs.
 	namespace detail
 	{
-		inline constexpr std::uint32_t kInvalidIndex = 0x00FFFFFFu;
+		inline constexpr std::uint32_t kInvalidIndex = 0x0000FFFFu;
 		inline constexpr std::uint32_t kInvalidGeneration = 0u;
 	} // namespace detail
 
@@ -45,12 +45,12 @@ namespace aether::gpu
 
 		[[nodiscard]] std::uint32_t GetIndex() const noexcept
 		{
-			return bits & 0x00FFFFFFu;
+			return bits & 0x0000FFFFu;
 		}
 
 		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
 		{
-			return (bits >> 24) & 0xFFu;
+			return (bits >> 16) & 0xFFFFu;
 		}
 
 		bool operator==(const TextureHandle& other) const noexcept
@@ -66,9 +66,9 @@ namespace aether::gpu
 		[[nodiscard]] static TextureHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
 		{
 			AE_ASSERT(index <= detail::kInvalidIndex, "TextureHandle index out of range");
-			AE_ASSERT(generation <= 0xFFu, "TextureHandle generation out of range");
+			AE_ASSERT(generation <= 0xFFFFu, "TextureHandle generation out of range");
 			TextureHandle h{};
-			h.bits = (index & 0x00FFFFFFu) | ((generation & 0xFFu) << 24);
+			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
 			return h;
 		}
 	};
@@ -84,12 +84,12 @@ namespace aether::gpu
 
 		[[nodiscard]] std::uint32_t GetIndex() const noexcept
 		{
-			return bits & 0x00FFFFFFu;
+			return bits & 0x0000FFFFu;
 		}
 
 		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
 		{
-			return (bits >> 24) & 0xFFu;
+			return (bits >> 16) & 0xFFFFu;
 		}
 
 		bool operator==(const BufferHandle& other) const noexcept
@@ -105,9 +105,9 @@ namespace aether::gpu
 		[[nodiscard]] static BufferHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
 		{
 			AE_ASSERT(index <= detail::kInvalidIndex, "BufferHandle index out of range");
-			AE_ASSERT(generation <= 0xFFu, "BufferHandle generation out of range");
+			AE_ASSERT(generation <= 0xFFFFu, "BufferHandle generation out of range");
 			BufferHandle h{};
-			h.bits = (index & 0x00FFFFFFu) | ((generation & 0xFFu) << 24);
+			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
 			return h;
 		}
 	};
@@ -123,12 +123,12 @@ namespace aether::gpu
 
 		[[nodiscard]] std::uint32_t GetIndex() const noexcept
 		{
-			return bits & 0x00FFFFFFu;
+			return bits & 0x0000FFFFu;
 		}
 
 		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
 		{
-			return (bits >> 24) & 0xFFu;
+			return (bits >> 16) & 0xFFFFu;
 		}
 
 		bool operator==(const PipelineHandle& other) const noexcept
@@ -144,9 +144,9 @@ namespace aether::gpu
 		[[nodiscard]] static PipelineHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
 		{
 			AE_ASSERT(index <= detail::kInvalidIndex, "PipelineHandle index out of range");
-			AE_ASSERT(generation <= 0xFFu, "PipelineHandle generation out of range");
+			AE_ASSERT(generation <= 0xFFFFu, "PipelineHandle generation out of range");
 			PipelineHandle h{};
-			h.bits = (index & 0x00FFFFFFu) | ((generation & 0xFFu) << 24);
+			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
 			return h;
 		}
 	};
@@ -162,12 +162,12 @@ namespace aether::gpu
 
 		[[nodiscard]] std::uint32_t GetIndex() const noexcept
 		{
-			return bits & 0x00FFFFFFu;
+			return bits & 0x0000FFFFu;
 		}
 
 		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
 		{
-			return (bits >> 24) & 0xFFu;
+			return (bits >> 16) & 0xFFFFu;
 		}
 
 		bool operator==(const SamplerHandle& other) const noexcept
@@ -183,9 +183,9 @@ namespace aether::gpu
 		[[nodiscard]] static SamplerHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
 		{
 			AE_ASSERT(index <= detail::kInvalidIndex, "SamplerHandle index out of range");
-			AE_ASSERT(generation <= 0xFFu, "SamplerHandle generation out of range");
+			AE_ASSERT(generation <= 0xFFFFu, "SamplerHandle generation out of range");
 			SamplerHandle h{};
-			h.bits = (index & 0x00FFFFFFu) | ((generation & 0xFFu) << 24);
+			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
 			return h;
 		}
 	};
