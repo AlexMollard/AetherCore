@@ -53,8 +53,8 @@ namespace aether
 		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, BindlessManager& bindless, TextureFilter filter, const char* debugName = nullptr)
 		{
 			const gpu::TextureDesc desc{
-			        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
 			        .format = gpu::Format::R8G8B8A8Srgb,
+			        .extent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height)},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
 			        .aspect = gpu::ImageAspect::Color,
 			        .debugName = debugName,
@@ -175,8 +175,8 @@ namespace aether
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
 			const gpu::TextureDesc desc{
-			        .extent = {width, height},
 			        .format = gpuFmt,
+			        .extent = {width, height},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
 			        .aspect = gpu::ImageAspect::Color,
 			};

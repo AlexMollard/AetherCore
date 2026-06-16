@@ -19,8 +19,8 @@ namespace aether
 		PostProcessStack stack;
 
 		const gpu::TextureDesc hdrDesc{
-		        .extent = desc.extent,
 		        .format = gpu::Format::R16G16B16A16Sfloat,
+		        .extent = desc.extent,
 		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "PostProcess.HdrColor",
@@ -47,8 +47,8 @@ namespace aether
 		}
 
 		const gpu::TextureDesc ldrDesc{
-		        .extent = desc.extent,
 		        .format = gpu::Format::R8G8B8A8Unorm,
+		        .extent = desc.extent,
 		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "PostProcess.LdrColor",

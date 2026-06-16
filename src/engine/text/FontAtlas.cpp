@@ -198,8 +198,8 @@ namespace aether
 		// registry-created view (see gpu::ComponentSwizzle). The shader
 		// reads .rgba as if the format were RGBA8.
 		const gpu::TextureDesc atlasDesc{
-		        .extent = {atlasW, atlasH},
 		        .format = gpu::Format::R8Unorm,
+		        .extent = {atlasW, atlasH},
 		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Color,
 		        .r = gpu::ComponentSwizzle::R,

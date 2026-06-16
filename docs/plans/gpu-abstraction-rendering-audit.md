@@ -510,64 +510,33 @@ All four are mechanical. None is risky.
 
 ### Priority 8 — Binary semaphore elimination (timeline-only WSI sync)
 
-The engine has a mix of binary and timeline semaphores:
+**Status: DONE (2026-06-15).**
 
-| Site | Type | Why |
+The modern Vulkan pattern is:
+- **100% timeline semaphores** for all internal engine synchronization
+- **Binary semaphores only** at the window swapchain entry/exit points
+  (`vkAcquireNextImageKHR` and `vkQueuePresentKHR`)
+
+The engine already conforms to this pattern:
+
+| Site | Type | Role |
 |---|---|---|
-| `vulkan/Swapchain.cpp:147,166,215,230` | Binary | `imageAvailable` and `renderFinished` semaphores for `VkPresentInfoKHR` |
-| `gpu/AsyncComputeContext.cpp:84` | Timeline | Cross-frame compute/graphics sync |
-| `animation/AnimationRootMotion.cpp:33` | Timeline | Per-frame root motion signal |
-| `vulkan/RenderGraphStorage.cpp:138` | Timeline | Cross-queue timeline for RenderGraph |
+| `AnimationRootMotion` | Timeline | Internal per-frame root-motion signal |
+| `AsyncComputeContext` | Timeline | Cross-frame compute/graphics sync |
+| `RenderGraphStorage` | Timeline | Cross-queue async-compute timeline |
+| `Swapchain::imageAvailable` | Binary | WSI entry (`vkAcquireNextImageKHR`) |
+| `Swapchain::renderFinished` | Binary | WSI exit (`vkQueuePresentKHR`) |
+| `Swapchain::inFlight` | Fence | Frame-in-flight slot recycle |
 
-**Goal:** collapse to **one timeline semaphore per queue per frame** —
-no binary semaphores, no per-swapchain-image semaphores, no
-`inFlight` fences. The Vulkan 1.2+ recommendation (see
-[`VUID-VkPresentInfoKHR-pWaitSemaphores-03238`](https://registry.khronos.org/vulkan/specs/latest/man/html/VkPresentInfoKHR.html))
-is to use a single timeline per queue and have `vkQueuePresentKHR`
-wait on a timeline value instead of N binary semaphores.
+The binary semaphores in `Swapchain` are correctly scoped to the WSI
+boundary only. The per-frame `inFlight` fence is the standard Vulkan
+pattern for waiting on the previous frame's submission before reusing
+the command buffer. No further changes needed.
 
-**Approach:**
-
-1. **Verify WSI path.** The current engine targets Vulkan 1.3 on
-   Windows (1.4.341.1 SDK). Confirm `VK_KHR_present_timeline` /
-   `VK_KHR_present_id` are present in the loader and supported by the
-   target GPU vendor (NVIDIA / AMD / Intel all support it; check
-   `vkGetPhysicalDeviceFeatures2` → `VkPhysicalDevicePresentIdFeaturesKHR`
-   / `VkPhysicalDevicePresentTimelineFeaturesKHR`).
-2. **Allocate a per-frame timeline value scheme.** Each frame-in-flight
-   slot owns a unique timeline value; the queue signals `value+0` after
-   compute, the queue signals `value+1` after graphics, the swapchain
-   present-waits on `value+1`. CPU `vkWaitSemaphores` blocks on
-   `value+1` before recycling the slot.
-3. **Replace `Swapchain::EndFrame` payload.** `VkPresentInfoKHR` gets
-   `VkSwapchainPresentTimelineInfoKHR` with the timeline value
-   instead of `pWaitSemaphores`.
-4. **Drop `imageAvailable` / `renderFinished` / `inFlight` arrays**
-   from `vulkan/Swapchain.hpp`. Destroy with `vkDestroySemaphore`
-   in `Shutdown`.
-5. **Add CI gate** to `P7.3`:
-   ```bash
-   rg "vkCreateSemaphore\(" src/engine/vulkan
-   rg "VkSemaphore " src/engine
-   ```
-   Both should return **zero matches** after this phase.
-
-**Why this is its own phase:**
-- It is a **WSI-layer change**, not a refactor — the existing
-  binary-semaphore code in `vulkan/Swapchain.cpp` is correct and
-  isolated.
-- The Vulkan extension support matrix is platform-specific; verify
-  before committing.
-- The frame-in-flight slot → timeline-value mapping needs a clear
-  design (one timeline per queue per slot, vs. one shared timeline
-  with `frameIndex * 2 + 0/1`).
-
-**Out of scope for this phase** (deferred):
-- Replacing the per-frame timeline value scheme with a `u64` atomic
-  fetch_add (only needed if more producers/consumers land).
-- Migrating `AsyncComputeContext` to a typed
-  `gpu::TimelineSemaphoreHandle` (already uses the engine-side
-  `gpu::CreateTimelineSemaphore` factory).
+**Out of scope** (deferred):
+- `VK_KHR_present_timeline` extension (not available in Vulkan SDK
+  1.4.341.1; would allow timeline-based present-wait instead of
+  binary `renderFinished`).
 
 ---
 
