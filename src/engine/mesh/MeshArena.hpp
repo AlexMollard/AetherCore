@@ -73,12 +73,12 @@ namespace aether
 			return m_indexHandle;
 		}
 
-		[[nodiscard]] VkBuffer GetVertexBufferRaw() const
+		[[nodiscard]] gpu::Buffer GetVertexBufferRaw() const
 		{
 			return m_vertexHeap.GetBuffer();
 		}
 
-		[[nodiscard]] VkBuffer GetIndexBufferRaw() const
+		[[nodiscard]] gpu::Buffer GetIndexBufferRaw() const
 		{
 			return m_indexHeap.GetBuffer();
 		}

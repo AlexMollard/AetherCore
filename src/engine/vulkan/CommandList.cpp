@@ -260,27 +260,6 @@ namespace aether::gpu
 		vkCmdDrawIndexedIndirectCount(AsVkCmd(m_cmd), AsVkBuffer(vkIndirectBuffer), static_cast<VkDeviceSize>(indirectOffset), AsVkBuffer(vkCountBuffer), static_cast<VkDeviceSize>(countOffset), maxDrawCount, stride);
 	}
 
-	void CommandList::PushDescriptorSet(void* vkPipelineLayout, std::uint32_t set, std::uint32_t writeCount, const void* vkWriteDescriptorSets) noexcept
-	{
-		// Delegate to the explicit overload using the bind point cached by
-		// the most recent BindPipeline / BindComputePipeline call. This
-		// means callers that bind the pipeline first (the canonical pattern
-		// for push descriptors) cannot accidentally record a graphics push
-		// on a compute command buffer - which is what the validation layer
-		// was complaining about before this change.
-		PushDescriptorSet(m_boundBindPoint, vkPipelineLayout, set, writeCount, vkWriteDescriptorSets);
-	}
-
-	void CommandList::PushDescriptorSet(PipelineBindPoint bindPoint, void* vkPipelineLayout, std::uint32_t set, std::uint32_t writeCount, const void* vkWriteDescriptorSets) noexcept
-	{
-		if (m_cmd == nullptr || vkPipelineLayout == nullptr || vkWriteDescriptorSets == nullptr || writeCount == 0)
-		{
-			return;
-		}
-		const auto* writes = static_cast<const VkWriteDescriptorSet*>(vkWriteDescriptorSets);
-		vkCmdPushDescriptorSetKHR(AsVkCmd(m_cmd), ToVk(bindPoint), AsVkPipelineLayout(vkPipelineLayout), set, writeCount, writes);
-	}
-
 	void CommandList::PushDescriptorSet(void* vkPipelineLayout, std::uint32_t set, std::span<const GpuWriteDescriptorSet> writes) noexcept
 	{
 		PushDescriptorSet(m_boundBindPoint, vkPipelineLayout, set, writes);
@@ -548,16 +527,6 @@ namespace aether::gpu
 		        .pImageMemoryBarriers = &barrier,
 		};
 		vkCmdPipelineBarrier2(AsVkCmd(m_cmd), &dep);
-	}
-
-	void CommandList::BeginRendering(const void* vkRenderingInfo)
-	{
-		if (m_cmd == nullptr || vkRenderingInfo == nullptr)
-		{
-			return;
-		}
-		const VkRenderingInfo* info = static_cast<const VkRenderingInfo*>(vkRenderingInfo);
-		vkCmdBeginRendering(AsVkCmd(m_cmd), info);
 	}
 
 	void CommandList::BeginRendering(const gpu::RenderingInfo& info)

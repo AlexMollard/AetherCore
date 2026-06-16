@@ -10,12 +10,13 @@
 #include "gpu/GpuTypes.hpp"
 #include "material/BindlessContract.hpp"
 #include "utils/Assert.hpp"
-#include "vulkan/volk.hpp"
 
 namespace aether
 {
 	class VulkanContext;
 
+	// Owns the bindless descriptor pool / set / layout and the sampler
+	// deduplication cache. Fields use `gpu::*` opaque aliases.
 	class BindlessManager
 	{
 	public:
@@ -74,8 +75,7 @@ namespace aether
 			return 1u;
 		}
 
-		// Returns a cached sampler matching the given filter/mipmap/address mode.
-		// Creates a new sampler if no matching one exists. Thread-safe.
+		// Cached sampler by key. Thread-safe.
 		[[nodiscard]] Expected<gpu::Sampler> GetOrCreateSampler(gpu::Filter filter, gpu::SamplerMipmapMode mipmapMode, gpu::SamplerAddressMode addressMode);
 
 		[[nodiscard]] Expected<std::uint32_t> AllocateSampledImageSlot();
@@ -94,19 +94,18 @@ namespace aether
 		void FreeSlotImmediateUnlocked(std::uint32_t slot);
 
 		mutable std::mutex m_mutex;
-		VkDevice m_device = VK_NULL_HANDLE;
-		VkDescriptorPool m_pool = VK_NULL_HANDLE;
-		VkDescriptorSetLayout m_layout = VK_NULL_HANDLE;
-		VkDescriptorSet m_set = VK_NULL_HANDLE;
+		gpu::Device m_device = nullptr;
+		gpu::DescriptorPool m_pool = nullptr;
+		gpu::DescriptorSetLayout m_layout = nullptr;
+		gpu::DescriptorSet m_set = nullptr;
 		std::uint32_t m_capacity = 0;
 		std::uint32_t m_deferredFreeFrames = 3;
 		std::uint64_t m_currentFrame = 0;
 		std::vector<std::uint32_t> m_freeSlots;
 		std::vector<bool> m_slotAllocated;
 		std::vector<PendingSlotFree> m_pendingSlotFrees;
-		VkSampler m_linearSampler = VK_NULL_HANDLE;
+		gpu::Sampler m_linearSampler = nullptr;
 
-		// Sampler deduplication cache: key -> VkSampler.
-		std::unordered_map<SamplerKey, VkSampler, SamplerKeyHash> m_samplerCache;
+		std::unordered_map<SamplerKey, gpu::Sampler, SamplerKeyHash> m_samplerCache;
 	};
 } // namespace aether

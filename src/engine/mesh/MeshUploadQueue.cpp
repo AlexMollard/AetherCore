@@ -25,10 +25,11 @@ namespace aether
 		m_ringHead = 0;
 	}
 
-	bool MeshUploadQueue::Upload(const void* vertexData, std::uint64_t vertexBytes, void* destVertexBuffer, std::uint64_t destVertexOffset, const void* indexData, std::uint64_t indexBytes, void* destIndexBuffer, std::uint64_t destIndexOffset)
+	bool MeshUploadQueue::Upload(
+	        const void* vertexData, std::uint64_t vertexBytes, gpu::Buffer destVertexBuffer, std::uint64_t destVertexOffset, const void* indexData, std::uint64_t indexBytes, gpu::Buffer destIndexBuffer, std::uint64_t destIndexOffset)
 	{
 		AE_PROFILE_ZONE();
-		const VkDeviceSize totalBytes = vertexBytes + indexBytes;
+		const std::uint64_t totalBytes = vertexBytes + indexBytes;
 		if (m_ringHead + totalBytes > kStagingCapacity)
 		{
 			return false; // staging full - retry next frame
@@ -37,11 +38,11 @@ namespace aether
 		auto* mapped = static_cast<std::uint8_t*>(m_staging.GetAllocationInfo().pMappedData);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
-		m_pendingCopies.push_back({static_cast<void*>(m_staging.Get()), m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
+		m_pendingCopies.push_back({m_staging.GetBuffer(), m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
 		m_ringHead += vertexBytes;
 
 		std::memcpy(mapped + m_ringHead, indexData, static_cast<std::size_t>(indexBytes));
-		m_pendingCopies.push_back({static_cast<void*>(m_staging.Get()), m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
+		m_pendingCopies.push_back({m_staging.GetBuffer(), m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
 		m_ringHead += indexBytes;
 
 		return true;

@@ -332,6 +332,28 @@ namespace aether
 		m_frameValid = true;
 	}
 
+	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue,
+	        VkQueue presentQueue,
+	        gpu::TimelineSemaphoreHandle extraWaitSemaphore,
+	        std::uint64_t extraWaitValue,
+	        gpu::TimelineSemaphoreHandle extraWaitSemaphore2,
+	        std::uint64_t extraWaitValue2,
+	        gpu::TimelineSemaphoreHandle extraSignalSemaphore,
+	        std::uint64_t extraSignalValue)
+	{
+		// Resolve the engine-side pImpl handles to their `VkSemaphore` payload
+		// at the seam. The cast is the single point of contact between
+		// the engine's `gpu::TimelineSemaphoreHandle` and the backend's
+		// `VkSemaphore`. `ResolveTimelineSemaphoreVk` returns a `void*` that
+		// we cast back to `VkSemaphore` here (the only TU that needs to
+		// know the typed name).
+		const VkSemaphore vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
+		const VkSemaphore vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
+		const VkSemaphore vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
+
+		EndFrame(graphicsQueue, presentQueue, vkExtraWait, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue, vkExtraWait2, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue2, vkExtraSignal, extraSignalValue);
+	}
+
 	void Swapchain::EndFrame(VkQueue graphicsQueue,
 	        VkQueue presentQueue,
 	        VkSemaphore extraWaitSemaphore,

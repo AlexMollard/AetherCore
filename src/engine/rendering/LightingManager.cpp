@@ -130,7 +130,7 @@ namespace aether
 		return m_setLayout;
 	}
 
-	void LightingManager::PushLightingDescriptor(gpu::CommandList& cmd, void* layout, const std::uint32_t frameSlot) const
+	void LightingManager::PushLightingDescriptor(gpu::CommandList& cmd, gpu::PipelineLayout layout, const std::uint32_t frameSlot) const
 	{
 		auto& frame = m_buffers[frameSlot];
 		const gpu::GpuDescriptorBufferInfo lightInfo{
@@ -370,23 +370,20 @@ namespace aether
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);
 	}
 
-	// TODO(audit/P1.1): EnsureBuffers is a buffer-pool helper that calls
-	// vulkan/ UniqueBuffer / VMA directly, which is why the body is full
-	// of VkBufferCreateInfo / VmaAllocationCreateInfo / VkDeviceSize. It
-	// should move to vulkan/LightingManagerBuffers.cpp so the engine
-	// version of LightingManager stays vulkan-free.
+	// Buffer-pool helper. The actual backend call (Vulkan) happens in
+	// `UniqueBuffer::CreateStorageBuffer` so this method stays vulkan-free.
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
 		AE_PROFILE_ZONE();
 		auto& frame = m_buffers[frameSlot];
-		const VkDevice device = m_context->GetDevice().device;
-		const VmaAllocator allocator = m_context->GetAllocator();
+		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		const gpu::Allocator allocator = static_cast<gpu::Allocator>(m_context->GetAllocator());
 
 		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
 		// guaranteed to have completed all GPU work referencing them.
 		frame.staleBuffers.clear();
 
-		auto ensureBuffer = [&](UniqueBuffer& buffer, std::size_t& capacity, const std::size_t required, const VkDeviceSize stride)
+		auto ensureBuffer = [&](UniqueBuffer& buffer, std::size_t& capacity, const std::size_t required, const std::size_t stride)
 		{
 			const std::size_t safeRequired = std::max<std::size_t>(required, 1u);
 			if (buffer && capacity >= safeRequired)
@@ -400,18 +397,8 @@ namespace aether
 				capacity = safeRequired;
 			}
 
-			VkBufferCreateInfo info{
-			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			        .size = stride * capacity,
-			        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-			};
-			VmaAllocationCreateInfo allocInfo{};
-			allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-			allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
 			// Create new buffer BEFORE releasing the old one - avoids use-after-free on creation failure.
-			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::Create(allocator, device, info, allocInfo));
-			// Defer destruction of the old buffer to this slot's next reuse cycle,
-			// ensuring any in-flight GPU work referencing it has completed.
+			AE_EXPECT_OR_THROW(newBuf, UniqueBuffer::CreateStorageBuffer(allocator, device, static_cast<gpu::DeviceSize>(stride * capacity), "LightingManager.FrameBuffer"));
 			if (buffer)
 			{
 				frame.staleBuffers.push_back(std::move(buffer));

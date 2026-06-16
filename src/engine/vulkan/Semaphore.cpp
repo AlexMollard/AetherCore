@@ -96,4 +96,24 @@ namespace aether::gpu
 		}
 		delete sem;
 	}
+
+	void* ResolveTimelineSemaphoreVk(TimelineSemaphoreHandle sem) noexcept
+	{
+		if (sem == nullptr)
+		{
+			return nullptr;
+		}
+		return sem->semaphore;
+	}
+
+	TimelineSemaphoreHandle WrapTimelineSemaphoreVk(void* vkSemaphore) noexcept
+	{
+		if (vkSemaphore == nullptr)
+		{
+			return nullptr;
+		}
+		auto* data = new detail::TimelineSemaphoreData;
+		data->semaphore = static_cast<VkSemaphore>(vkSemaphore);
+		return data;
+	}
 } // namespace aether::gpu

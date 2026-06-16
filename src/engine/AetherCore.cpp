@@ -154,9 +154,10 @@ namespace aether
 		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
 
 		const gpu::Device device = m_gpu->GetDevice();
+		const gpu::Allocator allocator = m_gpu->GetAllocator();
 
-		m_animationBlend->Init(gpu::Allocator{}, device, 256, 128);
-		m_animationIk->Init(gpu::Allocator{}, device, 256);
+		m_animationBlend->Init(allocator, device, 256, 128);
+		m_animationIk->Init(allocator, device, 256);
 		m_rootMotion->Init(device, 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
@@ -377,9 +378,9 @@ namespace aether
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
-			const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
+			const gpu::TimelineSemaphoreHandle rmSem = m_rootMotion->GetTimelineSemaphore();
 			const auto rmVal = m_frameIndex + 1;
-			m_gpu->SubmitAndPresent(0, 0, 0, 0, rmSem, rmVal);
+			m_gpu->SubmitAndPresent(nullptr, 0, nullptr, 0, rmSem, rmVal);
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
@@ -453,7 +454,7 @@ namespace aether
 	void AetherCore::SubmitAndAdvance()
 	{
 		auto& renderGraph = m_rendering->GetRenderGraph();
-		const auto rmSem = reinterpret_cast<std::uint64_t>(m_rootMotion->GetTimelineSemaphore());
+		const gpu::TimelineSemaphoreHandle rmSem = m_rootMotion->GetTimelineSemaphore();
 		const auto rmVal = m_frameIndex + 1;
 
 		// Submit the async compute command buffer now, right before the graphics
@@ -462,10 +463,10 @@ namespace aether
 		// ensuring the GPU sees compute results before draw-indirect.
 		renderGraph.SubmitComputeWork(static_cast<std::uint32_t>(m_frameIndex % kMaxFramesInFlight));
 
-		const std::uint64_t graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : 0;
+		const gpu::TimelineSemaphoreHandle graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : nullptr;
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
 
-		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, 0, 0, rmSem, rmVal);
+		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, nullptr, 0, rmSem, rmVal);
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);

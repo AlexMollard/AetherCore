@@ -9,6 +9,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "gpu/Semaphore.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -119,20 +120,16 @@ namespace aether
 		m_computeQueue = computeQueue;
 		m_computeQueueFamily = computeQueueFamily;
 
-		const VkSemaphoreTypeCreateInfo timelineTypeInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		        .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+		m_crossQueueTimeline = gpu::CreateTimelineSemaphore({
+		        .device = static_cast<gpu::Device>(m_device),
 		        .initialValue = 0,
-		};
-		const VkSemaphoreCreateInfo semInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		        .pNext = &timelineTypeInfo,
-		};
-		if (vkCreateSemaphore(m_device, &semInfo, nullptr, &m_crossQueueTimeline) != VK_SUCCESS)
+		        .debugName = "RenderGraph.CrossQueueTimeline",
+		});
+		if (m_crossQueueTimeline == nullptr)
 		{
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to create cross-queue timeline semaphore."));
 		}
-		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_crossQueueTimeline), VK_OBJECT_TYPE_SEMAPHORE, "RenderGraph.CrossQueueTimeline");
+		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(gpu::ResolveTimelineSemaphoreVk(m_crossQueueTimeline)), VK_OBJECT_TYPE_SEMAPHORE, "RenderGraph.CrossQueueTimeline");
 
 		VkFenceCreateInfo fenceInfo{};
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -231,7 +228,7 @@ namespace aether
 
 		const VkSemaphoreSubmitInfo signalInfo{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = m_crossQueueTimeline,
+		        .semaphore = static_cast<VkSemaphore>(gpu::ResolveTimelineSemaphoreVk(m_crossQueueTimeline)),
 		        .value = signalValue,
 		        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
 		};
@@ -272,10 +269,10 @@ namespace aether
 			}
 		}
 
-		if (m_crossQueueTimeline != VK_NULL_HANDLE)
+		if (m_crossQueueTimeline != nullptr)
 		{
-			vkDestroySemaphore(m_device, m_crossQueueTimeline, nullptr);
-			m_crossQueueTimeline = VK_NULL_HANDLE;
+			gpu::DestroyTimelineSemaphore(static_cast<gpu::Device>(m_device), m_crossQueueTimeline);
+			m_crossQueueTimeline = nullptr;
 		}
 
 		m_crossQueueTimelineValue = 0;

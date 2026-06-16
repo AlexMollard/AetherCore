@@ -18,14 +18,14 @@ namespace aether
 	Expected<void> BindlessManager::Initialize(const VulkanContext& context, const Config& config)
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device != VK_NULL_HANDLE)
+		if (m_device != nullptr)
 		{
 			return {};
 		}
 
 		AE_ASSERT(config.maxSampledImages > 0, "BindlessManager requires at least one sampled-image slot.");
 
-		m_device = context.GetDevice().device;
+		m_device = static_cast<gpu::Device>(context.GetDevice().device);
 		m_capacity = config.maxSampledImages;
 		m_deferredFreeFrames = config.deferredFreeFrames;
 		m_currentFrame = 0;
@@ -41,19 +41,19 @@ namespace aether
 		        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
 		        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-		        .mipLodBias = 0.0f,
-		        .anisotropyEnable = VK_FALSE,
 		        .compareEnable = VK_FALSE,
 		        .minLod = 0.0f,
 		        .maxLod = VK_LOD_CLAMP_NONE,
 		        .borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_BLACK,
 		        .unnormalizedCoordinates = VK_FALSE,
 		};
-		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_linearSampler) != VK_SUCCESS)
+		VkSampler linearSampler = VK_NULL_HANDLE;
+		if (vkCreateSampler(static_cast<VkDevice>(m_device), &samplerInfo, nullptr, &linearSampler) != VK_SUCCESS)
 		{
-			m_device = VK_NULL_HANDLE;
+			m_device = nullptr;
 			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create linear sampler.")};
 		}
+		m_linearSampler = static_cast<gpu::Sampler>(linearSampler);
 
 		// -- Descriptor pool ---------------------------------------------------
 		const VkDescriptorPoolSize poolSizes[2] = {
@@ -70,14 +70,16 @@ namespace aether
 		        .pPoolSizes = poolSizes,
 		};
 
-		const VkResult poolResult = vkCreateDescriptorPool(m_device, &poolCreateInfo, nullptr, &m_pool);
+		VkDescriptorPool pool = VK_NULL_HANDLE;
+		const VkResult poolResult = vkCreateDescriptorPool(static_cast<VkDevice>(m_device), &poolCreateInfo, nullptr, &pool);
 		if (poolResult != VK_SUCCESS)
 		{
-			vkDestroySampler(m_device, m_linearSampler, nullptr);
-			m_linearSampler = VK_NULL_HANDLE;
-			m_device = VK_NULL_HANDLE;
+			vkDestroySampler(static_cast<VkDevice>(m_device), linearSampler, nullptr);
+			m_linearSampler = nullptr;
+			m_device = nullptr;
 			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(poolResult), "Failed to create bindless descriptor pool.")};
 		}
+		m_pool = static_cast<gpu::DescriptorPool>(pool);
 
 		// -- Descriptor set layout ---------------------------------------------
 		// binding 0 - COMBINED_IMAGE_SAMPLER array (bindless image array)
@@ -95,7 +97,7 @@ namespace aether
 		                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
 		                .descriptorCount = 1,
 		                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-		                .pImmutableSamplers = &m_linearSampler, // embedded in the layout
+		                .pImmutableSamplers = &linearSampler, // embedded in the layout
 		        },
 		};
 
@@ -122,37 +124,41 @@ namespace aether
 		        .pBindings = bindings,
 		};
 
-		const VkResult layoutResult = vkCreateDescriptorSetLayout(m_device, &layoutCreateInfo, nullptr, &m_layout);
+		VkDescriptorSetLayout layout = VK_NULL_HANDLE;
+		const VkResult layoutResult = vkCreateDescriptorSetLayout(static_cast<VkDevice>(m_device), &layoutCreateInfo, nullptr, &layout);
 		if (layoutResult != VK_SUCCESS)
 		{
-			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-			vkDestroySampler(m_device, m_linearSampler, nullptr);
-			m_pool = VK_NULL_HANDLE;
-			m_linearSampler = VK_NULL_HANDLE;
-			m_device = VK_NULL_HANDLE;
+			vkDestroyDescriptorPool(static_cast<VkDevice>(m_device), pool, nullptr);
+			vkDestroySampler(static_cast<VkDevice>(m_device), linearSampler, nullptr);
+			m_pool = nullptr;
+			m_linearSampler = nullptr;
+			m_device = nullptr;
 			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(layoutResult), "Failed to create bindless descriptor layout.")};
 		}
+		m_layout = static_cast<gpu::DescriptorSetLayout>(layout);
 
 		const VkDescriptorSetAllocateInfo allocateInfo{
 		        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		        .pNext = nullptr,
-		        .descriptorPool = m_pool,
+		        .descriptorPool = pool,
 		        .descriptorSetCount = 1,
-		        .pSetLayouts = &m_layout,
+		        .pSetLayouts = &layout,
 		};
 
-		const VkResult setResult = vkAllocateDescriptorSets(m_device, &allocateInfo, &m_set);
+		VkDescriptorSet set = VK_NULL_HANDLE;
+		const VkResult setResult = vkAllocateDescriptorSets(static_cast<VkDevice>(m_device), &allocateInfo, &set);
 		if (setResult != VK_SUCCESS)
 		{
-			vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
-			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-			vkDestroySampler(m_device, m_linearSampler, nullptr);
-			m_layout = VK_NULL_HANDLE;
-			m_pool = VK_NULL_HANDLE;
-			m_linearSampler = VK_NULL_HANDLE;
-			m_device = VK_NULL_HANDLE;
+			vkDestroyDescriptorSetLayout(static_cast<VkDevice>(m_device), layout, nullptr);
+			vkDestroyDescriptorPool(static_cast<VkDevice>(m_device), pool, nullptr);
+			vkDestroySampler(static_cast<VkDevice>(m_device), linearSampler, nullptr);
+			m_layout = nullptr;
+			m_pool = nullptr;
+			m_linearSampler = nullptr;
+			m_device = nullptr;
 			return Unexpected{AetherError::Vulkan(static_cast<int32_t>(setResult), "Failed to allocate bindless descriptor set.")};
 		}
+		m_set = static_cast<gpu::DescriptorSet>(set);
 
 		m_slotAllocated.assign(m_capacity, false);
 		m_freeSlots.reserve(m_capacity);
@@ -168,38 +174,40 @@ namespace aether
 	{
 		std::scoped_lock lock(m_mutex);
 
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
 
+		const VkDevice vkDevice = static_cast<VkDevice>(m_device);
+
 		// Destroy layout before sampler (layout embeds the sampler handle).
-		if (m_layout != VK_NULL_HANDLE)
+		if (m_layout != nullptr)
 		{
-			vkDestroyDescriptorSetLayout(m_device, m_layout, nullptr);
-			m_layout = VK_NULL_HANDLE;
+			vkDestroyDescriptorSetLayout(vkDevice, static_cast<VkDescriptorSetLayout>(m_layout), nullptr);
+			m_layout = nullptr;
 		}
 
-		if (m_pool != VK_NULL_HANDLE)
+		if (m_pool != nullptr)
 		{
-			vkDestroyDescriptorPool(m_device, m_pool, nullptr);
-			m_pool = VK_NULL_HANDLE;
+			vkDestroyDescriptorPool(vkDevice, static_cast<VkDescriptorPool>(m_pool), nullptr);
+			m_pool = nullptr;
 		}
 
-		if (m_linearSampler != VK_NULL_HANDLE)
+		if (m_linearSampler != nullptr)
 		{
-			vkDestroySampler(m_device, m_linearSampler, nullptr);
-			m_linearSampler = VK_NULL_HANDLE;
+			vkDestroySampler(vkDevice, static_cast<VkSampler>(m_linearSampler), nullptr);
+			m_linearSampler = nullptr;
 		}
 
 		for (const auto& [key, sampler]: m_samplerCache)
 		{
-			vkDestroySampler(m_device, sampler, nullptr);
+			vkDestroySampler(vkDevice, static_cast<VkSampler>(sampler), nullptr);
 		}
 		m_samplerCache.clear();
 
-		m_set = VK_NULL_HANDLE;
-		m_device = VK_NULL_HANDLE;
+		m_set = nullptr;
+		m_device = nullptr;
 		m_capacity = 0;
 		m_deferredFreeFrames = 3;
 		m_currentFrame = 0;
@@ -211,19 +219,19 @@ namespace aether
 	bool BindlessManager::IsInitialized() const
 	{
 		std::scoped_lock lock(m_mutex);
-		return m_device != VK_NULL_HANDLE;
+		return m_device != nullptr;
 	}
 
 	gpu::DescriptorSetLayout BindlessManager::GetLayout() const
 	{
 		std::scoped_lock lock(m_mutex);
-		return static_cast<gpu::DescriptorSetLayout>(m_layout);
+		return m_layout;
 	}
 
 	gpu::DescriptorSet BindlessManager::GetSet() const
 	{
 		std::scoped_lock lock(m_mutex);
-		return static_cast<gpu::DescriptorSet>(m_set);
+		return m_set;
 	}
 
 	std::uint32_t BindlessManager::GetCapacity() const
@@ -241,7 +249,7 @@ namespace aether
 	Expected<std::uint32_t> BindlessManager::AllocateSampledImageSlot()
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
@@ -260,7 +268,7 @@ namespace aether
 	Expected<gpu::Sampler> BindlessManager::GetOrCreateSampler(const gpu::Filter filter, const gpu::SamplerMipmapMode mipmapMode, const gpu::SamplerAddressMode addressMode)
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
@@ -269,7 +277,7 @@ namespace aether
 		const auto it = m_samplerCache.find(key);
 		if (it != m_samplerCache.end())
 		{
-			return static_cast<gpu::Sampler>(it->second);
+			return it->second;
 		}
 
 		const VkFilter vkFilter = gpu::ToVk(filter);
@@ -284,8 +292,6 @@ namespace aether
 		        .addressModeU = vkAddress,
 		        .addressModeV = vkAddress,
 		        .addressModeW = vkAddress,
-		        .mipLodBias = 0.0f,
-		        .anisotropyEnable = VK_FALSE,
 		        .compareEnable = VK_FALSE,
 		        .minLod = 0.0f,
 		        .maxLod = VK_LOD_CLAMP_NONE,
@@ -294,19 +300,20 @@ namespace aether
 		};
 
 		VkSampler sampler = VK_NULL_HANDLE;
-		if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
+		if (vkCreateSampler(static_cast<VkDevice>(m_device), &samplerInfo, nullptr, &sampler) != VK_SUCCESS)
 		{
 			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.")};
 		}
 
-		m_samplerCache[key] = sampler;
-		return static_cast<gpu::Sampler>(sampler);
+		const gpu::Sampler gpuSampler = static_cast<gpu::Sampler>(sampler);
+		m_samplerCache[key] = gpuSampler;
+		return gpuSampler;
 	}
 
 	void BindlessManager::FreeSampledImageSlot(const std::uint32_t slot)
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
@@ -317,7 +324,7 @@ namespace aether
 	void BindlessManager::FreeSampledImageSlotDeferred(const std::uint32_t slot)
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return;
 		}
@@ -340,7 +347,7 @@ namespace aether
 	{
 		std::scoped_lock lock(m_mutex);
 		m_currentFrame = frameIndex;
-		if (m_device == VK_NULL_HANDLE || m_pendingSlotFrees.empty())
+		if (m_device == nullptr || m_pendingSlotFrees.empty())
 		{
 			return;
 		}
@@ -361,7 +368,7 @@ namespace aether
 	Expected<void> BindlessManager::UpdateSampledImage(const std::uint32_t slot, const gpu::ImageView imageView, const gpu::Sampler sampler, const gpu::ImageLayout imageLayout)
 	{
 		std::scoped_lock lock(m_mutex);
-		if (m_device == VK_NULL_HANDLE)
+		if (m_device == nullptr)
 		{
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
@@ -385,7 +392,7 @@ namespace aether
 		const VkWriteDescriptorSet write{
 		        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		        .pNext = nullptr,
-		        .dstSet = m_set,
+		        .dstSet = static_cast<VkDescriptorSet>(m_set),
 		        .dstBinding = bindless::kSampledImageBinding,
 		        .dstArrayElement = slot,
 		        .descriptorCount = 1,
@@ -395,7 +402,7 @@ namespace aether
 		        .pTexelBufferView = nullptr,
 		};
 
-		vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
+		vkUpdateDescriptorSets(static_cast<VkDevice>(m_device), 1, &write, 0, nullptr);
 		return {};
 	}
 

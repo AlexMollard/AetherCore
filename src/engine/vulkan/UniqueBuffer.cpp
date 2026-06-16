@@ -164,9 +164,27 @@ namespace aether
 			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
 			        .buffer = out.m_buffer,
 			};
-			out.m_deviceAddress = vkGetBufferDeviceAddress(device, &addressInfo);
+			vkGetBufferDeviceAddress(device, &addressInfo);
 		}
 
+		return out;
+	}
+
+	Expected<UniqueBuffer> UniqueBuffer::CreateStorageBuffer(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, const char* debugName)
+	{
+		VkBufferCreateInfo info{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .size = static_cast<VkDeviceSize>(size),
+		        .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+		};
+		VmaAllocationCreateInfo allocInfo{};
+		allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+		allocInfo.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT;
+		AE_EXPECT_OR_THROW(out, Create(static_cast<VmaAllocator>(allocator), static_cast<VkDevice>(device), info, allocInfo));
+		if (debugName != nullptr)
+		{
+			out.SetName(debugName);
+		}
 		return out;
 	}
 

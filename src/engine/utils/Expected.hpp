@@ -55,9 +55,9 @@ namespace aether
 			}
 		}
 
-		static AetherError Vulkan(int32_t vkResult, std::string_view msg)
+		static AetherError Vulkan(int32_t result, std::string_view msg)
 		{
-			return {.category = LogCategory::Vulkan, .message = std::string(msg), .code = vkResult};
+			return {.category = LogCategory::Vulkan, .message = std::string(msg), .code = result};
 		}
 
 		static AetherError Asset(std::string_view msg)

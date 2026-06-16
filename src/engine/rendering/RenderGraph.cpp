@@ -281,7 +281,7 @@ namespace aether
 		return false;
 	}
 
-	std::uint64_t RenderGraph::GetComputeTimelineSemaphore() const
+	gpu::TimelineSemaphoreHandle RenderGraph::GetComputeTimelineSemaphore() const
 	{
 		return m_storage->GetCrossQueueTimelineSemaphore();
 	}
@@ -1259,7 +1259,7 @@ namespace aether
 
 				producerCp.signalBarriers.push_back(b);
 
-				// Group waits by event to minimise vkCmdWaitEvents2 calls.
+				// Group waits by event to minimise cmdWaitEvents2 calls.
 				auto waitIt = std::find_if(cp.waits.begin(), cp.waits.end(), [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
 
 				if (waitIt != cp.waits.end())
@@ -1390,10 +1390,10 @@ namespace aether
 		};
 
 		// Execute a single compiled pass on the given command list.
-		// vkCmd is the opaque gpu::CommandBuffer (the actual VkCommandBuffer
+		// cmd is the opaque gpu::CommandBuffer (the actual VkCommandBuffer
 		// is obtained in the storage via static_cast at emit time). P5(d)
 		// barrier solver migration: the engine code never names VkCommandBuffer.
-		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer vkCmd)
+		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer cmd)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
@@ -1403,7 +1403,7 @@ namespace aether
 			// -- Split barrier waits (consume events from producers) -----------
 			// P5(d) barrier solver migration: all barriers are engine-side
 			// structs (gpu::ImageMemoryBarrier / gpu::BufferMemoryBarrier).
-			// The storage translates to Vk* and calls vkCmd*Event2.
+			// The storage translates to Vk* and calls cmd*Event2.
 			auto& scratchEventBars = m_storage->GetScratchSignalBarriers();
 			for (const CompiledWait& w: cp.waits)
 			{
@@ -1442,7 +1442,7 @@ namespace aether
 
 				if (!scratchEventBars.empty())
 				{
-					m_storage->CmdWaitEvents2(vkCmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
+					m_storage->CmdWaitEvents2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
 				}
 			}
 
@@ -1489,7 +1489,7 @@ namespace aether
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdImageBarriers(vkCmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers), resolveImage);
+			m_storage->CmdImageBarriers(cmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers), resolveImage);
 
 			// -- Buffer barriers --------------------------------------------
 			auto& scratchBufBars = m_storage->GetScratchBufferBarriers();
@@ -1512,12 +1512,12 @@ namespace aether
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdBufferBarriers(vkCmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars), resolveBuffer);
+			m_storage->CmdBufferBarriers(cmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars), resolveBuffer);
 
 			// -- Dynamic rendering -------------------------------------------
 			// P5(d) barrier solver migration: build engine-side
 			// gpu::RenderingAttachmentInfo + gpu::RenderingInfo. The storage
-			// translates to Vk* and calls vkCmdBeginRendering.
+			// translates to backend types.
 			auto& scratchColorInfos = m_storage->GetScratchColorInfos();
 			scratchColorInfos.clear();
 			for (const AttachmentRef& a: pass.colorWrites)
@@ -1608,7 +1608,7 @@ namespace aether
 				// Tracy GPU zone. The engine-side macro captures
 				// __FILE__/__LINE__ at this call site; the cast and
 				// Tracy plumbing live in vulkan/GpuProfiler.cpp.
-				AE_GPU_ZONE_SCOPED(vkCmd, pass.name.c_str());
+				AE_GPU_ZONE_SCOPED(cmd, pass.name.c_str());
 				const auto t0 = std::chrono::high_resolution_clock::now();
 				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
 				pass.execute(ctx);
@@ -1657,7 +1657,7 @@ namespace aether
 
 					if (!scratchEventBars.empty())
 					{
-						m_storage->CmdSetEvent2(vkCmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
+						m_storage->CmdSetEvent2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
 					}
 				}
 			}

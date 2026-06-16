@@ -7,11 +7,8 @@
 
 namespace aether::gpu
 {
-	// RAII helper for one-shot GPU buffer-to-buffer copies.
-	//
-	// Manages a single VkCommandPool and records transient command buffers
-	// via gpu::OneShotCmd.  All Vulkan details are hidden in the backend
-	// (vulkan/UploadContext.cpp); this header is Vulkan-free.
+	// RAII helper for one-shot GPU buffer-to-buffer copies. Backend owns
+	// the pool + command buffer; the engine just calls CopyBuffer.
 	class UploadContext
 	{
 	public:
@@ -24,14 +21,9 @@ namespace aether::gpu
 		UploadContext(UploadContext&& other) noexcept;
 		UploadContext& operator=(UploadContext&& other) noexcept;
 
-		// Allocate a command pool on the given queue family.
-		// device           - opaque VkDevice pointer (gpu::Device)
-		// queueFamilyIndex - queue family that will submit the copy
-		// queue            - opaque VkQueue that will be used for submits
-		// backendRegistry  - opaque pointer to aether::ResourceRegistry
+		// backendRegistry is the opaque aether::ResourceRegistry pointer.
 		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry);
 
-		// Tear down the command pool and release internal state.
 		void Destroy();
 
 		[[nodiscard]] bool IsValid() const
@@ -39,11 +31,10 @@ namespace aether::gpu
 			return m_impl != nullptr;
 		}
 
-		// Record a one-shot vkCmdCopyBuffer between two registry buffers
-		// using the stored queue, blocking until completion.
+		// One-shot copy src -> dst, blocking until completion.
 		void CopyBuffer(BufferHandle src, BufferHandle dst, DeviceSize size);
 
-		// Expose internal VkCommandPool for code paths that need it.
+		// Opaque handle to the backend command pool.
 		[[nodiscard]] void* GetCommandPool() const;
 
 	private:

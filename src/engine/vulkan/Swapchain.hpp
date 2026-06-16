@@ -6,6 +6,8 @@
 #include "vulkan/volk.hpp"
 
 #include "gpu/GpuFormat.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/Semaphore.hpp"
 #include "vulkan/UniqueImage.hpp"
 #include "gpu/GpuEnums.hpp"
 
@@ -41,6 +43,22 @@ namespace aether
 		        VkPipelineStageFlags2 extraWaitStage2 = VK_PIPELINE_STAGE_2_NONE,
 		        std::uint64_t extraWaitValue2 = 0,
 		        VkSemaphore extraSignalSemaphore = VK_NULL_HANDLE,
+		        std::uint64_t extraSignalValue = 0);
+
+		// Engine-side end-of-frame submission. The 3 timeline-semaphore
+		// handles are the opaque `gpu::TimelineSemaphoreHandle` pImpl
+		// pointers. The cast to `VkSemaphore` happens here so the engine
+		// TU never sees a `Vk*` token. The `extraWaitStage` and the
+		// `present` value (DRAW_INDIRECT_BIT) are fixed at this layer
+		// because the only caller (GpuDevice::SubmitAndPresent) uses
+		// the same stage for both waits.
+		void SubmitAndPresent(VkQueue graphicsQueue,
+		        VkQueue presentQueue,
+		        gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr,
+		        std::uint64_t extraWaitValue = 0,
+		        gpu::TimelineSemaphoreHandle extraWaitSemaphore2 = nullptr,
+		        std::uint64_t extraWaitValue2 = 0,
+		        gpu::TimelineSemaphoreHandle extraSignalSemaphore = nullptr,
 		        std::uint64_t extraSignalValue = 0);
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;

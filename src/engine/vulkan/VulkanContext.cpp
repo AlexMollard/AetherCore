@@ -558,6 +558,18 @@ namespace aether
 		return m_graphicsQueue;
 	}
 
+	void VulkanContext::WaitIdle() const
+	{
+		if (m_device->device == VK_NULL_HANDLE)
+		{
+			return;
+		}
+		if (vkDeviceWaitIdle(m_device->device) != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(0, "VulkanContext: failed to wait for device idle."));
+		}
+	}
+
 	VkQueue VulkanContext::GetComputeQueue() const
 	{
 		return m_computeQueue;

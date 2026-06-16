@@ -38,9 +38,31 @@ namespace aether::gpu
 	using DeviceAddress = std::uint64_t;
 	using DeviceSize = std::uint64_t;
 
-	// Viewport state (mirrors VkViewport for the dynamic state path). Floats
-	// are used directly because depth/normalisation semantics are the same
-	// on every backend the engine supports.
+	// Opaque handle aliases. Borrowed primitives (lifetime managed by the
+	// facade) live as `void*` typedefs here. Owned resources use the
+	// generation-checked typed handles from `gpu/GpuHandles.hpp`. The full
+	// borrow-vs-owned table lives in docs/plans/gpu-abstraction-rendering-audit.md.
+	using DescriptorSet = void*;
+	using DescriptorSetLayout = void*;
+	using DescriptorPool = void*;
+	using Pipeline = void*;
+	using PipelineLayout = void*;
+	using PipelineCache = void*;
+	using Device = void*;
+	using PhysicalDevice = void*;
+	using Allocator = void*;
+	using CommandPool = void*;
+	using Queue = void*;
+	using CommandBuffer = void*;
+	using Image = void*;
+	using ImageView = void*;
+	using Buffer = void*;
+	using Event = void*;
+	using Sampler = void*;
+	using QueryPool = void*;
+	using Fence = void*;
+
+	// Viewport state for the dynamic state path. Depth range is [0, 1].
 	struct Viewport
 	{
 		float x = 0.0f;
@@ -69,7 +91,7 @@ namespace aether::gpu
 	// write payloads from local UniqueBuffer / buffer-table sources.
 	struct GpuDescriptorBufferInfo
 	{
-		void* buffer = nullptr;
+		Buffer buffer = nullptr;
 		DeviceAddress offset = 0;
 		DeviceAddress range = 0;
 	};
@@ -122,68 +144,6 @@ namespace aether::gpu
 		std::uint32_t size = 0;
 	};
 
-	// Opaque engine-facing aliases for opaque Vulkan handles. The CommandList
-	// API takes these directly so the call site never mentions Vk*. The
-	// backend (vulkan/) defines the same names as their real Vk* types so
-	// the implementations can convert with a single static_cast.
-	//
-	// -------------------------------------------------------------------------
-	// BORROWED-vs-OWNED rule (audit §2, §4 - P4.1)
-	// -------------------------------------------------------------------------
-	// **Borrowed** primitives (never engine-owned, lifetime managed by the
-	// gpu/ facade or service container) live as `void*` typedefs in this
-	// header. The engine code stores them by value and never destroys them.
-	// **Owned** resources (engine code creates and destroys them) use typed
-	// handles from `gpu/GpuHandles.hpp` (generation-checked, 8 bytes).
-	//
-	// | Type                | Status   | Why                                         |
-	// |---------------------|----------|---------------------------------------------|
-	// | Device              | borrowed | owned by GpuDevice                          |
-	// | PhysicalDevice      | borrowed | owned by GpuDevice / VulkanContext          |
-	// | Queue               | borrowed | owned by VulkanContext                      |
-	// | Allocator           | borrowed | owned by GpuDevice (VMA)                    |
-	// | CommandPool         | borrowed | transient, owned by call site (Factory)     |
-	// | PipelineCache       | borrowed | owned by VulkanContext                      |
-	// | DescriptorPool      | borrowed | owned by BindlessManager                    |
-	// | Image                | borrowed | owned by ResourceRegistry                   |
-	// | ImageView           | borrowed | owned by ResourceRegistry (resolved view)   |
-	// | Buffer              | borrowed | owned by ResourceRegistry (resolved buffer)  |
-	// | Event               | borrowed | owned by RenderGraphStorage (event pool)     |
-	// | DescriptorSetLayout | borrowed | owned by BindlessManager / Factory          |
-	// | DescriptorSet       | borrowed | owned by BindlessManager                    |
-	// | Pipeline            | borrowed | owned by PipelineFactory (registry)         |
-	// | PipelineLayout      | borrowed | owned by PipelineFactory / Factory          |
-	// | Sampler             | borrowed | owned by BindlessManager's cache            |
-	// | BufferHandle        | OWNED    | created via ResourceRegistry                 |
-	// | TextureHandle       | OWNED    | created via ResourceRegistry                 |
-	// | PipelineHandle      | OWNED    | created via PipelineFactory / registry      |
-	// | SamplerHandle       | OWNED    | created via BindlessManager (engine-owned)  |
-	// -------------------------------------------------------------------------
-	//
-	// The aliases below cover the borrowed primitives plus Image / ImageView
-	// (commonly passed across the boundary even when owned elsewhere).
-	// Adding a new alias here requires updating the table above.
-	using DescriptorSet = void*;
-	using DescriptorSetLayout = void*;
-	using DescriptorPool = void*;
-	using Pipeline = void*;
-	using PipelineLayout = void*;
-	using PipelineCache = void*;
-	using Device = void*;
-	using PhysicalDevice = void*;
-	using Allocator = void*;
-	using CommandPool = void*;
-	using Queue = void*;
-	using CommandBuffer = void*;
-	using Image = void*;
-	using ImageView = void*;
-	using Buffer = void*;
-	using Event = void*;
-	using Buffer = void*;
-	using Sampler = void*;
-	using QueryPool = void*;
-	using Fence = void*;
-
 	// Indirect-draw command struct mirror. Mirrors the layout of
 	// VkDrawIndexedIndirectCommand (5 * uint32_t). Defined in the gpu/
 	// facade so engine code can take sizeof() of it without including
@@ -214,11 +174,9 @@ namespace aether::gpu
 	// -------------------------------------------------------------------------
 	// Image + buffer barriers (P5(d) - RenderGraph barrier solver migration)
 	// -------------------------------------------------------------------------
-	// Mirrors of VkImageMemoryBarrier2 / VkBufferMemoryBarrier2. Engine code
-	// accumulates these; the backend (vulkan/RenderGraphStorage) translates to
-	// Vk* and calls vkCmdPipelineBarrier2. The `image` / `buffer` fields are
-	// opaque gpu::Image / gpu::Buffer handles resolved by the storage; layout
-	// and access values are the engine-side enums from GpuEnums.hpp.
+	// Image/buffer memory barriers. The `image` / `buffer` fields are
+	// opaque engine-side handles resolved by the storage; layout and access
+	// values are the engine-side enums from GpuEnums.hpp.
 
 	struct ImageMemoryBarrier
 	{
@@ -253,7 +211,7 @@ namespace aether::gpu
 	// Mirrors of VkRenderingAttachmentInfo / VkRenderingInfo. Used by
 	// RenderGraph::Execute to describe the per-pass color / depth attachments
 	// and the render area. The backend (gpu/CommandList.cpp) translates to
-	// Vk* and calls vkCmdBeginRendering.
+	// Dynamic rendering.
 
 	struct RenderingAttachmentInfo
 	{

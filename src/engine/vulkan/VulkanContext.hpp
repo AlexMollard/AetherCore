@@ -7,10 +7,10 @@
 #include <vk_mem_alloc.h>
 #include <VkBootstrap.h>
 
-// Forward declaration of Tracy's VkCtx so the raw Tracy context
-// pointer can be stored as a member without dragging TracyVulkan.hpp
-// into every translation unit that includes this header. The full
-// type is needed only in VulkanContext.cpp.
+// Forward declaration of Tracy's context type so the raw pointer
+// can be stored as a member without dragging TracyVulkan.hpp into
+// every TU that includes this header. The full type is needed only
+// in VulkanContext.cpp.
 namespace tracy
 {
 	struct VkCtx;
@@ -50,6 +50,10 @@ namespace aether
 		[[nodiscard]] VkQueue GetPresentQueue() const;
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
+
+		// Block until the device finishes all in-flight work. Throws on
+		// backend failure.
+		void WaitIdle() const;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		[[nodiscard]] const AftermathContext& GetAftermathContext() const

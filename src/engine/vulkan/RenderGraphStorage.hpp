@@ -8,6 +8,7 @@
 #include <vector>
 #include <vk_mem_alloc.h>
 
+#include "gpu/Semaphore.hpp"
 #include "vulkan/volk.hpp"
 #include "vulkan/UniqueImage.hpp"
 #include "vulkan/UniqueBuffer.hpp"
@@ -76,12 +77,13 @@ namespace aether
 		// queue submission as a wait.
 		void SubmitComputeQueue(std::uint32_t frameIndex);
 
-		// Timeline semaphore handle (reinterpret_cast to VkSemaphore) and
-		// current signal value. Valid after SubmitComputeQueue() when
-		// async compute is enabled.
-		[[nodiscard]] std::uint64_t GetCrossQueueTimelineSemaphore() const
+		// Timeline semaphore handle (engine-side typed `gpu::TimelineSemaphoreHandle`)
+		// and current signal value. Valid after SubmitComputeQueue() when
+		// async compute is enabled. The handle is owned by the storage
+		// (it is destroyed in `Shutdown`).
+		[[nodiscard]] gpu::TimelineSemaphoreHandle GetCrossQueueTimelineSemaphore() const
 		{
-			return reinterpret_cast<std::uint64_t>(m_crossQueueTimeline);
+			return m_crossQueueTimeline;
 		}
 
 		[[nodiscard]] std::uint64_t GetCrossQueueTimelineValue() const
@@ -410,7 +412,7 @@ namespace aether
 		std::array<ComputeFrameResources, kMaxFramesInFlight> m_computeFrames{};
 		VkQueue m_computeQueue = VK_NULL_HANDLE;
 		std::uint32_t m_computeQueueFamily = 0;
-		VkSemaphore m_crossQueueTimeline = VK_NULL_HANDLE;
+		gpu::TimelineSemaphoreHandle m_crossQueueTimeline = nullptr;
 		std::uint64_t m_crossQueueTimelineValue = 0;
 		bool m_asyncComputeEnabled = false;
 

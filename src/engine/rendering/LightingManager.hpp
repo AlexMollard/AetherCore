@@ -20,6 +20,11 @@
 
 namespace aether
 {
+	class LightingManager;
+}
+
+namespace aether
+{
 	class RenderGraph;
 	struct RGBuffer;
 
@@ -58,9 +63,9 @@ namespace aether
 		[[nodiscard]] gpu::DescriptorSetLayout GetSetLayout() const;
 		// Push lighting descriptors (3 storage buffers) directly into the command list
 		// at setIndex in the given pipeline layout. Replaces per-frame VkDescriptorSet allocation.
-		// The layout pointer is the raw VkPipelineLayout (kept as void* so the
-		// engine-facing signature doesn't expose Vk*).
-		void PushLightingDescriptor(gpu::CommandList& cmd, void* layout, std::uint32_t frameSlot) const;
+		// `layout` is the opaque engine-side `gpu::PipelineLayout` handle; the backend casts to
+		// `VkPipelineLayout` at the seam.
+		void PushLightingDescriptor(gpu::CommandList& cmd, gpu::PipelineLayout layout, std::uint32_t frameSlot) const;
 
 		// Register lighting compute passes (InitTiles + BinLights) in the render
 		// graph. Must be called after Initialize() and before the first frame.

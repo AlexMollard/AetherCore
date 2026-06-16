@@ -82,11 +82,11 @@ namespace aether::gpu
 		All = Vertex | Fragment | Compute,
 	};
 
-	// Pipeline bind point for vkCmdBindPipeline / vkCmdPushDescriptorSet*.
+	// Pipeline bind point for the backend's bind-pipeline and push-descriptor commands.
 	// Mirrors VkPipelineBindPoint; the backend maps to VK_PIPELINE_BIND_POINT_*.
 	// The graphics variant is the default for descriptor set / push descriptor
 	// calls; compute pipelines must use Compute to satisfy
-	// VUID-vkCmdPushDescriptorSet-pipelineBindPoint-00363.
+	// Validation rule for the cached-bind-point push-descriptor path.
 	enum class PipelineBindPoint : std::uint32_t
 	{
 		Graphics = 0,

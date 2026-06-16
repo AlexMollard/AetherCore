@@ -9,7 +9,7 @@ namespace aether
 {
 	class MeshUploadQueue;
 
-	// A chunk mesh that can be rebuilt without allocating a new VkBuffer.
+	// A chunk mesh that can be rebuilt without allocating a new buffer.
 	// Suballocates from a MeshArena and schedules the upload via MeshUploadQueue.
 	//
 	// Usage:

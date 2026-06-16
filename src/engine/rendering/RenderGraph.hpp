@@ -12,6 +12,7 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
+#include "gpu/Semaphore.hpp"
 
 namespace aether
 {
@@ -255,7 +256,7 @@ namespace aether
 		// compute queue submission signals. The graphics queue submission must wait
 		// on this semaphore at this value. Only valid after Execute() when
 		// HasAsyncComputeWork() returns true.
-		[[nodiscard]] std::uint64_t GetComputeTimelineSemaphore() const;
+		[[nodiscard]] gpu::TimelineSemaphoreHandle GetComputeTimelineSemaphore() const;
 		[[nodiscard]] std::uint64_t GetComputeTimelineValue() const;
 
 		// Submit the async compute command buffer to the dedicated compute queue.
@@ -350,8 +351,8 @@ namespace aether
 			QueueClass queueClass = QueueClass::Graphics;
 			std::vector<CompiledBarrier> preBarriers;          // non-split barriers
 			std::vector<CompiledBufferBarrier> bufferBarriers; // buffer barriers for this pass
-			std::vector<CompiledBarrier> signalBarriers;       // emitted as vkCmdSetEvent2 at end of producer
-			std::uint32_t splitEventIndex = UINT32_MAX;        // event this pass signals (VkEvent index in storage)
+			std::vector<CompiledBarrier> signalBarriers;       // emitted as the set-event backend call at end of producer
+			std::uint32_t splitEventIndex = UINT32_MAX;        // event this pass signals (index in storage)
 			std::vector<CompiledWait> waits;                   // events/barriers to wait on at start of consumer
 		};
 

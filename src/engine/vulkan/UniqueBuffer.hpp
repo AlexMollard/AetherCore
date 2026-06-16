@@ -54,6 +54,13 @@ namespace aether
 		// Vulkan-internal only.
 		static Expected<UniqueBuffer> CreateAliased(VkDevice device, VmaAllocator allocator, VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset);
 
+		// Engine-side overload: typed `gpu::*` handles + `gpu::DeviceSize`.
+		// Creates a host-visible, host-mapped storage buffer (the only
+		// pattern used by the engine for per-frame CPU-written uniform/
+		// storage buffers). The cast to backend types happens at the seam
+		// inside this overload; the caller stays vulkan-free.
+		static Expected<UniqueBuffer> CreateStorageBuffer(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize size, const char* debugName = nullptr);
+
 		void Reset();
 
 		// Flushes host-visible memory to the device.

@@ -3,8 +3,9 @@
 #include <cstdint>
 #include <functional>
 
-#include "gpu/GpuTypes.hpp"
 #include "gpu/CommandList.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/Semaphore.hpp"
 
 namespace aether
 {
@@ -52,11 +53,16 @@ namespace aether
 
 		void BeginSwapchainFrame();
 		void RecreateSwapchain(class Window& window, bool enableVsync);
-		void SubmitAndPresent(std::uint64_t asyncComputeSemaphoreHandle = 0,
+		// End-of-frame submission. The 3 timeline-semaphore handles are the
+		// opaque engine-side `gpu::TimelineSemaphoreHandle` typedef (a pImpl
+		// pointer). All casts to `VkSemaphore` happen in the swapchain
+		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
+		// `Vk*` token.
+		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr,
 		        std::uint64_t asyncComputeTimelineValue = 0,
-		        std::uint64_t asyncComputeSemaphoreHandle2 = 0,
+		        gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle2 = nullptr,
 		        std::uint64_t asyncComputeTimelineValue2 = 0,
-		        std::uint64_t rootMotionSignalSemaphore = 0,
+		        gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore = nullptr,
 		        std::uint64_t rootMotionSignalValue = 0);
 
 		[[nodiscard]] gpu::CommandList GetCurrentCommandList() const;

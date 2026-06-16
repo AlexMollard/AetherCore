@@ -50,7 +50,7 @@ namespace aether
 			return false;
 		}
 
-		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, static_cast<void*>(arena.GetVertexBufferRaw()), m_alloc.vertexByteOffset, indices, indexBytes, static_cast<void*>(arena.GetIndexBufferRaw()), m_alloc.indexByteOffset);
+		const bool queued = uploadQueue.Upload(vertexData, vertexBytes, arena.GetVertexBufferRaw(), m_alloc.vertexByteOffset, indices, indexBytes, arena.GetIndexBufferRaw(), m_alloc.indexByteOffset);
 		if (!queued)
 		{
 			// Staging ring full this frame - release the arena slot immediately so
