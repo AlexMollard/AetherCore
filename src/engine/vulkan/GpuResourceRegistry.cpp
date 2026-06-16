@@ -2,6 +2,7 @@
 
 #include "rendering/GraphicsPipeline.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Logger.hpp"
 #include "vulkan/ComputePipelineFactory.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GraphicsPipelineFactory.hpp"
@@ -207,7 +208,7 @@ namespace aether::gpu
 		auto result = s_reg->EnsureBindlessSampled(handle, aspectMask, descriptorLayout, filter, addressMode);
 		if (!result)
 		{
-			// Log or assert - the function itself logs on failure
+			AE_WARN(LogCategory::Vulkan, "ResourceRegistry::EnsureBindlessSampled failed: {}", result.error());
 		}
 	}
 

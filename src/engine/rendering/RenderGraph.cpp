@@ -1442,7 +1442,7 @@ namespace aether
 
 				if (!scratchEventBars.empty())
 				{
-					m_storage->CmdWaitEvents2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
+					m_storage->CmdWaitEvents2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
 				}
 			}
 
@@ -1489,7 +1489,7 @@ namespace aether
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdImageBarriers(cmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers), resolveImage);
+			m_storage->CmdImageBarriers(cmd, std::span<const gpu::ImageMemoryBarrier>(scratchBarriers));
 
 			// -- Buffer barriers --------------------------------------------
 			auto& scratchBufBars = m_storage->GetScratchBufferBarriers();
@@ -1512,7 +1512,7 @@ namespace aether
 				        .dstAccess = static_cast<gpu::AccessFlags>(b.dstAccess),
 				});
 			}
-			m_storage->CmdBufferBarriers(cmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars), resolveBuffer);
+			m_storage->CmdBufferBarriers(cmd, std::span<const gpu::BufferMemoryBarrier>(scratchBufBars));
 
 			// -- Dynamic rendering -------------------------------------------
 			// P5(d) barrier solver migration: build engine-side
@@ -1657,7 +1657,7 @@ namespace aether
 
 					if (!scratchEventBars.empty())
 					{
-						m_storage->CmdSetEvent2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars), resolveImage);
+						m_storage->CmdSetEvent2(cmd, event, std::span<const gpu::ImageMemoryBarrier>(scratchEventBars));
 					}
 				}
 			}

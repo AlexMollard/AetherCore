@@ -231,7 +231,7 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
 		        .semaphore = static_cast<VkSemaphore>(gpu::ResolveTimelineSemaphoreVk(m_crossQueueTimeline)),
 		        .value = signalValue,
-		        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};
 
 		const VkSubmitInfo2 submitInfo{
@@ -498,6 +498,10 @@ namespace aether
 
 	gpu::ImageAspect RenderGraphStorage::ResolveTransientAspect(uint32_t idx) const
 	{
+		if (idx >= m_transientImages.size())
+		{
+			return gpu::ImageAspect::Color;
+		}
 		return m_transientImages[idx].aspect;
 	}
 
@@ -605,6 +609,11 @@ namespace aether
 			if (entry.image.IsValid())
 			{
 				gpu::ResourceRegistry::Destroy(entry.image);
+			}
+			if (entry.m_virtualAlloc)
+			{
+				vmaVirtualFree(m_virtualBlock, entry.m_virtualAlloc);
+				entry.m_virtualAlloc = nullptr;
 			}
 		}
 		else if (entry.bindlessRequested)
@@ -779,7 +788,7 @@ namespace aether
 		}
 	}
 
-	void RenderGraphStorage::CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers)
 	{
 		if (barriers.empty())
 		{
@@ -789,12 +798,12 @@ namespace aether
 		const VkEvent vkEvent = static_cast<VkEvent>(event);
 
 		// Translate gpu::ImageMemoryBarrier span to a stack VkImageMemoryBarrier2 array.
+		// barrier.image is the pre-resolved VkImage (opaque gpu::Image == VkImage);
+		// the caller populated it via resolveImage() before invoking this method.
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
 		for (const auto& b: barriers)
 		{
-			const gpu::Image resolved = resolveImage(b.image ? static_cast<uint32_t>(reinterpret_cast<std::uintptr_t>(b.image) & 0xFFFFFFFFu) : 0);
-			// barrier.image is the pre-resolved VkImage; cast directly.
 			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
 		}
 
@@ -808,7 +817,7 @@ namespace aether
 		vkCmdSetEvent2(vkCmd, vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers)
 	{
 		if (barriers.empty())
 		{
@@ -832,7 +841,7 @@ namespace aether
 		vkCmdWaitEvents2(vkCmd, 1, &vkEvent, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers, const std::function<gpu::Buffer(uint32_t)>& resolveBuffer)
+	void RenderGraphStorage::CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers)
 	{
 		if (barriers.empty())
 		{
@@ -855,7 +864,7 @@ namespace aether
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
 
-	void RenderGraphStorage::CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage)
+	void RenderGraphStorage::CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers)
 	{
 		if (barriers.empty())
 		{
@@ -1028,9 +1037,57 @@ namespace aether
 			}
 		}
 
-		// Calculate total size needed.
-		VkDeviceSize totalSize = 0;
+		// Calculate total size needed. Process entries in alignment-descending
+		// order so high-alignment sub-allocations establish a well-aligned
+		// running offset; lower-alignment entries then pack into the gaps
+		// with no per-entry padding. Original indices are preserved because
+		// other code accesses transient slots by their insertion index.
+		auto collectCandidates = [](const auto& entries, auto&& isValid, auto&& isAllocatable)
+		{
+			std::vector<std::uint32_t> indices;
+			for (std::uint32_t i = 0; i < entries.size(); ++i)
+			{
+				if (!isValid(entries[i]) && isAllocatable(entries[i]))
+				{
+					indices.push_back(i);
+				}
+			}
+			return indices;
+		};
 
+		auto imageIndices = collectCandidates(
+		        m_transientImages,
+		        [](const TransientImageEntry& e)
+		        {
+			        return e.image.IsValid();
+		        },
+		        [](const TransientImageEntry& e)
+		        {
+			        return e.memReqSize > 0;
+		        });
+		auto bufferIndices = collectCandidates(
+		        m_transientBuffers,
+		        [](const TransientBufferEntry& e)
+		        {
+			        return e.buffer.IsValid();
+		        },
+		        [](const TransientBufferEntry& e)
+		        {
+			        return e.memReqSize > 0;
+		        });
+
+		auto byAlignmentDescImages = [&](std::uint32_t a, std::uint32_t b)
+		{
+			return m_transientImages[a].memReqAlignment > m_transientImages[b].memReqAlignment;
+		};
+		auto byAlignmentDescBuffers = [&](std::uint32_t a, std::uint32_t b)
+		{
+			return m_transientBuffers[a].memReqAlignment > m_transientBuffers[b].memReqAlignment;
+		};
+		std::sort(imageIndices.begin(), imageIndices.end(), byAlignmentDescImages);
+		std::sort(bufferIndices.begin(), bufferIndices.end(), byAlignmentDescBuffers);
+
+		VkDeviceSize totalSize = 0;
 		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
 		{
 			if (size == 0)
@@ -1041,19 +1098,15 @@ namespace aether
 			return aligned + size;
 		};
 
-		for (auto& entry: m_transientImages)
+		for (const auto idx: imageIndices)
 		{
-			if (!entry.image.IsValid() && entry.memReqSize > 0)
-			{
-				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
-			}
+			const auto& entry = m_transientImages[idx];
+			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
 		}
-		for (auto& entry: m_transientBuffers)
+		for (const auto idx: bufferIndices)
 		{
-			if (!entry.buffer.IsValid() && entry.memReqSize > 0)
-			{
-				totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
-			}
+			const auto& entry = m_transientBuffers[idx];
+			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
 		}
 
 		// Allocate heap and virtual block if needed.
@@ -1072,12 +1125,12 @@ namespace aether
 		}
 
 		// Allocate virtual offsets for each resource from the virtual block.
-		for (auto& entry: m_transientImages)
+		// Process in the same alignment-descending order as the size
+		// accumulation so the per-entry offsets are predictable and the
+		// layout matches the size estimate.
+		for (const auto idx: imageIndices)
 		{
-			if (entry.image.IsValid() || entry.memReqSize == 0)
-			{
-				continue;
-			}
+			auto& entry = m_transientImages[idx];
 			VmaVirtualAllocationCreateInfo allocInfo{
 			        .size = entry.memReqSize,
 			        .alignment = entry.memReqAlignment,
@@ -1090,12 +1143,9 @@ namespace aether
 			}
 		}
 
-		for (auto& entry: m_transientBuffers)
+		for (const auto idx: bufferIndices)
 		{
-			if (entry.buffer.IsValid() || entry.memReqSize == 0)
-			{
-				continue;
-			}
+			auto& entry = m_transientBuffers[idx];
 			VmaVirtualAllocationCreateInfo allocInfo{
 			        .size = entry.memReqSize,
 			        .alignment = entry.memReqAlignment,

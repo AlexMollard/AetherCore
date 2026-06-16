@@ -39,12 +39,12 @@ namespace aether
 
 	bool VirtualBufferHandle::IsValid() const
 	{
-		return id != 0 && generation != 0;
+		return id != 0;
 	}
 
 	bool VirtualImageHandle::IsValid() const
 	{
-		return id != 0 && generation != 0;
+		return id != 0;
 	}
 
 	VirtualBufferHandle ResourcePool::CreateVirtualBuffer(const BufferResourceDesc& desc, const ResourceContract& contract)
@@ -58,7 +58,6 @@ namespace aether
 
 		return VirtualBufferHandle{
 		        .id = static_cast<std::uint32_t>(m_virtualBuffers.size()),
-		        .generation = m_virtualBuffers.back().generation,
 		};
 	}
 
@@ -73,7 +72,6 @@ namespace aether
 
 		return VirtualImageHandle{
 		        .id = static_cast<std::uint32_t>(m_virtualImages.size()),
-		        .generation = m_virtualImages.back().generation,
 		};
 	}
 
@@ -228,7 +226,6 @@ namespace aether
 		{
 			const auto sourceHandle = VirtualBufferHandle{
 			        .id = *record.aliasSourceId + 1,
-			        .generation = m_virtualBuffers[*record.aliasSourceId].generation,
 			};
 			auto& sourceRecord = RequireBufferRecord(sourceHandle);
 
@@ -306,7 +303,6 @@ namespace aether
 		{
 			const auto sourceHandle = VirtualImageHandle{
 			        .id = *record.aliasSourceId + 1,
-			        .generation = m_virtualImages[*record.aliasSourceId].generation,
 			};
 			auto& sourceRecord = RequireImageRecord(sourceHandle);
 
@@ -407,40 +403,28 @@ namespace aether
 	{
 		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualBuffers.size(), "Invalid virtual buffer handle.");
 
-		auto& record = m_virtualBuffers[handle.id - 1];
-		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual buffer handle generation.");
-
-		return record;
+		return m_virtualBuffers[handle.id - 1];
 	}
 
 	const ResourcePool::BufferVirtualRecord& ResourcePool::RequireBufferRecord(const VirtualBufferHandle handle) const
 	{
 		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualBuffers.size(), "Invalid virtual buffer handle.");
 
-		const auto& record = m_virtualBuffers[handle.id - 1];
-		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual buffer handle generation.");
-
-		return record;
+		return m_virtualBuffers[handle.id - 1];
 	}
 
 	ResourcePool::ImageVirtualRecord& ResourcePool::RequireImageRecord(const VirtualImageHandle handle)
 	{
 		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualImages.size(), "Invalid virtual image handle.");
 
-		auto& record = m_virtualImages[handle.id - 1];
-		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual image handle generation.");
-
-		return record;
+		return m_virtualImages[handle.id - 1];
 	}
 
 	const ResourcePool::ImageVirtualRecord& ResourcePool::RequireImageRecord(const VirtualImageHandle handle) const
 	{
 		AE_ASSERT_ALWAYS(handle.IsValid() && handle.id <= m_virtualImages.size(), "Invalid virtual image handle.");
 
-		const auto& record = m_virtualImages[handle.id - 1];
-		AE_ASSERT_ALWAYS(record.generation == handle.generation, "Stale virtual image handle generation.");
-
-		return record;
+		return m_virtualImages[handle.id - 1];
 	}
 
 	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const
@@ -454,6 +438,11 @@ namespace aether
 
 			const auto& ownerContract = records[ownerId].contract;
 			if (candidateContract.lifetime.Overlaps(ownerContract.lifetime))
+			{
+				return false;
+			}
+
+			if (!ownerContract.alias.allowAutomaticAliasing)
 			{
 				return false;
 			}
@@ -483,6 +472,11 @@ namespace aether
 
 			const auto& ownerContract = records[ownerId].contract;
 			if (candidateContract.lifetime.Overlaps(ownerContract.lifetime))
+			{
+				return false;
+			}
+
+			if (!ownerContract.alias.allowAutomaticAliasing)
 			{
 				return false;
 			}
@@ -552,6 +546,20 @@ namespace aether
 
 	void ResourcePool::Shutdown()
 	{
+		for (auto& physical: m_physicalBuffers)
+		{
+			if (physical.resource.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(physical.resource);
+			}
+		}
+		for (auto& physical: m_physicalImages)
+		{
+			if (physical.resource.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(physical.resource);
+			}
+		}
 		m_physicalBuffers.clear();
 		m_physicalImages.clear();
 		m_virtualBuffers.clear();

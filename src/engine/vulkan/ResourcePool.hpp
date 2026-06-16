@@ -80,7 +80,6 @@ namespace aether
 	struct VirtualBufferHandle
 	{
 		std::uint32_t id = 0;
-		std::uint32_t generation = 0;
 
 		[[nodiscard]] bool IsValid() const;
 	};
@@ -88,7 +87,6 @@ namespace aether
 	struct VirtualImageHandle
 	{
 		std::uint32_t id = 0;
-		std::uint32_t generation = 0;
 
 		[[nodiscard]] bool IsValid() const;
 	};
@@ -140,7 +138,6 @@ namespace aether
 		{
 			BufferResourceDesc desc{};
 			ResourceContract contract{};
-			std::uint32_t generation = 1;
 			std::optional<std::uint32_t> physicalId;
 			std::optional<std::uint32_t> aliasSourceId;
 		};
@@ -149,7 +146,6 @@ namespace aether
 		{
 			ImageResourceDesc desc{};
 			ResourceContract contract{};
-			std::uint32_t generation = 1;
 			std::optional<std::uint32_t> physicalId;
 			std::optional<std::uint32_t> aliasSourceId;
 		};

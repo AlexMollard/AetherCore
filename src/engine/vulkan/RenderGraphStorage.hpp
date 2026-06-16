@@ -224,22 +224,22 @@ namespace aether
 		void ResetEvents();
 
 		// Emit Vulkan commands for split barriers (vkCmdSetEvent2 / vkCmdWaitEvents2).
-		// Engine-side: takes gpu::ImageMemoryBarrier span + resolved VkImage
-		// lookup callback. The barrier's opaque gpu::Image field is mapped to
-		// the actual VkImage via `resolveImage` before translation.
-		void CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
-		void CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
+		// Engine-side: takes a gpu::ImageMemoryBarrier span. The barrier's
+		// opaque gpu::Image field is the pre-resolved VkImage (callers in
+		// RenderGraph.cpp populate it via their resolveImage lambda before
+		// calling these methods).
+		void CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
+		void CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
 
 		// Emit buffer memory barriers via vkCmdPipelineBarrier2. Engine-side:
-		// takes gpu::BufferMemoryBarrier span + resolved VkBuffer lookup.
-		void CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers, const std::function<gpu::Buffer(uint32_t)>& resolveBuffer);
+		// takes a gpu::BufferMemoryBarrier span. The barrier's opaque
+		// gpu::Buffer field is the pre-resolved VkBuffer.
+		void CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers);
 
 		// Emit image memory barriers via vkCmdPipelineBarrier2. Engine-side:
-		// takes gpu::ImageMemoryBarrier span + resolved VkImage lookup. The
-		// barrier's opaque gpu::Image field is mapped to the actual VkImage
-		// here (the engine code populates barrier.image with the resolved
-		// VkImage cast to gpu::Image).
-		void CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers, const std::function<gpu::Image(uint32_t)>& resolveImage);
+		// takes a gpu::ImageMemoryBarrier span. The barrier's opaque
+		// gpu::Image field is the pre-resolved VkImage.
+		void CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers);
 
 		// -- Scratch (reused across Execute calls) --------------------------
 		// Engine-side scratch arrays (P5(d)). The barrier emitter methods
