@@ -160,13 +160,13 @@ namespace aether::app
 			attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
 			auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
-			auto* physicsPtr = physicsSystem.get();
+			auto physicsPtr = physicsSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(physicsSystem));
 			services.Register<aether::PhysicsSystem>(*physicsPtr);
 
 			auto dayNightSystem = std::make_unique<aether::app::DayNightSystem>();
 			dayNightSystem->Init(*attachContext.TryGet<Renderer>());
-			auto* dayNightPtr = dayNightSystem.get();
+			auto dayNightPtr = dayNightSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
 			services.Register<aether::app::DayNightSystem>(*dayNightPtr);
 		}
@@ -251,13 +251,13 @@ namespace aether::app
 			m_engine.GetServiceContainer().Get<RenderQueue>().SetWriteSlot(drawSlot);
 			m_engine.GetServiceContainer().Get<RenderQueue>().Clear(drawSlot);
 			m_engine.GetServiceContainer().Get<ShadowService>().PrepareWriteSlot(drawSlot);
-			if (auto* uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
+			if (auto uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
 			{
 				uiRenderer->SetWriteSlot(drawSlot);
 			}
 
 			// ECS UI system: hit-test, drag, widget state (runs before OnGui).
-			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
+			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
@@ -266,7 +266,7 @@ namespace aether::app
 
 				// Auto-render all ECS UI entities (panels, buttons, sliders, etc.).
 				// Replaces explicit per-layer OnGui manual Draw* calls for ECS UI.
-				if (auto* uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
+				if (auto uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
 				{
 					uiSystem->RenderAll(uiWorld, *uiRenderer, m_engine.GetServiceContainer().Get<Input>(), extent);
 				}
@@ -283,7 +283,7 @@ namespace aether::app
 				m_layers.GuiAll(frameContext);
 			}
 
-			if (auto* uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
+			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
 				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();

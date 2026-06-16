@@ -427,7 +427,7 @@ namespace aether
 		return m_virtualImages[handle.id - 1];
 	}
 
-	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const
+	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records)
 	{
 		for (const auto ownerId: ownerIds)
 		{
@@ -461,7 +461,7 @@ namespace aether
 		return true;
 	}
 
-	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records) const
+	bool ResourcePool::CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records)
 	{
 		for (const auto ownerId: ownerIds)
 		{

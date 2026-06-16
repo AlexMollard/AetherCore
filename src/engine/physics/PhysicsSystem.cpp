@@ -338,7 +338,7 @@ namespace aether
 		world.Emplace<PhysicsStateComponent>(entity, pos, rot, pos, rot, visualScale);
 
 		// Set the initial transform so the app never needs to bake scale manually.
-		if (auto* tc = world.TryGet<TransformComponent>(entity))
+		if (auto tc = world.TryGet<TransformComponent>(entity))
 		{
 			tc->localToWorld = ToTransform(pos, rot, visualScale);
 		}
@@ -363,7 +363,7 @@ namespace aether
 		{
 			if (glm::length(v) > 0.f)
 			{
-				if (const auto* r = reg.try_get<RigidBodyComponent>(e))
+				if (const auto r = reg.try_get<RigidBodyComponent>(e))
 				{
 					bi.SetLinearVelocity(r->bodyId, ToJolt(v));
 				}
@@ -378,7 +378,7 @@ namespace aether
 				continue;
 			}
 
-			const auto* tc = reg.try_get<TransformComponent>(entity);
+			const auto tc = reg.try_get<TransformComponent>(entity);
 			JPH::BoxShapeSettings ss{ToJolt(desc.halfExtents)};
 			ss.mMaterial = nullptr;
 			auto result = ss.Create();
@@ -422,7 +422,7 @@ namespace aether
 				continue;
 			}
 
-			const auto* tc = reg.try_get<TransformComponent>(entity);
+			const auto tc = reg.try_get<TransformComponent>(entity);
 			JPH::SphereShapeSettings ss{desc.radius};
 			auto result = ss.Create();
 			if (result.HasError())
@@ -465,7 +465,7 @@ namespace aether
 				continue;
 			}
 
-			const auto* tc = reg.try_get<TransformComponent>(entity);
+			const auto tc = reg.try_get<TransformComponent>(entity);
 			JPH::CapsuleShapeSettings ss{desc.halfHeight, desc.radius};
 			auto result = ss.Create();
 			if (result.HasError())
@@ -510,7 +510,7 @@ namespace aether
 
 	void PhysicsSystem::RemoveBody(World& world, Entity entity)
 	{
-		auto* rigid = world.TryGet<RigidBodyComponent>(entity);
+		auto rigid = world.TryGet<RigidBodyComponent>(entity);
 		if (!rigid || rigid->bodyId.IsInvalid())
 		{
 			return;
@@ -532,7 +532,7 @@ namespace aether
 			return;
 		}
 
-		auto* rigid = registry.try_get<RigidBodyComponent>(enttEntity);
+		auto rigid = registry.try_get<RigidBodyComponent>(enttEntity);
 		if (!rigid || rigid->bodyId.IsInvalid())
 		{
 			return;

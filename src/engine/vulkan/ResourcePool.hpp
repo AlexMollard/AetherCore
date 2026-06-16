@@ -171,9 +171,9 @@ namespace aether
 		ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle);
 		[[nodiscard]] const ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle) const;
 
-		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const;
+		[[nodiscard]] static bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records);
 
-		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records) const;
+		[[nodiscard]] static bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<ImageVirtualRecord>& records);
 
 		static bool IsBufferCompatible(const BufferResourceDesc& requested, gpu::BufferHandle existing);
 		static bool IsImageCompatible(const ImageResourceDesc& requested, gpu::TextureHandle existing);

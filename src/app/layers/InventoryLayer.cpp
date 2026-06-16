@@ -152,7 +152,7 @@ namespace aether::app
 		// Populate slots with fake item data.
 		for (int i = 0; i < kInventorySlots; ++i)
 		{
-			if (auto* s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
+			if (auto s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
 			{
 				s->quantity = kItems[i].quantity;
 				s->rarityColor = kItems[i].rarity;
@@ -185,13 +185,13 @@ namespace aether::app
 		// -- Anchor grid container below the panel header -----------------------
 		// The panel can be dragged, so we re-derive the grid position from the
 		// panel's current resolved pixel rect each frame.
-		if (const auto* pt = world.TryGet<ui::UiTransformComponent>(m_panel))
+		if (const auto pt = world.TryGet<ui::UiTransformComponent>(m_panel))
 		{
 			const glm::vec4 panelPx = ResolveUiRectPx(extent, pt->rect);
 			const float gridX = panelPx.x + kGridPad;
 			const float gridY = panelPx.y + kHeaderH + kGridPad;
 
-			if (auto* gt = world.TryGet<ui::UiTransformComponent>(m_gridContainer))
+			if (auto gt = world.TryGet<ui::UiTransformComponent>(m_gridContainer))
 			{
 				gt->rect = UiRect{
 				        .anchorMin = {0.f, 0.f},
@@ -207,14 +207,14 @@ namespace aether::app
 		// is read by DrawItemSlot during auto-rendering).
 		for (int i = 0; i < kInventorySlots; ++i)
 		{
-			if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_slots[i]))
+			if (const auto inp = world.TryGet<ui::UiInputComponent>(m_slots[i]))
 			{
 				if (inp->clicked)
 				{
 					m_selectedSlot = (m_selectedSlot == i) ? -1 : i;
 				}
 			}
-			if (auto* s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
+			if (auto s = world.TryGet<ui::UiItemSlotComponent>(m_slots[i]))
 			{
 				s->selected = (m_selectedSlot == i);
 			}

@@ -25,7 +25,7 @@ namespace aether
 		RenderGraph& graph = *frame.graph;
 		const gpu::DescriptorSet bindlessSet = frame.bindless->GetSet();
 
-		auto* pass = &graph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
+		auto pass = &graph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
 
 		for (const RGImage shadowMap: shadowMaps)
 		{

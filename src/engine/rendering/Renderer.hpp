@@ -123,9 +123,9 @@ namespace aether
 		}
 
 		// Swapchain format queries for pipeline creation.
-		[[nodiscard]] gpu::Format GetColorFormat() const;
-		[[nodiscard]] gpu::Format GetDepthFormat() const;
-		[[nodiscard]] gpu::Extent2D GetExtent() const;
+		[[nodiscard]] static gpu::Format GetColorFormat();
+		[[nodiscard]] static gpu::Format GetDepthFormat();
+		[[nodiscard]] static gpu::Extent2D GetExtent();
 
 	private:
 		PostProcessStack* m_postProcessStack = nullptr;

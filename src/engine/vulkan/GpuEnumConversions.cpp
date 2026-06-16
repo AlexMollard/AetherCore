@@ -410,6 +410,10 @@ namespace aether::gpu
 		{
 			out |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 		}
+		if ((bits & static_cast<std::uint32_t>(ImageUsage::HostTransfer)) != 0)
+		{
+			out |= VK_IMAGE_USAGE_HOST_TRANSFER_BIT;
+		}
 		return out;
 	}
 

@@ -204,7 +204,7 @@ namespace aether::app
 
 	void DebugLayer::PollScriptErrors(LayerContext& context)
 	{
-		auto* scripting = context.TryGet<scripting::ScriptingSubsystem>();
+		auto scripting = context.TryGet<scripting::ScriptingSubsystem>();
 		if (!scripting)
 		{
 			return;
@@ -343,7 +343,7 @@ namespace aether::app
 		// Insert tab bar after header spacer, before pages.
 		// addChild appends; remove and re-add pages so tab bar is ordered correctly.
 		{
-			auto* panelChildren = world.TryGet<ui::UiChildrenComponent>(m_debugPanel);
+			auto panelChildren = world.TryGet<ui::UiChildrenComponent>(m_debugPanel);
 			panelChildren->children.erase(panelChildren->children.begin() + 1, panelChildren->children.begin() + 1 + kTabCount);
 			addChild(m_tabBar);
 			for (std::size_t i = 0; i < kTabCount; ++i)
@@ -397,7 +397,7 @@ namespace aether::app
 			addToPage(Tab_Render, hRow);
 
 			Entity labelRow = reg(ui::SpawnLabelRow(world, {}, "", 2.f));
-			if (auto* lt = world.TryGet<ui::UiTransformComponent>(labelRow))
+			if (auto lt = world.TryGet<ui::UiTransformComponent>(labelRow))
 			{
 				lt->flexGrow = 1.f;
 			}
@@ -405,7 +405,7 @@ namespace aether::app
 			m_labelRows[Row_FirstRenderPass + i] = labelRow;
 
 			Entity bar = reg(ui::SpawnProgressBar(world, {}, 0.f, 1.f, 0.f, 2.f));
-			if (auto* bt = world.TryGet<ui::UiTransformComponent>(bar))
+			if (auto bt = world.TryGet<ui::UiTransformComponent>(bar))
 			{
 				bt->rect.offsetMaxPx.x = 70.f;
 				bt->rect.offsetMaxPx.y = 12.f;
@@ -484,7 +484,7 @@ namespace aether::app
 
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
-			if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
+			if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
 			{
 				scripting->RequestReload();
 			}
@@ -532,7 +532,7 @@ namespace aether::app
 		// of the packet is the synchronization point.
 		if (m_debugTestShapes)
 		{
-			if (auto* engine = context.TryGet<aether::AetherCore>())
+			if (auto engine = context.TryGet<aether::AetherCore>())
 			{
 				auto& verts = engine->GetPendingDebugVertices();
 
@@ -569,7 +569,7 @@ namespace aether::app
 		// Push frame time to graph
 		if (m_graphEntity.IsValid())
 		{
-			if (auto* graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
+			if (auto graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
 			{
 				graph->samples[graph->head] = frameMs;
 				graph->head = (graph->head + 1) % ui::UiGraphComponent::kMaxSamples;
@@ -593,7 +593,7 @@ namespace aether::app
 		float maxMs = curMs;
 		if (m_graphEntity.IsValid())
 		{
-			if (auto* graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
+			if (auto graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
 			{
 				curMs = graph->count > 0 ? graph->samples[(graph->head + ui::UiGraphComponent::kMaxSamples - 1) % ui::UiGraphComponent::kMaxSamples] : frameMs;
 				if (graph->count > 0)
@@ -620,7 +620,7 @@ namespace aether::app
 		// Update label rows
 		auto setRow = [&](LabelRow idx, const char* val, glm::vec4 color)
 		{
-			if (auto* row = world.TryGet<ui::UiLabelRowComponent>(m_labelRows[idx]))
+			if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_labelRows[idx]))
 			{
 				row->value = val;
 				row->valueColor = color;
@@ -689,7 +689,7 @@ namespace aether::app
 		setRow(Row_SunIntensity, buf.data(), ui::UiTheme::Default().text);
 
 		// Render passes with names, timings, and progress bars
-		if (auto* rg = context.TryGet<aether::RenderGraph>())
+		if (auto rg = context.TryGet<aether::RenderGraph>())
 		{
 			auto passes = rg->GetPasses();
 			float totalMs = 0.f;
@@ -707,25 +707,25 @@ namespace aether::app
 					const float pct = totalMs > 0.f ? ms / totalMs : 0.f;
 					const glm::vec4 timeColor = ms < 0.5f ? ui::UiTheme::Default().good : ms < 2.f ? ui::UiTheme::Default().text : ms < 5.f ? ui::UiTheme::Default().warn : ui::UiTheme::Default().bad;
 					std::snprintf(buf.data(), buf.size(), "%.2f ms", ms);
-					if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+					if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
 					{
 						r->label = passes[i].name;
 						r->value = buf.data();
 						r->valueColor = timeColor;
 					}
-					if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+					if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
 					{
 						slider->value = pct;
 					}
 				}
 				else
 				{
-					if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+					if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
 					{
 						r->label.clear();
 						r->value.clear();
 					}
-					if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+					if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
 					{
 						slider->value = 0.f;
 					}
@@ -733,7 +733,7 @@ namespace aether::app
 			}
 
 			// Total row
-			if (auto* r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
+			if (auto r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
 			{
 				if (passes.empty())
 				{
@@ -754,17 +754,17 @@ namespace aether::app
 			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
 			{
 				auto& row = m_labelRows[Row_FirstRenderPass + i];
-				if (auto* r = world.TryGet<ui::UiLabelRowComponent>(row))
+				if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
 				{
 					r->label.clear();
 					r->value.clear();
 				}
-				if (auto* slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
+				if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
 				{
 					slider->value = 0.f;
 				}
 			}
-			if (auto* r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
+			if (auto r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
 			{
 				r->label.clear();
 				r->value.clear();
@@ -780,7 +780,7 @@ namespace aether::app
 		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// RenderGraph frame statistics
-		if (auto* rg = context.TryGet<aether::RenderGraph>())
+		if (auto rg = context.TryGet<aether::RenderGraph>())
 		{
 			const auto& stats = rg->GetFrameStats();
 			std::snprintf(buf.data(), buf.size(), "%u", stats.passCount);
@@ -808,11 +808,11 @@ namespace aether::app
 		}
 
 		// Reload button click detection
-		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))
+		if (const auto inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))
 		{
 			if (inp->clicked)
 			{
-				if (auto* scripting = context.TryGet<scripting::ScriptingSubsystem>())
+				if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
 				{
 					scripting->RequestReload();
 				}
@@ -820,7 +820,7 @@ namespace aether::app
 		}
 
 		// Tab switching via keyboard shortcuts (Num1/2/3).
-		if (auto* tabComp = world.TryGet<ui::UiTabComponent>(m_tabBar))
+		if (auto tabComp = world.TryGet<ui::UiTabComponent>(m_tabBar))
 		{
 			if (input.IsKeyPressed(aether::Key::Num1))
 			{
@@ -839,7 +839,7 @@ namespace aether::app
 		// Update panel title
 		if (m_debugPanel.IsValid())
 		{
-			if (auto* panel = world.TryGet<ui::UiPanelComponent>(m_debugPanel))
+			if (auto panel = world.TryGet<ui::UiPanelComponent>(m_debugPanel))
 			{
 				panel->title = std::format("Debug  |  {:.0f} FPS  |  {:.2f} ms", curFps, curMs);
 			}
@@ -906,7 +906,7 @@ namespace aether::app
 		// Move the panel on/off-screen so the auto-renderer skips it.
 		if (m_debugPanel.IsValid())
 		{
-			if (auto* pt = context.Get<World>().TryGet<ui::UiTransformComponent>(m_debugPanel))
+			if (auto pt = context.Get<World>().TryGet<ui::UiTransformComponent>(m_debugPanel))
 			{
 				if (m_visible && pt->rect.offsetMinPx.y < -1000.f)
 				{

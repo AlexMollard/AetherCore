@@ -84,7 +84,7 @@ namespace
 
 	void das_set_day_night_enabled(bool enabled)
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			dn->SetEnabled(enabled);
 		}
@@ -92,7 +92,7 @@ namespace
 
 	bool das_get_day_night_enabled()
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			return dn->IsEnabled();
 		}
@@ -101,7 +101,7 @@ namespace
 
 	void das_set_time_of_day(float hours)
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			dn->SetTimeOfDay(hours);
 		}
@@ -109,7 +109,7 @@ namespace
 
 	float das_get_time_of_day()
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			return dn->GetTimeOfDay();
 		}
@@ -118,7 +118,7 @@ namespace
 
 	void das_set_time_speed(float secondsPerSecond)
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			dn->SetTimeSpeed(secondsPerSecond);
 		}
@@ -126,7 +126,7 @@ namespace
 
 	float das_get_time_speed()
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			return dn->GetTimeSpeed();
 		}
@@ -135,7 +135,7 @@ namespace
 
 	das::float3 das_get_sun_direction()
 	{
-		if (auto* dn = ActiveContext().dayNight)
+		if (auto dn = ActiveContext().dayNight)
 		{
 			const auto d = dn->GetSunDirection();
 			return {d.x, d.y, d.z};

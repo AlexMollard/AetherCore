@@ -36,8 +36,8 @@ namespace aether::gpu
 			Release();
 		}
 
-		const auto vkDevice = static_cast<VkDevice>(device);
-		const auto vkPool = static_cast<VkCommandPool>(pool);
+		auto vkDevice = static_cast<VkDevice>(device);
+		auto vkPool = static_cast<VkCommandPool>(pool);
 
 		const VkCommandBufferAllocateInfo ai{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -80,9 +80,9 @@ namespace aether::gpu
 			return false;
 		}
 
-		const auto vkDevice = static_cast<VkDevice>(m_device);
-		const auto vkCmd = static_cast<VkCommandBuffer>(m_cmd);
-		const auto vkQueue = static_cast<VkQueue>(queue);
+		auto vkDevice = static_cast<VkDevice>(m_device);
+		auto vkCmd = static_cast<VkCommandBuffer>(m_cmd);
+		auto vkQueue = static_cast<VkQueue>(queue);
 
 		VkResult result = vkEndCommandBuffer(vkCmd);
 		if (result != VK_SUCCESS)
@@ -128,9 +128,9 @@ namespace aether::gpu
 	{
 		if (m_cmd != nullptr)
 		{
-			const auto vkDevice = static_cast<VkDevice>(m_device);
-			const auto vkPool = static_cast<VkCommandPool>(m_pool);
-			const auto vkCmd = static_cast<VkCommandBuffer>(m_cmd);
+			auto vkDevice = static_cast<VkDevice>(m_device);
+			auto vkPool = static_cast<VkCommandPool>(m_pool);
+			auto vkCmd = static_cast<VkCommandBuffer>(m_cmd);
 			vkFreeCommandBuffers(vkDevice, vkPool, 1, &vkCmd);
 		}
 		m_device = nullptr;

@@ -179,7 +179,7 @@ namespace aether
 			return;
 		}
 
-		const auto vkDevice = static_cast<VkDevice>(m_device);
+		auto vkDevice = static_cast<VkDevice>(m_device);
 
 		// Destroy layout before sampler (layout embeds the sampler handle).
 		if (m_layout != nullptr)
@@ -305,7 +305,7 @@ namespace aether
 			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.")};
 		}
 
-		const auto gpuSampler = static_cast<gpu::Sampler>(sampler);
+		auto gpuSampler = static_cast<gpu::Sampler>(sampler);
 		m_samplerCache[key] = gpuSampler;
 		return gpuSampler;
 	}

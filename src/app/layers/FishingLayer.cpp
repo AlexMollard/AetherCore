@@ -23,7 +23,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera) const
+	const char* FishingLayer::GetActiveCameraName(aether::CameraHandle activeCamera)
 	{
 		if (!activeCamera.IsValid())
 		{

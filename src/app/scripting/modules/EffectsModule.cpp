@@ -21,7 +21,7 @@ namespace
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: no EffectManager available");
 			return;
 		}
-		const auto* effect = ctx.effects->Find(name);
+		const auto effect = ctx.effects->Find(name);
 		if (!effect)
 		{
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: unknown effect '{}'", name);
@@ -40,7 +40,7 @@ namespace
 	// set_effect_color(world, entity_id, r, g, b) -> sets emissiveFactor.xyz
 	void das_set_effect_color(aether::World* w, uint32_t id, float r, float g, float b)
 	{
-		auto* mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
+		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
 		if (mc)
 		{
 			mc->material.emissiveFactor = glm::vec3(r, g, b);
@@ -50,7 +50,7 @@ namespace
 	// set_effect_speed(world, entity_id, speed) -> sets metallicFactor
 	void das_set_effect_speed(aether::World* w, uint32_t id, float speed)
 	{
-		auto* mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
+		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
 		if (mc)
 		{
 			mc->material.metallicFactor = speed;
@@ -60,7 +60,7 @@ namespace
 	// set_effect_scale(world, entity_id, scale) -> sets roughnessFactor
 	void das_set_effect_scale(aether::World* w, uint32_t id, float scale)
 	{
-		auto* mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
+		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
 		if (mc)
 		{
 			mc->material.roughnessFactor = scale;
@@ -70,7 +70,7 @@ namespace
 	// set_effect_intensity(world, entity_id, intensity) -> sets occlusionStrength
 	void das_set_effect_intensity(aether::World* w, uint32_t id, float intensity)
 	{
-		auto* mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
+		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
 		if (mc)
 		{
 			mc->material.occlusionStrength = intensity;

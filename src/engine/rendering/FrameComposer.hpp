@@ -11,8 +11,8 @@ namespace aether
 	class FrameComposer
 	{
 	public:
-		[[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj) const;
+		[[nodiscard]] static FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
 
-		void ApplyNoCameraLightingFallback(FrameConstants& fc) const;
+		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 	};
 } // namespace aether

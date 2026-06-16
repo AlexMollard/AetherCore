@@ -48,8 +48,8 @@ namespace aether::app
 	void ScriptedSceneLayer::BuildDefaultPipeline(LayerContext& context)
 	{
 		auto& assets = context.Get<AssetManager>();
-		const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-		const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+		auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
+		auto* const lightingLayout = context.Get<LightingManager>().GetSetLayout();
 		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
@@ -116,11 +116,11 @@ namespace aether::app
 			{
 				renderQueue.Clear(i);
 			}
-			if (auto* shadowService = context.TryGet<ShadowService>())
+			if (auto shadowService = context.TryGet<ShadowService>())
 			{
 				shadowService->ClearAllQueues();
 			}
-			if (auto* localShadowService = context.TryGet<LocalShadowService>())
+			if (auto localShadowService = context.TryGet<LocalShadowService>())
 			{
 				localShadowService->ClearAllQueues();
 			}
@@ -171,8 +171,8 @@ namespace aether::app
 
 		// Register effects so script can use set_entity_effect().
 		{
-			const auto bindlessLayout = context.Get<BindlessManager>().GetLayout();
-			const auto lightingLayout = context.Get<LightingManager>().GetSetLayout();
+			auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
+			auto* const lightingLayout = context.Get<LightingManager>().GetSetLayout();
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 
@@ -192,19 +192,19 @@ namespace aether::app
 		m_sceneCtx.renderer = &context.Get<Renderer>();
 		m_sceneCtx.input = &context.Get<Input>();
 		m_sceneCtx.effects = &m_effectManager;
-		if (auto* dn = context.TryGet<aether::app::DayNightSystem>())
+		if (auto dn = context.TryGet<aether::app::DayNightSystem>())
 		{
 			m_sceneCtx.dayNight = dn;
 		}
 		m_sceneCtx.systemFactory = &m_systemFactory;
 		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
 		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();
-		if (auto* physSys = context.Get<World>().FindSystem("PhysicsSystem"))
+		if (auto physSys = context.Get<World>().FindSystem("PhysicsSystem"))
 		{
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
 			aether::app::scripting::InitPhysicsModule(m_sceneCtx.physics);
 		}
-		if (auto* ikSys = context.TryGet<aether::AnimationIkSystem>())
+		if (auto ikSys = context.TryGet<aether::AnimationIkSystem>())
 		{
 			aether::app::scripting::InitAnimationModule(ikSys);
 		}

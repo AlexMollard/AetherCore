@@ -2,7 +2,7 @@
 
 namespace aether
 {
-	FrameConstants FrameComposer::ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj) const
+	FrameConstants FrameComposer::ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj)
 	{
 		FrameConstants fc{};
 
@@ -29,7 +29,7 @@ namespace aether
 		return fc;
 	}
 
-	void FrameComposer::ApplyNoCameraLightingFallback(FrameConstants& fc) const
+	void FrameComposer::ApplyNoCameraLightingFallback(FrameConstants& fc)
 	{
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);

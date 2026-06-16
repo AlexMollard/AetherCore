@@ -186,13 +186,13 @@ namespace aether::app
 
 		// Animate the progress bar with a smooth sine wave so all values [0..1] are
 		// exercised over time.
-		if (auto* s = world.TryGet<ui::UiSliderComponent>(m_progressBar))
+		if (auto s = world.TryGet<ui::UiSliderComponent>(m_progressBar))
 		{
 			s->value = std::sin(m_progressTime * 0.8f) * 0.5f + 0.5f;
 		}
 
 		// Detect button click (UiInputComponent::clicked set by UiSystem::BeginFrame).
-		if (const auto* inp = world.TryGet<ui::UiInputComponent>(m_clickButton))
+		if (const auto inp = world.TryGet<ui::UiInputComponent>(m_clickButton))
 		{
 			if (inp->clicked)
 			{
@@ -201,20 +201,20 @@ namespace aether::app
 		}
 
 		// Update button label each frame to reflect current click count.
-		if (auto* btn = world.TryGet<ui::UiButtonComponent>(m_clickButton))
+		if (auto btn = world.TryGet<ui::UiButtonComponent>(m_clickButton))
 		{
 			btn->label = std::format("Click Me!  ({})", m_clickCount);
 		}
 
 		// Embed the last submitted string in the input panel title.
-		if (auto* panel = world.TryGet<ui::UiPanelComponent>(m_inputPanel))
+		if (auto panel = world.TryGet<ui::UiPanelComponent>(m_inputPanel))
 		{
 			panel->title = std::format("Text Input  \xC2\xB7  last: {}", m_lastSubmitted);
 		}
 
 		// Detect text input submission (UiTextInputComponent::submitted set by
 		// UiSystem::ProcessTextInput, cleared in UiSystem::EndFrame).
-		if (const auto* ti = world.TryGet<ui::UiTextInputComponent>(m_textInput))
+		if (const auto ti = world.TryGet<ui::UiTextInputComponent>(m_textInput))
 		{
 			if (ti->submitted)
 			{
@@ -234,7 +234,7 @@ namespace aether::app
 
 		// -- Flex Toolbar ------------------------------------------------------
 		// The toolbar has no panel entity, so we draw its background manually.
-		if (const auto* ct = world.TryGet<ui::UiTransformComponent>(m_flexContainer))
+		if (const auto ct = world.TryGet<ui::UiTransformComponent>(m_flexContainer))
 		{
 			ui.DrawRect(ct->rect, theme.panelBg, theme.cornerRadius);
 

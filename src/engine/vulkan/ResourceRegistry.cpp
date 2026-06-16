@@ -387,7 +387,7 @@ namespace aether
 			return {};
 		}
 
-		const auto* entry = Resolve(handle);
+		const auto entry = Resolve(handle);
 		if (!entry)
 		{
 			return {};
@@ -407,7 +407,7 @@ namespace aether
 			return;
 		}
 
-		const auto* entry = Resolve(handle);
+		const auto entry = Resolve(handle);
 		if (!entry || entry->allocation == VK_NULL_HANDLE)
 		{
 			return;

@@ -30,7 +30,7 @@ namespace aether
 			return m_enabled;
 		}
 
-		void RegisterPass(const FrameContext& frame,
+		static void RegisterPass(const FrameContext& frame,
 		        RenderQueue& renderQueue,
 		        RGImage hdrColor,
 		        RGImage depth,

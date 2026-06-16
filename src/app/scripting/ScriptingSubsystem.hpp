@@ -67,7 +67,7 @@ namespace aether::app::scripting
 		// Delete the das::Context inside a handle and reset it to invalid.
 		// Must be called instead of `delete handle.ctx` because das::Context is
 		// only forward-declared in ScriptHandle.hpp.
-		void FreeHandle(ScriptHandle& handle);
+		static void FreeHandle(ScriptHandle& handle);
 
 		[[nodiscard]] const std::string& GetLastError() const
 		{

@@ -46,8 +46,8 @@ namespace aether
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		const auto device = static_cast<gpu::Device>(context.GetDevice().device);
-		const auto allocator = static_cast<gpu::Allocator>(context.GetAllocator());
+		auto device = static_cast<gpu::Device>(context.GetDevice().device);
+		auto allocator = static_cast<gpu::Allocator>(context.GetAllocator());
 
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
@@ -133,7 +133,7 @@ namespace aether
 			                .stageFlags = gpu::ShaderStage::Compute,
 			        },
 			};
-			m_blurDescriptorSetLayout = gpu::Factory::CreateDescriptorSetLayout(static_cast<gpu::Device>(device),
+			m_blurDescriptorSetLayout = gpu::Factory::CreateDescriptorSetLayout(device,
 			        {
 			                .bindings = bindings,
 			                .pushDescriptor = true,
@@ -149,7 +149,7 @@ namespace aether
 			        .size = sizeof(BlurPushConstants),
 			};
 			const std::array<gpu::DescriptorSetLayout, 1> setLayouts{m_blurDescriptorSetLayout};
-			m_blurPipelineLayout = gpu::Factory::CreatePipelineLayout(static_cast<gpu::Device>(device),
+			m_blurPipelineLayout = gpu::Factory::CreatePipelineLayout(device,
 			        {
 			                .setLayouts = setLayouts,
 			                .pushConstantRanges = std::span<const gpu::PushConstantRange>(&pcRange, 1),
@@ -158,7 +158,7 @@ namespace aether
 		}
 
 		// Compute pipeline via resource registry.
-		m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
+		m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
 		        context.GetPipelineCache(),
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://vsm_blur.spv",
@@ -428,7 +428,7 @@ namespace aether
 		// Write ShadowLightData to per-frame GPU buffer.
 		const auto shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
 		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
-		auto* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
+		auto mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
@@ -444,7 +444,7 @@ namespace aether
 		gpu::ResourceRegistry::FlushMappedBuffer(m_shadowDataBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(ShadowLightData));
 
 		// Write per-light frame constants (just viewProj) for atlas rendering.
-		auto* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
+		auto lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
@@ -472,8 +472,8 @@ namespace aether
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
 		// Register the blur scratch image.
-		const auto scratchView = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle).view;
-		const auto scratchImage = gpu::ResourceRegistry::ResolveTextureImage(m_blurScratchHandle);
+		auto scratchView = gpu::ResourceRegistry::ResolveTexture(m_blurScratchHandle).view;
+		auto scratchImage = gpu::ResourceRegistry::ResolveTextureImage(m_blurScratchHandle);
 		m_blurScratchImage = graph.RegisterImage(scratchImage, scratchView, gpu::ImageAspect::Color);
 
 		// Create a transient depth attachment for the atlas render pass.

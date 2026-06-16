@@ -88,7 +88,7 @@ namespace aether
 			return;
 		}
 
-		const auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		for (auto& frame: m_buffers)
 		{
 			auto destroyBuf = [](gpu::BufferHandle& h)
@@ -136,7 +136,7 @@ namespace aether
 		}
 		if (m_computeLayout != nullptr)
 		{
-			gpu::Factory::DestroyPipelineLayout(static_cast<gpu::Device>(device), m_computeLayout);
+			gpu::Factory::DestroyPipelineLayout(device, m_computeLayout);
 			m_computeLayout = nullptr;
 		}
 		if (m_setLayout != nullptr)
@@ -460,8 +460,8 @@ namespace aether
 			return;
 		}
 
-		const auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
-		const auto pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
+		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		auto pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
 
 		// Create shared layout once.
 		if (m_computeLayout == nullptr)
@@ -472,7 +472,7 @@ namespace aether
 			        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			};
 			const std::array<gpu::DescriptorSetLayout, 1> setLayoutHandles{m_setLayout};
-			m_computeLayout = gpu::Factory::CreatePipelineLayout(static_cast<gpu::Device>(device),
+			m_computeLayout = gpu::Factory::CreatePipelineLayout(device,
 			        {
 			                .setLayouts = setLayoutHandles,
 			                .pushConstantRanges = std::span<const gpu::PushConstantRange>(&pushRange, 1),
@@ -485,8 +485,8 @@ namespace aether
 
 		if (!m_initPipelineHandle.IsValid())
 		{
-			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-			        static_cast<gpu::PipelineCache>(pipelineCache),
+			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
+			        pipelineCache,
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "initTiles",
@@ -502,8 +502,8 @@ namespace aether
 
 		if (!m_cullPipelineHandle.IsValid())
 		{
-			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-			        static_cast<gpu::PipelineCache>(pipelineCache),
+			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
+			        pipelineCache,
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "binLights",
@@ -529,7 +529,7 @@ namespace aether
 
 		const std::size_t lightCount = frame.lightsSize / sizeof(GpuLight);
 		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
-		auto* mapped = static_cast<GpuLight*>(frame.lightsMapped);
+		auto mapped = static_cast<GpuLight*>(frame.lightsMapped);
 		for (std::size_t i = 0; i < applyCount; ++i)
 		{
 			mapped[i].shadowIndex.x = shadowIndices[i].x; // shadowIndex
@@ -538,7 +538,7 @@ namespace aether
 		gpu::ResourceRegistry::FlushMappedBuffer(frame.lightsHandle, 0, static_cast<gpu::DeviceSize>(applyCount) * sizeof(GpuLight));
 	}
 
-	void LightingManager::DisableForView(FrameConstants& fc) const
+	void LightingManager::DisableForView(FrameConstants& fc)
 	{
 		fc.tiledLightGridInfo = glm::uvec4(0u);
 		fc.tiledLightBufferOffsets = glm::uvec4(0u);

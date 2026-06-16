@@ -63,7 +63,7 @@ int main()
 	}
 	catch (const std::exception& exception)
 	{
-		const auto* engineError = dynamic_cast<const aether::EngineError*>(&exception);
+		const auto engineError = dynamic_cast<const aether::EngineError*>(&exception);
 		const aether::LogCategory category = engineError != nullptr ? engineError->Category() : aether::LogCategory::Std;
 		if (category == aether::LogCategory::Vulkan)
 		{

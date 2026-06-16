@@ -86,8 +86,8 @@ namespace aether::gpu
 			return {};
 		}
 		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle. Placement-new is required: tracy::VkCtxScope has no default ctor.
-		auto* storage = ::operator new(sizeof(detail::ProfilerScopeData));
-		auto* scope_data = reinterpret_cast<detail::ProfilerScopeData*>(storage);
+		auto storage = ::operator new(sizeof(detail::ProfilerScopeData));
+		auto scope_data = reinterpret_cast<detail::ProfilerScopeData*>(storage);
 		new (&scope_data->scope) tracy::VkCtxScope(m_context->ctx,
 		        line,
 		        file,

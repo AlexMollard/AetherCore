@@ -21,7 +21,7 @@ namespace aether
 
 		[[nodiscard]] GLFWwindow* GetHandle() const;
 		[[nodiscard]] bool ShouldClose() const;
-		void PollEvents() const;
+		static void PollEvents();
 
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
 		FramebufferSize WaitForValidFramebufferSize();

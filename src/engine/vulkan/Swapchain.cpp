@@ -349,9 +349,9 @@ namespace aether
 	        std::uint64_t extraSignalValue)
 	{
 		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
-		const auto vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
-		const auto vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
-		const auto vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
+		auto vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
+		auto vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
+		auto vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
 
 		EndFrame(graphicsQueue, presentQueue, vkExtraWait, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue, vkExtraWait2, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue2, vkExtraSignal, extraSignalValue);
 	}

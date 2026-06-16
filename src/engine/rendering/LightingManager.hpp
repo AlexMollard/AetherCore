@@ -144,7 +144,7 @@ namespace aether
 		static void BuildLightList(std::vector<GpuLight>& outLights, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
 
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
-		void DisableForView(FrameConstants& fc) const;
+		static void DisableForView(FrameConstants& fc);
 
 		// Per-frame push constants for the lighting compute passes (filled by
 		// PrepareForRenderGraph, consumed by the render graph pass callback).

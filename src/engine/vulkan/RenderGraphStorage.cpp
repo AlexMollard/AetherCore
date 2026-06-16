@@ -646,7 +646,7 @@ namespace aether
 
 	// -- Cache helpers --------------------------------------------------------
 
-	RenderGraphStorage::ImageCacheKey RenderGraphStorage::MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const
+	RenderGraphStorage::ImageCacheKey RenderGraphStorage::MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent)
 	{
 		return ImageCacheKey{
 		        .format = entry.format,
@@ -794,8 +794,8 @@ namespace aether
 		{
 			return;
 		}
-		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
-		const auto vkEvent = static_cast<VkEvent>(event);
+		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto vkEvent = static_cast<VkEvent>(event);
 
 		// Translate gpu::ImageMemoryBarrier span to a stack VkImageMemoryBarrier2 array.
 		// barrier.image is the pre-resolved VkImage (opaque gpu::Image == VkImage);
@@ -823,8 +823,8 @@ namespace aether
 		{
 			return;
 		}
-		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
-		const auto vkEvent = static_cast<VkEvent>(event);
+		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto vkEvent = static_cast<VkEvent>(event);
 
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
@@ -847,7 +847,7 @@ namespace aether
 		{
 			return;
 		}
-		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		std::vector<VkBufferMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
@@ -870,7 +870,7 @@ namespace aether
 		{
 			return;
 		}
-		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());

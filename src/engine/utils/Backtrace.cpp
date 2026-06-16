@@ -47,7 +47,7 @@ namespace aether
 		const auto address = reinterpret_cast<std::uint64_t>(addr);
 
 		std::array<char, sizeof(SYMBOL_INFO) + MAX_SYM_NAME> symBuf{};
-		auto* sym = reinterpret_cast<SYMBOL_INFO*>(symBuf.data());
+		auto sym = reinterpret_cast<SYMBOL_INFO*>(symBuf.data());
 		sym->SizeOfStruct = sizeof(SYMBOL_INFO);
 		sym->MaxNameLen = MAX_SYM_NAME;
 

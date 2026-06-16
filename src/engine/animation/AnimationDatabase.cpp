@@ -249,8 +249,8 @@ namespace aether
 
 		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		const auto device = static_cast<gpu::Device>(ctx.GetDevice().device);
-		const auto queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
+		auto device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		auto queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
 
 		db.m_clipsAddr = UploadArray(db.m_heap, gpuClips, device, queue, uploadPool);
 		db.m_channelsAddr = UploadArray(db.m_heap, gpuChannels, device, queue, uploadPool);
@@ -411,8 +411,8 @@ namespace aether
 		m_clipNames += newClipNames;
 
 		// -- Rebuild GPU heap with combined data ------------------------
-		const auto device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
-		const auto queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
+		auto device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
+		auto queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
 
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{

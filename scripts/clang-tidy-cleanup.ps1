@@ -14,37 +14,50 @@ Remove-Item "$outDir\*.txt" -ErrorAction SilentlyContinue
 Remove-Item "$fixesDir\*.yaml" -ErrorAction SilentlyContinue
 Set-Location $repoRoot
 
-# 1. Curated checks for FUTURE-PROOFING & TECH DEBT
+# 1. C++23 & Vulkan 1.4 Optimized Checks
 $checks = @(
-    # Dead code & Unused (From previous)
+    # 🧹 Dead code & Unused 
     'misc-unused-*', 'bugprone-unused-*', 'readability-redundant-*',
     'clang-analyzer-deadcode.*', 'clang-analyzer-core.uninitialized.*',
     
     # 🛡️ Core Guidelines (Memory Safety & Architecture)
     'cppcoreguidelines-special-member-functions', # Rule of 5 enforcement
     'cppcoreguidelines-slicing',                  # Catches silent object slicing
-    'cppcoreguidelines-pro-type-cstyle-cast',     # Bans dangerous C-style casts
+    'cppcoreguidelines-pro-type-cstyle-cast',     # Bans dangerous C-style casts (Use // NOLINT for Vulkan pNext)
     
     # 🧵 Concurrency
     'concurrency-mt-unsafe',                      # Flags non-thread-safe C functions
     
-    # 🚀 Modern C++ (C++17/20/23) & Performance
-    'modernize-use-nodiscard',                    # Prevents ignoring error codes
+    # 🚀 C++23 Modernization & Performance
+    'modernize-use-std-print',                    # Replaces printf/cout with C++23 std::print (LLVM 18+)
+    'modernize-use-std-numbers',                  # Replaces 3.14f with std::numbers::pi_v
+    'bugprone-unchecked-optional-access',         # Prevents crashes on std::optional/expected
+    'modernize-use-nodiscard',                    # Prevents ignoring error codes/VkResult
     'modernize-pass-by-value',                    # Optimizes unnecessary const-ref copies
     'performance-noexcept-move-constructor',      # Ensures fast vector reallocations
     'modernize-use-using',                        # typedef -> using
     'modernize-loop-convert',                     # C-for -> range-based for
     
     # 🧹 Deep Readability
-    'readability-convert-member-functions-to-static', # Reduces hidden 'this' coupling
-    'readability-container-size-empty',           # vec.size() == 0 -> vec.empty()
-    'readability-qualified-auto'                  # Forces auto* for pointers
+    'readability-convert-member-functions-to-static', 
+    'readability-container-size-empty',           
+    
+    # ❌ EXPLICITLY DISABLED FOR VULKAN / ENGINES
+    '-readability-qualified-auto',                # Stops the auto VkDevice handle issue
+    '-cppcoreguidelines-owning-memory',           # CRITICAL: Stops it from demanding unique_ptr for VkHandles
+    '-modernize-use-auto',                        # Stops aggressive type stripping
+    '-cppcoreguidelines-pro-bounds-pointer-arithmetic', # Allows custom allocator math
+    '-readability-magic-numbers',                 # Allows math/rendering constants
+    '-cppcoreguidelines-avoid-magic-numbers'      # Allows math/rendering constants
 ) -join ','
 
 $checkArg = '-*,' + $checks
 
-# 2. Inject Compiler Warnings for deep safety
+# 2. Inject Compiler Warnings for C++23
 $extraArgs = @(
+    # 🚨 CRITICAL: Force C++23 AST Parsing
+    '--extra-arg=-std=c++23', # (Use -std=c++2b if on Clang 15/16)
+    
     # Unused code injection
     '--extra-arg=-Wunused-function',
     '--extra-arg=-Wunused-member-function',
@@ -57,7 +70,7 @@ $extraArgs = @(
     '--extra-arg=-Wnon-virtual-dtor',         # Catch polymorphic memory leaks
     '--extra-arg=-Wshadow',                   # Catch variables hiding members
     '--extra-arg=-Wimplicit-fallthrough',     # Catch missing switch breaks
-    '--extra-arg=-Wdeprecated-declarations',  # Hunt down dead APIs
+    '--extra-arg=-Wdeprecated-declarations',  # Hunt down dead APIs (e.g., deprecated Vulkan extensions)
     '--extra-arg=-Wheader-hygiene'            # Ban 'using namespace' in headers
 )
 

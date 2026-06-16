@@ -189,7 +189,7 @@ namespace aether
 			}
 
 			std::array<char, sizeof(SYMBOL_INFO) + MAX_SYM_NAME> symbolBuffer{};
-			auto* symbolInfo = reinterpret_cast<SYMBOL_INFO*>(symbolBuffer.data());
+			auto symbolInfo = reinterpret_cast<SYMBOL_INFO*>(symbolBuffer.data());
 			symbolInfo->SizeOfStruct = sizeof(SYMBOL_INFO);
 			symbolInfo->MaxNameLen = MAX_SYM_NAME;
 

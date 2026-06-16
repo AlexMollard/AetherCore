@@ -31,19 +31,19 @@ namespace aether::ui
 	{
 	public:
 		// deltaTime - seconds since last frame; used for hover/press animation lerp.
-		void BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime = 0.f);
-		void RenderAll(aether::World& world, UIRenderer& ui, const Input& input, gpu::Extent2D extent);
-		void EndFrame(aether::World& world, UiContext& ctx);
+		static void BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime = 0.f);
+		static void RenderAll(aether::World& world, UIRenderer& ui, const Input& input, gpu::Extent2D extent);
+		static void EndFrame(aether::World& world, UiContext& ctx);
 
 	private:
-		void HitTest(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
-		void UpdateDrag(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
-		void FlushWidgetStates(aether::World& world, UiContext& ctx);
+		static void HitTest(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
+		static void UpdateDrag(aether::World& world, UiContext& ctx, gpu::Extent2D extent);
+		static void FlushWidgetStates(aether::World& world, UiContext& ctx);
 		// Lerps hoverT/pressT on every UiInputComponent toward their target [0..1].
-		void UpdateTransitions(aether::World& world, float deltaTime);
+		static void UpdateTransitions(aether::World& world, float deltaTime);
 		// Feeds keyboard events (typed chars, Backspace, arrows, Enter/Escape) into the
 		// focused UiTextInputComponent and drives cursor blink.
-		void ProcessTextInput(aether::World& world, UiContext& ctx, const Input& input, float deltaTime);
+		static void ProcessTextInput(aether::World& world, UiContext& ctx, const Input& input, float deltaTime);
 	};
 
 } // namespace aether::ui

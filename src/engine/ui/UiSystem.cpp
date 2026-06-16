@@ -19,12 +19,12 @@ namespace aether::ui
 
 	static void MoveSubtree(aether::World& world, Entity entity, glm::vec2 delta)
 	{
-		if (auto* t = world.TryGet<UiTransformComponent>(entity))
+		if (auto t = world.TryGet<UiTransformComponent>(entity))
 		{
 			t->rect.offsetMinPx += delta;
 			t->rect.offsetMaxPx += delta;
 		}
-		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		if (const auto ch = world.TryGet<UiChildrenComponent>(entity))
 		{
 			for (const Entity child: ch->children)
 			{
@@ -44,7 +44,7 @@ namespace aether::ui
 			std::size_t newSelection = tabComp.selectedTab;
 			for (std::size_t i = 0; i < tabCount; ++i)
 			{
-				if (const auto* inp = world.TryGet<UiInputComponent>(children.children[i]))
+				if (const auto inp = world.TryGet<UiInputComponent>(children.children[i]))
 				{
 					if (inp->clicked)
 					{
@@ -57,8 +57,8 @@ namespace aether::ui
 			const std::size_t pageCount = std::min(tabComp.tabPages.size(), tabComp.tabNames.size());
 			for (std::size_t i = 0; i < pageCount; ++i)
 			{
-				auto* layout = world.TryGet<UiLayoutComponent>(tabComp.tabPages[i]);
-				auto* pt = world.TryGet<UiTransformComponent>(tabComp.tabPages[i]);
+				auto layout = world.TryGet<UiLayoutComponent>(tabComp.tabPages[i]);
+				auto pt = world.TryGet<UiTransformComponent>(tabComp.tabPages[i]);
 
 				if (i == tabComp.selectedTab)
 				{
@@ -68,9 +68,9 @@ namespace aether::ui
 						{
 							if (pt)
 							{
-								if (auto* parentLink = world.TryGet<UiParentComponent>(tabComp.tabPages[i]))
+								if (auto parentLink = world.TryGet<UiParentComponent>(tabComp.tabPages[i]))
 								{
-									if (auto* parentTransform = world.TryGet<UiTransformComponent>(parentLink->parent))
+									if (auto parentTransform = world.TryGet<UiTransformComponent>(parentLink->parent))
 									{
 										pt->rect = parentTransform->rect;
 									}
@@ -149,10 +149,10 @@ namespace aether::ui
 	// entity is in the hidden body of that panel and should not receive input.
 	static bool InsideCollapsedPanel(const aether::World& world, Entity entity)
 	{
-		const auto* link = world.TryGet<UiParentComponent>(entity);
+		auto link = world.TryGet<UiParentComponent>(entity);
 		while (link && link->parent.IsValid())
 		{
-			const auto* panel = world.TryGet<UiPanelComponent>(link->parent);
+			const auto panel = world.TryGet<UiPanelComponent>(link->parent);
 			if (panel && panel->collapsed)
 			{
 				return true;
@@ -220,7 +220,7 @@ namespace aether::ui
 		// Recursively draw all children of a parent entity.
 		void DrawChildren(aether::World& world, Entity parent, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 		{
-			const auto* children = world.TryGet<UiChildrenComponent>(parent);
+			const auto children = world.TryGet<UiChildrenComponent>(parent);
 			if (!children)
 			{
 				return;
@@ -241,7 +241,7 @@ namespace aether::ui
 				}
 				else if (world.Has<UiChildrenComponent>(child))
 				{
-					if (auto* layout = world.TryGet<UiLayoutComponent>(child))
+					if (auto layout = world.TryGet<UiLayoutComponent>(child))
 					{
 						if (!layout->visible)
 						{
@@ -348,8 +348,8 @@ namespace aether::ui
 		// Start drag: left button just pressed over a draggable panel's title bar.
 		if (ctx.mousePressed && ctx.hotEntity.IsValid())
 		{
-			auto* panel = world.TryGet<UiPanelComponent>(ctx.hotEntity);
-			auto* transform = world.TryGet<UiTransformComponent>(ctx.hotEntity);
+			auto panel = world.TryGet<UiPanelComponent>(ctx.hotEntity);
+			auto transform = world.TryGet<UiTransformComponent>(ctx.hotEntity);
 
 			if (panel && panel->draggable && transform)
 			{
@@ -371,7 +371,7 @@ namespace aether::ui
 		// Continue drag: apply mouse delta to the panel and all descendants.
 		if (ctx.isDragging && ctx.mouseDown && ctx.draggedEntity.IsValid())
 		{
-			if (auto* transform = world.TryGet<UiTransformComponent>(ctx.draggedEntity))
+			if (auto transform = world.TryGet<UiTransformComponent>(ctx.draggedEntity))
 			{
 				const glm::vec2 delta = ctx.mousePos - ctx.dragStartMousePos;
 				const glm::vec2 newMin = ctx.dragStartRectMin + delta;
@@ -380,7 +380,7 @@ namespace aether::ui
 				transform->rect.offsetMinPx = newMin;
 				transform->rect.offsetMaxPx = newMax;
 
-				if (const auto* ch = world.TryGet<UiChildrenComponent>(ctx.draggedEntity))
+				if (const auto ch = world.TryGet<UiChildrenComponent>(ctx.draggedEntity))
 				{
 					for (const Entity child: ch->children)
 					{
@@ -423,7 +423,7 @@ namespace aether::ui
 			return;
 		}
 
-		auto* inp = world.TryGet<UiInputComponent>(ctx.hotEntity);
+		auto inp = world.TryGet<UiInputComponent>(ctx.hotEntity);
 		if (inp == nullptr)
 		{
 			return;
@@ -445,7 +445,7 @@ namespace aether::ui
 			{
 				ctx.focusedEntity = ctx.hotEntity;
 				// Reset blink so cursor is immediately visible on focus.
-				if (auto* ti = world.TryGet<UiTextInputComponent>(ctx.hotEntity))
+				if (auto ti = world.TryGet<UiTextInputComponent>(ctx.hotEntity))
 				{
 					ti->cursorBlinkTime = 0.f;
 					ti->cursorVisible = true;
@@ -477,7 +477,7 @@ namespace aether::ui
 			return;
 		}
 
-		auto* ti = world.TryGet<UiTextInputComponent>(ctx.focusedEntity);
+		auto ti = world.TryGet<UiTextInputComponent>(ctx.focusedEntity);
 		if (!ti)
 		{
 			return;

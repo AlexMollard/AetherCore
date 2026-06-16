@@ -16,7 +16,7 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		[[nodiscard]] const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
+		static [[nodiscard]] const char* GetActiveCameraName(aether::CameraHandle activeCamera);
 
 		FishingGameSystem* m_gameSystem = nullptr;
 

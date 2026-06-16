@@ -100,7 +100,7 @@ namespace aether::coro
 
 	inline void executor::schedule_on_resumer(std::coroutine_handle<> h)
 	{
-		if (auto* e = detail::g_default_executor)
+		if (auto e = detail::g_default_executor)
 		{
 			e->schedule(h);
 		}

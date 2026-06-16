@@ -40,7 +40,7 @@ namespace
 
 	char* get_npc_id(aether::World* w, uint32_t id, das::Context* context)
 	{
-		auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
 
 		if (c)
 		{
@@ -53,7 +53,7 @@ namespace
 
 	void set_npc_id(aether::World* w, uint32_t id, const char* val)
 	{
-		if (auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
 		{
 			assign_npc_id(*c, val);
 		}
@@ -61,7 +61,7 @@ namespace
 
 	char* get_npc_display_name(aether::World* w, uint32_t id, das::Context* context)
 	{
-		auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
 
 		if (c)
 		{
@@ -74,7 +74,7 @@ namespace
 
 	void set_npc_display_name(aether::World* w, uint32_t id, const char* val)
 	{
-		if (auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
 		{
 			assign_npc_display_name(*c, val);
 		}
@@ -82,7 +82,7 @@ namespace
 
 	char* get_npc_dialogue_id(aether::World* w, uint32_t id, das::Context* context)
 	{
-		auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
 
 		if (c)
 		{
@@ -95,7 +95,7 @@ namespace
 
 	void set_npc_dialogue_id(aether::World* w, uint32_t id, const char* val)
 	{
-		if (auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
 		{
 			assign_npc_dialogue_id(*c, val);
 		}
@@ -103,13 +103,13 @@ namespace
 
 	float get_npc_interaction_radius(aether::World* w, uint32_t id)
 	{
-		auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id});
 		return c ? c->interactionRadius : 0.0f;
 	}
 
 	void set_npc_interaction_radius(aether::World* w, uint32_t id, float val)
 	{
-		if (auto* c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::NpcComponent>(aether::Entity{id}))
 		{
 			c->interactionRadius = val;
 		}
@@ -119,13 +119,13 @@ namespace
 
 	float get_health_current(aether::World* w, uint32_t id)
 	{
-		auto* c = w->TryGet<aether::HealthComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::HealthComponent>(aether::Entity{id});
 		return c ? c->current : 0.0f;
 	}
 
 	void set_health_current(aether::World* w, uint32_t id, float val)
 	{
-		if (auto* c = w->TryGet<aether::HealthComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::HealthComponent>(aether::Entity{id}))
 		{
 			c->current = val;
 		}
@@ -133,13 +133,13 @@ namespace
 
 	float get_health_max(aether::World* w, uint32_t id)
 	{
-		auto* c = w->TryGet<aether::HealthComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::HealthComponent>(aether::Entity{id});
 		return c ? c->max : 0.0f;
 	}
 
 	void set_health_max(aether::World* w, uint32_t id, float val)
 	{
-		if (auto* c = w->TryGet<aether::HealthComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::HealthComponent>(aether::Entity{id}))
 		{
 			c->max = val;
 		}
@@ -149,7 +149,7 @@ namespace
 
 	char* get_dialogue_state_npc_id(aether::World* w, uint32_t id, das::Context* context)
 	{
-		auto* c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id});
 
 		if (c)
 		{
@@ -162,7 +162,7 @@ namespace
 
 	void set_dialogue_state_npc_id(aether::World* w, uint32_t id, const char* val)
 	{
-		if (auto* c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id}))
 		{
 			assign_dlg_npc_id(*c, val);
 		}
@@ -170,7 +170,7 @@ namespace
 
 	char* get_dialogue_state_current_node_id(aether::World* w, uint32_t id, das::Context* context)
 	{
-		auto* c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id});
 
 		if (c)
 		{
@@ -183,7 +183,7 @@ namespace
 
 	void set_dialogue_state_current_node_id(aether::World* w, uint32_t id, const char* val)
 	{
-		if (auto* c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::DialogueStateComponent>(aether::Entity{id}))
 		{
 			assign_dlg_current_node_id(*c, val);
 		}

@@ -55,7 +55,7 @@ namespace aether
 			return false; // staging full - retry next frame
 		}
 
-		auto* mapped = static_cast<std::uint8_t*>(m_stagingMapped);
+		auto mapped = static_cast<std::uint8_t*>(m_stagingMapped);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
 		m_pendingCopies.push_back({.srcBuffer = m_stagingBuffer, .srcOffset = m_ringHead, .dstBuffer = destVertexBuffer, .dstOffset = destVertexOffset, .size = vertexBytes});

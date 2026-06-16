@@ -172,17 +172,17 @@ namespace aether
 		return glm::vec3(m_skyVoidColor);
 	}
 
-	gpu::Format Renderer::GetColorFormat() const
+	gpu::Format Renderer::GetColorFormat()
 	{
 		return PostProcessStack::GetForwardColorFormat();
 	}
 
-	gpu::Format Renderer::GetDepthFormat() const
+	gpu::Format Renderer::GetDepthFormat()
 	{
 		return gpu::Format::D32Sfloat;
 	}
 
-	gpu::Extent2D Renderer::GetExtent() const
+	gpu::Extent2D Renderer::GetExtent()
 	{
 		return gpu::Extent2D{1280, 720};
 	}

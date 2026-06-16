@@ -23,7 +23,7 @@ namespace aether
 		void Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount);
 		void Shutdown(gpu::Device device);
 
-		void UpdateBlendWeights(World& world, float dt);
+		static void UpdateBlendWeights(World& world, float dt);
 
 		void PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t frameIndex);
 

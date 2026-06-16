@@ -71,7 +71,7 @@ namespace aether::app::scripting
 
 	{
 		// Insert VfsFileSystem at the front so it is tried first.
-		auto* vfs = new VfsFileSystem();
+		auto vfs = new VfsFileSystem();
 		addFileSystem(vfs, true, false);
 
 		// Introduce daslib modules (json, strings, etc.) from the daScript installation.

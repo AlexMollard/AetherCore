@@ -526,7 +526,7 @@ namespace aether
 		AddDebugLine(out, origin, origin + zAxis, glm::vec4(0.2f, 0.4f, 1.0f, 1.0f));
 	}
 
-	void PhysicsDebugRenderer::AppendSelfTestPattern(std::vector<DebugVertex>& out) const
+	void PhysicsDebugRenderer::AppendSelfTestPattern(std::vector<DebugVertex>& out)
 	{
 		// DIAGNOSTIC: a fullscreen NDC diamond. Pushed with the bypass flag
 		// (tint.w == 2.0). If this is visible the pipeline is alive and writes

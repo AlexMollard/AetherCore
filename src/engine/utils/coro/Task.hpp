@@ -251,7 +251,7 @@ namespace aether::coro
 
 		void set_value(T v) noexcept
 		{
-			auto* st = m_state.get();
+			auto st = m_state.get();
 			if constexpr (!std::is_void_v<T>)
 			{
 				st->value = std::move(v);
@@ -266,7 +266,7 @@ namespace aether::coro
 
 		void set_exception(const std::exception_ptr& e) noexcept
 		{
-			auto* st = m_state.get();
+			auto st = m_state.get();
 			st->error = std::move(e);
 			st->ready.store(true, std::memory_order_release);
 			auto c = std::exchange(st->continuation, nullptr);
@@ -321,7 +321,7 @@ namespace aether::coro
 
 			bool await_suspend(std::coroutine_handle<> awaiting) noexcept
 			{
-				auto* st = m_state.get();
+				auto st = m_state.get();
 				st->continuation = awaiting;
 
 				if (st->ready.load(std::memory_order_acquire))
@@ -339,7 +339,7 @@ namespace aether::coro
 				{
 					throw std::runtime_error("task::awaiter: no shared state");
 				}
-				auto* st = m_state.get();
+				auto st = m_state.get();
 				if (st->error)
 				{
 					std::rethrow_exception(st->error);
@@ -380,7 +380,7 @@ namespace aether::coro
 			{
 				throw std::runtime_error("task::wait: empty task");
 			}
-			auto* st = m_state.get();
+			auto st = m_state.get();
 			while (!st->ready.load(std::memory_order_acquire))
 			{
 				std::this_thread::yield();

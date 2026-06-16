@@ -234,10 +234,10 @@ namespace aether
 		[[nodiscard]] std::uint32_t AcquireBufferSlot();
 		[[nodiscard]] std::uint32_t AcquirePipelineSlot();
 
-		void RunDestroyersInRing(std::vector<PendingDestruction>& ring);
-		void DestroyTextureEntryNow(const TextureEntry& entry);
-		void DestroyBufferEntryNow(const BufferEntry& entry);
-		void DestroyPipelineEntryNow(const PipelineEntry& entry);
+		static void RunDestroyersInRing(std::vector<PendingDestruction>& ring);
+		static void DestroyTextureEntryNow(const TextureEntry& entry);
+		static void DestroyBufferEntryNow(const BufferEntry& entry);
+		static void DestroyPipelineEntryNow(const PipelineEntry& entry);
 
 		std::vector<TextureSlot> m_textures;
 		std::vector<BufferSlot> m_buffers;

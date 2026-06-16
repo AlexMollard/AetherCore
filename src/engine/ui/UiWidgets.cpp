@@ -67,17 +67,17 @@ namespace aether::ui
 	std::int32_t ComputeEffectiveLayer(aether::World& world, Entity entity, int subLayer)
 	{
 		Entity current = entity;
-		while (auto* parent = world.TryGet<UiParentComponent>(current))
+		while (auto parent = world.TryGet<UiParentComponent>(current))
 		{
 			current = parent->parent;
 		}
 		float rootZ = 0.f;
-		if (auto* rt = world.TryGet<UiTransformComponent>(current))
+		if (auto rt = world.TryGet<UiTransformComponent>(current))
 		{
 			rootZ = rt->zOrder;
 		}
 		float entityZ = 0.f;
-		if (auto* et = world.TryGet<UiTransformComponent>(entity))
+		if (auto et = world.TryGet<UiTransformComponent>(entity))
 		{
 			entityZ = et->zOrder;
 		}
@@ -91,9 +91,9 @@ namespace aether::ui
 
 	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* btn = world.TryGet<UiButtonComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto btn = world.TryGet<UiButtonComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !btn || !inp)
 		{
 			return false;
@@ -130,9 +130,9 @@ namespace aether::ui
 
 	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* slider = world.TryGet<UiSliderComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto slider = world.TryGet<UiSliderComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !slider || !inp)
 		{
 			return 0.f;
@@ -185,9 +185,9 @@ namespace aether::ui
 
 	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* cb = world.TryGet<UiCheckboxComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto cb = world.TryGet<UiCheckboxComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !cb || !inp)
 		{
 			return false;
@@ -237,8 +237,8 @@ namespace aether::ui
 
 	void DrawProgressBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* slider = world.TryGet<UiSliderComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto slider = world.TryGet<UiSliderComponent>(entity);
 		if (!t || !slider)
 		{
 			return;
@@ -264,9 +264,9 @@ namespace aether::ui
 
 	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* panel = world.TryGet<UiPanelComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto panel = world.TryGet<UiPanelComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !panel)
 		{
 			return true;
@@ -375,11 +375,11 @@ namespace aether::ui
 	// reachable through UiChildrenComponent.
 	static void RaiseSubtree(aether::World& world, Entity entity, float delta)
 	{
-		if (auto* t = world.TryGet<UiTransformComponent>(entity))
+		if (auto t = world.TryGet<UiTransformComponent>(entity))
 		{
 			t->zOrder += delta;
 		}
-		if (const auto* ch = world.TryGet<UiChildrenComponent>(entity))
+		if (const auto ch = world.TryGet<UiChildrenComponent>(entity))
 		{
 			for (const Entity child: ch->children)
 			{
@@ -391,7 +391,7 @@ namespace aether::ui
 	void BringToFront(aether::World& world, Entity entity)
 	{
 		Entity root = entity;
-		while (auto* parent = world.TryGet<UiParentComponent>(root))
+		while (auto parent = world.TryGet<UiParentComponent>(root))
 		{
 			root = parent->parent;
 		}
@@ -415,7 +415,7 @@ namespace aether::ui
 			maxZ *= 0.5f;
 		}
 
-		auto* t = world.TryGet<UiTransformComponent>(root);
+		auto t = world.TryGet<UiTransformComponent>(root);
 		if (!t || t->zOrder > maxZ)
 		{
 			return;
@@ -424,7 +424,7 @@ namespace aether::ui
 		const float delta = maxZ + 1.f - t->zOrder;
 		t->zOrder = maxZ + 1.f;
 
-		if (const auto* ch = world.TryGet<UiChildrenComponent>(root))
+		if (const auto ch = world.TryGet<UiChildrenComponent>(root))
 		{
 			for (const Entity child: ch->children)
 			{
@@ -437,9 +437,9 @@ namespace aether::ui
 
 	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
-		auto* layout = world.TryGet<UiLayoutComponent>(container);
-		auto* children = world.TryGet<UiChildrenComponent>(container);
-		auto* parent = world.TryGet<UiTransformComponent>(container);
+		auto layout = world.TryGet<UiLayoutComponent>(container);
+		auto children = world.TryGet<UiChildrenComponent>(container);
+		auto parent = world.TryGet<UiTransformComponent>(container);
 		if (!layout || !children || !parent)
 		{
 			return;
@@ -457,7 +457,7 @@ namespace aether::ui
 
 		for (const Entity child: children->children)
 		{
-			const auto* ct = world.TryGet<UiTransformComponent>(child);
+			const auto ct = world.TryGet<UiTransformComponent>(child);
 			if (!ct)
 			{
 				continue;
@@ -486,7 +486,7 @@ namespace aether::ui
 
 		for (const Entity child: children->children)
 		{
-			auto* ct = world.TryGet<UiTransformComponent>(child);
+			auto ct = world.TryGet<UiTransformComponent>(child);
 			if (!ct)
 			{
 				continue;
@@ -556,9 +556,9 @@ namespace aether::ui
 
 	void ApplyGridLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
-		auto* grid = world.TryGet<UiGridLayoutComponent>(container);
-		auto* children = world.TryGet<UiChildrenComponent>(container);
-		auto* parent = world.TryGet<UiTransformComponent>(container);
+		auto grid = world.TryGet<UiGridLayoutComponent>(container);
+		auto children = world.TryGet<UiChildrenComponent>(container);
+		auto parent = world.TryGet<UiTransformComponent>(container);
 		if (!grid || !children || !parent)
 		{
 			return;
@@ -573,7 +573,7 @@ namespace aether::ui
 		int i = 0;
 		for (const Entity child: children->children)
 		{
-			auto* ct = world.TryGet<UiTransformComponent>(child);
+			auto ct = world.TryGet<UiTransformComponent>(child);
 			if (!ct)
 			{
 				++i;
@@ -679,9 +679,9 @@ namespace aether::ui
 
 	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* ti = world.TryGet<UiTextInputComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto ti = world.TryGet<UiTextInputComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !ti || !inp)
 		{
 			return false;
@@ -744,13 +744,13 @@ namespace aether::ui
 
 	void AddChild(aether::World& world, Entity parent, Entity child)
 	{
-		auto* children = world.TryGet<UiChildrenComponent>(parent);
+		auto children = world.TryGet<UiChildrenComponent>(parent);
 		children->children.push_back(child);
 		world.EmplaceOrReplace<UiParentComponent>(child, UiParentComponent{parent});
 
-		if (auto* parentTransform = world.TryGet<UiTransformComponent>(parent))
+		if (auto parentTransform = world.TryGet<UiTransformComponent>(parent))
 		{
-			if (auto* childTransform = world.TryGet<UiTransformComponent>(child))
+			if (auto childTransform = world.TryGet<UiTransformComponent>(child))
 			{
 				const float parentZ = parentTransform->zOrder;
 				const float offset = 0.01f * static_cast<float>(children->children.size());
@@ -763,9 +763,9 @@ namespace aether::ui
 
 	bool DrawItemSlot(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* slot = world.TryGet<UiItemSlotComponent>(entity);
-		auto* inp = world.TryGet<UiInputComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto slot = world.TryGet<UiItemSlotComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
 		if (!t || !slot || !inp)
 		{
 			return false;
@@ -882,8 +882,8 @@ namespace aether::ui
 
 	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* row = world.TryGet<UiLabelRowComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto row = world.TryGet<UiLabelRowComponent>(entity);
 		if (!t || !row)
 		{
 			return;
@@ -914,7 +914,7 @@ namespace aether::ui
 
 	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
 		if (!t)
 		{
 			return;
@@ -939,9 +939,9 @@ namespace aether::ui
 
 	void DrawTabBar(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* tabComp = world.TryGet<UiTabComponent>(entity);
-		auto* transform = world.TryGet<UiTransformComponent>(entity);
-		auto* children = world.TryGet<UiChildrenComponent>(entity);
+		auto tabComp = world.TryGet<UiTabComponent>(entity);
+		auto transform = world.TryGet<UiTransformComponent>(entity);
+		auto children = world.TryGet<UiChildrenComponent>(entity);
 		if (!tabComp || !transform || !children)
 		{
 			return;
@@ -965,9 +965,9 @@ namespace aether::ui
 		for (std::size_t i = 0; i < tabCount; ++i)
 		{
 			Entity btnEntity = children->children[i];
-			auto* btnT = world.TryGet<UiTransformComponent>(btnEntity);
-			auto* btnComp = world.TryGet<UiButtonComponent>(btnEntity);
-			auto* btnInp = world.TryGet<UiInputComponent>(btnEntity);
+			auto btnT = world.TryGet<UiTransformComponent>(btnEntity);
+			auto btnComp = world.TryGet<UiButtonComponent>(btnEntity);
+			auto btnInp = world.TryGet<UiInputComponent>(btnEntity);
 			if (!btnT)
 			{
 				continue;
@@ -1054,8 +1054,8 @@ namespace aether::ui
 
 	void DrawGraph(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
-		auto* t = world.TryGet<UiTransformComponent>(entity);
-		auto* graph = world.TryGet<UiGraphComponent>(entity);
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto graph = world.TryGet<UiGraphComponent>(entity);
 		if (!t || !graph)
 		{
 			return;

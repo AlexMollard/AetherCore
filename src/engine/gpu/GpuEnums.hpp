@@ -213,6 +213,10 @@ namespace aether::gpu
 		Storage = 1u << 3,
 		ColorAttachment = 1u << 4,
 		DepthStencilAttachment = 1u << 5,
+		// Required for vkCopyMemoryToImage / vkTransitionImageLayout
+		// (Vulkan 1.4 host image copy). Opt-in at the call site that intends
+		// to do a host-side upload via those entry points.
+		HostTransfer = 1u << 6,
 	};
 
 	// Image aspect flags. Mirrors VkImageAspectFlags. Bitwise-OR-able.

@@ -201,7 +201,7 @@ namespace aether
 		const gpu::TextureDesc atlasDesc{
 		        .format = gpu::Format::R8Unorm,
 		        .extent = {atlasW, atlasH},
-		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled,
+		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 		        .aspect = gpu::ImageAspect::Color,
 		        .r = gpu::ComponentSwizzle::R,
 		        .g = gpu::ComponentSwizzle::Zero,

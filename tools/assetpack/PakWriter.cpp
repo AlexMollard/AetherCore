@@ -136,7 +136,7 @@ bool PakWriter::Write(const fs::path& outPath) const
 
 	auto PushPathString = [&](std::string_view s)
 	{
-		const auto* p = reinterpret_cast<const std::byte*>(s.data());
+		const auto p = reinterpret_cast<const std::byte*>(s.data());
 		pathData.insert(pathData.end(), p, p + s.size());
 		pathData.push_back(std::byte{0});
 	};

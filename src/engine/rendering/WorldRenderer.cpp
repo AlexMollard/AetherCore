@@ -46,7 +46,7 @@ namespace aether
 			}
 
 			std::uint32_t materialIndex = Material::kNoTexture;
-			if (const auto* material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
+			if (const auto material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
 			{
 				materialIndex = material->material.materialSlot;
 			}
@@ -56,7 +56,7 @@ namespace aether
 			std::uint32_t animClipIndex = 0;
 			float animTime = 0.f;
 			const AnimationDatabase* animDb = nullptr;
-			if (const auto* smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
+			if (const auto smc = world.GetRegistry().try_get<SkinnedMeshComponent>(enttEntity))
 			{
 				if (smc->animDb && smc->animDb->IsAlive() && smc->animDb->IsValid())
 				{

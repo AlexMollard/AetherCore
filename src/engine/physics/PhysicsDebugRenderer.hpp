@@ -123,7 +123,7 @@ namespace aether
 
 		// Append a self-test pattern (axis gizmo at origin + 1m world AABB + camera frustum)
 		// to `out`. Used to verify the pipeline end-to-end.
-		void AppendSelfTestPattern(std::vector<DebugVertex>& out) const;
+		static void AppendSelfTestPattern(std::vector<DebugVertex>& out);
 
 		bool m_enabled = false;
 		bool m_selfTestEnabled = true; // on by default to surface the pipeline immediately

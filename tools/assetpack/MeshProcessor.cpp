@@ -54,7 +54,7 @@ namespace MeshProcessor
 		std::string StripBonePrefix(const std::string& name)
 		{
 			static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
-			for (const auto* prefix: kPrefixes)
+			for (const auto prefix: kPrefixes)
 			{
 				const std::size_t plen = std::strlen(prefix);
 				if (name.size() > plen && name.compare(0, plen, prefix) == 0)
@@ -553,7 +553,7 @@ namespace MeshProcessor
 			std::vector<std::byte> matData;
 			auto append = [&](const void* p, std::size_t n)
 			{
-				const auto* bytes = reinterpret_cast<const std::byte*>(p);
+				const auto bytes = reinterpret_cast<const std::byte*>(p);
 				matData.insert(matData.end(), bytes, bytes + n);
 			};
 

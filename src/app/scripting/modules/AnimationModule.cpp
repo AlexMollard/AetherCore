@@ -26,11 +26,11 @@ namespace
 	const aether::SkinnedMeshComponent* FindSmcOrSpawned(const aether::World* w, uint32_t id)
 	{
 		const aether::Entity e{id};
-		if (const auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
+		if (const auto smc = w->TryGet<aether::SkinnedMeshComponent>(e))
 		{
 			return smc;
 		}
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
+		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
 		if (sec && !sec->entityIds.empty())
 		{
 			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{sec->entityIds.front()});
@@ -41,11 +41,11 @@ namespace
 	aether::SkinnedMeshComponent* FindSmcOrSpawned(aether::World* w, uint32_t id)
 	{
 		const aether::Entity e{id};
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(e))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(e))
 		{
 			return smc;
 		}
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
+		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
 		if (sec && !sec->entityIds.empty())
 		{
 			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{sec->entityIds.front()});
@@ -55,14 +55,14 @@ namespace
 
 	void ForEachSpawnedSmc(aether::World* w, uint32_t id, auto&& f)
 	{
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (!sec)
 		{
 			return;
 		}
 		for (const auto eid: sec->entityIds)
 		{
-			if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
+			if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
 			{
 				f(*smc);
 			}
@@ -74,7 +74,7 @@ namespace
 	static std::string StripBonePrefix(std::string name)
 	{
 		static constexpr const char* kPrefixes[] = {"mixamorig:", "mixamorig_", "Armature_"};
-		for (const auto* prefix: kPrefixes)
+		for (const auto prefix: kPrefixes)
 		{
 			const std::size_t plen = std::strlen(prefix);
 			if (name.size() > plen && name.substr(0, plen) == prefix)
@@ -132,7 +132,7 @@ namespace
 			// also register "mixamorig:Hips" and "Armature_Hips".
 			if (!stripped.empty())
 			{
-				for (const auto* altPrefix: kAltPrefixes)
+				for (const auto altPrefix: kAltPrefixes)
 				{
 					std::string alt = altPrefix + stripped;
 					if (alt != nodeName)
@@ -221,7 +221,7 @@ namespace
 	// during compilation (prevents root motion like walking in place).
 	int32_t das_add_animation(aether::World* w, uint32_t id, const char* animPath, bool lockRoot)
 	{
-		auto* smc = FindSmcOrSpawned(w, id);
+		auto smc = FindSmcOrSpawned(w, id);
 		if (!smc)
 		{
 			AE_WARN(aether::LogCategory::Animation, "add_animation: entity {} has no SkinnedMeshComponent", id);
@@ -404,7 +404,7 @@ namespace
 		{
 			smc.pendingExternalAnims.clear();
 		};
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			clearFn(*smc);
 		}
@@ -425,7 +425,7 @@ namespace
 			smc.clipIndex = uIdx;
 			smc.animTime = 0.f;
 		};
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			setClip(*smc);
 		}
@@ -434,13 +434,13 @@ namespace
 
 	int32_t das_get_current_animation(aether::World* w, uint32_t id)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		return smc ? static_cast<int32_t>(smc->clipIndex) : -1;
 	}
 
 	void das_set_playback_speed(aether::World* w, uint32_t id, float speed)
 	{
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			smc->playbackSpeed = speed;
 		}
@@ -449,13 +449,13 @@ namespace
 
 	float das_get_playback_speed(aether::World* w, uint32_t id)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		return smc ? smc->playbackSpeed : 0.f;
 	}
 
 	void das_set_anim_time(aether::World* w, uint32_t id, float t)
 	{
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 		{
 			smc->animTime = t;
 		}
@@ -464,7 +464,7 @@ namespace
 
 	float das_get_anim_time(aether::World* w, uint32_t id)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		return smc ? smc->animTime : 0.f;
 	}
 
@@ -472,7 +472,7 @@ namespace
 
 	int32_t das_get_animation_count(aether::World* w, uint32_t id)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		if (!smc)
 		{
 			return 0;
@@ -483,7 +483,7 @@ namespace
 
 	const char* das_get_animation_name(aether::World* w, uint32_t id, int32_t index)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		if (!smc || index < 0)
 		{
 			return nullptr;
@@ -505,7 +505,7 @@ namespace
 
 	float das_get_animation_duration(aether::World* w, uint32_t id)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		if (!smc)
 		{
 			return 0.f;
@@ -535,7 +535,7 @@ namespace
 
 	int32_t das_find_animation(aether::World* w, uint32_t id, const char* name)
 	{
-		const auto* smc = FindSmcOrSpawned(w, id);
+		const auto smc = FindSmcOrSpawned(w, id);
 		if (!smc || !name)
 		{
 			return -1;
@@ -584,7 +584,7 @@ namespace
 		float speed = transitionSpeed > 0.f ? transitionSpeed : 4.0f;
 
 		const aether::Entity entity{id};
-		if (auto* smc = w->TryGet<aether::SkinnedMeshComponent>(entity))
+		if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(entity))
 		{
 			auto& blend = w->GetRegistry().get_or_emplace<aether::AnimationBlendComponent>(aether::World::ToEntt(entity));
 			blend.secondaryClip = uIdx;
@@ -610,7 +610,7 @@ namespace
 	void das_set_ik_enabled(aether::World* w, uint32_t id, bool enabled)
 	{
 		const aether::Entity entity{id};
-		if (auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity))
+		if (auto ikComp = w->TryGet<aether::IkTargetsComponent>(entity))
 		{
 			ikComp->enabled = enabled;
 		}
@@ -618,7 +618,7 @@ namespace
 		        id,
 		        [&](aether::SkinnedMeshComponent&)
 		        {
-			        if (auto* comp = w->TryGet<aether::IkTargetsComponent>(aether::Entity{id}))
+			        if (auto comp = w->TryGet<aether::IkTargetsComponent>(aether::Entity{id}))
 			        {
 				        comp->enabled = enabled;
 			        }
@@ -628,7 +628,7 @@ namespace
 	bool das_get_foot_contact(aether::World* w, uint32_t id, int32_t footIndex)
 	{
 		const aether::Entity entity{id};
-		const auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
+		const auto ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
 		if (!ikComp)
 		{
 			return false;
@@ -639,7 +639,7 @@ namespace
 	float das_get_foot_offset_y(aether::World* w, uint32_t id, int32_t footIndex)
 	{
 		const aether::Entity entity{id};
-		const auto* ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
+		const auto ikComp = w->TryGet<aether::IkTargetsComponent>(entity);
 		if (!ikComp)
 		{
 			return 0.f;
@@ -655,7 +655,7 @@ namespace
 		{
 			return;
 		}
-		auto* smc = FindSmcOrSpawned(w, id);
+		auto smc = FindSmcOrSpawned(w, id);
 		if (!smc || !smc->animDb)
 		{
 			return;
@@ -668,7 +668,7 @@ namespace
 	void das_set_root_motion_enabled(aether::World* w, uint32_t id, bool enabled)
 	{
 		const aether::Entity entity{id};
-		if (auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity))
+		if (auto rmComp = w->TryGet<aether::RootMotionComponent>(entity))
 		{
 			rmComp->enabled = enabled;
 		}
@@ -676,7 +676,7 @@ namespace
 		        id,
 		        [&](aether::SkinnedMeshComponent&)
 		        {
-			        if (auto* comp = w->TryGet<aether::RootMotionComponent>(aether::Entity{id}))
+			        if (auto comp = w->TryGet<aether::RootMotionComponent>(aether::Entity{id}))
 			        {
 				        comp->enabled = enabled;
 			        }
@@ -686,14 +686,14 @@ namespace
 	bool das_get_root_motion_enabled(aether::World* w, uint32_t id)
 	{
 		const aether::Entity entity{id};
-		const auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity);
+		const auto rmComp = w->TryGet<aether::RootMotionComponent>(entity);
 		return rmComp ? rmComp->enabled : false;
 	}
 
 	void das_get_root_motion_delta(aether::World* w, uint32_t id, float& outX, float& outY, float& outZ)
 	{
 		const aether::Entity entity{id};
-		const auto* rmComp = w->TryGet<aether::RootMotionComponent>(entity);
+		const auto rmComp = w->TryGet<aether::RootMotionComponent>(entity);
 		if (rmComp)
 		{
 			outX = rmComp->accumulatedDelta.x;

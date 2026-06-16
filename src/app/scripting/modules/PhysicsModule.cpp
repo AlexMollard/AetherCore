@@ -18,7 +18,7 @@ namespace
 		{
 			return;
 		}
-		const auto* rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
+		const auto rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
 		if (!rb)
 		{
 			return;
@@ -34,7 +34,7 @@ namespace
 		{
 			return r;
 		}
-		const auto* rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
+		const auto rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
 		if (!rb)
 		{
 			return r;
@@ -79,7 +79,7 @@ namespace
 	das::float3 das_get_physics_position(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
+		const auto ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 		if (!ps)
 		{
 			return r;
@@ -95,7 +95,7 @@ namespace
 	{
 		das::float3 r{};
 		r.x = r.y = r.z = 1.0f;
-		const auto* ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
+		const auto ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
 		if (!ps)
 		{
 			return r;

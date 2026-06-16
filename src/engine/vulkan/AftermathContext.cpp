@@ -239,7 +239,7 @@ namespace aether
 	void GFSDK_AFTERMATH_CALL AftermathContext::OnCrashDump(const void* pGpuCrashDump, std::uint32_t gpuCrashDumpSize, void* pUserData)
 	{
 		AE_ERROR(LogCategory::Vulkan, "NVIDIA Aftermath: GPU crash dump received ({} bytes)", gpuCrashDumpSize);
-		auto* self = static_cast<AftermathContext*>(pUserData);
+		auto self = static_cast<AftermathContext*>(pUserData);
 		WriteCrashDumpToDisk(self->m_crashDumpDir, pGpuCrashDump, gpuCrashDumpSize);
 	}
 
@@ -248,7 +248,7 @@ namespace aether
 		AE_INFO(LogCategory::Vulkan, "NVIDIA Aftermath: shader debug info received ({} bytes)", shaderDebugInfoSize);
 		if (pShaderDebugInfo && shaderDebugInfoSize > 0)
 		{
-			auto* self = static_cast<AftermathContext*>(pUserData);
+			auto self = static_cast<AftermathContext*>(pUserData);
 			std::filesystem::path baseDir = self->m_crashDumpDir.empty() ? std::filesystem::current_path() / "gpu_crash_dumps" : std::filesystem::path(self->m_crashDumpDir);
 			WriteShaderDebugInfoToDisk(baseDir, pShaderDebugInfo, shaderDebugInfoSize);
 		}

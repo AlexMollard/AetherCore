@@ -153,12 +153,12 @@ namespace aether
 			std::size_t m_passIndex;
 		};
 
-		[[nodiscard]] RGImage GetSwapchainColor() const
+		[[nodiscard]] static RGImage GetSwapchainColor()
 		{
 			return RGImage{kSwapchainColorId};
 		}
 
-		[[nodiscard]] RGImage GetSwapchainDepth() const
+		[[nodiscard]] static RGImage GetSwapchainDepth()
 		{
 			return RGImage{kSwapchainDepthId};
 		}
@@ -410,22 +410,22 @@ namespace aether
 		[[nodiscard]] std::vector<BarrierIssue> EvaluateBarriers() const;
 #endif
 
-		[[nodiscard]] bool IsTransientId(uint32_t resourceId) const
+		[[nodiscard]] static bool IsTransientId(uint32_t resourceId)
 		{
 			return resourceId >= kFirstTransientId;
 		}
 
-		[[nodiscard]] uint32_t ExternalIndex(uint32_t resourceId) const
+		[[nodiscard]] static uint32_t ExternalIndex(uint32_t resourceId)
 		{
 			return resourceId - kFirstExternalId;
 		}
 
-		[[nodiscard]] uint32_t ExternalBufferIndex(uint32_t resourceId) const
+		[[nodiscard]] static uint32_t ExternalBufferIndex(uint32_t resourceId)
 		{
 			return resourceId - kFirstExternalBufferId;
 		}
 
-		[[nodiscard]] uint32_t TransientIndex(uint32_t resourceId) const
+		[[nodiscard]] static uint32_t TransientIndex(uint32_t resourceId)
 		{
 			return resourceId - kFirstTransientId;
 		}

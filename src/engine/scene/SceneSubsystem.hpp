@@ -14,7 +14,7 @@ namespace aether
 	class SceneSubsystem
 	{
 	public:
-		void Init();
+		static void Init();
 
 		void Shutdown()
 		{

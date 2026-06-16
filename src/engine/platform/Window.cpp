@@ -53,7 +53,7 @@ namespace aether
 		return glfwWindowShouldClose(m_window);
 	}
 
-	void Window::PollEvents() const
+	void Window::PollEvents()
 	{
 		AE_PROFILE_ZONE();
 		glfwPollEvents();

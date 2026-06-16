@@ -178,7 +178,7 @@ namespace
 
 	void das_set_ui_rect(aether::World* w, uint32_t id, float anchorMinX, float anchorMinY, float anchorMaxX, float anchorMaxY, float offsetMinX, float offsetMinY, float offsetMaxX, float offsetMaxY)
 	{
-		auto* c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id});
+		auto c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id});
 		if (!c)
 		{
 			return;
@@ -191,7 +191,7 @@ namespace
 
 	void das_set_ui_z_order(aether::World* w, uint32_t id, float z)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id}))
 		{
 			c->zOrder = z;
 		}
@@ -199,7 +199,7 @@ namespace
 
 	void das_set_ui_flex_grow(aether::World* w, uint32_t id, float flex)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTransformComponent>(aether::Entity{id}))
 		{
 			c->flexGrow = flex;
 		}
@@ -209,7 +209,7 @@ namespace
 
 	void das_set_ui_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
 		{
 			c->backgroundColor = ToGlm(color);
 		}
@@ -217,13 +217,13 @@ namespace
 
 	das::float4 das_get_ui_color(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id});
 		return c ? ToDas(c->backgroundColor) : das::float4{};
 	}
 
 	void das_set_ui_border_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
 		{
 			c->borderColor = ToGlm(color);
 		}
@@ -231,7 +231,7 @@ namespace
 
 	void das_set_ui_corner_radius(aether::World* w, uint32_t id, float radius)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
 		{
 			c->cornerRadius = radius;
 		}
@@ -239,7 +239,7 @@ namespace
 
 	void das_set_ui_border_width(aether::World* w, uint32_t id, float width)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
 		{
 			c->borderWidth = width;
 		}
@@ -247,7 +247,7 @@ namespace
 
 	void das_set_ui_visible(aether::World* w, uint32_t id, bool visible)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id}))
 		{
 			c->visible = visible;
 		}
@@ -255,7 +255,7 @@ namespace
 
 	bool das_get_ui_visible(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiRenderComponent>(aether::Entity{id});
 		return c && c->visible;
 	}
 
@@ -263,7 +263,7 @@ namespace
 
 	void das_set_ui_text(aether::World* w, uint32_t id, const char* text)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
 		{
 			c->text = text ? text : "";
 		}
@@ -271,13 +271,13 @@ namespace
 
 	const char* das_get_ui_text(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id});
 		return c ? c->text.c_str() : "";
 	}
 
 	void das_set_ui_font_size(aether::World* w, uint32_t id, float size)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
 		{
 			c->fontSize = size;
 		}
@@ -285,7 +285,7 @@ namespace
 
 	void das_set_ui_text_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTextComponent>(aether::Entity{id}))
 		{
 			c->color = ToGlm(color);
 		}
@@ -295,37 +295,37 @@ namespace
 
 	bool das_get_ui_hovered(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c && c->hovered;
 	}
 
 	bool das_get_ui_pressed(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c && c->pressed;
 	}
 
 	bool das_get_ui_clicked(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c && c->clicked;
 	}
 
 	bool das_get_ui_focused(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c && c->focused;
 	}
 
 	float das_get_ui_hover_t(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c ? c->hoverT : 0.f;
 	}
 
 	float das_get_ui_press_t(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiInputComponent>(aether::Entity{id});
 		return c ? c->pressT : 0.f;
 	}
 
@@ -333,7 +333,7 @@ namespace
 
 	void das_set_ui_panel_title(aether::World* w, uint32_t id, const char* title)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
 		{
 			c->title = title ? title : "";
 		}
@@ -341,13 +341,13 @@ namespace
 
 	const char* das_get_ui_panel_title(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id});
 		return c ? c->title.c_str() : "";
 	}
 
 	void das_set_ui_panel_draggable(aether::World* w, uint32_t id, bool draggable)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
 		{
 			c->draggable = draggable;
 		}
@@ -355,13 +355,13 @@ namespace
 
 	bool das_get_ui_panel_collapsed(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id});
 		return c && c->collapsed;
 	}
 
 	void das_set_ui_panel_collapsible(aether::World* w, uint32_t id, bool collapsible)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiPanelComponent>(aether::Entity{id}))
 		{
 			c->collapsible = collapsible;
 		}
@@ -371,7 +371,7 @@ namespace
 
 	void das_set_ui_button_label(aether::World* w, uint32_t id, const char* label)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
 		{
 			c->label = label ? label : "";
 		}
@@ -379,13 +379,13 @@ namespace
 
 	const char* das_get_ui_button_label(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id});
 		return c ? c->label.c_str() : "";
 	}
 
 	void das_set_ui_button_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
 		{
 			c->normalColor = ToGlm(color);
 		}
@@ -393,7 +393,7 @@ namespace
 
 	void das_set_ui_button_hover_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
 		{
 			c->hoverColor = ToGlm(color);
 		}
@@ -401,7 +401,7 @@ namespace
 
 	void das_set_ui_button_press_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
 		{
 			c->pressColor = ToGlm(color);
 		}
@@ -409,7 +409,7 @@ namespace
 
 	void das_set_ui_button_text_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiButtonComponent>(aether::Entity{id}))
 		{
 			c->textColor = ToGlm(color);
 		}
@@ -419,13 +419,13 @@ namespace
 
 	float das_get_ui_slider_value(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
 		return c ? c->value : 0.f;
 	}
 
 	void das_set_ui_slider_value(aether::World* w, uint32_t id, float value)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id}))
 		{
 			c->value = value;
 		}
@@ -433,7 +433,7 @@ namespace
 
 	void das_set_ui_slider_range(aether::World* w, uint32_t id, float min, float max)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id}))
 		{
 			c->min = min;
 			c->max = max;
@@ -442,7 +442,7 @@ namespace
 
 	bool das_get_ui_slider_dragging(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
 		return c && c->isDragging;
 	}
 
@@ -450,13 +450,13 @@ namespace
 
 	bool das_get_ui_checked(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id});
 		return c && c->checked;
 	}
 
 	void das_set_ui_checked(aether::World* w, uint32_t id, bool checked)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id}))
 		{
 			c->checked = checked;
 		}
@@ -464,7 +464,7 @@ namespace
 
 	void das_set_ui_checkbox_label(aether::World* w, uint32_t id, const char* label)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id}))
 		{
 			c->label = label ? label : "";
 		}
@@ -472,7 +472,7 @@ namespace
 
 	const char* das_get_ui_checkbox_label(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiCheckboxComponent>(aether::Entity{id});
 		return c ? c->label.c_str() : "";
 	}
 
@@ -480,7 +480,7 @@ namespace
 
 	void das_set_ui_image_slot(aether::World* w, uint32_t id, uint32_t slot)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
 		{
 			c->textureSlot = slot;
 		}
@@ -488,7 +488,7 @@ namespace
 
 	void das_set_ui_image_tint(aether::World* w, uint32_t id, das::float4 tint)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
 		{
 			c->tint = ToGlm(tint);
 		}
@@ -496,7 +496,7 @@ namespace
 
 	void das_set_ui_image_uv(aether::World* w, uint32_t id, float u0, float v0, float u1, float v1)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiImageComponent>(aether::Entity{id}))
 		{
 			c->uvRect = {u0, v0, u1, v1};
 		}
@@ -506,7 +506,7 @@ namespace
 
 	void das_set_ui_layout_vertical(aether::World* w, uint32_t id)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
 		{
 			c->direction = aether::ui::UiLayoutComponent::Direction::Vertical;
 		}
@@ -514,7 +514,7 @@ namespace
 
 	void das_set_ui_layout_horizontal(aether::World* w, uint32_t id)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
 		{
 			c->direction = aether::ui::UiLayoutComponent::Direction::Horizontal;
 		}
@@ -522,7 +522,7 @@ namespace
 
 	void das_set_ui_layout_spacing(aether::World* w, uint32_t id, float spacing)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
 		{
 			c->spacing = spacing;
 		}
@@ -530,7 +530,7 @@ namespace
 
 	void das_set_ui_layout_padding(aether::World* w, uint32_t id, float padding)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
 		{
 			c->padding = padding;
 		}
@@ -538,7 +538,7 @@ namespace
 
 	void das_set_ui_auto_size(aether::World* w, uint32_t id, bool autoSize)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiLayoutComponent>(aether::Entity{id}))
 		{
 			c->autoSize = autoSize;
 		}
@@ -548,13 +548,13 @@ namespace
 
 	const char* das_get_ui_input_text(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
 		return c ? c->text.c_str() : "";
 	}
 
 	void das_set_ui_input_text(aether::World* w, uint32_t id, const char* text)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id}))
 		{
 			c->text = text ? text : "";
 			c->cursorPos = static_cast<int>(c->text.size());
@@ -563,13 +563,13 @@ namespace
 
 	const char* das_get_ui_input_placeholder(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
 		return c ? c->placeholder.c_str() : "";
 	}
 
 	void das_set_ui_input_placeholder(aether::World* w, uint32_t id, const char* text)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id}))
 		{
 			c->placeholder = text ? text : "";
 		}
@@ -577,7 +577,7 @@ namespace
 
 	bool das_get_ui_input_submitted(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiTextInputComponent>(aether::Entity{id});
 		return c && c->submitted;
 	}
 
@@ -585,7 +585,7 @@ namespace
 
 	void das_set_ui_grid_columns(aether::World* w, uint32_t id, int columns)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
 		{
 			c->columns = columns;
 		}
@@ -593,7 +593,7 @@ namespace
 
 	void das_set_ui_grid_slot_size(aether::World* w, uint32_t id, float size)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
 		{
 			c->slotSize = size;
 		}
@@ -601,7 +601,7 @@ namespace
 
 	void das_set_ui_grid_spacing(aether::World* w, uint32_t id, float spacing)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiGridLayoutComponent>(aether::Entity{id}))
 		{
 			c->spacing = spacing;
 		}
@@ -611,7 +611,7 @@ namespace
 
 	void das_set_ui_item_slot(aether::World* w, uint32_t id, uint32_t textureSlot, int quantity)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id}))
 		{
 			c->textureSlot = textureSlot;
 			c->quantity = quantity;
@@ -620,19 +620,19 @@ namespace
 
 	int das_get_ui_item_quantity(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id});
 		return c ? c->quantity : 0;
 	}
 
 	bool das_get_ui_item_selected(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id});
 		return c && c->selected;
 	}
 
 	void das_set_ui_item_rarity_color(aether::World* w, uint32_t id, das::float4 color)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiItemSlotComponent>(aether::Entity{id}))
 		{
 			c->rarityColor = ToGlm(color);
 		}
@@ -642,13 +642,13 @@ namespace
 
 	uint32_t das_get_ui_parent(aether::World* w, uint32_t id)
 	{
-		const auto* c = w->TryGet<aether::ui::UiParentComponent>(aether::Entity{id});
+		const auto c = w->TryGet<aether::ui::UiParentComponent>(aether::Entity{id});
 		return c ? c->parent.id : 0u;
 	}
 
 	void das_set_ui_parent(aether::World* w, uint32_t id, uint32_t parentId)
 	{
-		if (auto* c = w->TryGet<aether::ui::UiParentComponent>(aether::Entity{id}))
+		if (auto c = w->TryGet<aether::ui::UiParentComponent>(aether::Entity{id}))
 		{
 			c->parent = aether::Entity{parentId};
 		}

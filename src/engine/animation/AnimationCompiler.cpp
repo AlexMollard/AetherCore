@@ -31,7 +31,7 @@ namespace aether
 			return;
 		}
 
-		const auto* sec = world.TryGet<SpawnedEntitiesComponent>(Entity{entityId});
+		const auto sec = world.TryGet<SpawnedEntitiesComponent>(Entity{entityId});
 
 		auto compileOne = [](SkinnedMeshComponent& smc)
 		{
@@ -155,7 +155,7 @@ namespace aether
 			smc.pendingExternalAnims.clear();
 		};
 
-		if (auto* smc = world.TryGet<SkinnedMeshComponent>(Entity{entityId}))
+		if (auto smc = world.TryGet<SkinnedMeshComponent>(Entity{entityId}))
 		{
 			compileOne(*smc);
 		}
@@ -164,7 +164,7 @@ namespace aether
 		{
 			for (const auto eid: sec->entityIds)
 			{
-				if (auto* smc = world.TryGet<SkinnedMeshComponent>(Entity{eid}))
+				if (auto smc = world.TryGet<SkinnedMeshComponent>(Entity{eid}))
 				{
 					compileOne(*smc);
 				}

@@ -76,13 +76,13 @@ inline std::string FormatTimestamp()
 template<typename T>
 inline void Append(std::vector<std::byte>& buf, const T& value)
 {
-	const auto* p = reinterpret_cast<const std::byte*>(&value);
+	const auto p = reinterpret_cast<const std::byte*>(&value);
 	buf.insert(buf.end(), p, p + sizeof(T));
 }
 
 inline void AppendBytes(std::vector<std::byte>& buf, const void* src, std::size_t n)
 {
-	const auto* p = reinterpret_cast<const std::byte*>(src);
+	const auto p = reinterpret_cast<const std::byte*>(src);
 	buf.insert(buf.end(), p, p + n);
 }
 

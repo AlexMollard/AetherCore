@@ -42,7 +42,7 @@ namespace
 
 	void das_set_camera_mode(uint32_t id, int mode)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (cam)
 		{
 			cam->SetMode(static_cast<aether::CameraMode>(mode));
@@ -51,7 +51,7 @@ namespace
 
 	void das_set_camera_position(uint32_t id, float x, float y, float z)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (cam)
 		{
 			cam->SetPosition({x, y, z});
@@ -60,7 +60,7 @@ namespace
 
 	void das_set_camera_yaw_pitch(uint32_t id, float yaw, float pitch)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (cam)
 		{
 			cam->SetYawPitch(yaw, pitch);
@@ -69,7 +69,7 @@ namespace
 
 	void das_set_camera_target(uint32_t id, float x, float y, float z)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (cam)
 		{
 			cam->SetOrbitTarget({x, y, z});
@@ -78,7 +78,7 @@ namespace
 
 	void das_set_camera_orbital(uint32_t id, float yaw, float pitch, float dist)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (cam)
 		{
 			cam->SetOrbitYawPitch(yaw, pitch);
@@ -88,14 +88,14 @@ namespace
 
 	float das_get_camera_yaw(uint32_t id)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		return cam ? cam->GetOrbitYaw() : 0.0f;
 	}
 
 	// get_camera_forward(id) -> float3
 	das::float3 das_get_camera_forward(uint32_t id)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (!cam)
 		{
 			return {0.0f, 0.0f, -1.0f};
@@ -107,7 +107,7 @@ namespace
 	// get_camera_right(id) -> float3
 	das::float3 das_get_camera_right(uint32_t id)
 	{
-		auto* cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
+		auto cam = ActiveContext().cameras->TryGet(aether::CameraHandle{id});
 		if (!cam)
 		{
 			return {1.0f, 0.0f, 0.0f};

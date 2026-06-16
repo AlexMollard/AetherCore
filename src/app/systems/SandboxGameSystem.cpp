@@ -69,7 +69,7 @@ namespace aether::app
 		{
 			return {};
 		}
-		const auto* smc = m_world->TryGet<aether::SkinnedMeshComponent>(m_foxInstances[0][0]);
+		const auto smc = m_world->TryGet<aether::SkinnedMeshComponent>(m_foxInstances[0][0]);
 		if (!smc)
 		{
 			return {};
@@ -269,7 +269,7 @@ namespace aether::app
 					const float phase = runDur > 0.f ? phaseDist(m_rng) : 0.f;
 					for (const aether::Entity e: instances)
 					{
-						if (auto* smc = world->TryGet<aether::SkinnedMeshComponent>(e))
+						if (auto smc = world->TryGet<aether::SkinnedMeshComponent>(e))
 						{
 							smc->clipIndex = kAnimRun;
 							smc->playbackSpeed = kFoxAnimRunSpeed;
@@ -496,7 +496,7 @@ namespace aether::app
 				const float speed = m_foxAgents[fi].idle ? 1.0f : kFoxAnimRunSpeed;
 				for (const aether::Entity e: m_foxInstances[fi])
 				{
-					if (auto* smc = world.TryGet<aether::SkinnedMeshComponent>(e))
+					if (auto smc = world.TryGet<aether::SkinnedMeshComponent>(e))
 					{
 						if (smc->clipIndex != desired)
 						{

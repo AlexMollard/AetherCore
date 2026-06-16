@@ -176,7 +176,7 @@ namespace aether
 		        {
 			        m_rendering->RecreateSwapchainResources(m_services);
 			        m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
-			        if (auto* ui = m_services.TryGet<UIRenderer>())
+			        if (auto ui = m_services.TryGet<UIRenderer>())
 			        {
 				        ui->ReRegisterPass();
 			        }
@@ -353,7 +353,7 @@ namespace aether
 		if (m_animationIk)
 		{
 			World& world = m_services.Get<SceneSubsystem>().GetWorld();
-			auto* physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem"));
+			auto physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem"));
 			if (physics)
 			{
 				m_animationIk->Update(world, *physics, 1.0f / 60.0f);

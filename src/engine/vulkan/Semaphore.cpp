@@ -35,7 +35,7 @@ namespace aether::gpu
 		        .pNext = &timelineTypeInfo,
 		};
 
-		auto* data = new detail::TimelineSemaphoreData;
+		auto data = new detail::TimelineSemaphoreData;
 		if (vkCreateSemaphore(device, &semInfo, nullptr, &data->semaphore) != VK_SUCCESS)
 		{
 			AE_ERROR(LogCategory::Vulkan, "gpu::CreateTimelineSemaphore: vkCreateSemaphore failed.");
@@ -110,7 +110,7 @@ namespace aether::gpu
 		{
 			return nullptr;
 		}
-		auto* data = new detail::TimelineSemaphoreData;
+		auto data = new detail::TimelineSemaphoreData;
 		data->semaphore = static_cast<VkSemaphore>(vkSemaphore);
 		return data;
 	}

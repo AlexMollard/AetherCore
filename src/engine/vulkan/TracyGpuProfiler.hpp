@@ -9,7 +9,7 @@
 //
 // Usage from `vulkan/VulkanContext.cpp`:
 //
-//   auto* handle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
+//   auto handle = aether::vulkan::CreateTracyGpuProfilerContext(m_tracyVkCtx);
 //   aether::gpu::GpuProfiler::Get().Initialize({ handle });
 //   ...
 //   aether::vulkan::DestroyTracyGpuProfilerContext(handle);
@@ -18,7 +18,7 @@
 
 namespace tracy
 {
-	class VkCtx;
+	struct VkCtx;
 } // namespace tracy
 
 namespace aether::vulkan

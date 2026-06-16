@@ -228,18 +228,18 @@ namespace aether
 		// opaque gpu::Image field is the pre-resolved VkImage (callers in
 		// RenderGraph.cpp populate it via their resolveImage lambda before
 		// calling these methods).
-		void CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
-		void CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
+		static void CmdSetEvent2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
+		static void CmdWaitEvents2(gpu::CommandBuffer cmd, gpu::Event event, std::span<const gpu::ImageMemoryBarrier> barriers);
 
 		// Emit buffer memory barriers via vkCmdPipelineBarrier2. Engine-side:
 		// takes a gpu::BufferMemoryBarrier span. The barrier's opaque
 		// gpu::Buffer field is the pre-resolved VkBuffer.
-		void CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers);
+		static void CmdBufferBarriers(gpu::CommandBuffer cmd, std::span<const gpu::BufferMemoryBarrier> barriers);
 
 		// Emit image memory barriers via vkCmdPipelineBarrier2. Engine-side:
 		// takes a gpu::ImageMemoryBarrier span. The barrier's opaque
 		// gpu::Image field is the pre-resolved VkImage.
-		void CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers);
+		static void CmdImageBarriers(gpu::CommandBuffer cmd, std::span<const gpu::ImageMemoryBarrier> barriers);
 
 		// -- Scratch (reused across Execute calls) --------------------------
 		// Engine-side scratch arrays (P5(d)). The barrier emitter methods
@@ -350,7 +350,7 @@ namespace aether
 		void MoveToCache(TransientImageEntry& entry);
 		gpu::TextureHandle TryPullFromCache(const ImageCacheKey& key);
 		void EvictStaleCacheEntries();
-		[[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent) const;
+		static [[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent);
 
 		static VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment)
 		{

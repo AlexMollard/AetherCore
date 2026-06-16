@@ -51,12 +51,12 @@ namespace aether::app
 			return m_time;
 		}
 
-		[[nodiscard]] std::size_t GetRingCount() const
+		static [[nodiscard]] std::size_t GetRingCount()
 		{
 			return kRingCount;
 		}
 
-		[[nodiscard]] std::size_t GetFoxCount() const
+		static [[nodiscard]] std::size_t GetFoxCount()
 		{
 			return kFoxCount;
 		}

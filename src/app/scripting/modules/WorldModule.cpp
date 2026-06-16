@@ -68,7 +68,7 @@ namespace
 	das::float3 das_get_position(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -83,7 +83,7 @@ namespace
 	// Only updates the translation column - leaves rotation/scale intact.
 	void das_set_position(aether::World* w, uint32_t id, das::float3 pos)
 	{
-		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return;
@@ -96,7 +96,7 @@ namespace
 	{
 		das::float3 r{};
 		r.x = r.y = r.z = 1.0f;
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -112,7 +112,7 @@ namespace
 	das::float3 das_get_euler(aether::World* w, uint32_t id)
 	{
 		das::float3 r{};
-		const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return r;
@@ -144,7 +144,7 @@ namespace
 	// set_euler(world, entity_id, euler_deg) - updates only rotation, preserves translation and scale
 	void das_set_euler(aether::World* w, uint32_t id, das::float3 euler)
 	{
-		auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+		auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
 			return;
@@ -158,12 +158,12 @@ namespace
 
 		tc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
 
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
 		{
 			for (const auto eid: sec->entityIds)
 			{
-				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
+				if (auto stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
 				{
 					stc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
 				}
@@ -178,18 +178,18 @@ namespace
 		const auto xform = ComposeTransform({pos.x, pos.y, pos.z}, {euler.x, euler.y, euler.z}, {scale.x, scale.y, scale.z});
 
 		// Update script entity transform.
-		if (auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
+		if (auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
 		{
 			tc->localToWorld = xform;
 		}
 
 		// Propagate to spawned mesh entities.
-		const auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
 		{
 			for (const auto eid: sec->entityIds)
 			{
-				if (auto* stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
+				if (auto stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
 				{
 					stc->localToWorld = xform;
 				}
@@ -212,7 +212,7 @@ namespace
 
 		glm::mat4 xform{1.0f};
 
-		if (const auto* tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
+		if (const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
 		{
 			xform = tc->localToWorld;
 		}
@@ -256,7 +256,7 @@ namespace
 
 		for (aether::Entity meshEntity: meshEntities)
 		{
-			if (auto* tc = w->TryGet<aether::TransformComponent>(meshEntity))
+			if (auto tc = w->TryGet<aether::TransformComponent>(meshEntity))
 			{
 				tc->localToWorld = xform * tc->localToWorld;
 			}
@@ -264,7 +264,7 @@ namespace
 		}
 
 		// Store spawned entity IDs for script-level propagation.
-		auto* sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
+		auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (!sec)
 		{
 			w->Emplace<aether::SpawnedEntitiesComponent>(aether::Entity{id});

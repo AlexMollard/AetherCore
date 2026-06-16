@@ -13,7 +13,7 @@ namespace aether::app
 
 	void LoadingLayer::OnGui(LayerContext& context)
 	{
-		auto* loadingManager = context.TryGet<LoadingManager>();
+		auto loadingManager = context.TryGet<LoadingManager>();
 		if (!loadingManager || loadingManager->IsComplete())
 		{
 			return;

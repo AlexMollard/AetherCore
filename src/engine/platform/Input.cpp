@@ -158,7 +158,7 @@ namespace aether
 
 	void Input::OnScroll(GLFWwindow* window, double xOffset, double yOffset)
 	{
-		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+		auto self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (self)
 		{
 			self->m_pendingScroll += glm::vec2{static_cast<float>(xOffset), static_cast<float>(yOffset)};
@@ -167,7 +167,7 @@ namespace aether
 
 	void Input::OnChar(GLFWwindow* window, unsigned int codepoint)
 	{
-		auto* self = static_cast<Input*>(glfwGetWindowUserPointer(window));
+		auto self = static_cast<Input*>(glfwGetWindowUserPointer(window));
 		if (!self)
 		{
 			return;

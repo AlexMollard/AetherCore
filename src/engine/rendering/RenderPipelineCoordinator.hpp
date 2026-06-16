@@ -45,6 +45,6 @@ namespace aether
 	class RenderPipelineCoordinator
 	{
 	public:
-		void RegisterPasses(const PassRegistrationContext& ctx);
+		static void RegisterPasses(const PassRegistrationContext& ctx);
 	};
 } // namespace aether
