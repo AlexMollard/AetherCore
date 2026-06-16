@@ -11,6 +11,11 @@ namespace aether
 	class RenderQueue;
 	class Scene;
 
+	// Forward-declared here so the `friend` declaration below can name
+	// `WorldRenderer::Flush` in MSVC (the in-class friend decl alone is not
+	// enough to introduce the namespace). The real API lives in
+	// rendering/WorldRenderer.hpp; this is a redundant function decl and
+	// clang-tidy will flag it, but it must stay for the friend decl to compile.
 	namespace WorldRenderer
 	{
 		void Flush(const Scene& scene, RenderQueue& queue);
@@ -27,7 +32,7 @@ namespace aether
 
 	// A container of persistent renderable objects. App layers register objects
 	// once (OnAttach) and update their transforms (OnUpdate). The engine calls
-	// FlushToQueue() each frame so app code never touches DrawCommands directly.
+	// WorldRenderer::Flush() each frame so app code never touches DrawCommands directly.
 	class Scene
 	{
 	public:

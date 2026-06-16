@@ -43,6 +43,10 @@ namespace aether
 			{
 				Throw(AetherError::Engine("PostProcessStack: HdrColor GetOrCreateSampler failed"));
 			}
+			// NOLINT(bugprone-unused-return-value): UpdateSampledImage only fails on
+			// invalid slot/image/sampler; the slot was just allocated and the sampler
+			// was just created above, so a failure indicates a logic bug, not a
+			// recoverable error here. Assert in debug, swallow in release.
 			(void) desc.bindlessManager->UpdateSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view, *sampler, gpu::ImageLayout::ShaderReadOnly);
 		}
 
@@ -71,6 +75,7 @@ namespace aether
 			{
 				Throw(AetherError::Engine("PostProcessStack: LdrColor GetOrCreateSampler failed"));
 			}
+			// NOLINT(bugprone-unused-return-value): see m_hdr branch above.
 			(void) desc.bindlessManager->UpdateSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view, *sampler, gpu::ImageLayout::ShaderReadOnly);
 		}
 

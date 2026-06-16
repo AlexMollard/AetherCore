@@ -180,7 +180,7 @@ namespace aether
 		void PrepareTransientAllocations(const FrameTarget& target);
 
 		// -- Release / cache ------------------------------------------------
-		void ReleaseTransient(uint32_t idx, std::uint32_t currentFrame);
+		void ReleaseTransient(uint32_t idx);
 
 		// -- Image layout oracle (debug) ------------------------------------
 #ifndef NDEBUG

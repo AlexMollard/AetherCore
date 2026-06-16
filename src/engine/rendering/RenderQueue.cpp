@@ -1029,7 +1029,6 @@ namespace aether
 		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
-		const Mesh* lastMesh = nullptr;
 		gpu::BufferHandle lastIndexBuffer{};
 		gpu::DeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
@@ -1080,7 +1079,6 @@ namespace aether
 					lastIndexBuffer = indexBufferHandle;
 					lastIndexOffset = indexOffset;
 				}
-				lastMesh = batch.mesh;
 			}
 
 			if (m_debugBypassIndirect)

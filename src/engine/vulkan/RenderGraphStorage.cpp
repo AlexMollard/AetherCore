@@ -595,7 +595,7 @@ namespace aether
 
 	// -- Release / cache ------------------------------------------------------
 
-	void RenderGraphStorage::ReleaseTransient(uint32_t idx, std::uint32_t currentFrame)
+	void RenderGraphStorage::ReleaseTransient(uint32_t idx)
 	{
 		if (idx >= m_transientImages.size())
 		{

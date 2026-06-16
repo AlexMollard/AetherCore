@@ -230,7 +230,7 @@ namespace aether
 				const uint32_t idx = TransientIndex(id);
 				if (idx < m_storage->GetTransientCount())
 				{
-					m_storage->ReleaseTransient(idx, m_frameIndex);
+					m_storage->ReleaseTransient(idx);
 				}
 			}
 		}
@@ -404,7 +404,7 @@ namespace aether
 		if (IsTransientId(image.id))
 		{
 			const uint32_t idx = TransientIndex(image.id);
-			m_storage->ReleaseTransient(idx, m_frameIndex);
+			m_storage->ReleaseTransient(idx);
 			return;
 		}
 

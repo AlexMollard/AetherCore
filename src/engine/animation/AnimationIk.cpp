@@ -237,12 +237,6 @@ namespace aether
 
 			std::uint32_t entityId = static_cast<std::uint32_t>(entt::to_integral(entity));
 
-			float rayMaxDist = ikComp.raycastMaxDist;
-			if (rayMaxDist < 0.1f)
-			{
-				rayMaxDist = 2.0f;
-			}
-
 			float leftGroundY = 0.0f;
 			float rightGroundY = 0.0f;
 			float leftOffsetY = 0.0f;
