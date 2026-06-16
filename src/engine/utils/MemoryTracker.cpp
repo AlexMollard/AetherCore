@@ -1,11 +1,3 @@
-// MemoryTracker.cpp
-// Overrides global operator new/delete to report every CPU heap allocation to
-// Tracy.  Only compiled in when TRACY_ENABLE is defined - zero cost in shipping
-// builds.
-//
-// Tracy's own internals use malloc() directly so they do not recurse through
-// these overrides.
-
 #include "utils/Profiler.hpp"
 
 #ifdef TRACY_ENABLE

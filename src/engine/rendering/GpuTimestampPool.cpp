@@ -86,7 +86,6 @@ namespace aether
 			}
 		}
 
-		// Reset this slot for new writes.
 		gpu::Factory::ResetQueryPool(m_device, m_pools[m_currentSlot], 0, kMaxTimestamps);
 		m_writeCount[m_currentSlot] = 0;
 		m_hasData[m_currentSlot] = false;

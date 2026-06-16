@@ -42,7 +42,6 @@ namespace aether
 
 	void RenderThread::WaitIdle()
 	{
-		// Close the channel to unblock any pending read, then join.
 		if (!m_shutdown)
 		{
 			m_shutdown = true;
@@ -82,13 +81,10 @@ namespace aether
 					m_isIdle.store(true, std::memory_order_release);
 				}
 
-				// Now idle - spin until reload is done
 				while (IsReloadInProgress())
 				{
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
-
-				// Reload complete - continue to read and process new frames
 			}
 
 			m_isIdle.store(false, std::memory_order_release);

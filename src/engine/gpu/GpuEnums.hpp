@@ -60,7 +60,6 @@ namespace aether::gpu
 	// ENUMS & STRUCTS
 	// ---------------------------------------------------------------------
 
-	// Element type of a bound index buffer.
 	enum class IndexType : std::uint32_t
 	{
 		U16 = 0,

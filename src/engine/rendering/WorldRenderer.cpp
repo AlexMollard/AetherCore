@@ -21,7 +21,6 @@ namespace aether
 		{
 			glm::vec3 center = glm::vec3(model * glm::vec4(localSphere.x, localSphere.y, localSphere.z, 1.0f));
 
-			// Extract max scale from the model matrix columns.
 			glm::vec3 col0(model[0]);
 			glm::vec3 col1(model[1]);
 			glm::vec3 col2(model[2]);

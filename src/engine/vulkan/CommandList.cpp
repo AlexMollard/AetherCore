@@ -106,8 +106,6 @@ namespace aether::gpu
 		}
 	} // namespace
 
-	// Static setter used by GraphicsDevice to wire the debug-label function
-	// pointers at engine init.
 	void CommandList::SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept
 	{
 		BeginDebugLabelFn() = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(beginFn);
@@ -127,9 +125,6 @@ namespace aether::gpu
 
 	void CommandList::BindPipeline(PipelineHandle)
 	{
-		// Stub: handle-based pipeline binding arrives in Phase 5 alongside
-		// the GraphicsPipeline migration. For now passes use the
-		// raw-void* BindPipeline overload above.
 	}
 
 	void CommandList::BindPipeline(GraphicsPipeline& pipeline)
@@ -271,10 +266,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		// Translate engine GpuWriteDescriptorSet -> VkWriteDescriptorSet.
-		// The pBufferInfo / pImageInfo / pTexelBufferView fields of the
-		// VkWriteDescriptorSet must point at caller-side memory; we keep
-		// small arrays alive on the stack (heap-fallback for large n).
+		// pBufferInfo/pImageInfo/pTexelBufferView must point at caller-side memory; stack with heap-fallback for large n.
 		const std::size_t n = writes.size();
 		VkDescriptorBufferInfo stackBufInfos[16];
 		std::vector<VkDescriptorBufferInfo> heapBufInfos;
@@ -535,11 +527,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		// P5(d) barrier solver migration: translate the engine-side
-		// gpu::RenderingInfo + its color attachment span to Vk* at the
-		// seam, then call vkCmdBeginRendering. The color attachment span
-		// is translated one-for-one via gpu::ToVk; the depth attachment
-		// is translated on demand (it's a single attachment, not a span).
+		// Translate gpu::RenderingInfo + color/depth attachments to Vk* at the seam.
 		std::vector<VkRenderingAttachmentInfo> vkColorAttachments;
 		vkColorAttachments.reserve(info.colorAttachments.size());
 		for (const auto& a: info.colorAttachments)

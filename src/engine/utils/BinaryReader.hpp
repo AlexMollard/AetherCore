@@ -80,7 +80,6 @@ namespace aether
 			m_pos += bytes;
 		}
 
-		// Skip forward by n bytes.
 		void Skip(std::size_t n)
 		{
 			if (static_cast<std::size_t>(m_end - m_pos) < n)
@@ -91,13 +90,11 @@ namespace aether
 			m_pos += n;
 		}
 
-		// Check if at least n bytes remain.
 		bool CanRead(std::size_t n) const
 		{
 			return static_cast<std::size_t>(m_end - m_pos) >= n;
 		}
 
-		// Bytes remaining.
 		std::size_t Remaining() const
 		{
 			return static_cast<std::size_t>(m_end - m_pos);

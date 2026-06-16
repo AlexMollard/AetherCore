@@ -102,8 +102,6 @@ namespace aether
 		// deferred destructions from frames the GPU has finished.
 		void BeginFrame(std::uint32_t frameIndex);
 
-		// Optional Tracy GPU context for GPU-zone instrumentation of render passes.
-
 		// Fluent pass builder; use immediately, do not store.
 		class PassBuilder
 		{
@@ -114,34 +112,24 @@ namespace aether
 			PassBuilder& operator=(PassBuilder&&) = AE_DELETE_MSG("PassBuilder is move-only - use std::move");
 			PassBuilder& operator=(const PassBuilder&) = delete;
 
-			// Declare a color attachment write.
 			PassBuilder& WriteColor(RGImage image, gpu::LoadOp loadOp = gpu::LoadOp::Clear, gpu::StoreOp storeOp = gpu::StoreOp::Store, gpu::ClearValue clearValue = {});
 
-			// Declare a depth/stencil attachment write.
 			PassBuilder& WriteDepth(RGImage image, gpu::LoadOp loadOp = gpu::LoadOp::Clear, gpu::StoreOp storeOp = gpu::StoreOp::DontCare, gpu::ClearValue clearValue = {});
 
-			// Declare a sampled texture read (graphics or compute).
 			PassBuilder& ReadTexture(RGImage image);
 
-			// Declare a storage-image read in compute.
 			PassBuilder& ReadStorageImage(RGImage image);
 
-			// Declare a storage-image write in compute.
 			PassBuilder& WriteStorageImage(RGImage image);
 
-			// Declare a storage buffer read (compute or graphics vertex/fragment).
 			PassBuilder& ReadBuffer(RGBuffer buffer);
 
-			// Declare a storage buffer write (compute only).
 			PassBuilder& WriteBuffer(RGBuffer buffer);
 
-			// Declare a storage buffer read+write (compute only).
 			PassBuilder& ReadWriteBuffer(RGBuffer buffer);
 
-			// Set graphics callback for this pass.
 			PassBuilder& Execute(std::function<void(PassContext&)> fn);
 
-			// Set compute callback for this pass.
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
 			// Override pass extent (for render-to-texture and non-swapchain targets).
@@ -207,13 +195,10 @@ namespace aether
 		// For transients this also destroys owned GPU memory.
 		void ReleaseImage(RGImage image);
 
-		// Register a graphics pass.
 		[[nodiscard]] PassBuilder AddPass(std::string name, std::source_location loc = std::source_location::current());
 
-		// Register a compute pass.
 		[[nodiscard]] PassBuilder AddComputePass(std::string name, std::source_location loc = std::source_location::current());
 
-		// Register a compute pass on the async-compute queue.
 		// Equivalent to AddComputePass(name).SetAsyncCompute().
 		[[nodiscard]] PassBuilder AddAsyncComputePass(std::string name, std::source_location loc = std::source_location::current());
 

@@ -86,7 +86,6 @@ namespace aether
 
 #else
 
-// Stub for builds without Aftermath.
 namespace aether
 {
 	class AftermathContext

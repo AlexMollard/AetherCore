@@ -42,7 +42,6 @@ namespace aether
 		// deferred-destruction ring. Per-frame data is mirrored by
 		// std::array<Handle, kFramesInFlight> for the hot path.
 
-		// m_instanceData (kFramesInFlight * maxDraws entries)
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -61,7 +60,6 @@ namespace aether
 			m_instanceData[i].address = view.deviceAddress;
 		}
 
-		// m_cullInput
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -80,7 +78,6 @@ namespace aether
 			m_cullInput[i].address = view.deviceAddress;
 		}
 
-		// m_batchDesc
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -101,7 +98,6 @@ namespace aether
 
 		if (m_maxAnimationDraws > 0u)
 		{
-			// m_skinCopyJobs
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
 				const gpu::MappedBufferDesc desc{
@@ -120,7 +116,6 @@ namespace aether
 				m_skinCopyJobs[i].address = view.deviceAddress;
 			}
 
-			// m_animationSampleJobs
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
 				const gpu::MappedBufferDesc desc{
@@ -141,7 +136,6 @@ namespace aether
 
 			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
 
-			// m_skinPalette (single buffer shared across frames).
 			{
 				const gpu::BufferDesc desc{
 				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
@@ -156,7 +150,6 @@ namespace aether
 				m_skinPaletteAddress = gpu::ResourceRegistry::ResolveBuffer(m_skinPaletteHandle).deviceAddress;
 			}
 
-			// m_sampledPoses (per-frame device-local).
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
 				const gpu::BufferDesc desc{
@@ -172,7 +165,6 @@ namespace aether
 				m_sampledPoses[i].address = gpu::ResourceRegistry::ResolveBuffer(m_sampledPoses[i].handle).deviceAddress;
 			}
 
-			// m_nodeGlobalTransforms (per-frame device-local).
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
 				const gpu::BufferDesc desc{
@@ -191,7 +183,6 @@ namespace aether
 			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}", m_skinPaletteAddress, m_sampledPoses[0].address, m_nodeGlobalTransforms[0].address);
 		}
 
-		// m_outputIndirect (per-frame device-local INDIRECT + BDA).
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 		{
 			const gpu::BufferDesc desc{

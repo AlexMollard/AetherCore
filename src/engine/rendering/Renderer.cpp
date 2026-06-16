@@ -183,9 +183,6 @@ namespace aether
 
 	gpu::Extent2D Renderer::GetExtent() const
 	{
-		// Would come from Swapchain, but we need a reference to it.
-		// For now, return a placeholder - this should be updated when we have
-		// Swapchain access.
 		return gpu::Extent2D{1280, 720};
 	}
 } // namespace aether

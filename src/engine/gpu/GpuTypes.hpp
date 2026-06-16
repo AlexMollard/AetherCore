@@ -172,7 +172,7 @@ namespace aether::gpu
 	static_assert(sizeof(DrawIndirectCommand) == 16, "DrawIndirectCommand must match VkDrawIndirectCommand layout");
 
 	// -------------------------------------------------------------------------
-	// Image + buffer barriers (P5(d) - RenderGraph barrier solver migration)
+	// Image + buffer barriers
 	// -------------------------------------------------------------------------
 	// Image/buffer memory barriers. The `image` / `buffer` fields are
 	// opaque engine-side handles resolved by the storage; layout and access
@@ -206,7 +206,7 @@ namespace aether::gpu
 	};
 
 	// -------------------------------------------------------------------------
-	// Dynamic rendering (P5(d))
+	// Dynamic rendering
 	// -------------------------------------------------------------------------
 	// Mirrors of VkRenderingAttachmentInfo / VkRenderingInfo. Used by
 	// RenderGraph::Execute to describe the per-pass color / depth attachments

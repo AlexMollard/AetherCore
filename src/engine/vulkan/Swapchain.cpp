@@ -162,7 +162,6 @@ namespace aether
 			}
 		}
 
-		// One renderFinished semaphore per swapchain image.
 		const VkSemaphoreCreateInfo semInfo2{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 		m_renderFinishedSemaphores.resize(m_images.size(), VK_NULL_HANDLE);
 		for (auto& sem: m_renderFinishedSemaphores)
@@ -308,9 +307,7 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to begin commands buffer."));
 		}
 
-		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
-		// srcStage = COLOR_ATTACHMENT_OUTPUT: synchronizes with the imageAvailable semaphore
-		// wait (also at COLOR_ATTACHMENT_OUTPUT) and with the prior frame's present read.
+		// Transition: UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL.
 		vkutil::TransitionImage(frame.commandBuffer,
 		        m_images[m_imageIndex],
 		        VK_IMAGE_LAYOUT_UNDEFINED,
@@ -351,12 +348,7 @@ namespace aether
 	        gpu::TimelineSemaphoreHandle extraSignalSemaphore,
 	        std::uint64_t extraSignalValue)
 	{
-		// Resolve the engine-side pImpl handles to their `VkSemaphore` payload
-		// at the seam. The cast is the single point of contact between
-		// the engine's `gpu::TimelineSemaphoreHandle` and the backend's
-		// `VkSemaphore`. `ResolveTimelineSemaphoreVk` returns a `void*` that
-		// we cast back to `VkSemaphore` here (the only TU that needs to
-		// know the typed name).
+		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
 		const VkSemaphore vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
 		const VkSemaphore vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
 		const VkSemaphore vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
@@ -384,7 +376,6 @@ namespace aether
 		FrameSync& frame = m_frames[m_currentFrame];
 		VkCommandBuffer cmd = frame.commandBuffer;
 
-		// Transition: COLOR_ATTACHMENT_OPTIMAL -> PRESENT_SRC_KHR
 		vkutil::TransitionImage(cmd,
 		        m_images[m_imageIndex],
 		        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,

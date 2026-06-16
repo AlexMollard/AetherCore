@@ -52,10 +52,7 @@ namespace aether::gpu
 	// Component swizzle conversion. Mirrors VkComponentSwizzle.
 	[[nodiscard]] VkComponentSwizzle ToVk(ComponentSwizzle s) noexcept;
 
-	// Sampler parameter conversions. Mirror VkFilter, VkSamplerMipmapMode,
-	// VkSamplerAddressMode. Only the values BindlessManager's sampler cache
-	// emits are enumerated; new values force a switch-case compile error
-	// in the backend conversion.
+	// Sampler parameter conversions.
 	[[nodiscard]] VkFilter ToVk(Filter filter) noexcept;
 	[[nodiscard]] VkSamplerMipmapMode ToVk(SamplerMipmapMode mode) noexcept;
 	[[nodiscard]] VkSamplerAddressMode ToVk(SamplerAddressMode mode) noexcept;
@@ -68,15 +65,7 @@ namespace aether::gpu
 	[[nodiscard]] VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept;
 	[[nodiscard]] VkPolygonMode ToVk(PolygonMode mode) noexcept;
 
-	// -------------------------------------------------------------------------
-	// Barrier + dynamic-rendering conversions (P5(d))
-	// -------------------------------------------------------------------------
-	// Engine-side barrier structs (ImageMemoryBarrier / BufferMemoryBarrier)
-	// are translated to VkImageMemoryBarrier2 / VkBufferMemoryBarrier2 here.
-	// The .image / .buffer fields are opaque gpu::Image / gpu::Buffer; the
-	// caller passes in the resolved Vulkan handle via the helper functions
-	// below (the engine-side struct holds the opaque type, the storage knows
-	// the actual VkImage / VkBuffer to populate).
+	// Barrier + dynamic-rendering conversions. The .image/.buffer fields are opaque gpu::Image/gpu::Buffer; the caller passes the resolved Vk* via the second argument.
 	[[nodiscard]] VkImageMemoryBarrier2 ToVk(const ImageMemoryBarrier& barrier, VkImage resolvedImage) noexcept;
 	[[nodiscard]] VkBufferMemoryBarrier2 ToVk(const BufferMemoryBarrier& barrier, VkBuffer resolvedBuffer) noexcept;
 	[[nodiscard]] VkRenderingAttachmentInfo ToVk(const RenderingAttachmentInfo& info) noexcept;

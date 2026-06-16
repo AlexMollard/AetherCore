@@ -102,7 +102,6 @@ namespace aether::coro
 
 		// -- Coroutine API ------------------------------------------------------
 
-		// Awaitable for writing.
 		class write_awaiter
 		{
 		public:
@@ -151,7 +150,6 @@ namespace aether::coro
 			return write_awaiter{this, std::move(value)};
 		}
 
-		// Awaitable for reading.
 		class read_awaiter
 		{
 		public:

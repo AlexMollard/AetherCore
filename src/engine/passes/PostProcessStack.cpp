@@ -111,9 +111,6 @@ namespace aether
 		m_tonemapPipeline.Destroy();
 		if (m_ldrBindlessSlot != 0xFFFFFFFFu)
 		{
-			// Free the bindless slot via BindlessManager; the registry's
-			// Destroy(handle) below schedules the GPU texture for deferred
-			// destruction via the 3-frame ring.
 		}
 		if (m_ldrColorHandle.IsValid())
 		{
@@ -124,7 +121,6 @@ namespace aether
 		m_ldrBindlessSlot = 0xFFFFFFFFu;
 		if (m_hdrBindlessSlot != 0xFFFFFFFFu)
 		{
-			// Same as above for HDR.
 		}
 		if (m_hdrColorHandle.IsValid())
 		{

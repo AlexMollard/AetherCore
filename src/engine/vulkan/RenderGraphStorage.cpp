@@ -19,8 +19,7 @@
 
 namespace aether
 {
-	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate
-	// to the Vulkan-internal overload. Keeps the bridge in one place.
+	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate.
 
 	void RenderGraphStorage::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
@@ -789,18 +788,13 @@ namespace aether
 		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
 		const VkEvent vkEvent = static_cast<VkEvent>(event);
 
-		// Translate the engine-side barrier span to a stack VkImageMemoryBarrier2
-		// array. P5(d) barrier solver migration: the engine-side
-		// ImageMemoryBarrier holds an opaque gpu::Image, the storage
-		// resolves it to the actual VkImage here.
+		// Translate gpu::ImageMemoryBarrier span to a stack VkImageMemoryBarrier2 array.
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
 		for (const auto& b: barriers)
 		{
 			const gpu::Image resolved = resolveImage(b.image ? static_cast<uint32_t>(reinterpret_cast<std::uintptr_t>(b.image) & 0xFFFFFFFFu) : 0);
-			// The barrier's `image` field IS the resolved VkImage (the
-			// engine code already populated it via the resolver). Convert
-			// directly:
+			// barrier.image is the pre-resolved VkImage; cast directly.
 			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
 		}
 
@@ -888,7 +882,6 @@ namespace aether
 
 	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize)
 	{
-		// Destroy old heap + virtual block if they exist.
 		if (m_virtualBlock != VK_NULL_HANDLE)
 		{
 			vmaDestroyVirtualBlock(m_virtualBlock);
@@ -962,7 +955,7 @@ namespace aether
 			entry.memReqAlignment = 0;
 		}
 
-		// Phase 1: Query memory requirements for all transient images.
+		// Query memory requirements for transient images.
 		for (auto& entry: m_transientImages)
 		{
 			if (entry.image.IsValid())
@@ -1007,7 +1000,7 @@ namespace aether
 			}
 		}
 
-		// Phase 2: Query memory requirements for all transient buffers.
+		// Query memory requirements for transient buffers.
 		for (auto& entry: m_transientBuffers)
 		{
 			if (entry.buffer.IsValid())
@@ -1035,10 +1028,9 @@ namespace aether
 			}
 		}
 
-		// Phase 3: Calculate total size needed.
+		// Calculate total size needed.
 		VkDeviceSize totalSize = 0;
 
-		// Helper: accumulate aligned.
 		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
 		{
 			if (size == 0)
@@ -1064,7 +1056,7 @@ namespace aether
 			}
 		}
 
-		// Phase 4: Allocate heap and virtual block if needed.
+		// Allocate heap and virtual block if needed.
 		if (totalSize > m_transientHeapCapacity)
 		{
 			AllocateTransientHeap(totalSize);
@@ -1079,7 +1071,7 @@ namespace aether
 			return; // heap allocation failed; everything falls back to VMA
 		}
 
-		// Phase 5: Allocate virtual offsets for each resource from the virtual block.
+		// Allocate virtual offsets for each resource from the virtual block.
 		for (auto& entry: m_transientImages)
 		{
 			if (entry.image.IsValid() || entry.memReqSize == 0)
@@ -1116,7 +1108,6 @@ namespace aether
 			}
 		}
 
-		// Update heap stats.
 		VmaStatistics blockStats{};
 		vmaGetVirtualBlockStatistics(m_virtualBlock, &blockStats);
 		m_lastFrameStats.heapCapacity = m_transientHeapCapacity;
@@ -1177,7 +1168,6 @@ namespace aether
 				continue;
 			}
 
-			// Check cache first.
 			const ImageCacheKey key = MakeCacheKey(entry, entry.extent);
 			gpu::TextureHandle cached = TryPullFromCache(key);
 			if (cached.IsValid())
@@ -1191,7 +1181,7 @@ namespace aether
 				continue;
 			}
 
-			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
+			// Heap-aliased allocation.
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
 				const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Aliased.Bindless[{}]", idx) : std::format("RenderGraph.Transient.Aliased[{}]", idx);
@@ -1220,7 +1210,6 @@ namespace aether
 				continue;
 			}
 
-			// Fallback: VMA-backed allocation.
 			const std::string entryName = entry.bindlessRequested ? std::format("RenderGraph.Transient.Bindless[{}]", idx) : std::format("RenderGraph.Transient[{}]", idx);
 			entry.image = gpu::ResourceRegistry::CreateTexture(gpu::TextureDesc{
 			        .format = entry.format,
@@ -1245,7 +1234,6 @@ namespace aether
 
 		EvictStaleCacheEntries();
 
-		// Compute total cache occupancy.
 		m_lastFrameStats.cacheSize = 0;
 		for (const auto& [key, entries]: m_imageCache)
 		{
@@ -1300,7 +1288,7 @@ namespace aether
 				continue;
 			}
 
-			// Try heap aliased allocation (pre-allocated by PrepareTransientAllocations).
+			// Heap-aliased allocation.
 			if (entry.fromHeap && m_transientHeapAllocation != VK_NULL_HANDLE && entry.heapOffset != VK_WHOLE_SIZE)
 			{
 				const std::string entryName = std::format("RenderGraph.Transient.Buffer.Aliased[{}]", idx);
@@ -1314,7 +1302,6 @@ namespace aether
 				continue;
 			}
 
-			// Fallback: VMA-backed buffer.
 			const std::string entryName = std::format("RenderGraph.Transient.Buffer[{}]", idx);
 			entry.buffer = gpu::ResourceRegistry::CreateBuffer(gpu::BufferDesc{
 			        .size = static_cast<gpu::DeviceSize>(entry.size),

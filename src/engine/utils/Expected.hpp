@@ -139,7 +139,6 @@ namespace aether
 	auto var = std::move(*var##_expected)
 
 // Same as AE_EXPECT_OR_THROW but for functions returning Expected<void>.
-// No value to unwrap - just checks for errors.
 #define AE_EXPECT_OR_THROW_VOID(expr) \
 	{ \
 		auto ae_result = (expr); \
@@ -147,7 +146,6 @@ namespace aether
 			Throw(ae_result.error()); \
 	}
 
-// Returns unexpected(err) from inside an Expected-returning function.
 #define AE_UNEXPECTED(err) return std::unexpected(err)
 
 template<>

@@ -23,14 +23,9 @@ namespace tracy
 
 namespace aether::vulkan
 {
-	// Build a profiler context handle from a Tracy GPU context. The
-	// caller owns the returned handle and must destroy it with
-	// `DestroyTracyGpuProfilerContext` before destroying the
-	// `tracy::VkCtx`. Returns `nullptr` if TRACY_ENABLE is off.
+	// Build a profiler context handle from a Tracy GPU context. The caller owns the handle and must destroy it before the underlying tracy::VkCtx.
 	aether::gpu::ProfilerContextHandle CreateTracyGpuProfilerContext(tracy::VkCtx* ctx) noexcept;
 
-	// Destroy a handle returned by `CreateTracyGpuProfilerContext`.
-	// No-op if `handle` is null. Must be called before the
-	// underlying `tracy::VkCtx` is destroyed.
+	// Destroy a handle. No-op if null. Must be called before the underlying tracy::VkCtx.
 	void DestroyTracyGpuProfilerContext(aether::gpu::ProfilerContextHandle handle) noexcept;
 } // namespace aether::vulkan

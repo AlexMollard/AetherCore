@@ -1,9 +1,4 @@
-// Engine-side Tracy GPU profiling facade - implementation.
-//
-// The pImpl data is defined here, where the Tracy types are fully
-// visible. The factory in this same file is the public way to build
-// a `ProfilerContextHandle` from a `tracy::VkCtx*`. The
-// `reinterpret_cast<VkCommandBuffer>` lives ONLY in this file.
+// pImpl data and `reinterpret_cast<VkCommandBuffer>` live in this file.
 
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/TracyGpuProfiler.hpp"
@@ -18,8 +13,6 @@
 namespace aether::gpu::detail
 {
 #ifdef TRACY_ENABLE
-	// Real definitions of the forward-declared pImpl data. The
-	// engine side only sees pointers to these.
 	struct ProfilerContextData
 	{
 		tracy::VkCtx* ctx = nullptr;
@@ -92,14 +85,7 @@ namespace aether::gpu
 		{
 			return GpuZoneScope();
 		}
-		// Heap-allocate the scope data so the engine-side
-		// `GpuZoneScope` can hold it as an opaque typed handle. The
-		// dtor writes the end timestamp and queues the end marker,
-		// then frees the memory. 5-20 zones per frame at pass-level
-		// granularity is well below the cost of Tracy's own per-event
-		// queue allocations.
-		// `tracy::VkCtxScope` has no default ctor (every ctor is
-		// parameterized), so we placement-new in place.
+		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle. Placement-new is required: tracy::VkCtxScope has no default ctor.
 		auto* storage = ::operator new(sizeof(detail::ProfilerScopeData));
 		auto* scope_data = reinterpret_cast<detail::ProfilerScopeData*>(storage);
 		new (&scope_data->scope) tracy::VkCtxScope(m_context->ctx,
@@ -142,9 +128,7 @@ namespace aether::gpu
 #ifdef TRACY_ENABLE
 		if (m_handle != nullptr)
 		{
-			// Explicitly invoke the dtor (which writes the end
-			// timestamp and queues the end marker), then free the
-			// heap memory.
+			// Explicit dtor call writes the end timestamp and queues the end marker.
 			m_handle->scope.~VkCtxScope();
 			delete m_handle;
 			m_handle = nullptr;

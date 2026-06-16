@@ -132,7 +132,6 @@ namespace aether
 	{
 		AE_INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
 
-		// Initialize volk loader (loads global Vulkan functions)
 		if (volkInitialize() != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "Failed to initialize volk Vulkan loader."));
@@ -168,7 +167,6 @@ namespace aether
 
 		m_instance = instanceResult.value();
 
-		// Load instance-level Vulkan functions
 		volkLoadInstance(m_instance->instance);
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
@@ -287,7 +285,6 @@ namespace aether
 
 		m_device = deviceResult.value();
 
-		// Load device-level Vulkan functions
 		volkLoadDevice(m_device->device);
 
 		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);
@@ -323,7 +320,6 @@ namespace aether
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		vkutil::SetObjectNameFunction(setObjectNameFn);
 
-		// Name queues immediately so they appear correctly in RenderDoc and validation output.
 		// Graphics and compute may be the same queue on some hardware; guard against double-naming.
 		vkutil::SetObjectName(m_device->device, reinterpret_cast<std::uint64_t>(static_cast<void*>(m_graphicsQueue)), VK_OBJECT_TYPE_QUEUE, "Queue.Graphics");
 		if (m_computeQueue != m_graphicsQueue)

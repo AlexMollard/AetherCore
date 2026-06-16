@@ -21,7 +21,6 @@ namespace aether::gpu
 		UploadContext(UploadContext&& other) noexcept;
 		UploadContext& operator=(UploadContext&& other) noexcept;
 
-		// backendRegistry is the opaque aether::ResourceRegistry pointer.
 		[[nodiscard]] static UploadContext Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry);
 
 		void Destroy();

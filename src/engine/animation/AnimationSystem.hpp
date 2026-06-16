@@ -4,8 +4,7 @@
 
 namespace aether
 {
-	// Example system: updates all skinned entities with animation data.
-	// This demonstrates how game logic systems integrate with the ECS.
+	// Updates all skinned entities with animation data.
 	class AnimationSystem : public System
 	{
 	public:

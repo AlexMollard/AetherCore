@@ -72,10 +72,8 @@ namespace aether
 		// Copy staging -> device-local
 		uploadContext.CopyBuffer(stagingHandle, bufferHandle, size);
 
-		// Free staging
 		gpu::ResourceRegistry::Destroy(stagingHandle);
 
-		// Retrieve device address
 		gpu::ResourceRegistry::ResolvedBuffer resolved = gpu::ResourceRegistry::ResolveBuffer(bufferHandle);
 
 		Mesh mesh;

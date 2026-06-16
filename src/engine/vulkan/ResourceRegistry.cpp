@@ -11,8 +11,6 @@
 
 namespace aether
 {
-	// The kMaxFramesInFlight constant (defined in ResourceRegistry.hpp)
-	// must match the engine-wide frame pacing constant - see gpu/GpuTypes.hpp.
 	namespace
 	{
 		inline constexpr std::uint32_t kIndexInvalid = 0x0000FFFFu;
@@ -127,15 +125,9 @@ namespace aether
 		}
 		m_shutdown = true;
 
-		// Drain all pending destruction first so any registered resources
-		// that were scheduled for deferred destruction actually get freed.
+		// Drain pending destruction first, then warn-and-tear-down any slots still holding entries.
 		DrainAll();
 
-		// Any slots still holding entries (i.e. not queued for destruction
-		// and not destroyed by caller code) get a final teardown. In normal
-		// operation Shutdown runs after every subsystem has cleaned up, so
-		// the only entries left are those the engine forgot - log a warning
-		// so it surfaces during development.
 		for (auto& slot: m_textures)
 		{
 			if (slot.entry)
@@ -873,8 +865,7 @@ namespace aether
 		const TextureEntry entry = *slot.entry;
 		--m_liveTextureCount;
 		slot.entry.reset();
-		// Bump generation on reuse so subsequent handles to this slot fail
-		// IsValid() until a fresh RegisterTexture fills it again.
+		// Bump generation on reuse so subsequent handles to this slot fail IsValid().
 		slot.generation = (slot.generation + 1u) % kGenerationWrap;
 		if (slot.generation == kGenerationInvalid)
 		{
@@ -1110,9 +1101,7 @@ namespace aether
 
 	void ResourceRegistry::RunDestroyersInRing(std::vector<PendingDestruction>& ring)
 	{
-		// Move out first so a destructor that touches the registry (e.g.
-		// chains Destroy calls into AdvanceFrame paths) does not invalidate
-		// the iteration range.
+		// Move out first so a destructor that chains Destroy() into the registry does not invalidate iteration.
 		std::vector<PendingDestruction> local;
 		local.swap(ring);
 		for (auto& d: local)

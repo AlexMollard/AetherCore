@@ -22,11 +22,8 @@ namespace aether
 
 namespace aether
 {
-	// -------------------------------------------------------------------------
-	// ResourceRegistry - Phase 2 of the GPU refactor
-	// -------------------------------------------------------------------------
 	// Owns opaque handles for engine-facing GPU resources and centralizes
-	// deferred destruction (3-frame WaitIdle-aware ring).
+	// deferred destruction (kMaxFramesInFlight ring, WaitIdle-aware).
 	//
 	// Slot tables: TextureSlot, BufferSlot, PipelineSlot. Each slot is
 	// {generation, std::optional<Entry>}. Generation increments on slot reuse
@@ -34,22 +31,14 @@ namespace aether
 	//
 	// Deferred destruction: callers schedule destruction with Destroy(handle);
 	// the entry is queued in the *current* frame's ring slot. AdvanceFrame()
-	// promotes the ring by one slot and runs the destroyers that have been
-	// in flight for at least kMaxFramesInFlight frames (i.e. the GPU is
-	// guaranteed to be done with them because GpuDevice::AdvanceBindlessFrame
-	// and GpuDevice::WaitIdle both block on the same fence).
-	//
-	// This is the foundation Phase 3+ code uses to expose handle-based GPU
-	// resources at the engine boundary. Existing UniqueBuffer/UniqueImage
-	// wrappers continue to do immediate teardown (their consumers don't hold
-	// buffers across frames); the registry's ring is reserved for new code
-	// paths that need the centralized lifetime guarantee.
+	// promotes the ring by one slot and runs destroyers whose target frame has
+	// retired (GpuDevice::WaitIdle at the matching point guarantees GPU done).
 	class ResourceRegistry
 	{
 	public:
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
-		// Debug backtrace constants (public so namespace-scope helpers can use them).
+		// Debug backtrace constants.
 		static constexpr int kAllocFrames = 4;
 		static constexpr int kBacktraceDepth = 9;
 
@@ -94,11 +83,7 @@ namespace aether
 			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkDevice device = VK_NULL_HANDLE;
 			bool ownsLayout = false;
-			// Optional GPL libraries. VK_NULL_HANDLE for compute / non-GPL
-			// pipelines. Destroyed alongside the linked pipeline in
-			// DestroyPipelineEntryNow. The linked `pipeline` is always
-			// independent of these (linking copies the state, not the
-			// VkPipeline handle).
+			// Optional GPL libraries; VK_NULL_HANDLE for compute / non-GPL pipelines.
 			VkPipeline vertInputLib = VK_NULL_HANDLE;
 			VkPipeline preRasterLib = VK_NULL_HANDLE;
 			VkPipeline fragShaderLib = VK_NULL_HANDLE;
@@ -113,54 +98,34 @@ namespace aether
 
 		void Shutdown();
 
-		// Texture registration. The registry does NOT take ownership of the
-		// VkImage/VkImageView by default (ownsAllocation=false); pass
-		// ownsAllocation=true when the caller wants the registry to destroy
-		// them via Destroy(handle) -> WaitIdle-aware deferred path.
+		// Texture registration. Pass ownsAllocation=true to have the registry destroy on Destroy().
 		gpu::TextureHandle RegisterTexture(const TextureEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Buffer registration. Same ownership semantics as TextureEntry.
+		// Buffer registration.
 		gpu::BufferHandle RegisterBuffer(const BufferEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Pipeline registration. Layouts may be shared; the registry destroys
-		// them only when ownsLayout is true.
+		// Pipeline registration.
 		gpu::PipelineHandle RegisterPipeline(const PipelineEntry& entry, std::string_view debugName = {}, std::source_location loc = std::source_location::current());
 
-		// Schedule destruction of the resource backing the handle. The actual
-		// destruction runs kMaxFramesInFlight frames later (in AdvanceFrame).
-		// Stale handles (wrong generation) are silently ignored - the
-		// generation check that would have caught the use is in IsValid().
+		// Schedule destruction. Runs kMaxFramesInFlight frames later in AdvanceFrame.
 		void Destroy(gpu::TextureHandle handle);
 		void Destroy(gpu::BufferHandle handle);
 		void Destroy(gpu::PipelineHandle handle);
 
-		// Resolve handle -> entry. Returns nullptr if the handle is stale or
-		// the slot is empty. Never null on a freshly-registered, valid handle.
+		// Resolve handle -> entry, or nullptr if stale.
 		[[nodiscard]] const TextureEntry* Resolve(gpu::TextureHandle handle) const;
 		[[nodiscard]] const BufferEntry* Resolve(gpu::BufferHandle handle) const;
 		[[nodiscard]] const PipelineEntry* Resolve(gpu::PipelineHandle handle) const;
 
-		// Direct mutating access for the backend to update bindless slots or
-		// storage views after registration (e.g. when a transient image gets
-		// promoted to bindless-sampled).
 		[[nodiscard]] TextureEntry* ResolveMutable(gpu::TextureHandle handle);
 		[[nodiscard]] BufferEntry* ResolveMutable(gpu::BufferHandle handle);
 
-		// Tick the deferred-destruction ring forward by one frame. Must be
-		// called once per frame by GpuDevice::BeginSwapchainFrame. After this
-		// call, the ring slot for the frame the GPU just finished holds
-		// resources that are safe to destroy (GpuDevice::WaitIdle at the
-		// corresponding point guarantees the GPU has retired them).
+		// Advance the deferred-destruction ring by one frame.
 		void AdvanceFrame();
 
-		// Called by GpuDevice::Shutdown to ensure all queued destroyers run
-		// while the device is still valid. After this, all slot tables are
-		// empty and the ring has been drained.
+		// Run all queued destroyers while the device is still valid.
 		void DrainAll();
 
-		// Phase-A consolidation: device/allocator back-references so the
-		// registry can allocate and map buffers directly instead of relying
-		// on a parallel side-channel in the gpu/ bridge.
 		void Init(VkDevice device, VmaAllocator allocator) noexcept;
 
 		[[nodiscard]] gpu::BufferHandle CreateBuffer(const gpu::BufferDesc& desc, std::source_location loc = std::source_location::current()) noexcept;
@@ -170,17 +135,13 @@ namespace aether
 		[[nodiscard]] gpu::MappedBufferView ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept;
 		void FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
 
-		// Naming - uses the debug-utils extension if available.
 		void SetBufferName(gpu::BufferHandle handle, const char* name);
 		void SetTextureName(gpu::TextureHandle handle, const char* name);
 
-		// Aliased creation - the caller owns the VmaAllocation lifetime.
 		[[nodiscard]] gpu::BufferHandle CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 		[[nodiscard]] gpu::TextureHandle CreateAliasedTexture(const gpu::TextureDesc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 
-		// Bindless registrations & queries.
-		// The registry stores a BindlessManager pointer for deferred slot-free
-		// during Destroy(TextureHandle). Set via SetBindlessManager() at init.
+		// Bindless registration. BindlessManager pointer is for deferred slot-free on Destroy().
 		void SetBindlessManager(BindlessManager* mgr);
 		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle,
 		        BindlessManager& bindlessManager,
@@ -191,14 +152,12 @@ namespace aether
 		[[nodiscard]] bool HasBindlessSampled(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(gpu::TextureHandle handle) const;
 
-		// Texture property queries.
 		[[nodiscard]] gpu::Format GetTextureFormat(gpu::TextureHandle handle) const;
 		[[nodiscard]] gpu::Extent2D GetTextureExtent(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetTextureMipLevels(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetTextureArrayLayers(gpu::TextureHandle handle) const;
 		[[nodiscard]] gpu::ImageUsage GetTextureUsage(gpu::TextureHandle handle) const;
 
-		// Buffer property queries.
 		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
 		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;
 

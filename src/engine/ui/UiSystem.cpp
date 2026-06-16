@@ -509,20 +509,17 @@ namespace aether::ui
 			++ti->cursorPos;
 		}
 
-		// Backspace: delete character before cursor.
 		if (input.IsKeyPressed(Key::Backspace) && ti->cursorPos > 0)
 		{
 			ti->text.erase(static_cast<std::string::size_type>(ti->cursorPos - 1), 1u);
 			--ti->cursorPos;
 		}
 
-		// Delete: delete character at cursor.
 		if (input.IsKeyPressed(Key::Delete) && ti->cursorPos < static_cast<int>(ti->text.size()))
 		{
 			ti->text.erase(static_cast<std::string::size_type>(ti->cursorPos), 1u);
 		}
 
-		// Arrow keys.
 		if (input.IsKeyPressed(Key::Left) && ti->cursorPos > 0)
 		{
 			--ti->cursorPos;
@@ -540,7 +537,6 @@ namespace aether::ui
 			ti->cursorPos = static_cast<int>(ti->text.size());
 		}
 
-		// Cursor blink.
 		ti->cursorBlinkTime += deltaTime;
 		if (ti->cursorBlinkTime >= 0.5f)
 		{

@@ -4,10 +4,6 @@
 
 namespace aether::gpu
 {
-	// -------------------------------------------------------------------------
-	// Format
-	// -------------------------------------------------------------------------
-
 	// All Format enum values are enumerated explicitly to satisfy
 	// -Werror=switch-enum. Anything the engine does not (yet) use maps to
 	// VK_FORMAT_UNDEFINED. Extending Format will force a compile error here,
@@ -249,10 +245,6 @@ namespace aether::gpu
 		return 0u;
 	}
 
-	// -------------------------------------------------------------------------
-	// PipelineBindPoint
-	// -------------------------------------------------------------------------
-
 	VkPipelineBindPoint ToVk(PipelineBindPoint bindPoint) noexcept
 	{
 		switch (bindPoint)
@@ -265,9 +257,6 @@ namespace aether::gpu
 		return VK_PIPELINE_BIND_POINT_GRAPHICS;
 	}
 
-	// -------------------------------------------------------------------------
-	// PipelineStage / AccessFlags
-	// -------------------------------------------------------------------------
 	// Bit values mirror VkPipelineStageFlagBits2 / VkAccessFlagBits2 directly,
 	// so the engine-side enum can forward to the Vk* bitmask without any
 	// per-bit translation. Unknown / unsupported stage bits fall through to
@@ -282,9 +271,6 @@ namespace aether::gpu
 		return static_cast<VkAccessFlags2>(access);
 	}
 
-	// -------------------------------------------------------------------------
-	// DescriptorType
-	// -------------------------------------------------------------------------
 	VkDescriptorType ToVk(DescriptorType type) noexcept
 	{
 		switch (type)
@@ -315,9 +301,6 @@ namespace aether::gpu
 		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 	}
 
-	// -------------------------------------------------------------------------
-	// ShaderStage
-	// -------------------------------------------------------------------------
 	VkShaderStageFlags ToVk(ShaderStage stage) noexcept
 	{
 		VkShaderStageFlags out = 0;
@@ -349,9 +332,6 @@ namespace aether::gpu
 		return out;
 	}
 
-	// -------------------------------------------------------------------------
-	// CompareOp
-	// -------------------------------------------------------------------------
 	VkCompareOp ToVk(CompareOp op) noexcept
 	{
 		switch (op)
@@ -376,9 +356,6 @@ namespace aether::gpu
 		return VK_COMPARE_OP_LESS;
 	}
 
-	// -------------------------------------------------------------------------
-	// LoadOp
-	// -------------------------------------------------------------------------
 	VkAttachmentLoadOp ToVk(LoadOp op) noexcept
 	{
 		switch (op)
@@ -393,9 +370,6 @@ namespace aether::gpu
 		return VK_ATTACHMENT_LOAD_OP_CLEAR;
 	}
 
-	// -------------------------------------------------------------------------
-	// StoreOp
-	// -------------------------------------------------------------------------
 	VkAttachmentStoreOp ToVk(StoreOp op) noexcept
 	{
 		switch (op)
@@ -408,9 +382,6 @@ namespace aether::gpu
 		return VK_ATTACHMENT_STORE_OP_STORE;
 	}
 
-	// -------------------------------------------------------------------------
-	// ImageUsage (bit-preserving)
-	// -------------------------------------------------------------------------
 	VkImageUsageFlags ToVk(ImageUsage usage) noexcept
 	{
 		VkImageUsageFlags out = 0;
@@ -442,9 +413,6 @@ namespace aether::gpu
 		return out;
 	}
 
-	// -------------------------------------------------------------------------
-	// BufferUsage (bit-preserving)
-	// -------------------------------------------------------------------------
 	VkBufferUsageFlags ToVk(BufferUsage usage) noexcept
 	{
 		VkBufferUsageFlags out = 0;
@@ -492,9 +460,6 @@ namespace aether::gpu
 		return out;
 	}
 
-	// -------------------------------------------------------------------------
-	// ImageAspect (bit-preserving)
-	// -------------------------------------------------------------------------
 	VkImageAspectFlags ToVk(ImageAspect aspect) noexcept
 	{
 		VkImageAspectFlags out = 0;
@@ -532,9 +497,6 @@ namespace aether::gpu
 		return static_cast<ImageAspect>(bits);
 	}
 
-	// -------------------------------------------------------------------------
-	// ImageLayout
-	// -------------------------------------------------------------------------
 	VkImageLayout ToVk(ImageLayout layout) noexcept
 	{
 		switch (layout)
@@ -622,10 +584,6 @@ namespace aether::gpu
 		return VK_COMPONENT_SWIZZLE_IDENTITY;
 	}
 
-	// -------------------------------------------------------------------------
-	// Sampler parameters
-	// -------------------------------------------------------------------------
-
 	VkFilter ToVk(Filter filter) noexcept
 	{
 		switch (filter)
@@ -666,9 +624,6 @@ namespace aether::gpu
 		return VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	}
 
-	// -------------------------------------------------------------------------
-	// ClearValue
-	// -------------------------------------------------------------------------
 	VkClearValue ToVk(const ClearValue& value) noexcept
 	{
 		VkClearValue v{};
@@ -681,9 +636,6 @@ namespace aether::gpu
 		return v;
 	}
 
-	// -------------------------------------------------------------------------
-	// PrimitiveTopology
-	// -------------------------------------------------------------------------
 	VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept
 	{
 		switch (topology)
@@ -713,9 +665,6 @@ namespace aether::gpu
 		return VK_POLYGON_MODE_FILL;
 	}
 
-	// -------------------------------------------------------------------------
-	// Barrier + dynamic-rendering conversions (P5(d))
-	// -------------------------------------------------------------------------
 	// The engine-side barrier structs hold opaque gpu::Image / gpu::Buffer
 	// handles; the storage knows the actual VkImage / VkBuffer to plug in.
 	// The translation here is otherwise a one-for-one field copy.

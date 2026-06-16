@@ -8,9 +8,7 @@
 
 namespace aether::gpu::detail
 {
-	// pImpl data: the real definition is here, where `VkSemaphore` is
-	// visible. The engine side only sees a pointer to this struct, so
-	// the engine never touches a `VkSemaphore` or a `void*` payload.
+	// pImpl data; the engine only sees a pointer.
 	struct TimelineSemaphoreData
 	{
 		VkSemaphore semaphore = VK_NULL_HANDLE;

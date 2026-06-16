@@ -13,8 +13,6 @@ namespace aether
 	{
 		SkyboxPass pass;
 
-		// Full-screen pass: no vertex input, no depth attachment.
-		// Push constant: a single uint64_t BDA pointer to FrameConstantsData.
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(desc.device,
 		                desc.pipelineCache,
@@ -43,14 +41,6 @@ namespace aether
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
-			                // Phase 3 migration: the pass uses gpu::CommandList
-			                // (a Vulkan-free wrapper) instead of calling
-			                // vkCmd* directly. The CommandList is constructed
-			                // from the same underlying VkCommandBuffer that
-			                // PassContext::recorder currently exposes. When the
-			                // PassContext API itself migrates (a later slice
-			                // of Phase 3) the wrapper construction moves into
-			                // RenderGraph and this body drops a line.
 			                gpu::CommandList& cmd = ctx.recorder;
 
 			                cmd.BindPipeline(m_pipeline.GetPipeline(), m_pipeline.GetLayout());

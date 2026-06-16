@@ -190,7 +190,6 @@ namespace aether::coro
 	//   int result = co_await t;
 	// ---------------------------------------------------------------------------
 
-	// Forward declarations
 	template<typename T>
 	class task;
 
@@ -239,7 +238,6 @@ namespace aether::coro
 
 	} // namespace detail
 
-	// Producer side
 	template<typename T>
 	class task_source
 	{
@@ -287,7 +285,6 @@ namespace aether::coro
 		std::shared_ptr<state_type> m_state;
 	};
 
-	// Consumer side
 	template<typename T>
 	class task
 	{

@@ -11,22 +11,16 @@ namespace aether::gpu
 	// Opaque resource handles
 	// -------------------------------------------------------------------------
 	// Engine-facing replacements for raw Vk* handles at the public API.
-	// Each handle pairs a 24-bit slot index with an 8-bit generation counter
+	// Each handle pairs a 16-bit slot index with a 16-bit generation counter
 	// incremented on slot reuse. The generation check makes stale-handle use
 	// fail loudly in IsValid() / Resolve*() instead of silently re-allocating
 	// over a live resource (a classic source of "the wrong texture is
 	// showing" / "buffer got freed mid-frame" bugs).
 	//
-	// Phase 2 of the GPU refactor introduces these types. Consumer migration
-	// happens in Phase 3 (gpu::CommandList) and Phase 5 (RenderGraph barriers).
-	// Until then, raw VkImage/VkBuffer/VkPipeline continue to be used at the
-	// engine boundary - the handle types are simply *available* for new code
-	// and for the registry that the backend will populate in a follow-up.
-	//
 	// The handle struct is 32 bits so handles fit cleanly in a single
-	// push-constant / draw-contract slot. The high 8 bits hold the
-	// generation; the low 24 bits hold the slot index. This caps total
-	// tracked resources per type at 16,777,216, which is far more than any
+	// push-constant / draw-contract slot. The high 16 bits hold the
+	// generation; the low 16 bits hold the slot index. This caps total
+	// tracked resources per type at 65,535, which is far more than any
 	// practical engine needs.
 	namespace detail
 	{

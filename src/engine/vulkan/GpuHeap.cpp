@@ -81,7 +81,7 @@ namespace aether
 				continue;
 			}
 
-			// Split off alignment waste as a separate free block (reuse current slot).
+			// Split off alignment waste as a separate free block.
 			if (waste > 0)
 			{
 				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset, effectiveSize});
@@ -93,14 +93,10 @@ namespace aether
 			if (effectiveSize > bytes)
 			{
 				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset + bytes, effectiveSize - bytes});
-				// Block at idx now represents the allocated region: {alignedOffset, bytes}
-				// Replace it with the remainder since we only split once - keep it simple:
-				// erase the usable slot (idx) since we'll let the normal free-list manage leftovers.
 				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
 			}
 			else
 			{
-				// Exact fit: just erase the usable block.
 				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
 			}
 
@@ -111,7 +107,7 @@ namespace aether
 
 	void GpuHeap::FreeBytes(VkDeviceSize offset, VkDeviceSize bytes)
 	{
-		// Round up to match the alignment applied by AllocBytes.
+		// Round up to match AllocBytes alignment.
 		constexpr VkDeviceSize kMinAlignment = 16;
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 		auto it = std::lower_bound(m_freeList.begin(), m_freeList.end(), offset, [](const FreeBlock& b, VkDeviceSize o) { return b.offset < o; });
@@ -141,7 +137,6 @@ namespace aether
 		assert(dstAddr >= m_baseAddress);
 		const VkDeviceSize dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
 
-		// Transient host-visible staging buffer.
 		const VkBufferCreateInfo stagingInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		        .size = bytes,
@@ -161,7 +156,6 @@ namespace aether
 		std::memcpy(stagingVmaInfo.pMappedData, src, static_cast<std::size_t>(bytes));
 		vmaFlushAllocation(m_allocatorRef, stagingAllocation, 0, bytes);
 
-		// One-time command buffer.
 		const VkCommandBufferAllocateInfo allocInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
 		        .commandPool = pool,
