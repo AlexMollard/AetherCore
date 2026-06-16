@@ -32,8 +32,12 @@ function(aethercore_target_defaults target)
             /external:W0
         )
 
+        # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
+        # COMDATs. Required for "what can we delete" audits via the link map.
+        # Works alongside /DEBUG — the link is still debuggable.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
+            $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
             $<$<CONFIG:Debug>:/DEBUG:FULL>
         )
@@ -80,8 +84,12 @@ function(aethercore_target_defaults target)
             /external:W0
         )
 
+        # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
+        # COMDATs. Required for "what can we delete" audits via the link map.
+        # Works alongside /DEBUG — the link is still debuggable.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
+            $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/DEBUG:FULL>
         )
 

@@ -35,3 +35,5 @@ endif()
 set_target_properties(AssetPacker PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tools"
 )
+
+aethercore_enable_dead_strip_report(AssetPacker)

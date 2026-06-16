@@ -25,6 +25,7 @@ endif()
 
 aethercore_target_defaults(App)
 aethercore_enable_slang_shader_compilation(App)
+aethercore_enable_dead_strip_report(App)
 
 set_target_properties(App PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"

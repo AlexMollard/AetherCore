@@ -20,12 +20,16 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMake")
 # Build-speed knobs (especially useful with Visual Studio generator).
 option(AETHERCORE_FAST_MSVC_DEBUG_INFO "Use /Z7 + /DEBUG:FASTLINK in Debug for faster iterative builds" ON)
 
+option(AETHERCORE_DEAD_STRIP_REPORT
+    "Emit link map files (and per-section gc log) for App and AssetPacker" OFF)
+
 # Generate compile_commands.json for clangd / tooling (ignored by VS generator).
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(Dependencies)
 include(TargetDefaults)
 include(SlangShaders)
+include(DeadStripReport)
 
 option(AETHERCORE_ENABLE_CLANG_TIDY_TARGET "Add clang-tidy custom target (uses the clangd preset's compile_commands.json)" OFF)
 if(AETHERCORE_ENABLE_CLANG_TIDY_TARGET)
