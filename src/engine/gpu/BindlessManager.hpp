@@ -38,7 +38,7 @@ namespace aether
 		{
 			std::size_t operator()(const SamplerKey& key) const
 			{
-				std::size_t h = static_cast<std::size_t>(key.filter);
+				auto h = static_cast<std::size_t>(key.filter);
 				h ^= static_cast<std::size_t>(key.mipmapMode) << 4;
 				h ^= static_cast<std::size_t>(key.addressMode) << 8;
 				return h;

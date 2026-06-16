@@ -26,7 +26,7 @@ namespace aether
 	namespace
 	{
 		std::atomic<LogLevel> g_minimumLevel{LogLevel::Verbose};
-		constexpr std::uint64_t kInvalidFrameNumber = (std::numeric_limits<std::uint64_t>::max)();
+		constexpr std::uint64_t kInvalidFrameNumber = std::numeric_limits<std::uint64_t>::max();
 		std::atomic<std::uint64_t> g_frameNumber{kInvalidFrameNumber};
 
 		struct LogEntry
@@ -211,7 +211,7 @@ namespace aether
 
 		std::string_view BuildTimestamp(const std::time_t nowTime)
 		{
-			thread_local std::time_t cachedSecond = static_cast<std::time_t>(-1);
+			thread_local auto cachedSecond = static_cast<std::time_t>(-1);
 			thread_local char cachedTimestamp[9] = "00:00:00";
 
 			if (nowTime == cachedSecond)

@@ -295,12 +295,12 @@ namespace aether
 		{
 			idx = m_freeExternalSlots.back();
 			m_freeExternalSlots.pop_back();
-			m_externalImages[idx] = {image, view, aspect};
+			m_externalImages[idx] = {.image = image, .view = view, .aspect = aspect};
 		}
 		else
 		{
 			idx = static_cast<uint32_t>(m_externalImages.size());
-			m_externalImages.push_back({image, view, aspect});
+			m_externalImages.push_back({.image = image, .view = view, .aspect = aspect});
 		}
 #ifndef NDEBUG
 		SetTrackedLayout(static_cast<gpu::Image>(image), gpu::ImageLayout::Undefined);
@@ -379,7 +379,7 @@ namespace aether
 			m_externalBuffers[idx] = buffer;
 			return idx;
 		}
-		const uint32_t idx = static_cast<uint32_t>(m_externalBuffers.size());
+		const auto idx = static_cast<uint32_t>(m_externalBuffers.size());
 		m_externalBuffers.push_back(buffer);
 		return idx;
 	}
@@ -742,7 +742,7 @@ namespace aether
 			return idx;
 		}
 
-		const uint32_t idx = static_cast<uint32_t>(m_events.size());
+		const auto idx = static_cast<uint32_t>(m_events.size());
 		VkEvent event = VK_NULL_HANDLE;
 		const VkEventCreateInfo info{
 		        .sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO,
@@ -794,8 +794,8 @@ namespace aether
 		{
 			return;
 		}
-		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
-		const VkEvent vkEvent = static_cast<VkEvent>(event);
+		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const auto vkEvent = static_cast<VkEvent>(event);
 
 		// Translate gpu::ImageMemoryBarrier span to a stack VkImageMemoryBarrier2 array.
 		// barrier.image is the pre-resolved VkImage (opaque gpu::Image == VkImage);
@@ -823,8 +823,8 @@ namespace aether
 		{
 			return;
 		}
-		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
-		const VkEvent vkEvent = static_cast<VkEvent>(event);
+		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const auto vkEvent = static_cast<VkEvent>(event);
 
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
@@ -847,7 +847,7 @@ namespace aether
 		{
 			return;
 		}
-		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		std::vector<VkBufferMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
@@ -870,7 +870,7 @@ namespace aether
 		{
 			return;
 		}
-		const VkCommandBuffer vkCmd = static_cast<VkCommandBuffer>(cmd);
+		const auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
 		std::vector<VkImageMemoryBarrier2> vkBarriers;
 		vkBarriers.reserve(barriers.size());
@@ -989,7 +989,7 @@ namespace aether
 			        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
 			        .imageType = VK_IMAGE_TYPE_2D,
 			        .format = gpu::ToVk(entry.format),
-			        .extent = {entry.extent.width, entry.extent.height, 1u},
+			        .extent = {.width = entry.extent.width, .height = entry.extent.height, .depth = 1u},
 			        .mipLevels = 1,
 			        .arrayLayers = 1,
 			        .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -1055,26 +1055,8 @@ namespace aether
 			return indices;
 		};
 
-		auto imageIndices = collectCandidates(
-		        m_transientImages,
-		        [](const TransientImageEntry& e)
-		        {
-			        return e.image.IsValid();
-		        },
-		        [](const TransientImageEntry& e)
-		        {
-			        return e.memReqSize > 0;
-		        });
-		auto bufferIndices = collectCandidates(
-		        m_transientBuffers,
-		        [](const TransientBufferEntry& e)
-		        {
-			        return e.buffer.IsValid();
-		        },
-		        [](const TransientBufferEntry& e)
-		        {
-			        return e.memReqSize > 0;
-		        });
+		auto imageIndices = collectCandidates(m_transientImages, [](const TransientImageEntry& e) { return e.image.IsValid(); }, [](const TransientImageEntry& e) { return e.memReqSize > 0; });
+		auto bufferIndices = collectCandidates(m_transientBuffers, [](const TransientBufferEntry& e) { return e.buffer.IsValid(); }, [](const TransientBufferEntry& e) { return e.memReqSize > 0; });
 
 		auto byAlignmentDescImages = [&](std::uint32_t a, std::uint32_t b)
 		{
@@ -1084,8 +1066,8 @@ namespace aether
 		{
 			return m_transientBuffers[a].memReqAlignment > m_transientBuffers[b].memReqAlignment;
 		};
-		std::sort(imageIndices.begin(), imageIndices.end(), byAlignmentDescImages);
-		std::sort(bufferIndices.begin(), bufferIndices.end(), byAlignmentDescBuffers);
+		std::ranges::sort(imageIndices, byAlignmentDescImages);
+		std::ranges::sort(bufferIndices, byAlignmentDescBuffers);
 
 		VkDeviceSize totalSize = 0;
 		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize

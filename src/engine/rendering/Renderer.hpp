@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <numbers>
 #include <span>
 #include <vector>
 #include "gpu/GpuFormat.hpp"
@@ -130,7 +131,7 @@ namespace aether
 		PostProcessStack* m_postProcessStack = nullptr;
 
 		// Cached light parameters (also written to frame constants).
-		glm::vec4 m_sunDirectionIntensity{0.577f, 0.577f, 0.577f, 3.0f};
+		glm::vec4 m_sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};
 		glm::vec4 m_sunColor{1.0f, 0.96f, 0.90f, 1.0f};
 		glm::vec4 m_ambientColor{0.03f, 0.04f, 0.06f, 1.0f};
 		glm::vec4 m_skyHorizonColor{0.34f, 0.52f, 0.82f, 1.0f};

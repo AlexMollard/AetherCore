@@ -32,7 +32,7 @@ namespace aether::io
 		// ---- coro::executor -----------------------------------------------
 		void schedule(std::coroutine_handle<> h) override;
 
-		const char* name() const noexcept override
+		[[nodiscard]] const char* name() const noexcept override
 		{
 			return "IoExecutor";
 		}

@@ -79,8 +79,8 @@ namespace aether::gpu
 		inline VkRect2D ToVkRect2D(const Rect2D& r) noexcept
 		{
 			return VkRect2D{
-			        .offset = {r.x, r.y},
-			        .extent = {r.width, r.height},
+			        .offset = {.x = r.x, .y = r.y},
+			        .extent = {.width = r.width, .height = r.height},
 			};
 		}
 
@@ -215,7 +215,7 @@ namespace aether::gpu
 			return;
 		}
 		const VkBuffer vkBuf = AsVkBuffer(vkBuffer);
-		const VkDeviceSize vkOffset = static_cast<VkDeviceSize>(offset);
+		const auto vkOffset = static_cast<VkDeviceSize>(offset);
 		vkCmdBindVertexBuffers(AsVkCmd(m_cmd), 0, 1, &vkBuf, &vkOffset);
 	}
 
@@ -500,7 +500,7 @@ namespace aether::gpu
 		        .image = static_cast<VkImage>(image),
 		        .subresourceRange =
 		                {
-		                        .aspectMask = static_cast<VkImageAspectFlags>(ToVk(aspect)),
+		                        .aspectMask = ToVk(aspect),
 		                        .baseMipLevel = 0,
 		                        .levelCount = 1,
 		                        .baseArrayLayer = 0,

@@ -16,8 +16,8 @@ namespace aether::vkutil
 {
 	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache gpuPipelineCache, const GraphicsPipeline::Desc& desc) noexcept
 	{
-		const VkDevice device = static_cast<VkDevice>(gpuDevice);
-		const VkPipelineCache pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
+		const auto device = static_cast<VkDevice>(gpuDevice);
+		const auto pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
 		const VkFormat vkDepthFormat = gpu::ToVk(desc.depthFormat);
 		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);
@@ -47,7 +47,7 @@ namespace aether::vkutil
 			{
 				auto fragResult = vkutil::CreateShaderModule(device, *fragSpirv, fragName.c_str());
 				AE_EXPECT_OR_THROW_VOID(fragResult);
-				fragModule = std::move(*fragResult);
+				fragModule = *fragResult;
 			}
 		}
 		else

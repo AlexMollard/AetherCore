@@ -9,6 +9,7 @@
 #include <regex>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 #include "utils/AetherExceptions.hpp"
@@ -21,7 +22,7 @@ namespace aether::io
 	{
 		std::string NormalizePath(std::string path)
 		{
-			std::replace(path.begin(), path.end(), '\\', '/');
+			std::ranges::replace(path, '\\', '/');
 			return path;
 		}
 
@@ -250,7 +251,7 @@ namespace aether::io
 			}
 		}
 
-		std::sort(matches.begin(), matches.end());
+		std::ranges::sort(matches);
 		return matches;
 	}
 
@@ -307,7 +308,7 @@ namespace aether::io
 		if (bestMatch)
 		{
 			*bestMatch = {};
-			int bestDist = (std::numeric_limits<int>::max)();
+			int bestDist = std::numeric_limits<int>::max();
 			for (std::filesystem::directory_iterator it(parent, ec), end; it != end; ++it)
 			{
 				const std::string candidate = it->path().filename().generic_string();
@@ -353,7 +354,7 @@ namespace aether::io
 			const std::string candidate = it->path().filename().generic_string();
 			const int d = utils::Levenshtein(targetFilename, candidate);
 			pq.emplace(d, candidate);
-			if (static_cast<int>(pq.size()) > maxSuggestions)
+			if (std::cmp_greater(pq.size(), maxSuggestions))
 			{
 				pq.pop();
 			}
@@ -367,7 +368,7 @@ namespace aether::io
 			results.push_back(parentVfs.empty() ? top.second : parentVfs + "/" + top.second);
 			pq.pop();
 		}
-		std::reverse(results.begin(), results.end());
+		std::ranges::reverse(results);
 		return results;
 	}
 } // namespace aether::io

@@ -181,8 +181,8 @@ namespace aether
 		AE_PROFILE_ZONE();
 		VkDevice device = gpu.GetVulkanContext().GetDevice().device;
 		auto& frame = m_frames[frameIndex];
-		VkFence fence = reinterpret_cast<VkFence>(frame.fence);
-		VkCommandPool pool = reinterpret_cast<VkCommandPool>(frame.commandPool);
+		auto fence = reinterpret_cast<VkFence>(frame.fence);
+		auto pool = reinterpret_cast<VkCommandPool>(frame.commandPool);
 
 		if (vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 		{
@@ -197,7 +197,7 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to reset command pool."));
 		}
 
-		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
+		auto cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
 		const VkCommandBufferBeginInfo beginInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
 		        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
@@ -217,7 +217,7 @@ namespace aether
 	void AsyncComputeContext::EndCommandBuffer(std::uint32_t frameIndex)
 	{
 		gpu::CommandList(reinterpret_cast<void*>(m_frames[frameIndex].commandBuffer)).EndDebugLabel();
-		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer);
+		auto cmd = reinterpret_cast<VkCommandBuffer>(m_frames[frameIndex].commandBuffer);
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
 			Throw(AetherError::Vulkan(0, "AsyncComputeContext: failed to end command buffer."));
@@ -230,9 +230,9 @@ namespace aether
 		auto& frame = m_frames[frameIndex];
 		const std::uint64_t signalValue = ++m_timelineValue;
 
-		VkCommandBuffer cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
-		VkFence fence = reinterpret_cast<VkFence>(frame.fence);
-		VkSemaphore timelineSem = reinterpret_cast<VkSemaphore>(m_timelineSemaphoreHandle);
+		auto cmd = reinterpret_cast<VkCommandBuffer>(frame.commandBuffer);
+		auto fence = reinterpret_cast<VkFence>(frame.fence);
+		auto timelineSem = reinterpret_cast<VkSemaphore>(m_timelineSemaphoreHandle);
 
 		VkCommandBufferSubmitInfo cmdInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,

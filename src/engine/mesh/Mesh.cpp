@@ -156,9 +156,9 @@ namespace aether
 	Mesh::Mesh(Mesh&& other) noexcept
 	      : m_device(other.m_device),
 	        m_allocator(other.m_allocator),
-	        m_buffer(std::move(other.m_buffer)),
+	        m_buffer(other.m_buffer),
 	        m_vertexCount(other.m_vertexCount),
-	        m_indexBuffer(std::move(other.m_indexBuffer)),
+	        m_indexBuffer(other.m_indexBuffer),
 	        m_indexCount(other.m_indexCount),
 	        m_vertexByteOffset(other.m_vertexByteOffset),
 	        m_indexByteOffset(other.m_indexByteOffset),
@@ -195,9 +195,9 @@ namespace aether
 
 			m_device = other.m_device;
 			m_allocator = other.m_allocator;
-			m_buffer = std::move(other.m_buffer);
+			m_buffer = other.m_buffer;
 			m_vertexCount = other.m_vertexCount;
-			m_indexBuffer = std::move(other.m_indexBuffer);
+			m_indexBuffer = other.m_indexBuffer;
 			m_indexCount = other.m_indexCount;
 			m_vertexByteOffset = other.m_vertexByteOffset;
 			m_indexByteOffset = other.m_indexByteOffset;

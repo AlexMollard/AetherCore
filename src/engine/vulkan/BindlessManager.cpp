@@ -57,8 +57,8 @@ namespace aether
 
 		// -- Descriptor pool ---------------------------------------------------
 		const VkDescriptorPoolSize poolSizes[2] = {
-		        {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, m_capacity},
-		        {VK_DESCRIPTOR_TYPE_SAMPLER, 1},
+		        {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = m_capacity},
+		        {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = 1},
 		};
 
 		const VkDescriptorPoolCreateInfo poolCreateInfo{
@@ -179,7 +179,7 @@ namespace aether
 			return;
 		}
 
-		const VkDevice vkDevice = static_cast<VkDevice>(m_device);
+		const auto vkDevice = static_cast<VkDevice>(m_device);
 
 		// Destroy layout before sampler (layout embeds the sampler handle).
 		if (m_layout != nullptr)
@@ -273,7 +273,7 @@ namespace aether
 			return Unexpected{AetherError::Engine("BindlessManager is not initialized.")};
 		}
 
-		const SamplerKey key{filter, mipmapMode, addressMode};
+		const SamplerKey key{.filter = filter, .mipmapMode = mipmapMode, .addressMode = addressMode};
 		const auto it = m_samplerCache.find(key);
 		if (it != m_samplerCache.end())
 		{
@@ -305,7 +305,7 @@ namespace aether
 			return Unexpected{AetherError::Vulkan(0, "BindlessManager: failed to create cached sampler.")};
 		}
 
-		const gpu::Sampler gpuSampler = static_cast<gpu::Sampler>(sampler);
+		const auto gpuSampler = static_cast<gpu::Sampler>(sampler);
 		m_samplerCache[key] = gpuSampler;
 		return gpuSampler;
 	}

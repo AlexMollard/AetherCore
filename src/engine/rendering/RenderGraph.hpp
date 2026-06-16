@@ -84,7 +84,7 @@ namespace aether
 			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
-			gpu::Extent2D extent{}; // {0,0} = match FrameTarget extent at Execute()
+			gpu::Extent2D extent; // {0,0} = match FrameTarget extent at Execute()
 		};
 
 		RenderGraph();

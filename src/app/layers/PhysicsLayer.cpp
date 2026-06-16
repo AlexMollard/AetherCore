@@ -55,7 +55,7 @@ namespace aether::app
 			return;
 		}
 
-		UIRenderer& ui = context.Get<UIRenderer>();
+		auto& ui = context.Get<UIRenderer>();
 
 		constexpr float kPanelW = 280.f;
 		constexpr float kPadX = 14.f;

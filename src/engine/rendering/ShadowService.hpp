@@ -58,7 +58,7 @@ namespace aether
 
 		[[nodiscard]] std::span<const RGImage> GetShadowDepthImages() const
 		{
-			return std::span<const RGImage>(m_shadowDepth.data(), m_shadowDepth.size());
+			return {m_shadowDepth.data(), m_shadowDepth.size()};
 		}
 
 	private:

@@ -46,8 +46,8 @@ namespace aether
 
 			                const std::uint32_t frameSlot = readSlot;
 			                auto& pending = m_pendingQuads[readSlot];
-			                const std::uint32_t commandCount = static_cast<std::uint32_t>(pending.size());
-			                const gpu::DeviceSize commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
+			                const auto commandCount = static_cast<std::uint32_t>(pending.size());
+			                const auto commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
 
 			                // Ensure GPU buffers are allocated.
 			                if (!m_commandBuffers[frameSlot].handle.IsValid() || m_commandBuffers[frameSlot].capacity < static_cast<std::size_t>(commandBytes))
@@ -94,7 +94,7 @@ namespace aether
 			                // Sort by layer on CPU. Use stable_sort to preserve insertion
 			                // order for elements at the same layer (original insertion
 			                // sort was also stable).
-			                std::stable_sort(pending.begin(), pending.end(), [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
+			                std::ranges::stable_sort(pending, [](const PendingQuad& a, const PendingQuad& b) { return a.cmd.layer < b.cmd.layer; });
 
 			                // Upload sorted command data to the GPU buffer.
 			                void* mappedCommands = m_commandBuffers[frameSlot].mapped;

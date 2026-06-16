@@ -34,7 +34,7 @@ namespace aether
 		        RenderQueue& renderQueue,
 		        RGImage hdrColor,
 		        RGImage depth,
-		        std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn,
+		        const std::function<void(gpu::CommandList&, gpu::PipelineLayout)>& pushLightingFn,
 		        std::span<const RGImage> shadowMaps = {},
 		        RGImage localShadowAtlas = {},
 		        RGBuffer lightsBuffer = {},

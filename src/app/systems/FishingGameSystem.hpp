@@ -50,7 +50,7 @@ namespace aether::app
 
 		void UpdatePlayer(float dt);
 		bool TryGetWaterHitPoint(glm::vec3& outTarget) const;
-		glm::vec3 GetRodWorldOrigin() const;
+		[[nodiscard]] glm::vec3 GetRodWorldOrigin() const;
 
 		enum class BobberState
 		{

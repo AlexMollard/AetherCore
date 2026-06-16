@@ -18,7 +18,7 @@ namespace aether::gpu
 	[[nodiscard]] std::span<const std::byte> AsPushConstantBytes(const T& value) noexcept
 	{
 		static_assert(std::is_trivially_copyable_v<T>, "push-constant payload must be trivially copyable");
-		return std::span<const std::byte>(reinterpret_cast<const std::byte*>(&value), sizeof(T));
+		return {reinterpret_cast<const std::byte*>(&value), sizeof(T)};
 	}
 
 	// Mutable overload: for the rare case where the caller wants to fill
@@ -27,7 +27,7 @@ namespace aether::gpu
 	[[nodiscard]] std::span<std::byte> AsPushConstantBytes(T& value) noexcept
 	{
 		static_assert(std::is_trivially_copyable_v<T>, "push-constant payload must be trivially copyable");
-		return std::span<std::byte>(reinterpret_cast<std::byte*>(&value), sizeof(T));
+		return {reinterpret_cast<std::byte*>(&value), sizeof(T)};
 	}
 
 	// Build a byte span from a small stack buffer (for cases where the

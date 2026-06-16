@@ -58,11 +58,11 @@ namespace aether
 		auto* mapped = static_cast<std::uint8_t*>(m_stagingMapped);
 
 		std::memcpy(mapped + m_ringHead, vertexData, static_cast<std::size_t>(vertexBytes));
-		m_pendingCopies.push_back({m_stagingBuffer, m_ringHead, destVertexBuffer, destVertexOffset, vertexBytes});
+		m_pendingCopies.push_back({.srcBuffer = m_stagingBuffer, .srcOffset = m_ringHead, .dstBuffer = destVertexBuffer, .dstOffset = destVertexOffset, .size = vertexBytes});
 		m_ringHead += vertexBytes;
 
 		std::memcpy(mapped + m_ringHead, indexData, static_cast<std::size_t>(indexBytes));
-		m_pendingCopies.push_back({m_stagingBuffer, m_ringHead, destIndexBuffer, destIndexOffset, indexBytes});
+		m_pendingCopies.push_back({.srcBuffer = m_stagingBuffer, .srcOffset = m_ringHead, .dstBuffer = destIndexBuffer, .dstOffset = destIndexOffset, .size = indexBytes});
 		m_ringHead += indexBytes;
 
 		return true;

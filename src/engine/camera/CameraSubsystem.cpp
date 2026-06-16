@@ -10,8 +10,8 @@ namespace aether
 	void CameraSubsystem::Init(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		GpuDevice& gpu = services.Get<GpuDevice>();
-		VulkanContext& vk = services.Get<VulkanContext>();
+		auto& gpu = services.Get<GpuDevice>();
+		auto& vk = services.Get<VulkanContext>();
 		// LightingManager needs the GpuDevice facade to talk to the backend
 		// descriptor-set-layout helper, and the VulkanContext for direct
 		// Vulkan access during compute-pipeline setup. The Renderer pointer

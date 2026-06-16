@@ -88,7 +88,7 @@ namespace aether
 			return;
 		}
 
-		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		const auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		for (auto& frame: m_buffers)
 		{
 			auto destroyBuf = [](gpu::BufferHandle& h)
@@ -218,9 +218,8 @@ namespace aether
 	{
 		outLights.reserve(outLights.size() + pointLights.size() + spotLights.size());
 
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(pointLights.size()); ++i)
+		for (const auto& src: pointLights)
 		{
-			const Renderer::PointLight& src = pointLights[i];
 			outLights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
@@ -229,9 +228,8 @@ namespace aether
 			        .shadowIndex = glm::vec4(-1.0f, 1.0f, 0.0f, 0.0f),
 			});
 		}
-		for (std::uint32_t i = 0; i < static_cast<std::uint32_t>(spotLights.size()); ++i)
+		for (const auto& src: spotLights)
 		{
-			const Renderer::SpotLight& src = spotLights[i];
 			outLights.push_back(GpuLight{
 			        .positionRadius = glm::vec4(src.position, src.radius),
 			        .colorIntensity = glm::vec4(src.color, src.intensity),
@@ -462,8 +460,8 @@ namespace aether
 			return;
 		}
 
-		const gpu::Device device = static_cast<gpu::Device>(m_context->GetDevice().device);
-		const gpu::PipelineCache pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
+		const auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
+		const auto pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
 
 		// Create shared layout once.
 		if (m_computeLayout == nullptr)
@@ -531,7 +529,7 @@ namespace aether
 
 		const std::size_t lightCount = frame.lightsSize / sizeof(GpuLight);
 		const std::size_t applyCount = std::min(lightCount, shadowIndices.size());
-		GpuLight* mapped = static_cast<GpuLight*>(frame.lightsMapped);
+		auto* mapped = static_cast<GpuLight*>(frame.lightsMapped);
 		for (std::size_t i = 0; i < applyCount; ++i)
 		{
 			mapped[i].shadowIndex.x = shadowIndices[i].x; // shadowIndex

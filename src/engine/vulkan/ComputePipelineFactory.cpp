@@ -12,8 +12,8 @@ namespace aether::vkutil
 {
 	Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache gpuPipelineCache, const ComputePipelineDesc& desc) noexcept
 	{
-		const VkDevice device = static_cast<VkDevice>(gpuDevice);
-		const VkPipelineCache pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
+		const auto device = static_cast<VkDevice>(gpuDevice);
+		const auto pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())

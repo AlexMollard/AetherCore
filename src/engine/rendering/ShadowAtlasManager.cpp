@@ -87,7 +87,7 @@ namespace aether
 		{
 			if (shelf.height >= height && shelf.cursorX + width <= kAtlasWidth)
 			{
-				Region r{shelf.cursorX, shelf.y, width, height};
+				Region r{.x = shelf.cursorX, .y = shelf.y, .width = width, .height = height};
 				shelf.cursorX += width;
 
 				// Update used bounds
@@ -101,7 +101,7 @@ namespace aether
 					const std::uint32_t minY = std::min(m_usedBounds.y, r.y);
 					const std::uint32_t maxX = std::max(m_usedBounds.x + m_usedBounds.width, r.x + r.width);
 					const std::uint32_t maxY = std::max(m_usedBounds.y + m_usedBounds.height, r.y + r.height);
-					m_usedBounds = {minX, minY, maxX - minX, maxY - minY};
+					m_usedBounds = {.x = minX, .y = minY, .width = maxX - minX, .height = maxY - minY};
 				}
 
 				return r;
@@ -115,8 +115,8 @@ namespace aether
 			return {};
 		}
 
-		m_shelves.push_back(Shelf{nextY, height, width});
-		Region r{0, nextY, width, height};
+		m_shelves.push_back(Shelf{.y = nextY, .height = height, .cursorX = width});
+		Region r{.x = 0, .y = nextY, .width = width, .height = height};
 
 		// Update used bounds
 		if (m_usedBounds.width == 0)
@@ -129,7 +129,7 @@ namespace aether
 			const std::uint32_t minY = std::min(m_usedBounds.y, r.y);
 			const std::uint32_t maxX = std::max(m_usedBounds.x + m_usedBounds.width, r.x + r.width);
 			const std::uint32_t maxY = std::max(m_usedBounds.y + m_usedBounds.height, r.y + r.height);
-			m_usedBounds = {minX, minY, maxX - minX, maxY - minY};
+			m_usedBounds = {.x = minX, .y = minY, .width = maxX - minX, .height = maxY - minY};
 		}
 
 		return r;

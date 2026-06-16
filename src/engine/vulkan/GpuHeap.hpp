@@ -69,7 +69,7 @@ namespace aether
 			{
 				return;
 			}
-			const VkDeviceSize offset = static_cast<VkDeviceSize>(span.address - m_baseAddress);
+			const auto offset = static_cast<VkDeviceSize>(span.address - m_baseAddress);
 			FreeBytes(offset, span.ByteSize());
 			span = {};
 		}

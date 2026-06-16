@@ -44,7 +44,7 @@ namespace aether
 	std::string ResolveAddress(void* addr) noexcept
 	{
 #ifdef _WIN32
-		const std::uint64_t address = reinterpret_cast<std::uint64_t>(addr);
+		const auto address = reinterpret_cast<std::uint64_t>(addr);
 
 		std::array<char, sizeof(SYMBOL_INFO) + MAX_SYM_NAME> symBuf{};
 		auto* sym = reinterpret_cast<SYMBOL_INFO*>(symBuf.data());

@@ -64,7 +64,7 @@ namespace aether
 		void FreeAlloc();
 
 		MeshArena::Alloc m_alloc{};
-		Mesh m_mesh{};
+		Mesh m_mesh;
 		MeshArena* m_arena = nullptr; // non-owning back-pointer for destructor
 	};
 } // namespace aether

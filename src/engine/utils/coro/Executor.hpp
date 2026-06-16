@@ -17,7 +17,7 @@ namespace aether::coro
 	public:
 		virtual ~executor() = default;
 		virtual void schedule(std::coroutine_handle<> h) = 0;
-		virtual const char* name() const noexcept = 0;
+		[[nodiscard]] virtual const char* name() const noexcept = 0;
 
 		// Drain all pending coroutines - returns how many were resumed.
 		virtual std::size_t drain()
@@ -42,7 +42,7 @@ namespace aether::coro
 			h.resume();
 		}
 
-		const char* name() const noexcept override
+		[[nodiscard]] const char* name() const noexcept override
 		{
 			return "inline";
 		}
@@ -79,7 +79,7 @@ namespace aether::coro
 			return n;
 		}
 
-		const char* name() const noexcept override
+		[[nodiscard]] const char* name() const noexcept override
 		{
 			return "queued";
 		}

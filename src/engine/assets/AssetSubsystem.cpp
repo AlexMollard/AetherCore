@@ -24,8 +24,8 @@ namespace aether
 
 		m_context = &services.Get<VulkanContext>();
 		VulkanContext& vk = *m_context;
-		BindlessManager& bindless = services.Get<BindlessManager>();
-		World& world = services.Get<World>();
+		auto& bindless = services.Get<BindlessManager>();
+		auto& world = services.Get<World>();
 
 		// Create a one-shot upload context backed by the resource registry
 		auto& registry = services.Get<aether::ResourceRegistry>();

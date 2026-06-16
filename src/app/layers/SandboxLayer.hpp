@@ -19,7 +19,7 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
-		const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
+		[[nodiscard]] const char* GetActiveCameraName(aether::CameraHandle activeCamera) const;
 
 		SandboxGameSystem* m_gameSystem = nullptr;
 

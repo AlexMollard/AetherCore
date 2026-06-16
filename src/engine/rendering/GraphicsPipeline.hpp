@@ -19,7 +19,7 @@ namespace aether
 			// Optional separate fragment path. When non-empty, the fragment
 			// SPIR-V is loaded from this path instead of sharing the vertex
 			// module. Default (empty) keeps the existing single-module behavior.
-			std::string_view fragmentVfsPath = {};
+			std::string_view fragmentVfsPath;
 			std::string_view vertexEntry = "vertexMain";
 			std::string_view fragmentEntry = "fragmentMain";
 			gpu::Format colorFormat = gpu::Format::Undefined;

@@ -1,6 +1,7 @@
 #include "rendering/Renderer.hpp"
 
 #include <glm/common.hpp>
+#include <numbers>
 #include <utility>
 
 #include "passes/PostProcessStack.hpp"
@@ -46,7 +47,7 @@ namespace aether
 		const float len2 = glm::dot(direction, direction);
 		if (len2 < 1e-8f)
 		{
-			direction = glm::vec3(0.577f, 0.577f, 0.577f);
+			direction = glm::vec3(std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>);
 		}
 		else
 		{

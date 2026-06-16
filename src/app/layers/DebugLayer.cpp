@@ -237,7 +237,7 @@ namespace aether::app
 				std::size_t lastPos = 0;
 				for (auto it = begin; it != end; ++it)
 				{
-					std::smatch match = *it;
+					const std::smatch& match = *it;
 					if (it == begin)
 					{
 						lastPos = match.position();
@@ -564,7 +564,7 @@ namespace aether::app
 		PollScriptErrors(context);
 
 		// -- Update data -----------------------------------------------------
-		const float frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
+		const auto frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
 
 		// Push frame time to graph
 		if (m_graphEntity.IsValid())
@@ -693,9 +693,9 @@ namespace aether::app
 		{
 			auto passes = rg->GetPasses();
 			float totalMs = 0.f;
-			for (std::size_t i = 0; i < passes.size(); ++i)
+			for (auto& passe: passes)
 			{
-				totalMs += passes[i].lastCpuTimeMs;
+				totalMs += passe.lastCpuTimeMs;
 			}
 
 			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
@@ -848,11 +848,11 @@ namespace aether::app
 
 	void DebugLayer::OnGui(LayerContext& context)
 	{
-		UIRenderer& ui = context.Get<UIRenderer>();
+		auto& ui = context.Get<UIRenderer>();
 		const Input& input = context.Get<Input>();
 		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
-		const float sw = static_cast<float>(extent.width);
-		const float sh = static_cast<float>(extent.height);
+		const auto sw = static_cast<float>(extent.width);
+		const auto sh = static_cast<float>(extent.height);
 		const ui::UiTheme& theme = ui::UiTheme::Default();
 
 		// -- Error notification bar (always visible) --------------------------

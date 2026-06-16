@@ -53,12 +53,12 @@ namespace aether
 
 	struct PhysicsSystem::BPLayerInterface final : public JPH::BroadPhaseLayerInterface
 	{
-		uint32_t GetNumBroadPhaseLayers() const override
+		[[nodiscard]] uint32_t GetNumBroadPhaseLayers() const override
 		{
 			return BroadPhaseLayers::kNumLayers;
 		}
 
-		JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override
+		[[nodiscard]] JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer layer) const override
 		{
 			switch (layer)
 			{
@@ -92,7 +92,7 @@ namespace aether
 
 	struct PhysicsSystem::ObjVsBPLayerFilter final : public JPH::ObjectVsBroadPhaseLayerFilter
 	{
-		bool ShouldCollide(JPH::ObjectLayer object, JPH::BroadPhaseLayer bp) const override
+		[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer object, JPH::BroadPhaseLayer bp) const override
 		{
 			switch (object)
 			{
@@ -110,7 +110,7 @@ namespace aether
 
 	struct PhysicsSystem::ObjVsObjLayerFilter final : public JPH::ObjectLayerPairFilter
 	{
-		bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override
+		[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override
 		{
 			switch (a)
 			{
@@ -198,7 +198,7 @@ namespace aether
 		m_tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
 
 		// One worker thread per logical CPU minus the calling thread.
-		const int workerThreads = std::max(1, (int) std::thread::hardware_concurrency() - 1);
+		const int workerThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 1);
 		m_jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreads);
 
 		m_bpLayerInterface = std::make_unique<BPLayerInterface>();
@@ -253,7 +253,7 @@ namespace aether
 		while (m_accumulator >= kFixedTimestep)
 		{
 			// Save previous state before stepping - used by SyncTransforms for interpolation.
-			for (auto [entity, state]: world.View<PhysicsStateComponent>().each())
+			for (const auto& [entity, state]: world.View<PhysicsStateComponent>().each())
 			{
 				state.prevPosition = state.currPosition;
 				state.prevRotation = state.currRotation;
@@ -280,7 +280,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto& bodyInterface = m_physics->GetBodyInterface();
 
-		for (auto [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
+		for (const auto& [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 		{
 			if (rigid.bodyId.IsInvalid() || rigid.motionType == PhysicsMotionType::Static)
 			{
@@ -371,7 +371,7 @@ namespace aether
 		};
 
 		// -- Box -------------------------------------------------------------------
-		for (auto [entity, desc]: world.View<BoxBodyDesc>().each())
+		for (const auto& [entity, desc]: world.View<BoxBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
 			{
@@ -415,7 +415,7 @@ namespace aether
 		}
 
 		// -- Sphere ----------------------------------------------------------------
-		for (auto [entity, desc]: world.View<SphereBodyDesc>().each())
+		for (const auto& [entity, desc]: world.View<SphereBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
 			{
@@ -458,7 +458,7 @@ namespace aether
 		}
 
 		// -- Capsule ---------------------------------------------------------------
-		for (auto [entity, desc]: world.View<CapsuleBodyDesc>().each())
+		for (const auto& [entity, desc]: world.View<CapsuleBodyDesc>().each())
 		{
 			if (reg.any_of<RigidBodyComponent>(entity))
 			{
@@ -614,7 +614,7 @@ namespace aether
 
 			// Hit position: mOrigin + fraction * mDirection (both in RVec3/double).
 			JPH::RVec3 hitPosR = ray.GetPointOnRay(joltResult.mFraction);
-			result.position = {static_cast<float>(hitPosR.GetX()), static_cast<float>(hitPosR.GetY()), static_cast<float>(hitPosR.GetZ())};
+			result.position = {hitPosR.GetX(), hitPosR.GetY(), hitPosR.GetZ()};
 
 			// Normal: approximate as world-up for ground detection.
 			// For true surface normal a shape-level CastRay would be needed.

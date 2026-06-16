@@ -180,7 +180,7 @@ namespace aether
 				std::vector<char> jsonBuf(jsonSize + 1);
 				GFSDK_Aftermath_GpuCrashDump_GetJSON(decoder, jsonSize + 1, jsonBuf.data());
 
-				std::streamsize writeSize = static_cast<std::streamsize>(jsonSize);
+				auto writeSize = static_cast<std::streamsize>(jsonSize);
 				if (writeSize > 0 && jsonBuf[writeSize - 1] == '\0')
 				{
 					writeSize--;

@@ -80,10 +80,10 @@ namespace aether::app
 		};
 
 		const std::array<WallDesc, 4> walls = {{
-		        {{0.f, wallH * 0.5f, wallHalf + wallT}, {wallHalf, wallH * 0.5f, wallT}},
-		        {{0.f, wallH * 0.5f, -wallHalf - wallT}, {wallHalf, wallH * 0.5f, wallT}},
-		        {{wallHalf + wallT, wallH * 0.5f, 0.f}, {wallT, wallH * 0.5f, wallHalf}},
-		        {{-wallHalf - wallT, wallH * 0.5f, 0.f}, {wallT, wallH * 0.5f, wallHalf}},
+		        {.pos = {0.f, wallH * 0.5f, wallHalf + wallT}, .half = {wallHalf, wallH * 0.5f, wallT}},
+		        {.pos = {0.f, wallH * 0.5f, -wallHalf - wallT}, .half = {wallHalf, wallH * 0.5f, wallT}},
+		        {.pos = {wallHalf + wallT, wallH * 0.5f, 0.f}, .half = {wallT, wallH * 0.5f, wallHalf}},
+		        {.pos = {-wallHalf - wallT, wallH * 0.5f, 0.f}, .half = {wallT, wallH * 0.5f, wallHalf}},
 		}};
 
 		for (const WallDesc& wallDesc: walls)
@@ -279,7 +279,7 @@ namespace aether::app
 
 		// Count active dynamic bodies for the HUD.
 		m_activeBodyCount = 0;
-		for (auto [entity, rigid]: world.View<aether::RigidBodyComponent>().each())
+		for (const auto& [entity, rigid]: world.View<aether::RigidBodyComponent>().each())
 		{
 			if (rigid.motionType == PhysicsMotionType::Dynamic)
 			{

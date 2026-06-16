@@ -58,13 +58,13 @@ namespace aether
 			return data + count;
 		}
 
-		const T* begin() const
+		[[nodiscard]] const T* begin() const
 		{
 			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data;
 		}
 
-		const T* end() const
+		[[nodiscard]] const T* end() const
 		{
 			AE_ASSERT(data != nullptr, "Cannot iterate device-local GpuSpan from CPU");
 			return data + count;

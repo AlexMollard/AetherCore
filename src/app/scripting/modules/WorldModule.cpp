@@ -150,7 +150,7 @@ namespace
 			return;
 		}
 
-		glm::vec3 pos = glm::vec3(tc->localToWorld[3]);
+		auto pos = glm::vec3(tc->localToWorld[3]);
 		float sx = glm::length(glm::vec3(tc->localToWorld[0]));
 		float sy = glm::length(glm::vec3(tc->localToWorld[1]));
 		float sz = glm::length(glm::vec3(tc->localToWorld[2]));
@@ -284,7 +284,7 @@ namespace
 	{
 		for (auto enttE: w->View<aether::TransformComponent>())
 		{
-			const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
+			const auto id = static_cast<uint32_t>(entt::to_integral(enttE));
 			vec4f args[1];
 			args[0] = das::cast<uint32_t>::from(id);
 			ctx->invoke(block, args, nullptr, at);

@@ -27,7 +27,7 @@ namespace aether::vkutil
 		        .oldLayout = oldLayout,
 		        .newLayout = newLayout,
 		        .image = image,
-		        .subresourceRange = {aspect, 0, 1, 0, 1},
+		        .subresourceRange = {.aspectMask = aspect, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
 		};
 		const VkDependencyInfo dep{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -58,7 +58,7 @@ namespace aether::vkutil
 		        .image = dstImage,
 		        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 		        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-		        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
 		};
 		VkResult result = vkTransitionImageLayout(device, 1, &transition);
 		if (result != VK_SUCCESS)
@@ -71,9 +71,9 @@ namespace aether::vkutil
 		        .pHostPointer = hostData,
 		        .memoryRowLength = 0,
 		        .memoryImageHeight = 0,
-		        .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-		        .imageOffset = {0, 0, 0},
-		        .imageExtent = {width, height, 1},
+		        .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
+		        .imageOffset = {.x = 0, .y = 0, .z = 0},
+		        .imageExtent = {.width = width, .height = height, .depth = 1},
 		};
 		const VkCopyMemoryToImageInfo copyInfo{
 		        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,

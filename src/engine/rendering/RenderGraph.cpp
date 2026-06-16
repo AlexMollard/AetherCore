@@ -208,7 +208,7 @@ namespace aether
 
 	void RenderGraph::RemovePass(const std::string& name)
 	{
-		const auto it = std::find_if(m_passes.begin(), m_passes.end(), [&](const PassRecord& p) { return p.name == name; });
+		const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& p) { return p.name == name; });
 		if (it != m_passes.end())
 		{
 			m_passes.erase(it);
@@ -218,7 +218,7 @@ namespace aether
 
 	bool RenderGraph::HasPass(std::string_view name) const
 	{
-		return std::find_if(m_passes.begin(), m_passes.end(), [&](const PassRecord& p) { return p.name == name; }) != m_passes.end();
+		return std::ranges::find_if(m_passes, [&](const PassRecord& p) { return p.name == name; }) != m_passes.end();
 	}
 
 	void RenderGraph::Clear()
@@ -574,7 +574,7 @@ namespace aether
 			}
 		};
 
-		ReadyCompare readyCmp{m_passes, adj};
+		ReadyCompare readyCmp{.passes = m_passes, .adj = adj};
 		std::priority_queue<std::size_t, std::vector<std::size_t>, ReadyCompare> ready(readyCmp);
 		for (std::size_t i = 0; i < N; ++i)
 		{
@@ -625,7 +625,7 @@ namespace aether
 			AE_WARN(LogCategory::Engine, "RenderGraph: cycle detected - falling back to declaration order.");
 #endif
 			sortedIndices.resize(N);
-			std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+			std::ranges::iota(sortedIndices, 0);
 		}
 
 		// -- Dead Store Elimination -----------------------------------------------
@@ -677,6 +677,7 @@ namespace aether
 
 				// Collect write targets
 				std::vector<uint32_t> writeTargets;
+				writeTargets.reserve(pass.colorWrites.size());
 				for (const AttachmentRef& a: pass.colorWrites)
 				{
 					writeTargets.push_back(a.image.id);
@@ -848,9 +849,9 @@ namespace aether
 			{
 				const uint32_t resId = a.image.id;
 				constexpr gpu::ImageLayout kTarget = gpu::ImageLayout::ColorAttachment;
-				constexpr std::uint64_t kDstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
-				constexpr std::uint64_t kDstWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
-				constexpr std::uint64_t kDstReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+				constexpr auto kDstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+				constexpr auto kDstWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
+				constexpr auto kDstReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT);
 
 				const auto it = states.find(resId);
 				if (it != states.end())
@@ -901,9 +902,9 @@ namespace aether
 				const AttachmentRef& da = *pass.depthWrite;
 				const uint32_t resId = da.image.id;
 				constexpr gpu::ImageLayout kTarget = gpu::ImageLayout::DepthAttachment;
-				constexpr std::uint64_t kDepthStages = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
-				constexpr std::uint64_t kDepthWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
-				constexpr std::uint64_t kDepthReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+				constexpr auto kDepthStages = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT);
+				constexpr auto kDepthWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+				constexpr auto kDepthReadWrite = static_cast<std::uint64_t>(VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
 
 				const auto it = states.find(resId);
 				if (it != states.end())
@@ -954,8 +955,8 @@ namespace aether
 				const uint32_t resId = r.image.id;
 
 				gpu::ImageLayout targetLayout = gpu::ImageLayout::ShaderReadOnly;
-				std::uint64_t dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-				std::uint64_t dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
+				auto dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+				auto dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
 
 				switch (r.type)
 				{
@@ -1019,7 +1020,7 @@ namespace aether
 				gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 				if (IsTransientId(resId))
 				{
-					aspect = static_cast<gpu::ImageAspect>(m_storage->ResolveTransientAspect(TransientIndex(resId)));
+					aspect = m_storage->ResolveTransientAspect(TransientIndex(resId));
 				}
 				else if (resId == kSwapchainDepthId)
 				{
@@ -1072,10 +1073,10 @@ namespace aether
 				const uint32_t resId = r.buffer.id;
 
 				const bool isComputePass = (pass.kind == PassKind::Compute);
-				constexpr std::uint64_t kComputeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-				constexpr std::uint64_t kGraphicsStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
-				constexpr std::uint64_t kStorageRead = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
-				constexpr std::uint64_t kStorageWrite = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+				constexpr auto kComputeStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+				constexpr auto kGraphicsStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
+				constexpr auto kStorageRead = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
+				constexpr auto kStorageWrite = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 
 				const std::uint64_t dstStage = isComputePass ? kComputeStage : kGraphicsStage;
 				const bool isRead = (r.type == BufferAccessType::StorageRead);
@@ -1260,7 +1261,7 @@ namespace aether
 				producerCp.signalBarriers.push_back(b);
 
 				// Group waits by event to minimise cmdWaitEvents2 calls.
-				auto waitIt = std::find_if(cp.waits.begin(), cp.waits.end(), [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
+				auto waitIt = std::ranges::find_if(cp.waits, [eventIdx = producerCp.splitEventIndex](const CompiledWait& w) { return w.eventIndex == eventIdx; });
 
 				if (waitIt != cp.waits.end())
 				{
@@ -1359,7 +1360,7 @@ namespace aether
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
-		gpu::DeviceAddress frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
+		auto frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
 
 		// Image resolution helper shared by pre-, wait-, and signal-barriers.
 		// Returns the opaque gpu::Image (the actual VkImage is obtained
@@ -1398,7 +1399,7 @@ namespace aether
 			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
-			recorder.BeginDebugLabel(pass.name.c_str(), 0.20f, 0.70f, 0.35f, 1.0f);
+			recorder.BeginDebugLabel(pass.name, 0.20f, 0.70f, 0.35f, 1.0f);
 
 			// -- Split barrier waits (consume events from producers) -----------
 			// P5(d) barrier solver migration: all barriers are engine-side
@@ -1608,9 +1609,9 @@ namespace aether
 				// Tracy GPU zone. The engine-side macro captures
 				// __FILE__/__LINE__ at this call site; the cast and
 				// Tracy plumbing live in vulkan/GpuProfiler.cpp.
-				AE_GPU_ZONE_SCOPED(cmd, pass.name.c_str());
+				AE_GPU_ZONE_SCOPED(cmd, pass.name);
 				const auto t0 = std::chrono::high_resolution_clock::now();
-				PassContext ctx{recorder, passExtent, frameAddr, frameIndex};
+				PassContext ctx{.recorder = recorder, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
 				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();

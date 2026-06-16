@@ -9,6 +9,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <zstd.h>
@@ -118,7 +119,7 @@ namespace aether::io
 		for (const auto& e: entries)
 		{
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
-			m_index.emplace(std::move(path), EntryInfo{e.dataOffset, e.dataSize, e.contentHash, e.flags});
+			m_index.emplace(std::move(path), EntryInfo{.offset = e.dataOffset, .size = e.dataSize, .hash = e.contentHash, .flags = e.flags});
 		}
 	}
 
@@ -245,7 +246,7 @@ namespace aether::io
 				results.push_back(path);
 			}
 		}
-		std::sort(results.begin(), results.end());
+		std::ranges::sort(results);
 		return results;
 	}
 
@@ -275,7 +276,7 @@ namespace aether::io
 		if (bestMatch)
 		{
 			*bestMatch = {};
-			int bestDist = (std::numeric_limits<int>::max)();
+			int bestDist = std::numeric_limits<int>::max();
 			for (const auto& ci: m_index)
 			{
 				const int d = utils::Levenshtein(path, ci.first);
@@ -303,7 +304,7 @@ namespace aether::io
 		{
 			const int d = utils::Levenshtein(path, ci.first);
 			pq.emplace(d, ci.first);
-			if (static_cast<int>(pq.size()) > maxSuggestions)
+			if (std::cmp_greater(pq.size(), maxSuggestions))
 			{
 				pq.pop();
 			}
@@ -312,10 +313,10 @@ namespace aether::io
 		std::vector<std::string> results;
 		while (!pq.empty())
 		{
-			results.push_back(std::move(pq.top().second));
+			results.push_back(pq.top().second);
 			pq.pop();
 		}
-		std::reverse(results.begin(), results.end());
+		std::ranges::reverse(results);
 		return results;
 	}
 

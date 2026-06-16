@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <BinaryFormats.hpp>
@@ -57,7 +58,7 @@ namespace aether::assets
 				const std::string candidateFilename = std::filesystem::path(path).filename().generic_string();
 				const int d = utils::Levenshtein(targetFilename, candidateFilename);
 				pq.emplace(d, path);
-				if (static_cast<int>(pq.size()) > maxSuggestions)
+				if (std::cmp_greater(pq.size(), maxSuggestions))
 				{
 					pq.pop();
 				}
@@ -66,10 +67,10 @@ namespace aether::assets
 			std::vector<std::string> suggestions;
 			while (!pq.empty())
 			{
-				suggestions.push_back(std::move(pq.top().second));
+				suggestions.push_back(pq.top().second);
 				pq.pop();
 			}
-			std::reverse(suggestions.begin(), suggestions.end());
+			std::ranges::reverse(suggestions);
 			return suggestions;
 		}
 
@@ -172,7 +173,7 @@ namespace aether::assets
 			const float r = static_cast<float>((packed >> 0) & 0xFF) / 255.0f;
 			const float g = static_cast<float>((packed >> 8) & 0xFF) / 255.0f;
 			const float b = static_cast<float>((packed >> 16) & 0xFF) / 255.0f;
-			return glm::vec3(r, g, b);
+			return {r, g, b};
 		}
 
 		// Decompose a 4x4 matrix into translation, rotation, scale.
@@ -221,7 +222,7 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*data);
-			SkelHeaderDisk hdr = reader.Read<SkelHeaderDisk>();
+			auto hdr = reader.Read<SkelHeaderDisk>();
 			if (!CheckMagic(hdr))
 			{
 				AE_WARN(LogCategory::Engine, "Invalid skeleton magic: {}", skelPath);
@@ -238,7 +239,7 @@ namespace aether::assets
 			reader.Skip(hdr.nameLen);
 
 			// Node index 0 is the root mesh node. Bones start at index 1.
-			const uint32_t boneNodeOffset = static_cast<uint32_t>(asset.nodes.size());
+			const auto boneNodeOffset = static_cast<uint32_t>(asset.nodes.size());
 
 			// First pass: read all bone data
 			struct BoneData
@@ -252,7 +253,7 @@ namespace aether::assets
 
 			for (uint32_t i = 0; i < hdr.boneCount; ++i)
 			{
-				uint16_t boneNameLen = reader.Read<uint16_t>();
+				auto boneNameLen = reader.Read<uint16_t>();
 				bones[i].name = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
 				reader.Advance(boneNameLen);
 				bones[i].parentIndex = reader.Read<int32_t>();
@@ -345,7 +346,7 @@ namespace aether::assets
 			};
 
 #pragma pack(pop)
-			V1Header v1Hdr = reader.Read<V1Header>();
+			auto v1Hdr = reader.Read<V1Header>();
 
 			AnimHeaderDisk hdr;
 			std::memcpy(hdr.magic, v1Hdr.magic, 4);
@@ -381,14 +382,14 @@ namespace aether::assets
 
 			for (uint32_t ci = 0; ci < hdr.channelCount; ++ci)
 			{
-				ChannelHeaderDisk ch = reader.Read<ChannelHeaderDisk>();
+				auto ch = reader.Read<ChannelHeaderDisk>();
 				AE_VERBOSE(LogCategory::Engine, "  Channel[{}]: node={}, path={}, interp={}, keyCount={}", ci, ch.nodeIndex, (int) ch.path, (int) ch.interp, ch.keyCount);
 				GltfAnimationChannel channel;
 				channel.nodeIndex = ch.nodeIndex;
 
 				if (hasBoneNames)
 				{
-					uint16_t boneNameLen = reader.Read<uint16_t>();
+					auto boneNameLen = reader.Read<uint16_t>();
 					if (boneNameLen > 0)
 					{
 						channel.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
@@ -478,7 +479,7 @@ namespace aether::assets
 		// Remap animation channels by bone name to work with a different skeleton.
 		// The animation's boneName field (from v2 .anim files) is used for remapping.
 		// Returns a new animation with remapped channels.
-		GltfAnimation RemapAnimationByBoneName(GltfAnimation anim, const std::unordered_map<std::string, uint32_t>& boneNameMap)
+		GltfAnimation RemapAnimationByBoneName(const GltfAnimation& anim, const std::unordered_map<std::string, uint32_t>& boneNameMap)
 		{
 			GltfAnimation result;
 			result.name = anim.name + " (remapped)";
@@ -520,7 +521,7 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*animSetData);
-			AnimSetHeaderDisk asetHdr = reader.Read<AnimSetHeaderDisk>();
+			auto asetHdr = reader.Read<AnimSetHeaderDisk>();
 			if (!CheckMagic(asetHdr))
 			{
 				return false;
@@ -582,7 +583,7 @@ namespace aether::assets
 			}
 
 			BinaryReader reader(*data);
-			MaterialHeaderDisk hdr = reader.Read<MaterialHeaderDisk>();
+			auto hdr = reader.Read<MaterialHeaderDisk>();
 			if (!CheckMagic(hdr))
 			{
 				return false;
@@ -599,7 +600,7 @@ namespace aether::assets
 
 			for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 			{
-				uint8_t type = reader.Read<uint8_t>();
+				auto type = reader.Read<uint8_t>();
 				std::string texPath = reader.ReadString();
 				std::string resolvedPath = ResolveRelativeVfsPath(matPath, texPath);
 
@@ -630,7 +631,7 @@ namespace aether::assets
 		Expected<GltfAsset> LoadFromMesh(const std::vector<std::byte>& data, std::string_view meshVfsPath)
 		{
 			BinaryReader reader(data);
-			MeshHeaderDisk hdr = reader.Read<MeshHeaderDisk>();
+			auto hdr = reader.Read<MeshHeaderDisk>();
 
 			if (std::memcmp(hdr.magic, MESH_MAGIC, 4) != 0)
 			{
@@ -845,7 +846,7 @@ namespace aether::assets
 				if (animSetData.has_value())
 				{
 					BinaryReader animSetReader(*animSetData);
-					AnimSetHeaderDisk asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
+					auto asetHdr = animSetReader.Read<AnimSetHeaderDisk>();
 					if (CheckMagic(asetHdr))
 					{
 						AE_VERBOSE(LogCategory::Engine, "  AnimSet: {} animations, skeletonHash={}", asetHdr.animCount, asetHdr.skeletonHash);
@@ -947,7 +948,7 @@ namespace aether::assets
 		return LoadFromMesh(meshData, meshPath);
 	}
 
-	Expected<GltfAsset> GltfAsset::LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath)
+	Expected<GltfAsset> GltfAsset::LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath)
 	{
 		return LoadFromMesh(meshData, debugPath);
 	}

@@ -7,7 +7,7 @@ namespace aether
 	void LoadingManager::AddTask(Task task, std::string_view name)
 	{
 		AE_PROFILE_ZONE();
-		m_tasks.push_back({std::move(task), std::string(name)});
+		m_tasks.push_back({.fn = std::move(task), .name = std::string(name)});
 		++m_total;
 	}
 

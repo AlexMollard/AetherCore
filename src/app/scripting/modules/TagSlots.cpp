@@ -34,7 +34,7 @@ namespace
 			        {
 				        for (auto enttE: w->View<TagSlot<N>>())
 				        {
-					        const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
+					        const auto id = static_cast<uint32_t>(entt::to_integral(enttE));
 					        callback(id);
 				        }
 			        }};
@@ -79,7 +79,7 @@ namespace
 			return id;
 		}
 
-		uint32_t GetTagId(const std::string& name) const
+		[[nodiscard]] uint32_t GetTagId(const std::string& name) const
 		{
 			auto it = m_nameToId.find(name);
 			if (it != m_nameToId.end())

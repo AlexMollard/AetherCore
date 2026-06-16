@@ -32,7 +32,7 @@ namespace
 	// Build an anchor-0 fixed pixel rect from top-left + size.
 	inline aether::UiRect PixelRect(float x, float y, float w, float h)
 	{
-		return aether::UiRect{{0.f, 0.f}, {0.f, 0.f}, {x, y}, {x + w, y + h}};
+		return aether::UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 0.f}, .offsetMinPx = {x, y}, .offsetMaxPx = {x + w, y + h}};
 	}
 
 	// -- Factory helpers -------------------------------------------------------

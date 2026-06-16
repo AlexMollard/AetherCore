@@ -89,7 +89,7 @@ static void for_each_components(aether::World* w, const das::TBlock<void, uint32
 {
 	for (auto enttE: w->View<Components...>())
 	{
-		const uint32_t id = static_cast<uint32_t>(entt::to_integral(enttE));
+		const auto id = static_cast<uint32_t>(entt::to_integral(enttE));
 		vec4f args[1];
 		args[0] = das::cast<uint32_t>::from(id);
 		ctx->invoke(block, args, nullptr, at);

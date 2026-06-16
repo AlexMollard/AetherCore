@@ -1,6 +1,7 @@
 #include "UiSystem.hpp"
 
 #include <limits>
+#include <utility>
 
 #include "platform/Input.hpp"
 #include "UiComponents.hpp"
@@ -37,7 +38,7 @@ namespace aether::ui
 	static void ProcessTabBars(aether::World& world, gpu::Extent2D extent)
 	{
 		(void) extent;
-		for (auto [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
+		for (const auto& [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
 		{
 			const std::size_t tabCount = std::min(tabComp.tabNames.size(), children.children.size());
 			std::size_t newSelection = tabComp.selectedTab;
@@ -122,7 +123,7 @@ namespace aether::ui
 		// BEFORE HitTest (which will repopulate hotEntity for this frame).
 		ctx.hotEntity = {};
 
-		for (auto [e, inp]: world.View<UiInputComponent>().each())
+		for (const auto& [e, inp]: world.View<UiInputComponent>().each())
 		{
 			inp.clicked = false;
 			inp.hovered = false;
@@ -148,7 +149,7 @@ namespace aether::ui
 	// entity is in the hidden body of that panel and should not receive input.
 	static bool InsideCollapsedPanel(const aether::World& world, Entity entity)
 	{
-		const UiParentComponent* link = world.TryGet<UiParentComponent>(entity);
+		const auto* link = world.TryGet<UiParentComponent>(entity);
 		while (link && link->parent.IsValid())
 		{
 			const auto* panel = world.TryGet<UiPanelComponent>(link->parent);
@@ -269,7 +270,7 @@ namespace aether::ui
 		RunLayouts(world, extent);
 
 		// 2. Draw root-level panels (no parent) and their children.
-		for (auto [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
+		for (const auto& [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);
 			if (world.Has<UiParentComponent>(entity))
@@ -284,7 +285,7 @@ namespace aether::ui
 		}
 
 		// 3. Draw root-level standalone widgets (no parent, no panel).
-		for (auto [e, transform]: world.View<UiTransformComponent>().each())
+		for (const auto& [e, transform]: world.View<UiTransformComponent>().each())
 		{
 			const Entity entity = aether::World::FromEntt(e);
 			if (world.Has<UiPanelComponent>(entity) || world.Has<UiParentComponent>(entity))
@@ -302,7 +303,7 @@ namespace aether::ui
 		// Clear per-frame submitted flag on all text inputs (was previously done
 		// inside DrawTextInput but is now deferred so layers can read it during
 		// OnUpdate / OnGui before the flag is consumed).
-		for (auto [e, ti]: world.View<UiTextInputComponent>().each())
+		for (const auto& [e, ti]: world.View<UiTextInputComponent>().each())
 		{
 			ti.submitted = false;
 		}
@@ -314,7 +315,7 @@ namespace aether::ui
 		Entity bestEntity;
 		std::int32_t bestLayer = std::numeric_limits<std::int32_t>::min();
 
-		for (auto [e, transform, inp]: world.View<UiTransformComponent, UiInputComponent>().each())
+		for (const auto& [e, transform, inp]: world.View<UiTransformComponent, UiInputComponent>().each())
 		{
 			if (!inp.blockInput)
 			{
@@ -501,7 +502,7 @@ namespace aether::ui
 		// Printable characters from the GLFW char callback.
 		for (const char c: input.GetTypedChars())
 		{
-			if (ti->maxLength > 0 && static_cast<int>(ti->text.size()) >= ti->maxLength)
+			if (ti->maxLength > 0 && std::cmp_greater_equal(ti->text.size(), ti->maxLength))
 			{
 				break;
 			}
@@ -515,7 +516,7 @@ namespace aether::ui
 			--ti->cursorPos;
 		}
 
-		if (input.IsKeyPressed(Key::Delete) && ti->cursorPos < static_cast<int>(ti->text.size()))
+		if (input.IsKeyPressed(Key::Delete) && std::cmp_less(ti->cursorPos, ti->text.size()))
 		{
 			ti->text.erase(static_cast<std::string::size_type>(ti->cursorPos), 1u);
 		}
@@ -524,7 +525,7 @@ namespace aether::ui
 		{
 			--ti->cursorPos;
 		}
-		if (input.IsKeyPressed(Key::Right) && ti->cursorPos < static_cast<int>(ti->text.size()))
+		if (input.IsKeyPressed(Key::Right) && std::cmp_less(ti->cursorPos, ti->text.size()))
 		{
 			++ti->cursorPos;
 		}
@@ -551,7 +552,7 @@ namespace aether::ui
 		static constexpr float kTransRate = 12.5f;
 		const float step = kTransRate * deltaTime;
 
-		for (auto [e, inp]: world.View<UiInputComponent>().each())
+		for (const auto& [e, inp]: world.View<UiInputComponent>().each())
 		{
 			inp.hoverT = inp.hovered ? std::min(1.f, inp.hoverT + step) : std::max(0.f, inp.hoverT - step);
 			inp.pressT = inp.pressed ? std::min(1.f, inp.pressT + step) : std::max(0.f, inp.pressT - step);

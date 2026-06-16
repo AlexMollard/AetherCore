@@ -166,7 +166,7 @@ namespace aether
 		if (leftFootIdx != UINT32_MAX && leftFootIdx < nodeCount)
 		{
 			glm::vec3 forward = glm::vec3(0.0f, 0.0f, 1.0f);
-			glm::vec3 hipToFoot = glm::vec3(bindTrans[leftFootIdx]);
+			auto hipToFoot = glm::vec3(bindTrans[leftFootIdx]);
 			float hipLen = glm::length(hipToFoot);
 			if (hipLen > 1e-6f)
 			{
@@ -183,7 +183,7 @@ namespace aether
 		if (rightFootIdx != UINT32_MAX && rightFootIdx < nodeCount)
 		{
 			glm::vec3 forward = glm::vec3(0.0f, 0.0f, 1.0f);
-			glm::vec3 hipToFoot = glm::vec3(bindTrans[rightFootIdx]);
+			auto hipToFoot = glm::vec3(bindTrans[rightFootIdx]);
 			float hipLen = glm::length(hipToFoot);
 			if (hipLen > 1e-6f)
 			{
@@ -235,7 +235,7 @@ namespace aether
 				continue;
 			}
 
-			std::uint32_t entityId = static_cast<std::uint32_t>(entt::to_integral(entity));
+			auto entityId = static_cast<std::uint32_t>(entt::to_integral(entity));
 
 			float leftGroundY = 0.0f;
 			float rightGroundY = 0.0f;

@@ -19,7 +19,7 @@ namespace aether::gpu
 {
 	TimelineSemaphoreHandle CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept
 	{
-		VkDevice device = static_cast<VkDevice>(desc.device);
+		auto device = static_cast<VkDevice>(desc.device);
 		if (device == VK_NULL_HANDLE)
 		{
 			return nullptr;
@@ -53,7 +53,7 @@ namespace aether::gpu
 
 	bool WaitTimelineSemaphore(Device device, TimelineSemaphoreHandle sem, std::uint64_t value) noexcept
 	{
-		VkDevice vkDevice = static_cast<VkDevice>(device);
+		auto vkDevice = static_cast<VkDevice>(device);
 		if (sem == nullptr)
 		{
 			return false;
@@ -87,7 +87,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		VkDevice vkDevice = static_cast<VkDevice>(device);
+		auto vkDevice = static_cast<VkDevice>(device);
 		if (vkDevice != VK_NULL_HANDLE && sem->semaphore != VK_NULL_HANDLE)
 		{
 			vkDestroySemaphore(vkDevice, sem->semaphore, nullptr);

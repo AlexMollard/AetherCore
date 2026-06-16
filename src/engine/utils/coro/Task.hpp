@@ -132,7 +132,7 @@ namespace aether::coro
 			{
 			}
 
-			bool await_ready() const noexcept
+			[[nodiscard]] bool await_ready() const noexcept
 			{
 				return false; // always suspend - the coroutine hasn't started yet
 			}
@@ -314,7 +314,7 @@ namespace aether::coro
 			{
 			}
 
-			bool await_ready() const noexcept
+			[[nodiscard]] bool await_ready() const noexcept
 			{
 				return m_state && m_state->ready.load(std::memory_order_acquire);
 			}

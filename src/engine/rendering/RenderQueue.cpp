@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstring>
 #include <stdexcept>
+#include <utility>
 
 #include "gpu/GpuTypes.hpp"
 #include "gpu/PushConstantsBytes.hpp"
@@ -342,7 +344,7 @@ namespace aether
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
-		m_cachedDrawBase = frameSlot * m_outputDrawCapacity;
+		m_cachedDrawBase = static_cast<gpu::DeviceAddress>(frameSlot * m_outputDrawCapacity);
 		m_cachedBatchBase = batchBase;
 		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
 		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address + static_cast<gpu::DeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
@@ -380,8 +382,8 @@ namespace aether
 		SkinPaletteBatch skinPaletteBatches[64];
 		std::uint32_t skinPaletteBatchCount = 0;
 
-		std::stable_sort(m_commands.begin(),
-		        m_commands.end(),
+		std::ranges::stable_sort(m_commands,
+
 		        [](const DrawCommand& a, const DrawCommand& b)
 		        {
 			        if (a.pipeline != b.pipeline)
@@ -391,7 +393,7 @@ namespace aether
 			        return a.mesh < b.mesh;
 		        });
 
-		const std::uint32_t totalDraws = static_cast<std::uint32_t>(m_commands.size());
+		const auto totalDraws = static_cast<std::uint32_t>(m_commands.size());
 		AE_ASSERT_ALWAYS(totalDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
 		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
@@ -415,7 +417,7 @@ namespace aether
 			}
 
 			const std::uint32_t batchOutputStart = globalDrawIdx;
-			const std::uint32_t batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
+			const auto batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
 
 			AE_ASSERT_ALWAYS(batchIdx < m_maxBatches, "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
 
@@ -437,7 +439,7 @@ namespace aether
 				const std::uint32_t drawNodeCount = dbValid ? drawAnimDb->GetNodeCount() : 0u;
 				const std::uint32_t drawSkinCount = dbValid ? drawAnimDb->GetSkinCount() : 0u;
 
-				const bool wantsGpuSampling = gpuSamplingEnabled && dbValid && dc.skinJointCount > 0 && dc.skinIndex >= 0 && dc.animClipIndex < drawClipCount && static_cast<std::uint32_t>(dc.skinIndex) < drawSkinCount;
+				const bool wantsGpuSampling = gpuSamplingEnabled && dbValid && dc.skinJointCount > 0 && dc.skinIndex >= 0 && dc.animClipIndex < drawClipCount && std::cmp_less(dc.skinIndex, drawSkinCount);
 				if (wantsGpuSampling)
 				{
 					if (skinJointCursor + dc.skinJointCount > m_maxSkinJoints)
@@ -486,7 +488,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(animSampleBatchCount < 64, "RenderQueue: too many animation sample batches");
-							animSampleBatches[animSampleBatchCount++] = {drawAnimDb, drawAnimDb ? drawAnimDb->GetGeneration() : 0, sampleJobsThisFrame, 1u};
+							animSampleBatches[animSampleBatchCount++] = {.db = drawAnimDb, .dbGeneration = drawAnimDb ? drawAnimDb->GetGeneration() : 0, .startJob = sampleJobsThisFrame, .count = 1u};
 						}
 
 						if (skinPaletteBatchCount > 0 && skinPaletteBatches[skinPaletteBatchCount - 1].db == drawAnimDb)
@@ -496,7 +498,7 @@ namespace aether
 						else
 						{
 							AE_ASSERT_ALWAYS(skinPaletteBatchCount < 64, "RenderQueue: too many skin palette batches");
-							skinPaletteBatches[skinPaletteBatchCount++] = {drawAnimDb, drawAnimDb ? drawAnimDb->GetGeneration() : 0, skinJobCount, 1u};
+							skinPaletteBatches[skinPaletteBatchCount++] = {.db = drawAnimDb, .dbGeneration = drawAnimDb ? drawAnimDb->GetGeneration() : 0, .startJob = skinJobCount, .count = 1u};
 						}
 
 						++sampleJobsThisFrame;
@@ -527,7 +529,7 @@ namespace aether
 				++globalDrawIdx;
 			}
 
-			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{batchOutputStart, batchDrawCount, batchOutputStart};
+			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{.inputStart = batchOutputStart, .drawCount = batchDrawCount, .outputStart = batchOutputStart};
 
 			m_batchRenderInfos.push_back(BatchRenderInfo{
 			        .pipeline = batchPipeline,
@@ -987,7 +989,7 @@ namespace aether
 		FlushDrawImpl(cmd, bindlessSet, lightingSet, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const std::function<void(gpu::CommandList&, gpu::PipelineLayout)>& pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		FlushDrawImpl(cmd, bindlessSet, nullptr, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
 	}
@@ -1034,9 +1036,8 @@ namespace aether
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
-		for (std::uint32_t bi = 0; bi < static_cast<std::uint32_t>(m_batchRenderInfos.size()); ++bi)
+		for (const auto& batch: m_batchRenderInfos)
 		{
-			const BatchRenderInfo& batch = m_batchRenderInfos[bi];
 			const GraphicsPipeline* activePipeline = overridePipeline != nullptr ? overridePipeline : batch.pipeline;
 
 			if (activePipeline != nullptr && activePipeline != lastPipeline)
@@ -1127,8 +1128,8 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create skin copy compute pipeline."));
 		}
 
-		animSample = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		animSample = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://animation_sample.spv",
 		                .shaderEntry = "main",
@@ -1140,8 +1141,8 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animation sample compute pipeline."));
 		}
 
-		poseInit = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		poseInit = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://pose_init.spv",
 		                .shaderEntry = "main",
@@ -1153,8 +1154,8 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create pose init compute pipeline."));
 		}
 
-		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://node_flatten.spv",
 		                .shaderEntry = "main",
@@ -1166,8 +1167,8 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create nodeFlatten compute pipeline."));
 		}
 
-		animBlend = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		animBlend = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://anim_blend.spv",
 		                .shaderEntry = "main",
@@ -1179,8 +1180,8 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 		}
 
-		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(static_cast<gpu::Device>(device),
-		        static_cast<gpu::PipelineCache>(pipelineCache),
+		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(device,
+		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://ik_solve.spv",
 		                .shaderEntry = "main",

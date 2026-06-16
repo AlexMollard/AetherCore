@@ -83,7 +83,7 @@ namespace aether::gpu
 #ifdef TRACY_ENABLE
 		if (m_context == nullptr)
 		{
-			return GpuZoneScope();
+			return {};
 		}
 		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle. Placement-new is required: tracy::VkCtxScope has no default ctor.
 		auto* storage = ::operator new(sizeof(detail::ProfilerScopeData));

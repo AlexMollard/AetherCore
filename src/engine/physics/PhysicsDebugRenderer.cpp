@@ -1,8 +1,10 @@
 #include "physics/PhysicsDebugRenderer.hpp"
 
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <glm/gtc/matrix_transform.hpp>
+#include <numbers>
 
 #include "rendering/RenderGraph.hpp"
 #include "gpu/GpuDevice.hpp"
@@ -21,13 +23,13 @@ namespace aether
 			switch (motionType)
 			{
 				case PhysicsMotionType::Static:
-					return glm::vec4(1.0f, 0.2f, 0.2f, 1.0f); // Red
+					return {1.0f, 0.2f, 0.2f, 1.0f}; // Red
 				case PhysicsMotionType::Kinematic:
-					return glm::vec4(0.2f, 1.0f, 0.2f, 1.0f); // Green
+					return {0.2f, 1.0f, 0.2f, 1.0f}; // Green
 				case PhysicsMotionType::Dynamic:
-					return glm::vec4(0.2f, 0.4f, 1.0f, 1.0f); // Blue
+					return {0.2f, 0.4f, 1.0f, 1.0f}; // Blue
 			}
-			return glm::vec4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow fallback
+			return {1.0f, 1.0f, 0.0f, 1.0f}; // Yellow fallback
 		}
 
 		// Engine-side wrapper around gpu::ResourceRegistry::CreateMappedBuffer
@@ -249,7 +251,7 @@ namespace aether
 		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
 		for (std::size_t i = 0; i < kBoxEdges.size(); ++i)
 		{
-			vertices[i] = DebugVertex{kBoxEdges[i], kWhite};
+			vertices[i] = DebugVertex{.position = kBoxEdges[i], .color = kWhite};
 		}
 
 		m_boxVertexCount = static_cast<std::uint32_t>(vertices.size());
@@ -259,12 +261,12 @@ namespace aether
 	void PhysicsDebugRenderer::CreateSphereGeometry()
 	{
 		std::vector<DebugVertex> vertices;
-		vertices.reserve(64 * 3);
+		vertices.reserve(static_cast<size_t>(64 * 3));
 
 		constexpr int kSegments = 16;
 		constexpr float kTubeRadius = 0.5f;
 		constexpr float kTwoPi = 6.28318530718f;
-		constexpr float kPi = 3.14159265359f;
+		constexpr float kPi = std::numbers::pi_v<float>;
 		constexpr glm::vec4 kWhite{1.0f, 1.0f, 1.0f, 1.0f};
 
 		for (int i = 0; i < kSegments; ++i)
@@ -277,11 +279,11 @@ namespace aether
 				const float phi1 = (static_cast<float>(j) * kPi) / kSegments;
 				const float phi2 = (static_cast<float>(j + 1) * kPi) / kSegments;
 
-				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta1), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta2), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta2)}, kWhite});
+				vertices.push_back(DebugVertex{.position = glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta1), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta1)}, .color = kWhite});
+				vertices.push_back(DebugVertex{.position = glm::vec3{kTubeRadius * std::sin(phi1) * std::cos(theta2), kTubeRadius * std::cos(phi1), kTubeRadius * std::sin(phi1) * std::sin(theta2)}, .color = kWhite});
 
-				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta1), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta1)}, kWhite});
-				vertices.push_back(DebugVertex{glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta2), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta2)}, kWhite});
+				vertices.push_back(DebugVertex{.position = glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta1), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta1)}, .color = kWhite});
+				vertices.push_back(DebugVertex{.position = glm::vec3{kTubeRadius * std::sin(phi2) * std::cos(theta2), kTubeRadius * std::cos(phi2), kTubeRadius * std::sin(phi2) * std::sin(theta2)}, .color = kWhite});
 			}
 		}
 
@@ -316,8 +318,8 @@ namespace aether
 			{
 				const float phi = (static_cast<float>(j) * kHalfPi) / kDomeSteps;
 				const glm::vec3 p{kRadius * std::sin(phi) * dx, kHalfHeight + kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
-				vertices.push_back(DebugVertex{prev, kWhite});
-				vertices.push_back(DebugVertex{p, kWhite});
+				vertices.push_back(DebugVertex{.position = prev, .color = kWhite});
+				vertices.push_back(DebugVertex{.position = p, .color = kWhite});
 				prev = p;
 			}
 
@@ -326,8 +328,8 @@ namespace aether
 			{
 				const float y = kHalfHeight - static_cast<float>(j + 1) * (2.0f * kHalfHeight) / kDomeSteps;
 				const glm::vec3 p{kRadius * dx, y, kRadius * dz};
-				vertices.push_back(DebugVertex{prev, kWhite});
-				vertices.push_back(DebugVertex{p, kWhite});
+				vertices.push_back(DebugVertex{.position = prev, .color = kWhite});
+				vertices.push_back(DebugVertex{.position = p, .color = kWhite});
 				prev = p;
 			}
 
@@ -336,15 +338,15 @@ namespace aether
 			{
 				const float phi = kHalfPi + (static_cast<float>(j) * kHalfPi) / kDomeSteps;
 				const glm::vec3 p{kRadius * std::sin(phi) * dx, -kHalfHeight - kRadius * std::cos(phi), kRadius * std::sin(phi) * dz};
-				vertices.push_back(DebugVertex{prev, kWhite});
-				vertices.push_back(DebugVertex{p, kWhite});
+				vertices.push_back(DebugVertex{.position = prev, .color = kWhite});
+				vertices.push_back(DebugVertex{.position = p, .color = kWhite});
 				prev = p;
 			}
 
 			// South pole (final point closing the meridian).
 			const glm::vec3 southPole{0.0f, -kHalfHeight - kRadius, 0.0f};
-			vertices.push_back(DebugVertex{prev, kWhite});
-			vertices.push_back(DebugVertex{southPole, kWhite});
+			vertices.push_back(DebugVertex{.position = prev, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = southPole, .color = kWhite});
 		}
 
 		// Horizontal rings at cylinder top and bottom.
@@ -358,12 +360,12 @@ namespace aether
 			const float cz2 = kRadius * std::sin(theta2);
 
 			// Top ring.
-			vertices.push_back(DebugVertex{glm::vec3{cx1, kHalfHeight, cz1}, kWhite});
-			vertices.push_back(DebugVertex{glm::vec3{cx2, kHalfHeight, cz2}, kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, kHalfHeight, cz1}, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, kHalfHeight, cz2}, .color = kWhite});
 
 			// Bottom ring.
-			vertices.push_back(DebugVertex{glm::vec3{cx1, -kHalfHeight, cz1}, kWhite});
-			vertices.push_back(DebugVertex{glm::vec3{cx2, -kHalfHeight, cz2}, kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx1, -kHalfHeight, cz1}, .color = kWhite});
+			vertices.push_back(DebugVertex{.position = glm::vec3{cx2, -kHalfHeight, cz2}, .color = kWhite});
 		}
 
 		m_capsuleVertexCount = static_cast<std::uint32_t>(vertices.size());
@@ -374,8 +376,8 @@ namespace aether
 
 	void AddDebugLine(std::vector<DebugVertex>& out, const glm::vec3& a, const glm::vec3& b, const glm::vec4& color)
 	{
-		out.push_back(DebugVertex{a, color});
-		out.push_back(DebugVertex{b, color});
+		out.push_back(DebugVertex{.position = a, .color = color});
+		out.push_back(DebugVertex{.position = b, .color = color});
 	}
 
 	void AddDebugAabb(std::vector<DebugVertex>& out, const glm::vec3& min, const glm::vec3& max, const glm::vec4& color)
@@ -440,7 +442,7 @@ namespace aether
 
 	void AddDebugSphere(std::vector<DebugVertex>& out, const glm::vec3& center, float radius, const glm::vec4& color, int segments)
 	{
-		constexpr float kPi = 3.14159265359f;
+		constexpr float kPi = std::numbers::pi_v<float>;
 		const float kTwoPi = 2.0f * kPi;
 		const int clamped = segments < 4 ? 4 : segments;
 
@@ -636,7 +638,7 @@ namespace aether
 			                }
 			                if (drawList != nullptr && !drawList->empty())
 			                {
-				                const std::uint32_t immediateCount = static_cast<std::uint32_t>(drawList->size());
+				                const auto immediateCount = static_cast<std::uint32_t>(drawList->size());
 				                EnsureImmediateBufferCapacity(immediateCount);
 				                if (m_immediateVertexHandle.IsValid())
 				                {
@@ -649,7 +651,7 @@ namespace aether
 					                gpu::ResourceRegistry::FlushMappedBuffer(m_immediateVertexHandle, 0, static_cast<gpu::DeviceSize>(immediateCount) * sizeof(DebugVertex));
 
 					                // White tint, identity model: per-vertex colors pass through unchanged.
-					                const DebugPc pc{ctx.frameConstantsAddr, glm::vec4(1.0f), glm::mat4(1.0f)};
+					                const DebugPc pc{.frameAddr = ctx.frameConstantsAddr, .tintColor = glm::vec4(1.0f), .model = glm::mat4(1.0f)};
 					                cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
 					                cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_immediateVertexHandle));
@@ -704,7 +706,7 @@ namespace aether
 						                        return;
 					                        }
 
-					                        const DebugPc pc{ctx.frameConstantsAddr, tint, model};
+					                        const DebugPc pc{.frameAddr = ctx.frameConstantsAddr, .tintColor = tint, .model = model};
 					                        cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
 
 					                        cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(vertexHandle));

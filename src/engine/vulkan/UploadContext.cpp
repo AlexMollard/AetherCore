@@ -42,7 +42,7 @@ namespace aether::gpu
 
 	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry)
 	{
-		const VkDevice vkDevice = static_cast<VkDevice>(device);
+		const auto vkDevice = static_cast<VkDevice>(device);
 
 		const VkCommandPoolCreateInfo poolInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,

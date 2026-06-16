@@ -17,7 +17,7 @@ namespace aether
 		m_deviceRef = ctx.GetDevice().device;
 
 		constexpr gpu::BufferUsage kBaseUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
-		const VkBufferUsageFlags vkUsage = static_cast<VkBufferUsageFlags>(kBaseUsage | desc.additionalUsage);
+		const auto vkUsage = static_cast<VkBufferUsageFlags>(kBaseUsage | desc.additionalUsage);
 
 		const VkBufferCreateInfo bufferInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -25,8 +25,8 @@ namespace aether
 		        .usage = vkUsage,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		VmaAllocationInfo vmaInfo{};
 		if (vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
@@ -45,7 +45,7 @@ namespace aether
 			vkutil::SetObjectName(m_deviceRef, reinterpret_cast<std::uint64_t>(m_buffer), VK_OBJECT_TYPE_BUFFER, desc.debugName);
 		}
 
-		m_freeList.push_back({0, desc.capacityBytes});
+		m_freeList.push_back({.offset = 0, .size = desc.capacityBytes});
 	}
 
 	void GpuHeap::Shutdown()
@@ -84,7 +84,7 @@ namespace aether
 			// Split off alignment waste as a separate free block.
 			if (waste > 0)
 			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset, effectiveSize});
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{.offset = alignedOffset, .size = effectiveSize});
 				m_freeList[idx].size = waste;
 				++idx;
 			}
@@ -92,7 +92,7 @@ namespace aether
 			// Split off remaining free space after the allocation.
 			if (effectiveSize > bytes)
 			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{alignedOffset + bytes, effectiveSize - bytes});
+				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{.offset = alignedOffset + bytes, .size = effectiveSize - bytes});
 				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
 			}
 			else
@@ -111,7 +111,7 @@ namespace aether
 		constexpr VkDeviceSize kMinAlignment = 16;
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 		auto it = std::lower_bound(m_freeList.begin(), m_freeList.end(), offset, [](const FreeBlock& b, VkDeviceSize o) { return b.offset < o; });
-		it = m_freeList.insert(it, {offset, bytes});
+		it = m_freeList.insert(it, {.offset = offset, .size = bytes});
 
 		// Merge with next block if adjacent.
 		if (const auto next = std::next(it); next != m_freeList.end() && it->offset + it->size == next->offset)
@@ -135,7 +135,7 @@ namespace aether
 	void GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)
 	{
 		assert(dstAddr >= m_baseAddress);
-		const VkDeviceSize dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
+		const auto dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
 
 		const VkBufferCreateInfo stagingInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -143,8 +143,8 @@ namespace aether
 		        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
 		};
 		const VmaAllocationCreateInfo stagingAllocInfo{
-		        .usage = VMA_MEMORY_USAGE_AUTO,
 		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
 		};
 		VkBuffer stagingBuffer = VK_NULL_HANDLE;
 		VmaAllocation stagingAllocation = VK_NULL_HANDLE;

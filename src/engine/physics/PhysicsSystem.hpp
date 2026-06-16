@@ -55,7 +55,7 @@ namespace aether
 		void Update(World& world, float dt) override;
 		void OnUnregister(World& world) override;
 
-		const char* GetName() const override
+		[[nodiscard]] const char* GetName() const override
 		{
 			return "PhysicsSystem";
 		}
@@ -72,9 +72,9 @@ namespace aether
 		// -- Body control ------------------------------------------------------
 
 		void SetLinearVelocity(JPH::BodyID id, glm::vec3 velocity);
-		glm::vec3 GetLinearVelocity(JPH::BodyID id) const;
+		[[nodiscard]] glm::vec3 GetLinearVelocity(JPH::BodyID id) const;
 		void SetAngularVelocity(JPH::BodyID id, glm::vec3 velocity);
-		glm::vec3 GetAngularVelocity(JPH::BodyID id) const;
+		[[nodiscard]] glm::vec3 GetAngularVelocity(JPH::BodyID id) const;
 		void AddImpulse(JPH::BodyID id, glm::vec3 impulse);
 		void AddForce(JPH::BodyID id, glm::vec3 force);
 

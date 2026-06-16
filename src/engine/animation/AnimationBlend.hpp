@@ -29,17 +29,17 @@ namespace aether
 
 		void BuildBlendPush(const AnimationDatabase& animDb, gpu::DeviceAddress sampledPosesAddr);
 
-		const AnimationContracts::AnimationBlendPush& GetBlendPush() const
+		[[nodiscard]] const AnimationContracts::AnimationBlendPush& GetBlendPush() const
 		{
 			return m_blendPush;
 		}
 
-		std::uint32_t GetBlendJobCount() const
+		[[nodiscard]] std::uint32_t GetBlendJobCount() const
 		{
 			return m_writtenJobCount;
 		}
 
-		gpu::DeviceAddress GetBlendJobsDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetBlendJobsDeviceAddress() const
 		{
 			return m_address;
 		}

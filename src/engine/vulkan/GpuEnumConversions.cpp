@@ -385,7 +385,7 @@ namespace aether::gpu
 	VkImageUsageFlags ToVk(ImageUsage usage) noexcept
 	{
 		VkImageUsageFlags out = 0;
-		const std::uint32_t bits = static_cast<std::uint32_t>(usage);
+		const auto bits = static_cast<std::uint32_t>(usage);
 		if ((bits & static_cast<std::uint32_t>(ImageUsage::TransferSrc)) != 0)
 		{
 			out |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -416,7 +416,7 @@ namespace aether::gpu
 	VkBufferUsageFlags ToVk(BufferUsage usage) noexcept
 	{
 		VkBufferUsageFlags out = 0;
-		const std::uint32_t bits = static_cast<std::uint32_t>(usage);
+		const auto bits = static_cast<std::uint32_t>(usage);
 		if ((bits & static_cast<std::uint32_t>(BufferUsage::TransferSrc)) != 0)
 		{
 			out |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
@@ -463,7 +463,7 @@ namespace aether::gpu
 	VkImageAspectFlags ToVk(ImageAspect aspect) noexcept
 	{
 		VkImageAspectFlags out = 0;
-		const std::uint32_t bits = static_cast<std::uint32_t>(aspect);
+		const auto bits = static_cast<std::uint32_t>(aspect);
 		if ((bits & static_cast<std::uint32_t>(ImageAspect::Color)) != 0)
 		{
 			out |= VK_IMAGE_ASPECT_COLOR_BIT;
@@ -725,7 +725,7 @@ namespace aether::gpu
 	{
 		return VkRenderingInfo{
 		        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-		        .renderArea = {{0, 0}, {info.width, info.height}},
+		        .renderArea = {.offset = {.x = 0, .y = 0}, .extent = {.width = info.width, .height = info.height}},
 		        .layerCount = info.layerCount,
 		        .colorAttachmentCount = colorAttachmentCount,
 		        .pColorAttachments = vkColorAttachments,

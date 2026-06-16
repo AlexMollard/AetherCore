@@ -46,8 +46,8 @@ namespace aether
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
-		const gpu::Device device = static_cast<gpu::Device>(context.GetDevice().device);
-		const gpu::Allocator allocator = static_cast<gpu::Allocator>(context.GetAllocator());
+		const auto device = static_cast<gpu::Device>(context.GetDevice().device);
+		const auto allocator = static_cast<gpu::Allocator>(context.GetAllocator());
 
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
@@ -225,7 +225,7 @@ namespace aether
 		}
 		if (m_blurPipelineLayout != nullptr)
 		{
-			gpu::Factory::DestroyPipelineLayout(static_cast<gpu::Device>(device), m_blurPipelineLayout);
+			gpu::Factory::DestroyPipelineLayout(device, m_blurPipelineLayout);
 			m_blurPipelineLayout = nullptr;
 		}
 		if (m_blurSampler != nullptr)
@@ -236,7 +236,7 @@ namespace aether
 		}
 		if (m_blurDescriptorSetLayout != nullptr)
 		{
-			gpu::Factory::DestroyDescriptorSetLayout(static_cast<gpu::Device>(device), m_blurDescriptorSetLayout);
+			gpu::Factory::DestroyDescriptorSetLayout(device, m_blurDescriptorSetLayout);
 			m_blurDescriptorSetLayout = nullptr;
 		}
 	}
@@ -268,8 +268,8 @@ namespace aether
 		const Camera* mainCam = cameraManager.TryGetMainCamera();
 		const glm::vec3 camPos = (mainCam != nullptr) ? mainCam->GetPosition() : glm::vec3(0.0f);
 
-		const std::uint32_t pointCount = static_cast<std::uint32_t>(packet.pointLights.size());
-		const std::uint32_t spotCount = static_cast<std::uint32_t>(packet.spotLights.size());
+		const auto pointCount = static_cast<std::uint32_t>(packet.pointLights.size());
+		const auto spotCount = static_cast<std::uint32_t>(packet.spotLights.size());
 
 		struct ShadowCandidate
 		{
@@ -325,7 +325,7 @@ namespace aether
 		}
 
 		// Sort by distance (closest first = highest priority).
-		std::sort(candidates.begin(), candidates.end(), [](const ShadowCandidate& a, const ShadowCandidate& b) { return a.distanceSq < b.distanceSq; });
+		std::ranges::sort(candidates, [](const ShadowCandidate& a, const ShadowCandidate& b) { return a.distanceSq < b.distanceSq; });
 
 		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
@@ -426,9 +426,9 @@ namespace aether
 		}
 
 		// Write ShadowLightData to per-frame GPU buffer.
-		const std::uint32_t shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
+		const auto shadowCount = static_cast<std::uint32_t>(m_perLightShadows.size());
 		const std::uint32_t bufSlot = frameIdx % kMaxFramesInFlight;
-		ShadowLightData* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
+		auto* mapped = static_cast<ShadowLightData*>(m_shadowDataBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			const PerLightShadow& pls = m_perLightShadows[i];
@@ -444,7 +444,7 @@ namespace aether
 		gpu::ResourceRegistry::FlushMappedBuffer(m_shadowDataBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(ShadowLightData));
 
 		// Write per-light frame constants (just viewProj) for atlas rendering.
-		FrameConstants* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
+		auto* lightFc = static_cast<FrameConstants*>(m_lightConstantsBuffer[bufSlot].mapped);
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
@@ -588,7 +588,7 @@ namespace aether
 			                };
 			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(hWrites));
 
-			                const BlurPushConstants hPc{bounds.width, bounds.height, bounds.x, bounds.y, 1u, 0.0f, 0.0f, 0.0f};
+			                const BlurPushConstants hPc{.atlasWidth = bounds.width, .atlasHeight = bounds.height, .blurOffsetX = bounds.x, .blurOffsetY = bounds.y, .isHorizontal = 1u, ._pad0 = 0.0f, ._pad1 = 0.0f, ._pad2 = 0.0f};
 			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
@@ -639,7 +639,7 @@ namespace aether
 			                };
 			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(vWrites));
 
-			                const BlurPushConstants vPc{bounds.width, bounds.height, bounds.x, bounds.y, 0u, 0.0f, 0.0f, 0.0f};
+			                const BlurPushConstants vPc{.atlasWidth = bounds.width, .atlasHeight = bounds.height, .blurOffsetX = bounds.x, .blurOffsetY = bounds.y, .isHorizontal = 0u, ._pad0 = 0.0f, ._pad1 = 0.0f, ._pad2 = 0.0f};
 			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);

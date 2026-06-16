@@ -81,7 +81,7 @@ namespace aether
 		auto view = reg.view<RootMotionComponent, PhysicsStateComponent>();
 
 		std::uint32_t entityIdx = 0;
-		for (auto [entity, rootMotion, physState]: view.each())
+		for (const auto& [entity, rootMotion, physState]: view.each())
 		{
 			if (!rootMotion.enabled)
 			{

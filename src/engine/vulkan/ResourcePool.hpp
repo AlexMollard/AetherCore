@@ -167,9 +167,9 @@ namespace aether
 		};
 
 		BufferVirtualRecord& RequireBufferRecord(VirtualBufferHandle handle);
-		const BufferVirtualRecord& RequireBufferRecord(VirtualBufferHandle handle) const;
+		[[nodiscard]] const BufferVirtualRecord& RequireBufferRecord(VirtualBufferHandle handle) const;
 		ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle);
-		const ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle) const;
+		[[nodiscard]] const ImageVirtualRecord& RequireImageRecord(VirtualImageHandle handle) const;
 
 		[[nodiscard]] bool CanAliasWithOwners(const ResourceContract& candidateContract, const std::vector<std::uint32_t>& ownerIds, const std::vector<BufferVirtualRecord>& records) const;
 

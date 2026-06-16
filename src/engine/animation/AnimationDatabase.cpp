@@ -36,7 +36,7 @@ namespace aether
 		}
 
 		// Validate animation channel node indices before building GPU data.
-		const std::uint32_t numNodes = static_cast<std::uint32_t>(asset.nodes.size());
+		const auto numNodes = static_cast<std::uint32_t>(asset.nodes.size());
 		std::uint32_t clampedChannels = 0;
 		for (const auto& clip: asset.animations)
 		{
@@ -230,7 +230,7 @@ namespace aether
 		// must be rounded up to a 16-byte boundary to guarantee enough capacity.
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
-			return (v + 15) & ~gpu::DeviceSize(15);
+			return (v + 15) & ~static_cast<gpu::DeviceSize>(15);
 		};
 		gpu::DeviceSize totalBytes = align16(gpuClips.size() * sizeof(GpuClip));
 		totalBytes += align16(gpuChannels.size() * sizeof(GpuChannel));
@@ -249,8 +249,8 @@ namespace aether
 
 		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		const gpu::Device device = static_cast<gpu::Device>(ctx.GetDevice().device);
-		const gpu::Queue queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
+		const auto device = static_cast<gpu::Device>(ctx.GetDevice().device);
+		const auto queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
 
 		db.m_clipsAddr = UploadArray(db.m_heap, gpuClips, device, queue, uploadPool);
 		db.m_channelsAddr = UploadArray(db.m_heap, gpuChannels, device, queue, uploadPool);
@@ -381,18 +381,17 @@ namespace aether
 			return static_cast<std::uint32_t>(m_clips.size());
 		}
 
-		const std::uint32_t firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
+		const auto firstClipIdx = static_cast<std::uint32_t>(m_clips.size());
 
 		// -- Adjust and append clip data --------------------------------
-		const std::uint32_t channelBase = static_cast<std::uint32_t>(m_channels.size());
-		const std::uint32_t timesBase = static_cast<std::uint32_t>(m_times.size());
-		const std::uint32_t valuesBase = static_cast<std::uint32_t>(m_values.size());
-		const std::uint32_t nameBase = static_cast<std::uint32_t>(m_clipNames.size());
+		const auto channelBase = static_cast<std::uint32_t>(m_channels.size());
+		const auto timesBase = static_cast<std::uint32_t>(m_times.size());
+		const auto valuesBase = static_cast<std::uint32_t>(m_values.size());
+		const auto nameBase = static_cast<std::uint32_t>(m_clipNames.size());
 
 		m_clips.reserve(m_clips.size() + newClips.size());
-		for (std::size_t i = 0; i < newClips.size(); ++i)
+		for (auto clip: newClips)
 		{
-			auto clip = newClips[i];
 			clip.channelOffset += channelBase;
 			clip.nameOffset += nameBase;
 			m_clips.push_back(clip);
@@ -412,12 +411,12 @@ namespace aether
 		m_clipNames += newClipNames;
 
 		// -- Rebuild GPU heap with combined data ------------------------
-		const gpu::Device device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
-		const gpu::Queue queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
+		const auto device = static_cast<gpu::Device>(m_ctx->GetDevice().device);
+		const auto queue = static_cast<gpu::Queue>(m_ctx->GetGraphicsQueue());
 
 		const auto align16 = [](gpu::DeviceSize v) -> gpu::DeviceSize
 		{
-			return (v + 15) & ~gpu::DeviceSize(15);
+			return (v + 15) & ~static_cast<gpu::DeviceSize>(15);
 		};
 		gpu::DeviceSize totalBytes = align16(m_clips.size() * sizeof(GpuClip));
 		totalBytes += align16(m_channels.size() * sizeof(GpuChannel));

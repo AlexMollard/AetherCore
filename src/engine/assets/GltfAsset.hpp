@@ -133,7 +133,7 @@ namespace aether::assets
 
 		// Load from raw .mesh file data (already read from disk).
 		// Useful after an async I/O operation.
-		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(std::vector<std::byte> meshData, std::string_view debugPath);
+		[[nodiscard]] static Expected<GltfAsset> LoadFromMemory(const std::vector<std::byte>& meshData, std::string_view debugPath);
 
 		// Resolve the VFS path of the .mesh file for a given model path.
 		// Returns an empty string if the path has no VFS mount.

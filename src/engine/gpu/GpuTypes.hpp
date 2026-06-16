@@ -227,7 +227,7 @@ namespace aether::gpu
 		std::uint32_t width = 0;
 		std::uint32_t height = 0;
 		std::uint32_t layerCount = 1;
-		std::span<const RenderingAttachmentInfo> colorAttachments{};
+		std::span<const RenderingAttachmentInfo> colorAttachments;
 		const RenderingAttachmentInfo* depthAttachment = nullptr;
 	};
 } // namespace aether::gpu

@@ -585,7 +585,7 @@ namespace aether::app
 
 				// Test mode: drive both marker cubes and actual point-light sources
 				// from the same animated position so any mismatch is impossible.
-				const float fi = static_cast<float>(idx);
+				const auto fi = static_cast<float>(idx);
 				const float ring = 8.0f + static_cast<float>(idx % 16) * 4.0f;
 				const float phase = fi * 0.37f;
 				const float speed = 0.35f + static_cast<float>(idx % 5) * 0.09f;

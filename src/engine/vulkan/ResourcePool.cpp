@@ -13,7 +13,7 @@ namespace aether
 	{
 		bool ContainsOwner(const std::vector<std::uint32_t>& owners, const std::uint32_t ownerId)
 		{
-			return std::find(owners.begin(), owners.end(), ownerId) != owners.end();
+			return std::ranges::find(owners, ownerId) != owners.end();
 		}
 
 		bool CanCrossQueueAlias(const ResourceContract& a, const ResourceContract& b)

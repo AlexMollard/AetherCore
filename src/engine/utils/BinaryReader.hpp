@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace aether
@@ -54,7 +55,7 @@ namespace aether
 		// Read a length-prefixed string (uint16_t length + raw bytes).
 		std::string ReadString()
 		{
-			const uint16_t len = Read<uint16_t>();
+			const auto len = Read<uint16_t>();
 			if (len == 0)
 			{
 				return {};
@@ -82,7 +83,7 @@ namespace aether
 
 		void Skip(std::size_t n)
 		{
-			if (static_cast<std::size_t>(m_end - m_pos) < n)
+			if (std::cmp_less(m_end - m_pos, n))
 			{
 				m_pos = m_end;
 				return;
@@ -90,18 +91,18 @@ namespace aether
 			m_pos += n;
 		}
 
-		bool CanRead(std::size_t n) const
+		[[nodiscard]] bool CanRead(std::size_t n) const
 		{
-			return static_cast<std::size_t>(m_end - m_pos) >= n;
+			return std::cmp_greater_equal(m_end - m_pos, n);
 		}
 
-		std::size_t Remaining() const
+		[[nodiscard]] std::size_t Remaining() const
 		{
 			return static_cast<std::size_t>(m_end - m_pos);
 		}
 
 		// Current position as raw pointer (for bulk memcpy of known-safe regions).
-		const std::byte* Data() const
+		[[nodiscard]] const std::byte* Data() const
 		{
 			return m_pos;
 		}

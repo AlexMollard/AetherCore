@@ -53,7 +53,7 @@ namespace aether
 		}
 
 		template<typename T>
-		const T* TryGet(Entity entity) const
+		[[nodiscard]] const T* TryGet(Entity entity) const
 		{
 			return m_registry.try_get<T>(ToEntt(entity));
 		}
@@ -65,13 +65,13 @@ namespace aether
 		}
 
 		template<typename T>
-		const T& Get(Entity entity) const
+		[[nodiscard]] const T& Get(Entity entity) const
 		{
 			return m_registry.get<T>(ToEntt(entity));
 		}
 
 		template<typename T>
-		bool Has(Entity entity) const
+		[[nodiscard]] bool Has(Entity entity) const
 		{
 			return m_registry.any_of<T>(ToEntt(entity));
 		}
@@ -89,7 +89,7 @@ namespace aether
 		}
 
 		template<typename... Components>
-		auto View() const
+		[[nodiscard]] auto View() const
 		{
 			return m_registry.view<Components...>();
 		}
@@ -203,7 +203,7 @@ namespace aether
 		}
 
 		template<typename T>
-		bool Has() const
+		[[nodiscard]] bool Has() const
 		{
 			return m_world.Has<T>(m_entity);
 		}

@@ -92,7 +92,7 @@ namespace aether::text
 
 	std::string ToLowerAscii(std::string value)
 	{
-		std::transform(value.begin(), value.end(), value.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
+		std::ranges::transform(value, value.begin(), [](const unsigned char c) { return static_cast<char>(std::tolower(c)); });
 		return value;
 	}
 

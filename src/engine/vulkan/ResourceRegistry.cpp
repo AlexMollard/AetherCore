@@ -306,7 +306,7 @@ namespace aether
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
 		        .imageType = VK_IMAGE_TYPE_2D,
 		        .format = gpu::ToVk(desc.format),
-		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .extent = {.width = desc.extent.width, .height = desc.extent.height, .depth = 1u},
 		        .mipLevels = desc.mipLevels,
 		        .arrayLayers = desc.arrayLayers,
 		        .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -343,7 +343,7 @@ namespace aether
 		                        .b = gpu::ToVk(desc.b),
 		                        .a = gpu::ToVk(desc.a),
 		                },
-		        .subresourceRange = {gpu::ToVk(desc.aspect), 0, desc.mipLevels, 0, desc.arrayLayers},
+		        .subresourceRange = {.aspectMask = gpu::ToVk(desc.aspect), .baseMipLevel = 0, .levelCount = desc.mipLevels, .baseArrayLayer = 0, .layerCount = desc.arrayLayers},
 		};
 		VkImageView view = VK_NULL_HANDLE;
 		const VkResult viewResult = vkCreateImageView(m_device, &viewInfo, nullptr, &view);
@@ -359,7 +359,7 @@ namespace aether
 		entry.view = view;
 		entry.storageView = VK_NULL_HANDLE;
 		entry.format = imageInfo.format;
-		entry.extent = {desc.extent.width, desc.extent.height};
+		entry.extent = {.width = desc.extent.width, .height = desc.extent.height};
 		entry.usage = imageInfo.usage;
 		entry.aspect = gpu::ToVk(desc.aspect);
 		entry.device = m_device;
@@ -515,7 +515,7 @@ namespace aether
 		        .flags = VK_IMAGE_CREATE_ALIAS_BIT,
 		        .imageType = VK_IMAGE_TYPE_2D,
 		        .format = gpu::ToVk(desc.format),
-		        .extent = {desc.extent.width, desc.extent.height, 1u},
+		        .extent = {.width = desc.extent.width, .height = desc.extent.height, .depth = 1u},
 		        .mipLevels = desc.mipLevels,
 		        .arrayLayers = desc.arrayLayers,
 		        .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -565,7 +565,7 @@ namespace aether
 		                        .b = gpu::ToVk(desc.b),
 		                        .a = gpu::ToVk(desc.a),
 		                },
-		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
+		        .subresourceRange = {.aspectMask = aspect, .baseMipLevel = 0, .levelCount = desc.mipLevels, .baseArrayLayer = 0, .layerCount = desc.arrayLayers},
 		};
 
 		VkImageView view = VK_NULL_HANDLE;
@@ -581,7 +581,7 @@ namespace aether
 		entry.view = view;
 		entry.storageView = VK_NULL_HANDLE;
 		entry.format = imageInfo.format;
-		entry.extent = {desc.extent.width, desc.extent.height};
+		entry.extent = {.width = desc.extent.width, .height = desc.extent.height};
 		entry.usage = imageInfo.usage;
 		entry.aspect = aspect;
 		entry.device = m_device;
@@ -665,7 +665,7 @@ namespace aether
 		}
 
 		// Pass the engine-side layout directly to UpdateSampledImage (no Vk round-trip).
-		Expected<void> updateResult = m_bindlessManager->UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), gpu::Sampler(*samplerResult), descriptorLayout);
+		Expected<void> updateResult = m_bindlessManager->UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), static_cast<gpu::Sampler>(*samplerResult), descriptorLayout);
 		if (!updateResult)
 		{
 			m_bindlessManager->FreeSampledImageSlot(*slotResult);
@@ -750,7 +750,7 @@ namespace aether
 		}
 		if (m_textures.size() < kIndexInvalid)
 		{
-			const std::uint32_t i = static_cast<std::uint32_t>(m_textures.size());
+			const auto i = static_cast<std::uint32_t>(m_textures.size());
 			m_textures.push_back(TextureSlot{});
 			return i;
 		}
@@ -769,7 +769,7 @@ namespace aether
 		}
 		if (m_buffers.size() < kIndexInvalid)
 		{
-			const std::uint32_t i = static_cast<std::uint32_t>(m_buffers.size());
+			const auto i = static_cast<std::uint32_t>(m_buffers.size());
 			m_buffers.push_back(BufferSlot{});
 			return i;
 		}
@@ -787,7 +787,7 @@ namespace aether
 		}
 		if (m_pipelines.size() < kIndexInvalid)
 		{
-			const std::uint32_t i = static_cast<std::uint32_t>(m_pipelines.size());
+			const auto i = static_cast<std::uint32_t>(m_pipelines.size());
 			m_pipelines.push_back(PipelineSlot{});
 			return i;
 		}

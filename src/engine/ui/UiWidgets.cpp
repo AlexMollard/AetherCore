@@ -83,7 +83,7 @@ namespace aether::ui
 		}
 		const float offset = std::clamp(entityZ - rootZ, 0.f, 9.999f);
 		const std::int32_t rootLayer = static_cast<std::int32_t>(std::lround(rootZ)) * 100000;
-		const std::int32_t offsetLayer = static_cast<std::int32_t>(std::lround(offset * 10000.f));
+		const auto offsetLayer = static_cast<std::int32_t>(std::lround(offset * 10000.f));
 		return rootLayer + offsetLayer + subLayer;
 	}
 
@@ -119,7 +119,7 @@ namespace aether::ui
 		{
 			const UiPoint centre = CentrePoint(*t, px, extent);
 			const float textW = ui.MeasureText(btn->label, theme.buttonFontSize);
-			ui.DrawText(btn->label, UiPoint{centre.anchor, {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, btn->textColor);
+			ui.DrawText(btn->label, UiPoint{.anchor = centre.anchor, .offsetPx = {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, btn->textColor);
 		}
 
 		ui.SetLayer(prevLayer);
@@ -830,8 +830,8 @@ namespace aether::ui
 				const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 
 				// Drop shadow for readability.
-				ui.DrawText(qty, UiPoint{t->rect.anchorMin, {tx - anchorPx.x + 1.f, ty - anchorPx.y + 1.f}}, theme.slotFontSize, {0.f, 0.f, 0.f, 0.75f});
-				ui.DrawText(qty, UiPoint{t->rect.anchorMin, {tx - anchorPx.x, ty - anchorPx.y}}, theme.slotFontSize, theme.quantityText);
+				ui.DrawText(qty, UiPoint{.anchor = t->rect.anchorMin, .offsetPx = {tx - anchorPx.x + 1.f, ty - anchorPx.y + 1.f}}, theme.slotFontSize, {0.f, 0.f, 0.f, 0.75f});
+				ui.DrawText(qty, UiPoint{.anchor = t->rect.anchorMin, .offsetPx = {tx - anchorPx.x, ty - anchorPx.y}}, theme.slotFontSize, theme.quantityText);
 			}
 		}
 
@@ -995,7 +995,7 @@ namespace aether::ui
 				const UiPoint centre = CentrePoint(*btnT, btnPx, extent);
 				const float textW = ui.MeasureText(btnComp->label, theme.buttonFontSize);
 				const glm::vec4 textColor = (i == tabComp->selectedTab) ? theme.accent : theme.textLabel;
-				ui.DrawText(btnComp->label, UiPoint{centre.anchor, {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, textColor);
+				ui.DrawText(btnComp->label, UiPoint{.anchor = centre.anchor, .offsetPx = {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, textColor);
 			}
 		}
 

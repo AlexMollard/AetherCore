@@ -86,7 +86,7 @@ namespace aether
 			return folder + "/" + resourcePath;
 		}
 
-		std::string ResolveStemInFolder(std::string_view folderPath, std::string stem)
+		std::string ResolveStemInFolder(std::string_view folderPath, const std::string& stem)
 		{
 			if (stem.empty())
 			{
@@ -387,7 +387,7 @@ namespace aether
 			if (data.has_value())
 			{
 				BinaryReader reader(*data);
-				MaterialHeaderDisk hdr = reader.Read<MaterialHeaderDisk>();
+				auto hdr = reader.Read<MaterialHeaderDisk>();
 				if (CheckMagic(hdr))
 				{
 					Material material;
@@ -403,7 +403,7 @@ namespace aether
 					// Resolve texture paths.
 					for (uint8_t t = 0; t < hdr.texturePathCount; ++t)
 					{
-						uint8_t type = reader.Read<uint8_t>();
+						auto type = reader.Read<uint8_t>();
 						std::string texRelPath = reader.ReadString();
 						std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
 

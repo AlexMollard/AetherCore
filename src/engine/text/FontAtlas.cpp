@@ -1,6 +1,7 @@
 #include "text/FontAtlas.hpp"
 
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <format>
 #include <ft2build.h>
@@ -35,7 +36,7 @@ namespace aether
 	        m_atlasWidth(std::exchange(o.m_atlasWidth, 0u)),
 	        m_atlasHeight(std::exchange(o.m_atlasHeight, 0u)),
 	        m_glyphSize(std::exchange(o.m_glyphSize, 0)),
-	        m_glyphs(std::move(o.m_glyphs))
+	        m_glyphs(o.m_glyphs)
 	{
 	}
 
@@ -54,7 +55,7 @@ namespace aether
 			m_atlasWidth = std::exchange(o.m_atlasWidth, 0u);
 			m_atlasHeight = std::exchange(o.m_atlasHeight, 0u);
 			m_glyphSize = std::exchange(o.m_glyphSize, 0);
-			m_glyphs = std::move(o.m_glyphs);
+			m_glyphs = o.m_glyphs;
 		}
 		return *this;
 	}
@@ -90,7 +91,7 @@ namespace aether
 
 		FT_Set_Pixel_Sizes(face, 0, static_cast<FT_UInt>(atlasGlyphSize));
 
-		FT_UInt spread = static_cast<FT_UInt>(kSdfSpread);
+		auto spread = static_cast<FT_UInt>(kSdfSpread);
 		FT_Property_Set(ft, "sdf", "spread", &spread);
 
 		// -- 2. Render all glyphs into a CPU-side atlas ------------------------
@@ -109,18 +110,18 @@ namespace aether
 			return p;
 		};
 
-		const uint32_t atlasW = static_cast<uint32_t>(nextPow2(cols * cellSize));
-		const uint32_t atlasH = static_cast<uint32_t>(nextPow2(rows * cellSize));
+		const auto atlasW = static_cast<uint32_t>(nextPow2(cols * cellSize));
+		const auto atlasH = static_cast<uint32_t>(nextPow2(rows * cellSize));
 
-		std::vector<std::uint8_t> atlasPixels(atlasW * atlasH, 0u);
+		std::vector<std::uint8_t> atlasPixels(static_cast<size_t>(atlasW * atlasH), 0u);
 
-		const float fAtlasW = static_cast<float>(atlasW);
-		const float fAtlasH = static_cast<float>(atlasH);
+		const auto fAtlasW = static_cast<float>(atlasW);
+		const auto fAtlasH = static_cast<float>(atlasH);
 
 		for (int i = 0; i < kGlyphCount; ++i)
 		{
 			const char cp = static_cast<char>(kFirstChar + i);
-			const FT_ULong charcode = static_cast<FT_ULong>(static_cast<unsigned char>(cp));
+			const auto charcode = static_cast<FT_ULong>(static_cast<unsigned char>(cp));
 			const FT_UInt glyphIdx = FT_Get_Char_Index(face, charcode);
 
 			GlyphInfo& info = m_glyphs[i];
@@ -159,7 +160,7 @@ namespace aether
 			for (unsigned int by = 0; by < bm.rows; ++by)
 			{
 				const int dstY = origY + static_cast<int>(by);
-				if (dstY < 0 || dstY >= static_cast<int>(atlasH))
+				if (dstY < 0 || std::cmp_greater_equal(dstY, atlasH))
 				{
 					continue;
 				}
@@ -167,7 +168,7 @@ namespace aether
 				for (unsigned int bx = 0; bx < bm.width; ++bx)
 				{
 					const int dstX = origX + static_cast<int>(bx);
-					if (dstX < 0 || dstX >= static_cast<int>(atlasW))
+					if (dstX < 0 || std::cmp_greater_equal(dstX, atlasW))
 					{
 						continue;
 					}

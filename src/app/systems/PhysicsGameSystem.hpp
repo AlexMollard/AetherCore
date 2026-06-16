@@ -34,7 +34,7 @@ namespace aether::app
 	public:
 		void Init(ServiceContainer& services, aether::AssetManager& assets, aether::CameraManager& cameras, aether::Input& input);
 
-		const char* GetName() const override
+		[[nodiscard]] const char* GetName() const override
 		{
 			return "PhysicsGameSystem";
 		}

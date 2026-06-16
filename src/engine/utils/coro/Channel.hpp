@@ -110,7 +110,7 @@ namespace aether::coro
 			{
 			}
 
-			bool await_ready() const noexcept
+			[[nodiscard]] bool await_ready() const noexcept
 			{
 				std::scoped_lock l(m_channel->m_mutex);
 				return m_channel->m_buffer.size() < m_channel->m_capacity || m_channel->m_closed;
@@ -158,7 +158,7 @@ namespace aether::coro
 			{
 			}
 
-			bool await_ready() const noexcept
+			[[nodiscard]] bool await_ready() const noexcept
 			{
 				std::scoped_lock l(m_channel->m_mutex);
 				return !m_channel->m_buffer.empty() || m_channel->m_closed;

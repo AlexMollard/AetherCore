@@ -82,7 +82,7 @@ namespace aether
 					}
 				}
 
-				const std::uint32_t nameOff = static_cast<std::uint32_t>(clipNames.size());
+				const auto nameOff = static_cast<std::uint32_t>(clipNames.size());
 				clipNames += anim.name;
 
 				AnimationDatabase::GpuClip clip{};
@@ -103,7 +103,7 @@ namespace aether
 					}
 
 					// Skip translation channels for root bones when root lock is active.
-					const bool isRootTranslation = anim.rootLocked && static_cast<std::uint8_t>(ch.path) == translationPath && std::find(rootInfo.boneIndices.begin(), rootInfo.boneIndices.end(), ch.nodeIndex) != rootInfo.boneIndices.end();
+					const bool isRootTranslation = anim.rootLocked && static_cast<std::uint8_t>(ch.path) == translationPath && std::ranges::find(rootInfo.boneIndices, ch.nodeIndex) != rootInfo.boneIndices.end();
 					if (isRootTranslation)
 					{
 						++lockedChannels;

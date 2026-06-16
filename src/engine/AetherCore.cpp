@@ -123,7 +123,7 @@ namespace aether
 		assetsSub.LinkRenderingDeps(m_services);
 
 		// -- 8. Create default main camera -----------------------------------
-		CameraManager& cameras = m_services.Get<CameraManager>();
+		auto& cameras = m_services.Get<CameraManager>();
 		const CameraHandle mainCam = cameras.Create(CameraDesc{});
 		cameras.SetMainCamera(mainCam);
 

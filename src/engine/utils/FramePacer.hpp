@@ -117,7 +117,7 @@ namespace aether
 		static constexpr Duration kSpinThreshold{std::chrono::duration_cast<Duration>(std::chrono::milliseconds(2))};
 
 		Duration m_targetDuration{0};
-		TimePoint m_nextFrameTime{};
+		TimePoint m_nextFrameTime;
 		bool m_initialised = false;
 	};
 

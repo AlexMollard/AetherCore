@@ -46,27 +46,27 @@ namespace aether
 		// to the staging buffer, populates IK jobs for GPU dispatch.
 		void Update(World& world, PhysicsSystem& physics, float dt);
 
-		std::uint32_t GetIkJobCount() const
+		[[nodiscard]] std::uint32_t GetIkJobCount() const
 		{
 			return m_writtenIkJobCount;
 		}
 
-		const AnimationContracts::IkSolveJob* GetIkJobsData() const
+		[[nodiscard]] const AnimationContracts::IkSolveJob* GetIkJobsData() const
 		{
 			return m_ikJobs.data();
 		}
 
-		gpu::DeviceAddress GetIkJobsDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetIkJobsDeviceAddress() const
 		{
 			return m_ikJobsAddress;
 		}
 
-		gpu::DeviceAddress GetGroundResultsDeviceAddress() const
+		[[nodiscard]] gpu::DeviceAddress GetGroundResultsDeviceAddress() const
 		{
 			return m_groundResultsAddress;
 		}
 
-		std::uint32_t GetGroundResultCount() const
+		[[nodiscard]] std::uint32_t GetGroundResultCount() const
 		{
 			return static_cast<std::uint32_t>(m_groundResults.size());
 		}
@@ -79,7 +79,7 @@ namespace aether
 			m_storedDepthSortedNodesAddr = depthSorted;
 		}
 
-		const AnimationContracts::IkSolvePush& GetIkSolvePush() const
+		[[nodiscard]] const AnimationContracts::IkSolvePush& GetIkSolvePush() const
 		{
 			return m_ikPush;
 		}

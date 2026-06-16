@@ -18,13 +18,13 @@ namespace aether
 	void RenderingSubsystem::Init(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		VulkanContext& vk = services.Get<VulkanContext>();
-		Swapchain& swapchain = services.Get<Swapchain>();
-		BindlessManager& bindless = services.Get<BindlessManager>();
-		CameraManager& cameras = services.Get<CameraManager>();
-		LightingManager& lighting = services.Get<LightingManager>();
-		MaterialBuffer& materials = services.Get<MaterialBuffer>();
-		GpuDevice& gpu = services.Get<GpuDevice>();
+		auto& vk = services.Get<VulkanContext>();
+		auto& swapchain = services.Get<Swapchain>();
+		auto& bindless = services.Get<BindlessManager>();
+		auto& cameras = services.Get<CameraManager>();
+		auto& lighting = services.Get<LightingManager>();
+		auto& materials = services.Get<MaterialBuffer>();
+		auto& gpu = services.Get<GpuDevice>();
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_frameConstantsBuffer.Initialize(vk);
@@ -82,8 +82,8 @@ namespace aether
 	void RenderingSubsystem::Shutdown(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		VulkanContext& vk = services.Get<VulkanContext>();
-		GpuDevice& gpu = services.Get<GpuDevice>();
+		auto& vk = services.Get<VulkanContext>();
+		auto& gpu = services.Get<GpuDevice>();
 
 		m_postProcessStack.Destroy();
 		m_skyboxPass.Destroy();
@@ -101,9 +101,9 @@ namespace aether
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		GpuDevice& gpu = services.Get<GpuDevice>();
-		Swapchain& swapchain = services.Get<Swapchain>();
-		BindlessManager& bindless = services.Get<BindlessManager>();
+		auto& gpu = services.Get<GpuDevice>();
+		auto& swapchain = services.Get<Swapchain>();
+		auto& bindless = services.Get<BindlessManager>();
 
 		m_shadowService.RecreatePipeline(gpu.GetDevice(), gpu.GetPipelineCache(), swapchain.GetDepthFormat());
 
@@ -134,9 +134,9 @@ namespace aether
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		LightingManager& lighting = services.Get<LightingManager>();
-		BindlessManager& bindless = services.Get<BindlessManager>();
-		Swapchain& swapchain = services.Get<Swapchain>();
+		auto& lighting = services.Get<LightingManager>();
+		auto& bindless = services.Get<BindlessManager>();
+		auto& swapchain = services.Get<Swapchain>();
 
 		const FrameContext frame{
 		        .graph = &m_renderGraph,

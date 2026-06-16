@@ -33,7 +33,7 @@ namespace aether
 		        ctx.mainRenderQueue,
 		        ctx.postProcessStack.GetHdrColor(),
 		        frame.graph->GetSwapchainDepth(),
-		        std::move(ctx.pushLightingFn),
+		        ctx.pushLightingFn,
 		        ctx.shadowService.GetShadowDepthImages(),
 		        ctx.localShadowService.GetAtlasRGImage(),
 		        frame.lighting ? frame.lighting->GetLightsBufferHandle() : RGBuffer{},

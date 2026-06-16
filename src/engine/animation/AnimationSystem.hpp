@@ -8,7 +8,7 @@ namespace aether
 	class AnimationSystem : public System
 	{
 	public:
-		const char* GetName() const override
+		[[nodiscard]] const char* GetName() const override
 		{
 			return "AnimationSystem";
 		}

@@ -210,7 +210,7 @@ namespace aether
 		// cascadeOffset is added to the output buffer offset (in gpu::DrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
 		void FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet = nullptr, gpu::DescriptorSet lightingSet = nullptr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
-		void FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, std::function<void(gpu::CommandList&, gpu::PipelineLayout)> pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const std::function<void(gpu::CommandList&, gpu::PipelineLayout)>& pushLightingFn, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs

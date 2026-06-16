@@ -46,7 +46,7 @@ namespace aether
 		const float x1 = std::max(minPos.x, maxPos.x);
 		const float y1 = std::max(minPos.y, maxPos.y);
 
-		return glm::vec4(x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0));
+		return {x0, y0, std::max(0.0f, x1 - x0), std::max(0.0f, y1 - y0)};
 	}
 
 	// -- Anchor presets --------------------------------------------------------
@@ -71,7 +71,7 @@ namespace aether
 		// Internal helper: both anchor corners identical -> fixed-size widget.
 		[[nodiscard]] inline UiRect Fixed(glm::vec2 anchor, glm::vec2 offsetMinPx, glm::vec2 sizePx)
 		{
-			return UiRect{anchor, anchor, offsetMinPx, offsetMinPx + sizePx};
+			return UiRect{.anchorMin = anchor, .anchorMax = anchor, .offsetMinPx = offsetMinPx, .offsetMaxPx = offsetMinPx + sizePx};
 		}
 
 		// -- Fixed-position presets ---------------------------------------------
@@ -130,19 +130,19 @@ namespace aether
 		// Fills the screen; `inset` shrinks each edge uniformly.
 		[[nodiscard]] inline UiRect StretchFull(float inset = 0.f)
 		{
-			return UiRect{{0.f, 0.f}, {1.f, 1.f}, {inset, inset}, {-inset, -inset}};
+			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 1.f}, .offsetMinPx = {inset, inset}, .offsetMaxPx = {-inset, -inset}};
 		}
 
 		// Full-width horizontal band.  `yPx` and `heightPx` are in pixels from the top.
 		[[nodiscard]] inline UiRect StretchHorizontal(float yPx, float heightPx, float insetX = 0.f)
 		{
-			return UiRect{{0.f, 0.f}, {1.f, 0.f}, {insetX, yPx}, {-insetX, yPx + heightPx}};
+			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {insetX, yPx}, .offsetMaxPx = {-insetX, yPx + heightPx}};
 		}
 
 		// Full-height vertical column.  `xPx` and `widthPx` are in pixels from the left.
 		[[nodiscard]] inline UiRect StretchVertical(float xPx, float widthPx, float insetY = 0.f)
 		{
-			return UiRect{{0.f, 0.f}, {0.f, 1.f}, {xPx, insetY}, {xPx + widthPx, -insetY}};
+			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 1.f}, .offsetMinPx = {xPx, insetY}, .offsetMaxPx = {xPx + widthPx, -insetY}};
 		}
 
 	} // namespace UiAnchors

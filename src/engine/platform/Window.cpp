@@ -64,7 +64,7 @@ namespace aether
 		int w = 0;
 		int h = 0;
 		glfwGetFramebufferSize(m_window, &w, &h);
-		return {w, h};
+		return {.width = w, .height = h};
 	}
 
 	FramebufferSize Window::WaitForValidFramebufferSize()

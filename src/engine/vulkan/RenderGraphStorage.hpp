@@ -282,12 +282,12 @@ namespace aether
 			gpu::Format format = gpu::Format::Undefined;
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			bool bindlessRequested = false;
 			bool fromHeap = false; // true if allocated from transient heap
 			VkImageLayout bindlessLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 			gpu::TextureHandle image;
-			gpu::Extent2D allocatedExtent{};
+			gpu::Extent2D allocatedExtent;
 			std::uint32_t aliasedEntryIndex = 0xFFFFFFFFu;
 			// Filled by PrepareTransientAllocations (two-pass).
 			VkDeviceSize memReqSize = 0;

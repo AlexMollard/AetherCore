@@ -41,7 +41,7 @@ namespace aether::gpu
 	struct TextureDesc
 	{
 		Format format = Format::Undefined;
-		Extent2D extent = {};
+		Extent2D extent;
 		ImageUsage usage = ImageUsage::None;
 		ImageAspect aspect = ImageAspect::Color;
 		std::uint32_t mipLevels = 1;
@@ -135,8 +135,8 @@ namespace aether::gpu
 
 		// Aliased creation (transient heap sub-allocation). The existingAllocation
 		// pointer (VmaAllocation) is cast through void* at the facade.
-		[[nodiscard]] static TextureHandle CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr);
-		[[nodiscard]] static BufferHandle CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr);
+		[[nodiscard]] static TextureHandle CreateAliasedTexture(const TextureDesc& desc, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr) noexcept;
+		[[nodiscard]] static BufferHandle CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr) noexcept;
 
 		// Compute-pipeline: factory + register. Returns an opaque
 		// PipelineHandle. Layout is owned by the registry entry (when the
@@ -162,7 +162,7 @@ namespace aether::gpu
 		{
 			ImageView view = nullptr;
 			Format format = Format::Undefined;
-			Extent2D extent{};
+			Extent2D extent;
 			std::uint32_t mipLevels = 0;
 			std::uint32_t arrayLayers = 0;
 			ImageUsage usage = ImageUsage::None;

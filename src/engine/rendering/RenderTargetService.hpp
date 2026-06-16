@@ -49,7 +49,7 @@ namespace aether
 		struct Entry
 		{
 			std::uint32_t cameraHandleRaw = 0;
-			gpu::Extent2D extent{};
+			gpu::Extent2D extent;
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;

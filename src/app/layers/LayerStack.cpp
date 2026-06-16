@@ -1,5 +1,7 @@
 #include "LayerStack.hpp"
 
+#include <ranges>
+
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
@@ -22,9 +24,9 @@ namespace aether::app
 	void LayerStack::DetachAll(LayerContext& context)
 	{
 		AE_INFO(LogCategory::App, "Detaching layers.");
-		for (auto it = m_layers.rbegin(); it != m_layers.rend(); ++it)
+		for (auto& m_layer: std::views::reverse(m_layers))
 		{
-			(*it)->OnDetach(context);
+			m_layer->OnDetach(context);
 		}
 	}
 

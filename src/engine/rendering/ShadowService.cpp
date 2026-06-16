@@ -146,7 +146,7 @@ namespace aether
 	void ShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
-		glm::vec3 lightDir = glm::vec3(packet.sunDirectionIntensity);
+		auto lightDir = glm::vec3(packet.sunDirectionIntensity);
 		if (glm::length(lightDir) < 1e-4f)
 		{
 			lightDir = glm::vec3(0.5f, 0.8f, 0.2f);

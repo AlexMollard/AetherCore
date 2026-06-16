@@ -15,7 +15,7 @@ namespace aether::app::scripting
 	class VfsFileSystem : public das::AnyFileSystem
 	{
 	public:
-		virtual das::FileInfo* tryOpenFile(const das::string& fileName) override;
+		das::FileInfo* tryOpenFile(const das::string& fileName) override;
 	};
 
 	// Custom FileAccess that:
@@ -29,7 +29,7 @@ namespace aether::app::scripting
 		// Add a search root: require "prefix/module" tries "rootPath/module.das"
 		void AddSearchRoot(const das::string& prefix, const das::string& rootPath);
 
-		virtual das::ModuleInfo getModuleInfo(const das::string& req, const das::string& from) const override;
+		das::ModuleInfo getModuleInfo(const das::string& req, const das::string& from) const override;
 
 	private:
 		struct SearchRoot

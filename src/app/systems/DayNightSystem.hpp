@@ -18,7 +18,7 @@ namespace aether::app
 	public:
 		void Init(aether::Renderer& renderer);
 
-		const char* GetName() const override
+		[[nodiscard]] const char* GetName() const override
 		{
 			return "DayNightSystem";
 		}

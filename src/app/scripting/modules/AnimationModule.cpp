@@ -249,7 +249,7 @@ namespace
 
 		aether::BinaryReader reader(*data);
 
-		V1Header v1Hdr = reader.Read<V1Header>();
+		auto v1Hdr = reader.Read<V1Header>();
 		if (v1Hdr.magic[0] != 'A' || v1Hdr.magic[1] != 'N' || v1Hdr.magic[2] != 'I' || v1Hdr.magic[3] != 'M')
 		{
 			AE_WARN(aether::LogCategory::Animation, "add_animation: invalid animation magic");
@@ -278,12 +278,12 @@ namespace
 
 			// The on-disk format writes ChannelHeaderDisk FIRST (nodeIndex + path +
 			// interp + padding + keyCount = 12 bytes), THEN the optional bone name.
-			ChannelHeaderDisk diskCh = reader.Read<ChannelHeaderDisk>();
+			auto diskCh = reader.Read<ChannelHeaderDisk>();
 			ch.nodeIndex = diskCh.nodeIndex;
 
 			if (hasBoneNames)
 			{
-				uint16_t boneNameLen = reader.Read<uint16_t>();
+				auto boneNameLen = reader.Read<uint16_t>();
 				if (boneNameLen > 0)
 				{
 					ch.boneName = std::string(reinterpret_cast<const char*>(reader.Data()), boneNameLen);
@@ -387,7 +387,7 @@ namespace
 
 		anim.rootLocked = lockRoot;
 
-		const std::uint32_t pendingIdx = static_cast<std::uint32_t>(smc->pendingExternalAnims.size());
+		const auto pendingIdx = static_cast<std::uint32_t>(smc->pendingExternalAnims.size());
 		smc->pendingExternalAnims.push_back(std::move(anim));
 
 		const std::uint32_t internalClipCount = smc->animDb ? smc->animDb->GetClipCount() : 0;
@@ -565,7 +565,7 @@ namespace
 	{
 		for (auto enttE: w->View<aether::SkinnedMeshComponent>())
 		{
-			const uint32_t eid = static_cast<uint32_t>(entt::to_integral(enttE));
+			const auto eid = static_cast<uint32_t>(entt::to_integral(enttE));
 			vec4f args[1];
 			args[0] = das::cast<uint32_t>::from(eid);
 			ctx->invoke(block, args, nullptr, at);

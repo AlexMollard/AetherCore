@@ -50,8 +50,8 @@ namespace aether
 		auto buildSwapchain = [&](const VkPresentModeKHR presentMode)
 		{
 			vkb::SwapchainBuilder builder{ctx.GetDevice()};
-			return builder.set_desired_format({VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
-			        .add_fallback_format({VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+			return builder.set_desired_format({.format = VK_FORMAT_B8G8R8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
+			        .add_fallback_format({.format = VK_FORMAT_R8G8B8A8_UNORM, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR})
 			        .set_desired_present_mode(presentMode)
 			        .set_desired_extent(static_cast<std::uint32_t>(w), static_cast<std::uint32_t>(h))
 			        .set_image_usage_flags(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT)
@@ -349,9 +349,9 @@ namespace aether
 	        std::uint64_t extraSignalValue)
 	{
 		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
-		const VkSemaphore vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
-		const VkSemaphore vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
-		const VkSemaphore vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
+		const auto vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
+		const auto vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
+		const auto vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
 
 		EndFrame(graphicsQueue, presentQueue, vkExtraWait, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue, vkExtraWait2, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue2, vkExtraSignal, extraSignalValue);
 	}

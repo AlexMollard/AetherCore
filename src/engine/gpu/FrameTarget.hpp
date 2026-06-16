@@ -19,6 +19,6 @@ namespace aether
 		void* depthView = nullptr;
 		gpu::Format colorFormat = gpu::Format::Undefined;
 		gpu::Format depthFormat = gpu::Format::Undefined;
-		gpu::Extent2D extent{};
+		gpu::Extent2D extent;
 	};
 } // namespace aether

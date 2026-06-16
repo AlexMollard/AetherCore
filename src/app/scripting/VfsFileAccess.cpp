@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <utility>
 
 namespace aether::app::scripting
 {
@@ -50,7 +51,7 @@ namespace aether::app::scripting
 			auto info = new das::TextFileInfo(source, st.st_size, true);
 			auto bytesRead = fread(source, 1, st.st_size, ff);
 			fclose(ff);
-			if (static_cast<size_t>(bytesRead) == static_cast<size_t>(st.st_size))
+			if (std::cmp_equal(bytesRead, st.st_size))
 			{
 				return info;
 			}
@@ -67,7 +68,7 @@ namespace aether::app::scripting
 	// -- VfsFileAccess -------------------------------------------------------------
 
 	VfsFileAccess::VfsFileAccess()
-	      : das::FsFileAccess()
+
 	{
 		// Insert VfsFileSystem at the front so it is tried first.
 		auto* vfs = new VfsFileSystem();
@@ -82,7 +83,7 @@ namespace aether::app::scripting
 
 	void VfsFileAccess::AddSearchRoot(const das::string& prefix, const das::string& rootPath)
 	{
-		searchRoots.push_back({prefix, rootPath});
+		searchRoots.push_back({.prefix = prefix, .rootPath = rootPath});
 		addFsRoot(prefix, rootPath);
 	}
 

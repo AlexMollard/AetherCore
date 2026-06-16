@@ -77,7 +77,7 @@ namespace aether::app
 
 	void SandboxLayer::OnGui(LayerContext& context)
 	{
-		UIRenderer& ui = context.Get<UIRenderer>();
+		auto& ui = context.Get<UIRenderer>();
 
 		constexpr float kPanelW = 260.f;
 		constexpr float kPadX = 14.f;

@@ -11,7 +11,7 @@ namespace aether
 		[[nodiscard]] std::vector<std::uint32_t> BuildMaterializationOrder(const std::vector<TRequest>& requests)
 		{
 			std::vector<std::uint32_t> order(requests.size());
-			std::iota(order.begin(), order.end(), 0);
+			std::ranges::iota(order, 0);
 			std::stable_sort(order.begin(),
 			        order.end(),
 			        [&](const std::uint32_t lhs, const std::uint32_t rhs)

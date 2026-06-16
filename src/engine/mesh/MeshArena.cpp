@@ -39,12 +39,12 @@ namespace aether
 		}
 
 		return Alloc{
-		        m_vertexHeap.GetOffset(vs),
-		        vertexCount,
-		        m_indexHeap.GetOffset(is),
-		        indexCount,
-		        vertexBytes,
-		        indexBytes,
+		        .vertexByteOffset = m_vertexHeap.GetOffset(vs),
+		        .vertexCount = vertexCount,
+		        .indexByteOffset = m_indexHeap.GetOffset(is),
+		        .indexCount = indexCount,
+		        .vertexByteSize = vertexBytes,
+		        .indexByteSize = indexBytes,
 		};
 	}
 

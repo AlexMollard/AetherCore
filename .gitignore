@@ -66,6 +66,7 @@ Thumbs.db
 
 # temorary files
 /.temp
+/audit/
 *.tmp
 *.log
 .aider*

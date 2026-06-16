@@ -20,6 +20,7 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include <GLFW/glfw3.h>
 #include <glm/gtx/quaternion.hpp>
+#include <utility>
 
 namespace aether::app
 {
@@ -420,7 +421,7 @@ namespace aether::app
 			if (m_input->IsKeyPressed(aether::Key::Space))
 			{
 				m_bobberState = BobberState::Hooked;
-				if (m_hookedFishIndex >= 0 && m_hookedFishIndex < static_cast<int>(m_fishAgents.size()))
+				if (m_hookedFishIndex >= 0 && std::cmp_less(m_hookedFishIndex, m_fishAgents.size()))
 				{
 					m_fishAgents[m_hookedFishIndex].hooked = true;
 				}
@@ -451,7 +452,7 @@ namespace aether::app
 				m_score += 1;
 				m_bobberState = BobberState::Ready;
 				m_bobberPos = rodOrigin;
-				if (m_hookedFishIndex >= 0 && m_hookedFishIndex < static_cast<int>(m_fishAgents.size()))
+				if (m_hookedFishIndex >= 0 && std::cmp_less(m_hookedFishIndex, m_fishAgents.size()))
 				{
 					m_fishAgents[m_hookedFishIndex].hooked = false;
 					std::uniform_real_distribution<float> angleDist(0.0f, glm::two_pi<float>());
@@ -466,9 +467,8 @@ namespace aether::app
 		}
 
 		// Update fish movement.
-		for (std::size_t i = 0; i < m_fishAgents.size(); ++i)
+		for (auto& agent: m_fishAgents)
 		{
-			FishAgent& agent = m_fishAgents[i];
 			if (agent.hooked)
 			{
 				agent.pos = m_bobberPos;

@@ -21,36 +21,41 @@ namespace aether::gpu
 	// Automatically handles 32-bit and 64-bit enums safely without manual casts.
 	// (Requires C++17 for std::is_enum_v.)
 
-	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	template<typename Enum>
 	constexpr Enum operator|(Enum lhs, Enum rhs) noexcept
+	    requires(std::is_enum_v<Enum>)
 	{
 		using Underlying = std::underlying_type_t<Enum>;
 		return static_cast<Enum>(static_cast<Underlying>(lhs) | static_cast<Underlying>(rhs));
 	}
 
-	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	template<typename Enum>
 	constexpr Enum& operator|=(Enum& lhs, Enum rhs) noexcept
+	    requires(std::is_enum_v<Enum>)
 	{
 		lhs = lhs | rhs;
 		return lhs;
 	}
 
-	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	template<typename Enum>
 	constexpr Enum operator&(Enum lhs, Enum rhs) noexcept
+	    requires(std::is_enum_v<Enum>)
 	{
 		using Underlying = std::underlying_type_t<Enum>;
 		return static_cast<Enum>(static_cast<Underlying>(lhs) & static_cast<Underlying>(rhs));
 	}
 
-	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	template<typename Enum>
 	constexpr Enum& operator&=(Enum& lhs, Enum rhs) noexcept
+	    requires(std::is_enum_v<Enum>)
 	{
 		lhs = lhs & rhs;
 		return lhs;
 	}
 
-	template<typename Enum, typename = std::enable_if_t<std::is_enum_v<Enum>>>
+	template<typename Enum>
 	constexpr Enum operator~(Enum rhs) noexcept
+	    requires(std::is_enum_v<Enum>)
 	{
 		using Underlying = std::underlying_type_t<Enum>;
 		return static_cast<Enum>(~static_cast<Underlying>(rhs));
