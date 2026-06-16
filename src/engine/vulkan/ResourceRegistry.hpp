@@ -33,6 +33,11 @@ namespace aether
 	// the entry is queued in the *current* frame's ring slot. AdvanceFrame()
 	// promotes the ring by one slot and runs destroyers whose target frame has
 	// retired (GpuDevice::WaitIdle at the matching point guarantees GPU done).
+	//
+	// Thread safety: none. Create / Destroy / AdvanceFrame / DrainAll /
+	// Shutdown mutate internal slot tables and the pending-destruction ring
+	// without locking. All calls must be externally serialized to a single
+	// thread (the engine's main thread / dedicated render thread).
 	class ResourceRegistry
 	{
 	public:
@@ -144,7 +149,6 @@ namespace aether
 		// Bindless registration. BindlessManager pointer is for deferred slot-free on Destroy().
 		void SetBindlessManager(BindlessManager* mgr);
 		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle,
-		        BindlessManager& bindlessManager,
 		        gpu::ImageAspect aspectMask = gpu::ImageAspect::Color,
 		        gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly,
 		        TextureFilter filter = TextureFilter::Linear,
@@ -225,7 +229,7 @@ namespace aether
 		};
 
 		// Find an empty slot, or pick a victim for reuse. Returns ~0u when
-		// the table is full (24-bit address space exhausted).
+		// the table is full (16-bit index space exhausted).
 		[[nodiscard]] std::uint32_t AcquireTextureSlot();
 		[[nodiscard]] std::uint32_t AcquireBufferSlot();
 		[[nodiscard]] std::uint32_t AcquirePipelineSlot();
@@ -243,7 +247,7 @@ namespace aether
 		std::vector<std::uint32_t> m_freeBufferSlots;
 		std::vector<std::uint32_t> m_freePipelineSlots;
 
-		std::vector<PendingDestruction> m_pendingDestructions[kMaxFramesInFlight];
+		std::array<std::vector<PendingDestruction>, kMaxFramesInFlight> m_pendingDestructions;
 		std::uint32_t m_currentFrame = 0;
 
 		bool m_shutdown = false;

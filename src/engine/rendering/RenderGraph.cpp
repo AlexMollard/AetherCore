@@ -372,7 +372,7 @@ namespace aether
 
 	// -- Bindless -------------------------------------------------------------
 
-	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout)
+	std::uint32_t RenderGraph::EnsureBindlessSampled(RGImage image, gpu::ImageLayout descriptorLayout)
 	{
 		if (!IsTransientId(image.id))
 		{
@@ -380,7 +380,7 @@ namespace aether
 		}
 
 		const uint32_t idx = TransientIndex(image.id);
-		return m_storage->EnsureBindlessSampled(idx, bindlessManager, descriptorLayout);
+		return m_storage->EnsureBindlessSampled(idx, descriptorLayout);
 	}
 
 	std::uint32_t RenderGraph::GetBindlessSampledSlot(RGImage image) const

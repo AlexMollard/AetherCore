@@ -1,5 +1,7 @@
 #include "vulkan/ResourceRegistry.hpp"
 
+#include <algorithm>
+
 #include "utils/Assert.hpp"
 #include "utils/Backtrace.hpp"
 #include "utils/Expected.hpp"
@@ -95,6 +97,8 @@ namespace aether
 #endif
 			switch (format)
 			{
+				case VK_FORMAT_S8_UINT:
+					return VK_IMAGE_ASPECT_STENCIL_BIT;
 				case VK_FORMAT_D16_UNORM:
 				case VK_FORMAT_D32_SFLOAT:
 				case VK_FORMAT_X8_D24_UNORM_PACK32:
@@ -139,7 +143,7 @@ namespace aether
 #endif
 				if (slot.entry->hasBindlessSampled && m_bindlessManager)
 				{
-					m_bindlessManager->FreeSampledImageSlotDeferred(slot.entry->bindlessSampledSlot);
+					m_bindlessManager->FreeSampledImageSlot(slot.entry->bindlessSampledSlot);
 				}
 				DestroyTextureEntryNow(*slot.entry);
 				--m_liveTextureCount;
@@ -460,6 +464,10 @@ namespace aether
 			return {};
 		}
 
+		VkMemoryRequirements memReq;
+		vkGetBufferMemoryRequirements(m_device, buffer, &memReq);
+		AE_ASSERT((memoryOffset % memReq.alignment) == 0, "CreateAliasedBuffer: memoryOffset is not aligned to VkMemoryRequirements::alignment.");
+
 		VmaAllocationInfo existingAllocInfo;
 		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
 
@@ -524,6 +532,10 @@ namespace aether
 			return {};
 		}
 
+		VkMemoryRequirements memReq;
+		vkGetImageMemoryRequirements(m_device, image, &memReq);
+		AE_ASSERT((memoryOffset % memReq.alignment) == 0, "CreateAliasedTexture: memoryOffset is not aligned to VkMemoryRequirements::alignment.");
+
 		VmaAllocationInfo existingAllocInfo;
 		vmaGetAllocationInfo(m_allocator, existingAllocation, &existingAllocInfo);
 
@@ -540,12 +552,19 @@ namespace aether
 			return {};
 		}
 
-		const VkImageAspectFlags aspect = DeduceAspect(imageInfo.format);
+		const VkImageAspectFlags aspect = (desc.aspect != gpu::ImageAspect::None) ? gpu::ToVk(desc.aspect) : DeduceAspect(imageInfo.format);
 		const VkImageViewCreateInfo viewInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		        .image = image,
 		        .viewType = desc.arrayLayers > 1 ? VK_IMAGE_VIEW_TYPE_2D_ARRAY : VK_IMAGE_VIEW_TYPE_2D,
 		        .format = imageInfo.format,
+		        .components =
+		                {
+		                        .r = gpu::ToVk(desc.r),
+		                        .g = gpu::ToVk(desc.g),
+		                        .b = gpu::ToVk(desc.b),
+		                        .a = gpu::ToVk(desc.a),
+		                },
 		        .subresourceRange = {aspect, 0, desc.mipLevels, 0, desc.arrayLayers},
 		};
 
@@ -575,9 +594,10 @@ namespace aether
 		return RegisterTexture(entry, debugName.empty() ? std::string_view{} : debugName);
 	}
 
-	Expected<void> ResourceRegistry::EnsureBindlessSampled(
-	        gpu::TextureHandle handle, BindlessManager& bindlessManager, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter, const gpu::SamplerAddressMode addressMode)
+	Expected<void> ResourceRegistry::EnsureBindlessSampled(gpu::TextureHandle handle, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter, const gpu::SamplerAddressMode addressMode)
 	{
+		AE_ASSERT(m_bindlessManager != nullptr, "EnsureBindlessSampled: SetBindlessManager was never called.");
+
 		TextureEntry* entry = ResolveMutable(handle);
 		if (!entry)
 		{
@@ -624,7 +644,7 @@ namespace aether
 		const gpu::Filter gpuFilter = (filter == TextureFilter::Nearest) ? gpu::Filter::Nearest : gpu::Filter::Linear;
 		const gpu::SamplerMipmapMode gpuMipmapMode = (filter == TextureFilter::Nearest) ? gpu::SamplerMipmapMode::Nearest : gpu::SamplerMipmapMode::Linear;
 
-		Expected<gpu::Sampler> samplerResult = bindlessManager.GetOrCreateSampler(gpuFilter, gpuMipmapMode, addressMode);
+		Expected<gpu::Sampler> samplerResult = m_bindlessManager->GetOrCreateSampler(gpuFilter, gpuMipmapMode, addressMode);
 		if (!samplerResult)
 		{
 			if (makeView)
@@ -634,7 +654,7 @@ namespace aether
 			AE_UNEXPECTED(samplerResult.error());
 		}
 
-		Expected<std::uint32_t> slotResult = bindlessManager.AllocateSampledImageSlot();
+		Expected<std::uint32_t> slotResult = m_bindlessManager->AllocateSampledImageSlot();
 		if (!slotResult)
 		{
 			if (makeView)
@@ -644,10 +664,11 @@ namespace aether
 			AE_UNEXPECTED(slotResult.error());
 		}
 
-		Expected<void> updateResult = bindlessManager.UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), gpu::Sampler(*samplerResult), gpu::FromVk(gpu::ToVk(descriptorLayout)));
+		// Pass the engine-side layout directly to UpdateSampledImage (no Vk round-trip).
+		Expected<void> updateResult = m_bindlessManager->UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), gpu::Sampler(*samplerResult), descriptorLayout);
 		if (!updateResult)
 		{
-			bindlessManager.FreeSampledImageSlot(*slotResult);
+			m_bindlessManager->FreeSampledImageSlot(*slotResult);
 			if (makeView)
 			{
 				vkDestroyImageView(entry->device, view, nullptr);
@@ -734,7 +755,7 @@ namespace aether
 			return i;
 		}
 		// Exhausted - caller will see an invalid handle and AE_ASSERT.
-		AE_ASSERT(false, "ResourceRegistry: out of TextureSlot indices (24-bit address space exhausted).");
+		AE_ASSERT(false, "ResourceRegistry: out of TextureSlot indices (16-bit index space exhausted).");
 		return kIndexInvalid;
 	}
 
@@ -752,7 +773,7 @@ namespace aether
 			m_buffers.push_back(BufferSlot{});
 			return i;
 		}
-		AE_ASSERT(false, "ResourceRegistry: out of BufferSlot indices (24-bit address space exhausted).");
+		AE_ASSERT(false, "ResourceRegistry: out of BufferSlot indices (16-bit index space exhausted).");
 		return kIndexInvalid;
 	}
 
@@ -770,7 +791,7 @@ namespace aether
 			m_pipelines.push_back(PipelineSlot{});
 			return i;
 		}
-		AE_ASSERT(false, "ResourceRegistry: out of PipelineSlot indices (24-bit address space exhausted).");
+		AE_ASSERT(false, "ResourceRegistry: out of PipelineSlot indices (16-bit index space exhausted).");
 		return kIndexInvalid;
 	}
 
@@ -862,6 +883,11 @@ namespace aether
 		{
 			return;
 		}
+		// The handle is invalidated for CPU resolve immediately (slot is
+		// reset and the generation is bumped below). The actual GPU/VkImage
+		// destruction is deferred to kMaxFramesInFlight frames from now via
+		// the queued destroyer; the WaitIdle at the matching frame boundary
+		// guarantees the GPU is no longer reading from this texture.
 		const TextureEntry entry = *slot.entry;
 		--m_liveTextureCount;
 		slot.entry.reset();

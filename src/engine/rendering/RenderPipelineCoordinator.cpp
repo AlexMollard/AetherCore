@@ -18,7 +18,7 @@ namespace aether
 	{
 		const FrameContext& frame = ctx.frame;
 
-		ctx.shadowService.SetupPassResources(*frame.graph, *frame.bindless, ctx.device, frame.depthFormat);
+		ctx.shadowService.SetupPassResources(*frame.graph, ctx.device, frame.depthFormat);
 		ctx.localShadowService.SetupPassResources(*frame.graph, frame.depthFormat);
 
 		ctx.shadowService.RegisterComputePasses(*frame.graph, ctx.cullPass);

@@ -73,7 +73,7 @@ namespace aether
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, Scene& scene, World& world, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
-		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat);
+		void RegisterPasses(RenderGraph& graph, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat);
 		void SetupPassResources(RenderGraph& graph, gpu::Format depthFormat);
 		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph);

@@ -46,9 +46,9 @@ namespace aether
 		UpdateExternalBuffer(idx, static_cast<VkBuffer>(buffer));
 	}
 
-	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout)
+	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, gpu::ImageLayout descriptorLayout)
 	{
-		return EnsureBindlessSampled(transientIdx, bindlessManager, gpu::ToVk(descriptorLayout));
+		return EnsureBindlessSampled(transientIdx, gpu::ToVk(descriptorLayout));
 	}
 
 	void RenderGraphStorage::Initialize(VkDevice device, VmaAllocator allocator)
@@ -532,7 +532,7 @@ namespace aether
 
 	// -- Bindless -------------------------------------------------------------
 
-	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkImageLayout descriptorLayout)
+	std::uint32_t RenderGraphStorage::EnsureBindlessSampled(uint32_t transientIdx, VkImageLayout descriptorLayout)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
@@ -570,7 +570,7 @@ namespace aether
 			entry.allocatedExtent = entry.extent;
 		}
 
-		gpu::ResourceRegistry::EnsureBindlessSampled(entry.image, bindlessManager, entry.aspect, gpu::FromVk(descriptorLayout));
+		gpu::ResourceRegistry::EnsureBindlessSampled(entry.image, entry.aspect, gpu::FromVk(descriptorLayout));
 		return gpu::ResourceRegistry::GetBindlessSampledSlot(entry.image);
 	}
 

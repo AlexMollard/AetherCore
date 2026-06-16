@@ -505,9 +505,7 @@ namespace aether
 	{
 		if (contract.visibility == ResourceVisibility::BindlessSampled)
 		{
-			AE_ASSERT_ALWAYS(m_bindlessImageConfig.manager != nullptr, "Bindless sampled image requested, but ResourcePool bindless image config is not set.");
-
-			gpu::ResourceRegistry::EnsureBindlessSampled(image, *m_bindlessImageConfig.manager, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout);
+			gpu::ResourceRegistry::EnsureBindlessSampled(image, m_bindlessImageConfig.sampledAspectMask, m_bindlessImageConfig.sampledLayout);
 		}
 	}
 

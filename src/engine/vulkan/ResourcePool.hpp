@@ -106,7 +106,6 @@ namespace aether
 
 		struct BindlessImageConfig
 		{
-			BindlessManager* manager = nullptr;
 			gpu::ImageAspect sampledAspectMask = gpu::ImageAspect::Color;
 			gpu::ImageLayout sampledLayout = gpu::ImageLayout::ShaderReadOnly;
 		};

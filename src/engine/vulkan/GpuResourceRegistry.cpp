@@ -202,9 +202,9 @@ namespace aether::gpu
 		s_reg->SetBindlessManager(mgr);
 	}
 
-	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, aether::BindlessManager& bindlessManager, ImageAspect aspectMask, ImageLayout descriptorLayout, TextureFilter filter, SamplerAddressMode addressMode)
+	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, ImageAspect aspectMask, ImageLayout descriptorLayout, TextureFilter filter, SamplerAddressMode addressMode)
 	{
-		auto result = s_reg->EnsureBindlessSampled(handle, bindlessManager, aspectMask, descriptorLayout, filter, addressMode);
+		auto result = s_reg->EnsureBindlessSampled(handle, aspectMask, descriptorLayout, filter, addressMode);
 		if (!result)
 		{
 			// Log or assert - the function itself logs on failure

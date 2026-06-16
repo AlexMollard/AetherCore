@@ -458,8 +458,9 @@ namespace aether
 		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}
 
-	void LocalShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindless, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat)
+	void LocalShadowService::RegisterPasses(RenderGraph& graph, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat)
 	{
+		(void) device;
 		SetupPassResources(graph, depthFormat);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);

@@ -10,6 +10,7 @@
 
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/Semaphore.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/volk.hpp"
 #include "gpu/GpuEnums.hpp"
 
@@ -156,8 +157,8 @@ namespace aether
 		}
 
 		// -- Bindless -------------------------------------------------------
-		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, VkImageLayout descriptorLayout);
-		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, BindlessManager& bindlessManager, gpu::ImageLayout descriptorLayout);
+		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, VkImageLayout descriptorLayout);
+		std::uint32_t EnsureBindlessSampled(uint32_t transientIdx, gpu::ImageLayout descriptorLayout);
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
 
 		// -- Transient buffer slots ------------------------------------------
@@ -185,7 +186,7 @@ namespace aether
 #ifndef NDEBUG
 		void SetTrackedLayout(gpu::Image image, gpu::ImageLayout layout)
 		{
-			m_trackedLayouts[static_cast<VkImage>(image)] = ToVk(layout);
+			m_trackedLayouts[static_cast<VkImage>(image)] = gpu::ToVk(layout);
 		}
 
 		[[nodiscard]] gpu::ImageLayout GetTrackedLayout(gpu::Image image) const
@@ -195,7 +196,7 @@ namespace aether
 			{
 				return gpu::ImageLayout::Undefined;
 			}
-			return FromVk(it->second);
+			return gpu::FromVk(it->second);
 		}
 
 		void EraseTrackedLayout(gpu::Image image)

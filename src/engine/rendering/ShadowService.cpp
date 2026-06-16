@@ -90,19 +90,20 @@ namespace aether
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
-	void ShadowService::RegisterPasses(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat)
+	void ShadowService::RegisterPasses(RenderGraph& graph, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat)
 	{
-		SetupPassResources(graph, bindlessManager, device, depthFormat);
+		SetupPassResources(graph, device, depthFormat);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
 	}
 
-	void ShadowService::SetupPassResources(RenderGraph& graph, BindlessManager& bindlessManager, gpu::Device device, gpu::Format depthFormat)
+	void ShadowService::SetupPassResources(RenderGraph& graph, gpu::Device device, gpu::Format depthFormat)
 	{
+		(void) device;
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
-			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade], bindlessManager);
+			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade]);
 		}
 	}
 

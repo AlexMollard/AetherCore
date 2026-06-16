@@ -189,15 +189,12 @@ namespace aether::gpu
 		static void SetTextureName(TextureHandle handle, const char* name);
 
 		// Bindless support
-		// EnsureBindlessSampled stores the bindless manager pointer in the
-		// backend registry for deferred slot-free during Destroy.
+		// EnsureBindlessSampled uses the BindlessManager pointer set via
+		// SetBindlessManager for both slot allocation (here) and deferred
+		// slot-free during Destroy.
 		static void SetBindlessManager(class aether::BindlessManager* mgr);
-		static void EnsureBindlessSampled(TextureHandle handle,
-		        class aether::BindlessManager& bindlessManager,
-		        ImageAspect aspectMask = ImageAspect::Color,
-		        ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly,
-		        TextureFilter filter = TextureFilter::Linear,
-		        SamplerAddressMode addressMode = SamplerAddressMode::Repeat);
+		static void EnsureBindlessSampled(
+		        TextureHandle handle, ImageAspect aspectMask = ImageAspect::Color, ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly, TextureFilter filter = TextureFilter::Linear, SamplerAddressMode addressMode = SamplerAddressMode::Repeat);
 		[[nodiscard]] static bool HasBindlessSampled(TextureHandle handle);
 		[[nodiscard]] static std::uint32_t GetBindlessSampledSlot(TextureHandle handle);
 
