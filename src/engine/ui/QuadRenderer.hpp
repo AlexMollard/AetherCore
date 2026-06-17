@@ -153,7 +153,7 @@ namespace aether
 
 		std::array<std::vector<PendingQuad>, Swapchain::kMaxFramesInFlight> m_pendingQuads;
 		std::array<PerFrameMapped, Swapchain::kMaxFramesInFlight> m_commandBuffers;
-		PerFrameDevice m_indirectBuffer;
+		std::array<PerFrameDevice, Swapchain::kMaxFramesInFlight> m_indirectBuffers;
 		std::uint32_t m_writeSlot = 0;
 		ClipState m_clipState{};
 		bool m_ready = false;
