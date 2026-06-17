@@ -23,7 +23,6 @@
 #include "ui/UiWidgets.hpp"
 #include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
-#include "passes/ForwardPass.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
@@ -520,9 +519,9 @@ namespace aether::app
 
 		if (input.IsKeyPressed(aether::Key::F8))
 		{
-			auto& forwardPass = context.Get<aether::RenderingSubsystem>().GetForwardPass();
-			const bool newState = !forwardPass.IsEnabled();
-			forwardPass.SetEnabled(newState);
+			auto& rs = context.Get<aether::RenderingSubsystem>();
+			const bool newState = !rs.IsForwardPassEnabled();
+			rs.SetForwardPassEnabled(newState);
 			AE_INFO(aether::LogCategory::App, "Forward render: {}", newState ? "on" : "off");
 		}
 
@@ -776,7 +775,7 @@ namespace aether::app
 		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// Forward render state
-		const bool fwdRender = context.Get<aether::RenderingSubsystem>().GetForwardPass().IsEnabled();
+		const bool fwdRender = context.Get<aether::RenderingSubsystem>().IsForwardPassEnabled();
 		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// RenderGraph frame statistics

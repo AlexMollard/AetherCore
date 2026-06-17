@@ -1,5 +1,8 @@
 #include "rendering/RenderingSubsystem.hpp"
 
+#include <cstring>
+#include <span>
+
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "camera/CameraManager.hpp"
@@ -53,11 +56,19 @@ namespace aether
 
 		m_renderer.Initialize(&m_postProcessStack);
 
-		m_skyboxPass = SkyboxPass::Create({
-		        .device = vk.GetDevice().device,
-		        .pipelineCache = vk.GetPipelineCache(),
-		        .hdrColorFormat = PostProcessStack::GetForwardColorFormat(),
-		});
+		AE_EXPECT_OR_THROW(skyboxPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                vk.GetPipelineCache(),
+		                {
+		                        .shaderVfsPath = "shaders://skybox.spv",
+		                        .colorFormat = PostProcessStack::GetForwardColorFormat(),
+		                        .depthTestEnable = false,
+		                        .depthWriteEnable = false,
+		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
+		                        .pushConstantStages = gpu::ShaderStage::VertexFragment,
+		                        .debugName = "Skybox",
+		                }));
+		m_skyboxPipeline = std::move(skyboxPipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -85,7 +96,7 @@ namespace aether
 		auto& gpu = services.Get<GpuDevice>();
 
 		m_postProcessStack.Destroy();
-		m_skyboxPass.Destroy();
+		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
@@ -133,7 +144,7 @@ namespace aether
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		auto& lighting = services.Get<LightingManager>();
+		auto& lightingManager = services.Get<LightingManager>();
 		auto& bindless = services.Get<BindlessManager>();
 		auto& swapchain = services.Get<Swapchain>();
 
@@ -141,7 +152,7 @@ namespace aether
 		        .graph = &m_renderGraph,
 		        .bindless = &bindless,
 		        .cameras = &services.Get<CameraManager>(),
-		        .lighting = &lighting,
+		        .lighting = &lightingManager,
 		        .renderer = &m_renderer,
 		        .materials = &services.Get<MaterialBuffer>(),
 		        .cullPass = &m_cullPass,
@@ -153,10 +164,10 @@ namespace aether
 
 		auto& gpu = services.Get<GpuDevice>();
 		const auto pushLightingFn =
-		        [this, &lighting](gpu::CommandList& cmd, gpu::PipelineLayout layout)
+		        [this, &lightingManager](gpu::CommandList& cmd, gpu::PipelineLayout layout)
 		{
 			const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-			lighting.PushLightingDescriptor(cmd, layout, frameIdx);
+			lightingManager.PushLightingDescriptor(cmd, layout, frameIdx);
 		};
 
 		m_shadowService.SetupPassResources(m_renderGraph, gpu.GetDevice(), frame.depthFormat);
@@ -166,20 +177,64 @@ namespace aether
 		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
 
-		m_skyboxPass.RegisterPass(m_renderGraph, m_postProcessStack.GetHdrColor());
+		{
+			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
+			m_renderGraph.AddPass("$Skybox")
+			        .WriteColor(hdrColor, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f))
+			        .Execute(
+			                [this](PassContext& ctx)
+			                {
+				                gpu::CommandList& cmd = ctx.recorder;
+				                cmd.BindPipeline(m_skyboxPipeline.GetPipeline(), m_skyboxPipeline.GetLayout());
+				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
+				                std::byte bytes[sizeof(gpu::DeviceAddress)];
+				                std::memcpy(bytes, &frameAddr, sizeof(bytes));
+				                cmd.PushConstantsRaw(m_skyboxPipeline.GetLayout(), gpu::ShaderStage::VertexFragment, 0, std::span<const std::byte>(bytes, sizeof(bytes)));
+				                cmd.Draw(3);
+			                });
+		}
 		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
 		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
 
-		m_forwardPass.RegisterPass(frame,
-		        m_renderQueue,
-		        m_postProcessStack.GetHdrColor(),
-		        m_renderGraph.GetSwapchainDepth(),
-		        pushLightingFn,
-		        m_shadowService.GetShadowDepthImages(),
-		        m_localShadowService.GetAtlasRGImage(),
-		        frame.lighting ? frame.lighting->GetLightsBufferHandle() : RGBuffer{},
-		        frame.lighting ? frame.lighting->GetTileHeadersBufferHandle() : RGBuffer{},
-		        frame.lighting ? frame.lighting->GetTileIndicesBufferHandle() : RGBuffer{});
+		{
+			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
+			const RGImage depth = m_renderGraph.GetSwapchainDepth();
+			const gpu::DescriptorSet bindlessSet = frame.bindless->GetSet();
+
+			auto* pass = &m_renderGraph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
+
+			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
+			{
+				if (shadowMap.IsValid())
+				{
+					pass->ReadTexture(shadowMap);
+				}
+			}
+
+			const RGImage localShadowAtlas = m_localShadowService.GetAtlasRGImage();
+			if (localShadowAtlas.IsValid())
+			{
+				pass->ReadTexture(localShadowAtlas);
+			}
+
+			if (auto* lighting = frame.lighting)
+			{
+				pass->ReadBuffer(lighting->GetLightsBufferHandle());
+				pass->ReadBuffer(lighting->GetTileHeadersBufferHandle());
+				pass->ReadBuffer(lighting->GetTileIndicesBufferHandle());
+			}
+
+			pass->Execute(
+			        [&m_renderQueue = m_renderQueue, bindlessSet, pushLightingFn, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
+			        {
+				        if (!forwardEnabled)
+				        {
+					        return;
+				        }
+				        m_renderQueue.FlushDrawPush(ctx.recorder, bindlessSet, pushLightingFn);
+				        m_renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
+			        });
+		}
 
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);

@@ -4,8 +4,8 @@
 #include <functional>
 
 #include "passes/CullPass.hpp"
-#include "passes/ForwardPass.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
+#include "rendering/GraphicsPipeline.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
@@ -13,7 +13,6 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
-#include "passes/SkyboxPass.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 
 namespace aether
@@ -41,13 +40,14 @@ namespace aether
 			m_frameIndexProvider = std::move(provider);
 		}
 
-		// Mirrors ForwardPass::SetEnabled into the per-frame feature flags
-		// consumed on the render thread via FrameContext. Set from DebugLayer F8
-		// toggle; snapshotted into every FrameContext built by RegisterPasses.
 		void SetForwardPassEnabled(bool enabled)
 		{
 			m_forwardPassEnabled = enabled;
-			m_forwardPass.SetEnabled(enabled);
+		}
+
+		[[nodiscard]] bool IsForwardPassEnabled() const
+		{
+			return m_forwardPassEnabled;
 		}
 
 		[[nodiscard]] RenderGraph& GetRenderGraph()
@@ -90,16 +90,6 @@ namespace aether
 			return m_cullPass;
 		}
 
-		[[nodiscard]] ForwardPass& GetForwardPass()
-		{
-			return m_forwardPass;
-		}
-
-		[[nodiscard]] SkyboxPass& GetSkyboxPass()
-		{
-			return m_skyboxPass;
-		}
-
 		[[nodiscard]] PostProcessStack& GetPostProcessStack()
 		{
 			return m_postProcessStack;
@@ -122,8 +112,7 @@ namespace aether
 		LocalShadowService m_localShadowService;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
-		ForwardPass m_forwardPass;
-		SkyboxPass m_skyboxPass;
+		GraphicsPipeline m_skyboxPipeline;
 		PostProcessStack m_postProcessStack;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;

@@ -116,9 +116,6 @@ namespace aether
 	{
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
-		if (m_ldrBindlessSlot != 0xFFFFFFFFu)
-		{
-		}
 		if (m_ldrColorHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_ldrColorHandle);
@@ -126,9 +123,6 @@ namespace aether
 		m_ldrColorHandle = {};
 		m_ldrColor = RGImage{};
 		m_ldrBindlessSlot = 0xFFFFFFFFu;
-		if (m_hdrBindlessSlot != 0xFFFFFFFFu)
-		{
-		}
 		if (m_hdrColorHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_hdrColorHandle);
