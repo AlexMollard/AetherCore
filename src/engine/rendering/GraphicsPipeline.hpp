@@ -41,6 +41,7 @@ namespace aether
 			std::span<const gpu::VertexInputBinding> vertexBindings;
 			std::span<const gpu::VertexInputAttribute> vertexAttributes;
 			bool lineWidthDynamic = false;
+			const char* debugName = nullptr;
 		};
 
 		GraphicsPipeline() = default;

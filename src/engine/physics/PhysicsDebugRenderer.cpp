@@ -210,6 +210,7 @@ namespace aether
 		        .vertexBindings = kBindings,
 		        .vertexAttributes = kAttribs,
 		        .lineWidthDynamic = true,
+		        .debugName = "PhysicsDebug.Pipeline",
 		};
 
 		m_pipelineHandle = gpu::ResourceRegistry::CreateGraphicsPipeline(gpu.GetDevice(), gpu.GetPipelineCache(), desc);

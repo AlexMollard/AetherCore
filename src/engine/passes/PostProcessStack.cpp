@@ -90,6 +90,7 @@ namespace aether
 		                        .pushConstantSize = 3 * sizeof(uint32_t),
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
+		                        .debugName = "Tonemap",
 		                }));
 		stack.m_tonemapPipeline = std::move(tonemapPipeline);
 
@@ -102,6 +103,7 @@ namespace aether
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
+		                        .debugName = "FXAA",
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 

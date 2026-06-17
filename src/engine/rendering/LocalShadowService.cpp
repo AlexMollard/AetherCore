@@ -68,6 +68,7 @@ namespace aether
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
+		                        .debugName = "LocalShadow.Depth",
 		                }));
 		m_shadowPipeline = std::move(pipeline);
 

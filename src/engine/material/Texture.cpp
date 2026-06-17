@@ -174,11 +174,13 @@ namespace aether
 
 			const uint32_t width = hdr.width;
 			const uint32_t height = hdr.height;
+			const std::string ddsName(debugPath);
 			const gpu::TextureDesc desc{
 			        .format = gpuFmt,
 			        .extent = {width, height},
 			        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
 			        .aspect = gpu::ImageAspect::Color,
+			        .debugName = ddsName.c_str(),
 			};
 			gpu::TextureHandle handle = gpu::ResourceRegistry::CreateTexture(desc);
 			if (!handle.IsValid())

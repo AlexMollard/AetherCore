@@ -23,6 +23,7 @@ namespace aether
 		                        .depthWriteEnable = false,
 		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
 		                        .pushConstantStages = gpu::ShaderStage::VertexFragment,
+		                        .debugName = "Skybox",
 		                }));
 		pass.m_pipeline = std::move(pipeline);
 

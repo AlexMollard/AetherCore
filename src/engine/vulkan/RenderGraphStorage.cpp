@@ -559,6 +559,7 @@ namespace aether
 				return 0xFFFFFFFFu;
 			}
 
+			const std::string bsName = std::format("RenderGraph.Transient.Bindless[{}]", transientIdx);
 			entry.image = gpu::ResourceRegistry::CreateTexture(gpu::TextureDesc{
 			        .format = entry.format,
 			        .extent = entry.extent,
@@ -566,6 +567,7 @@ namespace aether
 			        .aspect = entry.aspect,
 			        .mipLevels = 1,
 			        .arrayLayers = 1,
+			        .debugName = bsName.c_str(),
 			});
 			if (!entry.image.IsValid())
 			{
