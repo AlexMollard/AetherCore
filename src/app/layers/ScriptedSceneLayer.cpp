@@ -8,6 +8,7 @@
 #include "scripting/SystemFactory.hpp"
 
 #include "assets/AssetManager.hpp"
+#include "assets/AssetSubsystem.hpp"
 #include "camera/CameraManager.hpp"
 #include "gpu/DescriptorSetLayout.hpp"
 #include "effects/EffectManager.hpp"
@@ -195,6 +196,10 @@ namespace aether::app
 		m_sceneCtx.input = &context.Get<Input>();
 		m_sceneCtx.effects = &m_effectManager;
 		m_sceneCtx.loadingOverlay = context.TryGet<aether::app::LoadingLayer>();
+		if (auto assetsSub = context.TryGet<aether::AssetSubsystem>())
+		{
+			m_sceneCtx.uploadPool = assetsSub->GetUploadContext().GetCommandPool();
+		}
 		if (auto dn = context.TryGet<aether::app::DayNightSystem>())
 		{
 			m_sceneCtx.dayNight = dn;

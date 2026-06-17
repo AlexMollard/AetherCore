@@ -250,19 +250,9 @@ namespace aether
 			return m_nodeParents;
 		}
 
-		[[nodiscard]] const std::vector<glm::mat4>& GetSkinInverseBinds() const
-		{
-			return m_skinInverseBinds;
-		}
-
 		[[nodiscard]] const std::vector<std::uint32_t>& GetSkinJoints() const
 		{
 			return m_skinJoints;
-		}
-
-		[[nodiscard]] const std::vector<GpuSkinMeta>& GetSkinMetas() const
-		{
-			return m_skinMetas;
 		}
 
 		[[nodiscard]] std::string_view GetNodeName(std::uint32_t nodeIndex) const

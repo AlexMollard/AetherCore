@@ -42,28 +42,6 @@ namespace aether
 		m_mappedBlendJobs = nullptr;
 	}
 
-	void AnimationBlendSystem::UpdateBlendWeights(World& world, float dt)
-	{
-		auto& reg = world.GetRegistry();
-		auto view = reg.view<AnimationBlendComponent>();
-		for (const auto& [entity, blendComp]: view.each())
-		{
-			if (!blendComp.inTransition)
-			{
-				continue;
-			}
-
-			blendComp.blendWeight -= blendComp.transitionSpeed * dt;
-			if (blendComp.blendWeight <= 0.0f)
-			{
-				blendComp.blendWeight = 1.0f;
-				blendComp.primaryClip = blendComp.secondaryClip;
-				blendComp.secondaryClip = 0;
-				blendComp.inTransition = false;
-			}
-		}
-	}
-
 	void AnimationBlendSystem::PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t /*frameIndex*/)
 	{
 		m_writtenJobCount = 0;

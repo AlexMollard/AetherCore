@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "gpu/GpuTypes.hpp"
 #include "scene/Entity.hpp"
 #include "scene/LoadedModel.hpp"
 #include "effects/EffectManager.hpp"
@@ -45,6 +46,7 @@ namespace aether::app::scripting
 		aether::app::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
 		aether::app::LoadingLayer* loadingOverlay = nullptr;
+		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;
 		std::string scriptPath;
 

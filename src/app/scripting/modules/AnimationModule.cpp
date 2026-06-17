@@ -10,9 +10,11 @@
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "animation/AnimationIk.hpp"
+#include "assets/AssetSubsystem.hpp"
 #include "io/FileSystem.hpp"
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
+#include "scripting/SceneContext.hpp"
 #include "utils/BinaryReader.hpp"
 
 namespace
@@ -201,7 +203,13 @@ namespace
 	// Delegates to the engine-level CompileAnimations.
 	void das_compile_animations(aether::World* w, uint32_t id)
 	{
-		aether::CompileAnimations(*w, id);
+		auto& ctx = ActiveContext();
+		if (!ctx.uploadPool)
+		{
+			AE_WARN(aether::LogCategory::Animation, "compile_animations: no upload pool available");
+			return;
+		}
+		aether::CompileAnimations(*w, id, ctx.uploadPool);
 	}
 
 	// -- Loading ---------------------------------------------------------------

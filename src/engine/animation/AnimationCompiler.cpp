@@ -13,27 +13,17 @@
 
 namespace aether
 {
-	namespace
+	void CompileAnimations(World& world, std::uint32_t entityId, gpu::CommandPool uploadPool)
 	{
-		static gpu::CommandPool s_uploadPool = nullptr;
-	} // namespace
-
-	void SetAnimationCompilePool(gpu::CommandPool pool)
-	{
-		s_uploadPool = pool;
-	}
-
-	void CompileAnimations(World& world, std::uint32_t entityId)
-	{
-		if (s_uploadPool == nullptr)
+		if (uploadPool == nullptr)
 		{
-			AE_WARN(LogCategory::Animation, "CompileAnimations: no upload pool set - call SetAnimationCompilePool during app init");
+			AE_WARN(LogCategory::Animation, "CompileAnimations: upload pool is null");
 			return;
 		}
 
 		const auto sec = world.TryGet<SpawnedEntitiesComponent>(Entity{entityId});
 
-		auto compileOne = [](SkinnedMeshComponent& smc)
+		auto compileOne = [&uploadPool](SkinnedMeshComponent& smc)
 		{
 			if (smc.pendingExternalAnims.empty() || !smc.animDb)
 			{
@@ -142,7 +132,7 @@ namespace aether
 				clips.push_back(clip);
 			}
 
-			auto result = smc.animDb->AppendAnimations(s_uploadPool, clips, channels, times, values, clipNames);
+			auto result = smc.animDb->AppendAnimations(uploadPool, clips, channels, times, values, clipNames);
 			if (result)
 			{
 				AE_VERBOSE(LogCategory::Animation, "CompileAnimations: baked {} clip(s) into DB (first at index {})", clips.size(), *result);

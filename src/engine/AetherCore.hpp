@@ -64,10 +64,6 @@ namespace aether
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
 
-		// Per-frame immediate-mode debug vertex buffer. Game-thread-only; layers
-		// append during OnUpdate and PrepareFrame moves the contents into the
-		// outgoing packet. Lock-free: the channel transfer of the packet is the
-		// synchronization point with the render thread.
 		[[nodiscard]] std::vector<DebugVertex>& GetPendingDebugVertices()
 		{
 			return m_pendingDebugVertices;
