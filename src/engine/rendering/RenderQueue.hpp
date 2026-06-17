@@ -291,8 +291,7 @@ namespace aether
 		gpu::DeviceAddress m_cachedSkinPaletteAddr = 0;          // BDA of global skin palette mat4[0] for current frame slot
 		gpu::DeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
 		gpu::DeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
-		gpu::DeviceAddress m_cachedBatchBase = 0;                // frameSlot * maxBatches
-		// Cached handle for the current frame's indirect buffer; resolved in
+				// Cached handle for the current frame's indirect buffer; resolved in
 		// PrepareAndDispatch (when frameSlot is known) and consumed in
 		// FlushDrawImpl where the per-frame slot is no longer in scope.
 		gpu::BufferHandle m_cachedIndirectHandle{};

@@ -140,7 +140,7 @@ namespace aether
 
 			{
 				const gpu::BufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
+				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) * static_cast<gpu::DeviceSize>(kFramesInFlight),
 				        .usage = kAnimationSsboFlags,
 				        .debugName = "RenderQueue.SkinPalette",
 				};
@@ -280,16 +280,22 @@ namespace aether
 		m_animationSampleJobCount = 0;
 
 		const std::uint32_t frameSlot = frameIndex % kFramesInFlight;
-		const std::uint32_t drawBase = frameSlot * m_maxDraws;
-		const std::uint32_t batchBase = frameSlot * m_maxBatches;
-		const std::uint32_t animJobBase = frameSlot * m_maxAnimationDraws;
+		const std::uint32_t animJobBase = 0;
+
+		// Update mapped pointers to the current slot's buffers since each slot
+		// has its own independent allocation (not one shared mega-buffer).
+		m_instanceDataMapped = static_cast<DrawContracts::InstanceData*>(m_instanceData[frameSlot].mapped);
+		m_cullInputMapped = static_cast<CullContracts::DrawInput*>(m_cullInput[frameSlot].mapped);
+		m_batchDescMapped = static_cast<CullContracts::Batch*>(m_batchDesc[frameSlot].mapped);
+		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[frameSlot].mapped);
+		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[frameSlot].mapped);
 
 		// Clear the slot's instance data to zero-bounds (w=0 = always visible) so
 		// that any entries not overwritten by this frame don't carry stale sphere data
 		// from a previous frame that had more draws.
-		std::memset(m_instanceDataMapped + drawBase, 0, m_maxDraws * sizeof(DrawContracts::InstanceData));
-		std::memset(m_cullInputMapped + drawBase, 0, m_maxDraws * sizeof(CullContracts::DrawInput));
-		std::memset(m_batchDescMapped + batchBase, 0, m_maxBatches * sizeof(CullContracts::Batch));
+		std::memset(m_instanceDataMapped, 0, m_maxDraws * sizeof(DrawContracts::InstanceData));
+		std::memset(m_cullInputMapped, 0, m_maxDraws * sizeof(CullContracts::DrawInput));
+		std::memset(m_batchDescMapped, 0, m_maxBatches * sizeof(CullContracts::Batch));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
@@ -308,23 +314,22 @@ namespace aether
 			if (m_sampledPoses[frameSlot].handle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose);
-				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_sampledPoses[frameSlot].handle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_sampledPoses[frameSlot].handle), 0, slotSize, 0);
 			}
 			if (m_nodeGlobalTransforms[frameSlot].handle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4);
-				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_nodeGlobalTransforms[frameSlot].handle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_nodeGlobalTransforms[frameSlot].handle), 0, slotSize, 0);
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
-		m_cachedDrawBase = static_cast<gpu::DeviceAddress>(frameSlot * m_outputDrawCapacity);
-		m_cachedBatchBase = batchBase;
+		m_cachedDrawBase = 0;
 		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
-		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address + static_cast<gpu::DeviceSize>(drawBase) * sizeof(DrawContracts::InstanceData);
+		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address;
 		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteAddress + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
 		const gpu::DeviceAddress currSampledPosesAddr =
-		        (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(AnimationContracts::SampledNodePose) : 0;
-		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSampledPoses) * sizeof(glm::mat4) : 0;
+		        (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
+		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
@@ -481,7 +486,7 @@ namespace aether
 					}
 				}
 
-				m_instanceDataMapped[drawBase + globalDrawIdx] = DrawContracts::InstanceData{
+				m_instanceDataMapped[globalDrawIdx] = DrawContracts::InstanceData{
 				        .model = dc.modelMatrix,
 				        .materialIndex = dc.materialIndex,
 				        .skinPaletteOffset = skinPaletteOffset,
@@ -490,7 +495,7 @@ namespace aether
 				        .vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
 				};
 
-				m_cullInputMapped[drawBase + globalDrawIdx] = CullContracts::DrawInput{
+				m_cullInputMapped[globalDrawIdx] = CullContracts::DrawInput{
 				        .indexCount = (dc.mesh != nullptr) ? dc.mesh->GetIndexCount() : 0u,
 				        .instanceCount = 1u,
 				        .firstIndex = 0u,
@@ -502,7 +507,7 @@ namespace aether
 				++globalDrawIdx;
 			}
 
-			m_batchDescMapped[batchBase + batchIdx] = CullContracts::Batch{.inputStart = batchOutputStart, .drawCount = batchDrawCount, .outputStart = batchOutputStart};
+			m_batchDescMapped[batchIdx] = CullContracts::Batch{.inputStart = batchOutputStart, .drawCount = batchDrawCount, .outputStart = batchOutputStart};
 
 			m_batchRenderInfos.push_back(BatchRenderInfo{
 			        .pipeline = batchPipeline,
@@ -547,7 +552,7 @@ namespace aether
 				cmdList.BindComputePipeline(poseInitPipe.pipeline, poseInitPipe.layout);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
-				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address;
 
 				for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 				{
@@ -611,7 +616,7 @@ namespace aether
 				        .bindTranslationsAddr = 0,
 				        .bindRotationsAddr = 0,
 				        .bindScalesAddr = 0,
-				        .animatorJobsAddr = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob),
+				        .animatorJobsAddr = m_animationSampleJobs[frameSlot].address,
 				        .sampledPosesAddr = currSampledPosesAddr,
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
@@ -710,7 +715,7 @@ namespace aether
 			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline, nodeFlattenPipe.layout);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
-			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase) * sizeof(AnimationContracts::AnimatorSampleJob);
+			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address;
 
 			for (std::uint32_t bi = 0; bi < animSampleBatchCount; ++bi)
 			{
@@ -822,7 +827,7 @@ namespace aether
 					continue;
 				}
 				const AnimationContracts::SkinPalettePush skinPc{
-				        .jobsAddr = m_skinCopyJobs[frameSlot].address + static_cast<gpu::DeviceSize>(animJobBase + batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
+				        .jobsAddr = m_skinCopyJobs[frameSlot].address + static_cast<gpu::DeviceSize>(batch.startJob) * sizeof(AnimationContracts::SkinCopyJob),
 				        .dstPaletteAddr = currSkinPaletteAddr,
 				        .globalTransformsAddr = currNodeGlobalTransformsAddr,
 				        .skinMetasAddr = batch.db->GetSkinMetasAddr(),
@@ -848,16 +853,15 @@ namespace aether
 		}
 
 		// -- Cull dispatch: single or multi-frustum --
-		const gpu::DeviceSize inputCmdOffset = static_cast<gpu::DeviceSize>(drawBase) * sizeof(CullContracts::DrawInput);
-		const gpu::DeviceSize batchDescOffset = static_cast<gpu::DeviceSize>(batchBase) * sizeof(CullContracts::Batch);
+		const gpu::DeviceSize inputCmdOffset = 0;
+		const gpu::DeviceSize batchDescOffset = 0;
 
 		if (m_outputDrawCapacity > m_maxDraws)
 		{
 			// Multi-frustum mode (shadow cascades): test each draw against 3 VP matrices,
 			// write 3 independent output regions.  The 3 frame constant BDAs must have
 			// been set via SetMultiCullFrameAddrs() before this call.
-			const gpu::DeviceSize outputBase = static_cast<gpu::DeviceSize>(frameSlot) * m_outputDrawCapacity;
-			const gpu::DeviceSize outputCmdOffset = outputBase * sizeof(gpu::DrawIndexedIndirectCommand);
+			const gpu::DeviceSize outputCmdOffset = 0;
 			const gpu::DeviceSize cascadeStride = static_cast<gpu::DeviceSize>(m_maxDraws) * sizeof(gpu::DrawIndexedIndirectCommand);
 
 			const CullContracts::MultiPushConstants multiPc{
@@ -884,7 +888,7 @@ namespace aether
 		else
 		{
 			// Single-frustum mode (main camera, local shadows).
-			const gpu::DeviceSize outputCmdOffset = static_cast<gpu::DeviceSize>(drawBase) * sizeof(gpu::DrawIndexedIndirectCommand);
+			const gpu::DeviceSize outputCmdOffset = 0;
 			const CullContracts::PushConstants pc{
 			        .frameAddr = frameAddr,
 			        .instanceDataAddr = m_cachedInstanceDataAddr,
