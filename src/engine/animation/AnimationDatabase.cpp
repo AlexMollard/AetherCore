@@ -32,7 +32,7 @@ namespace aether
 
 		if (asset.animations.empty())
 		{
-			return std::move(db);
+			return db;
 		}
 
 		// Validate animation channel node indices before building GPU data.
@@ -247,29 +247,29 @@ namespace aether
 		totalBytes += align16(db.m_depthRanges.size() * sizeof(DepthRange));
 		totalBytes += align16(allStrings.size());
 
-		db.m_heap.Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
+		db.m_heap->Initialize(ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
 		auto device = static_cast<gpu::Device>(ctx.GetDevice().device);
 		auto queue = static_cast<gpu::Queue>(ctx.GetGraphicsQueue());
 
-		db.m_clipsAddr = UploadArray(db.m_heap, gpuClips, device, queue, uploadPool);
-		db.m_channelsAddr = UploadArray(db.m_heap, gpuChannels, device, queue, uploadPool);
-		db.m_timesAddr = UploadArray(db.m_heap, allTimes, device, queue, uploadPool);
-		db.m_valuesAddr = UploadArray(db.m_heap, allValues, device, queue, uploadPool);
-		db.m_nodeParentsAddr = UploadArray(db.m_heap, nodeParents, device, queue, uploadPool);
-		db.m_bindTranslationsAddr = UploadArray(db.m_heap, bindTranslations, device, queue, uploadPool);
-		db.m_bindRotationsAddr = UploadArray(db.m_heap, bindRotations, device, queue, uploadPool);
-		db.m_bindScalesAddr = UploadArray(db.m_heap, bindScales, device, queue, uploadPool);
+		db.m_clipsAddr = UploadArray(*db.m_heap, gpuClips, device, queue, uploadPool);
+		db.m_channelsAddr = UploadArray(*db.m_heap, gpuChannels, device, queue, uploadPool);
+		db.m_timesAddr = UploadArray(*db.m_heap, allTimes, device, queue, uploadPool);
+		db.m_valuesAddr = UploadArray(*db.m_heap, allValues, device, queue, uploadPool);
+		db.m_nodeParentsAddr = UploadArray(*db.m_heap, nodeParents, device, queue, uploadPool);
+		db.m_bindTranslationsAddr = UploadArray(*db.m_heap, bindTranslations, device, queue, uploadPool);
+		db.m_bindRotationsAddr = UploadArray(*db.m_heap, bindRotations, device, queue, uploadPool);
+		db.m_bindScalesAddr = UploadArray(*db.m_heap, bindScales, device, queue, uploadPool);
 		db.m_bindTranslations = std::move(bindTranslations);
 		db.m_bindRotations = std::move(bindRotations);
 		db.m_bindScales = std::move(bindScales);
 		db.m_nodeParents = std::move(nodeParents);
 		db.m_skinMetas = std::move(skinMetas);
-		db.m_skinMetasAddr = UploadArray(db.m_heap, db.m_skinMetas, device, queue, uploadPool);
+		db.m_skinMetasAddr = UploadArray(*db.m_heap, db.m_skinMetas, device, queue, uploadPool);
 		db.m_skinJoints = std::move(skinJoints);
-		db.m_skinJointsAddr = UploadArray(db.m_heap, db.m_skinJoints, device, queue, uploadPool);
+		db.m_skinJointsAddr = UploadArray(*db.m_heap, db.m_skinJoints, device, queue, uploadPool);
 		db.m_skinInverseBinds = std::move(skinInverseBinds);
-		db.m_skinInverseBindsAddr = UploadArray(db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
+		db.m_skinInverseBindsAddr = UploadArray(*db.m_heap, db.m_skinInverseBinds, device, queue, uploadPool);
 
 		// Log bone hierarchy for debugging
 		for (std::uint32_t i = 1; i < asset.nodes.size() && i < 5; ++i)
@@ -307,8 +307,8 @@ namespace aether
 
 		if (!db.m_depthSortedNodes.empty())
 		{
-			db.m_depthSortedNodesAddr = UploadArray(db.m_heap, db.m_depthSortedNodes, device, queue, uploadPool);
-			db.m_depthRangesAddr = UploadArray(db.m_heap, db.m_depthRanges, device, queue, uploadPool);
+			db.m_depthSortedNodesAddr = UploadArray(*db.m_heap, db.m_depthSortedNodes, device, queue, uploadPool);
+			db.m_depthRangesAddr = UploadArray(*db.m_heap, db.m_depthRanges, device, queue, uploadPool);
 		}
 
 		AE_VERBOSE(LogCategory::Engine,
@@ -324,8 +324,8 @@ namespace aether
 		// Strings: upload as raw bytes using char specialisation.
 		if (!allStrings.empty())
 		{
-			GpuSpan<char> span = db.m_heap.Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
-			db.m_heap.Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
+			GpuSpan<char> span = db.m_heap->Alloc<char>(static_cast<std::uint32_t>(allStrings.size()));
+			db.m_heap->Upload(span, std::span<const char>(allStrings.data(), allStrings.size()), device, queue, uploadPool);
 			db.m_stringsAddr = span.address;
 		}
 
@@ -334,12 +334,12 @@ namespace aether
 		db.m_times = std::move(allTimes);
 		db.m_values = std::move(allValues);
 
-		return std::move(db);
+		return db;
 	}
 
 	void AnimationDatabase::Destroy()
 	{
-		m_heap.Shutdown();
+		m_heap->Shutdown();
 		m_clipsAddr = 0;
 		m_channelsAddr = 0;
 		m_timesAddr = 0;
@@ -433,31 +433,31 @@ namespace aether
 		totalBytes += align16(m_depthRanges.size() * sizeof(DepthRange));
 		totalBytes += align16(m_clipNames.size());
 
-		m_heap.Shutdown();
-		m_heap.Initialize(*m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
+		m_heap->Shutdown();
+		m_heap->Initialize(*m_ctx, {.capacityBytes = totalBytes, .debugName = "AnimationDatabase"});
 
-		m_clipsAddr = UploadArray(m_heap, m_clips, device, queue, uploadPool);
-		m_channelsAddr = UploadArray(m_heap, m_channels, device, queue, uploadPool);
-		m_timesAddr = UploadArray(m_heap, m_times, device, queue, uploadPool);
-		m_valuesAddr = UploadArray(m_heap, m_values, device, queue, uploadPool);
-		m_nodeParentsAddr = UploadArray(m_heap, m_nodeParents, device, queue, uploadPool);
-		m_bindTranslationsAddr = UploadArray(m_heap, m_bindTranslations, device, queue, uploadPool);
-		m_bindRotationsAddr = UploadArray(m_heap, m_bindRotations, device, queue, uploadPool);
-		m_bindScalesAddr = UploadArray(m_heap, m_bindScales, device, queue, uploadPool);
-		m_skinMetasAddr = UploadArray(m_heap, m_skinMetas, device, queue, uploadPool);
-		m_skinJointsAddr = UploadArray(m_heap, m_skinJoints, device, queue, uploadPool);
-		m_skinInverseBindsAddr = UploadArray(m_heap, m_skinInverseBinds, device, queue, uploadPool);
+		m_clipsAddr = UploadArray(*m_heap, m_clips, device, queue, uploadPool);
+		m_channelsAddr = UploadArray(*m_heap, m_channels, device, queue, uploadPool);
+		m_timesAddr = UploadArray(*m_heap, m_times, device, queue, uploadPool);
+		m_valuesAddr = UploadArray(*m_heap, m_values, device, queue, uploadPool);
+		m_nodeParentsAddr = UploadArray(*m_heap, m_nodeParents, device, queue, uploadPool);
+		m_bindTranslationsAddr = UploadArray(*m_heap, m_bindTranslations, device, queue, uploadPool);
+		m_bindRotationsAddr = UploadArray(*m_heap, m_bindRotations, device, queue, uploadPool);
+		m_bindScalesAddr = UploadArray(*m_heap, m_bindScales, device, queue, uploadPool);
+		m_skinMetasAddr = UploadArray(*m_heap, m_skinMetas, device, queue, uploadPool);
+		m_skinJointsAddr = UploadArray(*m_heap, m_skinJoints, device, queue, uploadPool);
+		m_skinInverseBindsAddr = UploadArray(*m_heap, m_skinInverseBinds, device, queue, uploadPool);
 
 		if (!m_depthSortedNodes.empty())
 		{
-			m_depthSortedNodesAddr = UploadArray(m_heap, m_depthSortedNodes, device, queue, uploadPool);
-			m_depthRangesAddr = UploadArray(m_heap, m_depthRanges, device, queue, uploadPool);
+			m_depthSortedNodesAddr = UploadArray(*m_heap, m_depthSortedNodes, device, queue, uploadPool);
+			m_depthRangesAddr = UploadArray(*m_heap, m_depthRanges, device, queue, uploadPool);
 		}
 
 		if (!m_clipNames.empty())
 		{
-			GpuSpan<char> span = m_heap.Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
-			m_heap.Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
+			GpuSpan<char> span = m_heap->Alloc<char>(static_cast<std::uint32_t>(m_clipNames.size()));
+			m_heap->Upload(span, std::span<const char>(m_clipNames.data(), m_clipNames.size()), device, queue, uploadPool);
 			m_stringsAddr = span.address;
 		}
 

@@ -43,6 +43,8 @@ namespace aether
 			const char* debugName = nullptr;
 		};
 
+		~GpuHeap() { Shutdown(); }
+
 		void Initialize(const VulkanContext& ctx, Desc desc);
 		void Shutdown();
 

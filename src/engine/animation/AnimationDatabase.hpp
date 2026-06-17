@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -272,7 +273,7 @@ namespace aether
 	private:
 		const VulkanContext* m_ctx = nullptr;
 
-		GpuHeap m_heap;
+		std::unique_ptr<GpuHeap> m_heap = std::make_unique<GpuHeap>();
 
 		gpu::DeviceAddress m_clipsAddr = 0;
 		gpu::DeviceAddress m_channelsAddr = 0;
