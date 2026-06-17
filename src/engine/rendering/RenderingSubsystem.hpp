@@ -5,13 +5,11 @@
 
 #include "passes/CullPass.hpp"
 #include "passes/ForwardPass.hpp"
-#include "rendering/FrameComposer.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderGraph.hpp"
-#include "rendering/RenderPipelineCoordinator.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
@@ -107,11 +105,6 @@ namespace aether
 			return m_postProcessStack;
 		}
 
-		[[nodiscard]] FrameComposer& GetFrameComposer()
-		{
-			return m_frameComposer;
-		}
-
 		[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
 		{
 			return m_physicsDebug;
@@ -132,8 +125,6 @@ namespace aether
 		ForwardPass m_forwardPass;
 		SkyboxPass m_skyboxPass;
 		PostProcessStack m_postProcessStack;
-		FrameComposer m_frameComposer;
-		RenderPipelineCoordinator m_renderPipelineCoordinator;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
 		bool m_forwardPassEnabled = true;

@@ -30,6 +30,7 @@
 #include "material/MaterialBuffer.hpp"
 #include "platform/PlatformSubsystem.hpp"
 #include "rendering/FrameConstants.hpp"
+#include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/EcsHelpers.hpp"
@@ -389,7 +390,7 @@ namespace aether
 
 		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
-		FrameConstants fc = m_rendering->GetFrameComposer().ComposeBaseFrameConstants(packet, m_services.Get<SceneSubsystem>().GetScene().GetViewProjection());
+		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, m_services.Get<SceneSubsystem>().GetScene().GetViewProjection());
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
@@ -418,7 +419,7 @@ namespace aether
 
 				if (!lightDataReady)
 				{
-					m_rendering->GetFrameComposer().ApplyNoCameraLightingFallback(fc);
+					m_gpu->ApplyNoCameraLightingFallback(fc);
 				}
 
 				// Update render graph buffer handles for the current frame's lighting buffers.
@@ -427,7 +428,7 @@ namespace aether
 		}
 		else
 		{
-			m_rendering->GetFrameComposer().ApplyNoCameraLightingFallback(fc);
+			m_gpu->ApplyNoCameraLightingFallback(fc);
 		}
 	}
 

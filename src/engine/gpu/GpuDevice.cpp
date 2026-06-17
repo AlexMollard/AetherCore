@@ -5,6 +5,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "platform/Window.hpp"
+#include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GraphicsDevice.hpp"
@@ -36,7 +37,6 @@ namespace aether
 		services.Register<GpuDevice>(*this);
 		services.Register<VulkanContext>(m_gfx->GetVulkanContext());
 		services.Register<Swapchain>(m_gfx->GetSwapchain());
-		services.Register<ResourcePool>(m_gfx->GetResourcePool());
 		services.Register<BindlessManager>(m_gfx->GetBindlessManager());
 		services.Register<ResourceRegistry>(m_gfx->GetResourceRegistry());
 	}
@@ -205,11 +205,6 @@ namespace aether
 		return static_cast<gpu::PipelineCache>(m_gfx->GetVulkanContext().GetPipelineCache());
 	}
 
-	ResourcePool& GpuDevice::GetResourcePool()
-	{
-		return m_gfx->GetResourcePool();
-	}
-
 	BindlessManager& GpuDevice::GetBindlessManager()
 	{
 		return m_gfx->GetBindlessManager();
@@ -228,5 +223,38 @@ namespace aether
 	void GpuDevice::AdvanceResourceRegistryFrame()
 	{
 		m_gfx->GetResourceRegistry().AdvanceFrame();
+	}
+
+	FrameConstants GpuDevice::ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj)
+	{
+		FrameConstants fc{};
+
+		if (packet.hasCameraData)
+		{
+			fc.view = packet.view;
+			fc.proj = packet.proj;
+			fc.viewProj = packet.proj * packet.view;
+			fc.cameraWorldPos = packet.cameraWorldPos;
+		}
+		else
+		{
+			fc.viewProj = fallbackViewProj;
+		}
+
+		fc.materialBufferAddr = packet.materialBufferAddr;
+		fc.elapsedTime = packet.elapsedTime;
+		fc.sunDirectionIntensity = packet.sunDirectionIntensity;
+		fc.ambientColor = packet.ambientColor;
+		fc.sunColor = packet.sunColor;
+		fc.skyHorizonColor = packet.skyHorizonColor;
+		fc.skyZenithColor = packet.skyZenithColor;
+		fc.skyVoidColor = packet.skyVoidColor;
+		return fc;
+	}
+
+	void GpuDevice::ApplyNoCameraLightingFallback(FrameConstants& fc)
+	{
+		fc.tiledLightGridInfo = glm::uvec4(0u);
+		fc.tiledLightBufferOffsets = glm::uvec4(0u);
 	}
 } // namespace aether

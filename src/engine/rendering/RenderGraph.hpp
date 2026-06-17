@@ -198,11 +198,7 @@ namespace aether
 
 		[[nodiscard]] PassBuilder AddComputePass(std::string name, std::source_location loc = std::source_location::current());
 
-		// Equivalent to AddComputePass(name).SetAsyncCompute().
-		[[nodiscard]] PassBuilder AddAsyncComputePass(std::string name, std::source_location loc = std::source_location::current());
-
 		void RemovePass(const std::string& name);
-		[[nodiscard]] bool HasPass(std::string_view name) const;
 		void Clear();
 
 		// Per-frame allocation and execution statistics.

@@ -10,7 +10,6 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "scene/World.hpp"
-#include "vulkan/ResourcePool.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "gpu/OneShotCmd.hpp"

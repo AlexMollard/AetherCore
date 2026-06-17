@@ -187,20 +187,6 @@ namespace aether
 		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
-	RenderGraph::PassBuilder RenderGraph::AddAsyncComputePass(std::string name, [[maybe_unused]] std::source_location loc)
-	{
-		PassRecord rec{};
-		rec.name = std::move(name);
-		rec.kind = PassKind::Compute;
-		rec.queueClass = QueueClass::AsyncCompute;
-#ifndef NDEBUG
-		rec.declaredAt = loc;
-#endif
-		m_passes.push_back(std::move(rec));
-		m_compileDirty = true;
-		return PassBuilder{*this, m_passes.size() - 1};
-	}
-
 	const FrameStats& RenderGraph::GetFrameStats() const
 	{
 		return m_storage->GetLastFrameStats();
@@ -214,11 +200,6 @@ namespace aether
 			m_passes.erase(it);
 			m_compileDirty = true;
 		}
-	}
-
-	bool RenderGraph::HasPass(std::string_view name) const
-	{
-		return std::ranges::find_if(m_passes, [&](const PassRecord& p) { return p.name == name; }) != m_passes.end();
 	}
 
 	void RenderGraph::Clear()

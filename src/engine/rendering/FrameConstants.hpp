@@ -8,6 +8,11 @@
 
 namespace aether
 {
+	struct RenderFramePacket;
+} // namespace aether
+
+namespace aether
+{
 	// Per-frame constant data written once to a GPU buffer before any draws.
 	// Accessed via Buffer Device Address pushed per draw call.
 	//

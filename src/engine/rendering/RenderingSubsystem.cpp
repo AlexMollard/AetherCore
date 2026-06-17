@@ -9,7 +9,6 @@
 #include "gpu/GpuDevice.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/MaterialBuffer.hpp"
-#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
@@ -152,26 +151,38 @@ namespace aether
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};
 
-		const PassRegistrationContext ctx{
-		        .frame = frame,
-		        .device = services.Get<VulkanContext>().GetDevice().device,
-		        .skyboxPass = m_skyboxPass,
-		        .postProcessStack = m_postProcessStack,
-		        .shadowService = m_shadowService,
-		        .localShadowService = m_localShadowService,
-		        .cullPass = m_cullPass,
-		        .mainRenderQueue = m_renderQueue,
-		        .forwardPass = m_forwardPass,
-		        .pushLightingFn =
-		                [this, &lighting](gpu::CommandList& cmd, gpu::PipelineLayout layout)
-		        {
-			        const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-			        lighting.PushLightingDescriptor(cmd, layout, frameIdx);
-		        },
-		        .renderTargetService = m_renderTargetService,
-		        .physicsDebug = m_physicsDebug,
+		auto& gpu = services.Get<GpuDevice>();
+		const auto pushLightingFn =
+		        [this, &lighting](gpu::CommandList& cmd, gpu::PipelineLayout layout)
+		{
+			const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
+			lighting.PushLightingDescriptor(cmd, layout, frameIdx);
 		};
 
-		m_renderPipelineCoordinator.RegisterPasses(ctx);
+		m_shadowService.SetupPassResources(m_renderGraph, gpu.GetDevice(), frame.depthFormat);
+		m_localShadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
+
+		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
+		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
+		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
+
+		m_skyboxPass.RegisterPass(m_renderGraph, m_postProcessStack.GetHdrColor());
+		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
+		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
+
+		m_forwardPass.RegisterPass(frame,
+		        m_renderQueue,
+		        m_postProcessStack.GetHdrColor(),
+		        m_renderGraph.GetSwapchainDepth(),
+		        pushLightingFn,
+		        m_shadowService.GetShadowDepthImages(),
+		        m_localShadowService.GetAtlasRGImage(),
+		        frame.lighting ? frame.lighting->GetLightsBufferHandle() : RGBuffer{},
+		        frame.lighting ? frame.lighting->GetTileHeadersBufferHandle() : RGBuffer{},
+		        frame.lighting ? frame.lighting->GetTileIndicesBufferHandle() : RGBuffer{});
+
+		m_renderTargetService.RegisterPasses();
+		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
+		m_physicsDebug.RegisterPass(m_renderGraph);
 	}
 } // namespace aether

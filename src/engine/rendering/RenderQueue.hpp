@@ -12,7 +12,6 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "rendering/GpuContracts.hpp"
-#include "rendering/GpuTimestampPool.hpp"
 #include "vulkan/Swapchain.hpp"
 
 namespace aether
@@ -135,14 +134,6 @@ namespace aether
 		void SetDebugLogSkinJobs(std::uint32_t frameCount)
 		{
 			m_debugLogSkinJobsFramesLeft = frameCount;
-		}
-
-		// Optional GPU timestamp pool for measuring dispatch durations.
-		// When set, BeginFrame/Write/Readback are called automatically and results
-		// are emitted as TracyPlot entries: GPU/AnimSample_ms, GPU/SkinPalette_ms, GPU/Cull_ms.
-		void SetTimestampPool(GpuTimestampPool* pool)
-		{
-			m_timestampPool = pool;
 		}
 
 		// Optional Tracy GPU context for CPU-correlated GPU timeline zones.
@@ -337,22 +328,5 @@ namespace aether
 		AnimationRootMotionSystem* m_rootMotionSystem = nullptr;
 		std::uint32_t m_hipsNodeIdx = 0;
 
-		GpuTimestampPool* m_timestampPool = nullptr;
-
-		// Per-slot timestamp query indices written this frame, used to correlate results
-		// with the correct dispatch when BeginFrame reads them back kFramesInFlight later.
-		struct TsSlots
-		{
-			std::uint32_t animSampleStart = UINT32_MAX;
-			std::uint32_t animSampleEnd = UINT32_MAX;
-			std::uint32_t nodeFlattenStart = UINT32_MAX;
-			std::uint32_t nodeFlattenEnd = UINT32_MAX;
-			std::uint32_t skinPaletteStart = UINT32_MAX;
-			std::uint32_t skinPaletteEnd = UINT32_MAX;
-			std::uint32_t cullStart = UINT32_MAX;
-			std::uint32_t cullEnd = UINT32_MAX;
-		};
-
-		std::array<TsSlots, kFramesInFlight> m_tsSlots{};
 	};
 } // namespace aether

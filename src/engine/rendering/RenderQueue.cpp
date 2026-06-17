@@ -294,33 +294,6 @@ namespace aether
 		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
 
-		// GPU timestamp readback: read results from kFramesInFlight frames ago, reset slot for this frame.
-		if (m_timestampPool && m_timestampPool->IsValid())
-		{
-			float tsMs[GpuTimestampPool::kMaxTimestamps]{};
-			const std::uint32_t readCount = m_timestampPool->BeginFrame(frameIndex, tsMs);
-			const TsSlots& prev = m_tsSlots[frameSlot];
-#ifdef TRACY_ENABLE
-			if (prev.animSampleStart != UINT32_MAX && prev.animSampleEnd < readCount)
-			{
-				TracyPlot("GPU/AnimSample_ms", static_cast<double>(tsMs[prev.animSampleEnd] - tsMs[prev.animSampleStart]));
-			}
-			if (prev.nodeFlattenStart != UINT32_MAX && prev.nodeFlattenEnd < readCount)
-			{
-				TracyPlot("GPU/NodeFlatten_ms", static_cast<double>(tsMs[prev.nodeFlattenEnd] - tsMs[prev.nodeFlattenStart]));
-			}
-			if (prev.skinPaletteStart != UINT32_MAX && prev.skinPaletteEnd < readCount)
-			{
-				TracyPlot("GPU/SkinPalette_ms", static_cast<double>(tsMs[prev.skinPaletteEnd] - tsMs[prev.skinPaletteStart]));
-			}
-			if (prev.cullStart != UINT32_MAX && prev.cullEnd < readCount)
-			{
-				TracyPlot("GPU/Cull_ms", static_cast<double>(tsMs[prev.cullEnd] - tsMs[prev.cullStart]));
-			}
-#endif
-			m_tsSlots[frameSlot] = {};
-		}
-
 		// Clear device-local animation buffers on first use of each frame slot.
 		// Each slot is cleared individually so in-flight slots don't sit with garbage
 		// until the first animation sample writes their data.
@@ -644,18 +617,10 @@ namespace aether
 				        .clipCount = 0,
 				};
 				cmdList.PushConstantsRaw(animSamplePipe.layout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
-				if (m_timestampPool)
-				{
-					m_tsSlots[frameSlot].animSampleStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.SampleClips");
 					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
-				}
-				if (m_timestampPool)
-				{
-					m_tsSlots[frameSlot].animSampleEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 
 				cmdList.EndDebugLabel();
@@ -771,11 +736,6 @@ namespace aether
 					continue;
 				}
 
-				if (m_timestampPool && bi == 0 && skinJobCount > 0) // write start if we also have skin jobs
-				{
-					m_tsSlots[frameSlot].nodeFlattenStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
-
 				for (std::uint32_t di = 0; di < depthCount; ++di)
 				{
 					const AnimationDatabase::DepthRange& range = batch.db->GetDepthRange(di);
@@ -809,10 +769,6 @@ namespace aether
 					}
 				}
 
-				if (m_timestampPool && bi == animSampleBatchCount - 1 && skinJobCount > 0)
-				{
-					m_tsSlots[frameSlot].nodeFlattenEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
 			}
 			cmdList.EndDebugLabel();
 
@@ -876,20 +832,12 @@ namespace aether
 				        .jobCount = batch.count,
 				};
 				cmdList.PushConstantsRaw(skinPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
-				if (m_timestampPool && bi == 0)
-				{
-					m_tsSlots[frameSlot].skinPaletteStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.BuildSkinPalette");
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
-				if (m_timestampPool && bi == skinPaletteBatchCount - 1)
-				{
-					m_tsSlots[frameSlot].skinPaletteEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
-			}
+			}				
 
 			cmdList.EndDebugLabel();
 
@@ -954,18 +902,10 @@ namespace aether
 				cmdList.BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline, computeLayout);
 				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
-				if (m_timestampPool)
-				{
-					m_tsSlots[frameSlot].cullStart = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
-				}
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "CullPass.cullDraws");
 					const std::uint32_t groups = (totalDraws + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
-				}
-				if (m_timestampPool)
-				{
-					m_tsSlots[frameSlot].cullEnd = m_timestampPool->Write(cmdList, gpu::PipelineStage::ComputeShader);
 				}
 				cmdList.EndDebugLabel();
 			}

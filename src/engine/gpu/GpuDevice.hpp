@@ -6,6 +6,7 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/Semaphore.hpp"
+#include "rendering/FrameConstants.hpp"
 
 namespace aether
 {
@@ -14,9 +15,9 @@ namespace aether
 
 namespace aether
 {
+	struct RenderFramePacket;
 	class BindlessManager;
 	class GraphicsDevice;
-	class ResourcePool;
 	class ResourceRegistry;
 	class Swapchain;
 	class VulkanContext;
@@ -81,7 +82,6 @@ namespace aether
 
 		[[nodiscard]] Swapchain& GetSwapchain();
 		[[nodiscard]] VulkanContext& GetVulkanContext();
-		[[nodiscard]] ResourcePool& GetResourcePool();
 		[[nodiscard]] BindlessManager& GetBindlessManager();
 		[[nodiscard]] ResourceRegistry& GetResourceRegistry();
 
@@ -104,6 +104,10 @@ namespace aether
 		{
 			return GpuFormat::R16G16B16A16Sfloat;
 		}
+
+		[[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
+
+		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 
 	private:
 		GraphicsDevice* m_gfx = nullptr;
