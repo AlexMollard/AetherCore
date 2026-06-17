@@ -327,6 +327,5 @@ namespace aether
 		AnimationIkSystem* m_animationIkSystem = nullptr;
 		AnimationRootMotionSystem* m_rootMotionSystem = nullptr;
 		std::uint32_t m_hipsNodeIdx = 0;
-
 	};
 } // namespace aether

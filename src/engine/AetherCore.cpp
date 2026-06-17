@@ -247,7 +247,7 @@ namespace aether
 		}
 
 		m_gpu->BeginSwapchainFrame();
-		m_currentCmdList = m_gpu->GetCurrentCommandList();
+		m_currentCmdList = gpu::CommandList(m_gpu->GetSwapchain().GetCurrentCommandBuffer());
 	}
 
 	std::vector<std::string> AetherCore::GetRenderPassNames() const
@@ -290,7 +290,7 @@ namespace aether
 		auto& sceneSub = m_services.Get<SceneSubsystem>();
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
-		GpuExtent2D extent = m_gpu->GetSwapchainExtent();
+		gpu::Extent2D extent = m_gpu->GetSwapchainExtent();
 		RenderQueue& renderQueue = m_rendering->GetRenderQueue();
 		Scene& scene = sceneSub.GetScene();
 		World& world = sceneSub.GetWorld();
@@ -381,7 +381,7 @@ namespace aether
 		{
 			const gpu::TimelineSemaphoreHandle rmSem = m_rootMotion->GetTimelineSemaphore();
 			const auto rmVal = m_frameIndex + 1;
-			m_gpu->SubmitAndPresent(nullptr, 0, nullptr, 0, rmSem, rmVal);
+			m_gpu->SubmitAndPresent(nullptr, 0, rmSem, rmVal);
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
@@ -467,7 +467,7 @@ namespace aether
 		const gpu::TimelineSemaphoreHandle graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : nullptr;
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
 
-		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, nullptr, 0, rmSem, rmVal);
+		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, rmSem, rmVal);
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);

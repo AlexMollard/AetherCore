@@ -65,7 +65,7 @@ namespace aether
 		                        .depthTestEnable = false,
 		                        .depthWriteEnable = false,
 		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
-		                        .pushConstantStages = gpu::ShaderStage::VertexFragment,
+		                        .pushConstantStages = gpu::ShaderStage::AllGraphics,
 		                        .debugName = "Skybox",
 		                }));
 		m_skyboxPipeline = std::move(skyboxPipeline);
@@ -163,8 +163,7 @@ namespace aether
 		};
 
 		auto& gpu = services.Get<GpuDevice>();
-		const auto pushLightingFn =
-		        [this, &lightingManager](gpu::CommandList& cmd, gpu::PipelineLayout layout)
+		const auto pushLightingFn = [this, &lightingManager](gpu::CommandList& cmd, gpu::PipelineLayout layout)
 		{
 			const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
 			lightingManager.PushLightingDescriptor(cmd, layout, frameIdx);
@@ -189,7 +188,7 @@ namespace aether
 				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
 				                std::byte bytes[sizeof(gpu::DeviceAddress)];
 				                std::memcpy(bytes, &frameAddr, sizeof(bytes));
-				                cmd.PushConstantsRaw(m_skyboxPipeline.GetLayout(), gpu::ShaderStage::VertexFragment, 0, std::span<const std::byte>(bytes, sizeof(bytes)));
+				                cmd.PushConstantsRaw(m_skyboxPipeline.GetLayout(), gpu::ShaderStage::AllGraphics, 0, std::span<const std::byte>(bytes, sizeof(bytes)));
 				                cmd.Draw(3);
 			                });
 		}

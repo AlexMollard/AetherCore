@@ -161,16 +161,4 @@ namespace aether::gpu::Factory
 	// VK_QUERY_RESULT_64_BIT flag.
 	[[nodiscard]] std::uint32_t GetQueryPoolResults(Device device, QueryPool pool, std::uint32_t firstQuery, std::uint32_t queryCount, std::span<std::uint64_t> outTicks) noexcept;
 
-	// -----------------------------------------------------------------
-	// Host-to-image upload
-	// -----------------------------------------------------------------
-	// Synchronous host-to-device-image copy used by the engine's
-	// one-shot upload path (Texture, FontAtlas). Translates the
-	// layout to GENERAL, performs the copy, and returns the VkResult
-	// as a plain int32 (0 = VK_SUCCESS). Mirrors the engine-side
-	// overload of vkutil::HostCopyToImage but takes `gpu::Image`
-	// (the actual VkImage from ResolveTextureImage) rather than
-	// `gpu::ImageView`. The backend implementation lives in
-	// vulkan/GpuDeviceFactory.cpp.
-	[[nodiscard]] std::int32_t HostCopyToImage(Device device, Image dstImage, const void* hostData, std::uint32_t width, std::uint32_t height) noexcept;
 } // namespace aether::gpu::Factory

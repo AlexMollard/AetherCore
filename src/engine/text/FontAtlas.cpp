@@ -15,6 +15,7 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuDeviceFactory.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "gpu/OneShotCmd.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "io/FileSystem.hpp"
@@ -217,7 +218,7 @@ namespace aether
 
 		// -- 4. Host copy: synchronously writes the SDF atlas pixels --------
 		{
-			const std::int32_t copyResult = gpu::Factory::HostCopyToImage(device, gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle), atlasPixels.data(), atlasW, atlasH);
+			const std::int32_t copyResult = vkutil::HostCopyToImage(device, gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle), atlasPixels.data(), atlasW, atlasH);
 			if (copyResult != 0)
 			{
 				gpu::ResourceRegistry::Destroy(m_atlasHandle);

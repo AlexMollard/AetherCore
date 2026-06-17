@@ -90,26 +90,17 @@ namespace aether::gpu
 		}
 
 		// PFN_vkCmd*DebugUtilsLabelEXT are loaded by volk on demand. They
-		// are stored statically so the labels keep working when
+		// are stored at file scope so the labels keep working when
 		// validation layers are enabled. Initialized lazily on first use;
 		// null is a no-op (debug extensions not enabled in this build).
-		inline PFN_vkCmdBeginDebugUtilsLabelEXT& BeginDebugLabelFn() noexcept
-		{
-			static PFN_vkCmdBeginDebugUtilsLabelEXT fn = nullptr;
-			return fn;
-		}
-
-		inline PFN_vkCmdEndDebugUtilsLabelEXT& EndDebugLabelFn() noexcept
-		{
-			static PFN_vkCmdEndDebugUtilsLabelEXT fn = nullptr;
-			return fn;
-		}
+		PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabel = nullptr;
+		PFN_vkCmdEndDebugUtilsLabelEXT s_endDebugLabel = nullptr;
 	} // namespace
 
 	void CommandList::SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept
 	{
-		BeginDebugLabelFn() = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(beginFn);
-		EndDebugLabelFn() = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(endFn);
+		s_beginDebugLabel = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(beginFn);
+		s_endDebugLabel = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(endFn);
 	}
 
 	void CommandList::BindPipeline(void* vkPipeline, void* vkPipelineLayout) noexcept
@@ -419,7 +410,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		PFN_vkCmdBeginDebugUtilsLabelEXT fn = BeginDebugLabelFn();
+		auto fn = s_beginDebugLabel;
 		if (fn == nullptr)
 		{
 			return;
@@ -440,7 +431,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		PFN_vkCmdEndDebugUtilsLabelEXT fn = EndDebugLabelFn();
+		auto fn = s_endDebugLabel;
 		if (fn == nullptr)
 		{
 			return;

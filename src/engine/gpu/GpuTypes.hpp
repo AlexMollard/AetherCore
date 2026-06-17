@@ -12,25 +12,6 @@ namespace aether
 	// see GpuFormat.hpp for the full format enum.
 
 	inline constexpr std::uint32_t kMaxFramesInFlight = 3;
-
-	struct GpuExtent2D
-	{
-		std::uint32_t width = 0;
-		std::uint32_t height = 0;
-
-		GpuExtent2D() = default;
-
-		GpuExtent2D(std::uint32_t w, std::uint32_t h)
-		      : width(w), height(h)
-		{
-		}
-
-		template<typename Extent2D>
-		explicit GpuExtent2D(const Extent2D& ext)
-		      : width(ext.width), height(ext.height)
-		{
-		}
-	};
 } // namespace aether
 
 namespace aether::gpu

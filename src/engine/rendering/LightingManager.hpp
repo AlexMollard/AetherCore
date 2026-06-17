@@ -75,7 +75,7 @@ namespace aether
 		// ensures GPU buffers, copies data, and stores per-frame push constants.
 		// Call before RenderGraph::Execute() each frame.
 		// Returns true if lighting should run (lights exist).
-		[[nodiscard]] bool PrepareForRenderGraph(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
+		[[nodiscard]] bool PrepareForRenderGraph(std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
 
 		// Update the render graph's external buffer handles for the current frame.
 		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot) const;
@@ -97,7 +97,7 @@ namespace aether
 		}
 
 		void UpdateForView(
-		        std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, bool enableBinningForView, std::span<const Renderer::PointLight> pointLights = {}, std::span<const Renderer::SpotLight> spotLights = {}) const;
+		        std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, bool enableBinningForView, std::span<const Renderer::PointLight> pointLights = {}, std::span<const Renderer::SpotLight> spotLights = {}) const;
 
 		void EmitAcquireBarriers(std::uint32_t frameSlot, gpu::CommandList& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
 
@@ -143,7 +143,7 @@ namespace aether
 		// Builds GpuLight array from point/spot light spans. Appends to outLights.
 		static void BuildLightList(std::vector<GpuLight>& outLights, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
 
-		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, GpuExtent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
+		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		static void DisableForView(FrameConstants& fc);
 
 		// Per-frame push constants for the lighting compute passes (filled by

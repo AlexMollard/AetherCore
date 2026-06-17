@@ -83,7 +83,7 @@ namespace aether
 		return m_gfx->GetSwapchain().GetDepthFormat();
 	}
 
-	GpuExtent2D GpuDevice::GetSwapchainExtent() const
+	gpu::Extent2D GpuDevice::GetSwapchainExtent() const
 	{
 		const gpu::Extent2D extent = m_gfx->GetSwapchain().GetExtent();
 		return {extent.width, extent.height};
@@ -128,27 +128,13 @@ namespace aether
 		AE_INFO(LogCategory::Engine, "Swapchain recreated.");
 	}
 
-	void GpuDevice::SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle,
-	        std::uint64_t asyncComputeTimelineValue,
-	        gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle2,
-	        std::uint64_t asyncComputeTimelineValue2,
-	        gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore,
-	        std::uint64_t rootMotionSignalValue)
+	void GpuDevice::SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue, gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore, std::uint64_t rootMotionSignalValue)
 	{
 		AE_PROFILE_ZONE();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 
-		// The timeline-semaphore handles are passed by-value through the
-		// swapchain boundary. The cast to `VkSemaphore` happens inside
-		// `vulkan/Swapchain.cpp::EndFrame`; this TU never sees a `Vk*`
-		// token.
-		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue, asyncComputeSemaphoreHandle2, asyncComputeTimelineValue2, rootMotionSignalSemaphore, rootMotionSignalValue);
-	}
-
-	gpu::CommandList GpuDevice::GetCurrentCommandList() const
-	{
-		return gpu::CommandList(m_gfx->GetSwapchain().GetCurrentCommandBuffer());
+		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue, rootMotionSignalSemaphore, rootMotionSignalValue);
 	}
 
 	FrameTarget GpuDevice::BuildFrameTarget() const

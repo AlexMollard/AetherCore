@@ -184,7 +184,7 @@ namespace aether
 		                .depthWriteEnable = false,
 		                .blendEnable = true,
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
-		                .pushConstantStages = gpu::ShaderStage::VertexFragment,
+		                .pushConstantStages = gpu::ShaderStage::AllGraphics,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		        }));
 		m_pipeline = std::move(pipeline);

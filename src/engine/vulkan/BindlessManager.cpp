@@ -216,12 +216,6 @@ namespace aether
 		m_pendingSlotFrees.clear();
 	}
 
-	bool BindlessManager::IsInitialized() const
-	{
-		std::scoped_lock lock(m_mutex);
-		return m_device != nullptr;
-	}
-
 	gpu::DescriptorSetLayout BindlessManager::GetLayout() const
 	{
 		std::scoped_lock lock(m_mutex);
@@ -238,12 +232,6 @@ namespace aether
 	{
 		std::scoped_lock lock(m_mutex);
 		return m_capacity;
-	}
-
-	std::uint64_t BindlessManager::GetCurrentFrame() const
-	{
-		std::scoped_lock lock(m_mutex);
-		return m_currentFrame;
 	}
 
 	Expected<std::uint32_t> BindlessManager::AllocateSampledImageSlot()

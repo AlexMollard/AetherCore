@@ -339,34 +339,12 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue,
-	        VkQueue presentQueue,
-	        gpu::TimelineSemaphoreHandle extraWaitSemaphore,
-	        std::uint64_t extraWaitValue,
-	        gpu::TimelineSemaphoreHandle extraWaitSemaphore2,
-	        std::uint64_t extraWaitValue2,
-	        gpu::TimelineSemaphoreHandle extraSignalSemaphore,
-	        std::uint64_t extraSignalValue)
+	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue, gpu::TimelineSemaphoreHandle extraSignalSemaphore, std::uint64_t extraSignalValue)
 	{
 		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
-		auto vkExtraWait = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore));
-		auto vkExtraWait2 = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraWaitSemaphore2));
-		auto vkExtraSignal = static_cast<VkSemaphore>(::aether::gpu::ResolveTimelineSemaphoreVk(extraSignalSemaphore));
+		auto vkExtraWait = extraWaitSemaphore ? extraWaitSemaphore->semaphore : VK_NULL_HANDLE;
+		auto vkExtraSignal = extraSignalSemaphore ? extraSignalSemaphore->semaphore : VK_NULL_HANDLE;
 
-		EndFrame(graphicsQueue, presentQueue, vkExtraWait, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue, vkExtraWait2, VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT, extraWaitValue2, vkExtraSignal, extraSignalValue);
-	}
-
-	void Swapchain::EndFrame(VkQueue graphicsQueue,
-	        VkQueue presentQueue,
-	        VkSemaphore extraWaitSemaphore,
-	        VkPipelineStageFlags2 extraWaitStage,
-	        std::uint64_t extraWaitValue,
-	        VkSemaphore extraWaitSemaphore2,
-	        VkPipelineStageFlags2 extraWaitStage2,
-	        std::uint64_t extraWaitValue2,
-	        VkSemaphore extraSignalSemaphore,
-	        std::uint64_t extraSignalValue)
-	{
 		if (!m_frameValid)
 		{
 			m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
@@ -401,27 +379,16 @@ namespace aether
 
 		VkSemaphoreSubmitInfo extraWait{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = extraWaitSemaphore,
+		        .semaphore = vkExtraWait,
 		        .value = extraWaitValue,
-		        .stageMask = extraWaitStage,
+		        .stageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 		};
 
-		VkSemaphoreSubmitInfo extraWait2{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = extraWaitSemaphore2,
-		        .value = extraWaitValue2,
-		        .stageMask = extraWaitStage2,
-		};
-
-		VkSemaphoreSubmitInfo waitInfos[3] = {imageWait, extraWait, extraWait2};
+		VkSemaphoreSubmitInfo waitInfos[2] = {imageWait, extraWait};
 		std::uint32_t waitCount = 1;
 		if (extraWaitSemaphore != VK_NULL_HANDLE)
 		{
 			waitCount = 2;
-			if (extraWaitSemaphore2 != VK_NULL_HANDLE)
-			{
-				waitCount = 3;
-			}
 		}
 
 		VkCommandBufferSubmitInfo cmdInfo{
@@ -438,7 +405,7 @@ namespace aether
 
 		VkSemaphoreSubmitInfo extraSignalInfo{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = extraSignalSemaphore,
+		        .semaphore = vkExtraSignal,
 		        .value = extraSignalValue,
 		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};

@@ -130,7 +130,7 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to create cross-queue timeline semaphore."));
 		}
-		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(gpu::ResolveTimelineSemaphoreVk(m_crossQueueTimeline)), VK_OBJECT_TYPE_SEMAPHORE, "RenderGraph.CrossQueueTimeline");
+		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(m_crossQueueTimeline->semaphore), VK_OBJECT_TYPE_SEMAPHORE, "RenderGraph.CrossQueueTimeline");
 
 		VkFenceCreateInfo fenceInfo{};
 		fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -229,7 +229,7 @@ namespace aether
 
 		const VkSemaphoreSubmitInfo signalInfo{
 		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = static_cast<VkSemaphore>(gpu::ResolveTimelineSemaphoreVk(m_crossQueueTimeline)),
+		        .semaphore = m_crossQueueTimeline->semaphore,
 		        .value = signalValue,
 		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};

@@ -6,15 +6,6 @@
 #include "utils/LogCategory.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
-namespace aether::gpu::detail
-{
-	// pImpl data; the engine only sees a pointer.
-	struct TimelineSemaphoreData
-	{
-		VkSemaphore semaphore = VK_NULL_HANDLE;
-	};
-} // namespace aether::gpu::detail
-
 namespace aether::gpu
 {
 	TimelineSemaphoreHandle CreateTimelineSemaphore(const TimelineSemaphoreDesc& desc) noexcept
@@ -95,23 +86,4 @@ namespace aether::gpu
 		delete sem;
 	}
 
-	void* ResolveTimelineSemaphoreVk(TimelineSemaphoreHandle sem) noexcept
-	{
-		if (sem == nullptr)
-		{
-			return nullptr;
-		}
-		return sem->semaphore;
-	}
-
-	TimelineSemaphoreHandle WrapTimelineSemaphoreVk(void* vkSemaphore) noexcept
-	{
-		if (vkSemaphore == nullptr)
-		{
-			return nullptr;
-		}
-		auto data = new detail::TimelineSemaphoreData;
-		data->semaphore = static_cast<VkSemaphore>(vkSemaphore);
-		return data;
-	}
 } // namespace aether::gpu

@@ -47,7 +47,7 @@ namespace aether
 
 		[[nodiscard]] GpuFormat GetSwapchainColorFormat() const;
 		[[nodiscard]] GpuFormat GetSwapchainDepthFormat() const;
-		[[nodiscard]] GpuExtent2D GetSwapchainExtent() const;
+		[[nodiscard]] gpu::Extent2D GetSwapchainExtent() const;
 		[[nodiscard]] bool SwapchainNeedsRecreation() const;
 		void ClearSwapchainRecreationFlag();
 		[[nodiscard]] bool IsSwapchainFrameValid() const;
@@ -59,14 +59,8 @@ namespace aether
 		// pointer). All casts to `VkSemaphore` happen in the swapchain
 		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
 		// `Vk*` token.
-		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr,
-		        std::uint64_t asyncComputeTimelineValue = 0,
-		        gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle2 = nullptr,
-		        std::uint64_t asyncComputeTimelineValue2 = 0,
-		        gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore = nullptr,
-		        std::uint64_t rootMotionSignalValue = 0);
+		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0, gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore = nullptr, std::uint64_t rootMotionSignalValue = 0);
 
-		[[nodiscard]] gpu::CommandList GetCurrentCommandList() const;
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;
 
 		void SetSwapchainRecreatedCallback(std::function<void()> cb);

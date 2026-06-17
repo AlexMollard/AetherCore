@@ -250,7 +250,7 @@ namespace aether
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % aether::kMaxFramesInFlight);
-			                m_lightingManager->UpdateForView(frameIdx, *cam, GpuExtent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
+			                m_lightingManager->UpdateForView(frameIdx, *cam, gpu::Extent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 

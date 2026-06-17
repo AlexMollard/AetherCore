@@ -198,7 +198,7 @@ namespace aether
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
 	        const Camera& camera,
-	        const GpuExtent2D extent,
+	        const gpu::Extent2D extent,
 	        FrameConstants& fc,
 	        const bool enableBinningForView,
 	        const std::span<const Renderer::PointLight> pointLights,
@@ -246,7 +246,7 @@ namespace aether
 	}
 
 	void LightingManager::UpdateForViewCpu(
-	        const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
+	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
 		std::vector<GpuLight> lights;
@@ -624,7 +624,7 @@ namespace aether
 	}
 
 	bool LightingManager::PrepareForRenderGraph(
-	        const std::uint32_t frameSlot, const Camera& camera, const GpuExtent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
+	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
 	{
 		if (extent.width == 0 || extent.height == 0)
 		{

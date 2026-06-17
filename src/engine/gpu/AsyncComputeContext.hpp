@@ -27,18 +27,6 @@ namespace aether
 			return m_enabled;
 		}
 
-		void BeginFrame(GpuDevice& gpu, std::uint32_t frameIndex);
-		[[nodiscard]] gpu::CommandList GetCommandList(std::uint32_t frameIndex) const;
-		void EndCommandBuffer(std::uint32_t frameIndex);
-
-		struct SubmitResult
-		{
-			std::uint64_t semaphoreHandle = 0;
-			std::uint64_t timelineValue = 0;
-		};
-
-		[[nodiscard]] SubmitResult Submit(GpuDevice& gpu, std::uint32_t frameIndex);
-
 		[[nodiscard]] std::uint64_t GetTimelineSemaphoreHandle() const
 		{
 			return m_timelineSemaphoreHandle;

@@ -209,11 +209,4 @@ namespace aether::gpu
 		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);
 		[[nodiscard]] static BufferUsage GetBufferUsage(BufferHandle handle);
 	};
-
-	template<typename T>
-	[[nodiscard]] T* ResolveMappedBufferAs(BufferHandle handle) noexcept
-	{
-		const auto view = ResourceRegistry::ResolveMappedBuffer(handle);
-		return static_cast<T*>(view.mappedPtr);
-	}
 } // namespace aether::gpu

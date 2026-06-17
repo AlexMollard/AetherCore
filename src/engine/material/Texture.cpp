@@ -8,7 +8,7 @@
 
 #include "gpu/OneShotCmd.hpp"
 #include "gpu/CommandList.hpp"
-#include "gpu/GpuDeviceFactory.hpp"
+#include "vulkan/VulkanUtils.hpp"
 #include "gpu/ResourceRegistry.hpp"
 
 // stb_image - single-header image loader.
@@ -69,7 +69,7 @@ namespace aether
 			const gpu::ImageView view = gpu::ResourceRegistry::ResolveTexture(handle).view;
 
 			{
-				const std::int32_t copyResult = gpu::Factory::HostCopyToImage(device, image, pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image, pixels, static_cast<uint32_t>(width), static_cast<uint32_t>(height));
 				if (copyResult != 0)
 				{
 					Throw(AetherError::Vulkan(copyResult, "UploadRgbaToGpuImage: HostCopyToImage failed"));
@@ -192,7 +192,7 @@ namespace aether
 			const gpu::ImageView view = gpu::ResourceRegistry::ResolveTexture(handle).view;
 
 			{
-				const std::int32_t copyResult = gpu::Factory::HostCopyToImage(device, image, p, width, height);
+				const std::int32_t copyResult = vkutil::HostCopyToImage(device, image, p, width, height);
 				if (copyResult != 0)
 				{
 					Throw(AetherError::Vulkan(copyResult, "UploadBcnDds: HostCopyToImage failed"));

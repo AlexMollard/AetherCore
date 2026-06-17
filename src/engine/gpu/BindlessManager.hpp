@@ -54,11 +54,9 @@ namespace aether
 		Expected<void> Initialize(const VulkanContext& context, const Config& config);
 		void Shutdown();
 
-		[[nodiscard]] bool IsInitialized() const;
 		[[nodiscard]] gpu::DescriptorSetLayout GetLayout() const;
 		[[nodiscard]] gpu::DescriptorSet GetSet() const;
 		[[nodiscard]] std::uint32_t GetCapacity() const;
-		[[nodiscard]] std::uint64_t GetCurrentFrame() const;
 
 		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex()
 		{

@@ -768,7 +768,6 @@ namespace aether
 						cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 					}
 				}
-
 			}
 			cmdList.EndDebugLabel();
 
@@ -837,7 +836,7 @@ namespace aether
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
 					cmdList.Dispatch(groups, 1, 1);
 				}
-			}				
+			}
 
 			cmdList.EndDebugLabel();
 

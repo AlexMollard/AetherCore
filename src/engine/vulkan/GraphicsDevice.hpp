@@ -39,7 +39,7 @@ namespace aether
 			return m_swapchain;
 		}
 
-	[[nodiscard]] BindlessManager& GetBindlessManager()
+		[[nodiscard]] BindlessManager& GetBindlessManager()
 		{
 			return m_bindlessManager;
 		}

@@ -144,43 +144,4 @@ namespace aether::gpu
 			return h;
 		}
 	};
-
-	struct SamplerHandle
-	{
-		std::uint32_t bits = 0u;
-
-		[[nodiscard]] bool IsValid() const noexcept
-		{
-			return GetGeneration() != detail::kInvalidGeneration && GetIndex() != detail::kInvalidIndex;
-		}
-
-		[[nodiscard]] std::uint32_t GetIndex() const noexcept
-		{
-			return bits & 0x0000FFFFu;
-		}
-
-		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
-		{
-			return (bits >> 16) & 0xFFFFu;
-		}
-
-		bool operator==(const SamplerHandle& other) const noexcept
-		{
-			return bits == other.bits;
-		}
-
-		bool operator!=(const SamplerHandle& other) const noexcept
-		{
-			return !(*this == other);
-		}
-
-		[[nodiscard]] static SamplerHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
-		{
-			AE_ASSERT(index <= detail::kInvalidIndex, "SamplerHandle index out of range");
-			AE_ASSERT(generation <= 0xFFFFu, "SamplerHandle generation out of range");
-			SamplerHandle h{};
-			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
-			return h;
-		}
-	};
 } // namespace aether::gpu

@@ -308,47 +308,4 @@ namespace aether::gpu::Factory
 		return result == VK_SUCCESS ? readable : 0;
 	}
 
-	// -----------------------------------------------------------------
-	// HostCopyToImage
-	// -----------------------------------------------------------------
-	// Synchronous host-to-device-image copy for the one-shot upload
-	// path. Performs layout transition (UNDEFINED -> GENERAL) and the
-	// memory-to-image copy in one call. Returns the VkResult as a
-	// plain int32 (0 = VK_SUCCESS). Mirrors the engine-side
-	// overload of vkutil::HostCopyToImage but takes the actual
-	// VkImage (gpu::Image) rather than a VkImageView.
-	std::int32_t HostCopyToImage(Device device, Image dstImage, const void* hostData, std::uint32_t width, std::uint32_t height) noexcept
-	{
-		const VkHostImageLayoutTransitionInfo transition{
-		        .sType = VK_STRUCTURE_TYPE_HOST_IMAGE_LAYOUT_TRANSITION_INFO,
-		        .image = static_cast<VkImage>(dstImage),
-		        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-		        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-		        .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1},
-		};
-		VkResult result = vkTransitionImageLayout(static_cast<VkDevice>(device), 1, &transition);
-		if (result != VK_SUCCESS)
-		{
-			return static_cast<std::int32_t>(result);
-		}
-
-		const VkMemoryToImageCopy region{
-		        .sType = VK_STRUCTURE_TYPE_MEMORY_TO_IMAGE_COPY,
-		        .pHostPointer = hostData,
-		        .memoryRowLength = 0,
-		        .memoryImageHeight = 0,
-		        .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-		        .imageOffset = {.x = 0, .y = 0, .z = 0},
-		        .imageExtent = {.width = width, .height = height, .depth = 1},
-		};
-		const VkCopyMemoryToImageInfo copyInfo{
-		        .sType = VK_STRUCTURE_TYPE_COPY_MEMORY_TO_IMAGE_INFO,
-		        .dstImage = static_cast<VkImage>(dstImage),
-		        .dstImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-		        .regionCount = 1,
-		        .pRegions = &region,
-		};
-		result = vkCopyMemoryToImage(static_cast<VkDevice>(device), &copyInfo);
-		return static_cast<std::int32_t>(result);
-	}
 } // namespace aether::gpu::Factory

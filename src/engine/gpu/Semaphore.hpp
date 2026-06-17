@@ -3,13 +3,17 @@
 #include <cstdint>
 
 #include "gpu/GpuTypes.hpp"
+#include "vulkan/volk.hpp"
 
 namespace aether::gpu
 {
-	// Timeline-semaphore handle. pImpl defined in vulkan/Semaphore.cpp.
+	// Timeline-semaphore pImpl; the engine only sees a pointer.
 	namespace detail
 	{
-		struct TimelineSemaphoreData;
+		struct TimelineSemaphoreData
+		{
+			VkSemaphore semaphore = VK_NULL_HANDLE;
+		};
 	} // namespace detail
 
 	using TimelineSemaphore = detail::TimelineSemaphoreData;
@@ -26,12 +30,4 @@ namespace aether::gpu
 	[[nodiscard]] bool WaitTimelineSemaphore(Device device, TimelineSemaphoreHandle sem, std::uint64_t value) noexcept;
 	void DestroyTimelineSemaphore(Device device, TimelineSemaphoreHandle sem) noexcept;
 
-	// Cast a handle to its underlying backend semaphore. `void*` so the
-	// engine-side header never names the backend type.
-	[[nodiscard]] void* ResolveTimelineSemaphoreVk(TimelineSemaphoreHandle sem) noexcept;
-
-	// Wrap an externally-created backend semaphore in a pImpl handle so
-	// the engine can hold it as a typed TimelineSemaphoreHandle. The
-	// returned handle owns the destroy path.
-	[[nodiscard]] TimelineSemaphoreHandle WrapTimelineSemaphoreVk(void* vkSemaphore) noexcept;
 } // namespace aether::gpu

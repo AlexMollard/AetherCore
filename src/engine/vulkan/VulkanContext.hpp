@@ -37,11 +37,6 @@ namespace aether
 		[[nodiscard]] const vkb::Device& GetDevice() const;
 		[[nodiscard]] VkPhysicalDevice GetPhysicalDevice() const;
 
-		[[nodiscard]] gpu::ProfilerContextHandle GetTracyProfilerHandle() const
-		{
-			return m_tracyProfilerHandle;
-		}
-
 		[[nodiscard]] VkSurfaceKHR GetSurface() const;
 		[[nodiscard]] VmaAllocator GetAllocator() const;
 		[[nodiscard]] VkPipelineCache GetPipelineCache() const;

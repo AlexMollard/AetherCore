@@ -165,11 +165,6 @@ namespace aether
 		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
 		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;
 
-		// Diagnostic counters (not performance-critical, kept simple).
-		[[nodiscard]] std::uint32_t LiveTextureCount() const;
-		[[nodiscard]] std::uint32_t LiveBufferCount() const;
-		[[nodiscard]] std::uint32_t LivePipelineCount() const;
-
 	private:
 		// A queued destructor. Holds a typed-owning variant of the resource
 		// payload (or a closure) so destruction is unambiguous regardless of

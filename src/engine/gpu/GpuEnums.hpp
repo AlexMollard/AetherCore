@@ -81,7 +81,6 @@ namespace aether::gpu
 		Fragment = 1u << 1,
 		Compute = 1u << 2,
 		// Convenience aggregates used by the engine today.
-		VertexFragment = Vertex | Fragment,
 		AllGraphics = Vertex | Fragment,
 		All = Vertex | Fragment | Compute,
 	};
