@@ -6,7 +6,6 @@
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
-#include "scene/Scene.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
@@ -94,21 +93,4 @@ namespace aether
 		}
 	}
 
-	void WorldRenderer::Flush(const Scene& scene, RenderQueue& queue)
-	{
-		AE_PROFILE_ZONE();
-		for (const auto& [id, obj]: scene.m_objects)
-		{
-			const glm::vec4 localSphere = obj.desc.mesh ? obj.desc.mesh->GetBoundingSphere() : glm::vec4(0.0f);
-			queue.Submit({
-			        .pipeline = obj.desc.pipeline,
-			        .mesh = obj.desc.mesh,
-			        .instanceCount = 1,
-			        .modelMatrix = obj.transform,
-			        .materialIndex = obj.desc.materialIndex,
-			        .worldBoundingSphere = TransformBoundingSphere(localSphere, obj.transform),
-			        .meshGeneration = obj.desc.mesh ? obj.desc.mesh->GetGeneration() : 0,
-			});
-		}
-	}
 } // namespace aether

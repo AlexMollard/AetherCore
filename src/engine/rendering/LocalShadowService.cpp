@@ -19,7 +19,6 @@
 #include "passes/CullPass.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"
-#include "scene/Scene.hpp"
 #include "scene/World.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
@@ -242,16 +241,15 @@ namespace aether
 		}
 	}
 
-	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
+	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		m_shadowRenderQueue.Clear(drawSlot);
-		WorldRenderer::Flush(scene, m_shadowRenderQueue);
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
 	}
 
-	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, Scene& scene, World& world, FrameConstants& fc)
+	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
 		// Re-populate the shadow render queue to pick up any mid-frame changes
@@ -259,7 +257,6 @@ namespace aether
 		// PrepareQueues call.
 		m_shadowRenderQueue.SetWriteSlot(packet.drawSlot);
 		m_shadowRenderQueue.Clear(packet.drawSlot);
-		WorldRenderer::Flush(scene, m_shadowRenderQueue);
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
 
 		m_atlasManager.Reset();

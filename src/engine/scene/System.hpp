@@ -47,9 +47,6 @@ namespace aether
 		// Update all registered systems.
 		void UpdateAll(World& world, float dt);
 
-		// Clear all systems.
-		void Clear();
-
 		// Find a system by name, returns nullptr if not found.
 		System* Find(const char* name);
 

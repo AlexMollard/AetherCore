@@ -18,7 +18,6 @@ namespace aether
 	class BindlessManager;
 	class CameraManager;
 	class CullPass;
-	class Scene;
 	class Swapchain;
 	class VulkanContext;
 	class World;
@@ -39,7 +38,7 @@ namespace aether
 		// Set the double-buffer write slot and clear it on the single shadow queue.
 		void PrepareWriteSlot(std::uint32_t drawSlot);
 
-		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
+		void PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
 		void RegisterPasses(RenderGraph& graph, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat);

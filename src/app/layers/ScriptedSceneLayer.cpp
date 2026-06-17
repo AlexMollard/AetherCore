@@ -5,12 +5,14 @@
 #include <span>
 
 #include "scripting/ScriptingSubsystem.hpp"
+#include "scripting/SystemFactory.hpp"
 
 #include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "gpu/DescriptorSetLayout.hpp"
 #include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
+#include "layers/LoadingLayer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
@@ -38,8 +40,8 @@ namespace aether::app::scripting
 
 namespace aether::app
 {
-	ScriptedSceneLayer::ScriptedSceneLayer(std::string scriptPath, SystemFactory systemFactory)
-	      : m_scriptPath(std::move(scriptPath)), m_systemFactory(std::move(systemFactory))
+	ScriptedSceneLayer::ScriptedSceneLayer(std::string scriptPath)
+	      : m_scriptPath(std::move(scriptPath))
 	{
 	}
 
@@ -192,11 +194,12 @@ namespace aether::app
 		m_sceneCtx.renderer = &context.Get<Renderer>();
 		m_sceneCtx.input = &context.Get<Input>();
 		m_sceneCtx.effects = &m_effectManager;
+		m_sceneCtx.loadingOverlay = context.TryGet<aether::app::LoadingLayer>();
 		if (auto dn = context.TryGet<aether::app::DayNightSystem>())
 		{
 			m_sceneCtx.dayNight = dn;
 		}
-		m_sceneCtx.systemFactory = &m_systemFactory;
+		m_sceneCtx.systemFactory = context.TryGet<aether::app::SystemFactory>();
 		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
 		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();
 		if (auto physSys = context.Get<World>().FindSystem("PhysicsSystem"))

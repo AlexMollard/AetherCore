@@ -11,7 +11,6 @@
 #include "material/MaterialBuffer.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"
-#include "scene/Scene.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -98,12 +97,11 @@ namespace aether
 		}
 	}
 
-	void RenderTargetService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
+	void RenderTargetService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
 		for (auto& [_, rt]: m_targets)
 		{
 			rt.renderQueue.SetWriteSlot(drawSlot);
-			WorldRenderer::Flush(scene, rt.renderQueue);
 			WorldRenderer::Flush(world, rt.renderQueue);
 		}
 	}

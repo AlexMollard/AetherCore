@@ -4,14 +4,24 @@
 
 namespace aether::app
 {
-
-	// Full-screen loading overlay drawn with the engine UI system.
-	// Displays progress while LoadingManager has pending tasks,
-	// then becomes a no-op once loading is complete.
+	// Minimal loading overlay. The script toggles visibility via
+	// set_loading_visible(true/false) and does its own loading.
 	class LoadingLayer final : public AppLayer
 	{
 	public:
 		void OnGui(LayerContext& context) override;
-	};
 
+		void SetVisible(bool visible)
+		{
+			m_visible = visible;
+		}
+
+		[[nodiscard]] bool IsVisible() const
+		{
+			return m_visible;
+		}
+
+	private:
+		bool m_visible = false;
+	};
 } // namespace aether::app

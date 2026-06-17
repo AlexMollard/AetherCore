@@ -44,11 +44,6 @@ namespace aether
 		}
 	}
 
-	void SystemRegistry::Clear()
-	{
-		m_systems.clear();
-	}
-
 	System* SystemRegistry::Find(const char* name)
 	{
 		auto it = std::ranges::find_if(m_systems, [name](const std::unique_ptr<System>& sys) { return sys && std::string_view(sys->GetName()) == name; });

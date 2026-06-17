@@ -5,13 +5,8 @@
 #include "Application.hpp"
 #include "platform/CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
-// #include "layers/FishingLayer.hpp"
 #include "layers/LoadingLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
-// #include "layers/SandboxLayer.hpp"
-// #include "layers/PhysicsLayer.hpp"
-// #include "layers/UiSandboxLayer.hpp"
-// #include "layers/InventoryLayer.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scripting/SystemFactory.hpp"
 #include "utils/Logger.hpp"
@@ -44,21 +39,20 @@ int main()
 	{
 		aether::Logger::SetMinimumLevel(aether::LogLevel::Info);
 
+		aether::app::Application application;
+
+		// Services
 		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
+		application.AddService(scriptingSubsystem);
 
 		aether::app::SystemFactory systemFactory;
+		application.AddService(systemFactory);
 
-		aether::app::Application application;
-		application.GetEngine().GetServiceContainer().Register<aether::app::scripting::ScriptingSubsystem>(scriptingSubsystem);
+		// Layers
+		application.PushLayer<aether::app::LoadingLayer>();
+		application.PushLayer<aether::app::DebugLayer>();
+		application.PushLayer<aether::app::ScriptedSceneLayer>("sandbox.das");
 
-		// application.PushLayer(std::make_unique<aether::app::FishingLayer>());
-		application.PushLayer(std::make_unique<aether::app::LoadingLayer>());
-		// application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("game.das", std::move(systemFactory)));
-		application.PushLayer(std::make_unique<aether::app::ScriptedSceneLayer>("sandbox.das", std::move(systemFactory)));
-		// application.PushLayer(std::make_unique<aether::app::PhysicsLayer>());
-		// application.PushLayer(std::make_unique<aether::app::UiSandboxLayer>());
-		// application.PushLayer(std::make_unique<aether::app::InventoryLayer>());
-		application.PushLayer(std::make_unique<aether::app::DebugLayer>());
 		return application.Run();
 	}
 	catch (const std::exception& exception)

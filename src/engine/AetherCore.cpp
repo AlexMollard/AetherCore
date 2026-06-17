@@ -82,7 +82,6 @@ namespace aether
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();
 		m_services.Register<World>(sceneSub.GetWorld());
-		m_services.Register<Scene>(sceneSub.GetScene());
 
 		// -- 4. Assets -------------------------------------------------------
 		assetsSub.Init(m_services);
@@ -287,13 +286,11 @@ namespace aether
 	RenderFramePacket AetherCore::PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
-		auto& sceneSub = m_services.Get<SceneSubsystem>();
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
 		gpu::Extent2D extent = m_gpu->GetSwapchainExtent();
 		RenderQueue& renderQueue = m_rendering->GetRenderQueue();
-		Scene& scene = sceneSub.GetScene();
-		World& world = sceneSub.GetWorld();
+		World& world = m_services.Get<SceneSubsystem>().GetWorld();
 		RenderTargetService& rttService = m_rendering->GetRenderTargetService();
 		ShadowService& shadowService = m_rendering->GetShadowService();
 		MaterialBuffer& materialBuffer = assetsSub.GetMaterialBuffer();
@@ -301,11 +298,10 @@ namespace aether
 		Renderer& renderer = m_rendering->GetRenderer();
 
 		renderQueue.SetWriteSlot(drawSlot);
-		WorldRenderer::Flush(scene, renderQueue);
 		WorldRenderer::Flush(world, renderQueue);
 
-		rttService.PrepareQueues(drawSlot, scene, world);
-		shadowService.PrepareQueues(drawSlot, scene, world);
+		rttService.PrepareQueues(drawSlot, world);
+		shadowService.PrepareQueues(drawSlot, world);
 
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
@@ -390,7 +386,7 @@ namespace aether
 
 		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
-		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, m_services.Get<SceneSubsystem>().GetScene().GetViewProjection());
+		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
@@ -407,7 +403,7 @@ namespace aether
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)
 	{
 		m_rendering->GetShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), fc);
-		m_rendering->GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), m_services.Get<SceneSubsystem>().GetScene(), m_services.Get<SceneSubsystem>().GetWorld(), fc);
+		m_rendering->GetLocalShadowService().BuildFrameShadowData(packet, frameIdx, m_cameras->GetCameraManager(), m_services.Get<SceneSubsystem>().GetWorld(), fc);
 
 		if (packet.hasCameraData)
 		{

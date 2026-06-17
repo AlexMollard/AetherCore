@@ -8,7 +8,11 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/ScriptHandle.hpp"
-#include "scripting/SystemFactory.hpp"
+
+namespace aether::app
+{
+	class SystemFactory;
+} // namespace aether::app
 
 namespace aether::app::scripting
 {
@@ -26,7 +30,7 @@ namespace aether::app
 	class ScriptedSceneLayer final : public AppLayer
 	{
 	public:
-		explicit ScriptedSceneLayer(std::string scriptPath, SystemFactory systemFactory);
+		explicit ScriptedSceneLayer(std::string scriptPath);
 
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
@@ -38,12 +42,12 @@ namespace aether::app
 		void DoReload(LayerContext& context);
 
 		std::string m_scriptPath;
-		SystemFactory m_systemFactory;
 		scripting::SceneContext m_sceneCtx;
 		scripting::ScriptHandle m_handle;
 		aether::GraphicsPipeline m_defaultPipeline;
 		aether::app::effects::EffectManager m_effectManager;
 		scripting::ScriptingSubsystem* m_scripting = nullptr;
+		SystemFactory* m_systemFactory = nullptr;
 		bool m_scriptBroken = false;
 	};
 } // namespace aether::app

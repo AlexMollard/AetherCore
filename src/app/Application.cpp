@@ -137,11 +137,6 @@ namespace aether::app
 		// dispatch correctly.
 		aether::coro::set_default_executor(&m_coroExecutor);
 
-		// Register the shared LoadingManager so that the LoadingLayer,
-		// SandboxGameSystem, and any other loading participant can read
-		// progress or push tasks through the same instance.
-		m_engine.GetServiceContainer().Register<LoadingManager>(m_loadingManager);
-
 		// Start the dedicated render thread early so that loading-screen
 		// frames can be submitted while assets load incrementally.
 		m_renderThread.Start(m_engine);

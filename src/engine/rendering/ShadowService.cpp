@@ -15,7 +15,6 @@
 #include "camera/CameraManager.hpp"
 #include "passes/CullPass.hpp"
 #include "rendering/WorldRenderer.hpp"
-#include "scene/Scene.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -78,11 +77,10 @@ namespace aether
 		m_shadowRenderQueue.Clear(drawSlot);
 	}
 
-	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, Scene& scene, World& world)
+	void ShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
-		WorldRenderer::Flush(scene, m_shadowRenderQueue);
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
 	}
 

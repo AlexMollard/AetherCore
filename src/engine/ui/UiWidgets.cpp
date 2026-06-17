@@ -644,35 +644,51 @@ namespace aether::ui
 
 	Entity SpawnButton(aether::World& world, UiRect rect, std::string_view label, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiButtonComponent>(UiButtonComponent{.label = std::string(label)}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiButtonComponent>(e, UiButtonComponent{.label = std::string(label)});
+		return e;
 	}
 
 	Entity SpawnSlider(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiSliderComponent>(UiSliderComponent{.min = min, .max = max, .value = value}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiSliderComponent>(e, UiSliderComponent{.min = min, .max = max, .value = value});
+		return e;
 	}
 
 	Entity SpawnCheckbox(aether::World& world, UiRect rect, std::string_view label, bool checked, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiCheckboxComponent>(UiCheckboxComponent{.checked = checked, .label = std::string(label)}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiCheckboxComponent>(e, UiCheckboxComponent{.checked = checked, .label = std::string(label)});
+		return e;
 	}
 
 	Entity SpawnProgressBar(aether::World& world, UiRect rect, float min, float max, float value, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSliderComponent>(UiSliderComponent{.min = min, .max = max, .value = value}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiSliderComponent>(e, UiSliderComponent{.min = min, .max = max, .value = value});
+		return e;
 	}
 
 	Entity SpawnPanel(aether::World& world, UiRect rect, std::string_view title, bool draggable, bool collapsible, float zOrder)
 	{
-		return world.Spawn()
-		        .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
-		        .Add<UiInputComponent>()
-		        .Add<UiPanelComponent>(UiPanelComponent{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiPanelComponent>(e,
+		        UiPanelComponent{
 		                .title = std::string(title),
 		                .draggable = draggable,
 		                .collapsible = collapsible,
-		        })
-		        .entity();
+		        });
+		return e;
 	}
 
 	// -- Text Input ------------------------------------------------------------
@@ -737,7 +753,11 @@ namespace aether::ui
 
 	Entity SpawnTextInput(aether::World& world, UiRect rect, std::string_view placeholder, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiTextInputComponent>(UiTextInputComponent{.placeholder = std::string(placeholder)}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiTextInputComponent>(e, UiTextInputComponent{.placeholder = std::string(placeholder)});
+		return e;
 	}
 
 	// -- Hierarchy helper ------------------------------------------------------
@@ -849,21 +869,25 @@ namespace aether::ui
 
 	Entity SpawnItemSlot(aether::World& world, UiRect rect, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiInputComponent>().Add<UiItemSlotComponent>().entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiItemSlotComponent>(e);
+		return e;
 	}
 
 	Entity SpawnItemGrid(aether::World& world, UiRect containerRect, int columns, float slotSize, float spacing, float padding, int slotCount, float slotZOrder, Entity* slotsOut, float containerZOrder)
 	{
-		Entity container = world.Spawn()
-		                           .Add<UiTransformComponent>(UiTransformComponent{.rect = containerRect, .zOrder = containerZOrder})
-		                           .Add<UiGridLayoutComponent>(UiGridLayoutComponent{
-		                                   .columns = columns,
-		                                   .slotSize = slotSize,
-		                                   .spacing = spacing,
-		                                   .padding = padding,
-		                           })
-		                           .Add<UiChildrenComponent>()
-		                           .entity();
+		Entity container = world.Create();
+		world.Emplace<UiTransformComponent>(container, UiTransformComponent{.rect = containerRect, .zOrder = containerZOrder});
+		world.Emplace<UiGridLayoutComponent>(container,
+		        UiGridLayoutComponent{
+		                .columns = columns,
+		                .slotSize = slotSize,
+		                .spacing = spacing,
+		                .padding = padding,
+		        });
+		world.Emplace<UiChildrenComponent>(container);
 
 		for (int i = 0; i < slotCount; ++i)
 		{
@@ -907,7 +931,10 @@ namespace aether::ui
 
 	Entity SpawnLabelRow(aether::World& world, UiRect rect, std::string_view label, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiLabelRowComponent>(UiLabelRowComponent{.label = std::string(label)}).entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiLabelRowComponent>(e, UiLabelRowComponent{.label = std::string(label)});
+		return e;
 	}
 
 	// -- Section separator ------------------------------------------------------
@@ -932,7 +959,10 @@ namespace aether::ui
 
 	Entity SpawnSection(aether::World& world, UiRect rect, float zOrder)
 	{
-		return world.Spawn().Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder}).Add<UiSectionComponent>().entity();
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiSectionComponent>(e);
+		return e;
 	}
 
 	// -- Tab bar ----------------------------------------------------------------
@@ -1012,34 +1042,36 @@ namespace aether::ui
 
 	Entity SpawnTabPage(aether::World& world, float zOrder)
 	{
-		return world.Spawn()
-		        .Add<UiTransformComponent>(UiTransformComponent{.rect = UiRect{}, .zOrder = zOrder})
-		        .Add<UiLayoutComponent>(UiLayoutComponent{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = UiRect{}, .zOrder = zOrder});
+		world.Emplace<UiLayoutComponent>(e,
+		        UiLayoutComponent{
 		                .direction = UiLayoutComponent::Direction::Vertical,
 		                .spacing = 0.f,
 		                .padding = 0.f,
 		                .autoSize = true,
-		        })
-		        .Add<UiChildrenComponent>()
-		        .entity();
+		        });
+		world.Emplace<UiChildrenComponent>(e);
+		return e;
 	}
 
 	Entity SpawnTabBar(aether::World& world, UiRect rect, const std::vector<std::string>& tabNames, const std::vector<Entity>& tabPages, float zOrder)
 	{
-		Entity bar = world.Spawn()
-		                     .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
-		                     .Add<UiLayoutComponent>(UiLayoutComponent{
-		                             .direction = UiLayoutComponent::Direction::Horizontal,
-		                             .spacing = 4.f,
-		                             .padding = 6.f,
-		                     })
-		                     .Add<UiTabComponent>(UiTabComponent{
-		                             .tabNames = tabNames,
-		                             .selectedTab = 0,
-		                             .tabPages = tabPages,
-		                     })
-		                     .Add<UiChildrenComponent>()
-		                     .entity();
+		Entity bar = world.Create();
+		world.Emplace<UiTransformComponent>(bar, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiLayoutComponent>(bar,
+		        UiLayoutComponent{
+		                .direction = UiLayoutComponent::Direction::Horizontal,
+		                .spacing = 4.f,
+		                .padding = 6.f,
+		        });
+		world.Emplace<UiTabComponent>(bar,
+		        UiTabComponent{
+		                .tabNames = tabNames,
+		                .selectedTab = 0,
+		                .tabPages = tabPages,
+		        });
+		world.Emplace<UiChildrenComponent>(bar);
 
 		for (std::size_t i = 0; i < tabNames.size(); ++i)
 		{
@@ -1133,14 +1165,15 @@ namespace aether::ui
 
 	Entity SpawnGraph(aether::World& world, UiRect rect, std::string_view label, float rangeMin, float rangeMax, float zOrder)
 	{
-		return world.Spawn()
-		        .Add<UiTransformComponent>(UiTransformComponent{.rect = rect, .zOrder = zOrder})
-		        .Add<UiGraphComponent>(UiGraphComponent{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiGraphComponent>(e,
+		        UiGraphComponent{
 		                .rangeMin = rangeMin,
 		                .rangeMax = rangeMax,
 		                .label = std::string(label),
-		        })
-		        .entity();
+		        });
+		return e;
 	}
 
 } // namespace aether::ui

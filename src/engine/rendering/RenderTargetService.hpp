@@ -21,7 +21,6 @@ namespace aether
 	class LightingManager;
 	class MaterialBuffer;
 	class Renderer;
-	class Scene;
 	class VulkanContext;
 	class World;
 
@@ -36,7 +35,7 @@ namespace aether
 		void OnRenderGraphReset(gpu::Device device, gpu::Format depthFormat, gpu::Format forwardColorFormat);
 		void RegisterPasses();
 
-		void PrepareQueues(std::uint32_t drawSlot, Scene& scene, World& world);
+		void PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
 		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, gpu::Extent2D extent);
