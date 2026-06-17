@@ -136,13 +136,13 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "Failed to create swapchain command pool."));
 			}
 
-			VkCommandBufferAllocateInfo allocInfo{};
-			allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-			allocInfo.commandPool = frame.commandPool;
-			allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-			allocInfo.commandBufferCount = 1;
+			VkCommandBufferAllocateInfo bufAllocInfo{};
+			bufAllocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+			bufAllocInfo.commandPool = frame.commandPool;
+			bufAllocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+			bufAllocInfo.commandBufferCount = 1;
 
-			if (vkAllocateCommandBuffers(device, &allocInfo, &frame.commandBuffer) != VK_SUCCESS)
+			if (vkAllocateCommandBuffers(device, &bufAllocInfo, &frame.commandBuffer) != VK_SUCCESS)
 			{
 				Throw(AetherError::Vulkan(0, "Failed to allocate swapchain command buffer."));
 			}
