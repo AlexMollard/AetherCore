@@ -65,11 +65,6 @@ namespace aether
 		return glm::normalize(glm::cross(GetForward(), glm::vec3{0.0f, 1.0f, 0.0f}));
 	}
 
-	glm::vec3 Camera::GetUp() const
-	{
-		return glm::normalize(glm::cross(GetRight(), GetForward()));
-	}
-
 	// -- Setters with clamping -------------------------------------------------
 
 	void Camera::SetYawPitch(float yaw, float pitch)

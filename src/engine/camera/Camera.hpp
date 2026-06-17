@@ -54,19 +54,8 @@ namespace aether
 		// -- Free mode pose ----------------------------------------------------
 		[[nodiscard]] glm::vec3 GetPosition() const;
 
-		[[nodiscard]] float GetYaw() const
-		{
-			return m_yaw;
-		}
-
-		[[nodiscard]] float GetPitch() const
-		{
-			return m_pitch;
-		}
-
 		[[nodiscard]] glm::vec3 GetForward() const;
 		[[nodiscard]] glm::vec3 GetRight() const;
-		[[nodiscard]] glm::vec3 GetUp() const;
 
 		void SetPosition(glm::vec3 pos)
 		{
@@ -89,11 +78,6 @@ namespace aether
 		[[nodiscard]] float GetOrbitYaw() const
 		{
 			return m_orbitYaw;
-		}
-
-		[[nodiscard]] float GetOrbitPitch() const
-		{
-			return m_orbitPitch;
 		}
 
 		void SetOrbitTarget(glm::vec3 target)
@@ -120,71 +104,10 @@ namespace aether
 			return m_far;
 		}
 
-		void SetFovDegrees(float fov)
-		{
-			m_fovDeg = fov;
-		}
-
-		void SetNearPlane(float n)
-		{
-			m_near = n;
-		}
-
-		void SetFarPlane(float f)
-		{
-			m_far = f;
-		}
-
 		// -- Mode --------------------------------------------------------------
-		[[nodiscard]] CameraMode GetMode() const
-		{
-			return m_mode;
-		}
-
 		void SetMode(CameraMode mode)
 		{
 			m_mode = mode;
-		}
-
-		// -- Speeds ------------------------------------------------------------
-		[[nodiscard]] float GetMoveSpeed() const
-		{
-			return m_moveSpeed;
-		}
-
-		[[nodiscard]] float GetLookSpeed() const
-		{
-			return m_lookSpeed;
-		}
-
-		[[nodiscard]] float GetOrbitSpeed() const
-		{
-			return m_orbitSpeed;
-		}
-
-		[[nodiscard]] float GetZoomSpeed() const
-		{
-			return m_zoomSpeed;
-		}
-
-		void SetMoveSpeed(float s)
-		{
-			m_moveSpeed = s;
-		}
-
-		void SetLookSpeed(float s)
-		{
-			m_lookSpeed = s;
-		}
-
-		void SetOrbitSpeed(float s)
-		{
-			m_orbitSpeed = s;
-		}
-
-		void SetZoomSpeed(float s)
-		{
-			m_zoomSpeed = s;
 		}
 
 		// Called once per frame by CameraManager::Update. No-ops for Manual cameras.
