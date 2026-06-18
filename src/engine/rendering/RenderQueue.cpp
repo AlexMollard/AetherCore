@@ -138,22 +138,22 @@ namespace aether
 
 			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
 
-		{
-			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
-				const gpu::BufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
-				        .usage = kAnimationSsboFlags,
-				        .debugName = "RenderQueue.SkinPalette",
-				};
-				m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
-				if (!m_skinPalette[i].handle.IsValid())
+				for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 				{
-					Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
+					const gpu::BufferDesc desc{
+					        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
+					        .usage = kAnimationSsboFlags,
+					        .debugName = "RenderQueue.SkinPalette",
+					};
+					m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+					if (!m_skinPalette[i].handle.IsValid())
+					{
+						Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
+					}
+					m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
 				}
-				m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
 			}
-		}
 
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
@@ -324,8 +324,7 @@ namespace aether
 		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
 		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address;
 		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPalette[frameSlot].address : 0;
-		const gpu::DeviceAddress currSampledPosesAddr =
-		        (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
+		const gpu::DeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
 		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address : 0;
 		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
 		m_cachedSkinPaletteAddr = currSkinPaletteAddr;

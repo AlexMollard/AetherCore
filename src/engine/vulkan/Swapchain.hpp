@@ -22,7 +22,11 @@ namespace aether
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
 		Swapchain() = default;
-		~Swapchain() { Shutdown(m_device); }
+
+		~Swapchain()
+		{
+			Shutdown(m_device);
+		}
 
 		Swapchain(const Swapchain&) = delete;
 		Swapchain& operator=(const Swapchain&) = delete;

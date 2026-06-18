@@ -17,9 +17,9 @@ namespace aether::vkutil
 #endif
 
 		const VkShaderModuleCreateInfo info{
-			.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-			.codeSize = spirv.size(),
-			.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data()),
+		        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+		        .codeSize = spirv.size(),
+		        .pCode = reinterpret_cast<const std::uint32_t*>(spirv.data()),
 		};
 
 		VkShaderModule mod = VK_NULL_HANDLE;

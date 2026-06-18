@@ -36,14 +36,16 @@ namespace aether
 	public:
 		Texture() = default;
 
-		~Texture() { Destroy(); }
+		~Texture()
+		{
+			Destroy();
+		}
 
 		Texture(const Texture&) = delete;
 		Texture& operator=(const Texture&) = delete;
 
 		Texture(Texture&& other) noexcept
-		        : m_handle(std::exchange(other.m_handle, {}))
-		        , m_bindlessSlot(std::exchange(other.m_bindlessSlot, 0xFFFFFFFFu))
+		      : m_handle(std::exchange(other.m_handle, {})), m_bindlessSlot(std::exchange(other.m_bindlessSlot, 0xFFFFFFFFu))
 		{
 		}
 

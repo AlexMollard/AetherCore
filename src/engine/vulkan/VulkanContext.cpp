@@ -404,7 +404,7 @@ namespace aether
 		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
-		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT | VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT;
 		allocatorCreateInfo.physicalDevice = physicalDeviceResult.value().physical_device;
 		allocatorCreateInfo.device = m_device->device;
 		allocatorCreateInfo.instance = m_instance->instance;

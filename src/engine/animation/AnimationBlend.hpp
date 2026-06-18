@@ -20,10 +20,10 @@ namespace aether
 	class AnimationBlendSystem
 	{
 	public:
-	void Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount);
-	void Shutdown(gpu::Device device);
+		void Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount);
+		void Shutdown(gpu::Device device);
 
-	void PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t frameIndex);
+		void PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t frameIndex);
 
 		void BuildBlendPush(const AnimationDatabase& animDb, gpu::DeviceAddress sampledPosesAddr);
 

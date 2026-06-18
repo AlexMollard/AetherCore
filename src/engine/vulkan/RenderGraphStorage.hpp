@@ -46,7 +46,11 @@ namespace aether
 		static constexpr VkDeviceSize kTransientHeapAlignment = 65536u;
 
 		RenderGraphStorage() = default;
-		~RenderGraphStorage() { Shutdown(); }
+
+		~RenderGraphStorage()
+		{
+			Shutdown();
+		}
 
 		RenderGraphStorage(const RenderGraphStorage&) = delete;
 		RenderGraphStorage& operator=(const RenderGraphStorage&) = delete;
@@ -171,7 +175,7 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(uint32_t transientIdx) const;
 
 		// -- Transient buffer slots ------------------------------------------
-		uint32_t AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags usage);
+		uint32_t AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags2 usage);
 		void EnsureTransientBuffers();
 
 		[[nodiscard]] gpu::Buffer ResolveTransientBuffer(uint32_t idx) const;
@@ -308,7 +312,7 @@ namespace aether
 		struct TransientBufferEntry
 		{
 			VkDeviceSize size = 0;
-			VkBufferUsageFlags usage = 0;
+			VkBufferUsageFlags2 usage = 0;
 			bool fromHeap = false;
 			gpu::BufferHandle buffer;
 			// Filled by PrepareTransientAllocations (two-pass).
@@ -359,7 +363,7 @@ namespace aether
 		void MoveToCache(TransientImageEntry& entry);
 		gpu::TextureHandle TryPullFromCache(const ImageCacheKey& key);
 		void EvictStaleCacheEntries();
-		static [[nodiscard]] ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent);
+		[[nodiscard]] static ImageCacheKey MakeCacheKey(const TransientImageEntry& entry, gpu::Extent2D extent);
 
 		static VkDeviceSize AlignUp(VkDeviceSize value, VkDeviceSize alignment)
 		{

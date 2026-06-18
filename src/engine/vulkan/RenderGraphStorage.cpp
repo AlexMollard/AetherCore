@@ -1023,10 +1023,16 @@ namespace aether
 				continue;
 			}
 
+			const VkBufferUsageFlags2CreateInfo tempUsageFlags2{
+			        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+			        .usage = entry.usage,
+			};
+
 			const VkBufferCreateInfo tempInfo{
 			        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			        .pNext = &tempUsageFlags2,
 			        .size = entry.size,
-			        .usage = entry.usage,
+			        .usage = 0,
 			};
 			VkBuffer tempBuffer = VK_NULL_HANDLE;
 			if (vkCreateBuffer(m_device, &tempInfo, nullptr, &tempBuffer) == VK_SUCCESS)
@@ -1277,7 +1283,7 @@ namespace aether
 
 	// -- Transient buffers ----------------------------------------------------
 
-	uint32_t RenderGraphStorage::AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags usage)
+	uint32_t RenderGraphStorage::AddTransientBufferSlot(VkDeviceSize size, VkBufferUsageFlags2 usage)
 	{
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{

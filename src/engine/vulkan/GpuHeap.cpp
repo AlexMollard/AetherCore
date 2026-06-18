@@ -5,6 +5,7 @@
 
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
+#include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
@@ -16,16 +17,22 @@ namespace aether
 		m_deviceRef = ctx.GetDevice().device;
 
 		constexpr gpu::BufferUsage kBaseUsage = gpu::BufferUsage::Storage | gpu::BufferUsage::TransferDst | gpu::BufferUsage::ShaderDeviceAddress;
-		const auto vkUsage = static_cast<VkBufferUsageFlags>(kBaseUsage | desc.additionalUsage);
+		const VkBufferUsageFlags2 vkUsage = gpu::ToVk(kBaseUsage | desc.additionalUsage);
+
+		const VkBufferUsageFlags2CreateInfo usageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = vkUsage,
+		};
 
 		const VkBufferCreateInfo bufferInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-			.size = desc.capacityBytes,
-			.usage = vkUsage,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageFlags2,
+		        .size = desc.capacityBytes,
+		        .usage = 0,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-			.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+		        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		VmaAllocationInfo vmaInfo{};
 		if (vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
@@ -34,8 +41,8 @@ namespace aether
 		}
 
 		const VkBufferDeviceAddressInfo addrInfo{
-			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-			.buffer = m_buffer,
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		        .buffer = m_buffer,
 		};
 		m_baseAddress = vkGetBufferDeviceAddress(m_deviceRef, &addrInfo);
 
@@ -45,7 +52,7 @@ namespace aether
 		}
 
 		const VmaVirtualBlockCreateInfo blockInfo{
-			.size = desc.capacityBytes,
+		        .size = desc.capacityBytes,
 		};
 		if (vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
 		{
@@ -78,8 +85,8 @@ namespace aether
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 
 		const VmaVirtualAllocationCreateInfo allocInfo{
-			.size = bytes,
-			.alignment = kMinAlignment,
+		        .size = bytes,
+		        .alignment = kMinAlignment,
 		};
 		VmaVirtualAllocation handle = VK_NULL_HANDLE;
 		VkDeviceSize offset = VK_WHOLE_SIZE;
@@ -108,10 +115,16 @@ namespace aether
 		assert(dstAddr >= m_baseAddress);
 		const auto dstOffset = static_cast<VkDeviceSize>(dstAddr - m_baseAddress);
 
+		const VkBufferUsageFlags2CreateInfo stagingUsageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = VK_BUFFER_USAGE_2_TRANSFER_SRC_BIT,
+		};
+
 		const VkBufferCreateInfo stagingInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &stagingUsageFlags2,
 		        .size = bytes,
-		        .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		        .usage = 0,
 		};
 		const VmaAllocationCreateInfo stagingAllocInfo{
 		        .flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT,

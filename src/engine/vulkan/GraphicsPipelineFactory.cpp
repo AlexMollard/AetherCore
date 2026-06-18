@@ -219,10 +219,15 @@ namespace aether::vkutil
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
 		};
+		const VkPipelineCreateFlags2CreateInfo vertInputFlags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = &gplVertexInput,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		};
 		const VkGraphicsPipelineCreateInfo vertInputLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &gplVertexInput,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .pNext = &vertInputFlags2,
+		        .flags = 0,
 		        .pVertexInputState = &vertexInput,
 		        .pInputAssemblyState = &inputAssembly,
 		        .layout = layout,
@@ -245,10 +250,15 @@ namespace aether::vkutil
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
 		};
+		const VkPipelineCreateFlags2CreateInfo preRasterFlags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = &gplPreRaster,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		};
 		const VkGraphicsPipelineCreateInfo preRasterLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &gplPreRaster,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .pNext = &preRasterFlags2,
+		        .flags = 0,
 		        .stageCount = 1,
 		        .pStages = &vertStage,
 		        .pInputAssemblyState = &inputAssembly,
@@ -285,10 +295,15 @@ namespace aether::vkutil
 		        .pNext = &fragShaderRenderingInfo,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
 		};
+		const VkPipelineCreateFlags2CreateInfo fragShaderFlags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = &gplFragShader,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		};
 		const VkGraphicsPipelineCreateInfo fragShaderLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &gplFragShader,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .pNext = &fragShaderFlags2,
+		        .flags = 0,
 		        .stageCount = 1,
 		        .pStages = &fragStage,
 		        .pDepthStencilState = &depthStencil,
@@ -321,10 +336,15 @@ namespace aether::vkutil
 		        .pNext = &fragOutputRenderingInfo,
 		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
 		};
+		const VkPipelineCreateFlags2CreateInfo fragOutputFlags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = &gplFragOutput,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		};
 		const VkGraphicsPipelineCreateInfo fragOutputLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &gplFragOutput,
-		        .flags = VK_PIPELINE_CREATE_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .pNext = &fragOutputFlags2,
+		        .flags = 0,
 		        .pMultisampleState = &multisampling,
 		        .pColorBlendState = &colorBlend,
 		        .layout = layout,
@@ -359,10 +379,15 @@ namespace aether::vkutil
 		        .pColorAttachmentFormats = pColorFormats,
 		        .depthAttachmentFormat = vkDepthFormat,
 		};
+		const VkPipelineCreateFlags2CreateInfo linkFlags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = &renderingInfo,
+		        .flags = VK_PIPELINE_CREATE_2_LINK_TIME_OPTIMIZATION_BIT_EXT,
+		};
 		const VkGraphicsPipelineCreateInfo linkInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &renderingInfo,
-		        .flags = VK_PIPELINE_CREATE_LINK_TIME_OPTIMIZATION_BIT_EXT,
+		        .pNext = &linkFlags2,
+		        .flags = 0,
 		        .layout = layout,
 		};
 

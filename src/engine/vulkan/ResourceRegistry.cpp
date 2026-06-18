@@ -196,10 +196,18 @@ namespace aether
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 
+		const VkBufferUsageFlags2 vkUsage = gpu::ToVk(desc.usage);
+
+		const VkBufferUsageFlags2CreateInfo usageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = vkUsage,
+		};
+
 		const VkBufferCreateInfo bufInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageFlags2,
 		        .size = desc.size,
-		        .usage = gpu::ToVk(desc.usage),
+		        .usage = 0,
 		};
 
 		const VmaAllocationCreateInfo allocInfo = MakeDeviceLocalAllocInfo();
@@ -248,12 +256,18 @@ namespace aether
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 
-		const VkBufferUsageFlags vkUsage = gpu::ToVk(desc.usage);
+		const VkBufferUsageFlags2 vkUsage = gpu::ToVk(desc.usage);
+
+		const VkBufferUsageFlags2CreateInfo usageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = vkUsage,
+		};
 
 		const VkBufferCreateInfo bufInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageFlags2,
 		        .size = desc.size,
-		        .usage = vkUsage,
+		        .usage = 0,
 		};
 
 		const VmaAllocationCreateInfo allocInfo = MakeMappedAllocInfo(desc.memoryUsage);
@@ -453,15 +467,21 @@ namespace aether
 		m_bindlessManager = mgr;
 	}
 
-	gpu::BufferHandle ResourceRegistry::CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName)
+	gpu::BufferHandle ResourceRegistry::CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags2 usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName)
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 		AE_ASSERT(m_allocator != VK_NULL_HANDLE, "ResourceRegistry not initialized");
 
+		const VkBufferUsageFlags2CreateInfo usageFlags2{
+		        .sType = VK_STRUCTURE_TYPE_BUFFER_USAGE_FLAGS_2_CREATE_INFO,
+		        .usage = usage,
+		};
+
 		const VkBufferCreateInfo bufInfo{
 		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		        .pNext = &usageFlags2,
 		        .size = size,
-		        .usage = usage,
+		        .usage = 0,
 		};
 
 		VkBuffer buffer = VK_NULL_HANDLE;
@@ -500,7 +520,7 @@ namespace aether
 		entry.size = size;
 		entry.ownsAllocation = false;
 
-		if ((usage & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) != 0)
+		if ((usage & VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT) != 0)
 		{
 			const VkBufferDeviceAddressInfo addrInfo{
 			        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,

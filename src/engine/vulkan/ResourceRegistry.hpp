@@ -75,7 +75,7 @@ namespace aether
 			VkDevice device = VK_NULL_HANDLE;
 			VmaAllocation allocation = VK_NULL_HANDLE;
 			VmaAllocator allocator = VK_NULL_HANDLE;
-			VkBufferUsageFlags usage = 0;
+			VkBufferUsageFlags2 usage = 0;
 			VkDeviceSize size = 0;
 			bool ownsAllocation = false;
 			void* mappedPtr = nullptr;
@@ -143,7 +143,7 @@ namespace aether
 		void SetBufferName(gpu::BufferHandle handle, const char* name);
 		void SetTextureName(gpu::TextureHandle handle, const char* name);
 
-		[[nodiscard]] gpu::BufferHandle CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
+		[[nodiscard]] gpu::BufferHandle CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags2 usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 		[[nodiscard]] gpu::TextureHandle CreateAliasedTexture(const gpu::TextureDesc& desc, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName = {});
 
 		// Bindless registration. BindlessManager pointer is for deferred slot-free on Destroy().

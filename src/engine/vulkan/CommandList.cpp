@@ -186,7 +186,7 @@ namespace aether::gpu
 		{
 			return;
 		}
-		vkCmdBindIndexBuffer(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), ToVkIndexType(indexType));
+		vkCmdBindIndexBuffer2(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), VK_WHOLE_SIZE, ToVkIndexType(indexType));
 	}
 
 	void CommandList::BindIndexBuffer(BufferHandle buffer, DeviceAddress offset, IndexType indexType) noexcept

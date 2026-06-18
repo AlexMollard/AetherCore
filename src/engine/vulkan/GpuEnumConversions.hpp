@@ -39,7 +39,7 @@ namespace aether::gpu
 	[[nodiscard]] VkImageUsageFlags ToVk(ImageUsage usage) noexcept;
 
 	// Buffer usage flag conversion (bit-preserving; engine bits mirror Vk bits).
-	[[nodiscard]] VkBufferUsageFlags ToVk(BufferUsage usage) noexcept;
+	[[nodiscard]] VkBufferUsageFlags2 ToVk(BufferUsage usage) noexcept;
 
 	// Image aspect flag conversion (bit-preserving).
 	[[nodiscard]] VkImageAspectFlags ToVk(ImageAspect aspect) noexcept;

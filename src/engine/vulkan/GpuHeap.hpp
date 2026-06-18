@@ -47,7 +47,11 @@ namespace aether
 		};
 
 		GpuHeap() = default;
-		~GpuHeap() { Shutdown(); }
+
+		~GpuHeap()
+		{
+			Shutdown();
+		}
 
 		GpuHeap(const GpuHeap&) = delete;
 		GpuHeap& operator=(const GpuHeap&) = delete;
