@@ -10,16 +10,16 @@
 
 namespace aether::vkutil
 {
-	Expected<VkShaderModule> CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
+	Expected<UniqueShaderModule> CreateShaderModule(VkDevice device, const std::vector<std::byte>& spirv, const char* owner)
 	{
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		AftermathContext::RegisterShaderBinary(spirv.data(), static_cast<uint32_t>(spirv.size()));
 #endif
 
 		const VkShaderModuleCreateInfo info{
-		        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		        .codeSize = spirv.size(),
-		        .pCode = reinterpret_cast<const std::uint32_t*>(spirv.data()),
+			.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+			.codeSize = spirv.size(),
+			.pCode = reinterpret_cast<const std::uint32_t*>(spirv.data()),
 		};
 
 		VkShaderModule mod = VK_NULL_HANDLE;
@@ -31,6 +31,6 @@ namespace aether::vkutil
 
 		vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(mod), VK_OBJECT_TYPE_SHADER_MODULE, owner);
 
-		return mod;
+		return UniqueShaderModule{device, mod};
 	}
 } // namespace aether::vkutil

@@ -1,6 +1,5 @@
 #include "vulkan/GpuHeap.hpp"
 
-#include <algorithm>
 #include <cassert>
 #include <cstring>
 
@@ -20,13 +19,13 @@ namespace aether
 		const auto vkUsage = static_cast<VkBufferUsageFlags>(kBaseUsage | desc.additionalUsage);
 
 		const VkBufferCreateInfo bufferInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		        .size = desc.capacityBytes,
-		        .usage = vkUsage,
+			.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+			.size = desc.capacityBytes,
+			.usage = vkUsage,
 		};
 		const VmaAllocationCreateInfo allocInfo{
-		        .flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
-		        .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
+			.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT,
+			.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
 		};
 		VmaAllocationInfo vmaInfo{};
 		if (vmaCreateBuffer(m_allocatorRef, &bufferInfo, &allocInfo, &m_buffer, &m_bufferAllocation, &vmaInfo) != VK_SUCCESS)
@@ -35,8 +34,8 @@ namespace aether
 		}
 
 		const VkBufferDeviceAddressInfo addrInfo{
-		        .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-		        .buffer = m_buffer,
+			.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+			.buffer = m_buffer,
 		};
 		m_baseAddress = vkGetBufferDeviceAddress(m_deviceRef, &addrInfo);
 
@@ -45,18 +44,32 @@ namespace aether
 			vkutil::SetObjectName(m_deviceRef, reinterpret_cast<std::uint64_t>(m_buffer), VK_OBJECT_TYPE_BUFFER, desc.debugName);
 		}
 
-		m_freeList.push_back({.offset = 0, .size = desc.capacityBytes});
+		const VmaVirtualBlockCreateInfo blockInfo{
+			.size = desc.capacityBytes,
+		};
+		if (vmaCreateVirtualBlock(&blockInfo, &m_virtualBlock) != VK_SUCCESS)
+		{
+			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);
+			m_buffer = VK_NULL_HANDLE;
+			m_bufferAllocation = VK_NULL_HANDLE;
+			Throw(AetherError::Vulkan(0, "GpuHeap: failed to create VmaVirtualBlock"));
+		}
 	}
 
 	void GpuHeap::Shutdown()
 	{
+		if (m_virtualBlock != VK_NULL_HANDLE)
+		{
+			vmaDestroyVirtualBlock(m_virtualBlock);
+			m_virtualBlock = VK_NULL_HANDLE;
+		}
+		m_allocations.clear();
 		if (m_buffer != VK_NULL_HANDLE)
 		{
 			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);
 			m_buffer = VK_NULL_HANDLE;
 			m_bufferAllocation = VK_NULL_HANDLE;
 		}
-		m_freeList.clear();
 	}
 
 	VkDeviceSize GpuHeap::AllocBytes(VkDeviceSize bytes)
@@ -64,72 +77,30 @@ namespace aether
 		constexpr VkDeviceSize kMinAlignment = 16;
 		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
 
-		for (std::size_t idx = 0; idx < m_freeList.size(); ++idx)
+		const VmaVirtualAllocationCreateInfo allocInfo{
+			.size = bytes,
+			.alignment = kMinAlignment,
+		};
+		VmaVirtualAllocation handle = VK_NULL_HANDLE;
+		VkDeviceSize offset = VK_WHOLE_SIZE;
+		if (vmaVirtualAllocate(m_virtualBlock, &allocInfo, &handle, &offset) != VK_SUCCESS)
 		{
-			FreeBlock& blk = m_freeList[idx];
-
-			const VkDeviceSize alignedOffset = (blk.offset + kMinAlignment - 1) & ~(kMinAlignment - 1);
-			const VkDeviceSize waste = alignedOffset - blk.offset;
-			if (waste >= blk.size)
-			{
-				continue;
-			}
-			const VkDeviceSize effectiveSize = blk.size - waste;
-
-			if (effectiveSize < bytes)
-			{
-				continue;
-			}
-
-			// Split off alignment waste as a separate free block.
-			if (waste > 0)
-			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{.offset = alignedOffset, .size = effectiveSize});
-				m_freeList[idx].size = waste;
-				++idx;
-			}
-
-			// Split off remaining free space after the allocation.
-			if (effectiveSize > bytes)
-			{
-				m_freeList.insert(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx) + 1, FreeBlock{.offset = alignedOffset + bytes, .size = effectiveSize - bytes});
-				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
-			}
-			else
-			{
-				m_freeList.erase(m_freeList.begin() + static_cast<std::ptrdiff_t>(idx));
-			}
-
-			return alignedOffset;
+			return kInvalidOffset;
 		}
-		return kInvalidOffset;
+		const gpu::DeviceAddress addr = m_baseAddress + offset;
+		m_allocations[addr] = handle;
+		return offset;
 	}
 
-	void GpuHeap::FreeBytes(VkDeviceSize offset, VkDeviceSize bytes)
+	void GpuHeap::FreeBytes(gpu::DeviceAddress addr)
 	{
-		// Round up to match AllocBytes alignment.
-		constexpr VkDeviceSize kMinAlignment = 16;
-		bytes = (bytes + kMinAlignment - 1) & ~(kMinAlignment - 1);
-		auto it = std::lower_bound(m_freeList.begin(), m_freeList.end(), offset, [](const FreeBlock& b, VkDeviceSize o) { return b.offset < o; });
-		it = m_freeList.insert(it, {.offset = offset, .size = bytes});
-
-		// Merge with next block if adjacent.
-		if (const auto next = std::next(it); next != m_freeList.end() && it->offset + it->size == next->offset)
+		const auto it = m_allocations.find(addr);
+		if (it == m_allocations.end())
 		{
-			it->size += next->size;
-			m_freeList.erase(next);
+			return;
 		}
-
-		// Merge with previous block if adjacent.
-		if (it != m_freeList.begin())
-		{
-			const auto prev = std::prev(it);
-			if (prev->offset + prev->size == it->offset)
-			{
-				prev->size += it->size;
-				m_freeList.erase(it);
-			}
-		}
+		vmaVirtualFree(m_virtualBlock, it->second);
+		m_allocations.erase(it);
 	}
 
 	void GpuHeap::UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool)

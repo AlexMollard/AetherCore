@@ -200,9 +200,9 @@ namespace aether
 
 		[[nodiscard]] gpu::DeviceAddress GetSkinPaletteBufferAddress() const
 		{
-			// Single device-local buffer shared across all frames. The cached
-			// address is set on the first frame and remains stable.
-			return m_skinPaletteAddress;
+			// Per-slot device-local buffer; return slot 0's address as a
+			// representative handle (used only for diagnostic logging).
+			return m_skinPalette[0].address;
 		}
 
 		// Emit graphics draws from indirect output.
@@ -260,11 +260,7 @@ namespace aether
 		std::array<DevicePerFrame, kFramesInFlight> m_outputIndirect;
 		std::array<DevicePerFrame, kFramesInFlight> m_sampledPoses;
 		std::array<DevicePerFrame, kFramesInFlight> m_nodeGlobalTransforms;
-
-		// Single device-local buffer shared across all frames (no per-frame
-		// aliasing - the contents are frame-atomic by convention).
-		gpu::BufferHandle m_skinPaletteHandle{};
-		gpu::DeviceAddress m_skinPaletteAddress = 0;
+		std::array<DevicePerFrame, kFramesInFlight> m_skinPalette;
 
 		// CPU-write typed view cached on Init for hot-path access.
 		DrawContracts::InstanceData* m_instanceDataMapped = nullptr;

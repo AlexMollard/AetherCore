@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <unordered_map>
 #include <vector>
 #include <vk_mem_alloc.h>
 
@@ -14,7 +15,9 @@ namespace aether
 	class VulkanContext;
 
 	// A device-local GPU memory arena backed by a single large VkBuffer.
-	// Suballocates typed regions via a sorted free-list with coalescing.
+	// Suballocates typed regions via a VmaVirtualBlock (VMA's virtual
+	// allocator: best-fit, coalescing, alignment — same pattern as
+	// RenderGraphStorage's transient heap).
 	//
 	// Think of it as GPU malloc: Alloc<T> is new[], Free<T> is delete[].
 	// All allocations return a GpuSpan<T> whose DeviceAddress() is directly
@@ -77,8 +80,7 @@ namespace aether
 			{
 				return;
 			}
-			const auto offset = static_cast<VkDeviceSize>(span.address - m_baseAddress);
-			FreeBytes(offset, span.ByteSize());
+			FreeBytes(span.address);
 			span = {};
 		}
 
@@ -119,21 +121,19 @@ namespace aether
 	private:
 		static constexpr VkDeviceSize kInvalidOffset = ~0ull;
 
-		struct FreeBlock
-		{
-			VkDeviceSize offset;
-			VkDeviceSize size;
-		};
-
 		VkBuffer m_buffer = VK_NULL_HANDLE;
 		VmaAllocation m_bufferAllocation = VK_NULL_HANDLE;
+		VmaVirtualBlock m_virtualBlock = VK_NULL_HANDLE;
 		gpu::DeviceAddress m_baseAddress = 0;
 		VmaAllocator m_allocatorRef = nullptr;
 		VkDevice m_deviceRef = VK_NULL_HANDLE;
-		std::vector<FreeBlock> m_freeList;
+		// Maps each allocation's device address to its VmaVirtualAllocation
+		// handle so Free() can call vmaVirtualFree without coupling GpuSpan
+		// to VMA. Load-time only, not a hot-path structure.
+		std::unordered_map<gpu::DeviceAddress, VmaVirtualAllocation> m_allocations;
 
 		VkDeviceSize AllocBytes(VkDeviceSize bytes);
-		void FreeBytes(VkDeviceSize offset, VkDeviceSize bytes);
+		void FreeBytes(gpu::DeviceAddress addr);
 		void UploadBytes(gpu::DeviceAddress dstAddr, const void* src, VkDeviceSize bytes, VkDevice device, VkQueue queue, VkCommandPool pool);
 	};
 } // namespace aether

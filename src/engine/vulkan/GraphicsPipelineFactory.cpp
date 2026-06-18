@@ -33,6 +33,10 @@ namespace aether::vkutil
 		const std::string vertName = std::string(desc.shaderVfsPath) + ".vert";
 		AE_EXPECT_OR_THROW(vertModule, vkutil::CreateShaderModule(device, *spirv, vertName.c_str()));
 
+		// fragModuleOwned must outlive all pipeline-create calls below —
+		// vkCreateGraphicsPipelines copies SPIR-V at create time, but the
+		// module handle must still be valid when the call is made.
+		UniqueShaderModule fragModuleOwned;
 		VkShaderModule fragModule = VK_NULL_HANDLE;
 		const bool hasSeparateFragment = !desc.fragmentVfsPath.empty();
 		if (hasSeparateFragment)
@@ -40,29 +44,20 @@ namespace aether::vkutil
 			AE_TRY(fragSpirv, io::FileSystem::ReadFile(desc.fragmentVfsPath));
 			if (fragSpirv->empty())
 			{
-				vkDestroyShaderModule(device, vertModule, nullptr);
 				AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: fragment shader not found: " + std::string(desc.fragmentVfsPath)));
 			}
 			const std::string fragName = std::string(desc.fragmentVfsPath) + ".frag";
-			{
-				auto fragResult = vkutil::CreateShaderModule(device, *fragSpirv, fragName.c_str());
-				AE_EXPECT_OR_THROW_VOID(fragResult);
-				fragModule = *fragResult;
-			}
+			AE_EXPECT_OR_THROW(fragModuleTemp, vkutil::CreateShaderModule(device, *fragSpirv, fragName.c_str()));
+			fragModuleOwned = std::move(fragModuleTemp);
+			fragModule = fragModuleOwned.Get();
 		}
 		else
 		{
-			fragModule = vertModule;
+			fragModule = vertModule.Get();
 		}
 
-		auto destroyModules = [&]()
-		{
-			if (hasSeparateFragment && fragModule != VK_NULL_HANDLE)
-			{
-				vkDestroyShaderModule(device, fragModule, nullptr);
-			}
-			vkDestroyShaderModule(device, vertModule, nullptr);
-		};
+		// Shader modules are RAII-owned: vertModule and fragModuleOwned
+		// auto-destroy at scope exit on every path, including errors.
 
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);
@@ -191,14 +186,13 @@ namespace aether::vkutil
 		};
 		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
 		{
-			destroyModules();
 			AE_UNEXPECTED(AetherError::Vulkan(0, "Failed to create pipeline layout."));
 		}
 
 		const VkPipelineShaderStageCreateInfo vertStage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-		        .module = vertModule,
+		        .module = vertModule.Get(),
 		        .pName = vertEntry.c_str(),
 		};
 		const VkPipelineShaderStageCreateInfo fragStage{
@@ -237,7 +231,6 @@ namespace aether::vkutil
 		VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
 		if (result != VK_SUCCESS)
 		{
-			destroyModules();
 			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
 		}
@@ -268,7 +261,6 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
 		if (result != VK_SUCCESS)
 		{
-			destroyModules();
 			// Best-effort cleanup; the entry was never returned to the
 			// registry so the registry won't double-free these.
 			vkDestroyPipeline(device, vertInputLib, nullptr);
@@ -306,7 +298,6 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragShaderLibInfo, nullptr, &fragShaderLib);
 		if (result != VK_SUCCESS)
 		{
-			destroyModules();
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipelineLayout(device, layout, nullptr);
@@ -342,7 +333,6 @@ namespace aether::vkutil
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragOutputLibInfo, nullptr, &fragOutputLib);
 		if (result != VK_SUCCESS)
 		{
-			destroyModules();
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipeline(device, fragShaderLib, nullptr);
@@ -379,7 +369,7 @@ namespace aether::vkutil
 		VkPipeline pipeline = VK_NULL_HANDLE;
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
 
-		destroyModules();
+		// Shader modules RAII-destroy here regardless of result.
 
 		if (result != VK_SUCCESS)
 		{

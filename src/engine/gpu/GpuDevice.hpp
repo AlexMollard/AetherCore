@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuTypes.hpp"
@@ -32,7 +33,7 @@ namespace aether
 			bool enableVsync = true;
 		};
 
-		GpuDevice() = default;
+		GpuDevice();
 		~GpuDevice();
 
 		GpuDevice(const GpuDevice&) = delete;
@@ -104,7 +105,7 @@ namespace aether
 		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 
 	private:
-		GraphicsDevice* m_gfx = nullptr;
+		std::unique_ptr<GraphicsDevice> m_gfx;
 		std::function<void()> m_swapchainRecreatedCallback;
 	};
 } // namespace aether

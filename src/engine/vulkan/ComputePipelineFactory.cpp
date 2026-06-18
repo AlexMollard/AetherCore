@@ -41,7 +41,6 @@ namespace aether::vkutil
 			}
 			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
 			{
-				vkDestroyShaderModule(device, shaderModule, nullptr);
 				AE_UNEXPECTED(AetherError::Vulkan(0, "ComputePipeline: failed to create pipeline layout for " + owner));
 			}
 		}
@@ -50,7 +49,7 @@ namespace aether::vkutil
 		const VkPipelineShaderStageCreateInfo stage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .module = shaderModule,
+		        .module = shaderModule.Get(),
 		        .pName = entry.c_str(),
 		};
 		VkPipeline vkPipeline = VK_NULL_HANDLE;
@@ -60,7 +59,7 @@ namespace aether::vkutil
 		        .layout = vkLayout,
 		};
 		const VkResult result = vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &vkPipeline);
-		vkDestroyShaderModule(device, shaderModule, nullptr);
+		// shaderModule RAII-destroys here regardless of result.
 
 		if (result != VK_SUCCESS)
 		{

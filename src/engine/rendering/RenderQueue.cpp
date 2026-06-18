@@ -138,19 +138,22 @@ namespace aether
 
 			constexpr gpu::BufferUsage kAnimationSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst;
 
+		{
+			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
 				const gpu::BufferDesc desc{
-				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) * static_cast<gpu::DeviceSize>(kFramesInFlight),
+				        .size = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4),
 				        .usage = kAnimationSsboFlags,
 				        .debugName = "RenderQueue.SkinPalette",
 				};
-				m_skinPaletteHandle = gpu::ResourceRegistry::CreateBuffer(desc);
-				if (!m_skinPaletteHandle.IsValid())
+				m_skinPalette[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
+				if (!m_skinPalette[i].handle.IsValid())
 				{
 					Throw(AetherError::Engine("RenderQueue: SkinPalette CreateBuffer failed"));
 				}
-				m_skinPaletteAddress = gpu::ResourceRegistry::ResolveBuffer(m_skinPaletteHandle).deviceAddress;
+				m_skinPalette[i].address = gpu::ResourceRegistry::ResolveBuffer(m_skinPalette[i].handle).deviceAddress;
 			}
+		}
 
 			for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
 			{
@@ -182,7 +185,7 @@ namespace aether
 				m_nodeGlobalTransforms[i].address = gpu::ResourceRegistry::ResolveBuffer(m_nodeGlobalTransforms[i].handle).deviceAddress;
 			}
 
-			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}", m_skinPaletteAddress, m_sampledPoses[0].address, m_nodeGlobalTransforms[0].address);
+			AE_INFO(LogCategory::Render, "RenderQueue animation buffers: skinPalette[0]=0x{:x}, sampledPoses[0]=0x{:x}, nodeGlobalTransforms[0]=0x{:x}", m_skinPalette[0].address, m_sampledPoses[0].address, m_nodeGlobalTransforms[0].address);
 		}
 
 		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
@@ -232,13 +235,7 @@ namespace aether
 		DestroyAll(m_outputIndirect);
 		DestroyAll(m_sampledPoses);
 		DestroyAll(m_nodeGlobalTransforms);
-
-		if (m_skinPaletteHandle.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(m_skinPaletteHandle);
-			m_skinPaletteHandle = {};
-		}
-		m_skinPaletteAddress = 0;
+		DestroyAll(m_skinPalette);
 
 		m_instanceDataMapped = nullptr;
 		m_cullInputMapped = nullptr;
@@ -306,10 +303,10 @@ namespace aether
 		if (!m_animationSlotCleared[frameSlot])
 		{
 			m_animationSlotCleared[frameSlot] = true;
-			if (m_skinPaletteHandle.IsValid())
+			if (m_skinPalette[frameSlot].handle.IsValid())
 			{
 				const gpu::DeviceSize slotSize = static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4);
-				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_skinPaletteHandle), static_cast<gpu::DeviceAddress>(frameSlot) * slotSize, slotSize, 0);
+				cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_skinPalette[frameSlot].handle), 0, slotSize, 0);
 			}
 			if (m_sampledPoses[frameSlot].handle.IsValid())
 			{
@@ -326,7 +323,7 @@ namespace aether
 		m_cachedDrawBase = 0;
 		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
 		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address;
-		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPaletteAddress + static_cast<gpu::DeviceSize>(frameSlot) * static_cast<gpu::DeviceSize>(m_maxSkinJoints) * sizeof(glm::mat4) : 0;
+		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPalette[frameSlot].address : 0;
 		const gpu::DeviceAddress currSampledPosesAddr =
 		        (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
 		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address : 0;

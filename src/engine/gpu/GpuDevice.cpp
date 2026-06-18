@@ -16,16 +16,14 @@
 
 namespace aether
 {
-	GpuDevice::~GpuDevice()
-	{
-		delete m_gfx;
-		m_gfx = nullptr;
-	}
+	GpuDevice::GpuDevice() = default;
+
+	GpuDevice::~GpuDevice() = default;
 
 	void GpuDevice::Init(ServiceContainer& services, const Config& config)
 	{
 		AE_PROFILE_ZONE();
-		m_gfx = new GraphicsDevice();
+		m_gfx = std::make_unique<GraphicsDevice>();
 		m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync});
 
 		gpu::ResourceRegistryInitDesc regInit{};
@@ -47,8 +45,7 @@ namespace aether
 		if (m_gfx)
 		{
 			m_gfx->Shutdown();
-			delete m_gfx;
-			m_gfx = nullptr;
+			m_gfx.reset();
 		}
 	}
 
