@@ -20,16 +20,15 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (jobIdx >= pc.jobCount)
         return;
 
-    AnimatorSampleJob* jobs = (AnimatorSampleJob*)(pc.animatorJobsAddr);
-    AnimatorSampleJob job = jobs[jobIdx];
+    AnimatorSampleJob job = pc.animatorJobs.Load(jobIdx);
 
     if (nodeIdx >= job.nodeCount)
         return;
 
-    float4* bindT = (float4*)(pc.bindTranslationsAddr);
-    float4* bindR = (float4*)(pc.bindRotationsAddr);
-    float4* bindS = (float4*)(pc.bindScalesAddr);
-    SampledNodePose* poses = (SampledNodePose*)(pc.sampledPosesAddr);
+    float4* bindT = pc.bindTranslations.Ptr();
+    float4* bindR = pc.bindRotations.Ptr();
+    float4* bindS = pc.bindScales.Ptr();
+    SampledNodePose* poses = pc.sampledPoses.Ptr();
 
     const uint poseIdx = job.nodePoseOffset + nodeIdx;
     poses[poseIdx].translation = bindT[nodeIdx];

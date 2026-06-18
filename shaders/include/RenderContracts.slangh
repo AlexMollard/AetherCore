@@ -1,8 +1,15 @@
 #ifndef AETHER_RENDER_CONTRACTS_SLANGH
 #define AETHER_RENDER_CONTRACTS_SLANGH
 
+#include "DevicePointer.slangh"
+
 // Shared CPU -> GPU render contracts.
-// Keep in sync with src/engine/DrawPushConstants.hpp.
+// Keep in sync with src/engine/rendering/GpuContracts.hpp.
+//
+// Address fields are declared as DevicePtr<T> on the shader side. The host
+// (C++) writes plain gpu::DeviceAddress (uint64_t) values at the same offsets;
+// DevicePtr<T> is layout-identical to uint64_t, so the binary contract is
+// unchanged. The static_asserts in GpuContracts.hpp guard the host layout.
 
 struct DrawInstanceData
 {
@@ -17,9 +24,9 @@ struct DrawInstanceData
 
 struct DrawPushConstants
 {
-    [[vk::offset(0)]] uint64_t frameAddr;
-    [[vk::offset(8)]] uint64_t instanceDataAddr;
-    [[vk::offset(16)]] uint64_t skinPaletteAddr;
+    [[vk::offset(0)]]  DevicePtr<FrameConstantsData> frame;
+    [[vk::offset(8)]]  DevicePtr<DrawInstanceData>   instanceData;
+    [[vk::offset(16)]] DevicePtr<float4x4>           skinPalette; // float4x4 joints; 0 means unskinned
 };
 
 struct CullDrawInput
@@ -44,31 +51,31 @@ struct CullBatch
 
 struct CullPushConstants
 {
-    [[vk::offset(0)]] uint64_t frameAddr;
-    [[vk::offset(8)]] uint64_t instanceDataAddr;
-    [[vk::offset(16)]] uint64_t inputCmdAddr;
-    [[vk::offset(24)]] uint64_t outputCmdAddr;
-    [[vk::offset(32)]] uint64_t batchDescAddr;
-    [[vk::offset(40)]] uint64_t batchCountAddr;
-    [[vk::offset(48)]] uint totalDrawCount;
-    [[vk::offset(52)]] uint debugFlags;
-    [[vk::offset(56)]] uint _pad0;
-    [[vk::offset(60)]] uint _pad1;
+    [[vk::offset(0)]]  DevicePtr<FrameConstantsData> frame;
+    [[vk::offset(8)]]  DevicePtr<DrawInstanceData>   instanceData;
+    [[vk::offset(16)]] DevicePtr<CullDrawInput>      inputCmd;
+    [[vk::offset(24)]] DevicePtr<uint>               outputCmd;   // VkDrawIndexedIndirectCommand stream (5 uint32 per draw)
+    [[vk::offset(32)]] DevicePtr<CullBatch>          batchDesc;
+    [[vk::offset(40)]] uint64_t                      batchCountAddr; // unused, reserved
+    [[vk::offset(48)]] uint                          totalDrawCount;
+    [[vk::offset(52)]] uint                          debugFlags;
+    [[vk::offset(56)]] uint                          _pad0;
+    [[vk::offset(60)]] uint                          _pad1;
 };
 
 static const uint kCullMultiFrustumCount = 3u;
 
 struct CullMultiPushConstants
 {
-    [[vk::offset(0)]]  uint64_t frameAddrs[kCullMultiFrustumCount];
-    [[vk::offset(24)]] uint64_t instanceDataAddr;
-    [[vk::offset(32)]] uint64_t inputCmdAddr;
-    [[vk::offset(40)]] uint64_t outputCmdAddr;
-    [[vk::offset(48)]] uint64_t batchDescAddr;
-    [[vk::offset(56)]] uint     totalDrawCount;
-    [[vk::offset(60)]] uint     outputCascadeStride; // bytes per cascade region
-    [[vk::offset(64)]] uint     debugFlags;
-    [[vk::offset(68)]] uint     _pad0;
+    [[vk::offset(0)]]  DevicePtr<FrameConstantsData> frame[kCullMultiFrustumCount];
+    [[vk::offset(24)]] DevicePtr<DrawInstanceData>   instanceData;
+    [[vk::offset(32)]] DevicePtr<CullDrawInput>      inputCmd;
+    [[vk::offset(40)]] DevicePtr<uint>               outputCmd;
+    [[vk::offset(48)]] DevicePtr<CullBatch>          batchDesc;
+    [[vk::offset(56)]] uint                          totalDrawCount;
+    [[vk::offset(60)]] uint                          outputCascadeStride; // bytes per cascade region
+    [[vk::offset(64)]] uint                          debugFlags;
+    [[vk::offset(68)]] uint                          _pad0;
 };
 
 static const uint kCullDebugForceVisibleBit = 1u;

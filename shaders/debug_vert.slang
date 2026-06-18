@@ -1,7 +1,7 @@
 // Debug wireframe renderer - vertex shader
 //
 // Push constants (88 bytes at offset 0):
-//   offset  0 : uint64_t  frameAddr   BDA -> FrameConstantsData (viewProj lives here)
+//   offset  0 : DevicePtr<FrameConstantsData> frame  (viewProj lives here)
 //   offset  8 : float4    tintColor   multiplies into per-vertex color
 //   offset 24 : float4x4  model       per-draw world transform
 //
@@ -11,11 +11,12 @@
 //
 // Diagnostic: tintColor.w == 2.0 -> bypass viewProj, treat input.position as NDC.
 
+#include "include/DevicePointer.slangh"
 #include "include/FrameConstants.slangh"
 
 struct DebugPushConstants
 {
-    uint64_t frameAddr;
+    DevicePtr<FrameConstantsData> frame;
     float4   tintColor;
     float4x4 model;
 };
@@ -45,7 +46,7 @@ VSOutput main(VSInput input)
     }
     else
     {
-        FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+        FrameConstantsData* fc = pc.frame.Ptr();
         output.position = mul(fc->viewProj, mul(pc.model, float4(input.position, 1.0)));
         output.color = float4(input.color.rgb * pc.tintColor.rgb, input.color.a);
     }

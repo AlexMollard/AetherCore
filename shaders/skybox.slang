@@ -5,15 +5,16 @@
 // scattering, stars, and a moon by extending EvalSky() or adding passes.
 //
 // Push constant  (8 bytes):
-//   offset 0 : uint64_t  frameAddr   BDA -> FrameConstantsData
+//   offset 0 : DevicePtr<FrameConstantsData> frame
 //
 // No descriptor sets - all data comes from the push-constant BDA pointer.
 
+#include "include/DevicePointer.slangh"
 #include "include/FrameConstants.slangh"
 
 struct SkyboxPush
 {
-    uint64_t frameAddr;
+    DevicePtr<FrameConstantsData> frame;
 };
 [[vk::push_constant]] SkyboxPush pc;
 
@@ -175,7 +176,7 @@ float3 EvalSky(
 [shader("fragment")]
 float4 fragmentMain(VSOut input) : SV_Target0
 {
-    FrameConstantsData* fc = (FrameConstantsData*)pc.frameAddr;
+    FrameConstantsData* fc = pc.frame.Ptr();
 
     // ── Step 1: NDC -> view-space direction ──────────────────────────────
     // GLM perspective (Vulkan variant) column-major layout:

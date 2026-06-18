@@ -11,8 +11,8 @@ static const uint kThreads      = 256u;
 
 struct BuildPush
 {
-	uint64_t commandDataAddr;
-	uint64_t indirectCmdAddr;
+	DevicePtr<DrawCommandData>   commandData;
+	DevicePtr<DrawIndirectCommand> indirectCmd;
 	uint N;            // padded element count (next power of two)
 	uint stage;        // bitonic stage (2,4,8,...,N) for global path, or 0 for indirect-write
 	uint step;         // compare distance (global path only)
@@ -50,7 +50,7 @@ void main(uint3 tid : SV_GroupThreadID, uint3 dtid : SV_DispatchThreadID)
 	// Load elements into shared memory, run local bitonic sort, write back.
 	void localSortPass(uint3 tid)
 	{
-		DrawCommandData* commands = (DrawCommandData*)pc.commandDataAddr;
+		DrawCommandData* commands = pc.commandData.Ptr();
 
 		// Coalesced load. Threads beyond pc.N must still reach every barrier
 		// below but must never touch shared memory (out-of-bounds).
@@ -116,7 +116,7 @@ void globalSwapPass(uint3 dtid)
 	if (i >= halfN)
 		return;
 
-	DrawCommandData* commands = (DrawCommandData*)pc.commandDataAddr;
+	DrawCommandData* commands = pc.commandData.Ptr();
 
 	uint ix = i ^ pc.step;
 	bool ascending = ((i & pc.stage) == 0u);
@@ -142,7 +142,7 @@ void writeIndirectPass(uint3 dtid)
 	if (dtid.x != 0u)
 		return;
 
-	DrawIndirectCommand* indirect = (DrawIndirectCommand*)pc.indirectCmdAddr;
+	DrawIndirectCommand* indirect = pc.indirectCmd.Ptr();
 	indirect[0].vertexCount = 6;
 	indirect[0].instanceCount = pc.actualCount;
 	indirect[0].firstVertex = 0;

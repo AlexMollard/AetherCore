@@ -9,16 +9,16 @@
 //   - Thread globalId == draw index in [0, totalDrawCount).
 //
 // Push constants (CullPushConstants, 64 bytes):
-//   offset  0 : uint64  frameAddr        BDA -> FrameConstantsData
-//   offset  8 : uint64  instanceDataAddr BDA -> DrawInstanceData[]
-//   offset 16 : uint64  inputCmdAddr     BDA -> CullDrawInput[] (prototype commands)
-//   offset 24 : uint64  outputCmdAddr    BDA -> uint32[] (VkDrawIndexedIndirectCommand array)
-//   offset 32 : uint64  batchDescAddr    BDA -> CullBatch[]
-//   offset 40 : uint64  batchCountAddr   BDA -> (unused, reserved)
-//   offset 48 : uint32  totalDrawCount
-//   offset 52 : uint32  debugFlags bit0=force all draws visible
-//   offset 56 : uint32  _pad0
-//   offset 60 : uint32  _pad1
+//   offset  0 : DevicePtr<FrameConstantsData> frame
+//   offset  8 : DevicePtr<DrawInstanceData>   instanceData
+//   offset 16 : DevicePtr<CullDrawInput>      inputCmd   (prototype commands)
+//   offset 24 : DevicePtr<uint>               outputCmd  (VkDrawIndexedIndirectCommand array)
+//   offset 32 : DevicePtr<CullBatch>          batchDesc
+//   offset 40 : uint64                        batchCountAddr (unused, reserved)
+//   offset 48 : uint                          totalDrawCount
+//   offset 52 : uint                          debugFlags bit0=force all draws visible
+//   offset 56 : uint                          _pad0
+//   offset 60 : uint                          _pad1
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
@@ -36,18 +36,13 @@ void main(uint3 tid : SV_DispatchThreadID)
     if (drawIdx >= pc.totalDrawCount)
         return;
 
-    CullDrawInput*    inputs    = (CullDrawInput*)(pc.inputCmdAddr);
-    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
-    CullBatch*        batches   = (CullBatch*)(pc.batchDescAddr);
-    FrameConstantsData* fc      = (FrameConstantsData*)(pc.frameAddr);
-
-    CullDrawInput    cmd  = inputs[drawIdx];
-    DrawInstanceData inst = instances[cmd.firstInstance];
-    CullBatch        batch = batches[cmd.batchIndex];
+    CullDrawInput    cmd  = pc.inputCmd.Load(drawIdx);
+    DrawInstanceData inst = pc.instanceData.Load(cmd.firstInstance);
+    CullBatch        batch = pc.batchDesc.Load(cmd.batchIndex);
 
     const bool forceVisible = (pc.debugFlags & kCullDebugForceVisibleBit) != 0u;
 
-    const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, fc->viewProj);
+    const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, pc.frame.Ptr()->viewProj);
     const uint localOutputSlot = drawIdx - batch.inputStart;
     if (localOutputSlot >= batch.drawCount)
         return; // guard against malformed batch metadata
@@ -55,7 +50,7 @@ void main(uint3 tid : SV_DispatchThreadID)
     // Write VkDrawIndexedIndirectCommand as 5 consecutive uint32 values.
     // Layout: indexCount | instanceCount | firstIndex | vertexOffset | firstInstance.
     // Culled draws keep their slot but set instanceCount=0 so DrawIndexedIndirect skips them.
-    uint* out  = (uint*)(pc.outputCmdAddr);
+    uint* out  = pc.outputCmd.Ptr();
     uint  base = (batch.outputStart + localOutputSlot) * 5u;
     out[base + 0u] = cmd.indexCount;
     out[base + 1u] = visible ? cmd.instanceCount : 0u;

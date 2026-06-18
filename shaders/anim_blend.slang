@@ -136,14 +136,13 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (jobIdx >= pc.jobCount)
         return;
 
-    AnimatorBlendJob* jobs = (AnimatorBlendJob*)(pc.blendJobsAddr);
-    AnimatorBlendJob job = jobs[jobIdx];
+    AnimatorBlendJob job = pc.blendJobs.Load(jobIdx);
 
-    GpuClip* clips = (GpuClip*)(pc.animDbClipsAddr);
-    GpuChannel* channels = (GpuChannel*)(pc.animDbChannelsAddr);
-    float* times = (float*)(pc.animDbTimesAddr);
-    float4* values = (float4*)(pc.animDbValuesAddr);
-    SampledNodePose* poses = (SampledNodePose*)(pc.sampledPosesAddr);
+    GpuClip* clips = pc.animDbClips.Ptr();
+    GpuChannel* channels = pc.animDbChannels.Ptr();
+    float* times = pc.animDbTimes.Ptr();
+    float4* values = pc.animDbValues.Ptr();
+    SampledNodePose* poses = pc.sampledPoses.Ptr();
 
     const uint poseBase = job.nodePoseOffset;
 

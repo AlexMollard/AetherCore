@@ -4,6 +4,13 @@
 // Shared CPU -> GPU animation contracts.
 // Keep in sync with src/engine/AnimationDatabase.hpp,
 // src/engine/RenderQueue.hpp, and src/engine/RenderQueueGpuContracts.hpp.
+//
+// Address fields are declared as DevicePtr<T> on the shader side. The host
+// (C++) writes plain gpu::DeviceAddress (uint64_t) values at the same offsets;
+// DevicePtr<T> is layout-identical to uint64_t, so the binary contract is
+// unchanged.
+
+#include "DevicePointer.slangh"
 
 #ifndef UINT32_MAX
 #define UINT32_MAX 0xFFFFFFFFu
@@ -41,16 +48,16 @@ struct GpuClip
 
 struct AnimatorSampleJob
 {
-    [[vk::offset(0)]] uint animClipIndex;
-    [[vk::offset(4)]] float animTime;
-    [[vk::offset(8)]] uint nodePoseOffset;
-    [[vk::offset(12)]] uint nodeCount;
-    [[vk::offset(16)]] uint64_t clipsAddr;
-    [[vk::offset(24)]] uint64_t channelsAddr;
-    [[vk::offset(32)]] uint64_t timesAddr;
-    [[vk::offset(40)]] uint64_t valuesAddr;
-    [[vk::offset(48)]] uint clipCount;
-    [[vk::offset(52)]] uint _pad0;
+    [[vk::offset(0)]]  uint                          animClipIndex;
+    [[vk::offset(4)]]  float                         animTime;
+    [[vk::offset(8)]]  uint                          nodePoseOffset;
+    [[vk::offset(12)]] uint                          nodeCount;
+    [[vk::offset(16)]] DevicePtr<GpuClip>            clips;
+    [[vk::offset(24)]] DevicePtr<GpuChannel>         channels;
+    [[vk::offset(32)]] DevicePtr<float>              times;
+    [[vk::offset(40)]] DevicePtr<float4>             values; // translation/rotation/scale stream, laid out as float4
+    [[vk::offset(48)]] uint                          clipCount;
+    [[vk::offset(52)]] uint                          _pad0;
 };
 
 struct SampledNodePose
@@ -70,119 +77,119 @@ struct GpuSkinMeta
 
 struct SkinCopyJob
 {
-    [[vk::offset(0)]]  uint64_t sampledPosesAddr;
-    [[vk::offset(8)]]  uint dstPaletteOffset;
-    [[vk::offset(12)]] uint jointCount;
-    [[vk::offset(16)]] uint skinIndex;
-    [[vk::offset(20)]] uint nodeCount;
-    [[vk::offset(24)]] uint nodePoseOffset;
-    [[vk::offset(28)]] uint _pad1;
+    [[vk::offset(0)]]  DevicePtr<SampledNodePose> sampledPoses;
+    [[vk::offset(8)]]  uint                       dstPaletteOffset;
+    [[vk::offset(12)]] uint                       jointCount;
+    [[vk::offset(16)]] uint                       skinIndex;
+    [[vk::offset(20)]] uint                       nodeCount;
+    [[vk::offset(24)]] uint                       nodePoseOffset;
+    [[vk::offset(28)]] uint                       _pad1;
 };
 
 struct SkinPalettePush
 {
-    [[vk::offset(0)]]  uint64_t jobsAddr;
-    [[vk::offset(8)]]  uint64_t dstPaletteAddr;
-    [[vk::offset(16)]] uint64_t globalTransformsAddr;
-    [[vk::offset(24)]] uint64_t skinMetasAddr;
-    [[vk::offset(32)]] uint64_t skinJointsAddr;
-    [[vk::offset(40)]] uint64_t skinInverseBindsAddr;
-    [[vk::offset(48)]] uint jobCount;
-    [[vk::offset(52)]] uint _pad0;
-    [[vk::offset(56)]] uint _reserved0;
-    [[vk::offset(60)]] uint _reserved1;
+    [[vk::offset(0)]]  DevicePtr<SkinCopyJob>     jobs;
+    [[vk::offset(8)]]  DevicePtr<float4x4>        dstPalette;
+    [[vk::offset(16)]] DevicePtr<float4x4>        globalTransforms;
+    [[vk::offset(24)]] DevicePtr<GpuSkinMeta>     skinMetas;
+    [[vk::offset(32)]] DevicePtr<uint4>           skinJoints;     // uvec4 stream (4 joint indices per element)
+    [[vk::offset(40)]] DevicePtr<float4x4>        skinInverseBinds;
+    [[vk::offset(48)]] uint                       jobCount;
+    [[vk::offset(52)]] uint                       _pad0;
+    [[vk::offset(56)]] uint                       _reserved0;
+    [[vk::offset(60)]] uint                       _reserved1;
 };
 
 struct NodeFlattenPush
 {
-    [[vk::offset(0)]]  uint64_t sampledPosesAddr;
-    [[vk::offset(8)]]  uint64_t nodeParentsAddr;
-    [[vk::offset(16)]] uint64_t globalTransformsAddr;
-    [[vk::offset(24)]] uint64_t depthSortedNodesAddr;
-    [[vk::offset(32)]] uint64_t animatorJobsAddr;
-    [[vk::offset(40)]] uint depthOffset;
-    [[vk::offset(44)]] uint nodeCount;
-    [[vk::offset(48)]] uint batchStartJob;
-    [[vk::offset(52)]] uint batchJobCount;
+    [[vk::offset(0)]]  DevicePtr<SampledNodePose> sampledPoses;
+    [[vk::offset(8)]]  DevicePtr<int>             nodeParents;
+    [[vk::offset(16)]] DevicePtr<float4x4>        globalTransforms;
+    [[vk::offset(24)]] DevicePtr<uint>            depthSortedNodes;
+    [[vk::offset(32)]] DevicePtr<AnimatorSampleJob> animatorJobs;
+    [[vk::offset(40)]] uint                       depthOffset;
+    [[vk::offset(44)]] uint                       nodeCount;
+    [[vk::offset(48)]] uint                       batchStartJob;
+    [[vk::offset(52)]] uint                       batchJobCount;
 };
 
 struct AnimationSamplePush
 {
-    [[vk::offset(0)]] uint64_t animDbClipsAddr;
-    [[vk::offset(8)]] uint64_t animDbChannelsAddr;
-    [[vk::offset(16)]] uint64_t animDbTimesAddr;
-    [[vk::offset(24)]] uint64_t animDbValuesAddr;
-    [[vk::offset(32)]] uint64_t bindTranslationsAddr;
-    [[vk::offset(40)]] uint64_t bindRotationsAddr;
-    [[vk::offset(48)]] uint64_t bindScalesAddr;
-    [[vk::offset(56)]] uint64_t animatorJobsAddr;
-    [[vk::offset(64)]] uint64_t sampledPosesAddr;
-    [[vk::offset(72)]] uint jobCount;
-    [[vk::offset(76)]] uint clipCount;
+    [[vk::offset(0)]]  DevicePtr<GpuClip>            animDbClips;
+    [[vk::offset(8)]]  DevicePtr<GpuChannel>         animDbChannels;
+    [[vk::offset(16)]] DevicePtr<float>              animDbTimes;
+    [[vk::offset(24)]] DevicePtr<float4>             animDbValues;
+    [[vk::offset(32)]] DevicePtr<float4>             bindTranslations;
+    [[vk::offset(40)]] DevicePtr<float4>             bindRotations;
+    [[vk::offset(48)]] DevicePtr<float4>             bindScales;
+    [[vk::offset(56)]] DevicePtr<AnimatorSampleJob>  animatorJobs;
+    [[vk::offset(64)]] DevicePtr<SampledNodePose>    sampledPoses;
+    [[vk::offset(72)]] uint                          jobCount;
+    [[vk::offset(76)]] uint                          clipCount;
 };
 
 struct AnimatorBlendJob
 {
-    [[vk::offset(0)]] uint primaryClipIndex;
-    [[vk::offset(4)]] float primaryTime;
-    [[vk::offset(8)]] uint secondaryClipIndex;
-    [[vk::offset(12)]] float secondaryTime;
-    [[vk::offset(16)]] float blendWeight;
-    [[vk::offset(20)]] uint nodePoseOffset;
-    [[vk::offset(24)]] uint nodeCount;
-    [[vk::offset(28)]] uint _padReserved;
-    [[vk::offset(32)]] uint64_t clipsAddr;
-    [[vk::offset(40)]] uint64_t channelsAddr;
-    [[vk::offset(48)]] uint64_t timesAddr;
-    [[vk::offset(56)]] uint64_t valuesAddr;
-    [[vk::offset(64)]] uint clipCount;
-    [[vk::offset(68)]] uint _pad0;
+    [[vk::offset(0)]]  uint                     primaryClipIndex;
+    [[vk::offset(4)]]  float                    primaryTime;
+    [[vk::offset(8)]]  uint                     secondaryClipIndex;
+    [[vk::offset(12)]] float                    secondaryTime;
+    [[vk::offset(16)]] float                    blendWeight;
+    [[vk::offset(20)]] uint                     nodePoseOffset;
+    [[vk::offset(24)]] uint                     nodeCount;
+    [[vk::offset(28)]] uint                     _padReserved;
+    [[vk::offset(32)]] DevicePtr<GpuClip>       clips;
+    [[vk::offset(40)]] DevicePtr<GpuChannel>    channels;
+    [[vk::offset(48)]] DevicePtr<float>         times;
+    [[vk::offset(56)]] DevicePtr<float4>        values;
+    [[vk::offset(64)]] uint                     clipCount;
+    [[vk::offset(68)]] uint                     _pad0;
 };
 
 struct AnimationBlendPush
 {
-    [[vk::offset(0)]] uint64_t animDbClipsAddr;
-    [[vk::offset(8)]] uint64_t animDbChannelsAddr;
-    [[vk::offset(16)]] uint64_t animDbTimesAddr;
-    [[vk::offset(24)]] uint64_t animDbValuesAddr;
-    [[vk::offset(32)]] uint64_t bindTranslationsAddr;
-    [[vk::offset(40)]] uint64_t bindRotationsAddr;
-    [[vk::offset(48)]] uint64_t bindScalesAddr;
-    [[vk::offset(56)]] uint64_t blendJobsAddr;
-    [[vk::offset(64)]] uint64_t sampledPosesAddr;
-    [[vk::offset(72)]] uint jobCount;
-    [[vk::offset(76)]] uint _pad0;
+    [[vk::offset(0)]]  DevicePtr<GpuClip>            animDbClips;
+    [[vk::offset(8)]]  DevicePtr<GpuChannel>         animDbChannels;
+    [[vk::offset(16)]] DevicePtr<float>              animDbTimes;
+    [[vk::offset(24)]] DevicePtr<float4>             animDbValues;
+    [[vk::offset(32)]] DevicePtr<float4>             bindTranslations;
+    [[vk::offset(40)]] DevicePtr<float4>             bindRotations;
+    [[vk::offset(48)]] DevicePtr<float4>             bindScales;
+    [[vk::offset(56)]] DevicePtr<AnimatorBlendJob>   blendJobs;
+    [[vk::offset(64)]] DevicePtr<SampledNodePose>    sampledPoses;
+    [[vk::offset(72)]] uint                          jobCount;
+    [[vk::offset(76)]] uint                          _pad0;
 };
 
 struct IkSolveJob
 {
-    [[vk::offset(0)]] uint hipsNodeIdx;
-    [[vk::offset(4)]] uint leftKneeNodeIdx;
-    [[vk::offset(8)]] uint leftFootNodeIdx;
-    [[vk::offset(12)]] uint rightKneeNodeIdx;
-    [[vk::offset(16)]] uint rightFootNodeIdx;
-    [[vk::offset(20)]] float leftUpperLegLen;
-    [[vk::offset(24)]] float leftLowerLegLen;
-    [[vk::offset(28)]] float rightUpperLegLen;
-    [[vk::offset(32)]] float rightLowerLegLen;
-    [[vk::offset(36)]] float leftKneeBendSign;
-    [[vk::offset(40)]] float rightKneeBendSign;
-    [[vk::offset(44)]] uint _pad0;
-    [[vk::offset(48)]] uint64_t globalTransformsAddr;
-    [[vk::offset(56)]] uint64_t ikResultsAddr;
-    [[vk::offset(64)]] uint entityId;
-    [[vk::offset(68)]] uint _pad1;
+    [[vk::offset(0)]]  uint                     hipsNodeIdx;
+    [[vk::offset(4)]]  uint                     leftKneeNodeIdx;
+    [[vk::offset(8)]]  uint                     leftFootNodeIdx;
+    [[vk::offset(12)]] uint                     rightKneeNodeIdx;
+    [[vk::offset(16)]] uint                     rightFootNodeIdx;
+    [[vk::offset(20)]] float                    leftUpperLegLen;
+    [[vk::offset(24)]] float                    leftLowerLegLen;
+    [[vk::offset(28)]] float                    rightUpperLegLen;
+    [[vk::offset(32)]] float                    rightLowerLegLen;
+    [[vk::offset(36)]] float                    leftKneeBendSign;
+    [[vk::offset(40)]] float                    rightKneeBendSign;
+    [[vk::offset(44)]] uint                     _pad0;
+    [[vk::offset(48)]] DevicePtr<float4x4>      globalTransforms;
+    [[vk::offset(56)]] DevicePtr<float4>        ikResults; // IkGroundResult stream as float4 (16 bytes each)
+    [[vk::offset(64)]] uint                     entityId;
+    [[vk::offset(68)]] uint                     _pad1;
 };
 
 struct IkSolvePush
 {
-    [[vk::offset(0)]] uint64_t globalTransformsAddr;
-    [[vk::offset(8)]] uint64_t ikJobsAddr;
-    [[vk::offset(16)]] uint64_t ikGroundResultsAddr;
-    [[vk::offset(24)]] uint64_t nodeParentsAddr;
-    [[vk::offset(32)]] uint64_t depthSortedNodesAddr;
-    [[vk::offset(40)]] uint jobCount;
-    [[vk::offset(44)]] uint nodeCount;
+    [[vk::offset(0)]]  DevicePtr<float4x4>      globalTransforms;
+    [[vk::offset(8)]]  DevicePtr<IkSolveJob>    ikJobs;
+    [[vk::offset(16)]] DevicePtr<float4>        ikGroundResults;
+    [[vk::offset(24)]] DevicePtr<int>           nodeParents;
+    [[vk::offset(32)]] DevicePtr<uint>          depthSortedNodes;
+    [[vk::offset(40)]] uint                     jobCount;
+    [[vk::offset(44)]] uint                     nodeCount;
 };
 
 struct IkGroundResult
@@ -197,13 +204,13 @@ struct IkGroundResult
 
 struct PoseInitPush
 {
-    [[vk::offset(0)]]  uint64_t bindTranslationsAddr;
-    [[vk::offset(8)]]  uint64_t bindRotationsAddr;
-    [[vk::offset(16)]] uint64_t bindScalesAddr;
-    [[vk::offset(24)]] uint64_t animatorJobsAddr;
-    [[vk::offset(32)]] uint64_t sampledPosesAddr;
-    [[vk::offset(40)]] uint jobCount;
-    [[vk::offset(44)]] uint nodeCountPerJob;
+    [[vk::offset(0)]]  DevicePtr<float4>             bindTranslations;
+    [[vk::offset(8)]]  DevicePtr<float4>             bindRotations;
+    [[vk::offset(16)]] DevicePtr<float4>             bindScales;
+    [[vk::offset(24)]] DevicePtr<AnimatorSampleJob>  animatorJobs;
+    [[vk::offset(32)]] DevicePtr<SampledNodePose>    sampledPoses;
+    [[vk::offset(40)]] uint                          jobCount;
+    [[vk::offset(44)]] uint                          nodeCountPerJob;
 };
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef AETHER_UI_STRUCTS_SLANGH
 #define AETHER_UI_STRUCTS_SLANGH
 
+#include "DevicePointer.slangh"
+
 struct DrawCommandData
 {
     float4 data0;        // Rect: x,y,w,h | Circle: cx,cy,r,0 | Line: x0,y0,x1,y1

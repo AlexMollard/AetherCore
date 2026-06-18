@@ -33,7 +33,7 @@
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
-    FrameConstantsData* fc        = (FrameConstantsData*)(pc.frameAddr);
+    FrameConstantsData* fc        = pc.frame.Ptr();
     GpuMaterial*        materials = (GpuMaterial*)(fc->materialBufferAddr);
 
     GpuMaterial mat;

@@ -35,7 +35,7 @@ float3 Palette(float t)
 [shader("fragment")]
 float4 fragmentMain(VSOutput input) : SV_Target0
 {
-    FrameConstantsData* fc = (FrameConstantsData*)(pc.frameAddr);
+    FrameConstantsData* fc = pc.frame.Ptr();
     float elapsed = fc->elapsedTime;
     GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
 

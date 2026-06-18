@@ -14,17 +14,16 @@ void buildSkinPalette(uint3 tid : SV_DispatchThreadID)
     if (jobIndex >= pc.jobCount)
         return;
 
-    SkinCopyJob* jobs = (SkinCopyJob*)(pc.jobsAddr);
-    SkinCopyJob job = jobs[jobIndex];
+    SkinCopyJob job = pc.jobs.Load(jobIndex);
 
     if (job.jointCount == 0u)
         return;
 
-    float4x4* dst = (float4x4*)(pc.dstPaletteAddr);
-    float4x4* globalTransforms = (float4x4*)(pc.globalTransformsAddr);
-    GpuSkinMeta* skinMetas = (GpuSkinMeta*)(pc.skinMetasAddr);
-    uint* skinJoints = (uint*)(pc.skinJointsAddr);
-    float4x4* skinInverseBinds = (float4x4*)(pc.skinInverseBindsAddr);
+    float4x4* dst = pc.dstPalette.Ptr();
+    float4x4* globalTransforms = pc.globalTransforms.Ptr();
+    GpuSkinMeta* skinMetas = pc.skinMetas.Ptr();
+    uint* skinJoints = (uint*)(pc.skinJoints.addr);
+    float4x4* skinInverseBinds = pc.skinInverseBinds.Ptr();
 
     GpuSkinMeta meta = skinMetas[job.skinIndex];
     const uint poseBase = job.nodePoseOffset;

@@ -8,15 +8,15 @@
 // See cull_draws.slang for the base data layout.  This shader uses
 // CullMultiPushConstants instead of CullPushConstants:
 //
-//   offset  0 : uint64  frameAddrs[3]      BDA -> FrameConstantsData per cascade
-//   offset 24 : uint64  instanceDataAddr    BDA -> DrawInstanceData[]
-//   offset 32 : uint64  inputCmdAddr        BDA -> CullDrawInput[]
-//   offset 40 : uint64  outputCmdAddr       BDA -> output buffer base
-//   offset 48 : uint64  batchDescAddr       BDA -> CullBatch[]
-//   offset 56 : uint    totalDrawCount
-//   offset 60 : uint    outputCascadeStride  bytes between cascade output regions
-//   offset 64 : uint    debugFlags
-//   offset 68 : uint    _pad0
+//   offset  0 : DevicePtr<FrameConstantsData> frame[3]  per-cascade frame data
+//   offset 24 : DevicePtr<DrawInstanceData>   instanceData
+//   offset 32 : DevicePtr<CullDrawInput>      inputCmd
+//   offset 40 : DevicePtr<uint>               outputCmd   output buffer base
+//   offset 48 : DevicePtr<CullBatch>          batchDesc
+//   offset 56 : uint                          totalDrawCount
+//   offset 60 : uint                          outputCascadeStride  bytes between cascade output regions
+//   offset 64 : uint                          debugFlags
+//   offset 68 : uint                          _pad0
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
@@ -34,15 +34,10 @@ void main(uint3 tid : SV_DispatchThreadID)
     if (drawIdx >= pc.totalDrawCount)
         return;
 
-    CullDrawInput*    inputs    = (CullDrawInput*)(pc.inputCmdAddr);
-    DrawInstanceData* instances = (DrawInstanceData*)(pc.instanceDataAddr);
-    CullBatch*        batches   = (CullBatch*)(pc.batchDescAddr);
-    FrameConstantsData* fc;
-    uint8_t* outBase = (uint8_t*)(pc.outputCmdAddr);
-
-    CullDrawInput    cmd  = inputs[drawIdx];
-    DrawInstanceData inst = instances[cmd.firstInstance];
-    CullBatch        batch = batches[cmd.batchIndex];
+    CullDrawInput    cmd  = pc.inputCmd.Load(drawIdx);
+    DrawInstanceData inst = pc.instanceData.Load(cmd.firstInstance);
+    CullBatch        batch = pc.batchDesc.Load(cmd.batchIndex);
+    uint8_t* outBase = (uint8_t*)(pc.outputCmd.addr);
 
     const bool forceVisible = (pc.debugFlags & kCullDebugForceVisibleBit) != 0u;
     const uint localOutputSlot = drawIdx - batch.inputStart;
@@ -53,7 +48,7 @@ void main(uint3 tid : SV_DispatchThreadID)
     [unroll]
     for (uint cascade = 0; cascade < kCullMultiFrustumCount; ++cascade)
     {
-        fc = (FrameConstantsData*)(pc.frameAddrs[cascade]);
+        FrameConstantsData* fc = pc.frame[cascade].Ptr();
         const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, fc->viewProj);
 
         // Output slot = batch.outputStart + localOutputSlot, offset by cascade * stride.

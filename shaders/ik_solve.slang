@@ -266,11 +266,11 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (jobIdx >= pc.jobCount)
         return;
 
-    IkSolveJob* jobs = (IkSolveJob*)(pc.ikJobsAddr);
-    IkGroundResult* results = (IkGroundResult*)(pc.ikGroundResultsAddr);
-    int* nodeParents = (int*)(pc.nodeParentsAddr);
-    uint* depthSortedNodes = (uint*)(pc.depthSortedNodesAddr);
-    float4x4* globalTransforms = (float4x4*)(pc.globalTransformsAddr);
+    IkSolveJob* jobs = pc.ikJobs.Ptr();
+    IkGroundResult* results = (IkGroundResult*)(pc.ikGroundResults.addr);
+    int* nodeParents = pc.nodeParents.Ptr();
+    uint* depthSortedNodes = pc.depthSortedNodes.Ptr();
+    float4x4* globalTransforms = pc.globalTransforms.Ptr();
 
     IkSolveJob job = jobs[jobIdx];
 

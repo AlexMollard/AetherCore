@@ -1,0 +1,59 @@
+#ifndef AETHER_DEVICE_POINTER_SLANGH
+#define AETHER_DEVICE_POINTER_SLANGH
+
+// Typed buffer-device-address (BDA) pointer wrapper for shaders.
+//
+// A DevicePtr<T> is a single uint64_t device address dressed with the element
+// type T. Its memory layout is identical to a bare uint64_t, so it can be used
+// directly as a push-constant / push-data field: the host writes a VkDeviceAddress
+// (8 bytes) and the shader reads it as DevicePtr<T>. No descriptor or mapping
+// metadata is involved — BDA is the resource access mechanism.
+//
+// Usage:
+//   struct DrawPush {
+//       [[vk::offset(0)]] DevicePtr<FrameConstantsData> frame;
+//       [[vk::offset(8)]] DevicePtr<DrawInstanceData>   instances;
+//   };
+//   [[vk::push_constant]] DrawPush pc;
+//
+//   FrameConstantsData  fc = pc.frame.Load(0);     // single struct
+//   float4x4          vp  = pc.frame.Ptr()->viewProj; // deref single struct
+//   DrawInstanceData  inst = pc.instances.Load(drawIdx); // array index
+//
+// Zero overhead: every method compiles to the same pointer arithmetic as a raw
+// (T*) cast. The wrapper exists for type clarity at declaration sites and to
+// make the BDA access pattern greppable across shaders.
+
+struct DevicePtr<T>
+{
+    uint64_t addr;
+
+    // Load element i by value. Use for read-only access to array elements or
+    // a single struct at the address (i = 0).
+    T Load(uint i)
+    {
+        return ((T*)addr)[i];
+    }
+
+    // Store element i. T must be a storable type.
+    void Store(uint i, T value)
+    {
+        ((T*)addr)[i] = value;
+    }
+
+    // Return a typed pointer to element i, for `->` field access on a single
+    // struct (i = 0) or when a pointer is required by a helper function.
+    T* At(uint i)
+    {
+        return &((T*)addr)[i];
+    }
+
+    // Return a typed pointer to the base address (element 0). Shortcut for At(0);
+    // useful for single-struct BDA refs accessed via `->`.
+    T* Ptr()
+    {
+        return (T*)addr;
+    }
+};
+
+#endif

@@ -18,7 +18,7 @@ static const uint kShapeSdfGlyph    = 4;
 struct ShapesPush
 {
     float4   screenSize; // .xy = viewport dimensions
-    uint64_t commandDataAddr;
+    DevicePtr<DrawCommandData> commandData;
     uint     _pad0;
     uint     _pad1;
 };
@@ -40,7 +40,7 @@ struct VSOutput
 [shader("vertex")]
 VSOutput vertexMain(uint vertexId : SV_VertexID, uint instanceId : SV_InstanceID)
 {
-    DrawCommandData* commands = (DrawCommandData*)pc.commandDataAddr;
+    DrawCommandData* commands = pc.commandData.Ptr();
     const DrawCommandData cmd = commands[instanceId];
 
     const float2 uvRect[6] = {

@@ -66,16 +66,15 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (jobIdx >= pc.batchJobCount || localNodeIdx >= pc.nodeCount)
         return;
 
-    AnimatorSampleJob* jobs = (AnimatorSampleJob*)(pc.animatorJobsAddr);
-    uint poseBase = jobs[pc.batchStartJob + jobIdx].nodePoseOffset;
+    AnimatorSampleJob job = pc.animatorJobs.Load(pc.batchStartJob + jobIdx);
+    uint poseBase = job.nodePoseOffset;
 
-    uint* depthSortedNodes = (uint*)(pc.depthSortedNodesAddr);
-    uint nodeIdx = depthSortedNodes[pc.depthOffset + localNodeIdx];
+    uint nodeIdx = pc.depthSortedNodes.Load(pc.depthOffset + localNodeIdx);
     uint globalNodeIdx = poseBase + nodeIdx;
 
-    SampledNodePose* sampled = (SampledNodePose*)(pc.sampledPosesAddr);
-    int* nodeParents = (int*)(pc.nodeParentsAddr);
-    float4x4* globalTransforms = (float4x4*)(pc.globalTransformsAddr);
+    SampledNodePose* sampled = pc.sampledPoses.Ptr();
+    int* nodeParents = pc.nodeParents.Ptr();
+    float4x4* globalTransforms = pc.globalTransforms.Ptr();
 
     SampledNodePose p = sampled[globalNodeIdx];
     float4x4 localM = ComposeTrs(p.translation, p.rotation, p.scale);
