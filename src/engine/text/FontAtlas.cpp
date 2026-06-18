@@ -29,7 +29,6 @@ namespace aether
 	FontAtlas::FontAtlas(FontAtlas&& o) noexcept
 	      : m_atlasHandle(std::exchange(o.m_atlasHandle, {})),
 	        m_view(std::exchange(o.m_view, nullptr)),
-	        m_sampler(std::exchange(o.m_sampler, nullptr)),
 	        m_device(std::exchange(o.m_device, nullptr)),
 	        m_uploadPool(std::exchange(o.m_uploadPool, nullptr)),
 	        m_bindlessSlot(std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu)),
@@ -48,8 +47,8 @@ namespace aether
 			Destroy();
 			m_atlasHandle = std::exchange(o.m_atlasHandle, {});
 			m_view = std::exchange(o.m_view, nullptr);
-			m_sampler = std::exchange(o.m_sampler, nullptr);
-			m_device = std::exchange(o.m_device, nullptr);
+			m_atlasWidth = std::exchange(o.m_atlasWidth, 0);
+			m_atlasHeight = std::exchange(o.m_atlasHeight, 0);
 			m_uploadPool = std::exchange(o.m_uploadPool, nullptr);
 			m_bindlessSlot = std::exchange(o.m_bindlessSlot, 0xFFFFFFFFu);
 			m_bindlessMgr = std::exchange(o.m_bindlessMgr, nullptr);
@@ -230,11 +229,7 @@ namespace aether
 		// -- 5. Resolve the swizzled view (registry created it) -------------
 		m_view = gpu::ResourceRegistry::ResolveTexture(m_atlasHandle).view;
 
-		// -- 6. Acquire a linear/clamp sampler from the bindless cache -------
-		AE_EXPECT_OR_THROW(samplerResult, bindless.GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge));
-		m_sampler = samplerResult;
-
-		// -- 7. Layout transition via the one-shot upload path --------------
+		// -- 6. Layout transition via the one-shot upload path --------------
 		m_uploadPool = gpu::Factory::CreateCommandPool(device,
 		        gpu::Factory::CommandPoolDesc{
 		                .queueFamilyIndex = uploadQueueFamily,
@@ -285,7 +280,7 @@ namespace aether
 		// -- 8. Register in the bindless descriptor set --------------------
 		AE_EXPECT_OR_THROW(slotResult, bindless.AllocateSampledImageSlot());
 		m_bindlessSlot = slotResult;
-		const Expected<void> updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_view, m_sampler, gpu::ImageLayout::ShaderReadOnly);
+		const Expected<void> updateResult = bindless.WriteSampledImage(m_bindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_atlasHandle), gpu::ImageLayout::ShaderReadOnly);
 		if (!updateResult)
 		{
 			bindless.FreeSampledImageSlot(m_bindlessSlot);
@@ -310,8 +305,6 @@ namespace aether
 			m_bindlessMgr->FreeSampledImageSlot(m_bindlessSlot);
 			m_bindlessSlot = 0xFFFFFFFFu;
 		}
-		// m_sampler is owned by BindlessManager's cache; no destroy.
-		m_sampler = nullptr;
 		// m_view is owned by the registry's resolved view; no destroy.
 		m_view = nullptr;
 		if (m_atlasHandle.IsValid())

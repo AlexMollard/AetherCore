@@ -614,7 +614,7 @@ namespace aether
 			                };
 			                static_assert(sizeof(DebugPc) == 88);
 
-			                cmd.BindPipeline(resolved.pipeline, resolved.layout);
+			                cmd.BindPipeline(resolved.pipeline);
 			                cmd.SetLineWidth(2.0f);
 
 			                // 1) Immediate-mode batched debug primitives.

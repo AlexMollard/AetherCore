@@ -2,14 +2,11 @@
 
 #include <cstdint>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
 
 #include "gpu/CommandList.hpp"
-#include "gpu/DescriptorSetLayout.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuTypes.hpp"
-#include "material/BindlessContract.hpp"
 #include "utils/Assert.hpp"
 
 namespace aether
@@ -36,25 +33,6 @@ namespace aether
 			std::uint32_t deferredFreeFrames = 3;
 		};
 
-		struct SamplerKey
-		{
-			gpu::Filter filter = gpu::Filter::Linear;
-			gpu::SamplerMipmapMode mipmapMode = gpu::SamplerMipmapMode::Linear;
-			gpu::SamplerAddressMode addressMode = gpu::SamplerAddressMode::Repeat;
-			bool operator==(const SamplerKey& other) const = default;
-		};
-
-		struct SamplerKeyHash
-		{
-			std::size_t operator()(const SamplerKey& key) const
-			{
-				auto h = static_cast<std::size_t>(key.filter);
-				h ^= static_cast<std::size_t>(key.mipmapMode) << 4;
-				h ^= static_cast<std::size_t>(key.addressMode) << 8;
-				return h;
-			}
-		};
-
 		BindlessManager() = default;
 		~BindlessManager();
 
@@ -64,17 +42,6 @@ namespace aether
 		Expected<void> Initialize(const VulkanContext& context, const Config& config);
 		void Shutdown();
 
-		// ── Legacy API (migrating to descriptor_heap; will be removed in P4-P5) ──
-		[[nodiscard]] gpu::DescriptorSetLayout GetLayout() const;
-		[[nodiscard]] gpu::DescriptorSet GetSet() const;
-		[[nodiscard]] static constexpr std::uint32_t GetDescriptorSetIndex() { return bindless::kDescriptorSetIndex; }
-		[[nodiscard]] static constexpr std::uint32_t GetSampledImageBinding() { return bindless::kSampledImageBinding; }
-		[[nodiscard]] static constexpr std::uint32_t GetLinearSamplerBinding() { return 1u; }
-		[[nodiscard]] Expected<gpu::Sampler> GetOrCreateSampler(gpu::Filter filter, gpu::SamplerMipmapMode mipmapMode, gpu::SamplerAddressMode addressMode);
-		[[nodiscard]] Expected<void> UpdateSampledImage(std::uint32_t slot, gpu::ImageView imageView, gpu::Sampler sampler, gpu::ImageLayout imageLayout = gpu::ImageLayout::ShaderReadOnly);
-
-		// ── Descriptor-heap API ──
-		//
 		// Write a SAMPLED_IMAGE descriptor into the resource heap at the given slot.
 		// The descriptor data is written directly into the mapped heap via
 		// vkWriteResourceDescriptorsEXT. viewCreateInfo is the VkImageViewCreateInfo
@@ -100,8 +67,14 @@ namespace aether
 
 		// Bind both resource and sampler heaps on the command buffer.
 		// Called once per-pass/per-frame BEFORE any draw or dispatch that
-		// accesses bindless textures/samplers. Replaces BindDescriptorSet(bindlessSet).
+		// accesses bindless textures/samplers.
 		void CmdBindHeaps(gpu::CommandList& cmd) const;
+
+		// No-cache one-shot VkSampler creation. Returns a gpu::Sampler that
+		// must be destroyed by the caller via vkDestroySampler. Used by
+		// subsystems that need per-pipeline samplers outside the descriptor heap
+		// (e.g. LocalShadowService blur sampler).
+		[[nodiscard]] Expected<gpu::Sampler> CreateSampler(gpu::Filter filter, gpu::SamplerMipmapMode mipmap, gpu::SamplerAddressMode address) const;
 
 		[[nodiscard]] std::uint32_t GetCapacity() const;
 		[[nodiscard]] Expected<std::uint32_t> AllocateSampledImageSlot();
@@ -117,30 +90,24 @@ namespace aether
 		};
 
 		void FreeSlotImmediateUnlocked(std::uint32_t slot);
+		void WriteLinearSamplerUnlocked();
 
 		mutable std::mutex m_mutex;
 		gpu::Device m_device = nullptr;
-		void* m_vmaAllocator = nullptr;               // VmaAllocator (for Shutdown heap destroy)
-
-		// ── Legacy descriptor pool / set / layout (being migrated) ──
-		gpu::DescriptorPool m_pool = nullptr;
-		gpu::DescriptorSetLayout m_layout = nullptr;
-		gpu::DescriptorSet m_set = nullptr;
-		gpu::Sampler m_linearSampler = nullptr;
-		std::unordered_map<SamplerKey, gpu::Sampler, SamplerKeyHash> m_samplerCache;
+		void* m_vmaAllocator = nullptr;
 
 		// ── Descriptor heaps (VK_EXT_descriptor_heap) ──
-		void* m_resourceHeapBuffer = nullptr;          // VkBuffer, host-visible
-		void* m_resourceHeapAlloc = nullptr;           // VmaAllocation
-		void* m_resourceHeapMapped = nullptr;          // pointer for vkWriteResourceDescriptorsEXT
+		void* m_resourceHeapBuffer = nullptr;
+		void* m_resourceHeapAlloc = nullptr;
+		void* m_resourceHeapMapped = nullptr;
 		gpu::DeviceAddress m_resourceHeapAddr = 0;
 		gpu::DeviceSize m_resourceHeapSize = 0;
 		gpu::DeviceSize m_imageDescriptorSize = 0;
 		gpu::DeviceSize m_imageDescriptorAlignment = 0;
 
-		void* m_samplerHeapBuffer = nullptr;           // VkBuffer, host-visible
-		void* m_samplerHeapAlloc = nullptr;            // VmaAllocation
-		void* m_samplerHeapMapped = nullptr;           // pointer for vkWriteSamplerDescriptorsEXT
+		void* m_samplerHeapBuffer = nullptr;
+		void* m_samplerHeapAlloc = nullptr;
+		void* m_samplerHeapMapped = nullptr;
 		gpu::DeviceAddress m_samplerHeapAddr = 0;
 		gpu::DeviceSize m_samplerHeapSize = 0;
 		gpu::DeviceSize m_samplerDescriptorSize = 0;
@@ -148,7 +115,7 @@ namespace aether
 
 		// Pipeline mapping storage (opaque VkDescriptorSetAndBindingMappingEXT arrays).
 		// Allocated in Initialize(), freed in Shutdown().
-		void* m_shaderMappingInfo = nullptr;           // VkShaderDescriptorSetAndBindingMappingInfoEXT*
+		void* m_shaderMappingInfo = nullptr;
 
 		// ── Slot management ──
 		std::uint32_t m_capacity = 0;

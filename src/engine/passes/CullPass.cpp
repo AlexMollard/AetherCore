@@ -83,7 +83,7 @@ namespace aether
 
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);
 
-		graph.AddComputePass(passName).ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), GetSingleLayout(), ctx.frameIndex); });
+		graph.AddComputePass(passName).ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameIndex); });
 	}
 
 	gpu::Pipeline CullPass::GetSinglePipeline() const

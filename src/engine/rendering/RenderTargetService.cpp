@@ -215,11 +215,10 @@ namespace aether
 		const RGImage depth = it->second.rgDepth;
 		const gpu::Extent2D extent = it->second.extent;
 		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
-		const gpu::PipelineLayout cullLayout = m_cullPass->GetSingleLayout();
 
 		m_graph->AddComputePass("$CullDraws_RTT_" + idStr)
 		        .ExecuteCompute(
-		                [this, id, cullPipeline, cullLayout](PassContext& ctx)
+		                [this, id, cullPipeline](PassContext& ctx)
 		                {
 			                auto rit = m_targets.find(id);
 			                if (rit == m_targets.end())
@@ -253,7 +252,7 @@ namespace aether
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
+			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, ctx.frameIndex);
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)

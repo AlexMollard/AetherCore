@@ -4,10 +4,12 @@
 // Uses groupshared memory to cache the 5-tap filter window:
 // each 16x16 thread group loads a 20x20 tile (2-texel border for kernel radius)
 // into LDS, then reads from LDS for the convolution. This replaces 5 global
-// texture reads per thread with 1 global write + barrier + 5 LDS reads.
+// buffer reads per thread with 1 global write + barrier + 5 LDS reads.
+//
+// Input/output via DevicePtr<float2> (BDA) stored in push constants —
+// zero descriptor bindings required.
 
-[[vk::binding(0, 0)]] RWTexture2D<float2> g_output;
-[[vk::binding(1, 0)]] Texture2D<float2>  g_input;
+#include "include/DevicePointer.slangh"
 
 struct BlurPushConstants
 {
@@ -17,6 +19,8 @@ struct BlurPushConstants
     float  _pad0;
     float  _pad1;
     float  _pad2;
+    DevicePtr<float2> srcData;
+    DevicePtr<float2> dstData;
 };
 
 [[vk::push_constant]] BlurPushConstants pc;
@@ -29,12 +33,22 @@ static const int kOffsets[5] = { -2, -1, 0, 1, 2 };
 // plus a 2-texel border on each side for the [-2, +2] kernel radius.
 groupshared float2 tile[20][20];
 
-uint2 ClampRead(int2 p, uint2 atlasSize)
+uint2 ClampCoord(int2 p, uint2 atlasSize)
 {
     return uint2(
-        uint(max(min(p.x, int(atlasSize.x) - 1), 0)),
-        uint(max(min(p.y, int(atlasSize.y) - 1), 0))
+        uint(clamp(p.x, 0, int(atlasSize.x) - 1)),
+        uint(clamp(p.y, 0, int(atlasSize.y) - 1))
     );
+}
+
+float2 LoadInput(uint2 coord, uint2 atlasSize, DevicePtr<float2> src)
+{
+    return src.Load(coord.y * atlasSize.x + coord.x);
+}
+
+void StoreOutput(uint2 coord, uint2 atlasSize, float2 value, DevicePtr<float2> dst)
+{
+    dst.Store(coord.y * atlasSize.x + coord.x, value);
 }
 
 [numthreads(16, 16, 1)]
@@ -53,20 +67,20 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
         // ── Horizontal pass ─────────────────────────────────────────────
         // Interior maps to tile[ty][tx + 2], covering output columns [0, 15].
         int2 base = int2(origin) + int2(gtid.xy);
-        tile[gtid.y][gtid.x + 2] = g_input[ClampRead(base, pc.atlasSize)];
+        tile[gtid.y][gtid.x + 2] = LoadInput(ClampCoord(base, pc.atlasSize), pc.atlasSize, pc.srcData);
 
         // Left border: threads with tx < 2 load tile[ty][0..1].
         if (gtid.x < 2)
         {
             int2 p = int2(origin) + int2(gtid.xy) - int2(2, 0);
-            tile[gtid.y][gtid.x] = g_input[ClampRead(p, pc.atlasSize)];
+            tile[gtid.y][gtid.x] = LoadInput(ClampCoord(p, pc.atlasSize), pc.atlasSize, pc.srcData);
         }
 
         // Right border: threads with tx >= 14 load tile[ty][18..19].
         if (gtid.x >= 14)
         {
             int2 p = int2(origin) + int2(gtid.xy) + int2(2, 0);
-            tile[gtid.y][gtid.x + 4] = g_input[ClampRead(p, pc.atlasSize)];
+            tile[gtid.y][gtid.x + 4] = LoadInput(ClampCoord(p, pc.atlasSize), pc.atlasSize, pc.srcData);
         }
     }
     else
@@ -74,20 +88,20 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
         // ── Vertical pass ───────────────────────────────────────────────
         // Interior maps to tile[ty + 2][tx], covering output rows [0, 15].
         int2 base = int2(origin) + int2(gtid.xy);
-        tile[gtid.y + 2][gtid.x] = g_input[ClampRead(base, pc.atlasSize)];
+        tile[gtid.y + 2][gtid.x] = LoadInput(ClampCoord(base, pc.atlasSize), pc.atlasSize, pc.srcData);
 
         // Top border: threads with ty < 2 load tile[0..1][tx].
         if (gtid.y < 2)
         {
             int2 p = int2(origin) + int2(gtid.xy) - int2(0, 2);
-            tile[gtid.y][gtid.x] = g_input[ClampRead(p, pc.atlasSize)];
+            tile[gtid.y][gtid.x] = LoadInput(ClampCoord(p, pc.atlasSize), pc.atlasSize, pc.srcData);
         }
 
         // Bottom border: threads with ty >= 14 load tile[18..19][tx].
         if (gtid.y >= 14)
         {
             int2 p = int2(origin) + int2(gtid.xy) + int2(0, 2);
-            tile[gtid.y + 4][gtid.x] = g_input[ClampRead(p, pc.atlasSize)];
+            tile[gtid.y + 4][gtid.x] = LoadInput(ClampCoord(p, pc.atlasSize), pc.atlasSize, pc.srcData);
         }
     }
 
@@ -108,6 +122,6 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
             else
                 result += tile[gtid.y + kOffsets[t] + 2][gtid.x] * kWeights[t];
         }
-        g_output[globalPos] = result;
+        StoreOutput(globalPos, pc.atlasSize, result, pc.dstData);
     }
 }

@@ -151,9 +151,9 @@ namespace aether
 		struct LightingComputePush
 		{
 			glm::mat4 viewProj{1.0f};
-			glm::vec4 params0{0.0f};        // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
-			glm::uvec4 params1{0u};         // x=tilePx, y=tilesX, z=tilesY, w=lightCount
-			glm::uvec4 params2{0u};         // x=maxLightsPerTile
+			glm::vec4 params0{0.0f}; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
+			glm::uvec4 params1{0u};  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+			glm::uvec4 params2{0u};  // x=maxLightsPerTile
 			gpu::DeviceAddress lightDataAddr = 0;
 			gpu::DeviceAddress tileHeadersAddr = 0;
 			gpu::DeviceAddress tileLightIndicesAddr = 0;

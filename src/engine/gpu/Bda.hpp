@@ -29,4 +29,4 @@ namespace aether::gpu
 	{
 		return ResourceRegistry::ResolveBuffer(handle).deviceAddress + static_cast<DeviceAddress>(byteOffset);
 	}
-}
+} // namespace aether::gpu

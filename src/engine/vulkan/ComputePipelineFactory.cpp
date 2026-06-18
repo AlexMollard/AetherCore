@@ -24,37 +24,33 @@ namespace aether::vkutil
 		const std::string owner = desc.debugName ? desc.debugName : "ComputePipeline";
 		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, *spirv, owner.c_str()));
 
-		VkPipelineLayout vkLayout = desc.existingLayout;
-		if (vkLayout == VK_NULL_HANDLE)
-		{
-			VkPushConstantRange pushRange{};
-			VkPipelineLayoutCreateInfo layoutInfo{
-			        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-			};
-			if (desc.pushConstantSize > 0)
-			{
-				pushRange.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-				pushRange.offset = 0;
-				pushRange.size = desc.pushConstantSize;
-				layoutInfo.pushConstantRangeCount = 1;
-				layoutInfo.pPushConstantRanges = &pushRange;
-			}
-			if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &vkLayout) != VK_SUCCESS)
-			{
-				AE_UNEXPECTED(AetherError::Vulkan(0, "ComputePipeline: failed to create pipeline layout for " + owner));
-			}
-		}
+		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
+
+		// All compute pipelines use VK_EXT_descriptor_heap for push constants
+		// (vkCmdPushDataEXT) and access all data via BDA — no VkPipelineLayout
+		// or VkPushConstantRange is needed.
+		const VkPipelineLayout vkLayout = VK_NULL_HANDLE;
 
 		const std::string entry(desc.shaderEntry);
-		const VkPipelineShaderStageCreateInfo stage{
+		VkPipelineShaderStageCreateInfo stage{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
 		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
 		        .module = shaderModule.Get(),
 		        .pName = entry.c_str(),
 		};
+		if (mappings)
+		{
+			stage.pNext = const_cast<VkShaderDescriptorSetAndBindingMappingInfoEXT*>(mappings);
+		}
+		VkPipelineCreateFlags2CreateInfo flags2{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+		        .pNext = nullptr,
+		        .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+		};
 		VkPipeline vkPipeline = VK_NULL_HANDLE;
-		const VkComputePipelineCreateInfo pipelineInfo{
+		VkComputePipelineCreateInfo pipelineInfo{
 		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+		        .pNext = &flags2,
 		        .stage = stage,
 		        .layout = vkLayout,
 		};
@@ -63,7 +59,6 @@ namespace aether::vkutil
 
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyPipelineLayout(device, vkLayout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "ComputePipeline: failed to create pipeline for " + owner));
 		}
 
@@ -76,7 +71,7 @@ namespace aether::vkutil
 		entryOut.pipeline = vkPipeline;
 		entryOut.layout = vkLayout;
 		entryOut.device = device;
-		entryOut.ownsLayout = (desc.existingLayout == VK_NULL_HANDLE);
+		entryOut.ownsLayout = false;
 		return entryOut;
 	}
 } // namespace aether::vkutil

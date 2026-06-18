@@ -38,16 +38,7 @@ namespace aether
 				Throw(AetherError::Engine("PostProcessStack: HdrColor AllocateSampledImageSlot failed"));
 			}
 			stack.m_hdrBindlessSlot = *slot;
-			const auto sampler = desc.bindlessManager->GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge);
-			if (!sampler)
-			{
-				Throw(AetherError::Engine("PostProcessStack: HdrColor GetOrCreateSampler failed"));
-			}
-			// NOLINT(bugprone-unused-return-value): UpdateSampledImage only fails on
-			// invalid slot/image/sampler; the slot was just allocated and the sampler
-			// was just created above, so a failure indicates a logic bug, not a
-			// recoverable error here. Assert in debug, swallow in release.
-			(void) desc.bindlessManager->UpdateSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view, *sampler, gpu::ImageLayout::ShaderReadOnly);
+			(void) desc.bindlessManager->WriteSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_hdrColorHandle), gpu::ImageLayout::ShaderReadOnly);
 		}
 
 		const gpu::TextureDesc ldrDesc{
@@ -70,16 +61,8 @@ namespace aether
 				Throw(AetherError::Engine("PostProcessStack: LdrColor AllocateSampledImageSlot failed"));
 			}
 			stack.m_ldrBindlessSlot = *slot;
-			const auto sampler = desc.bindlessManager->GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge);
-			if (!sampler)
-			{
-				Throw(AetherError::Engine("PostProcessStack: LdrColor GetOrCreateSampler failed"));
-			}
-			// NOLINT(bugprone-unused-return-value): see m_hdr branch above.
-			(void) desc.bindlessManager->UpdateSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view, *sampler, gpu::ImageLayout::ShaderReadOnly);
+			(void) desc.bindlessManager->WriteSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_ldrColorHandle), gpu::ImageLayout::ShaderReadOnly);
 		}
-
-		const aether::gpu::DescriptorSetLayout bindlessLayout = desc.bindlessManager->GetLayout();
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
 		        GraphicsPipeline::Create(desc.device,
@@ -89,7 +72,6 @@ namespace aether
 		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
 		                        .pushConstantSize = 3 * sizeof(uint32_t),
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
-		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                        .debugName = "Tonemap",
 		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));
@@ -103,7 +85,6 @@ namespace aether
 		                        .colorFormat = desc.swapchainFormat,
 		                        .pushConstantSize = 2u * sizeof(uint32_t),
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
-		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                        .debugName = "FXAA",
 		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));
@@ -162,7 +143,7 @@ namespace aether
 
 			                bindless.CmdBindHeaps(cmd);
 
-			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline(), m_tonemapPipeline.GetLayout());
+			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());
 
 			                struct
 			                {
@@ -199,7 +180,7 @@ namespace aether
 
 			                bindless.CmdBindHeaps(cmd);
 
-			                cmd.BindPipeline(m_fxaaPipeline.GetPipeline(), m_fxaaPipeline.GetLayout());
+			                cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
 
 			                struct
 			                {

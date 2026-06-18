@@ -257,7 +257,7 @@ namespace aether
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
-	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, gpu::PipelineLayout computeLayout, std::uint32_t frameIndex)
+	void RenderQueue::PrepareAndDispatch(gpu::CommandList& cmdList, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, std::uint32_t frameIndex)
 	{
 		AE_PROFILE_ZONE();
 		// Keep the raw command buffer for Tracy GPU zones and GpuTimestampPool.
@@ -545,7 +545,7 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobs[frameSlot].address);
 
-				cmdList.BindComputePipeline(poseInitPipe.pipeline, poseInitPipe.layout);
+				cmdList.BindComputePipeline(poseInitPipe.pipeline);
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address;
@@ -601,7 +601,7 @@ namespace aether
 			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
 			{
 				const auto animSamplePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animSample);
-				cmdList.BindComputePipeline(animSamplePipe.pipeline, animSamplePipe.layout);
+				cmdList.BindComputePipeline(animSamplePipe.pipeline);
 				cmdList.BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
@@ -640,7 +640,7 @@ namespace aether
 				{
 					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
-					cmdList.BindComputePipeline(animBlendPipe.pipeline, animBlendPipe.layout);
+					cmdList.BindComputePipeline(animBlendPipe.pipeline);
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
 					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
@@ -708,7 +708,7 @@ namespace aether
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
-			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline, nodeFlattenPipe.layout);
+			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline);
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
 			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address;
@@ -788,7 +788,7 @@ namespace aether
 			{
 				const auto ikSolvePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->ikSolve);
 				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
-				cmdList.BindComputePipeline(ikSolvePipe.pipeline, ikSolvePipe.layout);
+				cmdList.BindComputePipeline(ikSolvePipe.pipeline);
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
 				cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
@@ -807,7 +807,7 @@ namespace aether
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 
 			const auto skinPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->skinCopy);
-			cmdList.BindComputePipeline(skinPipe.pipeline, skinPipe.layout);
+			cmdList.BindComputePipeline(skinPipe.pipeline);
 			cmdList.BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
@@ -874,7 +874,7 @@ namespace aether
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.DispatchMulti");
 				cmdList.BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
-				cmdList.BindComputePipeline(computePipeline, computeLayout);
+				cmdList.BindComputePipeline(computePipeline);
 				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
 				const std::uint32_t groups = (totalDraws + 63u) / 64u;
 				cmdList.Dispatch(groups, 1, 1);
@@ -899,7 +899,7 @@ namespace aether
 			{
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
 				cmdList.BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
-				cmdList.BindComputePipeline(computePipeline, computeLayout);
+				cmdList.BindComputePipeline(computePipeline);
 				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "CullPass.cullDraws");
@@ -933,7 +933,8 @@ namespace aether
 		FlushDrawImpl(cmd, bindlessSet, m_cachedFrameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(
+	        gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		FlushDrawImpl(cmd, bindlessSet, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
@@ -983,7 +984,7 @@ namespace aether
 
 			if (activePipeline != nullptr && activePipeline != lastPipeline)
 			{
-				cmd.BindPipeline(activePipeline->GetPipeline(), activePipeline->GetLayout());
+				cmd.BindPipeline(activePipeline->GetPipeline());
 				lastPipeline = activePipeline;
 				lastSetPipeline = nullptr;
 			}

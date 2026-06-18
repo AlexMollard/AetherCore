@@ -103,7 +103,7 @@ namespace aether::gpu
 		s_endDebugLabel = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(endFn);
 	}
 
-	void CommandList::BindPipeline(void* vkPipeline, void* vkPipelineLayout) noexcept
+	void CommandList::BindPipeline(void* vkPipeline) noexcept
 	{
 		if (m_cmd == nullptr || vkPipeline == nullptr)
 		{
@@ -119,7 +119,7 @@ namespace aether::gpu
 
 	void CommandList::BindPipeline(GraphicsPipeline& pipeline)
 	{
-		BindPipeline(pipeline.GetPipeline(), pipeline.GetLayout());
+		BindPipeline(pipeline.GetPipeline());
 	}
 
 	void CommandList::Draw(std::uint32_t vertexCount, std::uint32_t instanceCount, std::uint32_t firstVertex, std::uint32_t firstInstance)
@@ -149,7 +149,7 @@ namespace aether::gpu
 		vkCmdDispatch(AsVkCmd(m_cmd), groupCountX, groupCountY, groupCountZ);
 	}
 
-	void CommandList::BindComputePipeline(void* vkPipeline, void* vkPipelineLayout) noexcept
+	void CommandList::BindComputePipeline(void* vkPipeline) noexcept
 	{
 		if (m_cmd == nullptr || vkPipeline == nullptr)
 		{
@@ -372,10 +372,10 @@ namespace aether::gpu
 			return;
 		}
 		const VkPushDataInfoEXT pushInfo{
-			.sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-			.pNext = nullptr,
-			.offset = offset,
-			.data = {data.data(), data.size()},
+		        .sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+		        .pNext = nullptr,
+		        .offset = offset,
+		        .data = {data.data(), data.size()},
 		};
 		vkCmdPushDataEXT(AsVkCmd(m_cmd), &pushInfo);
 	}
@@ -542,5 +542,49 @@ namespace aether::gpu
 		        .size = static_cast<VkDeviceSize>(size),
 		};
 		vkCmdCopyBuffer(AsVkCmd(m_cmd), static_cast<VkBuffer>(src), static_cast<VkBuffer>(dst), 1, &region);
+	}
+
+	void CommandList::CopyImageToBuffer(void* srcImage, void* dstBuffer, ImageLayout srcImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset) noexcept
+	{
+		if (m_cmd == nullptr || srcImage == nullptr || dstBuffer == nullptr)
+		{
+			return;
+		}
+		const VkBufferImageCopy region{
+		        .bufferOffset = static_cast<VkDeviceSize>(bufferOffset),
+		        .bufferRowLength = 0,
+		        .bufferImageHeight = 0,
+		        .imageSubresource{
+.aspectMask = gpu::ToVk(aspect),
+		        .mipLevel = 0,
+		        .baseArrayLayer = 0,
+		        .layerCount = 1,
+		        },
+		        .imageOffset{0, 0, 0},
+		        .imageExtent{width, height, 1},
+		};
+		vkCmdCopyImageToBuffer(AsVkCmd(m_cmd), static_cast<VkImage>(srcImage), ToVk(srcImageLayout), static_cast<VkBuffer>(dstBuffer), 1, &region);
+	}
+
+	void CommandList::CopyBufferToImage(void* srcBuffer, void* dstImage, ImageLayout dstImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset) noexcept
+	{
+		if (m_cmd == nullptr || srcBuffer == nullptr || dstImage == nullptr)
+		{
+			return;
+		}
+		const VkBufferImageCopy region{
+		        .bufferOffset = static_cast<VkDeviceSize>(bufferOffset),
+		        .bufferRowLength = 0,
+		        .bufferImageHeight = 0,
+		        .imageSubresource{
+		                .aspectMask = gpu::ToVk(aspect),
+		                .mipLevel = 0,
+		                .baseArrayLayer = 0,
+		                .layerCount = 1,
+		        },
+		        .imageOffset{0, 0, 0},
+		        .imageExtent{width, height, 1},
+		};
+		vkCmdCopyBufferToImage(AsVkCmd(m_cmd), static_cast<VkBuffer>(srcBuffer), static_cast<VkImage>(dstImage), ToVk(dstImageLayout), 1, &region);
 	}
 } // namespace aether::gpu

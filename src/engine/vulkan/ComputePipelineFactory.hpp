@@ -16,6 +16,7 @@ namespace aether::vkutil
 		std::uint32_t pushConstantSize = 0;
 		const char* debugName = nullptr;
 		VkPipelineLayout existingLayout = VK_NULL_HANDLE;
+		const void* descriptorHeapMappings = nullptr;
 	};
 
 	[[nodiscard]] Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device device, gpu::PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;

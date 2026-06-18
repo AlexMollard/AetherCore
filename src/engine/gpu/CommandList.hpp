@@ -33,8 +33,6 @@ namespace aether::gpu
 			return m_cmd != nullptr;
 		}
 
-		// Sibling view that shares the command buffer but resets the bound
-		// layout cache. Use for sub-passes that re-bind their own pipeline.
 		[[nodiscard]] CommandList View() const noexcept
 		{
 			CommandList out{};
@@ -49,13 +47,11 @@ namespace aether::gpu
 			return m_cmd;
 		}
 
-		void BindPipeline(void* pipeline, void* pipelineLayout) noexcept;
+		void BindPipeline(void* pipeline) noexcept;
 		void BindPipeline(PipelineHandle pipeline);
 		void BindPipeline(GraphicsPipeline& pipeline);
 
-		void BindComputePipeline(void* pipeline, void* pipelineLayout) noexcept;
-
-		
+		void BindComputePipeline(void* pipeline) noexcept;
 
 		void BindIndexBuffer(void* buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
 		void BindIndexBuffer(BufferHandle buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
@@ -98,6 +94,8 @@ namespace aether::gpu
 		void WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept;
 
 		void CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept;
+		void CopyImageToBuffer(void* srcImage, void* dstBuffer, gpu::ImageLayout srcImageLayout, gpu::ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset = 0) noexcept;
+		void CopyBufferToImage(void* srcBuffer, void* dstImage, gpu::ImageLayout dstImageLayout, gpu::ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset = 0) noexcept;
 
 		// Wire the debug-label function pointers. Called once at engine init
 		// by the backend. Pass null to disable.

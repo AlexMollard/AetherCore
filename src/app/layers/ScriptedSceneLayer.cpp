@@ -1,8 +1,6 @@
 #include "ScriptedSceneLayer.hpp"
 
-#include <array>
 #include <filesystem>
-#include <span>
 
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scripting/SystemFactory.hpp"
@@ -10,7 +8,6 @@
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraManager.hpp"
-#include "gpu/DescriptorSetLayout.hpp"
 #include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "layers/LoadingLayer.hpp"
@@ -51,8 +48,6 @@ namespace aether::app
 	void ScriptedSceneLayer::BuildDefaultPipeline(LayerContext& context)
 	{
 		auto& assets = context.Get<AssetManager>();
-		auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
-		const std::array<aether::gpu::DescriptorSetLayout, 1> setLayouts{bindlessLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.spv",
@@ -60,7 +55,6 @@ namespace aether::app
 		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
 		        .descriptorHeapMappings = context.Get<BindlessManager>().GetDescriptorHeapMappings(),
 		});
 
@@ -174,7 +168,6 @@ namespace aether::app
 
 		// Register effects so script can use set_entity_effect().
 		{
-			auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 
@@ -185,7 +178,7 @@ namespace aether::app
 			plasmaMat.roughnessFactor = 2.0f;                       // scale
 			plasmaMat.occlusionStrength = 0.8f;                     // intensity
 
-			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
+			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), context.Get<BindlessManager>().GetDescriptorHeapMappings(), colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
 		}
 
 		m_sceneCtx.world = &context.Get<World>();

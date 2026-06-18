@@ -182,7 +182,7 @@ namespace aether
 			                [this](PassContext& ctx)
 			                {
 				                gpu::CommandList& cmd = ctx.recorder;
-				                cmd.BindPipeline(m_skyboxPipeline.GetPipeline(), m_skyboxPipeline.GetLayout());
+				                cmd.BindPipeline(m_skyboxPipeline.GetPipeline());
 				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
 				                std::byte bytes[sizeof(gpu::DeviceAddress)];
 				                std::memcpy(bytes, &frameAddr, sizeof(bytes));

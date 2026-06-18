@@ -83,7 +83,6 @@ namespace aether
 	private:
 		gpu::TextureHandle m_atlasHandle{};
 		gpu::ImageView m_view = nullptr;
-		gpu::Sampler m_sampler = nullptr;
 		// Upload context is rebuilt on every Build() and torn down on
 		// Destroy(). The pool is owned by the factory (not the registry)
 		// so it is destroyed immediately when no longer needed.

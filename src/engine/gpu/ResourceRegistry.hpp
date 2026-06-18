@@ -71,6 +71,7 @@ namespace aether::gpu
 		// Useful when the layout includes descriptor set layouts or is shared
 		// across multiple pipelines.
 		PipelineLayout existingLayout = nullptr;
+		const void* descriptorHeapMappings = nullptr;
 	};
 
 	// Graphics-pipeline description. Mirrors rendering::GraphicsPipeline::Desc
@@ -209,5 +210,10 @@ namespace aether::gpu
 		// Buffer property queries
 		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);
 		[[nodiscard]] static BufferUsage GetBufferUsage(BufferHandle handle);
+
+		// Returns an opaque pointer to the VkImageViewCreateInfo used to create
+		// the texture view. Null if the handle is stale. Needed by BindlessManager
+		// WriteSampledImage for descriptor_heap VkImageDescriptorInfoEXT.pView.
+		[[nodiscard]] static const void* GetViewCreateInfo(TextureHandle handle) noexcept;
 	};
 } // namespace aether::gpu

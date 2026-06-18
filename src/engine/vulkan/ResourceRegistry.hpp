@@ -172,6 +172,7 @@ namespace aether
 
 		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
 		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;
+		[[nodiscard]] const void* GetViewCreateInfo(gpu::TextureHandle handle) const noexcept;
 
 	private:
 		// A queued destructor. Holds a typed-owning variant of the resource

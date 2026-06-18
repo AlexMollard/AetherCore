@@ -123,6 +123,7 @@ namespace aether::gpu
 		VertexAttributeRead = 1ull << 2,
 		ShaderRead = 1ull << 5,
 		ShaderWrite = 1ull << 6,
+		TransferRead = 1ull << 11,
 		TransferWrite = 1ull << 12,
 		HostWrite = 1ull << 14,
 		ShaderStorageRead = 1ull << 33,
@@ -241,6 +242,8 @@ namespace aether::gpu
 		ColorAttachment = 2,
 		DepthAttachment = 3,
 		ShaderReadOnly = 4,
+		TransferSrc = 5,
+		TransferDst = 6,
 	};
 
 	// Component swizzle applied at view-creation time. Mirrors

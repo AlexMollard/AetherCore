@@ -3,7 +3,6 @@
 #include <string>
 #include <unordered_map>
 
-#include "gpu/DescriptorSetLayout.hpp"
 #include "material/Material.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 
@@ -40,13 +39,7 @@ namespace aether::app::effects
 		// Convenience: build a GraphicsPipeline from a shader path and register
 		// it with a default material in one call.  Returns true on success.
 		// The pipeline inherits depthTestEnable=true, depthWriteEnable=true.
-		bool CreateAndRegister(const char* name,
-		        aether::AssetManager& assets,
-		        aether::gpu::DescriptorSetLayout bindlessLayout,
-		        aether::gpu::Format colorFormat,
-		        aether::gpu::Format depthFormat,
-		        const char* shaderVfsPath,
-		        const aether::Material& material);
+		bool CreateAndRegister(const char* name, aether::AssetManager& assets, const void* descriptorHeapMappings, aether::gpu::Format colorFormat, aether::gpu::Format depthFormat, const char* shaderVfsPath, const aether::Material& material);
 
 		// Lookup. Returns nullptr if name not found.
 		[[nodiscard]] const EffectData* Find(const char* name) const;

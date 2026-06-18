@@ -758,6 +758,12 @@ namespace aether
 		return entry ? static_cast<gpu::BufferUsage>(entry->usage) : gpu::BufferUsage::None;
 	}
 
+	const void* ResourceRegistry::GetViewCreateInfo(gpu::TextureHandle handle) const noexcept
+	{
+		const TextureEntry* entry = Resolve(handle);
+		return entry ? &entry->viewCreateInfo : nullptr;
+	}
+
 	std::uint32_t ResourceRegistry::AcquireTextureSlot()
 	{
 		if (!m_freeTextureSlots.empty())
@@ -1304,6 +1310,7 @@ namespace aether::gpu
 		        .pushConstantSize = desc.pushConstantSize,
 		        .debugName = desc.debugName,
 		        .existingLayout = static_cast<VkPipelineLayout>(desc.existingLayout),
+		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
 		const auto entryExp = vkutil::CreateComputePipelineEntry(device, pipelineCache, vkDesc);
 		if (!entryExp.has_value())
@@ -1479,5 +1486,10 @@ namespace aether::gpu
 	BufferUsage ResourceRegistry::GetBufferUsage(BufferHandle handle)
 	{
 		return s_reg->GetBufferUsage(handle);
+	}
+
+	const void* ResourceRegistry::GetViewCreateInfo(TextureHandle handle) noexcept
+	{
+		return s_reg->GetViewCreateInfo(handle);
 	}
 } // namespace aether::gpu

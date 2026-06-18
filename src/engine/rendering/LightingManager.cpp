@@ -458,7 +458,7 @@ namespace aether
 		        .WriteBuffer(m_rgTileHeaders)
 		        .WriteBuffer(m_rgTileIndices)
 		        .ExecuteCompute(
-		                [this, initPipeline = initResolved.pipeline, initLayout = initResolved.layout](PassContext& ctx)
+		                [this, initPipeline = initResolved.pipeline](PassContext& ctx)
 		                {
 			                if (!m_lightDataReady)
 			                {
@@ -469,9 +469,9 @@ namespace aether
 			                // Host-write visibility barrier for the light data buffer.
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
-			                cmd.BindComputePipeline(initPipeline, initLayout);
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-			                cmd.Dispatch(m_lightTileGroups, 1, 1);
+	cmd.BindComputePipeline(initPipeline);
+				cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
+				cmd.Dispatch(m_lightTileGroups, 1, 1);
 		                });
 
 		graph.AddComputePass("$Lighting.BinLights")
@@ -479,16 +479,16 @@ namespace aether
 		        .ReadWriteBuffer(m_rgTileHeaders)
 		        .ReadWriteBuffer(m_rgTileIndices)
 		        .ExecuteCompute(
-		                [this, cullPipeline = cullResolved.pipeline, cullLayout = cullResolved.layout](PassContext& ctx)
+		                [this, cullPipeline = cullResolved.pipeline](PassContext& ctx)
 		                {
 			                if (!m_lightDataReady || m_lightLightGroups == 0)
 			                {
 				                return;
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                cmd.BindComputePipeline(cullPipeline, cullLayout);
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-			                cmd.Dispatch(m_lightLightGroups, 1, 1);
+	cmd.BindComputePipeline(cullPipeline);
+				cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
+				cmd.Dispatch(m_lightLightGroups, 1, 1);
 		                });
 
 		m_rgPassesRegistered = true;

@@ -519,6 +519,10 @@ namespace aether::gpu
 				return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
 			case ImageLayout::ShaderReadOnly:
 				return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			case ImageLayout::TransferSrc:
+				return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+			case ImageLayout::TransferDst:
+				return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 		}
 		return VK_IMAGE_LAYOUT_UNDEFINED;
 	}

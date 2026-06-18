@@ -119,7 +119,7 @@ namespace aether
 				                cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
 			                }
 			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), cullPass.GetMultiLayout(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), ctx.frameIndex);
 		                });
 	}
 

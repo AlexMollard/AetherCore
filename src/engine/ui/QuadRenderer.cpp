@@ -173,8 +173,6 @@ namespace aether
 			slot.reserve(256);
 		}
 
-		const aether::gpu::DescriptorSetLayout bindlessLayout = m_bindlessMgr->GetLayout();
-
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
 		                .shaderVfsPath = "shaders://ui_shapes.spv",
@@ -185,7 +183,7 @@ namespace aether
 		                .blendEnable = true,
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
 		                .pushConstantStages = gpu::ShaderStage::AllGraphics,
-		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
+		                .setLayouts = {},
 		                .descriptorHeapMappings = m_bindlessMgr->GetDescriptorHeapMappings(),
 		        }));
 		m_pipeline = std::move(pipeline);

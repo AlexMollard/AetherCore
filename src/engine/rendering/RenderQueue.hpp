@@ -181,7 +181,7 @@ namespace aether
 		// SetMultiCullFrameAddrs() beforehand to supply the 3 cascade frame
 		// constants addresses; the computePipeline/layout must then be compatible
 		// with CullMultiPushConstants.
-		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, gpu::PipelineLayout computeLayout, std::uint32_t frameIndex);
+		void PrepareAndDispatch(gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, gpu::Pipeline computePipeline, std::uint32_t frameIndex);
 
 		// For multi-frustum queues: provides the 3 cascade frame constant BDAs
 		// used by PrepareAndDispatch to build CullMultiPushConstants.
@@ -218,7 +218,8 @@ namespace aether
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(
+		        gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);

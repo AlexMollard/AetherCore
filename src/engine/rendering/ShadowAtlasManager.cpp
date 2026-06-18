@@ -36,15 +36,10 @@ namespace aether
 			Throw(AetherError::Engine("ShadowAtlasManager: AllocateSampledImageSlot failed"));
 		}
 		m_bindlessSlot = *slotResult;
-		const auto samplerResult = bindless.GetOrCreateSampler(gpu::Filter::Linear, gpu::SamplerMipmapMode::Linear, gpu::SamplerAddressMode::ClampToEdge);
-		if (!samplerResult)
-		{
-			Throw(AetherError::Engine("ShadowAtlasManager: GetOrCreateSampler failed"));
-		}
-		const auto updateResult = bindless.UpdateSampledImage(m_bindlessSlot, m_atlasView, *samplerResult, gpu::ImageLayout::ShaderReadOnly);
+		const auto updateResult = bindless.WriteSampledImage(m_bindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_atlasHandle), gpu::ImageLayout::ShaderReadOnly);
 		if (!updateResult)
 		{
-			Throw(AetherError::Engine("ShadowAtlasManager: UpdateSampledImage failed"));
+			Throw(AetherError::Engine("ShadowAtlasManager: WriteSampledImage failed"));
 		}
 	}
 

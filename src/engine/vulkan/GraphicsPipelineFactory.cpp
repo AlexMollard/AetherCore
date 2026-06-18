@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "io/FileSystem.hpp"
-#include "rendering/GpuContracts.hpp"
+
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -21,7 +21,6 @@ namespace aether::vkutil
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
 		const VkFormat vkDepthFormat = gpu::ToVk(desc.depthFormat);
 		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);
-		const VkShaderStageFlags vkPushConstantStages = gpu::ToVk(desc.pushConstantStages);
 		const bool hasColorAttachment = vkColorFormat != VK_FORMAT_UNDEFINED;
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
@@ -159,56 +158,32 @@ namespace aether::vkutil
 		};
 
 		// -- Pipeline layout --------------------------------------------------
-		VkPipelineLayout layout = VK_NULL_HANDLE;
-		const VkPushConstantRange kModelRange{
-		        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
-		        .offset = 0,
-		        .size = sizeof(DrawContracts::PushConstants),
-		};
-		const VkPushConstantRange kCustomRange{
-		        .stageFlags = vkPushConstantStages,
-		        .offset = 0,
-		        .size = desc.pushConstantSize,
-		};
-		const bool useCustomPush = desc.pushConstantSize > 0;
-		std::vector<VkDescriptorSetLayout> vkSetLayouts;
-		vkSetLayouts.reserve(desc.setLayouts.size());
-		for (const gpu::DescriptorSetLayout setLayout: desc.setLayouts)
-		{
-			vkSetLayouts.push_back(static_cast<VkDescriptorSetLayout>(setLayout));
-		}
-		const VkPipelineLayoutCreateInfo layoutInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		        .setLayoutCount = static_cast<std::uint32_t>(vkSetLayouts.size()),
-		        .pSetLayouts = vkSetLayouts.data(),
-		        .pushConstantRangeCount = 1,
-		        .pPushConstantRanges = useCustomPush ? &kCustomRange : &kModelRange,
-		};
-		if (vkCreatePipelineLayout(device, &layoutInfo, nullptr, &layout) != VK_SUCCESS)
-		{
-			AE_UNEXPECTED(AetherError::Vulkan(0, "Failed to create pipeline layout."));
-		}
+		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
-VkPipelineShaderStageCreateInfo vertStage{
-	        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-	        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-	        .module = vertModule.Get(),
-	        .pName = vertEntry.c_str(),
-	};
-	VkPipelineShaderStageCreateInfo fragStage{
-	        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-	        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-	        .module = fragModule,
-	        .pName = fragEntry.c_str(),
-	};
+		// All graphics pipelines use VK_EXT_descriptor_heap for push constants
+		// (vkCmdPushDataEXT) and access all data via BDA — no VkPipelineLayout
+		// or VkPushConstantRange is needed.
+		const VkPipelineLayout layout = VK_NULL_HANDLE;
+		const VkPipelineCreateFlags2 descriptorHeapFlags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
 
-	const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
-	const VkPipelineCreateFlags2 descriptorHeapFlags = mappings ? VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT : static_cast<VkPipelineCreateFlags2>(0);
-	if (mappings)
-	{
-		vertStage.pNext = mappings;
-		fragStage.pNext = mappings;
-	}
+		VkPipelineShaderStageCreateInfo vertStage{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+		        .module = vertModule.Get(),
+		        .pName = vertEntry.c_str(),
+		};
+		VkPipelineShaderStageCreateInfo fragStage{
+		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		        .module = fragModule,
+		        .pName = fragEntry.c_str(),
+		};
+
+		if (mappings)
+		{
+			vertStage.pNext = mappings;
+			fragStage.pNext = mappings;
+		}
 
 		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
 		const VkFormat* pColorFormats = hasColorAttachment ? &vkColorFormat : nullptr;
@@ -218,9 +193,7 @@ VkPipelineShaderStageCreateInfo vertStage{
 		ResourceRegistry::PipelineEntry entry{};
 		entry.device = device;
 		entry.layout = layout;
-		entry.ownsLayout = true;
-
-		AE_ASSERT(layout != VK_NULL_HANDLE, "GraphicsPipeline: layout must be valid for GPL creation.");
+		entry.ownsLayout = false;
 
 		// -- GPL: vertex input interface library ------------------------------
 		const VkGraphicsPipelineLibraryCreateInfoEXT gplVertexInput{
@@ -230,9 +203,9 @@ VkPipelineShaderStageCreateInfo vertStage{
 		const VkPipelineCreateFlags2CreateInfo vertInputFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &gplVertexInput,
-.flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
-	};
-	const VkGraphicsPipelineCreateInfo vertInputLibInfo{
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
+		};
+		const VkGraphicsPipelineCreateInfo vertInputLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		        .pNext = &vertInputFlags2,
 		        .flags = 0,
@@ -244,7 +217,6 @@ VkPipelineShaderStageCreateInfo vertStage{
 		VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
 		if (result != VK_SUCCESS)
 		{
-			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
 		}
 		entry.vertInputLib = vertInputLib;
@@ -279,10 +251,7 @@ VkPipelineShaderStageCreateInfo vertStage{
 		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
 		if (result != VK_SUCCESS)
 		{
-			// Best-effort cleanup; the entry was never returned to the
-			// registry so the registry won't double-free these.
 			vkDestroyPipeline(device, vertInputLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create pre-rasterization GPL library."));
 		}
 		entry.preRasterLib = preRasterLib;
@@ -323,7 +292,6 @@ VkPipelineShaderStageCreateInfo vertStage{
 		{
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-shader GPL library."));
 		}
 		entry.fragShaderLib = fragShaderLib;
@@ -364,7 +332,6 @@ VkPipelineShaderStageCreateInfo vertStage{
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipeline(device, fragShaderLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-output GPL library."));
 		}
 		entry.fragOutputLib = fragOutputLib;
@@ -406,12 +373,10 @@ VkPipelineShaderStageCreateInfo vertStage{
 
 		if (result != VK_SUCCESS)
 		{
-			// Best-effort cleanup; entry never returned to registry.
 			vkDestroyPipeline(device, vertInputLib, nullptr);
 			vkDestroyPipeline(device, preRasterLib, nullptr);
 			vkDestroyPipeline(device, fragShaderLib, nullptr);
 			vkDestroyPipeline(device, fragOutputLib, nullptr);
-			vkDestroyPipelineLayout(device, layout, nullptr);
 			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to link GPL pipeline."));
 		}
 		entry.pipeline = pipeline;

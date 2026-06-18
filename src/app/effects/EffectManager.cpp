@@ -1,8 +1,5 @@
 #include "EffectManager.hpp"
 
-#include <array>
-#include <span>
-
 #include "assets/AssetManager.hpp"
 
 namespace aether::app::effects
@@ -15,23 +12,16 @@ namespace aether::app::effects
 		m_effects[name] = std::move(data);
 	}
 
-	bool EffectManager::CreateAndRegister(const char* name,
-	        aether::AssetManager& assets,
-	        aether::gpu::DescriptorSetLayout bindlessLayout,
-	        aether::gpu::Format colorFormat,
-	        aether::gpu::Format depthFormat,
-	        const char* shaderVfsPath,
-	        const aether::Material& material)
+	bool EffectManager::CreateAndRegister(
+	        const char* name, aether::AssetManager& assets, const void* descriptorHeapMappings, aether::gpu::Format colorFormat, aether::gpu::Format depthFormat, const char* shaderVfsPath, const aether::Material& material)
 	{
-		const std::array<aether::gpu::DescriptorSetLayout, 1> setLayouts{bindlessLayout};
-
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = shaderVfsPath,
 		        .colorFormat = colorFormat,
 		        .depthFormat = depthFormat,
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
-		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        .descriptorHeapMappings = descriptorHeapMappings,
 		});
 
 		if (!result)
