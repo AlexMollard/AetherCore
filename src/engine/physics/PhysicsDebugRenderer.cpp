@@ -653,7 +653,7 @@ namespace aether
 
 					                // White tint, identity model: per-vertex colors pass through unchanged.
 					                const DebugPc pc{.frameAddr = ctx.frameConstantsAddr, .tintColor = glm::vec4(1.0f), .model = glm::mat4(1.0f)};
-					                cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
+					                cmd.PushDataRaw(0, std::as_bytes(std::span{&pc, 1}));
 
 					                cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_immediateVertexHandle));
 					                cmd.Draw(immediateCount, 1, 0, 0);
@@ -708,7 +708,7 @@ namespace aether
 					                        }
 
 					                        const DebugPc pc{.frameAddr = ctx.frameConstantsAddr, .tintColor = tint, .model = model};
-					                        cmd.PushConstantsRaw(resolved.layout, gpu::ShaderStage::Vertex, 0, std::as_bytes(std::span{&pc, 1}));
+					                        cmd.PushDataRaw(0, std::as_bytes(std::span{&pc, 1}));
 
 					                        cmd.BindVertexBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(vertexHandle));
 					                        cmd.Draw(vertexCount, 1, 0, 0);

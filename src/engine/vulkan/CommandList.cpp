@@ -110,7 +110,6 @@ namespace aether::gpu
 			return;
 		}
 		vkCmdBindPipeline(AsVkCmd(m_cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, AsVkPipeline(vkPipeline));
-		m_boundLayout = vkPipelineLayout;
 		m_boundBindPoint = PipelineBindPoint::Graphics;
 	}
 
@@ -157,27 +156,7 @@ namespace aether::gpu
 			return;
 		}
 		vkCmdBindPipeline(AsVkCmd(m_cmd), VK_PIPELINE_BIND_POINT_COMPUTE, AsVkPipeline(vkPipeline));
-		m_boundLayout = vkPipelineLayout;
 		m_boundBindPoint = PipelineBindPoint::Compute;
-	}
-
-	void CommandList::BindDescriptorSet(void* vkPipelineLayout, std::uint32_t set, void* vkDescriptorSet, std::uint32_t dynamicOffsetCount, const std::uint32_t* dynamicOffsets) noexcept
-	{
-		if (m_cmd == nullptr || vkPipelineLayout == nullptr || vkDescriptorSet == nullptr)
-		{
-			return;
-		}
-		const VkDescriptorSet vkSet = AsVkDescriptorSet(vkDescriptorSet);
-		vkCmdBindDescriptorSets(AsVkCmd(m_cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, AsVkPipelineLayout(vkPipelineLayout), set, 1, &vkSet, dynamicOffsetCount, dynamicOffsets);
-	}
-
-	void CommandList::BindDescriptorSet(std::uint32_t set, void* vkDescriptorSet, std::uint32_t dynamicOffsetCount, const std::uint32_t* dynamicOffsets) noexcept
-	{
-		if (m_boundLayout == nullptr)
-		{
-			return;
-		}
-		BindDescriptorSet(m_boundLayout, set, vkDescriptorSet, dynamicOffsetCount, dynamicOffsets);
 	}
 
 	void CommandList::BindIndexBuffer(void* vkBuffer, DeviceAddress offset, IndexType indexType) noexcept
@@ -386,22 +365,19 @@ namespace aether::gpu
 		vkCmdSetScissor(AsVkCmd(m_cmd), firstScissor, static_cast<std::uint32_t>(n), buf);
 	}
 
-	void CommandList::PushConstantsRaw(void* vkPipelineLayout, ShaderStage stages, std::uint32_t offset, std::span<const std::byte> data)
+	void CommandList::PushDataRaw(std::uint32_t offset, std::span<const std::byte> data)
 	{
-		if (m_cmd == nullptr || vkPipelineLayout == nullptr || data.empty())
+		if (m_cmd == nullptr || data.empty())
 		{
 			return;
 		}
-		vkCmdPushConstants(AsVkCmd(m_cmd), AsVkPipelineLayout(vkPipelineLayout), ToVkShaderStages(stages), offset, static_cast<std::uint32_t>(data.size()), data.data());
-	}
-
-	void CommandList::PushConstantsRaw(ShaderStage stages, std::uint32_t offset, std::span<const std::byte> data)
-	{
-		if (m_boundLayout == nullptr)
-		{
-			return;
-		}
-		PushConstantsRaw(m_boundLayout, stages, offset, data);
+		const VkPushDataInfoEXT pushInfo{
+			.sType = VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+			.pNext = nullptr,
+			.offset = offset,
+			.data = {data.data(), data.size()},
+		};
+		vkCmdPushDataEXT(AsVkCmd(m_cmd), &pushInfo);
 	}
 
 	void CommandList::BeginDebugLabel(std::string_view name, float r, float g, float b, float a)

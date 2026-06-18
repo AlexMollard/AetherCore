@@ -587,7 +587,7 @@ namespace aether
 			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(hWrites));
 
 			                const BlurPushConstants hPc{.atlasWidth = bounds.width, .atlasHeight = bounds.height, .blurOffsetX = bounds.x, .blurOffsetY = bounds.y, .isHorizontal = 1u, ._pad0 = 0.0f, ._pad1 = 0.0f, ._pad2 = 0.0f};
-			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&hPc, 1}));
+			                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
@@ -638,7 +638,7 @@ namespace aether
 			                cmd.PushDescriptorSet(gpu::PipelineBindPoint::Compute, blurPipeline.layout, 0, std::span<const gpu::GpuWriteDescriptorSet>(vWrites));
 
 			                const BlurPushConstants vPc{.atlasWidth = bounds.width, .atlasHeight = bounds.height, .blurOffsetX = bounds.x, .blurOffsetY = bounds.y, .isHorizontal = 0u, ._pad0 = 0.0f, ._pad1 = 0.0f, ._pad2 = 0.0f};
-			                cmd.PushConstantsRaw(blurPipeline.layout, gpu::ShaderStage::Compute, 0, std::as_bytes(std::span{&vPc, 1}));
+			                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
 
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });

@@ -143,7 +143,7 @@ namespace aether
 			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
 			                        .commandDataAddr = m_commandBuffers[frameSlot].address,
 			                };
-			                cmd.PushConstantsRaw(gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, std::as_bytes(std::span{&push, 1}));
+			                cmd.PushDataRaw(0, std::as_bytes(std::span{&push, 1}));
 
 			                cmd.DrawIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_indirectBuffers[frameSlot].handle), 0, 1, sizeof(gpu::DrawIndirectCommand));
 

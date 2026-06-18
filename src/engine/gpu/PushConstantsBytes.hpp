@@ -8,7 +8,7 @@
 namespace aether::gpu
 {
 	// Reinterpret a trivially-copyable value as a byte span suitable for
-	// CommandList::PushConstantsRaw. The returned span references the
+	// CommandList::PushDataRaw. The returned span references the
 	// caller's storage; the caller must keep the source object alive for
 	// the duration of the record-and-submit call (matches the existing
 	// SkyboxPass / PostProcessStack / RenderQueue pattern).
@@ -37,7 +37,7 @@ namespace aether::gpu
 	//
 	// Usage:
 	//   DrawContracts::PushConstants pc{...};
-	//   cmd.PushConstantsRaw(layout, stage, 0, gpu::AsPushConstantBytes(pc));
+	//   cmd.PushDataRaw(0, gpu::AsPushConstantBytes(pc));
 	template<typename T>
 	[[nodiscard]] std::span<const std::byte> ToPushConstantBytes(const T& value, std::byte (&buffer)[sizeof(T)]) noexcept
 	{

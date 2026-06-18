@@ -584,7 +584,7 @@ namespace aether
 					        .jobCount = batch.count,
 					        .nodeCountPerJob = nodeCount,
 					};
-					cmdList.PushConstantsRaw(poseInitPipe.layout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&initPc), sizeof(initPc)));
+					cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&initPc), sizeof(initPc)));
 
 					const std::uint32_t groupsX = (batch.count + 7u) / 8u;
 					const std::uint32_t groupsY = (nodeCount + 7u) / 8u;
@@ -617,7 +617,7 @@ namespace aether
 				        .jobCount = sampleJobsThisFrame,
 				        .clipCount = 0,
 				};
-				cmdList.PushConstantsRaw(animSamplePipe.layout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
+				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&animPc), sizeof(animPc)));
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.SampleClips");
 					const std::uint32_t groups = (sampleJobsThisFrame + 63u) / 64u;
@@ -642,7 +642,7 @@ namespace aether
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
 					cmdList.BindComputePipeline(animBlendPipe.pipeline, animBlendPipe.layout);
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
-					cmdList.PushConstantsRaw(animBlendPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
+					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
 						AE_GPU_ZONE_SCOPED(rawCmd, "Animation.AnimBlend");
 						const std::uint32_t groups = (blendPc.jobCount + 63u) / 64u;
@@ -756,7 +756,7 @@ namespace aether
 					        .batchStartJob = batch.startJob,
 					        .batchJobCount = batch.count,
 					};
-					cmdList.PushConstantsRaw(nodeFlattenPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&flattenPc), sizeof(flattenPc)));
+					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&flattenPc), sizeof(flattenPc)));
 
 					const std::uint32_t totalWork = batch.count * range.count;
 					const std::uint32_t groups = (totalWork + 63u) / 64u;
@@ -790,7 +790,7 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
 				cmdList.BindComputePipeline(ikSolvePipe.pipeline, ikSolvePipe.layout);
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
-				cmdList.PushConstantsRaw(ikSolvePipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
+				cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.IkSolve");
 					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
@@ -831,7 +831,7 @@ namespace aether
 				        .skinInverseBindsAddr = batch.db->GetSkinInverseBindsAddr(),
 				        .jobCount = batch.count,
 				};
-				cmdList.PushConstantsRaw(skinPipe.layout, gpu::ShaderStage::Compute, 0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
+				cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&skinPc), sizeof(skinPc)));
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.BuildSkinPalette");
 					const std::uint32_t groups = (batch.count + 63u) / 64u;
@@ -875,7 +875,7 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.DispatchMulti");
 				cmdList.BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline, computeLayout);
-				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
+				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
 				const std::uint32_t groups = (totalDraws + 63u) / 64u;
 				cmdList.Dispatch(groups, 1, 1);
 				cmdList.EndDebugLabel();
@@ -900,7 +900,7 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
 				cmdList.BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline, computeLayout);
-				cmdList.PushConstantsRaw(computeLayout, gpu::ShaderStage::Compute, 0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
+				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));
 				{
 					AE_GPU_ZONE_SCOPED(rawCmd, "CullPass.cullDraws");
 					const std::uint32_t groups = (totalDraws + 63u) / 64u;
@@ -990,7 +990,7 @@ namespace aether
 
 			if (activePipeline != nullptr)
 			{
-				cmd.PushConstantsRaw(activePipeline->GetLayout(), gpu::ShaderStage::Vertex | gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(sharedPc));
+				cmd.PushDataRaw(0, gpu::AsPushConstantBytes(sharedPc));
 			}
 
 			if (batch.mesh != nullptr && batch.mesh->IsAlive() && batch.mesh->IsValid() && batch.mesh->GetGeneration() == batch.meshGeneration && batch.mesh->GetIndexBuffer().IsValid())

@@ -186,7 +186,7 @@ namespace aether
 				                const gpu::DeviceAddress frameAddr = ctx.frameConstantsAddr;
 				                std::byte bytes[sizeof(gpu::DeviceAddress)];
 				                std::memcpy(bytes, &frameAddr, sizeof(bytes));
-				                cmd.PushConstantsRaw(m_skyboxPipeline.GetLayout(), gpu::ShaderStage::AllGraphics, 0, std::span<const std::byte>(bytes, sizeof(bytes)));
+				                cmd.PushDataRaw(0, std::span<const std::byte>(bytes, sizeof(bytes)));
 				                cmd.Draw(3);
 			                });
 		}

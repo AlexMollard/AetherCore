@@ -55,8 +55,7 @@ namespace aether::gpu
 
 		void BindComputePipeline(void* pipeline, void* pipelineLayout) noexcept;
 
-		void BindDescriptorSet(PipelineLayout pipelineLayout, std::uint32_t set, DescriptorSet descriptorSet, std::uint32_t dynamicOffsetCount = 0, const std::uint32_t* dynamicOffsets = nullptr) noexcept;
-		void BindDescriptorSet(std::uint32_t set, DescriptorSet descriptorSet, std::uint32_t dynamicOffsetCount = 0, const std::uint32_t* dynamicOffsets = nullptr) noexcept;
+		
 
 		void BindIndexBuffer(void* buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
 		void BindIndexBuffer(BufferHandle buffer, DeviceAddress offset = 0, IndexType indexType = IndexType::U32) noexcept;
@@ -85,8 +84,7 @@ namespace aether::gpu
 		void SetScissor(const Rect2D& scissor);
 		void SetScissor(std::uint32_t firstScissor, std::span<const Rect2D> scissors);
 
-		void PushConstantsRaw(void* pipelineLayout, ShaderStage stages, std::uint32_t offset, std::span<const std::byte> data);
-		void PushConstantsRaw(ShaderStage stages, std::uint32_t offset, std::span<const std::byte> data);
+		void PushDataRaw(std::uint32_t offset, std::span<const std::byte> data);
 
 		void BeginDebugLabel(std::string_view name, float r = 0.15f, float g = 0.55f, float b = 0.90f, float a = 1.0f);
 		void EndDebugLabel();
@@ -107,7 +105,6 @@ namespace aether::gpu
 
 	private:
 		void* m_cmd = nullptr;
-		void* m_boundLayout = nullptr;
 		PipelineBindPoint m_boundBindPoint = PipelineBindPoint::Graphics;
 	};
 } // namespace aether::gpu

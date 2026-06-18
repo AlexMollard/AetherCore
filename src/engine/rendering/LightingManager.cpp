@@ -470,7 +470,7 @@ namespace aether
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 			                cmd.BindComputePipeline(initPipeline, initLayout);
-			                cmd.PushConstantsRaw(initLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
 			                cmd.Dispatch(m_lightTileGroups, 1, 1);
 		                });
 
@@ -487,7 +487,7 @@ namespace aether
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(cullPipeline, cullLayout);
-			                cmd.PushConstantsRaw(cullLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
 			                cmd.Dispatch(m_lightLightGroups, 1, 1);
 		                });
 

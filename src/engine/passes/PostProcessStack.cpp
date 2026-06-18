@@ -173,7 +173,7 @@ namespace aether
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
 			                push.exposure = m_exposure;
-			                cmd.PushConstantsRaw(m_tonemapPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                cmd.Draw(3, 1, 0, 0);
 		                });
@@ -208,7 +208,7 @@ namespace aether
 			                } push;
 			                push.ldrSlot = m_ldrBindlessSlot;
 			                push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
-			                cmd.PushConstantsRaw(m_fxaaPipeline.GetLayout(), gpu::ShaderStage::Fragment, 0, gpu::AsPushConstantBytes(push));
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                cmd.Draw(3, 1, 0, 0);
 		                });
