@@ -43,7 +43,6 @@ namespace aether::app::effects
 		bool CreateAndRegister(const char* name,
 		        aether::AssetManager& assets,
 		        aether::gpu::DescriptorSetLayout bindlessLayout,
-		        aether::gpu::DescriptorSetLayout lightingLayout,
 		        aether::gpu::Format colorFormat,
 		        aether::gpu::Format depthFormat,
 		        const char* shaderVfsPath,

@@ -51,15 +51,15 @@ struct LocalLight
     float  shadowStrength;
 };
 
-LocalLight LoadLocalLight(uint index)
+LocalLight LoadLocalLight(DevicePtr<float4> lightData, uint index)
 {
     // CPU packs 5 float4 rows per light (4th row = shadow data).
     uint base = index * 5u;
-    float4 p0 = g_lightData[base + 0u];
-    float4 p1 = g_lightData[base + 1u];
-    float4 p2 = g_lightData[base + 2u];
-    float4 p3 = g_lightData[base + 3u];
-    float4 p4 = g_lightData[base + 4u];
+    float4 p0 = lightData.Load(base + 0u);
+    float4 p1 = lightData.Load(base + 1u);
+    float4 p2 = lightData.Load(base + 2u);
+    float4 p3 = lightData.Load(base + 3u);
+    float4 p4 = lightData.Load(base + 4u);
 
     LocalLight l;
     l.position = p0.xyz;

@@ -20,10 +20,17 @@ namespace aether
 
 	namespace DrawContracts
 	{
+		struct LightingAddresses
+		{
+			gpu::DeviceAddress lightDataAddr = 0;
+			gpu::DeviceAddress tileHeadersAddr = 0;
+			gpu::DeviceAddress tileLightIndicesAddr = 0;
+		};
+
 		struct InstanceData
 		{
 			glm::mat4 model{1.0f};
-			std::uint32_t materialIndex = 0xFFFFFFFFu;
+			std::uint32_t materialIndex = 0;
 			std::uint32_t skinPaletteOffset = 0;
 			std::uint32_t skinJointCount = 0;
 			std::uint32_t _pad0 = 0;
@@ -45,12 +52,18 @@ namespace aether
 			gpu::DeviceAddress frameAddr = 0;
 			gpu::DeviceAddress instanceDataAddr = 0;
 			gpu::DeviceAddress skinPaletteAddr = 0;
+			gpu::DeviceAddress lightDataAddr = 0;
+			gpu::DeviceAddress tileHeadersAddr = 0;
+			gpu::DeviceAddress tileLightIndicesAddr = 0;
 		};
 
-		static_assert(sizeof(PushConstants) == 24, "PushConstants layout changed - update shaders/include/RenderContracts.slangh.");
+		static_assert(sizeof(PushConstants) == 48, "PushConstants layout changed - update shaders/include/RenderContracts.slangh.");
 		static_assert(offsetof(PushConstants, frameAddr) == 0);
 		static_assert(offsetof(PushConstants, instanceDataAddr) == 8);
 		static_assert(offsetof(PushConstants, skinPaletteAddr) == 16);
+		static_assert(offsetof(PushConstants, lightDataAddr) == 24);
+		static_assert(offsetof(PushConstants, tileHeadersAddr) == 32);
+		static_assert(offsetof(PushConstants, tileLightIndicesAddr) == 40);
 	} // namespace DrawContracts
 
 	// -------------------------------------------------------------------------

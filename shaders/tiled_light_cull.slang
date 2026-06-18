@@ -1,11 +1,14 @@
 // GPU tiled-light binning compute path.
+// Light data and tile buffers are accessed via buffer-device-address (BDA)
+// from the push constant block.
 
-[[vk::binding(0, 0)]] StructuredBuffer<float4> g_lightData;
-[[vk::binding(1, 0)]] RWStructuredBuffer<uint> g_tileHeadersFlat; // [tile*2+0]=offset, [tile*2+1]=count
-[[vk::binding(2, 0)]] RWStructuredBuffer<uint> g_tileLightIndices;
+#include "include/DevicePointer.slangh"
 
 struct CullPush
 {
+    DevicePtr<float4> lightData;
+    DevicePtr<uint>   tileHeadersFlat; // [tile*2+0]=offset, [tile*2+1]=count
+    DevicePtr<uint>   tileLightIndices;
     float4x4 viewProj;
     float4   params0; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
     uint4    params1; // x=tilePx, y=tilesX, z=tilesY, w=lightCount
@@ -27,8 +30,8 @@ void initTiles(uint3 tid : SV_DispatchThreadID)
     }
 
     uint base = tile * 2u;
-    g_tileHeadersFlat[base + 0u] = tile * pc.params2.x;
-    g_tileHeadersFlat[base + 1u] = 0u;
+    pc.tileHeadersFlat.Store(base + 0u, tile * pc.params2.x);
+    pc.tileHeadersFlat.Store(base + 1u, 0u);
 }
 
 [shader("compute")]
@@ -43,7 +46,7 @@ void binLights(uint3 tid : SV_DispatchThreadID)
     }
 
     uint base = lightIndex * 5u;
-    float4 p0 = g_lightData[base + 0u];
+    float4 p0 = pc.lightData.Load(base + 0u);
     float3 worldPos = p0.xyz;
     float radius = max(p0.w, 1e-4);
 
@@ -92,11 +95,12 @@ void binLights(uint3 tid : SV_DispatchThreadID)
             uint tile = ty * tilesX + tx;
             uint headerBase = tile * 2u;
             uint slot = 0u;
-            InterlockedAdd(g_tileHeadersFlat[headerBase + 1u], 1u, slot);
+            uint* headersPtr = pc.tileHeadersFlat.Ptr();
+            InterlockedAdd(headersPtr[headerBase + 1u], 1u, slot);
             if (slot < maxLightsPerTile)
             {
-                uint writeIdx = g_tileHeadersFlat[headerBase + 0u] + slot;
-                g_tileLightIndices[writeIdx] = lightIndex;
+                uint writeIdx = headersPtr[headerBase + 0u] + slot;
+                pc.tileLightIndices.Store(writeIdx, lightIndex);
             }
         }
     }

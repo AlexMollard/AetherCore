@@ -274,13 +274,10 @@ namespace aether
 			                }
 
 			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
-			                auto pushLighting = [this, frameIdx](gpu::CommandList& cmd, gpu::PipelineLayout layout)
-			                {
-				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
-			                };
+			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
-			                rit->second.renderQueue->FlushDrawPush(cmd, nullptr, pushLighting);
+			                rit->second.renderQueue->FlushDrawPush(cmd, nullptr, lightingAddr);
 			                rit->second.renderQueue->Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}

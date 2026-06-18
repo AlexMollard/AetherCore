@@ -8,13 +8,13 @@
 
 #include "camera/Camera.hpp"
 #include "gpu/CommandList.hpp"
-#include "gpu/DescriptorSetLayout.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/RenderGraph.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -59,12 +59,8 @@ namespace aether
 			return m_gpuBinningEnabled;
 		}
 
-		[[nodiscard]] gpu::DescriptorSetLayout GetSetLayout() const;
-		// Push lighting descriptors (3 storage buffers) directly into the command list
-		// at setIndex in the given pipeline layout. Replaces per-frame VkDescriptorSet allocation.
-		// `layout` is the opaque engine-side `gpu::PipelineLayout` handle; the backend casts to
-		// `VkPipelineLayout` at the seam.
-		void PushLightingDescriptor(gpu::CommandList& cmd, gpu::PipelineLayout layout, std::uint32_t frameSlot) const;
+		// Get BDA addresses for the lighting buffers at the given frame slot.
+		[[nodiscard]] DrawContracts::LightingAddresses GetLightingAddresses(std::uint32_t frameSlot) const;
 
 		// Register lighting compute passes (InitTiles + BinLights) in the render
 		// graph. Must be called after Initialize() and before the first frame.
@@ -128,6 +124,9 @@ namespace aether
 			gpu::Buffer lightsBuffer = nullptr;
 			gpu::Buffer tileHeadersBuffer = nullptr;
 			gpu::Buffer tileIndicesBuffer = nullptr;
+			gpu::DeviceAddress lightsDeviceAddr = 0;
+			gpu::DeviceAddress tileHeadersDeviceAddr = 0;
+			gpu::DeviceAddress tileIndicesDeviceAddr = 0;
 			gpu::DeviceSize lightsSize = 0;
 			gpu::DeviceSize tileHeadersSize = 0;
 			gpu::DeviceSize tileIndicesSize = 0;
@@ -146,21 +145,23 @@ namespace aether
 		void UpdateForViewCpu(std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights) const;
 		static void DisableForView(FrameConstants& fc);
 
-		// Per-frame push constants for the lighting compute passes (filled by
-		// PrepareForRenderGraph, consumed by the render graph pass callback).
+		// Per-frame push constants for the lighting compute passes. Sent via
+		// vkCmdPushConstants and consumed by the tiled_light_cull compute shader.
+		// Layout must match the shader's [[vk::push_constant]] struct.
 		struct LightingComputePush
 		{
 			glm::mat4 viewProj{1.0f};
-			glm::vec4 params0{0.0f};
-			glm::uvec4 params1{0u};
-			glm::uvec4 params2{0u};
+			glm::vec4 params0{0.0f};        // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
+			glm::uvec4 params1{0u};         // x=tilePx, y=tilesX, z=tilesY, w=lightCount
+			glm::uvec4 params2{0u};         // x=maxLightsPerTile
+			gpu::DeviceAddress lightDataAddr = 0;
+			gpu::DeviceAddress tileHeadersAddr = 0;
+			gpu::DeviceAddress tileLightIndicesAddr = 0;
 		};
 
 		const VulkanContext* m_context = nullptr;
 		const Renderer* m_renderer = nullptr;
 		GpuDevice* m_device = nullptr;
-		gpu::DescriptorSetLayout m_setLayout = nullptr;
-		mutable gpu::PipelineLayout m_computeLayout = nullptr;
 		mutable gpu::PipelineHandle m_initPipelineHandle;
 		mutable gpu::PipelineHandle m_cullPipelineHandle;
 		mutable std::array<FrameLightingBuffers, kMaxFramesInFlight> m_buffers;

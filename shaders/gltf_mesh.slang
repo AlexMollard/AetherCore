@@ -12,11 +12,6 @@
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
 [[vk::binding(1, 0)]] SamplerState g_linearSampler;
 
-// ── Tiled-lighting buffers (descriptor set 1) ────────────────────────────
-[[vk::binding(0, 1)]] StructuredBuffer<float4> g_lightData;
-[[vk::binding(1, 1)]] StructuredBuffer<uint2>  g_tileHeaders;
-[[vk::binding(2, 1)]] StructuredBuffer<uint>   g_tileLightIndices;
-
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
 #include "include/GpuMaterial.slangh"
@@ -206,7 +201,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
             min((uint)input.svPosition.y / tilePx, tilesY - 1u));
         uint tile = tileCoord.y * tilesX + tileCoord.x;
 
-        uint2 header = g_tileHeaders[tile];
+        uint2 header = pc.tileHeaders.Load(tile);
         uint start = header.x;
         uint count = header.y;
         uint maxPerTile = fc->tiledLightBufferOffsets.w;
@@ -218,8 +213,8 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
         for (uint i = 0u; i < count; ++i)
         {
-            uint lightIndex = g_tileLightIndices[start + i];
-            LocalLight light = LoadLocalLight(lightIndex);
+            uint lightIndex = pc.tileLightIndices.Load(start + i);
+            LocalLight light = LoadLocalLight(pc.lightData, lightIndex);
             AccumulateLocalLight(
                 light,
                 input.worldPos,

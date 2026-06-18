@@ -18,13 +18,12 @@ namespace aether::app::effects
 	bool EffectManager::CreateAndRegister(const char* name,
 	        aether::AssetManager& assets,
 	        aether::gpu::DescriptorSetLayout bindlessLayout,
-	        aether::gpu::DescriptorSetLayout lightingLayout,
 	        aether::gpu::Format colorFormat,
 	        aether::gpu::Format depthFormat,
 	        const char* shaderVfsPath,
 	        const aether::Material& material)
 	{
-		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const std::array<aether::gpu::DescriptorSetLayout, 1> setLayouts{bindlessLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = shaderVfsPath,

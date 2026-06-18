@@ -21,53 +21,12 @@
 
 namespace aether
 {
-	struct LightingComputePush
-	{
-		glm::mat4 viewProj{1.0f};
-		glm::vec4 params0{0.0f}; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
-		glm::uvec4 params1{0u};  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
-		glm::uvec4 params2{0u};  // x=maxLightsPerTile
-	};
-
 	void LightingManager::Initialize(GpuDevice& device, const VulkanContext& context)
 	{
 		AE_PROFILE_ZONE();
 		m_device = &device;
 		m_context = &context;
 		m_renderer = nullptr;
-
-		const gpu::GpuDescriptorSetLayoutBinding bindings[] = {
-		        {
-		                .binding = 0,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .descriptorCount = 1,
-		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
-		        },
-		        {
-		                .binding = 1,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .descriptorCount = 1,
-		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
-		        },
-		        {
-		                .binding = 2,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .descriptorCount = 1,
-		                .stageFlags = gpu::ShaderStage::Fragment | gpu::ShaderStage::Compute,
-		        },
-		};
-
-		const gpu::DescriptorSetLayoutDesc layoutDesc{
-		        .bindings = std::span<const gpu::GpuDescriptorSetLayoutBinding>(bindings, std::size(bindings)),
-		        .flags = gpu::DescriptorSetLayoutFlags::PushDescriptor,
-		};
-
-		auto result = gpu::CreateDescriptorSetLayout(device, layoutDesc);
-		if (!result)
-		{
-			Throw(AetherError::Vulkan(0, "LightingManager: failed to create lighting descriptor set layout."));
-		}
-		m_setLayout = *result;
 
 		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
 		{
@@ -88,7 +47,6 @@ namespace aether
 			return;
 		}
 
-		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		for (auto& frame: m_buffers)
 		{
 			auto destroyBuf = [](gpu::BufferHandle& h)
@@ -122,6 +80,9 @@ namespace aether
 			frame.lightsCapacity = 0;
 			frame.headersCapacity = 0;
 			frame.indicesCapacity = 0;
+			frame.lightsDeviceAddr = 0;
+			frame.tileHeadersDeviceAddr = 0;
+			frame.tileIndicesDeviceAddr = 0;
 		}
 
 		if (m_initPipelineHandle.IsValid())
@@ -134,66 +95,10 @@ namespace aether
 			gpu::ResourceRegistry::Destroy(m_cullPipelineHandle);
 			m_cullPipelineHandle = {};
 		}
-		if (m_computeLayout != nullptr)
-		{
-			gpu::Factory::DestroyPipelineLayout(device, m_computeLayout);
-			m_computeLayout = nullptr;
-		}
-		if (m_setLayout != nullptr)
-		{
-			gpu::DestroyDescriptorSetLayout(*m_device, m_setLayout);
-			m_setLayout = nullptr;
-		}
 
 		m_context = nullptr;
 		m_renderer = nullptr;
 		m_device = nullptr;
-	}
-
-	gpu::DescriptorSetLayout LightingManager::GetSetLayout() const
-	{
-		return m_setLayout;
-	}
-
-	void LightingManager::PushLightingDescriptor(gpu::CommandList& cmd, gpu::PipelineLayout layout, const std::uint32_t frameSlot) const
-	{
-		auto& frame = m_buffers[frameSlot];
-		const gpu::GpuDescriptorBufferInfo lightInfo{
-		        .buffer = frame.lightsBuffer,
-		        .offset = 0,
-		        .range = frame.lightsSize,
-		};
-		const gpu::GpuDescriptorBufferInfo headerInfo{
-		        .buffer = frame.tileHeadersBuffer,
-		        .offset = 0,
-		        .range = frame.tileHeadersSize,
-		};
-		const gpu::GpuDescriptorBufferInfo indexInfo{
-		        .buffer = frame.tileIndicesBuffer,
-		        .offset = 0,
-		        .range = frame.tileIndicesSize,
-		};
-		const gpu::GpuWriteDescriptorSet writes[] = {
-		        {
-		                .dstBinding = 0,
-		                .descriptorCount = 1,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .bufferInfo = &lightInfo,
-		        },
-		        {
-		                .dstBinding = 1,
-		                .descriptorCount = 1,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .bufferInfo = &headerInfo,
-		        },
-		        {
-		                .dstBinding = 2,
-		                .descriptorCount = 1,
-		                .descriptorType = gpu::DescriptorType::StorageBuffer,
-		                .bufferInfo = &indexInfo,
-		        },
-		};
-		cmd.PushDescriptorSet(layout, 1, std::span<const gpu::GpuWriteDescriptorSet>(writes, std::size(writes)));
 	}
 
 	void LightingManager::UpdateForView(const std::uint32_t frameSlot,
@@ -450,38 +355,22 @@ namespace aether
 		ensureBuffer(frame.lightsHandle, frame.lightsMapped, frame.lightsBuffer, frame.lightsSize, frame.lightsCapacity, lightCount, sizeof(GpuLight));
 		ensureBuffer(frame.tileHeadersHandle, frame.tileHeadersMapped, frame.tileHeadersBuffer, frame.tileHeadersSize, frame.headersCapacity, tileCount, sizeof(TileHeader));
 		ensureBuffer(frame.tileIndicesHandle, frame.tileIndicesMapped, frame.tileIndicesBuffer, frame.tileIndicesSize, frame.indicesCapacity, indexCount, sizeof(std::uint32_t));
+
+		frame.lightsDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.lightsHandle).deviceAddress;
+		frame.tileHeadersDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileHeadersHandle).deviceAddress;
+		frame.tileIndicesDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileIndicesHandle).deviceAddress;
 	}
 
 	void LightingManager::EnsureComputePipeline() const
 	{
 		AE_PROFILE_ZONE();
-		if (m_computeLayout != nullptr && m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
+		if (m_initPipelineHandle.IsValid() && m_cullPipelineHandle.IsValid())
 		{
 			return;
 		}
 
 		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
 		auto pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
-
-		// Create shared layout once.
-		if (m_computeLayout == nullptr)
-		{
-			const gpu::PushConstantRange pushRange{
-			        .stageFlags = gpu::ShaderStage::Compute,
-			        .offset = 0,
-			        .size = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
-			};
-			const std::array<gpu::DescriptorSetLayout, 1> setLayoutHandles{m_setLayout};
-			m_computeLayout = gpu::Factory::CreatePipelineLayout(device,
-			        {
-			                .setLayouts = setLayoutHandles,
-			                .pushConstantRanges = std::span<const gpu::PushConstantRange>(&pushRange, 1),
-			        });
-			if (m_computeLayout == nullptr)
-			{
-				Throw(AetherError::Vulkan(0, "LightingManager: failed to create compute pipeline layout."));
-			}
-		}
 
 		if (!m_initPipelineHandle.IsValid())
 		{
@@ -492,7 +381,6 @@ namespace aether
 			                .shaderEntry = "initTiles",
 			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			                .debugName = "LightCull.InitTiles",
-			                .existingLayout = m_computeLayout,
 			        });
 			if (!m_initPipelineHandle.IsValid())
 			{
@@ -509,13 +397,22 @@ namespace aether
 			                .shaderEntry = "binLights",
 			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			                .debugName = "LightCull.BinLights",
-			                .existingLayout = m_computeLayout,
 			        });
 			if (!m_cullPipelineHandle.IsValid())
 			{
 				Throw(AetherError::Vulkan(0, "LightingManager: failed to create binLights compute pipeline."));
 			}
 		}
+	}
+
+	DrawContracts::LightingAddresses LightingManager::GetLightingAddresses(std::uint32_t frameSlot) const
+	{
+		auto& frame = m_buffers[frameSlot];
+		return DrawContracts::LightingAddresses{
+		        .lightDataAddr = frame.lightsDeviceAddr,
+		        .tileHeadersAddr = frame.tileHeadersDeviceAddr,
+		        .tileLightIndicesAddr = frame.tileIndicesDeviceAddr,
+		};
 	}
 
 	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)
@@ -567,26 +464,13 @@ namespace aether
 			                {
 				                return;
 			                }
-			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
-			                auto& frame = m_buffers[frameSlot];
-
 			                gpu::CommandList cmd = ctx.recorder.View();
 
 			                // Host-write visibility barrier for the light data buffer.
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
 			                cmd.BindComputePipeline(initPipeline, initLayout);
-
-			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lightsBuffer, .offset = 0, .range = frame.lightsSize};
-			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeadersBuffer, .offset = 0, .range = frame.tileHeadersSize};
-			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndicesBuffer, .offset = 0, .range = frame.tileIndicesSize};
-			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
-			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
-			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
-			                        {.dstBinding = 2, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &indexInfo},
-			                }};
-			                cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
-			                cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.PushConstantsRaw(initLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
 			                cmd.Dispatch(m_lightTileGroups, 1, 1);
 		                });
 
@@ -601,22 +485,9 @@ namespace aether
 			                {
 				                return;
 			                }
-			                const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % kMaxFramesInFlight);
-			                auto& frame = m_buffers[frameSlot];
-
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(cullPipeline, cullLayout);
-
-			                const gpu::GpuDescriptorBufferInfo lightInfo{.buffer = frame.lightsBuffer, .offset = 0, .range = frame.lightsSize};
-			                const gpu::GpuDescriptorBufferInfo headerInfo{.buffer = frame.tileHeadersBuffer, .offset = 0, .range = frame.tileHeadersSize};
-			                const gpu::GpuDescriptorBufferInfo indexInfo{.buffer = frame.tileIndicesBuffer, .offset = 0, .range = frame.tileIndicesSize};
-			                const std::array<gpu::GpuWriteDescriptorSet, 3> writes{{
-			                        {.dstBinding = 0, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &lightInfo},
-			                        {.dstBinding = 1, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &headerInfo},
-			                        {.dstBinding = 2, .descriptorCount = 1, .descriptorType = gpu::DescriptorType::StorageBuffer, .bufferInfo = &indexInfo},
-			                }};
-			                cmd.PushDescriptorSet(m_computeLayout, 0, std::span<const gpu::GpuWriteDescriptorSet>(writes));
-			                cmd.PushConstantsRaw(m_computeLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.PushConstantsRaw(cullLayout, gpu::ShaderStage::Compute, 0, gpu::AsPushConstantBytes(m_lightPush));
 			                cmd.Dispatch(m_lightLightGroups, 1, 1);
 		                });
 
@@ -664,6 +535,9 @@ namespace aether
 		m_lightPush.params0 = glm::vec4(camera.GetNearPlane(), 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
 		m_lightPush.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		m_lightPush.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
+		m_lightPush.lightDataAddr = frame.lightsDeviceAddr;
+		m_lightPush.tileHeadersAddr = frame.tileHeadersDeviceAddr;
+		m_lightPush.tileLightIndicesAddr = frame.tileIndicesDeviceAddr;
 
 		m_lightTileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
 		m_lightLightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);

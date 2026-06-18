@@ -27,6 +27,9 @@ struct DrawPushConstants
     [[vk::offset(0)]]  DevicePtr<FrameConstantsData> frame;
     [[vk::offset(8)]]  DevicePtr<DrawInstanceData>   instanceData;
     [[vk::offset(16)]] DevicePtr<float4x4>           skinPalette; // float4x4 joints; 0 means unskinned
+    [[vk::offset(24)]] DevicePtr<float4>             lightData;
+    [[vk::offset(32)]] DevicePtr<uint2>              tileHeaders;
+    [[vk::offset(40)]] DevicePtr<uint>               tileLightIndices;
 };
 
 struct CullDrawInput

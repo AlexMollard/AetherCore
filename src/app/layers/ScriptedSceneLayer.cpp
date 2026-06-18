@@ -52,8 +52,7 @@ namespace aether::app
 	{
 		auto& assets = context.Get<AssetManager>();
 		auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
-		auto* const lightingLayout = context.Get<LightingManager>().GetSetLayout();
-		const std::array<aether::gpu::DescriptorSetLayout, 2> setLayouts{bindlessLayout, lightingLayout};
+		const std::array<aether::gpu::DescriptorSetLayout, 1> setLayouts{bindlessLayout};
 
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = "shaders://gltf_mesh.spv",
@@ -176,7 +175,6 @@ namespace aether::app
 		// Register effects so script can use set_entity_effect().
 		{
 			auto* const bindlessLayout = context.Get<BindlessManager>().GetLayout();
-			auto* const lightingLayout = context.Get<LightingManager>().GetSetLayout();
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 
@@ -187,7 +185,7 @@ namespace aether::app
 			plasmaMat.roughnessFactor = 2.0f;                       // scale
 			plasmaMat.occlusionStrength = 0.8f;                     // intensity
 
-			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, lightingLayout, colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
+			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), bindlessLayout, colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
 		}
 
 		m_sceneCtx.world = &context.Get<World>();

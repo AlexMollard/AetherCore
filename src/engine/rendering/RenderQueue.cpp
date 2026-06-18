@@ -923,32 +923,31 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, gpu::DescriptorSet lightingSet, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, lightingSet, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, bindlessSet, m_cachedFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const std::function<void(gpu::CommandList&, gpu::PipelineLayout)>& pushLightingFn, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, nullptr, m_cachedFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f, pushLightingFn);
+		FlushDrawImpl(cmd, bindlessSet, m_cachedFrameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, gpu::DescriptorSet lightingSet, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, lightingSet, overrideFrameAddr, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
+		FlushDrawImpl(cmd, bindlessSet, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
 	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
 	        gpu::DescriptorSet bindlessSet,
-	        gpu::DescriptorSet lightingSet,
 	        gpu::DeviceAddress frameAddr,
+	        const DrawContracts::LightingAddresses* lighting,
 	        const GraphicsPipeline* overridePipeline,
 	        std::uint32_t cascadeOffset,
 	        const char* debugLabel,
 	        float r,
 	        float g,
-	        float b,
-	        const LightingPushFn& pushLightingFn)
+	        float b)
 	{
 		AE_PROFILE_ZONE();
 		if (!cmd.IsValid())
@@ -966,14 +965,17 @@ namespace aether
 		        .frameAddr = frameAddr,
 		        .instanceDataAddr = m_cachedInstanceDataAddr,
 		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
+		        .lightDataAddr = lighting ? lighting->lightDataAddr : gpu::DeviceAddress{0},
+		        .tileHeadersAddr = lighting ? lighting->tileHeadersAddr : gpu::DeviceAddress{0},
+		        .tileLightIndicesAddr = lighting ? lighting->tileLightIndicesAddr : gpu::DeviceAddress{0},
 		};
+		(void) bindlessSet;
 		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		gpu::BufferHandle lastIndexBuffer{};
 		gpu::DeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
-		const GraphicsPipeline* lastLightingSetPipeline = nullptr;
 
 		for (const auto& batch: m_batchRenderInfos)
 		{
@@ -984,18 +986,6 @@ namespace aether
 				cmd.BindPipeline(activePipeline->GetPipeline(), activePipeline->GetLayout());
 				lastPipeline = activePipeline;
 				lastSetPipeline = nullptr;
-				lastLightingSetPipeline = nullptr;
-			}
-
-			if (pushLightingFn && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
-			{
-				pushLightingFn(cmd, static_cast<gpu::PipelineLayout>(activePipeline->GetLayout()));
-				lastLightingSetPipeline = activePipeline;
-			}
-			else if (lightingSet != nullptr && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
-			{
-				cmd.BindDescriptorSet(static_cast<gpu::PipelineLayout>(activePipeline->GetLayout()), 1, lightingSet);
-				lastLightingSetPipeline = activePipeline;
 			}
 
 			if (activePipeline != nullptr)
