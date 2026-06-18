@@ -90,17 +90,52 @@ namespace aether
 			VkDeviceAddress deviceAddress = 0;
 		};
 
+		// A pipeline is a set of VK_EXT_shader_object shader handles plus the
+		// rasterization / depth / blend / topology state that was previously
+		// baked into a VkPipeline. CommandList::BindPipeline re-applies the
+		// cached state via vkCmdSet* on every bind (shader objects are fully
+		// dynamic - no static pipeline state survives the migration).
 		struct PipelineEntry
 		{
-			VkPipeline pipeline = VK_NULL_HANDLE;
-			VkPipelineLayout layout = VK_NULL_HANDLE;
 			VkDevice device = VK_NULL_HANDLE;
-			bool ownsLayout = false;
-			// Optional GPL libraries; VK_NULL_HANDLE for compute / non-GPL pipelines.
-			VkPipeline vertInputLib = VK_NULL_HANDLE;
-			VkPipeline preRasterLib = VK_NULL_HANDLE;
-			VkPipeline fragShaderLib = VK_NULL_HANDLE;
-			VkPipeline fragOutputLib = VK_NULL_HANDLE;
+
+			// Shader handles. For graphics: vertexShader is set, fragmentShader
+			// is set unless the pipeline is depth-only (no fragment stage).
+			// For compute: computeShader is set, the graphics fields are null.
+			VkShaderEXT vertexShader = VK_NULL_HANDLE;
+			VkShaderEXT fragmentShader = VK_NULL_HANDLE;
+			VkShaderEXT computeShader = VK_NULL_HANDLE;
+
+			bool isGraphics = false;
+
+			// -- Cached dynamic state (graphics only) -------------------------
+			VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+			VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
+			VkCullModeFlags cullMode = VK_CULL_MODE_NONE;
+			VkFrontFace frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+			VkBool32 depthClampEnable = VK_FALSE;
+			VkBool32 rasterizerDiscardEnable = VK_FALSE;
+			VkBool32 depthBiasEnable = VK_FALSE;
+			VkBool32 primitiveRestartEnable = VK_FALSE;
+			VkBool32 depthTestEnable = VK_FALSE;
+			VkBool32 depthWriteEnable = VK_FALSE;
+			VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
+			VkBool32 depthBoundsTestEnable = VK_FALSE;
+			VkBool32 stencilTestEnable = VK_FALSE;
+			VkLogicOp logicOp = VK_LOGIC_OP_COPY;
+			float blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+			VkSampleCountFlags rasterizationSampleCount = VK_SAMPLE_COUNT_1_BIT;
+			// One color attachment's blend state (engine uses at most 1 RT per pipeline).
+			VkBool32 colorBlendEnable = VK_FALSE;
+			VkColorBlendEquationEXT colorBlendEquation{};
+			VkColorComponentFlags colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+			float lineWidth = 1.0f;
+			bool hasLineWidth = false;
+
+			// Vertex input (vertex-input-dynamic-state). Empty for BDA-only pipelines
+			// (the common case); populated by debug renderers that bind vertex streams.
+			std::vector<VkVertexInputBindingDescription2EXT> vertexBindings;
+			std::vector<VkVertexInputAttributeDescription2EXT> vertexAttributes;
 		};
 
 		ResourceRegistry() = default;

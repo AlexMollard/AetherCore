@@ -24,10 +24,7 @@ namespace aether::gpu
 	// generation-checked typed handles from `gpu/GpuHandles.hpp`. The full
 	// borrow-vs-owned table lives in docs/plans/gpu-abstraction-rendering-audit.md.
 	using DescriptorSet = void*;
-	using DescriptorSetLayout = void*;
-	using DescriptorPool = void*;
 	using Pipeline = void*;
-	using PipelineLayout = void*;
 	using PipelineCache = void*;
 	using Device = void*;
 	using PhysicalDevice = void*;
@@ -62,67 +59,6 @@ namespace aether::gpu
 		std::int32_t y = 0;
 		std::uint32_t width = 0;
 		std::uint32_t height = 0;
-	};
-
-	// Engine-facing descriptor buffer info for push-descriptor writes.
-	// Mirrors the layout of VkDescriptorBufferInfo. The `buffer` field is
-	// the raw VkBuffer (void*); the backend translates via reinterpret_cast
-	// in the same way the existing CommandList binding methods do. This
-	// keeps the header Vulkan-free while letting callers build descriptor
-	// write payloads from local buffer-table sources.
-	struct GpuDescriptorBufferInfo
-	{
-		Buffer buffer = nullptr;
-		DeviceAddress offset = 0;
-		DeviceAddress range = 0;
-	};
-
-	// Engine-facing descriptor image info for push-descriptor writes.
-	// Mirrors VkDescriptorImageInfo. `sampler` may be nullptr for
-	// STORAGE_IMAGE / SAMPLED_IMAGE writes. The backend translates the
-	// void* to VkImageView / VkSampler at the seam in CommandList.
-	// Forward-declared as opaque pointers so the struct can appear
-	// before the `using` aliases below.
-	struct GpuDescriptorImageInfo
-	{
-		void* sampler = nullptr;
-		void* imageView = nullptr;
-		ImageLayout imageLayout = ImageLayout::Undefined;
-	};
-
-	// Engine-facing push-descriptor write payload. Supports storage-buffer,
-	// storage-image, and combined-image-sampler paths today; other types
-	// (uniform buffer, texel buffer) are added when the engine needs them.
-	// Mirrors the layout of VkWriteDescriptorSet; the backend translates
-	// one-for-one in CommandList. Exactly one of `bufferInfo` or `imageInfo`
-	// is set based on `descriptorType`.
-	struct GpuWriteDescriptorSet
-	{
-		std::uint32_t dstBinding = 0;
-		std::uint32_t descriptorCount = 0;
-		DescriptorType descriptorType = DescriptorType::StorageBuffer;
-		const GpuDescriptorBufferInfo* bufferInfo = nullptr;
-		const GpuDescriptorImageInfo* imageInfo = nullptr;
-	};
-
-	// One binding inside a descriptor-set layout. Mirrors the subset of
-	// VkDescriptorSetLayoutBinding the engine needs to declare storage-
-	// buffer bindings.
-	struct GpuDescriptorSetLayoutBinding
-	{
-		std::uint32_t binding = 0;
-		DescriptorType descriptorType = DescriptorType::StorageBuffer;
-		std::uint32_t descriptorCount = 1;
-		ShaderStage stageFlags = ShaderStage::None;
-	};
-
-	// Push-constant range for a pipeline layout. Mirrors
-	// VkPushConstantRange.
-	struct PushConstantRange
-	{
-		ShaderStage stageFlags = ShaderStage::None;
-		std::uint32_t offset = 0;
-		std::uint32_t size = 0;
 	};
 
 	// Indirect-draw command struct mirror. Mirrors the layout of

@@ -190,8 +190,6 @@ namespace aether
 		        },
 		};
 
-		constexpr std::uint32_t kPushConstantSize = sizeof(std::uint64_t) + sizeof(glm::vec4) + sizeof(glm::mat4);
-
 		const gpu::GraphicsPipelineDesc desc{
 		        .shaderVfsPath = "shaders://debug_vert.spv",
 		        .fragmentVfsPath = "shaders://debug_frag.spv",
@@ -203,8 +201,6 @@ namespace aether
 		        .depthWriteEnable = false,
 		        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		        .blendEnable = true,
-		        .pushConstantSize = kPushConstantSize,
-		        .pushConstantStages = gpu::ShaderStage::Vertex,
 		        .topology = gpu::PrimitiveTopology::LineList,
 		        .polygonMode = gpu::PolygonMode::Line,
 		        .vertexBindings = kBindings,
@@ -614,7 +610,7 @@ namespace aether
 			                };
 			                static_assert(sizeof(DebugPc) == 88);
 
-			                cmd.BindPipeline(resolved.pipeline);
+			                cmd.BindPipeline(const_cast<void*>(resolved.state));
 			                cmd.SetLineWidth(2.0f);
 
 			                // 1) Immediate-mode batched debug primitives.

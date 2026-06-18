@@ -42,7 +42,6 @@ namespace aether
 		const gpu::ComputePipelineDesc desc{
 		        .shaderVfsPath = "shaders://cull_draws.spv",
 		        .shaderEntry = "main",
-		        .pushConstantSize = sizeof(CullContracts::PushConstants),
 		        .debugName = "CullPass.cullDraws",
 		};
 		m_singleHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, m_pipelineCache, desc);
@@ -64,7 +63,6 @@ namespace aether
 		const gpu::ComputePipelineDesc desc{
 		        .shaderVfsPath = "shaders://cull_draws_multi.spv",
 		        .shaderEntry = "main",
-		        .pushConstantSize = sizeof(CullContracts::MultiPushConstants),
 		        .debugName = "CullPass.cullDrawsMulti",
 		};
 		m_multiHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, m_pipelineCache, desc);
@@ -88,21 +86,11 @@ namespace aether
 
 	gpu::Pipeline CullPass::GetSinglePipeline() const
 	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_singleHandle).pipeline;
-	}
-
-	gpu::PipelineLayout CullPass::GetSingleLayout() const
-	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_singleHandle).layout;
+		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_singleHandle).state);
 	}
 
 	gpu::Pipeline CullPass::GetMultiPipeline() const
 	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_multiHandle).pipeline;
-	}
-
-	gpu::PipelineLayout CullPass::GetMultiLayout() const
-	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_multiHandle).layout;
+		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_multiHandle).state);
 	}
 } // namespace aether

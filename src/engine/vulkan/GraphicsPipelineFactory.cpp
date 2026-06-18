@@ -1,388 +1,187 @@
 #include "vulkan/GraphicsPipelineFactory.hpp"
 
 #include <string>
-#include <utility>
 #include <vector>
 
 #include "io/FileSystem.hpp"
-
 #include "utils/Assert.hpp"
-#include "utils/Logger.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
 namespace aether::vkutil
 {
-	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache gpuPipelineCache, const GraphicsPipeline::Desc& desc) noexcept
+	// Builds graphics VkShaderEXT handles via vkCreateShadersEXT. Vertex and
+	// fragment shaders are linked (VK_SHADER_CREATE_LINK_STAGE_BIT_EXT) and
+	// tagged VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT so they consume push data
+	// via vkCmdPushDataEXT. No VkPipeline / VkPipelineLayout is created - all
+	// fixed-function state (topology, rasterizer, depth, blend) is cached on
+	// the returned PipelineEntry and re-applied through vkCmdSet* on each bind.
+	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache /*gpuPipelineCache*/, const GraphicsPipeline::Desc& desc) noexcept
 	{
 		auto device = static_cast<VkDevice>(gpuDevice);
-		auto pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
-		const VkFormat vkDepthFormat = gpu::ToVk(desc.depthFormat);
 		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);
 		const bool hasColorAttachment = vkColorFormat != VK_FORMAT_UNDEFINED;
 
-		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
-		if (spirv->empty())
+		// Load vertex SPIR-V.
+		AE_TRY(vertSpirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
+		if (vertSpirv->empty())
 		{
 			AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: shader not found: " + std::string(desc.shaderVfsPath)));
 		}
 
-		const std::string vertName = std::string(desc.shaderVfsPath) + ".vert";
-		AE_EXPECT_OR_THROW(vertModule, vkutil::CreateShaderModule(device, *spirv, vertName.c_str()));
-
-		// fragModuleOwned must outlive all pipeline-create calls below —
-		// vkCreateGraphicsPipelines copies SPIR-V at create time, but the
-		// module handle must still be valid when the call is made.
-		UniqueShaderModule fragModuleOwned;
-		VkShaderModule fragModule = VK_NULL_HANDLE;
+		// Load fragment SPIR-V (separate file when provided, otherwise the same module).
+		std::vector<std::byte> fragSpirvStorage;
+		const std::vector<std::byte>* fragSpirv = &*vertSpirv;
 		const bool hasSeparateFragment = !desc.fragmentVfsPath.empty();
 		if (hasSeparateFragment)
 		{
-			AE_TRY(fragSpirv, io::FileSystem::ReadFile(desc.fragmentVfsPath));
-			if (fragSpirv->empty())
+			AE_TRY(fragLoaded, io::FileSystem::ReadFile(desc.fragmentVfsPath));
+			if (fragLoaded->empty())
 			{
 				AE_UNEXPECTED(AetherError::Asset("GraphicsPipeline: fragment shader not found: " + std::string(desc.fragmentVfsPath)));
 			}
-			const std::string fragName = std::string(desc.fragmentVfsPath) + ".frag";
-			AE_EXPECT_OR_THROW(fragModuleTemp, vkutil::CreateShaderModule(device, *fragSpirv, fragName.c_str()));
-			fragModuleOwned = std::move(fragModuleTemp);
-			fragModule = fragModuleOwned.Get();
+			fragSpirvStorage = std::move(*fragLoaded);
+			fragSpirv = &fragSpirvStorage;
 		}
-		else
-		{
-			fragModule = vertModule.Get();
-		}
-
-		// Shader modules are RAII-owned: vertModule and fragModuleOwned
-		// auto-destroy at scope exit on every path, including errors.
 
 		const std::string vertEntry(desc.vertexEntry);
 		const std::string fragEntry(desc.fragmentEntry);
 
-		// -- Vertex input (bindings + attributes) ----------------------------
-		// Use caller-provided vertex bindings/attributes when non-empty, else
-		// an empty vertex input (no vertex buffers needed).
-		const bool hasVertexInput = !desc.vertexBindings.empty();
-		std::vector<VkVertexInputBindingDescription> vkVkBindings;
-		std::vector<VkVertexInputAttributeDescription> vkVkAttribs;
-		if (hasVertexInput)
+		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
+
+		// Shader-object create flags: layout-free (descriptor heap) + link the
+		// two stages so the driver can cross-optimize vert/frag.
+		const VkShaderCreateFlagsEXT shaderFlags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT | VK_SHADER_CREATE_LINK_STAGE_BIT_EXT;
+
+		VkShaderCreateInfoEXT vertInfo{
+		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+		        .pNext = mappings,
+		        .flags = shaderFlags,
+		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+		        .nextStage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		        .codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT,
+		        .codeSize = vertSpirv->size(),
+		        .pCode = vertSpirv->data(),
+		        .pName = vertEntry.c_str(),
+		        .setLayoutCount = 0,
+		        .pSetLayouts = nullptr,
+		        .pushConstantRangeCount = 0,
+		        .pPushConstantRanges = nullptr,
+		        .pSpecializationInfo = nullptr,
+		};
+
+		VkShaderCreateInfoEXT fragInfo{
+		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+		        .pNext = mappings,
+		        .flags = shaderFlags,
+		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+		        .nextStage = 0,
+		        .codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT,
+		        .codeSize = fragSpirv->size(),
+		        .pCode = fragSpirv->data(),
+		        .pName = fragEntry.c_str(),
+		        .setLayoutCount = 0,
+		        .pSetLayouts = nullptr,
+		        .pushConstantRangeCount = 0,
+		        .pPushConstantRanges = nullptr,
+		        .pSpecializationInfo = nullptr,
+		};
+
+		const VkShaderCreateInfoEXT shaderCreateInfos[] = {vertInfo, fragInfo};
+		VkShaderEXT shaders[2] = {VK_NULL_HANDLE, VK_NULL_HANDLE};
+		VkShaderEXT& vertShader = shaders[0];
+		VkShaderEXT& fragShader = shaders[1];
+
+		const VkResult result = vkCreateShadersEXT(device, 2, shaderCreateInfos, nullptr, shaders);
+		if (result != VK_SUCCESS)
 		{
-			vkVkBindings.reserve(desc.vertexBindings.size());
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create graphics shaders for " + std::string(desc.shaderVfsPath)));
+		}
+
+		// Name the shaders for debugging.
+		if (desc.debugName != nullptr)
+		{
+			const std::string vertName = std::string(desc.debugName) + ".vert";
+			const std::string fragName = std::string(desc.debugName) + ".frag";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(vertShader), VK_OBJECT_TYPE_SHADER_EXT, vertName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragShader), VK_OBJECT_TYPE_SHADER_EXT, fragName.c_str());
+		}
+		else
+		{
+			const std::string vertName = std::string(desc.shaderVfsPath) + ".vert";
+			const std::string fragName = (hasSeparateFragment ? std::string(desc.fragmentVfsPath) : std::string(desc.shaderVfsPath)) + ".frag";
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(vertShader), VK_OBJECT_TYPE_SHADER_EXT, vertName.c_str());
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragShader), VK_OBJECT_TYPE_SHADER_EXT, fragName.c_str());
+		}
+
+		// -- Build the entry with cached dynamic state -----------------------
+		ResourceRegistry::PipelineEntry entry{};
+		entry.device = device;
+		entry.isGraphics = true;
+		entry.vertexShader = vertShader;
+		entry.fragmentShader = fragShader;
+
+		entry.topology = gpu::ToVk(desc.topology);
+		entry.polygonMode = gpu::ToVk(desc.polygonMode);
+		entry.cullMode = VK_CULL_MODE_NONE;
+		entry.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+		entry.depthTestEnable = desc.depthTestEnable ? VK_TRUE : VK_FALSE;
+		entry.depthWriteEnable = desc.depthWriteEnable ? VK_TRUE : VK_FALSE;
+		entry.depthCompareOp = vkDepthCompareOp;
+		entry.rasterizationSampleCount = VK_SAMPLE_COUNT_1_BIT;
+		entry.lineWidth = 1.0f;
+		entry.hasLineWidth = desc.lineWidthDynamic;
+
+		// Color blend (single attachment - the engine never uses MRT).
+		if (hasColorAttachment)
+		{
+			entry.colorBlendEnable = desc.blendEnable ? VK_TRUE : VK_FALSE;
+			entry.colorBlendEquation.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+			entry.colorBlendEquation.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			entry.colorBlendEquation.colorBlendOp = VK_BLEND_OP_ADD;
+			entry.colorBlendEquation.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+			entry.colorBlendEquation.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+			entry.colorBlendEquation.alphaBlendOp = VK_BLEND_OP_ADD;
+			entry.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+		}
+		else
+		{
+			entry.colorBlendEnable = VK_FALSE;
+			entry.colorWriteMask = 0;
+		}
+
+		// Vertex input (dynamic). Empty for BDA-only pipelines.
+		if (!desc.vertexBindings.empty())
+		{
+			entry.vertexBindings.reserve(desc.vertexBindings.size());
 			for (const gpu::VertexInputBinding& b: desc.vertexBindings)
 			{
-				vkVkBindings.push_back(VkVertexInputBindingDescription{
+				entry.vertexBindings.push_back(VkVertexInputBindingDescription2EXT{
+				        .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+				        .pNext = nullptr,
 				        .binding = b.binding,
 				        .stride = b.stride,
 				        .inputRate = static_cast<VkVertexInputRate>(b.inputRate),
+				        .divisor = 1,
 				});
 			}
-			vkVkAttribs.reserve(desc.vertexAttributes.size());
+		}
+		if (!desc.vertexAttributes.empty())
+		{
+			entry.vertexAttributes.reserve(desc.vertexAttributes.size());
 			for (const gpu::VertexInputAttribute& a: desc.vertexAttributes)
 			{
-				vkVkAttribs.push_back(VkVertexInputAttributeDescription{
+				entry.vertexAttributes.push_back(VkVertexInputAttributeDescription2EXT{
+				        .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+				        .pNext = nullptr,
 				        .location = a.location,
 				        .binding = a.binding,
 				        .format = gpu::ToVk(a.format),
 				        .offset = a.offset,
 				});
 			}
-		}
-		const VkPipelineVertexInputStateCreateInfo vertexInput{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		        .vertexBindingDescriptionCount = static_cast<std::uint32_t>(vkVkBindings.size()),
-		        .pVertexBindingDescriptions = vkVkBindings.data(),
-		        .vertexAttributeDescriptionCount = static_cast<std::uint32_t>(vkVkAttribs.size()),
-		        .pVertexAttributeDescriptions = vkVkAttribs.data(),
-		};
-		const VkPipelineInputAssemblyStateCreateInfo inputAssembly{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		        .topology = gpu::ToVk(desc.topology),
-		};
-		const VkPipelineViewportStateCreateInfo viewportState{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		        .viewportCount = 1,
-		        .scissorCount = 1,
-		};
-		const VkPipelineRasterizationStateCreateInfo rasterizer{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		        .polygonMode = gpu::ToVk(desc.polygonMode),
-		        .cullMode = VK_CULL_MODE_NONE,
-		        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-		        .lineWidth = 1.0f,
-		};
-		const VkPipelineMultisampleStateCreateInfo multisampling{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
-		};
-		const VkPipelineDepthStencilStateCreateInfo depthStencil{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		        .depthTestEnable = desc.depthTestEnable ? VK_TRUE : VK_FALSE,
-		        .depthWriteEnable = desc.depthWriteEnable ? VK_TRUE : VK_FALSE,
-		        .depthCompareOp = vkDepthCompareOp,
-		        .depthBoundsTestEnable = VK_FALSE,
-		        .stencilTestEnable = VK_FALSE,
-		        .minDepthBounds = 0.0f,
-		        .maxDepthBounds = 1.0f,
-		};
-		const VkPipelineColorBlendAttachmentState colorBlendAttach{
-		        .blendEnable = desc.blendEnable ? VK_TRUE : VK_FALSE,
-		        .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-		        .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		        .colorBlendOp = VK_BLEND_OP_ADD,
-		        .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-		        .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-		        .alphaBlendOp = VK_BLEND_OP_ADD,
-		        .colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT,
-		};
-		const VkPipelineColorBlendStateCreateInfo colorBlend{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-		        .attachmentCount = hasColorAttachment ? 1u : 0u,
-		        .pAttachments = hasColorAttachment ? &colorBlendAttach : nullptr,
-		};
-		const VkDynamicState kBaseDynamicStates[] = {
-		        VK_DYNAMIC_STATE_VIEWPORT,
-		        VK_DYNAMIC_STATE_SCISSOR,
-		};
-		const VkDynamicState kDynamicStatesWithLineWidth[] = {
-		        VK_DYNAMIC_STATE_VIEWPORT,
-		        VK_DYNAMIC_STATE_SCISSOR,
-		        VK_DYNAMIC_STATE_LINE_WIDTH,
-		};
-		const bool hasLineWidthDynamic = desc.lineWidthDynamic;
-		const VkPipelineDynamicStateCreateInfo dynamicState{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		        .dynamicStateCount = hasLineWidthDynamic ? 3u : 2u,
-		        .pDynamicStates = hasLineWidthDynamic ? kDynamicStatesWithLineWidth : kBaseDynamicStates,
-		};
-
-		// -- Pipeline layout --------------------------------------------------
-		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
-
-		// All graphics pipelines use VK_EXT_descriptor_heap for push constants
-		// (vkCmdPushDataEXT) and access all data via BDA — no VkPipelineLayout
-		// or VkPushConstantRange is needed.
-		const VkPipelineLayout layout = VK_NULL_HANDLE;
-		const VkPipelineCreateFlags2 descriptorHeapFlags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT;
-
-		VkPipelineShaderStageCreateInfo vertStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-		        .module = vertModule.Get(),
-		        .pName = vertEntry.c_str(),
-		};
-		VkPipelineShaderStageCreateInfo fragStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		        .module = fragModule,
-		        .pName = fragEntry.c_str(),
-		};
-
-		if (mappings)
-		{
-			vertStage.pNext = mappings;
-			fragStage.pNext = mappings;
-		}
-
-		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
-		const VkFormat* pColorFormats = hasColorAttachment ? &vkColorFormat : nullptr;
-
-		// -- The entry we will return. The 4 GPL libraries are filled in below
-		//    and destroyed in unison with the linked pipeline by the registry.
-		ResourceRegistry::PipelineEntry entry{};
-		entry.device = device;
-		entry.layout = layout;
-		entry.ownsLayout = false;
-
-		// -- GPL: vertex input interface library ------------------------------
-		const VkGraphicsPipelineLibraryCreateInfoEXT gplVertexInput{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
-		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_VERTEX_INPUT_INTERFACE_BIT_EXT,
-		};
-		const VkPipelineCreateFlags2CreateInfo vertInputFlags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = &gplVertexInput,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
-		};
-		const VkGraphicsPipelineCreateInfo vertInputLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &vertInputFlags2,
-		        .flags = 0,
-		        .pVertexInputState = &vertexInput,
-		        .pInputAssemblyState = &inputAssembly,
-		        .layout = layout,
-		};
-		VkPipeline vertInputLib = VK_NULL_HANDLE;
-		VkResult result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &vertInputLibInfo, nullptr, &vertInputLib);
-		if (result != VK_SUCCESS)
-		{
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create vertex-input GPL library."));
-		}
-		entry.vertInputLib = vertInputLib;
-		{
-			const std::string libName = std::string(desc.shaderVfsPath) + ".VertexInput";
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(vertInputLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
-		}
-
-		// -- GPL: pre-rasterization library (vertex stage) --------------------
-		const VkGraphicsPipelineLibraryCreateInfoEXT gplPreRaster{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
-		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_PRE_RASTERIZATION_SHADERS_BIT_EXT,
-		};
-		const VkPipelineCreateFlags2CreateInfo preRasterFlags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = &gplPreRaster,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
-		};
-		const VkGraphicsPipelineCreateInfo preRasterLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &preRasterFlags2,
-		        .flags = 0,
-		        .stageCount = 1,
-		        .pStages = &vertStage,
-		        .pInputAssemblyState = &inputAssembly,
-		        .pViewportState = &viewportState,
-		        .pRasterizationState = &rasterizer,
-		        .pDynamicState = &dynamicState,
-		        .layout = layout,
-		};
-		VkPipeline preRasterLib = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &preRasterLibInfo, nullptr, &preRasterLib);
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipeline(device, vertInputLib, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create pre-rasterization GPL library."));
-		}
-		entry.preRasterLib = preRasterLib;
-		{
-			const std::string libName = std::string(desc.shaderVfsPath) + ".PreRaster";
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(preRasterLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
-		}
-
-		// -- GPL: fragment shader library -------------------------------------
-		const VkPipelineRenderingCreateInfo fragShaderRenderingInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		        .colorAttachmentCount = colorAttachmentCount,
-		        .pColorAttachmentFormats = pColorFormats,
-		        .depthAttachmentFormat = vkDepthFormat,
-		};
-		const VkGraphicsPipelineLibraryCreateInfoEXT gplFragShader{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
-		        .pNext = &fragShaderRenderingInfo,
-		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_SHADER_BIT_EXT,
-		};
-		const VkPipelineCreateFlags2CreateInfo fragShaderFlags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = &gplFragShader,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
-		};
-		const VkGraphicsPipelineCreateInfo fragShaderLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &fragShaderFlags2,
-		        .flags = 0,
-		        .stageCount = 1,
-		        .pStages = &fragStage,
-		        .pDepthStencilState = &depthStencil,
-		        .layout = layout,
-		};
-		VkPipeline fragShaderLib = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragShaderLibInfo, nullptr, &fragShaderLib);
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipeline(device, vertInputLib, nullptr);
-			vkDestroyPipeline(device, preRasterLib, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-shader GPL library."));
-		}
-		entry.fragShaderLib = fragShaderLib;
-		{
-			const std::string libName = std::string(desc.shaderVfsPath) + ".FragShader";
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragShaderLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
-		}
-
-		// -- GPL: fragment output interface library ---------------------------
-		const VkPipelineRenderingCreateInfo fragOutputRenderingInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		        .colorAttachmentCount = colorAttachmentCount,
-		        .pColorAttachmentFormats = pColorFormats,
-		        .depthAttachmentFormat = vkDepthFormat,
-		};
-		const VkGraphicsPipelineLibraryCreateInfoEXT gplFragOutput{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_LIBRARY_CREATE_INFO_EXT,
-		        .pNext = &fragOutputRenderingInfo,
-		        .flags = VK_GRAPHICS_PIPELINE_LIBRARY_FRAGMENT_OUTPUT_INTERFACE_BIT_EXT,
-		};
-		const VkPipelineCreateFlags2CreateInfo fragOutputFlags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = &gplFragOutput,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
-		};
-		const VkGraphicsPipelineCreateInfo fragOutputLibInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &fragOutputFlags2,
-		        .flags = 0,
-		        .pMultisampleState = &multisampling,
-		        .pColorBlendState = &colorBlend,
-		        .layout = layout,
-		};
-		VkPipeline fragOutputLib = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &fragOutputLibInfo, nullptr, &fragOutputLib);
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipeline(device, vertInputLib, nullptr);
-			vkDestroyPipeline(device, preRasterLib, nullptr);
-			vkDestroyPipeline(device, fragShaderLib, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to create fragment-output GPL library."));
-		}
-		entry.fragOutputLib = fragOutputLib;
-		{
-			const std::string libName = std::string(desc.shaderVfsPath) + ".FragOutput";
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(fragOutputLib), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
-		}
-
-		// -- GPL: link all libraries into final pipeline ----------------------
-		const VkPipeline kLibs[] = {vertInputLib, preRasterLib, fragShaderLib, fragOutputLib};
-		const VkPipelineLibraryCreateInfoKHR libLink{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_LIBRARY_CREATE_INFO_KHR,
-		        .libraryCount = 4,
-		        .pLibraries = kLibs,
-		};
-		const VkPipelineRenderingCreateInfo renderingInfo{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-		        .pNext = &libLink,
-		        .colorAttachmentCount = colorAttachmentCount,
-		        .pColorAttachmentFormats = pColorFormats,
-		        .depthAttachmentFormat = vkDepthFormat,
-		};
-		const VkPipelineCreateFlags2CreateInfo linkFlags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = &renderingInfo,
-		        .flags = VK_PIPELINE_CREATE_2_LINK_TIME_OPTIMIZATION_BIT_EXT | descriptorHeapFlags,
-		};
-		const VkGraphicsPipelineCreateInfo linkInfo{
-		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-		        .pNext = &linkFlags2,
-		        .flags = 0,
-		        .layout = layout,
-		};
-
-		VkPipeline pipeline = VK_NULL_HANDLE;
-		result = vkCreateGraphicsPipelines(device, pipelineCache, 1, &linkInfo, nullptr, &pipeline);
-
-		// Shader modules RAII-destroy here regardless of result.
-
-		if (result != VK_SUCCESS)
-		{
-			vkDestroyPipeline(device, vertInputLib, nullptr);
-			vkDestroyPipeline(device, preRasterLib, nullptr);
-			vkDestroyPipeline(device, fragShaderLib, nullptr);
-			vkDestroyPipeline(device, fragOutputLib, nullptr);
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "Failed to link GPL pipeline."));
-		}
-		entry.pipeline = pipeline;
-		{
-			const std::string libName = std::string(desc.shaderVfsPath) + ".Linked";
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(pipeline), VK_OBJECT_TYPE_PIPELINE, libName.c_str());
 		}
 
 		return entry;

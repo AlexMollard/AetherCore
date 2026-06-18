@@ -4,7 +4,6 @@
 #include <source_location>
 #include <span>
 
-#include "gpu/DescriptorSetLayout.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
@@ -64,13 +63,7 @@ namespace aether::gpu
 	{
 		const char* shaderVfsPath = nullptr;
 		const char* shaderEntry = "main";
-		std::uint32_t pushConstantSize = 0;
 		const char* debugName = nullptr;
-		// Optional borrowed pipeline layout. When non-null the factory skips
-		// vkCreatePipelineLayout and uses this layout directly (ownsLayout=false).
-		// Useful when the layout includes descriptor set layouts or is shared
-		// across multiple pipelines.
-		PipelineLayout existingLayout = nullptr;
 		const void* descriptorHeapMappings = nullptr;
 	};
 
@@ -93,12 +86,6 @@ namespace aether::gpu
 		bool depthWriteEnable = false;
 		CompareOp depthCompareOp = CompareOp::Less;
 		bool blendEnable = false;
-		std::uint32_t pushConstantSize = 0;
-		ShaderStage pushConstantStages = ShaderStage::AllGraphics;
-		// Borrowed. The caller is responsible for keeping these layout handles
-		// alive for the duration of the call (BindlessManager layouts are
-		// engine-global and live the whole frame).
-		std::span<const DescriptorSetLayout> setLayouts;
 		// Graphics-pipeline state overrides for non-default pipelines
 		// (debug renderers, etc.). Defaults match the standard MeshDraw path.
 		PrimitiveTopology topology = PrimitiveTopology::TriangleList;
@@ -141,23 +128,21 @@ namespace aether::gpu
 		[[nodiscard]] static BufferHandle CreateAliasedBuffer(DeviceSize size, BufferUsage usage, void* existingAllocation, DeviceSize memoryOffset, const char* debugName = nullptr) noexcept;
 
 		// Compute-pipeline: factory + register. Returns an opaque
-		// PipelineHandle. Layout is owned by the registry entry (when the
-		// factory sets ownsLayout=true) and is destroyed when the handle is.
+		// PipelineHandle.
 		[[nodiscard]] static PipelineHandle CreateComputePipeline(Device device, PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;
 
 		// Graphics-pipeline: factory + register. Returns an opaque
-		// PipelineHandle bound to the linked VkPipeline + VkPipelineLayout.
-		// The 4 GPL libraries used during linking are also tracked by the
-		// registry entry and destroyed alongside the linked pipeline.
+		// PipelineHandle bound to one or two VkShaderEXT handles plus the
+		// cached dynamic state the command list re-applies on every bind.
 		[[nodiscard]] static PipelineHandle CreateGraphicsPipeline(Device device, PipelineCache pipelineCache, const struct GraphicsPipelineDesc& desc) noexcept;
 
-		// Resolve a PipelineHandle to an opaque gpu::Pipeline pointer (the
-		// VkPipeline handle) and a gpu::PipelineLayout pointer. Returns
-		// {nullptr, nullptr} if the handle is stale or the slot is empty.
+		// Resolve a PipelineHandle to an opaque pointer to the vulkan-side
+		// pipeline state (shader handles + cached dynamic state). The pointer
+		// is valid until the handle is destroyed. Returns nullptr if the
+		// handle is stale or the slot is empty.
 		struct ResolvedPipeline
 		{
-			Pipeline pipeline = nullptr;
-			PipelineLayout layout = nullptr;
+			const void* state = nullptr;
 		};
 
 		struct ResolvedTexture

@@ -6,7 +6,6 @@
 #include <glm/common.hpp>
 #include <vector>
 
-#include "gpu/DescriptorSetLayoutOps.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/GpuDeviceFactory.hpp"
 #include "gpu/GpuEnums.hpp"
@@ -379,7 +378,6 @@ namespace aether
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "initTiles",
-			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			                .debugName = "LightCull.InitTiles",
 			        });
 			if (!m_initPipelineHandle.IsValid())
@@ -395,7 +393,6 @@ namespace aether
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "binLights",
-			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(LightingComputePush)),
 			                .debugName = "LightCull.BinLights",
 			        });
 			if (!m_cullPipelineHandle.IsValid())
@@ -458,7 +455,7 @@ namespace aether
 		        .WriteBuffer(m_rgTileHeaders)
 		        .WriteBuffer(m_rgTileIndices)
 		        .ExecuteCompute(
-		                [this, initPipeline = initResolved.pipeline](PassContext& ctx)
+		                [this, initPipeline = const_cast<void*>(initResolved.state)](PassContext& ctx)
 		                {
 			                if (!m_lightDataReady)
 			                {
@@ -469,9 +466,9 @@ namespace aether
 			                // Host-write visibility barrier for the light data buffer.
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
-	cmd.BindComputePipeline(initPipeline);
-				cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-				cmd.Dispatch(m_lightTileGroups, 1, 1);
+			                cmd.BindComputePipeline(initPipeline);
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.Dispatch(m_lightTileGroups, 1, 1);
 		                });
 
 		graph.AddComputePass("$Lighting.BinLights")
@@ -479,16 +476,16 @@ namespace aether
 		        .ReadWriteBuffer(m_rgTileHeaders)
 		        .ReadWriteBuffer(m_rgTileIndices)
 		        .ExecuteCompute(
-		                [this, cullPipeline = cullResolved.pipeline](PassContext& ctx)
+		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {
 			                if (!m_lightDataReady || m_lightLightGroups == 0)
 			                {
 				                return;
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
-	cmd.BindComputePipeline(cullPipeline);
-				cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-				cmd.Dispatch(m_lightLightGroups, 1, 1);
+			                cmd.BindComputePipeline(cullPipeline);
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
+			                cmd.Dispatch(m_lightLightGroups, 1, 1);
 		                });
 
 		m_rgPassesRegistered = true;

@@ -1208,31 +1208,17 @@ namespace aether
 		{
 			return;
 		}
-		// Linked pipeline first - the libraries it was built from can go
-		// immediately after (the linked pipeline retained its own state copy).
-		if (entry.pipeline != VK_NULL_HANDLE)
+		if (entry.vertexShader != VK_NULL_HANDLE)
 		{
-			vkDestroyPipeline(entry.device, entry.pipeline, nullptr);
+			vkDestroyShaderEXT(entry.device, entry.vertexShader, nullptr);
 		}
-		if (entry.vertInputLib != VK_NULL_HANDLE)
+		if (entry.fragmentShader != VK_NULL_HANDLE)
 		{
-			vkDestroyPipeline(entry.device, entry.vertInputLib, nullptr);
+			vkDestroyShaderEXT(entry.device, entry.fragmentShader, nullptr);
 		}
-		if (entry.preRasterLib != VK_NULL_HANDLE)
+		if (entry.computeShader != VK_NULL_HANDLE)
 		{
-			vkDestroyPipeline(entry.device, entry.preRasterLib, nullptr);
-		}
-		if (entry.fragShaderLib != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(entry.device, entry.fragShaderLib, nullptr);
-		}
-		if (entry.fragOutputLib != VK_NULL_HANDLE)
-		{
-			vkDestroyPipeline(entry.device, entry.fragOutputLib, nullptr);
-		}
-		if (entry.layout != VK_NULL_HANDLE && entry.ownsLayout)
-		{
-			vkDestroyPipelineLayout(entry.device, entry.layout, nullptr);
+			vkDestroyShaderEXT(entry.device, entry.computeShader, nullptr);
 		}
 	}
 
@@ -1307,9 +1293,7 @@ namespace aether::gpu
 		const vkutil::ComputePipelineDesc vkDesc{
 		        .shaderVfsPath = desc.shaderVfsPath,
 		        .shaderEntry = desc.shaderEntry,
-		        .pushConstantSize = desc.pushConstantSize,
 		        .debugName = desc.debugName,
-		        .existingLayout = static_cast<VkPipelineLayout>(desc.existingLayout),
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
 		const auto entryExp = vkutil::CreateComputePipelineEntry(device, pipelineCache, vkDesc);
@@ -1333,9 +1317,6 @@ namespace aether::gpu
 		        .depthWriteEnable = desc.depthWriteEnable,
 		        .depthCompareOp = desc.depthCompareOp,
 		        .blendEnable = desc.blendEnable,
-		        .pushConstantSize = desc.pushConstantSize,
-		        .pushConstantStages = desc.pushConstantStages,
-		        .setLayouts = desc.setLayouts,
 		        .topology = desc.topology,
 		        .polygonMode = desc.polygonMode,
 		        .vertexBindings = desc.vertexBindings,
@@ -1359,8 +1340,7 @@ namespace aether::gpu
 			return {};
 		}
 		ResolvedPipeline out{};
-		out.pipeline = static_cast<Pipeline>(entry->pipeline);
-		out.layout = static_cast<PipelineLayout>(entry->layout);
+		out.state = static_cast<const void*>(entry);
 		return out;
 	}
 

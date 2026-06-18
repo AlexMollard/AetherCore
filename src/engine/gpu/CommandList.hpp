@@ -68,11 +68,6 @@ namespace aether::gpu
 		void DrawIndexedIndirect(void* buffer, DeviceAddress offset, std::uint32_t drawCount, std::uint32_t stride);
 		void DrawIndexedIndirectCount(void* indirectBuffer, DeviceAddress indirectOffset, void* countBuffer, DeviceAddress countOffset, std::uint32_t maxDrawCount, std::uint32_t stride);
 
-		// Engine-typed push-descriptor path. Translates GpuWriteDescriptorSet
-		// to the backend at the seam. The writes span must outlive the call.
-		void PushDescriptorSet(PipelineLayout pipelineLayout, std::uint32_t set, std::span<const GpuWriteDescriptorSet> writes) noexcept;
-		void PushDescriptorSet(PipelineBindPoint bindPoint, PipelineLayout pipelineLayout, std::uint32_t set, std::span<const GpuWriteDescriptorSet> writes) noexcept;
-
 		void FillBuffer(void* buffer, DeviceAddress offset, DeviceAddress size, std::uint32_t value) noexcept;
 
 		void SetViewport(const Viewport& viewport);
@@ -103,6 +98,5 @@ namespace aether::gpu
 
 	private:
 		void* m_cmd = nullptr;
-		PipelineBindPoint m_boundBindPoint = PipelineBindPoint::Graphics;
 	};
 } // namespace aether::gpu

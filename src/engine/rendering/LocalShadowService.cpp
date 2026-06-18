@@ -131,7 +131,6 @@ namespace aether
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://vsm_blur.spv",
 			                .shaderEntry = "main",
-			                .pushConstantSize = static_cast<std::uint32_t>(sizeof(BlurPushConstants)),
 			                .debugName = "VSMBlur",
 			        });
 			if (!m_blurPipelineHandle.IsValid())
@@ -505,28 +504,35 @@ namespace aether
 
 			                // Transition atlas: ShaderReadOnly → General for copy.
 			                cmd.ImageMemoryBarrier(atlasImage,
-			                        gpu::ImageLayout::ShaderReadOnly, gpu::ImageLayout::General,
+			                        gpu::ImageLayout::ShaderReadOnly,
+			                        gpu::ImageLayout::General,
 			                        gpu::ImageAspect::Color,
-			                        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead,
-			                        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferRead);
+			                        gpu::PipelineStage::FragmentShader,
+			                        gpu::AccessFlags::ShaderRead,
+			                        gpu::PipelineStage::Transfer,
+			                        gpu::AccessFlags::TransferRead);
 			                // Copy atlas region → blur buffer.
-			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf,
-			                        gpu::ImageLayout::General, gpu::ImageAspect::Color,
-			                        bounds.width, bounds.height,
+			                cmd.CopyImageToBuffer(atlasImage,
+			                        blurVkBuf,
+			                        gpu::ImageLayout::General,
+			                        gpu::ImageAspect::Color,
+			                        bounds.width,
+			                        bounds.height,
 			                        (static_cast<std::uint64_t>(bounds.x) + static_cast<std::uint64_t>(bounds.y) * ShadowAtlasManager::kAtlasWidth) * sizeof(float) * 2u);
 			                // Buffer sync: transfer write → compute shader read.
-			                cmd.PipelineMemoryBarrier(
-			                        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite,
-			                        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
 			                // Transition atlas back to ShaderReadOnly for render-graph tracking.
 			                cmd.ImageMemoryBarrier(atlasImage,
-			                        gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly,
+			                        gpu::ImageLayout::General,
+			                        gpu::ImageLayout::ShaderReadOnly,
 			                        gpu::ImageAspect::Color,
-			                        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferRead,
-			                        gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+			                        gpu::PipelineStage::Transfer,
+			                        gpu::AccessFlags::TransferRead,
+			                        gpu::PipelineStage::FragmentShader,
+			                        gpu::AccessFlags::ShaderRead);
 
 			                // Horizontal blur via BDA.
-			                cmd.BindComputePipeline(blurPipeline.pipeline);
+			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
 			                const BlurPushConstants hPc{
 			                        .atlasWidth = bounds.width,
 			                        .atlasHeight = bounds.height,
@@ -563,7 +569,7 @@ namespace aether
 			                gpu::CommandList cmd = ctx.recorder.View();
 
 			                // Vertical blur via BDA (in-place).
-			                cmd.BindComputePipeline(blurPipeline.pipeline);
+			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
 			                const BlurPushConstants vPc{
 			                        .atlasWidth = bounds.width,
 			                        .atlasHeight = bounds.height,
@@ -581,13 +587,14 @@ namespace aether
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 
 			                // Buffer sync: compute shader write → transfer read.
-			                cmd.PipelineMemoryBarrier(
-			                        gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite,
-			                        gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferRead);
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferRead);
 			                // Copy blur buffer → atlas (atlas is in General layout from RG).
-			                cmd.CopyBufferToImage(blurVkBuf, atlasImage,
-			                        gpu::ImageLayout::General, gpu::ImageAspect::Color,
-			                        bounds.width, bounds.height,
+			                cmd.CopyBufferToImage(blurVkBuf,
+			                        atlasImage,
+			                        gpu::ImageLayout::General,
+			                        gpu::ImageAspect::Color,
+			                        bounds.width,
+			                        bounds.height,
 			                        (static_cast<std::uint64_t>(bounds.x) + static_cast<std::uint64_t>(bounds.y) * ShadowAtlasManager::kAtlasWidth) * sizeof(float) * 2u);
 			                // Atlas stays in General (RG tracks as General from WriteStorageImage).
 		                });

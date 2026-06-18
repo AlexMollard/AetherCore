@@ -231,11 +231,15 @@ namespace aether
 		// features14.pushDescriptor above, but the extension name is still required by some
 		// loader/driver paths.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
-		// Graphics pipeline libraries allow pre-compiling shader stages independently,
-		// reducing pipeline creation time for material variants.
-		selector.add_required_extension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
-		// VK_KHR_pipeline_library is a required dependency of VK_EXT_graphics_pipeline_library.
-		selector.add_required_extension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
+		// Core in Vulkan 1.4, but the extension name is still required by the loader.
+		// Implicitly grants dynamic vertex input (vkCmdSetVertexInputEXT) - no separate
+		// VK_EXT_vertex_input_dynamic_state enable is needed.
+		selector.add_required_extension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
+		// VK_EXT_extended_dynamic_state / 2 / 3 are NOT requested by name: v1 and v2
+		// are core/unconditional in Vulkan 1.3, and v3 is core in Vulkan 1.4. The EXT
+		// feature structs are chained into the device create pNext below; the loader
+		// resolves the vkCmdSet* entry points against the core API on a 1.4 device.
 		// VK_EXT_descriptor_heap supersedes descriptor sets and descriptor buffers.
 		// Hybrid model: buffers stay BDA-addressed (passed via push data), while
 		// images / samplers / storage images live in a single resource heap and a
@@ -260,14 +264,19 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "Failed to select a suitable Vulkan physical device."));
 		}
 
+		// Non-core extension feature structs chained into the vkb::DeviceBuilder
+		// pNext. The core 1.1/1.2/1.3/1.4 features above are handled by vkb
+		// internally; only the hardware-specific extension features need to be
+		// chained here. vkb owns the lifetime of the core feature structs it
+		// copied during select(), so these locals only need to outlive build().
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
 		        .maintenance9 = VK_TRUE,
 		};
 
-		VkPhysicalDeviceGraphicsPipelineLibraryFeaturesEXT gplFeatures{
-		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT,
-		        .graphicsPipelineLibrary = VK_TRUE,
+		VkPhysicalDeviceShaderObjectFeaturesEXT shaderObjectFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_OBJECT_FEATURES_EXT,
+		        .shaderObject = VK_TRUE,
 		};
 
 		VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeapFeatures{
@@ -275,20 +284,71 @@ namespace aether
 		        .descriptorHeap = VK_TRUE,
 		};
 
+		VkPhysicalDeviceExtendedDynamicStateFeaturesEXT extendedDynamicStateFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_FEATURES_EXT,
+		        .extendedDynamicState = VK_TRUE,
+		};
+
+		VkPhysicalDeviceExtendedDynamicState2FeaturesEXT extendedDynamicState2Features{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_2_FEATURES_EXT,
+		        .extendedDynamicState2 = VK_TRUE,
+		};
+
+		VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+		};
+		// Enable the full set of dynamic-state-3 toggles shader objects rely on.
+		extendedDynamicState3Features.extendedDynamicState3TessellationDomainOrigin = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3DepthClampEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3PolygonMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3RasterizationSamples = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3SampleMask = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3AlphaToCoverageEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3AlphaToOneEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3LogicOpEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ColorBlendEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ColorBlendEquation = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ColorWriteMask = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3RasterizationStream = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ConservativeRasterizationMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ExtraPrimitiveOverestimationSize = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3DepthClipEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3SampleLocationsEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ColorBlendAdvanced = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ProvokingVertexMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3LineRasterizationMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3LineStippleEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3DepthClipNegativeOneToOne = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ViewportWScalingEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ViewportSwizzle = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageToColorEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageToColorLocation = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageModulationMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageModulationTableEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageModulationTable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3CoverageReductionMode = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3RepresentativeFragmentTestEnable = VK_TRUE;
+		extendedDynamicState3Features.extendedDynamicState3ShadingRateImageEnable = VK_TRUE;
+
+		// Linear pNext chain: maintenance9 -> shaderObject -> descriptorHeap ->
+		// extendedDynamicState -> 2 -> 3.
+		maintenance9Features.pNext = &shaderObjectFeatures;
+		shaderObjectFeatures.pNext = &descriptorHeapFeatures;
+		descriptorHeapFeatures.pNext = &extendedDynamicStateFeatures;
+		extendedDynamicStateFeatures.pNext = &extendedDynamicState2Features;
+		extendedDynamicState2Features.pNext = &extendedDynamicState3Features;
+		extendedDynamicState3Features.pNext = nullptr;
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
 		        .flags = VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
 		};
+		extendedDynamicState3Features.pNext = &diagnosticsConfig;
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
-		deviceBuilder.add_pNext(&gplFeatures);
-		deviceBuilder.add_pNext(&descriptorHeapFeatures);
-#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		deviceBuilder.add_pNext(&diagnosticsConfig);
-#endif
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{

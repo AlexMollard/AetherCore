@@ -245,22 +245,6 @@ namespace aether::gpu
 		return 0u;
 	}
 
-	VkPipelineBindPoint ToVk(PipelineBindPoint bindPoint) noexcept
-	{
-		switch (bindPoint)
-		{
-			case PipelineBindPoint::Graphics:
-				return VK_PIPELINE_BIND_POINT_GRAPHICS;
-			case PipelineBindPoint::Compute:
-				return VK_PIPELINE_BIND_POINT_COMPUTE;
-		}
-		return VK_PIPELINE_BIND_POINT_GRAPHICS;
-	}
-
-	// Bit values mirror VkPipelineStageFlagBits2 / VkAccessFlagBits2 directly,
-	// so the engine-side enum can forward to the Vk* bitmask without any
-	// per-bit translation. Unknown / unsupported stage bits fall through to
-	// 0 (no stage), which makes any misuse a no-op rather than a crash.
 	VkPipelineStageFlags2 ToVk(PipelineStage stage) noexcept
 	{
 		return static_cast<VkPipelineStageFlags2>(stage);
@@ -269,67 +253,6 @@ namespace aether::gpu
 	VkAccessFlags2 ToVk(AccessFlags access) noexcept
 	{
 		return static_cast<VkAccessFlags2>(access);
-	}
-
-	VkDescriptorType ToVk(DescriptorType type) noexcept
-	{
-		switch (type)
-		{
-			case DescriptorType::Sampler:
-				return VK_DESCRIPTOR_TYPE_SAMPLER;
-			case DescriptorType::CombinedImageSampler:
-				return VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			case DescriptorType::SampledImage:
-				return VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-			case DescriptorType::StorageImage:
-				return VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-			case DescriptorType::UniformTexelBuffer:
-				return VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER;
-			case DescriptorType::StorageTexelBuffer:
-				return VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER;
-			case DescriptorType::StorageBuffer:
-				return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-			case DescriptorType::UniformBuffer:
-				return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			case DescriptorType::UniformBufferDynamic:
-				return VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-			case DescriptorType::StorageBufferDynamic:
-				return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC;
-			case DescriptorType::InputAttachment:
-				return VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-		}
-		return VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-	}
-
-	VkShaderStageFlags ToVk(ShaderStage stage) noexcept
-	{
-		VkShaderStageFlags out = 0;
-		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Vertex)) != 0)
-		{
-			out |= VK_SHADER_STAGE_VERTEX_BIT;
-		}
-		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Fragment)) != 0)
-		{
-			out |= VK_SHADER_STAGE_FRAGMENT_BIT;
-		}
-		if ((static_cast<std::uint32_t>(stage) & static_cast<std::uint32_t>(ShaderStage::Compute)) != 0)
-		{
-			out |= VK_SHADER_STAGE_COMPUTE_BIT;
-		}
-		return out;
-	}
-
-	// -------------------------------------------------------------------------
-	// DescriptorSetLayoutFlags
-	// -------------------------------------------------------------------------
-	VkDescriptorSetLayoutCreateFlags ToVk(DescriptorSetLayoutFlags flags) noexcept
-	{
-		VkDescriptorSetLayoutCreateFlags out = 0;
-		if ((static_cast<std::uint32_t>(flags) & static_cast<std::uint32_t>(DescriptorSetLayoutFlags::PushDescriptor)) != 0)
-		{
-			out |= VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR;
-		}
-		return out;
 	}
 
 	VkCompareOp ToVk(CompareOp op) noexcept

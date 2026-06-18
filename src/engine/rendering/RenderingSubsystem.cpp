@@ -64,8 +64,6 @@ namespace aether
 		                        .colorFormat = PostProcessStack::GetForwardColorFormat(),
 		                        .depthTestEnable = false,
 		                        .depthWriteEnable = false,
-		                        .pushConstantSize = static_cast<uint32_t>(sizeof(uint64_t)),
-		                        .pushConstantStages = gpu::ShaderStage::AllGraphics,
 		                        .debugName = "Skybox",
 		                }));
 		m_skyboxPipeline = std::move(skyboxPipeline);

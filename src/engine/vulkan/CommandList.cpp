@@ -5,6 +5,7 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/volk.hpp"
 
 namespace aether::gpu
@@ -14,16 +15,6 @@ namespace aether::gpu
 		inline VkCommandBuffer AsVkCmd(void* p) noexcept
 		{
 			return static_cast<VkCommandBuffer>(p);
-		}
-
-		inline VkPipeline AsVkPipeline(void* p) noexcept
-		{
-			return static_cast<VkPipeline>(p);
-		}
-
-		inline VkPipelineLayout AsVkPipelineLayout(void* p) noexcept
-		{
-			return static_cast<VkPipelineLayout>(p);
 		}
 
 		inline VkBuffer AsVkBuffer(void* p) noexcept
@@ -39,29 +30,6 @@ namespace aether::gpu
 		inline VkSampler AsVkSampler(void* p) noexcept
 		{
 			return static_cast<VkSampler>(p);
-		}
-
-		inline VkDescriptorSet AsVkDescriptorSet(void* p) noexcept
-		{
-			return static_cast<VkDescriptorSet>(p);
-		}
-
-		inline VkShaderStageFlags ToVkShaderStages(ShaderStage s) noexcept
-		{
-			std::uint32_t out = 0;
-			if ((static_cast<std::uint32_t>(s) & static_cast<std::uint32_t>(ShaderStage::Vertex)) != 0)
-			{
-				out |= VK_SHADER_STAGE_VERTEX_BIT;
-			}
-			if ((static_cast<std::uint32_t>(s) & static_cast<std::uint32_t>(ShaderStage::Fragment)) != 0)
-			{
-				out |= VK_SHADER_STAGE_FRAGMENT_BIT;
-			}
-			if ((static_cast<std::uint32_t>(s) & static_cast<std::uint32_t>(ShaderStage::Compute)) != 0)
-			{
-				out |= VK_SHADER_STAGE_COMPUTE_BIT;
-			}
-			return static_cast<VkShaderStageFlags>(out);
 		}
 
 		inline VkViewport ToVkViewport(const Viewport& v) noexcept
@@ -103,14 +71,50 @@ namespace aether::gpu
 		s_endDebugLabel = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(endFn);
 	}
 
-	void CommandList::BindPipeline(void* vkPipeline) noexcept
+	void CommandList::BindPipeline(void* pipeline) noexcept
 	{
-		if (m_cmd == nullptr || vkPipeline == nullptr)
+		if (m_cmd == nullptr || pipeline == nullptr)
 		{
 			return;
 		}
-		vkCmdBindPipeline(AsVkCmd(m_cmd), VK_PIPELINE_BIND_POINT_GRAPHICS, AsVkPipeline(vkPipeline));
-		m_boundBindPoint = PipelineBindPoint::Graphics;
+		const auto* entry = static_cast<const ::aether::ResourceRegistry::PipelineEntry*>(pipeline);
+		const VkCommandBuffer cmd = AsVkCmd(m_cmd);
+
+		VkShaderEXT shaders[2] = {entry->vertexShader, entry->fragmentShader};
+		VkShaderStageFlagBits stages[2] = {VK_SHADER_STAGE_VERTEX_BIT, VK_SHADER_STAGE_FRAGMENT_BIT};
+		const std::uint32_t shaderCount = (entry->fragmentShader != VK_NULL_HANDLE) ? 2u : 1u;
+		vkCmdBindShadersEXT(cmd, shaderCount, stages, shaders);
+
+		vkCmdSetPrimitiveTopologyEXT(cmd, entry->topology);
+		vkCmdSetPolygonModeEXT(cmd, entry->polygonMode);
+		vkCmdSetCullModeEXT(cmd, entry->cullMode);
+		vkCmdSetFrontFaceEXT(cmd, entry->frontFace);
+		vkCmdSetRasterizerDiscardEnableEXT(cmd, entry->rasterizerDiscardEnable);
+		vkCmdSetDepthBiasEnableEXT(cmd, entry->depthBiasEnable);
+		vkCmdSetPrimitiveRestartEnableEXT(cmd, entry->primitiveRestartEnable);
+		vkCmdSetDepthTestEnableEXT(cmd, entry->depthTestEnable);
+		vkCmdSetDepthWriteEnableEXT(cmd, entry->depthWriteEnable);
+		vkCmdSetDepthCompareOpEXT(cmd, entry->depthCompareOp);
+		vkCmdSetDepthBoundsTestEnableEXT(cmd, entry->depthBoundsTestEnable);
+		vkCmdSetStencilTestEnableEXT(cmd, entry->stencilTestEnable);
+		vkCmdSetLogicOpEXT(cmd, entry->logicOp);
+		vkCmdSetBlendConstants(cmd, entry->blendConstants);
+		vkCmdSetRasterizationSamplesEXT(cmd, static_cast<VkSampleCountFlagBits>(entry->rasterizationSampleCount));
+		vkCmdSetColorBlendEnableEXT(cmd, 0, 1, &entry->colorBlendEnable);
+		vkCmdSetColorBlendEquationEXT(cmd, 0, 1, &entry->colorBlendEquation);
+		vkCmdSetColorWriteMaskEXT(cmd, 0, 1, &entry->colorWriteMask);
+		if (entry->hasLineWidth)
+		{
+			vkCmdSetLineWidth(cmd, entry->lineWidth);
+		}
+		if (!entry->vertexBindings.empty())
+		{
+			vkCmdSetVertexInputEXT(cmd, static_cast<std::uint32_t>(entry->vertexBindings.size()), entry->vertexBindings.data(), static_cast<std::uint32_t>(entry->vertexAttributes.size()), entry->vertexAttributes.data());
+		}
+		else
+		{
+			vkCmdSetVertexInputEXT(cmd, 0, nullptr, 0, nullptr);
+		}
 	}
 
 	void CommandList::BindPipeline(PipelineHandle)
@@ -149,14 +153,18 @@ namespace aether::gpu
 		vkCmdDispatch(AsVkCmd(m_cmd), groupCountX, groupCountY, groupCountZ);
 	}
 
-	void CommandList::BindComputePipeline(void* vkPipeline) noexcept
+	void CommandList::BindComputePipeline(void* pipeline) noexcept
 	{
-		if (m_cmd == nullptr || vkPipeline == nullptr)
+		if (m_cmd == nullptr || pipeline == nullptr)
 		{
 			return;
 		}
-		vkCmdBindPipeline(AsVkCmd(m_cmd), VK_PIPELINE_BIND_POINT_COMPUTE, AsVkPipeline(vkPipeline));
-		m_boundBindPoint = PipelineBindPoint::Compute;
+		const auto* entry = static_cast<const ::aether::ResourceRegistry::PipelineEntry*>(pipeline);
+		const VkCommandBuffer cmd = AsVkCmd(m_cmd);
+
+		VkShaderEXT shaders[1] = {entry->computeShader};
+		VkShaderStageFlagBits stage = VK_SHADER_STAGE_COMPUTE_BIT;
+		vkCmdBindShadersEXT(cmd, 1, &stage, shaders);
 	}
 
 	void CommandList::BindIndexBuffer(void* vkBuffer, DeviceAddress offset, IndexType indexType) noexcept
@@ -223,70 +231,6 @@ namespace aether::gpu
 			return;
 		}
 		vkCmdDrawIndexedIndirectCount(AsVkCmd(m_cmd), AsVkBuffer(vkIndirectBuffer), static_cast<VkDeviceSize>(indirectOffset), AsVkBuffer(vkCountBuffer), static_cast<VkDeviceSize>(countOffset), maxDrawCount, stride);
-	}
-
-	void CommandList::PushDescriptorSet(void* vkPipelineLayout, std::uint32_t set, std::span<const GpuWriteDescriptorSet> writes) noexcept
-	{
-		PushDescriptorSet(m_boundBindPoint, vkPipelineLayout, set, writes);
-	}
-
-	void CommandList::PushDescriptorSet(PipelineBindPoint bindPoint, void* vkPipelineLayout, std::uint32_t set, std::span<const GpuWriteDescriptorSet> writes) noexcept
-	{
-		if (m_cmd == nullptr || vkPipelineLayout == nullptr || writes.empty())
-		{
-			return;
-		}
-		// pBufferInfo/pImageInfo/pTexelBufferView must point at caller-side memory; stack with heap-fallback for large n.
-		const std::size_t n = writes.size();
-		VkDescriptorBufferInfo stackBufInfos[16];
-		std::vector<VkDescriptorBufferInfo> heapBufInfos;
-		VkDescriptorBufferInfo* bufInfos = stackBufInfos;
-		if (n > std::size(stackBufInfos))
-		{
-			heapBufInfos.resize(n);
-			bufInfos = heapBufInfos.data();
-		}
-		VkDescriptorImageInfo stackImgInfos[16];
-		std::vector<VkDescriptorImageInfo> heapImgInfos;
-		VkDescriptorImageInfo* imgInfos = stackImgInfos;
-		if (n > std::size(stackImgInfos))
-		{
-			heapImgInfos.resize(n);
-			imgInfos = heapImgInfos.data();
-		}
-		VkWriteDescriptorSet stackWrites[16];
-		std::vector<VkWriteDescriptorSet> heapWrites;
-		VkWriteDescriptorSet* vkWrites = stackWrites;
-		if (n > std::size(stackWrites))
-		{
-			heapWrites.resize(n);
-			vkWrites = heapWrites.data();
-		}
-		for (std::size_t i = 0; i < n; ++i)
-		{
-			const GpuWriteDescriptorSet& src = writes[i];
-			VkWriteDescriptorSet& dst = vkWrites[i];
-			dst = {};
-			dst.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			dst.dstBinding = src.dstBinding;
-			dst.descriptorCount = src.descriptorCount;
-			dst.descriptorType = ToVk(src.descriptorType);
-			if (src.bufferInfo != nullptr)
-			{
-				bufInfos[i].buffer = AsVkBuffer(src.bufferInfo->buffer);
-				bufInfos[i].offset = static_cast<VkDeviceSize>(src.bufferInfo->offset);
-				bufInfos[i].range = static_cast<VkDeviceSize>(src.bufferInfo->range);
-				dst.pBufferInfo = &bufInfos[i];
-			}
-			else if (src.imageInfo != nullptr)
-			{
-				imgInfos[i].sampler = AsVkSampler(src.imageInfo->sampler);
-				imgInfos[i].imageView = AsVkImageView(src.imageInfo->imageView);
-				imgInfos[i].imageLayout = ToVk(src.imageInfo->imageLayout);
-				dst.pImageInfo = &imgInfos[i];
-			}
-		}
-		vkCmdPushDescriptorSetKHR(AsVkCmd(m_cmd), ToVk(bindPoint), AsVkPipelineLayout(vkPipelineLayout), set, static_cast<std::uint32_t>(n), vkWrites);
 	}
 
 	void CommandList::FillBuffer(void* vkBuffer, DeviceAddress offset, DeviceAddress size, std::uint32_t value) noexcept
@@ -555,10 +499,10 @@ namespace aether::gpu
 		        .bufferRowLength = 0,
 		        .bufferImageHeight = 0,
 		        .imageSubresource{
-.aspectMask = gpu::ToVk(aspect),
-		        .mipLevel = 0,
-		        .baseArrayLayer = 0,
-		        .layerCount = 1,
+		                .aspectMask = gpu::ToVk(aspect),
+		                .mipLevel = 0,
+		                .baseArrayLayer = 0,
+		                .layerCount = 1,
 		        },
 		        .imageOffset{0, 0, 0},
 		        .imageExtent{width, height, 1},

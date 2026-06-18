@@ -10,10 +10,12 @@
 
 namespace aether::vkutil
 {
-	Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache gpuPipelineCache, const ComputePipelineDesc& desc) noexcept
+	// Builds a compute VkShaderEXT via vkCreateShadersEXT. The shader is
+	// layout-free (VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT) - all push data
+	// flows through vkCmdPushDataEXT and BDA; no VkPipelineLayout is involved.
+	Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache /*gpuPipelineCache*/, const ComputePipelineDesc& desc) noexcept
 	{
 		auto device = static_cast<VkDevice>(gpuDevice);
-		auto pipelineCache = static_cast<VkPipelineCache>(gpuPipelineCache);
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));
 		if (spirv->empty())
@@ -22,56 +24,44 @@ namespace aether::vkutil
 		}
 
 		const std::string owner = desc.debugName ? desc.debugName : "ComputePipeline";
-		AE_EXPECT_OR_THROW(shaderModule, vkutil::CreateShaderModule(device, *spirv, owner.c_str()));
+		const std::string entryName(desc.shaderEntry);
 
 		const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
 
-		// All compute pipelines use VK_EXT_descriptor_heap for push constants
-		// (vkCmdPushDataEXT) and access all data via BDA — no VkPipelineLayout
-		// or VkPushConstantRange is needed.
-		const VkPipelineLayout vkLayout = VK_NULL_HANDLE;
-
-		const std::string entry(desc.shaderEntry);
-		VkPipelineShaderStageCreateInfo stage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+		VkShaderCreateInfoEXT createInfo{
+		        .sType = VK_STRUCTURE_TYPE_SHADER_CREATE_INFO_EXT,
+		        .pNext = mappings,
+		        .flags = VK_SHADER_CREATE_DESCRIPTOR_HEAP_BIT_EXT,
 		        .stage = VK_SHADER_STAGE_COMPUTE_BIT,
-		        .module = shaderModule.Get(),
-		        .pName = entry.c_str(),
+		        .nextStage = 0,
+		        .codeType = VK_SHADER_CODE_TYPE_SPIRV_EXT,
+		        .codeSize = spirv->size(),
+		        .pCode = spirv->data(),
+		        .pName = entryName.c_str(),
+		        .setLayoutCount = 0,
+		        .pSetLayouts = nullptr,
+		        .pushConstantRangeCount = 0,
+		        .pPushConstantRanges = nullptr,
+		        .pSpecializationInfo = nullptr,
 		};
-		if (mappings)
-		{
-			stage.pNext = const_cast<VkShaderDescriptorSetAndBindingMappingInfoEXT*>(mappings);
-		}
-		VkPipelineCreateFlags2CreateInfo flags2{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
-		        .pNext = nullptr,
-		        .flags = VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
-		};
-		VkPipeline vkPipeline = VK_NULL_HANDLE;
-		VkComputePipelineCreateInfo pipelineInfo{
-		        .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-		        .pNext = &flags2,
-		        .stage = stage,
-		        .layout = vkLayout,
-		};
-		const VkResult result = vkCreateComputePipelines(device, pipelineCache, 1, &pipelineInfo, nullptr, &vkPipeline);
-		// shaderModule RAII-destroys here regardless of result.
+
+		VkShaderEXT shader = VK_NULL_HANDLE;
+		const VkResult result = vkCreateShadersEXT(device, 1, &createInfo, nullptr, &shader);
 
 		if (result != VK_SUCCESS)
 		{
-			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "ComputePipeline: failed to create pipeline for " + owner));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "ComputePipeline: failed to create shader for " + owner));
 		}
 
 		if (desc.debugName != nullptr)
 		{
-			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(vkPipeline), VK_OBJECT_TYPE_PIPELINE, desc.debugName);
+			vkutil::SetObjectName(device, reinterpret_cast<std::uint64_t>(shader), VK_OBJECT_TYPE_SHADER_EXT, desc.debugName);
 		}
 
 		ResourceRegistry::PipelineEntry entryOut{};
-		entryOut.pipeline = vkPipeline;
-		entryOut.layout = vkLayout;
 		entryOut.device = device;
-		entryOut.ownsLayout = false;
+		entryOut.computeShader = shader;
+		entryOut.isGraphics = false;
 		return entryOut;
 	}
 } // namespace aether::vkutil

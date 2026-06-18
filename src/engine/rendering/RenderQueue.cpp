@@ -545,7 +545,7 @@ namespace aether
 				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobs[frameSlot].address);
 
-				cmdList.BindComputePipeline(poseInitPipe.pipeline);
+				cmdList.BindComputePipeline(const_cast<void*>(poseInitPipe.state));
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address;
@@ -601,7 +601,7 @@ namespace aether
 			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
 			{
 				const auto animSamplePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animSample);
-				cmdList.BindComputePipeline(animSamplePipe.pipeline);
+				cmdList.BindComputePipeline(const_cast<void*>(animSamplePipe.state));
 				cmdList.BeginDebugLabel("Animation.SampleClips", 0.9f, 0.6f, 0.3f, 1.0f);
 
 				const AnimationContracts::AnimationSamplePush animPc{
@@ -640,7 +640,7 @@ namespace aether
 				{
 					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
-					cmdList.BindComputePipeline(animBlendPipe.pipeline);
+					cmdList.BindComputePipeline(const_cast<void*>(animBlendPipe.state));
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
 					cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&blendPc), sizeof(blendPc)));
 					{
@@ -708,7 +708,7 @@ namespace aether
 			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
-			cmdList.BindComputePipeline(nodeFlattenPipe.pipeline);
+			cmdList.BindComputePipeline(const_cast<void*>(nodeFlattenPipe.state));
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
 
 			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address;
@@ -788,7 +788,7 @@ namespace aether
 			{
 				const auto ikSolvePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->ikSolve);
 				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
-				cmdList.BindComputePipeline(ikSolvePipe.pipeline);
+				cmdList.BindComputePipeline(const_cast<void*>(ikSolvePipe.state));
 				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
 				cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
 				{
@@ -807,7 +807,7 @@ namespace aether
 			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
 
 			const auto skinPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->skinCopy);
-			cmdList.BindComputePipeline(skinPipe.pipeline);
+			cmdList.BindComputePipeline(const_cast<void*>(skinPipe.state));
 			cmdList.BeginDebugLabel("Animation.BuildSkinPalette", 0.8f, 0.35f, 0.9f, 1.0f);
 
 			for (std::uint32_t bi = 0; bi < skinPaletteBatchCount; ++bi)
@@ -1044,7 +1044,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://skin_palette_build.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::SkinPalettePush)),
 		                .debugName = "Animation.BuildSkinPalette",
 		        });
 		if (!skinCopy.IsValid())
@@ -1057,7 +1056,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://animation_sample.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationSamplePush)),
 		                .debugName = "Animation.SampleClips",
 		        });
 		if (!animSample.IsValid())
@@ -1070,7 +1068,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://pose_init.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::PoseInitPush)),
 		                .debugName = "Animation.PoseInit",
 		        });
 		if (!poseInit.IsValid())
@@ -1083,7 +1080,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://node_flatten.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::NodeFlattenPush)),
 		                .debugName = "Animation.NodeFlatten",
 		        });
 		if (!nodeFlatten.IsValid())
@@ -1096,7 +1092,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://anim_blend.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::AnimationBlendPush)),
 		                .debugName = "Animation.AnimBlend",
 		        });
 		if (!animBlend.IsValid())
@@ -1109,7 +1104,6 @@ namespace aether
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://ik_solve.spv",
 		                .shaderEntry = "main",
-		                .pushConstantSize = static_cast<std::uint32_t>(sizeof(AnimationContracts::IkSolvePush)),
 		                .debugName = "Animation.IkSolve",
 		        });
 		if (!ikSolve.IsValid())

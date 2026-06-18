@@ -70,8 +70,6 @@ namespace aether
 		                {
 		                        .shaderVfsPath = "shaders://tonemap.spv",
 		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
-		                        .pushConstantSize = 3 * sizeof(uint32_t),
-		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .debugName = "Tonemap",
 		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));
@@ -83,8 +81,6 @@ namespace aether
 		                {
 		                        .shaderVfsPath = "shaders://fxaa.spv",
 		                        .colorFormat = desc.swapchainFormat,
-		                        .pushConstantSize = 2u * sizeof(uint32_t),
-		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .debugName = "FXAA",
 		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));

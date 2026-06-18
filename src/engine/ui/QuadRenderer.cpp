@@ -181,9 +181,6 @@ namespace aether
 		                .depthTestEnable = false,
 		                .depthWriteEnable = false,
 		                .blendEnable = true,
-		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
-		                .pushConstantStages = gpu::ShaderStage::AllGraphics,
-		                .setLayouts = {},
 		                .descriptorHeapMappings = m_bindlessMgr->GetDescriptorHeapMappings(),
 		        }));
 		m_pipeline = std::move(pipeline);

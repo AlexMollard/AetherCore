@@ -71,31 +71,6 @@ namespace aether::gpu
 		U32 = 1,
 	};
 
-	// Shader stage(s) for push-constant ranges. Mapped to VkShaderStageFlags
-	// in the backend via a manual bit-test; bit positions do NOT match
-	// VkShaderStageFlagBits.
-	enum class ShaderStage : std::uint32_t
-	{
-		None = 0,
-		Vertex = 1u << 0,
-		Fragment = 1u << 1,
-		Compute = 1u << 2,
-		// Convenience aggregates used by the engine today.
-		AllGraphics = Vertex | Fragment,
-		All = Vertex | Fragment | Compute,
-	};
-
-	// Pipeline bind point for the backend's bind-pipeline and push-descriptor commands.
-	// Mirrors VkPipelineBindPoint; the backend maps to VK_PIPELINE_BIND_POINT_*.
-	// The graphics variant is the default for descriptor set / push descriptor
-	// calls; compute pipelines must use Compute to satisfy
-	// Validation rule for the cached-bind-point push-descriptor path.
-	enum class PipelineBindPoint : std::uint32_t
-	{
-		Graphics = 0,
-		Compute = 1,
-	};
-
 	// Pipeline stage bits for memory barriers.
 	// Mapped to VkPipelineStageFlags2 in the backend. Enumerates the
 	// subset of VkPipelineStageFlagBits2 the engine actually uses.
@@ -128,33 +103,6 @@ namespace aether::gpu
 		HostWrite = 1ull << 14,
 		ShaderStorageRead = 1ull << 33,
 		ShaderStorageWrite = 1ull << 34,
-	};
-
-	// Descriptor type bits used in push-descriptor writes.
-	// Mirrors VkDescriptorType. The engine uses:
-	//   - StorageBuffer        (VK_DESCRIPTOR_TYPE_STORAGE_BUFFER)
-	enum class DescriptorType : std::uint32_t
-	{
-		Sampler = 0,
-		CombinedImageSampler = 1,
-		SampledImage = 2,
-		StorageImage = 3,
-		UniformTexelBuffer = 4,
-		StorageTexelBuffer = 5,
-		StorageBuffer = 6,
-		UniformBuffer = 7,
-		UniformBufferDynamic = 8,
-		StorageBufferDynamic = 9,
-		InputAttachment = 10,
-	};
-
-	// Bitflags for descriptor-set layout creation (mirrors
-	// VkDescriptorSetLayoutCreateFlagBits, the only flag the engine uses
-	// is the push-descriptor bit).
-	enum class DescriptorSetLayoutFlags : std::uint32_t
-	{
-		None = 0,
-		PushDescriptor = 1u << 0,
 	};
 
 	// Depth / stencil compare operations. Mapped to VkCompareOp.

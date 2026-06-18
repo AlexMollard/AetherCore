@@ -9,8 +9,7 @@
 // Engine-side factories for transient GPU resources that don't fit
 // the ResourceRegistry model (no long-lived handle, no bindless slot,
 // no deferred-destruction ring). Examples: command pools, query pools,
-// shader modules, descriptor set layouts, pipeline layouts, fences,
-// binary semaphores.
+// shader modules, fences, binary semaphores.
 //
 // Every factory takes a `gpu::Device` (opaque VkDevice pointer) as
 // its first argument and returns `gpu::` opaque types. The actual
@@ -79,32 +78,6 @@ namespace aether::gpu::Factory
 
 	[[nodiscard]] Pipeline CreateShaderModule(Device device, const SpirvBlob& spirv, const char* debugName = nullptr) noexcept;
 	void DestroyShaderModule(Device device, Pipeline shader) noexcept;
-
-	// -----------------------------------------------------------------
-	// DescriptorSetLayout
-	// -----------------------------------------------------------------
-
-	struct DescriptorSetLayoutDesc
-	{
-		std::span<const GpuDescriptorSetLayoutBinding> bindings;
-		bool pushDescriptor = false; // VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT
-	};
-
-	[[nodiscard]] DescriptorSetLayout CreateDescriptorSetLayout(Device device, const DescriptorSetLayoutDesc& desc) noexcept;
-	void DestroyDescriptorSetLayout(Device device, DescriptorSetLayout layout) noexcept;
-
-	// -----------------------------------------------------------------
-	// PipelineLayout
-	// -----------------------------------------------------------------
-
-	struct PipelineLayoutDesc
-	{
-		std::span<const DescriptorSetLayout> setLayouts;
-		std::span<const PushConstantRange> pushConstantRanges;
-	};
-
-	[[nodiscard]] PipelineLayout CreatePipelineLayout(Device device, const PipelineLayoutDesc& desc) noexcept;
-	void DestroyPipelineLayout(Device device, PipelineLayout layout) noexcept;
 
 	// -----------------------------------------------------------------
 	// Fence

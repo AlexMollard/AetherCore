@@ -5,7 +5,7 @@
 namespace aether
 {
 	GraphicsPipeline::GraphicsPipeline(GraphicsPipeline&& other) noexcept
-	      : m_handle(std::exchange(other.m_handle, {})), m_setLayoutCount(std::exchange(other.m_setLayoutCount, 0))
+	      : m_handle(std::exchange(other.m_handle, {}))
 	{
 	}
 
@@ -18,7 +18,6 @@ namespace aether
 				gpu::ResourceRegistry::Destroy(m_handle);
 			}
 			m_handle = std::exchange(other.m_handle, {});
-			m_setLayoutCount = std::exchange(other.m_setLayoutCount, 0);
 		}
 		return *this;
 	}
@@ -44,6 +43,7 @@ namespace aether
 	{
 		const gpu::GraphicsPipelineDesc facadeDesc{
 		        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
+		        .fragmentVfsPath = desc.fragmentVfsPath.data() ? desc.fragmentVfsPath.data() : "",
 		        .vertexEntry = desc.vertexEntry.data() ? desc.vertexEntry.data() : "vertexMain",
 		        .fragmentEntry = desc.fragmentEntry.data() ? desc.fragmentEntry.data() : "fragmentMain",
 		        .colorFormat = desc.colorFormat,
@@ -52,9 +52,11 @@ namespace aether
 		        .depthWriteEnable = desc.depthWriteEnable,
 		        .depthCompareOp = desc.depthCompareOp,
 		        .blendEnable = desc.blendEnable,
-		        .pushConstantSize = desc.pushConstantSize,
-		        .pushConstantStages = desc.pushConstantStages,
-		        .setLayouts = desc.setLayouts,
+		        .topology = desc.topology,
+		        .polygonMode = desc.polygonMode,
+		        .vertexBindings = desc.vertexBindings,
+		        .vertexAttributes = desc.vertexAttributes,
+		        .lineWidthDynamic = desc.lineWidthDynamic,
 		        .debugName = desc.debugName,
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
@@ -64,17 +66,11 @@ namespace aether
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(0, "GraphicsPipeline: failed to register with ResourceRegistry."));
 		}
-		out.m_setLayoutCount = static_cast<std::uint32_t>(desc.setLayouts.size());
 		return out;
 	}
 
 	gpu::Pipeline GraphicsPipeline::GetPipeline() const
 	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_handle).pipeline;
-	}
-
-	gpu::PipelineLayout GraphicsPipeline::GetLayout() const
-	{
-		return gpu::ResourceRegistry::ResolvePipeline(m_handle).layout;
+		return const_cast<void*>(gpu::ResourceRegistry::ResolvePipeline(m_handle).state);
 	}
 } // namespace aether
