@@ -76,6 +76,14 @@ namespace aether
 		static constexpr std::uint32_t kFramesInFlight = Swapchain::kMaxFramesInFlight;
 		static constexpr std::uint32_t kDefaultMaxAnimationDraws = 1024u;
 
+		RenderQueue() = default;
+		~RenderQueue() { Shutdown(); }
+
+		RenderQueue(const RenderQueue&) = delete;
+		RenderQueue& operator=(const RenderQueue&) = delete;
+		RenderQueue(RenderQueue&&) = delete;
+		RenderQueue& operator=(RenderQueue&&) = delete;
+
 		// Initialize with configuration struct.
 		void Initialize(gpu::Device device, gpu::Allocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config = {});
 		void Shutdown();

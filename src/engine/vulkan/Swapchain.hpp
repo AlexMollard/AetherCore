@@ -21,6 +21,14 @@ namespace aether
 	public:
 		static constexpr std::uint32_t kMaxFramesInFlight = 3;
 
+		Swapchain() = default;
+		~Swapchain() { Shutdown(m_device); }
+
+		Swapchain(const Swapchain&) = delete;
+		Swapchain& operator=(const Swapchain&) = delete;
+		Swapchain(Swapchain&&) = delete;
+		Swapchain& operator=(Swapchain&&) = delete;
+
 		void Initialize(const VulkanContext& ctx, const Window& window, bool enableVsync);
 		void Shutdown(VkDevice device);
 
@@ -81,5 +89,7 @@ namespace aether
 		bool m_frameValid = false;
 		bool m_needsRecreation = false;
 		VkImageLayout m_depthLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		VkDevice m_device = VK_NULL_HANDLE;
+		bool m_shutdown = false;
 	};
 } // namespace aether

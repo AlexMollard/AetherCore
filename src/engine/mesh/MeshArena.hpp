@@ -26,6 +26,9 @@ namespace aether
 	class MeshArena
 	{
 	public:
+		MeshArena() = default;
+		~MeshArena() = default;
+
 		struct Desc
 		{
 			gpu::DeviceSize vertexCapacityBytes = 256ull * 1024 * 1024;
@@ -51,6 +54,11 @@ namespace aether
 
 		void Initialize(const VulkanContext& ctx, const Desc& desc);
 		void Shutdown();
+
+		MeshArena(const MeshArena&) = delete;
+		MeshArena& operator=(const MeshArena&) = delete;
+		MeshArena(MeshArena&&) = delete;
+		MeshArena& operator=(MeshArena&&) = delete;
 
 		// Allocate a contiguous sub-region from both pools.
 		// Returns an invalid Alloc ({}) when either pool is exhausted.

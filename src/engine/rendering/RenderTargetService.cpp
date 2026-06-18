@@ -31,7 +31,7 @@ namespace aether
 		for (auto& [id, rt]: m_targets)
 		{
 			(void) id;
-			rt.renderQueue.Shutdown();
+			rt.renderQueue->Shutdown();
 			if (rt.constants)
 			{
 				rt.constants->Shutdown();
@@ -101,8 +101,8 @@ namespace aether
 	{
 		for (auto& [_, rt]: m_targets)
 		{
-			rt.renderQueue.SetWriteSlot(drawSlot);
-			WorldRenderer::Flush(world, rt.renderQueue);
+			rt.renderQueue->SetWriteSlot(drawSlot);
+			WorldRenderer::Flush(world, *rt.renderQueue);
 		}
 	}
 
@@ -110,7 +110,7 @@ namespace aether
 	{
 		for (auto& [_, rt]: m_targets)
 		{
-			rt.renderQueue.SetAnimationDatabase(animationDb);
+			rt.renderQueue->SetAnimationDatabase(animationDb);
 		}
 	}
 
@@ -132,7 +132,8 @@ namespace aether
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
-		rt.renderQueue.Initialize(m_context->GetDevice().device, m_context->GetAllocator(), *m_sharedPipelines);
+		rt.renderQueue = std::make_unique<RenderQueue>();
+		rt.renderQueue->Initialize(m_context->GetDevice().device, m_context->GetAllocator(), *m_sharedPipelines);
 
 		const std::uint32_t id = m_nextId++;
 		m_targets.emplace(id, std::move(rt));
@@ -158,7 +159,7 @@ namespace aether
 		m_graph->ReleaseImage(it->second.rgColor);
 		m_graph->ReleaseImage(it->second.rgDepth);
 
-		it->second.renderQueue.Shutdown();
+		it->second.renderQueue->Shutdown();
 		if (it->second.constants)
 		{
 			it->second.constants->Shutdown();
@@ -252,7 +253,7 @@ namespace aether
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                rit->second.renderQueue.PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
+			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, cullLayout, ctx.frameIndex);
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)
@@ -278,8 +279,8 @@ namespace aether
 				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
 			                };
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                rit->second.renderQueue.FlushDrawPush(cmd, m_bindlessManager->GetSet(), pushLighting);
-			                rit->second.renderQueue.Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
+			                rit->second.renderQueue->FlushDrawPush(cmd, m_bindlessManager->GetSet(), pushLighting);
+			                rit->second.renderQueue->Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}
 } // namespace aether

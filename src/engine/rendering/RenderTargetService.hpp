@@ -52,7 +52,7 @@ namespace aether
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;
-			RenderQueue renderQueue;
+			std::unique_ptr<RenderQueue> renderQueue;
 		};
 
 		void RegisterPassFor(std::uint32_t id);

@@ -44,6 +44,15 @@ namespace aether
 		static constexpr std::uint32_t kCacheMaxStaleFrames = 10;
 		static constexpr VkDeviceSize kTransientHeapCapacity = 256ull * 1024 * 1024; // 256 MB
 		static constexpr VkDeviceSize kTransientHeapAlignment = 65536u;
+
+		RenderGraphStorage() = default;
+		~RenderGraphStorage() { Shutdown(); }
+
+		RenderGraphStorage(const RenderGraphStorage&) = delete;
+		RenderGraphStorage& operator=(const RenderGraphStorage&) = delete;
+		RenderGraphStorage(RenderGraphStorage&&) = delete;
+		RenderGraphStorage& operator=(RenderGraphStorage&&) = delete;
+
 		void Initialize(VkDevice device, VmaAllocator allocator);
 		// Engine-side overload: opaque gpu::Device / gpu::Allocator.
 		void Initialize(gpu::Device device, gpu::Allocator allocator);

@@ -78,6 +78,8 @@ namespace aether
 		m_graphicsQueueFamily = ctx.GetGraphicsQueueFamily();
 
 		VkDevice device = ctx.GetDevice().device;
+		m_device = device;
+		m_shutdown = false;
 
 		const VkImageCreateInfo depthImageInfo{
 		        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
@@ -193,10 +195,11 @@ namespace aether
 
 	void Swapchain::Shutdown(VkDevice device)
 	{
-		if (device == VK_NULL_HANDLE)
+		if (device == VK_NULL_HANDLE || m_shutdown)
 		{
 			return;
 		}
+		m_shutdown = true;
 
 		if (m_depthView != VK_NULL_HANDLE)
 		{
