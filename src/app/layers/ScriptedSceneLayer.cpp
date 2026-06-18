@@ -62,6 +62,7 @@ namespace aether::app
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
 		        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(setLayouts.data(), setLayouts.size()),
+		        .descriptorHeapMappings = context.Get<BindlessManager>().GetDescriptorHeapMappings(),
 		});
 
 		if (!result)

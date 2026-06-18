@@ -189,18 +189,26 @@ namespace aether::vkutil
 			AE_UNEXPECTED(AetherError::Vulkan(0, "Failed to create pipeline layout."));
 		}
 
-		const VkPipelineShaderStageCreateInfo vertStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_VERTEX_BIT,
-		        .module = vertModule.Get(),
-		        .pName = vertEntry.c_str(),
-		};
-		const VkPipelineShaderStageCreateInfo fragStage{
-		        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-		        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-		        .module = fragModule,
-		        .pName = fragEntry.c_str(),
-		};
+VkPipelineShaderStageCreateInfo vertStage{
+	        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+	        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+	        .module = vertModule.Get(),
+	        .pName = vertEntry.c_str(),
+	};
+	VkPipelineShaderStageCreateInfo fragStage{
+	        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+	        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+	        .module = fragModule,
+	        .pName = fragEntry.c_str(),
+	};
+
+	const auto* mappings = static_cast<const VkShaderDescriptorSetAndBindingMappingInfoEXT*>(desc.descriptorHeapMappings);
+	const VkPipelineCreateFlags2 descriptorHeapFlags = mappings ? VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT : static_cast<VkPipelineCreateFlags2>(0);
+	if (mappings)
+	{
+		vertStage.pNext = mappings;
+		fragStage.pNext = mappings;
+	}
 
 		const uint32_t colorAttachmentCount = hasColorAttachment ? 1u : 0u;
 		const VkFormat* pColorFormats = hasColorAttachment ? &vkColorFormat : nullptr;
@@ -222,9 +230,9 @@ namespace aether::vkutil
 		const VkPipelineCreateFlags2CreateInfo vertInputFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &gplVertexInput,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
-		};
-		const VkGraphicsPipelineCreateInfo vertInputLibInfo{
+.flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
+	};
+	const VkGraphicsPipelineCreateInfo vertInputLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
 		        .pNext = &vertInputFlags2,
 		        .flags = 0,
@@ -253,7 +261,7 @@ namespace aether::vkutil
 		const VkPipelineCreateFlags2CreateInfo preRasterFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &gplPreRaster,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
 		};
 		const VkGraphicsPipelineCreateInfo preRasterLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -298,7 +306,7 @@ namespace aether::vkutil
 		const VkPipelineCreateFlags2CreateInfo fragShaderFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &gplFragShader,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
 		};
 		const VkGraphicsPipelineCreateInfo fragShaderLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -339,7 +347,7 @@ namespace aether::vkutil
 		const VkPipelineCreateFlags2CreateInfo fragOutputFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &gplFragOutput,
-		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT,
+		        .flags = VK_PIPELINE_CREATE_2_LIBRARY_BIT_KHR | VK_PIPELINE_CREATE_2_RETAIN_LINK_TIME_OPTIMIZATION_INFO_BIT_EXT | descriptorHeapFlags,
 		};
 		const VkGraphicsPipelineCreateInfo fragOutputLibInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -382,7 +390,7 @@ namespace aether::vkutil
 		const VkPipelineCreateFlags2CreateInfo linkFlags2{
 		        .sType = VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
 		        .pNext = &renderingInfo,
-		        .flags = VK_PIPELINE_CREATE_2_LINK_TIME_OPTIMIZATION_BIT_EXT,
+		        .flags = VK_PIPELINE_CREATE_2_LINK_TIME_OPTIMIZATION_BIT_EXT | descriptorHeapFlags,
 		};
 		const VkGraphicsPipelineCreateInfo linkInfo{
 		        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,

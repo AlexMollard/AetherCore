@@ -236,6 +236,12 @@ namespace aether
 		selector.add_required_extension(VK_EXT_GRAPHICS_PIPELINE_LIBRARY_EXTENSION_NAME);
 		// VK_KHR_pipeline_library is a required dependency of VK_EXT_graphics_pipeline_library.
 		selector.add_required_extension(VK_KHR_PIPELINE_LIBRARY_EXTENSION_NAME);
+		// VK_EXT_descriptor_heap supersedes descriptor sets and descriptor buffers.
+		// Hybrid model: buffers stay BDA-addressed (passed via push data), while
+		// images / samplers / storage images live in a single resource heap and a
+		// single sampler heap. Existing set/binding-decorated shaders are mapped to
+		// heap offsets at pipeline creation via VkShaderDescriptorSetAndBindingMappingInfoEXT.
+		selector.add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
@@ -264,6 +270,11 @@ namespace aether
 		        .graphicsPipelineLibrary = VK_TRUE,
 		};
 
+		VkPhysicalDeviceDescriptorHeapFeaturesEXT descriptorHeapFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
+		        .descriptorHeap = VK_TRUE,
+		};
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
@@ -274,6 +285,7 @@ namespace aether
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
 		deviceBuilder.add_pNext(&gplFeatures);
+		deviceBuilder.add_pNext(&descriptorHeapFeatures);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		deviceBuilder.add_pNext(&diagnosticsConfig);
 #endif
@@ -346,6 +358,26 @@ namespace aether
 				        props.limits.maxPushConstantsSize);
 			}
 			AE_INFO(LogCategory::Vulkan, "Physical device: {}, maxPushConstantsSize={}", props.deviceName, props.limits.maxPushConstantsSize);
+		}
+
+		// Query VK_EXT_descriptor_heap properties. Used by BindlessManager to
+		// size/align the resource and sampler heap backing buffers.
+		{
+			m_descriptorHeapProps.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+			VkPhysicalDeviceProperties2 props2{
+			        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+			        .pNext = &m_descriptorHeapProps,
+			};
+			vkGetPhysicalDeviceProperties2(m_device->physical_device, &props2);
+			AE_INFO(LogCategory::Vulkan,
+			        "Descriptor heap props: resourceHeapAlignment={}, imageDescriptorSize={}, samplerDescriptorSize={}, "
+			        "maxResourceHeapSize={}, maxSamplerHeapSize={}, maxPushDataSize={}",
+			        m_descriptorHeapProps.resourceHeapAlignment,
+			        m_descriptorHeapProps.imageDescriptorSize,
+			        m_descriptorHeapProps.samplerDescriptorSize,
+			        m_descriptorHeapProps.maxResourceHeapSize,
+			        m_descriptorHeapProps.maxSamplerHeapSize,
+			        m_descriptorHeapProps.maxPushDataSize);
 		}
 
 		// Pipeline cache for faster pipeline creation across runs.
@@ -581,5 +613,10 @@ namespace aether
 	std::uint32_t VulkanContext::GetComputeQueueFamily() const
 	{
 		return m_computeQueueFamily;
+	}
+
+	const VkPhysicalDeviceDescriptorHeapPropertiesEXT& VulkanContext::GetDescriptorHeapProperties() const
+	{
+		return m_descriptorHeapProps;
 	}
 } // namespace aether

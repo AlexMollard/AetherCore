@@ -91,6 +91,7 @@ namespace aether
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                        .debugName = "Tonemap",
+		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));
 		stack.m_tonemapPipeline = std::move(tonemapPipeline);
 
@@ -104,6 +105,7 @@ namespace aether
 		                        .pushConstantStages = gpu::ShaderStage::Fragment,
 		                        .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
 		                        .debugName = "FXAA",
+		                        .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 
@@ -158,8 +160,9 @@ namespace aether
 			                };
 			                (void) bindless;
 
+			                bindless.CmdBindHeaps(cmd);
+
 			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline(), m_tonemapPipeline.GetLayout());
-			                cmd.BindDescriptorSet(m_tonemapPipeline.GetLayout(), 0, bindless.GetSet());
 
 			                struct
 			                {
@@ -194,8 +197,9 @@ namespace aether
 			                cmd.SetViewport(vp);
 			                cmd.SetScissor(scissor);
 
+			                bindless.CmdBindHeaps(cmd);
+
 			                cmd.BindPipeline(m_fxaaPipeline.GetPipeline(), m_fxaaPipeline.GetLayout());
-			                cmd.BindDescriptorSet(m_fxaaPipeline.GetLayout(), 0, bindless.GetSet());
 
 			                struct
 			                {

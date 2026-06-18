@@ -42,6 +42,7 @@ namespace aether
 			std::span<const gpu::VertexInputAttribute> vertexAttributes;
 			bool lineWidthDynamic = false;
 			const char* debugName = nullptr;
+			const void* descriptorHeapMappings = nullptr;
 		};
 
 		GraphicsPipeline() = default;

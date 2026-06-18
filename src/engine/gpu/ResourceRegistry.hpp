@@ -106,6 +106,7 @@ namespace aether::gpu
 		std::span<const VertexInputAttribute> vertexAttributes;
 		bool lineWidthDynamic = false;
 		const char* debugName = nullptr;
+		const void* descriptorHeapMappings = nullptr;
 	};
 
 	struct ResourceRegistryInitDesc

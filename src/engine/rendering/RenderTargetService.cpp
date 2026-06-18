@@ -279,7 +279,8 @@ namespace aether
 				                m_lightingManager->PushLightingDescriptor(cmd, layout, frameIdx);
 			                };
 			                gpu::CommandList cmd = ctx.recorder.View();
-			                rit->second.renderQueue->FlushDrawPush(cmd, m_bindlessManager->GetSet(), pushLighting);
+			                m_bindlessManager->CmdBindHeaps(cmd);
+			                rit->second.renderQueue->FlushDrawPush(cmd, nullptr, pushLighting);
 			                rit->second.renderQueue->Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}

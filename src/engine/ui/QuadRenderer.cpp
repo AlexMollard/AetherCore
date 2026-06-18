@@ -137,7 +137,7 @@ namespace aether
 			                cmd.SetScissor(scissor);
 
 			                cmd.BindPipeline(m_pipeline);
-			                cmd.BindDescriptorSet(0, m_bindlessMgr->GetSet());
+			                m_bindlessMgr->CmdBindHeaps(cmd);
 
 			                const QuadPush push{
 			                        .screenSize = glm::vec4(static_cast<float>(ext.width), static_cast<float>(ext.height), 0.f, 0.f),
@@ -186,6 +186,7 @@ namespace aether
 		                .pushConstantSize = static_cast<uint32_t>(sizeof(QuadPush)),
 		                .pushConstantStages = gpu::ShaderStage::AllGraphics,
 		                .setLayouts = std::span<const aether::gpu::DescriptorSetLayout>(&bindlessLayout, 1),
+		                .descriptorHeapMappings = m_bindlessMgr->GetDescriptorHeapMappings(),
 		        }));
 		m_pipeline = std::move(pipeline);
 

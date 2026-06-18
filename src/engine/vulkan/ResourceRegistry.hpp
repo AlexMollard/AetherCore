@@ -64,6 +64,14 @@ namespace aether
 			bool ownsStorageView = false;
 			std::uint32_t mipLevels = 1;
 			std::uint32_t arrayLayers = 1;
+			// Recipe for VK_EXT_descriptor_heap: vkWriteResourceDescriptorsEXT
+			// takes a const VkImageViewCreateInfo* (the recipe, not the view
+			// handle). Stored here at view-creation time so the bindless
+			// manager can re-issue it when registering the texture into the
+			// resource heap. Stable for the texture's lifetime.
+			VkImageViewCreateInfo viewCreateInfo{
+			        .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			};
 			static constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
 			std::uint32_t bindlessSampledSlot = kInvalidBindlessSlot;
 			bool hasBindlessSampled = false;

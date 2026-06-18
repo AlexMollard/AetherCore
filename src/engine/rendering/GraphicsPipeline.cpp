@@ -56,6 +56,7 @@ namespace aether
 		        .pushConstantStages = desc.pushConstantStages,
 		        .setLayouts = desc.setLayouts,
 		        .debugName = desc.debugName,
+		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
 		GraphicsPipeline out;
 		out.m_handle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, pipelineCache, facadeDesc);

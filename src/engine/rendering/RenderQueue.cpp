@@ -987,12 +987,6 @@ namespace aether
 				lastLightingSetPipeline = nullptr;
 			}
 
-			if (bindlessSet != nullptr && activePipeline != nullptr && activePipeline != lastSetPipeline)
-			{
-				cmd.BindDescriptorSet(static_cast<gpu::PipelineLayout>(activePipeline->GetLayout()), 0, bindlessSet);
-				lastSetPipeline = activePipeline;
-			}
-
 			if (pushLightingFn && activePipeline != nullptr && activePipeline->GetSetLayoutCount() > 1 && activePipeline != lastLightingSetPipeline)
 			{
 				pushLightingFn(cmd, static_cast<gpu::PipelineLayout>(activePipeline->GetLayout()));

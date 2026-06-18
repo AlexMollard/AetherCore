@@ -198,8 +198,6 @@ namespace aether
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			const RGImage depth = m_renderGraph.GetSwapchainDepth();
-			const gpu::DescriptorSet bindlessSet = frame.bindless->GetSet();
-
 			auto* pass = &m_renderGraph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
@@ -224,13 +222,14 @@ namespace aether
 			}
 
 			pass->Execute(
-			        [&m_renderQueue = m_renderQueue, bindlessSet, pushLightingFn, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
+			        [&m_renderQueue = m_renderQueue, bindless = frame.bindless, pushLightingFn, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
 			        {
 				        if (!forwardEnabled)
 				        {
 					        return;
 				        }
-				        m_renderQueue.FlushDrawPush(ctx.recorder, bindlessSet, pushLightingFn);
+				        bindless->CmdBindHeaps(ctx.recorder);
+				        m_renderQueue.FlushDrawPush(ctx.recorder, nullptr, pushLightingFn);
 				        m_renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			        });
 		}

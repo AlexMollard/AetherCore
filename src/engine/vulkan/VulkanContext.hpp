@@ -46,6 +46,11 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetGraphicsQueueFamily() const;
 		[[nodiscard]] std::uint32_t GetComputeQueueFamily() const;
 
+		// Descriptor-heap properties (VK_EXT_descriptor_heap). Queried once
+		// during init; used by BindlessManager to size/align the resource and
+		// sampler heap backing buffers and to compute per-descriptor strides.
+		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
+
 		// Block until the device finishes all in-flight work. Throws on
 		// backend failure.
 		void WaitIdle() const;
@@ -73,6 +78,7 @@ namespace aether
 		VkQueue m_presentQueue = VK_NULL_HANDLE;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		std::uint32_t m_computeQueueFamily = 0;
+		VkPhysicalDeviceDescriptorHeapPropertiesEXT m_descriptorHeapProps{};
 		tracy::VkCtx* m_tracyVkCtx = nullptr;
 		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;
 

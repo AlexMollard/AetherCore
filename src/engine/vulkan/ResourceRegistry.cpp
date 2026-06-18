@@ -389,6 +389,7 @@ namespace aether
 		entry.ownsAllocation = true;
 		entry.mipLevels = desc.mipLevels;
 		entry.arrayLayers = desc.arrayLayers;
+		entry.viewCreateInfo = viewInfo;
 
 		const gpu::TextureHandle handle = RegisterTexture(entry, desc.debugName ? std::string_view(desc.debugName) : std::string_view{}, loc);
 		if (!handle.IsValid())
@@ -617,12 +618,15 @@ namespace aether
 		entry.ownsAllocation = false;
 		entry.mipLevels = desc.mipLevels;
 		entry.arrayLayers = desc.arrayLayers;
+		entry.viewCreateInfo = viewInfo;
 
 		return RegisterTexture(entry, debugName.empty() ? std::string_view{} : debugName);
 	}
 
 	Expected<void> ResourceRegistry::EnsureBindlessSampled(gpu::TextureHandle handle, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter, const gpu::SamplerAddressMode addressMode)
 	{
+		(void) filter;
+		(void) addressMode;
 		AE_ASSERT(m_bindlessManager != nullptr, "EnsureBindlessSampled: SetBindlessManager was never called.");
 
 		TextureEntry* entry = ResolveMutable(handle);
@@ -666,19 +670,7 @@ namespace aether
 			{
 				AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(viewResult), "Failed to create image view for bindless registration"));
 			}
-		}
-
-		const gpu::Filter gpuFilter = (filter == TextureFilter::Nearest) ? gpu::Filter::Nearest : gpu::Filter::Linear;
-		const gpu::SamplerMipmapMode gpuMipmapMode = (filter == TextureFilter::Nearest) ? gpu::SamplerMipmapMode::Nearest : gpu::SamplerMipmapMode::Linear;
-
-		Expected<gpu::Sampler> samplerResult = m_bindlessManager->GetOrCreateSampler(gpuFilter, gpuMipmapMode, addressMode);
-		if (!samplerResult)
-		{
-			if (makeView)
-			{
-				vkDestroyImageView(entry->device, view, nullptr);
-			}
-			AE_UNEXPECTED(samplerResult.error());
+			entry->viewCreateInfo = viewCreateInfo;
 		}
 
 		Expected<std::uint32_t> slotResult = m_bindlessManager->AllocateSampledImageSlot();
@@ -691,16 +683,15 @@ namespace aether
 			AE_UNEXPECTED(slotResult.error());
 		}
 
-		// Pass the engine-side layout directly to UpdateSampledImage (no Vk round-trip).
-		Expected<void> updateResult = m_bindlessManager->UpdateSampledImage(*slotResult, static_cast<gpu::ImageView>(view), static_cast<gpu::Sampler>(*samplerResult), descriptorLayout);
-		if (!updateResult)
+		Expected<void> writeResult = m_bindlessManager->WriteSampledImage(*slotResult, &entry->viewCreateInfo, descriptorLayout);
+		if (!writeResult)
 		{
 			m_bindlessManager->FreeSampledImageSlot(*slotResult);
 			if (makeView)
 			{
 				vkDestroyImageView(entry->device, view, nullptr);
 			}
-			AE_UNEXPECTED(updateResult.error());
+			AE_UNEXPECTED(writeResult.error());
 		}
 
 		entry->view = view;
@@ -1343,6 +1334,7 @@ namespace aether::gpu
 		        .vertexBindings = desc.vertexBindings,
 		        .vertexAttributes = desc.vertexAttributes,
 		        .lineWidthDynamic = desc.lineWidthDynamic,
+		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
 		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, pipelineCache, vkDesc);
 		if (!entryExp.has_value())

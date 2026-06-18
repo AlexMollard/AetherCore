@@ -461,6 +461,10 @@ namespace aether::gpu
 		{
 			out |= VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
 		}
+		if ((bits & static_cast<std::uint32_t>(BufferUsage::DescriptorHeap)) != 0)
+		{
+			out |= VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT;
+		}
 		return out;
 	}
 
