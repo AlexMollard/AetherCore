@@ -269,6 +269,9 @@ namespace aether
 		// internally; only the hardware-specific extension features need to be
 		// chained here. vkb owns the lifetime of the core feature structs it
 		// copied during select(), so these locals only need to outlive build().
+		// Each struct is added via its own add_pNext call: vkb builds the pNext
+		// chain internally by overwriting each struct's pNext field, so a
+		// manual chain must NOT be set up here.
 		VkPhysicalDeviceMaintenance9FeaturesKHR maintenance9Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_9_FEATURES_KHR,
 		        .maintenance9 = VK_TRUE,
@@ -330,25 +333,23 @@ namespace aether
 		extendedDynamicState3Features.extendedDynamicState3RepresentativeFragmentTestEnable = VK_TRUE;
 		extendedDynamicState3Features.extendedDynamicState3ShadingRateImageEnable = VK_TRUE;
 
-		// Linear pNext chain: maintenance9 -> shaderObject -> descriptorHeap ->
-		// extendedDynamicState -> 2 -> 3.
-		maintenance9Features.pNext = &shaderObjectFeatures;
-		shaderObjectFeatures.pNext = &descriptorHeapFeatures;
-		descriptorHeapFeatures.pNext = &extendedDynamicStateFeatures;
-		extendedDynamicStateFeatures.pNext = &extendedDynamicState2Features;
-		extendedDynamicState2Features.pNext = &extendedDynamicState3Features;
-		extendedDynamicState3Features.pNext = nullptr;
-
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV,
 		        .flags = VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_SHADER_DEBUG_INFO_BIT_NV | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_RESOURCE_TRACKING_BIT_NV | VK_DEVICE_DIAGNOSTICS_CONFIG_ENABLE_AUTOMATIC_CHECKPOINTS_BIT_NV,
 		};
-		extendedDynamicState3Features.pNext = &diagnosticsConfig;
 #endif
 
 		vkb::DeviceBuilder deviceBuilder{physicalDeviceResult.value()};
 		deviceBuilder.add_pNext(&maintenance9Features);
+		deviceBuilder.add_pNext(&shaderObjectFeatures);
+		deviceBuilder.add_pNext(&descriptorHeapFeatures);
+		deviceBuilder.add_pNext(&extendedDynamicStateFeatures);
+		deviceBuilder.add_pNext(&extendedDynamicState2Features);
+		deviceBuilder.add_pNext(&extendedDynamicState3Features);
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		deviceBuilder.add_pNext(&diagnosticsConfig);
+#endif
 		auto deviceResult = deviceBuilder.build();
 		if (!deviceResult)
 		{
