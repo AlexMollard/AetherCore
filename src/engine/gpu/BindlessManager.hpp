@@ -96,6 +96,7 @@ namespace aether
 		};
 
 		void FreeSlotImmediateUnlocked(std::uint32_t slot);
+		void ShutdownUnlocked();
 		void WriteLinearSamplerUnlocked();
 
 		mutable std::mutex m_mutex;
@@ -112,6 +113,7 @@ namespace aether
 		gpu::DeviceSize m_resourceHeapReservedRangeSize = 0;
 		gpu::DeviceSize m_imageDescriptorSize = 0;
 		gpu::DeviceSize m_imageDescriptorAlignment = 0;
+		gpu::DeviceSize m_imageDescriptorStride = 0;
 
 		void* m_samplerHeapBuffer = nullptr;
 		void* m_samplerHeapAlloc = nullptr;

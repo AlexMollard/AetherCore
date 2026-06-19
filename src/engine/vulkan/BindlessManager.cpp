@@ -59,6 +59,7 @@ namespace aether
 		const auto& heapProps = context.GetDescriptorHeapProperties();
 		m_imageDescriptorSize = heapProps.imageDescriptorSize;
 		m_imageDescriptorAlignment = heapProps.imageDescriptorAlignment;
+		m_imageDescriptorStride = AlignUp(m_imageDescriptorSize, m_imageDescriptorAlignment);
 		m_samplerDescriptorSize = heapProps.samplerDescriptorSize;
 		m_samplerDescriptorAlignment = heapProps.samplerDescriptorAlignment;
 		m_resourceHeapReservedRangeSize = heapProps.minResourceHeapReservedRange;
@@ -75,8 +76,7 @@ namespace aether
 		const VkBufferUsageFlags2 heapUsage = VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
 
 		// Resource heap (SAMPLED_IMAGE descriptors)
-		const VkDeviceSize paddedImageDescSize = AlignUp(m_imageDescriptorSize, m_imageDescriptorAlignment);
-		const VkDeviceSize resourceDescriptorBytes = static_cast<VkDeviceSize>(m_capacity) * paddedImageDescSize;
+		const VkDeviceSize resourceDescriptorBytes = static_cast<VkDeviceSize>(m_capacity) * m_imageDescriptorStride;
 		const VkDeviceSize resourceReservedAlignment = std::lcm(heapProps.bufferDescriptorAlignment, heapProps.imageDescriptorAlignment);
 		m_resourceHeapReservedRangeOffset = AlignUp(resourceDescriptorBytes, resourceReservedAlignment);
 		m_resourceHeapSize = m_resourceHeapReservedRangeOffset + m_resourceHeapReservedRangeSize;
@@ -109,7 +109,7 @@ namespace aether
 			const VkResult result = vmaCreateBuffer(allocator, &mutableInfo, &allocInfo, &buffer, &allocation, &allocDetail);
 			if (result != VK_SUCCESS)
 			{
-				Shutdown();
+				ShutdownUnlocked();
 				return Unexpected{AetherError::Vulkan(static_cast<int32_t>(result), "BindlessManager: failed to create resource descriptor heap.")};
 			}
 
@@ -159,7 +159,7 @@ namespace aether
 			const VkResult result = vmaCreateBuffer(allocator, &mutableInfo, &allocInfo, &buffer, &allocation, &allocDetail);
 			if (result != VK_SUCCESS)
 			{
-				Shutdown();
+				ShutdownUnlocked();
 				return Unexpected{AetherError::Vulkan(static_cast<int32_t>(result), "BindlessManager: failed to create sampler descriptor heap.")};
 			}
 
@@ -196,7 +196,7 @@ namespace aether
 			};
 			pm->mappings[0].sourceData.constantOffset = {
 			        .heapOffset = 0,
-			        .heapArrayStride = static_cast<std::uint32_t>(m_imageDescriptorSize),
+			        .heapArrayStride = static_cast<std::uint32_t>(m_imageDescriptorStride),
 			        .pEmbeddedSampler = nullptr,
 			        .samplerHeapOffset = 0,
 			        .samplerHeapArrayStride = 0,
@@ -236,7 +236,11 @@ namespace aether
 	void BindlessManager::Shutdown()
 	{
 		std::scoped_lock lock(m_mutex);
+		ShutdownUnlocked();
+	}
 
+	void BindlessManager::ShutdownUnlocked()
+	{
 		if (m_device == nullptr)
 		{
 			return;
@@ -275,6 +279,7 @@ namespace aether
 		}
 		m_imageDescriptorSize = 0;
 		m_imageDescriptorAlignment = 0;
+		m_imageDescriptorStride = 0;
 		m_samplerDescriptorSize = 0;
 		m_samplerDescriptorAlignment = 0;
 
@@ -288,6 +293,7 @@ namespace aether
 			m_shaderMappingInfo = nullptr;
 		}
 		m_device = nullptr;
+		m_vmaAllocator = nullptr;
 		m_capacity = 0;
 		m_deferredFreeFrames = 3;
 		m_currentFrame = 0;
@@ -492,7 +498,7 @@ namespace aether
 		        .data = {.pImage = &imageInfo},
 		};
 
-		const VkDeviceSize offset = static_cast<VkDeviceSize>(slot) * m_imageDescriptorSize;
+		const VkDeviceSize offset = static_cast<VkDeviceSize>(slot) * m_imageDescriptorStride;
 		void* hostAddr = static_cast<std::byte*>(m_resourceHeapMapped) + offset;
 
 		const VkHostAddressRangeEXT hostRange{
@@ -501,6 +507,11 @@ namespace aether
 		};
 
 		vkWriteResourceDescriptorsEXT(static_cast<VkDevice>(m_device), 1, &resourceInfo, &hostRange);
+		const VkResult flushResult = vmaFlushAllocation(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VmaAllocation>(m_resourceHeapAlloc), offset, m_imageDescriptorSize);
+		if (flushResult != VK_SUCCESS)
+		{
+			return Unexpected{AetherError::Vulkan(static_cast<std::int32_t>(flushResult), "BindlessManager: failed to flush a sampled-image descriptor write.")};
+		}
 
 		return {};
 	}
@@ -539,6 +550,8 @@ namespace aether
 		};
 
 		vkWriteSamplerDescriptorsEXT(static_cast<VkDevice>(m_device), 1, &samplerInfo, &hostRange);
+		const VkResult flushResult = vmaFlushAllocation(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VmaAllocation>(m_samplerHeapAlloc), 0, m_samplerDescriptorSize);
+		AE_ASSERT_ALWAYS(flushResult == VK_SUCCESS, "BindlessManager: failed to flush the sampler descriptor write.");
 	}
 
 	void BindlessManager::CmdBindHeaps(gpu::CommandList& cmd) const

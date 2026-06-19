@@ -38,7 +38,7 @@ namespace aether
 				Throw(AetherError::Engine("PostProcessStack: HdrColor AllocateSampledImageSlot failed"));
 			}
 			stack.m_hdrBindlessSlot = *slot;
-			(void) desc.bindlessManager->WriteSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_hdrColorHandle), gpu::ImageLayout::ShaderReadOnly);
+			AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_hdrColorHandle), gpu::ImageLayout::ShaderReadOnly));
 		}
 
 		const gpu::TextureDesc ldrDesc{
@@ -61,7 +61,7 @@ namespace aether
 				Throw(AetherError::Engine("PostProcessStack: LdrColor AllocateSampledImageSlot failed"));
 			}
 			stack.m_ldrBindlessSlot = *slot;
-			(void) desc.bindlessManager->WriteSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_ldrColorHandle), gpu::ImageLayout::ShaderReadOnly);
+			AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_ldrColorHandle), gpu::ImageLayout::ShaderReadOnly));
 		}
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
