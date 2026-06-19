@@ -17,6 +17,7 @@
 namespace aether
 {
 	class BindlessManager;
+	class VulkanContext;
 	struct FrameTarget;
 
 	// Per-frame allocation and execution statistics.
@@ -60,6 +61,16 @@ namespace aether
 		void Initialize(VkDevice device, VmaAllocator allocator);
 		// Engine-side overload: opaque gpu::Device / gpu::Allocator.
 		void Initialize(gpu::Device device, gpu::Allocator allocator);
+
+		// Set the VulkanContext for device-loss routing. When a compute fence
+		// returns VK_ERROR_DEVICE_LOST, BeginComputeCommandBuffer calls
+		// WaitIdle() on this context instead of throwing directly, so the
+		// DiagnosticEngine captures the fault before the exception propagates.
+		void SetVulkanContext(VulkanContext* ctx)
+		{
+			m_vulkanContext = ctx;
+		}
+
 		void Shutdown();
 		void BeginFrame(std::uint32_t frameIndex);
 
@@ -375,6 +386,7 @@ namespace aether
 		// -- Member state ---------------------------------------------------
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
+		VulkanContext* m_vulkanContext = nullptr;
 
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<std::uint32_t> m_freeExternalSlots;

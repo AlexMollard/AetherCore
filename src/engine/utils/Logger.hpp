@@ -19,6 +19,21 @@ namespace aether
 		Error = 3,
 	};
 
+	enum class LogPlainColor
+	{
+		None,
+		Red,
+		Yellow,
+		Green,
+		Cyan,
+		Magenta,
+		BoldRed,
+		BoldYellow,
+		BoldGreen,
+		BoldCyan,
+		BoldMagenta,
+	};
+
 	class Logger
 	{
 	public:
@@ -122,6 +137,32 @@ namespace aether
 			Log(LogLevel::Error, category, FormatMessage(formatText, std::forward<Args>(args)...), location);
 		}
 
+		template<typename... Args>
+		static void ErrorPlain(std::format_string<Args...> formatText, Args&&... args)
+		{
+			if (!ShouldLog(LogLevel::Error))
+			{
+				return;
+			}
+
+			ErrorPlain(FormatMessage(formatText, std::forward<Args>(args)...));
+		}
+
+		template<typename... Args>
+		static void InfoPlain(std::format_string<Args...> formatText, Args&&... args)
+		{
+			if (!ShouldLog(LogLevel::Info))
+			{
+				return;
+			}
+
+			InfoPlain(FormatMessage(formatText, std::forward<Args>(args)...));
+		}
+
+		static void ErrorPlain(std::string_view message);
+		static void InfoPlain(std::string_view message);
+		static void InfoPlain(std::string_view message, LogPlainColor color);
+
 	private:
 		template<typename... Args>
 		static std::string FormatMessage(std::format_string<Args...> formatText, Args&&... args)
@@ -135,3 +176,5 @@ namespace aether
 #define AE_INFO(category, formatText, ...) ::aether::Logger::InfoAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 #define AE_WARN(category, formatText, ...) ::aether::Logger::WarnAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
 #define AE_ERROR(category, formatText, ...) ::aether::Logger::ErrorAt(category, std::source_location::current(), formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_DIAG(formatText, ...) ::aether::Logger::InfoPlain(formatText __VA_OPT__(, ) __VA_ARGS__)
+#define AE_DIAG_COLOR(color, formatText, ...) ::aether::Logger::InfoPlain(std::format(formatText __VA_OPT__(, ) __VA_ARGS__), color)

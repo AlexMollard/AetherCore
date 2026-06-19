@@ -77,8 +77,12 @@ namespace aether
 		constexpr const char* kAnsiRed = "\x1b[31m";
 		constexpr const char* kAnsiCyan = "\x1b[96m";
 		constexpr const char* kAnsiGreen = "\x1b[92m";
+		constexpr const char* kAnsiMagenta = "\x1b[35m";
 		constexpr const char* kAnsiBoldYellow = "\x1b[1;33m";
 		constexpr const char* kAnsiBoldRed = "\x1b[1;31m";
+		constexpr const char* kAnsiBoldGreen = "\x1b[1;32m";
+		constexpr const char* kAnsiBoldCyan = "\x1b[1;36m";
+		constexpr const char* kAnsiBoldMagenta = "\x1b[1;35m";
 		constexpr const char* kAnsiBright = "\x1b[97m";
 
 		const char* ToLevelName(const LogLevel level)
@@ -166,6 +170,37 @@ namespace aether
 					return kAnsiYellow;
 				case LogLevel::Error:
 					return kAnsiRed;
+				default:
+					return kAnsiReset;
+			}
+		}
+
+		const char* ToPlainColor(const LogPlainColor color)
+		{
+			switch (color)
+			{
+				case LogPlainColor::None:
+					return kAnsiReset;
+				case LogPlainColor::Red:
+					return kAnsiRed;
+				case LogPlainColor::Yellow:
+					return kAnsiYellow;
+				case LogPlainColor::Green:
+					return kAnsiGreen;
+				case LogPlainColor::Cyan:
+					return kAnsiCyan;
+				case LogPlainColor::Magenta:
+					return kAnsiMagenta;
+				case LogPlainColor::BoldRed:
+					return kAnsiBoldRed;
+				case LogPlainColor::BoldYellow:
+					return kAnsiBoldYellow;
+				case LogPlainColor::BoldGreen:
+					return kAnsiBoldGreen;
+				case LogPlainColor::BoldCyan:
+					return kAnsiBoldCyan;
+				case LogPlainColor::BoldMagenta:
+					return kAnsiBoldMagenta;
 				default:
 					return kAnsiReset;
 			}
@@ -296,6 +331,33 @@ namespace aether
 
 				fileStream << '\n';
 			}
+		}
+
+		void WritePlainMessage(std::string_view message, const char* color, std::ofstream& fileStream)
+		{
+			std::cerr << color << message << kAnsiReset << '\n';
+			std::cerr.flush();
+
+			if (fileStream.is_open())
+			{
+				fileStream << message << '\n';
+				fileStream.flush();
+			}
+		}
+
+		void WritePlainError(std::string_view message, std::ofstream& fileStream)
+		{
+			WritePlainMessage(message, ToMessageColor(LogLevel::Error), fileStream);
+		}
+
+		void WritePlainInfo(std::string_view message, std::ofstream& fileStream)
+		{
+			WritePlainMessage(message, ToMessageColor(LogLevel::Info), fileStream);
+		}
+
+		void WritePlainInfo(std::string_view message, LogPlainColor color, std::ofstream& fileStream)
+		{
+			WritePlainMessage(message, ToPlainColor(color), fileStream);
 		}
 
 		void CrashFlushBestEffort()
@@ -627,6 +689,37 @@ namespace aether
 		}
 
 		backend.condition.notify_one();
+	}
+
+	void Logger::ErrorPlain(const std::string_view message)
+	{
+		if (!ShouldLog(LogLevel::Error))
+		{
+			return;
+		}
+
+		EnsureInitialized();
+		LoggerBackend& backend = GetBackend();
+		std::scoped_lock writeLock(backend.outputMutex);
+		WritePlainError(message, backend.fileStream);
+	}
+
+	void Logger::InfoPlain(const std::string_view message)
+	{
+		InfoPlain(message, LogPlainColor::None);
+	}
+
+	void Logger::InfoPlain(const std::string_view message, const LogPlainColor color)
+	{
+		if (!ShouldLog(LogLevel::Info))
+		{
+			return;
+		}
+
+		EnsureInitialized();
+		LoggerBackend& backend = GetBackend();
+		std::scoped_lock writeLock(backend.outputMutex);
+		WritePlainInfo(message, color, backend.fileStream);
 	}
 
 } // namespace aether

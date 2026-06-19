@@ -1,9 +1,11 @@
 #include "gpu/CommandList.hpp"
 
+#include <format>
 #include <vector>
 
 #include "gpu/ResourceRegistry.hpp"
 #include "rendering/GraphicsPipeline.hpp"
+#include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/volk.hpp"
@@ -63,12 +65,26 @@ namespace aether::gpu
 		// null is a no-op (debug extensions not enabled in this build).
 		PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabel = nullptr;
 		PFN_vkCmdEndDebugUtilsLabelEXT s_endDebugLabel = nullptr;
+		DiagnosticEngine* s_diagnosticEngine = nullptr;
+
+		void RecordDiagnosticEvent(std::string_view message)
+		{
+			if (s_diagnosticEngine != nullptr)
+			{
+				s_diagnosticEngine->RecordEvent(message);
+			}
+		}
 	} // namespace
 
 	void CommandList::SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept
 	{
 		s_beginDebugLabel = reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(beginFn);
 		s_endDebugLabel = reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(endFn);
+	}
+
+	void CommandList::SetDiagnosticEngine(DiagnosticEngine* engine) noexcept
+	{
+		s_diagnosticEngine = engine;
 	}
 
 	void CommandList::BindPipeline(void* pipeline) noexcept
@@ -137,6 +153,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("Draw({}, {}, {}, {})", vertexCount, instanceCount, firstVertex, firstInstance));
 		vkCmdDraw(AsVkCmd(m_cmd), vertexCount, instanceCount, firstVertex, firstInstance);
 	}
 
@@ -146,6 +163,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("DrawIndexed({}, {}, {}, {}, {})", indexCount, instanceCount, firstIndex, vertexOffset, firstInstance));
 		vkCmdDrawIndexed(AsVkCmd(m_cmd), indexCount, instanceCount, firstIndex, vertexOffset, firstInstance);
 	}
 
@@ -155,6 +173,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("Dispatch({}, {}, {})", groupCountX, groupCountY, groupCountZ));
 		vkCmdDispatch(AsVkCmd(m_cmd), groupCountX, groupCountY, groupCountZ);
 	}
 
@@ -217,6 +236,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("DrawIndirect(count={}, stride={})", drawCount, stride));
 		vkCmdDrawIndirect(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), drawCount, stride);
 	}
 
@@ -226,6 +246,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("DrawIndexedIndirect(count={}, stride={})", drawCount, stride));
 		vkCmdDrawIndexedIndirect(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), drawCount, stride);
 	}
 
@@ -235,6 +256,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("DrawIndexedIndirectCount(max={}, stride={})", maxDrawCount, stride));
 		vkCmdDrawIndexedIndirectCount(AsVkCmd(m_cmd), AsVkBuffer(vkIndirectBuffer), static_cast<VkDeviceSize>(indirectOffset), AsVkBuffer(vkCountBuffer), static_cast<VkDeviceSize>(countOffset), maxDrawCount, stride);
 	}
 
@@ -244,6 +266,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("FillBuffer(size={}, value=0x{:X})", size, value));
 		vkCmdFillBuffer(AsVkCmd(m_cmd), AsVkBuffer(vkBuffer), static_cast<VkDeviceSize>(offset), static_cast<VkDeviceSize>(size), value);
 	}
 

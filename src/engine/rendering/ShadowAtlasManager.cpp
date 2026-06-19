@@ -15,7 +15,7 @@ namespace aether
 		const gpu::TextureDesc desc{
 		        .format = kAtlasFormat,
 		        .extent = {kAtlasWidth, kAtlasHeight},
-		        .usage = gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage | gpu::ImageUsage::ColorAttachment,
+		        .usage = gpu::ImageUsage::TransferSrc | gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::Storage | gpu::ImageUsage::ColorAttachment,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "ShadowAtlas",
 		};

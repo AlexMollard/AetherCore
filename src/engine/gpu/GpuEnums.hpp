@@ -150,7 +150,7 @@ namespace aether::gpu
 		Indirect = 1u << 8,
 		ShaderDeviceAddress = 1u << 17,
 		// VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT (0x10000000). Heap backing
-		// buffer for VK_EXT_descriptor_heap — host-visible, persistently mapped,
+		// buffer for VK_EXT_descriptor_heap - host-visible, persistently mapped,
 		// read by the GPU via BDA when bound as a resource/sampler heap.
 		DescriptorHeap = 1u << 28,
 	};

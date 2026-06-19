@@ -18,7 +18,7 @@ namespace aether
 
 	// A device-local GPU memory arena backed by a single large VkBuffer.
 	// Suballocates typed regions via a VmaVirtualBlock (VMA's virtual
-	// allocator: best-fit, coalescing, alignment — same pattern as
+	// allocator: best-fit, coalescing, alignment - same pattern as
 	// RenderGraphStorage's transient heap).
 	//
 	// Think of it as GPU malloc: Alloc<T> is new[], Free<T> is delete[].

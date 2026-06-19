@@ -1,5 +1,6 @@
 #include "vulkan/GraphicsDevice.hpp"
 
+#include "gpu/CommandList.hpp"
 #include "utils/Assert.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "platform/Window.hpp"
@@ -29,9 +30,11 @@ namespace aether
 
 		m_vulkanContext.emplace(window, config.appName);
 		m_resourceRegistry.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetAllocator());
-		m_diagnosticEngine.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetPhysicalDevice());
+		m_diagnosticEngine.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetPhysicalDevice(), m_vulkanContext->GetGraphicsQueue());
+		gpu::CommandList::SetDiagnosticEngine(&m_diagnosticEngine);
 		g_activeDiagnosticEngine = &m_diagnosticEngine;
 		m_vulkanContext->SetFaultCallback(&DiagnosticFaultThunk);
+		m_vulkanContext->SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
 		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
 		AE_EXPECT_OR_THROW_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);
@@ -49,8 +52,12 @@ namespace aether
 
 	void GraphicsDevice::Shutdown()
 	{
+		// WaitIdle may throw VK_ERROR_DEVICE_LOST, which triggers the fault
+		// callback — keep it set until after the wait.
 		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);
+		m_vulkanContext->SetGlobalAddressBindingTracker(nullptr);
 		m_vulkanContext->SetFaultCallback(nullptr);
+		gpu::CommandList::SetDiagnosticEngine(nullptr);
 		g_activeDiagnosticEngine = nullptr;
 		m_bindlessManager.Shutdown();
 		m_swapchain.Shutdown(m_vulkanContext->GetDevice().device);

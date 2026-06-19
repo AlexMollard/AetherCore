@@ -17,6 +17,7 @@
 namespace aether
 {
 	class BindlessManager;
+	class DiagnosticEngine; // forward decl for breadcrumb injection
 
 	// Forward declarations - live in vulkan/RenderGraphStorage.hpp
 	struct RenderGraphStorage;
@@ -96,6 +97,17 @@ namespace aether
 		RenderGraph& operator=(RenderGraph&&) noexcept;
 
 		void Initialize(gpu::Device device, gpu::Allocator allocator);
+		// Set the VulkanContext for device-loss routing. Delegates to
+		// RenderGraphStorage::SetVulkanContext.
+		void SetVulkanContext(class VulkanContext* ctx);
+
+		// Register a DiagnosticEngine for breadcrumb injection before each
+		// render pass. Safe to call with nullptr (no-ops). Not owned.
+		void SetDiagnosticEngine(class DiagnosticEngine* de)
+		{
+			m_diagnosticEngine = de;
+		}
+
 		void Shutdown();
 
 		// Begin a new frame - must be called before Execute() to process
@@ -428,6 +440,9 @@ namespace aether
 
 		// Opaque storage for all Vulkan-internal state.
 		std::unique_ptr<RenderGraphStorage> m_storage;
+
+		// Diagnostic breadcrumb injection (nullable, not owned).
+		class DiagnosticEngine* m_diagnosticEngine = nullptr;
 
 		// Pass graph state (Vulkan-free).
 		std::vector<PassRecord> m_passes;

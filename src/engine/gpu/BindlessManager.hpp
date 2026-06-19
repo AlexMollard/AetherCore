@@ -51,7 +51,7 @@ namespace aether
 		// Write a SAMPLED_IMAGE descriptor into the resource heap at the given slot.
 		// The descriptor data is written directly into the mapped heap via
 		// vkWriteResourceDescriptorsEXT. viewCreateInfo is the VkImageViewCreateInfo
-		// recipe (not the VkImageView handle) — required by the extension.
+		// recipe (not the VkImageView handle) - required by the extension.
 		[[nodiscard]] Expected<void> WriteSampledImage(std::uint32_t slot, const void* viewCreateInfo, gpu::ImageLayout layout);
 
 		// Write the linear sampler into the sampler heap (one-time init / on-demand).

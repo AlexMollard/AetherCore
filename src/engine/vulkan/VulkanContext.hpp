@@ -16,6 +16,11 @@ namespace tracy
 	struct VkCtx;
 }
 
+namespace aether
+{
+	class GpuMemoryTracker;
+}
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 #	include "vulkan/AftermathContext.hpp"
 #endif
@@ -72,6 +77,10 @@ namespace aether
 			m_faultCallback = callback;
 		}
 
+		// Forward to the file-static address binding tracker so GraphicsDevice
+		// can wire up the debug-messenger-driven alloc tracking.
+		static void SetGlobalAddressBindingTracker(GpuMemoryTracker* tracker);
+
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		[[nodiscard]] const AftermathContext& GetAftermathContext() const
 		{
@@ -86,6 +95,7 @@ namespace aether
 
 	private:
 		std::optional<vkb::Instance> m_instance;
+		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 		std::optional<vkb::Device> m_device;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		VkPipelineCache m_pipelineCache = VK_NULL_HANDLE;

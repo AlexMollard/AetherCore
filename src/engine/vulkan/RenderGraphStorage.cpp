@@ -15,6 +15,7 @@
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
 namespace aether
@@ -181,6 +182,10 @@ namespace aether
 
 		if (vkWaitForFences(m_device, 1, &frame.fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 		{
+			if (m_vulkanContext != nullptr)
+			{
+				m_vulkanContext->WaitIdle();
+			}
 			Throw(AetherError::Vulkan(0, "RenderGraphStorage: failed to wait for compute fence."));
 		}
 		if (vkResetFences(m_device, 1, &frame.fence) != VK_SUCCESS)

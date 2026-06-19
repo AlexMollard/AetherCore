@@ -16,6 +16,7 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/VulkanUtils.hpp"
+#include "vulkan/DiagnosticEngine.hpp"
 
 namespace aether
 {
@@ -36,6 +37,11 @@ namespace aether
 		m_storage->Initialize(device, allocator);
 	}
 
+	void RenderGraph::SetVulkanContext(class VulkanContext* ctx)
+	{
+		m_storage->SetVulkanContext(ctx);
+	}
+
 	void RenderGraph::Shutdown()
 	{
 		m_storage->Shutdown();
@@ -49,6 +55,10 @@ namespace aether
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
 		m_frameIndex = frameIndex;
+		if (m_diagnosticEngine != nullptr)
+		{
+			m_diagnosticEngine->BeginFrame(frameIndex);
+		}
 		m_storage->BeginFrame(frameIndex);
 	}
 
@@ -1332,6 +1342,16 @@ namespace aether
 
 		Compile();
 
+		// Register breadcrumb labels for all compiled passes so the
+		// diagnostic engine can resolve marker values to pass names.
+		if (m_diagnosticEngine != nullptr)
+		{
+			for (std::size_t i = 0; i < m_compiled.size(); i++)
+			{
+				m_diagnosticEngine->RegisterBreadcrumbLabel(static_cast<std::uint32_t>(i), m_passes[m_compiled[i].passIndex].name);
+			}
+		}
+
 		// Two-pass transient heap preparation: query memory requirements, allocate heap, assign virtual offsets.
 		m_storage->PrepareTransientAllocations(target);
 
@@ -1375,12 +1395,16 @@ namespace aether
 		// cmd is the opaque gpu::CommandBuffer (the actual VkCommandBuffer
 		// is obtained in the storage via static_cast at emit time). P5(d)
 		// barrier solver migration: the engine code never names VkCommandBuffer.
-		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer cmd)
+		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer cmd, uint32_t breadcrumbValue)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
 			AE_PROFILE_ZONE_N("RenderPass");
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name, 0.20f, 0.70f, 0.35f, 1.0f);
+			if (m_diagnosticEngine != nullptr)
+			{
+				m_diagnosticEngine->RecordEvent("Begin pass {}", pass.name);
+			}
 
 			// -- Split barrier waits (consume events from producers) -----------
 			// P5(d) barrier solver migration: all barriers are engine-side
@@ -1585,6 +1609,11 @@ namespace aether
 				recorder.SetScissor(scissor);
 			}
 
+			if (m_diagnosticEngine != nullptr)
+			{
+				m_diagnosticEngine->WriteBreadcrumb(reinterpret_cast<VkCommandBuffer>(cmd), breadcrumbValue);
+			}
+
 			if (pass.execute)
 			{
 				// Tracy GPU zone. The engine-side macro captures
@@ -1596,6 +1625,11 @@ namespace aether
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
 				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
+			}
+
+			if (m_diagnosticEngine != nullptr)
+			{
+				m_diagnosticEngine->RecordEvent("End pass {}", pass.name);
 			}
 
 			if (useDynamicRendering)
@@ -1648,6 +1682,7 @@ namespace aether
 		};
 
 		const bool hasAsyncCompute = HasAsyncComputeWork();
+		std::uint32_t passMarker = 0;
 
 		// Phase 1: Execute async-compute passes on the dedicated compute queue.
 		if (hasAsyncCompute)
@@ -1663,7 +1698,8 @@ namespace aether
 				{
 					break; // validated: all async-compute passes precede graphics
 				}
-				executePassOn(cp, computeRecorder, computeCmd);
+				executePassOn(cp, computeRecorder, computeCmd, passMarker);
+				passMarker++;
 			}
 
 			computeRecorder.EndDebugLabel();
@@ -1692,7 +1728,8 @@ namespace aether
 					continue; // skip async-compute passes (already executed)
 				}
 				foundGraphics = true;
-				executePassOn(cp, gfxRecorder, gfxCmd);
+				executePassOn(cp, gfxRecorder, gfxCmd, passMarker);
+				passMarker++;
 			}
 
 			gfxRecorder.EndDebugLabel();
@@ -1717,5 +1754,9 @@ namespace aether
 		        stats.aliasedBufferCount,
 		        stats.transientCacheHit,
 		        stats.cacheSize);
+		if (m_diagnosticEngine != nullptr)
+		{
+			m_diagnosticEngine->EndFrame(frameIndex);
+		}
 	}
 } // namespace aether

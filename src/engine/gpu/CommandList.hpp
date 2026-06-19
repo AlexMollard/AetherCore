@@ -10,8 +10,9 @@
 
 namespace aether
 {
+	class DiagnosticEngine;
 	class GraphicsPipeline;
-}
+} // namespace aether
 
 namespace aether::gpu
 {
@@ -95,6 +96,7 @@ namespace aether::gpu
 		// Wire the debug-label function pointers. Called once at engine init
 		// by the backend. Pass null to disable.
 		static void SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept;
+		static void SetDiagnosticEngine(DiagnosticEngine* engine) noexcept;
 
 	private:
 		void* m_cmd = nullptr;

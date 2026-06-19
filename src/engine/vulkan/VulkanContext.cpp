@@ -1,5 +1,6 @@
 #include "vulkan/VulkanContext.hpp"
 
+#include <format>
 #include <fstream>
 #include <string>
 #include <vector>
@@ -18,6 +19,7 @@
 #endif
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/GpuMemoryTracker.hpp"
 #include "platform/Window.hpp"
 
 // Validation mode is controlled by CMake options AETHERCORE_VULKAN_GPU_DEBUG /
@@ -29,6 +31,11 @@
 
 namespace
 {
+	// Set by GraphicsDevice::Init so the VK_EXT_device_address_binding_report
+	// events delivered through the debug messenger can register/unregister GPU
+	// memory ranges in a single place (including driver-internal allocations).
+	aether::GpuMemoryTracker* g_addressBindingTracker = nullptr;
+
 	const char* ObjectTypeToString(VkObjectType type)
 	{
 		switch (static_cast<int>(type))
@@ -120,8 +127,17 @@ namespace
 				if (pNext->sType == VK_STRUCTURE_TYPE_DEVICE_ADDRESS_BINDING_CALLBACK_DATA_EXT)
 				{
 					const auto* binding = reinterpret_cast<const VkDeviceAddressBindingCallbackDataEXT*>(pNext);
-					const char* bindType = binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT ? "bind" : binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT ? "unbind" : "unknown";
-					extra += std::format(" [AddressBinding {} base=0x{:016X} size={}]", bindType, binding->baseAddress, binding->size);
+					if (g_addressBindingTracker != nullptr)
+					{
+						if (binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_BIND_EXT)
+						{
+							g_addressBindingTracker->Register(binding->baseAddress, binding->size, "<address-binding>", aether::GpuMemoryTracker::ResourceType::Buffer);
+						}
+						else if (binding->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT)
+						{
+							g_addressBindingTracker->UnregisterRange(binding->baseAddress, binding->size);
+						}
+					}
 				}
 			}
 		}
@@ -161,12 +177,12 @@ namespace aether
 		instanceBuilder.require_api_version(1, 4, 0);
 #if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
 		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		VkDebugUtilsMessageTypeFlagsEXT debugTypes =
+		        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
 		instanceBuilder.request_validation_layers();
-		instanceBuilder.set_debug_callback(LogValidationMessage);
-		instanceBuilder.set_debug_messenger_severity(debugSeverity);
-		instanceBuilder.set_debug_messenger_type(debugTypes);
+		instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 #endif
 #if defined(VULKAN_GPU_DEBUG)
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
@@ -212,6 +228,20 @@ namespace aether
 		m_instance = instanceResult.value();
 
 		volkLoadInstance(m_instance->instance);
+
+#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+		VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+		        .messageSeverity = debugSeverity,
+		        .messageType = debugTypes,
+		        .pfnUserCallback = LogValidationMessage,
+		};
+		VkResult messengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &debugMessengerCreateInfo, nullptr, &m_debugMessenger);
+		if (messengerResult != VK_SUCCESS)
+		{
+			Throw(AetherError::Vulkan(messengerResult, "Failed to create Vulkan debug messenger."));
+		}
+#endif
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
 		{
@@ -267,29 +297,26 @@ namespace aether
 		// extension explicitly so vkb enables it and the function pointers are available.
 		selector.add_required_extension(VK_EXT_CALIBRATED_TIMESTAMPS_EXTENSION_NAME);
 #endif
-		// maintenance9 (promoted to 1.4 spec but still KHR in this SDK) allows queue
-		// family ownership transfers to be omitted when both queue families are compatible.
+		// VK_KHR_maintenance9: optional device extension. Required by this renderer
+		// for compatible queue-family ownership transfer behavior.
 		selector.add_required_extension(VK_KHR_MAINTENANCE_9_EXTENSION_NAME);
-		// Push descriptors eliminate per-frame VkDescriptorPool allocation - write descriptors
-		// directly into the command buffer at bind time. Core in Vulkan 1.4 - enabled via
-		// features14.pushDescriptor above, but the extension name is still required by some
-		// loader/driver paths.
+		// Push descriptors are represented in Vulkan 1.4 core structures, but
+		// requesting the legacy extension keeps extension-suffixed entry points
+		// and driver paths explicit for this renderer.
 		selector.add_required_extension(VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME);
 		// VK_EXT_shader_object: layout-free shaders bound directly via vkCmdBindShadersEXT.
-		// Core in Vulkan 1.4, but the extension name is still required by the loader.
-		// Implicitly grants dynamic vertex input (vkCmdSetVertexInputEXT) - no separate
-		// VK_EXT_vertex_input_dynamic_state enable is needed.
+		// Still a device extension, not Vulkan 1.4 core. Required explicitly.
 		selector.add_required_extension(VK_EXT_SHADER_OBJECT_EXTENSION_NAME);
-		// VK_EXT_extended_dynamic_state / 2 / 3 are NOT requested by name: v1 and v2
-		// are core/unconditional in Vulkan 1.3, and v3 is core in Vulkan 1.4. The EXT
-		// feature structs are chained into the device create pNext below; the loader
-		// resolves the vkCmdSet* entry points against the core API on a 1.4 device.
-		// VK_EXT_descriptor_heap supersedes descriptor sets and descriptor buffers.
-		// Hybrid model: buffers stay BDA-addressed (passed via push data), while
-		// images / samplers / storage images live in a single resource heap and a
-		// single sampler heap. Existing set/binding-decorated shaders are mapped to
-		// heap offsets at pipeline creation via VkShaderDescriptorSetAndBindingMappingInfoEXT.
+		// Extended dynamic state v1/v2 functionality is available through Vulkan 1.3/core
+		// entry points for the states used here. VK_EXT_extended_dynamic_state3 is still
+		// an extension and is required explicitly below because shader objects use EDS3
+		// rasterization and blend dynamic states.
+		// VK_EXT_descriptor_heap: explicit descriptor memory management using one
+		// resource heap and one sampler heap. This is an extension, not Vulkan 1.4 core.
+		// It can replace descriptor sets/pipeline layouts for heap-based binding while
+		// still allowing set/binding shader decorations to map to heap offsets.
 		selector.add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
+		selector.add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
 		// VK_KHR_device_fault: on device loss, vkGetDeviceFaultReportsKHR returns
 		// detailed fault addresses (memory + instruction), vendor-specific data,
 		// and a description string. deviceFaultDeviceLostOnMasked forces the
@@ -303,6 +330,16 @@ namespace aether
 		// DiagnosticEngine to maintain a BDA -> resource-name registry for
 		// post-mortem address resolution.
 		selector.add_required_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
+		// VK_NV_device_diagnostic_checkpoints: driver-stored breadcrumb markers
+		// for post-crash flight-recorder dump. vkCmdSetCheckpointNV writes a
+		// marker into the command stream; vkGetQueueCheckpointDataNV retrieves
+		// the last N markers after device loss. The driver retains checkpoints
+		// internally so they survive device loss even when mapped memory does
+		// not. Compared to VK_AMD_buffer_marker, this is Nvidia-specific but
+		// strictly more resilient (driver-stored, not host-visible-buffer).
+		// Works alongside VK_AMD_buffer_marker; DiagnosticEngine writes markers
+		// via whichever mechanism is available.
+		selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
@@ -346,21 +383,44 @@ namespace aether
 
 		// Query supported fault features on this physical device so we only
 		// request what the hardware actually supports. deviceFaultReportMasked
-		// and deviceFaultDeviceLostOnMasked are optional — NVIDIA beta drivers
+		// and deviceFaultDeviceLostOnMasked are optional - NVIDIA beta drivers
 		// (and some production drivers) may not support them.
 		VkPhysicalDeviceFaultFeaturesKHR supportedFaultFeatures{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
 		};
-		VkPhysicalDeviceFeatures2 queryFeatures2{
+		VkPhysicalDeviceFeatures2 queryFaultFeatures2{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
 		        .pNext = &supportedFaultFeatures,
 		};
-		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryFeatures2);
+		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryFaultFeatures2);
+
+		VkPhysicalDeviceExtendedDynamicState3FeaturesEXT supportedEDS3{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+		};
+		VkPhysicalDeviceFeatures2 queryEDS3Features2{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+		        .pNext = &supportedEDS3,
+		};
+		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryEDS3Features2);
+
+		const bool eds3RequiredSupport = supportedEDS3.extendedDynamicState3PolygonMode == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3RasterizationSamples == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3SampleMask == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3AlphaToOneEnable == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE
+		        && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
+		if (!eds3RequiredSupport)
+		{
+			Throw(AetherError::Vulkan(0, "VK_EXT_extended_dynamic_state3 is missing required dynamic state features."));
+		}
 
 		VkPhysicalDeviceFaultFeaturesKHR faultFeatures{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
-		        .deviceFault = VK_TRUE,
-		        .deviceFaultVendorBinary = VK_TRUE,
+		        .deviceFault = supportedFaultFeatures.deviceFault,
+		        .deviceFaultVendorBinary = supportedFaultFeatures.deviceFaultVendorBinary,
 		        .deviceFaultReportMasked = supportedFaultFeatures.deviceFaultReportMasked,
 		        .deviceFaultDeviceLostOnMasked = supportedFaultFeatures.deviceFaultDeviceLostOnMasked,
 		};
@@ -382,39 +442,16 @@ namespace aether
 
 		VkPhysicalDeviceExtendedDynamicState3FeaturesEXT extendedDynamicState3Features{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT,
+		        .extendedDynamicState3PolygonMode = supportedEDS3.extendedDynamicState3PolygonMode,
+		        .extendedDynamicState3RasterizationSamples = supportedEDS3.extendedDynamicState3RasterizationSamples,
+		        .extendedDynamicState3SampleMask = supportedEDS3.extendedDynamicState3SampleMask,
+		        .extendedDynamicState3AlphaToCoverageEnable = supportedEDS3.extendedDynamicState3AlphaToCoverageEnable,
+		        .extendedDynamicState3AlphaToOneEnable = supportedEDS3.extendedDynamicState3AlphaToOneEnable,
+		        .extendedDynamicState3LogicOpEnable = supportedEDS3.extendedDynamicState3LogicOpEnable,
+		        .extendedDynamicState3ColorBlendEnable = supportedEDS3.extendedDynamicState3ColorBlendEnable,
+		        .extendedDynamicState3ColorBlendEquation = supportedEDS3.extendedDynamicState3ColorBlendEquation,
+		        .extendedDynamicState3ColorWriteMask = supportedEDS3.extendedDynamicState3ColorWriteMask,
 		};
-		// Enable the full set of dynamic-state-3 toggles shader objects rely on.
-		extendedDynamicState3Features.extendedDynamicState3TessellationDomainOrigin = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3DepthClampEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3PolygonMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3RasterizationSamples = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3SampleMask = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3AlphaToCoverageEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3AlphaToOneEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3LogicOpEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ColorBlendEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ColorBlendEquation = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ColorWriteMask = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3RasterizationStream = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ConservativeRasterizationMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ExtraPrimitiveOverestimationSize = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3DepthClipEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3SampleLocationsEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ColorBlendAdvanced = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ProvokingVertexMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3LineRasterizationMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3LineStippleEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3DepthClipNegativeOneToOne = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ViewportWScalingEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ViewportSwizzle = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageToColorEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageToColorLocation = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageModulationMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageModulationTableEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageModulationTable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3CoverageReductionMode = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3RepresentativeFragmentTestEnable = VK_TRUE;
-		extendedDynamicState3Features.extendedDynamicState3ShadingRateImageEnable = VK_TRUE;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{
@@ -444,6 +481,26 @@ namespace aether
 		m_device = deviceResult.value();
 
 		volkLoadDevice(m_device->device);
+
+#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+		VkDebugUtilsMessengerEXT upgradedDebugMessenger = VK_NULL_HANDLE;
+		VkDebugUtilsMessengerCreateInfoEXT upgradedDebugMessengerCreateInfo{
+		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+		        .messageSeverity = debugSeverity,
+		        .messageType = debugTypesWithAddressBinding,
+		        .pfnUserCallback = LogValidationMessage,
+		};
+		VkResult upgradedMessengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &upgradedDebugMessengerCreateInfo, nullptr, &upgradedDebugMessenger);
+		if (upgradedMessengerResult == VK_SUCCESS)
+		{
+			vkDestroyDebugUtilsMessengerEXT(m_instance->instance, m_debugMessenger, nullptr);
+			m_debugMessenger = upgradedDebugMessenger;
+		}
+		else
+		{
+			AE_WARN(LogCategory::Vulkan, "Unable to enable device address binding debug messenger events after Vulkan device creation: VkResult={}.", static_cast<int>(upgradedMessengerResult));
+		}
+#endif
 
 		const auto graphicsQueueResult = m_device->get_queue(vkb::QueueType::graphics);
 		if (!graphicsQueueResult)
@@ -569,13 +626,27 @@ namespace aether
 		}
 
 		// Report GPU (VkDeviceMemory) allocations to Tracy as the "GPU" named pool
-		// so VRAM usage is visible alongside CPU heap allocations.
+		// and optionally to GpuMemoryTracker for address resolution.
+		static const VmaDeviceMemoryCallbacks kVmaCallbacks{
+		        .pfnAllocate =
+		                [](VmaAllocator, uint32_t memoryType, VkDeviceMemory memory, VkDeviceSize size, void*)
+		        {
+			        (void) memoryType;
+			        (void) size;
 #ifdef TRACY_ENABLE
-		static const VmaDeviceMemoryCallbacks kTracyVmaCallbacks{
-		        .pfnAllocate = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize size, void*) { AE_PROFILE_ALLOC_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), static_cast<std::size_t>(size), "GPU"); },
-		        .pfnFree = [](VmaAllocator, uint32_t, VkDeviceMemory memory, VkDeviceSize, void*) { AE_PROFILE_FREE_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), "GPU"); },
-		};
+			        AE_PROFILE_ALLOC_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), static_cast<std::size_t>(size), "GPU");
 #endif
+		        },
+		        .pfnFree =
+		                [](VmaAllocator, uint32_t memoryType, VkDeviceMemory memory, VkDeviceSize size, void*)
+		        {
+			        (void) memoryType;
+			        (void) size;
+#ifdef TRACY_ENABLE
+			        AE_PROFILE_FREE_N(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(memory)), "GPU");
+#endif
+		        },
+		};
 
 		VmaVulkanFunctions vulkanFunctions{};
 		vulkanFunctions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
@@ -588,9 +659,7 @@ namespace aether
 		allocatorCreateInfo.instance = m_instance->instance;
 		allocatorCreateInfo.vulkanApiVersion = VK_API_VERSION_1_4;
 		allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
-#ifdef TRACY_ENABLE
-		allocatorCreateInfo.pDeviceMemoryCallbacks = &kTracyVmaCallbacks;
-#endif
+		allocatorCreateInfo.pDeviceMemoryCallbacks = &kVmaCallbacks;
 
 		const VkResult allocatorResult = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
 		if (allocatorResult != VK_SUCCESS)
@@ -681,6 +750,12 @@ namespace aether
 		if (m_device.has_value())
 		{
 			vkb::destroy_device(*m_device);
+		}
+
+		if (m_debugMessenger != VK_NULL_HANDLE && m_instance.has_value())
+		{
+			vkDestroyDebugUtilsMessengerEXT(m_instance->instance, m_debugMessenger, nullptr);
+			m_debugMessenger = VK_NULL_HANDLE;
 		}
 
 		if (m_surface != VK_NULL_HANDLE && m_instance.has_value())
@@ -896,5 +971,10 @@ namespace aether
 	const VkPhysicalDeviceDescriptorHeapPropertiesEXT& VulkanContext::GetDescriptorHeapProperties() const
 	{
 		return m_descriptorHeapProps;
+	}
+
+	void VulkanContext::SetGlobalAddressBindingTracker(GpuMemoryTracker* tracker)
+	{
+		g_addressBindingTracker = tracker;
 	}
 } // namespace aether

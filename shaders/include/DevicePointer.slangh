@@ -7,7 +7,7 @@
 // type T. Its memory layout is identical to a bare uint64_t, so it can be used
 // directly as a push-constant / push-data field: the host writes a VkDeviceAddress
 // (8 bytes) and the shader reads it as DevicePtr<T>. No descriptor or mapping
-// metadata is involved — BDA is the resource access mechanism.
+// metadata is involved - BDA is the resource access mechanism.
 //
 // Usage:
 //   struct DrawPush {

@@ -6,8 +6,8 @@ option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party target
 # variant for layout/shader debugging (higher overhead, higher signal), or the
 # CPU variant for general API conformance. Leave both OFF for Release-like
 # builds where validation overhead is unwanted.
-option(AETHERCORE_VULKAN_GPU_DEBUG "Enable GPU-assisted Vulkan validation (GPU-AV + sync validation + debug printf)" OFF)
-option(AETHERCORE_VULKAN_CPU_DEBUG "Enable CPU core Vulkan validation" ON)
+option(AETHERCORE_VULKAN_GPU_DEBUG "Enable GPU-assisted Vulkan validation (GPU-AV + sync validation + debug printf)" ON)
+option(AETHERCORE_VULKAN_CPU_DEBUG "Enable CPU core Vulkan validation" OFF)
 
 # aethercore_target_defaults(<target>)
 #
@@ -43,7 +43,7 @@ function(aethercore_target_defaults target)
 
         # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
         # COMDATs. Required for "what can we delete" audits via the link map.
-        # Works alongside /DEBUG — the link is still debuggable.
+        # Works alongside /DEBUG - the link is still debuggable.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>
@@ -95,7 +95,7 @@ function(aethercore_target_defaults target)
 
         # /OPT:REF,ICF: dead-strip unreferenced functions/data and fold identical
         # COMDATs. Required for "what can we delete" audits via the link map.
-        # Works alongside /DEBUG — the link is still debuggable.
+        # Works alongside /DEBUG - the link is still debuggable.
         target_link_options(${target} PRIVATE
             $<$<CONFIG:Release>:/OPT:REF,ICF>
             $<$<CONFIG:RelWithDebInfo>:/OPT:REF,ICF>

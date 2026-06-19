@@ -133,10 +133,10 @@ namespace aether
 			VkBool32 alphaToOneEnable = VK_FALSE;
 
 			std::uint32_t scissorCount = 1;
-			VkRect2D scissors[8]{};
+			VkRect2D scissors[8] = {{{0, 0}, {1, 1}}};
 
 			std::uint32_t viewportCount = 1;
-			VkViewport viewports[8]{};
+			VkViewport viewports[8] = {{0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 1.0f}};
 
 			// One color attachment's blend state (engine uses at most 1 RT per pipeline).
 			VkBool32 colorBlendEnable = VK_FALSE;

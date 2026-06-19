@@ -6,7 +6,7 @@
 // into LDS, then reads from LDS for the convolution. This replaces 5 global
 // buffer reads per thread with 1 global write + barrier + 5 LDS reads.
 //
-// Input/output via DevicePtr<float2> (BDA) stored in push constants —
+// Input/output via DevicePtr<float2> (BDA) stored in push constants -
 // zero descriptor bindings required.
 
 #include "include/DevicePointer.slangh"

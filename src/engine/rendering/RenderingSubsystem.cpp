@@ -14,6 +14,7 @@
 #include "material/MaterialBuffer.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "vulkan/DiagnosticEngine.hpp"
 
 namespace aether
 {
@@ -29,6 +30,8 @@ namespace aether
 		auto& gpu = services.Get<GpuDevice>();
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
+		m_renderGraph.SetVulkanContext(&vk);
+		m_renderGraph.SetDiagnosticEngine(&services.Get<DiagnosticEngine>());
 		m_frameConstantsBuffer.Initialize(vk);
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());

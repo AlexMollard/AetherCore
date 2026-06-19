@@ -102,7 +102,17 @@ namespace aether
 
 			// Execute the frame. This blocks on the GPU fence internally and
 			// includes all command recording and submission.
-			m_engine->ExecuteRenderFrame(packet);
+			try
+			{
+				m_engine->ExecuteRenderFrame(packet);
+			}
+			catch (const std::exception& e)
+			{
+				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
+				m_shutdown = true;
+				m_channel.close();
+				break;
+			}
 
 			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
