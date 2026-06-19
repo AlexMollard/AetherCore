@@ -100,6 +100,11 @@ namespace aether::gpu
 		vkCmdSetLogicOpEXT(cmd, entry->logicOp);
 		vkCmdSetBlendConstants(cmd, entry->blendConstants);
 		vkCmdSetRasterizationSamplesEXT(cmd, static_cast<VkSampleCountFlagBits>(entry->rasterizationSampleCount));
+		vkCmdSetSampleMaskEXT(cmd, static_cast<VkSampleCountFlagBits>(entry->rasterizationSampleCount), &entry->sampleMask);
+		vkCmdSetAlphaToCoverageEnableEXT(cmd, entry->alphaToCoverageEnable);
+		vkCmdSetAlphaToOneEnableEXT(cmd, entry->alphaToOneEnable);
+		vkCmdSetScissorWithCountEXT(cmd, entry->scissorCount, entry->scissors);
+		vkCmdSetViewportWithCount(cmd, entry->viewportCount, entry->viewports);
 		vkCmdSetColorBlendEnableEXT(cmd, 0, 1, &entry->colorBlendEnable);
 		vkCmdSetColorBlendEquationEXT(cmd, 0, 1, &entry->colorBlendEquation);
 		vkCmdSetColorWriteMaskEXT(cmd, 0, 1, &entry->colorWriteMask);

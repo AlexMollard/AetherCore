@@ -10,6 +10,7 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/ComputePipelineFactory.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/GraphicsPipelineFactory.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
@@ -161,7 +162,7 @@ namespace aether
 #else
 				AE_WARN(LogCategory::Vulkan, "ResourceRegistry::Shutdown: leaked buffer '{}' (gen {}).", slot.debugName, slot.generation);
 #endif
-				DestroyBufferEntryNow(*slot.entry);
+				DestroyBufferEntryNow(*slot.entry, m_memoryTracker);
 				--m_liveBufferCount;
 				slot.entry.reset();
 			}
@@ -230,6 +231,10 @@ namespace aether
 			        .buffer = buffer,
 			};
 			deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+			if (m_memoryTracker != nullptr && deviceAddress != 0)
+			{
+				m_memoryTracker->Register(deviceAddress, desc.size, std::string(desc.debugName ? desc.debugName : "<buffer>"), GpuMemoryTracker::ResourceType::Buffer);
+			}
 		}
 
 		BufferEntry entry{};
@@ -290,6 +295,10 @@ namespace aether
 			        .buffer = buffer,
 			};
 			deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+			if (m_memoryTracker != nullptr && deviceAddress != 0)
+			{
+				m_memoryTracker->Register(deviceAddress, desc.size, std::string(desc.debugName ? desc.debugName : "<mapped_buffer>"), GpuMemoryTracker::ResourceType::Buffer);
+			}
 		}
 
 		BufferEntry entry{};
@@ -468,6 +477,11 @@ namespace aether
 		m_bindlessManager = mgr;
 	}
 
+	void ResourceRegistry::SetMemoryTracker(GpuMemoryTracker* tracker)
+	{
+		m_memoryTracker = tracker;
+	}
+
 	gpu::BufferHandle ResourceRegistry::CreateAliasedBuffer(VkDeviceSize size, VkBufferUsageFlags2 usage, VmaAllocation existingAllocation, VkDeviceSize memoryOffset, std::string_view debugName)
 	{
 		AE_ASSERT(m_device != VK_NULL_HANDLE, "ResourceRegistry not initialized");
@@ -528,6 +542,10 @@ namespace aether
 			        .buffer = buffer,
 			};
 			entry.deviceAddress = vkGetBufferDeviceAddress(m_device, &addrInfo);
+			if (m_memoryTracker != nullptr && entry.deviceAddress != 0)
+			{
+				m_memoryTracker->Register(entry.deviceAddress, size, debugName.empty() ? std::string{"<aliased_buffer>"} : std::string(debugName), GpuMemoryTracker::ResourceType::Buffer);
+			}
 		}
 
 		return RegisterBuffer(entry, debugName.empty() ? std::string_view{} : debugName);
@@ -961,7 +979,7 @@ namespace aether
 		}
 		m_freeBufferSlots.push_back(idx);
 		m_pendingDestructions[m_currentFrame].push_back(PendingDestruction{
-		        .fn = [this, entry]() { DestroyBufferEntryNow(entry); },
+		        .fn = [this, entry]() { DestroyBufferEntryNow(entry, m_memoryTracker); },
 		});
 	}
 
@@ -1186,11 +1204,15 @@ namespace aether
 		}
 	}
 
-	void ResourceRegistry::DestroyBufferEntryNow(const BufferEntry& entry)
+	void ResourceRegistry::DestroyBufferEntryNow(const BufferEntry& entry, GpuMemoryTracker* memoryTracker)
 	{
 		if (entry.buffer == VK_NULL_HANDLE)
 		{
 			return;
+		}
+		if (memoryTracker != nullptr && entry.deviceAddress != 0)
+		{
+			memoryTracker->Unregister(entry.deviceAddress);
 		}
 		if (entry.ownsAllocation && entry.allocation != VK_NULL_HANDLE)
 		{

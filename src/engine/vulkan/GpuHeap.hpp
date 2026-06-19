@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <span>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <vk_mem_alloc.h>
@@ -13,6 +14,7 @@
 namespace aether
 {
 	class VulkanContext;
+	class GpuMemoryTracker;
 
 	// A device-local GPU memory arena backed by a single large VkBuffer.
 	// Suballocates typed regions via a VmaVirtualBlock (VMA's virtual
@@ -60,6 +62,8 @@ namespace aether
 
 		void Initialize(const VulkanContext& ctx, Desc desc);
 		void Shutdown();
+
+		void SetMemoryTracker(GpuMemoryTracker* tracker);
 
 		template<typename T>
 		[[nodiscard]] GpuSpan<T> Alloc(std::uint32_t count)
@@ -129,8 +133,11 @@ namespace aether
 		VmaAllocation m_bufferAllocation = VK_NULL_HANDLE;
 		VmaVirtualBlock m_virtualBlock = VK_NULL_HANDLE;
 		gpu::DeviceAddress m_baseAddress = 0;
+		VkDeviceSize m_capacityBytes = 0;
 		VmaAllocator m_allocatorRef = nullptr;
 		VkDevice m_deviceRef = VK_NULL_HANDLE;
+		GpuMemoryTracker* m_memoryTracker = nullptr;
+		std::string m_debugName;
 		// Maps each allocation's device address to its VmaVirtualAllocation
 		// handle so Free() can call vmaVirtualFree without coupling GpuSpan
 		// to VMA. Load-time only, not a hot-path structure.

@@ -6,6 +6,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
 
@@ -45,10 +46,20 @@ namespace aether
 		        .buffer = m_buffer,
 		};
 		m_baseAddress = vkGetBufferDeviceAddress(m_deviceRef, &addrInfo);
-
+		m_capacityBytes = desc.capacityBytes;
 		if (desc.debugName != nullptr)
 		{
+			m_debugName = desc.debugName;
 			vkutil::SetObjectName(m_deviceRef, reinterpret_cast<std::uint64_t>(m_buffer), VK_OBJECT_TYPE_BUFFER, desc.debugName);
+		}
+		else
+		{
+			m_debugName = "<gpu_heap>";
+		}
+
+		if (m_memoryTracker != nullptr && m_baseAddress != 0)
+		{
+			m_memoryTracker->Register(m_baseAddress, m_capacityBytes, m_debugName, GpuMemoryTracker::ResourceType::GpuHeap);
 		}
 
 		const VmaVirtualBlockCreateInfo blockInfo{
@@ -65,6 +76,10 @@ namespace aether
 
 	void GpuHeap::Shutdown()
 	{
+		if (m_memoryTracker != nullptr && m_baseAddress != 0)
+		{
+			m_memoryTracker->UnregisterRange(m_baseAddress, m_capacityBytes);
+		}
 		if (m_virtualBlock != VK_NULL_HANDLE)
 		{
 			vmaDestroyVirtualBlock(m_virtualBlock);
@@ -76,6 +91,17 @@ namespace aether
 			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);
 			m_buffer = VK_NULL_HANDLE;
 			m_bufferAllocation = VK_NULL_HANDLE;
+		}
+		m_baseAddress = 0;
+		m_capacityBytes = 0;
+	}
+
+	void GpuHeap::SetMemoryTracker(GpuMemoryTracker* tracker)
+	{
+		m_memoryTracker = tracker;
+		if (m_memoryTracker != nullptr && m_baseAddress != 0)
+		{
+			m_memoryTracker->Register(m_baseAddress, m_capacityBytes, m_debugName, GpuMemoryTracker::ResourceType::GpuHeap);
 		}
 	}
 

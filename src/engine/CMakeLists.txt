@@ -38,6 +38,11 @@ target_compile_definitions(Engine PUBLIC
     GLM_ENABLE_EXPERIMENTAL
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
     $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:AETHER_ENABLE_NVIDIA_AFTERMATH>
+    # Vulkan validation modes (mutually exclusive). Controlled via CMake cache
+    # options AETHERCORE_VULKAN_GPU_DEBUG / AETHERCORE_VULKAN_CPU_DEBUG so the
+    # debug configuration is reproducible without editing source.
+    $<$<BOOL:${AETHERCORE_VULKAN_GPU_DEBUG}>:VULKAN_GPU_DEBUG>
+    $<$<BOOL:${AETHERCORE_VULKAN_CPU_DEBUG}>:VULKAN_CPU_DEBUG>
 )
 
 # Shared pak format header lives at <repo>/include/ - included by PakBackend

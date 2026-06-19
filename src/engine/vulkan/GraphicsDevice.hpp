@@ -3,6 +3,7 @@
 #include <optional>
 
 #include "gpu/BindlessManager.hpp"
+#include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -49,10 +50,16 @@ namespace aether
 			return m_resourceRegistry;
 		}
 
+		[[nodiscard]] DiagnosticEngine& GetDiagnosticEngine()
+		{
+			return m_diagnosticEngine;
+		}
+
 	private:
 		std::optional<VulkanContext> m_vulkanContext;
 		Swapchain m_swapchain;
 		BindlessManager m_bindlessManager;
 		ResourceRegistry m_resourceRegistry;
+		DiagnosticEngine m_diagnosticEngine;
 	};
 } // namespace aether

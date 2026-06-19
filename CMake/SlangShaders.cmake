@@ -76,10 +76,16 @@ function(aethercore_enable_slang_shader_compilation target_name)
         set(_shader_output "${AETHERCORE_SHADER_OUTPUT_DIR}/${_shader_parent}/${_shader_stem}.spv")
         get_filename_component(_shader_output_dir "${_shader_output}" DIRECTORY)
 
+        # Debug info: -g3 emits source/line info (Slang embeds the original
+        # source into SPIR-V for RenderDoc/validation). -O0 disables all
+        # optimisations so variables are not folded/inlined away (Debug only).
         add_custom_command(
             OUTPUT "${_shader_output}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_shader_output_dir}"
-            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_arg_list} "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g3>" -o "${_shader_output}" "${_shader_source}"
+            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_arg_list}
+                    "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g3>"
+                    "$<$<CONFIG:Debug>:-O0>"
+                    -o "${_shader_output}" "${_shader_source}"
             DEPENDS "${_shader_source}" ${AETHERCORE_SHADER_HEADERS}
             COMMENT "Compiling Slang shader ${_shader_rel}"
             VERBATIM

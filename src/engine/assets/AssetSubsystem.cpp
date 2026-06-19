@@ -11,6 +11,7 @@
 #include "rendering/RenderTargetService.hpp"
 #include "scene/World.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "gpu/OneShotCmd.hpp"
 
@@ -32,6 +33,15 @@ namespace aether
 
 		m_materialBuffer.Initialize(vk);
 		m_meshArena.Initialize(vk, {});
+
+		// Wire GPU memory tracking to the arena's GpuHeap instances so
+		// crash-diagnostic address resolution can identify vertex/index
+		// heap ranges by name.
+		if (services.TryGet<DiagnosticEngine>() != nullptr)
+		{
+			m_meshArena.SetMemoryTracker(&services.Get<DiagnosticEngine>().GetMemoryTracker());
+		}
+
 		m_meshUploadQueue.Initialize(vk);
 		m_primitiveMeshes.Initialize(m_uploadContext);
 		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadContext);

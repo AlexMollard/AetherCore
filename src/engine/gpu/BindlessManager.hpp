@@ -42,6 +42,12 @@ namespace aether
 		Expected<void> Initialize(const VulkanContext& context, const Config& config);
 		void Shutdown();
 
+		// Diagnostic address tracking. Registers both descriptor heap
+		// buffers with the GpuMemoryTracker so fault addresses inside the
+		// bindless heaps resolve to "bindless_resource_heap" /
+		// "bindless_sampler_heap" in the diagnostic dashboard.
+		void SetMemoryTracker(class GpuMemoryTracker* tracker);
+
 		// Write a SAMPLED_IMAGE descriptor into the resource heap at the given slot.
 		// The descriptor data is written directly into the mapped heap via
 		// vkWriteResourceDescriptorsEXT. viewCreateInfo is the VkImageViewCreateInfo
@@ -112,6 +118,8 @@ namespace aether
 		gpu::DeviceSize m_samplerHeapSize = 0;
 		gpu::DeviceSize m_samplerDescriptorSize = 0;
 		gpu::DeviceSize m_samplerDescriptorAlignment = 0;
+
+		GpuMemoryTracker* m_memoryTracker = nullptr;
 
 		// Pipeline mapping storage (opaque VkDescriptorSetAndBindingMappingEXT arrays).
 		// Allocated in Initialize(), freed in Shutdown().

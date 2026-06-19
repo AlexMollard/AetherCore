@@ -52,8 +52,25 @@ namespace aether
 		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
 
 		// Block until the device finishes all in-flight work. Throws on
-		// backend failure.
+		// backend failure. If the device is lost, queries and logs fault info
+		// via VK_EXT_device_fault before throwing.
 		void WaitIdle() const;
+
+		// Query and log device fault information via VK_KHR_device_fault.
+		// Called automatically on device loss; can also be called manually
+		// after observing VK_ERROR_DEVICE_LOST from any Vulkan call.
+		void QueryDeviceFaultInfo() const;
+
+		// Set an external diagnostic callback invoked on device loss. When
+		// set, WaitIdle() calls this instead of the built-in QueryDeviceFaultInfo
+		// so the full DiagnosticEngine (with address resolution + flight
+		// recorder) can run. Pass nullptr to revert to the built-in query.
+		using FaultCallback = void (*)();
+
+		void SetFaultCallback(FaultCallback callback)
+		{
+			m_faultCallback = callback;
+		}
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		[[nodiscard]] const AftermathContext& GetAftermathContext() const
@@ -81,6 +98,7 @@ namespace aether
 		VkPhysicalDeviceDescriptorHeapPropertiesEXT m_descriptorHeapProps{};
 		tracy::VkCtx* m_tracyVkCtx = nullptr;
 		gpu::ProfilerContextHandle m_tracyProfilerHandle = nullptr;
+		FaultCallback m_faultCallback = nullptr;
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		AftermathContext m_aftermathContext;

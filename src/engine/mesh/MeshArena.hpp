@@ -101,6 +101,12 @@ namespace aether
 			return m_indexHeap.GetBaseAddress();
 		}
 
+		void SetMemoryTracker(class GpuMemoryTracker* tracker)
+		{
+			m_vertexHeap.SetMemoryTracker(tracker);
+			m_indexHeap.SetMemoryTracker(tracker);
+		}
+
 	private:
 		GpuHeap m_vertexHeap;
 		GpuHeap m_indexHeap;

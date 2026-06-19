@@ -5,6 +5,7 @@
 
 #include "utils/Assert.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/volk.hpp"
 
@@ -109,6 +110,10 @@ namespace aether
 			// Query device address
 			const VkBufferDeviceAddressInfo addrInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr, .buffer = buffer};
 			m_resourceHeapAddr = vkGetBufferDeviceAddress(static_cast<VkDevice>(m_device), &addrInfo);
+			if (m_memoryTracker != nullptr && m_resourceHeapAddr != 0)
+			{
+				m_memoryTracker->Register(m_resourceHeapAddr, m_resourceHeapSize, "bindless_resource_heap", GpuMemoryTracker::ResourceType::BindlessHeap);
+			}
 		}
 
 		// Sampler heap (one immutable linear SAMPLER)
@@ -153,6 +158,10 @@ namespace aether
 
 			const VkBufferDeviceAddressInfo addrInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .pNext = nullptr, .buffer = buffer};
 			m_samplerHeapAddr = vkGetBufferDeviceAddress(static_cast<VkDevice>(m_device), &addrInfo);
+			if (m_memoryTracker != nullptr && m_samplerHeapAddr != 0)
+			{
+				m_memoryTracker->Register(m_samplerHeapAddr, m_samplerHeapSize, "bindless_sampler_heap", GpuMemoryTracker::ResourceType::BindlessHeap);
+			}
 		}
 
 		AE_INFO(LogCategory::Vulkan, "BindlessManager: resource heap {}B at 0x{:016x}, sampler heap {}B at 0x{:016x}", m_resourceHeapSize, m_resourceHeapAddr, m_samplerHeapSize, m_samplerHeapAddr);
@@ -224,6 +233,10 @@ namespace aether
 		// Descriptor heaps
 		if (m_resourceHeapBuffer != nullptr)
 		{
+			if (m_memoryTracker != nullptr && m_resourceHeapAddr != 0)
+			{
+				m_memoryTracker->Unregister(m_resourceHeapAddr);
+			}
 			vmaDestroyBuffer(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VkBuffer>(m_resourceHeapBuffer), static_cast<VmaAllocation>(m_resourceHeapAlloc));
 			m_resourceHeapBuffer = nullptr;
 			m_resourceHeapAlloc = nullptr;
@@ -233,6 +246,10 @@ namespace aether
 		}
 		if (m_samplerHeapBuffer != nullptr)
 		{
+			if (m_memoryTracker != nullptr && m_samplerHeapAddr != 0)
+			{
+				m_memoryTracker->Unregister(m_samplerHeapAddr);
+			}
 			vmaDestroyBuffer(reinterpret_cast<VmaAllocator>(m_vmaAllocator), static_cast<VkBuffer>(m_samplerHeapBuffer), static_cast<VmaAllocation>(m_samplerHeapAlloc));
 			m_samplerHeapBuffer = nullptr;
 			m_samplerHeapAlloc = nullptr;
@@ -540,5 +557,21 @@ namespace aether
 		        .reservedRangeSize = 0,
 		};
 		vkCmdBindSamplerHeapEXT(vkCmd, &samplerBindInfo);
+	}
+
+	void BindlessManager::SetMemoryTracker(GpuMemoryTracker* tracker)
+	{
+		m_memoryTracker = tracker;
+		if (m_memoryTracker != nullptr)
+		{
+			if (m_resourceHeapAddr != 0)
+			{
+				m_memoryTracker->Register(m_resourceHeapAddr, m_resourceHeapSize, "bindless_resource_heap", GpuMemoryTracker::ResourceType::BindlessHeap);
+			}
+			if (m_samplerHeapAddr != 0)
+			{
+				m_memoryTracker->Register(m_samplerHeapAddr, m_samplerHeapSize, "bindless_sampler_heap", GpuMemoryTracker::ResourceType::BindlessHeap);
+			}
+		}
 	}
 } // namespace aether

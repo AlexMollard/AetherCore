@@ -18,7 +18,8 @@
 namespace aether
 {
 	class BindlessManager;
-}
+	class GpuMemoryTracker;
+} // namespace aether
 
 namespace aether
 {
@@ -125,6 +126,18 @@ namespace aether
 			VkLogicOp logicOp = VK_LOGIC_OP_COPY;
 			float blendConstants[4] = {0.0f, 0.0f, 0.0f, 0.0f};
 			VkSampleCountFlags rasterizationSampleCount = VK_SAMPLE_COUNT_1_BIT;
+			// Sample mask + alpha-to-coverage / alpha-to-one. The engine uses 1
+			// sample (no MSAA), so the sample mask is all-ones and alpha-to-* is off.
+			VkSampleMask sampleMask = 0xFFFFFFFFu;
+			VkBool32 alphaToCoverageEnable = VK_FALSE;
+			VkBool32 alphaToOneEnable = VK_FALSE;
+
+			std::uint32_t scissorCount = 1;
+			VkRect2D scissors[8]{};
+
+			std::uint32_t viewportCount = 1;
+			VkViewport viewports[8]{};
+
 			// One color attachment's blend state (engine uses at most 1 RT per pipeline).
 			VkBool32 colorBlendEnable = VK_FALSE;
 			VkColorBlendEquationEXT colorBlendEquation{};
@@ -191,6 +204,11 @@ namespace aether
 
 		// Bindless registration. BindlessManager pointer is for deferred slot-free on Destroy().
 		void SetBindlessManager(BindlessManager* mgr);
+
+		// Diagnostic address tracking. GpuMemoryTracker pointer lets the
+		// registry auto-register every BDA range so the DiagnosticEngine can
+		// resolve raw GPU fault addresses back to resource names.
+		void SetMemoryTracker(GpuMemoryTracker* tracker);
 		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle,
 		        gpu::ImageAspect aspectMask = gpu::ImageAspect::Color,
 		        gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly,
@@ -275,7 +293,7 @@ namespace aether
 
 		static void RunDestroyersInRing(std::vector<PendingDestruction>& ring);
 		static void DestroyTextureEntryNow(const TextureEntry& entry);
-		static void DestroyBufferEntryNow(const BufferEntry& entry);
+		static void DestroyBufferEntryNow(const BufferEntry& entry, GpuMemoryTracker* memoryTracker);
 		static void DestroyPipelineEntryNow(const PipelineEntry& entry);
 
 		std::vector<TextureSlot> m_textures;
@@ -294,6 +312,7 @@ namespace aether
 		VkDevice m_device = VK_NULL_HANDLE;
 		VmaAllocator m_allocator = VK_NULL_HANDLE;
 		BindlessManager* m_bindlessManager = nullptr;
+		GpuMemoryTracker* m_memoryTracker = nullptr;
 
 		std::uint32_t m_liveTextureCount = 0;
 		std::uint32_t m_liveBufferCount = 0;
