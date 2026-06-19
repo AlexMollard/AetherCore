@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
@@ -150,14 +151,23 @@ namespace aether
 		// Layout must match the shader's [[vk::push_constant]] struct.
 		struct LightingComputePush
 		{
+			gpu::DeviceAddress lightDataAddr = 0;
+			gpu::DeviceAddress tileHeadersAddr = 0;
+			gpu::DeviceAddress tileLightIndicesAddr = 0;
 			glm::mat4 viewProj{1.0f};
 			glm::vec4 params0{0.0f}; // x=nearClip, y=pixelScaleY, z=screenW, w=screenH
 			glm::uvec4 params1{0u};  // x=tilePx, y=tilesX, z=tilesY, w=lightCount
 			glm::uvec4 params2{0u};  // x=maxLightsPerTile
-			gpu::DeviceAddress lightDataAddr = 0;
-			gpu::DeviceAddress tileHeadersAddr = 0;
-			gpu::DeviceAddress tileLightIndicesAddr = 0;
 		};
+
+		static_assert(sizeof(LightingComputePush) == 136);
+		static_assert(offsetof(LightingComputePush, lightDataAddr) == 0);
+		static_assert(offsetof(LightingComputePush, tileHeadersAddr) == 8);
+		static_assert(offsetof(LightingComputePush, tileLightIndicesAddr) == 16);
+		static_assert(offsetof(LightingComputePush, viewProj) == 24);
+		static_assert(offsetof(LightingComputePush, params0) == 88);
+		static_assert(offsetof(LightingComputePush, params1) == 104);
+		static_assert(offsetof(LightingComputePush, params2) == 120);
 
 		const VulkanContext* m_context = nullptr;
 		const Renderer* m_renderer = nullptr;
