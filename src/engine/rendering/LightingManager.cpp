@@ -329,7 +329,7 @@ namespace aether
 
 			const gpu::MappedBufferDesc desc{
 			        .size = static_cast<gpu::DeviceSize>(stride * capacity),
-			        .usage = gpu::BufferUsage::Storage,
+			        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
 			        .memoryUsage = gpu::MappedMemoryUsage::Auto,
 			        .debugName = "LightingManager.FrameBuffer",
 			};
@@ -358,6 +358,7 @@ namespace aether
 		frame.lightsDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.lightsHandle).deviceAddress;
 		frame.tileHeadersDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileHeadersHandle).deviceAddress;
 		frame.tileIndicesDeviceAddr = gpu::ResourceRegistry::ResolveBuffer(frame.tileIndicesHandle).deviceAddress;
+		AE_ASSERT_ALWAYS(frame.lightsDeviceAddr != 0 && frame.tileHeadersDeviceAddr != 0 && frame.tileIndicesDeviceAddr != 0, "LightingManager buffers require valid shader device addresses.");
 	}
 
 	void LightingManager::EnsureComputePipeline() const

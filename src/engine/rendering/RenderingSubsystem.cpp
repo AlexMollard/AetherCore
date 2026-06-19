@@ -165,9 +165,6 @@ namespace aether
 
 		auto& gpu = services.Get<GpuDevice>();
 
-		const auto frameIdx = static_cast<std::uint32_t>((m_frameIndexProvider ? m_frameIndexProvider() : 0ULL) % Swapchain::kMaxFramesInFlight);
-		auto lightingAddr = frame.lighting ? frame.lighting->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
-
 		m_shadowService.SetupPassResources(m_renderGraph, gpu.GetDevice(), frame.depthFormat);
 		m_localShadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
 
@@ -221,12 +218,14 @@ namespace aether
 			}
 
 			pass->Execute(
-			        [&m_renderQueue = m_renderQueue, bindless = frame.bindless, lightingAddr, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
+			        [&m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
 			        {
 				        if (!forwardEnabled)
 				        {
 					        return;
 				        }
+				        const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
 				        m_renderQueue.FlushDrawPush(ctx.recorder, nullptr, lightingAddr);
 				        m_renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
