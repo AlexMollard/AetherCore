@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <format>
+#include <numeric>
 
 #include "utils/Assert.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -13,6 +14,11 @@ namespace aether
 {
 	namespace
 	{
+		VkDeviceSize AlignUp(const VkDeviceSize value, const VkDeviceSize alignment)
+		{
+			return (value + alignment - 1) / alignment * alignment;
+		}
+
 		struct DescriptorHeapMappings
 		{
 			VkDescriptorSetAndBindingMappingEXT mappings[2];
@@ -55,6 +61,8 @@ namespace aether
 		m_imageDescriptorAlignment = heapProps.imageDescriptorAlignment;
 		m_samplerDescriptorSize = heapProps.samplerDescriptorSize;
 		m_samplerDescriptorAlignment = heapProps.samplerDescriptorAlignment;
+		m_resourceHeapReservedRangeSize = heapProps.minResourceHeapReservedRange;
+		m_samplerHeapReservedRangeSize = heapProps.minSamplerHeapReservedRange;
 
 		AE_INFO(LogCategory::Vulkan,
 		        "BindlessManager: imageDescriptorSize={}, imageDescriptorAlignment={}, samplerDescriptorSize={}, samplerDescriptorAlignment={}",
@@ -67,8 +75,11 @@ namespace aether
 		const VkBufferUsageFlags2 heapUsage = VK_BUFFER_USAGE_2_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_2_SHADER_DEVICE_ADDRESS_BIT;
 
 		// Resource heap (SAMPLED_IMAGE descriptors)
-		const VkDeviceSize paddedImageDescSize = (m_imageDescriptorSize + m_imageDescriptorAlignment - 1) / m_imageDescriptorAlignment * m_imageDescriptorAlignment;
-		m_resourceHeapSize = static_cast<VkDeviceSize>(m_capacity) * paddedImageDescSize;
+		const VkDeviceSize paddedImageDescSize = AlignUp(m_imageDescriptorSize, m_imageDescriptorAlignment);
+		const VkDeviceSize resourceDescriptorBytes = static_cast<VkDeviceSize>(m_capacity) * paddedImageDescSize;
+		const VkDeviceSize resourceReservedAlignment = std::lcm(heapProps.bufferDescriptorAlignment, heapProps.imageDescriptorAlignment);
+		m_resourceHeapReservedRangeOffset = AlignUp(resourceDescriptorBytes, resourceReservedAlignment);
+		m_resourceHeapSize = m_resourceHeapReservedRangeOffset + m_resourceHeapReservedRangeSize;
 
 		{
 			const VkBufferCreateInfo bufferInfo{
@@ -117,7 +128,8 @@ namespace aether
 		}
 
 		// Sampler heap (one immutable linear SAMPLER)
-		m_samplerHeapSize = m_samplerDescriptorSize;
+		m_samplerHeapReservedRangeOffset = AlignUp(m_samplerDescriptorSize, m_samplerDescriptorAlignment);
+		m_samplerHeapSize = m_samplerHeapReservedRangeOffset + m_samplerHeapReservedRangeSize;
 
 		{
 			const VkBufferCreateInfo bufferInfo{
@@ -243,6 +255,8 @@ namespace aether
 			m_resourceHeapMapped = nullptr;
 			m_resourceHeapAddr = 0;
 			m_resourceHeapSize = 0;
+			m_resourceHeapReservedRangeOffset = 0;
+			m_resourceHeapReservedRangeSize = 0;
 		}
 		if (m_samplerHeapBuffer != nullptr)
 		{
@@ -256,6 +270,8 @@ namespace aether
 			m_samplerHeapMapped = nullptr;
 			m_samplerHeapAddr = 0;
 			m_samplerHeapSize = 0;
+			m_samplerHeapReservedRangeOffset = 0;
+			m_samplerHeapReservedRangeSize = 0;
 		}
 		m_imageDescriptorSize = 0;
 		m_imageDescriptorAlignment = 0;
@@ -541,8 +557,8 @@ namespace aether
 		                        .address = m_resourceHeapAddr,
 		                        .size = m_resourceHeapSize,
 		                },
-		        .reservedRangeOffset = 0,
-		        .reservedRangeSize = 0,
+		        .reservedRangeOffset = m_resourceHeapReservedRangeOffset,
+		        .reservedRangeSize = m_resourceHeapReservedRangeSize,
 		};
 		vkCmdBindResourceHeapEXT(vkCmd, &resourceBindInfo);
 
@@ -553,8 +569,8 @@ namespace aether
 		                        .address = m_samplerHeapAddr,
 		                        .size = m_samplerHeapSize,
 		                },
-		        .reservedRangeOffset = 0,
-		        .reservedRangeSize = 0,
+		        .reservedRangeOffset = m_samplerHeapReservedRangeOffset,
+		        .reservedRangeSize = m_samplerHeapReservedRangeSize,
 		};
 		vkCmdBindSamplerHeapEXT(vkCmd, &samplerBindInfo);
 	}

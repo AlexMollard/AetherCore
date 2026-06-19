@@ -574,12 +574,14 @@ namespace aether
 			vkGetPhysicalDeviceProperties2(m_device->physical_device, &props2);
 			AE_INFO(LogCategory::Vulkan,
 			        "Descriptor heap props: resourceHeapAlignment={}, imageDescriptorSize={}, samplerDescriptorSize={}, "
-			        "maxResourceHeapSize={}, maxSamplerHeapSize={}, maxPushDataSize={}",
+			        "maxResourceHeapSize={}, maxSamplerHeapSize={}, minResourceHeapReservedRange={}, minSamplerHeapReservedRange={}, maxPushDataSize={}",
 			        m_descriptorHeapProps.resourceHeapAlignment,
 			        m_descriptorHeapProps.imageDescriptorSize,
 			        m_descriptorHeapProps.samplerDescriptorSize,
 			        m_descriptorHeapProps.maxResourceHeapSize,
 			        m_descriptorHeapProps.maxSamplerHeapSize,
+			        m_descriptorHeapProps.minResourceHeapReservedRange,
+			        m_descriptorHeapProps.minSamplerHeapReservedRange,
 			        m_descriptorHeapProps.maxPushDataSize);
 		}
 

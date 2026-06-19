@@ -108,6 +108,8 @@ namespace aether
 		void* m_resourceHeapMapped = nullptr;
 		gpu::DeviceAddress m_resourceHeapAddr = 0;
 		gpu::DeviceSize m_resourceHeapSize = 0;
+		gpu::DeviceSize m_resourceHeapReservedRangeOffset = 0;
+		gpu::DeviceSize m_resourceHeapReservedRangeSize = 0;
 		gpu::DeviceSize m_imageDescriptorSize = 0;
 		gpu::DeviceSize m_imageDescriptorAlignment = 0;
 
@@ -116,6 +118,8 @@ namespace aether
 		void* m_samplerHeapMapped = nullptr;
 		gpu::DeviceAddress m_samplerHeapAddr = 0;
 		gpu::DeviceSize m_samplerHeapSize = 0;
+		gpu::DeviceSize m_samplerHeapReservedRangeOffset = 0;
+		gpu::DeviceSize m_samplerHeapReservedRangeSize = 0;
 		gpu::DeviceSize m_samplerDescriptorSize = 0;
 		gpu::DeviceSize m_samplerDescriptorAlignment = 0;
 
