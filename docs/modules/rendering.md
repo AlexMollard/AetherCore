@@ -96,7 +96,7 @@ This is what makes the renderer declarative - subsystems add passes, and the gra
 - `worldBoundingSphere` (for culling)
 - `instanceCount`
 
-The queue holds pointers to the `AnimationBlendSystem` / `AnimationIkSystem` / `AnimationRootMotionSystem` so the forward pass can read the GPU skinning matrices via BDA.
+The queue holds pointers to the `AnimationBlendSystem` / `AnimationRootMotionSystem` so the forward pass can read the GPU skinning matrices via BDA.
 
 ## `Renderer`
 

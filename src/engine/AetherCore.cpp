@@ -16,7 +16,6 @@
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
-#include "animation/AnimationIk.hpp"
 #include "animation/AnimationRootMotion.hpp"
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetSubsystem.hpp"
@@ -148,23 +147,19 @@ namespace aether
 
 		// -- 11. Animation systems -------------------------------------------
 		m_animationBlend = std::make_unique<AnimationBlendSystem>();
-		m_animationIk = std::make_unique<AnimationIkSystem>();
 		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
 
 		const gpu::Device device = m_gpu->GetDevice();
 		const gpu::Allocator allocator = m_gpu->GetAllocator();
 
 		m_animationBlend->Init(allocator, device, 256, 128);
-		m_animationIk->Init(allocator, device, 256);
 		m_rootMotion->Init(device, 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
-		m_services.Register<AnimationIkSystem>(*m_animationIk);
 		m_services.Register<AnimationRootMotionSystem>(*m_rootMotion);
 
 		RenderQueue& rq = m_rendering->GetRenderQueue();
 		rq.SetAnimationBlendSystem(m_animationBlend.get());
-		rq.SetAnimationIkSystem(m_animationIk.get());
 		rq.SetRootMotionSystem(m_rootMotion.get());
 		rq.SetHipsNodeIndex(0);
 
@@ -200,7 +195,6 @@ namespace aether
 		{
 			const gpu::Device device = m_gpu->GetDevice();
 			m_rootMotion->Shutdown(device);
-			m_animationIk->Shutdown(device);
 			m_animationBlend->Shutdown(device);
 		}
 
@@ -344,16 +338,6 @@ namespace aether
 
 		const gpu::Device device = m_gpu->GetDevice();
 		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
-
-		if (m_animationIk)
-		{
-			World& world = m_services.Get<SceneSubsystem>().GetWorld();
-			auto physics = static_cast<PhysicsSystem*>(world.FindSystem("PhysicsSystem"));
-			if (physics)
-			{
-				m_animationIk->Update(world, *physics, 1.0f / 60.0f);
-			}
-		}
 
 		if (m_rendering)
 		{

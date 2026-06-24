@@ -11,7 +11,6 @@
 #include "gpu/PushConstantsBytes.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "animation/AnimationBlend.hpp"
-#include "animation/AnimationIk.hpp"
 #include "io/FileSystem.hpp"
 #include "vulkan/VulkanUtils.hpp"
 #include "rendering/GpuContracts.hpp"
@@ -701,7 +700,6 @@ namespace aether
 		}
 
 		// -- Pass 1.5: Flatten per-node global transforms (level-by-level depth dispatch) --
-		std::uint32_t firstBatchNodeCount = 0;
 		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
 		{
 			const auto nodeFlattenPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->nodeFlatten);
@@ -724,11 +722,6 @@ namespace aether
 				if (depthAddr == 0)
 				{
 					continue;
-				}
-				if (bi == 0 && m_animationIkSystem != nullptr)
-				{
-					firstBatchNodeCount = batch.db->GetNodeCount();
-					m_animationIkSystem->SetDatabaseAddrs(batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
 				}
 				const std::uint32_t depthCount = batch.db->GetDepthCount();
 				AE_VERBOSE(LogCategory::Animation, "  Batch[{}]: depthCount={} nodeParentsAddr=0x{:x} depthSortedNodesAddr=0x{:x}", bi, depthCount, batch.db->GetNodeParentsAddr(), batch.db->GetDepthSortedNodesAddr());
@@ -773,33 +766,6 @@ namespace aether
 			cmdList.EndDebugLabel();
 
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
-		}
-
-		// -- Pass 1.8: IK solve (two-bone leg IK on GPU) -------------------------
-		if (m_animationIkSystem != nullptr && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->ikSolve.IsValid())
-		{
-			if (m_cachedNodeGlobalTransformsAddr != 0)
-			{
-				m_animationIkSystem->BuildIkSolvePush(m_cachedNodeGlobalTransformsAddr, 0, 0, firstBatchNodeCount);
-			}
-			const AnimationContracts::IkSolvePush& ikPc = m_animationIkSystem->GetIkSolvePush();
-			const std::uint32_t ikJobCount = m_animationIkSystem->GetIkJobCount();
-			if (ikJobCount > 0 && ikPc.jobCount > 0)
-			{
-				const auto ikSolvePipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->ikSolve);
-				AE_PROFILE_ZONE_N("RenderQueue.IkSolve.Dispatch");
-				cmdList.BindComputePipeline(const_cast<void*>(ikSolvePipe.state));
-				cmdList.BeginDebugLabel("Animation.IkSolve", 0.5f, 0.7f, 0.3f, 1.0f);
-				cmdList.PushDataRaw(0, std::span<const std::byte>(reinterpret_cast<const std::byte*>(&ikPc), sizeof(ikPc)));
-				{
-					AE_GPU_ZONE_SCOPED(rawCmd, "Animation.IkSolve");
-					const std::uint32_t groups = (ikPc.jobCount + 63u) / 64u;
-					cmdList.Dispatch(groups, 1, 1);
-				}
-				cmdList.EndDebugLabel();
-
-				cmdList.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
-			}
 		}
 
 		if ((m_debugAnimPassMask & 8u) && skinJobCount > 0 && !m_debugDisableAnimation)
@@ -1099,17 +1065,6 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 		}
 
-		ikSolve = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
-		        gpu::ComputePipelineDesc{
-		                .shaderVfsPath = "shaders://ik_solve.spv",
-		                .shaderEntry = "main",
-		                .debugName = "Animation.IkSolve",
-		        });
-		if (!ikSolve.IsValid())
-		{
-			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create ikSolve compute pipeline."));
-		}
 	}
 
 	void RenderQueueSharedPipelines::Shutdown(gpu::Device device)
@@ -1139,11 +1094,6 @@ namespace aether
 		{
 			gpu::ResourceRegistry::Destroy(animBlend);
 			animBlend = {};
-		}
-		if (ikSolve.IsValid())
-		{
-			gpu::ResourceRegistry::Destroy(ikSolve);
-			ikSolve = {};
 		}
 	}
 } // namespace aether

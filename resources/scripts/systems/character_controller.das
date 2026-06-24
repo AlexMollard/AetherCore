@@ -2,7 +2,6 @@ options gen2;
 
 require world;
 require animation;
-require physics;
 require camera;
 require math;
 
@@ -31,31 +30,30 @@ def update_player_controller(world : World?; dt : float; player : uint; idleClip
 	let len = sqrt(moveDir.x * moveDir.x + moveDir.z * moveDir.z);
 
 	let is_moving = len > 0.001;
+	var pos = get_position(world, player);
+	var euler = get_euler(world, player);
+	let scale = get_scale(world, player);
+
 	if (is_moving)
 	{
 		let nx = moveDir.x / len;
 		let nz = moveDir.z / len;
 
-		// Apply velocity to physics body.
-		set_linear_velocity(world, player, nx * g_move_speed, 0.0, nz * g_move_speed);
+		pos.x += nx * g_move_speed * dt;
+		pos.z += nz * g_move_speed * dt;
 
 		// Face the movement direction (yaw only).
 		let targetYaw = atan2(nx, nz) * 57.2958;
-		let euler = get_euler(world, player);
-		set_euler(world, player, float3(euler.x, targetYaw, euler.z));
+		euler = float3(0.0, targetYaw, 0.0);
 	}
 	else
 	{
-		// Stop horizontal movement when no input.
-		set_linear_velocity(world, player, 0.0, 0.0, 0.0);
+		euler = float3(0.0, euler.y, 0.0);
 	}
 
-	// Sync visual position from physics position so renderer follows physics.
-	let physPos = get_physics_position(world, player);
-	if (physPos.x != 0.0 || physPos.y != 0.0 || physPos.z != 0.0)
-	{
-		set_position(world, player, physPos);
-	}
+	// set_transform propagates to spawned model entities; set_position alone only
+	// updates the script parent transform.
+	set_transform(world, player, pos, euler, scale);
 
 	// ── Animation state ────────────────────────────────────
 	let target_clip = is_moving ? walkClip : idleClip;

@@ -23,7 +23,6 @@
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
-#include "animation/AnimationIk.hpp"
 #include "systems/DayNightSystem.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -32,7 +31,6 @@
 namespace aether::app::scripting
 {
 	void InitPhysicsModule(aether::PhysicsSystem* physics);
-	void InitAnimationModule(aether::AnimationIkSystem* ik);
 	void SetPhysicsDebugRendererCallback(std::function<void(bool)> callback);
 } // namespace aether::app::scripting
 
@@ -203,10 +201,6 @@ namespace aether::app
 		{
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
 			aether::app::scripting::InitPhysicsModule(m_sceneCtx.physics);
-		}
-		if (auto ikSys = context.TryGet<aether::AnimationIkSystem>())
-		{
-			aether::app::scripting::InitAnimationModule(ikSys);
 		}
 		m_sceneCtx.scriptPath = m_scriptPath;
 

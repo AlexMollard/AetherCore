@@ -49,7 +49,6 @@ var g_plasma_sphere : uint = 0u;
 var g_player : uint = 0u;
 var g_player_idle_clip : int = 0;
 var g_player_walk_clip : int = -1; // -1 means not yet added
-var g_player_ik_enabled : bool = true;
 var g_cam : uint = 0u;
 
 // ── Tags ─────────────────────────────────────────────────────────────────────
@@ -262,7 +261,6 @@ def on_attach(world : World?)
 	add_transform(world, g_player);
 	set_transform(world, g_player, float3(0.0, 0.0, -6.0), float3(0.0, 180.0, 0.0), float3(0.05, 0.05, 0.05));
 	load_model(world, g_player, "assets://models/Human/Human.mesh");
-	add_capsule_body(world, g_player, 0.025, 0.0125, true);
 	g_player_idle_clip = get_current_animation(world, g_player);
 	set_playback_speed(world, g_player, 1.0);
 	add_tag(world, g_player, create_tag("player"));
@@ -274,9 +272,6 @@ def on_attach(world : World?)
 	{
 		// print("Walking animation added as clip {g_player_walk_clip}\n");
 		compile_animations(world, g_player);
-		init_entity_ik(world, g_player);
-		set_ik_enabled(world, g_player, true);
-		// print("IK foot planting enabled for player\n");
 	}
 	else
 	{
@@ -474,16 +469,6 @@ def on_update(world : World?)
 		g_time_of_day = 0.0;
 		set_time_of_day(0.0);
 		set_ui_slider_value(world, g_time_slider, 0.0);
-	}
-
-	// ── Toggle IK foot planting with 'I' key ─────────────────────────────
-	if (is_action_pressed("toggle_ik"))
-	{
-		g_player_ik_enabled = !g_player_ik_enabled;
-		set_ik_enabled(world, g_player, g_player_ik_enabled);
-		var ikState = g_player_ik_enabled ? "ENABLED" : "DISABLED";
-		var footContact = get_foot_contact(world, g_player, 0) ? "L foot planted" : "L foot in air";
-		// print("IK {ikState} ({footContact})\n");
 	}
 }
 

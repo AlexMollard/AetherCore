@@ -55,7 +55,7 @@ See `ARCHITECTURE.md §1` for the full dependency-driven order. The constructor 
 6. **Rendering** - `RenderingSubsystem::Init`. Registers `Renderer`, `RenderQueue`, `RenderGraph`, `ShadowService`, `RenderTargetService`.
 7. **UI** - `UISubsystem::Init` (opt-in via `uiFontPath`). Registers `UIRenderer`, `ui::UiContext`, `ui::UiSystem`.
 8. **Async compute** - `AsyncComputeContext::Init` (skipped if no dedicated compute queue).
-9. **Animation systems** - `AnimationBlendSystem`, `AnimationIkSystem`, `AnimationRootMotionSystem` constructed and registered.
+9. **Animation systems** - `AnimationBlendSystem` and `AnimationRootMotionSystem` constructed and registered.
 10. **Cross-subsystem wiring** - `LightingManager.LinkRenderer`, `AssetSubsystem.LinkRenderingDeps`, animation systems wired into `RenderQueue`.
 11. **Default main camera** - `CameraManager::Create` + `SetMainCamera`.
 12. **Swapchain callback** - `GpuDevice::SetSwapchainRecreatedCallback` registered.

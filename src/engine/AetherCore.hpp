@@ -14,7 +14,6 @@ namespace aether
 	struct FrameConstants;
 
 	class AnimationBlendSystem;
-	class AnimationIkSystem;
 	class AnimationRootMotionSystem;
 	class GpuDevice;
 	class CameraSubsystem;
@@ -90,7 +89,6 @@ namespace aether
 		std::unique_ptr<RenderingSubsystem> m_rendering;
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
-		std::unique_ptr<AnimationIkSystem> m_animationIk;
 		std::unique_ptr<AnimationRootMotionSystem> m_rootMotion;
 
 		gpu::CommandList m_currentCmdList;

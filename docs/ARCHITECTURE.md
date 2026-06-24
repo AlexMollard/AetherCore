@@ -48,7 +48,7 @@ The order is significant - each step depends on services registered by earlier s
 6. **Rendering** - `RenderingSubsystem` registers `Renderer`, `RenderQueue`, `RenderGraph`, all passes.
 7. **UI** - `UISubsystem` (opt-in via `uiFontPath` config; registers `UIRenderer` + `UiContext` + `UiSystem`).
 8. **Async compute** - `AsyncComputeContext::Init` (skipped if no dedicated compute queue).
-9. **Animation systems** - `AnimationBlendSystem`, `AnimationIkSystem`, `AnimationRootMotionSystem` are constructed and registered.
+9. **Animation systems** - `AnimationBlendSystem` and `AnimationRootMotionSystem` are constructed and registered.
 10. **Swapchain recreation callback** - `GpuDevice::SetSwapchainRecreatedCallback` lets the rendering subsystem re-register its UI passes when the swapchain changes.
 
 **Shutdown is the exact reverse**, preceded by `m_gpu->WaitIdle()`.
@@ -208,7 +208,7 @@ This makes the rendering pipeline declarative: subsystems add passes, and the gr
 
 ### Render queue
 
-`src/engine/rendering/RenderQueue.hpp` collects `DrawCommand` structs on the engine thread (from the scene's ECS) and sorts them into a GPU-friendly order for the `ForwardPass`. The queue holds a reference to the `AnimationBlendSystem` / `AnimationIkSystem` / `AnimationRootMotionSystem` to inject skinning data per draw.
+`src/engine/rendering/RenderQueue.hpp` collects `DrawCommand` structs on the engine thread (from the scene's ECS) and sorts them into a GPU-friendly order for the `ForwardPass`. The queue holds a reference to the `AnimationBlendSystem` / `AnimationRootMotionSystem` to inject skinning data per draw.
 
 ### `Renderer`
 
@@ -287,7 +287,6 @@ The build system invokes it as a post-build step. PBR materials can be raw `.png
 Three GPU-side systems share the same per-frame pattern:
 
 - `AnimationBlendSystem` - clip blending, weight normalization.
-- `AnimationIkSystem` - two-bone CCD IK.
 - `AnimationRootMotionSystem` - extract root motion delta.
 
 All three are initialized with `(allocator, device, capacity)`, register themselves on the service container, and are wired into `RenderQueue` so the forward pass can read the resulting skinning matrices via BDA.

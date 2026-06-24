@@ -33,7 +33,7 @@ AetherCore is split into focused modules. Each module owns one concern; subsyste
 |---|---|---|
 | **`scene/`** | ECS (EnTT), `World`, `Scene`, components, `SceneSubsystem`, per-frame systems. | [modules/scene.md](modules/scene.md) |
 | **`assets/`** | `AssetManager`, `AssetSubsystem`, glTF loading, `MeshArena`, `MaterialBuffer`. | [modules/assets.md](modules/assets.md) |
-| **`animation/`** | Skeletal animation, GPU skinning, `AnimationBlend` / `AnimationIk` / `AnimationRootMotion`, `AnimationCompiler`, `AnimationDatabase`. | [modules/animation.md](modules/animation.md) |
+| **`animation/`** | Skeletal animation, GPU skinning, `AnimationBlend` / `AnimationRootMotion`, `AnimationCompiler`, `AnimationDatabase`. | [modules/animation.md](modules/animation.md) |
 | **`camera/`** | `Camera`, `CameraManager`, `CameraSubsystem`, `LightingManager`. | [modules/camera.md](modules/camera.md) |
 | **`physics/`** | Jolt integration, `PhysicsSystem`, `PhysicsDebugRenderer`, physics components. | [modules/physics.md](modules/physics.md) |
 | **`ui/`** | In-engine immediate-mode UI: `UISubsystem`, `UiSystem`, `UiContext`, widgets, layout, theme, `UIRenderer`. | [modules/ui.md](modules/ui.md) |

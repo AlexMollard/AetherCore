@@ -49,7 +49,7 @@ The `scene/` module hosts the entity/component system. It is the engine's source
 - `Light` (point / spot) - color, intensity, radius / cone.
 - `Camera` - view/proj override (or use `CameraManager` for full cameras).
 - `RigidBody`, `Shape` - physics.
-- Animation tags (`AnimationTag`, `SkinJointCount`, etc.) - wired to `AnimationBlendSystem` / `AnimationIkSystem`.
+- Animation tags (`AnimationTag`, `SkinJointCount`, etc.) - wired to `AnimationBlendSystem`.
 
 ## `System`
 

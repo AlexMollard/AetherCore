@@ -85,46 +85,6 @@ namespace aether
 		bool inTransition = false;
 	};
 
-	// -- IK targets ---------------------------------------------------------
-
-	// Per-entity IK state for foot-planting and ground snapping.
-	// Populated once at spawn from bone name lookups, then updated per-frame
-	// by the IK system with raycast results and computed adjustments.
-	struct IkTargetsComponent
-	{
-		// Node indices for each leg chain (set once at spawn).
-		std::uint32_t hipsNodeIdx = UINT32_MAX;
-		std::uint32_t leftKneeNodeIdx = UINT32_MAX;
-		std::uint32_t leftFootNodeIdx = UINT32_MAX;
-		std::uint32_t rightKneeNodeIdx = UINT32_MAX;
-		std::uint32_t rightFootNodeIdx = UINT32_MAX;
-
-		// Bind-pose leg lengths (set once at spawn from skeleton data).
-		float leftUpperLegLen = 0.0f;
-		float leftLowerLegLen = 0.0f;
-		float rightUpperLegLen = 0.0f;
-		float rightLowerLegLen = 0.0f;
-
-		// Knee bend direction: +1 or -1 (computed from bind-pose knee vs hip-to-foot direction).
-		// Used by the two-bone IK solver to determine which side the knee bends.
-		float leftKneeBendSign = 1.0f;
-		float rightKneeBendSign = 1.0f;
-
-		// Per-frame ground detection results (written by CPU raycast, read by GPU IK pass).
-		bool leftFootPlanted = false;
-		bool rightFootPlanted = false;
-		float leftFootGroundY = 0.0f;
-		float rightFootGroundY = 0.0f;
-		float raycastMaxDist = 2.0f; // maximum downward raycast distance for foot grounding
-
-		// IK correction offsets applied to each foot in world space.
-		glm::vec3 leftFootOffset{0.0f, 0.0f, 0.0f};
-		glm::vec3 rightFootOffset{0.0f, 0.0f, 0.0f};
-
-		// Global IK enable/disable (cheap toggle without removing component).
-		bool enabled = true;
-	};
-
 	// -- Root motion ---------------------------------------------------------
 
 	// Tracks root bone motion state for physics-driven character movement.

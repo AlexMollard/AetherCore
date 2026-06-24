@@ -368,58 +368,5 @@ namespace aether
 
 		static_assert(sizeof(AnimationBlendPush) == 80, "AnimationBlendPush layout changed - update shaders/include/AnimationContracts.slangh.");
 
-		// Per-entity IK solve job. Each thread handles one entity's two-bone leg IK.
-		// Bone indices are looked up once at spawn and stored in IkTargetsComponent.
-		// The pass reads global transforms (which include animation + blend), applies
-		// foot-ground corrections computed by the CPU raycast pass, and writes
-		// corrected global transforms back so the skinned mesh renders the planted feet.
-		struct IkSolveJob
-		{
-			std::uint32_t hipsNodeIdx = UINT32_MAX;
-			std::uint32_t leftKneeNodeIdx = UINT32_MAX;
-			std::uint32_t leftFootNodeIdx = UINT32_MAX;
-			std::uint32_t rightKneeNodeIdx = UINT32_MAX;
-			std::uint32_t rightFootNodeIdx = UINT32_MAX;
-			float leftUpperLegLen = 0.0f;
-			float leftLowerLegLen = 0.0f;
-			float rightUpperLegLen = 0.0f;
-			float rightLowerLegLen = 0.0f;
-			float leftKneeBendSign = 1.0f;
-			float rightKneeBendSign = 1.0f;
-			gpu::DeviceAddress globalTransformsAddr = 0;
-			gpu::DeviceAddress ikResultsAddr = 0; // CPU-written per-entity foot ground data
-			std::uint32_t entityId = 0;
-			std::uint32_t _pad0 = 0;
-		};
-
-		static_assert(sizeof(IkSolveJob) == 72, "IkSolveJob layout changed - update shaders/include/AnimationContracts.slangh.");
-
-		// Push constant for the IK solve compute pass.
-		struct IkSolvePush
-		{
-			gpu::DeviceAddress globalTransformsAddr = 0;
-			gpu::DeviceAddress ikJobsAddr = 0;
-			gpu::DeviceAddress ikGroundResultsAddr = 0; // GPU buffer of IkGroundResult entries
-			gpu::DeviceAddress nodeParentsAddr = 0;
-			gpu::DeviceAddress depthSortedNodesAddr = 0;
-			std::uint32_t jobCount = 0;
-			std::uint32_t nodeCount = 0;
-		};
-
-		static_assert(sizeof(IkSolvePush) == 48, "IkSolvePush layout changed - update shaders/include/AnimationContracts.slangh.");
-
-		// Per-entity IK ground result written by CPU and read by GPU IK solver.
-		// Two entries per entity: [0] = left foot, [1] = right foot.
-		struct IkGroundResult
-		{
-			std::uint32_t entityId = 0;
-			std::uint32_t footIndex = 0; // 0=left, 1=right
-			float groundY = 0.0f;
-			float footOffsetY = 0.0f; // vertical correction to apply (0 = in air)
-			std::uint32_t _pad0 = 0;
-			std::uint32_t _pad1 = 0;
-		};
-
-		static_assert(sizeof(IkGroundResult) == 24, "IkGroundResult layout changed - update shaders/include/AnimationContracts.slangh.");
 	} // namespace AnimationContracts
 } // namespace aether

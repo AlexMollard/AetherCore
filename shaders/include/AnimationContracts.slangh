@@ -161,47 +161,6 @@ struct AnimationBlendPush
     [[vk::offset(76)]] uint                          _pad0;
 };
 
-struct IkSolveJob
-{
-    [[vk::offset(0)]]  uint                     hipsNodeIdx;
-    [[vk::offset(4)]]  uint                     leftKneeNodeIdx;
-    [[vk::offset(8)]]  uint                     leftFootNodeIdx;
-    [[vk::offset(12)]] uint                     rightKneeNodeIdx;
-    [[vk::offset(16)]] uint                     rightFootNodeIdx;
-    [[vk::offset(20)]] float                    leftUpperLegLen;
-    [[vk::offset(24)]] float                    leftLowerLegLen;
-    [[vk::offset(28)]] float                    rightUpperLegLen;
-    [[vk::offset(32)]] float                    rightLowerLegLen;
-    [[vk::offset(36)]] float                    leftKneeBendSign;
-    [[vk::offset(40)]] float                    rightKneeBendSign;
-    [[vk::offset(44)]] uint                     _pad0;
-    [[vk::offset(48)]] DevicePtr<float4x4>      globalTransforms;
-    [[vk::offset(56)]] DevicePtr<float4>        ikResults; // IkGroundResult stream as float4 (16 bytes each)
-    [[vk::offset(64)]] uint                     entityId;
-    [[vk::offset(68)]] uint                     _pad1;
-};
-
-struct IkSolvePush
-{
-    [[vk::offset(0)]]  DevicePtr<float4x4>      globalTransforms;
-    [[vk::offset(8)]]  DevicePtr<IkSolveJob>    ikJobs;
-    [[vk::offset(16)]] DevicePtr<float4>        ikGroundResults;
-    [[vk::offset(24)]] DevicePtr<int>           nodeParents;
-    [[vk::offset(32)]] DevicePtr<uint>          depthSortedNodes;
-    [[vk::offset(40)]] uint                     jobCount;
-    [[vk::offset(44)]] uint                     nodeCount;
-};
-
-struct IkGroundResult
-{
-    [[vk::offset(0)]] uint entityId;
-    [[vk::offset(4)]] uint footIndex;
-    [[vk::offset(8)]] float groundY;
-    [[vk::offset(12)]] float footOffsetY;
-    [[vk::offset(16)]] uint _pad0;
-    [[vk::offset(20)]] uint _pad1;
-};
-
 struct PoseInitPush
 {
     [[vk::offset(0)]]  DevicePtr<float4>             bindTranslations;

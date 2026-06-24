@@ -17,7 +17,6 @@
 namespace aether
 {
 	class AnimationBlendSystem;
-	class AnimationIkSystem;
 	class AnimationRootMotionSystem;
 	class GraphicsPipeline;
 	class Mesh;
@@ -31,7 +30,6 @@ namespace aether
 		gpu::PipelineHandle nodeFlatten;
 		gpu::PipelineHandle poseInit;
 		gpu::PipelineHandle animBlend;
-		gpu::PipelineHandle ikSolve;
 
 		void Initialize(gpu::Device device, gpu::PipelineCache pipelineCache);
 		void Shutdown(gpu::Device device);
@@ -152,16 +150,11 @@ namespace aether
 		// Wired through the engine-side GpuProfiler singleton - no
 		// Tracy type or `Vk*` token is exposed on the public API.
 
-		// Optional animation extension systems. When set, the blend/IK/root-motion
+		// Optional animation extension systems. When set, the blend/root-motion
 		// passes are dispatched after the standard animation pipeline.
 		void SetAnimationBlendSystem(AnimationBlendSystem* sys)
 		{
 			m_animationBlendSystem = sys;
-		}
-
-		void SetAnimationIkSystem(AnimationIkSystem* sys)
-		{
-			m_animationIkSystem = sys;
 		}
 
 		void SetRootMotionSystem(AnimationRootMotionSystem* sys)
@@ -329,7 +322,6 @@ namespace aether
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 
 		AnimationBlendSystem* m_animationBlendSystem = nullptr;
-		AnimationIkSystem* m_animationIkSystem = nullptr;
 		AnimationRootMotionSystem* m_rootMotionSystem = nullptr;
 		std::uint32_t m_hipsNodeIdx = 0;
 	};

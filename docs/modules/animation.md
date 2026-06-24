@@ -8,14 +8,13 @@ The animation system is split into three GPU-side systems (blend, IK, root motio
 |---|---|
 | `AnimationSystem.hpp` / `AnimationSystem.cpp` | Base class for animation systems. |
 | `AnimationBlend.hpp` / `AnimationBlend.cpp` | Clip blending, weight normalization. |
-| `AnimationIk.hpp` / `AnimationIk.cpp` | Two-bone CCD inverse kinematics. |
 | `AnimationRootMotion.hpp` / `AnimationRootMotion.cpp` | Root motion extraction. |
 | `AnimationCompiler.hpp` / `AnimationCompiler.cpp` | Converts source animation data to runtime format. |
 | `AnimationDatabase.hpp` / `AnimationDatabase.cpp` | Runtime storage for animation clips. |
 
-## The three GPU systems
+## GPU animation systems
 
-`src/engine/animation/AnimationBlend.hpp`, `AnimationIk.hpp`, `AnimationRootMotion.hpp`. Each follows the same pattern:
+`src/engine/animation/AnimationBlend.hpp` and `AnimationRootMotion.hpp`. Each follows the same pattern:
 
 ```cpp
 class AnimationBlendSystem {
@@ -39,7 +38,6 @@ public:
 ```cpp
 RenderQueue& rq = m_rendering->GetRenderQueue();
 rq.SetAnimationBlendSystem(m_animationBlend.get());
-rq.SetAnimationIkSystem(m_animationIk.get());
 rq.SetRootMotionSystem(m_rootMotion.get());
 rq.SetHipsNodeIndex(0);
 ```
@@ -58,7 +56,7 @@ When a draw is skinned, the forward pass reads skinning matrices directly from t
 
 ## Adding a new animation feature
 
-1. Add a new system class mirroring the existing `AnimationBlendSystem` / `AnimationIkSystem` / `AnimationRootMotionSystem` pattern.
+1. Add a new system class mirroring the existing `AnimationBlendSystem` / `AnimationRootMotionSystem` pattern.
 2. Init in `AetherCore` (after step 9 in the subsystem init order), allocate from `GpuHeap`.
 3. Register on the service container.
 4. If the system produces data the forward pass needs, add a BDA field to the relevant pass and an accessor to the system.
