@@ -96,6 +96,7 @@ namespace aether::ui
 		float max = 1.f;
 		float value = 0.f;
 		bool isDragging = false;
+		std::string label;
 	};
 
 	// -- Checkbox ---------------------------------------------------------------

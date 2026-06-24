@@ -145,6 +145,12 @@ namespace aether::ui
 		const float trackH = px.w;
 		const float range = std::max(slider->max - slider->min, 1e-6f);
 
+		// Optional label tucked just above the slider track.
+		if (!slider->label.empty())
+		{
+			ui.DrawText(slider->label, PixelPoint(*t, {px.x, px.y - 8.f}, extent), theme.labelFontSize, theme.textLabel);
+		}
+
 		// Update isDragging and value from mouse.
 		if (inp->pressed)
 		{

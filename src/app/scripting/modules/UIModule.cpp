@@ -440,10 +440,24 @@ namespace
 		}
 	}
 
+	const char* das_get_ui_slider_label(aether::World* w, uint32_t id)
+	{
+		const auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
+		return c ? c->label.c_str() : "";
+	}
+
 	bool das_get_ui_slider_dragging(aether::World* w, uint32_t id)
 	{
 		const auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id});
 		return c && c->isDragging;
+	}
+
+	void das_set_ui_slider_label(aether::World* w, uint32_t id, const char* label)
+	{
+		if (auto c = w->TryGet<aether::ui::UiSliderComponent>(aether::Entity{id}))
+		{
+			c->label = label ? label : "";
+		}
 	}
 
 	// -- UiCheckboxComponent ---------------------------------------------------
@@ -731,6 +745,8 @@ namespace aether::app::scripting
 			Bind<das_get_ui_slider_value>(lib, "get_ui_slider_value", SE::accessExternal);
 			Bind<das_set_ui_slider_value>(lib, "set_ui_slider_value", SE::modifyExternal);
 			Bind<das_set_ui_slider_range>(lib, "set_ui_slider_range", SE::modifyExternal);
+			Bind<das_get_ui_slider_label>(lib, "get_ui_slider_label", SE::accessExternal);
+			Bind<das_set_ui_slider_label>(lib, "set_ui_slider_label", SE::modifyExternal);
 			Bind<das_get_ui_slider_dragging>(lib, "get_ui_slider_dragging", SE::accessExternal);
 
 			// -- UiCheckboxComponent -------------------------------------------

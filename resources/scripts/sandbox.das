@@ -379,12 +379,8 @@ def on_attach(world : World?)
 	let panel = create_ui_panel(world, 16.0, 16.0, 280.0, 240.0, "Scene Controls");
 	set_ui_panel_collapsible(world, panel, true);
 
-	let sep_lbl = create_ui_label(world, 16.0, 88.0, 260.0, 20.0, "Fox rotation speed");
-	set_ui_font_size(world, sep_lbl, 12.0);
-	set_ui_text_color(world, sep_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, panel, sep_lbl);
-
-	g_speed_slider = create_ui_slider(world, 16.0, 112.0, 260.0, 28.0, 0.1, 5.0, 1.0);
+	g_speed_slider = create_ui_slider(world, 16.0, 108.0, 260.0, 28.0, 0.1, 5.0, 1.0);
+	set_ui_slider_label(world, g_speed_slider, "Fox rotation speed");
 	add_ui_child(world, panel, g_speed_slider);
 
 	g_rotate_cb = create_ui_checkbox(world, 16.0, 152.0, 260.0, 28.0, "Rotate foxes", true);
@@ -397,36 +393,28 @@ def on_attach(world : World?)
 	add_ui_child(world, panel, g_spawn_btn);
 
 	// ── Native UI - Day/Night Controls panel ────────────────────────────────
-	let dn_panel = create_ui_panel(world, 312.0, 16.0, 280.0, 260.0, "Day / Night");
+	let dn_panel = create_ui_panel(world, 312.0, 16.0, 280.0, 216.0, "Day / Night");
 	set_ui_panel_collapsible(world, dn_panel, true);
 
-	g_time_label = create_ui_label(world, 328.0, 56.0, 260.0, 24.0, "Time: 12:00");
+	g_time_label = create_ui_label(world, 328.0, 44.0, 260.0, 22.0, "Time: 12:00");
 	set_ui_font_size(world, g_time_label, 14.0);
 	set_ui_text_color(world, g_time_label, float4(1.0, 0.95, 0.70, 1.0));
 	add_ui_child(world, dn_panel, g_time_label);
 
-	g_sun_dir_label = create_ui_label(world, 328.0, 84.0, 260.0, 20.0, "Sun: (0.00, 1.00, 0.00)");
+	g_sun_dir_label = create_ui_label(world, 328.0, 70.0, 260.0, 20.0, "Sun: (0.00, 1.00, 0.00)");
 	set_ui_font_size(world, g_sun_dir_label, 11.0);
 	set_ui_text_color(world, g_sun_dir_label, float4(0.65, 0.65, 0.72, 1.0));
 	add_ui_child(world, dn_panel, g_sun_dir_label);
 
-	let tod_lbl = create_ui_label(world, 328.0, 112.0, 260.0, 20.0, "Time of day (hours)");
-	set_ui_font_size(world, tod_lbl, 12.0);
-	set_ui_text_color(world, tod_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, dn_panel, tod_lbl);
-
-	g_time_slider = create_ui_slider(world, 328.0, 136.0, 260.0, 28.0, 0.0, 24.0, 12.0);
+	g_time_slider = create_ui_slider(world, 328.0, 108.0, 260.0, 28.0, 0.0, 24.0, 12.0);
+	set_ui_slider_label(world, g_time_slider, "Time of day (hours)");
 	add_ui_child(world, dn_panel, g_time_slider);
 
-	let spd_lbl = create_ui_label(world, 328.0, 172.0, 260.0, 20.0, "Time speed (sec/sec)");
-	set_ui_font_size(world, spd_lbl, 12.0);
-	set_ui_text_color(world, spd_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, dn_panel, spd_lbl);
-
-	g_speed_slider_dn = create_ui_slider(world, 328.0, 196.0, 260.0, 28.0, 0.0, 300.0, 60.0);
+	g_speed_slider_dn = create_ui_slider(world, 328.0, 156.0, 260.0, 28.0, 0.0, 300.0, 60.0);
+	set_ui_slider_label(world, g_speed_slider_dn, "Time speed (sec/sec)");
 	add_ui_child(world, dn_panel, g_speed_slider_dn);
 
-	g_manual_cb = create_ui_checkbox(world, 328.0, 232.0, 260.0, 28.0, "Manual mode (pause auto)", false);
+	g_manual_cb = create_ui_checkbox(world, 328.0, 188.0, 260.0, 28.0, "Manual mode (pause auto)", false);
 	add_ui_child(world, dn_panel, g_manual_cb);
 
 	// ── NEW Native UI - Entity Inspector panel ──────────────────────────────
@@ -446,39 +434,24 @@ def on_attach(world : World?)
 	set_ui_button_color(world, g_ins_next_btn, float4(0.18, 0.22, 0.28, 1.0));
 	add_ui_child(world, ins_panel, g_ins_next_btn);
 
-	let px_lbl = create_ui_label(world, 32.0, 392.0, 260.0, 18.0, "Position X");
-	set_ui_font_size(world, px_lbl, 11.0);
-	set_ui_text_color(world, px_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, ins_panel, px_lbl);
 	g_ins_x_sl = create_ui_slider(world, 32.0, 410.0, 244.0, 26.0, -30.0, 30.0, 0.0);
+	set_ui_slider_label(world, g_ins_x_sl, "Position X");
 	add_ui_child(world, ins_panel, g_ins_x_sl);
 
-	let py_lbl = create_ui_label(world, 32.0, 440.0, 260.0, 18.0, "Position Y");
-	set_ui_font_size(world, py_lbl, 11.0);
-	set_ui_text_color(world, py_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, ins_panel, py_lbl);
 	g_ins_y_sl = create_ui_slider(world, 32.0, 458.0, 244.0, 26.0, -1.0, 16.0, 0.0);
+	set_ui_slider_label(world, g_ins_y_sl, "Position Y");
 	add_ui_child(world, ins_panel, g_ins_y_sl);
 
-	let pz_lbl = create_ui_label(world, 32.0, 488.0, 260.0, 18.0, "Position Z");
-	set_ui_font_size(world, pz_lbl, 11.0);
-	set_ui_text_color(world, pz_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, ins_panel, pz_lbl);
 	g_ins_z_sl = create_ui_slider(world, 32.0, 506.0, 244.0, 26.0, -30.0, 30.0, 0.0);
+	set_ui_slider_label(world, g_ins_z_sl, "Position Z");
 	add_ui_child(world, ins_panel, g_ins_z_sl);
 
-	let yaw_lbl = create_ui_label(world, 32.0, 536.0, 260.0, 18.0, "Yaw (degrees)");
-	set_ui_font_size(world, yaw_lbl, 11.0);
-	set_ui_text_color(world, yaw_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, ins_panel, yaw_lbl);
 	g_ins_yaw_sl = create_ui_slider(world, 32.0, 554.0, 244.0, 26.0, -180.0, 180.0, 0.0);
+	set_ui_slider_label(world, g_ins_yaw_sl, "Yaw (degrees)");
 	add_ui_child(world, ins_panel, g_ins_yaw_sl);
 
-	let sc_lbl = create_ui_label(world, 32.0, 584.0, 260.0, 18.0, "Uniform scale");
-	set_ui_font_size(world, sc_lbl, 11.0);
-	set_ui_text_color(world, sc_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, ins_panel, sc_lbl);
 	g_ins_sc_sl = create_ui_slider(world, 32.0, 602.0, 244.0, 26.0, 0.01, 5.0, 0.05);
+	set_ui_slider_label(world, g_ins_sc_sl, "Uniform scale");
 	add_ui_child(world, ins_panel, g_ins_sc_sl);
 
 	// ── NEW Native UI - Physics Toys & Spawner panel ─────────────────────────
@@ -490,18 +463,12 @@ def on_attach(world : World?)
 	set_ui_text_color(world, toy_intro, float4(0.65, 0.65, 0.72, 1.0));
 	add_ui_child(world, toy_panel, toy_intro);
 
-	let sz_lbl = create_ui_label(world, 328.0, 360.0, 260.0, 18.0, "Toy size");
-	set_ui_font_size(world, sz_lbl, 11.0);
-	set_ui_text_color(world, sz_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, toy_panel, sz_lbl);
 	g_toy_sz_sl = create_ui_slider(world, 328.0, 378.0, 244.0, 26.0, 0.2, 2.0, 0.4);
+	set_ui_slider_label(world, g_toy_sz_sl, "Toy size");
 	add_ui_child(world, toy_panel, g_toy_sz_sl);
 
-	let h_lbl = create_ui_label(world, 328.0, 408.0, 260.0, 18.0, "Drop height");
-	set_ui_font_size(world, h_lbl, 11.0);
-	set_ui_text_color(world, h_lbl, float4(0.65, 0.65, 0.72, 1.0));
-	add_ui_child(world, toy_panel, h_lbl);
 	g_toy_h_sl = create_ui_slider(world, 328.0, 426.0, 244.0, 26.0, 4.0, 24.0, 12.0);
+	set_ui_slider_label(world, g_toy_h_sl, "Drop height");
 	add_ui_child(world, toy_panel, g_toy_h_sl);
 
 	g_btn_cube    = create_ui_button(world, 328.0, 462.0, 244.0, 32.0, "Spawn Cube @ Drop");
