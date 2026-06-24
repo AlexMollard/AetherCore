@@ -43,11 +43,11 @@ namespace aether
 		[[nodiscard]] Mesh CreateMesh(std::span<const Mesh::Vertex> vertices, std::span<const std::uint32_t> indices, const float* aabbMin, const float* aabbMax, const float* sphereCenter, float sphereRadius);
 
 		// Texture creation.
-		[[nodiscard]] Expected<Texture> CreateTexture(std::string_view path, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] Expected<Texture> CreateTexture(std::string_view path);
 
 		// Async texture creation - co_await the file read on the I/O thread,
 		// then decode and upload to GPU on the calling (game) thread.
-		[[nodiscard]] coro::async<Expected<Texture>> CreateTextureAsync(std::string_view path, TextureFilter filter = TextureFilter::Linear);
+		[[nodiscard]] coro::async<Expected<Texture>> CreateTextureAsync(std::string_view path);
 
 		// Pipeline creation.
 		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);

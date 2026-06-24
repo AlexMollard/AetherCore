@@ -49,12 +49,11 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		auto device = static_cast<gpu::Device>(context.GetDevice().device);
-		auto allocator = static_cast<gpu::Allocator>(context.GetAllocator());
 
 		m_atlasManager.Initialize(context, bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
-		m_shadowRenderQueue.Initialize(device, allocator, pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
+		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
@@ -476,7 +475,7 @@ namespace aether
 				                cmd.SetScissor(scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, nullptr, lightFcAddr, &m_shadowPipeline);
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 
 			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);

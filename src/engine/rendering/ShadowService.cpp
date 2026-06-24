@@ -31,7 +31,7 @@ namespace aether
 		}
 
 		// Single shadow queue with 3x output capacity for multi-frustum culling.
-		m_shadowRenderQueue.Initialize(context.GetDevice().device, context.GetAllocator(), pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
+		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 8192, .maxBatches = 1024, .maxAnimationDraws = UINT32_MAX, .outputDrawCapacity = 8192 * kCullMultiFrustumCount});
 		AE_INFO(LogCategory::Render, "ShadowService RenderQueue initialized: maxSkinJoints={}, skinPaletteBuffer={}", m_shadowRenderQueue.GetMaxSkinJoints(), m_shadowRenderQueue.GetSkinPaletteBufferAddress());
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
@@ -136,7 +136,7 @@ namespace aether
 			                {
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
 				                gpu::CommandList cmd = ctx.recorder.View();
-				                m_shadowRenderQueue.FlushDraw(cmd, nullptr, nullptr, &m_shadowPipeline, cascadeOffset);
+				                m_shadowRenderQueue.FlushDraw(cmd, nullptr, &m_shadowPipeline, cascadeOffset);
 				                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			                });
 		}

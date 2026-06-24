@@ -283,12 +283,12 @@ namespace aether
 		return Mesh::Create(*m_uploadContext, vertices, indices, aabbMin, aabbMax, sphereCenter, sphereRadius);
 	}
 
-	Expected<Texture> AssetManager::CreateTexture(std::string_view path, TextureFilter filter)
+	Expected<Texture> AssetManager::CreateTexture(std::string_view path)
 	{
-		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool(), *m_bindlessManager, filter);
+		return Texture::LoadFromFile(path, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool());
 	}
 
-	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path, TextureFilter filter)
+	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path)
 	{
 		// Read file data on the I/O thread (suspends the calling coroutine).
 		const std::string pathStr(path);
@@ -297,7 +297,7 @@ namespace aether
 		// GPU upload must happen on the game thread (owns the Vulkan context).
 		// After co_await resumes, we're back on the game thread via the default
 		// executor, so this is safe.
-		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetAllocator(), m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool(), *m_bindlessManager, filter);
+		co_return Texture::LoadFromFileData(fileData, pathStr, m_context->GetDevice().device, m_context->GetGraphicsQueue(), m_uploadContext->GetCommandPool());
 	}
 
 	Expected<GraphicsPipeline> AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)

@@ -177,8 +177,7 @@ namespace aether
 		instanceBuilder.require_api_version(1, 4, 0);
 #if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
 		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-		VkDebugUtilsMessageTypeFlagsEXT debugTypes =
-		        VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
 		instanceBuilder.request_validation_layers();
@@ -403,15 +402,9 @@ namespace aether
 		};
 		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryEDS3Features2);
 
-		const bool eds3RequiredSupport = supportedEDS3.extendedDynamicState3PolygonMode == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3RasterizationSamples == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3SampleMask == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3AlphaToOneEnable == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE
-		        && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
+		const bool eds3RequiredSupport = supportedEDS3.extendedDynamicState3PolygonMode == VK_TRUE && supportedEDS3.extendedDynamicState3RasterizationSamples == VK_TRUE && supportedEDS3.extendedDynamicState3SampleMask == VK_TRUE
+		                                 && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE && supportedEDS3.extendedDynamicState3AlphaToOneEnable == VK_TRUE && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
+		                                 && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
 		if (!eds3RequiredSupport)
 		{
 			Throw(AetherError::Vulkan(0, "VK_EXT_extended_dynamic_state3 is missing required dynamic state features."));

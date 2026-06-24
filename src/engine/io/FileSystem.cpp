@@ -220,13 +220,14 @@ namespace aether::io
 		const std::string assetMode = EnvironmentString("AETHER_ASSET_MODE");
 		if (EqualsIgnoreCase(assetMode, "dir"))
 		{
-			MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR").value_or(
+			MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR")
+			                .value_or(
 #ifdef AETHER_DEFAULT_ASSET_DIR
-			        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+			                        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
 #else
-			        workingDirectory / "assets"
+			                        workingDirectory / "assets"
 #endif
-			                ));
+			                                ));
 		}
 		else
 		{
@@ -250,13 +251,14 @@ namespace aether::io
 					AE_ASSERT_ALWAYS(false, "AETHER_ASSET_MODE=pak but no usable assets.pak was found. Set AETHER_ASSET_PAK or build App to generate data/assets.pak.");
 				}
 
-				MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR").value_or(
+				MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR")
+				                .value_or(
 #ifdef AETHER_DEFAULT_ASSET_DIR
-				        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+				                        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
 #else
-				        workingDirectory / "assets"
+				                        workingDirectory / "assets"
 #endif
-				                ));
+				                                ));
 			}
 		}
 

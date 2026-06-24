@@ -36,7 +36,7 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
-		m_renderQueue.Initialize(vk.GetDevice().device, vk.GetAllocator(), m_renderQueuePipelines, RenderQueueConfig{.maxDraws = 65536});
+		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = 65536});
 		m_renderQueue.SetDebugForceVisible(true);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);
@@ -93,7 +93,6 @@ namespace aether
 	void RenderingSubsystem::Shutdown(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
-		auto& vk = services.Get<VulkanContext>();
 		auto& gpu = services.Get<GpuDevice>();
 
 		m_postProcessStack.Destroy();
@@ -105,7 +104,7 @@ namespace aether
 		m_localShadowService.Shutdown(gpu.GetDevice());
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
-		m_renderQueuePipelines.Shutdown(vk.GetDevice().device);
+		m_renderQueuePipelines.Shutdown();
 		m_physicsDebug.Shutdown();
 	}
 
@@ -227,7 +226,7 @@ namespace aether
 				        const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
-				        m_renderQueue.FlushDrawPush(ctx.recorder, nullptr, lightingAddr);
+				        m_renderQueue.FlushDrawPush(ctx.recorder, lightingAddr);
 				        m_renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			        });
 		}

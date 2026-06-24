@@ -24,10 +24,8 @@
 
 namespace aether
 {
-	void RenderQueue::Initialize(gpu::Device device, gpu::Allocator allocator, const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
+	void RenderQueue::Initialize(const RenderQueueSharedPipelines& pipelines, const RenderQueueConfig& config)
 	{
-		(void) device;
-		(void) allocator;
 		m_sharedPipelines = &pipelines;
 		m_maxDraws = config.maxDraws;
 		m_maxBatches = config.maxBatches;
@@ -889,32 +887,23 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDraw(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, m_cachedFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, m_cachedFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, m_cachedFrameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, m_cachedFrameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(
-	        gpu::CommandList& cmd, gpu::DescriptorSet bindlessSet, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, bindlessSet, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
+		FlushDrawImpl(cmd, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
-	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
-	        gpu::DescriptorSet bindlessSet,
-	        gpu::DeviceAddress frameAddr,
-	        const DrawContracts::LightingAddresses* lighting,
-	        const GraphicsPipeline* overridePipeline,
-	        std::uint32_t cascadeOffset,
-	        const char* debugLabel,
-	        float r,
-	        float g,
-	        float b)
+	void RenderQueue::FlushDrawImpl(
+	        gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
 	{
 		AE_PROFILE_ZONE();
 		if (!cmd.IsValid())
@@ -936,7 +925,6 @@ namespace aether
 		        .tileHeadersAddr = lighting ? lighting->tileHeadersAddr : gpu::DeviceAddress{0},
 		        .tileLightIndicesAddr = lighting ? lighting->tileLightIndicesAddr : gpu::DeviceAddress{0},
 		};
-		(void) bindlessSet;
 		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
@@ -1064,12 +1052,10 @@ namespace aether
 		{
 			Throw(AetherError::Vulkan(0, "RenderQueueSharedPipelines: failed to create animBlend compute pipeline."));
 		}
-
 	}
 
-	void RenderQueueSharedPipelines::Shutdown(gpu::Device device)
+	void RenderQueueSharedPipelines::Shutdown()
 	{
-		(void) device;
 		if (skinCopy.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(skinCopy);

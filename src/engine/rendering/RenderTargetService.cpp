@@ -133,7 +133,7 @@ namespace aether
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize(*m_context);
 		rt.renderQueue = std::make_unique<RenderQueue>();
-		rt.renderQueue->Initialize(m_context->GetDevice().device, m_context->GetAllocator(), *m_sharedPipelines);
+		rt.renderQueue->Initialize(*m_sharedPipelines);
 
 		const std::uint32_t id = m_nextId++;
 		m_targets.emplace(id, std::move(rt));
@@ -276,7 +276,7 @@ namespace aether
 			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
-			                rit->second.renderQueue->FlushDrawPush(cmd, nullptr, lightingAddr);
+			                rit->second.renderQueue->FlushDrawPush(cmd, lightingAddr);
 			                rit->second.renderQueue->Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}

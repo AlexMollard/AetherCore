@@ -559,13 +559,8 @@ namespace aether
 
 	std::string DiagnosticEngine::WorkloadText(const PassWorkload& pass) const
 	{
-		std::string out = std::format("{} direct, {} indexed, {} indirect, {} indexed-indirect, {} indirect-count, {} dispatches",
-		        pass.directDraws,
-		        pass.indexedDraws,
-		        pass.indirectDraws,
-		        pass.indirectIndexedDraws,
-		        pass.indirectCountDraws,
-		        pass.dispatches);
+		std::string out =
+		        std::format("{} direct, {} indexed, {} indirect, {} indexed-indirect, {} indirect-count, {} dispatches", pass.directDraws, pass.indexedDraws, pass.indirectDraws, pass.indirectIndexedDraws, pass.indirectCountDraws, pass.dispatches);
 		if (pass.fillBuffers != 0)
 		{
 			out += std::format(", {} fill-buffer", pass.fillBuffers);

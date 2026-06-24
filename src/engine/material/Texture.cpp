@@ -11,40 +11,32 @@
 #include "vulkan/VulkanUtils.hpp"
 #include "gpu/ResourceRegistry.hpp"
 
-// stb_image - single-header image loader.
-// STB_IMAGE_IMPLEMENTATION must be defined in exactly one compilation unit.
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-#include "gpu/BindlessManager.hpp"
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
+
+#define INVALID_BINDLESS_SLOT 0xFFFFFFFFu
 
 namespace aether
 {
 	namespace
 	{
-		// Helper: acquire a bindless slot, configure a sampler, and update
-		// the descriptor with the resolved image view. Engine-side; the
-		// backend translates the slot to a real descriptor write.
-		std::uint32_t RegisterTextureBindless(BindlessManager& bindless, gpu::TextureHandle handle, gpu::ImageLayout layout)
+		std::uint32_t RegisterTextureBindless(gpu::TextureHandle handle, gpu::ImageLayout layout)
 		{
-			const auto slotResult = bindless.AllocateSampledImageSlot();
-			if (!slotResult)
+			gpu::ResourceRegistry::EnsureBindlessSampled(handle, gpu::ImageAspect::Color, layout);
+			const std::uint32_t slot = gpu::ResourceRegistry::GetBindlessSampledSlot(handle);
+			if (slot == INVALID_BINDLESS_SLOT)
 			{
-				Throw(AetherError::Engine("Texture: AllocateSampledImageSlot failed"));
+				Throw(AetherError::Engine("Texture: EnsureBindlessSampled failed"));
 			}
-			const std::uint32_t slot = *slotResult;
-			const auto updateResult = bindless.WriteSampledImage(slot, gpu::ResourceRegistry::GetViewCreateInfo(handle), layout);
-			if (!updateResult)
-			{
-				Throw(AetherError::Engine("Texture: WriteSampledImage failed"));
-			}
+
 			return slot;
 		}
 
-		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, const char* debugName = nullptr)
+		gpu::TextureHandle UploadRgbaToGpuImage(const stbi_uc* pixels, int width, int height, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, const char* debugName = nullptr)
 		{
 			const gpu::TextureDesc desc{
 			        .format = gpu::Format::R8G8B8A8Srgb,
@@ -81,7 +73,7 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "UploadRgbaToGpuImage: failed to submit OneShotCmd"));
 			}
 
-			(void) RegisterTextureBindless(bindless, handle, gpu::ImageLayout::ShaderReadOnly);
+			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
 
 			return handle;
 		}
@@ -138,7 +130,7 @@ namespace aether
 			}
 		}
 
-		Expected<gpu::TextureHandle> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless)
+		Expected<gpu::TextureHandle> UploadBcnDds(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 		{
 			constexpr std::size_t kMinSize = sizeof(uint32_t) + sizeof(DdsHeader) + sizeof(DdsDx10Header);
 			if (fileData.size() < kMinSize)
@@ -203,18 +195,14 @@ namespace aether
 				Throw(AetherError::Vulkan(0, "UploadBcnDds: failed to submit OneShotCmd"));
 			}
 
-			(void) RegisterTextureBindless(bindless, handle, gpu::ImageLayout::ShaderReadOnly);
+			RegisterTextureBindless(handle, gpu::ImageLayout::ShaderReadOnly);
 
 			return handle;
 		}
 	} // namespace
 
-	Expected<Texture> Texture::LoadFromFileData(
-	        std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFileData(std::span<const std::byte> fileData, std::string_view debugPath, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
-		(void) allocator;
-		(void) filter;
-
 		if (fileData.size() < 4)
 		{
 			int width = 0, height = 0, channels = 0;
@@ -224,7 +212,8 @@ namespace aether
 				AE_UNEXPECTED(AetherError::Asset("failed to decode '" + std::string(debugPath) + "': " + stbi_failure_reason()));
 			}
 			Texture texture;
-			texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, bindless, std::string(debugPath).c_str());
+			texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, std::string(debugPath).c_str());
+			texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 			stbi_image_free(pixels);
 			return texture;
 		}
@@ -234,8 +223,9 @@ namespace aether
 		if (magic == DDS_MAGIC)
 		{
 			Texture texture;
-			AE_TRY(handle, UploadBcnDds(fileData, debugPath, device, uploadQueue, uploadPool, bindless));
+			AE_TRY(handle, UploadBcnDds(fileData, debugPath, device, uploadQueue, uploadPool));
 			texture.m_handle = *handle;
+			texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 			return texture;
 		}
 
@@ -247,12 +237,13 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, bindless, std::string(debugPath).c_str());
+		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, std::string(debugPath).c_str());
+		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 		stbi_image_free(pixels);
 		return texture;
 	}
 
-	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
 		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
 		AE_PROFILE_SET_ZONE_NAME(path.data());
@@ -295,14 +286,11 @@ namespace aether
 			fileData = std::move(*data);
 		}
 
-		return LoadFromFileData(fileData, pathStr, device, allocator, uploadQueue, uploadPool, bindless, filter);
+		return LoadFromFileData(fileData, pathStr, device, uploadQueue, uploadPool);
 	}
 
-	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, gpu::CommandPool uploadPool, BindlessManager& bindless, TextureFilter filter)
+	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
-		(void) allocator;
-		(void) filter;
-
 		int width = 0;
 		int height = 0;
 		int channels = 0;
@@ -315,7 +303,8 @@ namespace aether
 		}
 
 		Texture texture;
-		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, bindless, path.string().c_str());
+		texture.m_handle = UploadRgbaToGpuImage(pixels, width, height, device, uploadQueue, uploadPool, path.string().c_str());
+		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
 
 		stbi_image_free(pixels);
 		return texture;
