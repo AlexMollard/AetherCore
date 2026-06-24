@@ -197,6 +197,11 @@ namespace aether::ui
 		std::string label;
 		std::string value;
 		glm::vec4 valueColor{1.f, 1.f, 1.f, 1.f};
+		float valueColumnOffsetPx = 206.f;
+		float labelMaxWidthPx = 0.f; // 0 = auto-fit to value column / row width
+		float valueMaxWidthPx = 0.f; // 0 = auto-fit to remaining row width
+		bool truncateLabel = true;
+		bool truncateValue = true;
 	};
 
 	// -- Section separator ------------------------------------------------------

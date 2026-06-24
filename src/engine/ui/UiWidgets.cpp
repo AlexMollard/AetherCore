@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <string_view>
 
 #include "platform/Input.hpp"
 #include "ui/UIRenderer.hpp"
@@ -40,6 +41,42 @@ namespace aether::ui
 		        .offsetMinPx = {px.x - anchorPx.x, px.y - anchorPx.y},
 		        .offsetMaxPx = {px.x + px.z - anchorPx.x, px.y + px.w - anchorPx.y},
 		};
+	}
+
+	static std::string FitTextToWidth(UIRenderer& ui, std::string_view text, float fontSize, float maxWidth)
+	{
+		if (maxWidth <= 0.f || text.empty() || ui.MeasureText(text, fontSize) <= maxWidth)
+		{
+			return std::string(text);
+		}
+
+		constexpr std::string_view kEllipsis = "...";
+		const float ellipsisW = ui.MeasureText(kEllipsis, fontSize);
+		if (ellipsisW > maxWidth)
+		{
+			return {};
+		}
+
+		std::size_t lo = 0;
+		std::size_t hi = text.size();
+		while (lo < hi)
+		{
+			const std::size_t mid = (lo + hi + 1) / 2;
+			std::string candidate{text.substr(0, mid)};
+			candidate += kEllipsis;
+			if (ui.MeasureText(candidate, fontSize) <= maxWidth)
+			{
+				lo = mid;
+			}
+			else
+			{
+				hi = mid - 1;
+			}
+		}
+
+		std::string fitted{text.substr(0, lo)};
+		fitted += kEllipsis;
+		return fitted;
 	}
 
 	// A UiPoint centred on a pixel rect, using the entity's anchor.
@@ -924,12 +961,19 @@ namespace aether::ui
 
 		const glm::vec4 px = PixelRect(*t, extent);
 		const float y = px.y + px.w * 0.5f + theme.labelFontSize * 0.35f;
-		const float col2X = px.x + 206.f;
+		const float valueColumnOffset = std::clamp(row->valueColumnOffsetPx, 0.f, px.z);
+		const float valueGap = 8.f;
+		const float autoLabelMax = row->value.empty() ? px.z : std::max(0.f, valueColumnOffset - valueGap);
+		const float autoValueMax = std::max(0.f, px.z - valueColumnOffset);
+		const float labelMax = row->labelMaxWidthPx > 0.f ? std::min(row->labelMaxWidthPx, px.z) : autoLabelMax;
+		const float valueMax = row->valueMaxWidthPx > 0.f ? std::min(row->valueMaxWidthPx, autoValueMax) : autoValueMax;
+		const std::string label = row->truncateLabel ? FitTextToWidth(ui, row->label, theme.labelFontSize, labelMax) : row->label;
+		const std::string value = row->truncateValue ? FitTextToWidth(ui, row->value, theme.labelFontSize, valueMax) : row->value;
 
-		ui.DrawText(row->label, PixelPoint(*t, {px.x, y}, extent), theme.labelFontSize, theme.textLabel);
-		if (!row->value.empty())
+		ui.DrawText(label, PixelPoint(*t, {px.x, y}, extent), theme.labelFontSize, theme.textLabel);
+		if (!value.empty())
 		{
-			ui.DrawText(row->value, PixelPoint(*t, {col2X, y}, extent), theme.labelFontSize, row->valueColor);
+			ui.DrawText(value, PixelPoint(*t, {px.x + valueColumnOffset, y}, extent), theme.labelFontSize, row->valueColor);
 		}
 
 		ui.SetLayer(prevLayer);

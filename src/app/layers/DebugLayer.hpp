@@ -38,6 +38,8 @@ namespace aether::app
 		void OnGui(LayerContext& context) override;
 
 	private:
+		static constexpr std::size_t kMaxRenderPassRows = 16;
+
 		enum LabelRow : std::size_t
 		{
 			Row_Frame,
@@ -59,14 +61,13 @@ namespace aether::app
 			Row_PhysicsDebug,
 			Row_ForwardRender,
 			Row_FirstRenderPass,
-			Row_RgPassCount,
+			Row_RgPassCount = Row_FirstRenderPass + kMaxRenderPassRows,
 			Row_RgBarriers,
 			Row_RgTransientHit,
 			Row_RgTransientMiss,
 			Row_RgCacheSize,
 		};
 
-		static constexpr std::size_t kMaxRenderPassRows = 16;
 		static constexpr std::size_t kLabelRowCount = Row_RgCacheSize + 1;
 
 		enum Tab : std::size_t

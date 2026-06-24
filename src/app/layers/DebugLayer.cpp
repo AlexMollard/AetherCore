@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <format>
 #include <regex>
+#include <string_view>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -75,6 +76,16 @@ namespace aether::app
 		UiRect PxRect(float l, float t, float r, float b)
 		{
 			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 0.f}, .offsetMinPx = {l, t}, .offsetMaxPx = {r, b}};
+		}
+
+		std::string ShortRenderPassName(std::string_view name)
+		{
+			const std::size_t sourceSuffix = name.find(" (");
+			if (sourceSuffix != std::string_view::npos)
+			{
+				name = name.substr(0, sourceSuffix);
+			}
+			return std::string(name);
 		}
 	} // namespace
 
@@ -395,10 +406,16 @@ namespace aether::app
 			world.Emplace<ui::UiChildrenComponent>(hRow);
 			addToPage(Tab_Render, hRow);
 
-			Entity labelRow = reg(ui::SpawnLabelRow(world, {}, "", 2.f));
+			Entity labelRow = reg(ui::SpawnLabelRow(world, HeightRect(18.f), "", 2.f));
 			if (auto lt = world.TryGet<ui::UiTransformComponent>(labelRow))
 			{
 				lt->flexGrow = 1.f;
+			}
+			if (auto row = world.TryGet<ui::UiLabelRowComponent>(labelRow))
+			{
+				row->valueColumnOffsetPx = 192.f;
+				row->labelMaxWidthPx = 184.f;
+				row->valueMaxWidthPx = 64.f;
 			}
 			ui::AddChild(world, hRow, labelRow);
 			m_labelRows[Row_FirstRenderPass + i] = labelRow;
@@ -406,7 +423,7 @@ namespace aether::app
 			Entity bar = reg(ui::SpawnProgressBar(world, {}, 0.f, 1.f, 0.f, 2.f));
 			if (auto bt = world.TryGet<ui::UiTransformComponent>(bar))
 			{
-				bt->rect.offsetMaxPx.x = 70.f;
+				bt->rect.offsetMaxPx.x = 82.f;
 				bt->rect.offsetMaxPx.y = 12.f;
 			}
 			ui::AddChild(world, hRow, bar);
@@ -708,7 +725,7 @@ namespace aether::app
 					std::snprintf(buf.data(), buf.size(), "%.2f ms", ms);
 					if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
 					{
-						r->label = passes[i].name;
+						r->label = ShortRenderPassName(passes[i].name);
 						r->value = buf.data();
 						r->valueColor = timeColor;
 					}
