@@ -26,6 +26,11 @@
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 
+namespace
+{
+	constexpr float kPointLightFovDeg = 170.0f;
+} // namespace
+
 namespace aether
 {
 	// Must match BlurPushConstants in vsm_blur.slang.
@@ -306,7 +311,7 @@ namespace aether
 				// Upper hemisphere: look up from the light.
 				{
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(170.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(kPointLightFovDeg), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
@@ -320,7 +325,7 @@ namespace aether
 				// Lower hemisphere: look down from the light.
 				{
 					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(170.0f), 1.0f, 1.0f, 0.1f, c.radius);
+					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(kPointLightFovDeg), 1.0f, 1.0f, 0.1f, c.radius);
 
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,

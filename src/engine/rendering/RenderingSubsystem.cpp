@@ -16,6 +16,11 @@
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
 
+namespace
+{
+	constexpr std::uint32_t kRenderQueueMaxDraws = 65536;
+} // namespace
+
 namespace aether
 {
 	void RenderingSubsystem::Init(ServiceContainer& services)
@@ -36,7 +41,7 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
-		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = 65536});
+		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = kRenderQueueMaxDraws});
 		m_renderQueue.SetDebugForceVisible(true);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);

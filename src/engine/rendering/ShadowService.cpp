@@ -20,6 +20,19 @@
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
 
+namespace
+{
+	constexpr float kShadowFarCap = 320.0f;
+	constexpr float kLightEyeBackoff = 120.0f;
+	constexpr float kFarPlanePadding = 64.0f;
+	constexpr float kCascadeRangePadding = 140.0f;
+	constexpr float kCascadeSplitNear = 0.08f;
+	constexpr float kCascadeSplitMid = 0.28f;
+	constexpr float kCascadeSplitFar = 0.72f;
+	constexpr float kOrthoHalfMin = 20.0f;
+	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
+} // namespace
+
 namespace aether
 {
 	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
@@ -152,11 +165,11 @@ namespace aether
 
 		const Camera* mainCamForShadows = cameraManager.TryGetMainCamera();
 		const float camNear = (mainCamForShadows != nullptr) ? mainCamForShadows->GetNearPlane() : 0.1f;
-		const float camFar = (mainCamForShadows != nullptr) ? std::min(mainCamForShadows->GetFarPlane(), 320.0f) : 320.0f;
+		const float camFar = (mainCamForShadows != nullptr) ? std::min(mainCamForShadows->GetFarPlane(), kShadowFarCap) : kShadowFarCap;
 		const float viewRange = std::max(camFar - camNear, 1.0f);
-		const float split0 = camNear + viewRange * 0.08f;
-		const float split1 = camNear + viewRange * 0.28f;
-		const float split2 = camNear + viewRange * 0.72f;
+		const float split0 = camNear + viewRange * kCascadeSplitNear;
+		const float split1 = camNear + viewRange * kCascadeSplitMid;
+		const float split2 = camNear + viewRange * kCascadeSplitFar;
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
 		fc.shadowParams = glm::vec4(0.0007f, 0.0012f, 1.0f, 1.5f);
@@ -188,8 +201,8 @@ namespace aether
 				up = glm::vec3(1.0f, 0.0f, 0.0f);
 			}
 
-			const float orthoHalf = std::max(20.0f, cascadeFar * 0.60f);
-			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + 120.0f);
+			const float orthoHalf = std::max(kOrthoHalfMin, cascadeFar * kOrthoHalfViewRangeRatio);
+			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
 			glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
 
 			const float texelSize = (2.0f * orthoHalf) / std::max(1.0f, static_cast<float>(m_shadowMapExtents[cascade].width));
@@ -199,11 +212,11 @@ namespace aether
 
 			const glm::mat4 invLightView = glm::inverse(lightView);
 			shadowCenter = glm::vec3(invLightView * glm::vec4(centerLs, 1.0f));
-			lightEye = shadowCenter + lightDir * (cascadeFar + 120.0f);
+			lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
 			lightView = glm::lookAt(lightEye, shadowCenter, up);
 
 			const float nearPlane = std::max(0.1f, cascadeNear * 0.5f);
-			const float farPlane = std::max(nearPlane + 64.0f, cascadeFar + cascadeRange + 140.0f);
+			const float farPlane = std::max(nearPlane + kFarPlanePadding, cascadeFar + cascadeRange + kCascadeRangePadding);
 
 			FrameConstants shadowFc{};
 			shadowFc.view = lightView;

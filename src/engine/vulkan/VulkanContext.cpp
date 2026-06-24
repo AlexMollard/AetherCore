@@ -344,7 +344,7 @@ namespace aether
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
 		// VK_NV_device_diagnostic_checkpoints provides vkCmdSetCheckpointNV for event markers.
 		{
-			[[maybe_unused]] const bool amEnabled = m_aftermathContext.EnableGpuCrashDumps(".");
+			[[maybe_unused]] auto _ = m_aftermathContext.EnableGpuCrashDumps(".");
 			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
 			selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 		}
@@ -684,7 +684,7 @@ namespace aether
 #endif
 
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
-		[[maybe_unused]] const bool amInit = m_aftermathContext.Initialize(m_device->device, physicalDeviceResult.value().physical_device);
+		[[maybe_unused]] auto _ = m_aftermathContext.Initialize(m_device->device, physicalDeviceResult.value().physical_device);
 #endif
 
 		AE_INFO(LogCategory::Vulkan, "Vulkan context initialized successfully.");

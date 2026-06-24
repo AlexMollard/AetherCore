@@ -4,11 +4,6 @@
 
 namespace aether
 {
-	class ServiceContainer;
-}
-
-namespace aether
-{
 	class SceneSubsystem
 	{
 	public:

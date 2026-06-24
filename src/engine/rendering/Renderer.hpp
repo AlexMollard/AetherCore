@@ -11,7 +11,6 @@
 namespace aether
 {
 	class PostProcessStack;
-	class CameraManager;
 	enum class TonemapMode : std::uint32_t;
 
 	// Renderer service - owns all rendering configuration and post-processing.

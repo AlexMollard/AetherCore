@@ -119,15 +119,6 @@ namespace aether::app
 		{
 			AE_WARN(LogCategory::FileSystem, "No compiled shader files found via shaders://**/*.spv");
 		}
-		//else
-		//{
-		//	AE_INFO(LogCategory::FileSystem, "Discovered {} compiled shader file(s).", shaderFilesResult->size());
-		//	for (const auto& shaderFile: *shaderFilesResult)
-		//	{
-		//		AE_VERBOSE(LogCategory::FileSystem, "Shader asset: shaders://{}", shaderFile);
-		//	}
-		//}
-
 		Logger::SetFrameNumber(0);
 
 		// Set the coroutine default executor - all cross-thread continuation

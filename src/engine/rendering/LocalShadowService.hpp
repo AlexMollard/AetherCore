@@ -15,7 +15,6 @@
 
 namespace aether
 {
-	class AnimationDatabase;
 	class BindlessManager;
 	class CameraManager;
 	class CullPass;

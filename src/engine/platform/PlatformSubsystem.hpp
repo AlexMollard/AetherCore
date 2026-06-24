@@ -7,11 +7,6 @@
 
 namespace aether
 {
-	class ServiceContainer;
-}
-
-namespace aether
-{
 	// Owns the window and input services. Must be initialized before any
 	// subsystem that needs a native window handle or Vulkan surface.
 	class PlatformSubsystem

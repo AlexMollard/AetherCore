@@ -116,6 +116,6 @@ namespace aether::vkutil
 		        .objectHandle = handle,
 		        .pObjectName = name,
 		};
-		[[maybe_unused]] const VkResult nameResult = g_setObjectNameFn(device, &info);
+		g_setObjectNameFn(device, &info);
 	}
 } // namespace aether::vkutil

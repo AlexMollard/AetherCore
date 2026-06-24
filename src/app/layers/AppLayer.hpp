@@ -4,11 +4,6 @@
 
 #include "utils/ServiceContainer.hpp"
 
-namespace aether
-{
-	class AetherCore;
-} // namespace aether
-
 namespace aether::app
 {
 	struct LayerContext

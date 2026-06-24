@@ -20,7 +20,6 @@ namespace aether
 	class GraphicsPipeline;
 	class PrimitiveMeshes;
 	class PhysicsSystem;
-	class PhysicsDebugRenderer;
 } // namespace aether
 
 namespace aether::app

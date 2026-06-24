@@ -126,10 +126,6 @@ namespace aether::gpu
 		}
 	}
 
-	void CommandList::BindPipeline(PipelineHandle)
-	{
-	}
-
 	void CommandList::BindPipeline(GraphicsPipeline& pipeline)
 	{
 		BindPipeline(pipeline.GetPipeline());

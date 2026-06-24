@@ -49,7 +49,6 @@ namespace aether::gpu
 		}
 
 		void BindPipeline(void* pipeline) noexcept;
-		void BindPipeline(PipelineHandle pipeline);
 		void BindPipeline(GraphicsPipeline& pipeline);
 
 		void BindComputePipeline(void* pipeline) noexcept;

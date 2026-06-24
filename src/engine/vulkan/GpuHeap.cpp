@@ -223,7 +223,8 @@ namespace aether
 			vkFreeCommandBuffers(device, pool, 1, &cmd);
 			Throw(AetherError::Vulkan(static_cast<int32_t>(submitResult), "GpuHeap: failed to submit upload command buffer"));
 		}
-		(void) vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);
+		AE_ASSERT_ALWAYS(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS,
+		        "GpuHeap: fence wait failed (device lost?)");
 		vkDestroyFence(device, fence, nullptr);
 		vkFreeCommandBuffers(device, pool, 1, &cmd);
 		vmaDestroyBuffer(m_allocatorRef, stagingBuffer, stagingAllocation);

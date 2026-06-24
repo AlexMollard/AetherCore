@@ -142,7 +142,6 @@ namespace aether
 		std::unique_ptr<JPH::PhysicsSystem> m_physics;
 
 		float m_accumulator = 0.0f;
-		bool m_needsBroadPhaseOptimize = false;
 
 		// Auto-disconnects in the destructor (declared last so it disconnects
 		// before m_physics is destroyed - reverse member destruction order).

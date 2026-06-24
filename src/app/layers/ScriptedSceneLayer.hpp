@@ -47,7 +47,6 @@ namespace aether::app
 		aether::GraphicsPipeline m_defaultPipeline;
 		aether::app::effects::EffectManager m_effectManager;
 		scripting::ScriptingSubsystem* m_scripting = nullptr;
-		SystemFactory* m_systemFactory = nullptr;
 		bool m_scriptBroken = false;
 	};
 } // namespace aether::app

@@ -10,8 +10,6 @@
 
 namespace aether
 {
-	class RenderQueue;
-
 	class World
 	{
 	public:

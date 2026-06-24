@@ -835,7 +835,7 @@ namespace aether
 		return kIndexInvalid;
 	}
 
-	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
+	gpu::TextureHandle ResourceRegistry::RegisterTexture(const TextureEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterTexture called after Shutdown.");
 		const std::uint32_t idx = AcquireTextureSlot();
@@ -845,7 +845,11 @@ namespace aether
 		}
 		++m_liveTextureCount;
 		m_textures[idx].entry = entry;
-		m_textures[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+		{
+			auto nameStr = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+			nameStr += " (" + std::string(loc.file_name()) + ":" + std::to_string(loc.line()) + ")";
+			m_textures[idx].debugName = std::move(nameStr);
+		}
 #ifndef NDEBUG
 		{
 			auto& s = m_textures[idx];
@@ -859,7 +863,7 @@ namespace aether
 		return gpu::TextureHandle::Make(idx, gen);
 	}
 
-	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
+	gpu::BufferHandle ResourceRegistry::RegisterBuffer(const BufferEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterBuffer called after Shutdown.");
 		const std::uint32_t idx = AcquireBufferSlot();
@@ -869,7 +873,11 @@ namespace aether
 		}
 		++m_liveBufferCount;
 		m_buffers[idx].entry = entry;
-		m_buffers[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+		{
+			auto nameStr = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+			nameStr += " (" + std::string(loc.file_name()) + ":" + std::to_string(loc.line()) + ")";
+			m_buffers[idx].debugName = std::move(nameStr);
+		}
 #ifndef NDEBUG
 		{
 			auto& s = m_buffers[idx];
@@ -883,7 +891,7 @@ namespace aether
 		return gpu::BufferHandle::Make(idx, gen);
 	}
 
-	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry, std::string_view debugName, [[maybe_unused]] std::source_location loc)
+	gpu::PipelineHandle ResourceRegistry::RegisterPipeline(const PipelineEntry& entry, std::string_view debugName, std::source_location loc)
 	{
 		AE_ASSERT(!m_shutdown, "ResourceRegistry::RegisterPipeline called after Shutdown.");
 		const std::uint32_t idx = AcquirePipelineSlot();
@@ -893,7 +901,11 @@ namespace aether
 		}
 		++m_livePipelineCount;
 		m_pipelines[idx].entry = entry;
-		m_pipelines[idx].debugName = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+		{
+			auto nameStr = debugName.empty() ? std::to_string(idx) : std::string(debugName);
+			nameStr += " (" + std::string(loc.file_name()) + ":" + std::to_string(loc.line()) + ")";
+			m_pipelines[idx].debugName = std::move(nameStr);
+		}
 #ifndef NDEBUG
 		{
 			auto& s = m_pipelines[idx];

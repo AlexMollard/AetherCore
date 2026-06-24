@@ -28,7 +28,8 @@ namespace aether::gpu
 		inline constexpr std::uint32_t kInvalidGeneration = 0u;
 	} // namespace detail
 
-	struct TextureHandle
+	template<typename Tag>
+	struct TypedHandle
 	{
 		std::uint32_t bits = 0u;
 
@@ -47,101 +48,27 @@ namespace aether::gpu
 			return (bits >> 16) & 0xFFFFu;
 		}
 
-		bool operator==(const TextureHandle& other) const noexcept
+		bool operator==(const TypedHandle& other) const noexcept
 		{
 			return bits == other.bits;
 		}
 
-		bool operator!=(const TextureHandle& other) const noexcept
+		bool operator!=(const TypedHandle& other) const noexcept
 		{
 			return !(*this == other);
 		}
 
-		[[nodiscard]] static TextureHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
+		[[nodiscard]] static TypedHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
 		{
-			AE_ASSERT(index <= detail::kInvalidIndex, "TextureHandle index out of range");
-			AE_ASSERT(generation <= 0xFFFFu, "TextureHandle generation out of range");
-			TextureHandle h{};
+			AE_ASSERT(index <= detail::kInvalidIndex, "TypedHandle index out of range");
+			AE_ASSERT(generation <= 0xFFFFu, "TypedHandle generation out of range");
+			TypedHandle h{};
 			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
 			return h;
 		}
 	};
 
-	struct BufferHandle
-	{
-		std::uint32_t bits = 0u;
-
-		[[nodiscard]] bool IsValid() const noexcept
-		{
-			return GetGeneration() != detail::kInvalidGeneration && GetIndex() != detail::kInvalidIndex;
-		}
-
-		[[nodiscard]] std::uint32_t GetIndex() const noexcept
-		{
-			return bits & 0x0000FFFFu;
-		}
-
-		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
-		{
-			return (bits >> 16) & 0xFFFFu;
-		}
-
-		bool operator==(const BufferHandle& other) const noexcept
-		{
-			return bits == other.bits;
-		}
-
-		bool operator!=(const BufferHandle& other) const noexcept
-		{
-			return !(*this == other);
-		}
-
-		[[nodiscard]] static BufferHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
-		{
-			AE_ASSERT(index <= detail::kInvalidIndex, "BufferHandle index out of range");
-			AE_ASSERT(generation <= 0xFFFFu, "BufferHandle generation out of range");
-			BufferHandle h{};
-			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
-			return h;
-		}
-	};
-
-	struct PipelineHandle
-	{
-		std::uint32_t bits = 0u;
-
-		[[nodiscard]] bool IsValid() const noexcept
-		{
-			return GetGeneration() != detail::kInvalidGeneration && GetIndex() != detail::kInvalidIndex;
-		}
-
-		[[nodiscard]] std::uint32_t GetIndex() const noexcept
-		{
-			return bits & 0x0000FFFFu;
-		}
-
-		[[nodiscard]] std::uint32_t GetGeneration() const noexcept
-		{
-			return (bits >> 16) & 0xFFFFu;
-		}
-
-		bool operator==(const PipelineHandle& other) const noexcept
-		{
-			return bits == other.bits;
-		}
-
-		bool operator!=(const PipelineHandle& other) const noexcept
-		{
-			return !(*this == other);
-		}
-
-		[[nodiscard]] static PipelineHandle Make(std::uint32_t index, std::uint32_t generation) noexcept
-		{
-			AE_ASSERT(index <= detail::kInvalidIndex, "PipelineHandle index out of range");
-			AE_ASSERT(generation <= 0xFFFFu, "PipelineHandle generation out of range");
-			PipelineHandle h{};
-			h.bits = (index & 0x0000FFFFu) | ((generation & 0xFFFFu) << 16);
-			return h;
-		}
-	};
+	using TextureHandle = TypedHandle<struct TextureTag>;
+	using BufferHandle = TypedHandle<struct BufferTag>;
+	using PipelineHandle = TypedHandle<struct PipelineTag>;
 } // namespace aether::gpu

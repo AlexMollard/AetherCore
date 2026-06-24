@@ -117,7 +117,8 @@ namespace aether::gpu
 			return false;
 		}
 
-		(void) vkWaitForFences(vkDevice, 1, &fence, VK_TRUE, UINT64_MAX);
+		AE_ASSERT_ALWAYS(vkWaitForFences(vkDevice, 1, &fence, VK_TRUE, UINT64_MAX) == VK_SUCCESS,
+		        "OneShotCmd: fence wait failed (device lost?)");
 		vkDestroyFence(vkDevice, fence, nullptr);
 
 		Release();
