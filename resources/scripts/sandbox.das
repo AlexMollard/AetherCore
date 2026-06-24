@@ -6,6 +6,7 @@ require camera;
 require physics;
 require effects;
 require input;
+require keycodes;
 require input_bindings;
 require ui;
 require math;
@@ -56,6 +57,177 @@ var g_cam : uint = 0u;
 var g_fox_tag : uint = 0u;
 var g_ground_tag : uint = 0u;
 var g_center_tag : uint = 0u;
+var g_phys_toy_tag : uint = 0u;
+
+// ── Entity inspector state ─────────────────────────────────────────────────────
+//
+// Selects a fox-tagged entity the user wants to push around with sliders. The
+// inspector keeps the entity's last-applied transform so it can detect when a
+// slider was user-dragged (its value drifted from the cached value), and only
+// writes back to the world in that case so we never fight the server.
+
+var g_ins_idx      : int  = -1;
+var g_ins_entity    : uint = 0u;
+var g_ins_count     : int  = 0;
+var g_ins_x         : float = 0.0;
+var g_ins_y         : float = 0.0;
+var g_ins_z         : float = 0.0;
+var g_ins_yaw       : float = 0.0;
+var g_ins_sc        : float = 1.0;
+
+var g_ins_label_idx : uint = 0u;
+var g_ins_prev_btn  : uint = 0u;
+var g_ins_next_btn  : uint = 0u;
+var g_ins_x_sl      : uint = 0u;
+var g_ins_y_sl      : uint = 0u;
+var g_ins_z_sl      : uint = 0u;
+var g_ins_yaw_sl    : uint = 0u;
+var g_ins_sc_sl     : uint = 0u;
+
+// Shared enumeration scratch (avoids needing array mutation inside blocks).
+var g_enum_count  : int  = 0;
+var g_enum_target : int  = -1;
+var g_enum_result : uint = 0u;
+
+// ── Physics toy / spawner state ────────────────────────────────────────────────
+
+var g_toy_sz_sl    : uint = 0u;
+var g_toy_h_sl     : uint = 0u;
+var g_btn_cube     : uint = 0u;
+var g_btn_sphere   : uint = 0u;
+var g_btn_tower    : uint = 0u;
+var g_btn_rain     : uint = 0u;
+var g_btn_bounce   : uint = 0u;
+var g_btn_clear    : uint = 0u;
+var g_phys_debug_cb : uint = 0u;
+var g_phys_debug_enabled : bool = false;
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+
+// Count entities carrying the given tag, using only primitive global mutation.
+def count_tagged(world : World?; tag : uint) : int
+{
+	g_enum_count = 0;
+	for_each_with_tag(world, tag) $(e : uint)
+	{
+		g_enum_count += 1;
+	};
+	return g_enum_count;
+}
+
+// Find the Nth (0-based) entity with the given tag, using global scratch so
+// the block only mutates simple scalars.
+def find_nth_tagged(world : World?; tag : uint; n : int) : uint
+{
+	g_enum_count = 0;
+	g_enum_target = n;
+	g_enum_result = 0u;
+	for_each_with_tag(world, tag) $(e : uint)
+	{
+		if (g_enum_count == g_enum_target) { g_enum_result = e; }
+		g_enum_count += 1;
+	};
+	return g_enum_result;
+}
+
+// Re-sync the inspector sliders + label with the currently selected entity.
+def refresh_inspector(world : World?)
+{
+	g_ins_count = count_tagged(world, g_fox_tag);
+	if (g_ins_idx < 0 || g_ins_idx >= g_ins_count)
+	{
+		g_ins_entity = 0u;
+		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
+		return;
+	}
+	g_ins_entity = find_nth_tagged(world, g_fox_tag, g_ins_idx);
+	if (g_ins_entity == 0u)
+	{
+		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
+		return;
+	}
+
+	let pos = get_position(world, g_ins_entity);
+	let eul = get_euler(world, g_ins_entity);
+	let sc  = get_scale(world, g_ins_entity);
+	g_ins_x   = pos.x;
+	g_ins_y   = pos.y;
+	g_ins_z   = pos.z;
+	g_ins_yaw = eul.y;
+	g_ins_sc  = sc.x; // foxes use uniform scale
+
+	set_ui_slider_value(world, g_ins_x_sl,   g_ins_x);
+	set_ui_slider_value(world, g_ins_y_sl,   g_ins_y);
+	set_ui_slider_value(world, g_ins_z_sl,   g_ins_z);
+	set_ui_slider_value(world, g_ins_yaw_sl, g_ins_yaw);
+	set_ui_slider_value(world, g_ins_sc_sl,  g_ins_sc);
+	let total = g_ins_count - 1;
+	set_ui_text(world, g_ins_label_idx, "Selected: fox {g_ins_idx}/{total}  (id {g_ins_entity})");
+}
+
+// Spawn a single dynamic primitive with a transform and tag it as a physics toy.
+// is_sphere == false -> box; is_sphere == true -> sphere.
+def spawn_toy(world : World?; is_sphere : bool; pos : float3; size : float)
+{
+	let e = entity_create(world);
+	add_transform(world, e);
+	set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
+	if (is_sphere)
+	{
+		add_mesh(world, e, g_sphere_mesh);
+		add_sphere_body(world, e, size * 0.5, true);
+	}
+	else
+	{
+		add_mesh(world, e, g_cube_mesh);
+		add_box_body(world, e, float3(size * 0.5, size * 0.5, size * 0.5), true);
+	}
+	add_tag(world, e, g_phys_toy_tag);
+}
+
+// Destroy every entity tagged as a physics toy. We destroy from highest index
+// downward so that already-destroyed entities cannot be re-resolved.
+def clear_toys(world : World?)
+{
+	let n = count_tagged(world, g_phys_toy_tag);
+	var k = n;
+	while (k > 0)
+	{
+		k -= 1;
+		let e = find_nth_tagged(world, g_phys_toy_tag, k);
+		if (e != 0u && entity_valid(e))
+		{
+			entity_destroy(world, e);
+		}
+	}
+}
+
+// Stack a vertical tower of dynamic boxes at world origin.
+def spawn_tower(world : World?)
+{
+	let sz = get_ui_slider_value(world, g_toy_sz_sl);
+	for (i in 0..5)
+	{
+		let y = 0.5 + float(i) * sz * 1.05;
+		// tiny horizontal jitter so it teeters
+		let jx = (float(i % 2) - 0.5) * 0.04;
+		spawn_toy(world, false, float3(jx, y, 0.0), sz);
+	}
+}
+
+// Scatter 4 dynamic spheres above the scene with random-ish offsets.
+def spawn_rain(world : World?)
+{
+	let sz = get_ui_slider_value(world, g_toy_sz_sl);
+	let h  = get_ui_slider_value(world, g_toy_h_sl);
+	for (i in 0..4)
+	{
+		let ang = float(i) * 1.2566; // 72 deg spacing
+		let x   = cos(ang) * 4.0 + float(i) * 0.7;
+		let z   = sin(ang) * 4.0;
+		spawn_toy(world, true, float3(x, h, z), sz);
+	}
+}
 
 // ── on_attach ─────────────────────────────────────────────────────────────────
 
@@ -67,9 +239,10 @@ def on_attach(world : World?)
 	g_time        = 0.0;
 
 	// ── Create tags ─────────────────────────────────────────────────────────
-	g_fox_tag    = create_tag("fox");
-	g_ground_tag = create_tag("ground");
-	g_center_tag = create_tag("center");
+	g_fox_tag       = create_tag("fox");
+	g_ground_tag    = create_tag("ground");
+	g_center_tag    = create_tag("center");
+	g_phys_toy_tag  = create_tag("phys_toy");
 
 	// ── Lighting: sparse, well-separated for clear shadow testing ──────────
 	clear_lights();
@@ -123,7 +296,7 @@ def on_attach(world : World?)
 		}
 	}
 
-	// ─ RIGHT ZONE: sphere grid under cool point light ──────────────────────
+	// ── RIGHT ZONE: sphere grid under cool point light ──────────────────────
 	for (i in 0..4)
 	{
 		for (j in 0..4)
@@ -139,7 +312,7 @@ def on_attach(world : World?)
 		}
 	}
 
-	// ─ CENTER ZONE: tall pillar under spot light ──────────────────────────
+	// ── CENTER ZONE: tall pillar under spot light ──────────────────────────
 	let pillar = entity_create(world);
 	add_transform(world, pillar);
 	set_transform(world, pillar,
@@ -188,7 +361,7 @@ def on_attach(world : World?)
 	add_mesh(world, sphere, g_sphere_mesh);
 	add_sphere_body(world, sphere, 0.8, true);
 
-	// ─ Physics box (drops from above, right zone) ──────────────────────────
+	// ── Physics box (drops from above, right zone) ──────────────────────────
 	let capsule = entity_create(world);
 	add_transform(world, capsule);
 	set_transform(world, capsule,
@@ -256,6 +429,106 @@ def on_attach(world : World?)
 	g_manual_cb = create_ui_checkbox(world, 328.0, 232.0, 260.0, 28.0, "Manual mode (pause auto)", false);
 	add_ui_child(world, dn_panel, g_manual_cb);
 
+	// ── NEW Native UI - Entity Inspector panel ──────────────────────────────
+	let ins_panel = create_ui_panel(world, 16.0, 280.0, 280.0, 376.0, "Entity Inspector");
+	set_ui_panel_collapsible(world, ins_panel, true);
+
+	g_ins_label_idx = create_ui_label(world, 32.0, 320.0, 260.0, 24.0, "Selected: <none>");
+	set_ui_font_size(world, g_ins_label_idx, 13.0);
+	set_ui_text_color(world, g_ins_label_idx, float4(0.85, 0.95, 1.0, 1.0));
+	add_ui_child(world, ins_panel, g_ins_label_idx);
+
+	g_ins_prev_btn = create_ui_button(world, 32.0, 352.0, 124.0, 30.0, "Prev Fox");
+	set_ui_button_color(world, g_ins_prev_btn, float4(0.18, 0.22, 0.28, 1.0));
+	add_ui_child(world, ins_panel, g_ins_prev_btn);
+
+	g_ins_next_btn = create_ui_button(world, 162.0, 352.0, 124.0, 30.0, "Next Fox");
+	set_ui_button_color(world, g_ins_next_btn, float4(0.18, 0.22, 0.28, 1.0));
+	add_ui_child(world, ins_panel, g_ins_next_btn);
+
+	let px_lbl = create_ui_label(world, 32.0, 392.0, 260.0, 18.0, "Position X");
+	set_ui_font_size(world, px_lbl, 11.0);
+	set_ui_text_color(world, px_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, ins_panel, px_lbl);
+	g_ins_x_sl = create_ui_slider(world, 32.0, 410.0, 244.0, 26.0, -30.0, 30.0, 0.0);
+	add_ui_child(world, ins_panel, g_ins_x_sl);
+
+	let py_lbl = create_ui_label(world, 32.0, 440.0, 260.0, 18.0, "Position Y");
+	set_ui_font_size(world, py_lbl, 11.0);
+	set_ui_text_color(world, py_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, ins_panel, py_lbl);
+	g_ins_y_sl = create_ui_slider(world, 32.0, 458.0, 244.0, 26.0, -1.0, 16.0, 0.0);
+	add_ui_child(world, ins_panel, g_ins_y_sl);
+
+	let pz_lbl = create_ui_label(world, 32.0, 488.0, 260.0, 18.0, "Position Z");
+	set_ui_font_size(world, pz_lbl, 11.0);
+	set_ui_text_color(world, pz_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, ins_panel, pz_lbl);
+	g_ins_z_sl = create_ui_slider(world, 32.0, 506.0, 244.0, 26.0, -30.0, 30.0, 0.0);
+	add_ui_child(world, ins_panel, g_ins_z_sl);
+
+	let yaw_lbl = create_ui_label(world, 32.0, 536.0, 260.0, 18.0, "Yaw (degrees)");
+	set_ui_font_size(world, yaw_lbl, 11.0);
+	set_ui_text_color(world, yaw_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, ins_panel, yaw_lbl);
+	g_ins_yaw_sl = create_ui_slider(world, 32.0, 554.0, 244.0, 26.0, -180.0, 180.0, 0.0);
+	add_ui_child(world, ins_panel, g_ins_yaw_sl);
+
+	let sc_lbl = create_ui_label(world, 32.0, 584.0, 260.0, 18.0, "Uniform scale");
+	set_ui_font_size(world, sc_lbl, 11.0);
+	set_ui_text_color(world, sc_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, ins_panel, sc_lbl);
+	g_ins_sc_sl = create_ui_slider(world, 32.0, 602.0, 244.0, 26.0, 0.01, 5.0, 0.05);
+	add_ui_child(world, ins_panel, g_ins_sc_sl);
+
+	// ── NEW Native UI - Physics Toys & Spawner panel ─────────────────────────
+	let toy_panel = create_ui_panel(world, 312.0, 296.0, 280.0, 480.0, "Physics Toys & Spawner");
+	set_ui_panel_collapsible(world, toy_panel, true);
+
+	let toy_intro = create_ui_label(world, 328.0, 336.0, 260.0, 20.0, "Drop primitives from above (tagged)");
+	set_ui_font_size(world, toy_intro, 11.0);
+	set_ui_text_color(world, toy_intro, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, toy_panel, toy_intro);
+
+	let sz_lbl = create_ui_label(world, 328.0, 360.0, 260.0, 18.0, "Toy size");
+	set_ui_font_size(world, sz_lbl, 11.0);
+	set_ui_text_color(world, sz_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, toy_panel, sz_lbl);
+	g_toy_sz_sl = create_ui_slider(world, 328.0, 378.0, 244.0, 26.0, 0.2, 2.0, 0.4);
+	add_ui_child(world, toy_panel, g_toy_sz_sl);
+
+	let h_lbl = create_ui_label(world, 328.0, 408.0, 260.0, 18.0, "Drop height");
+	set_ui_font_size(world, h_lbl, 11.0);
+	set_ui_text_color(world, h_lbl, float4(0.65, 0.65, 0.72, 1.0));
+	add_ui_child(world, toy_panel, h_lbl);
+	g_toy_h_sl = create_ui_slider(world, 328.0, 426.0, 244.0, 26.0, 4.0, 24.0, 12.0);
+	add_ui_child(world, toy_panel, g_toy_h_sl);
+
+	g_btn_cube    = create_ui_button(world, 328.0, 462.0, 244.0, 32.0, "Spawn Cube @ Drop");
+	g_btn_sphere  = create_ui_button(world, 328.0, 500.0, 244.0, 32.0, "Spawn Sphere @ Drop");
+	g_btn_tower   = create_ui_button(world, 328.0, 538.0, 244.0, 32.0, "Stack Tower (5 boxes)");
+	g_btn_rain    = create_ui_button(world, 328.0, 576.0, 244.0, 32.0, "Rain (4 spheres)");
+	g_btn_bounce  = create_ui_button(world, 328.0, 614.0, 244.0, 32.0, "Bounce Test (cube, +Y vel)");
+	set_ui_button_color(world, g_btn_cube,   float4(0.30, 0.34, 0.42, 1.0));
+	set_ui_button_color(world, g_btn_sphere, float4(0.30, 0.34, 0.42, 1.0));
+	set_ui_button_color(world, g_btn_tower,  float4(0.20, 0.30, 0.40, 1.0));
+	set_ui_button_color(world, g_btn_rain,   float4(0.20, 0.30, 0.40, 1.0));
+	set_ui_button_color(world, g_btn_bounce,  float4(0.35, 0.45, 0.20, 1.0));
+	add_ui_child(world, toy_panel, g_btn_cube);
+	add_ui_child(world, toy_panel, g_btn_sphere);
+	add_ui_child(world, toy_panel, g_btn_tower);
+	add_ui_child(world, toy_panel, g_btn_rain);
+	add_ui_child(world, toy_panel, g_btn_bounce);
+
+	g_btn_clear = create_ui_button(world, 328.0, 656.0, 244.0, 32.0, "Clear All Toys");
+	set_ui_button_color(world, g_btn_clear,       float4(0.62, 0.18, 0.18, 1.0));
+	set_ui_button_hover_color(world, g_btn_clear, float4(0.78, 0.28, 0.28, 1.0));
+	set_ui_button_press_color(world, g_btn_clear, float4(0.40, 0.10, 0.10, 1.0));
+	add_ui_child(world, toy_panel, g_btn_clear);
+
+	g_phys_debug_cb = create_ui_checkbox(world, 328.0, 696.0, 244.0, 28.0, "Physics debug overlay", false);
+	add_ui_child(world, toy_panel, g_phys_debug_cb);
+
 	// ── spawn a human (1 clip: idle) ───────────────────────────────────────
 	g_player = entity_create(world);
 	add_transform(world, g_player);
@@ -270,15 +543,22 @@ def on_attach(world : World?)
 	g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim", true);
 	if (g_player_walk_clip >= 0)
 	{
-		// print("Walking animation added as clip {g_player_walk_clip}\n");
 		compile_animations(world, g_player);
 	}
-	else
-	{
-		// print("Failed to add walking animation\n");
-	}
 
+	// Init default bindings, then register the new sandbox actions.
 	init_default_bindings();
+	register_action("inspector_prev",  KEY_LEFT,   0);
+	register_action("inspector_next",  KEY_RIGHT,  0);
+	register_action("toggle_phys_dbg", KEY_F1,     0);
+	register_action("spawn_cube_key",  KEY_1,      0);
+	register_action("spawn_sphere_key", KEY_2,    0);
+	register_action("clear_toys_key",  KEY_X,      0);
+	register_action("spawn_tower_key", KEY_T,      0);
+
+	// Pick first fox into the inspector after attach.
+	g_ins_idx = 0;
+	refresh_inspector(world);
 }
 
 // ── Helper: format time of day as HH:MM ───────────────────────────────────────
@@ -322,7 +602,7 @@ def on_update(world : World?)
 	g_speed_scale  = get_ui_slider_value(world, g_speed_slider);
 	g_rotate_foxes = get_ui_checked(world, g_rotate_cb);
 
-	// Spawn a new fox when button clicked
+	// Spawn a new fox when scene-controls button clicked
 	if (get_ui_clicked(world, g_spawn_btn))
 	{
 		let angle  = float(g_fox_count) * 0.618 * 6.2832;
@@ -343,19 +623,16 @@ def on_update(world : World?)
 		set_ui_button_label(world, g_spawn_btn, "Spawn Fox ({g_fox_count})");
 	}
 
-	// Rotate all foxes if enabled
+	// Rotate all foxes if enabled (uses for_each_with_tag_transform so the block
+	// gets the entity's pos/euler/scale without needing extra getter calls).
 	if (g_rotate_foxes)
 	{
-		for_each_with_tag(world, g_fox_tag) $(e : uint)
+		for_each_with_tag_transform(world, g_fox_tag) $(e : uint; pos : float3; euler : float3; scale : float3)
 		{
-			let pos    = get_position(world, e);
-			let euler  = get_euler(world, e);
-			let scale  = get_scale(world, e);
-			let angle  = atan2(pos.x, pos.z);
-			let r      = sqrt(pos.x * pos.x + pos.z * pos.z);
+			let r = sqrt(pos.x * pos.x + pos.z * pos.z);
 			if (r > 0.5)
 			{
-				let na  = angle + dt * g_speed_scale * 0.6;
+				let na  = atan2(pos.x, pos.z) + dt * g_speed_scale * 0.6;
 				let np  = float3(sin(na) * r, pos.y, cos(na) * r);
 				let ny  = na * 57.2958 + 90.0;
 				set_transform(world, e, np, float3(euler.x, ny, euler.z), scale);
@@ -373,6 +650,61 @@ def on_update(world : World?)
 			set_playback_speed(world, e, g_rotate_foxes ? 0.7 : 1.0);
 		}
 	};
+
+	// ── Entity inspector UI logic ─────────────────────────────────────────────
+	if (get_ui_clicked(world, g_ins_prev_btn))
+	{
+		if (g_ins_count == 0) { g_ins_idx = -1; }
+		else { g_ins_idx = (g_ins_idx - 1 + g_ins_count) % g_ins_count; }
+		refresh_inspector(world);
+	}
+	if (get_ui_clicked(world, g_ins_next_btn))
+	{
+		if (g_ins_count == 0) { g_ins_idx = -1; }
+		else { g_ins_idx = (g_ins_idx + 1) % g_ins_count; }
+		refresh_inspector(world);
+	}
+	if (is_action_pressed("inspector_prev"))
+	{
+		if (g_ins_count == 0) { g_ins_idx = -1; }
+		else { g_ins_idx = (g_ins_idx - 1 + g_ins_count) % g_ins_count; }
+		refresh_inspector(world);
+	}
+	if (is_action_pressed("inspector_next"))
+	{
+		if (g_ins_count == 0) { g_ins_idx = -1; }
+		else { g_ins_idx = (g_ins_idx + 1) % g_ins_count; }
+		refresh_inspector(world);
+	}
+
+	// Apply slider edits back to the selected entity (write-on-change).
+	if (g_ins_entity != 0u && entity_valid(g_ins_entity))
+	{
+		let sx  = get_ui_slider_value(world, g_ins_x_sl);
+		let sy  = get_ui_slider_value(world, g_ins_y_sl);
+		let sz  = get_ui_slider_value(world, g_ins_z_sl);
+		let syw = get_ui_slider_value(world, g_ins_yaw_sl);
+		let ssc = get_ui_slider_value(world, g_ins_sc_sl);
+
+		var dirty = false;
+		if (abs(sx  - g_ins_x)   > 0.001) { g_ins_x   = sx;  dirty = true; }
+		if (abs(sy  - g_ins_y)   > 0.001) { g_ins_y   = sy;  dirty = true; }
+		if (abs(sz  - g_ins_z)   > 0.001) { g_ins_z   = sz;  dirty = true; }
+		if (abs(syw - g_ins_yaw) > 0.001) { g_ins_yaw = syw; dirty = true; }
+		if (abs(ssc - g_ins_sc)  > 0.001) { g_ins_sc  = ssc; dirty = true; }
+
+		if (dirty)
+		{
+			set_transform(world, g_ins_entity, float3(g_ins_x, g_ins_y, g_ins_z),
+				float3(0.0, g_ins_yaw, 0.0), float3(g_ins_sc, g_ins_sc, g_ins_sc));
+		}
+	}
+	elif (g_ins_entity != 0u)
+	{
+		// Selected entity went away (cleared/destroyed). Reset selection.
+		g_ins_entity = 0u;
+		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
+	}
 
 	// ── Player controller & third-person camera ───────────────────────────────
 	var inputX = 0.0; var inputZ = 0.0;
@@ -410,6 +742,51 @@ def on_update(world : World?)
 	let sun_dir = get_sun_direction();
 	let sun_str = "Sun: ({sun_dir.x:.2f}, {sun_dir.y:.2f}, {sun_dir.z:.2f})";
 	set_ui_text(world, g_sun_dir_label, sun_str);
+
+	// ── Physics toys UI ──────────────────────────────────────────────────────
+	let toy_sz = get_ui_slider_value(world, g_toy_sz_sl);
+	let toy_h  = get_ui_slider_value(world, g_toy_h_sl);
+
+	if (get_ui_clicked(world, g_btn_cube) || is_action_pressed("spawn_cube_key"))
+	{
+		spawn_toy(world, false, float3(0.0, toy_h, 0.0), toy_sz);
+	}
+	if (get_ui_clicked(world, g_btn_sphere) || is_action_pressed("spawn_sphere_key"))
+	{
+		spawn_toy(world, true, float3(0.0, toy_h, 0.0), toy_sz);
+	}
+	if (get_ui_clicked(world, g_btn_tower) || is_action_pressed("spawn_tower_key"))
+	{
+		spawn_tower(world);
+	}
+	if (get_ui_clicked(world, g_btn_rain))
+	{
+		spawn_rain(world);
+	}
+	if (get_ui_clicked(world, g_btn_bounce))
+	{
+		// Spawn a cube with an upward velocity for a bounce test.
+		let e = entity_create(world);
+		add_transform(world, e);
+		set_transform(world, e, float3(0.0, 0.5, 0.0), float3(0.0, 0.0, 0.0), float3(toy_sz, toy_sz, toy_sz));
+		add_mesh(world, e, g_cube_mesh);
+		add_box_body(world, e, float3(toy_sz * 0.5, toy_sz * 0.5, toy_sz * 0.5), true);
+		add_tag(world, e, g_phys_toy_tag);
+		set_linear_velocity(world, e, 0.0, 12.0, 0.0);
+	}
+	if (get_ui_clicked(world, g_btn_clear) || is_action_pressed("clear_toys_key"))
+	{
+		clear_toys(world);
+	}
+
+	// Physics debug toggle via checkbox and F1.
+	g_phys_debug_enabled = get_ui_checked(world, g_phys_debug_cb);
+	if (is_action_pressed("toggle_phys_dbg"))
+	{
+		g_phys_debug_enabled = !g_phys_debug_enabled;
+		set_ui_checked(world, g_phys_debug_cb, g_phys_debug_enabled);
+	}
+	set_physics_debug_enabled(g_phys_debug_enabled);
 
 	// ── Keyboard shortcuts ────────────────────────────────────────────────────
 	if (is_action_pressed("toggle_rotate"))

@@ -125,11 +125,36 @@ namespace aether
 		m_pointLights = std::move(lights);
 	}
 
+	void Renderer::AddPointLight(PointLight light)
+	{
+		AE_PROFILE_ZONE();
+		light.radius = glm::max(light.radius, 0.01f);
+		light.intensity = glm::max(light.intensity, 0.0f);
+		light.color = glm::max(light.color, glm::vec3(0.0f));
+		m_pointLights.push_back(std::move(light));
+	}
+
 	void Renderer::SetPointLightPosition(const std::uint32_t idx, const glm::vec3 position)
 	{
 		if (idx < m_pointLights.size())
 		{
 			m_pointLights[idx].position = position;
+		}
+	}
+
+	void Renderer::SetPointLightColor(const std::uint32_t idx, const glm::vec3 color)
+	{
+		if (idx < m_pointLights.size())
+		{
+			m_pointLights[idx].color = glm::max(color, glm::vec3(0.0f));
+		}
+	}
+
+	void Renderer::SetPointLightIntensity(const std::uint32_t idx, const float intensity)
+	{
+		if (idx < m_pointLights.size())
+		{
+			m_pointLights[idx].intensity = glm::max(intensity, 0.0f);
 		}
 	}
 
@@ -154,11 +179,40 @@ namespace aether
 		m_spotLights = std::move(lights);
 	}
 
+	void Renderer::AddSpotLight(SpotLight light)
+	{
+		AE_PROFILE_ZONE();
+		light.radius = glm::max(light.radius, 0.01f);
+		light.intensity = glm::max(light.intensity, 0.0f);
+		light.color = glm::max(light.color, glm::vec3(0.0f));
+		const float dirLen2 = glm::dot(light.direction, light.direction);
+		light.direction = (dirLen2 > 1e-8f) ? glm::normalize(light.direction) : glm::vec3(0.0f, -1.0f, 0.0f);
+		light.innerAngleRad = glm::clamp(light.innerAngleRad, 0.01f, 1.54f);
+		light.outerAngleRad = glm::clamp(light.outerAngleRad, light.innerAngleRad + 0.01f, 1.55f);
+		m_spotLights.push_back(std::move(light));
+	}
+
 	void Renderer::SetSpotLightPosition(const std::uint32_t idx, const glm::vec3 position)
 	{
 		if (idx < m_spotLights.size())
 		{
 			m_spotLights[idx].position = position;
+		}
+	}
+
+	void Renderer::SetSpotLightColor(const std::uint32_t idx, const glm::vec3 color)
+	{
+		if (idx < m_spotLights.size())
+		{
+			m_spotLights[idx].color = glm::max(color, glm::vec3(0.0f));
+		}
+	}
+
+	void Renderer::SetSpotLightIntensity(const std::uint32_t idx, const float intensity)
+	{
+		if (idx < m_spotLights.size())
+		{
+			m_spotLights[idx].intensity = glm::max(intensity, 0.0f);
 		}
 	}
 

@@ -30,7 +30,7 @@
 
 namespace aether::app::scripting
 {
-	void InitPhysicsModule(aether::PhysicsSystem* physics);
+	
 	void SetPhysicsDebugRendererCallback(std::function<void(bool)> callback);
 } // namespace aether::app::scripting
 
@@ -200,7 +200,6 @@ namespace aether::app
 		if (auto physSys = context.Get<World>().FindSystem("PhysicsSystem"))
 		{
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
-			aether::app::scripting::InitPhysicsModule(m_sceneCtx.physics);
 		}
 		m_sceneCtx.scriptPath = m_scriptPath;
 

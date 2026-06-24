@@ -15,6 +15,7 @@
 #include "assets/AssetManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scripting/DasHelpers.hpp"
 #include "utils/Logger.hpp"
 
 // -- Helpers -------------------------------------------------------------------
@@ -30,6 +31,29 @@ namespace
 		r = r * glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.z), glm::vec3(0, 0, 1));
 		glm::mat4 s = glm::scale(glm::mat4(1.0f), scale);
 		return t * r * s;
+	}
+
+	// Extract YXZ euler angles (degrees) + per-axis scale from a TRS matrix.
+	void DecomposeTRS(const glm::mat4& m, glm::vec3& pos, glm::vec3& eulerDeg, glm::vec3& scale)
+	{
+		pos = glm::vec3(m[3]);
+		float sx = glm::length(glm::vec3(m[0]));
+		float sy = glm::length(glm::vec3(m[1]));
+		float sz = glm::length(glm::vec3(m[2]));
+		scale = {sx, sy, sz};
+		glm::vec3 c2 = sz > 1e-6f ? glm::vec3(m[2]) / sz : glm::vec3(0, 0, 1);
+		float sinX = glm::clamp(-c2.y, -1.0f, 1.0f);
+		float rotXRad = std::asin(sinX);
+		float rotYRad = std::atan2(c2.x, c2.z);
+		float rotZRad = 0.0f;
+		float cosX = std::cos(rotXRad);
+		if (std::abs(cosX) > 1e-4f)
+		{
+			glm::vec3 c0 = sx > 1e-6f ? glm::vec3(m[0]) / sx : glm::vec3(1, 0, 0);
+			glm::vec3 c1 = sy > 1e-6f ? glm::vec3(m[1]) / sy : glm::vec3(0, 1, 0);
+			rotZRad = std::atan2(c0.y, c1.y);
+		}
+		eulerDeg = {glm::degrees(rotXRad), glm::degrees(rotYRad), glm::degrees(rotZRad)};
 	}
 } // namespace
 
@@ -67,16 +91,12 @@ namespace
 	// get_position(world, entity_id) -> float3
 	das::float3 das_get_position(aether::World* w, uint32_t id)
 	{
-		das::float3 r{};
 		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
-			return r;
+			return {};
 		}
-		r.x = tc->localToWorld[3][0];
-		r.y = tc->localToWorld[3][1];
-		r.z = tc->localToWorld[3][2];
-		return r;
+		return to_das(glm::vec3(tc->localToWorld[3]));
 	}
 
 	// set_position(world, entity_id, pos)
@@ -88,57 +108,32 @@ namespace
 		{
 			return;
 		}
-		tc->localToWorld[3] = glm::vec4(pos.x, pos.y, pos.z, 1.0f);
+		tc->localToWorld[3] = glm::vec4(to_glm(pos), 1.0f);
 	}
 
 	// get_scale(world, entity_id) -> float3
 	das::float3 das_get_scale(aether::World* w, uint32_t id)
 	{
-		das::float3 r{};
-		r.x = r.y = r.z = 1.0f;
 		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
-			return r;
+			return {1.0f, 1.0f, 1.0f};
 		}
 		const auto& m = tc->localToWorld;
-		r.x = glm::length(glm::vec3(m[0]));
-		r.y = glm::length(glm::vec3(m[1]));
-		r.z = glm::length(glm::vec3(m[2]));
-		return r;
+		return to_das({glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2]))});
 	}
 
 	// get_euler(world, entity_id) -> float3  (degrees, YXZ order)
 	das::float3 das_get_euler(aether::World* w, uint32_t id)
 	{
-		das::float3 r{};
 		const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
 		if (!tc)
 		{
-			return r;
+			return {};
 		}
-		const auto& mat = tc->localToWorld;
-
-		float sx = glm::length(glm::vec3(mat[0]));
-		float sy = glm::length(glm::vec3(mat[1]));
-		float sz = glm::length(glm::vec3(mat[2]));
-		glm::vec3 c2 = sz > 1e-6f ? glm::vec3(mat[2]) / sz : glm::vec3(0, 0, 1);
-		float sinX = glm::clamp(-c2.y, -1.0f, 1.0f);
-		float rotXRad = std::asin(sinX);
-		float rotYRad = std::atan2(c2.x, c2.z);
-		float rotZRad = 0.0f;
-		float cosX = std::cos(rotXRad);
-		if (std::abs(cosX) > 1e-4f)
-		{
-			glm::vec3 c0 = sx > 1e-6f ? glm::vec3(mat[0]) / sx : glm::vec3(1, 0, 0);
-			glm::vec3 c1 = sy > 1e-6f ? glm::vec3(mat[1]) / sy : glm::vec3(0, 1, 0);
-			rotZRad = std::atan2(c0.y, c1.y);
-		}
-
-		r.x = glm::degrees(rotXRad);
-		r.y = glm::degrees(rotYRad);
-		r.z = glm::degrees(rotZRad);
-		return r;
+		glm::vec3 pos{}, euler{}, scale{};
+		DecomposeTRS(tc->localToWorld, pos, euler, scale);
+		return to_das(euler);
 	}
 
 	// set_euler(world, entity_id, euler_deg) - updates only rotation, preserves translation and scale
@@ -150,13 +145,11 @@ namespace
 			return;
 		}
 
-		auto pos = glm::vec3(tc->localToWorld[3]);
-		float sx = glm::length(glm::vec3(tc->localToWorld[0]));
-		float sy = glm::length(glm::vec3(tc->localToWorld[1]));
-		float sz = glm::length(glm::vec3(tc->localToWorld[2]));
-		glm::vec3 scale = {sx, sy, sz};
+		glm::vec3 pos{}, curEuler{}, scale{};
+		DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
+		const glm::vec3 e = to_glm(euler);
 
-		tc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
+		tc->localToWorld = ComposeTransform(pos, e, scale);
 
 		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
 		if (sec)
@@ -165,7 +158,7 @@ namespace
 			{
 				if (auto stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
 				{
-					stc->localToWorld = ComposeTransform(pos, {euler.x, euler.y, euler.z}, scale);
+					stc->localToWorld = ComposeTransform(pos, e, scale);
 				}
 			}
 		}
@@ -175,7 +168,7 @@ namespace
 	// Recomposes the full TRS matrix from the three float3 arguments.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
 	{
-		const auto xform = ComposeTransform({pos.x, pos.y, pos.z}, {euler.x, euler.y, euler.z}, {scale.x, scale.y, scale.z});
+		const auto xform = ComposeTransform(to_glm(pos), to_glm(euler), to_glm(scale));
 
 		// Update script entity transform.
 		if (auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
@@ -340,6 +333,33 @@ namespace
 		        });
 	}
 
+	// for_each_with_tag_transform(world, tag_id) <| $(e : uint, pos : float3, euler : float3, scale : float3) { ... }
+	// Convenience combo: iterate tagged entities that also have a TransformComponent and
+	// hand the block decomposed pos/euler(degrees, YXZ)/scale - no per-entity get calls needed.
+	void das_for_each_with_tag_transform(aether::World* w, uint32_t tagId,
+	        const das::TBlock<void, uint32_t, das::float3, das::float3, das::float3>& block,
+	        das::Context* ctx, das::LineInfoArg* at)
+	{
+		aether::ForEachWithTag(w,
+		        tagId,
+		        [&](uint32_t id)
+		        {
+			        const auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
+			        if (!tc)
+			        {
+				        return;
+			        }
+			        glm::vec3 pos{}, euler{}, scale{};
+			        DecomposeTRS(tc->localToWorld, pos, euler, scale);
+			        vec4f args[4];
+			        args[0] = das::cast<uint32_t>::from(id);
+			        args[1] = das::cast<das::float3>::from(to_das(pos));
+			        args[2] = das::cast<das::float3>::from(to_das(euler));
+			        args[3] = das::cast<das::float3>::from(to_das(scale));
+			        ctx->invoke(block, args, nullptr, at);
+		        });
+	}
+
 	// -- Primitive mesh caching -----------------------------------------------
 	// create_mesh(world, type_string) -> uint
 	// Caches a primitive mesh by type ("cube", "sphere", "plane", "quad", "triangle")
@@ -478,6 +498,7 @@ namespace aether::app::scripting
 			Bind<das_has_tag>(lib, "has_tag", SE::accessExternal);
 			Bind<das_remove_tag>(lib, "remove_tag", SE::modifyExternal);
 			Bind<das_for_each_with_tag>(lib, "for_each_with_tag", SE::accessExternal);
+			Bind<das_for_each_with_tag_transform>(lib, "for_each_with_tag_transform", SE::accessExternal);
 
 			verifyAotReady();
 		}

@@ -6,15 +6,26 @@
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
+#include "scripting/SceneContext.hpp"
 
 namespace
 {
-	aether::PhysicsSystem* s_physicsSystem = nullptr;
+	using namespace aether::app::scripting;
+
+	// Access the physics system via the active script context (consistent with
+	// every other module). The previous file-scope static s_physicsSystem was
+	// the one outlier that bypassed the TLS SceneContext path.
+	[[nodiscard]] inline aether::PhysicsSystem* active_physics()
+	{
+		auto& ctx = ActiveContext();
+		return ctx.physics;
+	}
 
 	// set_linear_velocity(world, entity_id, x, y, z)
 	void das_set_linear_velocity(aether::World* w, uint32_t id, float x, float y, float z)
 	{
-		if (!s_physicsSystem)
+		auto* phys = active_physics();
+		if (!phys)
 		{
 			return;
 		}
@@ -23,34 +34,27 @@ namespace
 		{
 			return;
 		}
-		s_physicsSystem->SetLinearVelocity(rb->bodyId, {x, y, z});
+		phys->SetLinearVelocity(rb->bodyId, {x, y, z});
 	}
 
 	// get_linear_velocity(world, entity_id) -> float3
 	das::float3 das_get_linear_velocity(aether::World* w, uint32_t id)
 	{
-		das::float3 r{0.f, 0.f, 0.f};
-		if (!s_physicsSystem)
+		if (auto* phys = active_physics())
 		{
-			return r;
+			if (const auto rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
+			{
+				return to_das(phys->GetLinearVelocity(rb->bodyId));
+			}
 		}
-		const auto rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id});
-		if (!rb)
-		{
-			return r;
-		}
-		glm::vec3 vel = s_physicsSystem->GetLinearVelocity(rb->bodyId);
-		r.x = vel.x;
-		r.y = vel.y;
-		r.z = vel.z;
-		return r;
+		return {0.f, 0.f, 0.f};
 	}
 
 	// add_box_body(world, entity_id, half_extents, dynamic)
 	void das_add_box_body(aether::World* w, uint32_t id, das::float3 half, bool dynamic)
 	{
 		aether::BoxBodyDesc desc{};
-		desc.halfExtents = {half.x, half.y, half.z};
+		desc.halfExtents = to_glm(half);
 		desc.motionType = dynamic ? aether::PhysicsMotionType::Dynamic : aether::PhysicsMotionType::Static;
 		w->Emplace<aether::BoxBodyDesc>(aether::Entity{id}, desc);
 	}
@@ -78,32 +82,15 @@ namespace
 	// Returns the interpolated world-space position from PhysicsStateComponent.
 	das::float3 das_get_physics_position(aether::World* w, uint32_t id)
 	{
-		das::float3 r{};
 		const auto ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
-		if (!ps)
-		{
-			return r;
-		}
-		r.x = ps->currPosition.x;
-		r.y = ps->currPosition.y;
-		r.z = ps->currPosition.z;
-		return r;
+		return ps ? to_das(ps->currPosition) : das::float3{};
 	}
 
 	// get_physics_scale(world, entity_id) -> float3
 	das::float3 das_get_physics_scale(aether::World* w, uint32_t id)
 	{
-		das::float3 r{};
-		r.x = r.y = r.z = 1.0f;
 		const auto ps = w->TryGet<aether::PhysicsStateComponent>(aether::Entity{id});
-		if (!ps)
-		{
-			return r;
-		}
-		r.x = ps->scale.x;
-		r.y = ps->scale.y;
-		r.z = ps->scale.z;
-		return r;
+		return ps ? to_das(ps->scale) : das::float3{1.0f, 1.0f, 1.0f};
 	}
 
 	// set_physics_debug_enabled(enabled: bool)
@@ -124,11 +111,6 @@ namespace
 
 namespace aether::app::scripting
 {
-	void InitPhysicsModule(aether::PhysicsSystem* physics)
-	{
-		s_physicsSystem = physics;
-	}
-
 	struct PhysicsModule : DasModuleBase
 	{
 		PhysicsModule()

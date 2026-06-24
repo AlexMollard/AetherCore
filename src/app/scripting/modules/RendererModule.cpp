@@ -3,6 +3,7 @@
 #include "daScript/daScript.h"
 
 #include "rendering/Renderer.hpp"
+#include "scripting/DasHelpers.hpp"
 #include "scripting/SceneContext.hpp"
 #include "systems/DayNightSystem.hpp"
 
@@ -12,60 +13,84 @@ namespace
 
 	void das_set_ambient(das::float3 color)
 	{
-		ActiveContext().renderer->SetAmbientLight({color.x, color.y, color.z});
+		ActiveContext().renderer->SetAmbientLight(to_glm(color));
 	}
 
 	void das_set_sun(das::float3 dir, float intensity, das::float3 color)
 	{
 		auto& r = *ActiveContext().renderer;
-		r.SetDirectionalLight({dir.x, dir.y, dir.z}, intensity);
-		r.SetSunColor({color.x, color.y, color.z});
+		r.SetDirectionalLight(to_glm(dir), intensity);
+		r.SetSunColor(to_glm(color));
 	}
 
 	void das_add_point_light(das::float3 pos, das::float3 color, float intensity, float radius, bool castsShadow)
 	{
-		auto& r = *ActiveContext().renderer;
-		std::vector<aether::Renderer::PointLight> lights(r.GetPointLights().begin(), r.GetPointLights().end());
-		lights.push_back({
-		        .position = {pos.x, pos.y, pos.z},
+		ActiveContext().renderer->AddPointLight({
+		        .position = to_glm(pos),
 		        .radius = radius,
-		        .color = {color.x, color.y, color.z},
+		        .color = to_glm(color),
 		        .intensity = intensity,
 		        .castsShadow = castsShadow,
 		});
-		r.SetPointLights(std::move(lights));
 	}
 
 	void das_add_spot_light(das::float3 pos, das::float3 color, float intensity, float radius, das::float3 dir, float innerAngle, float outerAngle, bool castsShadow)
 	{
-		auto& r = *ActiveContext().renderer;
-		std::vector<aether::Renderer::SpotLight> lights(r.GetSpotLights().begin(), r.GetSpotLights().end());
-		lights.push_back({
-		        .position = {pos.x, pos.y, pos.z},
+		ActiveContext().renderer->AddSpotLight({
+		        .position = to_glm(pos),
 		        .radius = radius,
-		        .direction = {dir.x, dir.y, dir.z},
+		        .direction = to_glm(dir),
 		        .innerAngleRad = innerAngle,
-		        .color = {color.x, color.y, color.z},
+		        .color = to_glm(color),
 		        .intensity = intensity,
 		        .outerAngleRad = outerAngle,
 		        .castsShadow = castsShadow,
 		});
-		r.SetSpotLights(std::move(lights));
 	}
 
 	void das_set_sky(das::float3 horizon, das::float3 zenith)
 	{
-		ActiveContext().renderer->SetSkyGradient({horizon.x, horizon.y, horizon.z}, {zenith.x, zenith.y, zenith.z});
+		ActiveContext().renderer->SetSkyGradient(to_glm(horizon), to_glm(zenith));
 	}
 
 	void das_set_point_light_position(int idx, das::float3 pos)
 	{
-		ActiveContext().renderer->SetPointLightPosition(static_cast<std::uint32_t>(idx), {pos.x, pos.y, pos.z});
+		ActiveContext().renderer->SetPointLightPosition(static_cast<std::uint32_t>(idx), to_glm(pos));
+	}
+
+	void das_set_point_light_color(int idx, das::float3 color)
+	{
+		ActiveContext().renderer->SetPointLightColor(static_cast<std::uint32_t>(idx), to_glm(color));
+	}
+
+	void das_set_point_light_intensity(int idx, float intensity)
+	{
+		ActiveContext().renderer->SetPointLightIntensity(static_cast<std::uint32_t>(idx), intensity);
+	}
+
+	int das_get_point_light_count()
+	{
+		return static_cast<int>(ActiveContext().renderer->GetPointLights().size());
 	}
 
 	void das_set_spot_light_position(int idx, das::float3 pos)
 	{
-		ActiveContext().renderer->SetSpotLightPosition(static_cast<std::uint32_t>(idx), {pos.x, pos.y, pos.z});
+		ActiveContext().renderer->SetSpotLightPosition(static_cast<std::uint32_t>(idx), to_glm(pos));
+	}
+
+	void das_set_spot_light_color(int idx, das::float3 color)
+	{
+		ActiveContext().renderer->SetSpotLightColor(static_cast<std::uint32_t>(idx), to_glm(color));
+	}
+
+	void das_set_spot_light_intensity(int idx, float intensity)
+	{
+		ActiveContext().renderer->SetSpotLightIntensity(static_cast<std::uint32_t>(idx), intensity);
+	}
+
+	int das_get_spot_light_count()
+	{
+		return static_cast<int>(ActiveContext().renderer->GetSpotLights().size());
 	}
 
 	void das_clear_lights()
@@ -77,7 +102,7 @@ namespace
 
 	void das_set_sky_void(das::float3 color)
 	{
-		ActiveContext().renderer->SetSkyVoidColor({color.x, color.y, color.z});
+		ActiveContext().renderer->SetSkyVoidColor(to_glm(color));
 	}
 
 	// -- Day/Night cycle controls ----------------------------------------------
@@ -137,8 +162,7 @@ namespace
 	{
 		if (auto dn = ActiveContext().dayNight)
 		{
-			const auto d = dn->GetSunDirection();
-			return {d.x, d.y, d.z};
+			return to_das(dn->GetSunDirection());
 		}
 		return {0.0f, 1.0f, 0.0f};
 	}
@@ -158,8 +182,14 @@ namespace aether::app::scripting
 			Bind<das_set_sun>(lib, "set_sun", SE::modifyExternal);
 			Bind<das_add_point_light>(lib, "add_point_light", SE::modifyExternal);
 			Bind<das_set_point_light_position>(lib, "set_point_light_position", SE::modifyExternal);
+			Bind<das_set_point_light_color>(lib, "set_point_light_color", SE::modifyExternal);
+			Bind<das_set_point_light_intensity>(lib, "set_point_light_intensity", SE::modifyExternal);
+			Bind<das_get_point_light_count>(lib, "get_point_light_count", SE::accessExternal);
 			Bind<das_add_spot_light>(lib, "add_spot_light", SE::modifyExternal);
 			Bind<das_set_spot_light_position>(lib, "set_spot_light_position", SE::modifyExternal);
+			Bind<das_set_spot_light_color>(lib, "set_spot_light_color", SE::modifyExternal);
+			Bind<das_set_spot_light_intensity>(lib, "set_spot_light_intensity", SE::modifyExternal);
+			Bind<das_get_spot_light_count>(lib, "get_spot_light_count", SE::accessExternal);
 			Bind<das_clear_lights>(lib, "clear_lights", SE::modifyExternal);
 			Bind<das_set_sky>(lib, "set_sky", SE::modifyExternal);
 			Bind<das_set_sky_void>(lib, "set_sky_void", SE::modifyExternal);

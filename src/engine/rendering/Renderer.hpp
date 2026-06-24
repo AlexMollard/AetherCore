@@ -104,7 +104,10 @@ namespace aether
 
 		// Local lights for tiled forward shading.
 		void SetPointLights(std::vector<PointLight> lights);
+		void AddPointLight(PointLight light);
 		void SetPointLightPosition(std::uint32_t idx, glm::vec3 position);
+		void SetPointLightColor(std::uint32_t idx, glm::vec3 color);
+		void SetPointLightIntensity(std::uint32_t idx, float intensity);
 		void ClearPointLights();
 
 		[[nodiscard]] std::span<const PointLight> GetPointLights() const
@@ -113,7 +116,10 @@ namespace aether
 		}
 
 		void SetSpotLights(std::vector<SpotLight> lights);
+		void AddSpotLight(SpotLight light);
 		void SetSpotLightPosition(std::uint32_t idx, glm::vec3 position);
+		void SetSpotLightColor(std::uint32_t idx, glm::vec3 color);
+		void SetSpotLightIntensity(std::uint32_t idx, float intensity);
 		void ClearSpotLights();
 
 		[[nodiscard]] std::span<const SpotLight> GetSpotLights() const
