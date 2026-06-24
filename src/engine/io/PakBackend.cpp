@@ -8,6 +8,7 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -120,6 +121,19 @@ namespace aether::io
 		{
 			std::string path(pathData.data() + e.pathOffset, e.pathLen);
 			m_index.emplace(std::move(path), EntryInfo{.offset = e.dataOffset, .size = e.dataSize, .hash = e.contentHash, .flags = e.flags});
+		}
+
+		const auto manifest = Read(PAK_MANIFEST_PATH);
+		if (!manifest.has_value())
+		{
+			throw FileSystemError("Pak missing " + std::string(PAK_MANIFEST_PATH) + " metadata; rebuild assets with the current AssetPacker: " + m_pakPath.string());
+		}
+
+		const std::string manifestText(reinterpret_cast<const char*>(manifest->data()), manifest->size());
+		const std::string expectedVersion = "pipelineVersion=" + std::to_string(PAK_PIPELINE_VERSION);
+		if (manifestText.find(expectedVersion) == std::string::npos)
+		{
+			throw FileSystemError("Pak pipeline version mismatch in " + m_pakPath.string() + "; expected " + expectedVersion + ". Rebuild assets with the current AssetPacker.");
 		}
 	}
 

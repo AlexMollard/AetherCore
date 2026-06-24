@@ -12,7 +12,7 @@ namespace fs = std::filesystem;
 
 // Bump when the manifest format changes so that stale cached manifests
 // are automatically regenerated on the next pack.
-inline constexpr int kManifestVersion = 3;
+inline constexpr int kManifestVersion = 4;
 
 struct ManifestEntry
 {

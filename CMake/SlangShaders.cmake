@@ -67,6 +67,21 @@ function(aethercore_enable_slang_shader_compilation target_name)
         separate_arguments(_aethercore_slang_arg_list UNIX_COMMAND "${AETHERCORE_SLANG_SHADER_ARGS}")
     endif()
 
+    set(_aethercore_slang_config_arg_list "")
+    if (CMAKE_CONFIGURATION_TYPES)
+        list(APPEND _aethercore_slang_config_arg_list
+            "$<$<CONFIG:Debug>:-g3>"
+            "$<$<CONFIG:Debug>:-O0>"
+            "$<$<CONFIG:RelWithDebInfo>:-g3>"
+        )
+    elseif (CMAKE_BUILD_TYPE STREQUAL "Debug")
+        list(APPEND _aethercore_slang_config_arg_list -g3 -O0)
+    elseif (CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+        list(APPEND _aethercore_slang_config_arg_list -g3)
+    endif()
+
+    set(_aethercore_slang_command_args ${_aethercore_slang_arg_list} ${_aethercore_slang_config_arg_list})
+
     set(AETHERCORE_SHADER_OUTPUTS "")
 
     foreach(_shader_source IN LISTS AETHERCORE_SHADER_SOURCES)
@@ -82,9 +97,7 @@ function(aethercore_enable_slang_shader_compilation target_name)
         add_custom_command(
             OUTPUT "${_shader_output}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${_shader_output_dir}"
-            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_arg_list}
-                    "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:-g3>"
-                    "$<$<CONFIG:Debug>:-O0>"
+            COMMAND "${SLANGC_EXECUTABLE}" ${_aethercore_slang_command_args}
                     -o "${_shader_output}" "${_shader_source}"
             DEPENDS "${_shader_source}" ${AETHERCORE_SHADER_HEADERS}
             COMMENT "Compiling Slang shader ${_shader_rel}"

@@ -48,10 +48,24 @@ add_custom_command(TARGET App POST_BUILD
         "--import-materials"
         "${CMAKE_SOURCE_DIR}/resources"
         "${CMAKE_BINARY_DIR}/data/assets.pak"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/assets.pak"
+        "$<TARGET_FILE_DIR:App>/data/assets.pak"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/assets.pak.log"
+        "$<TARGET_FILE_DIR:App>/data/assets.pak.log"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_BINARY_DIR}/data/assets.pak.manifest"
+        "$<TARGET_FILE_DIR:App>/data/assets.pak.manifest"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_SOURCE_DIR}/engine.toml"
         "${CMAKE_BINARY_DIR}/data/config/engine.toml"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/config"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/engine.toml"
+        "$<TARGET_FILE_DIR:App>/data/config/engine.toml"
     COMMENT "Packing assets to data/assets.pak"
     VERBATIM
 )
@@ -63,10 +77,18 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/scripts"
         "${CMAKE_BINARY_DIR}/data/scripts"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/scripts"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/scripts"
+        "$<TARGET_FILE_DIR:App>/data/scripts"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/data"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/data"
         "${CMAKE_BINARY_DIR}/data/data"
+    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/data"
+    COMMAND "${CMAKE_COMMAND}" -E copy_directory
+        "${CMAKE_SOURCE_DIR}/resources/data"
+        "$<TARGET_FILE_DIR:App>/data/data"
     COMMENT "Copying scripts and data to build output"
     VERBATIM
 )

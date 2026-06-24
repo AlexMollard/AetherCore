@@ -7,10 +7,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <future>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
+#include <sstream>
 
 #include <PakFormat.hpp>
 
@@ -120,6 +122,21 @@ bool PakWriter::Write(const fs::path& outPath) const
 			}
 			items.push_back({extra.virtualPath, extra.data, extra.flags, extra.rawSize, extra.contentHash});
 		}
+	}
+
+	{
+		std::ostringstream manifest;
+		manifest << "format=AetherPakManifest\n";
+		manifest << "pakVersion=" << PAK_VERSION << "\n";
+		manifest << "pipelineVersion=" << PAK_PIPELINE_VERSION << "\n";
+		manifest << "sourceFileCount=" << m_files.size() << "\n";
+		manifest << "entryCount=" << items.size() << "\n";
+
+		const std::string manifestText = manifest.str();
+		std::vector<std::byte> manifestData(manifestText.size());
+		std::memcpy(manifestData.data(), manifestText.data(), manifestText.size());
+		const uint64_t manifestHash = XXH3_64bits(manifestData.data(), manifestData.size());
+		items.push_back({PAK_MANIFEST_PATH, std::move(manifestData), 0, static_cast<uint64_t>(manifestText.size()), manifestHash});
 	}
 
 	std::sort(items.begin(), items.end(), [](const PackItem& a, const PackItem& b) { return a.virtualPath < b.virtualPath; });

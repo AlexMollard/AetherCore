@@ -102,6 +102,8 @@ namespace aether
 					return "Instruction pointer invalid";
 				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR:
 					return "Instruction pointer fault";
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
+					return "Unknown";
 				default:
 					return std::format("Unknown({})", static_cast<int>(type));
 			}

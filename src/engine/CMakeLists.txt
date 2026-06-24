@@ -37,6 +37,8 @@ target_compile_definitions(Engine PUBLIC
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]
     GLM_ENABLE_EXPERIMENTAL
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
+    AETHER_DEFAULT_ASSET_PAK="${CMAKE_BINARY_DIR}/data/assets.pak"
+    AETHER_DEFAULT_ASSET_DIR="${CMAKE_SOURCE_DIR}/resources"
     $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:AETHER_ENABLE_NVIDIA_AFTERMATH>
     # Vulkan validation modes (mutually exclusive). Controlled via CMake cache
     # options AETHERCORE_VULKAN_GPU_DEBUG / AETHERCORE_VULKAN_CPU_DEBUG so the

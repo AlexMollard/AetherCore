@@ -1,13 +1,18 @@
 #include "FileSystem.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include "utils/AetherExceptions.hpp"
 #include "utils/Profiler.hpp"
@@ -71,6 +76,114 @@ namespace aether::io
 
 			return *candidates.begin();
 		}
+
+		bool PathExists(const std::filesystem::path& path)
+		{
+			std::error_code ec;
+			return std::filesystem::exists(path, ec);
+		}
+
+		std::filesystem::path NormalPath(std::filesystem::path path)
+		{
+			std::error_code ec;
+			auto absolute = std::filesystem::absolute(path, ec);
+			if (!ec)
+			{
+				path = std::move(absolute);
+			}
+
+			auto canonical = std::filesystem::weakly_canonical(path, ec);
+			if (!ec)
+			{
+				return canonical;
+			}
+			return path.lexically_normal();
+		}
+
+		void AddUniquePath(std::vector<std::filesystem::path>& paths, std::filesystem::path path)
+		{
+			path = NormalPath(std::move(path));
+			for (const auto& existing: paths)
+			{
+				if (existing == path)
+				{
+					return;
+				}
+			}
+			paths.push_back(std::move(path));
+		}
+
+		std::string EnvironmentString(const char* name)
+		{
+#ifdef _MSC_VER
+			char* value = nullptr;
+			std::size_t size = 0;
+			if (_dupenv_s(&value, &size, name) != 0 || value == nullptr)
+			{
+				return {};
+			}
+			std::string result(value);
+			std::free(value);
+			return result;
+#else
+			if (const char* value = std::getenv(name); value != nullptr)
+			{
+				return value;
+			}
+			return {};
+#endif
+		}
+
+		std::optional<std::filesystem::path> EnvironmentPath(const char* name)
+		{
+			const std::string value = EnvironmentString(name);
+			return value.empty() ? std::nullopt : std::optional<std::filesystem::path>(NormalPath(value));
+		}
+
+		bool EqualsIgnoreCase(std::string_view lhs, std::string_view rhs)
+		{
+			return lhs.size() == rhs.size() && std::equal(lhs.begin(), lhs.end(), rhs.begin(), [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+		}
+
+		bool MountAssetsPak(const std::vector<std::filesystem::path>& candidates)
+		{
+			std::optional<std::filesystem::path> selected;
+			std::vector<std::filesystem::path> existing;
+			for (const auto& candidate: candidates)
+			{
+				if (PathExists(candidate))
+				{
+					AddUniquePath(existing, candidate);
+					if (!selected)
+					{
+						selected = NormalPath(candidate);
+					}
+				}
+			}
+
+			if (!selected)
+			{
+				return false;
+			}
+
+			for (const auto& pak: existing)
+			{
+				if (pak != *selected)
+				{
+					AE_WARN(LogCategory::FileSystem, "Ignoring alternate assets pak '{}' because '{}' was selected.", pak.string(), selected->string());
+				}
+			}
+
+			FileSystem::MountPak("assets", *selected);
+			return true;
+		}
+
+		void MountAssetsDirectory(std::filesystem::path directory)
+		{
+			directory = NormalPath(std::move(directory));
+			AE_WARN(LogCategory::FileSystem, "Mounting loose asset directory. Processed assets such as .mesh/.texture may be unavailable unless this directory contains generated outputs: {}", directory.string());
+			FileSystem::Mount("assets", std::move(directory));
+		}
 	} // namespace
 
 	void FileSystem::Initialize()
@@ -98,33 +211,53 @@ namespace aether::io
 		const auto workingDirectory = std::filesystem::current_path();
 
 		// -- assets:// ---------------------------------------------------------
-		// Prefer a compiled pak produced by AssetPacker at build time.
-		// Fall back to a loose assets/ directory if the pak does not yet exist
-		// (e.g., clean checkout before first build).
-		const std::filesystem::path pakCandidates[] = {
-		        workingDirectory / "data" / "assets.pak",
-		        workingDirectory / "../data/assets.pak",
-		        workingDirectory / "../../data/assets.pak",
-		};
-		bool pakMounted = false;
-		for (const auto& candidate: pakCandidates)
+		// Selection is intentionally deterministic:
+		//   AETHER_ASSET_MODE=pak|dir|auto
+		//   AETHER_ASSET_PAK=<pak path>   overrides pak candidates
+		//   AETHER_ASSET_DIR=<directory>  overrides loose directory fallback
+		// Default pak candidates are run-directory data/ first (ship layout),
+		// then the CMake build data dir (dev layout).
+		const std::string assetMode = EnvironmentString("AETHER_ASSET_MODE");
+		if (EqualsIgnoreCase(assetMode, "dir"))
 		{
-			std::error_code ec;
-			if (std::filesystem::exists(candidate, ec))
-			{
-				MountPak("assets", candidate);
-				pakMounted = true;
-				break;
-			}
+			MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR").value_or(
+#ifdef AETHER_DEFAULT_ASSET_DIR
+			        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+#else
+			        workingDirectory / "assets"
+#endif
+			                ));
 		}
-		if (!pakMounted)
+		else
 		{
-			const auto assetsDirectory = ResolveMountedDirectory({
-			        workingDirectory / "assets",
-			        workingDirectory / "../assets",
-			        workingDirectory / "../../assets",
-			});
-			Mount("assets", assetsDirectory);
+			std::vector<std::filesystem::path> pakCandidates;
+			if (auto overridePak = EnvironmentPath("AETHER_ASSET_PAK"))
+			{
+				AddUniquePath(pakCandidates, *overridePak);
+			}
+
+			AddUniquePath(pakCandidates, workingDirectory / "data" / "assets.pak");
+			AddUniquePath(pakCandidates, workingDirectory / "../data/assets.pak");
+			AddUniquePath(pakCandidates, workingDirectory / "../../data/assets.pak");
+#ifdef AETHER_DEFAULT_ASSET_PAK
+			AddUniquePath(pakCandidates, AETHER_DEFAULT_ASSET_PAK);
+#endif
+
+			if (!MountAssetsPak(pakCandidates))
+			{
+				if (EqualsIgnoreCase(assetMode, "pak"))
+				{
+					AE_ASSERT_ALWAYS(false, "AETHER_ASSET_MODE=pak but no usable assets.pak was found. Set AETHER_ASSET_PAK or build App to generate data/assets.pak.");
+				}
+
+				MountAssetsDirectory(EnvironmentPath("AETHER_ASSET_DIR").value_or(
+#ifdef AETHER_DEFAULT_ASSET_DIR
+				        std::filesystem::path(AETHER_DEFAULT_ASSET_DIR)
+#else
+				        workingDirectory / "assets"
+#endif
+				                ));
+			}
 		}
 
 		// -- shaders:// --------------------------------------------------------
