@@ -450,11 +450,11 @@ namespace aether
 			{
 				if (pass.completed)
 				{
-					AE_DIAG_COLOR(LogPlainColor::BoldGreen, "[OK] {} - {}", pass.name.empty() ? "(unknown)" : pass.name.c_str(), WorkloadText(pass).c_str());
+					AE_DIAG_COLOR(LogPlainColor::BoldGreen, "[OK] {} - {}", pass.name.empty() ? "(unknown)" : pass.name.c_str(), WorkloadText(pass));
 				}
 				else
 				{
-					AE_DIAG_COLOR(LogPlainColor::BoldYellow, "[WARN] {} - {}", pass.name.empty() ? "(unknown)" : pass.name.c_str(), WorkloadText(pass).c_str());
+					AE_DIAG_COLOR(LogPlainColor::BoldYellow, "[WARN] {} - {}", pass.name.empty() ? "(unknown)" : pass.name.c_str(), WorkloadText(pass));
 				}
 			}
 		}
@@ -557,7 +557,7 @@ namespace aether
 		return &passes.back();
 	}
 
-	std::string DiagnosticEngine::WorkloadText(const PassWorkload& pass) const
+	std::string DiagnosticEngine::WorkloadText(const PassWorkload& pass)
 	{
 		std::string out =
 		        std::format("{} direct, {} indexed, {} indirect, {} indexed-indirect, {} indirect-count, {} dispatches", pass.directDraws, pass.indexedDraws, pass.indirectDraws, pass.indirectIndexedDraws, pass.indirectCountDraws, pass.dispatches);

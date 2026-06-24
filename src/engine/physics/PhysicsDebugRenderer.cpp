@@ -25,6 +25,7 @@ namespace aether
 			glm::vec4 tintColor;
 			glm::mat4 model;
 		};
+
 		static_assert(sizeof(DebugPc) == 88);
 
 		glm::vec4 GetColorForMotionType(const PhysicsMotionType motionType)

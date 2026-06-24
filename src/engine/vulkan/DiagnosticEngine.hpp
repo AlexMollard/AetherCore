@@ -167,7 +167,7 @@ namespace aether
 		std::string GetLabel(std::uint32_t markerValue) const;
 		FaultAnalysis AnalyzeFaults(const std::vector<VkDeviceFaultInfoKHR>& faults, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const;
 		ActivitySummary BuildActivitySummary() const;
-		std::string WorkloadText(const PassWorkload& pass) const;
+		static std::string WorkloadText(const PassWorkload& pass);
 		static PassWorkload* FindOrAddPass(std::vector<PassWorkload>& passes, std::string_view name);
 
 		VkDevice m_device = VK_NULL_HANDLE;

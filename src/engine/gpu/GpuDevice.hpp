@@ -99,7 +99,7 @@ namespace aether
 			return GpuFormat::R16G16B16A16Sfloat;
 		}
 
-		[[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
+		static [[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
 
 		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 
