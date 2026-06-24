@@ -49,9 +49,9 @@ namespace
 		transform.rect = PixelRect(x, y, width, height);
 
 		auto& render = w->Emplace<aether::ui::UiRenderComponent>(e);
-		render.backgroundColor = {0.12f, 0.14f, 0.18f, 0.95f};
-		render.borderColor = {0.30f, 0.35f, 0.45f, 1.00f};
-		render.cornerRadius = 6.f;
+		render.backgroundColor = {0.08f, 0.10f, 0.11f, 0.95f};
+		render.borderColor = {0.32f, 0.37f, 0.34f, 1.00f};
+		render.cornerRadius = 3.f;
 		render.borderWidth = 1.f;
 
 		w->Emplace<aether::ui::UiInputComponent>(e);

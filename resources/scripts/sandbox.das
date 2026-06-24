@@ -387,9 +387,9 @@ def on_attach(world : World?)
 	add_ui_child(world, panel, g_rotate_cb);
 
 	g_spawn_btn = create_ui_button(world, 16.0, 192.0, 260.0, 40.0, "Spawn Fox");
-	set_ui_button_color(world, g_spawn_btn,       float4(0.15, 0.38, 0.20, 1.0));
-	set_ui_button_hover_color(world, g_spawn_btn, float4(0.20, 0.50, 0.27, 1.0));
-	set_ui_button_press_color(world, g_spawn_btn, float4(0.10, 0.28, 0.15, 1.0));
+	set_ui_button_color(world, g_spawn_btn,       float4(0.23, 0.36, 0.19, 1.0));
+	set_ui_button_hover_color(world, g_spawn_btn, float4(0.31, 0.46, 0.24, 1.0));
+	set_ui_button_press_color(world, g_spawn_btn, float4(0.17, 0.27, 0.14, 1.0));
 	add_ui_child(world, panel, g_spawn_btn);
 
 	// ── Native UI - Day/Night Controls panel ────────────────────────────────
@@ -398,12 +398,12 @@ def on_attach(world : World?)
 
 	g_time_label = create_ui_label(world, 328.0, 44.0, 260.0, 22.0, "Time: 12:00");
 	set_ui_font_size(world, g_time_label, 14.0);
-	set_ui_text_color(world, g_time_label, float4(1.0, 0.95, 0.70, 1.0));
+	set_ui_text_color(world, g_time_label, float4(0.98, 0.76, 0.38, 1.0));
 	add_ui_child(world, dn_panel, g_time_label);
 
 	g_sun_dir_label = create_ui_label(world, 328.0, 70.0, 260.0, 20.0, "Sun: (0.00, 1.00, 0.00)");
 	set_ui_font_size(world, g_sun_dir_label, 11.0);
-	set_ui_text_color(world, g_sun_dir_label, float4(0.65, 0.65, 0.72, 1.0));
+	set_ui_text_color(world, g_sun_dir_label, float4(0.60, 0.66, 0.62, 1.0));
 	add_ui_child(world, dn_panel, g_sun_dir_label);
 
 	g_time_slider = create_ui_slider(world, 328.0, 108.0, 260.0, 28.0, 0.0, 24.0, 12.0);
@@ -423,15 +423,15 @@ def on_attach(world : World?)
 
 	g_ins_label_idx = create_ui_label(world, 32.0, 320.0, 260.0, 24.0, "Selected: <none>");
 	set_ui_font_size(world, g_ins_label_idx, 13.0);
-	set_ui_text_color(world, g_ins_label_idx, float4(0.85, 0.95, 1.0, 1.0));
+	set_ui_text_color(world, g_ins_label_idx, float4(0.95, 0.77, 0.42, 1.0));
 	add_ui_child(world, ins_panel, g_ins_label_idx);
 
 	g_ins_prev_btn = create_ui_button(world, 32.0, 352.0, 124.0, 30.0, "Prev Fox");
-	set_ui_button_color(world, g_ins_prev_btn, float4(0.18, 0.22, 0.28, 1.0));
+	set_ui_button_color(world, g_ins_prev_btn, float4(0.16, 0.20, 0.21, 1.0));
 	add_ui_child(world, ins_panel, g_ins_prev_btn);
 
 	g_ins_next_btn = create_ui_button(world, 162.0, 352.0, 124.0, 30.0, "Next Fox");
-	set_ui_button_color(world, g_ins_next_btn, float4(0.18, 0.22, 0.28, 1.0));
+	set_ui_button_color(world, g_ins_next_btn, float4(0.16, 0.20, 0.21, 1.0));
 	add_ui_child(world, ins_panel, g_ins_next_btn);
 
 	g_ins_x_sl = create_ui_slider(world, 32.0, 410.0, 244.0, 26.0, -30.0, 30.0, 0.0);
@@ -460,7 +460,7 @@ def on_attach(world : World?)
 
 	let toy_intro = create_ui_label(world, 328.0, 336.0, 260.0, 20.0, "Drop primitives from above (tagged)");
 	set_ui_font_size(world, toy_intro, 11.0);
-	set_ui_text_color(world, toy_intro, float4(0.65, 0.65, 0.72, 1.0));
+	set_ui_text_color(world, toy_intro, float4(0.60, 0.66, 0.62, 1.0));
 	add_ui_child(world, toy_panel, toy_intro);
 
 	g_toy_sz_sl = create_ui_slider(world, 328.0, 378.0, 244.0, 26.0, 0.2, 2.0, 0.4);
@@ -476,11 +476,11 @@ def on_attach(world : World?)
 	g_btn_tower   = create_ui_button(world, 328.0, 538.0, 244.0, 32.0, "Stack Tower (5 boxes)");
 	g_btn_rain    = create_ui_button(world, 328.0, 576.0, 244.0, 32.0, "Rain (4 spheres)");
 	g_btn_bounce  = create_ui_button(world, 328.0, 614.0, 244.0, 32.0, "Bounce Test (cube, +Y vel)");
-	set_ui_button_color(world, g_btn_cube,   float4(0.30, 0.34, 0.42, 1.0));
-	set_ui_button_color(world, g_btn_sphere, float4(0.30, 0.34, 0.42, 1.0));
-	set_ui_button_color(world, g_btn_tower,  float4(0.20, 0.30, 0.40, 1.0));
-	set_ui_button_color(world, g_btn_rain,   float4(0.20, 0.30, 0.40, 1.0));
-	set_ui_button_color(world, g_btn_bounce,  float4(0.35, 0.45, 0.20, 1.0));
+	set_ui_button_color(world, g_btn_cube,   float4(0.18, 0.22, 0.22, 1.0));
+	set_ui_button_color(world, g_btn_sphere, float4(0.18, 0.22, 0.22, 1.0));
+	set_ui_button_color(world, g_btn_tower,  float4(0.25, 0.29, 0.18, 1.0));
+	set_ui_button_color(world, g_btn_rain,   float4(0.25, 0.29, 0.18, 1.0));
+	set_ui_button_color(world, g_btn_bounce,  float4(0.30, 0.40, 0.19, 1.0));
 	add_ui_child(world, toy_panel, g_btn_cube);
 	add_ui_child(world, toy_panel, g_btn_sphere);
 	add_ui_child(world, toy_panel, g_btn_tower);
@@ -488,9 +488,9 @@ def on_attach(world : World?)
 	add_ui_child(world, toy_panel, g_btn_bounce);
 
 	g_btn_clear = create_ui_button(world, 328.0, 656.0, 244.0, 32.0, "Clear All Toys");
-	set_ui_button_color(world, g_btn_clear,       float4(0.62, 0.18, 0.18, 1.0));
-	set_ui_button_hover_color(world, g_btn_clear, float4(0.78, 0.28, 0.28, 1.0));
-	set_ui_button_press_color(world, g_btn_clear, float4(0.40, 0.10, 0.10, 1.0));
+	set_ui_button_color(world, g_btn_clear,       float4(0.48, 0.18, 0.13, 1.0));
+	set_ui_button_hover_color(world, g_btn_clear, float4(0.64, 0.25, 0.16, 1.0));
+	set_ui_button_press_color(world, g_btn_clear, float4(0.34, 0.12, 0.09, 1.0));
 	add_ui_child(world, toy_panel, g_btn_clear);
 
 	g_phys_debug_cb = create_ui_checkbox(world, 328.0, 696.0, 244.0, 28.0, "Physics debug overlay", false);

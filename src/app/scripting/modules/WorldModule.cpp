@@ -336,9 +336,7 @@ namespace
 	// for_each_with_tag_transform(world, tag_id) <| $(e : uint, pos : float3, euler : float3, scale : float3) { ... }
 	// Convenience combo: iterate tagged entities that also have a TransformComponent and
 	// hand the block decomposed pos/euler(degrees, YXZ)/scale - no per-entity get calls needed.
-	void das_for_each_with_tag_transform(aether::World* w, uint32_t tagId,
-	        const das::TBlock<void, uint32_t, das::float3, das::float3, das::float3>& block,
-	        das::Context* ctx, das::LineInfoArg* at)
+	void das_for_each_with_tag_transform(aether::World* w, uint32_t tagId, const das::TBlock<void, uint32_t, das::float3, das::float3, das::float3>& block, das::Context* ctx, das::LineInfoArg* at)
 	{
 		aether::ForEachWithTag(w,
 		        tagId,

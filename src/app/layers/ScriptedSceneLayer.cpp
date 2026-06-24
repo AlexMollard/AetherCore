@@ -30,7 +30,7 @@
 
 namespace aether::app::scripting
 {
-	
+
 	void SetPhysicsDebugRendererCallback(std::function<void(bool)> callback);
 } // namespace aether::app::scripting
 
