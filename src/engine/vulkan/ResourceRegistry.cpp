@@ -1320,7 +1320,7 @@ namespace aether::gpu
 		s_reg->Destroy(h);
 	}
 
-	PipelineHandle ResourceRegistry::CreateComputePipeline(Device device, PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept
+	PipelineHandle ResourceRegistry::CreateComputePipeline(Device device, const ComputePipelineDesc& desc) noexcept
 	{
 		const vkutil::ComputePipelineDesc vkDesc{
 		        .shaderVfsPath = desc.shaderVfsPath,
@@ -1328,7 +1328,7 @@ namespace aether::gpu
 		        .debugName = desc.debugName,
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
-		const auto entryExp = vkutil::CreateComputePipelineEntry(device, pipelineCache, vkDesc);
+		const auto entryExp = vkutil::CreateComputePipelineEntry(device, vkDesc);
 		if (!entryExp.has_value())
 		{
 			return PipelineHandle{};
@@ -1336,7 +1336,7 @@ namespace aether::gpu
 		return s_reg->RegisterPipeline(entryExp.value(), desc.debugName ? std::string_view(desc.debugName) : std::string_view{});
 	}
 
-	PipelineHandle ResourceRegistry::CreateGraphicsPipeline(Device device, PipelineCache pipelineCache, const GraphicsPipelineDesc& desc) noexcept
+	PipelineHandle ResourceRegistry::CreateGraphicsPipeline(Device device, const GraphicsPipelineDesc& desc) noexcept
 	{
 		GraphicsPipeline::Desc vkDesc{
 		        .shaderVfsPath = desc.shaderVfsPath,
@@ -1356,7 +1356,7 @@ namespace aether::gpu
 		        .lineWidthDynamic = desc.lineWidthDynamic,
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
-		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, pipelineCache, vkDesc);
+		const auto entryExp = vkutil::CreateGraphicsPipelineEntry(device, vkDesc);
 		if (!entryExp.has_value())
 		{
 			return PipelineHandle{};

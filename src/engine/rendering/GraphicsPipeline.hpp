@@ -52,7 +52,7 @@ namespace aether
 		// destruction path (3-frame ring). On Shutdown / destruction of
 		// this object the handle is released and the registry tears down
 		// the shaders kMaxFramesInFlight frames later.
-		static Expected<GraphicsPipeline> Create(gpu::Device device, gpu::PipelineCache pipelineCache, const Desc& desc);
+		static Expected<GraphicsPipeline> Create(gpu::Device device, const Desc& desc);
 
 		// Explicit teardown that schedules the underlying shaders for
 		// deferred destruction immediately, then resets the handle so the

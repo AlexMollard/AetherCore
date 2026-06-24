@@ -302,7 +302,7 @@ namespace aether
 
 	Expected<GraphicsPipeline> AssetManager::CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc)
 	{
-		return GraphicsPipeline::Create(m_context->GetDevice().device, m_context->GetPipelineCache(), desc);
+		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}
 
 	void AssetManager::RegisterMaterial(Material& mat)

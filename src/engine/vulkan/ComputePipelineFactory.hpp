@@ -18,5 +18,5 @@ namespace aether::vkutil
 		const void* descriptorHeapMappings = nullptr;
 	};
 
-	[[nodiscard]] Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device device, gpu::PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;
+	[[nodiscard]] Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device device, const ComputePipelineDesc& desc) noexcept;
 } // namespace aether::vkutil

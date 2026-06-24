@@ -39,7 +39,7 @@ namespace aether
 		}
 	}
 
-	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device device, gpu::PipelineCache pipelineCache, const Desc& desc)
+	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device device, const Desc& desc)
 	{
 		const gpu::GraphicsPipelineDesc facadeDesc{
 		        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
@@ -61,7 +61,7 @@ namespace aether
 		        .descriptorHeapMappings = desc.descriptorHeapMappings,
 		};
 		GraphicsPipeline out;
-		out.m_handle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, pipelineCache, facadeDesc);
+		out.m_handle = gpu::ResourceRegistry::CreateGraphicsPipeline(device, facadeDesc);
 		if (!out.m_handle.IsValid())
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(0, "GraphicsPipeline: failed to register with ResourceRegistry."));

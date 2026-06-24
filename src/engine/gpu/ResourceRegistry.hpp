@@ -129,12 +129,12 @@ namespace aether::gpu
 
 		// Compute-pipeline: factory + register. Returns an opaque
 		// PipelineHandle.
-		[[nodiscard]] static PipelineHandle CreateComputePipeline(Device device, PipelineCache pipelineCache, const ComputePipelineDesc& desc) noexcept;
+		[[nodiscard]] static PipelineHandle CreateComputePipeline(Device device, const ComputePipelineDesc& desc) noexcept;
 
 		// Graphics-pipeline: factory + register. Returns an opaque
 		// PipelineHandle bound to one or two VkShaderEXT handles plus the
 		// cached dynamic state the command list re-applies on every bind.
-		[[nodiscard]] static PipelineHandle CreateGraphicsPipeline(Device device, PipelineCache pipelineCache, const struct GraphicsPipelineDesc& desc) noexcept;
+		[[nodiscard]] static PipelineHandle CreateGraphicsPipeline(Device device, const struct GraphicsPipelineDesc& desc) noexcept;
 
 		// Resolve a PipelineHandle to an opaque pointer to the vulkan-side
 		// pipeline state (shader handles + cached dynamic state). The pointer

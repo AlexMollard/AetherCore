@@ -38,7 +38,6 @@ namespace aether
 		struct Desc
 		{
 			gpu::Device device = nullptr;
-			gpu::PipelineCache pipelineCache = nullptr;
 			gpu::Extent2D extent;
 			gpu::Format swapchainFormat = gpu::Format::Undefined;
 			BindlessManager* bindlessManager = nullptr; // non-owning

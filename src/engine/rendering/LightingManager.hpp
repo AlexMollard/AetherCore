@@ -96,8 +96,6 @@ namespace aether
 		void UpdateForView(
 		        std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, bool enableBinningForView, std::span<const Renderer::PointLight> pointLights = {}, std::span<const Renderer::SpotLight> spotLights = {}) const;
 
-		void EmitAcquireBarriers(std::uint32_t frameSlot, gpu::CommandList& graphicsCmd, std::uint32_t srcFamily, std::uint32_t dstFamily) const;
-
 	private:
 		struct GpuLight
 		{

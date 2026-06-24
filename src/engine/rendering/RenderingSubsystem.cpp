@@ -39,7 +39,7 @@ namespace aether
 		m_renderGraph.SetDiagnosticEngine(&services.Get<DiagnosticEngine>());
 		m_frameConstantsBuffer.Initialize();
 
-		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
+		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
 		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = kRenderQueueMaxDraws});
 		m_renderQueue.SetDebugForceVisible(true);
@@ -50,11 +50,10 @@ namespace aether
 		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
-		m_cullPass.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
+		m_cullPass.Initialize(vk.GetDevice().device);
 
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
-		        .pipelineCache = vk.GetPipelineCache(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
@@ -65,7 +64,6 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(skyboxPipeline,
 		        GraphicsPipeline::Create(vk.GetDevice().device,
-		                vk.GetPipelineCache(),
 		                {
 		                        .shaderVfsPath = "shaders://skybox.spv",
 		                        .colorFormat = PostProcessStack::GetForwardColorFormat(),
@@ -117,7 +115,7 @@ namespace aether
 		auto& swapchain = services.Get<Swapchain>();
 		auto& bindless = services.Get<BindlessManager>();
 
-		m_shadowService.RecreatePipeline(gpu.GetDevice(), gpu.GetPipelineCache(), swapchain.GetDepthFormat());
+		m_shadowService.RecreatePipeline(gpu.GetDevice(), swapchain.GetDepthFormat());
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
@@ -127,7 +125,6 @@ namespace aether
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = gpu.GetDevice(),
-		        .pipelineCache = gpu.GetPipelineCache(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,

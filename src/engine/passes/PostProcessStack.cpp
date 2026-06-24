@@ -64,7 +64,6 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(tonemapPipeline,
 		        GraphicsPipeline::Create(desc.device,
-		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://tonemap.spv",
 		                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
@@ -75,7 +74,6 @@ namespace aether
 
 		AE_EXPECT_OR_THROW(fxaaPipeline,
 		        GraphicsPipeline::Create(desc.device,
-		                desc.pipelineCache,
 		                {
 		                        .shaderVfsPath = "shaders://fxaa.spv",
 		                        .colorFormat = desc.swapchainFormat,

@@ -119,6 +119,9 @@ namespace aether
 
 		void RegisterPass();
 
+		void EnsureCommandBufferReady(std::uint32_t frameSlot, gpu::DeviceSize commandBytes);
+		void EnsureIndirectBufferReady(std::uint32_t frameSlot);
+
 		struct ClipState
 		{
 			bool active = false;

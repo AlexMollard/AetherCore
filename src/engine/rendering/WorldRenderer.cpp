@@ -29,7 +29,7 @@ namespace aether
 		}
 	} // namespace
 
-	void WorldRenderer::Flush(const World& world, RenderQueue& queue, const IAnimationProvider* /*anim*/)
+	void WorldRenderer::Flush(const World& world, RenderQueue& queue)
 	{
 		AE_PROFILE_ZONE();
 		auto view = world.GetRegistry().view<const PipelineComponent, const MeshComponent, const TransformComponent>();

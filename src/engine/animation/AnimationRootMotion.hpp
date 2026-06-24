@@ -24,7 +24,7 @@ namespace aether
 			return m_timelineSemaphore;
 		}
 
-		void ApplyDelta(World& world, float dt, std::uint32_t frameIndex);
+		void ApplyDelta(World& world, std::uint32_t frameIndex);
 
 	private:
 		gpu::BufferHandle m_stagingHandle{};

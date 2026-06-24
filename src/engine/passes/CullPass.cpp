@@ -8,11 +8,10 @@
 
 namespace aether
 {
-	void CullPass::Initialize(gpu::Device device, gpu::PipelineCache pipelineCache)
+	void CullPass::Initialize(gpu::Device device)
 	{
 		AE_PROFILE_ZONE();
 		m_device = device;
-		m_pipelineCache = pipelineCache;
 	}
 
 	void CullPass::Shutdown()
@@ -44,7 +43,7 @@ namespace aether
 		        .shaderEntry = "main",
 		        .debugName = "CullPass.cullDraws",
 		};
-		m_singleHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, m_pipelineCache, desc);
+		m_singleHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, desc);
 		if (!m_singleHandle.IsValid())
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(0, "CullPass: failed to register single compute pipeline."));
@@ -65,7 +64,7 @@ namespace aether
 		        .shaderEntry = "main",
 		        .debugName = "CullPass.cullDrawsMulti",
 		};
-		m_multiHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, m_pipelineCache, desc);
+		m_multiHandle = gpu::ResourceRegistry::CreateComputePipeline(m_device, desc);
 		if (!m_multiHandle.IsValid())
 		{
 			AE_UNEXPECTED(AetherError::Vulkan(0, "CullPass: failed to register multi compute pipeline."));

@@ -98,14 +98,14 @@ namespace aether
 		// direction must be normalized. maxDistance is the ray length.
 		// Only collides with bodies on the specified layer.
 		// Returns immediately with hit=false if no surface is found within maxDistance.
-		RaycastResult CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance, PhysicsLayer layer = PhysicsLayer::NonMoving);
+		RaycastResult CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance);
 
 		// Cast a downward ray (direction = {0,-1,0}) from origin, find ground.
 		// Convenience wrapper for IK foot planting. maxDistance is the maximum
 		// trace height above the expected floor (e.g. step height).
 		RaycastResult CastGround(glm::vec3 origin, float maxDistance = 2.0f)
 		{
-			return CastRay(origin, {0.f, -1.f, 0.f}, maxDistance, PhysicsLayer::NonMoving);
+			return CastRay(origin, {0.f, -1.f, 0.f}, maxDistance);
 		}
 
 		// Raw Jolt system - for advanced use (raycasts, queries, etc.).

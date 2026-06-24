@@ -9,6 +9,11 @@
 #include "gpu/GpuEnums.hpp"
 #include "physics/PhysicsComponents.hpp"
 
+namespace aether::gpu
+{
+	class CommandList;
+} // namespace aether::gpu
+
 namespace aether
 {
 	class World;
@@ -120,6 +125,9 @@ namespace aether
 		// ResourceRegistry; this function's responsibility is the size policy.
 		void EnsureImmediateBufferCapacity(std::uint32_t vertexCount);
 		void DestroyImmediateBuffer();
+
+		void DrawImmediateDebugPrimitives(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr);
+		void DrawPhysicsDebugShapes(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr) const;
 
 		// Append a self-test pattern (axis gizmo at origin + 1m world AABB + camera frustum)
 		// to `out`. Used to verify the pipeline end-to-end.

@@ -144,11 +144,6 @@ namespace aether
 		}
 	}
 
-	void LightingManager::EmitAcquireBarriers(const std::uint32_t /*frameSlot*/, gpu::CommandList& /*graphicsCmd*/, const std::uint32_t /*srcFamily*/, const std::uint32_t /*dstFamily*/) const
-	{
-		// maintenance9 eliminates queue family ownership transfers entirely.
-	}
-
 	void LightingManager::UpdateForViewCpu(
 	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
@@ -370,12 +365,9 @@ namespace aether
 		}
 
 		auto device = static_cast<gpu::Device>(m_context->GetDevice().device);
-		auto pipelineCache = static_cast<gpu::PipelineCache>(m_context->GetPipelineCache());
-
 		if (!m_initPipelineHandle.IsValid())
 		{
 			m_initPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        pipelineCache,
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "initTiles",
@@ -390,7 +382,6 @@ namespace aether
 		if (!m_cullPipelineHandle.IsValid())
 		{
 			m_cullPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        pipelineCache,
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://tiled_light_cull.spv",
 			                .shaderEntry = "binLights",

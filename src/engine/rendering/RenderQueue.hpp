@@ -31,7 +31,7 @@ namespace aether
 		gpu::PipelineHandle poseInit;
 		gpu::PipelineHandle animBlend;
 
-		void Initialize(gpu::Device device, gpu::PipelineCache pipelineCache);
+		void Initialize(gpu::Device device);
 		void Shutdown();
 	};
 

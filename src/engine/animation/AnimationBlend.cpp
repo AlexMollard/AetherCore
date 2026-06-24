@@ -40,7 +40,7 @@ namespace aether
 		m_mappedBlendJobs = nullptr;
 	}
 
-	void AnimationBlendSystem::PopulateBlendJobs(World& world, const AnimationDatabase& animDb, std::uint32_t /*frameIndex*/)
+	void AnimationBlendSystem::PopulateBlendJobs(World& world, const AnimationDatabase& animDb)
 	{
 		m_writtenJobCount = 0;
 

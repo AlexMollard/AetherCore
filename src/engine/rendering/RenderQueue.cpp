@@ -991,10 +991,9 @@ namespace aether
 		return m_commandSlots[slot % kFramesInFlight].empty();
 	}
 
-	void RenderQueueSharedPipelines::Initialize(gpu::Device device, gpu::PipelineCache pipelineCache)
+	void RenderQueueSharedPipelines::Initialize(gpu::Device device)
 	{
 		skinCopy = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://skin_palette_build.spv",
 		                .shaderEntry = "main",
@@ -1006,7 +1005,6 @@ namespace aether
 		}
 
 		animSample = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://animation_sample.spv",
 		                .shaderEntry = "main",
@@ -1018,7 +1016,6 @@ namespace aether
 		}
 
 		poseInit = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://pose_init.spv",
 		                .shaderEntry = "main",
@@ -1030,7 +1027,6 @@ namespace aether
 		}
 
 		nodeFlatten = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://node_flatten.spv",
 		                .shaderEntry = "main",
@@ -1042,7 +1038,6 @@ namespace aether
 		}
 
 		animBlend = gpu::ResourceRegistry::CreateComputePipeline(device,
-		        pipelineCache,
 		        gpu::ComputePipelineDesc{
 		                .shaderVfsPath = "shaders://anim_blend.spv",
 		                .shaderEntry = "main",

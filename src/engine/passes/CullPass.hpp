@@ -13,7 +13,7 @@ namespace aether
 	class CullPass
 	{
 	public:
-		void Initialize(gpu::Device device, gpu::PipelineCache pipelineCache);
+		void Initialize(gpu::Device device);
 		void Shutdown();
 		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
 
@@ -27,7 +27,6 @@ namespace aether
 		Expected<void> EnsureMultiPipeline();
 
 		gpu::Device m_device = nullptr;
-		gpu::PipelineCache m_pipelineCache = nullptr;
 		gpu::PipelineHandle m_singleHandle{};
 		gpu::PipelineHandle m_multiHandle{};
 	};

@@ -587,7 +587,7 @@ namespace aether
 
 	// -- Raycasting --------------------------------------------------------------
 
-	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance, PhysicsLayer /*layer*/)
+	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance)
 	{
 		RaycastResult result{};
 

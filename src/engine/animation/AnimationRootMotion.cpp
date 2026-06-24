@@ -67,14 +67,9 @@ namespace aether
 		}
 	}
 
-	void AnimationRootMotionSystem::ApplyDelta(World& world, float /*dt*/, std::uint32_t frameIndex)
+	void AnimationRootMotionSystem::ApplyDelta(World& world, std::uint32_t frameIndex)
 	{
-		if (frameIndex == 0)
-		{
-			return;
-		}
-
-		const std::uint32_t readSlot = (frameIndex - 1) % kSlots;
+		const std::uint32_t readSlot = (frameIndex == 0) ? (kSlots - 1) : ((frameIndex - 1) % kSlots);
 		const std::uint32_t entityCount = m_maxEntities;
 
 		auto& reg = world.GetRegistry();

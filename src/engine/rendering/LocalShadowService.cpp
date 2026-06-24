@@ -66,7 +66,6 @@ namespace aether
 		const gpu::Format depthFormat = swapchain.GetDepthFormat();
 		AE_EXPECT_OR_THROW(pipeline,
 		        GraphicsPipeline::Create(device,
-		                context.GetPipelineCache(),
 		                {
 		                        .shaderVfsPath = "shaders://local_shadow_depth.spv",
 		                        .colorFormat = gpu::Format::R32G32Sfloat,
@@ -131,7 +130,6 @@ namespace aether
 		// -- Create VSM blur compute pipeline (BDA, no descriptors) ---------
 		{
 			m_blurPipelineHandle = gpu::ResourceRegistry::CreateComputePipeline(device,
-			        context.GetPipelineCache(),
 			        gpu::ComputePipelineDesc{
 			                .shaderVfsPath = "shaders://vsm_blur.spv",
 			                .shaderEntry = "main",

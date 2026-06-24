@@ -17,7 +17,7 @@ namespace aether::vkutil
 	// via vkCmdPushDataEXT. No VkPipeline / VkPipelineLayout is created - all
 	// fixed-function state (topology, rasterizer, depth, blend) is cached on
 	// the returned PipelineEntry and re-applied through vkCmdSet* on each bind.
-	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, gpu::PipelineCache /*gpuPipelineCache*/, const GraphicsPipeline::Desc& desc) noexcept
+	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, const GraphicsPipeline::Desc& desc) noexcept
 	{
 		auto device = static_cast<VkDevice>(gpuDevice);
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
