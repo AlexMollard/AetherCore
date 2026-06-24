@@ -24,16 +24,6 @@ namespace aether::gpu
 			return static_cast<VkBuffer>(p);
 		}
 
-		inline VkImageView AsVkImageView(void* p) noexcept
-		{
-			return static_cast<VkImageView>(p);
-		}
-
-		inline VkSampler AsVkSampler(void* p) noexcept
-		{
-			return static_cast<VkSampler>(p);
-		}
-
 		inline VkViewport ToVkViewport(const Viewport& v) noexcept
 		{
 			return VkViewport{
@@ -275,7 +265,7 @@ namespace aether::gpu
 			return;
 		}
 		VkViewport vkVp = ToVkViewport(viewport);
-		vkCmdSetViewport(AsVkCmd(m_cmd), 0, 1, &vkVp);
+		vkCmdSetViewportWithCount(AsVkCmd(m_cmd), 1, &vkVp);
 	}
 
 	void CommandList::SetViewport(std::uint32_t firstViewport, std::span<const Viewport> viewports)
@@ -300,7 +290,14 @@ namespace aether::gpu
 		{
 			buf[i] = ToVkViewport(viewports[i]);
 		}
-		vkCmdSetViewport(AsVkCmd(m_cmd), firstViewport, static_cast<std::uint32_t>(n), buf);
+		if (firstViewport == 0)
+		{
+			vkCmdSetViewportWithCount(AsVkCmd(m_cmd), static_cast<std::uint32_t>(n), buf);
+		}
+		else
+		{
+			vkCmdSetViewport(AsVkCmd(m_cmd), firstViewport, static_cast<std::uint32_t>(n), buf);
+		}
 	}
 
 	void CommandList::SetScissor(const Rect2D& scissor)
@@ -310,7 +307,7 @@ namespace aether::gpu
 			return;
 		}
 		VkRect2D vkRect = ToVkRect2D(scissor);
-		vkCmdSetScissor(AsVkCmd(m_cmd), 0, 1, &vkRect);
+		vkCmdSetScissorWithCount(AsVkCmd(m_cmd), 1, &vkRect);
 	}
 
 	void CommandList::SetScissor(std::uint32_t firstScissor, std::span<const Rect2D> scissors)
@@ -332,7 +329,14 @@ namespace aether::gpu
 		{
 			buf[i] = ToVkRect2D(scissors[i]);
 		}
-		vkCmdSetScissor(AsVkCmd(m_cmd), firstScissor, static_cast<std::uint32_t>(n), buf);
+		if (firstScissor == 0)
+		{
+			vkCmdSetScissorWithCount(AsVkCmd(m_cmd), static_cast<std::uint32_t>(n), buf);
+		}
+		else
+		{
+			vkCmdSetScissor(AsVkCmd(m_cmd), firstScissor, static_cast<std::uint32_t>(n), buf);
+		}
 	}
 
 	void CommandList::PushDataRaw(std::uint32_t offset, std::span<const std::byte> data)
