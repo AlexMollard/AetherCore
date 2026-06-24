@@ -26,11 +26,25 @@ namespace
 	constexpr float kLightEyeBackoff = 120.0f;
 	constexpr float kFarPlanePadding = 64.0f;
 	constexpr float kCascadeRangePadding = 140.0f;
-	constexpr float kCascadeSplitNear = 0.08f;
-	constexpr float kCascadeSplitMid = 0.28f;
-	constexpr float kCascadeSplitFar = 0.72f;
+
+	// PSSM (practical split) blend factor.
+	// 0.0 = uniform split in view-space distance, 1.0 = logarithmic split.
+	// 0.65 gives a good balance: the first two cascades cover near-to-mid
+	// range where perspective aliasing is most visible, while the last
+	// cascade still reaches the shadow far cap.
+	constexpr float kPssmLambda = 0.65f;
+
+	// Minimum orthographic half-extent for each cascade.
 	constexpr float kOrthoHalfMin = 20.0f;
+
+	// Base orthographic half-extent = cascadeFar * kOrthoHalfViewRangeRatio.
 	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
+
+	// Extra extent multiplier that forces cascade frustums to overlap.
+	// Without overlap, the shader blend at cascade boundaries samples a
+	// neighbour cascade's map near its edge where the depth is 1.0
+	// (no shadow), producing a bright seam. 1.20 = 20 % geometric overlap.
+	constexpr float kCascadeOverlap = 1.20f;
 } // namespace
 
 namespace aether
@@ -166,9 +180,19 @@ namespace aether
 		const float camNear = (mainCamForShadows != nullptr) ? mainCamForShadows->GetNearPlane() : 0.1f;
 		const float camFar = (mainCamForShadows != nullptr) ? std::min(mainCamForShadows->GetFarPlane(), kShadowFarCap) : kShadowFarCap;
 		const float viewRange = std::max(camFar - camNear, 1.0f);
-		const float split0 = camNear + viewRange * kCascadeSplitNear;
-		const float split1 = camNear + viewRange * kCascadeSplitMid;
-		const float split2 = camNear + viewRange * kCascadeSplitFar;
+
+		// Practical split (PSSM) — mixes logarithmic and uniform to balance
+		// perspective aliasing against cascade count.
+		float split0, split1, split2;
+		{
+			const float uni0 = camNear + viewRange * (1.0f / 3.0f);
+			const float uni1 = camNear + viewRange * (2.0f / 3.0f);
+			const float log0 = camNear * std::pow(camFar / camNear, 1.0f / 3.0f);
+			const float log1 = camNear * std::pow(camFar / camNear, 2.0f / 3.0f);
+			split0 = kPssmLambda * log0 + (1.0f - kPssmLambda) * uni0;
+			split1 = kPssmLambda * log1 + (1.0f - kPssmLambda) * uni1;
+			split2 = camFar;
+		}
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
 		fc.shadowParams = glm::vec4(0.0007f, 0.0012f, 1.0f, 1.5f);
@@ -200,7 +224,7 @@ namespace aether
 				up = glm::vec3(1.0f, 0.0f, 0.0f);
 			}
 
-			const float orthoHalf = std::max(kOrthoHalfMin, cascadeFar * kOrthoHalfViewRangeRatio);
+			const float orthoHalf = std::max(kOrthoHalfMin, cascadeFar * kOrthoHalfViewRangeRatio) * kCascadeOverlap;
 			glm::vec3 lightEye = shadowCenter + lightDir * (cascadeFar + kLightEyeBackoff);
 			glm::mat4 lightView = glm::lookAt(lightEye, shadowCenter, up);
 

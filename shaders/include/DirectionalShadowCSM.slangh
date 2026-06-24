@@ -80,7 +80,7 @@ float ComputeDirectionalShadowCascade(
     return (weightSum > 0.0) ? (visibility / weightSum) : 1.0;
 }
 
-float ComputeDirectionalShadow(FrameConstantsData* fc, float3 worldPos, float3 worldNormal, float3 lightDir)
+    float ComputeDirectionalShadow(FrameConstantsData* fc, float3 worldPos, float3 worldNormal, float3 lightDir)
 {
     const float viewDepth = max(-mul(fc->view, float4(worldPos, 1.0)).z, 0.0);
     const float split0 = fc->shadowCascadeSplits.x;
@@ -96,10 +96,13 @@ float ComputeDirectionalShadow(FrameConstantsData* fc, float3 worldPos, float3 w
         cascade = 2u;
     }
 
-    float shadow = ComputeDirectionalShadowCascade(fc, cascade, worldPos, worldNormal, lightDir);
+    // Wider blend regions reduce visible seams by cross-fading over a larger
+    // depth range.  The orthographic frustums also overlap (kCascadeOverlap)
+    // so that blend samples stay inside the neighbour cascade's valid map area.
+    const float blendWidth0 = max(split0 * 0.20, 6.0);
+    const float blendWidth1 = max((split1 - split0) * 0.20, 8.0);
 
-    const float blendWidth0 = max(split0 * 0.10, 4.0);
-    const float blendWidth1 = max((split1 - split0) * 0.10, 6.0);
+    float shadow = ComputeDirectionalShadowCascade(fc, cascade, worldPos, worldNormal, lightDir);
 
     if (cascade == 0u)
     {
