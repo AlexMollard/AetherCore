@@ -4,7 +4,6 @@
 #include <format>
 
 #include "utils/Assert.hpp"
-#include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
@@ -13,10 +12,8 @@ namespace aether
 		Shutdown();
 	}
 
-	void FrameConstantsBuffer::Initialize(const VulkanContext& ctx)
+	void FrameConstantsBuffer::Initialize()
 	{
-		(void) ctx;
-
 		for (std::uint32_t i = 0; i < kFrameCount; ++i)
 		{
 			const gpu::MappedBufferDesc desc{

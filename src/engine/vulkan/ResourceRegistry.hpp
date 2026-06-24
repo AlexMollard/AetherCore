@@ -209,11 +209,7 @@ namespace aether
 		// registry auto-register every BDA range so the DiagnosticEngine can
 		// resolve raw GPU fault addresses back to resource names.
 		void SetMemoryTracker(GpuMemoryTracker* tracker);
-		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle,
-		        gpu::ImageAspect aspectMask = gpu::ImageAspect::Color,
-		        gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly,
-		        TextureFilter filter = TextureFilter::Linear,
-		        gpu::SamplerAddressMode addressMode = gpu::SamplerAddressMode::Repeat);
+		Expected<void> EnsureBindlessSampled(gpu::TextureHandle handle, gpu::ImageAspect aspectMask = gpu::ImageAspect::Color, gpu::ImageLayout descriptorLayout = gpu::ImageLayout::ShaderReadOnly);
 		[[nodiscard]] bool HasBindlessSampled(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetBindlessSampledSlot(gpu::TextureHandle handle) const;
 

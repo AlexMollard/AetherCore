@@ -131,7 +131,7 @@ namespace aether
 		rt.rgDepth = m_graph->CreateTransientDepth(m_depthFormat, extent);
 
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
-		rt.constants->Initialize(*m_context);
+		rt.constants->Initialize();
 		rt.renderQueue = std::make_unique<RenderQueue>();
 		rt.renderQueue->Initialize(*m_sharedPipelines);
 

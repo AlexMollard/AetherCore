@@ -67,9 +67,8 @@ namespace aether
 
 	// -- Build -----------------------------------------------------------------
 
-	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless)
+	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless)
 	{
-		(void) allocator;
 		m_bindlessMgr = &bindless;
 		m_device = device;
 

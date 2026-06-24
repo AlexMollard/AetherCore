@@ -168,11 +168,6 @@ namespace aether
 		return static_cast<gpu::Device>(m_gfx->GetVulkanContext().GetDevice().device);
 	}
 
-	gpu::Allocator GpuDevice::GetAllocator() const noexcept
-	{
-		return static_cast<gpu::Allocator>(m_gfx->GetVulkanContext().GetAllocator());
-	}
-
 	gpu::Queue GpuDevice::GetGraphicsQueue() const noexcept
 	{
 		return static_cast<gpu::Queue>(m_gfx->GetVulkanContext().GetGraphicsQueue());

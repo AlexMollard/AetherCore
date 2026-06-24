@@ -65,9 +65,8 @@ namespace aether
 		return true;
 	}
 
-	void DynamicMesh::Reset(MeshArena& arena)
+	void DynamicMesh::Reset()
 	{
-		(void) arena;
 		FreeAlloc();
 		m_alloc = {};
 		m_mesh = Mesh{};

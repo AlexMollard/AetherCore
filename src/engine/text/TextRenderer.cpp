@@ -24,10 +24,10 @@ namespace aether
 			return;
 		}
 
-		// GpuDevice exposes opaque gpu::Device / gpu::Allocator / gpu::Queue
-		// accessors. The FontAtlas (and any other engine-side consumer)
+		// GpuDevice exposes opaque gpu::Device / gpu::Queue accessors.
+		// The FontAtlas (and any other engine-side consumer)
 		// never sees raw Vk* types.
-		m_fontAtlas.Build(fontVfsPath, glyphSize, gpu.GetDevice(), gpu.GetAllocator(), gpu.GetGraphicsQueue(), gpu.GetGraphicsQueueFamily(), *m_bindlessMgr);
+		m_fontAtlas.Build(fontVfsPath, glyphSize, gpu.GetDevice(), gpu.GetGraphicsQueue(), gpu.GetGraphicsQueueFamily(), *m_bindlessMgr);
 
 		m_ready = true;
 		AE_INFO(LogCategory::Engine, "TextRenderer: font atlas ready.");

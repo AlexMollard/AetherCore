@@ -4,7 +4,6 @@
 #include <stdexcept>
 
 #include "utils/Assert.hpp"
-#include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
@@ -13,10 +12,8 @@ namespace aether
 		Shutdown();
 	}
 
-	void MaterialBuffer::Initialize(const VulkanContext& ctx)
+	void MaterialBuffer::Initialize()
 	{
-		(void) ctx;
-
 		const gpu::MappedBufferDesc desc{
 		        .size = sizeof(GpuMaterial) * kMaxMaterials,
 		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,

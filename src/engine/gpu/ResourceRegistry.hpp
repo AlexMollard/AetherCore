@@ -180,8 +180,7 @@ namespace aether::gpu
 		// SetBindlessManager for both slot allocation (here) and deferred
 		// slot-free during Destroy.
 		static void SetBindlessManager(class aether::BindlessManager* mgr);
-		static void EnsureBindlessSampled(
-		        TextureHandle handle, ImageAspect aspectMask = ImageAspect::Color, ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly, TextureFilter filter = TextureFilter::Linear, SamplerAddressMode addressMode = SamplerAddressMode::Repeat);
+		static void EnsureBindlessSampled(TextureHandle handle, ImageAspect aspectMask = ImageAspect::Color, ImageLayout descriptorLayout = ImageLayout::ShaderReadOnly);
 		[[nodiscard]] static bool HasBindlessSampled(TextureHandle handle);
 		[[nodiscard]] static std::uint32_t GetBindlessSampledSlot(TextureHandle handle);
 

@@ -28,7 +28,7 @@ namespace aether
 	{
 	public:
 		void Init(ServiceContainer& services);
-		void Shutdown(ServiceContainer& services);
+		void Shutdown();
 
 		// Called on swapchain recreation to rebuild extent-dependent resources.
 		void RecreateSwapchainResources(ServiceContainer& services);

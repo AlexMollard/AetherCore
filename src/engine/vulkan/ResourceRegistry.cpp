@@ -641,10 +641,8 @@ namespace aether
 		return RegisterTexture(entry, debugName.empty() ? std::string_view{} : debugName);
 	}
 
-	Expected<void> ResourceRegistry::EnsureBindlessSampled(gpu::TextureHandle handle, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout, const TextureFilter filter, const gpu::SamplerAddressMode addressMode)
+	Expected<void> ResourceRegistry::EnsureBindlessSampled(gpu::TextureHandle handle, const gpu::ImageAspect aspectMask, const gpu::ImageLayout descriptorLayout)
 	{
-		(void) filter;
-		(void) addressMode;
 		AE_ASSERT(m_bindlessManager != nullptr, "EnsureBindlessSampled: SetBindlessManager was never called.");
 
 		TextureEntry* entry = ResolveMutable(handle);
@@ -1436,9 +1434,9 @@ namespace aether::gpu
 		s_reg->SetBindlessManager(mgr);
 	}
 
-	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, ImageAspect aspectMask, ImageLayout descriptorLayout, TextureFilter filter, SamplerAddressMode addressMode)
+	void ResourceRegistry::EnsureBindlessSampled(TextureHandle handle, ImageAspect aspectMask, ImageLayout descriptorLayout)
 	{
-		auto result = s_reg->EnsureBindlessSampled(handle, aspectMask, descriptorLayout, filter, addressMode);
+		auto result = s_reg->EnsureBindlessSampled(handle, aspectMask, descriptorLayout);
 		if (!result)
 		{
 			AE_WARN(LogCategory::Vulkan, "ResourceRegistry::EnsureBindlessSampled failed: {}", result.error());

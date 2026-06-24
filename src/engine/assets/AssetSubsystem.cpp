@@ -31,7 +31,7 @@ namespace aether
 		auto& registry = services.Get<aether::ResourceRegistry>();
 		m_uploadContext = gpu::UploadContext::Create(static_cast<void*>(vk.GetDevice().device), vk.GetGraphicsQueueFamily(), static_cast<void*>(vk.GetGraphicsQueue()), static_cast<void*>(&registry));
 
-		m_materialBuffer.Initialize(vk);
+		m_materialBuffer.Initialize();
 		m_meshArena.Initialize(vk, {});
 
 		// Wire GPU memory tracking to the arena's GpuHeap instances so
@@ -42,7 +42,7 @@ namespace aether
 			m_meshArena.SetMemoryTracker(&services.Get<DiagnosticEngine>().GetMemoryTracker());
 		}
 
-		m_meshUploadQueue.Initialize(vk);
+		m_meshUploadQueue.Initialize();
 		m_primitiveMeshes.Initialize(m_uploadContext);
 		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadContext);
 	}

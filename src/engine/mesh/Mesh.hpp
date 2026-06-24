@@ -145,8 +145,7 @@ namespace aether
 		}
 
 	private:
-		gpu::Device m_device = nullptr;
-		gpu::Allocator m_allocator = nullptr;
+		bool m_ownsBuffers = false;
 		gpu::BufferHandle m_buffer{};
 		std::uint32_t m_vertexCount = 0;
 		gpu::BufferHandle m_indexBuffer{};

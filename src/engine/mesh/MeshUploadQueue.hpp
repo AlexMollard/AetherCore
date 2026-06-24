@@ -10,8 +10,6 @@
 
 namespace aether
 {
-	class VulkanContext;
-
 	// Batches pending dynamic-mesh vertex/index uploads into a persistently
 	// mapped staging ring, then emits all buffer-copy calls and a single
 	// transfer -> vertex/index barrier in Flush().
@@ -21,7 +19,7 @@ namespace aether
 		// 64 MB staging budget per frame.
 		static constexpr std::uint64_t kStagingCapacity = 64ull * 1024 * 1024;
 
-		void Initialize(const VulkanContext& ctx);
+		void Initialize();
 		void Shutdown();
 
 		// Stage vertexBytes + indexBytes and enqueue copies into the arena

@@ -2,14 +2,12 @@
 
 #include "gpu/BindlessManager.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
-	void ShadowAtlasManager::Initialize(const VulkanContext& ctx, BindlessManager& bindless)
+	void ShadowAtlasManager::Initialize(BindlessManager& bindless)
 	{
 		AE_PROFILE_ZONE();
-		(void) ctx;
 		m_bindless = &bindless;
 
 		const gpu::TextureDesc desc{

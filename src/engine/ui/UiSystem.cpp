@@ -35,9 +35,8 @@ namespace aether::ui
 
 	// Runs before RunLayouts. Checks tab button clicks, updates selection,
 	// and toggles UiLayoutComponent::autoSize + visible per page.
-	static void ProcessTabBars(aether::World& world, gpu::Extent2D extent)
+	static void ProcessTabBars(aether::World& world)
 	{
-		(void) extent;
 		for (const auto& [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
 		{
 			const std::size_t tabCount = std::min(tabComp.tabNames.size(), children.children.size());
@@ -263,7 +262,7 @@ namespace aether::ui
 		const UiTheme& theme = UiTheme::Default();
 
 		// 0. Process tab bar state (clicks, selection, autoSize toggles).
-		ProcessTabBars(world, extent);
+		ProcessTabBars(world);
 
 		// 1. Three-pass layout: children auto-size -> parents position -> children
 		//    re-layout at new positions. See RunLayouts for details.
@@ -296,10 +295,8 @@ namespace aether::ui
 		}
 	}
 
-	void UiSystem::EndFrame(aether::World& world, UiContext& ctx)
+	void UiSystem::EndFrame(aether::World& world)
 	{
-		(void) ctx;
-
 		// Clear per-frame submitted flag on all text inputs (was previously done
 		// inside DrawTextInput but is now deferred so layers can read it during
 		// OnUpdate / OnGui before the flag is consumed).

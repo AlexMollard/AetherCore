@@ -7,10 +7,8 @@
 
 namespace aether
 {
-	void AnimationBlendSystem::Init(gpu::Allocator allocator, gpu::Device device, gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount)
+	void AnimationBlendSystem::Init(gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount)
 	{
-		(void) allocator;
-		(void) device;
 		m_nodeCount = nodeCount;
 		m_blendJobs.resize(static_cast<std::size_t>(maxBlendJobCount));
 
@@ -30,7 +28,7 @@ namespace aether
 		m_address = view.deviceAddress;
 	}
 
-	void AnimationBlendSystem::Shutdown(gpu::Device /*device*/)
+	void AnimationBlendSystem::Shutdown()
 	{
 		if (m_handle.IsValid())
 		{

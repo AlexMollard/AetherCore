@@ -32,7 +32,7 @@ namespace aether
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_renderGraph.SetVulkanContext(&vk);
 		m_renderGraph.SetDiagnosticEngine(&services.Get<DiagnosticEngine>());
-		m_frameConstantsBuffer.Initialize(vk);
+		m_frameConstantsBuffer.Initialize();
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device, vk.GetPipelineCache());
 
@@ -50,7 +50,6 @@ namespace aether
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
 		        .pipelineCache = vk.GetPipelineCache(),
-		        .allocator = vk.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
@@ -90,18 +89,16 @@ namespace aether
 		RegisterPasses(services);
 	}
 
-	void RenderingSubsystem::Shutdown(ServiceContainer& services)
+	void RenderingSubsystem::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		auto& gpu = services.Get<GpuDevice>();
-
 		m_postProcessStack.Destroy();
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
 		m_renderQueue.Shutdown();
-		m_shadowService.Shutdown(gpu.GetDevice());
-		m_localShadowService.Shutdown(gpu.GetDevice());
+		m_shadowService.Shutdown();
+		m_localShadowService.Shutdown();
 		m_renderTargetService.Shutdown();
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown();
@@ -126,7 +123,6 @@ namespace aether
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = gpu.GetDevice(),
 		        .pipelineCache = gpu.GetPipelineCache(),
-		        .allocator = gpu.GetAllocator(),
 		        .extent = swapchain.GetExtent(),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
@@ -162,9 +158,7 @@ namespace aether
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};
 
-		auto& gpu = services.Get<GpuDevice>();
-
-		m_shadowService.SetupPassResources(m_renderGraph, gpu.GetDevice(), frame.depthFormat);
+		m_shadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
 		m_localShadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
 
 		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);

@@ -281,8 +281,7 @@ namespace aether::app
 			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
-				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
-				uiSystem->EndFrame(uiWorld, uiCtx);
+				uiSystem->EndFrame(uiWorld);
 			}
 
 			// Flush ECS draws and build a frame packet.

@@ -48,7 +48,7 @@ namespace aether
 
 		// Release the current arena allocation without rebuilding.
 		// Safe to call on an already-empty DynamicMesh.
-		void Reset(MeshArena& arena);
+		void Reset();
 
 		[[nodiscard]] bool IsValid() const
 		{

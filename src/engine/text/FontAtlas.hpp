@@ -56,7 +56,7 @@ namespace aether
 		// All GPU primitives are passed as opaque `gpu::` types; the call
 		// site (TextRenderer) is the only place that resolves them from
 		// the engine-side GpuDevice accessors.
-		void Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Allocator allocator, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless);
+		void Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless);
 
 		void Destroy();
 

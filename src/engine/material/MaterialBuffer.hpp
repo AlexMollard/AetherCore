@@ -11,8 +11,6 @@
 
 namespace aether
 {
-	class VulkanContext;
-
 	// Persistently-mapped SSBO holding the engine's material table.
 	//
 	// Storage path: stores a single gpu::BufferHandle (8 bytes, typed,
@@ -33,7 +31,7 @@ namespace aether
 		MaterialBuffer(const MaterialBuffer&) = AE_DELETE_MSG("use std::move");
 		MaterialBuffer& operator=(const MaterialBuffer&) = AE_DELETE_MSG("use std::move");
 
-		void Initialize(const VulkanContext& ctx);
+		void Initialize();
 		void Shutdown();
 
 		[[nodiscard]] bool IsInitialized() const

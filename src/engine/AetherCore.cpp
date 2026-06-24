@@ -150,9 +150,7 @@ namespace aether
 		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
 
 		const gpu::Device device = m_gpu->GetDevice();
-		const gpu::Allocator allocator = m_gpu->GetAllocator();
-
-		m_animationBlend->Init(allocator, device, 256, 128);
+		m_animationBlend->Init(256, 128);
 		m_rootMotion->Init(device, 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
@@ -185,7 +183,7 @@ namespace aether
 		m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
 
 		// Subsystems free their VMA-backed allocations (VMA still alive).
-		m_rendering->Shutdown(m_services);
+		m_rendering->Shutdown();
 		m_services.Get<UISubsystem>().Shutdown(m_services);
 		m_cameras->Shutdown();
 		m_services.Get<AssetSubsystem>().Shutdown();
@@ -195,7 +193,7 @@ namespace aether
 		{
 			const gpu::Device device = m_gpu->GetDevice();
 			m_rootMotion->Shutdown(device);
-			m_animationBlend->Shutdown(device);
+			m_animationBlend->Shutdown();
 		}
 
 		// GPU shutdown destroys internal Vulkan resources.

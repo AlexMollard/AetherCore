@@ -10,8 +10,6 @@
 
 namespace aether
 {
-	class VulkanContext;
-
 	// Per-frame uniform buffer for the frame constants block.
 	//
 	// Storage path: stores gpu::BufferHandle per frame in m_frames (8 bytes
@@ -30,7 +28,7 @@ namespace aether
 		FrameConstantsBuffer(const FrameConstantsBuffer&) = AE_DELETE_MSG("use std::move");
 		FrameConstantsBuffer& operator=(const FrameConstantsBuffer&) = AE_DELETE_MSG("use std::move");
 
-		void Initialize(const VulkanContext& ctx);
+		void Initialize();
 		void Shutdown();
 
 		void Write(std::uint32_t frameIndex, const FrameConstants& data);

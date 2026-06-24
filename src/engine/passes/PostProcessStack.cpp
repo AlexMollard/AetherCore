@@ -14,8 +14,6 @@ namespace aether
 {
 	PostProcessStack PostProcessStack::Create(const Desc& desc)
 	{
-		(void) desc.allocator;
-		(void) desc.device;
 		PostProcessStack stack;
 
 		const gpu::TextureDesc hdrDesc{
@@ -135,8 +133,6 @@ namespace aether
 			                        .width = ctx.extent.width,
 			                        .height = ctx.extent.height,
 			                };
-			                (void) bindless;
-
 			                bindless.CmdBindHeaps(cmd);
 
 			                cmd.BindPipeline(m_tonemapPipeline.GetPipeline());

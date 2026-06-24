@@ -90,7 +90,6 @@ namespace aether
 		// `static_cast<gpu::*>` back to opaque. Use these accessors
 		// instead.
 		[[nodiscard]] gpu::Device GetDevice() const noexcept;
-		[[nodiscard]] gpu::Allocator GetAllocator() const noexcept;
 		[[nodiscard]] gpu::Queue GetGraphicsQueue() const noexcept;
 		[[nodiscard]] gpu::Queue GetComputeQueue() const noexcept;
 		[[nodiscard]] gpu::PipelineCache GetPipelineCache() const noexcept;

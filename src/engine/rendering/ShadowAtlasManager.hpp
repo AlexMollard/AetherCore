@@ -11,7 +11,6 @@
 namespace aether
 {
 	class BindlessManager;
-	class VulkanContext;
 
 	// Manages an 8K x 8K R32G32_SFLOAT VSM shadow atlas with shelf-packing
 	// allocation. The atlas is re-packed every frame (reset + re-allocate)
@@ -45,7 +44,7 @@ namespace aether
 			}
 		};
 
-		void Initialize(const VulkanContext& ctx, BindlessManager& bindless);
+		void Initialize(BindlessManager& bindless);
 		void Shutdown();
 
 		// Reset all shelves for a new frame. Must be called once per frame

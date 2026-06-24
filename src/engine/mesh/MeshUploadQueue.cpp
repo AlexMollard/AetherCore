@@ -5,14 +5,12 @@
 
 #include "utils/Expected.hpp"
 #include "utils/Profiler.hpp"
-#include "vulkan/VulkanContext.hpp"
 
 namespace aether
 {
-	void MeshUploadQueue::Initialize(const VulkanContext& ctx)
+	void MeshUploadQueue::Initialize()
 	{
 		AE_PROFILE_ZONE();
-		(void) ctx;
 
 		const gpu::MappedBufferDesc desc{
 		        .size = kStagingCapacity,

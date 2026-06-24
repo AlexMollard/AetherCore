@@ -27,7 +27,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
-			shadowConstants.Initialize(context);
+			shadowConstants.Initialize();
 		}
 
 		// Single shadow queue with 3x output capacity for multi-frustum culling.
@@ -39,7 +39,7 @@ namespace aether
 		RecreatePipeline(context.GetDevice().device, context.GetPipelineCache(), swapchain.GetDepthFormat());
 	}
 
-	void ShadowService::Shutdown(const gpu::Device device)
+	void ShadowService::Shutdown()
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
@@ -48,7 +48,6 @@ namespace aether
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
-		(void) device;
 	}
 
 	void ShadowService::RecreatePipeline(gpu::Device device, gpu::PipelineCache pipelineCache, gpu::Format depthFormat)
@@ -89,16 +88,15 @@ namespace aether
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
-	void ShadowService::RegisterPasses(RenderGraph& graph, gpu::Device device, const CullPass& cullPass, gpu::Format depthFormat)
+	void ShadowService::RegisterPasses(RenderGraph& graph, const CullPass& cullPass, gpu::Format depthFormat)
 	{
-		SetupPassResources(graph, device, depthFormat);
+		SetupPassResources(graph, depthFormat);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
 	}
 
-	void ShadowService::SetupPassResources(RenderGraph& graph, gpu::Device device, gpu::Format depthFormat)
+	void ShadowService::SetupPassResources(RenderGraph& graph, gpu::Format depthFormat)
 	{
-		(void) device;
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);

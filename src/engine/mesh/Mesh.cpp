@@ -19,7 +19,6 @@ namespace aether
 	{
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
-		// m_allocator intentionally left null - Destroy() uses ResourceRegistry.
 		mesh.m_buffer = vertexBuffer;
 		mesh.m_vertexCount = vertexCount;
 		mesh.m_vertexByteOffset = vertexByteOffset;
@@ -78,7 +77,7 @@ namespace aether
 
 		Mesh mesh;
 		mesh.m_aliveSentinel = Mesh::kAliveSentinel;
-		mesh.m_allocator = reinterpret_cast<gpu::Allocator>(static_cast<std::uintptr_t>(1));
+		mesh.m_ownsBuffers = true;
 		mesh.m_buffer = bufferHandle;
 		mesh.m_vertexCount = static_cast<std::uint32_t>(vertices.size());
 		mesh.m_vertexDeviceAddress = resolved.deviceAddress;
@@ -154,8 +153,7 @@ namespace aether
 	}
 
 	Mesh::Mesh(Mesh&& other) noexcept
-	      : m_device(other.m_device),
-	        m_allocator(other.m_allocator),
+	      : m_ownsBuffers(other.m_ownsBuffers),
 	        m_buffer(other.m_buffer),
 	        m_vertexCount(other.m_vertexCount),
 	        m_indexBuffer(other.m_indexBuffer),
@@ -170,8 +168,7 @@ namespace aether
 	        m_aliveSentinel(other.m_aliveSentinel),
 	        m_generation(other.m_generation)
 	{
-		other.m_device = nullptr;
-		other.m_allocator = nullptr;
+		other.m_ownsBuffers = false;
 		other.m_buffer = {};
 		other.m_vertexCount = 0;
 		other.m_indexBuffer = {};
@@ -193,8 +190,7 @@ namespace aether
 		{
 			Destroy();
 
-			m_device = other.m_device;
-			m_allocator = other.m_allocator;
+			m_ownsBuffers = other.m_ownsBuffers;
 			m_buffer = other.m_buffer;
 			m_vertexCount = other.m_vertexCount;
 			m_indexBuffer = other.m_indexBuffer;
@@ -209,8 +205,7 @@ namespace aether
 			m_aliveSentinel = other.m_aliveSentinel;
 			m_generation = other.m_generation;
 
-			other.m_device = nullptr;
-			other.m_allocator = nullptr;
+			other.m_ownsBuffers = false;
 			other.m_buffer = {};
 			other.m_vertexCount = 0;
 			other.m_indexBuffer = {};
@@ -231,19 +226,18 @@ namespace aether
 	void Mesh::Destroy()
 	{
 		++m_generation;
-		if (m_indexBuffer.IsValid() && m_allocator != nullptr)
+		if (m_indexBuffer.IsValid() && m_ownsBuffers)
 		{
 			gpu::ResourceRegistry::Destroy(m_indexBuffer);
 			m_indexBuffer = {};
 		}
 		m_indexCount = 0;
-		if (m_buffer.IsValid() && m_allocator != nullptr)
+		if (m_buffer.IsValid() && m_ownsBuffers)
 		{
 			gpu::ResourceRegistry::Destroy(m_buffer);
 			m_buffer = {};
 		}
-		m_allocator = nullptr;
+		m_ownsBuffers = false;
 		m_vertexCount = 0;
-		// device intentionally left valid; the engine may still query it.
 	}
 } // namespace aether

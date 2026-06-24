@@ -50,7 +50,7 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto device = static_cast<gpu::Device>(context.GetDevice().device);
 
-		m_atlasManager.Initialize(context, bindless);
+		m_atlasManager.Initialize(bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
 		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
@@ -143,9 +143,8 @@ namespace aether
 		}
 	}
 
-	void LocalShadowService::Shutdown(gpu::Device device)
+	void LocalShadowService::Shutdown()
 	{
-		(void) device;
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.Shutdown();
 		m_shadowPipeline.Destroy();
@@ -400,9 +399,8 @@ namespace aether
 		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}
 
-	void LocalShadowService::RegisterPasses(RenderGraph& graph, gpu::Device device, CullPass& cullPass, gpu::Format depthFormat)
+	void LocalShadowService::RegisterPasses(RenderGraph& graph, CullPass& cullPass, gpu::Format depthFormat)
 	{
-		(void) device;
 		SetupPassResources(graph, depthFormat);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
