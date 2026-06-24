@@ -127,7 +127,7 @@ namespace aether
 		out << "fxaa = " << (settings.graphics.fxaa ? "true" : "false") << "\n";
 		out << "asyncCompute = " << (settings.graphics.asyncCompute ? "true" : "false") << "\n\n";
 		out << "[app]\n";
-		out << "# 0 = auto policy (sync to display when VSync on, uncapped when off)\n";
+		out << "# 0 = auto policy (swapchain-paced when VSync on, uncapped when off)\n";
 		out << "targetFps = " << settings.app.targetFps << "\n";
 	}
 

@@ -167,16 +167,7 @@ namespace aether::app
 		}
 		else if (m_settings.graphics.vsync)
 		{
-			const int refreshRate = m_engine.GetServiceContainer().Get<Window>().GetDisplayRefreshRate();
-			if (refreshRate > 0)
-			{
-				AE_INFO(LogCategory::App, "Display refresh rate: {} Hz - setting frame pacer target.", refreshRate);
-				m_framePacer.SetTargetFps(static_cast<float>(refreshRate));
-			}
-			else
-			{
-				AE_WARN(LogCategory::App, "Could not query display refresh rate - frame pacer running uncapped.");
-			}
+			AE_INFO(LogCategory::App, "VSync is on and TargetFPS is 0 - using swapchain FIFO pacing.");
 		}
 		else
 		{

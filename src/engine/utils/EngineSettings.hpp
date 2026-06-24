@@ -22,7 +22,7 @@ namespace aether
 
 		struct App
 		{
-			// 0 = automatic policy (sync to display when VSync is on, uncapped when off)
+			// 0 = automatic policy (swapchain-paced when VSync is on, uncapped when off)
 			float targetFps = 0.0f;
 		} app;
 	};

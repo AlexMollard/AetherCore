@@ -35,7 +35,7 @@ namespace aether
 
 		// Write to the channel and return immediately.
 		// The render thread picks up the packet asynchronously.
-		// If both channel slots are occupied (render thread is 2 frames behind),
+		// If all channel slots are occupied (render thread is 3 frames behind),
 		// this blocks until a slot frees up -- natural backpressure.
 		m_channel.write(std::move(packet));
 	}

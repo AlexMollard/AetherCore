@@ -16,7 +16,7 @@ namespace aether
 	//   Game thread   : Sim N -> SubmitFrame(N) -> Sim N+1 -> SubmitFrame(N+1) -> ...
 	//   Render thread :              Read N -> Exec N            Read N+1 -> Exec N+1 -> ...
 	//
-	// Synchronisation uses a bounded channel (capacity = 2 = double-buffered).
+	// Synchronisation uses a bounded channel (capacity = kMaxFramesInFlight).
 	// SubmitFrame writes to the channel and returns immediately -- the game thread
 	// continues with frame N+1's simulation while the render thread executes frame N.
 	//
