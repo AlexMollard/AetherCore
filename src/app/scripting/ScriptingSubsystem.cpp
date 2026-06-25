@@ -9,6 +9,7 @@
 
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 #include <filesystem>
 
@@ -37,6 +38,7 @@ namespace aether::app::scripting
 {
 	ScriptingSubsystem::ScriptingSubsystem()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_modulesRegistered)
 		{
 			EnsureModulesRegistered();
@@ -124,6 +126,7 @@ namespace aether::app::scripting
 
 	ScriptHandle ScriptingSubsystem::Compile(const std::string& path)
 	{
+		AE_PROFILE_ZONE();
 		m_lastError.clear();
 		const std::string resolvedPath = ResolveScriptPath(path);
 
@@ -208,16 +211,19 @@ namespace aether::app::scripting
 
 	void ScriptingSubsystem::CallOnAttach(ScriptHandle& handle, SceneContext& ctx)
 	{
+		AE_PROFILE_ZONE();
 		InvokeWithWorld(handle.ctx, handle.onAttach, ctx, *this);
 	}
 
 	void ScriptingSubsystem::CallOnUpdate(ScriptHandle& handle, SceneContext& ctx)
 	{
+		AE_PROFILE_ZONE();
 		InvokeWithWorld(handle.ctx, handle.onUpdate, ctx, *this);
 	}
 
 	void ScriptingSubsystem::CallOnDetach(ScriptHandle& handle, SceneContext& ctx)
 	{
+		AE_PROFILE_ZONE();
 		InvokeWithWorld(handle.ctx, handle.onDetach, ctx, *this);
 	}
 

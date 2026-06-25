@@ -18,6 +18,7 @@
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -171,6 +172,7 @@ namespace aether
 
 	void QuadRenderer::Init(ServiceContainer& services, std::string_view passName)
 	{
+		AE_PROFILE_ZONE();
 		m_vkCtx = &services.Get<VulkanContext>();
 		m_renderGraph = &services.Get<RenderGraph>();
 		m_bindlessMgr = &services.Get<BindlessManager>();
@@ -201,6 +203,7 @@ namespace aether
 
 	void QuadRenderer::Shutdown(ServiceContainer& services)
 	{
+		AE_PROFILE_ZONE();
 		if (m_ready)
 		{
 			services.Get<RenderGraph>().RemovePass(m_passName);

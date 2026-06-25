@@ -10,11 +10,13 @@
 #include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void CompileAnimations(World& world, std::uint32_t entityId, gpu::CommandPool uploadPool)
 	{
+		AE_PROFILE_ZONE();
 		if (uploadPool == nullptr)
 		{
 			AE_WARN(LogCategory::Animation, "CompileAnimations: upload pool is null");

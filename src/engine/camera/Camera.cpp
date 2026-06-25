@@ -5,6 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "platform/Input.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -121,6 +122,7 @@ namespace aether
 
 	void Camera::Update(const Input& input, float dt)
 	{
+		AE_PROFILE_ZONE();
 		if (m_mode == CameraMode::Manual)
 		{
 			return;

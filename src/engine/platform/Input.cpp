@@ -3,6 +3,8 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include "utils/Profiler.hpp"
+
 namespace aether
 {
 	Input::~Input()
@@ -19,6 +21,7 @@ namespace aether
 
 	void Input::Init(GLFWwindow* window)
 	{
+		AE_PROFILE_ZONE();
 		m_window = window;
 		glfwSetWindowUserPointer(window, this);
 		glfwSetScrollCallback(window, &Input::OnScroll);
@@ -27,6 +30,7 @@ namespace aether
 
 	void Input::Update()
 	{
+		AE_PROFILE_ZONE();
 		// Carry current state into previous before polling the new state.
 		m_prevKeys = m_currKeys;
 		m_prevMouseButtons = m_currMouseButtons;

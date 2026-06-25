@@ -8,11 +8,13 @@
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
 #include "utils/LogCategory.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void AnimationRootMotionSystem::Init(gpu::Device device, std::uint32_t maxEntities)
 	{
+		AE_PROFILE_ZONE();
 		m_maxEntities = maxEntities;
 		m_prevPositions.resize(static_cast<std::size_t>(maxEntities) * kSlots, glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
 
@@ -40,6 +42,7 @@ namespace aether
 
 	void AnimationRootMotionSystem::Shutdown(gpu::Device device)
 	{
+		AE_PROFILE_ZONE();
 		if (m_timelineSemaphore != nullptr)
 		{
 			gpu::DestroyTimelineSemaphore(device, m_timelineSemaphore);
@@ -56,19 +59,24 @@ namespace aether
 
 	void AnimationRootMotionSystem::BeginFrame(gpu::Device device, std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		if (frameIndex == 0)
 		{
 			return;
 		}
 
-		if (!gpu::WaitTimelineSemaphore(device, m_timelineSemaphore, frameIndex))
 		{
-			AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: gpu::WaitTimelineSemaphore failed (expected success or timeout).");
+			AE_PROFILE_ZONE();
+			if (!gpu::WaitTimelineSemaphore(device, m_timelineSemaphore, frameIndex))
+			{
+				AE_WARN(LogCategory::Animation, "AnimationRootMotionSystem::BeginFrame: gpu::WaitTimelineSemaphore failed (expected success or timeout).");
+			}
 		}
 	}
 
 	void AnimationRootMotionSystem::ApplyDelta(World& world, std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		const std::uint32_t readSlot = (frameIndex == 0) ? (kSlots - 1) : ((frameIndex - 1) % kSlots);
 		const std::uint32_t entityCount = m_maxEntities;
 

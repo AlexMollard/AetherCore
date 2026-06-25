@@ -245,7 +245,7 @@ namespace aether
 
 	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
-		AE_PROFILE_ZONE_N("Texture::LoadFromFile");
+		AE_PROFILE_ZONE();
 		AE_PROFILE_SET_ZONE_NAME(path.data());
 
 		// Try the pre-transcoded .texture (DDS) version first, then fall back to

@@ -165,6 +165,7 @@ namespace aether
 {
 	VulkanContext::VulkanContext(const Window& window, const char* appName)
 	{
+		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::Vulkan, "Creating Vulkan context for '{}'.", appName);
 
 		if (volkInitialize() != VK_SUCCESS)
@@ -692,6 +693,7 @@ namespace aether
 
 	VulkanContext::~VulkanContext()
 	{
+		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Vulkan, "Destroying Vulkan context resources.");
 
 		if (m_pipelineCache != VK_NULL_HANDLE && m_device.has_value())
@@ -801,6 +803,7 @@ namespace aether
 
 	void VulkanContext::WaitIdle() const
 	{
+		AE_PROFILE_ZONE();
 		if (m_device->device == VK_NULL_HANDLE)
 		{
 			return;
@@ -826,6 +829,7 @@ namespace aether
 
 	void VulkanContext::QueryDeviceFaultInfo() const
 	{
+		AE_PROFILE_ZONE();
 		const auto vkGetDeviceFaultReportsKHR = reinterpret_cast<PFN_vkGetDeviceFaultReportsKHR>(vkGetDeviceProcAddr(m_device->device, "vkGetDeviceFaultReportsKHR"));
 		if (vkGetDeviceFaultReportsKHR == nullptr)
 		{

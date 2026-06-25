@@ -1,11 +1,13 @@
 #include "EffectManager.hpp"
 
 #include "assets/AssetManager.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::app::effects
 {
 	void EffectManager::Register(const char* name, aether::GraphicsPipeline pipeline, const aether::Material& material)
 	{
+		AE_PROFILE_ZONE();
 		EffectData data;
 		data.pipeline = std::move(pipeline);
 		data.material = material;
@@ -15,6 +17,7 @@ namespace aether::app::effects
 	bool EffectManager::CreateAndRegister(
 	        const char* name, aether::AssetManager& assets, const void* descriptorHeapMappings, aether::gpu::Format colorFormat, aether::gpu::Format depthFormat, const char* shaderVfsPath, const aether::Material& material)
 	{
+		AE_PROFILE_ZONE();
 		auto result = assets.CreateGraphicsPipeline({
 		        .shaderVfsPath = shaderVfsPath,
 		        .colorFormat = colorFormat,
@@ -45,6 +48,7 @@ namespace aether::app::effects
 
 	void EffectManager::DestroyAll(aether::AssetManager& assets)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& [name, data]: m_effects)
 		{
 			assets.UnregisterMaterial(data.material);

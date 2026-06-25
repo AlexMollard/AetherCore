@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "mesh/MeshUploadQueue.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -35,6 +36,7 @@ namespace aether
 
 	bool DynamicMesh::Rebuild(const void* vertexData, std::uint32_t vertexCount, std::uint32_t vertexStride, const std::uint32_t* indices, std::uint32_t indexCount, MeshArena& arena, MeshUploadQueue& uploadQueue)
 	{
+		AE_PROFILE_ZONE();
 		// Release the old allocation back to the arena.
 		FreeAlloc();
 		m_arena = &arena;

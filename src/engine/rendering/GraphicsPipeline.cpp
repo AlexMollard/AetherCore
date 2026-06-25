@@ -1,6 +1,7 @@
 #include "rendering/GraphicsPipeline.hpp"
 
 #include "gpu/ResourceRegistry.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -32,6 +33,7 @@ namespace aether
 
 	void GraphicsPipeline::Destroy()
 	{
+		AE_PROFILE_ZONE();
 		if (m_handle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_handle);
@@ -41,6 +43,7 @@ namespace aether
 
 	Expected<GraphicsPipeline> GraphicsPipeline::Create(gpu::Device device, const Desc& desc)
 	{
+		AE_PROFILE_ZONE();
 		const gpu::GraphicsPipelineDesc facadeDesc{
 		        .shaderVfsPath = desc.shaderVfsPath.data() ? desc.shaderVfsPath.data() : "",
 		        .fragmentVfsPath = desc.fragmentVfsPath.data() ? desc.fragmentVfsPath.data() : "",

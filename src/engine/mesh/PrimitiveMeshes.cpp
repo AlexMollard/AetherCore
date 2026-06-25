@@ -4,11 +4,13 @@
 #include <vector>
 
 #include "mesh/MeshGen.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void PrimitiveMeshes::Initialize(gpu::UploadContext& uploadContext)
 	{
+		AE_PROFILE_ZONE();
 		// -----------------------------------------------------------------------
 		// Triangle  (CCW, facing +Z)
 		// -----------------------------------------------------------------------
@@ -146,6 +148,7 @@ namespace aether
 
 	void PrimitiveMeshes::Destroy()
 	{
+		AE_PROFILE_ZONE();
 		m_triangle.Destroy();
 		m_quad.Destroy();
 		m_cube.Destroy();

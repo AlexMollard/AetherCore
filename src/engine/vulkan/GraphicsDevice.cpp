@@ -1,5 +1,6 @@
 #include "vulkan/GraphicsDevice.hpp"
 
+#include "utils/Profiler.hpp"
 #include "gpu/CommandList.hpp"
 #include "utils/Assert.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -26,6 +27,7 @@ namespace aether
 
 	void GraphicsDevice::Init(ServiceContainer& services, const Config& config)
 	{
+		AE_PROFILE_ZONE();
 		auto& window = services.Get<Window>();
 
 		m_vulkanContext.emplace(window, config.appName);
@@ -52,6 +54,7 @@ namespace aether
 
 	void GraphicsDevice::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		// WaitIdle may throw VK_ERROR_DEVICE_LOST, which triggers the fault
 		// callback — keep it set until after the wait.
 		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);

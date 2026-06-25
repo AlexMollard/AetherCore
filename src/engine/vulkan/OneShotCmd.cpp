@@ -3,6 +3,7 @@
 #include "vulkan/volk.hpp"
 
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::gpu
 {
@@ -31,6 +32,7 @@ namespace aether::gpu
 
 	bool OneShotCmd::Begin(void* device, void* pool)
 	{
+		AE_PROFILE_ZONE();
 		if (m_cmd != nullptr)
 		{
 			Release();
@@ -75,6 +77,7 @@ namespace aether::gpu
 
 	bool OneShotCmd::EndAndSubmit(void* queue)
 	{
+		AE_PROFILE_ZONE();
 		if (m_cmd == nullptr)
 		{
 			return false;

@@ -539,7 +539,7 @@ namespace aether
 			if ((m_debugAnimPassMask & 1u) && m_sharedPipelines != nullptr && m_sharedPipelines->poseInit.IsValid())
 			{
 				const auto poseInitPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->poseInit);
-				AE_PROFILE_ZONE_N("RenderQueue.Animation.PoseInit.Dispatch");
+				AE_PROFILE_ZONE();
 				AE_VERBOSE(LogCategory::Animation, "PoseInit: currSampledPosesAddr=0x{:x}, animJobsBDA=0x{:x}", currSampledPosesAddr, m_animationSampleJobs[frameSlot].address);
 
 				cmdList.BindComputePipeline(const_cast<void*>(poseInitPipe.state));
@@ -593,7 +593,7 @@ namespace aether
 				cmdList.EndDebugLabel();
 			}
 
-			AE_PROFILE_ZONE_N("RenderQueue.Animation.SampleClips.Dispatch");
+			AE_PROFILE_ZONE();
 
 			if ((m_debugAnimPassMask & 2u) && m_sharedPipelines != nullptr && m_sharedPipelines->animSample.IsValid() && sampleJobsThisFrame > 0)
 			{
@@ -635,7 +635,7 @@ namespace aether
 				const std::uint32_t blendJobCount = m_animationBlendSystem->GetBlendJobCount();
 				if (blendJobCount > 0 && blendPc.jobCount > 0)
 				{
-					AE_PROFILE_ZONE_N("RenderQueue.AnimationBlend.Dispatch");
+					AE_PROFILE_ZONE();
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);
 					cmdList.BindComputePipeline(const_cast<void*>(animBlendPipe.state));
 					cmdList.BeginDebugLabel("Animation.AnimBlend", 0.6f, 0.4f, 0.8f, 1.0f);
@@ -701,7 +701,7 @@ namespace aether
 		if ((m_debugAnimPassMask & 4u) && sampleJobsThisFrame > 0 && !m_debugDisableAnimation && m_sharedPipelines->nodeFlatten.IsValid())
 		{
 			const auto nodeFlattenPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->nodeFlatten);
-			AE_PROFILE_ZONE_N("RenderQueue.NodeFlatten.Dispatch");
+			AE_PROFILE_ZONE();
 			AE_VERBOSE(LogCategory::Animation, "NodeFlatten: {} batches, {} sampleJobs", animSampleBatchCount, sampleJobsThisFrame);
 
 			cmdList.BindComputePipeline(const_cast<void*>(nodeFlattenPipe.state));
@@ -768,7 +768,7 @@ namespace aether
 
 		if ((m_debugAnimPassMask & 8u) && skinJobCount > 0 && !m_debugDisableAnimation)
 		{
-			AE_PROFILE_ZONE_N("RenderQueue.Animation.BuildSkinPalette.Dispatch");
+			AE_PROFILE_ZONE();
 
 			const auto skinPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->skinCopy);
 			cmdList.BindComputePipeline(const_cast<void*>(skinPipe.state));
@@ -836,7 +836,7 @@ namespace aether
 			};
 
 			{
-				AE_PROFILE_ZONE_N("RenderQueue.Cull.DispatchMulti");
+				AE_PROFILE_ZONE();
 				cmdList.BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline);
 				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
@@ -861,7 +861,7 @@ namespace aether
 			};
 
 			{
-				AE_PROFILE_ZONE_N("RenderQueue.Cull.Dispatch");
+				AE_PROFILE_ZONE();
 				cmdList.BeginDebugLabel("CullPass.cullDraws", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline);
 				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&pc), sizeof(pc)));

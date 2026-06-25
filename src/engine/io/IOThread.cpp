@@ -81,12 +81,12 @@ namespace aether::io
 			// --- Execute ---------------------------------------------------
 			if (coro)
 			{
-				AE_PROFILE_ZONE_N("IO::CoroResume");
+				AE_PROFILE_ZONE();
 				coro.resume();
 			}
 			else
 			{
-				AE_PROFILE_ZONE_N("IO::Job");
+				AE_PROFILE_ZONE();
 				work();
 			}
 

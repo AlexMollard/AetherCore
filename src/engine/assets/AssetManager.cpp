@@ -22,6 +22,7 @@
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -261,6 +262,7 @@ namespace aether
 
 	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, gpu::UploadContext& uploadContext)
 	{
+		AE_PROFILE_ZONE();
 		m_context = &context;
 		m_bindlessManager = &bindlessManager;
 		m_materialBuffer = &materialBuffer;
@@ -290,6 +292,7 @@ namespace aether
 
 	coro::async<Expected<Texture>> AssetManager::CreateTextureAsync(std::string_view path)
 	{
+		AE_PROFILE_ZONE();
 		// Read file data on the I/O thread (suspends the calling coroutine).
 		const std::string pathStr(path);
 		auto fileData = co_await io::FileSystem::ReadFileAsync(pathStr);
@@ -363,6 +366,7 @@ namespace aether
 
 	Expected<Material> AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
 	{
+		AE_PROFILE_ZONE();
 		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
 
 		std::string presetPath = requestedPath;
@@ -552,6 +556,7 @@ namespace aether
 
 	Expected<LoadedModel> AssetManager::LoadModel(std::string_view path)
 	{
+		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Engine, "Loading model: {}", path);
 		AE_TRY(source, assets::GltfAsset::LoadFromVfsPath(path));
 		LoadedModel loaded;
@@ -568,6 +573,7 @@ namespace aether
 
 	coro::async<Expected<LoadedModel>> AssetManager::LoadModelAsync(std::string_view path)
 	{
+		AE_PROFILE_ZONE();
 		const std::string pathStr(path);
 
 		// Resolve the .mesh path (same logic as GltfAsset::LoadFromVfsPath).
@@ -597,6 +603,7 @@ namespace aether
 
 	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path)
 	{
+		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Engine, "Finalising model: {} nodes, {} primitives, {} skins, {} materials", source.nodes.size(), source.primitives.size(), source.skins.size(), source.materials.size());
 
 		std::vector<glm::mat4> localNodeTransforms(source.nodes.size(), glm::mat4(1.0f));
@@ -776,6 +783,7 @@ namespace aether
 
 	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId, float scale)
 	{
+		AE_PROFILE_ZONE();
 		std::vector<Entity> entities;
 		entities.reserve(model.primitives.size());
 

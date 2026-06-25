@@ -32,7 +32,7 @@ namespace aether
 
 	Mesh Mesh::Create(gpu::UploadContext& uploadContext, std::span<const Vertex> vertices)
 	{
-		AE_PROFILE_ZONE_N("Mesh::Upload");
+		AE_PROFILE_ZONE();
 		const gpu::DeviceSize size = sizeof(Vertex) * vertices.size();
 
 		// Staging mapped buffer

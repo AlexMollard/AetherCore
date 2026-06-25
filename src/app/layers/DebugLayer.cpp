@@ -31,6 +31,7 @@
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
+#include "utils/Profiler.hpp"
 #include "AetherCore.hpp"
 
 namespace aether::app
@@ -301,6 +302,7 @@ namespace aether::app
 
 	void DebugLayer::OnAttach(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		auto& world = context.Get<World>();
 
 		auto reg = [this](Entity e) -> Entity
@@ -479,6 +481,7 @@ namespace aether::app
 
 	void DebugLayer::OnDetach(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		auto& world = context.Get<World>();
 		for (const Entity e: m_entities)
 		{
@@ -489,6 +492,7 @@ namespace aether::app
 
 	void DebugLayer::OnUpdate(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		auto& world = context.Get<World>();
 		const Input& input = context.Get<Input>();
 
@@ -864,6 +868,7 @@ namespace aether::app
 
 	void DebugLayer::OnGui(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		auto& ui = context.Get<UIRenderer>();
 		const Input& input = context.Get<Input>();
 		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();

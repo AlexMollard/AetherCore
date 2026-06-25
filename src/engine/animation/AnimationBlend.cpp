@@ -5,10 +5,13 @@
 #include "scene/World.hpp"
 #include <entt/entt.hpp>
 
+#include "utils/Profiler.hpp"
+
 namespace aether
 {
 	void AnimationBlendSystem::Init(gpu::DeviceSize maxBlendJobCount, std::uint32_t nodeCount)
 	{
+		AE_PROFILE_ZONE();
 		m_nodeCount = nodeCount;
 		m_blendJobs.resize(static_cast<std::size_t>(maxBlendJobCount));
 
@@ -30,6 +33,7 @@ namespace aether
 
 	void AnimationBlendSystem::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_handle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_handle);
@@ -42,6 +46,7 @@ namespace aether
 
 	void AnimationBlendSystem::PopulateBlendJobs(World& world, const AnimationDatabase& animDb)
 	{
+		AE_PROFILE_ZONE();
 		m_writtenJobCount = 0;
 
 		auto& reg = world.GetRegistry();

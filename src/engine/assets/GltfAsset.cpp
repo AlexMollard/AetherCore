@@ -903,7 +903,7 @@ namespace aether::assets
 
 	Expected<GltfAsset> GltfAsset::LoadFromVfsPath(std::string_view path)
 	{
-		AE_PROFILE_ZONE_N("GltfAsset::Load");
+		AE_PROFILE_ZONE();
 		AE_PROFILE_SET_ZONE_NAME(path.data());
 
 		const std::string vfsPath(path);
@@ -941,7 +941,7 @@ namespace aether::assets
 
 		std::vector<std::byte> meshData;
 		{
-			AE_PROFILE_ZONE_N("GltfAsset::LoadMesh");
+			AE_PROFILE_ZONE();
 			AE_EXPECT_OR_THROW(data, io::FileSystem::ReadFile(meshPath));
 			meshData = std::move(data);
 		}

@@ -4,6 +4,7 @@
 
 #include "gpu/GpuTypes.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/VulkanContext.hpp"
 
 namespace aether
@@ -25,6 +26,7 @@ namespace aether
 
 	AnimationDatabase AnimationDatabase::Create(const VulkanContext& ctx, gpu::CommandPool uploadPool, const assets::GltfAsset& asset)
 	{
+		AE_PROFILE_ZONE();
 		AnimationDatabase db;
 		db.m_ctx = &ctx;
 		db.m_nodeCount = static_cast<std::uint32_t>(asset.nodes.size());
@@ -339,6 +341,7 @@ namespace aether
 
 	void AnimationDatabase::Destroy()
 	{
+		AE_PROFILE_ZONE();
 		m_heap->Shutdown();
 		m_clipsAddr = 0;
 		m_channelsAddr = 0;
@@ -376,6 +379,7 @@ namespace aether
 	Expected<std::uint32_t> AnimationDatabase::AppendAnimations(
 	        gpu::CommandPool uploadPool, std::span<const GpuClip> newClips, std::span<const GpuChannel> newChannels, std::span<const float> newTimes, std::span<const glm::vec4> newValues, std::string_view newClipNames)
 	{
+		AE_PROFILE_ZONE();
 		if (newClips.empty() || !m_ctx)
 		{
 			return static_cast<std::uint32_t>(m_clips.size());

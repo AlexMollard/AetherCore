@@ -261,7 +261,7 @@ namespace aether
 
 		{
 			const auto fenceStart = std::chrono::steady_clock::now();
-			AE_PROFILE_ZONE_N("WaitForFence");
+			AE_PROFILE_ZONE();
 			if (vkWaitForFences(device, 1, &frame.inFlight, VK_TRUE, UINT64_MAX) != VK_SUCCESS)
 			{
 				Throw(AetherError::Vulkan(0, "Failed to wait for fence."));
@@ -272,7 +272,7 @@ namespace aether
 		VkResult acquireResult;
 		{
 			const auto acquireStart = std::chrono::steady_clock::now();
-			AE_PROFILE_ZONE_N("AcquireNextImage");
+			AE_PROFILE_ZONE();
 			acquireResult = vkAcquireNextImageKHR(device, m_swapchain.swapchain, UINT64_MAX, frame.imageAvailable, VK_NULL_HANDLE, &m_imageIndex);
 			AE_PROFILE_PLOT("Swapchain/AcquireImageNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - acquireStart).count()));
 		}

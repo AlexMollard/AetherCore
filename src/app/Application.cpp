@@ -189,7 +189,7 @@ namespace aether::app
 
 		while (!m_engine.ShouldClose())
 		{
-			AE_PROFILE_ZONE_N("Frame");
+			AE_PROFILE_ZONE();
 
 			const auto frameStartTime = std::chrono::steady_clock::now();
 
@@ -230,7 +230,7 @@ namespace aether::app
 
 			// Update ECS systems (game logic) with scaled dt.
 			{
-				AE_PROFILE_ZONE_N("WorldSystems");
+				AE_PROFILE_ZONE();
 				frameContext.Get<World>().UpdateSystems(static_cast<float>(scaledDt));
 			}
 
@@ -262,12 +262,12 @@ namespace aether::app
 
 			// Layer game-logic update.
 			{
-				AE_PROFILE_ZONE_N("LayerUpdate");
+				AE_PROFILE_ZONE();
 				m_layers.UpdateAll(frameContext);
 			}
 			// Layer UI / overlay submission.
 			{
-				AE_PROFILE_ZONE_N("LayerGui");
+				AE_PROFILE_ZONE();
 				m_layers.GuiAll(frameContext);
 			}
 

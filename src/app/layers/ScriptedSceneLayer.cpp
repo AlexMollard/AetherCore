@@ -27,6 +27,7 @@
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::app::scripting
 {
@@ -45,6 +46,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::BuildDefaultPipeline(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		auto& assets = context.Get<AssetManager>();
 
 		auto result = assets.CreateGraphicsPipeline({
@@ -89,6 +91,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath);
 
 		if (m_handle.IsValid())
@@ -155,6 +158,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::OnAttach(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		m_scripting = context.TryGet<scripting::ScriptingSubsystem>();
 		if (!m_scripting)
 		{
@@ -229,6 +233,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::OnDetach(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		if (!m_scripting)
 		{
 			return;
@@ -251,6 +256,7 @@ namespace aether::app
 
 	void ScriptedSceneLayer::OnUpdate(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		if (!m_scripting)
 		{
 			return;

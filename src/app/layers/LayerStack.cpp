@@ -34,7 +34,7 @@ namespace aether::app
 	{
 		for (const auto& layer: m_layers)
 		{
-			AE_PROFILE_ZONE_N("Layer::Update");
+			AE_PROFILE_ZONE();
 			layer->OnUpdate(context);
 		}
 	}
@@ -43,7 +43,7 @@ namespace aether::app
 	{
 		for (const auto& layer: m_layers)
 		{
-			AE_PROFILE_ZONE_N("Layer::Gui");
+			AE_PROFILE_ZONE();
 			layer->OnGui(context);
 		}
 	}

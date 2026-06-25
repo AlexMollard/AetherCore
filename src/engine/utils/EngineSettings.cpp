@@ -7,6 +7,7 @@
 #include "io/FileSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/TextIni.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -108,6 +109,7 @@ namespace aether
 
 	void EngineSettingsIO::Save(const EngineSettings& settings, const std::filesystem::path& path)
 	{
+		AE_PROFILE_ZONE();
 		std::error_code ec;
 		std::filesystem::create_directories(path.parent_path(), ec);
 
@@ -133,6 +135,7 @@ namespace aether
 
 	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view fileName)
 	{
+		AE_PROFILE_ZONE();
 		EngineSettings settings;
 		const std::string requestedFile(fileName);
 		const std::string virtualPath = "config://" + requestedFile;

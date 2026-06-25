@@ -13,6 +13,7 @@
 #include "scene/World.hpp"
 #include "scene/System.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -141,6 +142,7 @@ namespace aether
 
 	void PhysicsDebugRenderer::Init(GpuDevice& gpu, gpu::Format colorFormat, gpu::Format depthFormat)
 	{
+		AE_PROFILE_ZONE();
 		m_colorFormat = colorFormat;
 		m_depthFormat = depthFormat;
 		CreateWireframePipeline(gpu, colorFormat, depthFormat);
@@ -154,6 +156,7 @@ namespace aether
 
 	void PhysicsDebugRenderer::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_boxVertexHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_boxVertexHandle);

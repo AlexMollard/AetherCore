@@ -3,11 +3,13 @@
 #include "ui/UIRenderer.hpp"
 #include "ui/UiLayout.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether::app
 {
 	void LoadingLayer::OnGui(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
 		if (!m_visible)
 		{
 			return;

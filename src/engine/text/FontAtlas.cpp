@@ -21,6 +21,7 @@
 #include "io/FileSystem.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -69,6 +70,7 @@ namespace aether
 
 	void FontAtlas::Build(std::string_view fontVfsPath, int atlasGlyphSize, gpu::Device device, gpu::Queue uploadQueue, std::uint32_t uploadQueueFamily, BindlessManager& bindless)
 	{
+		AE_PROFILE_ZONE();
 		m_bindlessMgr = &bindless;
 		m_device = device;
 
@@ -294,6 +296,7 @@ namespace aether
 
 	void FontAtlas::Destroy()
 	{
+		AE_PROFILE_ZONE();
 		if (m_device == nullptr)
 		{
 			return;

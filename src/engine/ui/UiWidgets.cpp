@@ -9,6 +9,7 @@
 #include "ui/UIRenderer.hpp"
 #include "UiComponents.hpp"
 #include "UiContext.hpp"
+#include "utils/Profiler.hpp"
 #include "ui/UiLayout.hpp"
 
 namespace aether::ui
@@ -128,6 +129,7 @@ namespace aether::ui
 
 	bool DrawButton(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
+		AE_PROFILE_ZONE();
 		auto t = world.TryGet<UiTransformComponent>(entity);
 		auto btn = world.TryGet<UiButtonComponent>(entity);
 		auto inp = world.TryGet<UiInputComponent>(entity);
@@ -167,6 +169,7 @@ namespace aether::ui
 
 	float DrawSlider(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
 	{
+		AE_PROFILE_ZONE();
 		auto t = world.TryGet<UiTransformComponent>(entity);
 		auto slider = world.TryGet<UiSliderComponent>(entity);
 		auto inp = world.TryGet<UiInputComponent>(entity);
@@ -228,6 +231,7 @@ namespace aether::ui
 
 	bool DrawCheckbox(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
+		AE_PROFILE_ZONE();
 		auto t = world.TryGet<UiTransformComponent>(entity);
 		auto cb = world.TryGet<UiCheckboxComponent>(entity);
 		auto inp = world.TryGet<UiInputComponent>(entity);
@@ -307,6 +311,7 @@ namespace aether::ui
 
 	bool DrawPanel(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
 	{
+		AE_PROFILE_ZONE();
 		auto t = world.TryGet<UiTransformComponent>(entity);
 		auto panel = world.TryGet<UiPanelComponent>(entity);
 		auto inp = world.TryGet<UiInputComponent>(entity);
@@ -480,6 +485,7 @@ namespace aether::ui
 
 	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
+		AE_PROFILE_ZONE();
 		auto layout = world.TryGet<UiLayoutComponent>(container);
 		auto children = world.TryGet<UiChildrenComponent>(container);
 		auto parent = world.TryGet<UiTransformComponent>(container);
@@ -645,6 +651,7 @@ namespace aether::ui
 
 	void RunLayouts(aether::World& world, gpu::Extent2D extent)
 	{
+		AE_PROFILE_ZONE();
 		// Three-pass layout to handle nested containers correctly regardless of
 		// EnTT view iteration order.
 		//

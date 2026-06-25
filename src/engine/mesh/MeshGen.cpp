@@ -5,6 +5,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/constants.hpp>
 
+#include "utils/Profiler.hpp"
+
 namespace aether::MeshGen
 {
 	// -------------------------------------------------------------------------
@@ -12,6 +14,7 @@ namespace aether::MeshGen
 	// -------------------------------------------------------------------------
 	MeshData GeneratePlane(const PlaneDesc& desc)
 	{
+		AE_PROFILE_ZONE();
 		const int nx = std::max(desc.segmentsX, 1);
 		const int ny = std::max(desc.segmentsY, 1);
 
@@ -65,6 +68,7 @@ namespace aether::MeshGen
 	// -------------------------------------------------------------------------
 	MeshData GenerateUVSphere(const UVSphereDesc& desc)
 	{
+		AE_PROFILE_ZONE();
 		const int stacks = std::max(desc.stacks, 2);
 		const int slices = std::max(desc.slices, 3);
 
@@ -146,6 +150,7 @@ namespace aether::MeshGen
 	// -------------------------------------------------------------------------
 	MeshData GenerateCylinder(const CylinderDesc& desc)
 	{
+		AE_PROFILE_ZONE();
 		const int n = std::max(desc.segments, 3);
 
 		MeshData data;

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -131,6 +132,7 @@ namespace aether
 
 	void DiagnosticEngine::Init(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue graphicsQueue)
 	{
+		AE_PROFILE_ZONE();
 		if (m_initialized)
 		{
 			Shutdown();
@@ -278,6 +280,7 @@ namespace aether
 
 	void DiagnosticEngine::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_initialized)
 		{
 			return;
@@ -330,6 +333,7 @@ namespace aether
 
 	void DiagnosticEngine::CaptureFaults()
 	{
+		AE_PROFILE_ZONE();
 		bool expected = false;
 		if (!m_captureInProgress.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_relaxed))
 		{
@@ -517,12 +521,14 @@ namespace aether
 
 	void DiagnosticEngine::BeginFrame(std::uint64_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		m_currentFrameIndex = frameIndex;
 		RecordEvent("Begin Frame {}", frameIndex);
 	}
 
 	void DiagnosticEngine::EndFrame(const std::uint64_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		RecordEvent("End Frame {}", frameIndex);
 	}
 

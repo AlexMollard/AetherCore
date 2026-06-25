@@ -4,6 +4,7 @@
 #include <format>
 
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -14,6 +15,7 @@ namespace aether
 
 	void FrameConstantsBuffer::Initialize()
 	{
+		AE_PROFILE_ZONE();
 		for (std::uint32_t i = 0; i < kFrameCount; ++i)
 		{
 			const gpu::MappedBufferDesc desc{
@@ -36,6 +38,7 @@ namespace aether
 
 	void FrameConstantsBuffer::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_initialized)
 		{
 			return;
@@ -57,6 +60,7 @@ namespace aether
 
 	void FrameConstantsBuffer::Write(std::uint32_t frameIndex, const FrameConstants& data)
 	{
+		AE_PROFILE_ZONE();
 		std::memcpy(m_frames[frameIndex].mapped, &data, sizeof(FrameConstants));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_frames[frameIndex].handle, 0, sizeof(FrameConstants));
 	}

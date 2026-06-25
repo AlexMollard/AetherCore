@@ -4,6 +4,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -15,6 +16,7 @@ namespace aether::vkutil
 	// flows through vkCmdPushDataEXT and BDA; no VkPipelineLayout is involved.
 	Expected<ResourceRegistry::PipelineEntry> CreateComputePipelineEntry(gpu::Device gpuDevice, const ComputePipelineDesc& desc) noexcept
 	{
+		AE_PROFILE_ZONE();
 		auto device = static_cast<VkDevice>(gpuDevice);
 
 		AE_TRY(spirv, io::FileSystem::ReadFile(desc.shaderVfsPath));

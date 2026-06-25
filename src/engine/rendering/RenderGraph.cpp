@@ -1406,7 +1406,7 @@ namespace aether
 		auto executePassOn = [&](const CompiledPass& cp, gpu::CommandList& recorder, gpu::CommandBuffer cmd, uint32_t breadcrumbValue)
 		{
 			PassRecord& pass = m_passes[cp.passIndex];
-			AE_PROFILE_ZONE_N("RenderPass");
+			AE_PROFILE_ZONE();
 			AE_PROFILE_SET_ZONE_NAME(pass.name.c_str());
 			recorder.BeginDebugLabel(pass.name, 0.20f, 0.70f, 0.35f, 1.0f);
 			if (m_diagnosticEngine != nullptr)

@@ -14,6 +14,7 @@
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -54,12 +55,14 @@ namespace aether
 
 	void RenderGraphStorage::Initialize(VkDevice device, VmaAllocator allocator)
 	{
+		AE_PROFILE_ZONE();
 		m_device = device;
 		m_allocator = allocator;
 	}
 
 	void RenderGraphStorage::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		ShutdownComputeResources();
 
 		for (auto& entry: m_transientImages)
@@ -177,6 +180,7 @@ namespace aether
 
 	void RenderGraphStorage::BeginComputeCommandBuffer(std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		AE_ASSERT(m_asyncComputeEnabled, "RenderGraphStorage: async compute not enabled.");
 		auto& frame = m_computeFrames[frameIndex % kMaxFramesInFlight];
 
@@ -214,6 +218,7 @@ namespace aether
 
 	void RenderGraphStorage::EndComputeCommandBuffer(std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		VkCommandBuffer cmd = m_computeFrames[frameIndex % kMaxFramesInFlight].commandBuffer;
 		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
@@ -223,6 +228,7 @@ namespace aether
 
 	void RenderGraphStorage::SubmitComputeQueue(std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		AE_ASSERT(m_asyncComputeEnabled, "RenderGraphStorage: async compute not enabled.");
 		auto& frame = m_computeFrames[frameIndex % kMaxFramesInFlight];
 		const std::uint64_t signalValue = ++m_crossQueueTimelineValue;
@@ -287,6 +293,7 @@ namespace aether
 
 	void RenderGraphStorage::BeginFrame(std::uint32_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		m_currentFrame = frameIndex % kMaxFramesInFlight;
 		m_lastFrameStats = FrameStats{};
 	}
@@ -948,6 +955,7 @@ namespace aether
 
 	void RenderGraphStorage::PrepareTransientAllocations(const FrameTarget& target)
 	{
+		AE_PROFILE_ZONE();
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
 			return;
@@ -1187,6 +1195,7 @@ namespace aether
 
 	void RenderGraphStorage::EnsureTransientImages(const FrameTarget& target)
 	{
+		AE_PROFILE_ZONE();
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
 			AE_WARN(LogCategory::Engine, "RenderGraphStorage: transient images require Initialize(device, allocator).");
@@ -1315,6 +1324,7 @@ namespace aether
 
 	void RenderGraphStorage::EnsureTransientBuffers()
 	{
+		AE_PROFILE_ZONE();
 		if (m_device == VK_NULL_HANDLE || m_allocator == VK_NULL_HANDLE)
 		{
 			AE_WARN(LogCategory::Engine, "RenderGraphStorage: transient buffers require Initialize(device, allocator).");

@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
@@ -14,6 +15,7 @@ namespace aether
 
 	void MaterialBuffer::Initialize()
 	{
+		AE_PROFILE_ZONE();
 		const gpu::MappedBufferDesc desc{
 		        .size = sizeof(GpuMaterial) * kMaxMaterials,
 		        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
@@ -39,6 +41,7 @@ namespace aether
 
 	void MaterialBuffer::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (!m_handle.IsValid())
 		{
 			return;
@@ -53,6 +56,7 @@ namespace aether
 
 	std::uint32_t MaterialBuffer::AllocateSlot()
 	{
+		AE_PROFILE_ZONE();
 		std::scoped_lock lock(m_mutex);
 		if (m_freeSlots.empty())
 		{

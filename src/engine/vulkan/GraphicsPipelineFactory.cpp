@@ -5,6 +5,7 @@
 
 #include "io/FileSystem.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
@@ -19,6 +20,7 @@ namespace aether::vkutil
 	// the returned PipelineEntry and re-applied through vkCmdSet* on each bind.
 	Expected<ResourceRegistry::PipelineEntry> CreateGraphicsPipelineEntry(gpu::Device gpuDevice, const GraphicsPipeline::Desc& desc) noexcept
 	{
+		AE_PROFILE_ZONE();
 		auto device = static_cast<VkDevice>(gpuDevice);
 		const VkFormat vkColorFormat = gpu::ToVk(desc.colorFormat);
 		const VkCompareOp vkDepthCompareOp = gpu::ToVk(desc.depthCompareOp);

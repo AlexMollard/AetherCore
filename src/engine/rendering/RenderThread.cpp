@@ -31,7 +31,7 @@ namespace aether
 
 	void RenderThread::SubmitFrame(RenderFramePacket packet)
 	{
-		AE_PROFILE_ZONE_N("RenderThread::Submit");
+		AE_PROFILE_ZONE();
 
 		// Write to the channel and return immediately.
 		// The render thread picks up the packet asynchronously.

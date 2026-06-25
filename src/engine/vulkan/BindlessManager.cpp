@@ -5,6 +5,7 @@
 #include <numeric>
 
 #include "utils/Assert.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -33,6 +34,7 @@ namespace aether
 
 	Expected<void> BindlessManager::Initialize(const VulkanContext& context, const Config& config)
 	{
+		AE_PROFILE_ZONE();
 		std::scoped_lock lock(m_mutex);
 		if (m_device != nullptr)
 		{
@@ -235,6 +237,7 @@ namespace aether
 
 	void BindlessManager::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		std::scoped_lock lock(m_mutex);
 		ShutdownUnlocked();
 	}
@@ -394,6 +397,7 @@ namespace aether
 
 	void BindlessManager::AdvanceFrame(const std::uint64_t frameIndex)
 	{
+		AE_PROFILE_ZONE();
 		std::scoped_lock lock(m_mutex);
 		m_currentFrame = frameIndex;
 		if (m_device == nullptr || m_pendingSlotFrees.empty())

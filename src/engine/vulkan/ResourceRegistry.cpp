@@ -6,6 +6,7 @@
 #include "utils/Backtrace.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/ComputePipelineFactory.hpp"
@@ -126,6 +127,7 @@ namespace aether
 
 	void ResourceRegistry::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_shutdown)
 		{
 			return;
@@ -185,6 +187,7 @@ namespace aether
 
 	void ResourceRegistry::Init(VkDevice device, VmaAllocator allocator) noexcept
 	{
+		AE_PROFILE_ZONE();
 		m_device = device;
 		m_allocator = allocator;
 		m_textures.reserve(1024);
@@ -1155,6 +1158,7 @@ namespace aether
 
 	void ResourceRegistry::AdvanceFrame()
 	{
+		AE_PROFILE_ZONE();
 		// The "next" frame becomes the current. The ring slot we are about
 		// to retire (m_currentFrame after the increment) holds destroyers
 		// queued kMaxFramesInFlight frames ago, when the GPU was given the

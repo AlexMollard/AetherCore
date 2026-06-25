@@ -5,6 +5,7 @@
 
 #include "gpu/GpuTypes.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "vulkan/VulkanContext.hpp"
@@ -14,6 +15,7 @@ namespace aether
 {
 	void GpuHeap::Initialize(const VulkanContext& ctx, Desc desc)
 	{
+		AE_PROFILE_ZONE();
 		m_allocatorRef = ctx.GetAllocator();
 		m_deviceRef = ctx.GetDevice().device;
 
@@ -76,6 +78,7 @@ namespace aether
 
 	void GpuHeap::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		if (m_memoryTracker != nullptr && m_baseAddress != 0)
 		{
 			m_memoryTracker->UnregisterRange(m_baseAddress, m_capacityBytes);

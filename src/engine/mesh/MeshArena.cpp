@@ -2,11 +2,13 @@
 
 #include "vulkan/VulkanContext.hpp"
 #include "gpu/GpuHandles.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void MeshArena::Initialize(const VulkanContext& ctx, const Desc& desc)
 	{
+		AE_PROFILE_ZONE();
 		m_vertexHeap.Initialize(ctx, {.capacityBytes = desc.vertexCapacityBytes});
 		m_indexHeap.Initialize(ctx,
 		        {
@@ -19,6 +21,7 @@ namespace aether
 
 	void MeshArena::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		m_vertexHeap.Shutdown();
 		m_indexHeap.Shutdown();
 	}

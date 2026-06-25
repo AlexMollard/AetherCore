@@ -9,11 +9,13 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	PostProcessStack PostProcessStack::Create(const Desc& desc)
 	{
+		AE_PROFILE_ZONE();
 		PostProcessStack stack;
 
 		const gpu::TextureDesc hdrDesc{
@@ -89,6 +91,7 @@ namespace aether
 
 	void PostProcessStack::Destroy()
 	{
+		AE_PROFILE_ZONE();
 		m_fxaaPipeline.Destroy();
 		m_tonemapPipeline.Destroy();
 		if (m_ldrColorHandle.IsValid())
@@ -110,6 +113,7 @@ namespace aether
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
 	{
+		AE_PROFILE_ZONE();
 		// Tonemap -> LDR intermediate (always), then FXAA -> swapchain.
 		// FXAA toggling is handled at runtime via a push constant so the graph
 		// topology stays stable and toggles don't require a graph rebuild.

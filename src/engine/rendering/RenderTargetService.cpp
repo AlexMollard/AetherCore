@@ -17,17 +17,20 @@
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "scene/World.hpp"
+#include "utils/Profiler.hpp"
 
 namespace aether
 {
 	void RenderTargetService::Initialize(VulkanContext& context, const RenderQueueSharedPipelines& pipelines)
 	{
+		AE_PROFILE_ZONE();
 		m_context = &context;
 		m_sharedPipelines = &pipelines;
 	}
 
 	void RenderTargetService::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		for (auto& [id, rt]: m_targets)
 		{
 			(void) id;
@@ -42,6 +45,7 @@ namespace aether
 
 	void RenderTargetService::BindRuntime(const FrameContext& frame)
 	{
+		AE_PROFILE_ZONE();
 		AE_ASSERT(frame.graph != nullptr, "RenderTargetService::BindRuntime: frame.graph is null");
 		AE_ASSERT(frame.bindless != nullptr, "RenderTargetService::BindRuntime: frame.bindless is null");
 		AE_ASSERT(frame.cameras != nullptr, "RenderTargetService::BindRuntime: frame.cameras is null");
@@ -67,6 +71,7 @@ namespace aether
 
 	void RenderTargetService::OnRenderGraphReset(const gpu::Device device, const gpu::Format depthFormat, const gpu::Format forwardColorFormat)
 	{
+		AE_PROFILE_ZONE();
 		m_device = device;
 		m_depthFormat = depthFormat;
 		m_forwardColorFormat = forwardColorFormat;
@@ -90,6 +95,7 @@ namespace aether
 
 	void RenderTargetService::RegisterPasses()
 	{
+		AE_PROFILE_ZONE();
 		for (const auto& [id, _]: m_targets)
 		{
 			(void) _;
@@ -99,6 +105,7 @@ namespace aether
 
 	void RenderTargetService::PrepareQueues(const std::uint32_t drawSlot, World& world)
 	{
+		AE_PROFILE_ZONE();
 		for (auto& [_, rt]: m_targets)
 		{
 			rt.renderQueue->SetWriteSlot(drawSlot);
@@ -116,6 +123,7 @@ namespace aether
 
 	Expected<std::uint32_t> RenderTargetService::CreateCameraRenderTarget(const std::uint32_t cameraHandleRaw, const gpu::Extent2D extent)
 	{
+		AE_PROFILE_ZONE();
 		AE_ASSERT_ALWAYS(m_context != nullptr && m_graph != nullptr && m_bindlessManager != nullptr, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
 
 		Entry rt{};
@@ -143,6 +151,7 @@ namespace aether
 
 	void RenderTargetService::DestroyCameraRenderTarget(const std::uint32_t id)
 	{
+		AE_PROFILE_ZONE();
 		if (id == 0 || m_graph == nullptr)
 		{
 			return;

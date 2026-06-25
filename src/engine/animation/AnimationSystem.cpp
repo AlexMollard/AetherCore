@@ -11,7 +11,7 @@ namespace aether
 {
 	void AnimationSystem::Update(World& world, float dt)
 	{
-		AE_PROFILE_ZONE_N("AnimationSystem.Update");
+		AE_PROFILE_ZONE();
 
 		auto view = world.View<SkinnedMeshComponent>();
 		for (auto entity: view)

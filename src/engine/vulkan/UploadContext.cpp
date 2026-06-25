@@ -6,6 +6,7 @@
 #include "gpu/OneShotCmd.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
@@ -42,6 +43,7 @@ namespace aether::gpu
 
 	UploadContext UploadContext::Create(Device device, std::uint32_t queueFamilyIndex, Queue queue, void* backendRegistry)
 	{
+		AE_PROFILE_ZONE();
 		auto vkDevice = static_cast<VkDevice>(device);
 
 		const VkCommandPoolCreateInfo poolInfo{

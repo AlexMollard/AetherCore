@@ -1,5 +1,6 @@
 #include "text/TextRenderer.hpp"
 
+#include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuDevice.hpp"
@@ -11,6 +12,7 @@ namespace aether
 {
 	void TextRenderer::Init(ServiceContainer& services, std::string_view fontVfsPath, int glyphSize)
 	{
+		AE_PROFILE_ZONE();
 		m_bindlessMgr = &services.Get<BindlessManager>();
 		m_gpu = &services.Get<GpuDevice>();
 		GpuDevice& gpu = *m_gpu;
@@ -35,6 +37,7 @@ namespace aether
 
 	void TextRenderer::Shutdown()
 	{
+		AE_PROFILE_ZONE();
 		m_fontAtlas.Destroy();
 		m_bindlessMgr = nullptr;
 		m_gpu = nullptr;
@@ -43,6 +46,7 @@ namespace aether
 
 	void TextRenderer::DrawTextLayered(std::string_view text, const UiPoint& point, float fontSize, glm::vec4 color, std::int32_t layer, QuadRenderer& qr)
 	{
+		AE_PROFILE_ZONE();
 		if (m_gpu == nullptr || !m_ready || !m_fontAtlas.IsValid() || text.empty())
 		{
 			return;
