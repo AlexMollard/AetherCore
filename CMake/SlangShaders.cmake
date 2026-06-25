@@ -101,7 +101,6 @@ function(aethercore_enable_slang_shader_compilation target_name)
                     -o "${_shader_output}" "${_shader_source}"
             DEPENDS "${_shader_source}" ${AETHERCORE_SHADER_HEADERS}
             COMMENT "Compiling Slang shader ${_shader_rel}"
-            VERBATIM
         )
 
         list(APPEND AETHERCORE_SHADER_OUTPUTS "${_shader_output}")

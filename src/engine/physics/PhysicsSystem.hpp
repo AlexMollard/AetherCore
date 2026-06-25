@@ -1,8 +1,13 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
+#include <semaphore>
+#include <thread>
+#include <unordered_map>
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/Body/BodyID.h>
+#include <Jolt/Physics/Collision/Shape/Shape.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <entt/entt.hpp>
@@ -25,10 +30,21 @@ namespace aether
 
 	// -- PhysicsSystem ---------------------------------------------------------
 	//
-	// Owns the Jolt physics world and drives it with a fixed timestep.
-	// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
-	//   - determinism across machines (required for lockstep networking)
-	//   - stable simulation regardless of render framerate
+// Owns the Jolt physics world and drives it with a fixed timestep on a
+// dedicated background thread.
+// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
+//   - determinism across machines (required for lockstep networking)
+//   - stable simulation regardless of render framerate
+//
+// Threading model (pipelined, 1 frame of latency — same pattern as RenderThread):
+//   Game thread:   FlushPendingBodies → Kick step N → [other systems overlap] → ...
+//   Physics thread:                      Run step N → Done
+//   Game thread (next frame): Wait for step N → SyncTransforms(N-1) → ...
+//
+// All public methods that touch the Jolt body interface call WaitForStep()
+// internally, so the first physics API call after a kick becomes the sync
+// point.  This gives maximum overlap when no physics API is called during the
+// overlap window, and safe serialisation when one is.
 	//
 	// Usage:
 	//   world.RegisterSystem(std::make_unique<PhysicsSystem>());
@@ -72,9 +88,9 @@ namespace aether
 		// -- Body control ------------------------------------------------------
 
 		void SetLinearVelocity(JPH::BodyID id, glm::vec3 velocity);
-		[[nodiscard]] glm::vec3 GetLinearVelocity(JPH::BodyID id) const;
+		[[nodiscard]] glm::vec3 GetLinearVelocity(JPH::BodyID id);
 		void SetAngularVelocity(JPH::BodyID id, glm::vec3 velocity);
-		[[nodiscard]] glm::vec3 GetAngularVelocity(JPH::BodyID id) const;
+		[[nodiscard]] glm::vec3 GetAngularVelocity(JPH::BodyID id);
 		void AddImpulse(JPH::BodyID id, glm::vec3 impulse);
 		void AddForce(JPH::BodyID id, glm::vec3 force);
 
@@ -129,6 +145,22 @@ namespace aether
 		void StepPhysics();
 		void SyncTransforms(World& world, float alpha);
 
+		// Save prev = curr for all PhysicsStateComponents (called between steps).
+		void SavePrevState(World& world);
+
+		// -- Dedicated physics thread ------------------------------------------------
+
+		// Thread entry point: waits on m_stepKick, runs StepPhysics, signals m_stepDone.
+		void PhysicsThreadLoop();
+
+		// Block until the in-flight step (if any) completes.  Called by Update
+		// at the top of each frame and by every public Jolt-touching method so
+		// the first API call after a kick becomes the natural sync point.
+		void WaitForStep();
+
+		void StartPhysicsThread();
+		void StopPhysicsThread();
+
 		// Jolt internal implementations - defined in .cpp to keep header light.
 		struct BPLayerInterface;
 		struct ObjVsBPLayerFilter;
@@ -142,6 +174,23 @@ namespace aether
 		std::unique_ptr<JPH::PhysicsSystem> m_physics;
 
 		float m_accumulator = 0.0f;
+
+		// Dedicated physics thread — runs m_physics->Update() off the game thread.
+		// Ping-pong semaphores: Kick signals "start a step", Done signals "step finished".
+		std::thread m_physicsThread;
+		std::binary_semaphore m_stepKick{0};
+		std::binary_semaphore m_stepDone{0};
+		std::atomic<bool> m_physicsThreadRunning{false};
+
+		// Game-thread-only flag: true between Kick and Wait.  Not atomic — only
+		// ever read/written on the game thread.
+		bool m_stepInFlight = false;
+
+		// Alpha saved at end of each Update for the next frame's SyncTransforms.
+		float m_lastAlpha = 0.0f;
+
+		// Shape cache: avoid repeated Jolt shape creation for identical dimensions.
+		std::unordered_map<uint64_t, JPH::ShapeRefC> m_shapeCache;
 
 		// Auto-disconnects in the destructor (declared last so it disconnects
 		// before m_physics is destroyed - reverse member destruction order).
