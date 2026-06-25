@@ -342,11 +342,10 @@ namespace aether
 		m_frameValid = true;
 	}
 
-	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue, gpu::TimelineSemaphoreHandle extraSignalSemaphore, std::uint64_t extraSignalValue)
+	void Swapchain::SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore, std::uint64_t extraWaitValue)
 	{
 		// Resolve gpu::TimelineSemaphoreHandle pImpl -> VkSemaphore at the seam.
 		auto vkExtraWait = extraWaitSemaphore ? extraWaitSemaphore->semaphore : VK_NULL_HANDLE;
-		auto vkExtraSignal = extraSignalSemaphore ? extraSignalSemaphore->semaphore : VK_NULL_HANDLE;
 
 		if (!m_frameValid)
 		{
@@ -406,28 +405,14 @@ namespace aether
 		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
 		};
 
-		VkSemaphoreSubmitInfo extraSignalInfo{
-		        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-		        .semaphore = vkExtraSignal,
-		        .value = extraSignalValue,
-		        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-		};
-
-		VkSemaphoreSubmitInfo signalInfos[2] = {signalInfo, extraSignalInfo};
-		std::uint32_t signalCount = 1;
-		if (extraSignalSemaphore != VK_NULL_HANDLE)
-		{
-			signalCount = 2;
-		}
-
 		VkSubmitInfo2 submit{
 		        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
 		        .waitSemaphoreInfoCount = waitCount,
 		        .pWaitSemaphoreInfos = waitInfos,
 		        .commandBufferInfoCount = 1,
 		        .pCommandBufferInfos = &cmdInfo,
-		        .signalSemaphoreInfoCount = signalCount,
-		        .pSignalSemaphoreInfos = signalInfos,
+		        .signalSemaphoreInfoCount = 1,
+		        .pSignalSemaphoreInfos = &signalInfo,
 		};
 		{
 			const VkResult submitResult = vkQueueSubmit2(graphicsQueue, 1, &submit, frame.inFlight);

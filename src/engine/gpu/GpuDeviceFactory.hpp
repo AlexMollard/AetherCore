@@ -102,8 +102,7 @@ namespace aether::gpu::Factory
 	// (VkPresentInfoKHR) requires binary semaphores for present-wait
 	// on platforms that don't support
 	// VK_SWAPCHAIN_CREATE_PRESENT_TIMELINE_BIT. Sites that need
-	// cross-frame sync (AsyncComputeContext, AnimationRootMotion,
-	// RenderGraphStorage) all use the timeline factory instead.
+	// cross-frame sync (AsyncComputeContext, RenderGraphStorage) all use the timeline factory instead.
 
 	// -----------------------------------------------------------------
 	// PhysicalDevice queries

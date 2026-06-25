@@ -17,7 +17,6 @@
 namespace aether
 {
 	class AnimationBlendSystem;
-	class AnimationRootMotionSystem;
 	class GraphicsPipeline;
 	class Mesh;
 
@@ -155,18 +154,6 @@ namespace aether
 		void SetAnimationBlendSystem(AnimationBlendSystem* sys)
 		{
 			m_animationBlendSystem = sys;
-		}
-
-		void SetRootMotionSystem(AnimationRootMotionSystem* sys)
-		{
-			m_rootMotionSystem = sys;
-		}
-
-		// Hips node index for root motion copy: copy-buffer reads from
-		// global transforms buffer at (hipNodeIdx * 64) bytes offset.
-		void SetHipsNodeIndex(std::uint32_t hipsNodeIdx)
-		{
-			m_hipsNodeIdx = hipsNodeIdx;
 		}
 
 		// Write inputs and dispatch animation/cull compute.
@@ -313,7 +300,5 @@ namespace aether
 		std::array<bool, kFramesInFlight> m_animationSlotCleared{};
 
 		AnimationBlendSystem* m_animationBlendSystem = nullptr;
-		AnimationRootMotionSystem* m_rootMotionSystem = nullptr;
-		std::uint32_t m_hipsNodeIdx = 0;
 	};
 } // namespace aether

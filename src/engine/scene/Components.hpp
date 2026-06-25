@@ -88,10 +88,10 @@ namespace aether
 	// -- Root motion ---------------------------------------------------------
 
 	// Tracks root bone motion state for physics-driven character movement.
-	// Each frame the AnimationRootMotionSystem reads the Hips node's world position
-	// from the node global transforms buffer, computes the delta since the previous
-	// frame, and applies that delta to the entity's PhysicsStateComponent so the
-	// character physically moves through the world rather than sliding in place.
+	// Reads the Hips node's world position from the node global transforms buffer,
+	// computes the delta since the previous frame, and applies that delta to the
+	// entity's PhysicsStateComponent so the character physically moves through the
+	// world rather than sliding in place.
 	struct RootMotionComponent
 	{
 		std::uint32_t hipsNodeIdx = UINT32_MAX;       // node index of the root bone (e.g. Hips)

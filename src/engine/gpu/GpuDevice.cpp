@@ -125,13 +125,13 @@ namespace aether
 		AE_INFO(LogCategory::Engine, "Swapchain recreated.");
 	}
 
-	void GpuDevice::SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue, gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore, std::uint64_t rootMotionSignalValue)
+	void GpuDevice::SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle, std::uint64_t asyncComputeTimelineValue)
 	{
 		AE_PROFILE_ZONE();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 
-		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue, rootMotionSignalSemaphore, rootMotionSignalValue);
+		swapchain.SubmitAndPresent(vk.GetGraphicsQueue(), vk.GetPresentQueue(), asyncComputeSemaphoreHandle, asyncComputeTimelineValue);
 	}
 
 	FrameTarget GpuDevice::BuildFrameTarget() const

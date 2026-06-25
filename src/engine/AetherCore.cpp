@@ -16,7 +16,7 @@
 #include "animation/AnimationBlend.hpp"
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
-#include "animation/AnimationRootMotion.hpp"
+
 #include "assets/GltfAsset.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraSubsystem.hpp"
@@ -147,19 +147,13 @@ namespace aether
 
 		// -- 11. Animation systems -------------------------------------------
 		m_animationBlend = std::make_unique<AnimationBlendSystem>();
-		m_rootMotion = std::make_unique<AnimationRootMotionSystem>();
 
-		const gpu::Device device = m_gpu->GetDevice();
 		m_animationBlend->Init(256, 128);
-		m_rootMotion->Init(device, 256);
 
 		m_services.Register<AnimationBlendSystem>(*m_animationBlend);
-		m_services.Register<AnimationRootMotionSystem>(*m_rootMotion);
 
 		RenderQueue& rq = m_rendering->GetRenderQueue();
 		rq.SetAnimationBlendSystem(m_animationBlend.get());
-		rq.SetRootMotionSystem(m_rootMotion.get());
-		rq.SetHipsNodeIndex(0);
 
 		// -- 10. Swapchain recreation callback ------------------------------
 		m_gpu->SetSwapchainRecreatedCallback(
@@ -190,11 +184,7 @@ namespace aether
 		// SceneSubsystem has no shutdown work.
 
 		// Animation systems (reverse of init order).
-		{
-			const gpu::Device device = m_gpu->GetDevice();
-			m_rootMotion->Shutdown(device);
-			m_animationBlend->Shutdown();
-		}
+		m_animationBlend->Shutdown();
 
 		// GPU shutdown destroys internal Vulkan resources.
 		m_gpu->Shutdown();
@@ -334,9 +324,6 @@ namespace aether
 		m_frameIndex = packet.frameIndex;
 		BeginFrame();
 
-		const gpu::Device device = m_gpu->GetDevice();
-		m_rootMotion->BeginFrame(device, static_cast<std::uint32_t>(m_frameIndex));
-
 		if (m_rendering)
 		{
 			World& world = m_services.Get<SceneSubsystem>().GetWorld();
@@ -355,9 +342,7 @@ namespace aether
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
-			const gpu::TimelineSemaphoreHandle rmSem = m_rootMotion->GetTimelineSemaphore();
-			const auto rmVal = m_frameIndex + 1;
-			m_gpu->SubmitAndPresent(nullptr, 0, rmSem, rmVal);
+			m_gpu->SubmitAndPresent();
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
@@ -431,8 +416,6 @@ namespace aether
 	void AetherCore::SubmitAndAdvance()
 	{
 		auto& renderGraph = m_rendering->GetRenderGraph();
-		const gpu::TimelineSemaphoreHandle rmSem = m_rootMotion->GetTimelineSemaphore();
-		const auto rmVal = m_frameIndex + 1;
 
 		// Submit the async compute command buffer now, right before the graphics
 		// submission, so both queues are dispatched to the GPU simultaneously.
@@ -443,7 +426,7 @@ namespace aether
 		const gpu::TimelineSemaphoreHandle graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : nullptr;
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
 
-		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal, rmSem, rmVal);
+		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal);
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);

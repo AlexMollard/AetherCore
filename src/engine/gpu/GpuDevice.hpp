@@ -60,7 +60,7 @@ namespace aether
 		// pointer). All casts to `VkSemaphore` happen in the swapchain
 		// implementation (`vulkan/Swapchain.cpp`); this TU never sees a
 		// `Vk*` token.
-		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0, gpu::TimelineSemaphoreHandle rootMotionSignalSemaphore = nullptr, std::uint64_t rootMotionSignalValue = 0);
+		void SubmitAndPresent(gpu::TimelineSemaphoreHandle asyncComputeSemaphoreHandle = nullptr, std::uint64_t asyncComputeTimelineValue = 0);
 
 		[[nodiscard]] FrameTarget BuildFrameTarget() const;
 

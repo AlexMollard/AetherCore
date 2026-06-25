@@ -46,12 +46,7 @@ namespace aether
 		// ends command buffer, submits, and presents. No-op if !IsFrameValid().
 		// The opaque `gpu::TimelineSemaphoreHandle` pImpl pointers are cast
 		// to `VkSemaphore` here so the engine TU never sees a `Vk*` token.
-		void SubmitAndPresent(VkQueue graphicsQueue,
-		        VkQueue presentQueue,
-		        gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr,
-		        std::uint64_t extraWaitValue = 0,
-		        gpu::TimelineSemaphoreHandle extraSignalSemaphore = nullptr,
-		        std::uint64_t extraSignalValue = 0);
+		void SubmitAndPresent(VkQueue graphicsQueue, VkQueue presentQueue, gpu::TimelineSemaphoreHandle extraWaitSemaphore = nullptr, std::uint64_t extraWaitValue = 0);
 
 		[[nodiscard]] VkCommandBuffer GetCurrentCommandBuffer() const;
 		[[nodiscard]] gpu::Extent2D GetExtent() const;
