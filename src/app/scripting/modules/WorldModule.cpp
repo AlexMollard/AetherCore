@@ -455,7 +455,7 @@ namespace aether::app::scripting
 
 			// Register World as an opaque reference type so scripts can declare
 			// def on_attach(world : World) and pass it to ECS functions.
-			addAnnotation(das::make_smart<das::DummyTypeAnnotation>("World", "::aether::World", sizeof(void*), alignof(void*)));
+			addAnnotation(das::make_smart<das::DummyTypeAnnotation>("World", "::aether::World", sizeof(void*), sizeof(void*)));
 
 			// Entity lifecycle
 			Bind<das_entity_create>(lib, "entity_create", SE::modifyExternal);

@@ -27,5 +27,17 @@
       "template": "Run: cmake --preset clangd",
       "description": "Regenerate compile_commands.json for clangd LSP intelligence"
     }
+  },
+  "mcp": {
+    "daslang": {
+      "type": "local",
+      "command": [
+        "C:\\tools\\daslang\\0.6.3-RC3\\bin\\daslang.exe",
+        "C:\\tools\\daslang\\0.6.3-RC3\\utils\\mcp\\main.das"
+      ],
+      "cwd": "C:\\tools\\daslang\\0.6.3-RC3",
+      "timeout": 30000,
+      "enabled": true
+    }
   }
 }

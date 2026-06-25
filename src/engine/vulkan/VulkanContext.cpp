@@ -1,5 +1,7 @@
 #include "vulkan/VulkanContext.hpp"
 
+#include "Defines.hpp"
+
 #include <format>
 #include <fstream>
 #include <string>
@@ -21,13 +23,6 @@
 #include "utils/Profiler.hpp"
 #include "vulkan/GpuMemoryTracker.hpp"
 #include "platform/Window.hpp"
-
-// Validation mode is controlled by CMake options AETHERCORE_VULKAN_GPU_DEBUG /
-// AETHERCORE_VULKAN_CPU_DEBUG (see CMake/TargetDefaults.cmake). The resulting
-// VULKAN_GPU_DEBUG / VULKAN_CPU_DEBUG macros are passed as compile definitions.
-#if defined(VULKAN_GPU_DEBUG) && defined(VULKAN_CPU_DEBUG)
-#	error "VULKAN_GPU_DEBUG and VULKAN_CPU_DEBUG are mutually exclusive"
-#endif
 
 namespace
 {
@@ -176,7 +171,7 @@ namespace aether
 		vkb::InstanceBuilder instanceBuilder;
 		instanceBuilder.set_app_name(appName);
 		instanceBuilder.require_api_version(1, 4, 0);
-#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+#if defined(VULKAN_GPU_DEBUG)
 		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
@@ -192,8 +187,6 @@ namespace aether
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
 		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
 		AE_INFO(LogCategory::Vulkan, "GPU-AV + Synchronization Validation + Debug Printf enabled.");
-#elif defined(VULKAN_CPU_DEBUG)
-		AE_INFO(LogCategory::Vulkan, "Core Validation (CPU) enabled.");
 #endif
 
 #if defined(VULKAN_GPU_DEBUG)
@@ -229,7 +222,7 @@ namespace aether
 
 		volkLoadInstance(m_instance->instance);
 
-#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+#if defined(VULKAN_GPU_DEBUG)
 		VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		        .messageSeverity = debugSeverity,
@@ -476,7 +469,7 @@ namespace aether
 
 		volkLoadDevice(m_device->device);
 
-#if defined(VULKAN_GPU_DEBUG) || defined(VULKAN_CPU_DEBUG)
+#if defined(VULKAN_GPU_DEBUG)
 		VkDebugUtilsMessengerEXT upgradedDebugMessenger = VK_NULL_HANDLE;
 		VkDebugUtilsMessengerCreateInfoEXT upgradedDebugMessengerCreateInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,

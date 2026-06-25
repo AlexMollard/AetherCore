@@ -192,20 +192,18 @@ CPMAddPackage(
     GIT_TAG        v0.6.0
     GIT_SHALLOW    TRUE
     OPTIONS
-        # Disable daScript's own tutorial / test / example / tool projects.
         "DAS_TUTORIAL_DISABLED ON"
         "DAS_TESTS_DISABLED ON"
         "DAS_AOT_EXAMPLES_DISABLED ON"
         "DAS_TOOLS_DISABLED ON"
-        # Disable all optional integration modules (each has its own guard name).
         "DAS_GLFW_DISABLED ON"
-        "DAS_OPENGL_INCLUDED ON"
-        "DAS_GLSL_INCLUDED ON"
-        "DAS_PEG_INCLUDED ON"
         "DAS_STBIMAGE_DISABLED ON"
         "DAS_STBTRUETYPE_DISABLED ON"
         "DAS_STDDLG_DISABLED ON"
         "DAS_UNIT_TEST_DISABLED ON"
+        "DAS_OPENGL_DISABLED ON"
+        "DAS_GLSL_DISABLED ON"
+        "DAS_PEG_DISABLED ON"
 )
 
 if(TARGET libDaScriptDyn_xxd AND TARGET libDaScript_xxd)

@@ -1,14 +1,5 @@
 option(AETHERCORE_ENABLE_ASAN "Enable AddressSanitizer on all first-party targets" OFF)
 
-# Vulkan validation modes. GPU-AV (GPU-assisted validation) + sync validation
-# catches shader/SSBO OOB and hazard errors on the GPU; CPU core validation
-# catches API misuse on the CPU. They are mutually exclusive. Enable the GPU
-# variant for layout/shader debugging (higher overhead, higher signal), or the
-# CPU variant for general API conformance. Leave both OFF for Release-like
-# builds where validation overhead is unwanted.
-option(AETHERCORE_VULKAN_GPU_DEBUG "Enable GPU-assisted Vulkan validation (GPU-AV + sync validation + debug printf)" ON)
-option(AETHERCORE_VULKAN_CPU_DEBUG "Enable CPU core Vulkan validation" OFF)
-
 # aethercore_target_defaults(<target>)
 #
 # Applies project-wide compiler flags to a first-party target.
