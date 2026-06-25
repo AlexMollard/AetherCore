@@ -113,6 +113,9 @@ CPMAddPackage(
 
 # ── Profiler ──────────────────────────────────────────────────────────────────
 option(AETHERCORE_ENABLE_TRACY "Enable Tracy profiler instrumentation" ON)
+option(AETHERCORE_ENABLE_TRACY_GPU "Enable Tracy Vulkan GPU timeline instrumentation" ON)
+option(AETHERCORE_ENABLE_TRACY_PLOTS "Enable Tracy plot/counter streams" ON)
+option(AETHERCORE_ENABLE_TRACY_MEMORY "Enable Tracy CPU and named-pool memory reporting" ON)
 if(AETHERCORE_ENABLE_TRACY)
     set(_tracy_opts "TRACY_ENABLE ON" "TRACY_ON_DEMAND ON")
 else()

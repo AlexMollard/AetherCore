@@ -82,10 +82,22 @@ namespace aether
 		}
 		if (m_virtualBlock != VK_NULL_HANDLE)
 		{
+			for (const auto& [addr, allocation]: m_allocations)
+			{
+				(void) addr;
+				if (allocation != VK_NULL_HANDLE)
+				{
+					vmaVirtualFree(m_virtualBlock, allocation);
+				}
+			}
+			m_allocations.clear();
 			vmaDestroyVirtualBlock(m_virtualBlock);
 			m_virtualBlock = VK_NULL_HANDLE;
 		}
-		m_allocations.clear();
+		else
+		{
+			m_allocations.clear();
+		}
 		if (m_buffer != VK_NULL_HANDLE)
 		{
 			vmaDestroyBuffer(m_allocatorRef, m_buffer, m_bufferAllocation);

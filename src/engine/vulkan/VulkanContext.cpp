@@ -14,7 +14,7 @@
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/TracyGpuProfiler.hpp"
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 #	include <tracy/TracyVulkan.hpp>
 #endif
 #include "utils/Logger.hpp"
@@ -662,7 +662,7 @@ namespace aether
 			Throw(AetherError::Vulkan(static_cast<int32_t>(allocatorResult), std::format("Failed to create VMA allocator. VkResult={}", static_cast<int>(allocatorResult))));
 		}
 
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		{
 			const auto qpreset = reinterpret_cast<PFN_vkResetQueryPoolEXT>(vkGetDeviceProcAddr(m_device->device, "vkResetQueryPool"));
 			const auto gpdctd = reinterpret_cast<PFN_vkGetPhysicalDeviceCalibrateableTimeDomainsEXT>(vkGetInstanceProcAddr(m_instance->instance, "vkGetPhysicalDeviceCalibrateableTimeDomainsEXT"));
@@ -725,7 +725,7 @@ namespace aether
 			m_allocator = VK_NULL_HANDLE;
 		}
 
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_tracyVkCtx)
 		{
 			// Drop the engine-side reference before destroying the

@@ -35,6 +35,9 @@ cmake --preset default && cmake --build --preset default
 - `AETHERCORE_ENABLE_ASAN` - AddressSanitizer (default OFF)
 - `AETHERCORE_FAST_MSVC_DEBUG_INFO` - `/Z7` + `/DEBUG:FASTLINK` (default ON)
 - `AETHERCORE_ENABLE_TRACY` - Tracy profiler (default ON)
+- `AETHERCORE_ENABLE_TRACY_GPU` - Tracy Vulkan GPU context, zones, and collection (default ON)
+- `AETHERCORE_ENABLE_TRACY_PLOTS` - Tracy plot/counter streams (default ON)
+- `AETHERCORE_ENABLE_TRACY_MEMORY` - Tracy CPU allocation and named memory-pool reporting (default ON)
 - `AETHERCORE_ENABLE_SLANG` - Slang shader compilation (default ON)
 
 ### Targets

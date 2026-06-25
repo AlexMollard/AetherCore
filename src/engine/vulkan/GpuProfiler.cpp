@@ -3,7 +3,7 @@
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/TracyGpuProfiler.hpp"
 
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 #	include <cstring>
 
 #	include "vulkan/volk.hpp"
@@ -12,7 +12,7 @@
 
 namespace aether::gpu::detail
 {
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 	struct ProfilerContextData
 	{
 		tracy::VkCtx* ctx = nullptr;
@@ -20,6 +20,11 @@ namespace aether::gpu::detail
 
 	struct ProfilerScopeData
 	{
+		ProfilerScopeData(tracy::VkCtx* ctx, std::uint32_t line, const char* file, std::size_t fileSize, const char* func, std::size_t funcSize, const char* name, std::size_t nameSize, VkCommandBuffer cmd)
+		      : scope(ctx, line, file, fileSize, func, funcSize, name, nameSize, cmd, 0, true)
+		{
+		}
+
 		tracy::VkCtxScope scope;
 	};
 #endif
@@ -29,7 +34,7 @@ namespace aether::vulkan
 {
 	aether::gpu::ProfilerContextHandle CreateTracyGpuProfilerContext(tracy::VkCtx* ctx) noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		return new aether::gpu::detail::ProfilerContextData{.ctx = ctx};
 #else
 		(void) ctx;
@@ -39,7 +44,7 @@ namespace aether::vulkan
 
 	void DestroyTracyGpuProfilerContext(aether::gpu::ProfilerContextHandle handle) noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		delete handle;
 #else
 		(void) handle;
@@ -67,7 +72,7 @@ namespace aether::gpu
 
 	void GpuProfiler::SetName(std::string_view name) noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_context == nullptr)
 		{
 			return;
@@ -80,15 +85,13 @@ namespace aether::gpu
 
 	GpuZoneScope GpuProfiler::BeginZoneScopedImpl(gpu::CommandBuffer cmd, std::string_view name, const char* file, std::uint32_t line, const char* func) noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_context == nullptr)
 		{
 			return {};
 		}
-		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle. Placement-new is required: tracy::VkCtxScope has no default ctor.
-		auto storage = ::operator new(sizeof(detail::ProfilerScopeData));
-		auto scope_data = reinterpret_cast<detail::ProfilerScopeData*>(storage);
-		new (&scope_data->scope) tracy::VkCtxScope(m_context->ctx,
+		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle.
+		auto scopeData = new detail::ProfilerScopeData(m_context->ctx,
 		        line,
 		        file,
 		        std::strlen(file),
@@ -96,10 +99,8 @@ namespace aether::gpu
 		        std::strlen(func),
 		        name.data(),
 		        static_cast<std::size_t>(name.size()),
-		        reinterpret_cast<VkCommandBuffer>(cmd),
-		        0,     // depth
-		        true); // is_active
-		return GpuZoneScope(scope_data);
+		        reinterpret_cast<VkCommandBuffer>(cmd));
+		return GpuZoneScope(scopeData);
 #else
 		(void) cmd;
 		(void) name;
@@ -112,7 +113,7 @@ namespace aether::gpu
 
 	void GpuProfiler::Collect(gpu::CommandBuffer cmd) noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_context == nullptr)
 		{
 			return;
@@ -125,11 +126,10 @@ namespace aether::gpu
 
 	void GpuZoneScope::Reset() noexcept
 	{
-#ifdef TRACY_ENABLE
+#if defined(TRACY_ENABLE) && AETHERCORE_ENABLE_TRACY_GPU
 		if (m_handle != nullptr)
 		{
 			// Explicit dtor call writes the end timestamp and queues the end marker.
-			m_handle->scope.~VkCtxScope();
 			delete m_handle;
 			m_handle = nullptr;
 		}

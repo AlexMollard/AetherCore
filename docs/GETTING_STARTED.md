@@ -80,6 +80,9 @@ cmake --build --preset vs2022-msvc --config Release
 | `AETHERCORE_ENABLE_ASAN` | `OFF` | AddressSanitizer on all first-party targets. |
 | `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | `/Z7` + `/DEBUG:FASTLINK` for faster MSVC link. |
 | `AETHERCORE_ENABLE_TRACY` | `ON` | Tracy profiler integration. |
+| `AETHERCORE_ENABLE_TRACY_GPU` | `ON` | Tracy Vulkan GPU context, zones, and collection. |
+| `AETHERCORE_ENABLE_TRACY_PLOTS` | `ON` | Tracy plot/counter streams. |
+| `AETHERCORE_ENABLE_TRACY_MEMORY` | `ON` | Tracy CPU allocation and named memory-pool reporting. |
 | `AETHERCORE_ENABLE_SLANG` | `ON` | Slang shader compiler for `.slang` sources. |
 
 Example:

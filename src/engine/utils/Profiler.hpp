@@ -23,7 +23,19 @@
 // Named memory pools (e.g. "GPU"):
 //   AE_PROFILE_ALLOC_N(ptr, size, pool)
 //   AE_PROFILE_FREE_N(ptr, pool)
+//
+// Plots:
+//   AE_PROFILE_PLOT(name, value)
+//   AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color)
 // ---------------------------------------------------------------------------
+
+#ifndef AETHERCORE_ENABLE_TRACY_PLOTS
+#	define AETHERCORE_ENABLE_TRACY_PLOTS 1
+#endif
+
+#ifndef AETHERCORE_ENABLE_TRACY_MEMORY
+#	define AETHERCORE_ENABLE_TRACY_MEMORY 1
+#endif
 
 #ifdef TRACY_ENABLE
 #	include <cstring>
@@ -34,12 +46,24 @@
 #	define AE_PROFILE_SET_ZONE_NAME(cstr) ZoneName(cstr, std::strlen(cstr))
 #	define AE_PROFILE_FRAME FrameMark
 #	define AE_PROFILE_THREAD(name) tracy::SetThreadName(name)
-#	define AE_PROFILE_ALLOC(ptr, size) TracyAlloc(ptr, size)
-#	define AE_PROFILE_FREE(ptr) TracyFree(ptr)
-#	define AE_PROFILE_ALLOC_N(ptr, size, pool) TracyAllocN(ptr, size, pool)
-#	define AE_PROFILE_FREE_N(ptr, pool) TracyFreeN(ptr, pool)
-#	define AE_PROFILE_PLOT(name, val) TracyPlot(name, val)
-#	define AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color) TracyPlotConfig(name, type, step, fill, color)
+#	if AETHERCORE_ENABLE_TRACY_MEMORY
+#		define AE_PROFILE_ALLOC(ptr, size) TracyAlloc(ptr, size)
+#		define AE_PROFILE_FREE(ptr) TracyFree(ptr)
+#		define AE_PROFILE_ALLOC_N(ptr, size, pool) TracyAllocN(ptr, size, pool)
+#		define AE_PROFILE_FREE_N(ptr, pool) TracyFreeN(ptr, pool)
+#	else
+#		define AE_PROFILE_ALLOC(ptr, size) (void) 0
+#		define AE_PROFILE_FREE(ptr) (void) 0
+#		define AE_PROFILE_ALLOC_N(ptr, size, pool) (void) 0
+#		define AE_PROFILE_FREE_N(ptr, pool) (void) 0
+#	endif
+#	if AETHERCORE_ENABLE_TRACY_PLOTS
+#		define AE_PROFILE_PLOT(name, val) TracyPlot(name, val)
+#		define AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color) TracyPlotConfig(name, type, step, fill, color)
+#	else
+#		define AE_PROFILE_PLOT(name, val) (void) 0
+#		define AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color) (void) 0
+#	endif
 #else
 #	define AE_PROFILE_ZONE() (void) 0
 #	define AE_PROFILE_ZONE_N(name) (void) 0

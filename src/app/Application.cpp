@@ -36,6 +36,16 @@ namespace aether::app
 			}
 			return cfg;
 		}
+
+		void ConfigureTracyPlots()
+		{
+			AE_PROFILE_PLOT_CONFIG("Frame/ChannelSubmitNs", tracy::PlotFormatType::Number, false, true, 0x4EA3FF);
+			AE_PROFILE_PLOT_CONFIG("Frame/GameThreadTotalNs", tracy::PlotFormatType::Number, false, true, 0xF7B955);
+			AE_PROFILE_PLOT_CONFIG("Frame/RenderThreadExecNs", tracy::PlotFormatType::Number, false, true, 0x7BD88F);
+			AE_PROFILE_PLOT_CONFIG("Animation/SampleJobs", tracy::PlotFormatType::Number, true, true, 0xE66A8A);
+			AE_PROFILE_PLOT_CONFIG("Animation/SkinCopyJobs", tracy::PlotFormatType::Number, true, true, 0x9C7CFF);
+			AE_PROFILE_PLOT_CONFIG("RenderQueue/TotalDraws", tracy::PlotFormatType::Number, true, true, 0x6ED3CF);
+		}
 	} // namespace
 
 	void AppLayer::OnAttach(LayerContext& context)
@@ -109,6 +119,7 @@ namespace aether::app
 	int Application::Run()
 	{
 		AE_INFO(LogCategory::App, "Application run loop starting.");
+		ConfigureTracyPlots();
 
 		const auto shaderFilesResult = io::FileSystem::Glob("shaders://**/*.spv");
 		if (!shaderFilesResult.has_value())

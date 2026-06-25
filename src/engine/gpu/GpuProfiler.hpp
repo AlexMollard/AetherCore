@@ -21,6 +21,10 @@
 
 #include "gpu/GpuTypes.hpp"
 
+#ifndef AETHERCORE_ENABLE_TRACY_GPU
+#	define AETHERCORE_ENABLE_TRACY_GPU 1
+#endif
+
 namespace aether::gpu::detail
 {
 	// Forward-declared pImpl data. Full definitions live in
@@ -135,7 +139,11 @@ namespace aether::gpu
 // function. The function constructs the private `GpuZoneScope`, so
 // no public ctor is needed on `GpuZoneScope` and callers cannot
 // forge a scope handle themselves.
-#define AE_GPU_ZONE_SCOPED(cmd, name) \
-	auto AE_GPU_PROFILER_CONCAT(_ae_gpu_zone_, __LINE__) = \
-		::aether::gpu::GpuProfiler::Get().BeginZoneScopedImpl( \
-			(cmd), (name), __FILE__, __LINE__, __func__)
+#if AETHERCORE_ENABLE_TRACY_GPU
+#	define AE_GPU_ZONE_SCOPED(cmd, name) \
+		auto AE_GPU_PROFILER_CONCAT(_ae_gpu_zone_, __LINE__) = \
+			::aether::gpu::GpuProfiler::Get().BeginZoneScopedImpl( \
+				(cmd), (name), __FILE__, __LINE__, __func__)
+#else
+#	define AE_GPU_ZONE_SCOPED(cmd, name) (void) 0
+#endif

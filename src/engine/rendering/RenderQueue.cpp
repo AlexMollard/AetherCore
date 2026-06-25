@@ -879,9 +879,9 @@ namespace aether
 
 #ifdef TRACY_ENABLE
 		{
-			TracyPlot("Animation/SampleJobs", static_cast<int64_t>(sampleJobsThisFrame));
-			TracyPlot("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
-			TracyPlot("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
+			AE_PROFILE_PLOT("Animation/SampleJobs", static_cast<int64_t>(sampleJobsThisFrame));
+			AE_PROFILE_PLOT("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
+			AE_PROFILE_PLOT("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
 		::aether::gpu::GpuProfiler::Get().Collect(rawCmd);
 #endif

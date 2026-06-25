@@ -197,10 +197,18 @@ The importer detects common naming patterns (`*_Color`, `*_NormalGL`, `*_Roughne
 
 ## 🔬 Profiling
 
-Tracy is enabled by default. To disable at configure time:
+Tracy is enabled by default, including CPU zones, frame marks, thread names, memory pools, plot streams, and Vulkan GPU zones. To disable all Tracy instrumentation at configure time:
 
 ```powershell
 cmake --preset default -DAETHERCORE_ENABLE_TRACY=OFF
+```
+
+The detailed streams can be isolated independently when diagnosing profiler issues:
+
+```powershell
+cmake --preset default -DAETHERCORE_ENABLE_TRACY_GPU=OFF
+cmake --preset default -DAETHERCORE_ENABLE_TRACY_PLOTS=OFF
+cmake --preset default -DAETHERCORE_ENABLE_TRACY_MEMORY=OFF
 ```
 
 ---
