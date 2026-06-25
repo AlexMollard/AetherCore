@@ -91,15 +91,7 @@ namespace aether::gpu
 			return {};
 		}
 		// Heap-allocate scope data so the engine-side GpuZoneScope can hold it as an opaque typed handle.
-		auto scopeData = new detail::ProfilerScopeData(m_context->ctx,
-		        line,
-		        file,
-		        std::strlen(file),
-		        func,
-		        std::strlen(func),
-		        name.data(),
-		        static_cast<std::size_t>(name.size()),
-		        reinterpret_cast<VkCommandBuffer>(cmd));
+		auto scopeData = new detail::ProfilerScopeData(m_context->ctx, line, file, std::strlen(file), func, std::strlen(func), name.data(), static_cast<std::size_t>(name.size()), reinterpret_cast<VkCommandBuffer>(cmd));
 		return GpuZoneScope(scopeData);
 #else
 		(void) cmd;

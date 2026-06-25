@@ -167,6 +167,28 @@ namespace aether::ui
 		bool submitted = false; // true for ONE frame when Enter is pressed; DrawTextInput clears it
 	};
 
+	// -- Drag vector ------------------------------------------------------------
+	// Editor-style XYZ numeric control. Drag horizontally on a component to adjust
+	// it, or click without dragging to type a numeric value.
+	struct UiVec3DragComponent
+	{
+		std::string label;
+		glm::vec3 value{0.f};
+		glm::vec3 min{-1000000.f};
+		glm::vec3 max{1000000.f};
+		float speed = 0.05f;
+		int decimals = 2;
+		int activeAxis = -1;
+		int editingAxis = -1;
+		glm::vec2 dragStartMouse{};
+		glm::vec3 dragStartValue{0.f};
+		std::string editText;
+		bool dragging = false;
+		bool changed = false;
+		bool visible = true;
+		bool readOnly = false;
+	};
+
 	// -- Grid Layout ------------------------------------------------------------
 	// Positions UiChildrenComponent children in a uniform cell grid and
 	// auto-sizes the container height to wrap all rows.
@@ -202,6 +224,32 @@ namespace aether::ui
 		float valueMaxWidthPx = 0.f; // 0 = auto-fit to remaining row width
 		bool truncateLabel = true;
 		bool truncateValue = true;
+	};
+
+	// -- Selectable row ---------------------------------------------------------
+	// Generic clickable row for editor/debug list UIs.
+	struct UiSelectableComponent
+	{
+		std::string label;
+		Entity payload{};
+		bool selected = false;
+		bool visible = true;
+		float labelMaxWidthPx = 0.f; // 0 = auto-fit to row width
+	};
+
+	// -- Tree node --------------------------------------------------------------
+	// Selectable row with indentation and optional expand/collapse affordance.
+	struct UiTreeNodeComponent
+	{
+		std::string label;
+		Entity payload{};
+		std::uint32_t depth = 0;
+		bool selected = false;
+		bool expanded = true;
+		bool hasChildren = false;
+		bool visible = true;
+		float indentPx = 14.f;
+		float labelMaxWidthPx = 0.f; // 0 = auto-fit to remaining row width
 	};
 
 	// -- Section separator ------------------------------------------------------

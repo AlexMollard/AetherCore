@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <string>
 #include <string_view>
 
@@ -511,16 +512,22 @@ namespace aether::ui
 			{
 				continue;
 			}
-			++childCount;
 
 			if (ct->flexGrow > 0.f)
 			{
+				++childCount;
 				flexWeightTotal += ct->flexGrow;
 			}
 			else
 			{
 				const glm::vec4 childPx = PixelRect(*ct, extent);
-				fixedTotal += isVertical ? childPx.w : childPx.z;
+				const float mainSize = isVertical ? childPx.w : childPx.z;
+				if (mainSize <= 0.f)
+				{
+					continue;
+				}
+				++childCount;
+				fixedTotal += mainSize;
 			}
 		}
 
@@ -533,6 +540,7 @@ namespace aether::ui
 		const float crossSize = isVertical ? (parentPx.z - 2.f * pad) : (parentPx.w - 2.f * pad);
 		float cursor = isVertical ? (parentPx.y + pad) : (parentPx.x + pad);
 
+		int positionedChildren = 0;
 		for (const Entity child: children->children)
 		{
 			auto ct = world.TryGet<UiTransformComponent>(child);
@@ -543,6 +551,10 @@ namespace aether::ui
 
 			const glm::vec4 childPx = PixelRect(*ct, extent);
 			const float mainSize = (ct->flexGrow > 0.f && flexWeightTotal > 0.f) ? flexPool * (ct->flexGrow / flexWeightTotal) : (isVertical ? childPx.w : childPx.z);
+			if (ct->flexGrow <= 0.f && mainSize <= 0.f)
+			{
+				continue;
+			}
 
 			if (isVertical)
 			{
@@ -580,16 +592,21 @@ namespace aether::ui
 				}
 				ct->rect = PixelToUiRect(*ct, {cursor, childY, mainSize, childH}, extent);
 			}
-			cursor += mainSize + spacing;
+			cursor += mainSize;
+			++positionedChildren;
+			if (positionedChildren < childCount)
+			{
+				cursor += spacing;
+			}
 		}
 
 		// -- Auto-size: shrink/grow container to wrap content ------------------
-		// cursor is now: start + pad + sum(sizes) + N*spacing.
-		// Desired container size: 2*pad + sum(sizes) + (N-1)*spacing = cursor - start - spacing + pad.
+		// cursor is now: start + pad + sum(sizes) + (N-1)*spacing.
+		// Desired container size: 2*pad + sum(sizes) + (N-1)*spacing = cursor - start + pad.
 		if (layout->autoSize && childCount > 0)
 		{
 			const float start = isVertical ? parentPx.y : parentPx.x;
-			const float newMainSize = cursor - start - spacing + pad;
+			const float newMainSize = cursor - start + pad;
 			glm::vec4 newPx = parentPx;
 			if (isVertical)
 			{
@@ -810,6 +827,144 @@ namespace aether::ui
 		return e;
 	}
 
+	// -- Vec3 drag --------------------------------------------------------------
+
+	static std::string FormatFloat(float value, int decimals)
+	{
+		char buf[64]{};
+		const int clampedDecimals = std::clamp(decimals, 0, 6);
+		std::snprintf(buf, sizeof(buf), "%.*f", clampedDecimals, value);
+		return buf;
+	}
+
+	static int Vec3AxisAt(const UiTransformComponent& t, const UiVec3DragComponent& vec, glm::vec4 px, glm::vec2 mousePos)
+	{
+		if (vec.readOnly)
+		{
+			return -1;
+		}
+
+		const float labelW = std::min(92.f, px.z * 0.33f);
+		const float gap = 4.f;
+		const float fieldX = px.x + labelW + 6.f;
+		const float fieldW = std::max(0.f, (px.z - labelW - 6.f - gap * 2.f) / 3.f);
+		(void) t;
+
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			const float x = fieldX + static_cast<float>(axis) * (fieldW + gap);
+			if (mousePos.x >= x && mousePos.x <= x + fieldW && mousePos.y >= px.y && mousePos.y <= px.y + px.w)
+			{
+				return axis;
+			}
+		}
+		return -1;
+	}
+
+	bool DrawVec3Drag(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme)
+	{
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto vec = world.TryGet<UiVec3DragComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
+		if (!t || !vec || !inp || !vec->visible)
+		{
+			return false;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		vec->changed = false;
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float labelW = std::min(92.f, px.z * 0.33f);
+		const float gap = 4.f;
+		const float fieldX = px.x + labelW + 6.f;
+		const float fieldW = std::max(0.f, (px.z - labelW - 6.f - gap * 2.f) / 3.f);
+		const float textY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
+		const char* axisNames[] = {"X", "Y", "Z"};
+		const glm::vec4 axisColors[] = {
+		        {0.86f, 0.31f, 0.24f, 1.f},
+		        {0.42f, 0.65f, 0.31f, 1.f},
+		        {0.34f, 0.52f, 0.78f, 1.f},
+		};
+
+		ui.DrawText(vec->label, PixelPoint(*t, {px.x, textY}, extent), theme.labelFontSize, theme.textLabel);
+
+		if (inp->pressed && !vec->readOnly)
+		{
+			const int axis = Vec3AxisAt(*t, *vec, px, input.GetMousePos());
+			if (axis >= 0 && vec->activeAxis < 0)
+			{
+				vec->activeAxis = axis;
+				vec->dragStartMouse = input.GetMousePos();
+				vec->dragStartValue = vec->value;
+				vec->dragging = false;
+				vec->editingAxis = -1;
+			}
+		}
+
+		if (vec->activeAxis >= 0 && input.IsMouseButtonDown(MouseButton::Left))
+		{
+			const glm::vec2 delta = input.GetMousePos() - vec->dragStartMouse;
+			if (!vec->dragging && glm::dot(delta, delta) > 9.f)
+			{
+				vec->dragging = true;
+			}
+			if (vec->dragging)
+			{
+				vec->value[vec->activeAxis] = std::clamp(vec->dragStartValue[vec->activeAxis] + delta.x * vec->speed, vec->min[vec->activeAxis], vec->max[vec->activeAxis]);
+				vec->changed = true;
+			}
+		}
+
+		if (vec->activeAxis >= 0 && input.IsMouseButtonReleased(MouseButton::Left))
+		{
+			if (!vec->dragging && inp->hovered)
+			{
+				vec->editingAxis = vec->activeAxis;
+				vec->editText = FormatFloat(vec->value[vec->editingAxis], vec->decimals);
+			}
+			vec->activeAxis = -1;
+			vec->dragging = false;
+		}
+
+		for (int axis = 0; axis < 3; ++axis)
+		{
+			const float x = fieldX + static_cast<float>(axis) * (fieldW + gap);
+			const glm::vec4 fieldPx{x, px.y, fieldW, px.w};
+			const bool active = axis == vec->activeAxis || axis == vec->editingAxis;
+			glm::vec4 bg = vec->readOnly ? theme.tabInactive : glm::mix(theme.inputBg, theme.inputHoverBg, inp->hoverT);
+			if (active)
+			{
+				bg = theme.inputFocusBg;
+			}
+			ui.DrawRect(PixelToUiRect(*t, fieldPx, extent), bg, theme.cornerRadius * 0.5f);
+
+			const glm::vec4 badgePx{x + 3.f, px.y + 3.f, 18.f, px.w - 6.f};
+			ui.DrawRect(PixelToUiRect(*t, badgePx, extent), axisColors[axis], theme.cornerRadius * 0.5f);
+
+			const float axisTextW = ui.MeasureText(axisNames[axis], theme.buttonFontSize);
+			ui.DrawText(axisNames[axis], PixelPoint(*t, {badgePx.x + badgePx.z * 0.5f - axisTextW * 0.5f, textY}, extent), theme.buttonFontSize, theme.text);
+
+			const std::string valueText = (axis == vec->editingAxis) ? vec->editText : FormatFloat(vec->value[axis], vec->decimals);
+			const float valueMaxW = std::max(0.f, fieldW - 28.f);
+			const std::string fitted = FitTextToWidth(ui, valueText, theme.bodyFontSize, valueMaxW);
+			ui.DrawText(fitted, PixelPoint(*t, {x + 25.f, textY}, extent), theme.bodyFontSize, vec->readOnly ? theme.textLabel : theme.text);
+		}
+
+		ui.SetLayer(prevLayer);
+		return vec->changed;
+	}
+
+	Entity SpawnVec3Drag(aether::World& world, UiRect rect, std::string_view label, glm::vec3 value, float zOrder)
+	{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiVec3DragComponent>(e, UiVec3DragComponent{.label = std::string(label), .value = value});
+		return e;
+	}
+
 	// -- Hierarchy helper ------------------------------------------------------
 
 	void AddChild(aether::World& world, Entity parent, Entity child)
@@ -991,6 +1146,111 @@ namespace aether::ui
 		Entity e = world.Create();
 		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
 		world.Emplace<UiLabelRowComponent>(e, UiLabelRowComponent{.label = std::string(label)});
+		return e;
+	}
+
+	// -- Selectable row ---------------------------------------------------------
+
+	bool DrawSelectable(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
+	{
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto row = world.TryGet<UiSelectableComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
+		if (!t || !row || !inp || !row->visible)
+		{
+			return false;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float bgAlpha = row->selected ? 0.30f : (0.12f * inp->hoverT);
+		if (bgAlpha > 0.f)
+		{
+			glm::vec4 bg = row->selected ? theme.accent : theme.tabHover;
+			bg.a = bgAlpha;
+			ui.DrawRect(t->rect, bg, theme.cornerRadius * 0.5f);
+		}
+
+		if (row->selected)
+		{
+			ui.DrawRect(PixelToUiRect(*t, {px.x, px.y + 3.f, 2.f, px.w - 6.f}, extent), theme.accent, 0.f);
+		}
+
+		const float textX = px.x + 8.f;
+		const float textY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
+		const float maxW = row->labelMaxWidthPx > 0.f ? std::min(row->labelMaxWidthPx, px.z - 12.f) : std::max(0.f, px.z - 16.f);
+		const std::string label = FitTextToWidth(ui, row->label, theme.bodyFontSize, maxW);
+		ui.DrawText(label, PixelPoint(*t, {textX, textY}, extent), theme.bodyFontSize, row->selected ? theme.text : theme.textLabel);
+
+		ui.SetLayer(prevLayer);
+		return inp->clicked;
+	}
+
+	Entity SpawnSelectable(aether::World& world, UiRect rect, std::string_view label, float zOrder)
+	{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiSelectableComponent>(e, UiSelectableComponent{.label = std::string(label)});
+		return e;
+	}
+
+	// -- Tree node --------------------------------------------------------------
+
+	bool DrawTreeNode(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme)
+	{
+		auto t = world.TryGet<UiTransformComponent>(entity);
+		auto node = world.TryGet<UiTreeNodeComponent>(entity);
+		auto inp = world.TryGet<UiInputComponent>(entity);
+		if (!t || !node || !inp || !node->visible)
+		{
+			return false;
+		}
+
+		const std::int32_t prevLayer = ui.GetLayer();
+		ui.SetLayer(ComputeEffectiveLayer(world, entity));
+
+		const glm::vec4 px = PixelRect(*t, extent);
+		const float bgAlpha = node->selected ? 0.32f : (0.14f * inp->hoverT);
+		if (bgAlpha > 0.f)
+		{
+			glm::vec4 bg = node->selected ? theme.accent : theme.tabHover;
+			bg.a = bgAlpha;
+			ui.DrawRect(t->rect, bg, theme.cornerRadius * 0.5f);
+		}
+
+		if (node->selected)
+		{
+			ui.DrawRect(PixelToUiRect(*t, {px.x, px.y + 3.f, 2.f, px.w - 6.f}, extent), theme.accent, 0.f);
+		}
+
+		const float indent = static_cast<float>(node->depth) * node->indentPx;
+		const float markerX = px.x + 8.f + indent;
+		const float textX = markerX + 14.f;
+		const float textY = px.y + px.w * 0.5f + theme.bodyFontSize * 0.35f;
+
+		if (node->hasChildren)
+		{
+			ui.DrawText(node->expanded ? "v" : ">", PixelPoint(*t, {markerX, textY}, extent), theme.bodyFontSize, node->selected ? theme.text : theme.textSection);
+		}
+
+		const float autoMax = std::max(0.f, px.x + px.z - textX - 8.f);
+		const float maxW = node->labelMaxWidthPx > 0.f ? std::min(node->labelMaxWidthPx, autoMax) : autoMax;
+		const std::string label = FitTextToWidth(ui, node->label, theme.bodyFontSize, maxW);
+		ui.DrawText(label, PixelPoint(*t, {textX, textY}, extent), theme.bodyFontSize, node->selected ? theme.text : theme.textLabel);
+
+		ui.SetLayer(prevLayer);
+		return inp->clicked;
+	}
+
+	Entity SpawnTreeNode(aether::World& world, UiRect rect, std::string_view label, float zOrder)
+	{
+		Entity e = world.Create();
+		world.Emplace<UiTransformComponent>(e, UiTransformComponent{.rect = rect, .zOrder = zOrder});
+		world.Emplace<UiInputComponent>(e);
+		world.Emplace<UiTreeNodeComponent>(e, UiTreeNodeComponent{.label = std::string(label)});
 		return e;
 	}
 

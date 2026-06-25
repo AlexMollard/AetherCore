@@ -4,12 +4,18 @@
 #include <cstddef>
 #include <deque>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "AppLayer.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Entity.hpp"
 #include "ui/UiLayout.hpp"
+
+namespace aether
+{
+	class World;
+}
 
 namespace aether::app::scripting
 {
@@ -39,6 +45,10 @@ namespace aether::app
 
 	private:
 		static constexpr std::size_t kMaxRenderPassRows = 16;
+		static constexpr std::size_t kMaxSceneTreeRows = 40;
+		static constexpr std::size_t kMaxVisibleSceneTreeRows = 4;
+		static constexpr std::size_t kInspectorRowCount = 7;
+		static constexpr std::size_t kInspectorVec3RowCount = 3;
 
 		enum LabelRow : std::size_t
 		{
@@ -75,12 +85,14 @@ namespace aether::app
 			Tab_Performance,
 			Tab_Render,
 			Tab_Camera,
+			Tab_Scene,
 			kTabCount
 		};
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
 
 		void PollScriptErrors(LayerContext& context);
+		void UpdateSceneTab(World& world);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
@@ -99,6 +111,13 @@ namespace aether::app
 		Entity m_reloadButton;
 		Entity m_passTotalRow;
 		std::array<Entity, kMaxRenderPassRows> m_passBars{};
+		std::array<Entity, kMaxSceneTreeRows> m_sceneRows{};
+		std::array<Entity, kInspectorRowCount> m_inspectorRows{};
+		std::array<Entity, kInspectorVec3RowCount> m_inspectorVec3Rows{};
+		Entity m_sceneSummaryRow;
+		Entity m_inspectorHeaderRow;
+		Entity m_selectedSceneEntity;
+		std::unordered_set<std::uint32_t> m_expandedSceneEntities;
 		std::vector<Entity> m_entities;
 		std::array<Entity, kTabCount> m_tabPages;
 	};

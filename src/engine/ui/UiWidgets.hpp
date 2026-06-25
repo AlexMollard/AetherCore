@@ -51,6 +51,12 @@ namespace aether::ui
 	// Label row: draws static label (left) + dynamic value (right, coloured).
 	void DrawLabelRow(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
+	// Selectable row: draws hover/selection background and a single-line label.
+	bool DrawSelectable(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
+
+	// Tree node row: selectable row with depth indentation and disclosure marker.
+	bool DrawTreeNode(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
+
 	// Section separator: draws a thin horizontal line.
 	void DrawSection(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
@@ -58,6 +64,9 @@ namespace aether::ui
 	// UiSystem feeds typed characters when this entity has keyboard focus.
 	// Returns true for ONE frame when the user submits with Enter.
 	bool DrawTextInput(aether::World& world, Entity entity, UIRenderer& ui, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
+
+	// Vec3 drag: editor-style XYZ numeric fields. Drag a field or type into it.
+	bool DrawVec3Drag(aether::World& world, Entity entity, UIRenderer& ui, const Input& input, gpu::Extent2D extent, const UiTheme& theme = UiTheme::Default());
 
 	// Item slot: draws rarity border, hover/press overlay, icon placeholder,
 	// and a quantity badge.  Returns true the frame the slot is clicked.
@@ -116,11 +125,20 @@ namespace aether::ui
 	// Label-value row entity (UiTransform + UiLabelRowComponent).
 	Entity SpawnLabelRow(aether::World& world, UiRect rect, std::string_view label, float zOrder = 0.f);
 
+	// Selectable row entity (UiTransform + UiInput + UiSelectableComponent).
+	Entity SpawnSelectable(aether::World& world, UiRect rect, std::string_view label, float zOrder = 0.f);
+
+	// Tree node row entity (UiTransform + UiInput + UiTreeNodeComponent).
+	Entity SpawnTreeNode(aether::World& world, UiRect rect, std::string_view label, float zOrder = 0.f);
+
 	// Section separator entity (UiTransform + UiSectionComponent).
 	Entity SpawnSection(aether::World& world, UiRect rect, float zOrder = 0.f);
 
 	// Single-line text input entity.
 	Entity SpawnTextInput(aether::World& world, UiRect rect, std::string_view placeholder = {}, float zOrder = 0.f);
+
+	// Editor vector row entity.
+	Entity SpawnVec3Drag(aether::World& world, UiRect rect, std::string_view label, glm::vec3 value = glm::vec3{0.f}, float zOrder = 0.f);
 
 	// Single item slot entity (UiTransform + UiInput + UiItemSlot).
 	Entity SpawnItemSlot(aether::World& world, UiRect rect = {}, float zOrder = 0.f);

@@ -1,5 +1,6 @@
 #include "UiSystem.hpp"
 
+#include <algorithm>
 #include <limits>
 #include <utility>
 
@@ -198,6 +199,10 @@ namespace aether::ui
 			{
 				DrawTextInput(world, entity, ui, extent, theme);
 			}
+			else if (world.Has<UiVec3DragComponent>(entity) && world.Has<UiInputComponent>(entity))
+			{
+				DrawVec3Drag(world, entity, ui, input, extent, theme);
+			}
 			else if (world.Has<UiItemSlotComponent>(entity))
 			{
 				DrawItemSlot(world, entity, ui, extent, theme);
@@ -205,6 +210,14 @@ namespace aether::ui
 			else if (world.Has<UiLabelRowComponent>(entity))
 			{
 				DrawLabelRow(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiTreeNodeComponent>(entity) && world.Has<UiInputComponent>(entity))
+			{
+				DrawTreeNode(world, entity, ui, extent, theme);
+			}
+			else if (world.Has<UiSelectableComponent>(entity) && world.Has<UiInputComponent>(entity))
+			{
+				DrawSelectable(world, entity, ui, extent, theme);
 			}
 			else if (world.Has<UiSectionComponent>(entity))
 			{
@@ -223,6 +236,12 @@ namespace aether::ui
 			if (!children)
 			{
 				return;
+			}
+			const auto parentTransform = world.TryGet<UiTransformComponent>(parent);
+			const bool clipToPanel = world.Has<UiPanelComponent>(parent) && parentTransform != nullptr;
+			if (clipToPanel)
+			{
+				ui.PushClipRect(parentTransform->rect);
 			}
 			for (Entity child: children->children)
 			{
@@ -253,6 +272,10 @@ namespace aether::ui
 				{
 					DrawWidget(world, child, ui, input, extent, theme);
 				}
+			}
+			if (clipToPanel)
+			{
+				ui.PopClipRect();
 			}
 		}
 	} // namespace
@@ -436,9 +459,9 @@ namespace aether::ui
 			// Raise clicked entity above all others so panels stack correctly.
 			BringToFront(world, ctx.hotEntity);
 
-			// Focus management: text inputs gain keyboard focus on click; anything
-			// else clicked removes focus so the text field stops consuming events.
-			if (world.Has<UiTextInputComponent>(ctx.hotEntity))
+			// Focus management: text editors gain keyboard focus on click; anything
+			// else clicked removes focus so the field stops consuming events.
+			if (world.Has<UiTextInputComponent>(ctx.hotEntity) || world.Has<UiVec3DragComponent>(ctx.hotEntity))
 			{
 				ctx.focusedEntity = ctx.hotEntity;
 				// Reset blink so cursor is immediately visible on focus.
@@ -475,8 +498,56 @@ namespace aether::ui
 		}
 
 		auto ti = world.TryGet<UiTextInputComponent>(ctx.focusedEntity);
-		if (!ti)
+		auto vec3 = world.TryGet<UiVec3DragComponent>(ctx.focusedEntity);
+		if (!ti && !vec3)
 		{
+			return;
+		}
+
+		if (vec3)
+		{
+			if (vec3->editingAxis < 0)
+			{
+				return;
+			}
+
+			if (input.IsKeyPressed(Key::Enter) || input.IsKeyPressed(Key::KpEnter))
+			{
+				try
+				{
+					const float parsed = std::stof(vec3->editText);
+					vec3->value[vec3->editingAxis] = std::clamp(parsed, vec3->min[vec3->editingAxis], vec3->max[vec3->editingAxis]);
+					vec3->changed = true;
+				}
+				catch (...)
+				{
+				}
+				vec3->editingAxis = -1;
+				ctx.focusedEntity = {};
+				return;
+			}
+
+			if (input.IsKeyPressed(Key::Escape))
+			{
+				vec3->editingAxis = -1;
+				ctx.focusedEntity = {};
+				return;
+			}
+
+			for (const char c: input.GetTypedChars())
+			{
+				const bool numeric = (c >= '0' && c <= '9') || c == '-' || c == '+' || c == '.';
+				if (numeric && vec3->editText.size() < 32)
+				{
+					vec3->editText.push_back(c);
+				}
+			}
+
+			if (input.IsKeyPressed(Key::Backspace) && !vec3->editText.empty())
+			{
+				vec3->editText.pop_back();
+			}
+
 			return;
 		}
 

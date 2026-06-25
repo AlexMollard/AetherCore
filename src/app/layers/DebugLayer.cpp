@@ -5,8 +5,11 @@
 #include <cstdio>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <regex>
 #include <string_view>
+#include <unordered_map>
+#include <unordered_set>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -17,6 +20,7 @@
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
 #include "platform/Input.hpp"
+#include "physics/PhysicsComponents.hpp"
 #include "ui/UIRenderer.hpp"
 #include "ui/UiComponents.hpp"
 #include "ui/UiLayout.hpp"
@@ -87,6 +91,140 @@ namespace aether::app
 				name = name.substr(0, sourceSuffix);
 			}
 			return std::string(name);
+		}
+
+		struct SceneTreeItem
+		{
+			Entity entity{};
+			std::uint32_t depth = 0;
+			bool hasChildren = false;
+		};
+
+		bool IsAlive(const World& world, Entity entity)
+		{
+			return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
+		}
+
+		bool IsSceneVisibleEntity(const World& world, Entity entity)
+		{
+			if (!IsAlive(world, entity))
+			{
+				return false;
+			}
+			return !world.Has<ui::UiTransformComponent>(entity);
+		}
+
+		std::string ComponentSummary(const World& world, Entity entity)
+		{
+			std::string out;
+			auto add = [&](std::string_view name)
+			{
+				if (!out.empty())
+				{
+					out += ", ";
+				}
+				out += name;
+			};
+
+			if (world.Has<TransformComponent>(entity))
+			{
+				add("Transform");
+			}
+			if (world.Has<MeshComponent>(entity))
+			{
+				add("Mesh");
+			}
+			if (world.Has<MaterialComponent>(entity))
+			{
+				add("Material");
+			}
+			if (world.Has<PipelineComponent>(entity))
+			{
+				add("Pipeline");
+			}
+			if (world.Has<SkinnedMeshComponent>(entity))
+			{
+				add("Skinned");
+			}
+			if (world.Has<SpawnedEntitiesComponent>(entity))
+			{
+				add("Spawned");
+			}
+			if (world.Has<ParentEntityComponent>(entity))
+			{
+				add("Child");
+			}
+			if (world.Has<RigidBodyComponent>(entity))
+			{
+				add("RigidBody");
+			}
+			if (world.Has<PhysicsStateComponent>(entity))
+			{
+				add("Physics");
+			}
+			if (world.Has<PhysicsDebugShapeComponent>(entity))
+			{
+				add("DebugShape");
+			}
+
+			return out.empty() ? "Entity" : out;
+		}
+
+		std::string SceneEntityLabel(const World& world, Entity entity)
+		{
+			return std::format("#{}  {}", entity.id, ComponentSummary(world, entity));
+		}
+
+		void SetTreeRowVisible(World& world, Entity rowEntity, bool visible)
+		{
+			if (auto node = world.TryGet<ui::UiTreeNodeComponent>(rowEntity))
+			{
+				node->visible = visible;
+			}
+			if (auto inp = world.TryGet<ui::UiInputComponent>(rowEntity))
+			{
+				inp->blockInput = visible;
+			}
+			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
+			{
+				t->rect.offsetMaxPx.y = visible ? 18.f : 0.f;
+			}
+		}
+
+		void SetInspectorRow(World& world, Entity rowEntity, std::string_view label, std::string_view value, glm::vec4 valueColor = ui::UiTheme::Default().text)
+		{
+			if (auto row = world.TryGet<ui::UiLabelRowComponent>(rowEntity))
+			{
+				row->label = label;
+				row->value = value;
+				row->valueColor = valueColor;
+			}
+			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
+			{
+				t->rect.offsetMaxPx.y = label.empty() && value.empty() ? 0.f : 18.f;
+			}
+		}
+
+		void SetVec3Row(World& world, Entity rowEntity, std::string_view label, glm::vec3 value, bool visible, bool readOnly = false)
+		{
+			if (auto row = world.TryGet<ui::UiVec3DragComponent>(rowEntity))
+			{
+				if (!row->changed && !row->dragging && row->editingAxis < 0)
+				{
+					row->value = value;
+				}
+				row->label = label;
+				row->visible = visible;
+				row->readOnly = readOnly;
+			}
+			if (auto inp = world.TryGet<ui::UiInputComponent>(rowEntity))
+			{
+				inp->blockInput = visible && !readOnly;
+			}
+			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
+			{
+				t->rect.offsetMaxPx.y = visible ? 22.f : 0.f;
+			}
 		}
 	} // namespace
 
@@ -323,7 +461,6 @@ namespace aether::app
 		                .direction = ui::UiLayoutComponent::Direction::Vertical,
 		                .spacing = 0.f,
 		                .padding = 10.f,
-		                .autoSize = true,
 		        });
 		world.Emplace<ui::UiChildrenComponent>(m_debugPanel);
 
@@ -336,11 +473,16 @@ namespace aether::app
 		world.Emplace<ui::UiTransformComponent>(m_headerSpacer, ui::UiTransformComponent{.rect = HeightRect(48.f), .zOrder = 2.f});
 		addChild(m_headerSpacer);
 
-		std::vector<std::string> tabNames = {"Perf", "Render", "Camera"};
+		std::vector<std::string> tabNames = {"Perf", "Render", "Camera", "Scene"};
 
 		auto createPage = [&]([[maybe_unused]] Tab tab) -> Entity
 		{
 			auto page = reg(ui::SpawnTabPage(world, 2.f));
+			if (auto layout = world.TryGet<ui::UiLayoutComponent>(page))
+			{
+				layout->spacing = 1.f;
+				layout->padding = 5.f;
+			}
 			addChild(page);
 			return page;
 		};
@@ -348,8 +490,9 @@ namespace aether::app
 		m_tabPages[Tab_Performance] = createPage(Tab_Performance);
 		m_tabPages[Tab_Render] = createPage(Tab_Render);
 		m_tabPages[Tab_Camera] = createPage(Tab_Camera);
+		m_tabPages[Tab_Scene] = createPage(Tab_Scene);
 
-		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Camera]};
+		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Camera], m_tabPages[Tab_Scene]};
 		m_tabBar = reg(ui::SpawnTabBar(world, UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {0, 0}, .offsetMaxPx = {0, ui::UiTheme::Default().tabHeight}}, tabNames, tabPageVec, 3.f));
 
 		// Insert tab bar after header spacer, before pages.
@@ -475,6 +618,53 @@ namespace aether::app
 			addToPage(Tab_Camera, m_labelRows[Row_PointLights + i]);
 		}
 
+		m_sceneSummaryRow = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Entities", 2.f));
+		if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_sceneSummaryRow))
+		{
+			row->valueColumnOffsetPx = 230.f;
+			row->labelMaxWidthPx = 220.f;
+			row->valueMaxWidthPx = 120.f;
+		}
+		addToPage(Tab_Scene, m_sceneSummaryRow);
+
+		for (std::size_t i = 0; i < kMaxSceneTreeRows; ++i)
+		{
+			Entity row = reg(ui::SpawnTreeNode(world, HeightRect(18.f), "", 2.f));
+			SetTreeRowVisible(world, row, false);
+			addToPage(Tab_Scene, row);
+			m_sceneRows[i] = row;
+		}
+
+		m_inspectorHeaderRow = reg(ui::SpawnLabelRow(world, HeightRect(22.f), "Inspector", 2.f));
+		if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_inspectorHeaderRow))
+		{
+			row->valueColumnOffsetPx = 140.f;
+			row->labelMaxWidthPx = 132.f;
+		}
+		addToPage(Tab_Scene, m_inspectorHeaderRow);
+
+		for (std::size_t i = 0; i < kInspectorVec3RowCount; ++i)
+		{
+			Entity row = reg(ui::SpawnVec3Drag(world, HeightRect(22.f), "", {}, 2.f));
+			SetVec3Row(world, row, "", {}, false);
+			addToPage(Tab_Scene, row);
+			m_inspectorVec3Rows[i] = row;
+		}
+
+		for (std::size_t i = 0; i < kInspectorRowCount; ++i)
+		{
+			Entity row = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "", 2.f));
+			if (auto label = world.TryGet<ui::UiLabelRowComponent>(row))
+			{
+				label->valueColumnOffsetPx = 138.f;
+				label->labelMaxWidthPx = 130.f;
+				label->valueMaxWidthPx = 230.f;
+			}
+			SetInspectorRow(world, row, "", "");
+			addToPage(Tab_Scene, row);
+			m_inspectorRows[i] = row;
+		}
+
 		m_reloadButton = reg(ui::SpawnButton(world, HeightRect(28.f), "Reload Script  [F5]", 2.f));
 		addChild(m_reloadButton);
 	}
@@ -488,6 +678,303 @@ namespace aether::app
 			world.Destroy(e);
 		}
 		m_entities.clear();
+	}
+
+	void DebugLayer::UpdateSceneTab(World& world)
+	{
+		std::vector<Entity> entities;
+		std::unordered_set<std::uint32_t> seen;
+		auto addCandidate = [&](Entity entity)
+		{
+			if (IsSceneVisibleEntity(world, entity) && seen.insert(entity.id).second)
+			{
+				entities.push_back(entity);
+			}
+		};
+
+		for (const auto& [raw, component]: world.View<TransformComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<MeshComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<MaterialComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<PipelineComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<SkinnedMeshComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<SpawnedEntitiesComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<ParentEntityComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<RigidBodyComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<PhysicsStateComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+		for (const auto& [raw, component]: world.View<PhysicsDebugShapeComponent>().each())
+		{
+			(void) component;
+			addCandidate(World::FromEntt(raw));
+		}
+
+		std::ranges::sort(entities, [](Entity a, Entity b) { return a.id < b.id; });
+
+		std::unordered_set<std::uint32_t> aliveIds;
+		aliveIds.reserve(entities.size());
+		for (const Entity entity: entities)
+		{
+			aliveIds.insert(entity.id);
+		}
+
+		std::unordered_map<std::uint32_t, std::vector<Entity>> childrenByParent;
+		std::unordered_set<std::uint32_t> childIds;
+		for (const Entity entity: entities)
+		{
+			if (const auto parent = world.TryGet<ParentEntityComponent>(entity))
+			{
+				if (parent->parentId != 0 && aliveIds.contains(parent->parentId))
+				{
+					childrenByParent[parent->parentId].push_back(entity);
+					childIds.insert(entity.id);
+				}
+			}
+		}
+
+		for (auto& [_, children]: childrenByParent)
+		{
+			std::ranges::sort(children, [](Entity a, Entity b) { return a.id < b.id; });
+		}
+
+		std::vector<SceneTreeItem> visibleItems;
+		visibleItems.reserve(std::min<std::size_t>(entities.size(), kMaxVisibleSceneTreeRows));
+
+		std::function<void(Entity, std::uint32_t)> appendEntity;
+		appendEntity = [&](Entity entity, std::uint32_t depth) -> void
+		{
+			if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
+			{
+				return;
+			}
+
+			const auto childIt = childrenByParent.find(entity.id);
+			const bool hasChildren = childIt != childrenByParent.end() && !childIt->second.empty();
+			visibleItems.push_back(SceneTreeItem{
+			        .entity = entity,
+			        .depth = depth,
+			        .hasChildren = hasChildren,
+			});
+
+			if (!hasChildren || !m_expandedSceneEntities.contains(entity.id))
+			{
+				return;
+			}
+
+			for (const Entity child: childIt->second)
+			{
+				appendEntity(child, depth + 1);
+				if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
+				{
+					break;
+				}
+			}
+		};
+
+		for (const Entity entity: entities)
+		{
+			if (childIds.contains(entity.id))
+			{
+				continue;
+			}
+			appendEntity(entity, 0);
+			if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
+			{
+				break;
+			}
+		}
+
+		if (!IsSceneVisibleEntity(world, m_selectedSceneEntity))
+		{
+			m_selectedSceneEntity = {};
+		}
+
+		if (auto summary = world.TryGet<ui::UiLabelRowComponent>(m_sceneSummaryRow))
+		{
+			const bool capped = entities.size() > visibleItems.size();
+			summary->value = capped ? std::format("first {} / {}", visibleItems.size(), entities.size()) : std::format("{} total", entities.size());
+			summary->valueColor = capped ? ui::UiTheme::Default().warn : ui::UiTheme::Default().text;
+		}
+
+		for (std::size_t i = 0; i < m_sceneRows.size(); ++i)
+		{
+			const Entity rowEntity = m_sceneRows[i];
+			if (i >= visibleItems.size())
+			{
+				SetTreeRowVisible(world, rowEntity, false);
+				continue;
+			}
+
+			const SceneTreeItem& item = visibleItems[i];
+			SetTreeRowVisible(world, rowEntity, true);
+			if (auto node = world.TryGet<ui::UiTreeNodeComponent>(rowEntity))
+			{
+				node->label = SceneEntityLabel(world, item.entity);
+				node->payload = item.entity;
+				node->depth = item.depth;
+				node->hasChildren = item.hasChildren;
+				node->expanded = m_expandedSceneEntities.contains(item.entity.id);
+				node->selected = item.entity == m_selectedSceneEntity;
+			}
+
+			if (const auto inp = world.TryGet<ui::UiInputComponent>(rowEntity); inp && inp->clicked)
+			{
+				m_selectedSceneEntity = item.entity;
+				if (item.hasChildren)
+				{
+					if (m_expandedSceneEntities.contains(item.entity.id))
+					{
+						m_expandedSceneEntities.erase(item.entity.id);
+					}
+					else
+					{
+						m_expandedSceneEntities.insert(item.entity.id);
+					}
+				}
+			}
+		}
+
+		if (!m_selectedSceneEntity.IsValid())
+		{
+			SetInspectorRow(world, m_inspectorHeaderRow, "Inspector", "No selection", ui::UiTheme::Default().textLabel);
+			for (Entity row: m_inspectorVec3Rows)
+			{
+				SetVec3Row(world, row, "", {}, false);
+			}
+			for (Entity row: m_inspectorRows)
+			{
+				SetInspectorRow(world, row, "", "");
+			}
+			return;
+		}
+
+		SetInspectorRow(world, m_inspectorHeaderRow, "Inspector", std::format("#{}", m_selectedSceneEntity.id), ui::UiTheme::Default().accent);
+
+		std::size_t row = 0;
+		auto addRow = [&](std::string_view label, std::string value, glm::vec4 color = ui::UiTheme::Default().text)
+		{
+			if (row >= m_inspectorRows.size())
+			{
+				return;
+			}
+			SetInspectorRow(world, m_inspectorRows[row], label, value, color);
+			++row;
+		};
+
+		addRow("Components", ComponentSummary(world, m_selectedSceneEntity), ui::UiTheme::Default().textLabel);
+
+		std::size_t vecRow = 0;
+		auto addVec3Row = [&](std::string_view label, glm::vec3 value, bool readOnly = false) -> ui::UiVec3DragComponent*
+		{
+			if (vecRow >= m_inspectorVec3Rows.size())
+			{
+				return nullptr;
+			}
+			Entity rowEntity = m_inspectorVec3Rows[vecRow];
+			SetVec3Row(world, rowEntity, label, value, true, readOnly);
+			++vecRow;
+			return world.TryGet<ui::UiVec3DragComponent>(rowEntity);
+		};
+
+		if (const auto parent = world.TryGet<ParentEntityComponent>(m_selectedSceneEntity))
+		{
+			addRow("Parent", std::format("#{}", parent->parentId));
+		}
+		if (const auto spawned = world.TryGet<SpawnedEntitiesComponent>(m_selectedSceneEntity))
+		{
+			addRow("Spawned", std::format("{} children", spawned->entityIds.size()));
+		}
+		if (const auto transform = world.TryGet<TransformComponent>(m_selectedSceneEntity))
+		{
+			const glm::vec3 pos{transform->localToWorld[3]};
+			if (auto vec = addVec3Row("Position", pos))
+			{
+				if (vec->changed)
+				{
+					if (auto writable = world.TryGet<TransformComponent>(m_selectedSceneEntity))
+					{
+						writable->localToWorld[3] = glm::vec4(vec->value, 1.f);
+					}
+				}
+			}
+		}
+		if (world.Has<MeshComponent>(m_selectedSceneEntity))
+		{
+			addRow("Mesh", "present", ui::UiTheme::Default().good);
+		}
+		if (world.Has<MaterialComponent>(m_selectedSceneEntity))
+		{
+			addRow("Material", "present", ui::UiTheme::Default().good);
+		}
+		if (const auto skin = world.TryGet<SkinnedMeshComponent>(m_selectedSceneEntity))
+		{
+			addRow("Skin", std::format("{} joints, clip {}", skin->jointCount, skin->clipIndex));
+			addRow("Anim Time", std::format("{:.2f}s x{:.2f}", skin->animTime, skin->playbackSpeed));
+		}
+		if (const auto rigid = world.TryGet<RigidBodyComponent>(m_selectedSceneEntity))
+		{
+			const char* motion = "Dynamic";
+			if (rigid->motionType == PhysicsMotionType::Static)
+			{
+				motion = "Static";
+			}
+			else if (rigid->motionType == PhysicsMotionType::Kinematic)
+			{
+				motion = "Kinematic";
+			}
+			addRow("Rigid Body", motion);
+		}
+		if (const auto physics = world.TryGet<PhysicsStateComponent>(m_selectedSceneEntity))
+		{
+			addRow("Physics Pos", std::format("{:.2f}, {:.2f}, {:.2f}", physics->currPosition.x, physics->currPosition.y, physics->currPosition.z));
+			addRow("Physics Scale", std::format("{:.2f}, {:.2f}, {:.2f}", physics->scale.x, physics->scale.y, physics->scale.z));
+		}
+
+		while (vecRow < m_inspectorVec3Rows.size())
+		{
+			SetVec3Row(world, m_inspectorVec3Rows[vecRow], "", {}, false);
+			++vecRow;
+		}
+
+		while (row < m_inspectorRows.size())
+		{
+			SetInspectorRow(world, m_inspectorRows[row], "", "");
+			++row;
+		}
 	}
 
 	void DebugLayer::OnUpdate(LayerContext& context)
@@ -854,7 +1341,13 @@ namespace aether::app
 			{
 				tabComp->selectedTab = Tab_Camera;
 			}
+			else if (input.IsKeyPressed(aether::Key::Num4))
+			{
+				tabComp->selectedTab = Tab_Scene;
+			}
 		}
+
+		UpdateSceneTab(world);
 
 		// Update panel title
 		if (m_debugPanel.IsValid())
