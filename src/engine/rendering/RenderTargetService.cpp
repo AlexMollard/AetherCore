@@ -286,7 +286,6 @@ namespace aether
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
 			                rit->second.renderQueue->FlushDrawPush(cmd, lightingAddr);
-			                rit->second.renderQueue->Clear(static_cast<std::uint32_t>(ctx.frameIndex % RenderQueue::kFramesInFlight));
 		                });
 	}
 } // namespace aether

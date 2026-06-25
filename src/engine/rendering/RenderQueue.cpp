@@ -33,6 +33,7 @@ namespace aether
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
+		m_slotConsumed.fill(true);
 		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
@@ -251,6 +252,7 @@ namespace aether
 
 	void RenderQueue::Submit(const DrawCommand& cmd)
 	{
+		std::lock_guard lock(m_slotMutexes[m_writeSlot]);
 		m_commandSlots[m_writeSlot].push_back(cmd);
 	}
 
@@ -262,8 +264,19 @@ namespace aether
 		// documented allowlist exception (see gpu-abstraction-rendering-audit.md
 		// §7.3.0) - Tracy's API requires a raw Vulkan handle.
 		const gpu::CommandBuffer rawCmd = cmdList.GetCommandBuffer();
-		std::vector<DrawCommand>& m_commands = m_commandSlots[frameIndex % kFramesInFlight];
-		if (m_commands.empty())
+		// Move the commands out of the slot under the lock. This gives the
+		// render thread its own copy that the game thread cannot touch.
+		// Setting m_slotConsumed and notifying wakes the game thread's Clear()
+		// which is waiting for permission to reuse this slot.
+		const auto frameSlot = frameIndex % kFramesInFlight;
+		std::vector<DrawCommand> commands;
+		{
+			std::lock_guard lock(m_slotMutexes[frameSlot]);
+			commands = std::move(m_commandSlots[frameSlot]);
+			m_slotConsumed[frameSlot] = true;
+		}
+		m_slotCv[frameSlot].notify_one();
+		if (commands.empty())
 		{
 			m_batchRenderInfos.clear();
 			return;
@@ -273,7 +286,6 @@ namespace aether
 		m_batchRenderInfos.clear();
 		m_animationSampleJobCount = 0;
 
-		const std::uint32_t frameSlot = frameIndex % kFramesInFlight;
 		const std::uint32_t animJobBase = 0;
 
 		// Update mapped pointers to the current slot's buffers since each slot
@@ -353,7 +365,7 @@ namespace aether
 		SkinPaletteBatch skinPaletteBatches[64];
 		std::uint32_t skinPaletteBatchCount = 0;
 
-		std::ranges::stable_sort(m_commands,
+		std::ranges::stable_sort(commands,
 
 		        [](const DrawCommand& a, const DrawCommand& b)
 		        {
@@ -364,19 +376,19 @@ namespace aether
 			        return a.mesh < b.mesh;
 		        });
 
-		const auto totalDraws = static_cast<std::uint32_t>(m_commands.size());
+		const auto totalDraws = static_cast<std::uint32_t>(commands.size());
 		AE_ASSERT_ALWAYS(totalDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
 		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
 		std::uint32_t batchIdx = 0;
 
-		for (std::size_t i = 0; i < m_commands.size();)
+		for (std::size_t i = 0; i < commands.size();)
 		{
-			const GraphicsPipeline* batchPipeline = m_commands[i].pipeline;
-			const Mesh* batchMesh = m_commands[i].mesh;
+			const GraphicsPipeline* batchPipeline = commands[i].pipeline;
+			const Mesh* batchMesh = commands[i].mesh;
 
 			std::size_t batchEnd = i;
-			while (batchEnd < m_commands.size() && m_commands[batchEnd].pipeline == batchPipeline && m_commands[batchEnd].mesh == batchMesh)
+			while (batchEnd < commands.size() && commands[batchEnd].pipeline == batchPipeline && commands[batchEnd].mesh == batchMesh)
 			{
 				++batchEnd;
 			}
@@ -394,7 +406,7 @@ namespace aether
 
 			for (std::size_t j = i; j < batchEnd; ++j)
 			{
-				const DrawCommand& dc = m_commands[j];
+				const DrawCommand& dc = commands[j];
 
 				if (dc.mesh && (!dc.mesh->IsAlive() || !dc.mesh->IsValid() || dc.mesh->GetGeneration() != dc.meshGeneration || !dc.mesh->GetIndexBuffer().IsValid()))
 				{
@@ -883,7 +895,6 @@ namespace aether
 			AE_PROFILE_PLOT("Animation/SkinCopyJobs", static_cast<int64_t>(skinJobCount));
 			AE_PROFILE_PLOT("RenderQueue/TotalDraws", static_cast<int64_t>(totalDraws));
 		}
-		::aether::gpu::GpuProfiler::Get().Collect(rawCmd);
 #endif
 	}
 
@@ -982,8 +993,11 @@ namespace aether
 
 	void RenderQueue::Clear(std::uint32_t slot)
 	{
-		m_commandSlots[slot % kFramesInFlight].clear();
-		m_batchRenderInfos.clear();
+		const auto idx = slot % kFramesInFlight;
+		std::unique_lock lock(m_slotMutexes[idx]);
+		m_slotCv[idx].wait(lock, [this, idx] { return m_slotConsumed[idx]; });
+		m_slotConsumed[idx] = false;
+		m_commandSlots[idx].clear();
 	}
 
 	bool RenderQueue::IsEmpty(std::uint32_t slot) const

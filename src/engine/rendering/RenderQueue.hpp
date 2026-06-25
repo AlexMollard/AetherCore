@@ -2,8 +2,10 @@
 
 #include <functional>
 #include <array>
+#include <condition_variable>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <mutex>
 #include <vector>
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuHandles.hpp"
@@ -207,7 +209,16 @@ namespace aether
 
 	private:
 		// Per-frame queued draw commands.
+		// Each slot is protected by m_slotMutexes[slot]. The game thread
+		// (Clear/Submit) and render thread (PrepareAndDispatch) can access
+		// the same slot concurrently when the render thread is kFramesInFlight
+		// behind. Clear() waits on m_slotCv until the render thread has
+		// consumed the slot (m_slotConsumed == true), preventing the game
+		// thread from destroying commands the render thread hasn't read yet.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
+		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
+		std::array<std::condition_variable, kFramesInFlight> m_slotCv;
+		std::array<bool, kFramesInFlight> m_slotConsumed{};
 		std::uint32_t m_writeSlot = 0; // set by game thread via SetWriteSlot()
 
 		// ------------------------------------------------------------------------

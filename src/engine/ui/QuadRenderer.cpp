@@ -90,13 +90,26 @@ namespace aether
 		                [this](PassContext& ctx)
 		                {
 			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
-			                if (m_vkCtx == nullptr || m_pendingQuads[readSlot].empty())
+			                if (m_vkCtx == nullptr)
+			                {
+				                return;
+			                }
+
+			                // Take ownership of the pending quads so the game thread
+			                // can immediately start writing to this slot again.
+			                auto pending = std::move(m_pendingQuads[readSlot]);
+			                {
+				                std::lock_guard lock(m_slotMutexes[readSlot]);
+				                m_slotConsumed[readSlot] = true;
+			                }
+			                m_slotCvs[readSlot].notify_one();
+
+			                if (pending.empty())
 			                {
 				                return;
 			                }
 
 			                const std::uint32_t frameSlot = readSlot;
-			                auto& pending = m_pendingQuads[readSlot];
 			                const auto commandCount = static_cast<std::uint32_t>(pending.size());
 			                const auto commandBytes = static_cast<gpu::DeviceSize>(commandCount * sizeof(DrawCommandData));
 
@@ -156,8 +169,6 @@ namespace aether
 			                cmd.PushDataRaw(0, std::as_bytes(std::span{&push, 1}));
 
 			                cmd.DrawIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_indirectBuffers[frameSlot].handle), 0, 1, sizeof(gpu::DrawIndirectCommand));
-
-			                m_pendingQuads[readSlot].clear();
 		                });
 	}
 
@@ -183,6 +194,8 @@ namespace aether
 		{
 			slot.reserve(256);
 		}
+
+		m_slotConsumed.fill(true);
 
 		AE_EXPECT_OR_THROW(pipeline,
 		        services.Get<AssetManager>().CreateGraphicsPipeline({
@@ -234,6 +247,19 @@ namespace aether
 			m_swapchain = nullptr;
 			m_ready = false;
 		}
+	}
+
+	void QuadRenderer::SetWriteSlot(std::uint32_t slot)
+	{
+		// Wait for the render thread to consume the previous contents of this
+		// slot before clearing it and allowing new draw commands.
+		{
+			std::unique_lock lock(m_slotMutexes[slot]);
+			m_slotCvs[slot].wait(lock, [this, slot] { return m_slotConsumed[slot]; });
+			m_slotConsumed[slot] = false;
+		}
+		m_pendingQuads[slot].clear();
+		m_writeSlot = slot;
 	}
 
 	void QuadRenderer::DrawRect(const UiRect& rect, glm::vec4 color, std::int32_t layer, float cornerRadiusPx)

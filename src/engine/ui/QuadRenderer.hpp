@@ -1,8 +1,10 @@
 #pragma once
 
 #include <array>
+#include <condition_variable>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -46,10 +48,10 @@ namespace aether
 		void Shutdown(ServiceContainer& services);
 
 		// Must be called by the game thread before DrawRect() each frame.
-		void SetWriteSlot(std::uint32_t slot)
-		{
-			m_writeSlot = slot;
-		}
+		// Blocks until the render thread has consumed the previous contents of
+		// this slot (up to kMaxFramesInFlight frames ago), then clears it ready
+		// for new draw commands.
+		void SetWriteSlot(std::uint32_t slot);
 
 		void DrawRect(const UiRect& rect, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0, float cornerRadiusPx = 0.0f);
 		void DrawLine(const UiPoint& start, const UiPoint& end, float thicknessPx, glm::vec4 color = glm::vec4(1.f), std::int32_t layer = 0);
@@ -139,7 +141,8 @@ namespace aether
 		GraphicsPipeline m_pipeline;
 
 		// Double-buffered pending draw list. Game thread writes to m_writeSlot;
-		// render thread reads from ctx.frameIndex % 2 (guaranteed to be different).
+		// render thread reads from ctx.frameIndex % kMaxFramesInFlight and moves
+		// the data out, setting m_slotConsumed[slot] = true.
 		struct PerFrameMapped
 		{
 			gpu::BufferHandle handle{};
@@ -160,5 +163,12 @@ namespace aether
 		std::uint32_t m_writeSlot = 0;
 		ClipState m_clipState{};
 		bool m_ready = false;
+
+		// Per-slot synchronization: game thread waits in SetWriteSlot for the
+		// render thread to consume (std::move) the previous frame's data before
+		// clearing and refilling the slot.
+		std::array<std::mutex, Swapchain::kMaxFramesInFlight> m_slotMutexes;
+		std::array<std::condition_variable, Swapchain::kMaxFramesInFlight> m_slotCvs;
+		std::array<bool, Swapchain::kMaxFramesInFlight> m_slotConsumed{};
 	};
 } // namespace aether

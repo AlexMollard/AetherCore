@@ -23,6 +23,7 @@
 #include "gpu/AsyncComputeContext.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/GpuProfiler.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/CommandList.hpp"
 #include "io/FileSystem.hpp"
@@ -427,6 +428,15 @@ namespace aether
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;
 
 		m_gpu->SubmitAndPresent(graphAsyncSem, graphAsyncVal);
+
+		// Collect Tracy GPU timestamps AFTER submission so the query pool
+		// contains valid GPU data. Collecting before submission reads stale
+		// results and wraps the pool before the GPU has written, triggering
+		// "query not reset" validation errors.
+		// Pass nullptr for host-side query pool reset (TracyVkContextHostCalibrated
+		// was used at init). Passing the submitted command buffer would issue
+		// vkCmdResetQueryPool on a PENDING buffer, which is invalid.
+		gpu::GpuProfiler::Get().Collect(nullptr);
 
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);

@@ -1741,13 +1741,6 @@ namespace aether
 			}
 
 			gfxRecorder.EndDebugLabel();
-
-			// Tracy GPU collection only from the graphics command buffer
-			// since it's the one that gets submitted via SubmitAndPresent.
-			if (foundGraphics)
-			{
-				gpu::GpuProfiler::Get().Collect(gfxCmd);
-			}
 		}
 
 		// Transient heap trace logging.

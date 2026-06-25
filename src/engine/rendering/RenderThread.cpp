@@ -4,6 +4,15 @@
 #include "utils/Profiler.hpp"
 #include "vulkan/Swapchain.hpp"
 
+// ---------------------------------------------------------------------------
+// Platform thread configuration
+// ---------------------------------------------------------------------------
+#if defined(_WIN32)
+#	include <windows.h>
+#elif defined(__linux__)
+#	include <pthread.h>
+#endif
+
 namespace aether
 {
 	RenderThread::RenderThread()
@@ -20,7 +29,11 @@ namespace aether
 
 	void RenderThread::Stop()
 	{
-		m_shutdown = true;
+		{
+			std::lock_guard lock(m_reloadMutex);
+			m_shutdown = true;
+		}
+		m_reloadCv.notify_one();
 		m_channel.close();
 
 		if (m_thread.joinable())
@@ -42,11 +55,16 @@ namespace aether
 
 	void RenderThread::WaitIdle()
 	{
-		if (!m_shutdown)
 		{
-			m_shutdown = true;
-			m_channel.close();
+			std::lock_guard lock(m_reloadMutex);
+			if (!m_shutdown)
+			{
+				m_shutdown = true;
+			}
 		}
+		m_reloadCv.notify_one();
+		m_channel.close();
+
 		if (m_thread.joinable())
 		{
 			m_thread.join();
@@ -56,6 +74,10 @@ namespace aether
 	void RenderThread::SetReloadInProgress(bool inProgress)
 	{
 		m_reloadInProgress.store(inProgress, std::memory_order_release);
+		if (!inProgress)
+		{
+			m_reloadCv.notify_one();
+		}
 	}
 
 	bool RenderThread::IsReloadInProgress() const
@@ -63,9 +85,29 @@ namespace aether
 		return m_reloadInProgress.load(std::memory_order_acquire);
 	}
 
+	void RenderThread::ConfigureThisThread()
+	{
+#if defined(_WIN32)
+		// Boost the render thread to time-critical priority so that kernel
+		// DPCs, ISRs, and other system threads are far less likely to preempt
+		// it. This is the primary mitigation for intermittent GPU-backpressure
+		// stutter caused by Windows scheduler preemption.
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+
+		// Name the thread for debugger / ETW / crash-dump visibility.
+		// SetThreadDescription is available since Windows 10 1607.
+		SetThreadDescription(GetCurrentThread(), L"AetherCore RenderThread");
+#elif defined(__linux__)
+		// Name the thread (limited to 16 bytes including null-terminator).
+		pthread_setname_np(pthread_self(), "Aether-Render");
+#endif
+	}
+
 	void RenderThread::ThreadLoop()
 	{
 		AE_PROFILE_THREAD("RenderThread");
+
+		ConfigureThisThread();
 
 		while (!m_shutdown)
 		{
@@ -81,9 +123,12 @@ namespace aether
 					m_isIdle.store(true, std::memory_order_release);
 				}
 
-				while (IsReloadInProgress())
+				// Block until reload completes instead of busy-waiting.
+				// The condition variable avoids wasting CPU and provides
+				// immediate wakeup when SetReloadInProgress(false) is called.
 				{
-					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					std::unique_lock lock(m_reloadMutex);
+					m_reloadCv.wait(lock, [this] { return !IsReloadInProgress() || m_shutdown; });
 				}
 			}
 
@@ -109,7 +154,11 @@ namespace aether
 			catch (const std::exception& e)
 			{
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
-				m_shutdown = true;
+				{
+					std::lock_guard lock(m_reloadMutex);
+					m_shutdown = true;
+				}
+				m_reloadCv.notify_one();
 				m_channel.close();
 				break;
 			}

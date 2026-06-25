@@ -223,7 +223,6 @@ namespace aether
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
 				        m_renderQueue.FlushDrawPush(ctx.recorder, lightingAddr);
-				        m_renderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
 			        });
 		}
 

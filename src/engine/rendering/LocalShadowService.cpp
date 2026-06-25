@@ -476,11 +476,9 @@ namespace aether
 				                cmd.SetScissor(scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
-			                }
-
-			                m_shadowRenderQueue.Clear(ctx.frameIndex % RenderQueue::kFramesInFlight);
-		                });
+			                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
+		                }
+	                });
 
 		// -- VSM blur passes (BDA, no descriptors) ---------------------------
 		// Flow: copy atlas → buffer, H-blur (in-place via LDS), V-blur (in-place via LDS), copy buffer → atlas.

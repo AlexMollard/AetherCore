@@ -1,6 +1,8 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 #include "utils/coro/Channel.hpp"
@@ -22,10 +24,18 @@ namespace aether
 	//
 	// All shared render data is deep-copied per frame slot, so there are no
 	// data races between the game and render threads.
+	//
+	// Thread safety: Start/Stop/WaitIdle are main-thread-only after init.
+	// SetReloadInProgress is main-thread-only. SubmitFrame is game-thread-only.
 	class RenderThread
 	{
 	public:
 		RenderThread();
+
+		RenderThread(const RenderThread&) = delete;
+		RenderThread& operator=(const RenderThread&) = delete;
+		RenderThread(RenderThread&&) = delete;
+		RenderThread& operator=(RenderThread&&) = delete;
 
 		void Start(AetherCore& engine);
 		void Stop();
@@ -48,9 +58,16 @@ namespace aether
 	private:
 		void ThreadLoop();
 
+		// Apply platform-specific thread configuration (priority, name, scheduling).
+		// Called inside ThreadLoop() on the newly-started thread.
+		static void ConfigureThisThread();
+
 		AetherCore* m_engine = nullptr;
 		std::thread m_thread;
 		coro::channel<RenderFramePacket> m_channel;
+
+		std::mutex m_reloadMutex;
+		std::condition_variable m_reloadCv;
 
 		// Tracks the index of the last fully-executed frame (for shutdown /
 		// debugging / statistics).  Not used for per-frame synchronisation.
