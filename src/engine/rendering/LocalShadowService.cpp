@@ -245,12 +245,8 @@ namespace aether
 	void LocalShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc)
 	{
 		AE_PROFILE_ZONE();
-		// Re-populate the shadow render queue to pick up any mid-frame changes
-		// to MeshComponent::mesh pointers made by game systems after the initial
-		// PrepareQueues call.
-		m_shadowRenderQueue.SetWriteSlot(packet.drawSlot);
-		m_shadowRenderQueue.Clear(packet.drawSlot);
-		WorldRenderer::Flush(world, m_shadowRenderQueue);
+		(void) packet;
+		(void) world;
 
 		m_atlasManager.Reset();
 		m_perLightShadows.clear();
@@ -477,10 +473,6 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
-			                if (m_shadowRenderQueue.IsEmpty(ctx.frameIndex % RenderQueue::kFramesInFlight))
-			                {
-				                return;
-			                }
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameIndex);
 		                });

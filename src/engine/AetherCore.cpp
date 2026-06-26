@@ -275,6 +275,7 @@ namespace aether
 		World& world = m_services.Get<SceneSubsystem>().GetWorld();
 		RenderTargetService& rttService = m_rendering->GetRenderTargetService();
 		ShadowService& shadowService = m_rendering->GetShadowService();
+		LocalShadowService& localShadowService = m_rendering->GetLocalShadowService();
 		MaterialBuffer& materialBuffer = assetsSub.GetMaterialBuffer();
 		CameraManager& cameras = m_cameras->GetCameraManager();
 		Renderer& renderer = m_rendering->GetRenderer();
@@ -284,6 +285,7 @@ namespace aether
 
 		rttService.PrepareQueues(drawSlot, world);
 		shadowService.PrepareQueues(drawSlot, world);
+		localShadowService.PrepareQueues(drawSlot, world);
 
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;

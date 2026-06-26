@@ -68,8 +68,8 @@ namespace aether
 
 		// Called during frame constant composition to build per-light shadow data,
 		// allocate atlas regions, and fill FrameConstants with shadow info.
-		// Re-populates the shadow render queue from Scene/World to capture any
-		// mid-frame MeshComponent changes from game systems.
+		// The shadow render queue is populated by PrepareQueues on the game thread;
+		// this render-thread step must not clear or mutate producer-side queue state.
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.

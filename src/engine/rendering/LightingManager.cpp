@@ -439,29 +439,7 @@ namespace aether
 		m_rgTileHeaders = graph.RegisterBuffer(nullptr);
 		m_rgTileIndices = graph.RegisterBuffer(nullptr);
 
-		const auto initResolved = gpu::ResourceRegistry::ResolvePipeline(m_initPipelineHandle);
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
-
-		graph.AddComputePass("$Lighting.InitTiles")
-		        .ReadBuffer(m_rgLights)
-		        .WriteBuffer(m_rgTileHeaders)
-		        .WriteBuffer(m_rgTileIndices)
-		        .ExecuteCompute(
-		                [this, initPipeline = const_cast<void*>(initResolved.state)](PassContext& ctx)
-		                {
-			                if (!m_lightDataReady)
-			                {
-				                return;
-			                }
-			                gpu::CommandList cmd = ctx.recorder.View();
-
-			                // Host-write visibility barrier for the light data buffer.
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
-
-			                cmd.BindComputePipeline(initPipeline);
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-			                cmd.Dispatch(m_lightTileGroups, 1, 1);
-		                });
 
 		graph.AddComputePass("$Lighting.BinLights")
 		        .ReadBuffer(m_rgLights)
@@ -470,14 +448,15 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {
-			                if (!m_lightDataReady || m_lightLightGroups == 0)
+			                if (!m_lightDataReady || m_lightTileGroups == 0)
 			                {
 				                return;
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 			                cmd.BindComputePipeline(cullPipeline);
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-			                cmd.Dispatch(m_lightLightGroups, 1, 1);
+			                cmd.Dispatch(m_lightTileGroups, 1, 1);
 		                });
 
 		m_rgPassesRegistered = true;

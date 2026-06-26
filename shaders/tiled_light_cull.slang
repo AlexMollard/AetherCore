@@ -38,70 +38,78 @@ void initTiles(uint3 tid : SV_DispatchThreadID)
 [numthreads(64, 1, 1)]
 void binLights(uint3 tid : SV_DispatchThreadID)
 {
-    uint lightIndex = tid.x;
-    uint lightCount = pc.params1.w;
-    if (lightIndex >= lightCount)
-    {
-        return;
-    }
-
-    uint base = lightIndex * 5u;
-    float4 p0 = pc.lightData.Load(base + 0u);
-    float3 worldPos = p0.xyz;
-    float radius = max(p0.w, 1e-4);
-
-    float4 clip = mul(pc.viewProj, float4(worldPos, 1.0));
-    float depth = abs(clip.w);
-    if (depth < pc.params0.x || abs(clip.w) <= 1e-6)
-    {
-        return;
-    }
-
-    float3 ndc = clip.xyz / clip.w;
-    float screenW = pc.params0.z;
-    float screenH = pc.params0.w;
-    float screenX = (ndc.x * 0.5 + 0.5) * screenW;
-    float screenY = (ndc.y * 0.5 + 0.5) * screenH;
-    float effectiveDepth = max(sqrt(max(depth * depth - radius * radius, 0.0)), pc.params0.x);
-    float radiusPx = (radius * pc.params0.y) / effectiveDepth;
-    if (radiusPx <= 0.5)
-    {
-        return;
-    }
-
-    float minX = screenX - radiusPx;
-    float maxX = screenX + radiusPx;
-    float minY = screenY - radiusPx;
-    float maxY = screenY + radiusPx;
-    if (maxX < 0.0 || maxY < 0.0 || minX >= screenW || minY >= screenH)
+    uint tile = tid.x;
+    uint tilesX = pc.params1.y;
+    uint tilesY = pc.params1.z;
+    uint tileCount = tilesX * tilesY;
+    if (tile >= tileCount)
     {
         return;
     }
 
     uint tilePx = max(pc.params1.x, 1u);
-    uint tilesX = pc.params1.y;
-    uint tilesY = pc.params1.z;
     uint maxLightsPerTile = max(pc.params2.x, 1u);
+    uint headerBase = tile * 2u;
+    uint tileOffset = tile * maxLightsPerTile;
+    pc.tileHeadersFlat.Store(headerBase + 0u, tileOffset);
+    pc.tileHeadersFlat.Store(headerBase + 1u, 0u);
 
-    uint minTx = min((uint)max(floor(minX / tilePx), 0.0), tilesX - 1u);
-    uint maxTx = min((uint)max(floor(maxX / tilePx), 0.0), tilesX - 1u);
-    uint minTy = min((uint)max(floor(minY / tilePx), 0.0), tilesY - 1u);
-    uint maxTy = min((uint)max(floor(maxY / tilePx), 0.0), tilesY - 1u);
-
-    for (uint ty = minTy; ty <= maxTy; ++ty)
+    uint lightCount = pc.params1.w;
+    if (lightCount == 0u)
     {
-        for (uint tx = minTx; tx <= maxTx; ++tx)
+        return;
+    }
+
+    uint tx = tile % tilesX;
+    uint ty = tile / tilesX;
+    float tileMinX = (float)(tx * tilePx);
+    float tileMinY = (float)(ty * tilePx);
+    float tileMaxX = min(tileMinX + (float)tilePx, pc.params0.z);
+    float tileMaxY = min(tileMinY + (float)tilePx, pc.params0.w);
+
+    float screenW = pc.params0.z;
+    float screenH = pc.params0.w;
+    uint count = 0u;
+
+    for (uint lightIndex = 0u; lightIndex < lightCount; ++lightIndex)
+    {
+        uint base = lightIndex * 5u;
+        float4 p0 = pc.lightData.Load(base + 0u);
+        float3 worldPos = p0.xyz;
+        float radius = max(p0.w, 1e-4);
+
+        float4 clip = mul(pc.viewProj, float4(worldPos, 1.0));
+        float depth = abs(clip.w);
+        if (depth < pc.params0.x || abs(clip.w) <= 1e-6)
         {
-            uint tile = ty * tilesX + tx;
-            uint headerBase = tile * 2u;
-            uint slot = 0u;
-            uint* headersPtr = pc.tileHeadersFlat.Ptr();
-            InterlockedAdd(headersPtr[headerBase + 1u], 1u, slot);
-            if (slot < maxLightsPerTile)
-            {
-                uint writeIdx = headersPtr[headerBase + 0u] + slot;
-                pc.tileLightIndices.Store(writeIdx, lightIndex);
-            }
+            continue;
+        }
+
+        float3 ndc = clip.xyz / clip.w;
+        float screenX = (ndc.x * 0.5 + 0.5) * screenW;
+        float screenY = (ndc.y * 0.5 + 0.5) * screenH;
+        float effectiveDepth = max(sqrt(max(depth * depth - radius * radius, 0.0)), pc.params0.x);
+        float radiusPx = (radius * pc.params0.y) / effectiveDepth;
+        if (radiusPx <= 0.5)
+        {
+            continue;
+        }
+
+        float minX = screenX - radiusPx;
+        float maxX = screenX + radiusPx;
+        float minY = screenY - radiusPx;
+        float maxY = screenY + radiusPx;
+        if (maxX < tileMinX || maxY < tileMinY || minX >= tileMaxX || minY >= tileMaxY)
+        {
+            continue;
+        }
+
+        if (count < maxLightsPerTile)
+        {
+            pc.tileLightIndices.Store(tileOffset + count, lightIndex);
+            ++count;
         }
     }
+
+    pc.tileHeadersFlat.Store(headerBase + 1u, count);
 }
