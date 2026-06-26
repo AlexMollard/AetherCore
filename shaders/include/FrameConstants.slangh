@@ -28,6 +28,7 @@ struct FrameConstantsData
     [[vk::offset(624)]] uint    shadowAtlasSlot;            // VSM atlas bindless slot (0xFFFFFFFF = none)
     [[vk::offset(628)]] uint    shadowLightCount;           // number of active local shadow lights
     [[vk::offset(632)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
+    [[vk::offset(640)]] float4  frustumPlanes[6];           // normalized planes, xyz=n, w=d
 };
 
 #endif

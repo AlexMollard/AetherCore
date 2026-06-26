@@ -22,7 +22,7 @@ namespace aether
 	//
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (640 bytes):
+	// Layout (736 bytes):
 	//   offset   0 : mat4     viewProj               (64)  Combined view-projection matrix
 	//   offset  64 : mat4     view                   (64)  View matrix
 	//   offset 128 : mat4     proj                   (64)  Projection matrix
@@ -45,7 +45,8 @@ namespace aether
 	//   offset 624 : uint     shadowAtlasSlot         ( 4)  Bindless slot for VSM atlas (0xFFFFFFFF = none, LocalShadowService)
 	//   offset 628 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
 	//   offset 632 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
-	//   Total: 640 bytes
+	//   offset 640 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
+	//   Total: 736 bytes
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};                                                                                                           // offset 0
@@ -75,11 +76,38 @@ namespace aether
 		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu; // offset 624, local shadows
 		std::uint32_t shadowLightCount = 0;          // offset 628
 		std::uint64_t shadowLightDataAddr = 0;       // offset 632
+		std::array<glm::vec4, 6> frustumPlanes{
+		        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
+		        glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f),
+		        glm::vec4(0.0f, 1.0f, 0.0f, 1.0f),
+		        glm::vec4(0.0f, -1.0f, 0.0f, 1.0f),
+		        glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
+		        glm::vec4(0.0f, 0.0f, -1.0f, 1.0f),
+		}; // offset 640
+
+		void RefreshDerived()
+		{
+			const glm::vec4 row0{viewProj[0][0], viewProj[1][0], viewProj[2][0], viewProj[3][0]};
+			const glm::vec4 row1{viewProj[0][1], viewProj[1][1], viewProj[2][1], viewProj[3][1]};
+			const glm::vec4 row2{viewProj[0][2], viewProj[1][2], viewProj[2][2], viewProj[3][2]};
+			const glm::vec4 row3{viewProj[0][3], viewProj[1][3], viewProj[2][3], viewProj[3][3]};
+
+			frustumPlanes[0] = NormalizePlane(row3 + row0);
+			frustumPlanes[1] = NormalizePlane(row3 - row0);
+			frustumPlanes[2] = NormalizePlane(row3 + row1);
+			frustumPlanes[3] = NormalizePlane(row3 - row1);
+			frustumPlanes[4] = NormalizePlane(row2);
+			frustumPlanes[5] = NormalizePlane(row3 - row2);
+		}
+
+		[[nodiscard]] static glm::vec4 NormalizePlane(glm::vec4 plane)
+		{
+			const float len = glm::length(glm::vec3(plane));
+			return (len > 1e-6f) ? (plane / len) : glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 640,
-	        "FrameConstants layout changed - update the Slang structs in "
-	        "gltf_mesh.slang and skybox.slang.");
+	static_assert(sizeof(FrameConstants) == 736, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -102,5 +130,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowAtlasSlot) == 624);
 	static_assert(offsetof(FrameConstants, shadowLightCount) == 628);
 	static_assert(offsetof(FrameConstants, shadowLightDataAddr) == 632);
-	static_assert(sizeof(FrameConstants) == 640);
+	static_assert(offsetof(FrameConstants, frustumPlanes) == 640);
+	static_assert(sizeof(FrameConstants) == 736);
 } // namespace aether

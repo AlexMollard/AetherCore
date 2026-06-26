@@ -61,7 +61,9 @@ namespace aether
 	void FrameConstantsBuffer::Write(std::uint32_t frameIndex, const FrameConstants& data)
 	{
 		AE_PROFILE_ZONE();
-		std::memcpy(m_frames[frameIndex].mapped, &data, sizeof(FrameConstants));
+		FrameConstants upload = data;
+		upload.RefreshDerived();
+		std::memcpy(m_frames[frameIndex].mapped, &upload, sizeof(FrameConstants));
 		gpu::ResourceRegistry::FlushMappedBuffer(m_frames[frameIndex].handle, 0, sizeof(FrameConstants));
 	}
 

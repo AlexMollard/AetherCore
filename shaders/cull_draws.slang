@@ -42,7 +42,8 @@ void main(uint3 tid : SV_DispatchThreadID)
 
     const bool forceVisible = (pc.debugFlags & kCullDebugForceVisibleBit) != 0u;
 
-    const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, pc.frame.Ptr()->viewProj);
+    FrameConstantsData* frame = pc.frame.Ptr();
+    const bool visible = forceVisible || TestSphereFrustum(inst.worldBoundingSphere, frame);
     const uint localOutputSlot = drawIdx - batch.inputStart;
     if (localOutputSlot >= batch.drawCount)
         return; // guard against malformed batch metadata

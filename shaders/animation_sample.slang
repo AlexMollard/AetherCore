@@ -78,6 +78,19 @@ float4 Nlerp(float4 q1, float4 q2, float t)
     return SafeNormalize(lerp(q1, q2, t));
 }
 
+float4 SampleChannelValue(GpuChannel channel, float animTime, float* times, float4* values)
+{
+    const uint valueBase = channel.valuesOffset / 16u;
+
+    if (channel.timesCount <= 1u || channel.interpolation == 1u)
+    {
+        return values[valueBase];
+    }
+
+    Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, animTime, times);
+    return lerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 [shader("compute")]
@@ -122,33 +135,27 @@ void main(uint3 dtid : SV_DispatchThreadID)
 
         if (animPath == 0u)  // Translation
         {
-            // Linear interpolation for translation
-            Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.animTime, times);
-            uint valIdx0 = channel.valuesOffset / 16u + bracket.lo;
-            uint valIdx1 = channel.valuesOffset / 16u + bracket.hi;
-            float a = (channel.interpolation == 1u) ? 0.0f : bracket.alpha;
-            float4 sampled = lerp(values[valIdx0], values[valIdx1], a);
+            float4 sampled = SampleChannelValue(channel, job.animTime, times, values);
             poses[poseIdx].translation = sampled;
         }
         else if (animPath == 1u)  // Rotation
         {
-            // Slerp for rotations
-            Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.animTime, times);
-            uint valIdx0 = channel.valuesOffset / 16u + bracket.lo;
-            uint valIdx1 = channel.valuesOffset / 16u + bracket.hi;
-            float4 sampled = (channel.interpolation == 1u)
-                ? values[valIdx0]
-                : Nlerp(values[valIdx0], values[valIdx1], bracket.alpha);
-            poses[poseIdx].rotation = SafeNormalize(sampled);
+            const uint valueBase = channel.valuesOffset / 16u;
+            float4 sampled;
+            if (channel.timesCount <= 1u || channel.interpolation == 1u)
+            {
+                sampled = values[valueBase];
+            }
+            else
+            {
+                Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.animTime, times);
+                sampled = Nlerp(values[valueBase + bracket.lo], values[valueBase + bracket.hi], bracket.alpha);
+            }
+            poses[poseIdx].rotation = sampled;
         }
         else if (animPath == 2u)  // Scale
         {
-            // Linear interpolation for scale
-            Bracket bracket = FindBracket(channel.timesOffset / 4u, channel.timesCount, job.animTime, times);
-            uint valIdx0 = channel.valuesOffset / 16u + bracket.lo;
-            uint valIdx1 = channel.valuesOffset / 16u + bracket.hi;
-            float a = (channel.interpolation == 1u) ? 0.0f : bracket.alpha;
-            float4 sampled = lerp(values[valIdx0], values[valIdx1], a);
+            float4 sampled = SampleChannelValue(channel, job.animTime, times, values);
             poses[poseIdx].scale = sampled;
         }
     }
