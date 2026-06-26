@@ -271,7 +271,7 @@ namespace aether
 
 		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
 
-		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f || IsClipped(pxRect))
+		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f || IsClipped(pxRect) || !IsFullyInsideClip(pxRect))
 		{
 			return;
 		}
@@ -302,6 +302,14 @@ namespace aether
 		{
 			return;
 		}
+		const float minX = std::min(p0.x, p1.x) - thicknessPx * 0.5f;
+		const float minY = std::min(p0.y, p1.y) - thicknessPx * 0.5f;
+		const float maxX = std::max(p0.x, p1.x) + thicknessPx * 0.5f;
+		const float maxY = std::max(p0.y, p1.y) + thicknessPx * 0.5f;
+		if (IsClipped({minX, minY, maxX - minX, maxY - minY}) || !IsFullyInsideClip({minX, minY, maxX - minX, maxY - minY}))
+		{
+			return;
+		}
 
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
@@ -322,6 +330,11 @@ namespace aether
 			return;
 		}
 		const glm::vec2 c = ResolveUiPointPx(m_swapchain->GetExtent(), center);
+		const glm::vec4 bounds{c.x - radiusPx, c.y - radiusPx, radiusPx * 2.f, radiusPx * 2.f};
+		if (IsClipped(bounds) || !IsFullyInsideClip(bounds))
+		{
+			return;
+		}
 		m_pendingQuads[m_writeSlot].push_back({
 		        .cmd =
 		                DrawCommandData{
@@ -342,7 +355,7 @@ namespace aether
 		}
 
 		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
-		if (pxRect.z <= 0.f || pxRect.w <= 0.f || IsClipped(pxRect))
+		if (pxRect.z <= 0.f || pxRect.w <= 0.f || IsClipped(pxRect) || !IsFullyInsideClip(pxRect))
 		{
 			return;
 		}
@@ -362,7 +375,7 @@ namespace aether
 
 	void QuadRenderer::DrawGlyph(glm::vec4 glyphRectPx, glm::vec4 uvRect, glm::vec4 color, std::uint32_t atlasSlot, std::int32_t layer)
 	{
-		if (!m_ready || glyphRectPx.z <= 0.f || glyphRectPx.w <= 0.f || IsClipped(glyphRectPx))
+		if (!m_ready || glyphRectPx.z <= 0.f || glyphRectPx.w <= 0.f || IsClipped(glyphRectPx) || !IsFullyInsideClip(glyphRectPx))
 		{
 			return;
 		}
@@ -399,5 +412,15 @@ namespace aether
 		const glm::vec4& c = m_clipState.pixelRect;
 		// Entirely outside if one rect is to the left/right/above/below the other.
 		return (pxRect.x + pxRect.z <= c.x) || (pxRect.x >= c.x + c.z) || (pxRect.y + pxRect.w <= c.y) || (pxRect.y >= c.y + c.w);
+	}
+
+	bool QuadRenderer::IsFullyInsideClip(glm::vec4 pxRect) const
+	{
+		if (!m_clipState.active)
+		{
+			return true;
+		}
+		const glm::vec4& c = m_clipState.pixelRect;
+		return pxRect.x >= c.x && pxRect.y >= c.y && pxRect.x + pxRect.z <= c.x + c.z && pxRect.y + pxRect.w <= c.y + c.w;
 	}
 } // namespace aether

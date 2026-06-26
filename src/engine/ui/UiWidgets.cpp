@@ -416,6 +416,27 @@ namespace aether::ui
 			        UiPoint{.anchor = t->rect.anchorMin, .offsetPx = {px.x + px.z - theme.padding - anchorPx.x, sepY - anchorPx.y}},
 			        1.f,
 			        theme.separator);
+
+			if (panel->bodyMaxScrollY > 0.5f)
+			{
+				ui.SetLayer(baseLayer + 90000);
+				const float bodyTop = px.y + hdrH;
+				const float bodyBottom = px.y + px.w - theme.padding;
+				const float bodyH = std::max(0.f, bodyBottom - bodyTop);
+				if (bodyH > 12.f)
+				{
+					const float trackW = 4.f;
+					const float trackX = px.x + px.z - theme.padding * 0.55f;
+					const glm::vec4 trackPx{trackX, bodyTop + 4.f, trackW, std::max(0.f, bodyH - 8.f)};
+					const float totalContentH = bodyH + panel->bodyMaxScrollY;
+					const float thumbH = std::clamp((bodyH / std::max(totalContentH, 1.f)) * trackPx.w, 24.f, trackPx.w);
+					const float scrollT = panel->bodyMaxScrollY > 0.f ? std::clamp(panel->bodyScrollY / panel->bodyMaxScrollY, 0.f, 1.f) : 0.f;
+					const float thumbY = trackPx.y + (trackPx.w - thumbH) * scrollT;
+					ui.DrawRect(PixelToUiRect(*t, trackPx, extent), {0.10f, 0.13f, 0.13f, 0.95f}, 2.f);
+					ui.DrawRect(PixelToUiRect(*t, {trackPx.x, thumbY, trackPx.z, thumbH}, extent), theme.textLabel * glm::vec4{1.f, 1.f, 1.f, 0.75f}, 2.f);
+				}
+				ui.SetLayer(baseLayer + 2);
+			}
 		}
 
 		ui.SetLayer(prevLayer);
@@ -488,6 +509,46 @@ namespace aether::ui
 
 	// -- Layout ---------------------------------------------------------------
 
+	static bool IsLayoutVisible(aether::World& world, Entity entity)
+	{
+		if (const auto layout = world.TryGet<UiLayoutComponent>(entity))
+		{
+			if (!layout->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto render = world.TryGet<UiRenderComponent>(entity))
+		{
+			if (!render->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto vec3 = world.TryGet<UiVec3DragComponent>(entity))
+		{
+			if (!vec3->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto selectable = world.TryGet<UiSelectableComponent>(entity))
+		{
+			if (!selectable->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto treeNode = world.TryGet<UiTreeNodeComponent>(entity))
+		{
+			if (!treeNode->visible)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void ApplyLayout(aether::World& world, Entity container, gpu::Extent2D extent)
 	{
 		AE_PROFILE_ZONE();
@@ -511,6 +572,11 @@ namespace aether::ui
 
 		for (const Entity child: children->children)
 		{
+			if (!IsLayoutVisible(world, child))
+			{
+				continue;
+			}
+
 			const auto ct = world.TryGet<UiTransformComponent>(child);
 			if (!ct)
 			{
@@ -547,6 +613,11 @@ namespace aether::ui
 		int positionedChildren = 0;
 		for (const Entity child: children->children)
 		{
+			if (!IsLayoutVisible(world, child))
+			{
+				continue;
+			}
+
 			auto ct = world.TryGet<UiTransformComponent>(child);
 			if (!ct)
 			{
@@ -1335,13 +1406,6 @@ namespace aether::ui
 				const glm::vec4 bgColor = selected ? glm::vec4{0.09f, 0.12f, 0.12f, 0.92f} : theme.tabHover;
 				ui.SetLayer(baseLayer + 1 + static_cast<std::int32_t>(i));
 				ui.DrawRect(insetRect, bgColor, 3.f);
-			}
-
-			if (selected)
-			{
-				const float underlineY = btnPx.y + btnPx.w - 4.f;
-				ui.SetLayer(baseLayer + 2 + static_cast<std::int32_t>(i));
-				ui.DrawLine(PixelPoint(*btnT, {btnPx.x + 9.f, underlineY}, extent), PixelPoint(*btnT, {btnPx.x + btnPx.z - 9.f, underlineY}, extent), 2.f, theme.accent);
 			}
 
 			// Tab label.

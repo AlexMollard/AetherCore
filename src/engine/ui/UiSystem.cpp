@@ -1,6 +1,7 @@
 #include "UiSystem.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <utility>
 
@@ -61,7 +62,100 @@ namespace aether::ui
 				return false;
 			}
 		}
+		if (const auto render = world.TryGet<UiRenderComponent>(entity))
+		{
+			if (!render->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto vec3 = world.TryGet<UiVec3DragComponent>(entity))
+		{
+			if (!vec3->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto selectable = world.TryGet<UiSelectableComponent>(entity))
+		{
+			if (!selectable->visible)
+			{
+				return false;
+			}
+		}
+		if (const auto treeNode = world.TryGet<UiTreeNodeComponent>(entity))
+		{
+			if (!treeNode->visible)
+			{
+				return false;
+			}
+		}
 		return true;
+	}
+
+	static float VisibleSubtreeBottom(aether::World& world, Entity entity, gpu::Extent2D extent)
+	{
+		if (!IsSubtreeVisible(world, entity))
+		{
+			return -std::numeric_limits<float>::infinity();
+		}
+
+		float bottom = -std::numeric_limits<float>::infinity();
+		bool hasVisibleChild = false;
+		if (const auto children = world.TryGet<UiChildrenComponent>(entity))
+		{
+			for (const Entity child: children->children)
+			{
+				const float childBottom = VisibleSubtreeBottom(world, child, extent);
+				if (std::isfinite(childBottom))
+				{
+					hasVisibleChild = true;
+					bottom = std::max(bottom, childBottom);
+				}
+			}
+		}
+
+		if (!hasVisibleChild)
+		{
+			if (const auto transform = world.TryGet<UiTransformComponent>(entity))
+			{
+				const glm::vec4 px = ResolveUiRectPx(extent, transform->rect);
+				bottom = px.y + px.w;
+			}
+		}
+
+		return bottom;
+	}
+
+	static void ResetAncestorPanelScroll(aether::World& world, Entity entity)
+	{
+		auto link = world.TryGet<UiParentComponent>(entity);
+		while (link && link->parent.IsValid())
+		{
+			const Entity parent = link->parent;
+			if (auto panel = world.TryGet<UiPanelComponent>(parent))
+			{
+				panel->bodyScrollY = 0.f;
+				panel->bodyMaxScrollY = 0.f;
+			}
+			link = world.TryGet<UiParentComponent>(parent);
+		}
+	}
+
+	static void MoveBodyScrollContent(aether::World& world, Entity entity, glm::vec2 delta)
+	{
+		if (world.Has<UiLayoutComponent>(entity))
+		{
+			if (const auto children = world.TryGet<UiChildrenComponent>(entity))
+			{
+				for (const Entity child: children->children)
+				{
+					MoveSubtree(world, child, delta);
+				}
+				return;
+			}
+		}
+		MoveSubtree(world, entity, delta);
 	}
 
 	static void ApplyPanelBodyScroll(aether::World& world, Entity panelEntity, const Input* input, gpu::Extent2D extent)
@@ -87,9 +181,15 @@ namespace aether::ui
 			{
 				continue;
 			}
+			const float childBottom = VisibleSubtreeBottom(world, child, extent);
+			if (!std::isfinite(childBottom))
+			{
+				continue;
+			}
 			const auto childTransform = world.TryGet<UiTransformComponent>(child);
 			if (!childTransform)
 			{
+				contentBottom = std::max(contentBottom, childBottom);
 				continue;
 			}
 			const glm::vec4 childPx = ResolveUiRectPx(extent, childTransform->rect);
@@ -97,7 +197,7 @@ namespace aether::ui
 			{
 				continue;
 			}
-			contentBottom = std::max(contentBottom, childPx.y + childPx.w);
+			contentBottom = std::max(contentBottom, childBottom);
 		}
 
 		panel->bodyMaxScrollY = std::max(0.f, contentBottom - bodyBottom);
@@ -131,7 +231,7 @@ namespace aether::ui
 			const glm::vec4 childPx = ResolveUiRectPx(extent, childTransform->rect);
 			if (childPx.y + 0.5f >= bodyTop)
 			{
-				MoveSubtree(world, child, scrollDelta);
+				MoveBodyScrollContent(world, child, scrollDelta);
 			}
 		}
 	}
@@ -142,6 +242,7 @@ namespace aether::ui
 	{
 		for (const auto& [e, tabComp, children]: world.View<UiTabComponent, UiChildrenComponent>().each())
 		{
+			const Entity tabEntity = aether::World::FromEntt(e);
 			const std::size_t tabCount = std::min(tabComp.tabNames.size(), children.children.size());
 			std::size_t newSelection = tabComp.selectedTab;
 			for (std::size_t i = 0; i < tabCount; ++i)
@@ -154,7 +255,17 @@ namespace aether::ui
 					}
 				}
 			}
+			if (tabCount > 0)
+			{
+				newSelection = std::min(newSelection, tabCount - 1);
+			}
 			tabComp.selectedTab = newSelection;
+
+			if (tabComp.appliedSelectedTab != tabComp.selectedTab)
+			{
+				ResetAncestorPanelScroll(world, tabEntity);
+				tabComp.appliedSelectedTab = tabComp.selectedTab;
+			}
 
 			const std::size_t pageCount = std::min(tabComp.tabPages.size(), tabComp.tabNames.size());
 			for (std::size_t i = 0; i < pageCount; ++i)
@@ -302,7 +413,8 @@ namespace aether::ui
 				if (!world.Has<UiTabComponent>(child))
 				{
 					const float bodyTop = panelPx.y + theme.headerHeight + panel->headerExtensionHeight;
-					if (mousePos.y < bodyTop)
+					const float bodyBottom = panelPx.y + panelPx.w - theme.padding;
+					if (mousePos.y < bodyTop || mousePos.y > bodyBottom)
 					{
 						return false;
 					}
@@ -395,8 +507,9 @@ namespace aether::ui
 			const bool clipToPanel = parentPanel != nullptr && parentTransform != nullptr;
 			const glm::vec4 panelPx = parentTransform != nullptr ? ResolveUiRectPx(extent, parentTransform->rect) : glm::vec4{};
 			const float bodyTop = (parentPanel != nullptr) ? panelPx.y + theme.headerHeight + parentPanel->headerExtensionHeight : 0.f;
+			const float bodyBottom = (parentPanel != nullptr) ? panelPx.y + panelPx.w - theme.padding : 0.f;
 			const UiRect panelClip = (parentTransform != nullptr) ? parentTransform->rect : UiRect{};
-			const UiRect bodyClip = PixelRectToUiRect({panelPx.x, bodyTop, panelPx.z, std::max(0.f, panelPx.y + panelPx.w - bodyTop)});
+			const UiRect bodyClip = PixelRectToUiRect({panelPx.x, bodyTop, panelPx.z, std::max(0.f, bodyBottom - bodyTop)});
 			for (Entity child: children->children)
 			{
 				bool pushedClip = false;

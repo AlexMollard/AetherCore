@@ -292,6 +292,7 @@ namespace aether::ui
 	{
 		std::vector<std::string> tabNames;
 		std::size_t selectedTab = 0;
+		std::size_t appliedSelectedTab = static_cast<std::size_t>(-1);
 		std::vector<Entity> tabPages;
 	};
 

@@ -132,6 +132,7 @@ namespace aether
 
 		// Returns true if the pixel rect is entirely outside the active clip.
 		[[nodiscard]] bool IsClipped(glm::vec4 pxRect) const;
+		[[nodiscard]] bool IsFullyInsideClip(glm::vec4 pxRect) const;
 
 		std::string m_passName;
 		VulkanContext* m_vkCtx = nullptr;
