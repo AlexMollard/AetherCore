@@ -3,6 +3,7 @@
 #include "utils/Profiler.hpp"
 #include "gpu/CommandList.hpp"
 #include "utils/Assert.hpp"
+#include "utils/Expected.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "platform/Window.hpp"
 
@@ -25,12 +26,13 @@ namespace aether
 		}
 	} // namespace
 
-	void GraphicsDevice::Init(ServiceContainer& services, const Config& config)
+	Expected<void> GraphicsDevice::Init(ServiceContainer& services, const Config& config)
 	{
 		AE_PROFILE_ZONE();
 		auto& window = services.Get<Window>();
 
-		m_vulkanContext.emplace(window, config.appName);
+		AE_TRY(ctxResult, VulkanContext::Create(window, config.appName));
+		m_vulkanContext = std::move(*ctxResult);
 		m_resourceRegistry.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetAllocator());
 		m_diagnosticEngine.Init(m_vulkanContext->GetDevice().device, m_vulkanContext->GetPhysicalDevice(), m_vulkanContext->GetGraphicsQueue());
 		gpu::CommandList::SetDiagnosticEngine(&m_diagnosticEngine);
@@ -38,7 +40,7 @@ namespace aether
 		m_vulkanContext->SetFaultCallback(&DiagnosticFaultThunk);
 		m_vulkanContext->SetGlobalAddressBindingTracker(&m_diagnosticEngine.GetMemoryTracker());
 		m_swapchain.Initialize(*m_vulkanContext, window, config.enableVsync);
-		AE_EXPECT_OR_THROW_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
+		AE_TRY_VOID(m_bindlessManager.Initialize(*m_vulkanContext, {}));
 		m_resourceRegistry.SetBindlessManager(&m_bindlessManager);
 
 		// Wire diagnostic memory tracking to all GPU allocation sites.
@@ -50,6 +52,7 @@ namespace aether
 		m_bindlessManager.SetMemoryTracker(&memTracker);
 
 		services.Register<DiagnosticEngine>(m_diagnosticEngine);
+		return {};
 	}
 
 	void GraphicsDevice::Shutdown()

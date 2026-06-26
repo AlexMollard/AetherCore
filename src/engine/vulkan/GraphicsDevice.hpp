@@ -1,8 +1,9 @@
 #pragma once
 
-#include <optional>
+#include <memory>
 
 #include "gpu/BindlessManager.hpp"
+#include "utils/Expected.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
 #include "vulkan/ResourceRegistry.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -27,8 +28,8 @@ namespace aether
 			bool enableVsync = true;
 		};
 
-		void Init(ServiceContainer& services, const Config& config);
-		void Shutdown();
+	[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
+	void Shutdown();
 
 		[[nodiscard]] VulkanContext& GetVulkanContext()
 		{
@@ -56,7 +57,7 @@ namespace aether
 		}
 
 	private:
-		std::optional<VulkanContext> m_vulkanContext;
+		std::unique_ptr<VulkanContext> m_vulkanContext;
 		Swapchain m_swapchain;
 		BindlessManager m_bindlessManager;
 		ResourceRegistry m_resourceRegistry;

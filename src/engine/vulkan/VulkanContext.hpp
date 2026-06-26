@@ -1,7 +1,9 @@
 #pragma once
 
+#include <memory>
 #include <optional>
 #include "utils/Assert.hpp"
+#include "utils/Expected.hpp"
 #include "gpu/GpuProfiler.hpp"
 #include "vulkan/volk.hpp"
 #include <vk_mem_alloc.h>
@@ -32,11 +34,17 @@ namespace aether
 	class VulkanContext
 	{
 	public:
-		VulkanContext(const Window& window, const char* appName);
 		~VulkanContext();
+
+		// Factory: create and initialize a VulkanContext. Returns an error
+		// on failure instead of throwing, so callers can propagate via
+		// Expected / AE_TRY.
+		[[nodiscard]] static Expected<std::unique_ptr<VulkanContext>> Create(const Window& window, const char* appName);
 
 		VulkanContext(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
 		VulkanContext& operator=(const VulkanContext&) = AE_DELETE_MSG("VulkanContext owns VkDevice and VmaAllocator - use reference");
+		VulkanContext(VulkanContext&&) = delete;
+		VulkanContext& operator=(VulkanContext&&) = delete;
 
 		[[nodiscard]] const vkb::Instance& GetInstance() const;
 		[[nodiscard]] const vkb::Device& GetDevice() const;
@@ -56,10 +64,10 @@ namespace aether
 		// sampler heap backing buffers and to compute per-descriptor strides.
 		[[nodiscard]] const VkPhysicalDeviceDescriptorHeapPropertiesEXT& GetDescriptorHeapProperties() const;
 
-		// Block until the device finishes all in-flight work. Throws on
-		// backend failure. If the device is lost, queries and logs fault info
-		// via VK_EXT_device_fault before throwing.
-		void WaitIdle() const;
+		// Block until the device finishes all in-flight work. Returns an
+		// error on backend failure. If the device is lost, queries and logs
+		// fault info via VK_EXT_device_fault before returning the error.
+		[[nodiscard]] Expected<void> WaitIdle() const;
 
 		// Query and log device fault information via VK_KHR_device_fault.
 		// Called automatically on device loss; can also be called manually
@@ -94,6 +102,8 @@ namespace aether
 #endif
 
 	private:
+		VulkanContext(const Window& window, const char* appName);
+
 		std::optional<vkb::Instance> m_instance;
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 		std::optional<vkb::Device> m_device;

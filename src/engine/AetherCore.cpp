@@ -38,6 +38,7 @@
 #include "scene/World.hpp"
 #include "ui/UISubsystem.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 
@@ -77,7 +78,7 @@ namespace aether
 		m_services.Register<Input>(platform.GetInput());
 
 		// -- 2. Graphics device ----------------------------------------------
-		m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync});
+		AE_EXPECT_OR_THROW_VOID(m_gpu->Init(m_services, {.appName = config.appName, .enableVsync = config.enableVsync}));
 
 		// -- 3. Scene (ECS + legacy) -----------------------------------------
 		sceneSub.Init();

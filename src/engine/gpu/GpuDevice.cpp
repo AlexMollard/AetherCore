@@ -8,6 +8,7 @@
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "utils/Logger.hpp"
+#include "utils/Expected.hpp"
 #include "vulkan/GraphicsDevice.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ResourceRegistry.hpp"
@@ -20,11 +21,11 @@ namespace aether
 
 	GpuDevice::~GpuDevice() = default;
 
-	void GpuDevice::Init(ServiceContainer& services, const Config& config)
+	Expected<void> GpuDevice::Init(ServiceContainer& services, const Config& config)
 	{
 		AE_PROFILE_ZONE();
 		m_gfx = std::make_unique<GraphicsDevice>();
-		m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync});
+		AE_TRY_VOID(m_gfx->Init(services, {.appName = config.appName, .enableVsync = config.enableVsync}));
 
 		gpu::ResourceRegistryInitDesc regInit{};
 		regInit.vulkanDevice = static_cast<void*>(m_gfx->GetVulkanContext().GetDevice().device);
@@ -37,6 +38,7 @@ namespace aether
 		services.Register<Swapchain>(m_gfx->GetSwapchain());
 		services.Register<BindlessManager>(m_gfx->GetBindlessManager());
 		services.Register<ResourceRegistry>(m_gfx->GetResourceRegistry());
+		return {};
 	}
 
 	void GpuDevice::Shutdown()
@@ -52,7 +54,7 @@ namespace aether
 	void GpuDevice::WaitIdle()
 	{
 		AE_PROFILE_ZONE();
-		m_gfx->GetVulkanContext().WaitIdle();
+		AE_EXPECT_OR_THROW_VOID(m_gfx->GetVulkanContext().WaitIdle());
 	}
 
 	bool GpuDevice::HasDedicatedComputeQueue() const
@@ -112,7 +114,7 @@ namespace aether
 		VulkanContext& vk = m_gfx->GetVulkanContext();
 		Swapchain& swapchain = m_gfx->GetSwapchain();
 
-		vk.WaitIdle();
+		AE_EXPECT_OR_THROW_VOID(vk.WaitIdle());
 		swapchain.Shutdown(vk.GetDevice().device);
 		swapchain.ClearRecreationFlag();
 		swapchain.Initialize(vk, window, enableVsync);

@@ -8,6 +8,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/Semaphore.hpp"
 #include "rendering/FrameConstants.hpp"
+#include "utils/Expected.hpp"
 
 namespace aether
 {
@@ -39,8 +40,8 @@ namespace aether
 		GpuDevice(const GpuDevice&) = delete;
 		GpuDevice& operator=(const GpuDevice&) = delete;
 
-		void Init(ServiceContainer& services, const Config& config);
-		void Shutdown();
+	[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
+	void Shutdown();
 
 		void WaitIdle();
 
@@ -99,7 +100,7 @@ namespace aether
 			return GpuFormat::R16G16B16A16Sfloat;
 		}
 
-		static [[nodiscard]] FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
+		[[nodiscard]] static FrameConstants ComposeBaseFrameConstants(const RenderFramePacket& packet, const glm::mat4& fallbackViewProj);
 
 		static void ApplyNoCameraLightingFallback(FrameConstants& fc);
 

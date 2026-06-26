@@ -2,8 +2,25 @@
 
 #include "Defines.hpp"
 
+// Derived from the user-facing VULKAN_CPU_DEBUG / VULKAN_GPU_DEBUG macros in
+// Defines.hpp. Those two are mutually exclusive (enforced there).
+//   VULKAN_CPU_DEBUG  -> CPU=1, GPU=0
+//   VULKAN_GPU_DEBUG  -> CPU=1, GPU=1
+//   neither defined   -> CPU=0, GPU=0
+#if defined(VULKAN_GPU_DEBUG)
+#	define VK_VALIDATION_CPU 1
+#	define VK_VALIDATION_GPU 1
+#elif defined(VULKAN_CPU_DEBUG)
+#	define VK_VALIDATION_CPU 1
+#	define VK_VALIDATION_GPU 0
+#else
+#	define VK_VALIDATION_CPU 0
+#	define VK_VALIDATION_GPU 0
+#endif
+
 #include <format>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 #include <cstring>
@@ -80,9 +97,49 @@ namespace
 		}
 	}
 
+	// Substrings of known-noisy validation messages that we suppress before
+	// they reach the logger. Content-based matching is more robust than
+	// message-ID hashing because the IDs are not stable across SDK versions
+	// and are not documented. All of these are status/adjustment notices, not
+	// actual validation errors.
+	bool IsSuppressedMessage(const char* message)
+	{
+		if (message == nullptr)
+		{
+			return false;
+		}
+		std::string_view msg(message);
+		// "DebugPrintf logs to the Information message severity, enabling..."
+		if (msg.find("DebugPrintf logs to the Information") != std::string_view::npos)
+		{
+			return true;
+		}
+		// "Khronos Validation Layer Active: Current Enables: ..."
+		if (msg.find("Khronos Validation Layer Active") != std::string_view::npos)
+		{
+			return true;
+		}
+		// "vkCreateDevice(): Warning that validation is adjusting settings:
+		//  Forcing fragmentStoresAndAtomics to VK_TRUE ..."
+		// "vkCreateDevice(): Warning that validation is adjusting settings:
+		//  Ray Query validation option was enabled, but the rayQuery feature
+		//  is not supported. ..."
+		if (msg.find("validation is adjusting settings") != std::string_view::npos)
+		{
+			return true;
+		}
+		return false;
+	}
+
 	VKAPI_ATTR VkBool32 VKAPI_CALL LogValidationMessage(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* callbackData, void* userData)
 	{
 		(void) userData;
+
+		// Early-out for known-noisy messages so they never reach the logger.
+		if (callbackData != nullptr && IsSuppressedMessage(callbackData->pMessage))
+		{
+			return VK_FALSE;
+		}
 
 		const char* type = vkb::to_string_message_type(messageType);
 		const char* message = callbackData != nullptr && callbackData->pMessage != nullptr ? callbackData->pMessage : "Unknown validation layer message.";
@@ -171,44 +228,40 @@ namespace aether
 		vkb::InstanceBuilder instanceBuilder;
 		instanceBuilder.set_app_name(appName);
 		instanceBuilder.require_api_version(1, 4, 0);
-#if defined(VULKAN_GPU_DEBUG)
+#if VK_VALIDATION_CPU
 		VkDebugUtilsMessageSeverityFlagsEXT debugSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
 		VkDebugUtilsMessageTypeFlagsEXT debugTypes = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 		VkDebugUtilsMessageTypeFlagsEXT debugTypesWithAddressBinding = debugTypes | VK_DEBUG_UTILS_MESSAGE_TYPE_DEVICE_ADDRESS_BINDING_BIT_EXT;
 		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
 		instanceBuilder.request_validation_layers();
 		instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
-#if defined(VULKAN_GPU_DEBUG)
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+		// Chain the debug messenger in vkCreateInstance's pNext chain via vkb
+		// so LogValidationMessage is active DURING instance creation. This
+		// catches early status messages (e.g. "Khronos Validation Layer
+		// Active") that would otherwise bypass the callback and go straight
+		// to OutputDebugString. Uses debugTypes (without DEVICE_ADDRESS_BINDING)
+		// because VK_EXT_device_address_binding_report is a device extension
+		// not yet enabled at instance creation; a post-device upgraded messenger
+		// adds that message type later.
+		instanceBuilder.set_debug_callback(LogValidationMessage);
+		instanceBuilder.set_debug_messenger_severity(debugSeverity);
+		instanceBuilder.set_debug_messenger_type(debugTypes);
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
 		// Debug printf routes shader debugPrintfEXT() calls through the debug
 		// messenger so GPU-side printfs surface in the log.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
-		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
-		AE_INFO(LogCategory::Vulkan, "GPU-AV + Synchronization Validation + Debug Printf enabled.");
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
+		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + debug printf + best practices).");
 #endif
-
-#if defined(VULKAN_GPU_DEBUG)
-		// VK_LAYER_LUNARG_crash_diagnostic captures command buffer state at GPU
-		// hang time, producing a dump that identifies the exact draw/dispatch
-		// that faulted. Enumerate available instance layers and enable it only
-		// if present so instance creation does not fail on systems without it.
-		{
-			uint32_t layerCount = 0;
-			vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
-			std::vector<VkLayerProperties> layers(layerCount);
-			vkEnumerateInstanceLayerProperties(&layerCount, layers.data());
-			for (const auto& layer: layers)
-			{
-				if (std::strcmp(layer.layerName, "VK_LAYER_LUNARG_crash_diagnostic") == 0)
-				{
-					instanceBuilder.enable_layer("VK_LAYER_LUNARG_crash_diagnostic");
-					AE_INFO(LogCategory::Vulkan, "Crash diagnostic layer enabled.");
-					break;
-				}
-			}
-		}
+#if VK_VALIDATION_GPU
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
+		AE_INFO(LogCategory::Vulkan, "GPU-AV enabled (render-pass injection; TDR risk on AMD/Intel).");
+		// Note: VK_LAYER_LUNARG_crash_diagnostic intentionally NOT enabled. It
+		// writes per-submit trace lines to OutputDebugString which cannot be
+		// intercepted or routed through aether::Logger. The engine already has
+		// superior crash diagnostics via VK_KHR_device_fault, NVIDIA Aftermath,
+		// VK_NV_device_diagnostic_checkpoints, and VK_AMD_buffer_marker.
 #endif
 
 		auto instanceResult = instanceBuilder.build();
@@ -222,19 +275,11 @@ namespace aether
 
 		volkLoadInstance(m_instance->instance);
 
-#if defined(VULKAN_GPU_DEBUG)
-		VkDebugUtilsMessengerCreateInfoEXT debugMessengerCreateInfo{
-		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-		        .messageSeverity = debugSeverity,
-		        .messageType = debugTypes,
-		        .pfnUserCallback = LogValidationMessage,
-		};
-		VkResult messengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &debugMessengerCreateInfo, nullptr, &m_debugMessenger);
-		if (messengerResult != VK_SUCCESS)
-		{
-			Throw(AetherError::Vulkan(messengerResult, "Failed to create Vulkan debug messenger."));
-		}
-#endif
+		// Note: the debug messenger is created by vkb during instanceBuilder.build()
+		// via set_debug_callback() — no manual messenger creation needed here. This
+		// ensures the callback is active DURING vkCreateInstance(), catching
+		// pre-messenger messages that would otherwise go to OutputDebugString.
+		// vkb::destroy_instance() will destroy the messenger automatically.
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
 		{
@@ -469,21 +514,41 @@ namespace aether
 
 		volkLoadDevice(m_device->device);
 
-#if defined(VULKAN_GPU_DEBUG)
-		VkDebugUtilsMessengerEXT upgradedDebugMessenger = VK_NULL_HANDLE;
+		// Probe active Vulkan tools (RenderDoc, Nsight Graphics, Steam overlay, etc.)
+		// via VK_EXT_tooling_info so the developer knows what is injecting into the
+		// instance/device. volk loads the function pointer at instance load time.
+		if (vkGetPhysicalDeviceToolPropertiesEXT != nullptr)
+		{
+			uint32_t toolCount = 0;
+			if (vkGetPhysicalDeviceToolPropertiesEXT(m_device->physical_device, &toolCount, nullptr) == VK_SUCCESS && toolCount > 0)
+			{
+				std::vector<VkPhysicalDeviceToolPropertiesEXT> tools(toolCount);
+				if (vkGetPhysicalDeviceToolPropertiesEXT(m_device->physical_device, &toolCount, tools.data()) == VK_SUCCESS)
+				{
+					AE_INFO(LogCategory::Vulkan, "Active Vulkan tools ({}):", toolCount);
+					for (const auto& tool : tools)
+					{
+						AE_INFO(LogCategory::Vulkan, "  - {} v{}: {}", tool.name, tool.version, tool.description);
+					}
+				}
+			}
+		}
+
+#if VK_VALIDATION_CPU
+		// Create an upgraded debug messenger that adds the DEVICE_ADDRESS_BINDING
+		// message type. VK_EXT_device_address_binding_report is a device extension,
+		// so this can only be done after device creation. vkb's instance-level
+		// messenger (with debugTypes only) stays active and is destroyed by
+		// vkb::destroy_instance(); this second messenger is stored in
+		// m_debugMessenger and destroyed manually in the destructor.
 		VkDebugUtilsMessengerCreateInfoEXT upgradedDebugMessengerCreateInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		        .messageSeverity = debugSeverity,
 		        .messageType = debugTypesWithAddressBinding,
 		        .pfnUserCallback = LogValidationMessage,
 		};
-		VkResult upgradedMessengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &upgradedDebugMessengerCreateInfo, nullptr, &upgradedDebugMessenger);
-		if (upgradedMessengerResult == VK_SUCCESS)
-		{
-			vkDestroyDebugUtilsMessengerEXT(m_instance->instance, m_debugMessenger, nullptr);
-			m_debugMessenger = upgradedDebugMessenger;
-		}
-		else
+		VkResult upgradedMessengerResult = vkCreateDebugUtilsMessengerEXT(m_instance->instance, &upgradedDebugMessengerCreateInfo, nullptr, &m_debugMessenger);
+		if (upgradedMessengerResult != VK_SUCCESS)
 		{
 			AE_WARN(LogCategory::Vulkan, "Unable to enable device address binding debug messenger events after Vulkan device creation: VkResult={}.", static_cast<int>(upgradedMessengerResult));
 		}
@@ -759,6 +824,22 @@ namespace aether
 		}
 	}
 
+	Expected<std::unique_ptr<VulkanContext>> VulkanContext::Create(const Window& window, const char* appName)
+	{
+		try
+		{
+			return std::unique_ptr<VulkanContext>(new VulkanContext(window, appName));
+		}
+		catch (const VulkanError& e)
+		{
+			return std::unexpected(AetherError::Vulkan(0, e.what()));
+		}
+		catch (const std::exception& e)
+		{
+			return std::unexpected(AetherError::Vulkan(0, std::format("VulkanContext initialization failed: {}", e.what())));
+		}
+	}
+
 	const vkb::Instance& VulkanContext::GetInstance() const
 	{
 		return *m_instance;
@@ -794,12 +875,12 @@ namespace aether
 		return m_graphicsQueue;
 	}
 
-	void VulkanContext::WaitIdle() const
+	Expected<void> VulkanContext::WaitIdle() const
 	{
 		AE_PROFILE_ZONE();
 		if (m_device->device == VK_NULL_HANDLE)
 		{
-			return;
+			return {};
 		}
 		const VkResult result = vkDeviceWaitIdle(m_device->device);
 		if (result == VK_ERROR_DEVICE_LOST)
@@ -812,12 +893,13 @@ namespace aether
 			{
 				QueryDeviceFaultInfo();
 			}
-			Throw(AetherError::Vulkan(static_cast<int32_t>(result), "VulkanContext: device lost (VK_ERROR_DEVICE_LOST)."));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "VulkanContext: device lost (VK_ERROR_DEVICE_LOST)."));
 		}
 		if (result != VK_SUCCESS)
 		{
-			Throw(AetherError::Vulkan(static_cast<int32_t>(result), "VulkanContext: failed to wait for device idle."));
+			AE_UNEXPECTED(AetherError::Vulkan(static_cast<int32_t>(result), "VulkanContext: failed to wait for device idle."));
 		}
+		return {};
 	}
 
 	void VulkanContext::QueryDeviceFaultInfo() const

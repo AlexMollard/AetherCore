@@ -146,6 +146,15 @@ namespace aether
 			Throw(ae_result.error()); \
 	}
 
+// Propagate an Expected<void> failure: if expr has no value, return the
+// unexpected error. Use in functions that themselves return Expected<void>.
+#define AE_TRY_VOID(expr) \
+	{ \
+		auto ae_result = (expr); \
+		if (!ae_result.has_value()) \
+			return std::unexpected(std::move(ae_result.error())); \
+	}
+
 #define AE_UNEXPECTED(err) return std::unexpected(err)
 
 template<>
