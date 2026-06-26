@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <glm/common.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <cstring>
@@ -49,6 +50,14 @@ namespace aether
 	};
 
 	static_assert(sizeof(BlurPushConstants) == 48, "BlurPushConstants must be 48 bytes");
+	static_assert(offsetof(BlurPushConstants, atlasWidth) == 0, "BlurPushConstants atlasWidth offset mismatch");
+	static_assert(offsetof(BlurPushConstants, blurOffsetX) == 8, "BlurPushConstants blurOffsetX offset mismatch");
+	static_assert(offsetof(BlurPushConstants, isHorizontal) == 16, "BlurPushConstants isHorizontal offset mismatch");
+	static_assert(offsetof(BlurPushConstants, _pad0) == 20, "BlurPushConstants _pad0 offset mismatch");
+	static_assert(offsetof(BlurPushConstants, _pad1) == 24, "BlurPushConstants _pad1 offset mismatch");
+	static_assert(offsetof(BlurPushConstants, _pad2) == 28, "BlurPushConstants _pad2 offset mismatch");
+	static_assert(offsetof(BlurPushConstants, srcAddr) == 32, "BlurPushConstants srcAddr offset mismatch");
+	static_assert(offsetof(BlurPushConstants, dstAddr) == 40, "BlurPushConstants dstAddr offset mismatch");
 
 	void LocalShadowService::Initialize(VulkanContext& context, BindlessManager& bindless, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
 	{
@@ -125,6 +134,15 @@ namespace aether
 			AE_ASSERT_ALWAYS(m_blurBuffer.IsValid(), "LocalShadowService: CreateBuffer(blur) failed");
 			m_blurBufferAddr = gpu::GetBufferAddress(m_blurBuffer);
 			AE_ASSERT_ALWAYS(m_blurBufferAddr != 0, "LocalShadowService: blur buffer address is 0");
+
+			m_blurScratchBuffer = gpu::ResourceRegistry::CreateBuffer({
+			        .size = kBlurBufSize,
+			        .usage = kBlurBufUsage,
+			        .debugName = "ShadowBlurScratchBuffer",
+			});
+			AE_ASSERT_ALWAYS(m_blurScratchBuffer.IsValid(), "LocalShadowService: CreateBuffer(blur scratch) failed");
+			m_blurScratchBufferAddr = gpu::GetBufferAddress(m_blurScratchBuffer);
+			AE_ASSERT_ALWAYS(m_blurScratchBufferAddr != 0, "LocalShadowService: blur scratch buffer address is 0");
 		}
 
 		// -- Create VSM blur compute pipeline (BDA, no descriptors) ---------
@@ -139,6 +157,21 @@ namespace aether
 			{
 				AE_ASSERT_ALWAYS(false, "Failed to create VSM blur compute pipeline");
 			}
+		}
+
+		// -- Create persistent atlas depth attachment ----------------------
+		{
+			const gpu::TextureDesc desc{
+			        .format = depthFormat,
+			        .extent = {ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
+			        .usage = gpu::ImageUsage::DepthStencilAttachment,
+			        .aspect = gpu::ImageAspect::Depth,
+			        .debugName = "LocalShadow.AtlasDepth",
+			};
+			m_atlasDepthHandle = gpu::ResourceRegistry::CreateTexture(desc);
+			AE_ASSERT_ALWAYS(m_atlasDepthHandle.IsValid(), "LocalShadowService: CreateTexture(atlas depth) failed");
+			m_atlasDepthImageVk = gpu::ResourceRegistry::ResolveTextureImage(m_atlasDepthHandle);
+			m_atlasDepthView = gpu::ResourceRegistry::ResolveTexture(m_atlasDepthHandle).view;
 		}
 
 		// Descriptor pool.
@@ -178,13 +211,27 @@ namespace aether
 			gpu::ResourceRegistry::Destroy(m_blurBuffer);
 			m_blurBuffer = {};
 		}
+		if (m_blurScratchBuffer.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_blurScratchBuffer);
+			m_blurScratchBuffer = {};
+		}
 		m_blurBufferAddr = 0;
+		m_blurScratchBufferAddr = 0;
 
 		if (m_blurPipelineHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_blurPipelineHandle);
 			m_blurPipelineHandle = {};
 		}
+
+		if (m_atlasDepthHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_atlasDepthHandle);
+			m_atlasDepthHandle = {};
+		}
+		m_atlasDepthImageVk = nullptr;
+		m_atlasDepthView = nullptr;
 	}
 
 	void LocalShadowService::PrepareQueues(const std::uint32_t drawSlot, World& world)
@@ -402,23 +449,24 @@ namespace aether
 		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}
 
-	void LocalShadowService::RegisterPasses(RenderGraph& graph, CullPass& cullPass, gpu::Format depthFormat)
+	void LocalShadowService::RegisterPasses(RenderGraph& graph, CullPass& cullPass)
 	{
-		SetupPassResources(graph, depthFormat);
+		SetupPassResources(graph);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
 	}
 
-	void LocalShadowService::SetupPassResources(RenderGraph& graph, gpu::Format depthFormat)
+	void LocalShadowService::SetupPassResources(RenderGraph& graph)
 	{
 		// Register the atlas as an external image in the render graph.
 		m_atlasImage = graph.RegisterImage(m_atlasManager.GetAtlasImage(), m_atlasManager.GetAtlasView(), gpu::ImageAspect::Color);
 
 		// Register the blur BDA buffer.
-		m_blurBufferRG = graph.RegisterBuffer(nullptr);
+		m_blurBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer));
+		m_blurScratchBufferRG = graph.RegisterBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurScratchBuffer));
 
-		// Create a transient depth attachment for the atlas render pass.
-		m_atlasDepthImage = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight}, gpu::ImageUsage::DepthStencilAttachment);
+		// Create a persistent depth attachment for the atlas render pass.
+		m_atlasDepthImage = graph.RegisterImage(m_atlasDepthImageVk, m_atlasDepthView, gpu::ImageAspect::Depth);
 	}
 
 	void LocalShadowService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)
@@ -476,15 +524,37 @@ namespace aether
 				                cmd.SetScissor(scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
-			                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
-		                }
-	                });
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
+			                }
+		                });
 
 		// -- VSM blur passes (BDA, no descriptors) ---------------------------
 		// Flow: copy atlas → buffer, H-blur (in-place via LDS), V-blur (in-place via LDS), copy buffer → atlas.
+		// All synchronization is handled by the render graph via transfer access types.
+
+		graph.AddComputePass("$VSMCopyToBuffer")
+		        .ReadImageTransfer(m_atlasImage)
+		        .WriteBufferTransfer(m_blurBufferRG)
+		        .ExecuteCompute(
+		                [this](PassContext& ctx)
+		                {
+			                const auto bounds = m_atlasManager.GetUsedBounds();
+			                if (bounds.width == 0 || bounds.height == 0)
+			                {
+				                return;
+			                }
+
+			                const auto atlasImage = m_atlasManager.GetAtlasImage();
+			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+
+			                gpu::CommandList cmd = ctx.recorder.View();
+			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf, gpu::ImageLayout::TransferSrc, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
+		                });
+
 		graph.AddComputePass("$VSMBlurH")
-		        .ReadTexture(m_atlasImage)
-		        .ReadWriteBuffer(m_blurBufferRG)
+		        .DisableAsyncCompute()
+		        .ReadBuffer(m_blurBufferRG)
+		        .WriteBuffer(m_blurScratchBufferRG)
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {
@@ -495,41 +565,8 @@ namespace aether
 			                }
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
-			                const auto atlasImage = m_atlasManager.GetAtlasImage();
-			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
-
-			                // Transition atlas: ShaderReadOnly → General for copy.
-			                cmd.ImageMemoryBarrier(atlasImage,
-			                        gpu::ImageLayout::ShaderReadOnly,
-			                        gpu::ImageLayout::General,
-			                        gpu::ImageAspect::Color,
-			                        gpu::PipelineStage::FragmentShader,
-			                        gpu::AccessFlags::ShaderRead,
-			                        gpu::PipelineStage::Transfer,
-			                        gpu::AccessFlags::TransferRead);
-			                // Copy atlas region → blur buffer.
-			                cmd.CopyImageToBuffer(atlasImage,
-			                        blurVkBuf,
-			                        gpu::ImageLayout::General,
-			                        gpu::ImageAspect::Color,
-			                        bounds.width,
-			                        bounds.height,
-			                        (static_cast<std::uint64_t>(bounds.x) + static_cast<std::uint64_t>(bounds.y) * ShadowAtlasManager::kAtlasWidth) * sizeof(float) * 2u);
-			                // Buffer sync: transfer write → compute shader read.
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead);
-			                // Transition atlas back to ShaderReadOnly for render-graph tracking.
-			                cmd.ImageMemoryBarrier(atlasImage,
-			                        gpu::ImageLayout::General,
-			                        gpu::ImageLayout::ShaderReadOnly,
-			                        gpu::ImageAspect::Color,
-			                        gpu::PipelineStage::Transfer,
-			                        gpu::AccessFlags::TransferRead,
-			                        gpu::PipelineStage::FragmentShader,
-			                        gpu::AccessFlags::ShaderRead);
-
-			                // Horizontal blur via BDA.
 			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
 			                const BlurPushConstants hPc{
 			                        .atlasWidth = bounds.width,
@@ -541,16 +578,16 @@ namespace aether
 			                        ._pad1 = 0.0f,
 			                        ._pad2 = 0.0f,
 			                        .srcAddr = m_blurBufferAddr,
-			                        .dstAddr = m_blurBufferAddr,
+			                        .dstAddr = m_blurScratchBufferAddr,
 			                };
 			                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
-
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 
 		graph.AddComputePass("$VSMBlurV")
-		        .ReadWriteBuffer(m_blurBufferRG)
-		        .WriteStorageImage(m_atlasImage)
+		        .DisableAsyncCompute()
+		        .ReadBuffer(m_blurScratchBufferRG)
+		        .WriteBuffer(m_blurBufferRG)
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {
@@ -561,12 +598,8 @@ namespace aether
 			                }
 
 			                const auto blurPipeline = gpu::ResourceRegistry::ResolvePipeline(m_blurPipelineHandle);
-			                const auto atlasImage = m_atlasManager.GetAtlasImage();
-			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
 
 			                gpu::CommandList cmd = ctx.recorder.View();
-
-			                // Vertical blur via BDA (in-place).
 			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
 			                const BlurPushConstants vPc{
 			                        .atlasWidth = bounds.width,
@@ -577,24 +610,30 @@ namespace aether
 			                        ._pad0 = 0.0f,
 			                        ._pad1 = 0.0f,
 			                        ._pad2 = 0.0f,
-			                        .srcAddr = m_blurBufferAddr,
+			                        .srcAddr = m_blurScratchBufferAddr,
 			                        .dstAddr = m_blurBufferAddr,
 			                };
 			                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
-
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+		                });
 
-			                // Buffer sync: compute shader write → transfer read.
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite, gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferRead);
-			                // Copy blur buffer → atlas (atlas is in General layout from RG).
-			                cmd.CopyBufferToImage(blurVkBuf,
-			                        atlasImage,
-			                        gpu::ImageLayout::General,
-			                        gpu::ImageAspect::Color,
-			                        bounds.width,
-			                        bounds.height,
-			                        (static_cast<std::uint64_t>(bounds.x) + static_cast<std::uint64_t>(bounds.y) * ShadowAtlasManager::kAtlasWidth) * sizeof(float) * 2u);
-			                // Atlas stays in General (RG tracks as General from WriteStorageImage).
+		graph.AddComputePass("$VSMCopyToAtlas")
+		        .ReadBufferTransfer(m_blurBufferRG)
+		        .WriteImageTransfer(m_atlasImage)
+		        .ExecuteCompute(
+		                [this](PassContext& ctx)
+		                {
+			                const auto bounds = m_atlasManager.GetUsedBounds();
+			                if (bounds.width == 0 || bounds.height == 0)
+			                {
+				                return;
+			                }
+
+			                const auto atlasImage = m_atlasManager.GetAtlasImage();
+			                const auto blurVkBuf = gpu::ResourceRegistry::ResolveBufferVkHandle(m_blurBuffer);
+
+			                gpu::CommandList cmd = ctx.recorder.View();
+			                cmd.CopyBufferToImage(blurVkBuf, atlasImage, gpu::ImageLayout::TransferDst, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
 		                });
 	}
 } // namespace aether

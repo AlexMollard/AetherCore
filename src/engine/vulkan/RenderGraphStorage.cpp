@@ -428,6 +428,12 @@ namespace aether
 		}
 	}
 
+	void RenderGraphStorage::ClearExternalBuffers()
+	{
+		m_externalBuffers.clear();
+		m_freeExternalBufferSlots.clear();
+	}
+
 	// -- Transient images -----------------------------------------------------
 
 	uint32_t RenderGraphStorage::AddTransientSlot(gpu::Format format, gpu::ImageUsage usage, gpu::ImageAspect aspect, gpu::Extent2D extent)
@@ -820,8 +826,6 @@ namespace aether
 		{
 			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
 		}
-
-		vkCmdResetEvent2(vkCmd, vkEvent, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT);
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,

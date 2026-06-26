@@ -28,8 +28,8 @@ namespace aether
 			bool enableVsync = true;
 		};
 
-	[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
-	void Shutdown();
+		[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
+		void Shutdown();
 
 		[[nodiscard]] VulkanContext& GetVulkanContext()
 		{

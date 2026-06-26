@@ -215,6 +215,7 @@ namespace aether
 	// -- PhysicsSystem -------------------------------------------------------------
 
 	PhysicsSystem::PhysicsSystem() = default;
+
 	PhysicsSystem::~PhysicsSystem()
 	{
 		StopPhysicsThread();
@@ -542,13 +543,13 @@ namespace aether
 				{
 					JPH::BoxShapeSettings ss{ToJolt(desc.halfExtents)};
 					ss.mMaterial = nullptr;
-				auto result = ss.Create();
-				if (result.HasError())
-				{
-					AE_WARN(LogCategory::Engine, "PhysicsSystem: box shape error: {}", result.GetError().c_str());
-					reg.remove<BoxBodyDesc>(entity);
-					continue;
-				}
+					auto result = ss.Create();
+					if (result.HasError())
+					{
+						AE_WARN(LogCategory::Engine, "PhysicsSystem: box shape error: {}", result.GetError().c_str());
+						reg.remove<BoxBodyDesc>(entity);
+						continue;
+					}
 					cachedIt = m_shapeCache.emplace(boxKey, result.Get()).first;
 				}
 
@@ -595,13 +596,13 @@ namespace aether
 				if (cachedIt == m_shapeCache.end())
 				{
 					JPH::SphereShapeSettings ss{desc.radius};
-				auto result = ss.Create();
-				if (result.HasError())
-				{
-					AE_WARN(LogCategory::Engine, "PhysicsSystem: sphere shape error: {}", result.GetError().c_str());
-					reg.remove<SphereBodyDesc>(entity);
-					continue;
-				}
+					auto result = ss.Create();
+					if (result.HasError())
+					{
+						AE_WARN(LogCategory::Engine, "PhysicsSystem: sphere shape error: {}", result.GetError().c_str());
+						reg.remove<SphereBodyDesc>(entity);
+						continue;
+					}
 					cachedIt = m_shapeCache.emplace(sphereKey, result.Get()).first;
 				}
 
@@ -648,13 +649,13 @@ namespace aether
 				if (cachedIt == m_shapeCache.end())
 				{
 					JPH::CapsuleShapeSettings ss{desc.halfHeight, desc.radius};
-				auto result = ss.Create();
-				if (result.HasError())
-				{
-					AE_WARN(LogCategory::Engine, "PhysicsSystem: capsule shape error: {}", result.GetError().c_str());
-					reg.remove<CapsuleBodyDesc>(entity);
-					continue;
-				}
+					auto result = ss.Create();
+					if (result.HasError())
+					{
+						AE_WARN(LogCategory::Engine, "PhysicsSystem: capsule shape error: {}", result.GetError().c_str());
+						reg.remove<CapsuleBodyDesc>(entity);
+						continue;
+					}
 					cachedIt = m_shapeCache.emplace(capsuleKey, result.Get()).first;
 				}
 
@@ -827,8 +828,7 @@ namespace aether
 			if (lock.Succeeded())
 			{
 				const JPH::Body& body = lock.GetBody();
-				const JPH::Vec3 surfaceNormal = body.GetWorldSpaceSurfaceNormal(
-				        joltResult.mSubShapeID2, ray.GetPointOnRay(joltResult.mFraction));
+				const JPH::Vec3 surfaceNormal = body.GetWorldSpaceSurfaceNormal(joltResult.mSubShapeID2, ray.GetPointOnRay(joltResult.mFraction));
 				result.normal = FromJolt(surfaceNormal);
 			}
 			else

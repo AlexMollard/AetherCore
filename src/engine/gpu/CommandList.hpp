@@ -89,8 +89,24 @@ namespace aether::gpu
 		void WriteTimestamp(void* queryPool, std::uint32_t slot, PipelineStage stage) noexcept;
 
 		void CopyBuffer(void* src, void* dst, std::uint64_t srcOffset, std::uint64_t dstOffset, std::uint64_t size) noexcept;
-		void CopyImageToBuffer(void* srcImage, void* dstBuffer, gpu::ImageLayout srcImageLayout, gpu::ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset = 0) noexcept;
-		void CopyBufferToImage(void* srcBuffer, void* dstImage, gpu::ImageLayout dstImageLayout, gpu::ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset = 0) noexcept;
+		void CopyImageToBuffer(void* srcImage,
+		        void* dstBuffer,
+		        gpu::ImageLayout srcImageLayout,
+		        gpu::ImageAspect aspect,
+		        std::uint32_t width,
+		        std::uint32_t height,
+		        std::uint64_t bufferOffset = 0,
+		        std::int32_t imageOffsetX = 0,
+		        std::int32_t imageOffsetY = 0) noexcept;
+		void CopyBufferToImage(void* srcBuffer,
+		        void* dstImage,
+		        gpu::ImageLayout dstImageLayout,
+		        gpu::ImageAspect aspect,
+		        std::uint32_t width,
+		        std::uint32_t height,
+		        std::uint64_t bufferOffset = 0,
+		        std::int32_t imageOffsetX = 0,
+		        std::int32_t imageOffsetY = 0) noexcept;
 
 		// Wire the debug-label function pointers. Called once at engine init
 		// by the backend. Pass null to disable.

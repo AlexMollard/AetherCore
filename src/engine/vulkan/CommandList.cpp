@@ -356,6 +356,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent(std::format("BeginDebugLabel({})", name));
 		auto fn = s_beginDebugLabel;
 		if (fn == nullptr)
 		{
@@ -377,6 +378,7 @@ namespace aether::gpu
 		{
 			return;
 		}
+		RecordDiagnosticEvent("EndDebugLabel");
 		auto fn = s_endDebugLabel;
 		if (fn == nullptr)
 		{
@@ -514,7 +516,8 @@ namespace aether::gpu
 		vkCmdCopyBuffer(AsVkCmd(m_cmd), static_cast<VkBuffer>(src), static_cast<VkBuffer>(dst), 1, &region);
 	}
 
-	void CommandList::CopyImageToBuffer(void* srcImage, void* dstBuffer, ImageLayout srcImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset) noexcept
+	void CommandList::CopyImageToBuffer(
+	        void* srcImage, void* dstBuffer, ImageLayout srcImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset, std::int32_t imageOffsetX, std::int32_t imageOffsetY) noexcept
 	{
 		if (m_cmd == nullptr || srcImage == nullptr || dstBuffer == nullptr)
 		{
@@ -530,13 +533,14 @@ namespace aether::gpu
 		                .baseArrayLayer = 0,
 		                .layerCount = 1,
 		        },
-		        .imageOffset{0, 0, 0},
+		        .imageOffset{imageOffsetX, imageOffsetY, 0},
 		        .imageExtent{width, height, 1},
 		};
 		vkCmdCopyImageToBuffer(AsVkCmd(m_cmd), static_cast<VkImage>(srcImage), ToVk(srcImageLayout), static_cast<VkBuffer>(dstBuffer), 1, &region);
 	}
 
-	void CommandList::CopyBufferToImage(void* srcBuffer, void* dstImage, ImageLayout dstImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset) noexcept
+	void CommandList::CopyBufferToImage(
+	        void* srcBuffer, void* dstImage, ImageLayout dstImageLayout, ImageAspect aspect, std::uint32_t width, std::uint32_t height, std::uint64_t bufferOffset, std::int32_t imageOffsetX, std::int32_t imageOffsetY) noexcept
 	{
 		if (m_cmd == nullptr || srcBuffer == nullptr || dstImage == nullptr)
 		{
@@ -552,7 +556,7 @@ namespace aether::gpu
 		                .baseArrayLayer = 0,
 		                .layerCount = 1,
 		        },
-		        .imageOffset{0, 0, 0},
+		        .imageOffset{imageOffsetX, imageOffsetY, 0},
 		        .imageExtent{width, height, 1},
 		};
 		vkCmdCopyBufferToImage(AsVkCmd(m_cmd), static_cast<VkBuffer>(srcBuffer), static_cast<VkImage>(dstImage), ToVk(dstImageLayout), 1, &region);

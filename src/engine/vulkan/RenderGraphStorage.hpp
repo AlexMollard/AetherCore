@@ -155,6 +155,7 @@ namespace aether
 		[[nodiscard]] gpu::Buffer GetExternalBuffer(uint32_t idx) const;
 		[[nodiscard]] VkBuffer GetExternalBufferVk(uint32_t idx) const;
 		void ReleaseExternalBuffer(uint32_t idx);
+		void ClearExternalBuffers();
 
 		[[nodiscard]] std::size_t GetExternalBufferCount() const
 		{

@@ -128,6 +128,13 @@ namespace
 		{
 			return true;
 		}
+		// Non-actionable "Internal Warning" diagnostics from the validation
+		// layer itself (e.g. driver-reported property values that the layer
+		// finds unusual but are harmless).
+		if (msg.find("Internal Warning") != std::string_view::npos)
+		{
+			return true;
+		}
 		return false;
 	}
 
@@ -235,33 +242,32 @@ namespace aether
 		debugSeverity |= VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT;
 		instanceBuilder.request_validation_layers();
 		instanceBuilder.enable_extension(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-		// Chain the debug messenger in vkCreateInstance's pNext chain via vkb
-		// so LogValidationMessage is active DURING instance creation. This
-		// catches early status messages (e.g. "Khronos Validation Layer
-		// Active") that would otherwise bypass the callback and go straight
-		// to OutputDebugString. Uses debugTypes (without DEVICE_ADDRESS_BINDING)
-		// because VK_EXT_device_address_binding_report is a device extension
-		// not yet enabled at instance creation; a post-device upgraded messenger
-		// adds that message type later.
+
 		instanceBuilder.set_debug_callback(LogValidationMessage);
 		instanceBuilder.set_debug_messenger_severity(debugSeverity);
 		instanceBuilder.set_debug_messenger_type(debugTypes);
-		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
+
 		// Debug printf routes shader debugPrintfEXT() calls through the debug
 		// messenger so GPU-side printfs surface in the log.
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_DEBUG_PRINTF_EXT);
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT);
+#	if VK_VALIDATION_GPU
+		// GPU-AV is incompatible with sync validation: the two inject conflicting
+		// tracking into pipeline/descriptor state (LunarG docs). Skip sync-val.
+		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (GPU-AV, debug printf + best practices).");
+#	else
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT);
 		AE_INFO(LogCategory::Vulkan, "Vulkan validation layer enabled (sync validation + debug printf + best practices).");
+#	endif
 #endif
 #if VK_VALIDATION_GPU
+		static_assert(AETHERCORE_ENABLE_DESCRIPTOR_HEAP == 0,
+		        "GPU-AV (VULKAN_GPU_DEBUG) is incompatible with VK_EXT_descriptor_heap. "
+		        "Set AETHERCORE_ENABLE_DESCRIPTOR_HEAP=0 in Defines.hpp.");
 		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT);
+		instanceBuilder.add_validation_feature_enable(VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT);
 		instanceBuilder.add_validation_feature_disable(VK_VALIDATION_FEATURE_DISABLE_CORE_CHECKS_EXT);
 		AE_INFO(LogCategory::Vulkan, "GPU-AV enabled (render-pass injection; TDR risk on AMD/Intel).");
-		// Note: VK_LAYER_LUNARG_crash_diagnostic intentionally NOT enabled. It
-		// writes per-submit trace lines to OutputDebugString which cannot be
-		// intercepted or routed through aether::Logger. The engine already has
-		// superior crash diagnostics via VK_KHR_device_fault, NVIDIA Aftermath,
-		// VK_NV_device_diagnostic_checkpoints, and VK_AMD_buffer_marker.
 #endif
 
 		auto instanceResult = instanceBuilder.build();
@@ -274,12 +280,6 @@ namespace aether
 		m_instance = instanceResult.value();
 
 		volkLoadInstance(m_instance->instance);
-
-		// Note: the debug messenger is created by vkb during instanceBuilder.build()
-		// via set_debug_callback() — no manual messenger creation needed here. This
-		// ensures the callback is active DURING vkCreateInstance(), catching
-		// pre-messenger messages that would otherwise go to OutputDebugString.
-		// vkb::destroy_instance() will destroy the messenger automatically.
 
 		if (glfwCreateWindowSurface(m_instance->instance, window.GetHandle(), nullptr, &m_surface) != VK_SUCCESS)
 		{
@@ -355,13 +355,11 @@ namespace aether
 		// still allowing set/binding shader decorations to map to heap offsets.
 		selector.add_required_extension(VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME);
 		selector.add_required_extension(VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME);
-		// VK_KHR_device_fault: on device loss, vkGetDeviceFaultReportsKHR returns
+		// VK_EXT_device_fault: on device loss, vkGetDeviceFaultInfoEXT returns
 		// detailed fault addresses (memory + instruction), vendor-specific data,
-		// and a description string. deviceFaultDeviceLostOnMasked forces the
-		// driver to surface soft (masked) hardware errors as hard device-lost
-		// events so they are not silently absorbed. Near-zero cost when no fault
-		// occurs - enabled unconditionally.
-		selector.add_required_extension(VK_KHR_DEVICE_FAULT_EXTENSION_NAME);
+		// and a description string. Near-zero cost when no fault occurs -
+		// enabled unconditionally.
+		selector.add_required_extension(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
 		// VK_EXT_device_address_binding_report: the driver reports every bind/
 		// unbind of a device address range through the debug messenger pNext
 		// chain (VkDeviceAddressBindingCallbackDataEXT). Used by the
@@ -420,11 +418,11 @@ namespace aether
 		};
 
 		// Query supported fault features on this physical device so we only
-		// request what the hardware actually supports. deviceFaultReportMasked
-		// and deviceFaultDeviceLostOnMasked are optional - NVIDIA beta drivers
-		// (and some production drivers) may not support them.
-		VkPhysicalDeviceFaultFeaturesKHR supportedFaultFeatures{
-		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
+		// request what the hardware actually supports. deviceFaultVendorBinary
+		// is optional - NVIDIA beta drivers (and some production drivers) may
+		// not support it.
+		VkPhysicalDeviceFaultFeaturesEXT supportedFaultFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
 		};
 		VkPhysicalDeviceFeatures2 queryFaultFeatures2{
 		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -449,12 +447,10 @@ namespace aether
 			Throw(AetherError::Vulkan(0, "VK_EXT_extended_dynamic_state3 is missing required dynamic state features."));
 		}
 
-		VkPhysicalDeviceFaultFeaturesKHR faultFeatures{
-		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_KHR,
+		VkPhysicalDeviceFaultFeaturesEXT faultFeatures{
+		        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT,
 		        .deviceFault = supportedFaultFeatures.deviceFault,
 		        .deviceFaultVendorBinary = supportedFaultFeatures.deviceFaultVendorBinary,
-		        .deviceFaultReportMasked = supportedFaultFeatures.deviceFaultReportMasked,
-		        .deviceFaultDeviceLostOnMasked = supportedFaultFeatures.deviceFaultDeviceLostOnMasked,
 		};
 
 		VkPhysicalDeviceAddressBindingReportFeaturesEXT addressBindingReportFeatures{
@@ -526,7 +522,7 @@ namespace aether
 				if (vkGetPhysicalDeviceToolPropertiesEXT(m_device->physical_device, &toolCount, tools.data()) == VK_SUCCESS)
 				{
 					AE_INFO(LogCategory::Vulkan, "Active Vulkan tools ({}):", toolCount);
-					for (const auto& tool : tools)
+					for (const auto& tool: tools)
 					{
 						AE_INFO(LogCategory::Vulkan, "  - {} v{}: {}", tool.name, tool.version, tool.description);
 					}
@@ -535,12 +531,10 @@ namespace aether
 		}
 
 #if VK_VALIDATION_CPU
-		// Create an upgraded debug messenger that adds the DEVICE_ADDRESS_BINDING
-		// message type. VK_EXT_device_address_binding_report is a device extension,
-		// so this can only be done after device creation. vkb's instance-level
-		// messenger (with debugTypes only) stays active and is destroyed by
-		// vkb::destroy_instance(); this second messenger is stored in
-		// m_debugMessenger and destroyed manually in the destructor.
+		// Create the persistent debug messenger that includes DEVICE_ADDRESS_BINDING.
+		// VK_EXT_device_address_binding_report is a device extension, so this can
+		// only be done after device creation. Stored in m_debugMessenger and
+		// destroyed manually in the destructor.
 		VkDebugUtilsMessengerCreateInfoEXT upgradedDebugMessengerCreateInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
 		        .messageSeverity = debugSeverity,
@@ -905,120 +899,86 @@ namespace aether
 	void VulkanContext::QueryDeviceFaultInfo() const
 	{
 		AE_PROFILE_ZONE();
-		const auto vkGetDeviceFaultReportsKHR = reinterpret_cast<PFN_vkGetDeviceFaultReportsKHR>(vkGetDeviceProcAddr(m_device->device, "vkGetDeviceFaultReportsKHR"));
-		if (vkGetDeviceFaultReportsKHR == nullptr)
+		// Pass 1: query the number of fault address and vendor records.
+		VkDeviceFaultCountsEXT counts{
+		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT,
+		};
+		VkResult result = vkGetDeviceFaultInfoEXT(m_device->device, &counts, nullptr);
+		if (result != VK_SUCCESS)
 		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultReportsKHR not available; cannot query device fault info.");
+			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT (counts) failed: VkResult={}.", static_cast<int>(result));
+			return;
+		}
+		if (counts.addressInfoCount == 0 && counts.vendorInfoCount == 0)
+		{
+			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT: no fault records available.");
 			return;
 		}
 
-		// Pass 1: query the number of fault records the driver has preserved.
-		// timeout=0 returns immediately with whatever is currently available.
-		uint32_t faultCount = 0;
-		VkResult result = vkGetDeviceFaultReportsKHR(m_device->device, 0, &faultCount, nullptr);
-		if (result != VK_SUCCESS && result != VK_INCOMPLETE)
+		// Pass 2: allocate arrays and fetch full fault info.
+		std::vector<VkDeviceFaultAddressInfoKHR> addrInfos(counts.addressInfoCount);
+		std::vector<VkDeviceFaultVendorInfoKHR> vendorInfos(counts.vendorInfoCount);
+		VkDeviceFaultInfoEXT info{
+		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
+		        .pAddressInfos = addrInfos.data(),
+		        .pVendorInfos = vendorInfos.data(),
+		        .pVendorBinaryData = nullptr,
+		};
+		result = vkGetDeviceFaultInfoEXT(m_device->device, &counts, &info);
+		if (result != VK_SUCCESS)
 		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultReportsKHR (count) failed: VkResult={}.", static_cast<int>(result));
-			return;
-		}
-		if (faultCount == 0)
-		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultReportsKHR: driver preserved no hardware diagnostic records.");
-			return;
-		}
-
-		// Pass 2: allocate fault records and fetch. Each VkDeviceFaultInfoKHR
-		// carries inline address/vendor info (not pointer arrays like the EXT
-		// variant).
-		std::vector<VkDeviceFaultInfoKHR> faults(faultCount);
-		for (uint32_t i = 0; i < faultCount; ++i)
-		{
-			faults[i].sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_KHR;
-		}
-
-		result = vkGetDeviceFaultReportsKHR(m_device->device, 0, &faultCount, faults.data());
-		if (result != VK_SUCCESS && result != VK_INCOMPLETE)
-		{
-			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultReportsKHR (info) failed: VkResult={}.", static_cast<int>(result));
+			AE_WARN(LogCategory::Vulkan, "vkGetDeviceFaultInfoEXT (info) failed: VkResult={}.", static_cast<int>(result));
 			return;
 		}
 
-		AE_ERROR(LogCategory::Vulkan, "=================== VK_KHR_device_fault report ({} fault(s)) ===================", faultCount);
-		for (uint32_t i = 0; i < faultCount; ++i)
+		AE_ERROR(LogCategory::Vulkan, "=================== VK_EXT_device_fault report ===================");
+		AE_ERROR(LogCategory::Vulkan, "  description: {}", info.description);
+
+		// Memory (MMU) fault address infos.
+		for (uint32_t i = 0; i < counts.addressInfoCount; ++i)
 		{
-			const auto& f = faults[i];
-
-			// Decode fault flag bits into human-readable causes.
-			std::string flagStr;
-			if (f.flags == 0)
+			const auto& ai = addrInfos[i];
+			const char* typeStr = "";
+			switch (ai.addressType)
 			{
-				flagStr = "(none)";
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_KHR:
+					typeStr = "ReadInvalid";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_KHR:
+					typeStr = "WriteInvalid";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_KHR:
+					typeStr = "ExecuteInvalid";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_KHR:
+					typeStr = "InstrPtrUnknown";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_KHR:
+					typeStr = "InstrPtrInvalid";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR:
+					typeStr = "InstrPtrFault";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR:
+					typeStr = "None";
+					break;
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
+					typeStr = "MaxEnum";
+					break;
+				default:
+					typeStr = "Unknown";
+					break;
 			}
-			else
-			{
-				if (f.flags & VK_DEVICE_FAULT_FLAG_DEVICE_LOST_KHR)
-				{
-					flagStr += "DeviceLost|";
-				}
-				if (f.flags & VK_DEVICE_FAULT_FLAG_MEMORY_ADDRESS_KHR)
-				{
-					flagStr += "MemoryAddress|";
-				}
-				if (f.flags & VK_DEVICE_FAULT_FLAG_INSTRUCTION_ADDRESS_KHR)
-				{
-					flagStr += "InstructionAddress|";
-				}
-				if (f.flags & VK_DEVICE_FAULT_FLAG_VENDOR_KHR)
-				{
-					flagStr += "Vendor|";
-				}
-				if (f.flags & VK_DEVICE_FAULT_FLAG_WATCHDOG_TIMEOUT_KHR)
-				{
-					flagStr += "WatchdogTimeout(TDR)|";
-				}
-				if (f.flags & VK_DEVICE_FAULT_FLAG_OVERFLOW_KHR)
-				{
-					flagStr += "Overflow|";
-				}
-				if (!flagStr.empty() && flagStr.back() == '|')
-				{
-					flagStr.pop_back();
-				}
-			}
-
-			AE_ERROR(LogCategory::Vulkan, "----- Fault[{}] groupId={} flags=0x{:X} ({}) -----", i, f.groupId, static_cast<uint32_t>(f.flags), flagStr);
-			AE_ERROR(LogCategory::Vulkan, "  description: {}", f.description);
-
-			// Memory (MMU) fault address.
-			if (f.faultAddressInfo.addressType != VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR)
-			{
-				const auto& ai = f.faultAddressInfo;
-				const char* typeStr = ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_KHR                  ? "ReadInvalid"
-				                      : ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_KHR               ? "WriteInvalid"
-				                      : ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_KHR             ? "ExecuteInvalid"
-				                      : ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_KHR ? "InstrPtrUnknown"
-				                      : ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_KHR ? "InstrPtrInvalid"
-				                      : ai.addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR   ? "InstrPtrFault"
-				                                                                                                       : "Unknown";
-				AE_ERROR(LogCategory::Vulkan, "  faultAddress: type={} reportedAddress=0x{:016X} precision={}", typeStr, ai.reportedAddress, ai.addressPrecision);
-			}
-
-			// Instruction pointer at the time of the fault - used with
-			// VK_KHR_pipeline_executable_properties / shader debug info to
-			// resolve to a SPIR-V/Slang source line.
-			if (f.instructionAddressInfo.addressType != VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR)
-			{
-				const auto& ii = f.instructionAddressInfo;
-				AE_ERROR(LogCategory::Vulkan, "  instructionAddress: type={} reportedAddress=0x{:016X} precision={}", static_cast<int>(ii.addressType), ii.reportedAddress, ii.addressPrecision);
-			}
-
-			// Vendor-specific fault code/data.
-			if (f.vendorInfo.description[0] != '\0')
-			{
-				const auto& vi = f.vendorInfo;
-				AE_ERROR(LogCategory::Vulkan, "  vendor: faultCode=0x{:016X} faultData=0x{:016X} description='{}'", vi.vendorFaultCode, vi.vendorFaultData, vi.description);
-			}
+			AE_ERROR(LogCategory::Vulkan, "  addressInfo[{}]: type={} reportedAddress=0x{:016X} precision={}", i, typeStr, ai.reportedAddress, ai.addressPrecision);
 		}
+
+		// Vendor-specific fault info.
+		for (uint32_t i = 0; i < counts.vendorInfoCount; ++i)
+		{
+			const auto& vi = vendorInfos[i];
+			AE_ERROR(LogCategory::Vulkan, "  vendorInfo[{}]: faultCode=0x{:016X} faultData=0x{:016X} description='{}'", i, vi.vendorFaultCode, vi.vendorFaultData, vi.description);
+		}
+
 		AE_ERROR(LogCategory::Vulkan, "=================== end device fault report ===================");
 	}
 

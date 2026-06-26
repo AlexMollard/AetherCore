@@ -49,12 +49,17 @@ namespace aether
 		m_passes.clear();
 		m_compiled.clear();
 		m_lastImageStates.clear();
+		m_lastBufferStates.clear();
 		m_compileDirty = true;
 	}
 
 	void RenderGraph::BeginFrame(std::uint32_t frameIndex)
 	{
 		m_frameIndex = frameIndex;
+		// Barrier source stages depend on the previous submitted frame's terminal
+		// resource states. Recompile each frame so persistent external resources
+		// such as shadow atlases and blur buffers get correct cross-submit barriers.
+		m_compileDirty = true;
 		if (m_diagnosticEngine != nullptr)
 		{
 			m_diagnosticEngine->BeginFrame(frameIndex);
@@ -145,6 +150,42 @@ namespace aether
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadImageTransfer(RGImage image)
+	{
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+		        .image = image,
+		        .type = ImageAccessType::TransferRead,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteImageTransfer(RGImage image)
+	{
+		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
+		        .image = image,
+		        .type = ImageAccessType::TransferWrite,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBufferTransfer(RGBuffer buffer)
+	{
+		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
+		        .buffer = buffer,
+		        .type = BufferAccessType::TransferRead,
+		});
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBufferTransfer(RGBuffer buffer)
+	{
+		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
+		        .buffer = buffer,
+		        .type = BufferAccessType::TransferWrite,
+		});
+		return *this;
+	}
+
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::Execute(std::function<void(PassContext&)> fn)
 	{
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
@@ -167,6 +208,14 @@ namespace aether
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetQueueClass(QueueClass qc)
 	{
 		m_graph.m_passes[m_passIndex].queueClass = qc;
+		m_graph.m_passes[m_passIndex].allowAsyncCompute = qc == QueueClass::AsyncCompute;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::DisableAsyncCompute()
+	{
+		m_graph.m_passes[m_passIndex].allowAsyncCompute = false;
+		m_graph.m_passes[m_passIndex].queueClass = QueueClass::Graphics;
 		return *this;
 	}
 
@@ -235,9 +284,12 @@ namespace aether
 		}
 		m_storage->ClearExternalImages();
 		m_externalImages.clear();
+		m_storage->ClearExternalBuffers();
+		m_externalBuffers.clear();
 		m_passes.clear();
 		m_compiled.clear();
 		m_lastImageStates.clear();
+		m_lastBufferStates.clear();
 		m_compileDirty = true;
 	}
 
@@ -435,7 +487,7 @@ namespace aether
 		{
 			for (auto& pass: m_passes)
 			{
-				if (pass.kind == PassKind::Compute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value() && pass.imageAccesses.empty())
+				if (pass.kind == PassKind::Compute && pass.allowAsyncCompute && pass.queueClass == QueueClass::Graphics && pass.colorWrites.empty() && !pass.depthWrite.has_value() && pass.imageAccesses.empty())
 				{
 					pass.queueClass = QueueClass::AsyncCompute;
 				}
@@ -460,14 +512,14 @@ namespace aether
 			}
 			for (const ImageAccessRef& a: m_passes[idx].imageAccesses)
 			{
-				if (a.image.id == resId && a.type == ImageAccessType::StorageWrite)
+				if (a.image.id == resId && (a.type == ImageAccessType::StorageWrite || a.type == ImageAccessType::TransferWrite))
 				{
 					return true;
 				}
 			}
 			for (const BufferAccessRef& a: m_passes[idx].bufferAccesses)
 			{
-				if (a.buffer.id == resId && a.type == BufferAccessType::StorageWrite)
+				if (a.buffer.id == resId && (a.type == BufferAccessType::StorageWrite || a.type == BufferAccessType::StorageReadWrite || a.type == BufferAccessType::TransferWrite))
 				{
 					return true;
 				}
@@ -519,7 +571,7 @@ namespace aether
 				{
 					for (const ImageAccessRef& ia: m_passes[i].imageAccesses)
 					{
-						if (ia.type == ImageAccessType::StorageWrite && passAccesses(j, ia.image.id))
+						if ((ia.type == ImageAccessType::StorageWrite || ia.type == ImageAccessType::TransferWrite) && passAccesses(j, ia.image.id))
 						{
 							dependent = true;
 							break;
@@ -530,7 +582,7 @@ namespace aether
 				{
 					for (const BufferAccessRef& ba: m_passes[i].bufferAccesses)
 					{
-						if (ba.type == BufferAccessType::StorageWrite && passAccesses(j, ba.buffer.id))
+						if ((ba.type == BufferAccessType::StorageWrite || ba.type == BufferAccessType::StorageReadWrite || ba.type == BufferAccessType::TransferWrite) && passAccesses(j, ba.buffer.id))
 						{
 							dependent = true;
 							break;
@@ -649,7 +701,7 @@ namespace aether
 
 				for (const ImageAccessRef& r: pass.imageAccesses)
 				{
-					if (r.type != ImageAccessType::StorageWrite)
+					if (r.type != ImageAccessType::StorageWrite && r.type != ImageAccessType::TransferWrite)
 					{
 						recordRead(r.image.id);
 					}
@@ -687,14 +739,14 @@ namespace aether
 				}
 				for (const ImageAccessRef& ia: pass.imageAccesses)
 				{
-					if (ia.type == ImageAccessType::StorageWrite)
+					if (ia.type == ImageAccessType::StorageWrite || ia.type == ImageAccessType::TransferWrite)
 					{
 						writeTargets.push_back(ia.image.id);
 					}
 				}
 				for (const BufferAccessRef& ba: pass.bufferAccesses)
 				{
-					if (ba.type == BufferAccessType::StorageWrite)
+					if (ba.type == BufferAccessType::StorageWrite || ba.type == BufferAccessType::StorageReadWrite || ba.type == BufferAccessType::TransferWrite)
 					{
 						writeTargets.push_back(ba.buffer.id);
 					}
@@ -974,9 +1026,19 @@ namespace aether
 						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
 						targetLayout = gpu::ImageLayout::General;
 						break;
+					case ImageAccessType::TransferRead:
+						dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COPY_BIT);
+						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_TRANSFER_READ_BIT);
+						targetLayout = gpu::ImageLayout::TransferSrc;
+						break;
+					case ImageAccessType::TransferWrite:
+						dstStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COPY_BIT);
+						dstAccess = static_cast<std::uint64_t>(VK_ACCESS_2_TRANSFER_WRITE_BIT);
+						targetLayout = gpu::ImageLayout::TransferDst;
+						break;
 				}
 
-				const bool isRead = (r.type != ImageAccessType::StorageWrite);
+				const bool isRead = (r.type != ImageAccessType::StorageWrite && r.type != ImageAccessType::TransferWrite);
 
 				auto it = states.find(resId);
 
@@ -1076,11 +1138,44 @@ namespace aether
 				constexpr auto kGraphicsStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT);
 				constexpr auto kStorageRead = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_READ_BIT);
 				constexpr auto kStorageWrite = static_cast<std::uint64_t>(VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT);
+				constexpr auto kTransferStage = static_cast<std::uint64_t>(VK_PIPELINE_STAGE_2_COPY_BIT);
+				constexpr auto kTransferRead = static_cast<std::uint64_t>(VK_ACCESS_2_TRANSFER_READ_BIT);
+				constexpr auto kTransferWrite = static_cast<std::uint64_t>(VK_ACCESS_2_TRANSFER_WRITE_BIT);
 
-				const std::uint64_t dstStage = isComputePass ? kComputeStage : kGraphicsStage;
-				const bool isRead = (r.type == BufferAccessType::StorageRead);
-				const bool isReadWrite = (r.type == BufferAccessType::StorageReadWrite);
-				const std::uint64_t dstAccess = isRead ? kStorageRead : kStorageWrite;
+				std::uint64_t dstStage = 0;
+				std::uint64_t dstAccess = 0;
+				bool isRead = false;
+				bool isReadWrite = false;
+
+				switch (r.type)
+				{
+					case BufferAccessType::StorageRead:
+						dstStage = isComputePass ? kComputeStage : kGraphicsStage;
+						dstAccess = kStorageRead;
+						isRead = true;
+						break;
+					case BufferAccessType::StorageWrite:
+						dstStage = isComputePass ? kComputeStage : kGraphicsStage;
+						dstAccess = kStorageWrite;
+						isRead = false;
+						break;
+					case BufferAccessType::StorageReadWrite:
+						dstStage = isComputePass ? kComputeStage : kGraphicsStage;
+						dstAccess = kStorageRead | kStorageWrite;
+						isRead = false;
+						isReadWrite = true;
+						break;
+					case BufferAccessType::TransferRead:
+						dstStage = kTransferStage;
+						dstAccess = kTransferRead;
+						isRead = true;
+						break;
+					case BufferAccessType::TransferWrite:
+						dstStage = kTransferStage;
+						dstAccess = kTransferWrite;
+						isRead = false;
+						break;
+				}
 
 				auto it = bufferStates.find(resId);
 
@@ -1155,7 +1250,7 @@ namespace aether
 			}
 			for (const ImageAccessRef& ia: pass.imageAccesses)
 			{
-				if (ia.type == ImageAccessType::StorageWrite)
+				if (ia.type == ImageAccessType::StorageWrite || ia.type == ImageAccessType::TransferWrite)
 				{
 					recordWrite(ia.image.id);
 				}
@@ -1231,7 +1326,7 @@ namespace aether
 					{
 						for (const ImageAccessRef& ia: ipass.imageAccesses)
 						{
-							if (ia.type == ImageAccessType::StorageWrite && checkWrite(ia.image.id))
+							if ((ia.type == ImageAccessType::StorageWrite || ia.type == ImageAccessType::TransferWrite) && checkWrite(ia.image.id))
 							{
 								intermediateWrite = true;
 								break;

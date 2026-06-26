@@ -30,21 +30,21 @@ namespace aether
 
 	// -- PhysicsSystem ---------------------------------------------------------
 	//
-// Owns the Jolt physics world and drives it with a fixed timestep on a
-// dedicated background thread.
-// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
-//   - determinism across machines (required for lockstep networking)
-//   - stable simulation regardless of render framerate
-//
-// Threading model (pipelined, 1 frame of latency — same pattern as RenderThread):
-//   Game thread:   FlushPendingBodies → Kick step N → [other systems overlap] → ...
-//   Physics thread:                      Run step N → Done
-//   Game thread (next frame): Wait for step N → SyncTransforms(N-1) → ...
-//
-// All public methods that touch the Jolt body interface call WaitForStep()
-// internally, so the first physics API call after a kick becomes the sync
-// point.  This gives maximum overlap when no physics API is called during the
-// overlap window, and safe serialisation when one is.
+	// Owns the Jolt physics world and drives it with a fixed timestep on a
+	// dedicated background thread.
+	// Using a fixed step (kFixedTimestep = 1/60 s) is essential for:
+	//   - determinism across machines (required for lockstep networking)
+	//   - stable simulation regardless of render framerate
+	//
+	// Threading model (pipelined, 1 frame of latency — same pattern as RenderThread):
+	//   Game thread:   FlushPendingBodies → Kick step N → [other systems overlap] → ...
+	//   Physics thread:                      Run step N → Done
+	//   Game thread (next frame): Wait for step N → SyncTransforms(N-1) → ...
+	//
+	// All public methods that touch the Jolt body interface call WaitForStep()
+	// internally, so the first physics API call after a kick becomes the sync
+	// point.  This gives maximum overlap when no physics API is called during the
+	// overlap window, and safe serialisation when one is.
 	//
 	// Usage:
 	//   world.RegisterSystem(std::make_unique<PhysicsSystem>());

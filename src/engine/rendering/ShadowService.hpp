@@ -4,7 +4,9 @@
 #include <cstdint>
 #include <span>
 
+#include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GraphicsPipeline.hpp"
@@ -30,7 +32,7 @@ namespace aether
 	class ShadowService
 	{
 	public:
-		void Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines);
+		void Initialize(VulkanContext& context, const Swapchain& swapchain, BindlessManager& bindless, const RenderQueueSharedPipelines& pipelines);
 		void Shutdown();
 
 		void RecreatePipeline(gpu::Device device, gpu::Format depthFormat);
@@ -41,8 +43,8 @@ namespace aether
 		void PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
-		void RegisterPasses(RenderGraph& graph, const CullPass& cullPass, gpu::Format depthFormat);
-		void SetupPassResources(RenderGraph& graph, gpu::Format depthFormat);
+		void RegisterPasses(RenderGraph& graph, const CullPass& cullPass);
+		void SetupPassResources(RenderGraph& graph);
 		void RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph);
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc);
@@ -67,6 +69,10 @@ namespace aether
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
+		std::array<gpu::TextureHandle, kShadowCascadeCount> m_shadowDepthHandle{};
+		std::array<gpu::Image, kShadowCascadeCount> m_shadowDepthImage{};
+		std::array<gpu::ImageView, kShadowCascadeCount> m_shadowDepthView{};
+		BindlessManager* m_bindless = nullptr;
 		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
 		        gpu::Extent2D{4096u, 4096u},
 		        gpu::Extent2D{2048u, 2048u},

@@ -140,6 +140,14 @@ namespace aether
 
 			PassBuilder& ReadWriteBuffer(RGBuffer buffer);
 
+			PassBuilder& ReadImageTransfer(RGImage image);
+
+			PassBuilder& WriteImageTransfer(RGImage image);
+
+			PassBuilder& ReadBufferTransfer(RGBuffer buffer);
+
+			PassBuilder& WriteBufferTransfer(RGBuffer buffer);
+
 			PassBuilder& Execute(std::function<void(PassContext&)> fn);
 
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
@@ -150,6 +158,10 @@ namespace aether
 			// Assign this pass to a specific hardware queue. Only meaningful for
 			// compute passes; graphics passes always run on the graphics queue.
 			PassBuilder& SetQueueClass(QueueClass qc);
+
+			// Keep this compute pass on the graphics queue even when async
+			// compute auto-promotion is enabled.
+			PassBuilder& DisableAsyncCompute();
 
 			// Convenience: mark this compute pass for the async compute queue.
 			PassBuilder& SetAsyncCompute()
@@ -280,6 +292,8 @@ namespace aether
 			SampledRead,
 			StorageRead,
 			StorageWrite,
+			TransferRead,
+			TransferWrite,
 		};
 
 		// Per-resource access type for buffer barrier compilation.
@@ -288,6 +302,8 @@ namespace aether
 			StorageRead,
 			StorageWrite,
 			StorageReadWrite,
+			TransferRead,
+			TransferWrite,
 		};
 
 		struct ImageAccessRef
@@ -376,6 +392,7 @@ namespace aether
 			std::string name;
 			PassKind kind = PassKind::Graphics;
 			QueueClass queueClass = QueueClass::Graphics;
+			bool allowAsyncCompute = true;
 			std::vector<AttachmentRef> colorWrites;
 			std::optional<AttachmentRef> depthWrite;
 			std::vector<ImageAccessRef> imageAccesses;

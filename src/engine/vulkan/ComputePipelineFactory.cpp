@@ -8,6 +8,9 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "vulkan/ShaderUtils.hpp"
 #include "vulkan/VulkanUtils.hpp"
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+#	include "vulkan/AftermathContext.hpp"
+#endif
 
 namespace aether::vkutil
 {
@@ -48,6 +51,9 @@ namespace aether::vkutil
 		};
 
 		VkShaderEXT shader = VK_NULL_HANDLE;
+#ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
+		AftermathContext::RegisterShaderBinary(spirv->data(), static_cast<uint32_t>(spirv->size()));
+#endif
 		const VkResult result = vkCreateShadersEXT(device, 1, &createInfo, nullptr, &shader);
 
 		if (result != VK_SUCCESS)

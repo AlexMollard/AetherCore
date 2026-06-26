@@ -47,7 +47,7 @@ namespace aether
 		m_renderQueue.SetDebugDisableAnimation(false);
 		m_renderQueue.SetDebugAnimPassMask(0xFu);
 
-		m_shadowService.Initialize(vk, swapchain, m_renderQueuePipelines);
+		m_shadowService.Initialize(vk, swapchain, bindless, m_renderQueuePipelines);
 		m_localShadowService.Initialize(vk, bindless, swapchain, m_renderQueuePipelines);
 		m_renderTargetService.Initialize(vk, m_renderQueuePipelines);
 		m_cullPass.Initialize(vk.GetDevice().device);
@@ -160,8 +160,8 @@ namespace aether
 		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
 		};
 
-		m_shadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
-		m_localShadowService.SetupPassResources(m_renderGraph, frame.depthFormat);
+		m_shadowService.SetupPassResources(m_renderGraph);
+		m_localShadowService.SetupPassResources(m_renderGraph);
 
 		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);

@@ -645,7 +645,8 @@ namespace aether
 			{
 				const AnimationContracts::AnimationBlendPush& blendPc = m_animationBlendSystem->GetBlendPush();
 				const std::uint32_t blendJobCount = m_animationBlendSystem->GetBlendJobCount();
-				if (blendJobCount > 0 && blendPc.jobCount > 0)
+				const bool blendPushValid = blendPc.blendJobsAddr != 0 && blendPc.sampledPosesAddr != 0;
+				if (blendJobCount > 0 && blendPc.jobCount > 0 && blendPushValid)
 				{
 					AE_PROFILE_ZONE();
 					const auto animBlendPipe = gpu::ResourceRegistry::ResolvePipeline(m_sharedPipelines->animBlend);

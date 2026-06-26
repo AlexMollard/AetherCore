@@ -40,8 +40,8 @@ namespace aether
 		GpuDevice(const GpuDevice&) = delete;
 		GpuDevice& operator=(const GpuDevice&) = delete;
 
-	[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
-	void Shutdown();
+		[[nodiscard]] Expected<void> Init(ServiceContainer& services, const Config& config);
+		void Shutdown();
 
 		void WaitIdle();
 

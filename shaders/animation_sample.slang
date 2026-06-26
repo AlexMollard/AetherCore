@@ -93,6 +93,9 @@ void main(uint3 dtid : SV_DispatchThreadID)
     if (job.animClipIndex >= job.clipCount)
         return;
 
+    if (job.clips.addr == 0 || job.channels.addr == 0 || job.times.addr == 0 || job.values.addr == 0 || pc.sampledPoses.addr == 0)
+        return;
+
     GpuClip* clips = job.clips.Ptr();
     GpuChannel* channels = job.channels.Ptr();
     float* times = job.times.Ptr();

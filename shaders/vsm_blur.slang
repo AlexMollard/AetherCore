@@ -13,14 +13,14 @@
 
 struct BlurPushConstants
 {
-    uint2  atlasSize;
-    uint2  blurOffset;  // Top-left corner of the region to blur
-    uint   isHorizontal;
-    float  _pad0;
-    float  _pad1;
-    float  _pad2;
-    DevicePtr<float2> srcData;
-    DevicePtr<float2> dstData;
+    [[vk::offset(0)]]  uint2  atlasSize;
+    [[vk::offset(8)]]  uint2  blurOffset;  // Top-left corner of the region to blur
+    [[vk::offset(16)]] uint   isHorizontal;
+    [[vk::offset(20)]] float  _pad0;
+    [[vk::offset(24)]] float  _pad1;
+    [[vk::offset(28)]] float  _pad2;
+    [[vk::offset(32)]] DevicePtr<float2> srcData;
+    [[vk::offset(40)]] DevicePtr<float2> dstData;
 };
 
 [[vk::push_constant]] BlurPushConstants pc;
@@ -55,6 +55,11 @@ void StoreOutput(uint2 coord, uint2 atlasSize, float2 value, DevicePtr<float2> d
 [shader("compute")]
 void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
 {
+    if (pc.srcData.addr == 0 || pc.dstData.addr == 0 || pc.atlasSize.x == 0 || pc.atlasSize.y == 0)
+    {
+        return;
+    }
+
     // Workgroup origin (top-left of this 16x16 output tile) + blur offset.
     uint2 origin = dtid.xy - gtid.xy + pc.blurOffset;
     uint2 globalPos = dtid.xy + pc.blurOffset;

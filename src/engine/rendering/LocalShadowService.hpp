@@ -12,6 +12,8 @@
 #include "rendering/RenderFramePacket.hpp"
 #include "rendering/ShadowAtlasManager.hpp"
 #include "gpu/GpuHandles.hpp"
+#include "gpu/GpuTypes.hpp"
+#include "gpu/ResourceRegistry.hpp"
 
 namespace aether
 {
@@ -71,8 +73,8 @@ namespace aether
 		void BuildFrameShadowData(const RenderFramePacket& packet, std::uint32_t frameIdx, CameraManager& cameraManager, World& world, FrameConstants& fc);
 
 		// Register render graph passes: cull shadow casters, render atlas, blur.
-		void RegisterPasses(RenderGraph& graph, CullPass& cullPass, gpu::Format depthFormat);
-		void SetupPassResources(RenderGraph& graph, gpu::Format depthFormat);
+		void RegisterPasses(RenderGraph& graph, CullPass& cullPass);
+		void SetupPassResources(RenderGraph& graph);
 		void RegisterComputePasses(RenderGraph& graph, CullPass& cullPass);
 		void RegisterGraphicsPasses(RenderGraph& graph);
 
@@ -112,6 +114,9 @@ namespace aether
 		GraphicsPipeline m_shadowPipeline;
 		RGImage m_atlasImage{};
 		RGImage m_atlasDepthImage{};
+		gpu::TextureHandle m_atlasDepthHandle{};
+		gpu::Image m_atlasDepthImageVk{};
+		gpu::ImageView m_atlasDepthView{};
 		std::uint32_t m_atlasBindlessSlot = 0xFFFFFFFFu;
 
 		// Per-light shadow data (CPU side, rebuilt each frame).
@@ -138,7 +143,10 @@ namespace aether
 		// -- VSM blur resources ----------------------------------------------
 		gpu::PipelineHandle m_blurPipelineHandle;
 		gpu::BufferHandle m_blurBuffer;
+		gpu::BufferHandle m_blurScratchBuffer;
 		gpu::DeviceAddress m_blurBufferAddr = 0;
+		gpu::DeviceAddress m_blurScratchBufferAddr = 0;
 		RGBuffer m_blurBufferRG{};
+		RGBuffer m_blurScratchBufferRG{};
 	};
 } // namespace aether

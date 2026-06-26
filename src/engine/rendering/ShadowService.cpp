@@ -49,12 +49,51 @@ namespace
 
 namespace aether
 {
-	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, const RenderQueueSharedPipelines& pipelines)
+	void ShadowService::Initialize(VulkanContext& context, const Swapchain& swapchain, BindlessManager& bindless, const RenderQueueSharedPipelines& pipelines)
 	{
 		AE_PROFILE_ZONE();
+		m_bindless = &bindless;
+
 		for (auto& shadowConstants: m_shadowFrameConstants)
 		{
 			shadowConstants.Initialize();
+		}
+
+		static constexpr const char* kShadowDepthNames[kShadowCascadeCount] = {
+		        "ShadowService.Depth_C0",
+		        "ShadowService.Depth_C1",
+		        "ShadowService.Depth_C2",
+		};
+
+		const gpu::Format depthFormat = swapchain.GetDepthFormat();
+		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
+		{
+			const gpu::TextureDesc desc{
+			        .format = depthFormat,
+			        .extent = {m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height},
+			        .usage = gpu::ImageUsage::DepthStencilAttachment | gpu::ImageUsage::Sampled,
+			        .aspect = gpu::ImageAspect::Depth,
+			        .debugName = kShadowDepthNames[cascade],
+			};
+			m_shadowDepthHandle[cascade] = gpu::ResourceRegistry::CreateTexture(desc);
+			if (!m_shadowDepthHandle[cascade].IsValid())
+			{
+				Throw(AetherError::Engine("ShadowService: CreateTexture failed for cascade " + std::to_string(cascade)));
+			}
+			m_shadowDepthImage[cascade] = gpu::ResourceRegistry::ResolveTextureImage(m_shadowDepthHandle[cascade]);
+			m_shadowDepthView[cascade] = gpu::ResourceRegistry::ResolveTexture(m_shadowDepthHandle[cascade]).view;
+
+			const auto slotResult = bindless.AllocateSampledImageSlot();
+			if (!slotResult)
+			{
+				Throw(AetherError::Engine("ShadowService: AllocateSampledImageSlot failed for cascade " + std::to_string(cascade)));
+			}
+			m_shadowMapSlots[cascade] = *slotResult;
+			const auto updateResult = bindless.WriteSampledImage(m_shadowMapSlots[cascade], gpu::ResourceRegistry::GetViewCreateInfo(m_shadowDepthHandle[cascade]), gpu::ImageLayout::ShaderReadOnly);
+			if (!updateResult)
+			{
+				Throw(AetherError::Engine("ShadowService: WriteSampledImage failed for cascade " + std::to_string(cascade)));
+			}
 		}
 
 		// Single shadow queue with 3x output capacity for multi-frustum culling.
@@ -63,7 +102,7 @@ namespace aether
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 
-		RecreatePipeline(context.GetDevice().device, swapchain.GetDepthFormat());
+		RecreatePipeline(context.GetDevice().device, depthFormat);
 	}
 
 	void ShadowService::Shutdown()
@@ -75,6 +114,23 @@ namespace aether
 			shadowConstants.Shutdown();
 		}
 		m_shadowPipeline.Destroy();
+
+		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
+		{
+			if (m_shadowMapSlots[cascade] != 0xFFFFFFFFu && m_bindless != nullptr)
+			{
+				m_bindless->FreeSampledImageSlot(m_shadowMapSlots[cascade]);
+			}
+			if (m_shadowDepthHandle[cascade].IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(m_shadowDepthHandle[cascade]);
+			}
+			m_shadowDepthHandle[cascade] = {};
+			m_shadowDepthImage[cascade] = nullptr;
+			m_shadowDepthView[cascade] = nullptr;
+			m_shadowMapSlots[cascade] = 0xFFFFFFFFu;
+		}
+		m_bindless = nullptr;
 	}
 
 	void ShadowService::RecreatePipeline(gpu::Device device, gpu::Format depthFormat)
@@ -114,19 +170,18 @@ namespace aether
 		m_shadowRenderQueue.SetAnimationDatabase(animationDb);
 	}
 
-	void ShadowService::RegisterPasses(RenderGraph& graph, const CullPass& cullPass, gpu::Format depthFormat)
+	void ShadowService::RegisterPasses(RenderGraph& graph, const CullPass& cullPass)
 	{
-		SetupPassResources(graph, depthFormat);
+		SetupPassResources(graph);
 		RegisterComputePasses(graph, cullPass);
 		RegisterGraphicsPasses(graph);
 	}
 
-	void ShadowService::SetupPassResources(RenderGraph& graph, gpu::Format depthFormat)
+	void ShadowService::SetupPassResources(RenderGraph& graph)
 	{
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			m_shadowDepth[cascade] = graph.CreateTransientDepth(depthFormat, gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height}, gpu::ImageUsage::Sampled);
-			m_shadowMapSlots[cascade] = graph.EnsureBindlessSampled(m_shadowDepth[cascade]);
+			m_shadowDepth[cascade] = graph.RegisterImage(m_shadowDepthImage[cascade], m_shadowDepthView[cascade], gpu::ImageAspect::Depth);
 		}
 	}
 
@@ -159,10 +214,12 @@ namespace aether
 			                [this, cascade](PassContext& ctx)
 			                {
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                m_shadowRenderQueue.FlushDraw(cmd, nullptr, &m_shadowPipeline, cascadeOffset);
-		                });
+				                gpu::CommandList cmd = ctx.recorder.View();
+				                m_shadowRenderQueue.FlushDraw(cmd, nullptr, &m_shadowPipeline, cascadeOffset);
+			                });
 		}
+
+		graph.AddPass("$ShadowDepthTransition").ReadTexture(m_shadowDepth[0]).ReadTexture(m_shadowDepth[1]).ReadTexture(m_shadowDepth[2]).Execute([](PassContext&) {});
 	}
 
 	void ShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
