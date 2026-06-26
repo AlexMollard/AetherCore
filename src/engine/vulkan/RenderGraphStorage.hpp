@@ -382,7 +382,7 @@ namespace aether
 			return (value + alignment - 1) & ~(alignment - 1);
 		}
 
-		void AllocateTransientHeap(VkDeviceSize requiredSize);
+		void AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment);
 
 		// -- Member state ---------------------------------------------------
 		VkDevice m_device = VK_NULL_HANDLE;
@@ -415,6 +415,7 @@ namespace aether
 		VmaAllocation m_transientHeapAllocation = VK_NULL_HANDLE;
 		VmaVirtualBlock m_virtualBlock = VK_NULL_HANDLE;
 		VkDeviceSize m_transientHeapCapacity = 0;
+		VkDeviceSize m_transientHeapAlignment = kTransientHeapAlignment;
 
 		// Per-frame allocation statistics (populated during Execute).
 		FrameStats m_lastFrameStats;

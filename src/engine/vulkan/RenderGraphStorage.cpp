@@ -21,6 +21,11 @@
 
 namespace aether
 {
+	// Maximum number of barriers converted inline on the stack before falling
+	// back to heap allocation. Render-graph passes rarely exceed a handful of
+	// image/buffer barriers per call, so 16 covers virtually all cases.
+	static constexpr std::size_t kMaxInlineBarriers = 16;
+
 	// Engine-side forwarders: cast opaque gpu:: types to Vk* and delegate.
 
 	void RenderGraphStorage::Initialize(gpu::Device device, gpu::Allocator allocator)
@@ -146,7 +151,7 @@ namespace aether
 
 			const VkCommandPoolCreateInfo poolInfo{
 			        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-			        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT | VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+			        .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
 			        .queueFamilyIndex = m_computeQueueFamily,
 			};
 			if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &frame.commandPool) != VK_SUCCESS)
@@ -766,6 +771,7 @@ namespace aether
 		VkEvent event = VK_NULL_HANDLE;
 		const VkEventCreateInfo info{
 		        .sType = VK_STRUCTURE_TYPE_EVENT_CREATE_INFO,
+		        .flags = VK_EVENT_CREATE_DEVICE_ONLY_BIT,
 		};
 		if (vkCreateEvent(m_device, &info, nullptr, &event) != VK_SUCCESS)
 		{
@@ -802,11 +808,13 @@ namespace aether
 
 	void RenderGraphStorage::ResetEvents()
 	{
+		// Device-only events are reset explicitly via vkCmdResetEvent2 before each
+		// vkCmdSetEvent2 in CmdSetEvent2 (vkCmdWaitEvents2 does not reset events).
+		// No host-side reset needed.
 		m_freeEventSlots.clear();
 		m_freeEventSlots.reserve(m_events.size());
 		for (std::uint32_t i = 0; i < m_events.size(); ++i)
 		{
-			vkResetEvent(m_device, m_events[i]);
 			m_freeEventSlots.push_back(i);
 		}
 	}
@@ -820,20 +828,60 @@ namespace aether
 		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 		auto vkEvent = static_cast<VkEvent>(event);
 
-		// Translate gpu::ImageMemoryBarrier span to a stack VkImageMemoryBarrier2 array.
+		// Device-only events retain their signaled state across frames
+		// (vkCmdWaitEvents2 does NOT reset the event — it stays signaled).
+		// Explicitly reset the event before setting it to avoid the 'already
+		// signaled' validation warning and ensure the dependency info in
+		// vkCmdSetEvent2 is honored. vkCmdResetEvent2 on an already-unsignaled
+		// event is a defined no-op, so the first frame is fine too.
+		vkCmdResetEvent2(vkCmd, vkEvent, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+
+		// Execution barrier between vkCmdResetEvent2 and vkCmdSetEvent2 on the
+		// same event. The Vulkan spec requires an intervening execution dependency
+		// (a pipeline barrier or event) between reset and set.
+		{
+			const VkMemoryBarrier2 execBarrier{
+			        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+			        .pNext = nullptr,
+			        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+			        .srcAccessMask = VK_ACCESS_2_NONE,
+			        .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+			        .dstAccessMask = VK_ACCESS_2_NONE,
+			};
+			const VkDependencyInfo execDep{
+			        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			        .pNext = nullptr,
+			        .memoryBarrierCount = 1,
+			        .pMemoryBarriers = &execBarrier,
+			        .bufferMemoryBarrierCount = 0,
+			        .pBufferMemoryBarriers = nullptr,
+			        .imageMemoryBarrierCount = 0,
+			        .pImageMemoryBarriers = nullptr,
+			};
+			vkCmdPipelineBarrier2(vkCmd, &execDep);
+		}
+
+		// Convert gpu::ImageMemoryBarrier span to VkImageMemoryBarrier2 array.
 		// barrier.image is the pre-resolved VkImage (opaque gpu::Image == VkImage);
 		// the caller populated it via resolveImage() before invoking this method.
-		std::vector<VkImageMemoryBarrier2> vkBarriers;
-		vkBarriers.reserve(barriers.size());
-		for (const auto& b: barriers)
+		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
+		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
+		auto* vkBarriers = vkBarriersInline;
+		if (barriers.size() > kMaxInlineBarriers)
 		{
-			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
+			vkBarriersHeap.resize(barriers.size());
+			vkBarriers = vkBarriersHeap.data();
+		}
+		for (std::size_t i = 0; i < barriers.size(); ++i)
+		{
+			vkBarriers[i] = gpu::ToVk(barriers[i], static_cast<VkImage>(barriers[i].image));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
-		        .pImageMemoryBarriers = vkBarriers.data(),
+		        .pNext = nullptr,
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(barriers.size()),
+		        .pImageMemoryBarriers = vkBarriers,
 		};
 		vkCmdSetEvent2(vkCmd, vkEvent, &depInfo);
 	}
@@ -847,17 +895,23 @@ namespace aether
 		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 		auto vkEvent = static_cast<VkEvent>(event);
 
-		std::vector<VkImageMemoryBarrier2> vkBarriers;
-		vkBarriers.reserve(barriers.size());
-		for (const auto& b: barriers)
+		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
+		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
+		auto* vkBarriers = vkBarriersInline;
+		if (barriers.size() > kMaxInlineBarriers)
 		{
-			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
+			vkBarriersHeap.resize(barriers.size());
+			vkBarriers = vkBarriersHeap.data();
+		}
+		for (std::size_t i = 0; i < barriers.size(); ++i)
+		{
+			vkBarriers[i] = gpu::ToVk(barriers[i], static_cast<VkImage>(barriers[i].image));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
-		        .pImageMemoryBarriers = vkBarriers.data(),
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(barriers.size()),
+		        .pImageMemoryBarriers = vkBarriers,
 		};
 		vkCmdWaitEvents2(vkCmd, 1, &vkEvent, &depInfo);
 	}
@@ -870,17 +924,23 @@ namespace aether
 		}
 		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
-		std::vector<VkBufferMemoryBarrier2> vkBarriers;
-		vkBarriers.reserve(barriers.size());
-		for (const auto& b: barriers)
+		VkBufferMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
+		std::vector<VkBufferMemoryBarrier2> vkBarriersHeap;
+		auto* vkBarriers = vkBarriersInline;
+		if (barriers.size() > kMaxInlineBarriers)
 		{
-			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkBuffer>(b.buffer)));
+			vkBarriersHeap.resize(barriers.size());
+			vkBarriers = vkBarriersHeap.data();
+		}
+		for (std::size_t i = 0; i < barriers.size(); ++i)
+		{
+			vkBarriers[i] = gpu::ToVk(barriers[i], static_cast<VkBuffer>(barriers[i].buffer));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .bufferMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
-		        .pBufferMemoryBarriers = vkBarriers.data(),
+		        .bufferMemoryBarrierCount = static_cast<uint32_t>(barriers.size()),
+		        .pBufferMemoryBarriers = vkBarriers,
 		};
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
@@ -893,24 +953,30 @@ namespace aether
 		}
 		auto vkCmd = static_cast<VkCommandBuffer>(cmd);
 
-		std::vector<VkImageMemoryBarrier2> vkBarriers;
-		vkBarriers.reserve(barriers.size());
-		for (const auto& b: barriers)
+		VkImageMemoryBarrier2 vkBarriersInline[kMaxInlineBarriers];
+		std::vector<VkImageMemoryBarrier2> vkBarriersHeap;
+		auto* vkBarriers = vkBarriersInline;
+		if (barriers.size() > kMaxInlineBarriers)
 		{
-			vkBarriers.push_back(gpu::ToVk(b, static_cast<VkImage>(b.image)));
+			vkBarriersHeap.resize(barriers.size());
+			vkBarriers = vkBarriersHeap.data();
+		}
+		for (std::size_t i = 0; i < barriers.size(); ++i)
+		{
+			vkBarriers[i] = gpu::ToVk(barriers[i], static_cast<VkImage>(barriers[i].image));
 		}
 
 		const VkDependencyInfo depInfo{
 		        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		        .imageMemoryBarrierCount = static_cast<uint32_t>(vkBarriers.size()),
-		        .pImageMemoryBarriers = vkBarriers.data(),
+		        .imageMemoryBarrierCount = static_cast<uint32_t>(barriers.size()),
+		        .pImageMemoryBarriers = vkBarriers,
 		};
 		vkCmdPipelineBarrier2(vkCmd, &depInfo);
 	}
 
 	// -- Transient heap -------------------------------------------------------
 
-	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize)
+	void RenderGraphStorage::AllocateTransientHeap(VkDeviceSize requiredSize, VkDeviceSize alignment)
 	{
 		if (m_virtualBlock != VK_NULL_HANDLE)
 		{
@@ -923,6 +989,7 @@ namespace aether
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 		}
 		m_transientHeapCapacity = 0;
+		m_transientHeapAlignment = kTransientHeapAlignment;
 
 		if (requiredSize == 0)
 		{
@@ -931,11 +998,11 @@ namespace aether
 
 		const VkMemoryRequirements memReqs{
 		        .size = requiredSize,
-		        .alignment = kTransientHeapAlignment,
+		        .alignment = alignment,
 		        .memoryTypeBits = std::numeric_limits<std::uint32_t>::max(),
 		};
 		const VmaAllocationCreateInfo allocInfo{
-		        .usage = VMA_MEMORY_USAGE_UNKNOWN,
+		        .usage = VMA_MEMORY_USAGE_AUTO,
 		        .requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
 		};
 		if (vmaAllocateMemory(m_allocator, &memReqs, &allocInfo, &m_transientHeapAllocation, nullptr) != VK_SUCCESS)
@@ -945,6 +1012,7 @@ namespace aether
 			return;
 		}
 		m_transientHeapCapacity = requiredSize;
+		m_transientHeapAlignment = alignment;
 
 		const VmaVirtualBlockCreateInfo blockInfo{
 		        .size = requiredSize,
@@ -955,6 +1023,7 @@ namespace aether
 			vmaFreeMemory(m_allocator, m_transientHeapAllocation);
 			m_transientHeapAllocation = VK_NULL_HANDLE;
 			m_transientHeapCapacity = 0;
+			m_transientHeapAlignment = kTransientHeapAlignment;
 		}
 	}
 
@@ -1020,15 +1089,14 @@ namespace aether
 			        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
 			        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
 			};
-			VkImage tempImage = VK_NULL_HANDLE;
-			if (vkCreateImage(m_device, &tempInfo, nullptr, &tempImage) == VK_SUCCESS)
-			{
-				VkMemoryRequirements reqs{};
-				vkGetImageMemoryRequirements(m_device, tempImage, &reqs);
-				vkDestroyImage(m_device, tempImage, nullptr);
-				entry.memReqSize = reqs.size;
-				entry.memReqAlignment = reqs.alignment;
-			}
+			const VkDeviceImageMemoryRequirements query{
+			        .sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS,
+			        .pCreateInfo = &tempInfo,
+			};
+			VkMemoryRequirements2 reqs2{.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+			vkGetDeviceImageMemoryRequirements(m_device, &query, &reqs2);
+			entry.memReqSize = reqs2.memoryRequirements.size;
+			entry.memReqAlignment = reqs2.memoryRequirements.alignment;
 		}
 
 		// Query memory requirements for transient buffers.
@@ -1054,15 +1122,14 @@ namespace aether
 			        .size = entry.size,
 			        .usage = 0,
 			};
-			VkBuffer tempBuffer = VK_NULL_HANDLE;
-			if (vkCreateBuffer(m_device, &tempInfo, nullptr, &tempBuffer) == VK_SUCCESS)
-			{
-				VkMemoryRequirements reqs{};
-				vkGetBufferMemoryRequirements(m_device, tempBuffer, &reqs);
-				vkDestroyBuffer(m_device, tempBuffer, nullptr);
-				entry.memReqSize = reqs.size;
-				entry.memReqAlignment = reqs.alignment;
-			}
+			const VkDeviceBufferMemoryRequirements query{
+			        .sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS,
+			        .pCreateInfo = &tempInfo,
+			};
+			VkMemoryRequirements2 reqs2{.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2};
+			vkGetDeviceBufferMemoryRequirements(m_device, &query, &reqs2);
+			entry.memReqSize = reqs2.memoryRequirements.size;
+			entry.memReqAlignment = reqs2.memoryRequirements.alignment;
 		}
 
 		// Calculate total size needed. Process entries in alignment-descending
@@ -1119,10 +1186,27 @@ namespace aether
 			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
 		}
 
-		// Allocate heap and virtual block if needed.
-		if (totalSize > m_transientHeapCapacity)
+		// Determine max alignment needed across all transient resources.
+		VkDeviceSize maxAlignment = kTransientHeapAlignment;
+		for (const auto idx: imageIndices)
 		{
-			AllocateTransientHeap(totalSize);
+			if (m_transientImages[idx].memReqAlignment > maxAlignment)
+			{
+				maxAlignment = m_transientImages[idx].memReqAlignment;
+			}
+		}
+		for (const auto idx: bufferIndices)
+		{
+			if (m_transientBuffers[idx].memReqAlignment > maxAlignment)
+			{
+				maxAlignment = m_transientBuffers[idx].memReqAlignment;
+			}
+		}
+
+		// Allocate heap and virtual block if needed.
+		if (totalSize > m_transientHeapCapacity || maxAlignment > m_transientHeapAlignment)
+		{
+			AllocateTransientHeap(totalSize * 3 / 2, maxAlignment);
 		}
 		else if (m_virtualBlock != VK_NULL_HANDLE)
 		{
