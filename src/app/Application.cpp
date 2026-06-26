@@ -287,7 +287,6 @@ namespace aether::app
 			AE_PROFILE_PLOT("Frame/ChannelSubmitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - submitStart).count()));
 			AE_PROFILE_PLOT("Frame/GameThreadTotalNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - frameStartTime).count()));
 
-			AE_PROFILE_FRAME;
 			++m_frameIndex;
 		}
 

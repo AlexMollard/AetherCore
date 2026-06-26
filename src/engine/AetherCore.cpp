@@ -347,6 +347,7 @@ namespace aether
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
 			m_gpu->SubmitAndPresent();
+			AE_PROFILE_FRAME;
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
@@ -441,6 +442,7 @@ namespace aether
 		// vkCmdResetQueryPool on a PENDING buffer, which is invalid.
 		gpu::GpuProfiler::Get().Collect(nullptr);
 
+		AE_PROFILE_FRAME;
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
 		m_gpu->AdvanceResourceRegistryFrame();
