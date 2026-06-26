@@ -773,6 +773,8 @@ namespace aether
 			return UINT32_MAX;
 		}
 		m_events.push_back(event);
+		const std::string eventName = std::format("RG.SplitEvent[{}]", idx);
+		vkutil::SetObjectName(m_device, reinterpret_cast<std::uint64_t>(event), VK_OBJECT_TYPE_EVENT, eventName.c_str());
 		return idx;
 	}
 
@@ -804,6 +806,7 @@ namespace aether
 		m_freeEventSlots.reserve(m_events.size());
 		for (std::uint32_t i = 0; i < m_events.size(); ++i)
 		{
+			vkResetEvent(m_device, m_events[i]);
 			m_freeEventSlots.push_back(i);
 		}
 	}

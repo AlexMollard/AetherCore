@@ -135,6 +135,12 @@ namespace
 		{
 			return true;
 		}
+		// "vkBindBufferMemory() ... should be sub-allocated from larger memory blocks"
+		// VMA handles sub-allocation internally; this performance hint is noise.
+		if (msg.find("should be sub-allocated") != std::string_view::npos)
+		{
+			return true;
+		}
 		return false;
 	}
 
