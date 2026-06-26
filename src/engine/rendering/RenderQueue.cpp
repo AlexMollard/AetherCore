@@ -1001,6 +1001,25 @@ namespace aether
 		m_commandSlots[idx].clear();
 	}
 
+	void RenderQueue::DiscardPending(std::uint32_t slot)
+	{
+		const auto idx = slot % kFramesInFlight;
+		{
+			std::lock_guard lock(m_slotMutexes[idx]);
+			m_commandSlots[idx].clear();
+			m_slotConsumed[idx] = true;
+		}
+		m_slotCv[idx].notify_one();
+	}
+
+	void RenderQueue::DiscardAllPending()
+	{
+		for (std::uint32_t i = 0; i < kFramesInFlight; ++i)
+		{
+			DiscardPending(i);
+		}
+	}
+
 	bool RenderQueue::IsEmpty(std::uint32_t slot) const
 	{
 		return m_commandSlots[slot % kFramesInFlight].empty();

@@ -53,6 +53,7 @@ namespace aether
 		// When SetReloadInProgress(true) is called, the render thread stops executing
 		// frames after the current one completes. Call SetReloadInProgress(false) to resume.
 		void SetReloadInProgress(bool inProgress);
+		void WaitPaused();
 		[[nodiscard]] bool IsReloadInProgress() const;
 
 	private:

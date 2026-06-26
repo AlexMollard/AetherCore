@@ -51,10 +51,7 @@ namespace aether
 
 		void ClearAllQueues()
 		{
-			for (std::uint32_t i = 0; i < RenderQueue::kFramesInFlight; ++i)
-			{
-				m_shadowRenderQueue.Clear(i);
-			}
+			m_shadowRenderQueue.DiscardAllPending();
 		}
 
 		[[nodiscard]] std::span<const RGImage> GetShadowDepthImages() const

@@ -74,10 +74,13 @@ namespace aether
 	void RenderThread::SetReloadInProgress(bool inProgress)
 	{
 		m_reloadInProgress.store(inProgress, std::memory_order_release);
-		if (!inProgress)
-		{
-			m_reloadCv.notify_one();
-		}
+		m_reloadCv.notify_all();
+	}
+
+	void RenderThread::WaitPaused()
+	{
+		std::unique_lock lock(m_reloadMutex);
+		m_reloadCv.wait(lock, [this] { return m_shutdown || m_isIdle.load(std::memory_order_acquire); });
 	}
 
 	bool RenderThread::IsReloadInProgress() const
@@ -121,6 +124,7 @@ namespace aether
 				{
 					m_engine->WaitIdle();
 					m_isIdle.store(true, std::memory_order_release);
+					m_reloadCv.notify_all();
 				}
 
 				// Block until reload completes instead of busy-waiting.
@@ -132,13 +136,20 @@ namespace aether
 				}
 			}
 
-			m_isIdle.store(false, std::memory_order_release);
-
 			RenderFramePacket packet;
 
 			try
 			{
+				m_isIdle.store(true, std::memory_order_release);
+				m_reloadCv.notify_all();
 				packet = m_channel.read();
+				if (IsReloadInProgress())
+				{
+					m_isIdle.store(true, std::memory_order_release);
+					m_reloadCv.notify_all();
+					continue;
+				}
+				m_isIdle.store(false, std::memory_order_release);
 			}
 			catch (const std::runtime_error&)
 			{
@@ -165,6 +176,8 @@ namespace aether
 
 			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
+			m_isIdle.store(true, std::memory_order_release);
+			m_reloadCv.notify_all();
 		}
 	}
 

@@ -204,6 +204,8 @@ namespace aether
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
+		void DiscardPending(std::uint32_t slot);
+		void DiscardAllPending();
 
 		[[nodiscard]] bool IsEmpty(std::uint32_t slot) const;
 

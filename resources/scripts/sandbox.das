@@ -517,7 +517,7 @@ def on_attach(world : World?)
 	init_default_bindings();
 	register_action("inspector_prev",  KEY_LEFT,   0);
 	register_action("inspector_next",  KEY_RIGHT,  0);
-	register_action("toggle_phys_dbg", KEY_F1,     0);
+	register_action("toggle_phys_dbg", KEY_F6,     0);
 	register_action("spawn_cube_key",  KEY_1,      0);
 	register_action("spawn_sphere_key", KEY_2,    0);
 	register_action("clear_toys_key",  KEY_X,      0);
@@ -746,7 +746,7 @@ def on_update(world : World?)
 		clear_toys(world);
 	}
 
-	// Physics debug toggle via checkbox and F1.
+	// Physics debug toggle via checkbox and F6.
 	g_phys_debug_enabled = get_ui_checked(world, g_phys_debug_cb);
 	if (is_action_pressed("toggle_phys_dbg"))
 	{

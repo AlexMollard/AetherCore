@@ -436,8 +436,8 @@ namespace aether
 		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryEDS3Features2);
 
 		const bool eds3RequiredSupport = supportedEDS3.extendedDynamicState3PolygonMode == VK_TRUE && supportedEDS3.extendedDynamicState3RasterizationSamples == VK_TRUE && supportedEDS3.extendedDynamicState3SampleMask == VK_TRUE
-		                                 && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
-		                                 && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
+		                                 && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE
+		                                 && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
 		if (!eds3RequiredSupport)
 		{
 			Throw(AetherError::Vulkan(0, "VK_EXT_extended_dynamic_state3 is missing required dynamic state features."));

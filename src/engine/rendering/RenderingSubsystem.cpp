@@ -84,7 +84,7 @@ namespace aether
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
-		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
+		        .featureFlags = {.forwardEnabled = IsForwardPassEnabled()},
 		});
 
 		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
@@ -157,7 +157,7 @@ namespace aether
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),
 		        .colorFormat = PostProcessStack::GetForwardColorFormat(),
-		        .featureFlags = {.forwardEnabled = m_forwardPassEnabled},
+		        .featureFlags = {.forwardEnabled = IsForwardPassEnabled()},
 		};
 
 		m_shadowService.SetupPassResources(m_renderGraph);
@@ -189,7 +189,7 @@ namespace aether
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			const RGImage depth = m_renderGraph.GetSwapchainDepth();
-			auto* pass = &m_renderGraph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f));
+			auto* pass = &m_renderGraph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f));
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
@@ -213,9 +213,9 @@ namespace aether
 			}
 
 			pass->Execute(
-			        [&m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting, forwardEnabled = frame.featureFlags.forwardEnabled](PassContext& ctx)
+			        [this, &m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting](PassContext& ctx)
 			        {
-				        if (!forwardEnabled)
+				        if (!IsForwardPassEnabled())
 				        {
 					        return;
 				        }

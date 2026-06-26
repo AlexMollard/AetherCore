@@ -287,7 +287,7 @@ namespace aether
 			{
 				jointStr += std::to_string(asset.skins[0].joints[ji]) + " ";
 			}
-			AE_VERBOSE(LogCategory::Engine, "  First {} skin joints: {}", (std::min) (asset.skins[0].joints.size(), std::size_t(8)), jointStr);
+			AE_VERBOSE(LogCategory::Engine, "  First {} skin joints: {}", (std::min)(asset.skins[0].joints.size(), std::size_t(8)), jointStr);
 		}
 
 		AE_VERBOSE(LogCategory::Engine,

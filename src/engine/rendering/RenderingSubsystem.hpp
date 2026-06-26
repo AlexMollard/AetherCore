@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 
@@ -42,12 +43,12 @@ namespace aether
 
 		void SetForwardPassEnabled(bool enabled)
 		{
-			m_forwardPassEnabled = enabled;
+			m_forwardPassEnabled.store(enabled, std::memory_order_relaxed);
 		}
 
 		[[nodiscard]] bool IsForwardPassEnabled() const
 		{
-			return m_forwardPassEnabled;
+			return m_forwardPassEnabled.load(std::memory_order_relaxed);
 		}
 
 		[[nodiscard]] RenderGraph& GetRenderGraph()
@@ -116,6 +117,6 @@ namespace aether
 		PostProcessStack m_postProcessStack;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
-		bool m_forwardPassEnabled = true;
+		std::atomic_bool m_forwardPassEnabled = true;
 	};
 } // namespace aether

@@ -100,7 +100,9 @@ namespace aether::app
 
 			// Signal that a reload is in progress - the render thread will skip
 			// executing any new frames until we've destroyed the old scene entities.
-			context.Get<aether::RenderThread>().SetReloadInProgress(true);
+			auto& renderThread = context.Get<aether::RenderThread>();
+			renderThread.SetReloadInProgress(true);
+			renderThread.WaitPaused();
 
 			// Frames in flight may still reference the buffers backing the scene
 			// entities we're about to destroy. Hot-reload is out-of-band, so a
@@ -110,10 +112,7 @@ namespace aether::app
 			// Clear all render queues to remove any pending commands that reference
 			// destroyed meshes/animation databases.
 			auto& renderQueue = context.Get<RenderQueue>();
-			for (std::uint32_t i = 0; i < RenderQueue::kFramesInFlight; ++i)
-			{
-				renderQueue.Clear(i);
-			}
+			renderQueue.DiscardAllPending();
 			if (auto shadowService = context.TryGet<ShadowService>())
 			{
 				shadowService->ClearAllQueues();
@@ -125,7 +124,7 @@ namespace aether::app
 
 			DestroySceneEntities(context);
 
-			context.Get<aether::RenderThread>().SetReloadInProgress(false);
+			renderThread.SetReloadInProgress(false);
 		}
 
 		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
