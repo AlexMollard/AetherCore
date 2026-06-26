@@ -372,16 +372,6 @@ namespace aether
 		// DiagnosticEngine to maintain a BDA -> resource-name registry for
 		// post-mortem address resolution.
 		selector.add_required_extension(VK_EXT_DEVICE_ADDRESS_BINDING_REPORT_EXTENSION_NAME);
-		// VK_NV_device_diagnostic_checkpoints: driver-stored breadcrumb markers
-		// for post-crash flight-recorder dump. vkCmdSetCheckpointNV writes a
-		// marker into the command stream; vkGetQueueCheckpointDataNV retrieves
-		// the last N markers after device loss. The driver retains checkpoints
-		// internally so they survive device loss even when mapped memory does
-		// not. Compared to VK_AMD_buffer_marker, this is Nvidia-specific but
-		// strictly more resilient (driver-stored, not host-visible-buffer).
-		// Works alongside VK_AMD_buffer_marker; DiagnosticEngine writes markers
-		// via whichever mechanism is available.
-		selector.add_required_extension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
 #ifdef AETHER_ENABLE_NVIDIA_AFTERMATH
 		// VK_NV_device_diagnostics_config is required for Aftermath resource tracking
 		// and shader debug info. If unavailable (non-NVIDIA GPU), device selection will fail.
@@ -446,11 +436,15 @@ namespace aether
 		vkGetPhysicalDeviceFeatures2(physicalDeviceResult.value().physical_device, &queryEDS3Features2);
 
 		const bool eds3RequiredSupport = supportedEDS3.extendedDynamicState3PolygonMode == VK_TRUE && supportedEDS3.extendedDynamicState3RasterizationSamples == VK_TRUE && supportedEDS3.extendedDynamicState3SampleMask == VK_TRUE
-		                                 && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE && supportedEDS3.extendedDynamicState3AlphaToOneEnable == VK_TRUE && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
+		                                 && supportedEDS3.extendedDynamicState3AlphaToCoverageEnable == VK_TRUE && supportedEDS3.extendedDynamicState3LogicOpEnable == VK_TRUE
 		                                 && supportedEDS3.extendedDynamicState3ColorBlendEnable == VK_TRUE && supportedEDS3.extendedDynamicState3ColorBlendEquation == VK_TRUE && supportedEDS3.extendedDynamicState3ColorWriteMask == VK_TRUE;
 		if (!eds3RequiredSupport)
 		{
 			Throw(AetherError::Vulkan(0, "VK_EXT_extended_dynamic_state3 is missing required dynamic state features."));
+		}
+		if (supportedEDS3.extendedDynamicState3AlphaToOneEnable != VK_TRUE)
+		{
+			AE_INFO(LogCategory::Vulkan, "VK_EXT_extended_dynamic_state3 alpha-to-one dynamic state is not supported; leaving alpha-to-one disabled.");
 		}
 
 		VkPhysicalDeviceFaultFeaturesEXT faultFeatures{
@@ -583,6 +577,7 @@ namespace aether
 
 		gpu::CommandList::SetDebugLabelFunctions(reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdBeginDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdBeginDebugUtilsLabelEXT"))),
 		        reinterpret_cast<void*>(reinterpret_cast<PFN_vkCmdEndDebugUtilsLabelEXT>(vkGetDeviceProcAddr(m_device->device, "vkCmdEndDebugUtilsLabelEXT"))));
+		gpu::CommandList::SetAlphaToOneDynamicStateSupported(extendedDynamicState3Features.extendedDynamicState3AlphaToOneEnable == VK_TRUE);
 
 		const auto setObjectNameFn = reinterpret_cast<PFN_vkSetDebugUtilsObjectNameEXT>(vkGetDeviceProcAddr(m_device->device, "vkSetDebugUtilsObjectNameEXT"));
 		vkutil::SetObjectNameFunction(setObjectNameFn);

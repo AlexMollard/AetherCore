@@ -56,6 +56,7 @@ namespace aether::gpu
 		PFN_vkCmdBeginDebugUtilsLabelEXT s_beginDebugLabel = nullptr;
 		PFN_vkCmdEndDebugUtilsLabelEXT s_endDebugLabel = nullptr;
 		DiagnosticEngine* s_diagnosticEngine = nullptr;
+		bool s_alphaToOneDynamicStateSupported = true;
 
 		void RecordDiagnosticEvent(std::string_view message)
 		{
@@ -75,6 +76,11 @@ namespace aether::gpu
 	void CommandList::SetDiagnosticEngine(DiagnosticEngine* engine) noexcept
 	{
 		s_diagnosticEngine = engine;
+	}
+
+	void CommandList::SetAlphaToOneDynamicStateSupported(const bool supported) noexcept
+	{
+		s_alphaToOneDynamicStateSupported = supported;
 	}
 
 	void CommandList::BindPipeline(void* pipeline) noexcept
@@ -108,7 +114,10 @@ namespace aether::gpu
 		vkCmdSetRasterizationSamplesEXT(cmd, static_cast<VkSampleCountFlagBits>(entry->rasterizationSampleCount));
 		vkCmdSetSampleMaskEXT(cmd, static_cast<VkSampleCountFlagBits>(entry->rasterizationSampleCount), &entry->sampleMask);
 		vkCmdSetAlphaToCoverageEnableEXT(cmd, entry->alphaToCoverageEnable);
-		vkCmdSetAlphaToOneEnableEXT(cmd, entry->alphaToOneEnable);
+		if (s_alphaToOneDynamicStateSupported)
+		{
+			vkCmdSetAlphaToOneEnableEXT(cmd, entry->alphaToOneEnable);
+		}
 		vkCmdSetColorBlendEnableEXT(cmd, 0, 1, &entry->colorBlendEnable);
 		vkCmdSetColorBlendEquationEXT(cmd, 0, 1, &entry->colorBlendEquation);
 		vkCmdSetColorWriteMaskEXT(cmd, 0, 1, &entry->colorWriteMask);

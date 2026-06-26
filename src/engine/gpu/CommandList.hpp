@@ -112,6 +112,7 @@ namespace aether::gpu
 		// by the backend. Pass null to disable.
 		static void SetDebugLabelFunctions(void* beginFn, void* endFn) noexcept;
 		static void SetDiagnosticEngine(DiagnosticEngine* engine) noexcept;
+		static void SetAlphaToOneDynamicStateSupported(bool supported) noexcept;
 
 	private:
 		void* m_cmd = nullptr;
