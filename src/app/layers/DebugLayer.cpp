@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <format>
@@ -10,6 +11,8 @@
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
+
+#include <glm/geometric.hpp>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -29,6 +32,7 @@
 #include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/Renderer.hpp"
+#include "rendering/RenderQueue.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
@@ -44,6 +48,7 @@ namespace aether::app
 	{
 		constexpr float kPanelW = 408.f;
 		constexpr float kPanelH = 600.f;
+		constexpr float kHeaderTabsHeight = 40.f;
 
 		UiRect HeightRect(float h)
 		{
@@ -98,6 +103,15 @@ namespace aether::app
 			Entity entity{};
 			std::uint32_t depth = 0;
 			bool hasChildren = false;
+		};
+
+		struct LightGizmoOptions
+		{
+			bool pointVolumes = true;
+			bool spotCones = true;
+			bool sunDirection = true;
+			bool shadowMarkers = true;
+			float scale = 1.0f;
 		};
 
 		bool IsAlive(const World& world, Entity entity)
@@ -224,6 +238,112 @@ namespace aether::app
 			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
 			{
 				t->rect.offsetMaxPx.y = visible ? 22.f : 0.f;
+			}
+		}
+
+		glm::vec4 LightDebugColor(glm::vec3 color, float intensity, bool castsShadow)
+		{
+			const float maxChannel = std::max({color.x, color.y, color.z, 0.001f});
+			color /= maxChannel;
+			const float gain = std::clamp(intensity * 0.35f, 0.35f, 1.0f);
+			const glm::vec3 tinted = glm::max(color * gain, castsShadow ? glm::vec3(0.25f, 0.22f, 0.08f) : glm::vec3(0.08f));
+			return {std::clamp(tinted.x, 0.0f, 1.0f), std::clamp(tinted.y, 0.0f, 1.0f), std::clamp(tinted.z, 0.0f, 1.0f), 1.0f};
+		}
+
+		void MakeBasis(glm::vec3 direction, glm::vec3& right, glm::vec3& up)
+		{
+			if (glm::length(direction) <= 0.0001f)
+			{
+				direction = {0.0f, -1.0f, 0.0f};
+			}
+			direction = glm::normalize(direction);
+			const glm::vec3 reference = std::abs(direction.y) > 0.95f ? glm::vec3{1.0f, 0.0f, 0.0f} : glm::vec3{0.0f, 1.0f, 0.0f};
+			right = glm::normalize(glm::cross(reference, direction));
+			up = glm::normalize(glm::cross(direction, right));
+		}
+
+		void AddDebugCircle(std::vector<DebugVertex>& out, glm::vec3 center, glm::vec3 normal, float radius, glm::vec4 color, int segments = 32)
+		{
+			if (radius <= 0.0f)
+			{
+				return;
+			}
+
+			glm::vec3 right{};
+			glm::vec3 up{};
+			MakeBasis(normal, right, up);
+
+			constexpr float kTwoPi = 6.28318530718f;
+			for (int i = 0; i < segments; ++i)
+			{
+				const float a0 = static_cast<float>(i) * kTwoPi / static_cast<float>(segments);
+				const float a1 = static_cast<float>(i + 1) * kTwoPi / static_cast<float>(segments);
+				const glm::vec3 p0 = center + (right * std::cos(a0) + up * std::sin(a0)) * radius;
+				const glm::vec3 p1 = center + (right * std::cos(a1) + up * std::sin(a1)) * radius;
+				AddDebugLine(out, p0, p1, color);
+			}
+		}
+
+		void AddLightGizmos(std::vector<DebugVertex>& out, const Renderer& renderer, const CameraManager& cameras, const LightGizmoOptions& options)
+		{
+			for (const Renderer::PointLight& light: renderer.GetPointLights())
+			{
+				const glm::vec4 color = LightDebugColor(light.color, light.intensity, light.castsShadow);
+				const float centerSize = 0.25f * options.scale;
+				if (options.pointVolumes)
+				{
+					AddDebugSphere(out, light.position, std::max(light.radius * options.scale, 0.05f), color, 24);
+				}
+				AddDebugLine(out, light.position - glm::vec3{centerSize, 0.0f, 0.0f}, light.position + glm::vec3{centerSize, 0.0f, 0.0f}, color);
+				AddDebugLine(out, light.position - glm::vec3{0.0f, centerSize, 0.0f}, light.position + glm::vec3{0.0f, centerSize, 0.0f}, color);
+				AddDebugLine(out, light.position - glm::vec3{0.0f, 0.0f, centerSize}, light.position + glm::vec3{0.0f, 0.0f, centerSize}, color);
+				if (options.shadowMarkers && light.castsShadow)
+				{
+					AddDebugAabb(out, light.position - glm::vec3{0.18f}, light.position + glm::vec3{0.18f}, {1.0f, 0.88f, 0.20f, 1.0f});
+				}
+			}
+
+			for (const Renderer::SpotLight& light: renderer.GetSpotLights())
+			{
+				glm::vec3 dir = glm::length(light.direction) > 0.0001f ? glm::normalize(light.direction) : glm::vec3{0.0f, -1.0f, 0.0f};
+				const float radius = std::max(light.radius * options.scale, 0.05f);
+				const glm::vec4 color = LightDebugColor(light.color, light.intensity, light.castsShadow);
+				const glm::vec3 coneCenter = light.position + dir * radius;
+				const float outerRadius = std::tan(light.outerAngleRad) * radius;
+				const float innerRadius = std::tan(light.innerAngleRad) * radius;
+
+				AddDebugSphere(out, light.position, 0.16f * options.scale, color, 12);
+				if (options.spotCones)
+				{
+					AddDebugLine(out, light.position, coneCenter, color);
+					AddDebugCircle(out, coneCenter, dir, outerRadius, color);
+					AddDebugCircle(out, coneCenter, dir, innerRadius, {color.x, color.y, color.z, 0.55f}, 24);
+
+					glm::vec3 right{};
+					glm::vec3 up{};
+					MakeBasis(dir, right, up);
+					AddDebugLine(out, light.position, coneCenter + right * outerRadius, color);
+					AddDebugLine(out, light.position, coneCenter - right * outerRadius, color);
+					AddDebugLine(out, light.position, coneCenter + up * outerRadius, color);
+					AddDebugLine(out, light.position, coneCenter - up * outerRadius, color);
+				}
+				if (options.shadowMarkers && light.castsShadow)
+				{
+					AddDebugAabb(out, light.position - glm::vec3{0.15f}, light.position + glm::vec3{0.15f}, {1.0f, 0.88f, 0.20f, 1.0f});
+				}
+			}
+
+			if (options.sunDirection)
+			{
+				if (const Camera* cam = cameras.TryGetMainCamera())
+				{
+					const glm::vec3 sunDir = glm::length(renderer.GetDirectionalLightDirection()) > 0.0001f ? glm::normalize(renderer.GetDirectionalLightDirection()) : glm::vec3{0.0f, -1.0f, 0.0f};
+					const glm::vec3 anchor = cam->GetPosition() + cam->GetForward() * 4.0f + glm::vec3{0.0f, 1.5f, 0.0f};
+					const glm::vec4 sunColor = LightDebugColor(renderer.GetSunColor(), renderer.GetDirectionalLightIntensity(), true);
+					AddDebugLine(out, anchor - sunDir * (0.9f * options.scale), anchor + sunDir * (0.9f * options.scale), sunColor);
+					AddDebugSphere(out, anchor + sunDir * (0.9f * options.scale), 0.18f * options.scale, sunColor, 12);
+					AddDebugCircle(out, anchor, sunDir, 0.35f * options.scale, sunColor, 24);
+				}
 			}
 		}
 	} // namespace
@@ -455,6 +575,10 @@ namespace aether::app
 		        /*draggable=*/true,
 		        /*collapsible=*/true,
 		        /*zOrder=*/1.f));
+		if (auto panel = world.TryGet<ui::UiPanelComponent>(m_debugPanel))
+		{
+			panel->headerExtensionHeight = kHeaderTabsHeight;
+		}
 
 		world.Emplace<ui::UiLayoutComponent>(m_debugPanel,
 		        ui::UiLayoutComponent{
@@ -470,10 +594,10 @@ namespace aether::app
 		};
 
 		m_headerSpacer = reg(world.Create());
-		world.Emplace<ui::UiTransformComponent>(m_headerSpacer, ui::UiTransformComponent{.rect = HeightRect(48.f), .zOrder = 2.f});
+		world.Emplace<ui::UiTransformComponent>(m_headerSpacer, ui::UiTransformComponent{.rect = HeightRect(46.f), .zOrder = 2.f});
 		addChild(m_headerSpacer);
 
-		std::vector<std::string> tabNames = {"Perf", "Render", "Camera", "Scene"};
+		std::vector<std::string> tabNames = {"Perf", "Render", "Debug", "Camera", "Scene"};
 
 		auto createPage = [&]([[maybe_unused]] Tab tab) -> Entity
 		{
@@ -489,11 +613,12 @@ namespace aether::app
 
 		m_tabPages[Tab_Performance] = createPage(Tab_Performance);
 		m_tabPages[Tab_Render] = createPage(Tab_Render);
+		m_tabPages[Tab_Debug] = createPage(Tab_Debug);
 		m_tabPages[Tab_Camera] = createPage(Tab_Camera);
 		m_tabPages[Tab_Scene] = createPage(Tab_Scene);
 
-		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Camera], m_tabPages[Tab_Scene]};
-		m_tabBar = reg(ui::SpawnTabBar(world, UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {0, 0}, .offsetMaxPx = {0, ui::UiTheme::Default().tabHeight}}, tabNames, tabPageVec, 3.f));
+		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Debug], m_tabPages[Tab_Camera], m_tabPages[Tab_Scene]};
+		m_tabBar = reg(ui::SpawnTabBar(world, UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {0, 0}, .offsetMaxPx = {0, 28.f}}, tabNames, tabPageVec, 3.f));
 
 		// Insert tab bar after header spacer, before pages.
 		// addChild appends; remove and re-add pages so tab bar is ordered correctly.
@@ -584,8 +709,55 @@ namespace aether::app
 		m_labelRows[Row_PhysicsDebug] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Physics Debug", 2.f));
 		addToPage(Tab_Render, m_labelRows[Row_PhysicsDebug]);
 
+		m_labelRows[Row_LightGizmos] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Light Gizmos", 2.f));
+		addToPage(Tab_Render, m_labelRows[Row_LightGizmos]);
+
 		m_labelRows[Row_ForwardRender] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Forward Render", 2.f));
 		addToPage(Tab_Render, m_labelRows[Row_ForwardRender]);
+
+		auto addDebugSection = [&](float height = 14.f)
+		{
+			Entity section = reg(ui::SpawnSection(world, HeightRect(height), 2.f));
+			addToPage(Tab_Debug, section);
+		};
+		auto addDebugCheckbox = [&](DebugCheckbox idx, std::string_view label, bool checked)
+		{
+			Entity checkbox = reg(ui::SpawnCheckbox(world, HeightRect(22.f), label, checked, 2.f));
+			m_debugCheckboxes[idx] = checkbox;
+			addToPage(Tab_Debug, checkbox);
+		};
+		auto addDebugSlider = [&](DebugSlider idx, std::string_view label, float min, float max, float value)
+		{
+			Entity slider = reg(ui::SpawnSlider(world, HeightRect(30.f), min, max, value, 2.f));
+			if (auto sliderComp = world.TryGet<ui::UiSliderComponent>(slider))
+			{
+				sliderComp->label = std::string(label);
+			}
+			m_debugSliders[idx] = slider;
+			addToPage(Tab_Debug, slider);
+		};
+
+		addDebugSection();
+		addDebugCheckbox(DebugCheck_DebugOverlay, "Debug renderer  [F6]", aether::IsDebugRenderingEnabled());
+		addDebugCheckbox(DebugCheck_PhysicsShapes, "Physics shapes", aether::IsPhysicsDebugShapesEnabled());
+		addDebugCheckbox(DebugCheck_SelfTest, "Renderer self-test pattern", true);
+		addDebugCheckbox(DebugCheck_TestShapes, "Diagnostic test shapes  [F7]", m_debugTestShapes);
+		addDebugCheckbox(DebugCheck_LightGizmos, "Light gizmos  [F9]", m_lightGizmos);
+		addDebugCheckbox(DebugCheck_PointVolumes, "Point light radius spheres", m_lightGizmoPointVolumes);
+		addDebugCheckbox(DebugCheck_SpotCones, "Spot light cones", m_lightGizmoSpotCones);
+		addDebugCheckbox(DebugCheck_SunDirection, "Sun direction marker", m_lightGizmoSunDirection);
+		addDebugCheckbox(DebugCheck_ShadowMarkers, "Shadow caster markers", m_lightGizmoShadowMarkers);
+		addDebugSlider(DebugSlider_LightGizmoScale, "Light gizmo scale", 0.25f, 2.0f, m_lightGizmoScale);
+
+		addDebugSection();
+		addDebugCheckbox(DebugCheck_ForwardRender, "Forward render  [F8]", context.Get<aether::RenderingSubsystem>().IsForwardPassEnabled());
+		addDebugCheckbox(DebugCheck_Fxaa, "FXAA  [F]", context.Get<Renderer>().IsFxaaEnabled());
+		addDebugSlider(DebugSlider_Exposure, "Exposure", 0.1f, 4.0f, context.Get<aether::RenderingSubsystem>().GetPostProcessStack().GetExposure());
+
+		addDebugSection();
+		addDebugCheckbox(DebugCheck_ForceVisible, "Cull force visible", context.Get<RenderQueue>().IsDebugForceVisible());
+		addDebugCheckbox(DebugCheck_BypassIndirect, "Bypass indirect draws", context.Get<RenderQueue>().IsDebugBypassIndirect());
+		addDebugCheckbox(DebugCheck_DisableAnimation, "Disable GPU animation", context.Get<RenderQueue>().IsDebugDisableAnimation());
 
 		// RenderGraph stats
 		m_separators[5] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
@@ -1033,6 +1205,74 @@ namespace aether::app
 			AE_INFO(aether::LogCategory::App, "Forward render: {}", newState ? "on" : "off");
 		}
 
+		if (input.IsKeyPressed(aether::Key::F9))
+		{
+			m_lightGizmos = !m_lightGizmos;
+			AE_INFO(aether::LogCategory::App, "Light gizmos: {}", m_lightGizmos ? "on" : "off");
+		}
+
+		auto syncCheckbox = [&](DebugCheckbox idx, bool value) -> bool
+		{
+			Entity entity = m_debugCheckboxes[idx];
+			if (!entity.IsValid())
+			{
+				return value;
+			}
+			auto checkbox = world.TryGet<ui::UiCheckboxComponent>(entity);
+			auto inputState = world.TryGet<ui::UiInputComponent>(entity);
+			if (!checkbox)
+			{
+				return value;
+			}
+			if (inputState != nullptr && inputState->clicked)
+			{
+				return checkbox->checked;
+			}
+			checkbox->checked = value;
+			return value;
+		};
+
+		auto syncSlider = [&](DebugSlider idx, float value) -> float
+		{
+			Entity entity = m_debugSliders[idx];
+			if (!entity.IsValid())
+			{
+				return value;
+			}
+			auto slider = world.TryGet<ui::UiSliderComponent>(entity);
+			if (!slider)
+			{
+				return value;
+			}
+			return slider->value;
+		};
+
+		const bool debugOverlay = syncCheckbox(DebugCheck_DebugOverlay, aether::IsDebugRenderingEnabled());
+		aether::SetDebugRenderingEnabled(debugOverlay);
+		aether::SetPhysicsDebugShapesEnabled(syncCheckbox(DebugCheck_PhysicsShapes, aether::IsPhysicsDebugShapesEnabled()));
+
+		auto& rendering = context.Get<aether::RenderingSubsystem>();
+		PhysicsDebugRenderer& physicsDebug = rendering.GetPhysicsDebugRenderer();
+		physicsDebug.SetSelfTestEnabled(syncCheckbox(DebugCheck_SelfTest, physicsDebug.IsSelfTestEnabled()));
+
+		m_debugTestShapes = syncCheckbox(DebugCheck_TestShapes, m_debugTestShapes);
+		m_lightGizmos = syncCheckbox(DebugCheck_LightGizmos, m_lightGizmos);
+		m_lightGizmoPointVolumes = syncCheckbox(DebugCheck_PointVolumes, m_lightGizmoPointVolumes);
+		m_lightGizmoSpotCones = syncCheckbox(DebugCheck_SpotCones, m_lightGizmoSpotCones);
+		m_lightGizmoSunDirection = syncCheckbox(DebugCheck_SunDirection, m_lightGizmoSunDirection);
+		m_lightGizmoShadowMarkers = syncCheckbox(DebugCheck_ShadowMarkers, m_lightGizmoShadowMarkers);
+		m_lightGizmoScale = std::clamp(syncSlider(DebugSlider_LightGizmoScale, m_lightGizmoScale), 0.25f, 2.0f);
+
+		rendering.SetForwardPassEnabled(syncCheckbox(DebugCheck_ForwardRender, rendering.IsForwardPassEnabled()));
+		Renderer& rendererService = context.Get<Renderer>();
+		rendererService.SetFxaaEnabled(syncCheckbox(DebugCheck_Fxaa, rendererService.IsFxaaEnabled()));
+		rendering.GetPostProcessStack().SetExposure(std::clamp(syncSlider(DebugSlider_Exposure, rendering.GetPostProcessStack().GetExposure()), 0.1f, 4.0f));
+
+		RenderQueue& renderQueue = context.Get<RenderQueue>();
+		renderQueue.SetDebugForceVisible(syncCheckbox(DebugCheck_ForceVisible, renderQueue.IsDebugForceVisible()));
+		renderQueue.SetDebugBypassIndirect(syncCheckbox(DebugCheck_BypassIndirect, renderQueue.IsDebugBypassIndirect()));
+		renderQueue.SetDebugDisableAnimation(syncCheckbox(DebugCheck_DisableAnimation, renderQueue.IsDebugDisableAnimation()));
+
 		// -- Diagnostic test shapes (F7) -----------------------------------
 		// Drawn into the per-frame packet's debug vertex vector; the $Debug
 		// pass consumes them on the render thread. No locks - the channel transfer
@@ -1065,6 +1305,23 @@ namespace aether::app
 
 				// Vertical axis line at world origin so we can see orientation.
 				AddDebugLine(verts, glm::vec3(0.0f, -5.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
+			}
+		}
+
+		if (m_lightGizmos && aether::IsDebugRenderingEnabled())
+		{
+			if (auto engine = context.TryGet<aether::AetherCore>())
+			{
+				AddLightGizmos(engine->GetPendingDebugVertices(),
+				        context.Get<Renderer>(),
+				        context.Get<CameraManager>(),
+				        LightGizmoOptions{
+				                .pointVolumes = m_lightGizmoPointVolumes,
+				                .spotCones = m_lightGizmoSpotCones,
+				                .sunDirection = m_lightGizmoSunDirection,
+				                .shadowMarkers = m_lightGizmoShadowMarkers,
+				                .scale = m_lightGizmoScale,
+				        });
 			}
 		}
 
@@ -1279,8 +1536,10 @@ namespace aether::app
 		}
 
 		// Physics debug state
-		const bool physDebug = aether::IsDebugRenderingEnabled();
+		const bool physDebug = aether::IsPhysicsDebugShapesEnabled();
 		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
+
+		setRow(Row_LightGizmos, m_lightGizmos ? "On" : "Off", m_lightGizmos ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
 
 		// Forward render state
 		const bool fwdRender = context.Get<aether::RenderingSubsystem>().IsForwardPassEnabled();
@@ -1326,7 +1585,7 @@ namespace aether::app
 			}
 		}
 
-		// Tab switching via keyboard shortcuts (Num1/2/3).
+		// Tab switching via keyboard shortcuts (Num1..5).
 		if (auto tabComp = world.TryGet<ui::UiTabComponent>(m_tabBar))
 		{
 			if (input.IsKeyPressed(aether::Key::Num1))
@@ -1339,9 +1598,13 @@ namespace aether::app
 			}
 			else if (input.IsKeyPressed(aether::Key::Num3))
 			{
-				tabComp->selectedTab = Tab_Camera;
+				tabComp->selectedTab = Tab_Debug;
 			}
 			else if (input.IsKeyPressed(aether::Key::Num4))
+			{
+				tabComp->selectedTab = Tab_Camera;
+			}
+			else if (input.IsKeyPressed(aether::Key::Num5))
 			{
 				tabComp->selectedTab = Tab_Scene;
 			}

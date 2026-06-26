@@ -99,8 +99,6 @@ var g_btn_tower    : uint = 0u;
 var g_btn_rain     : uint = 0u;
 var g_btn_bounce   : uint = 0u;
 var g_btn_clear    : uint = 0u;
-var g_phys_debug_cb : uint = 0u;
-var g_phys_debug_enabled : bool = false;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -493,9 +491,6 @@ def on_attach(world : World?)
 	set_ui_button_press_color(world, g_btn_clear, float4(0.34, 0.12, 0.09, 1.0));
 	add_ui_child(world, toy_panel, g_btn_clear);
 
-	g_phys_debug_cb = create_ui_checkbox(world, 328.0, 696.0, 244.0, 28.0, "Physics debug overlay", false);
-	add_ui_child(world, toy_panel, g_phys_debug_cb);
-
 	// ── spawn a human (1 clip: idle) ───────────────────────────────────────
 	g_player = entity_create(world);
 	add_transform(world, g_player);
@@ -517,7 +512,6 @@ def on_attach(world : World?)
 	init_default_bindings();
 	register_action("inspector_prev",  KEY_LEFT,   0);
 	register_action("inspector_next",  KEY_RIGHT,  0);
-	register_action("toggle_phys_dbg", KEY_F6,     0);
 	register_action("spawn_cube_key",  KEY_1,      0);
 	register_action("spawn_sphere_key", KEY_2,    0);
 	register_action("clear_toys_key",  KEY_X,      0);
@@ -745,15 +739,6 @@ def on_update(world : World?)
 	{
 		clear_toys(world);
 	}
-
-	// Physics debug toggle via checkbox and F6.
-	g_phys_debug_enabled = get_ui_checked(world, g_phys_debug_cb);
-	if (is_action_pressed("toggle_phys_dbg"))
-	{
-		g_phys_debug_enabled = !g_phys_debug_enabled;
-		set_ui_checked(world, g_phys_debug_cb, g_phys_debug_enabled);
-	}
-	set_physics_debug_enabled(g_phys_debug_enabled);
 
 	// ── Keyboard shortcuts ────────────────────────────────────────────────────
 	if (is_action_pressed("toggle_rotate"))

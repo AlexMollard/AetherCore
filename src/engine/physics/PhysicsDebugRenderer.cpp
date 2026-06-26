@@ -66,6 +66,7 @@ namespace aether
 	} // namespace
 
 	static bool s_debugRenderingEnabled = true; // F6 toggles from DebugLayer
+	static bool s_physicsDebugShapesEnabled = true;
 
 	void SetDebugRenderingEnabled(bool enabled)
 	{
@@ -75,6 +76,16 @@ namespace aether
 	bool IsDebugRenderingEnabled()
 	{
 		return s_debugRenderingEnabled;
+	}
+
+	void SetPhysicsDebugShapesEnabled(bool enabled)
+	{
+		s_physicsDebugShapesEnabled = enabled;
+	}
+
+	bool IsPhysicsDebugShapesEnabled()
+	{
+		return s_physicsDebugShapesEnabled;
 	}
 
 	PhysicsDebugRenderer::~PhysicsDebugRenderer()
@@ -456,33 +467,21 @@ namespace aether
 		const float kTwoPi = 2.0f * kPi;
 		const int clamped = segments < 4 ? 4 : segments;
 
-		auto pointOnCircle = [&](float theta, float phi) -> glm::vec3
+		auto addCircle = [&](const glm::vec3& axisA, const glm::vec3& axisB)
 		{
-			return center + radius * glm::vec3{std::sin(phi) * std::cos(theta), std::cos(phi), std::sin(phi) * std::sin(theta)};
+			for (int i = 0; i < clamped; ++i)
+			{
+				const float t1 = static_cast<float>(i) * kTwoPi / clamped;
+				const float t2 = static_cast<float>(i + 1) * kTwoPi / clamped;
+				const glm::vec3 p1 = center + radius * (axisA * std::cos(t1) + axisB * std::sin(t1));
+				const glm::vec3 p2 = center + radius * (axisA * std::cos(t2) + axisB * std::sin(t2));
+				AddDebugLine(out, p1, p2, color);
+			}
 		};
 
-		// 3 great circles (XY, XZ, YZ planes) for a recognizable sphere outline.
-		// XY plane (phi=pi/2)
-		for (int i = 0; i < clamped; ++i)
-		{
-			const float t1 = static_cast<float>(i) * kTwoPi / clamped;
-			const float t2 = static_cast<float>(i + 1) * kTwoPi / clamped;
-			AddDebugLine(out, pointOnCircle(t1, kPi * 0.5f), pointOnCircle(t2, kPi * 0.5f), color);
-		}
-		// XZ plane
-		for (int i = 0; i < clamped; ++i)
-		{
-			const float p1 = static_cast<float>(i) * kPi / clamped;
-			const float p2 = static_cast<float>(i + 1) * kPi / clamped;
-			AddDebugLine(out, pointOnCircle(0.0f, p1), pointOnCircle(0.0f, p2), color);
-		}
-		// YZ plane
-		for (int i = 0; i < clamped; ++i)
-		{
-			const float p1 = static_cast<float>(i) * kPi / clamped;
-			const float p2 = static_cast<float>(i + 1) * kPi / clamped;
-			AddDebugLine(out, pointOnCircle(kPi * 0.5f, p1), pointOnCircle(kPi * 0.5f, p2), color);
-		}
+		addCircle({1.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f});
+		addCircle({1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
+		addCircle({0.0f, 1.0f, 0.0f}, {0.0f, 0.0f, 1.0f});
 	}
 
 	void AddDebugFrustum(std::vector<DebugVertex>& out, const glm::mat4& viewProj, const glm::vec4& color)
@@ -632,7 +631,7 @@ namespace aether
 
 	void PhysicsDebugRenderer::DrawPhysicsDebugShapes(gpu::CommandList& cmd, std::uint64_t frameConstantsAddr) const
 	{
-		if (m_world == nullptr)
+		if (!s_physicsDebugShapesEnabled || m_world == nullptr)
 		{
 			return;
 		}

@@ -17,6 +17,9 @@
 namespace aether::ui
 {
 	static constexpr float kTitleBarHeight = 48.f;
+	static constexpr float kScrollStepPx = 36.f;
+
+	static void ProcessTabBars(aether::World& world);
 
 	static void MoveSubtree(aether::World& world, Entity entity, glm::vec2 delta)
 	{
@@ -30,6 +33,105 @@ namespace aether::ui
 			for (const Entity child: ch->children)
 			{
 				MoveSubtree(world, child, delta);
+			}
+		}
+	}
+
+	static UiRect PixelRectToUiRect(const glm::vec4& px)
+	{
+		return UiRect{
+		        .anchorMin = {0.f, 0.f},
+		        .anchorMax = {0.f, 0.f},
+		        .offsetMinPx = {px.x, px.y},
+		        .offsetMaxPx = {px.x + px.z, px.y + px.w},
+		};
+	}
+
+	static bool IsPointInRect(glm::vec2 point, const glm::vec4& rect)
+	{
+		return point.x >= rect.x && point.x <= rect.x + rect.z && point.y >= rect.y && point.y <= rect.y + rect.w;
+	}
+
+	static bool IsSubtreeVisible(aether::World& world, Entity entity)
+	{
+		if (const auto layout = world.TryGet<UiLayoutComponent>(entity))
+		{
+			if (!layout->visible)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	static void ApplyPanelBodyScroll(aether::World& world, Entity panelEntity, const Input* input, gpu::Extent2D extent)
+	{
+		auto panel = world.TryGet<UiPanelComponent>(panelEntity);
+		auto panelTransform = world.TryGet<UiTransformComponent>(panelEntity);
+		const auto children = world.TryGet<UiChildrenComponent>(panelEntity);
+		if (!panel || !panelTransform || !children || panel->collapsed)
+		{
+			return;
+		}
+
+		const UiTheme& theme = UiTheme::Default();
+		const glm::vec4 panelPx = ResolveUiRectPx(extent, panelTransform->rect);
+		const float bodyTop = panelPx.y + theme.headerHeight + panel->headerExtensionHeight;
+		const float bodyBottom = panelPx.y + panelPx.w - theme.padding;
+		const float bodyHeight = std::max(0.f, bodyBottom - bodyTop);
+
+		float contentBottom = bodyTop;
+		for (const Entity child: children->children)
+		{
+			if (!IsSubtreeVisible(world, child))
+			{
+				continue;
+			}
+			const auto childTransform = world.TryGet<UiTransformComponent>(child);
+			if (!childTransform)
+			{
+				continue;
+			}
+			const glm::vec4 childPx = ResolveUiRectPx(extent, childTransform->rect);
+			if (childPx.y + 0.5f < bodyTop)
+			{
+				continue;
+			}
+			contentBottom = std::max(contentBottom, childPx.y + childPx.w);
+		}
+
+		panel->bodyMaxScrollY = std::max(0.f, contentBottom - bodyBottom);
+		if (input != nullptr && panel->bodyMaxScrollY > 0.f && IsPointInRect(input->GetMousePos(), {panelPx.x, bodyTop, panelPx.z, bodyHeight}))
+		{
+			const float wheelY = input->GetScrollDelta().y;
+			if (wheelY != 0.f)
+			{
+				panel->bodyScrollY = std::clamp(panel->bodyScrollY - wheelY * kScrollStepPx, 0.f, panel->bodyMaxScrollY);
+			}
+		}
+		panel->bodyScrollY = std::clamp(panel->bodyScrollY, 0.f, panel->bodyMaxScrollY);
+
+		if (panel->bodyScrollY <= 0.f)
+		{
+			return;
+		}
+
+		const glm::vec2 scrollDelta{0.f, -panel->bodyScrollY};
+		for (const Entity child: children->children)
+		{
+			if (!IsSubtreeVisible(world, child))
+			{
+				continue;
+			}
+			const auto childTransform = world.TryGet<UiTransformComponent>(child);
+			if (!childTransform)
+			{
+				continue;
+			}
+			const glm::vec4 childPx = ResolveUiRectPx(extent, childTransform->rect);
+			if (childPx.y + 0.5f >= bodyTop)
+			{
+				MoveSubtree(world, child, scrollDelta);
 			}
 		}
 	}
@@ -97,6 +199,17 @@ namespace aether::ui
 		}
 	}
 
+	static void LayoutAndScroll(aether::World& world, const Input* input, gpu::Extent2D extent)
+	{
+		ProcessTabBars(world);
+		RunLayouts(world, extent);
+
+		for (const auto& [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
+		{
+			ApplyPanelBodyScroll(world, aether::World::FromEntt(e), input, extent);
+		}
+	}
+
 	void UiSystem::BeginFrame(aether::World& world, Input& input, UiContext& ctx, gpu::Extent2D extent, float deltaTime)
 	{
 		AE_PROFILE_ZONE();
@@ -117,6 +230,8 @@ namespace aether::ui
 		// frame's hot entity for drag-start detection.  It must also run before
 		// HitTest so the dragged rect is at its new position when hit-tested.
 		UpdateDrag(world, ctx, extent);
+
+		LayoutAndScroll(world, &input, extent);
 
 		// -- Clear per-frame transient flags -----------------------------------
 		// Cleared AFTER UpdateDrag (which needs last frame's hotEntity) and
@@ -160,6 +275,44 @@ namespace aether::ui
 			link = world.TryGet<UiParentComponent>(link->parent);
 		}
 		return false;
+	}
+
+	static bool IsVisibleThroughAncestorPanels(aether::World& world, Entity entity, glm::vec2 mousePos, gpu::Extent2D extent)
+	{
+		Entity child = entity;
+		auto link = world.TryGet<UiParentComponent>(child);
+		while (link && link->parent.IsValid())
+		{
+			const Entity parent = link->parent;
+			if (const auto panel = world.TryGet<UiPanelComponent>(parent))
+			{
+				const auto panelTransform = world.TryGet<UiTransformComponent>(parent);
+				if (!panelTransform)
+				{
+					return false;
+				}
+
+				const UiTheme& theme = UiTheme::Default();
+				const glm::vec4 panelPx = ResolveUiRectPx(extent, panelTransform->rect);
+				if (!IsPointInRect(mousePos, panelPx))
+				{
+					return false;
+				}
+
+				if (!world.Has<UiTabComponent>(child))
+				{
+					const float bodyTop = panelPx.y + theme.headerHeight + panel->headerExtensionHeight;
+					if (mousePos.y < bodyTop)
+					{
+						return false;
+					}
+				}
+			}
+
+			child = parent;
+			link = world.TryGet<UiParentComponent>(child);
+		}
+		return true;
 	}
 
 	namespace
@@ -238,13 +391,24 @@ namespace aether::ui
 				return;
 			}
 			const auto parentTransform = world.TryGet<UiTransformComponent>(parent);
-			const bool clipToPanel = world.Has<UiPanelComponent>(parent) && parentTransform != nullptr;
-			if (clipToPanel)
-			{
-				ui.PushClipRect(parentTransform->rect);
-			}
+			const auto parentPanel = world.TryGet<UiPanelComponent>(parent);
+			const bool clipToPanel = parentPanel != nullptr && parentTransform != nullptr;
+			const glm::vec4 panelPx = parentTransform != nullptr ? ResolveUiRectPx(extent, parentTransform->rect) : glm::vec4{};
+			const float bodyTop = (parentPanel != nullptr) ? panelPx.y + theme.headerHeight + parentPanel->headerExtensionHeight : 0.f;
+			const UiRect panelClip = (parentTransform != nullptr) ? parentTransform->rect : UiRect{};
+			const UiRect bodyClip = PixelRectToUiRect({panelPx.x, bodyTop, panelPx.z, std::max(0.f, panelPx.y + panelPx.w - bodyTop)});
 			for (Entity child: children->children)
 			{
+				bool pushedClip = false;
+				if (clipToPanel)
+				{
+					const auto childTransform = world.TryGet<UiTransformComponent>(child);
+					const glm::vec4 childPx = childTransform != nullptr ? ResolveUiRectPx(extent, childTransform->rect) : glm::vec4{};
+					const bool bodyChild = !world.Has<UiTabComponent>(child) && (world.Has<UiChildrenComponent>(child) || (childTransform != nullptr && childPx.y + 0.5f >= bodyTop));
+					ui.PushClipRect(bodyChild ? bodyClip : panelClip);
+					pushedClip = true;
+				}
+
 				if (world.Has<UiPanelComponent>(child))
 				{
 					const bool bodyVisible = DrawPanel(world, child, ui, extent, theme);
@@ -263,6 +427,10 @@ namespace aether::ui
 					{
 						if (!layout->visible)
 						{
+							if (pushedClip)
+							{
+								ui.PopClipRect();
+							}
 							continue;
 						}
 					}
@@ -272,10 +440,10 @@ namespace aether::ui
 				{
 					DrawWidget(world, child, ui, input, extent, theme);
 				}
-			}
-			if (clipToPanel)
-			{
-				ui.PopClipRect();
+				if (pushedClip)
+				{
+					ui.PopClipRect();
+				}
 			}
 		}
 	} // namespace
@@ -284,12 +452,8 @@ namespace aether::ui
 	{
 		const UiTheme& theme = UiTheme::Default();
 
-		// 0. Process tab bar state (clicks, selection, autoSize toggles).
-		ProcessTabBars(world);
-
-		// 1. Three-pass layout: children auto-size -> parents position -> children
-		//    re-layout at new positions. See RunLayouts for details.
-		RunLayouts(world, extent);
+		// Refresh layout after layers have updated row visibility/text in OnGui().
+		LayoutAndScroll(world, nullptr, extent);
 
 		// 2. Draw root-level panels (no parent) and their children.
 		for (const auto& [e, panel, transform]: world.View<UiPanelComponent, UiTransformComponent>().each())
@@ -351,6 +515,10 @@ namespace aether::ui
 			const glm::vec4 r = ResolveUiRectPx(extent, transform.rect);
 			if (mp.x >= r.x && mp.x <= r.x + r.z && mp.y >= r.y && mp.y <= r.y + r.w)
 			{
+				if (!IsVisibleThroughAncestorPanels(world, aether::World::FromEntt(e), mp, extent))
+				{
+					continue;
+				}
 				const std::int32_t layer = ComputeEffectiveLayer(world, aether::World::FromEntt(e));
 				if (layer > bestLayer)
 				{

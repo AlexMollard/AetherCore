@@ -69,6 +69,9 @@ namespace aether::ui
 		bool draggable = true;
 		bool collapsible = false;
 		bool collapsed = false;
+		float headerExtensionHeight = 0.f;
+		float bodyScrollY = 0.f;
+		float bodyMaxScrollY = 0.f;
 
 		// Full-size rect saved when the panel collapses; restored on expand.
 		// Written by DrawPanel - do not set manually.

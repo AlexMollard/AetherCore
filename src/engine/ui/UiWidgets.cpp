@@ -183,13 +183,15 @@ namespace aether::ui
 		ui.SetLayer(ComputeEffectiveLayer(world, entity));
 
 		const glm::vec4 px = PixelRect(*t, extent);
-		const float trackH = px.w;
+		const bool hasLabel = !slider->label.empty();
+		const float labelH = hasLabel ? theme.labelFontSize + 6.f : 0.f;
+		const float trackY = px.y + labelH;
+		const float trackH = hasLabel ? std::max(8.f, px.w - labelH) : px.w;
 		const float range = std::max(slider->max - slider->min, 1e-6f);
 
-		// Optional label tucked just above the slider track.
-		if (!slider->label.empty())
+		if (hasLabel)
 		{
-			ui.DrawText(slider->label, PixelPoint(*t, {px.x, px.y - 8.f}, extent), theme.labelFontSize, theme.textLabel);
+			ui.DrawText(slider->label, PixelPoint(*t, {px.x, px.y + theme.labelFontSize}, extent), theme.labelFontSize, theme.textLabel);
 		}
 
 		// Update isDragging and value from mouse.
@@ -209,19 +211,20 @@ namespace aether::ui
 		}
 
 		// Draw track background.
-		ui.DrawRect(t->rect, theme.sliderTrack, theme.cornerRadius * 0.5f);
+		const UiRect trackRect = PixelToUiRect(*t, {px.x, trackY, px.z, trackH}, extent);
+		ui.DrawRect(trackRect, theme.sliderTrack, theme.cornerRadius * 0.5f);
 
 		// Draw fill up to current value.
 		const float fillFraction = (slider->value - slider->min) / range;
 		const float fillW = px.z * fillFraction;
 		if (fillW > 0.f)
 		{
-			ui.DrawRect(PixelToUiRect(*t, {px.x, px.y, fillW, trackH}, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
+			ui.DrawRect(PixelToUiRect(*t, {px.x, trackY, fillW, trackH}, extent), theme.sliderFill, theme.cornerRadius * 0.5f);
 		}
 
 		// Draw knob circle.
 		const float knobCX = px.x + fillW;
-		const float knobCY = px.y + trackH * 0.5f;
+		const float knobCY = trackY + trackH * 0.5f;
 		ui.DrawCircle(PixelPoint(*t, {knobCX, knobCY}, extent), theme.knobRadius, slider->isDragging ? theme.accent : theme.sliderKnob);
 
 		ui.SetLayer(prevLayer);
@@ -326,13 +329,14 @@ namespace aether::ui
 		if (inp && inp->clicked && panel->collapsible)
 		{
 			const glm::vec4 px0 = PixelRect(*t, extent);
-			const bool inHeader = (inp->clickPos.y >= px0.y && inp->clickPos.y < px0.y + theme.headerHeight);
+			const float headerH = theme.headerHeight + panel->headerExtensionHeight;
+			const bool inHeader = (inp->clickPos.y >= px0.y && inp->clickPos.y < px0.y + headerH);
 			if (inHeader)
 			{
 				if (!panel->collapsed)
 				{
 					panel->expandedRect = t->rect;
-					t->rect = PixelToUiRect(*t, {px0.x, px0.y, px0.z, theme.headerHeight}, extent);
+					t->rect = PixelToUiRect(*t, {px0.x, px0.y, px0.z, headerH}, extent);
 				}
 				else
 				{
@@ -352,7 +356,7 @@ namespace aether::ui
 		const std::int32_t baseLayer = ComputeEffectiveLayer(world, entity);
 
 		const glm::vec4 px = PixelRect(*t, extent);
-		const float hdrH = theme.headerHeight;
+		const float hdrH = theme.headerHeight + panel->headerExtensionHeight;
 		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
 		const glm::vec2 anchorPx = t->rect.anchorMin * sizePx;
 
@@ -369,7 +373,7 @@ namespace aether::ui
 		ui.DrawRect(PixelToUiRect(*t, hdrPx, extent), theme.panelHeaderBg, theme.cornerRadius);
 
 		// Accent bar on left edge of header.
-		const glm::vec4 accentPx = {px.x + 2.f, px.y + hdrH * 0.2f, 3.f, hdrH * 0.6f};
+		const glm::vec4 accentPx = {px.x + 2.f, px.y + theme.headerHeight * 0.2f, 3.f, theme.headerHeight * 0.6f};
 		ui.DrawRect(PixelToUiRect(*t, accentPx, extent), theme.accent);
 
 		// Title text.
@@ -378,7 +382,7 @@ namespace aether::ui
 			ui.DrawText(panel->title,
 			        UiPoint{
 			                .anchor = t->rect.anchorMin,
-			                .offsetPx = {px.x + theme.padding - anchorPx.x, px.y + hdrH * 0.5f + theme.titleFontSize * 0.35f - anchorPx.y},
+			                .offsetPx = {px.x + theme.padding - anchorPx.x, px.y + theme.headerHeight * 0.5f + theme.titleFontSize * 0.35f - anchorPx.y},
 			        },
 			        theme.titleFontSize,
 			        theme.textTitle);
@@ -388,7 +392,7 @@ namespace aether::ui
 		if (panel->collapsible)
 		{
 			const float arrowX = px.x + px.z - theme.padding;
-			const float arrowY = px.y + hdrH * 0.5f;
+			const float arrowY = px.y + theme.headerHeight * 0.5f;
 			if (panel->collapsed)
 			{
 				// Right-pointing triangle (collapsed).
@@ -1306,7 +1310,7 @@ namespace aether::ui
 		const std::int32_t prevLayer = ui.GetLayer();
 
 		ui.SetLayer(baseLayer);
-		ui.DrawRect(transform->rect, theme.tabStripBg);
+		ui.DrawRect(transform->rect, theme.panelHeaderBg);
 
 		// Draw each tab button.
 		for (std::size_t i = 0; i < tabCount; ++i)
@@ -1322,37 +1326,36 @@ namespace aether::ui
 
 			const glm::vec4 btnPx = PixelRect(*btnT, extent);
 
-			// Button background colour: active > hover > inactive.
-			glm::vec4 bgColor = theme.tabInactive;
-			if (i == tabComp->selectedTab)
+			const bool selected = i == tabComp->selectedTab;
+			const bool hovered = btnInp != nullptr && btnInp->hovered;
+			const UiRect insetRect = PixelToUiRect(*btnT, {btnPx.x + 3.f, btnPx.y + 3.f, std::max(0.f, btnPx.z - 6.f), std::max(0.f, btnPx.w - 6.f)}, extent);
+
+			if (selected || hovered)
 			{
-				bgColor = theme.tabActive;
-			}
-			else if (btnInp && btnInp->hovered)
-			{
-				bgColor = theme.tabHover;
+				const glm::vec4 bgColor = selected ? glm::vec4{0.09f, 0.12f, 0.12f, 0.92f} : theme.tabHover;
+				ui.SetLayer(baseLayer + 1 + static_cast<std::int32_t>(i));
+				ui.DrawRect(insetRect, bgColor, 3.f);
 			}
 
-			ui.SetLayer(baseLayer + 1 + static_cast<std::int32_t>(i));
-			ui.DrawRect(btnT->rect, bgColor, 4.f);
+			if (selected)
+			{
+				const float underlineY = btnPx.y + btnPx.w - 4.f;
+				ui.SetLayer(baseLayer + 2 + static_cast<std::int32_t>(i));
+				ui.DrawLine(PixelPoint(*btnT, {btnPx.x + 9.f, underlineY}, extent), PixelPoint(*btnT, {btnPx.x + btnPx.z - 9.f, underlineY}, extent), 2.f, theme.accent);
+			}
 
 			// Tab label.
 			if (btnComp && !btnComp->label.empty())
 			{
 				const UiPoint centre = CentrePoint(*btnT, btnPx, extent);
-				const float textW = ui.MeasureText(btnComp->label, theme.buttonFontSize);
-				const glm::vec4 textColor = (i == tabComp->selectedTab) ? theme.accent : theme.textLabel;
-				ui.DrawText(btnComp->label, UiPoint{.anchor = centre.anchor, .offsetPx = {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + theme.buttonFontSize * 0.35f}}, theme.buttonFontSize, textColor);
+				const float tabFontSize = 12.f;
+				const std::string label = FitTextToWidth(ui, btnComp->label, tabFontSize, std::max(0.f, btnPx.z - 10.f));
+				const float textW = ui.MeasureText(label, tabFontSize);
+				const glm::vec4 textColor = (i == tabComp->selectedTab) ? theme.textTitle : theme.textLabel;
+				ui.SetLayer(baseLayer + 3 + static_cast<std::int32_t>(i));
+				ui.DrawText(label, UiPoint{.anchor = centre.anchor, .offsetPx = {centre.offsetPx.x - textW * 0.5f, centre.offsetPx.y + tabFontSize * 0.35f}}, tabFontSize, textColor);
 			}
 		}
-
-		// Bottom separator line.
-		ui.SetLayer(baseLayer + static_cast<std::int32_t>(tabCount) + 1);
-		const glm::vec2 sizePx{static_cast<float>(extent.width), static_cast<float>(extent.height)};
-		const glm::vec2 anchorPx = transform->rect.anchorMin * sizePx;
-		const float sepY = tabPx.y + tabPx.w;
-		ui.DrawLine(
-		        UiPoint{.anchor = transform->rect.anchorMin, .offsetPx = {tabPx.x - anchorPx.x, sepY - anchorPx.y}}, UiPoint{.anchor = transform->rect.anchorMin, .offsetPx = {tabPx.x + tabPx.z - anchorPx.x, sepY - anchorPx.y}}, 1.f, theme.separator);
 
 		ui.SetLayer(prevLayer);
 	}
@@ -1379,8 +1382,8 @@ namespace aether::ui
 		world.Emplace<UiLayoutComponent>(bar,
 		        UiLayoutComponent{
 		                .direction = UiLayoutComponent::Direction::Horizontal,
-		                .spacing = 4.f,
-		                .padding = 6.f,
+		                .spacing = 2.f,
+		                .padding = 4.f,
 		        });
 		world.Emplace<UiTabComponent>(bar,
 		        UiTabComponent{
@@ -1392,7 +1395,11 @@ namespace aether::ui
 
 		for (std::size_t i = 0; i < tabNames.size(); ++i)
 		{
-			Entity btn = SpawnButton(world, UiRect{.offsetMaxPx = {80.f, 24.f}}, tabNames[i], zOrder + 0.01f * static_cast<float>(i + 1));
+			Entity btn = SpawnButton(world, UiRect{.offsetMaxPx = {64.f, 22.f}}, tabNames[i], zOrder + 0.01f * static_cast<float>(i + 1));
+			if (auto transform = world.TryGet<UiTransformComponent>(btn))
+			{
+				transform->flexGrow = 1.0f;
+			}
 			AddChild(world, bar, btn);
 		}
 

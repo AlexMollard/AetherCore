@@ -23,6 +23,8 @@ namespace aether
 
 	void SetDebugRenderingEnabled(bool enabled);
 	bool IsDebugRenderingEnabled();
+	void SetPhysicsDebugShapesEnabled(bool enabled);
+	bool IsPhysicsDebugShapesEnabled();
 
 	enum class PhysicsDebugColorMode : uint8_t
 	{
@@ -99,7 +101,7 @@ namespace aether
 		// Register the $Debug pass. The pass body draws (in this order):
 		//   1. game-thread immediate-mode primitives from RenderFramePacket::debugVertices
 		//   2. self-test pattern (gizmo + world AABB) when m_selfTestEnabled
-		//   3. physics shape components (boxes/spheres/capsules) from the World
+		//   3. physics shape components (boxes/spheres/capsules) from the World when enabled
 		void RegisterPass(RenderGraph& graph);
 
 		// Toggle the always-on self-test pattern. Useful for diagnosing whether

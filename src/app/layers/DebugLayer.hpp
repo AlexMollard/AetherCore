@@ -69,6 +69,7 @@ namespace aether::app
 			Row_SpotLights,
 			Row_SunIntensity,
 			Row_PhysicsDebug,
+			Row_LightGizmos,
 			Row_ForwardRender,
 			Row_FirstRenderPass,
 			Row_RgPassCount = Row_FirstRenderPass + kMaxRenderPassRows,
@@ -84,9 +85,36 @@ namespace aether::app
 		{
 			Tab_Performance,
 			Tab_Render,
+			Tab_Debug,
 			Tab_Camera,
 			Tab_Scene,
 			kTabCount
+		};
+
+		enum DebugCheckbox : std::size_t
+		{
+			DebugCheck_DebugOverlay,
+			DebugCheck_PhysicsShapes,
+			DebugCheck_SelfTest,
+			DebugCheck_TestShapes,
+			DebugCheck_LightGizmos,
+			DebugCheck_PointVolumes,
+			DebugCheck_SpotCones,
+			DebugCheck_SunDirection,
+			DebugCheck_ShadowMarkers,
+			DebugCheck_ForwardRender,
+			DebugCheck_Fxaa,
+			DebugCheck_ForceVisible,
+			DebugCheck_BypassIndirect,
+			DebugCheck_DisableAnimation,
+			kDebugCheckboxCount
+		};
+
+		enum DebugSlider : std::size_t
+		{
+			DebugSlider_Exposure,
+			DebugSlider_LightGizmoScale,
+			kDebugSliderCount
 		};
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
@@ -99,6 +127,12 @@ namespace aether::app
 
 		bool m_visible = true;
 		bool m_debugTestShapes = true; // F7: show diagnostic test shapes
+		bool m_lightGizmos = true;     // F9: show light volume/direction gizmos
+		bool m_lightGizmoPointVolumes = true;
+		bool m_lightGizmoSpotCones = true;
+		bool m_lightGizmoSunDirection = true;
+		bool m_lightGizmoShadowMarkers = true;
+		float m_lightGizmoScale = 1.0f;
 		aether::UiRect m_savedPanelRect{};
 		std::deque<ScriptErrorToast> m_errorToasts;
 
@@ -111,6 +145,8 @@ namespace aether::app
 		Entity m_reloadButton;
 		Entity m_passTotalRow;
 		std::array<Entity, kMaxRenderPassRows> m_passBars{};
+		std::array<Entity, kDebugCheckboxCount> m_debugCheckboxes{};
+		std::array<Entity, kDebugSliderCount> m_debugSliders{};
 		std::array<Entity, kMaxSceneTreeRows> m_sceneRows{};
 		std::array<Entity, kInspectorRowCount> m_inspectorRows{};
 		std::array<Entity, kInspectorVec3RowCount> m_inspectorVec3Rows{};
