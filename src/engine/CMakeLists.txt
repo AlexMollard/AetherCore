@@ -39,10 +39,24 @@ target_compile_definitions(Engine PUBLIC
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
     AETHER_DEFAULT_ASSET_PAK="${CMAKE_BINARY_DIR}/data/assets.pak"
     AETHER_DEFAULT_ASSET_DIR="${CMAKE_SOURCE_DIR}/resources"
+    # Build-tier config — Defines.hpp reads these for policy (Tracy, asserts, etc.)
+    $<$<CONFIG:Debug>:AE_CONFIG_DEBUG>
+    $<$<CONFIG:RelWithDebInfo>:AE_CONFIG_DEV>
+    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${AETHERCORE_RETAIL}>>>:AE_CONFIG_SHIP>
+    $<$<BOOL:${AETHERCORE_RETAIL}>:AE_CONFIG_RETAIL>
+    $<$<CONFIG:MinSizeRel>:AE_CONFIG_RETAIL>
     AETHERCORE_ENABLE_TRACY_GPU=$<BOOL:${AETHERCORE_ENABLE_TRACY_GPU}>
     AETHERCORE_ENABLE_TRACY_PLOTS=$<BOOL:${AETHERCORE_ENABLE_TRACY_PLOTS}>
     AETHERCORE_ENABLE_TRACY_MEMORY=$<BOOL:${AETHERCORE_ENABLE_TRACY_MEMORY}>
     $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:AETHER_ENABLE_NVIDIA_AFTERMATH>
+)
+
+# Force-include Defines.hpp so it is the very first thing read by every
+# translation unit. Defines.hpp sets TRACY_ENABLE, which must precede any
+# Tracy header include. AAA engines commonly use this pattern.
+target_compile_options(Engine PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/FI"${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp">
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include ${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp>
 )
 
 # Shared pak format header lives at <repo>/include/ - included by PakBackend

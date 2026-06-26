@@ -71,7 +71,8 @@
       },
       "cacheVariables": {
         "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++"
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
       }
     },
     {
@@ -100,6 +101,24 @@
         "CMAKE_CXX_COMPILER": "clang-cl",
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "AETHERCORE_ENABLE_CLANG_TIDY_TARGET": "ON"
+      }
+    },
+    {
+      "name": "vs2022-msvc-release",
+      "displayName": "VS 2022 MSVC Release",
+      "description": "Shipping build (Release, no profiling).",
+      "inherits": "vs2022-msvc",
+      "binaryDir": "${sourceDir}/build-vs2022-msvc-release"
+    },
+    {
+      "name": "vs2022-msvc-retail",
+      "displayName": "VS 2022 MSVC Retail",
+      "description": "Retail build — LTCG enabled, all diagnostics stripped.",
+      "inherits": "vs2022-msvc",
+      "binaryDir": "${sourceDir}/build-vs2022-msvc-retail",
+      "cacheVariables": {
+        "AETHERCORE_RETAIL": "ON",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE": "ON"
       }
     }
   ],
@@ -151,6 +170,20 @@
       "description": "Build for clangd code intelligence (Ninja + clang-cl).",
       "configurePreset": "clangd",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "vs2022-msvc-release",
+      "displayName": "VS 2022 MSVC Release (Ship)",
+      "description": "Shipping build without profiling.",
+      "configurePreset": "vs2022-msvc-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022-msvc-retail",
+      "displayName": "VS 2022 MSVC Retail",
+      "description": "Retail build with LTCG and maximum stripping.",
+      "configurePreset": "vs2022-msvc-retail",
+      "configuration": "Release"
     }
   ]
 }

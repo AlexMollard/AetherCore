@@ -197,13 +197,11 @@ The importer detects common naming patterns (`*_Color`, `*_NormalGL`, `*_Roughne
 
 ## 🔬 Profiling
 
-Tracy is enabled by default, including CPU zones, frame marks, thread names, memory pools, plot streams, and Vulkan GPU zones. To disable all Tracy instrumentation at configure time:
+Tracy is active in Debug and Dev (`RelWithDebInfo`) builds, and is automatically stripped in Ship/Retail (`Release`) builds via linker GC. The behavior is controlled by `src/engine/Defines.hpp`, which sets `TRACY_ENABLE` based on the build tier (`AE_CONFIG_DEBUG` / `AE_CONFIG_DEV`).
 
-```powershell
-cmake --preset default -DAETHERCORE_ENABLE_TRACY=OFF
-```
+All the Tracy library symbols are always compiled into `TracyClient.lib`; the per-tier toggling happens purely through the preprocessor define, and the linker drops unreferenced code when Tracy is off.
 
-The detailed streams can be isolated independently when diagnosing profiler issues:
+Detailed sub-streams can be isolated independently:
 
 ```powershell
 cmake --preset default -DAETHERCORE_ENABLE_TRACY_GPU=OFF

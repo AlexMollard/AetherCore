@@ -3,7 +3,10 @@
 // ---------------------------------------------------------------------------
 // AetherCore profiling macros - thin wrappers around Tracy.
 //
-// Enable at configure time:  cmake -DAETHERCORE_ENABLE_TRACY=ON ...
+// TRACY_ENABLE is set per build config by Defines.hpp (AE_CONFIG_DEBUG/DEV
+// → Tracy ON, AE_CONFIG_SHIP/RETAIL → Tracy OFF).
+// Sub-feature toggles (AETHERCORE_ENABLE_TRACY_*) are set by CMake options
+// and forwarded as compile definitions.
 //
 // CPU zones:
 //   AE_PROFILE_ZONE()                  - auto-named zone (function + file + line)
@@ -28,14 +31,6 @@
 //   AE_PROFILE_PLOT(name, value)
 //   AE_PROFILE_PLOT_CONFIG(name, type, step, fill, color)
 // ---------------------------------------------------------------------------
-
-#ifndef AETHERCORE_ENABLE_TRACY_PLOTS
-#	define AETHERCORE_ENABLE_TRACY_PLOTS 1
-#endif
-
-#ifndef AETHERCORE_ENABLE_TRACY_MEMORY
-#	define AETHERCORE_ENABLE_TRACY_MEMORY 1
-#endif
 
 #ifdef TRACY_ENABLE
 #	include <cstring>

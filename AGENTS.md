@@ -32,13 +32,28 @@ cmake --preset default && cmake --build --preset default
 
 ### Config options
 
-- `AETHERCORE_ENABLE_ASAN` - AddressSanitizer (default OFF)
-- `AETHERCORE_FAST_MSVC_DEBUG_INFO` - `/Z7` + `/DEBUG:FASTLINK` (default ON)
-- `AETHERCORE_ENABLE_TRACY` - Tracy profiler (default ON)
-- `AETHERCORE_ENABLE_TRACY_GPU` - Tracy Vulkan GPU context, zones, and collection (default ON)
-- `AETHERCORE_ENABLE_TRACY_PLOTS` - Tracy plot/counter streams (default ON)
-- `AETHERCORE_ENABLE_TRACY_MEMORY` - Tracy CPU allocation and named memory-pool reporting (default ON)
-- `AETHERCORE_ENABLE_SLANG` - Slang shader compilation (default ON)
+| Option | Default | Effect |
+|---|---|---|
+| `AETHERCORE_ENABLE_ASAN` | `OFF` | AddressSanitizer on all first-party targets. |
+| `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | `/Z7` + `/DEBUG:FASTLINK` for faster MSVC link. |
+| `AETHERCORE_ENABLE_TRACY_GPU` | `ON` | Tracy Vulkan GPU context, zones, and collection. |
+| `AETHERCORE_ENABLE_TRACY_PLOTS` | `ON` | Tracy plot/counter streams. |
+| `AETHERCORE_ENABLE_TRACY_MEMORY` | `ON` | Tracy CPU allocation and named memory-pool reporting. |
+| `AETHERCORE_ENABLE_SLANG` | `ON` | Slang shader compilation. |
+| `AETHERCORE_RETAIL` | `OFF` | Retail build — LTCG, all diagnostics stripped. |
+
+The engine uses a **three-tier build config** system via `src/engine/Defines.hpp`:
+
+| Tier | CMake config | Defines.hpp sets | Use case |
+|---|---|---|---|
+| Debug | `--config Debug` | `AE_CONFIG_DEBUG` → Tracy ON, full asserts | Local dev stepping |
+| Dev | `--config RelWithDebInfo` | `AE_CONFIG_DEV` → Tracy ON, optimized | Daily profiling |
+| Ship | `--config Release` | `AE_CONFIG_SHIP` → Tracy OFF, no debug asserts | CI / shipping |
+| Retail | `--config Release` + `-DAETHERCORE_RETAIL=ON` | `AE_CONFIG_RETAIL` → Tracy OFF, all asserts stripped | End-user release |
+
+Tracy is always compiled into the Tracy library; the linker strips unused profiler symbols
+in Ship/Retail via `/Gy /OPT:REF`. Tracy GPU / plots / memory are sub-feature toggles
+controlled independently regardless of build tier.
 
 ### Targets
 

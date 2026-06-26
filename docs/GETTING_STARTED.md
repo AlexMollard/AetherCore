@@ -26,7 +26,7 @@ This guide gets you from a clean clone to a running build. It supplements the bu
 
 ### Optional
 
-- **Tracy** - enabled by default (`AETHERCORE_ENABLE_TRACY=ON`); builds against the bundled profiler.
+- **Tracy** - active in Debug/Dev builds; automatically stripped from Ship/Retail. Sub-features (GPU, plots, memory) are independently toggleable.
 - **Slang** - enabled by default (`AETHERCORE_ENABLE_SLANG=ON`) for shader compilation.
 - **AddressSanitizer** - opt in with `AETHERCORE_ENABLE_ASAN=ON` for sanitizer builds.
 
@@ -65,31 +65,43 @@ sudo apt-get install build-essential cmake git ninja-build clang libvulkan-dev \
     vulkan-tools libglfw3-dev libglm-dev libfreetype6-dev
 ```
 
-### Release builds
+### Build tiers
 
-All presets default to `RelWithDebInfo`. To pick a different configuration:
+The engine uses three build tiers controlled by `--config`:
+
+| Tier | CMake config | Tracy | Use case |
+|---|---|---|---|
+| Debug | `--config Debug` | ON | Local dev stepping |
+| Dev | `--config RelWithDebInfo` | ON | Daily profiling |
+| Ship | `--config Release` | OFF | CI / shipping |
+| Retail | `Release` + `AETHERCORE_RETAIL=ON` | OFF | End-user release |
 
 ```powershell
-cmake --build --preset vs2022-msvc --config Release
+# Dev build (Tracy ON, optimized)
+cmake --preset vs2022-msvc && cmake --build --preset vs2022-msvc --config RelWithDebInfo
+
+# Ship build (Tracy OFF, clean)
+cmake --preset vs2022-msvc-release && cmake --build --preset vs2022-msvc-release
+
+# Retail build (LTCG, all diagnostics stripped)
+cmake --preset vs2022-msvc-retail && cmake --build --preset vs2022-msvc-retail
 ```
 
 ### Useful CMake options
 
 | Option | Default | Effect |
 |---|---|---|
+| Option | Default | Effect |
+|---|---|---|
 | `AETHERCORE_ENABLE_ASAN` | `OFF` | AddressSanitizer on all first-party targets. |
 | `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | `/Z7` + `/DEBUG:FASTLINK` for faster MSVC link. |
-| `AETHERCORE_ENABLE_TRACY` | `ON` | Tracy profiler integration. |
 | `AETHERCORE_ENABLE_TRACY_GPU` | `ON` | Tracy Vulkan GPU context, zones, and collection. |
 | `AETHERCORE_ENABLE_TRACY_PLOTS` | `ON` | Tracy plot/counter streams. |
 | `AETHERCORE_ENABLE_TRACY_MEMORY` | `ON` | Tracy CPU allocation and named memory-pool reporting. |
 | `AETHERCORE_ENABLE_SLANG` | `ON` | Slang shader compiler for `.slang` sources. |
+| `AETHERCORE_RETAIL` | `OFF` | Retail build — LTCG, all diagnostics stripped. |
 
-Example:
-
-```powershell
-cmake --preset vs2022-msvc -DAETHERCORE_ENABLE_TRACY=OFF
-```
+Tracy is **always active in Debug/Dev** (no opt-out `-D` flag); it is cleanly stripped from Ship/Retail builds using linker dead-code elimination. Use the dedicated Ship/Retail presets to build without profiling overhead.
 
 ---
 

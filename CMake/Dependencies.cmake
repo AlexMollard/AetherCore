@@ -112,23 +112,34 @@ CPMAddPackage(
 )
 
 # ── Profiler ──────────────────────────────────────────────────────────────────
-option(AETHERCORE_ENABLE_TRACY "Enable Tracy profiler instrumentation" ON)
 option(AETHERCORE_ENABLE_TRACY_GPU "Enable Tracy Vulkan GPU timeline instrumentation" ON)
 option(AETHERCORE_ENABLE_TRACY_PLOTS "Enable Tracy plot/counter streams" ON)
 option(AETHERCORE_ENABLE_TRACY_MEMORY "Enable Tracy CPU and named-pool memory reporting" ON)
-if(AETHERCORE_ENABLE_TRACY)
-    set(_tracy_opts "TRACY_ENABLE ON" "TRACY_ON_DEMAND ON")
-else()
-    set(_tracy_opts "TRACY_ENABLE OFF")
-endif()
 
+# Tracy is always compiled with profiling support enabled so all profiler symbols
+# exist in the library. The engine controls TRACY_ENABLE per build config via
+# Defines.hpp (AE_CONFIG_DEBUG/DEV → Tracy ON, AE_CONFIG_SHIP/RETAIL → Tracy OFF).
+# The linker strips unused Tracy symbols in Ship/Retail via /OPT:REF /Gy.
 CPMAddPackage(
     NAME Tracy
     GIT_REPOSITORY https://github.com/wolfpld/tracy.git
     GIT_TAG        v0.13.1
     GIT_SHALLOW    TRUE
-    OPTIONS        ${_tracy_opts}
+    OPTIONS
+        "TRACY_ENABLE ON"
+        "TRACY_ON_DEMAND ON"
 )
+
+# Strip TRACY_ENABLE from TracyClient's public interface — Defines.hpp manages
+# it per config, which is impossible with a PUBLIC define on a static library
+# in multi-config generators.
+if(TARGET TracyClient)
+    get_target_property(_tracy_iface_defs TracyClient INTERFACE_COMPILE_DEFINITIONS)
+    if(_tracy_iface_defs)
+        list(REMOVE_ITEM _tracy_iface_defs TRACY_ENABLE)
+        set_property(TARGET TracyClient PROPERTY INTERFACE_COMPILE_DEFINITIONS ${_tracy_iface_defs})
+    endif()
+endif()
 
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
@@ -217,6 +228,17 @@ if(TARGET libDaScript)
         $<$<CONFIG:Release>:DAS_FUSION=2 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
         $<$<CONFIG:MinSizeRel>:DAS_FUSION=1 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
         $<$<CONFIG:RelWithDebInfo>:DAS_FUSION=1 DAS_RELWITHDEBINFO=1 DAS_SMART_PTR_DEBUG=1>
+    )
+endif()
+
+# When Tracy is active (Debug/Dev), the engine defines its own global operator
+# new/delete (via MemoryTracker.cpp) to hook allocation profiling. daScript's
+# free_list also defines them when DAS_FREE_LIST=1. Prevent the ODR violation
+# by telling daScript to skip its global operator new/delete.
+# The config guard matches Defines.hpp: Debug and Dev (RelWithDebInfo).
+if(TARGET libDaScript)
+    target_compile_definitions(libDaScript PRIVATE
+        $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:DAS_NO_GLOBAL_NEW_AND_DELETE>
     )
 endif()
 if(TARGET libDaScriptDyn)

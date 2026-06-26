@@ -1,36 +1,45 @@
 #pragma once
 
-// Build-derived macros.
+// ---------------------------------------------------------------------------
+// Build-tier configuration for AetherCore.
+//
+// Exactly one AE_CONFIG_* macro is defined by the build system via CMake
+// generator expressions (see src/engine/CMakeLists.txt):
+//
+//   AE_CONFIG_DEBUG    — Debug build,    full diagnostics, Tracy ON
+//   AE_CONFIG_DEV      — Dev build       (RelWithDebInfo), Tracy ON, optimized
+//   AE_CONFIG_SHIP     — Shipping build  (Release), Tracy OFF, minimal checks
+//   AE_CONFIG_RETAIL   — Retail build    (like Ship but no asserts, LTCG)
+//
+// Policy decisions (Tracy, assertions, logging) flow from these defines
+// so the same binary directory can produce Debug/Dev/Ship/Retail outputs.
+//
+// Tracy's own library is always compiled with TRACY_ENABLE ON so all profiler
+// symbols exist; the linker strips them in Ship/Retail via /OPT:REF /Gy.
+// ---------------------------------------------------------------------------
 
-#if defined(VULKAN_CPU_DEBUG) && defined(VULKAN_GPU_DEBUG)
-#	error "VULKAN_CPU_DEBUG and VULKAN_GPU_DEBUG are mutually exclusive; pick one"
+// ── Tracy profiler ──────────────────────────────────────────────────────────
+#if defined(AE_CONFIG_DEBUG) || defined(AE_CONFIG_DEV)
+#	define TRACY_ENABLE 1
+#	define TRACY_ON_DEMAND 1
 #endif
 
-// AETHERCORE_ENABLE_DESCRIPTOR_HEAP controls whether VK_EXT_descriptor_heap
-// is enabled. This extension is incompatible with GPU-AV (VULKAN_GPU_DEBUG):
-// GPU-AV injects shaders that use standard descriptor set binding, but
-// VK_EXT_descriptor_heap replaces that binding model. The two cannot be used
-// together; define AETHERCORE_ENABLE_DESCRIPTOR_HEAP=0 to use GPU-AV.
-// Default: 1 (enabled).
-#define AETHERCORE_ENABLE_DESCRIPTOR_HEAP 1
+// ── Sub-feature toggles (passed as compile definitions from CMake) ───────────
+// These are user-configurable at configure time:
+//   AETHERCORE_ENABLE_TRACY_GPU     — Vulkan GPU tracing    (default ON)
+//   AETHERCORE_ENABLE_TRACY_PLOTS   — Tracy plot/counters   (default ON)
+//   AETHERCORE_ENABLE_TRACY_MEMORY  — Tracy memory tracking  (default ON)
+// They appear here for documentation; CMake unconditionally defines them
+// for all targets so Profiler.hpp / GpuProfiler can check them at runtime.
 
-// VULKAN_CPU_DEBUG enables the Vulkan validation layer (best-effort
-// parameter/object/usage checking, synchronization validation, debug printf)
-// and routes all findings through aether::Logger via a debug utils messenger.
-// No GPU cost, no render-pass injection, no TDR risk. Safe to leave on in
-// any build. Off by default.
+// ── Vulkan validation ───────────────────────────────────────────────────────
+// Uncomment the desired validation level before local development builds.
+// GPU-AV is mutually exclusive with VK_EXT_descriptor_heap (see below).
 //
-// VULKAN_GPU_DEBUG additionally enables GPU-Assisted Validation (GPU-AV) and
-// the Crash Diagnostic Layer on top of everything VULKAN_CPU_DEBUG enables.
-// GPU-AV injects extra render passes and timestamp queries around every draw,
-// which routinely causes TDRs / device-lost on AMD and Intel drivers. CDL
-// writes a per-queue/per-submit trace to OutputDebugString.
-// VULKAN_CPU_DEBUG and VULKAN_GPU_DEBUG are mutually exclusive; setting
-// both produces a compile error (see top of file). Off by default.
-//
-// NOTE: VULKAN_GPU_DEBUG (GPU-AV) is incompatible with VK_EXT_descriptor_heap.
-// When VULKAN_GPU_DEBUG is defined, set AETHERCORE_ENABLE_DESCRIPTOR_HEAP=0.
-//
-// Uncomment the lines below to opt in for a debugging session.
-#define VULKAN_CPU_DEBUG
-// # define VULKAN_GPU_DEBUG
+// #define VULKAN_CPU_DEBUG 1    // CPU-only validation
+// #define VULKAN_GPU_DEBUG 1    // GPU-based validation (slower, more thorough)
+
+// ── Descriptor heap extension ───────────────────────────────────────────────
+// Enable VK_EXT_descriptor_heap (Vulkan 1.4). This is incompatible with
+// VULKAN_GPU_DEBUG; disable it if you need GPU-AV.
+#define AETHERCORE_ENABLE_DESCRIPTOR_HEAP 1
