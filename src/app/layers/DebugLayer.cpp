@@ -33,6 +33,7 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/TomlConfig.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/Swapchain.hpp"
 
@@ -548,14 +549,67 @@ namespace aether::app
 		m_frameSampleCount = std::min(m_frameSampleCount + 1, m_frameSamples.size());
 	}
 
-	void DebugLayer::OnAttach(LayerContext&)
+	void DebugLayer::LoadSettings(LayerContext& context)
 	{
-		AE_PROFILE_ZONE();
+		if (!m_debugConfig.LoadFile("debug"))
+		{
+			return;
+		}
+
+		m_visible = m_debugConfig.GetBool("debug.visible", m_visible);
+		m_debugTestShapes = m_debugConfig.GetBool("debug.testshapes", m_debugTestShapes);
+		m_lightGizmos = m_debugConfig.GetBool("debug.lightgizmos", m_lightGizmos);
+		m_lightGizmoPointVolumes = m_debugConfig.GetBool("debug.lightgizmopointvolumes", m_lightGizmoPointVolumes);
+		m_lightGizmoSpotCones = m_debugConfig.GetBool("debug.lightgizmospotcones", m_lightGizmoSpotCones);
+		m_lightGizmoSunDirection = m_debugConfig.GetBool("debug.lightgizmosundirection", m_lightGizmoSunDirection);
+		m_lightGizmoShadowMarkers = m_debugConfig.GetBool("debug.lightgizmoshadowmarkers", m_lightGizmoShadowMarkers);
+		m_lightGizmoScale = m_debugConfig.GetFloat("debug.lightgizmoscale", m_lightGizmoScale);
+
+		bool overlay = m_debugConfig.GetBool("debug.debugoverlay", aether::IsDebugRenderingEnabled());
+		aether::SetDebugRenderingEnabled(overlay);
+
+		bool physicsShapes = m_debugConfig.GetBool("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
+		aether::SetPhysicsDebugShapesEnabled(physicsShapes);
+
+		auto& physicsDebug = context.Get<aether::RenderingSubsystem>().GetPhysicsDebugRenderer();
+		bool selfTest = m_debugConfig.GetBool("debug.physicsdebugselftest", physicsDebug.IsSelfTestEnabled());
+		physicsDebug.SetSelfTestEnabled(selfTest);
+
+		AE_INFO(LogCategory::App, "Debug settings loaded");
 	}
 
-	void DebugLayer::OnDetach(LayerContext&)
+	void DebugLayer::SaveSettings(LayerContext& context)
+	{
+		m_debugConfig.Set("debug.visible", m_visible);
+		m_debugConfig.Set("debug.testshapes", m_debugTestShapes);
+		m_debugConfig.Set("debug.lightgizmos", m_lightGizmos);
+		m_debugConfig.Set("debug.lightgizmopointvolumes", m_lightGizmoPointVolumes);
+		m_debugConfig.Set("debug.lightgizmospotcones", m_lightGizmoSpotCones);
+		m_debugConfig.Set("debug.lightgizmosundirection", m_lightGizmoSunDirection);
+		m_debugConfig.Set("debug.lightgizmoshadowmarkers", m_lightGizmoShadowMarkers);
+		m_debugConfig.Set("debug.lightgizmoscale", m_lightGizmoScale);
+		m_debugConfig.Set("debug.debugoverlay", aether::IsDebugRenderingEnabled());
+		m_debugConfig.Set("debug.physicsdebugrendering", aether::IsPhysicsDebugShapesEnabled());
+
+		auto& physicsDebug = context.Get<aether::RenderingSubsystem>().GetPhysicsDebugRenderer();
+		m_debugConfig.Set("debug.physicsdebugselftest", physicsDebug.IsSelfTestEnabled());
+
+		if (m_debugConfig.SaveIfDirty("debug", "Debug layer settings"))
+		{
+			AE_INFO(LogCategory::App, "Debug settings saved");
+		}
+	}
+
+	void DebugLayer::OnAttach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+		LoadSettings(context);
+	}
+
+	void DebugLayer::OnDetach(LayerContext& context)
+	{
+		AE_PROFILE_ZONE();
+		SaveSettings(context);
 		m_errorToasts.clear();
 		m_selectedSceneEntity = {};
 		m_expandedSceneEntities.clear();
@@ -976,5 +1030,7 @@ namespace aether::app
 		}
 
 		ImGui::End();
+
+		SaveSettings(context);
 	}
 } // namespace aether::app

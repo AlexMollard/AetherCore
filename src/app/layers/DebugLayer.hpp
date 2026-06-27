@@ -10,6 +10,7 @@
 #include "AppLayer.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Entity.hpp"
+#include "utils/TomlConfig.hpp"
 
 namespace aether
 {
@@ -51,6 +52,8 @@ namespace aether::app
 
 		void PollScriptErrors(LayerContext& context);
 		void PushFrameSample(float frameMs);
+		void LoadSettings(LayerContext& context);
+		void SaveSettings(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
@@ -68,6 +71,7 @@ namespace aether::app
 		std::size_t m_frameSampleHead = 0;
 		std::size_t m_frameSampleCount = 0;
 
+		TomlConfig m_debugConfig;
 		std::deque<ScriptErrorToast> m_errorToasts;
 		Entity m_selectedSceneEntity;
 		std::unordered_set<std::uint32_t> m_expandedSceneEntities;
