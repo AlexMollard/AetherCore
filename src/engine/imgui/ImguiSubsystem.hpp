@@ -1,8 +1,10 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <vector>
 
 namespace aether
 {
@@ -49,5 +51,6 @@ namespace aether
 		std::uint64_t m_frameIndex = 0;
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;
+		std::vector<std::byte> m_fontData;
 	};
 } // namespace aether

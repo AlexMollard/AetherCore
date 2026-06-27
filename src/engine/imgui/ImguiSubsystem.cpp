@@ -6,6 +6,8 @@
 
 #include <span>
 
+#include "Color.hpp"
+#include "io/FileSystem.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "imgui/ImguiFrameData.hpp"
@@ -19,6 +21,168 @@
 
 namespace aether
 {
+	namespace
+	{
+		void ApplyTheme()
+		{
+			auto& style = ImGui::GetStyle();
+			auto& colors = style.Colors;
+
+			using colors::Background, colors::Surface, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Green, colors::Red;
+
+			constexpr auto grey = [](int v, int a = 255)
+			{
+				return ImColor(v, v, v, a);
+			};
+			constexpr auto black = [](int a)
+			{
+				return ImColor(0, 0, 0, a);
+			};
+			constexpr auto withAlpha = [](const ImColor& c, int a)
+			{
+				return ImColor(c.Value.x, c.Value.y, c.Value.z, a / 255.0f);
+			};
+
+			const auto toIm = [](const glm::vec4& c)
+			{
+				return ImColor(c.r, c.g, c.b, c.a);
+			};
+			const auto bg = toIm(Background);
+			const auto bgAlt = toIm(Surface);
+			const auto fg = toIm(TextPrimary);
+			const auto fgAlt = toIm(TextSecondary);
+			const auto cOrange = toIm(Orange);
+			const auto cYellow = toIm(Yellow);
+			const auto cGreen = toIm(Green);
+			const auto cRed = toIm(Red);
+
+			// Rounding and spacing
+			style.FrameRounding = 6.0f;
+			style.GrabRounding = 6.0f;
+			style.ChildRounding = 6.0f;
+			style.PopupRounding = 6.0f;
+			style.TabRounding = 6.0f;
+			style.WindowRounding = 8.0f;
+			style.FrameBorderSize = 0.0f;
+			style.WindowBorderSize = 1.0f;
+			style.ChildBorderSize = 0.0f;
+			style.PopupBorderSize = 1.0f;
+			style.TabBorderSize = 0.0f;
+			style.ScrollbarSize = 12.0f;
+			style.WindowMenuButtonPosition = ImGuiDir_Right;
+			style.ItemSpacing = ImVec2(10.0f, 6.0f);
+			style.ItemInnerSpacing = ImVec2(8.0f, 4.0f);
+			style.IndentSpacing = 20.0f;
+			style.ScrollbarRounding = 8.0f;
+			style.GrabMinSize = 10.0f;
+
+			// Text
+			colors[ImGuiCol_Text] = fg;
+			colors[ImGuiCol_TextDisabled] = fgAlt;
+			colors[ImGuiCol_TextLink] = cOrange;
+			colors[ImGuiCol_TextSelectedBg] = withAlpha(cOrange, 48);
+
+			// Window
+			colors[ImGuiCol_WindowBg] = bg;
+			colors[ImGuiCol_ChildBg] = bg;
+			colors[ImGuiCol_PopupBg] = bgAlt;
+			colors[ImGuiCol_Border] = fgAlt;
+			colors[ImGuiCol_BorderShadow] = grey(0, 0);
+
+			// Title
+			colors[ImGuiCol_TitleBg] = bg;
+			colors[ImGuiCol_TitleBgActive] = bgAlt;
+			colors[ImGuiCol_TitleBgCollapsed] = bg;
+
+			// Menu
+			colors[ImGuiCol_MenuBarBg] = bgAlt;
+
+			// Scrollbar
+			colors[ImGuiCol_ScrollbarBg] = bg;
+			colors[ImGuiCol_ScrollbarGrab] = bgAlt;
+			colors[ImGuiCol_ScrollbarGrabHovered] = withAlpha(cOrange, 140);
+			colors[ImGuiCol_ScrollbarGrabActive] = cOrange;
+
+			// Checkbox, radio, slider
+			colors[ImGuiCol_CheckMark] = cGreen;
+			colors[ImGuiCol_CheckboxSelectedBg] = withAlpha(cGreen, 40);
+			colors[ImGuiCol_SliderGrab] = cOrange;
+			colors[ImGuiCol_SliderGrabActive] = cYellow;
+
+			// Button
+			colors[ImGuiCol_Button] = bgAlt;
+			colors[ImGuiCol_ButtonHovered] = withAlpha(cOrange, 180);
+			colors[ImGuiCol_ButtonActive] = cOrange;
+
+			// Header (collapsing headers, tree nodes, selectables)
+			colors[ImGuiCol_Header] = bgAlt;
+			colors[ImGuiCol_HeaderHovered] = withAlpha(cOrange, 100);
+			colors[ImGuiCol_HeaderActive] = withAlpha(cOrange, 160);
+
+			// Separator
+			colors[ImGuiCol_Separator] = fgAlt;
+			colors[ImGuiCol_SeparatorHovered] = cOrange;
+			colors[ImGuiCol_SeparatorActive] = cYellow;
+
+			// Resize grip
+			colors[ImGuiCol_ResizeGrip] = bgAlt;
+			colors[ImGuiCol_ResizeGripHovered] = withAlpha(cOrange, 140);
+			colors[ImGuiCol_ResizeGripActive] = cOrange;
+
+			// Frame BG (input fields, combo, etc.)
+			colors[ImGuiCol_FrameBg] = bgAlt;
+			colors[ImGuiCol_FrameBgHovered] = withAlpha(cOrange, 60);
+			colors[ImGuiCol_FrameBgActive] = withAlpha(cOrange, 100);
+
+			// Input text
+			colors[ImGuiCol_InputTextCursor] = fg;
+
+			// Tabs
+			colors[ImGuiCol_Tab] = bg;
+			colors[ImGuiCol_TabHovered] = withAlpha(cOrange, 80);
+			colors[ImGuiCol_TabSelected] = bgAlt;
+			colors[ImGuiCol_TabSelectedOverline] = cOrange;
+			colors[ImGuiCol_TabDimmed] = bg;
+			colors[ImGuiCol_TabDimmedSelected] = bgAlt;
+			colors[ImGuiCol_TabDimmedSelectedOverline] = withAlpha(cOrange, 80);
+
+			// Docking
+			colors[ImGuiCol_DockingPreview] = withAlpha(cOrange, 120);
+			colors[ImGuiCol_DockingEmptyBg] = bg;
+
+			// Plot
+			colors[ImGuiCol_PlotLines] = fgAlt;
+			colors[ImGuiCol_PlotLinesHovered] = cOrange;
+			colors[ImGuiCol_PlotHistogram] = cOrange;
+			colors[ImGuiCol_PlotHistogramHovered] = cYellow;
+
+			// Tables
+			colors[ImGuiCol_TableHeaderBg] = bgAlt;
+			colors[ImGuiCol_TableBorderStrong] = fgAlt;
+			colors[ImGuiCol_TableBorderLight] = bgAlt;
+			colors[ImGuiCol_TableRowBg] = bg;
+			colors[ImGuiCol_TableRowBgAlt] = withAlpha(bgAlt, 160);
+
+			// Tree
+			colors[ImGuiCol_TreeLines] = fgAlt;
+
+			// Unsaved marker
+			colors[ImGuiCol_UnsavedMarker] = cYellow;
+
+			// Modal dimming
+			colors[ImGuiCol_ModalWindowDimBg] = black(128);
+
+			// Drag and drop
+			colors[ImGuiCol_DragDropTarget] = cOrange;
+			colors[ImGuiCol_DragDropTargetBg] = withAlpha(cOrange, 48);
+
+			// Nav
+			colors[ImGuiCol_NavCursor] = withAlpha(cOrange, 100);
+			colors[ImGuiCol_NavWindowingHighlight] = withAlpha(fg, 112);
+			colors[ImGuiCol_NavWindowingDimBg] = black(128);
+		}
+	} // anonymous namespace
+
 	ImguiSubsystem::~ImguiSubsystem()
 	{
 		if (m_initialized)
@@ -48,7 +212,26 @@ namespace aether
 			io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
 		}
 
-		ImGui::StyleColorsDark();
+		ApplyTheme();
+
+		// Load Roboto Regular (same font as UISubsystem)
+		constexpr std::string_view kFontPath = "assets://fonts/Roboto-Regular.ttf";
+		if (io::FileSystem::Exists(kFontPath))
+		{
+			auto result = io::FileSystem::ReadFile(kFontPath);
+			if (result)
+			{
+				m_fontData = std::move(*result);
+				ImFontConfig fontConfig{};
+				fontConfig.FontDataOwnedByAtlas = false;
+				fontConfig.SizePixels = 15.0f;
+				fontConfig.OversampleH = 3;
+				fontConfig.OversampleV = 3;
+				fontConfig.PixelSnapH = false;
+				io.Fonts->AddFontFromMemoryTTF(m_fontData.data(), static_cast<int>(m_fontData.size()), fontConfig.SizePixels, &fontConfig);
+				io.FontDefault = io.Fonts->Fonts.back();
+			}
+		}
 
 		m_initialized = true;
 		InitBackends(services);

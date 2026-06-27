@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "Color.hpp"
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "physics/PhysicsComponents.hpp"
@@ -43,11 +44,13 @@ namespace aether
 	// supplied vector. Thread-safe by construction: each thread holds its own
 	// std::vector and the render graph consumes it via the RenderFramePacket.
 	// Positions are in world space; the shader applies the camera's viewProj.
-	void AddDebugLine(std::vector<DebugVertex>& out, const glm::vec3& a, const glm::vec3& b, const glm::vec4& color = {1.0f, 1.0f, 0.0f, 1.0f});
-	void AddDebugAabb(std::vector<DebugVertex>& out, const glm::vec3& min, const glm::vec3& max, const glm::vec4& color = {1.0f, 1.0f, 0.0f, 1.0f});
-	void AddDebugBox(std::vector<DebugVertex>& out, const glm::vec3& center, const glm::quat& rotation, const glm::vec3& halfExtents, const glm::vec4& color = {1.0f, 1.0f, 0.0f, 1.0f});
-	void AddDebugSphere(std::vector<DebugVertex>& out, const glm::vec3& center, float radius, const glm::vec4& color = {1.0f, 1.0f, 0.0f, 1.0f}, int segments = 16);
-	void AddDebugFrustum(std::vector<DebugVertex>& out, const glm::mat4& viewProj, const glm::vec4& color = {1.0f, 1.0f, 0.0f, 1.0f});
+	inline constexpr auto kDefaultDebugColor = glm::vec4(colors::DebugYellow);
+
+	void AddDebugLine(std::vector<DebugVertex>& out, const glm::vec3& a, const glm::vec3& b, const glm::vec4& color = kDefaultDebugColor);
+	void AddDebugAabb(std::vector<DebugVertex>& out, const glm::vec3& min, const glm::vec3& max, const glm::vec4& color = kDefaultDebugColor);
+	void AddDebugBox(std::vector<DebugVertex>& out, const glm::vec3& center, const glm::quat& rotation, const glm::vec3& halfExtents, const glm::vec4& color = kDefaultDebugColor);
+	void AddDebugSphere(std::vector<DebugVertex>& out, const glm::vec3& center, float radius, const glm::vec4& color = kDefaultDebugColor, int segments = 16);
+	void AddDebugFrustum(std::vector<DebugVertex>& out, const glm::mat4& viewProj, const glm::vec4& color = kDefaultDebugColor);
 	void AddDebugAxes(std::vector<DebugVertex>& out, const glm::mat4& transform, float length = 1.0f);
 
 	class PhysicsDebugRenderer

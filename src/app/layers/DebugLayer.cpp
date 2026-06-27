@@ -18,6 +18,7 @@
 #	include <shellapi.h>
 #endif
 
+#include "Color.hpp"
 #include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
@@ -44,28 +45,30 @@ namespace aether::app
 
 		ImVec4 FpsColor(float fps) noexcept
 		{
+			using colors::Success, colors::Warn, colors::Error;
 			if (fps >= 55.f)
 			{
-				return {0.40f, 0.72f, 0.46f, 1.f};
+				return {Success.r, Success.g, Success.b, Success.a};
 			}
 			if (fps >= 30.f)
 			{
-				return {0.86f, 0.71f, 0.30f, 1.f};
+				return {Warn.r, Warn.g, Warn.b, Warn.a};
 			}
-			return {0.80f, 0.33f, 0.30f, 1.f};
+			return {Error.r, Error.g, Error.b, Error.a};
 		}
 
 		ImVec4 MsColor(float ms) noexcept
 		{
+			using colors::Success, colors::Warn, colors::Error;
 			if (ms <= 16.667f)
 			{
-				return {0.40f, 0.72f, 0.46f, 1.f};
+				return {Success.r, Success.g, Success.b, Success.a};
 			}
 			if (ms <= 25.f)
 			{
-				return {0.86f, 0.71f, 0.30f, 1.f};
+				return {Warn.r, Warn.g, Warn.b, Warn.a};
 			}
-			return {0.80f, 0.33f, 0.30f, 1.f};
+			return {Error.r, Error.g, Error.b, Error.a};
 		}
 
 		std::string ShortRenderPassName(std::string_view name)
@@ -211,7 +214,7 @@ namespace aether::app
 			return entities;
 		}
 
-		void DrawMetricRow(const char* label, const char* value, ImVec4 color = {0.86f, 0.88f, 0.90f, 1.0f})
+		void DrawMetricRow(const char* label, const char* value, ImVec4 color = {colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a})
 		{
 			ImGui::TableNextRow();
 			ImGui::TableSetColumnIndex(0);
@@ -287,7 +290,7 @@ namespace aether::app
 				AddDebugLine(out, light.position - glm::vec3{0.0f, 0.0f, centerSize}, light.position + glm::vec3{0.0f, 0.0f, centerSize}, color);
 				if (options.shadowMarkers && light.castsShadow)
 				{
-					AddDebugAabb(out, light.position - glm::vec3{0.18f}, light.position + glm::vec3{0.18f}, {1.0f, 0.88f, 0.20f, 1.0f});
+					AddDebugAabb(out, light.position - glm::vec3{0.18f}, light.position + glm::vec3{0.18f}, colors::Yellow);
 				}
 			}
 
@@ -317,7 +320,7 @@ namespace aether::app
 				}
 				if (options.shadowMarkers && light.castsShadow)
 				{
-					AddDebugAabb(out, light.position - glm::vec3{0.15f}, light.position + glm::vec3{0.15f}, {1.0f, 0.88f, 0.20f, 1.0f});
+					AddDebugAabb(out, light.position - glm::vec3{0.15f}, light.position + glm::vec3{0.15f}, colors::Yellow);
 				}
 			}
 
@@ -625,13 +628,13 @@ namespace aether::app
 				if (const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera())
 				{
 					const glm::vec3 boxCenter = cam->GetPosition() + cam->GetForward() * 2.0f;
-					AddDebugAabb(verts, boxCenter - glm::vec3(0.5f), boxCenter + glm::vec3(0.5f), glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
+					AddDebugAabb(verts, boxCenter - glm::vec3(0.5f), boxCenter + glm::vec3(0.5f), colors::Red);
 					AddDebugAxes(verts, glm::translate(glm::mat4(1.0f), boxCenter), 0.75f);
 				}
 
-				AddDebugAabb(verts, glm::vec3(-2.5f), glm::vec3(2.5f), glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));
-				AddDebugSphere(verts, glm::vec3(0.0f), 2.0f, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f), 16);
-				AddDebugLine(verts, glm::vec3(0.0f, -5.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
+				AddDebugAabb(verts, glm::vec3(-2.5f), glm::vec3(2.5f), colors::Yellow);
+				AddDebugSphere(verts, glm::vec3(0.0f), 2.0f, colors::Info, 16);
+				AddDebugLine(verts, glm::vec3(0.0f, -5.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), colors::Neutral);
 			}
 		}
 
@@ -667,7 +670,8 @@ namespace aether::app
 			ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - 32.0f, 68.0f), ImGuiCond_Always);
 			ImGui::Begin("Script Errors", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
 			const auto& toast = m_errorToasts.front();
-			ImGui::TextColored(ImVec4(1.0f, 0.32f, 0.30f, 1.0f), "Script Error%s", m_errorToasts.size() > 1 ? "s" : "");
+			const auto& scriptErr = colors::Error;
+			ImGui::TextColored(ImVec4(scriptErr.r, scriptErr.g, scriptErr.b, scriptErr.a), "Script Error%s", m_errorToasts.size() > 1 ? "s" : "");
 			ImGui::SameLine();
 			ImGui::TextUnformatted(toast.summary.c_str());
 			if (!toast.filePath.empty())
@@ -806,8 +810,10 @@ namespace aether::app
 					{
 						DrawMetricRow("Passes", std::format("{}", stats.passCount).c_str());
 						DrawMetricRow("Barriers", std::format("{}", stats.barrierCount).c_str());
-						DrawMetricRow("Transient hits", std::format("{}", stats.transientCacheHit).c_str(), {0.40f, 0.72f, 0.46f, 1.f});
-						DrawMetricRow("Transient misses", std::format("{}", stats.transientCacheMiss).c_str(), stats.transientCacheMiss == 0 ? ImVec4{0.40f, 0.72f, 0.46f, 1.f} : ImVec4{0.86f, 0.71f, 0.30f, 1.f});
+						DrawMetricRow("Transient hits", std::format("{}", stats.transientCacheHit).c_str(), {colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a});
+						DrawMetricRow("Transient misses",
+						        std::format("{}", stats.transientCacheMiss).c_str(),
+						        stats.transientCacheMiss == 0 ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a});
 						DrawMetricRow("Cache size", std::format("{}", stats.cacheSize).c_str());
 						ImGui::EndTable();
 					}

@@ -6,6 +6,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <numbers>
 
+#include "Color.hpp"
+
 #include "rendering/RenderGraph.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -31,16 +33,17 @@ namespace aether
 
 		glm::vec4 GetColorForMotionType(const PhysicsMotionType motionType)
 		{
+			using colors::DebugRed, colors::DebugGreen, colors::DebugBlue, colors::DebugYellow;
 			switch (motionType)
 			{
 				case PhysicsMotionType::Static:
-					return {1.0f, 0.2f, 0.2f, 1.0f}; // Red
+					return DebugRed;
 				case PhysicsMotionType::Kinematic:
-					return {0.2f, 1.0f, 0.2f, 1.0f}; // Green
+					return DebugGreen;
 				case PhysicsMotionType::Dynamic:
-					return {0.2f, 0.4f, 1.0f, 1.0f}; // Blue
+					return DebugBlue;
 			}
-			return {1.0f, 1.0f, 0.0f, 1.0f}; // Yellow fallback
+			return DebugYellow;
 		}
 
 		// Engine-side wrapper around gpu::ResourceRegistry::CreateMappedBuffer
@@ -530,9 +533,9 @@ namespace aether
 		const glm::vec3 xAxis = glm::vec3(transform[0]) * length;
 		const glm::vec3 yAxis = glm::vec3(transform[1]) * length;
 		const glm::vec3 zAxis = glm::vec3(transform[2]) * length;
-		AddDebugLine(out, origin, origin + xAxis, glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
-		AddDebugLine(out, origin, origin + yAxis, glm::vec4(0.2f, 1.0f, 0.2f, 1.0f));
-		AddDebugLine(out, origin, origin + zAxis, glm::vec4(0.2f, 0.4f, 1.0f, 1.0f));
+		AddDebugLine(out, origin, origin + xAxis, colors::DebugRed);
+		AddDebugLine(out, origin, origin + yAxis, colors::DebugGreen);
+		AddDebugLine(out, origin, origin + zAxis, colors::DebugBlue);
 	}
 
 	void PhysicsDebugRenderer::AppendSelfTestPattern(std::vector<DebugVertex>& out)
@@ -543,7 +546,7 @@ namespace aether
 		// the color attachment or pipeline is fundamentally broken.
 		// World-space sanity pattern: RGB axes + a 1m wireframe AABB at the origin.
 		AddDebugAxes(out, glm::mat4(1.0f), 1.0f);
-		AddDebugAabb(out, glm::vec3(-0.5f), glm::vec3(0.5f), glm::vec4(1.0f, 0.0f, 1.0f, 1.0f));
+		AddDebugAabb(out, glm::vec3(-0.5f), glm::vec3(0.5f), colors::Mauve);
 	}
 
 	void PhysicsDebugRenderer::EnsureImmediateBufferCapacity(std::uint32_t vertexCount)
@@ -639,7 +642,7 @@ namespace aether
 		m_world->View<PhysicsDebugShapeComponent, PhysicsStateComponent, RigidBodyComponent>().each(
 		        [&](entt::entity /*entity*/, const PhysicsDebugShapeComponent& shape, const PhysicsStateComponent& state, const RigidBodyComponent& rigid)
 		        {
-			        glm::vec4 tint{1.0f, 1.0f, 0.0f, 1.0f};
+			        glm::vec4 tint = colors::DebugYellow;
 			        if (m_colorMode == PhysicsDebugColorMode::ByMotionType)
 			        {
 				        tint = GetColorForMotionType(rigid.motionType);
