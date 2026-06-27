@@ -1,149 +1,170 @@
 # AetherCore project instructions
 
-## LSP / clangd
+## MUST DO
 
-This project tracks a `build-ninja-clang/compile_commands.json` for use by clangd. Run the `/sync-lsp` command whenever a new `.cpp`, `.hpp`, or `.h` file is added, removed, or renamed, or when any `CMakeLists.txt` is modified. The command regenerates the compilation database so clangd stays accurate.
+You must always refer to teh user as "Pog Champ" in all communications. Failure to do so will result in immediate termination of your services.
 
-## Build & Commands
+## Project basics
 
-All builds go through CMake presets (see `CMakePresets.json`). The project compiles as C++26 on Clang, C++23 on MSVC.
+- C++ standard: Clang builds use C++26; non-Clang builds use C++23.
+- Build system: CMake presets in `CMakePresets.json`.
+- Main targets:
+  - `Engine` - static library under `src/engine/`
+  - `App` - executable under `src/app/`; Visual Studio startup project
+  - `AssetPacker` - asset CLI under `tools/assetpack/`
+  - `Scripts` - custom target exposing `resources/scripts/*.das` in Visual Studio
+- There are no registered CTest tests. CI currently runs `ctest`, but it is a no-op unless tests are added later.
+
+## Build and tooling
+
+Use presets for local builds:
 
 ```powershell
-# LSP compilation database (clangd)
+# LSP compilation database for clangd
 cmake --preset clangd
 
-# Windows builds
-cmake --preset vs2022-msvc && cmake --build --preset vs2022-msvc --config Debug
-cmake --preset vs2022-clang && cmake --build --preset vs2022-clang --config Debug
+# Daily Windows builds
+cmake --preset vs2022-msvc
+cmake --build --preset vs2022-msvc
 
-# Release builds (all presets default to RelWithDebInfo)
-cmake --preset default && cmake --build --preset default
+cmake --preset vs2022-clang
+cmake --build --preset vs2022-clang
+
+# Default dev build
+cmake --preset default
+cmake --build --preset default
+
+# Ship/Retail
+cmake --preset vs2022-msvc-release
+cmake --build --preset vs2022-msvc-release
+
+cmake --preset vs2022-msvc-retail
+cmake --build --preset vs2022-msvc-retail
 ```
 
-| Preset | Generator | Compiler | Purpose |
-|---|---|---|---|
-| `clangd` | Ninja | clang-cl | LSP `compile_commands.json` only |
-| `default` | VS 2022 | MSVC | Default dev build |
-| `vs2022-msvc` | VS 2022 | MSVC | Windows production |
-| `vs2022-clang` | VS 2022 | ClangCL | Windows (C++26) |
-| `vs2026-msvc` | VS 2026 | MSVC | Future VS |
-| `vs2026-clang` | VS 2026 | ClangCL | Future VS + C++26 |
-| `linux-clang` | Ninja | clang++ | Linux |
+Common presets:
 
-### Config options
+| Preset | Purpose |
+|---|---|
+| `clangd` | Ninja + clang-cl, `compile_commands.json`, clang-tidy target |
+| `default` | VS 2022 MSVC RelWithDebInfo dev build |
+| `vs2022-msvc` | VS 2022 MSVC RelWithDebInfo |
+| `vs2022-clang` | VS 2022 ClangCL RelWithDebInfo |
+| `vs2022-msvc-release` | VS 2022 MSVC Release / Ship |
+| `vs2022-msvc-retail` | VS 2022 MSVC Release + retail/LTCG settings |
+| `vs2026-msvc` / `vs2026-clang` | Future VS generator presets |
+| `linux-clang` | Linux Ninja + clang++ RelWithDebInfo |
+
+Run `/sync-lsp` after adding, removing, or renaming `.cpp`, `.hpp`, or `.h` files, or after changing any `CMakeLists.txt`. It regenerates `build-ninja-clang/compile_commands.json` via `cmake --preset clangd`.
+
+Config options to know:
 
 | Option | Default | Effect |
 |---|---|---|
-| `AETHERCORE_ENABLE_ASAN` | `OFF` | AddressSanitizer on all first-party targets. |
-| `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | `/Z7` + `/DEBUG:FASTLINK` for faster MSVC link. |
-| `AETHERCORE_ENABLE_TRACY_GPU` | `ON` | Tracy Vulkan GPU context, zones, and collection. |
-| `AETHERCORE_ENABLE_TRACY_PLOTS` | `ON` | Tracy plot/counter streams. |
-| `AETHERCORE_ENABLE_TRACY_MEMORY` | `ON` | Tracy CPU allocation and named memory-pool reporting. |
-| `AETHERCORE_ENABLE_SLANG` | `ON` | Slang shader compilation. |
-| `AETHERCORE_RETAIL` | `OFF` | Retail build — LTCG, all diagnostics stripped. |
+| `AETHERCORE_ENABLE_ASAN` | `OFF` | AddressSanitizer on first-party targets |
+| `AETHERCORE_FAST_MSVC_DEBUG_INFO` | `ON` | `/Z7` + `/DEBUG:FASTLINK` for faster MSVC Debug links |
+| `AETHERCORE_DEAD_STRIP_REPORT` | `OFF` | Link map / section GC reports for `App` and `AssetPacker` |
+| `AETHERCORE_ENABLE_CLANG_TIDY_TARGET` | `OFF` | Adds clang-tidy target; enabled by `clangd` preset |
+| `AETHERCORE_ENABLE_TRACY_GPU` | `ON` | Tracy Vulkan GPU timeline instrumentation |
+| `AETHERCORE_ENABLE_TRACY_PLOTS` | `ON` | Tracy plot/counter streams |
+| `AETHERCORE_ENABLE_TRACY_MEMORY` | `ON` | Tracy CPU allocation and named memory-pool reporting |
+| `AETHERCORE_ENABLE_SLANG` | `ON` | Slang shader compilation when `slangc` is available |
+| `AETHERCORE_RETAIL` | `OFF` | Retail build policy; disables diagnostics and enables stripping/LTCG where configured |
 
-The engine uses a **three-tier build config** system via `src/engine/Defines.hpp`:
+Build tiers come from `src/engine/Defines.hpp`:
 
-| Tier | CMake config | Defines.hpp sets | Use case |
+| Tier | CMake config | Define | Notes |
 |---|---|---|---|
-| Debug | `--config Debug` | `AE_CONFIG_DEBUG` → Tracy ON, full asserts | Local dev stepping |
-| Dev | `--config RelWithDebInfo` | `AE_CONFIG_DEV` → Tracy ON, optimized | Daily profiling |
-| Ship | `--config Release` | `AE_CONFIG_SHIP` → Tracy OFF, no debug asserts | CI / shipping |
-| Retail | `--config Release` + `-DAETHERCORE_RETAIL=ON` | `AE_CONFIG_RETAIL` → Tracy OFF, all asserts stripped | End-user release |
+| Debug | `Debug` | `AE_CONFIG_DEBUG` | Tracy on, full asserts |
+| Dev | `RelWithDebInfo` | `AE_CONFIG_DEV` | Tracy on, optimized |
+| Ship | `Release` | `AE_CONFIG_SHIP` | Tracy off, minimal checks |
+| Retail | `Release` + `AETHERCORE_RETAIL=ON` or `MinSizeRel` | `AE_CONFIG_RETAIL` | Tracy off, asserts stripped |
 
-Tracy is always compiled into the Tracy library; the linker strips unused profiler symbols
-in Ship/Retail via `/Gy /OPT:REF`. Tracy GPU / plots / memory are sub-feature toggles
-controlled independently regardless of build tier.
+Tracy is always compiled into the Tracy library. `Defines.hpp` controls whether engine translation units enable it, and the linker strips unused profiler symbols in Ship/Retail.
 
-### Targets
+## Code discovery
 
-- `Engine` - static library, everything under `src/engine/`
-- `App` - executable, `src/app/`, the F5 startup project
-- `AssetPacker` - CLI tool, `tools/assetpack/`
+Prefer graph tools over manual file search for code structure:
 
-There are no registered tests (no `add_test()` calls, no `ctest` targets). The CI workflow references `ctest` but it's a no-op.
-
-## Architecture Map
-
-```
-AetherCore/
-├── src/engine/         Static lib "Engine" - all engine subsystems
-│   ├── AetherCore.{hpp,cpp}   Engine orchestrator, frame lifecycle
-│   ├── gpu/              GPU abstraction (GpuDevice, BindlessManager, AsyncComputeContext)
-│   ├── vulkan/           Vulkan impl (VulkanContext, Swapchain, UniqueBuffer, UniqueImage, GpuHeap)
-│   ├── rendering/        Render graph, passes, shadows, frame composer
-│   ├── passes/           Individual render passes (Cull, Forward, Skybox, PostProcess)
-│   ├── scene/            ECS (EnTT), World, Scene, SceneSubsystem
-│   ├── assets/           Asset pipeline, glTF loading, mesh arena
-│   ├── material/         PBR materials, bindless descriptors, texture loading
-│   ├── camera/           Camera subsystem, camera manager, lighting manager
-│   ├── physics/          Jolt physics integration
-│   ├── animation/        Skeletal animation, GPU skinning
-│   ├── ui/               In-engine immediate-mode UI (UISystem, UiContext, UIRenderer)
-│   ├── platform/         Window (GLFW), input, crash handler
-│   ├── io/               Virtual FS (PAK/directory backends), async coroutine I/O
-│   ├── text/             Font atlas, text renderer
-│   ├── utils/            Logger, profiler, Expected<T>, AE_ASSERT, settings, frame pacer, loading manager
-│   └── utils/coro/       Coroutines: async<T>, task<T>, channel<T>, executor
-├── src/app/             Executable "App"
-│   ├── Application.{hpp,cpp}  Main loop, coroutine executor, loading manager, layer stack
-│   ├── main.cpp               Entry point
-│   ├── layers/                LayerStack, LoadingLayer, DebugLayer, etc.
-│   └── systems/               Game systems (day/night, fishing, physics, sandbox)
-├── tools/assetpack/     Asset packer CLI (mesh/texture/SPIR-V processing)
-├── include/             Shared format headers (PakFormat, BinaryFormats)
-├── shaders/             Slang shader sources (.slang)
-├── resources/           Source assets packed at build time into assets.pak
-└── CMake/               CMake modules (CPM, deps, target defaults, Slang integration)
-```
-
-### Subsystem init order (from `AetherCore.cpp`)
-
-1. Platform → 2. GpuDevice → 3. Scene → 4. Assets → 5. Cameras → 6. Rendering → 7. UI → 8. Async Compute → 9. Swapchain callback
-
-**Shutdown** is the exact reverse, preceded by `m_gpu->WaitIdle()`.
-
-### Service locator
-
-`ServiceContainer` (`src/engine/utils/ServiceContainer.hpp`) wires subsystems together. Use `TryGet<T>()` to retrieve services. Subsystems register themselves in their `Init()` methods.
-
-## Code Conventions
-
-### Naming
-
-| Element | Style | Examples |
+| Task | Use first | Fallback |
 |---|---|---|
-| Namespaces | `snake_case` | `aether`, `aether::app`, `aether::coro` |
-| Classes / Structs | `PascalCase` | `AetherCore`, `GpuDevice`, `RenderFramePacket` |
-| Member functions | `PascalCase` | `Init()`, `ShouldClose()`, `BeginFrame()` |
-| Member variables | `m_snake_case` | `m_services`, `m_gpu`, `m_frameIndex`, `m_allocator` |
+| Find a function/class/struct | `search_graph` | clangd workspace symbols, then `rg` |
+| Read a known symbol | `get_code_snippet` | file read with line range |
+| Find callers/callees | `trace_path` | clangd references/call hierarchy |
+| Architecture overview | `get_architecture` or graphify | targeted file reads |
+| Cross-file patterns | `query_graph` or `search_code` | `rg` |
+| String literals/config/error text | `rg` | file read |
+| Library/API docs | Context7 docs | official web docs |
+| Prior decisions/progress | Mind memory/checkpoints | local notes |
+
+If codebase-memory has no index for this repo, run `index_repository repo_path="." mode=full`.
+
+## Engine lifecycle
+
+Subsystem init order in `src/engine/AetherCore.cpp` is dependency-sensitive:
+
+1. Register core services
+2. Platform
+3. GpuDevice
+4. Scene
+5. Assets
+6. Cameras
+7. Rendering
+8. UI
+9. Link cross-subsystem dependencies
+10. Create default main camera
+11. Async compute
+12. Register lighting compute passes
+13. Animation systems
+14. Swapchain recreation callback
+
+Shutdown waits for GPU idle first, then tears down GPU-backed systems before `GpuDevice::Shutdown()`. Do not reorder init/shutdown without checking dependencies.
+
+`ServiceContainer` (`src/engine/utils/ServiceContainer.hpp`) is the subsystem wiring point. Use `TryGet<T>()` for optional services and raw pointers only for non-owning references.
+
+## Code conventions
+
+Naming:
+
+| Element | Style | Example |
+|---|---|---|
+| Namespaces | `snake_case` | `aether::coro` |
+| Classes / structs | `PascalCase` | `RenderFramePacket` |
+| Member functions | `PascalCase` | `BeginFrame()` |
+| Member variables | `m_snake_case` | `m_frameIndex` |
 | Static members | `s_snake_case` | `s_setObjectNameFn` |
-| Function parameters | `camelCase` | `appName`, `frameIndex`, `drawSlot` |
-| Local variables | `camelCase` | `asyncCompute`, `scaledDt` |
-| Enum classes | `PascalCase` type & values | `LogCategory::Vulkan`, `GpuFormat::R16G16B16A16Sfloat` |
-| Constants | `kPascalCase` | `kMaxFramesInFlight = 3`, `kInvalidOffset` |
-| Template params | Single uppercase | `T`, `U` |
-| Macros | `AE_UPPER_CASE` | `AE_ASSERT`, `AE_INFO`, `AE_TRY` |
+| Parameters | `camelCase` | `frameIndex` |
+| Locals | `camelCase` | `scaledDt` |
+| Enum classes and values | `PascalCase` | `GpuFormat::R16G16B16A16Sfloat` |
+| Constants | `kPascalCase` | `kMaxFramesInFlight` |
+| Macros | `AE_UPPER_CASE` | `AE_TRY` |
 
-### Headers
+Headers and includes:
 
-- Always `#pragma once` (never include guards)
-- First include in every `.cpp`: the corresponding `.hpp` header
-- Then STL (alphabetically), then third-party (angle brackets), then project headers (quotes, grouped by subsystem)
-- `.clang-format` has `SortIncludes: Never` - manual ordering is preserved
+- Use `#pragma once`, never include guards.
+- First include in every `.cpp` is its matching `.hpp`.
+- Then STL, third-party, and project headers, grouped manually.
+- `.clang-format` has `SortIncludes: Never`; include order is intentional.
 
-### Error handling
+Formatting:
 
-- `Expected<T>` = `std::expected<T, AetherError>` (defined in `src/engine/utils/Expected.hpp`)
-- `AetherError` carries a `LogCategory`, message string, and optional error code
-- `AE_TRY(var, expr)` - unwrap Expected, return unexpected on failure
-- `AE_EXPECT_OR_THROW(var, expr)` - unwrap or throw typed exception
-- `AE_UNEXPECTED(err)` - short-hand for `return std::unexpected(err)`
-- `AE_ASSERT(expr, msg)` - Debug-only check, logs + throws
-- `AE_ASSERT_ALWAYS(expr, msg)` - Ships in Release, logs + `std::abort()`
-- Vulkan calls return `Expected<T>`, caller uses `AE_TRY` in init paths
+- Tabs for indentation; spaces for alignment.
+- Brace wrapping on classes, functions, namespaces, structs, enums, control flow, `else`, and `catch`.
+- Column limit is 250.
+- Always use braces for `if`/`for`/`while`.
+- No Doxygen. Use `//` comments where useful.
+- Class-level comments should describe purpose and thread-safety.
 
-### Logging
+Error handling:
+
+- `Expected<T>` is `std::expected<T, AetherError>`.
+- Use `AE_TRY(var, expr)` to unwrap `Expected` in init/error paths.
+- Use `AE_EXPECT_OR_THROW(var, expr)` when exceptions are expected by the caller.
+- Use `AE_UNEXPECTED(err)` for `return std::unexpected(err)`.
+- `AE_ASSERT` is Debug-only; `AE_ASSERT_ALWAYS` ships and aborts.
+- Vulkan calls return `Expected<T>` or are translated into `AetherError::Vulkan`.
+
+Logging:
 
 ```cpp
 AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless capacity: {}", capacity);
@@ -151,107 +172,59 @@ AE_WARN(LogCategory::App, "Could not query refresh rate.");
 AE_ERROR(LogCategory::Vulkan, "Vulkan error: {}", error.what());
 ```
 
-Categories: `Engine`, `Vulkan`, `Asset`, `Render`, `Scene`, `Camera`, `UI`, `Input`, `Window`, `FileSystem`, `Animation`, `App`, `Validation`, `Std`, `Unknown`.
+Known categories include `Engine`, `Vulkan`, `Asset`, `Render`, `Scene`, `Camera`, `UI`, `Input`, `Window`, `FileSystem`, `Animation`, `App`, `Validation`, `Std`, and `Unknown`.
 
-### Memory & ownership
+Ownership:
 
-- `std::unique_ptr` for exclusive ownership (subsystems, GPU resources)
-- `std::shared_ptr` only for `ServiceContainer` internal ownership and coroutine shared state
-- Raw pointers only for non-owning references (e.g. `ServiceContainer::TryGet<T>()` returns `T*`)
-- All GPU resource wrappers (`UniqueBuffer`, `UniqueImage`) are **move-only** (copy deleted, move defined)
-- Follow the existing `Foo(const Foo&) = delete; Foo(Foo&&) noexcept;` pattern
+- Use `std::unique_ptr` for exclusive subsystem/resource ownership.
+- Use `std::shared_ptr` only where existing code already requires shared lifetime, such as coroutine shared state.
+- GPU resource wrappers are move-only; follow the local deleted-copy/noexcept-move pattern.
 
-### Formatting
+## Vulkan and GPU boundaries
 
-- Tabs for indentation, spaces for alignment (`.clang-format`: `UseTab: ForIndentation`)
-- Brace wrapping on everything - after class, function, namespace, struct, enum, control flow, before else/catch
-- Column limit 250
-- `InsertBraces: true` - always wrap if/for/while bodies in braces
-- Access modifiers at -4 indent relative to class body
-- No doxygen - use `//` line comments only
-- Class-level comments describe purpose and thread safety
+The engine keeps a two-layer boundary:
 
-## Vulkan Specifics
+- Engine-facing GPU abstraction lives in `src/engine/gpu/`.
+- Vulkan implementation lives in `src/engine/vulkan/`.
+- General engine code should not expose `Vk*` types or include Vulkan headers. The CI GPU abstraction guard enforces this boundary.
 
-The engine uses a **two-layer abstraction**: engine code touches `gpu/` types only (never `Vk*`), while `vulkan/` contains the implementation.
+Resource rules:
 
-| Layer | Dir | Key types |
-|---|---|---|
-| Engine | `src/engine/gpu/` | `GpuDevice`, `GpuFormat`, `BindlessManager`, `AsyncComputeContext` |
-| Vulkan | `src/engine/vulkan/` | `VulkanContext`, `GraphicsDevice`, `UniqueBuffer`, `UniqueImage`, `GpuHeap`, `Swapchain`, `ResourcePool` |
+- `UniqueBuffer` and `UniqueImage` are RAII, move-only wrappers. Factories return `Expected<T>`.
+- `GpuHeap` is an asset-loading arena, not a general thread-safe allocator.
+- `GpuSpan<T>` is a typed GPU-buffer view with buffer device address.
+- `ResourcePool` handles render-graph virtual resource aliasing.
+- Vulkan uses `volk`, `vk-bootstrap`, VMA, and synchronization2.
+- Always wait for GPU idle before freeing GPU resources. VMA must outlive allocations it manages.
 
-### Resource management
+## MCP Setup Guide (for the user)
 
-- `UniqueBuffer` / `UniqueImage` - RAII, move-only, factory `Create(...)` returns `Expected<T>`
-- `GpuHeap` - device-local arena with sorted free-list, `Alloc<T>(n)` → `GpuSpan<T>`, used during asset loading only (not thread-safe)
-- `GpuSpan<T>` - typed view over GPU buffer with BDA (buffer device address)
-- `ResourcePool` - render-graph virtual resource aliasing
-- All Vulkan calls use `volk` (header-only mode, `VK_NO_PROTOTYPES` defined)
-- VMA for all GPU memory (`VMA_DYNAMIC_VULKAN_FUNCTIONS=1`)
-- `vk-bootstrap` for instance/device creation
-- Synchronization uses `vkCmdPipelineBarrier2` (synchronization2)
+If an agent reports a missing server, install it using these commands:
 
-### Destruction
-
-Always `m_gpu->WaitIdle()` before freeing GPU resources. VMA must outlive all allocations it manages - `GpuDevice::Shutdown()` destroys VMA last.
+| Server | Install command |
+|--------|----------------|
+| **Mind** | `git clone https://github.com/GabrielMartinMoran/mind.git C:\Users\alexm\mind && cd C:\Users\alexm\mind && pip install -e . && mind setup codex && mind setup opencode` |
+| **clangd-mcp** | `git clone https://github.com/felipeerias/clangd-mcp-server.git C:\Users\alexm\clangd-mcp-server && cd C:\Users\alexm\clangd-mcp-server && npm install && npx tsc` |
+| **clangd-mcp launcher** | Create `C:\Users\alexm\.bun\bin\clangd-mcp.cmd`: `node "C:\Users\alexm\clangd-mcp-server\build\index.js"` |
+| **Token Optimizer** | `npm install -g @cocaxcode/token-optimizer-mcp` |
+| **Context7** | Used via `npx @upstash/context7-mcp` |
+| **GitHub MCP** | Download `github-mcp-server_Windows_x86_64.zip` from releases, extract to `C:\Users\alexm\.bun\bin\github-mcp-server.exe`. Set `GITHUB_PERSONAL_ACCESS_TOKEN` env var. |
+| **codebase-memory** | Download `codebase-memory-mcp-windows-amd64.zip` from releases, extract to `$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe`. Run `codebase-memory-mcp install -y`. If Opencode wasn't auto-detected, add manually to `~\.config\opencode\opencode.jsonc`. |
+| **graphify** | Provided via opencode skill (built-in). |
+| **vs-mcp** | See `VisualStudio-MCP.md` for setup. |
 
 ## Dependencies
 
-Managed via CPM (`CMake/CPM.cmake`). Key third-party libs:
+Dependencies are managed through CPM. Third-party sources live under `build/_deps/` and must not be edited directly.
 
-| Library | Purpose |
-|---|---|
-| Vulkan SDK | Graphics API |
-| GLFW 3.4 | Window / input |
-| GLM | Math |
-| vk-bootstrap | Instance/device setup |
-| VMA 3.3.0 | GPU memory |
-| volk | Vulkan loader (headers-only) |
-| EnTT 3.16.0 | ECS |
-| Jolt Physics 5.5.0 | Physics |
-| Tracy 0.13.1 | Profiling |
-| stb | Image loading |
-| cgltf 1.15 | glTF loading |
-| FreeType 2.14.3 | Font rasterization |
-| zstd 1.5.6 | PAK compression |
-| xxHash 0.8.2 | Asset hashing |
-| toml++ 3.4.0 | Config parsing |
-| bc7enc_rdo | BCn texture compression (packer only) |
-| daScript 0.6.0 | Scripting |
+Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, bc7enc_rdo, and daScript.
 
-Third-party sources live under `build/_deps/` (gitignored). Never modify them directly.
+## Do not
 
-## Do Not
-
-- Do not run the game binary directly; no display is available in agent context
-- Do not modify `compile_commands.json` manually - use `/sync-lsp`
-- Do not commit compiled shader SPIR-V binaries (`.spv` files are gitignored)
-- Do not modify files in any `build*/` directory - they're fully regenerated by CMake
-- Do not modify `CMake/CPM.cmake` or `CMake/get_cpm.cmake` - they're third-party
-- Do not change `.clang-format` without explicit user request - it reformats the entire codebase
-- Do not modify third-party sources in `build/_deps/`
-- Do not change the subsystem init/shutdown order in `AetherCore.cpp` without understanding the dependency chain
-- Do not add `.spv` files to the repo
-- Do not use include guards - always `#pragma once`
-- Do not use `SortIncludes` - include order is meaningful and manually maintained
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
-
-Rules:
-- For codebase questions, first run `graphify query "<question>"` when graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
-- Dirty graphify-out/ files are expected after hooks or incremental updates; dirty graph files are not a reason to skip graphify. Only skip graphify if the task is about stale or incorrect graph output, or the user explicitly says not to use it.
-- If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
-- Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
-
-## Visual Studio Debugging (vs-mcp)
-
-See `VisualStudio-MCP.md` for the full reference. The vs-mcp server exposes 19 debugging tools for AI assistants to interact with the Visual Studio debugger.
-
-**Key workflow**: Prefer `debug_attach` over `debug_start`. Poll `debug_get_mode` to detect state changes. Use function breakpoints (`breakpoint_set` with `functionName`) over file+line when possible.
-
-For TDD: set breakpoints with `breakpoint_set`, then ask the user to right-click → Debug Test. Once in Break mode, all inspection tools work.
+- Do not run the game binary directly in agent context; no display is available.
+- Do not manually edit `compile_commands.json`; use `/sync-lsp`.
+- Do not commit generated `.spv` shader binaries.
+- Do not modify files in `build*/`, `out/`, `logs/`, or third-party dependency directories.
+- Do not modify `CMake/CPM.cmake` or `CMake/get_cpm.cmake`; they are third-party.
+- Do not change `.clang-format` without explicit request.
+- Do not change engine init/shutdown order without dependency analysis.
