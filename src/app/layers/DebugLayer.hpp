@@ -10,7 +10,6 @@
 #include "AppLayer.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Entity.hpp"
-#include "ui/UiLayout.hpp"
 
 namespace aether
 {
@@ -45,82 +44,13 @@ namespace aether::app
 
 	private:
 		static constexpr std::size_t kMaxRenderPassRows = 16;
-		static constexpr std::size_t kMaxSceneTreeRows = 40;
-		static constexpr std::size_t kMaxVisibleSceneTreeRows = 4;
-		static constexpr std::size_t kInspectorRowCount = 7;
-		static constexpr std::size_t kInspectorVec3RowCount = 3;
-
-		enum LabelRow : std::size_t
-		{
-			Row_Frame,
-			Row_Fps,
-			Row_Delta,
-			Row_AvgFps,
-			Row_Min,
-			Row_Max,
-			Row_Tonemap,
-			Row_Fxaa,
-			Row_Resolution,
-			Row_Pos,
-			Row_Fov,
-			Row_Near,
-			Row_Far,
-			Row_PointLights,
-			Row_SpotLights,
-			Row_SunIntensity,
-			Row_PhysicsDebug,
-			Row_LightGizmos,
-			Row_ForwardRender,
-			Row_FirstRenderPass,
-			Row_RgPassCount = Row_FirstRenderPass + kMaxRenderPassRows,
-			Row_RgBarriers,
-			Row_RgTransientHit,
-			Row_RgTransientMiss,
-			Row_RgCacheSize,
-		};
-
-		static constexpr std::size_t kLabelRowCount = Row_RgCacheSize + 1;
-
-		enum Tab : std::size_t
-		{
-			Tab_Performance,
-			Tab_Render,
-			Tab_Debug,
-			Tab_Camera,
-			Tab_Scene,
-			kTabCount
-		};
-
-		enum DebugCheckbox : std::size_t
-		{
-			DebugCheck_DebugOverlay,
-			DebugCheck_PhysicsShapes,
-			DebugCheck_SelfTest,
-			DebugCheck_TestShapes,
-			DebugCheck_LightGizmos,
-			DebugCheck_PointVolumes,
-			DebugCheck_SpotCones,
-			DebugCheck_SunDirection,
-			DebugCheck_ShadowMarkers,
-			DebugCheck_ForwardRender,
-			DebugCheck_Fxaa,
-			DebugCheck_ForceVisible,
-			DebugCheck_BypassIndirect,
-			DebugCheck_DisableAnimation,
-			kDebugCheckboxCount
-		};
-
-		enum DebugSlider : std::size_t
-		{
-			DebugSlider_Exposure,
-			DebugSlider_LightGizmoScale,
-			kDebugSliderCount
-		};
+		static constexpr std::size_t kMaxSceneRows = 80;
+		static constexpr std::size_t kFrameSampleCount = 180;
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
 
 		void PollScriptErrors(LayerContext& context);
-		void UpdateSceneTab(World& world);
+		void PushFrameSample(float frameMs);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
@@ -133,28 +63,13 @@ namespace aether::app
 		bool m_lightGizmoSunDirection = true;
 		bool m_lightGizmoShadowMarkers = true;
 		float m_lightGizmoScale = 1.0f;
-		aether::UiRect m_savedPanelRect{};
-		std::deque<ScriptErrorToast> m_errorToasts;
 
-		Entity m_debugPanel;
-		Entity m_headerSpacer;
-		Entity m_tabBar;
-		Entity m_graphEntity;
-		Entity m_labelRows[kLabelRowCount];
-		Entity m_separators[6];
-		Entity m_reloadButton;
-		Entity m_passTotalRow;
-		std::array<Entity, kMaxRenderPassRows> m_passBars{};
-		std::array<Entity, kDebugCheckboxCount> m_debugCheckboxes{};
-		std::array<Entity, kDebugSliderCount> m_debugSliders{};
-		std::array<Entity, kMaxSceneTreeRows> m_sceneRows{};
-		std::array<Entity, kInspectorRowCount> m_inspectorRows{};
-		std::array<Entity, kInspectorVec3RowCount> m_inspectorVec3Rows{};
-		Entity m_sceneSummaryRow;
-		Entity m_inspectorHeaderRow;
+		std::array<float, kFrameSampleCount> m_frameSamples{};
+		std::size_t m_frameSampleHead = 0;
+		std::size_t m_frameSampleCount = 0;
+
+		std::deque<ScriptErrorToast> m_errorToasts;
 		Entity m_selectedSceneEntity;
 		std::unordered_set<std::uint32_t> m_expandedSceneEntities;
-		std::vector<Entity> m_entities;
-		std::array<Entity, kTabCount> m_tabPages;
 	};
 } // namespace aether::app

@@ -26,6 +26,7 @@
 #include "gpu/GpuProfiler.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/CommandList.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "platform/PlatformSubsystem.hpp"
@@ -66,6 +67,7 @@ namespace aether
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
 		m_cameras = std::make_unique<CameraSubsystem>();
+		m_imgui = std::make_unique<ImguiSubsystem>();
 		m_rendering = std::make_unique<RenderingSubsystem>();
 
 		auto& platform = m_services.Get<PlatformSubsystem>();
@@ -107,7 +109,11 @@ namespace aether
 		m_services.Register<ShadowService>(m_rendering->GetShadowService());
 		m_services.Register<RenderTargetService>(m_rendering->GetRenderTargetService());
 
-		// -- 7. UI ----------------------------------------------------------
+		// -- 7. ImGui tooling -----------------------------------------------
+		m_imgui->Init(m_services);
+		m_services.Register<ImguiSubsystem>(*m_imgui);
+
+		// -- 8. UI ----------------------------------------------------------
 		if (config.uiFontPath != nullptr && config.uiFontPath[0] != '\0')
 		{
 			auto& ui = m_services.Get<UISubsystem>();
@@ -180,6 +186,7 @@ namespace aether
 
 		// Subsystems free their VMA-backed allocations (VMA still alive).
 		m_rendering->Shutdown();
+		m_imgui->Shutdown(m_services);
 		m_services.Get<UISubsystem>().Shutdown(m_services);
 		m_cameras->Shutdown();
 		m_services.Get<AssetSubsystem>().Shutdown();
@@ -366,6 +373,7 @@ namespace aether
 		}
 
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
+		m_imgui->RenderFrame(packet.imgui, m_currentCmdList, m_gpu->BuildFrameTarget());
 
 		SubmitAndAdvance();
 	}

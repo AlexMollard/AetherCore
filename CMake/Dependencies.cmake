@@ -141,6 +141,40 @@ if(TARGET TracyClient)
     endif()
 endif()
 
+# ── Debug / tooling UI ────────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME imgui
+    GIT_REPOSITORY https://github.com/ocornut/imgui.git
+    GIT_TAG        v1.92.8-docking
+    GIT_SHALLOW    TRUE
+    DOWNLOAD_ONLY  YES
+)
+
+if(imgui_ADDED)
+    add_library(imgui STATIC
+        "${imgui_SOURCE_DIR}/imgui.cpp"
+        "${imgui_SOURCE_DIR}/imgui_draw.cpp"
+        "${imgui_SOURCE_DIR}/imgui_tables.cpp"
+        "${imgui_SOURCE_DIR}/imgui_widgets.cpp"
+        "${imgui_SOURCE_DIR}/imgui_demo.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp"
+        "${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp"
+    )
+    target_include_directories(imgui
+        PUBLIC
+            "${imgui_SOURCE_DIR}"
+            "${imgui_SOURCE_DIR}/backends"
+    )
+    target_link_libraries(imgui PRIVATE glfw Vulkan::Vulkan)
+    target_compile_definitions(imgui PRIVATE
+        IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+        IMGUI_IMPL_VULKAN_USE_VOLK
+    )
+    if(TARGET volk::volk_headers)
+        target_link_libraries(imgui PRIVATE volk::volk_headers)
+    endif()
+endif()
+
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
 CPMAddPackage(
@@ -290,6 +324,7 @@ foreach(_dep IN ITEMS
     EnTT
     tomlplusplus_tomlplusplus
     TracyClient
+    imgui
     Jolt
     libzstd_static
     libDaScript daslang

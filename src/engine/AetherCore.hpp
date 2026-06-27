@@ -16,6 +16,7 @@ namespace aether
 	class AnimationBlendSystem;
 	class GpuDevice;
 	class CameraSubsystem;
+	class ImguiSubsystem;
 	class RenderingSubsystem;
 
 	class AetherCore
@@ -85,6 +86,7 @@ namespace aether
 
 		std::unique_ptr<GpuDevice> m_gpu;
 		std::unique_ptr<CameraSubsystem> m_cameras;
+		std::unique_ptr<ImguiSubsystem> m_imgui;
 		std::unique_ptr<RenderingSubsystem> m_rendering;
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;

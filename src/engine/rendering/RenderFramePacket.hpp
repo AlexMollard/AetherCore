@@ -5,6 +5,7 @@
 
 #include <glm/glm.hpp>
 
+#include "imgui/ImguiFrameData.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/Renderer.hpp"
 
@@ -41,6 +42,10 @@ namespace aether
 
 		// Stable GPU resource addresses.
 		std::uint64_t materialBufferAddr = 0;
+
+		// Dear ImGui draw data snapshotted on the game thread and consumed by
+		// the render thread after world/runtime UI/debug geometry.
+		ImguiFrameData imgui;
 
 		// Frame identity - render thread uses these for GPU buffer slot selection.
 		std::uint64_t frameIndex = 0;

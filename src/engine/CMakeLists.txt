@@ -27,6 +27,7 @@ target_link_libraries(Engine
         $<$<PLATFORM_ID:Linux>:dl>
         Tracy::TracyClient
         $<$<BOOL:${NVIDIA_AFTERMATH_FOUND}>:Nvidia::Aftermath>
+        imgui
     PRIVATE
         freetype
 )

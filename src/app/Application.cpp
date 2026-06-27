@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "animation/AnimationSystem.hpp"
+#include "imgui/ImguiSubsystem.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "io/FileSystem.hpp"
 #include "platform/Input.hpp"
@@ -268,6 +269,10 @@ namespace aether::app
 			// Layer UI / overlay submission.
 			{
 				AE_PROFILE_ZONE();
+				if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
+				{
+					imgui->BeginFrame(frameContext.services, static_cast<float>(deltaTime));
+				}
 				m_layers.GuiAll(frameContext);
 			}
 
@@ -280,6 +285,10 @@ namespace aether::app
 			// Flush ECS draws and build a frame packet.
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
 			packet.elapsedTime = static_cast<float>(m_elapsedTimeSeconds);
+			if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
+			{
+				imgui->CaptureFrame(packet.imgui);
+			}
 
 			// Hand the packet to the render thread.
 			const auto submitStart = std::chrono::steady_clock::now();

@@ -22,7 +22,7 @@ namespace aether
 	//
 	// Combines three post-mortem data sources into a single forensic dashboard:
 	//
-	//   1. VK_KHR_device_fault - raw hardware fault registers (memory address,
+	//   1. VK_EXT_device_fault - raw hardware fault registers (memory address,
 	//      instruction pointer, vendor code). Captured
 	//      immediately after VK_ERROR_DEVICE_LOST.
 	//
@@ -50,7 +50,7 @@ namespace aether
 		DiagnosticEngine& operator=(const DiagnosticEngine&) = delete;
 
 		// Initialize with an already-created VkDevice. Loads function pointers
-		// for VK_KHR_device_fault, VK_AMD_buffer_marker, and
+		// for VK_EXT_device_fault, VK_AMD_buffer_marker, and
 		// VK_NV_device_diagnostic_checkpoints (whichever the device supports).
 		//
 		// If VK_AMD_buffer_marker is supported, allocates the flight-recorder
@@ -62,7 +62,7 @@ namespace aether
 		void Shutdown();
 
 		// Capture and log the full forensic dashboard. Queries
-		// vkGetDeviceFaultReportsKHR, resolves every fault address via the
+		// vkGetDeviceFaultInfoEXT, resolves every fault address via the
 		// GpuMemoryTracker, dumps the breadcrumb ring buffer, and prints a
 		// structured human-readable report. Called automatically by VulkanContext
 		// on VK_ERROR_DEVICE_LOST; can also be called manually.
@@ -139,6 +139,18 @@ namespace aether
 			std::vector<std::string> nextSteps;
 		};
 
+		struct DeviceFaultReport
+		{
+			std::string description;
+			bool hasMemoryFault = false;
+			bool hasInstructionFault = false;
+			bool hasVendorInfo = false;
+			std::uint64_t vendorFaultCode = 0;
+			std::uint64_t vendorFaultData = 0;
+			VkDeviceFaultAddressInfoEXT faultAddressInfo{};
+			VkDeviceFaultAddressInfoEXT instructionAddressInfo{};
+		};
+
 		struct PassWorkload
 		{
 			std::string name;
@@ -163,9 +175,9 @@ namespace aether
 		void TryInitAmdBufferMarker();
 		void TryInitNvCheckpoints();
 		std::vector<ResolvedBreadcrumb> CollectBreadcrumbs();
-		std::vector<VkDeviceFaultInfoKHR> QueryFaultReports();
+		std::vector<DeviceFaultReport> QueryFaultReports();
 		std::string GetLabel(std::uint32_t markerValue) const;
-		FaultAnalysis AnalyzeFaults(const std::vector<VkDeviceFaultInfoKHR>& faults, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const;
+		FaultAnalysis AnalyzeFaults(const std::vector<DeviceFaultReport>& faults, const std::vector<ResolvedBreadcrumb>& breadcrumbs) const;
 		ActivitySummary BuildActivitySummary() const;
 		static std::string WorkloadText(const PassWorkload& pass);
 		static PassWorkload* FindOrAddPass(std::vector<PassWorkload>& passes, std::string_view name);
@@ -180,8 +192,8 @@ namespace aether
 
 		GpuMemoryTracker m_memoryTracker;
 
-		// -- VK_KHR_device_fault function pointer
-		PFN_vkGetDeviceFaultReportsKHR m_vkGetDeviceFaultReportsKHR = nullptr;
+		// -- VK_EXT_device_fault function pointer
+		PFN_vkGetDeviceFaultInfoEXT m_vkGetDeviceFaultInfoEXT = nullptr;
 
 		// -- Flight recorder (VK_AMD_buffer_marker / VK_NV_device_diagnostic_checkpoints)
 		bool m_hasBufferMarker = false;

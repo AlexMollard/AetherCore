@@ -917,8 +917,8 @@ namespace aether
 		}
 
 		// Pass 2: allocate arrays and fetch full fault info.
-		std::vector<VkDeviceFaultAddressInfoKHR> addrInfos(counts.addressInfoCount);
-		std::vector<VkDeviceFaultVendorInfoKHR> vendorInfos(counts.vendorInfoCount);
+		std::vector<VkDeviceFaultAddressInfoEXT> addrInfos(counts.addressInfoCount);
+		std::vector<VkDeviceFaultVendorInfoEXT> vendorInfos(counts.vendorInfoCount);
 		VkDeviceFaultInfoEXT info{
 		        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT,
 		        .pAddressInfos = addrInfos.data(),
@@ -942,29 +942,26 @@ namespace aether
 			const char* typeStr = "";
 			switch (ai.addressType)
 			{
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT:
 					typeStr = "ReadInvalid";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT:
 					typeStr = "WriteInvalid";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT:
 					typeStr = "ExecuteInvalid";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_UNKNOWN_EXT:
 					typeStr = "InstrPtrUnknown";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_INVALID_EXT:
 					typeStr = "InstrPtrInvalid";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_INSTRUCTION_POINTER_FAULT_EXT:
 					typeStr = "InstrPtrFault";
 					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_KHR:
+				case VK_DEVICE_FAULT_ADDRESS_TYPE_NONE_EXT:
 					typeStr = "None";
-					break;
-				case VK_DEVICE_FAULT_ADDRESS_TYPE_MAX_ENUM_KHR:
-					typeStr = "MaxEnum";
 					break;
 				default:
 					typeStr = "Unknown";

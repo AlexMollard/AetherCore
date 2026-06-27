@@ -3,16 +3,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdio>
 #include <filesystem>
 #include <format>
-#include <functional>
 #include <regex>
 #include <string_view>
-#include <unordered_map>
 #include <unordered_set>
 
 #include <glm/geometric.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <imgui.h>
 
 #ifdef _WIN32
 #	include <Windows.h>
@@ -22,42 +21,28 @@
 #include "AetherCore.hpp"
 #include "camera/Camera.hpp"
 #include "camera/CameraManager.hpp"
-#include "platform/Input.hpp"
-#include "physics/PhysicsComponents.hpp"
-#include "ui/UIRenderer.hpp"
-#include "ui/UiComponents.hpp"
-#include "ui/UiLayout.hpp"
-#include "ui/UiTheme.hpp"
-#include "ui/UiWidgets.hpp"
-#include "utils/Logger.hpp"
 #include "passes/PostProcessStack.hpp"
-#include "rendering/Renderer.hpp"
+#include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
+#include "platform/Input.hpp"
+#include "rendering/RenderGraph.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scene/World.hpp"
+#include "utils/Logger.hpp"
+#include "utils/Profiler.hpp"
 #include "vulkan/RenderGraphStorage.hpp"
 #include "vulkan/Swapchain.hpp"
-#include "physics/PhysicsDebugRenderer.hpp"
-#include "utils/Profiler.hpp"
-#include "AetherCore.hpp"
 
 namespace aether::app
 {
 	namespace
 	{
-		constexpr float kPanelW = 408.f;
-		constexpr float kPanelH = 600.f;
-		constexpr float kHeaderTabsHeight = 40.f;
+		constexpr float kPanelW = 430.f;
+		constexpr float kPanelH = 640.f;
 
-		UiRect HeightRect(float h)
-		{
-			UiRect r{};
-			r.offsetMaxPx.y = h;
-			return r;
-		}
-
-		glm::vec4 FpsColor(float fps) noexcept
+		ImVec4 FpsColor(float fps) noexcept
 		{
 			if (fps >= 55.f)
 			{
@@ -70,7 +55,7 @@ namespace aether::app
 			return {0.80f, 0.33f, 0.30f, 1.f};
 		}
 
-		glm::vec4 MsColor(float ms) noexcept
+		ImVec4 MsColor(float ms) noexcept
 		{
 			if (ms <= 16.667f)
 			{
@@ -83,11 +68,6 @@ namespace aether::app
 			return {0.80f, 0.33f, 0.30f, 1.f};
 		}
 
-		UiRect PxRect(float l, float t, float r, float b)
-		{
-			return UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {0.f, 0.f}, .offsetMinPx = {l, t}, .offsetMaxPx = {r, b}};
-		}
-
 		std::string ShortRenderPassName(std::string_view name)
 		{
 			const std::size_t sourceSuffix = name.find(" (");
@@ -98,34 +78,9 @@ namespace aether::app
 			return std::string(name);
 		}
 
-		struct SceneTreeItem
-		{
-			Entity entity{};
-			std::uint32_t depth = 0;
-			bool hasChildren = false;
-		};
-
-		struct LightGizmoOptions
-		{
-			bool pointVolumes = true;
-			bool spotCones = true;
-			bool sunDirection = true;
-			bool shadowMarkers = true;
-			float scale = 1.0f;
-		};
-
 		bool IsAlive(const World& world, Entity entity)
 		{
 			return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
-		}
-
-		bool IsSceneVisibleEntity(const World& world, Entity entity)
-		{
-			if (!IsAlive(world, entity))
-			{
-				return false;
-			}
-			return !world.Has<ui::UiTransformComponent>(entity);
 		}
 
 		std::string ComponentSummary(const World& world, Entity entity)
@@ -189,56 +144,80 @@ namespace aether::app
 			return std::format("#{}  {}", entity.id, ComponentSummary(world, entity));
 		}
 
-		void SetTreeRowVisible(World& world, Entity rowEntity, bool visible)
+		std::vector<Entity> CollectSceneEntities(const World& world)
 		{
-			if (auto node = world.TryGet<ui::UiTreeNodeComponent>(rowEntity))
+			std::vector<Entity> entities;
+			std::unordered_set<std::uint32_t> seen;
+			auto addCandidate = [&](Entity entity)
 			{
-				node->visible = visible;
-			}
-			if (auto inp = world.TryGet<ui::UiInputComponent>(rowEntity))
-			{
-				inp->blockInput = visible;
-			}
-			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
-			{
-				t->rect.offsetMaxPx.y = visible ? 18.f : 0.f;
-			}
-		}
-
-		void SetInspectorRow(World& world, Entity rowEntity, std::string_view label, std::string_view value, glm::vec4 valueColor = ui::UiTheme::Default().text)
-		{
-			if (auto row = world.TryGet<ui::UiLabelRowComponent>(rowEntity))
-			{
-				row->label = label;
-				row->value = value;
-				row->valueColor = valueColor;
-			}
-			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
-			{
-				t->rect.offsetMaxPx.y = label.empty() && value.empty() ? 0.f : 18.f;
-			}
-		}
-
-		void SetVec3Row(World& world, Entity rowEntity, std::string_view label, glm::vec3 value, bool visible, bool readOnly = false)
-		{
-			if (auto row = world.TryGet<ui::UiVec3DragComponent>(rowEntity))
-			{
-				if (!row->changed && !row->dragging && row->editingAxis < 0)
+				if (IsAlive(world, entity) && seen.insert(entity.id).second)
 				{
-					row->value = value;
+					entities.push_back(entity);
 				}
-				row->label = label;
-				row->visible = visible;
-				row->readOnly = readOnly;
-			}
-			if (auto inp = world.TryGet<ui::UiInputComponent>(rowEntity))
+			};
+
+			for (const auto& [raw, component]: world.View<TransformComponent>().each())
 			{
-				inp->blockInput = visible && !readOnly;
+				(void) component;
+				addCandidate(World::FromEntt(raw));
 			}
-			if (auto t = world.TryGet<ui::UiTransformComponent>(rowEntity))
+			for (const auto& [raw, component]: world.View<MeshComponent>().each())
 			{
-				t->rect.offsetMaxPx.y = visible ? 22.f : 0.f;
+				(void) component;
+				addCandidate(World::FromEntt(raw));
 			}
+			for (const auto& [raw, component]: world.View<MaterialComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<PipelineComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<SkinnedMeshComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<SpawnedEntitiesComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<ParentEntityComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<RigidBodyComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<PhysicsStateComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+			for (const auto& [raw, component]: world.View<PhysicsDebugShapeComponent>().each())
+			{
+				(void) component;
+				addCandidate(World::FromEntt(raw));
+			}
+
+			std::ranges::sort(entities, [](Entity a, Entity b) { return a.id < b.id; });
+			return entities;
+		}
+
+		void DrawMetricRow(const char* label, const char* value, ImVec4 color = {0.86f, 0.88f, 0.90f, 1.0f})
+		{
+			ImGui::TableNextRow();
+			ImGui::TableSetColumnIndex(0);
+			ImGui::TextUnformatted(label);
+			ImGui::TableSetColumnIndex(1);
+			ImGui::TextColored(color, "%s", value);
 		}
 
 		glm::vec4 LightDebugColor(glm::vec3 color, float intensity, bool castsShadow)
@@ -283,6 +262,15 @@ namespace aether::app
 				AddDebugLine(out, p0, p1, color);
 			}
 		}
+
+		struct LightGizmoOptions
+		{
+			bool pointVolumes = true;
+			bool spotCones = true;
+			bool sunDirection = true;
+			bool shadowMarkers = true;
+			float scale = 1.0f;
+		};
 
 		void AddLightGizmos(std::vector<DebugVertex>& out, const Renderer& renderer, const CameraManager& cameras, const LightGizmoOptions& options)
 		{
@@ -348,8 +336,6 @@ namespace aether::app
 		}
 	} // namespace
 
-	// -- Stat helpers ----------------------------------------------------------
-
 	const char* DebugLayer::GetTonemapModeName(aether::TonemapMode mode)
 	{
 		switch (mode)
@@ -364,8 +350,6 @@ namespace aether::app
 				return "Unknown";
 		}
 	}
-
-	// -- Script error location -------------------------------------------------
 
 	void DebugLayer::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
@@ -432,7 +416,6 @@ namespace aether::app
 		}
 
 		std::string resolved = filePath;
-
 		if (!std::filesystem::path(filePath).is_absolute())
 		{
 			std::error_code ec;
@@ -513,8 +496,7 @@ namespace aether::app
 					}
 					else
 					{
-						std::string prevError = err.substr(lastPos, match.position() - lastPos);
-						individualErrors.push_back(prevError);
+						individualErrors.push_back(err.substr(lastPos, match.position() - lastPos));
 						lastPos = match.position();
 					}
 				}
@@ -556,606 +538,31 @@ namespace aether::app
 		}
 	}
 
-	// -- AppLayer overrides ----------------------------------------------------
-
-	void DebugLayer::OnAttach(LayerContext& context)
+	void DebugLayer::PushFrameSample(float frameMs)
 	{
-		AE_PROFILE_ZONE();
-		auto& world = context.Get<World>();
-
-		auto reg = [this](Entity e) -> Entity
-		{
-			m_entities.push_back(e);
-			return e;
-		};
-
-		m_debugPanel = reg(ui::SpawnPanel(world,
-		        UiAnchors::TopRight({12.f, 12.f}, {kPanelW, kPanelH}),
-		        "Debug",
-		        /*draggable=*/true,
-		        /*collapsible=*/true,
-		        /*zOrder=*/1.f));
-		if (auto panel = world.TryGet<ui::UiPanelComponent>(m_debugPanel))
-		{
-			panel->headerExtensionHeight = kHeaderTabsHeight;
-		}
-
-		world.Emplace<ui::UiLayoutComponent>(m_debugPanel,
-		        ui::UiLayoutComponent{
-		                .direction = ui::UiLayoutComponent::Direction::Vertical,
-		                .spacing = 0.f,
-		                .padding = 10.f,
-		        });
-		world.Emplace<ui::UiChildrenComponent>(m_debugPanel);
-
-		auto addChild = [&](Entity child)
-		{
-			ui::AddChild(world, m_debugPanel, child);
-		};
-
-		m_headerSpacer = reg(world.Create());
-		world.Emplace<ui::UiTransformComponent>(m_headerSpacer, ui::UiTransformComponent{.rect = HeightRect(46.f), .zOrder = 2.f});
-		addChild(m_headerSpacer);
-
-		std::vector<std::string> tabNames = {"Perf", "Render", "Debug", "Camera", "Scene"};
-
-		auto createPage = [&]([[maybe_unused]] Tab tab) -> Entity
-		{
-			auto page = reg(ui::SpawnTabPage(world, 2.f));
-			if (auto layout = world.TryGet<ui::UiLayoutComponent>(page))
-			{
-				layout->spacing = 1.f;
-				layout->padding = 5.f;
-			}
-			addChild(page);
-			return page;
-		};
-
-		m_tabPages[Tab_Performance] = createPage(Tab_Performance);
-		m_tabPages[Tab_Render] = createPage(Tab_Render);
-		m_tabPages[Tab_Debug] = createPage(Tab_Debug);
-		m_tabPages[Tab_Camera] = createPage(Tab_Camera);
-		m_tabPages[Tab_Scene] = createPage(Tab_Scene);
-
-		std::vector<Entity> tabPageVec = {m_tabPages[Tab_Performance], m_tabPages[Tab_Render], m_tabPages[Tab_Debug], m_tabPages[Tab_Camera], m_tabPages[Tab_Scene]};
-		m_tabBar = reg(ui::SpawnTabBar(world, UiRect{.anchorMin = {0.f, 0.f}, .anchorMax = {1.f, 0.f}, .offsetMinPx = {0, 0}, .offsetMaxPx = {0, 28.f}}, tabNames, tabPageVec, 3.f));
-
-		// Insert tab bar after header spacer, before pages.
-		// addChild appends; remove and re-add pages so tab bar is ordered correctly.
-		{
-			auto panelChildren = world.TryGet<ui::UiChildrenComponent>(m_debugPanel);
-			panelChildren->children.erase(panelChildren->children.begin() + 1, panelChildren->children.begin() + 1 + kTabCount);
-			addChild(m_tabBar);
-			for (std::size_t i = 0; i < kTabCount; ++i)
-			{
-				addChild(m_tabPages[i]);
-			}
-		}
-
-		auto addToPage = [&](Tab tab, Entity child)
-		{
-			ui::AddChild(world, m_tabPages[tab], child);
-		};
-
-		for (std::size_t i = 0; i < 6; ++i)
-		{
-			const char* perfLabels[] = {"Frame", "FPS", "Delta", "Avg FPS", "Min", "Max"};
-			m_labelRows[Row_Frame + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), perfLabels[i], 2.f));
-			addToPage(Tab_Performance, m_labelRows[Row_Frame + i]);
-		}
-		m_graphEntity = reg(ui::SpawnGraph(world, HeightRect(108.f), "Frame Time (0 - 33 ms)  |  ref: 60fps  30fps", 0.f, 33.333f, 2.f));
-		addToPage(Tab_Performance, m_graphEntity);
-
-		m_separators[0] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Render, m_separators[0]);
-
-		const char* renderLabels[] = {"Tonemap", "FXAA", "Resolution"};
-		for (std::size_t i = 0; i < 3; ++i)
-		{
-			m_labelRows[Row_Tonemap + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), renderLabels[i], 2.f));
-			addToPage(Tab_Render, m_labelRows[Row_Tonemap + i]);
-		}
-
-		m_separators[1] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Render, m_separators[1]);
-
-		// Per-pass horizontal rows: label (flex) + progress bar (fixed width).
-		// Each row is an HStack container with crossAxisAlignment::Center so the
-		// progress bar is vertically centred within the 22 px row.
-		for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
-		{
-			Entity hRow = reg(world.Create());
-			world.Emplace<ui::UiTransformComponent>(hRow, ui::UiTransformComponent{.rect = HeightRect(22.f), .zOrder = 2.f});
-			world.Emplace<ui::UiLayoutComponent>(hRow,
-			        ui::UiLayoutComponent{
-			                .direction = ui::UiLayoutComponent::Direction::Horizontal,
-			                .spacing = 6.f,
-			                .padding = 2.f,
-			                .crossAlignment = ui::UiLayoutComponent::Alignment::Center,
-			        });
-			world.Emplace<ui::UiChildrenComponent>(hRow);
-			addToPage(Tab_Render, hRow);
-
-			Entity labelRow = reg(ui::SpawnLabelRow(world, HeightRect(18.f), "", 2.f));
-			if (auto lt = world.TryGet<ui::UiTransformComponent>(labelRow))
-			{
-				lt->flexGrow = 1.f;
-			}
-			if (auto row = world.TryGet<ui::UiLabelRowComponent>(labelRow))
-			{
-				row->valueColumnOffsetPx = 192.f;
-				row->labelMaxWidthPx = 184.f;
-				row->valueMaxWidthPx = 64.f;
-			}
-			ui::AddChild(world, hRow, labelRow);
-			m_labelRows[Row_FirstRenderPass + i] = labelRow;
-
-			Entity bar = reg(ui::SpawnProgressBar(world, {}, 0.f, 1.f, 0.f, 2.f));
-			if (auto bt = world.TryGet<ui::UiTransformComponent>(bar))
-			{
-				bt->rect.offsetMaxPx.x = 82.f;
-				bt->rect.offsetMaxPx.y = 12.f;
-			}
-			ui::AddChild(world, hRow, bar);
-			m_passBars[i] = bar;
-		}
-
-		m_passTotalRow = reg(ui::SpawnLabelRow(world, HeightRect(22.f), "Total", 2.f));
-		addToPage(Tab_Render, m_passTotalRow);
-
-		m_separators[4] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Render, m_separators[4]);
-
-		m_labelRows[Row_PhysicsDebug] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Physics Debug", 2.f));
-		addToPage(Tab_Render, m_labelRows[Row_PhysicsDebug]);
-
-		m_labelRows[Row_LightGizmos] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Light Gizmos", 2.f));
-		addToPage(Tab_Render, m_labelRows[Row_LightGizmos]);
-
-		m_labelRows[Row_ForwardRender] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Forward Render", 2.f));
-		addToPage(Tab_Render, m_labelRows[Row_ForwardRender]);
-
-		auto addDebugSection = [&](float height = 14.f)
-		{
-			Entity section = reg(ui::SpawnSection(world, HeightRect(height), 2.f));
-			addToPage(Tab_Debug, section);
-		};
-		auto addDebugCheckbox = [&](DebugCheckbox idx, std::string_view label, bool checked)
-		{
-			Entity checkbox = reg(ui::SpawnCheckbox(world, HeightRect(22.f), label, checked, 2.f));
-			m_debugCheckboxes[idx] = checkbox;
-			addToPage(Tab_Debug, checkbox);
-		};
-		auto addDebugSlider = [&](DebugSlider idx, std::string_view label, float min, float max, float value)
-		{
-			Entity slider = reg(ui::SpawnSlider(world, HeightRect(30.f), min, max, value, 2.f));
-			if (auto sliderComp = world.TryGet<ui::UiSliderComponent>(slider))
-			{
-				sliderComp->label = std::string(label);
-			}
-			m_debugSliders[idx] = slider;
-			addToPage(Tab_Debug, slider);
-		};
-
-		addDebugSection();
-		addDebugCheckbox(DebugCheck_DebugOverlay, "Debug renderer  [F6]", aether::IsDebugRenderingEnabled());
-		addDebugCheckbox(DebugCheck_PhysicsShapes, "Physics shapes", aether::IsPhysicsDebugShapesEnabled());
-		addDebugCheckbox(DebugCheck_SelfTest, "Renderer self-test pattern", true);
-		addDebugCheckbox(DebugCheck_TestShapes, "Diagnostic test shapes  [F7]", m_debugTestShapes);
-		addDebugCheckbox(DebugCheck_LightGizmos, "Light gizmos  [F9]", m_lightGizmos);
-		addDebugCheckbox(DebugCheck_PointVolumes, "Point light radius spheres", m_lightGizmoPointVolumes);
-		addDebugCheckbox(DebugCheck_SpotCones, "Spot light cones", m_lightGizmoSpotCones);
-		addDebugCheckbox(DebugCheck_SunDirection, "Sun direction marker", m_lightGizmoSunDirection);
-		addDebugCheckbox(DebugCheck_ShadowMarkers, "Shadow caster markers", m_lightGizmoShadowMarkers);
-		addDebugSlider(DebugSlider_LightGizmoScale, "Light gizmo scale", 0.25f, 2.0f, m_lightGizmoScale);
-
-		addDebugSection();
-		addDebugCheckbox(DebugCheck_ForwardRender, "Forward render  [F8]", context.Get<aether::RenderingSubsystem>().IsForwardPassEnabled());
-		addDebugCheckbox(DebugCheck_Fxaa, "FXAA  [F]", context.Get<Renderer>().IsFxaaEnabled());
-		addDebugSlider(DebugSlider_Exposure, "Exposure", 0.1f, 4.0f, context.Get<aether::RenderingSubsystem>().GetPostProcessStack().GetExposure());
-
-		addDebugSection();
-		addDebugCheckbox(DebugCheck_ForceVisible, "Cull force visible", context.Get<RenderQueue>().IsDebugForceVisible());
-		addDebugCheckbox(DebugCheck_BypassIndirect, "Bypass indirect draws", context.Get<RenderQueue>().IsDebugBypassIndirect());
-		addDebugCheckbox(DebugCheck_DisableAnimation, "Disable GPU animation", context.Get<RenderQueue>().IsDebugDisableAnimation());
-
-		// RenderGraph stats
-		m_separators[5] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Render, m_separators[5]);
-
-		const char* rgLabels[] = {"Passes", "Barriers", "Cache Hit", "Cache Miss", "Cache Size"};
-		for (std::size_t i = 0; i < 5; ++i)
-		{
-			m_labelRows[Row_RgPassCount + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), rgLabels[i], 2.f));
-			addToPage(Tab_Render, m_labelRows[Row_RgPassCount + i]);
-		}
-
-		m_separators[2] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Camera, m_separators[2]);
-
-		const char* camLabels[] = {"Position", "FOV", "Near", "Far"};
-		for (std::size_t i = 0; i < 4; ++i)
-		{
-			m_labelRows[Row_Pos + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), camLabels[i], 2.f));
-			addToPage(Tab_Camera, m_labelRows[Row_Pos + i]);
-		}
-
-		m_separators[3] = reg(ui::SpawnSection(world, HeightRect(15.f), 2.f));
-		addToPage(Tab_Camera, m_separators[3]);
-
-		const char* lightLabels[] = {"Point Lights", "Spot Lights", "Sun Intensity"};
-		for (std::size_t i = 0; i < 3; ++i)
-		{
-			m_labelRows[Row_PointLights + i] = reg(ui::SpawnLabelRow(world, HeightRect(20.f), lightLabels[i], 2.f));
-			addToPage(Tab_Camera, m_labelRows[Row_PointLights + i]);
-		}
-
-		m_sceneSummaryRow = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "Entities", 2.f));
-		if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_sceneSummaryRow))
-		{
-			row->valueColumnOffsetPx = 230.f;
-			row->labelMaxWidthPx = 220.f;
-			row->valueMaxWidthPx = 120.f;
-		}
-		addToPage(Tab_Scene, m_sceneSummaryRow);
-
-		for (std::size_t i = 0; i < kMaxSceneTreeRows; ++i)
-		{
-			Entity row = reg(ui::SpawnTreeNode(world, HeightRect(18.f), "", 2.f));
-			SetTreeRowVisible(world, row, false);
-			addToPage(Tab_Scene, row);
-			m_sceneRows[i] = row;
-		}
-
-		m_inspectorHeaderRow = reg(ui::SpawnLabelRow(world, HeightRect(22.f), "Inspector", 2.f));
-		if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_inspectorHeaderRow))
-		{
-			row->valueColumnOffsetPx = 140.f;
-			row->labelMaxWidthPx = 132.f;
-		}
-		addToPage(Tab_Scene, m_inspectorHeaderRow);
-
-		for (std::size_t i = 0; i < kInspectorVec3RowCount; ++i)
-		{
-			Entity row = reg(ui::SpawnVec3Drag(world, HeightRect(22.f), "", {}, 2.f));
-			SetVec3Row(world, row, "", {}, false);
-			addToPage(Tab_Scene, row);
-			m_inspectorVec3Rows[i] = row;
-		}
-
-		for (std::size_t i = 0; i < kInspectorRowCount; ++i)
-		{
-			Entity row = reg(ui::SpawnLabelRow(world, HeightRect(20.f), "", 2.f));
-			if (auto label = world.TryGet<ui::UiLabelRowComponent>(row))
-			{
-				label->valueColumnOffsetPx = 138.f;
-				label->labelMaxWidthPx = 130.f;
-				label->valueMaxWidthPx = 230.f;
-			}
-			SetInspectorRow(world, row, "", "");
-			addToPage(Tab_Scene, row);
-			m_inspectorRows[i] = row;
-		}
-
-		m_reloadButton = reg(ui::SpawnButton(world, HeightRect(28.f), "Reload Script  [F5]", 2.f));
-		addChild(m_reloadButton);
+		m_frameSamples[m_frameSampleHead] = frameMs;
+		m_frameSampleHead = (m_frameSampleHead + 1) % m_frameSamples.size();
+		m_frameSampleCount = std::min(m_frameSampleCount + 1, m_frameSamples.size());
 	}
 
-	void DebugLayer::OnDetach(LayerContext& context)
+	void DebugLayer::OnAttach(LayerContext&)
 	{
 		AE_PROFILE_ZONE();
-		auto& world = context.Get<World>();
-		for (const Entity e: m_entities)
-		{
-			world.Destroy(e);
-		}
-		m_entities.clear();
 	}
 
-	void DebugLayer::UpdateSceneTab(World& world)
+	void DebugLayer::OnDetach(LayerContext&)
 	{
-		std::vector<Entity> entities;
-		std::unordered_set<std::uint32_t> seen;
-		auto addCandidate = [&](Entity entity)
-		{
-			if (IsSceneVisibleEntity(world, entity) && seen.insert(entity.id).second)
-			{
-				entities.push_back(entity);
-			}
-		};
-
-		for (const auto& [raw, component]: world.View<TransformComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<MeshComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<MaterialComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<PipelineComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<SkinnedMeshComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<SpawnedEntitiesComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<ParentEntityComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<RigidBodyComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<PhysicsStateComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<PhysicsDebugShapeComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-
-		std::ranges::sort(entities, [](Entity a, Entity b) { return a.id < b.id; });
-
-		std::unordered_set<std::uint32_t> aliveIds;
-		aliveIds.reserve(entities.size());
-		for (const Entity entity: entities)
-		{
-			aliveIds.insert(entity.id);
-		}
-
-		std::unordered_map<std::uint32_t, std::vector<Entity>> childrenByParent;
-		std::unordered_set<std::uint32_t> childIds;
-		for (const Entity entity: entities)
-		{
-			if (const auto parent = world.TryGet<ParentEntityComponent>(entity))
-			{
-				if (parent->parentId != 0 && aliveIds.contains(parent->parentId))
-				{
-					childrenByParent[parent->parentId].push_back(entity);
-					childIds.insert(entity.id);
-				}
-			}
-		}
-
-		for (auto& [_, children]: childrenByParent)
-		{
-			std::ranges::sort(children, [](Entity a, Entity b) { return a.id < b.id; });
-		}
-
-		std::vector<SceneTreeItem> visibleItems;
-		visibleItems.reserve(std::min<std::size_t>(entities.size(), kMaxVisibleSceneTreeRows));
-
-		std::function<void(Entity, std::uint32_t)> appendEntity;
-		appendEntity = [&](Entity entity, std::uint32_t depth) -> void
-		{
-			if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
-			{
-				return;
-			}
-
-			const auto childIt = childrenByParent.find(entity.id);
-			const bool hasChildren = childIt != childrenByParent.end() && !childIt->second.empty();
-			visibleItems.push_back(SceneTreeItem{
-			        .entity = entity,
-			        .depth = depth,
-			        .hasChildren = hasChildren,
-			});
-
-			if (!hasChildren || !m_expandedSceneEntities.contains(entity.id))
-			{
-				return;
-			}
-
-			for (const Entity child: childIt->second)
-			{
-				appendEntity(child, depth + 1);
-				if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
-				{
-					break;
-				}
-			}
-		};
-
-		for (const Entity entity: entities)
-		{
-			if (childIds.contains(entity.id))
-			{
-				continue;
-			}
-			appendEntity(entity, 0);
-			if (visibleItems.size() >= kMaxVisibleSceneTreeRows)
-			{
-				break;
-			}
-		}
-
-		if (!IsSceneVisibleEntity(world, m_selectedSceneEntity))
-		{
-			m_selectedSceneEntity = {};
-		}
-
-		if (auto summary = world.TryGet<ui::UiLabelRowComponent>(m_sceneSummaryRow))
-		{
-			const bool capped = entities.size() > visibleItems.size();
-			summary->value = capped ? std::format("first {} / {}", visibleItems.size(), entities.size()) : std::format("{} total", entities.size());
-			summary->valueColor = capped ? ui::UiTheme::Default().warn : ui::UiTheme::Default().text;
-		}
-
-		for (std::size_t i = 0; i < m_sceneRows.size(); ++i)
-		{
-			const Entity rowEntity = m_sceneRows[i];
-			if (i >= visibleItems.size())
-			{
-				SetTreeRowVisible(world, rowEntity, false);
-				continue;
-			}
-
-			const SceneTreeItem& item = visibleItems[i];
-			SetTreeRowVisible(world, rowEntity, true);
-			if (auto node = world.TryGet<ui::UiTreeNodeComponent>(rowEntity))
-			{
-				node->label = SceneEntityLabel(world, item.entity);
-				node->payload = item.entity;
-				node->depth = item.depth;
-				node->hasChildren = item.hasChildren;
-				node->expanded = m_expandedSceneEntities.contains(item.entity.id);
-				node->selected = item.entity == m_selectedSceneEntity;
-			}
-
-			if (const auto inp = world.TryGet<ui::UiInputComponent>(rowEntity); inp && inp->clicked)
-			{
-				m_selectedSceneEntity = item.entity;
-				if (item.hasChildren)
-				{
-					if (m_expandedSceneEntities.contains(item.entity.id))
-					{
-						m_expandedSceneEntities.erase(item.entity.id);
-					}
-					else
-					{
-						m_expandedSceneEntities.insert(item.entity.id);
-					}
-				}
-			}
-		}
-
-		if (!m_selectedSceneEntity.IsValid())
-		{
-			SetInspectorRow(world, m_inspectorHeaderRow, "Inspector", "No selection", ui::UiTheme::Default().textLabel);
-			for (Entity row: m_inspectorVec3Rows)
-			{
-				SetVec3Row(world, row, "", {}, false);
-			}
-			for (Entity row: m_inspectorRows)
-			{
-				SetInspectorRow(world, row, "", "");
-			}
-			return;
-		}
-
-		SetInspectorRow(world, m_inspectorHeaderRow, "Inspector", std::format("#{}", m_selectedSceneEntity.id), ui::UiTheme::Default().accent);
-
-		std::size_t row = 0;
-		auto addRow = [&](std::string_view label, std::string value, glm::vec4 color = ui::UiTheme::Default().text)
-		{
-			if (row >= m_inspectorRows.size())
-			{
-				return;
-			}
-			SetInspectorRow(world, m_inspectorRows[row], label, value, color);
-			++row;
-		};
-
-		addRow("Components", ComponentSummary(world, m_selectedSceneEntity), ui::UiTheme::Default().textLabel);
-
-		std::size_t vecRow = 0;
-		auto addVec3Row = [&](std::string_view label, glm::vec3 value, bool readOnly = false) -> ui::UiVec3DragComponent*
-		{
-			if (vecRow >= m_inspectorVec3Rows.size())
-			{
-				return nullptr;
-			}
-			Entity rowEntity = m_inspectorVec3Rows[vecRow];
-			SetVec3Row(world, rowEntity, label, value, true, readOnly);
-			++vecRow;
-			return world.TryGet<ui::UiVec3DragComponent>(rowEntity);
-		};
-
-		if (const auto parent = world.TryGet<ParentEntityComponent>(m_selectedSceneEntity))
-		{
-			addRow("Parent", std::format("#{}", parent->parentId));
-		}
-		if (const auto spawned = world.TryGet<SpawnedEntitiesComponent>(m_selectedSceneEntity))
-		{
-			addRow("Spawned", std::format("{} children", spawned->entityIds.size()));
-		}
-		if (const auto transform = world.TryGet<TransformComponent>(m_selectedSceneEntity))
-		{
-			const glm::vec3 pos{transform->localToWorld[3]};
-			if (auto vec = addVec3Row("Position", pos))
-			{
-				if (vec->changed)
-				{
-					if (auto writable = world.TryGet<TransformComponent>(m_selectedSceneEntity))
-					{
-						writable->localToWorld[3] = glm::vec4(vec->value, 1.f);
-					}
-				}
-			}
-		}
-		if (world.Has<MeshComponent>(m_selectedSceneEntity))
-		{
-			addRow("Mesh", "present", ui::UiTheme::Default().good);
-		}
-		if (world.Has<MaterialComponent>(m_selectedSceneEntity))
-		{
-			addRow("Material", "present", ui::UiTheme::Default().good);
-		}
-		if (const auto skin = world.TryGet<SkinnedMeshComponent>(m_selectedSceneEntity))
-		{
-			addRow("Skin", std::format("{} joints, clip {}", skin->jointCount, skin->clipIndex));
-			addRow("Anim Time", std::format("{:.2f}s x{:.2f}", skin->animTime, skin->playbackSpeed));
-		}
-		if (const auto rigid = world.TryGet<RigidBodyComponent>(m_selectedSceneEntity))
-		{
-			const char* motion = "Dynamic";
-			if (rigid->motionType == PhysicsMotionType::Static)
-			{
-				motion = "Static";
-			}
-			else if (rigid->motionType == PhysicsMotionType::Kinematic)
-			{
-				motion = "Kinematic";
-			}
-			addRow("Rigid Body", motion);
-		}
-		if (const auto physics = world.TryGet<PhysicsStateComponent>(m_selectedSceneEntity))
-		{
-			addRow("Physics Pos", std::format("{:.2f}, {:.2f}, {:.2f}", physics->currPosition.x, physics->currPosition.y, physics->currPosition.z));
-			addRow("Physics Scale", std::format("{:.2f}, {:.2f}, {:.2f}", physics->scale.x, physics->scale.y, physics->scale.z));
-		}
-
-		while (vecRow < m_inspectorVec3Rows.size())
-		{
-			SetVec3Row(world, m_inspectorVec3Rows[vecRow], "", {}, false);
-			++vecRow;
-		}
-
-		while (row < m_inspectorRows.size())
-		{
-			SetInspectorRow(world, m_inspectorRows[row], "", "");
-			++row;
-		}
+		AE_PROFILE_ZONE();
+		m_errorToasts.clear();
+		m_selectedSceneEntity = {};
+		m_expandedSceneEntities.clear();
 	}
 
 	void DebugLayer::OnUpdate(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		auto& world = context.Get<World>();
 		const Input& input = context.Get<Input>();
 
-		// -- Toggle visibility -----------------------------------------------
 		if (input.IsKeyPressed(aether::Key::F1))
 		{
 			m_visible = !m_visible;
@@ -1180,8 +587,7 @@ namespace aether::app
 		{
 			const auto next = static_cast<aether::TonemapMode>((static_cast<int>(context.Get<Renderer>().GetTonemapMode()) + 1) % 3);
 			context.Get<Renderer>().SetTonemapMode(next);
-			const char* names[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
-			AE_INFO(aether::LogCategory::App, "Tonemap: {}", names[static_cast<int>(next)]);
+			AE_INFO(aether::LogCategory::App, "Tonemap: {}", GetTonemapModeName(next));
 		}
 
 		if (input.IsKeyPressed(aether::Key::F6))
@@ -1211,99 +617,20 @@ namespace aether::app
 			AE_INFO(aether::LogCategory::App, "Light gizmos: {}", m_lightGizmos ? "on" : "off");
 		}
 
-		auto syncCheckbox = [&](DebugCheckbox idx, bool value) -> bool
-		{
-			Entity entity = m_debugCheckboxes[idx];
-			if (!entity.IsValid())
-			{
-				return value;
-			}
-			auto checkbox = world.TryGet<ui::UiCheckboxComponent>(entity);
-			auto inputState = world.TryGet<ui::UiInputComponent>(entity);
-			if (!checkbox)
-			{
-				return value;
-			}
-			if (inputState != nullptr && inputState->clicked)
-			{
-				return checkbox->checked;
-			}
-			checkbox->checked = value;
-			return value;
-		};
-
-		auto syncSlider = [&](DebugSlider idx, float value) -> float
-		{
-			Entity entity = m_debugSliders[idx];
-			if (!entity.IsValid())
-			{
-				return value;
-			}
-			auto slider = world.TryGet<ui::UiSliderComponent>(entity);
-			if (!slider)
-			{
-				return value;
-			}
-			return slider->value;
-		};
-
-		const bool debugOverlay = syncCheckbox(DebugCheck_DebugOverlay, aether::IsDebugRenderingEnabled());
-		aether::SetDebugRenderingEnabled(debugOverlay);
-		aether::SetPhysicsDebugShapesEnabled(syncCheckbox(DebugCheck_PhysicsShapes, aether::IsPhysicsDebugShapesEnabled()));
-
-		auto& rendering = context.Get<aether::RenderingSubsystem>();
-		PhysicsDebugRenderer& physicsDebug = rendering.GetPhysicsDebugRenderer();
-		physicsDebug.SetSelfTestEnabled(syncCheckbox(DebugCheck_SelfTest, physicsDebug.IsSelfTestEnabled()));
-
-		m_debugTestShapes = syncCheckbox(DebugCheck_TestShapes, m_debugTestShapes);
-		m_lightGizmos = syncCheckbox(DebugCheck_LightGizmos, m_lightGizmos);
-		m_lightGizmoPointVolumes = syncCheckbox(DebugCheck_PointVolumes, m_lightGizmoPointVolumes);
-		m_lightGizmoSpotCones = syncCheckbox(DebugCheck_SpotCones, m_lightGizmoSpotCones);
-		m_lightGizmoSunDirection = syncCheckbox(DebugCheck_SunDirection, m_lightGizmoSunDirection);
-		m_lightGizmoShadowMarkers = syncCheckbox(DebugCheck_ShadowMarkers, m_lightGizmoShadowMarkers);
-		m_lightGizmoScale = std::clamp(syncSlider(DebugSlider_LightGizmoScale, m_lightGizmoScale), 0.25f, 2.0f);
-
-		rendering.SetForwardPassEnabled(syncCheckbox(DebugCheck_ForwardRender, rendering.IsForwardPassEnabled()));
-		Renderer& rendererService = context.Get<Renderer>();
-		rendererService.SetFxaaEnabled(syncCheckbox(DebugCheck_Fxaa, rendererService.IsFxaaEnabled()));
-		rendering.GetPostProcessStack().SetExposure(std::clamp(syncSlider(DebugSlider_Exposure, rendering.GetPostProcessStack().GetExposure()), 0.1f, 4.0f));
-
-		RenderQueue& renderQueue = context.Get<RenderQueue>();
-		renderQueue.SetDebugForceVisible(syncCheckbox(DebugCheck_ForceVisible, renderQueue.IsDebugForceVisible()));
-		renderQueue.SetDebugBypassIndirect(syncCheckbox(DebugCheck_BypassIndirect, renderQueue.IsDebugBypassIndirect()));
-		renderQueue.SetDebugDisableAnimation(syncCheckbox(DebugCheck_DisableAnimation, renderQueue.IsDebugDisableAnimation()));
-
-		// -- Diagnostic test shapes (F7) -----------------------------------
-		// Drawn into the per-frame packet's debug vertex vector; the $Debug
-		// pass consumes them on the render thread. No locks - the channel transfer
-		// of the packet is the synchronization point.
 		if (m_debugTestShapes)
 		{
 			if (auto engine = context.TryGet<aether::AetherCore>())
 			{
 				auto& verts = engine->GetPendingDebugVertices();
-
-				// 1m wireframe cube at the camera (always visible in front of you).
 				if (const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera())
 				{
-					const glm::vec3 camPos = cam->GetPosition();
-					const glm::vec3 camFwd = cam->GetForward();
-					// 1m box 2m in front of the camera so it's not clipping the near plane.
-					const glm::vec3 boxCenter = camPos + camFwd * 2.0f;
+					const glm::vec3 boxCenter = cam->GetPosition() + cam->GetForward() * 2.0f;
 					AddDebugAabb(verts, boxCenter - glm::vec3(0.5f), boxCenter + glm::vec3(0.5f), glm::vec4(1.0f, 0.2f, 0.2f, 1.0f));
-
-					// 0.75m RGB axes gizmo at the same spot.
-					const glm::mat4 gizmoXform = glm::translate(glm::mat4(1.0f), boxCenter);
-					AddDebugAxes(verts, gizmoXform, 0.75f);
+					AddDebugAxes(verts, glm::translate(glm::mat4(1.0f), boxCenter), 0.75f);
 				}
 
-				// 5m wireframe cube at world origin (yellow).
 				AddDebugAabb(verts, glm::vec3(-2.5f), glm::vec3(2.5f), glm::vec4(1.0f, 0.85f, 0.2f, 1.0f));
-
-				// 2m wireframe sphere at world origin (cyan).
 				AddDebugSphere(verts, glm::vec3(0.0f), 2.0f, glm::vec4(0.2f, 0.85f, 1.0f, 1.0f), 16);
-
-				// Vertical axis line at world origin so we can see orientation.
 				AddDebugLine(verts, glm::vec3(0.0f, -5.0f, 0.0f), glm::vec3(0.0f, 5.0f, 0.0f), glm::vec4(0.3f, 0.4f, 0.5f, 1.0f));
 			}
 		}
@@ -1326,376 +653,322 @@ namespace aether::app
 		}
 
 		PollScriptErrors(context);
-
-		// -- Update data -----------------------------------------------------
-		const auto frameMs = static_cast<float>(context.deltaTimeSeconds * 1000.0);
-
-		// Push frame time to graph
-		if (m_graphEntity.IsValid())
-		{
-			if (auto graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
-			{
-				graph->samples[graph->head] = frameMs;
-				graph->head = (graph->head + 1) % ui::UiGraphComponent::kMaxSamples;
-				graph->count = std::min(graph->count + 1, ui::UiGraphComponent::kMaxSamples);
-
-				float avg = 0.f;
-				for (std::size_t i = 0; i < graph->count; ++i)
-				{
-					const std::size_t idx = (graph->head + ui::UiGraphComponent::kMaxSamples - graph->count + i) % ui::UiGraphComponent::kMaxSamples;
-					avg += graph->samples[idx];
-				}
-				avg /= static_cast<float>(std::max(graph->count, std::size_t{1}));
-				graph->label = std::format("Frame Time (0 - 33 ms)  |  avg: {:.2f} ms  |  ref: 60fps  30fps", avg);
-			}
-		}
-
-		// Compute frame-time statistics from the graph's data.
-		float curMs = frameMs;
-		float avgMs = curMs;
-		float minMs = curMs;
-		float maxMs = curMs;
-		if (m_graphEntity.IsValid())
-		{
-			if (auto graph = world.TryGet<ui::UiGraphComponent>(m_graphEntity))
-			{
-				curMs = graph->count > 0 ? graph->samples[(graph->head + ui::UiGraphComponent::kMaxSamples - 1) % ui::UiGraphComponent::kMaxSamples] : frameMs;
-				if (graph->count > 0)
-				{
-					float total = 0.f;
-					minMs = graph->samples[0];
-					maxMs = graph->samples[0];
-					for (std::size_t i = 0; i < graph->count; ++i)
-					{
-						const float v = graph->samples[i];
-						total += v;
-						minMs = std::min(minMs, v);
-						maxMs = std::max(maxMs, v);
-					}
-					avgMs = total / static_cast<float>(graph->count);
-				}
-			}
-		}
-		const float curFps = curMs > 0.f ? 1000.f / curMs : 0.f;
-		const float avgFps = avgMs > 0.f ? 1000.f / avgMs : 0.f;
-
-		std::array<char, 128> buf{};
-
-		// Update label rows
-		auto setRow = [&](LabelRow idx, const char* val, glm::vec4 color)
-		{
-			if (auto row = world.TryGet<ui::UiLabelRowComponent>(m_labelRows[idx]))
-			{
-				row->value = val;
-				row->valueColor = color;
-			}
-		};
-
-		std::snprintf(buf.data(), buf.size(), "#%llu", static_cast<unsigned long long>(context.frameIndex));
-		setRow(Row_Frame, buf.data(), ui::UiTheme::Default().text);
-
-		std::snprintf(buf.data(), buf.size(), "%.1f", curFps);
-		setRow(Row_Fps, buf.data(), FpsColor(curFps));
-
-		std::snprintf(buf.data(), buf.size(), "%.2f ms", curMs);
-		setRow(Row_Delta, buf.data(), MsColor(curMs));
-
-		std::snprintf(buf.data(), buf.size(), "%.1f", avgFps);
-		setRow(Row_AvgFps, buf.data(), FpsColor(avgFps));
-
-		std::snprintf(buf.data(), buf.size(), "%.2f ms", minMs);
-		setRow(Row_Min, buf.data(), ui::UiTheme::Default().good);
-
-		std::snprintf(buf.data(), buf.size(), "%.2f ms", maxMs);
-		setRow(Row_Max, buf.data(), MsColor(maxMs));
-
-		const Renderer& renderer = context.Get<Renderer>();
-		setRow(Row_Tonemap, GetTonemapModeName(renderer.GetTonemapMode()), ui::UiTheme::Default().text);
-
-		const bool fxaa = renderer.IsFxaaEnabled();
-		setRow(Row_Fxaa, fxaa ? "On" : "Off", fxaa ? ui::UiTheme::Default().good : (ui::UiTheme::Default().textLabel * glm::vec4{1.f, 1.f, 1.f, 0.5f}));
-
-		const gpu::Extent2D ext = context.Get<Swapchain>().GetExtent();
-		std::snprintf(buf.data(), buf.size(), "%u x %u", ext.width, ext.height);
-		setRow(Row_Resolution, buf.data(), ui::UiTheme::Default().text);
-
-		const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera();
-		if (cam)
-		{
-			const glm::vec3 pos = cam->GetPosition();
-			std::snprintf(buf.data(), buf.size(), "%.1f, %.1f, %.1f", pos.x, pos.y, pos.z);
-			setRow(Row_Pos, buf.data(), ui::UiTheme::Default().text);
-
-			std::snprintf(buf.data(), buf.size(), "%.0f deg", cam->GetFovDegrees());
-			setRow(Row_Fov, buf.data(), ui::UiTheme::Default().text);
-
-			std::snprintf(buf.data(), buf.size(), "%.2f", cam->GetNearPlane());
-			setRow(Row_Near, buf.data(), ui::UiTheme::Default().text);
-
-			std::snprintf(buf.data(), buf.size(), "%.0f", cam->GetFarPlane());
-			setRow(Row_Far, buf.data(), ui::UiTheme::Default().text);
-		}
-		else
-		{
-			setRow(Row_Pos, "No active camera", ui::UiTheme::Default().textLabel);
-			setRow(Row_Fov, "", {});
-			setRow(Row_Near, "", {});
-			setRow(Row_Far, "", {});
-		}
-
-		std::snprintf(buf.data(), buf.size(), "%zu", renderer.GetPointLights().size());
-		setRow(Row_PointLights, buf.data(), ui::UiTheme::Default().text);
-
-		std::snprintf(buf.data(), buf.size(), "%zu", renderer.GetSpotLights().size());
-		setRow(Row_SpotLights, buf.data(), ui::UiTheme::Default().text);
-
-		std::snprintf(buf.data(), buf.size(), "%.2f", renderer.GetDirectionalLightIntensity());
-		setRow(Row_SunIntensity, buf.data(), ui::UiTheme::Default().text);
-
-		// Render passes with names, timings, and progress bars
-		if (auto rg = context.TryGet<aether::RenderGraph>())
-		{
-			auto passes = rg->GetPasses();
-			float totalMs = 0.f;
-			for (auto& passe: passes)
-			{
-				totalMs += passe.lastCpuTimeMs;
-			}
-
-			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
-			{
-				auto& row = m_labelRows[Row_FirstRenderPass + i];
-				if (i < passes.size())
-				{
-					const float ms = passes[i].lastCpuTimeMs;
-					const float pct = totalMs > 0.f ? ms / totalMs : 0.f;
-					const glm::vec4 timeColor = ms < 0.5f ? ui::UiTheme::Default().good : ms < 2.f ? ui::UiTheme::Default().text : ms < 5.f ? ui::UiTheme::Default().warn : ui::UiTheme::Default().bad;
-					std::snprintf(buf.data(), buf.size(), "%.2f ms", ms);
-					if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
-					{
-						r->label = ShortRenderPassName(passes[i].name);
-						r->value = buf.data();
-						r->valueColor = timeColor;
-					}
-					if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
-					{
-						slider->value = pct;
-					}
-				}
-				else
-				{
-					if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
-					{
-						r->label.clear();
-						r->value.clear();
-					}
-					if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
-					{
-						slider->value = 0.f;
-					}
-				}
-			}
-
-			// Total row
-			if (auto r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
-			{
-				if (passes.empty())
-				{
-					r->label.clear();
-					r->value.clear();
-				}
-				else
-				{
-					std::snprintf(buf.data(), buf.size(), "%.2f ms", totalMs);
-					r->label = "Total";
-					r->value = buf.data();
-					r->valueColor = ui::UiTheme::Default().text;
-				}
-			}
-		}
-		else
-		{
-			for (std::size_t i = 0; i < kMaxRenderPassRows; ++i)
-			{
-				auto& row = m_labelRows[Row_FirstRenderPass + i];
-				if (auto r = world.TryGet<ui::UiLabelRowComponent>(row))
-				{
-					r->label.clear();
-					r->value.clear();
-				}
-				if (auto slider = world.TryGet<ui::UiSliderComponent>(m_passBars[i]))
-				{
-					slider->value = 0.f;
-				}
-			}
-			if (auto r = world.TryGet<ui::UiLabelRowComponent>(m_passTotalRow))
-			{
-				r->label.clear();
-				r->value.clear();
-			}
-		}
-
-		// Physics debug state
-		const bool physDebug = aether::IsPhysicsDebugShapesEnabled();
-		setRow(Row_PhysicsDebug, physDebug ? "On" : "Off", physDebug ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
-
-		setRow(Row_LightGizmos, m_lightGizmos ? "On" : "Off", m_lightGizmos ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
-
-		// Forward render state
-		const bool fwdRender = context.Get<aether::RenderingSubsystem>().IsForwardPassEnabled();
-		setRow(Row_ForwardRender, fwdRender ? "On" : "Off", fwdRender ? ui::UiTheme::Default().good : ui::UiTheme::Default().textLabel);
-
-		// RenderGraph frame statistics
-		if (auto rg = context.TryGet<aether::RenderGraph>())
-		{
-			const auto& stats = rg->GetFrameStats();
-			std::snprintf(buf.data(), buf.size(), "%u", stats.passCount);
-			setRow(Row_RgPassCount, buf.data(), ui::UiTheme::Default().text);
-
-			std::snprintf(buf.data(), buf.size(), "%u", stats.barrierCount);
-			setRow(Row_RgBarriers, buf.data(), ui::UiTheme::Default().text);
-
-			std::snprintf(buf.data(), buf.size(), "%u", stats.transientCacheHit);
-			setRow(Row_RgTransientHit, buf.data(), ui::UiTheme::Default().good);
-
-			std::snprintf(buf.data(), buf.size(), "%u", stats.transientCacheMiss);
-			setRow(Row_RgTransientMiss, buf.data(), stats.transientCacheMiss == 0 ? ui::UiTheme::Default().good : ui::UiTheme::Default().warn);
-
-			std::snprintf(buf.data(), buf.size(), "%zu", stats.cacheSize);
-			setRow(Row_RgCacheSize, buf.data(), ui::UiTheme::Default().text);
-		}
-		else
-		{
-			setRow(Row_RgPassCount, "", {});
-			setRow(Row_RgBarriers, "", {});
-			setRow(Row_RgTransientHit, "", {});
-			setRow(Row_RgTransientMiss, "", {});
-			setRow(Row_RgCacheSize, "", {});
-		}
-
-		// Reload button click detection
-		if (const auto inp = world.TryGet<ui::UiInputComponent>(m_reloadButton))
-		{
-			if (inp->clicked)
-			{
-				if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
-				{
-					scripting->RequestReload();
-				}
-			}
-		}
-
-		// Tab switching via keyboard shortcuts (Num1..5).
-		if (auto tabComp = world.TryGet<ui::UiTabComponent>(m_tabBar))
-		{
-			if (input.IsKeyPressed(aether::Key::Num1))
-			{
-				tabComp->selectedTab = Tab_Performance;
-			}
-			else if (input.IsKeyPressed(aether::Key::Num2))
-			{
-				tabComp->selectedTab = Tab_Render;
-			}
-			else if (input.IsKeyPressed(aether::Key::Num3))
-			{
-				tabComp->selectedTab = Tab_Debug;
-			}
-			else if (input.IsKeyPressed(aether::Key::Num4))
-			{
-				tabComp->selectedTab = Tab_Camera;
-			}
-			else if (input.IsKeyPressed(aether::Key::Num5))
-			{
-				tabComp->selectedTab = Tab_Scene;
-			}
-		}
-
-		UpdateSceneTab(world);
-
-		// Update panel title
-		if (m_debugPanel.IsValid())
-		{
-			if (auto panel = world.TryGet<ui::UiPanelComponent>(m_debugPanel))
-			{
-				panel->title = std::format("Debug  |  {:.0f} FPS  |  {:.2f} ms", curFps, curMs);
-			}
-		}
+		PushFrameSample(static_cast<float>(context.deltaTimeSeconds * 1000.0));
 	}
 
 	void DebugLayer::OnGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		auto& ui = context.Get<UIRenderer>();
-		const Input& input = context.Get<Input>();
-		const gpu::Extent2D extent = context.Get<Swapchain>().GetExtent();
-		const auto sw = static_cast<float>(extent.width);
-		const auto sh = static_cast<float>(extent.height);
-		const ui::UiTheme& theme = ui::UiTheme::Default();
 
-		// -- Error notification bar (always visible) --------------------------
 		if (!m_errorToasts.empty())
 		{
-			constexpr float kBarHeight = 44.f;
-			constexpr float kDismissW = 100.f;
-			constexpr float kMargin = 16.f;
-			const float barY = sh - kBarHeight - kMargin;
-
-			ui.DrawRect(PxRect(0.f, barY, sw, barY + kBarHeight), {0.14f, 0.04f, 0.04f, 0.95f}, 4.f);
-
-			const std::size_t count = m_errorToasts.size();
-			const std::string& summary = m_errorToasts[0].summary;
-			std::array<char, 256> errText{};
-			if (count == 1)
+			const ImGuiViewport* viewport = ImGui::GetMainViewport();
+			ImGui::SetNextWindowPos(ImVec2(viewport->WorkPos.x + 16.0f, viewport->WorkPos.y + viewport->WorkSize.y - 88.0f), ImGuiCond_Always);
+			ImGui::SetNextWindowSize(ImVec2(viewport->WorkSize.x - 32.0f, 68.0f), ImGuiCond_Always);
+			ImGui::Begin("Script Errors", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+			const auto& toast = m_errorToasts.front();
+			ImGui::TextColored(ImVec4(1.0f, 0.32f, 0.30f, 1.0f), "Script Error%s", m_errorToasts.size() > 1 ? "s" : "");
+			ImGui::SameLine();
+			ImGui::TextUnformatted(toast.summary.c_str());
+			if (!toast.filePath.empty())
 			{
-				std::snprintf(errText.data(), errText.size(), "Script Error: %s", summary.c_str());
+				ImGui::SameLine();
+				if (ImGui::SmallButton("Open"))
+				{
+					OpenInVSCode(toast.filePath, toast.line);
+				}
 			}
-			else
-			{
-				std::snprintf(errText.data(), errText.size(), "Script Errors (%zu): %s", count, summary.c_str());
-			}
-
-			const float errTextY = barY + (kBarHeight - theme.bodyFontSize) * 0.5f + theme.bodyFontSize * 0.35f;
-			ui.DrawText(errText.data(), UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {kMargin, errTextY}}, theme.bodyFontSize, theme.bad);
-
-			// Dismiss button
-			const float btnX = sw - kDismissW - kMargin;
-			const float btnY = barY + (kBarHeight - 24.f) * 0.5f;
-			const float btnW = kDismissW - 10.f;
-			const float btnH = 24.f;
-
-			const bool btnHovered = input.GetMousePos().x >= btnX && input.GetMousePos().x <= btnX + btnW && input.GetMousePos().y >= btnY && input.GetMousePos().y <= btnY + btnH;
-
-			const glm::vec4 btnColor = btnHovered ? glm::vec4{0.45f, 0.15f, 0.15f, 1.f} : glm::vec4{0.35f, 0.10f, 0.10f, 1.f};
-			ui.DrawRect(PxRect(btnX, btnY, btnX + btnW, btnY + btnH), btnColor, 3.f);
-
-			const float btnTextW = ui.MeasureText("Dismiss All", 13.f);
-			const float btnTextX = btnX + (btnW - btnTextW) * 0.5f;
-			const float btnTextY = btnY + btnH * 0.5f + 13.f * 0.35f;
-			ui.DrawText("Dismiss All", UiPoint{.anchor = {0.f, 0.f}, .offsetPx = {btnTextX, btnTextY}}, 13.f, {0.85f, 0.55f, 0.55f, 1.f});
-
-			if (input.IsMouseButtonPressed(MouseButton::Left) && btnHovered)
+			ImGui::SameLine();
+			if (ImGui::SmallButton("Dismiss All"))
 			{
 				m_errorToasts.clear();
 			}
+			ImGui::End();
 		}
 
-		// -- Panel visibility toggle ------------------------------------------
-		// Move the panel on/off-screen so the auto-renderer skips it.
-		if (m_debugPanel.IsValid())
+		if (!m_visible)
 		{
-			if (auto pt = context.Get<World>().TryGet<ui::UiTransformComponent>(m_debugPanel))
-			{
-				if (m_visible && pt->rect.offsetMinPx.y < -1000.f)
-				{
-					pt->rect = m_savedPanelRect;
-				}
-				else if (!m_visible && pt->rect.offsetMinPx.y >= -1000.f)
-				{
-					m_savedPanelRect = pt->rect;
-					pt->rect.offsetMinPx.y = -9999.f;
-					pt->rect.offsetMaxPx.y = -9999.f;
-				}
-			}
+			return;
 		}
+
+		const gpu::Extent2D ext = context.Get<Swapchain>().GetExtent();
+		ImGui::SetNextWindowPos(ImVec2(static_cast<float>(ext.width) - kPanelW - 16.0f, 16.0f), ImGuiCond_FirstUseEver);
+		ImGui::SetNextWindowSize(ImVec2(kPanelW, kPanelH), ImGuiCond_FirstUseEver);
+
+		const float curMs = m_frameSampleCount > 0 ? m_frameSamples[(m_frameSampleHead + m_frameSamples.size() - 1) % m_frameSamples.size()] : static_cast<float>(context.deltaTimeSeconds * 1000.0);
+		float totalMs = 0.0f;
+		float minMs = curMs;
+		float maxMs = curMs;
+		std::array<float, kFrameSampleCount> orderedSamples{};
+		for (std::size_t i = 0; i < m_frameSampleCount; ++i)
+		{
+			const std::size_t idx = (m_frameSampleHead + m_frameSamples.size() - m_frameSampleCount + i) % m_frameSamples.size();
+			const float sample = m_frameSamples[idx];
+			orderedSamples[i] = sample;
+			totalMs += sample;
+			minMs = std::min(minMs, sample);
+			maxMs = std::max(maxMs, sample);
+		}
+		const float avgMs = m_frameSampleCount > 0 ? totalMs / static_cast<float>(m_frameSampleCount) : curMs;
+		const float curFps = curMs > 0.0f ? 1000.0f / curMs : 0.0f;
+		const float avgFps = avgMs > 0.0f ? 1000.0f / avgMs : 0.0f;
+
+		const std::string windowTitle = std::format("Debug  |  {:.0f} FPS  |  {:.2f} ms###DebugPanel", curFps, curMs);
+		if (!ImGui::Begin(windowTitle.c_str(), &m_visible))
+		{
+			ImGui::End();
+			return;
+		}
+
+		if (ImGui::BeginTabBar("DebugTabs"))
+		{
+			if (ImGui::BeginTabItem("Perf"))
+			{
+				if (ImGui::BeginTable("PerfStats", 2, ImGuiTableFlags_SizingStretchProp))
+				{
+					DrawMetricRow("Frame", std::format("#{}", context.frameIndex).c_str());
+					DrawMetricRow("FPS", std::format("{:.1f}", curFps).c_str(), FpsColor(curFps));
+					DrawMetricRow("Delta", std::format("{:.2f} ms", curMs).c_str(), MsColor(curMs));
+					DrawMetricRow("Avg FPS", std::format("{:.1f}", avgFps).c_str(), FpsColor(avgFps));
+					DrawMetricRow("Min", std::format("{:.2f} ms", minMs).c_str(), {0.40f, 0.72f, 0.46f, 1.f});
+					DrawMetricRow("Max", std::format("{:.2f} ms", maxMs).c_str(), MsColor(maxMs));
+					ImGui::EndTable();
+				}
+				ImGui::PlotLines("Frame Time", orderedSamples.data(), static_cast<int>(m_frameSampleCount), 0, "0 - 33 ms", 0.0f, 33.333f, ImVec2(-1.0f, 120.0f));
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Render"))
+			{
+				Renderer& renderer = context.Get<Renderer>();
+				auto& rendering = context.Get<aether::RenderingSubsystem>();
+				RenderQueue& renderQueue = context.Get<RenderQueue>();
+
+				int tonemapMode = static_cast<int>(renderer.GetTonemapMode());
+				const char* tonemapNames[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
+				if (ImGui::Combo("Tonemap", &tonemapMode, tonemapNames, static_cast<int>(std::size(tonemapNames))))
+				{
+					renderer.SetTonemapMode(static_cast<aether::TonemapMode>(tonemapMode));
+				}
+
+				bool fxaa = renderer.IsFxaaEnabled();
+				if (ImGui::Checkbox("FXAA", &fxaa))
+				{
+					renderer.SetFxaaEnabled(fxaa);
+				}
+
+				float exposure = rendering.GetPostProcessStack().GetExposure();
+				if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 4.0f, "%.2f"))
+				{
+					rendering.GetPostProcessStack().SetExposure(exposure);
+				}
+
+				bool forward = rendering.IsForwardPassEnabled();
+				if (ImGui::Checkbox("Forward pass", &forward))
+				{
+					rendering.SetForwardPassEnabled(forward);
+				}
+
+				bool forceVisible = renderQueue.IsDebugForceVisible();
+				if (ImGui::Checkbox("Force visible", &forceVisible))
+				{
+					renderQueue.SetDebugForceVisible(forceVisible);
+				}
+				bool bypassIndirect = renderQueue.IsDebugBypassIndirect();
+				if (ImGui::Checkbox("Bypass indirect", &bypassIndirect))
+				{
+					renderQueue.SetDebugBypassIndirect(bypassIndirect);
+				}
+				bool disableAnimation = renderQueue.IsDebugDisableAnimation();
+				if (ImGui::Checkbox("Disable animation", &disableAnimation))
+				{
+					renderQueue.SetDebugDisableAnimation(disableAnimation);
+				}
+
+				ImGui::Separator();
+				ImGui::Text("Resolution: %u x %u", ext.width, ext.height);
+				ImGui::Text("Point lights: %zu", renderer.GetPointLights().size());
+				ImGui::Text("Spot lights: %zu", renderer.GetSpotLights().size());
+				ImGui::Text("Sun intensity: %.2f", renderer.GetDirectionalLightIntensity());
+
+				if (auto rg = context.TryGet<aether::RenderGraph>())
+				{
+					const auto passes = rg->GetPasses();
+					float passTotalMs = 0.0f;
+					for (const auto& pass: passes)
+					{
+						passTotalMs += pass.lastCpuTimeMs;
+					}
+
+					ImGui::SeparatorText("Render Graph");
+					const auto& stats = rg->GetFrameStats();
+					if (ImGui::BeginTable("RenderGraphStats", 2, ImGuiTableFlags_SizingStretchProp))
+					{
+						DrawMetricRow("Passes", std::format("{}", stats.passCount).c_str());
+						DrawMetricRow("Barriers", std::format("{}", stats.barrierCount).c_str());
+						DrawMetricRow("Transient hits", std::format("{}", stats.transientCacheHit).c_str(), {0.40f, 0.72f, 0.46f, 1.f});
+						DrawMetricRow("Transient misses", std::format("{}", stats.transientCacheMiss).c_str(), stats.transientCacheMiss == 0 ? ImVec4{0.40f, 0.72f, 0.46f, 1.f} : ImVec4{0.86f, 0.71f, 0.30f, 1.f});
+						DrawMetricRow("Cache size", std::format("{}", stats.cacheSize).c_str());
+						ImGui::EndTable();
+					}
+
+					if (ImGui::BeginTable("RenderPasses", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp))
+					{
+						ImGui::TableSetupColumn("Pass");
+						ImGui::TableSetupColumn("CPU");
+						ImGui::TableSetupColumn("Share");
+						ImGui::TableHeadersRow();
+						const std::size_t count = std::min<std::size_t>(passes.size(), kMaxRenderPassRows);
+						for (std::size_t i = 0; i < count; ++i)
+						{
+							const float pct = passTotalMs > 0.0f ? passes[i].lastCpuTimeMs / passTotalMs : 0.0f;
+							ImGui::TableNextRow();
+							ImGui::TableSetColumnIndex(0);
+							ImGui::TextUnformatted(ShortRenderPassName(passes[i].name).c_str());
+							ImGui::TableSetColumnIndex(1);
+							ImGui::TextColored(MsColor(passes[i].lastCpuTimeMs), "%.2f ms", passes[i].lastCpuTimeMs);
+							ImGui::TableSetColumnIndex(2);
+							ImGui::ProgressBar(pct, ImVec2(-1.0f, 0.0f), "");
+						}
+						ImGui::EndTable();
+					}
+					ImGui::Text("Total CPU: %.2f ms", passTotalMs);
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Debug"))
+			{
+				bool debugRenderer = aether::IsDebugRenderingEnabled();
+				if (ImGui::Checkbox("Debug overlay", &debugRenderer))
+				{
+					aether::SetDebugRenderingEnabled(debugRenderer);
+				}
+
+				bool physicsShapes = aether::IsPhysicsDebugShapesEnabled();
+				if (ImGui::Checkbox("Physics debug rendering", &physicsShapes))
+				{
+					aether::SetPhysicsDebugShapesEnabled(physicsShapes);
+				}
+
+				auto& physicsDebug = context.Get<aether::RenderingSubsystem>().GetPhysicsDebugRenderer();
+				bool selfTest = physicsDebug.IsSelfTestEnabled();
+				if (ImGui::Checkbox("Physics renderer self-test", &selfTest))
+				{
+					physicsDebug.SetSelfTestEnabled(selfTest);
+				}
+
+				ImGui::Checkbox("Test shapes", &m_debugTestShapes);
+				ImGui::Checkbox("Light gizmos", &m_lightGizmos);
+				ImGui::Checkbox("Point light volumes", &m_lightGizmoPointVolumes);
+				ImGui::Checkbox("Spot cones", &m_lightGizmoSpotCones);
+				ImGui::Checkbox("Sun direction", &m_lightGizmoSunDirection);
+				ImGui::Checkbox("Shadow markers", &m_lightGizmoShadowMarkers);
+				ImGui::SliderFloat("Light gizmo scale", &m_lightGizmoScale, 0.25f, 2.0f, "%.2f");
+
+				if (ImGui::Button("Reload Script"))
+				{
+					if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
+					{
+						scripting->RequestReload();
+					}
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Camera"))
+			{
+				if (const aether::Camera* cam = context.Get<CameraManager>().TryGetMainCamera())
+				{
+					const glm::vec3 pos = cam->GetPosition();
+					const glm::vec3 fwd = cam->GetForward();
+					if (ImGui::BeginTable("CameraStats", 2, ImGuiTableFlags_SizingStretchProp))
+					{
+						DrawMetricRow("Position", std::format("{:.2f}, {:.2f}, {:.2f}", pos.x, pos.y, pos.z).c_str());
+						DrawMetricRow("Forward", std::format("{:.2f}, {:.2f}, {:.2f}", fwd.x, fwd.y, fwd.z).c_str());
+						DrawMetricRow("FOV", std::format("{:.0f} deg", cam->GetFovDegrees()).c_str());
+						DrawMetricRow("Near", std::format("{:.2f}", cam->GetNearPlane()).c_str());
+						DrawMetricRow("Far", std::format("{:.0f}", cam->GetFarPlane()).c_str());
+						ImGui::EndTable();
+					}
+				}
+				else
+				{
+					ImGui::TextUnformatted("No active camera");
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Scene"))
+			{
+				World& world = context.Get<World>();
+				const auto entities = CollectSceneEntities(world);
+				if (!IsAlive(world, m_selectedSceneEntity))
+				{
+					m_selectedSceneEntity = {};
+				}
+
+				ImGui::Text("%zu entities", entities.size());
+				ImGui::BeginChild("SceneList", ImVec2(0.0f, 220.0f), ImGuiChildFlags_Borders);
+				const std::size_t count = std::min<std::size_t>(entities.size(), kMaxSceneRows);
+				for (std::size_t i = 0; i < count; ++i)
+				{
+					const Entity entity = entities[i];
+					const bool selected = entity == m_selectedSceneEntity;
+					if (ImGui::Selectable(SceneEntityLabel(world, entity).c_str(), selected))
+					{
+						m_selectedSceneEntity = entity;
+					}
+				}
+				if (entities.size() > count)
+				{
+					ImGui::TextDisabled("Showing first %zu of %zu", count, entities.size());
+				}
+				ImGui::EndChild();
+
+				ImGui::SeparatorText("Inspector");
+				if (!IsAlive(world, m_selectedSceneEntity))
+				{
+					ImGui::TextDisabled("No selection");
+				}
+				else
+				{
+					ImGui::Text("#%u", m_selectedSceneEntity.id);
+					ImGui::Text("Components: %s", ComponentSummary(world, m_selectedSceneEntity).c_str());
+					if (const auto transform = world.TryGet<TransformComponent>(m_selectedSceneEntity))
+					{
+						const glm::vec3 pos = glm::vec3(transform->localToWorld[3]);
+						ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
+					}
+					if (const auto skinned = world.TryGet<SkinnedMeshComponent>(m_selectedSceneEntity))
+					{
+						ImGui::Text("Animation: clip %u, time %.2f, speed %.2f", skinned->clipIndex, skinned->animTime, skinned->playbackSpeed);
+					}
+					if (const auto rigid = world.TryGet<RigidBodyComponent>(m_selectedSceneEntity))
+					{
+						const char* motion = "Dynamic";
+						if (rigid->motionType == PhysicsMotionType::Static)
+						{
+							motion = "Static";
+						}
+						else if (rigid->motionType == PhysicsMotionType::Kinematic)
+						{
+							motion = "Kinematic";
+						}
+						ImGui::Text("Rigid body: %s", motion);
+					}
+					if (const auto physics = world.TryGet<PhysicsStateComponent>(m_selectedSceneEntity))
+					{
+						ImGui::Text("Physics pos: %.2f, %.2f, %.2f", physics->currPosition.x, physics->currPosition.y, physics->currPosition.z);
+						ImGui::Text("Physics scale: %.2f, %.2f, %.2f", physics->scale.x, physics->scale.y, physics->scale.z);
+					}
+				}
+				ImGui::EndTabItem();
+			}
+
+			ImGui::EndTabBar();
+		}
+
+		ImGui::End();
 	}
 } // namespace aether::app
