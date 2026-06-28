@@ -74,7 +74,7 @@ Loaded glTF data is converted into AetherCore's runtime representation and store
 
 ## LoadingManager integration
 
-`src/engine/utils/LoadingManager.hpp` tracks async load progress. `LoadingLayer` renders a full-screen overlay with a progress bar. Together with the IO thread's coroutines, this gives the user feedback during heavy asset loads.
+`src/engine/utils/LoadingManager.hpp` tracks async load progress for asset and coroutine workflows. The old `LoadingLayer` overlay was removed during the UI migration; replacement runtime loading UI belongs in the later Noesis phase.
 
 ## Threading
 

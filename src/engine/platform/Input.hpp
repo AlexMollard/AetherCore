@@ -203,7 +203,7 @@ namespace aether
 		[[nodiscard]] const std::string& GetTypedChars() const;
 
 		// -- Mouse capture ------------------------------------------------------
-		// Set by UiSystem when the UI is actively consuming mouse input.
+		// Set by ImGui/tooling when UI is actively consuming mouse input.
 		// Camera and other systems should skip their own mouse processing
 		// while this is true to prevent conflicts (e.g. orbiting while dragging a panel).
 		void SetMouseCaptured(bool captured)

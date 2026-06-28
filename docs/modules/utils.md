@@ -96,7 +96,7 @@ The default file is created on first run if it doesn't exist.
 
 ## `LoadingManager`
 
-`src/engine/utils/LoadingManager.hpp`. Tracks async load progress. `LoadingLayer` (in `src/app/layers/`) reads from it to render a full-screen overlay with a progress bar.
+`src/engine/utils/LoadingManager.hpp`. Tracks async load progress for asset and coroutine workflows. The old `LoadingLayer` overlay has been removed; future runtime loading UI should be built on the replacement runtime UI stack.
 
 ## `Profiler` / `GpuProfiler`
 

@@ -29,9 +29,6 @@ namespace aether
 			int height = 720;
 			bool enableVsync = true;
 			const char* settingsFile = "engine.toml";
-			const char* uiFontPath = "";
-			const char* uiPassNamePrefix = "UIPass";
-			int uiGlyphSize = 48;
 		};
 
 		struct CameraRenderTarget

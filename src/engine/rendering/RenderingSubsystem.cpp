@@ -9,7 +9,6 @@
 #include "camera/CameraManager.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
-#include "ui/UIRenderer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "gpu/ResourceRegistry.hpp"
@@ -421,11 +420,6 @@ namespace aether
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
 		const gpu::Extent2D sceneExtent = m_postProcessStack.GetExtent();
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
-		if (auto ui = services.TryGet<UIRenderer>())
-		{
-			ui->SetRenderTarget(m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
-			ui->ReRegisterPass();
-		}
 		if (m_sceneViewportEnabled)
 		{
 			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});

@@ -46,26 +46,24 @@ public:
     virtual ~AppLayer() = default;
     virtual void OnAttach(AetherCore& engine, ServiceContainer& services) = 0;
     virtual void OnUpdate(AetherCore& engine, ServiceContainer& services, float dt) = 0;
-    virtual void OnUIRender(AetherCore& engine, ServiceContainer& services) = 0;  // optional
+    virtual void OnImGui(AetherCore& engine, ServiceContainer& services) = 0;  // optional
     virtual void OnDetach() = 0;
 
     [[nodiscard]] virtual std::string_view Name() const = 0;
 };
 ```
 
-Layers are pushed onto the `LayerStack` in a fixed order. `OnAttach` is called once at startup; `OnUpdate` every frame; `OnUIRender` after `OnUpdate` if the layer has UI.
+Layers are pushed onto the `LayerStack` in a fixed order. `OnAttach` is called once at startup; `OnUpdate` every frame; `OnImGui` after `OnUpdate` if the layer has tooling UI.
 
 ## Built-in layers
 
 | Layer | Role |
 |---|---|
-| `LoadingLayer` | Renders a full-screen loading overlay. |
-| `DebugLayer` | Debug HUD, frame stats, Tracy overlay. |
+| `DebugLayer` | Dockable ImGui panels for viewport, render stats, scene inspection, and diagnostics. |
 | `SandboxLayer` | Generic sandbox for trying engine features. |
 | `PhysicsLayer` | Drives the physics simulation. |
 | `FishingLayer` | Game-specific fishing mini-game. |
 | `InventoryLayer` | Game-specific inventory UI. |
-| `UiSandboxLayer` | UI playground. |
 | `ScriptedSceneLayer` | Loads and runs scripted scene data. |
 
 ## Game systems

@@ -2,7 +2,7 @@
 
 Welcome to AetherCore. This directory contains the project's reference documentation, written for contributors and engine users who want to understand how the engine fits together.
 
-> AetherCore is a C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, coroutines, and a custom asset pipeline.
+> AetherCore is a C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, ImGui debug tooling, coroutines, and a custom asset pipeline.
 
 ---
 
@@ -28,12 +28,11 @@ Welcome to AetherCore. This directory contains the project's reference documenta
 - [`scene`](modules/scene.md) - `World`, `Scene`, ECS components, `SceneSubsystem`
 - [`animation`](modules/animation.md) - skeletal animation, GPU skinning, blend/IK/root-motion systems
 - [`camera`](modules/camera.md) - `Camera`, `CameraManager`, `CameraSubsystem`, `LightingManager`
-- [`ui`](modules/ui.md) - `UISubsystem`, `UiSystem`, `UiContext`, widgets, layout, theming
+- [`imgui`](modules/ui.md) - Dear ImGui integration and debug/tooling UI
 - [`physics`](modules/physics.md) - Jolt integration, `PhysicsSystem`, `PhysicsDebugRenderer`
 - [`platform`](modules/platform.md) - `Window`, `Input`, `CrashHandler`, `PlatformSubsystem`
 - [`io`](modules/io.md) - virtual file system, PAK/directory backends, async coroutine I/O
 - [`material`](modules/material.md) - PBR materials, bindless descriptors, textures
-- [`text`](modules/text.md) - font atlas, text renderer
 - [`utils`](modules/utils.md) - `Expected`, logger, profiler, `AE_TRY`, settings, frame pacer, loading manager, coroutines
 - [`app`](modules/app.md) - `Application` main loop, layers, game systems
 

@@ -215,7 +215,7 @@ namespace aether
 
 		ApplyTheme();
 
-		// Load Roboto Regular (same font as UISubsystem)
+		// Load Roboto Regular for tooling UI.
 		constexpr std::string_view kFontPath = "assets://fonts/Roboto-Regular.ttf";
 		if (io::FileSystem::Exists(kFontPath))
 		{

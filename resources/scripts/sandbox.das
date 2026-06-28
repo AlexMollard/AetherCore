@@ -8,7 +8,6 @@ require effects;
 require input;
 require keycodes;
 require input_bindings;
-require ui;
 require math;
 require animation;
 require systems/fox_system;
@@ -20,9 +19,6 @@ require systems/third_person_camera;
 var g_fox_count    : int   = 0;
 var g_speed_scale  : float = 1.0;
 var g_rotate_foxes : bool  = true;
-var g_spawn_btn    : uint  = 0u;
-var g_speed_slider : uint  = 0u;
-var g_rotate_cb    : uint  = 0u;
 var g_cube_mesh   : uint  = 0u;
 var g_sphere_mesh : uint  = 0u;
 
@@ -45,31 +41,6 @@ var g_ground_tag : uint = 0u;
 var g_center_tag : uint = 0u;
 var g_phys_toy_tag : uint = 0u;
 
-// ── Entity inspector state ─────────────────────────────────────────────────────
-//
-// Selects a fox-tagged entity the user wants to push around with sliders. The
-// inspector keeps the entity's last-applied transform so it can detect when a
-// slider was user-dragged (its value drifted from the cached value), and only
-// writes back to the world in that case so we never fight the server.
-
-var g_ins_idx      : int  = -1;
-var g_ins_entity    : uint = 0u;
-var g_ins_count     : int  = 0;
-var g_ins_x         : float = 0.0;
-var g_ins_y         : float = 0.0;
-var g_ins_z         : float = 0.0;
-var g_ins_yaw       : float = 0.0;
-var g_ins_sc        : float = 1.0;
-
-var g_ins_label_idx : uint = 0u;
-var g_ins_prev_btn  : uint = 0u;
-var g_ins_next_btn  : uint = 0u;
-var g_ins_x_sl      : uint = 0u;
-var g_ins_y_sl      : uint = 0u;
-var g_ins_z_sl      : uint = 0u;
-var g_ins_yaw_sl    : uint = 0u;
-var g_ins_sc_sl     : uint = 0u;
-
 // Shared enumeration scratch (avoids needing array mutation inside blocks).
 var g_enum_count  : int  = 0;
 var g_enum_target : int  = -1;
@@ -77,14 +48,8 @@ var g_enum_result : uint = 0u;
 
 // ── Physics toy / spawner state ────────────────────────────────────────────────
 
-var g_toy_sz_sl    : uint = 0u;
-var g_toy_h_sl     : uint = 0u;
-var g_btn_cube     : uint = 0u;
-var g_btn_sphere   : uint = 0u;
-var g_btn_tower    : uint = 0u;
-var g_btn_rain     : uint = 0u;
-var g_btn_bounce   : uint = 0u;
-var g_btn_clear    : uint = 0u;
+var g_toy_size        : float = 0.4;
+var g_toy_drop_height : float = 12.0;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -112,41 +77,6 @@ def find_nth_tagged(world : World?; tag : uint; n : int) : uint
 		g_enum_count += 1;
 	};
 	return g_enum_result;
-}
-
-// Re-sync the inspector sliders + label with the currently selected entity.
-def refresh_inspector(world : World?)
-{
-	g_ins_count = count_tagged(world, g_fox_tag);
-	if (g_ins_idx < 0 || g_ins_idx >= g_ins_count)
-	{
-		g_ins_entity = 0u;
-		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
-		return;
-	}
-	g_ins_entity = find_nth_tagged(world, g_fox_tag, g_ins_idx);
-	if (g_ins_entity == 0u)
-	{
-		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
-		return;
-	}
-
-	let pos = get_position(world, g_ins_entity);
-	let eul = get_euler(world, g_ins_entity);
-	let sc  = get_scale(world, g_ins_entity);
-	g_ins_x   = pos.x;
-	g_ins_y   = pos.y;
-	g_ins_z   = pos.z;
-	g_ins_yaw = eul.y;
-	g_ins_sc  = sc.x; // foxes use uniform scale
-
-	set_ui_slider_value(world, g_ins_x_sl,   g_ins_x);
-	set_ui_slider_value(world, g_ins_y_sl,   g_ins_y);
-	set_ui_slider_value(world, g_ins_z_sl,   g_ins_z);
-	set_ui_slider_value(world, g_ins_yaw_sl, g_ins_yaw);
-	set_ui_slider_value(world, g_ins_sc_sl,  g_ins_sc);
-	let total = g_ins_count - 1;
-	set_ui_text(world, g_ins_label_idx, "Selected: fox {g_ins_idx}/{total}  (id {g_ins_entity})");
 }
 
 // Spawn a single dynamic primitive with a transform and tag it as a physics toy.
@@ -189,7 +119,7 @@ def clear_toys(world : World?)
 // Stack a vertical tower of dynamic boxes at world origin.
 def spawn_tower(world : World?)
 {
-	let sz = get_ui_slider_value(world, g_toy_sz_sl);
+	let sz = g_toy_size;
 	for (i in 0..5)
 	{
 		let y = 0.5 + float(i) * sz * 1.05;
@@ -202,8 +132,8 @@ def spawn_tower(world : World?)
 // Scatter 4 dynamic spheres above the scene with random-ish offsets.
 def spawn_rain(world : World?)
 {
-	let sz = get_ui_slider_value(world, g_toy_sz_sl);
-	let h  = get_ui_slider_value(world, g_toy_h_sl);
+	let sz = g_toy_size;
+	let h  = g_toy_drop_height;
 	for (i in 0..4)
 	{
 		let ang = float(i) * 1.2566; // 72 deg spacing
@@ -211,6 +141,36 @@ def spawn_rain(world : World?)
 		let z   = sin(ang) * 4.0;
 		spawn_toy(world, true, float3(x, h, z), sz);
 	}
+}
+
+def spawn_bounce_test(world : World?)
+{
+	let sz = g_toy_size;
+	let e = entity_create(world);
+	add_transform(world, e);
+	set_transform(world, e, float3(0.0, 0.5, 0.0), float3(0.0, 0.0, 0.0), float3(sz, sz, sz));
+	add_mesh(world, e, g_cube_mesh);
+	add_box_body(world, e, float3(sz * 0.5, sz * 0.5, sz * 0.5), true);
+	add_tag(world, e, g_phys_toy_tag);
+	set_linear_velocity(world, e, 0.0, 12.0, 0.0);
+}
+
+def spawn_fox(world : World?)
+{
+	let angle  = float(g_fox_count) * 0.618 * 6.2832;
+	let radius = 3.0 + sqrt(float(g_fox_count)) * 1.8;
+	let pos    = float3(cos(angle) * radius, 0.0, sin(angle) * radius);
+	let yaw    = angle * 57.2958 + 90.0;
+
+	let fox = entity_create(world);
+	add_transform(world, fox);
+	set_transform(world, fox, pos, float3(0.0, yaw, 0.0), float3(0.05, 0.05, 0.05));
+	load_model(world, fox, "assets://models/Fox/Fox.mesh");
+	set_animation(world, fox, 2);
+	set_playback_speed(world, fox, 0.7);
+	set_anim_time(world, fox, float(g_fox_count) * 0.3);
+	add_tag(world, fox, g_fox_tag);
+	g_fox_count++;
 }
 
 // ── on_attach ─────────────────────────────────────────────────────────────────
@@ -359,99 +319,6 @@ def on_attach(world : World?)
 	spawn_foxes(world, 3, 8.0, g_fox_tag);
 	g_fox_count = 3;
 
-	// ── Native UI - Scene Controls panel ────────────────────────────────────
-	let panel = create_ui_panel(world, 16.0, 16.0, 280.0, 240.0, "Scene Controls");
-	set_ui_panel_collapsible(world, panel, true);
-
-	g_speed_slider = create_ui_slider(world, 16.0, 108.0, 260.0, 28.0, 0.1, 5.0, 1.0);
-	set_ui_slider_label(world, g_speed_slider, "Fox rotation speed");
-	add_ui_child(world, panel, g_speed_slider);
-
-	g_rotate_cb = create_ui_checkbox(world, 16.0, 152.0, 260.0, 28.0, "Rotate foxes", true);
-	add_ui_child(world, panel, g_rotate_cb);
-
-	g_spawn_btn = create_ui_button(world, 16.0, 192.0, 260.0, 40.0, "Spawn Fox");
-	set_ui_button_color(world, g_spawn_btn,       float4(0.23, 0.36, 0.19, 1.0));
-	set_ui_button_hover_color(world, g_spawn_btn, float4(0.31, 0.46, 0.24, 1.0));
-	set_ui_button_press_color(world, g_spawn_btn, float4(0.17, 0.27, 0.14, 1.0));
-	add_ui_child(world, panel, g_spawn_btn);
-
-	// ── NEW Native UI - Entity Inspector panel ──────────────────────────────
-	let ins_panel = create_ui_panel(world, 16.0, 280.0, 280.0, 376.0, "Entity Inspector");
-	set_ui_panel_collapsible(world, ins_panel, true);
-
-	g_ins_label_idx = create_ui_label(world, 32.0, 320.0, 260.0, 24.0, "Selected: <none>");
-	set_ui_font_size(world, g_ins_label_idx, 13.0);
-	set_ui_text_color(world, g_ins_label_idx, float4(0.95, 0.77, 0.42, 1.0));
-	add_ui_child(world, ins_panel, g_ins_label_idx);
-
-	g_ins_prev_btn = create_ui_button(world, 32.0, 352.0, 124.0, 30.0, "Prev Fox");
-	set_ui_button_color(world, g_ins_prev_btn, float4(0.16, 0.20, 0.21, 1.0));
-	add_ui_child(world, ins_panel, g_ins_prev_btn);
-
-	g_ins_next_btn = create_ui_button(world, 162.0, 352.0, 124.0, 30.0, "Next Fox");
-	set_ui_button_color(world, g_ins_next_btn, float4(0.16, 0.20, 0.21, 1.0));
-	add_ui_child(world, ins_panel, g_ins_next_btn);
-
-	g_ins_x_sl = create_ui_slider(world, 32.0, 410.0, 244.0, 26.0, -30.0, 30.0, 0.0);
-	set_ui_slider_label(world, g_ins_x_sl, "Position X");
-	add_ui_child(world, ins_panel, g_ins_x_sl);
-
-	g_ins_y_sl = create_ui_slider(world, 32.0, 458.0, 244.0, 26.0, -1.0, 16.0, 0.0);
-	set_ui_slider_label(world, g_ins_y_sl, "Position Y");
-	add_ui_child(world, ins_panel, g_ins_y_sl);
-
-	g_ins_z_sl = create_ui_slider(world, 32.0, 506.0, 244.0, 26.0, -30.0, 30.0, 0.0);
-	set_ui_slider_label(world, g_ins_z_sl, "Position Z");
-	add_ui_child(world, ins_panel, g_ins_z_sl);
-
-	g_ins_yaw_sl = create_ui_slider(world, 32.0, 554.0, 244.0, 26.0, -180.0, 180.0, 0.0);
-	set_ui_slider_label(world, g_ins_yaw_sl, "Yaw (degrees)");
-	add_ui_child(world, ins_panel, g_ins_yaw_sl);
-
-	g_ins_sc_sl = create_ui_slider(world, 32.0, 602.0, 244.0, 26.0, 0.01, 5.0, 0.05);
-	set_ui_slider_label(world, g_ins_sc_sl, "Uniform scale");
-	add_ui_child(world, ins_panel, g_ins_sc_sl);
-
-	// ── NEW Native UI - Physics Toys & Spawner panel ─────────────────────────
-	let toy_panel = create_ui_panel(world, 312.0, 296.0, 280.0, 480.0, "Physics Toys & Spawner");
-	set_ui_panel_collapsible(world, toy_panel, true);
-
-	let toy_intro = create_ui_label(world, 328.0, 336.0, 260.0, 20.0, "Drop primitives from above (tagged)");
-	set_ui_font_size(world, toy_intro, 11.0);
-	set_ui_text_color(world, toy_intro, float4(0.60, 0.66, 0.62, 1.0));
-	add_ui_child(world, toy_panel, toy_intro);
-
-	g_toy_sz_sl = create_ui_slider(world, 328.0, 378.0, 244.0, 26.0, 0.2, 2.0, 0.4);
-	set_ui_slider_label(world, g_toy_sz_sl, "Toy size");
-	add_ui_child(world, toy_panel, g_toy_sz_sl);
-
-	g_toy_h_sl = create_ui_slider(world, 328.0, 426.0, 244.0, 26.0, 4.0, 24.0, 12.0);
-	set_ui_slider_label(world, g_toy_h_sl, "Drop height");
-	add_ui_child(world, toy_panel, g_toy_h_sl);
-
-	g_btn_cube    = create_ui_button(world, 328.0, 462.0, 244.0, 32.0, "Spawn Cube @ Drop");
-	g_btn_sphere  = create_ui_button(world, 328.0, 500.0, 244.0, 32.0, "Spawn Sphere @ Drop");
-	g_btn_tower   = create_ui_button(world, 328.0, 538.0, 244.0, 32.0, "Stack Tower (5 boxes)");
-	g_btn_rain    = create_ui_button(world, 328.0, 576.0, 244.0, 32.0, "Rain (4 spheres)");
-	g_btn_bounce  = create_ui_button(world, 328.0, 614.0, 244.0, 32.0, "Bounce Test (cube, +Y vel)");
-	set_ui_button_color(world, g_btn_cube,   float4(0.18, 0.22, 0.22, 1.0));
-	set_ui_button_color(world, g_btn_sphere, float4(0.18, 0.22, 0.22, 1.0));
-	set_ui_button_color(world, g_btn_tower,  float4(0.25, 0.29, 0.18, 1.0));
-	set_ui_button_color(world, g_btn_rain,   float4(0.25, 0.29, 0.18, 1.0));
-	set_ui_button_color(world, g_btn_bounce,  float4(0.30, 0.40, 0.19, 1.0));
-	add_ui_child(world, toy_panel, g_btn_cube);
-	add_ui_child(world, toy_panel, g_btn_sphere);
-	add_ui_child(world, toy_panel, g_btn_tower);
-	add_ui_child(world, toy_panel, g_btn_rain);
-	add_ui_child(world, toy_panel, g_btn_bounce);
-
-	g_btn_clear = create_ui_button(world, 328.0, 656.0, 244.0, 32.0, "Clear All Toys");
-	set_ui_button_color(world, g_btn_clear,       float4(0.48, 0.18, 0.13, 1.0));
-	set_ui_button_hover_color(world, g_btn_clear, float4(0.64, 0.25, 0.16, 1.0));
-	set_ui_button_press_color(world, g_btn_clear, float4(0.34, 0.12, 0.09, 1.0));
-	add_ui_child(world, toy_panel, g_btn_clear);
-
 	// ── spawn a human (1 clip: idle) ───────────────────────────────────────
 	g_player = entity_create(world);
 	add_transform(world, g_player);
@@ -471,25 +338,13 @@ def on_attach(world : World?)
 
 	// Init default bindings, then register the new sandbox actions.
 	init_default_bindings();
-	register_action("inspector_prev",  KEY_LEFT,   0);
-	register_action("inspector_next",  KEY_RIGHT,  0);
 	register_action("spawn_cube_key",  KEY_1,      0);
 	register_action("spawn_sphere_key", KEY_2,    0);
 	register_action("clear_toys_key",  KEY_X,      0);
 	register_action("spawn_tower_key", KEY_T,      0);
-
-	// Pick first fox into the inspector after attach.
-	g_ins_idx = 0;
-	refresh_inspector(world);
-}
-
-// ── Helper: format time of day as HH:MM ───────────────────────────────────────
-
-def format_time(hours : float) : string
-{
-	let h = int(hours) % 24;
-	let m = int((hours - float(int(hours))) * 60.0) % 60;
-	return "{h:02}:{m:02}";
+	register_action("spawn_fox_key",   KEY_F,      0);
+	register_action("spawn_rain_key",  KEY_3,      0);
+	register_action("bounce_test_key", KEY_B,      0);
 }
 
 // ── on_update ─────────────────────────────────────────────────────────────────
@@ -520,29 +375,9 @@ def on_update(world : World?)
 		set_effect_intensity(world, g_plasma_sphere, 0.7 + sin(g_time * 0.5) * 0.3);
 	}
 
-	// ── Read UI controls ──────────────────────────────────────────────────────
-	g_speed_scale  = get_ui_slider_value(world, g_speed_slider);
-	g_rotate_foxes = get_ui_checked(world, g_rotate_cb);
-
-	// Spawn a new fox when scene-controls button clicked
-	if (get_ui_clicked(world, g_spawn_btn))
+	if (is_action_pressed("spawn_fox_key"))
 	{
-		let angle  = float(g_fox_count) * 0.618 * 6.2832;
-		let radius = 3.0 + sqrt(float(g_fox_count)) * 1.8;
-		let pos    = float3(cos(angle) * radius, 0.0, sin(angle) * radius);
-		let yaw    = angle * 57.2958 + 90.0;
-
-		let fox = entity_create(world);
-		add_transform(world, fox);
-		set_transform(world, fox, pos, float3(0.0, yaw, 0.0), float3(0.05, 0.05, 0.05));
-		load_model(world, fox, "assets://models/Fox/Fox.mesh");
-		set_animation(world, fox, 2);
-		set_playback_speed(world, fox, 0.7);
-		set_anim_time(world, fox, float(g_fox_count) * 0.3);
-		add_tag(world, fox, g_fox_tag);
-		g_fox_count++;
-
-		set_ui_button_label(world, g_spawn_btn, "Spawn Fox ({g_fox_count})");
+		spawn_fox(world);
 	}
 
 	// Rotate all foxes if enabled (uses for_each_with_tag_transform so the block
@@ -573,61 +408,6 @@ def on_update(world : World?)
 		}
 	};
 
-	// ── Entity inspector UI logic ─────────────────────────────────────────────
-	if (get_ui_clicked(world, g_ins_prev_btn))
-	{
-		if (g_ins_count == 0) { g_ins_idx = -1; }
-		else { g_ins_idx = (g_ins_idx - 1 + g_ins_count) % g_ins_count; }
-		refresh_inspector(world);
-	}
-	if (get_ui_clicked(world, g_ins_next_btn))
-	{
-		if (g_ins_count == 0) { g_ins_idx = -1; }
-		else { g_ins_idx = (g_ins_idx + 1) % g_ins_count; }
-		refresh_inspector(world);
-	}
-	if (is_action_pressed("inspector_prev"))
-	{
-		if (g_ins_count == 0) { g_ins_idx = -1; }
-		else { g_ins_idx = (g_ins_idx - 1 + g_ins_count) % g_ins_count; }
-		refresh_inspector(world);
-	}
-	if (is_action_pressed("inspector_next"))
-	{
-		if (g_ins_count == 0) { g_ins_idx = -1; }
-		else { g_ins_idx = (g_ins_idx + 1) % g_ins_count; }
-		refresh_inspector(world);
-	}
-
-	// Apply slider edits back to the selected entity (write-on-change).
-	if (g_ins_entity != 0u && entity_valid(g_ins_entity))
-	{
-		let sx  = get_ui_slider_value(world, g_ins_x_sl);
-		let sy  = get_ui_slider_value(world, g_ins_y_sl);
-		let sz  = get_ui_slider_value(world, g_ins_z_sl);
-		let syw = get_ui_slider_value(world, g_ins_yaw_sl);
-		let ssc = get_ui_slider_value(world, g_ins_sc_sl);
-
-		var dirty = false;
-		if (abs(sx  - g_ins_x)   > 0.001) { g_ins_x   = sx;  dirty = true; }
-		if (abs(sy  - g_ins_y)   > 0.001) { g_ins_y   = sy;  dirty = true; }
-		if (abs(sz  - g_ins_z)   > 0.001) { g_ins_z   = sz;  dirty = true; }
-		if (abs(syw - g_ins_yaw) > 0.001) { g_ins_yaw = syw; dirty = true; }
-		if (abs(ssc - g_ins_sc)  > 0.001) { g_ins_sc  = ssc; dirty = true; }
-
-		if (dirty)
-		{
-			set_transform(world, g_ins_entity, float3(g_ins_x, g_ins_y, g_ins_z),
-				float3(0.0, g_ins_yaw, 0.0), float3(g_ins_sc, g_ins_sc, g_ins_sc));
-		}
-	}
-	elif (g_ins_entity != 0u)
-	{
-		// Selected entity went away (cleared/destroyed). Reset selection.
-		g_ins_entity = 0u;
-		set_ui_text(world, g_ins_label_idx, "Selected: <none>");
-	}
-
 	// ── Player controller & third-person camera ───────────────────────────────
 	var inputX = 0.0; var inputZ = 0.0;
 	if (is_action_down("move_forward"))  { inputZ += 1.0; }
@@ -637,38 +417,31 @@ def on_update(world : World?)
 	update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam);
 	update_third_person_camera(world, g_cam, g_player);
 
-	// ── Physics toys UI ──────────────────────────────────────────────────────
-	let toy_sz = get_ui_slider_value(world, g_toy_sz_sl);
-	let toy_h  = get_ui_slider_value(world, g_toy_h_sl);
+	// ── Physics toys keyboard shortcuts ──────────────────────────────────────
+	let toy_sz = g_toy_size;
+	let toy_h  = g_toy_drop_height;
 
-	if (get_ui_clicked(world, g_btn_cube) || is_action_pressed("spawn_cube_key"))
+	if (is_action_pressed("spawn_cube_key"))
 	{
 		spawn_toy(world, false, float3(0.0, toy_h, 0.0), toy_sz);
 	}
-	if (get_ui_clicked(world, g_btn_sphere) || is_action_pressed("spawn_sphere_key"))
+	if (is_action_pressed("spawn_sphere_key"))
 	{
 		spawn_toy(world, true, float3(0.0, toy_h, 0.0), toy_sz);
 	}
-	if (get_ui_clicked(world, g_btn_tower) || is_action_pressed("spawn_tower_key"))
+	if (is_action_pressed("spawn_tower_key"))
 	{
 		spawn_tower(world);
 	}
-	if (get_ui_clicked(world, g_btn_rain))
+	if (is_action_pressed("spawn_rain_key"))
 	{
 		spawn_rain(world);
 	}
-	if (get_ui_clicked(world, g_btn_bounce))
+	if (is_action_pressed("bounce_test_key"))
 	{
-		// Spawn a cube with an upward velocity for a bounce test.
-		let e = entity_create(world);
-		add_transform(world, e);
-		set_transform(world, e, float3(0.0, 0.5, 0.0), float3(0.0, 0.0, 0.0), float3(toy_sz, toy_sz, toy_sz));
-		add_mesh(world, e, g_cube_mesh);
-		add_box_body(world, e, float3(toy_sz * 0.5, toy_sz * 0.5, toy_sz * 0.5), true);
-		add_tag(world, e, g_phys_toy_tag);
-		set_linear_velocity(world, e, 0.0, 12.0, 0.0);
+		spawn_bounce_test(world);
 	}
-	if (get_ui_clicked(world, g_btn_clear) || is_action_pressed("clear_toys_key"))
+	if (is_action_pressed("clear_toys_key"))
 	{
 		clear_toys(world);
 	}
@@ -677,18 +450,15 @@ def on_update(world : World?)
 	if (is_action_pressed("toggle_rotate"))
 	{
 		g_rotate_foxes = !g_rotate_foxes;
-		set_ui_checked(world, g_rotate_cb, g_rotate_foxes);
 	}
 
 	if (is_action_down("speed_up"))
 	{
 		g_speed_scale = clamp(g_speed_scale + dt * 2.0, 0.1, 5.0);
-		set_ui_slider_value(world, g_speed_slider, g_speed_scale);
 	}
 	if (is_action_down("speed_down"))
 	{
 		g_speed_scale = clamp(g_speed_scale - dt * 2.0, 0.1, 5.0);
-		set_ui_slider_value(world, g_speed_slider, g_speed_scale);
 	}
 
 }

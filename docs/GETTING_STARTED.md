@@ -147,17 +147,16 @@ AetherCore/
 │   ├── camera/           Camera subsystem, camera manager, lighting manager
 │   ├── physics/          Jolt physics integration
 │   ├── animation/        Skeletal animation, GPU skinning
-│   ├── ui/               In-engine immediate-mode UI (UISystem, UiContext, UIRenderer)
+│   ├── imgui/            Dear ImGui debug/tooling integration
 │   ├── platform/         Window (GLFW), input, crash handler
 │   ├── io/               Virtual FS (PAK/directory backends), async coroutine I/O
-│   ├── text/             Font atlas, text renderer
 │   └── utils/            Logger, profiler, Expected<T>, AE_ASSERT, settings, frame pacer, loading manager
 │       └── coro/         Coroutines: async<T>, task<T>, channel<T>, executor
 │
 ├── src/app/             Executable "App"
 │   ├── Application.{hpp,cpp}  Main loop, coroutine executor, loading manager, layer stack
 │   ├── main.cpp               Entry point
-│   ├── layers/                LayerStack, LoadingLayer, DebugLayer, etc.
+│   ├── layers/                LayerStack, DebugLayer, ScriptedSceneLayer, etc.
 │   └── systems/               Game systems (day/night, fishing, physics, sandbox)
 │
 ├── tools/assetpack/     Asset packer CLI (mesh/texture/SPIR-V processing)
@@ -217,7 +216,7 @@ cmake --preset clangd
 
 ### "Where do I add a new subsystem?"
 
-1. Create `src/engine/<area>/<Name>Subsystem.hpp/.cpp` mirroring the existing `*Subsystem` pattern (`PlatformSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `RenderingSubsystem`, `UISubsystem`).
+1. Create `src/engine/<area>/<Name>Subsystem.hpp/.cpp` mirroring the existing `*Subsystem` pattern (`PlatformSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `RenderingSubsystem`, `ImguiSubsystem`).
 2. Add the subsystem to `AetherCore::AetherCore` in `src/engine/AetherCore.cpp` at the correct step in the init order (see "Subsystem init order" in `ARCHITECTURE.md`).
 3. Register the subsystem (and any sub-services) on `m_services`.
 4. Add a matching `Shutdown` call in the destructor (reverse order).
@@ -255,7 +254,7 @@ AetherCore::AetherCore({.appName = "MyGame", .settingsFile = "mygame.toml"});
 | "Service not registered" panic | `ServiceContainer::Get<T>()` failed - the type isn't registered. Check `AetherCore::AetherCore` and the relevant subsystem's `Init`. |
 | Validation layer errors | Enable Vulkan validation in your driver / SDK config. `AETHERCORE_ENABLE_ASAN` will catch CPU-side buffer overruns. |
 | Asset won't load | Path is virtual (`assets://...`, `shaders://...`). Confirm the file is in the `assets.pak` and the virtual path is mounted in `io::FileSystem::InitializeDefaultMounts`. |
-| Slow first frame | Asset packing, shader compilation, and PAK decompression happen on the first frame. Pre-warm via `LoadingManager` + `LoadingLayer`. |
+| Slow first frame | Asset packing, shader compilation, and PAK decompression happen on the first frame. Track progress through `LoadingManager` until the replacement runtime loading UI exists. |
 
 For deeper debugging:
 

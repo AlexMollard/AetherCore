@@ -1,13 +1,13 @@
 # ⚡ AetherCore
 
-A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, in-engine UI, coroutines, and a custom asset pipeline.
+A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction layer, ECS-driven gameplay, Jolt physics, ImGui debug tooling, coroutines, and a custom asset pipeline.
 
 ---
 
 ## ✨ Features
 
 - **GPU abstraction layer** - `GpuDevice`/`GpuTypes` wrap Vulkan behind a generic interface; core engine code never touches Vulkan directly
-- **Subsystem orchestrator** - engine decomposed into `RenderingSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `CameraSubsystem`, `PlatformSubsystem`, `UISubsystem` wired through a `ServiceContainer` service locator
+- **Subsystem orchestrator** - engine decomposed into `RenderingSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `CameraSubsystem`, `PlatformSubsystem`, and other focused services wired through a `ServiceContainer` service locator
 - **Bindless resources** - materials, textures, and vertex data accessed via bindless descriptors and BDA (buffer device address)
 - **GPU heap allocator** - device-local memory arena with typed `GpuSpan<T>` suballocations (GPU malloc/free), used by `MeshArena` and animation database
 - **Render graph** - GPU culling, forward pass, tiled lighting, CSM shadows, post-processing, triple buffering
@@ -15,7 +15,7 @@ A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction lay
 - **ECS world** - EnTT-based entity/component system with typed entity handles
 - **Jolt physics** - component-based rigid body and shape authoring
 - **Animation system** - skeletal animation with GPU skinning pipeline
-- **In-engine UI system** - widget-based immediate-mode UI (`UiSystem`, `UiWidgets`, `UiLayout`, `UiWorld`) with theming
+- **ImGui debug tooling** - dockable panels for render stats, scene inspection, viewport controls, day/night settings, and diagnostics
 - **Offscreen rendering** - render-to-texture camera targets
 - **Asset pipeline** - virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML
 - **Asset processor** - mesh processing, texture compression, SPIR-V optimization in the asset packer
@@ -23,7 +23,7 @@ A C++26/23 Vulkan game engine with a subsystem orchestrator, GPU abstraction lay
 - **Day/night cycle** - time-of-day driven lighting system
 - **Coroutine system** - `async<T>`, `executor`, `queued_executor`, `channel<T>`, `sleep_for` under `aether::coro`; enables lazy async coroutines for asset I/O and render thread sync
 - **Error handling** - `Expected<T>` wrapping C++26 `std::expected`, `AetherError` with typed log categories, `AE_ASSERT`/`AE_ASSERT_ALWAYS`, `AE_TRY`/`AE_EXPECT_OR_THROW` macros; all Vulkan calls, asset loads, and I/O operations are error-checked
-- **Loading manager** - `LoadingManager` tracks async load progress; `LoadingLayer` renders a full-screen loading overlay with progress bar
+- **Loading manager** - `LoadingManager` tracks async load progress for asset and coroutine workflows
 - **Frame pacer** - `FramePacer` regulates game-thread cadence to a fixed target FPS with coarse-sleep + fine-spin timing
 
 ---
@@ -47,9 +47,7 @@ src/engine/
   rendering/               Render graph, render queue, pipelines, shadow service,
                            lighting manager, frame composer, render thread (channel-based sync)
   scene/                   Scene graph, ECS helpers, world, scene subsystem
-  text/                    Font atlas, text renderer
-  ui/                      In-engine UI system (widgets, layout, theme),
-                           quad/text renderers
+  imgui/                   Dear ImGui integration for debug/tooling UI
   utils/                   Logger, profiler, settings, text/ini parser,
                            debug GUI helpers, frame pacer, loading manager,
                            Expected<T>, AetherError, AE_ASSERT macros,
@@ -62,8 +60,7 @@ src/engine/
 src/app/
   Application.hpp/cpp      Main application loop with coroutine executor and loading manager
   main.cpp                 Entry point
-  layers/                  AppLayer interface, LayerStack, LoadingLayer,
-                           SandboxLayer, DebugLayer,
+  layers/                  AppLayer interface, LayerStack, SandboxLayer, DebugLayer,
                            FishingLayer, InventoryLayer, UiSandboxLayer,
                            PhysicsLayer
   systems/                 Game systems (day/night, fishing, physics, sandbox)

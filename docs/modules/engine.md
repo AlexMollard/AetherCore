@@ -20,9 +20,6 @@ public:
         int         height           = 720;
         bool        enableVsync      = true;
         const char* settingsFile     = "engine.toml";
-        const char* uiFontPath       = "";
-        const char* uiPassNamePrefix = "UIPass";
-        int         uiGlyphSize      = 48;
     };
 
     explicit AetherCore(const Config& config);
@@ -53,7 +50,7 @@ See `ARCHITECTURE.md §1` for the full dependency-driven order. The constructor 
 4. **Assets** - `AssetSubsystem::Init`. Registers `AssetManager`, `MeshArena`, `MeshUploadQueue`, `MaterialBuffer`.
 5. **Cameras** - `CameraSubsystem::Init`. Registers `CameraManager`, `LightingManager`.
 6. **Rendering** - `RenderingSubsystem::Init`. Registers `Renderer`, `RenderQueue`, `RenderGraph`, `ShadowService`, `RenderTargetService`.
-7. **UI** - `UISubsystem::Init` (opt-in via `uiFontPath`). Registers `UIRenderer`, `ui::UiContext`, `ui::UiSystem`.
+7. **ImGui** - `ImguiSubsystem::Init`. Registers the debug/tooling UI integration.
 8. **Async compute** - `AsyncComputeContext::Init` (skipped if no dedicated compute queue).
 9. **Animation systems** - `AnimationBlendSystem` and `AnimationRootMotionSystem` constructed and registered.
 10. **Cross-subsystem wiring** - `LightingManager.LinkRenderer`, `AssetSubsystem.LinkRenderingDeps`, animation systems wired into `RenderQueue`.

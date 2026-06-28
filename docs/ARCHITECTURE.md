@@ -25,8 +25,8 @@ This document describes how AetherCore fits together. It is intended for contrib
                   └────────┘
             ┌────────────────────┬────────────────────┐
             ▼                    ▼                    ▼
-       AssetSubsystem       UISubsystem          Animation systems
-       (assets/, io/)       (ui/)                (animation/)
+       AssetSubsystem       ImguiSubsystem       Animation systems
+       (assets/, io/)       (imgui/)             (animation/)
        ┌────────────┐
        │ MaterialBuffer,
        │  MeshArena,
@@ -46,10 +46,10 @@ The order is significant - each step depends on services registered by earlier s
 4. **Assets** - `AssetSubsystem` builds `AssetManager`, `MeshArena`, `MaterialBuffer`, registers virtual file system mounts.
 5. **Cameras** - `CameraSubsystem` registers `CameraManager` + `LightingManager`.
 6. **Rendering** - `RenderingSubsystem` registers `Renderer`, `RenderQueue`, `RenderGraph`, all passes.
-7. **UI** - `UISubsystem` (opt-in via `uiFontPath` config; registers `UIRenderer` + `UiContext` + `UiSystem`).
+7. **ImGui** - `ImguiSubsystem` owns the debug/tooling UI context and backend integration.
 8. **Async compute** - `AsyncComputeContext::Init` (skipped if no dedicated compute queue).
 9. **Animation systems** - `AnimationBlendSystem` and `AnimationRootMotionSystem` are constructed and registered.
-10. **Swapchain recreation callback** - `GpuDevice::SetSwapchainRecreatedCallback` lets the rendering subsystem re-register its UI passes when the swapchain changes.
+10. **Swapchain recreation callback** - `GpuDevice::SetSwapchainRecreatedCallback` lets the rendering subsystem rebuild render targets when the swapchain changes.
 
 **Shutdown is the exact reverse**, preceded by `m_gpu->WaitIdle()`.
 
@@ -297,20 +297,14 @@ All three are initialized with `(allocator, device, capacity)`, register themsel
 
 ---
 
-## 9. The UI system
+## 9. Debug and tooling UI
 
-`src/engine/ui/` is a self-contained immediate-mode UI system, similar in spirit to Dear ImGui but engine-integrated:
+`src/engine/imgui/` owns the Dear ImGui integration used by debug/tooling UI. The old custom screen-space UI stack under `src/engine/ui/` was removed during the UI scripting migration.
 
-- `UISubsystem` is the orchestrator.
-- `UiSystem` is the per-frame state machine (Begin / Window / End).
-- `UiContext` is the user-facing draw API (`Button`, `Slider`, etc.).
-- `UiWidgets` provides widgets.
-- `UiLayout` is the flex/anchor layout engine.
-- `UIRenderer` translates UI commands into render graph passes.
-- `QuadRenderer` and `TextRenderer` are the underlying primitive renderers.
-- `FontAtlas` and `TextRenderer` (in `src/engine/text/`) provide text rendering.
-
-UI passes are re-registered on swapchain recreation through `GpuDevice`'s callback.
+- `ImguiSubsystem` owns the ImGui context and GLFW/Vulkan backend lifetime.
+- App layers submit tooling through `AppLayer::OnImGui()`.
+- Debug panels live under `src/app/debug/`.
+- Runtime UI is intentionally reserved for the later Noesis phase.
 
 ---
 

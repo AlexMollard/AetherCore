@@ -11,9 +11,6 @@
 #include "rendering/RenderQueue.hpp"
 #include "rendering/ShadowService.hpp"
 #include "scene/World.hpp"
-#include "ui/UiContext.hpp"
-#include "ui/UIRenderer.hpp"
-#include "ui/UiSystem.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -23,18 +20,12 @@ namespace aether::app
 {
 	namespace
 	{
-		constexpr std::string_view kUiFontPath = "assets://fonts/Roboto-Regular.ttf";
-
 		aether::AetherCore::Config BuildConfigFromSettings(const aether::AetherCore::Config& baseConfig, const aether::EngineSettings& settings)
 		{
 			aether::AetherCore::Config cfg = baseConfig;
 			cfg.width = settings.window.width;
 			cfg.height = settings.window.height;
 			cfg.enableVsync = settings.graphics.vsync;
-			if (cfg.uiFontPath == nullptr || cfg.uiFontPath[0] == '\0')
-			{
-				cfg.uiFontPath = kUiFontPath.data();
-			}
 			return cfg;
 		}
 
@@ -107,7 +98,6 @@ namespace aether::app
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
 
 		m_layers.DetachAll(context);
-		// Engine UIRenderer shutdown is handled by AetherCore.
 		AE_INFO(LogCategory::App, "Application shutdown complete.");
 	}
 
@@ -240,26 +230,6 @@ namespace aether::app
 			m_engine.GetServiceContainer().Get<RenderQueue>().SetWriteSlot(drawSlot);
 			m_engine.GetServiceContainer().Get<RenderQueue>().Clear(drawSlot);
 			m_engine.GetServiceContainer().Get<ShadowService>().PrepareWriteSlot(drawSlot);
-			if (auto uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
-			{
-				uiRenderer->SetWriteSlot(drawSlot);
-			}
-
-			// ECS UI system: hit-test, drag, widget state (runs before OnImGui).
-			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
-			{
-				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
-				auto& uiCtx = m_engine.GetServiceContainer().Get<ui::UiContext>();
-				const auto extent = m_engine.GetServiceContainer().Get<Swapchain>().GetExtent();
-				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, extent, static_cast<float>(scaledDt));
-
-				// Auto-render all ECS UI entities (panels, buttons, sliders, etc.).
-				// Replaces explicit per-layer OnImGui manual Draw* calls for ECS UI.
-				if (auto uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
-				{
-					uiSystem->RenderAll(uiWorld, *uiRenderer, m_engine.GetServiceContainer().Get<Input>(), extent);
-				}
-			}
 
 			// Layer game-logic update.
 			{
@@ -274,12 +244,6 @@ namespace aether::app
 					imgui->BeginFrame(frameContext.services, static_cast<float>(deltaTime));
 				}
 				m_layers.ImGuiAll(frameContext);
-			}
-
-			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
-			{
-				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
-				uiSystem->EndFrame(uiWorld);
 			}
 
 			// Flush ECS draws and build a frame packet.

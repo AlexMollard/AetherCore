@@ -17,9 +17,6 @@ struct Config {
     int         height           = 720;
     bool        enableVsync      = true;
     const char* settingsFile     = "engine.toml";
-    const char* uiFontPath       = "";
-    const char* uiPassNamePrefix = "UIPass";
-    int         uiGlyphSize      = 48;
 };
 
 explicit AetherCore(const Config& config);
@@ -232,14 +229,14 @@ Defined in `src/app/layers/AppLayer.hpp`.
 ```cpp
 virtual void OnAttach(AetherCore&, ServiceContainer&) = 0;
 virtual void OnUpdate(AetherCore&, ServiceContainer&, float dt) = 0;
-virtual void OnUIRender(AetherCore&, ServiceContainer&) {}
+virtual void OnImGui(AetherCore&, ServiceContainer&) {}
 virtual void OnDetach() = 0;
 virtual std::string_view Name() const = 0;
 ```
 
-## `aether::UISubsystem` / `aether::ui::UiSystem` / `aether::ui::UiContext`
+## `aether::ImguiSubsystem`
 
-Defined in `src/engine/ui/`. The in-engine immediate-mode UI.
+Defined in `src/engine/imgui/`. Owns the Dear ImGui context and platform/render backends used by debug/tooling UI.
 
 ## `aether::coro::*` - coroutines
 

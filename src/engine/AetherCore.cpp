@@ -37,7 +37,6 @@
 #include "scene/EcsHelpers.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
-#include "ui/UISubsystem.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Expected.hpp"
 #include "utils/Logger.hpp"
@@ -62,7 +61,6 @@ namespace aether
 		m_services.RegisterOwned(std::make_unique<PlatformSubsystem>());
 		m_services.RegisterOwned(std::make_unique<SceneSubsystem>());
 		m_services.RegisterOwned(std::make_unique<AssetSubsystem>());
-		m_services.RegisterOwned(std::make_unique<UISubsystem>());
 		m_services.RegisterOwned(std::make_unique<AsyncComputeContext>());
 		m_gpu = std::make_unique<GpuDevice>();
 		m_services.Register<GpuDevice>(*m_gpu);
@@ -113,16 +111,6 @@ namespace aether
 		m_imgui->Init(m_services);
 		m_services.Register<ImguiSubsystem>(*m_imgui);
 
-		// -- 8. UI ----------------------------------------------------------
-		if (config.uiFontPath != nullptr && config.uiFontPath[0] != '\0')
-		{
-			auto& ui = m_services.Get<UISubsystem>();
-			ui.Init(m_services, config.uiFontPath, config.uiPassNamePrefix, config.uiGlyphSize);
-			m_services.Register<UIRenderer>(ui.GetUiRenderer());
-			m_services.Register<ui::UiContext>(ui.GetUiContext());
-			m_services.Register<ui::UiSystem>(ui.GetUiSystem());
-		}
-
 		// Link cross-subsystem dependencies.
 		m_cameras->GetLightingManager().LinkRenderer(m_rendering->GetRenderer());
 		assetsSub.LinkRenderingDeps(m_services);
@@ -164,15 +152,7 @@ namespace aether
 		rq.SetAnimationBlendSystem(m_animationBlend.get());
 
 		// -- 10. Swapchain recreation callback ------------------------------
-		m_gpu->SetSwapchainRecreatedCallback(
-		        [this]()
-		        {
-			        m_rendering->RecreateSwapchainResources(m_services);
-			        if (auto ui = m_services.TryGet<UIRenderer>(); ui != nullptr && !m_rendering->IsSceneViewportEnabled())
-			        {
-				        ui->ReRegisterPass();
-			        }
-		        });
+		m_gpu->SetSwapchainRecreatedCallback([this]() { m_rendering->RecreateSwapchainResources(m_services); });
 
 		AE_INFO(LogCategory::Engine, "Engine core initialized. Bindless sampled-image capacity: {}", m_gpu->GetBindlessManager().GetCapacity());
 	}
@@ -186,7 +166,6 @@ namespace aether
 		// Subsystems free their VMA-backed allocations (VMA still alive).
 		m_rendering->Shutdown();
 		m_imgui->Shutdown(m_services);
-		m_services.Get<UISubsystem>().Shutdown(m_services);
 		m_cameras->Shutdown();
 		m_services.Get<AssetSubsystem>().Shutdown();
 		// SceneSubsystem has no shutdown work.

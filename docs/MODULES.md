@@ -36,7 +36,7 @@ AetherCore is split into focused modules. Each module owns one concern; subsyste
 | **`animation/`** | Skeletal animation, GPU skinning, `AnimationBlend` / `AnimationRootMotion`, `AnimationCompiler`, `AnimationDatabase`. | [modules/animation.md](modules/animation.md) |
 | **`camera/`** | `Camera`, `CameraManager`, `CameraSubsystem`, `LightingManager`. | [modules/camera.md](modules/camera.md) |
 | **`physics/`** | Jolt integration, `PhysicsSystem`, `PhysicsDebugRenderer`, physics components. | [modules/physics.md](modules/physics.md) |
-| **`ui/`** | In-engine immediate-mode UI: `UISubsystem`, `UiSystem`, `UiContext`, widgets, layout, theme, `UIRenderer`. | [modules/ui.md](modules/ui.md) |
+| **`imgui/`** | Dear ImGui integration for debug/tooling UI. | [modules/ui.md](modules/ui.md) |
 
 ## Platform
 
@@ -50,13 +50,12 @@ AetherCore is split into focused modules. Each module owns one concern; subsyste
 | Module | Owns | Doc |
 |---|---|---|
 | **`material/`** | PBR materials, `MaterialBuffer`, `BindlessContract`, `Texture`. | [modules/material.md](modules/material.md) |
-| **`text/`** | `FontAtlas`, `TextRenderer`. | [modules/text.md](modules/text.md) |
 
 ## App
 
 | Module | Owns | Doc |
 |---|---|---|
-| **`app/`** | `Application` main loop, `LayerStack`, layers (`LoadingLayer`, `DebugLayer`, `SandboxLayer`, `PhysicsLayer`, `FishingLayer`, `InventoryLayer`, `UiSandboxLayer`, `ScriptedSceneLayer`), game systems (day/night, fishing, physics, sandbox). | [modules/app.md](modules/app.md) |
+| **`app/`** | `Application` main loop, `LayerStack`, layers (`DebugLayer`, `SandboxLayer`, `PhysicsLayer`, `FishingLayer`, `InventoryLayer`, `ScriptedSceneLayer`), game systems (day/night, fishing, physics, sandbox). | [modules/app.md](modules/app.md) |
 
 ## Tooling
 
