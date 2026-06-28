@@ -55,4 +55,14 @@ namespace aether::colors
 	inline constexpr auto DebugYellow = detail::rgb(255, 211, 42); // #FFD32A
 	inline constexpr auto DebugCyan = detail::rgb(23, 195, 224);   // #17C3E0
 
+	// Frame time histogram gradient (fast → slow)
+	inline constexpr auto HistFastest = detail::rgb(60, 200, 80);
+	inline constexpr auto HistFast = detail::rgb(80, 200, 120);
+	inline constexpr auto HistFair = detail::rgb(100, 200, 100);
+	inline constexpr auto HistOkay = detail::rgb(160, 200, 80);
+	inline constexpr auto HistSlow = detail::rgb(200, 180, 60);
+	inline constexpr auto HistSlower = detail::rgb(200, 80, 60);
+	inline constexpr auto HistBad = detail::rgb(160, 40, 40);
+	inline constexpr auto HistTerrible = detail::rgb(120, 20, 20);
+
 } // namespace aether::colors

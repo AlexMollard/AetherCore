@@ -1,0 +1,229 @@
+#include "ViewportPanel.hpp"
+
+#include <algorithm>
+#include <cmath>
+#include <format>
+
+#include <glm/glm.hpp>
+#include <imgui.h>
+#include <imgui_internal.h>
+
+#include "AetherCore.hpp"
+#include "debug/DebugPanel.hpp"
+#include "imgui/ImguiSubsystem.hpp"
+#include "layers/AppLayer.hpp"
+#include "passes/PostProcessStack.hpp"
+#include "platform/Input.hpp"
+#include "rendering/RenderingSubsystem.hpp"
+#include "utils/Profiler.hpp"
+#include "vulkan/Swapchain.hpp"
+
+namespace aether::app
+{
+	void ViewportPanel::OnAttach(LayerContext& context)
+	{
+		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, true);
+	}
+
+	void ViewportPanel::OnDetach(LayerContext& context)
+	{
+		ReleaseSceneViewportTexture(context);
+		context.Get<Input>().ClearMouseViewportTransform();
+		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, false);
+	}
+
+	void ViewportPanel::ReleaseSceneViewportTexture(LayerContext& context)
+	{
+		if (m_sceneViewportTextureId != 0)
+		{
+			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(m_sceneViewportTextureId));
+			}
+		}
+
+		m_sceneViewportTextureId = 0;
+		m_sceneViewportImageView = nullptr;
+	}
+
+	void ViewportPanel::OnGui(LayerContext& context)
+	{
+		AE_PROFILE_ZONE();
+
+		ImGui::Begin("Viewport");
+
+		auto& rendering = context.Get<aether::RenderingSubsystem>();
+		auto& post = rendering.GetPostProcessStack();
+		const gpu::ImageView imageView = post.GetFinalColorImageView();
+
+		if (imageView != m_sceneViewportImageView)
+		{
+			ReleaseSceneViewportTexture(context);
+			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+			{
+				const ImTextureID textureId = imgui->RegisterTexture(imageView, gpu::ImageLayout::ShaderReadOnly);
+				m_sceneViewportTextureId = static_cast<std::uint64_t>(textureId);
+				m_sceneViewportImageView = imageView;
+			}
+		}
+
+		if (m_sceneViewportTextureId == 0)
+		{
+			context.Get<Input>().ClearMouseViewportTransform();
+			ImGui::TextDisabled("Scene viewport texture unavailable");
+			ImGui::End();
+			return;
+		}
+
+		const ImVec2 available = ImGui::GetContentRegionAvail();
+		gpu::Extent2D extent = post.GetExtent();
+		if (extent.width == 0 || extent.height == 0)
+		{
+			extent = context.Get<Swapchain>().GetExtent();
+		}
+
+		const float renderAspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+		float targetAspect = renderAspect;
+		switch (m_viewportAspectMode)
+		{
+			case 1:
+				targetAspect = available.y > 0.0f ? available.x / available.y : renderAspect;
+				break;
+			case 2:
+				targetAspect = 16.0f / 9.0f;
+				break;
+			case 3:
+				targetAspect = 16.0f / 10.0f;
+				break;
+			case 4:
+				targetAspect = 4.0f / 3.0f;
+				break;
+			case 5:
+				targetAspect = 1.0f;
+				break;
+			default:
+				break;
+		}
+
+		ImVec2 imageSize = available;
+		if (m_viewportDisplayMode == 2)
+		{
+			imageSize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+		}
+		else if (m_viewportDisplayMode == 3)
+		{
+			const float sx = extent.width > 0 ? std::floor(available.x / static_cast<float>(extent.width)) : 1.0f;
+			const float sy = extent.height > 0 ? std::floor(available.y / static_cast<float>(extent.height)) : 1.0f;
+			const float scale = std::max(1.0f, std::min(sx, sy));
+			imageSize = ImVec2(static_cast<float>(extent.width) * scale, static_cast<float>(extent.height) * scale);
+		}
+		else if (m_viewportDisplayMode == 1)
+		{
+			if (imageSize.x < imageSize.y * targetAspect)
+			{
+				imageSize.x = imageSize.y * targetAspect;
+			}
+			else
+			{
+				imageSize.y = imageSize.x / targetAspect;
+			}
+		}
+		else if (m_viewportAspectMode != 1)
+		{
+			if (imageSize.x > imageSize.y * targetAspect)
+			{
+				imageSize.x = imageSize.y * targetAspect;
+			}
+			else
+			{
+				imageSize.y = imageSize.x / targetAspect;
+			}
+		}
+
+		const ImVec2 cursor = ImGui::GetCursorPos();
+		ImGui::SetCursorPos(ImVec2(cursor.x + (available.x - imageSize.x) * 0.5f, cursor.y + (available.y - imageSize.y) * 0.5f));
+		if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
+		{
+			context.Get<Input>().SetMouseViewportInputActive(false);
+			ImGui::End();
+			return;
+		}
+
+		ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+		const ImVec2 imageMin = ImGui::GetItemRectMin();
+		const ImVec2 imageMax = ImGui::GetItemRectMax();
+		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
+		context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive());
+		context.Get<Input>().SetMouseViewportTransform(glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
+		if (m_viewportShowStats || m_viewportShowMouse)
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImVec2 pad(8.0f, 6.0f);
+			std::string overlay;
+			if (m_viewportShowStats)
+			{
+				overlay += std::format("Render: {} x {}\nView: {:.0f} x {:.0f}", extent.width, extent.height, imageSize.x, imageSize.y);
+			}
+			if (m_viewportShowMouse)
+			{
+				const glm::vec2 mouse = context.Get<Input>().GetMousePos();
+				if (mouse.x > -999999.0f)
+				{
+					if (!overlay.empty())
+					{
+						overlay += "\n";
+					}
+					overlay += std::format("Mouse: {:.0f}, {:.0f}", mouse.x, mouse.y);
+				}
+			}
+			if (!overlay.empty())
+			{
+				const ImVec2 textSize = ImGui::CalcTextSize(overlay.c_str());
+				const ImVec2 rectMin(imageMin.x + 8.0f, imageMin.y + 8.0f);
+				const ImVec2 rectMax(rectMin.x + textSize.x + pad.x * 2.0f, rectMin.y + textSize.y + pad.y * 2.0f);
+				drawList->AddRectFilled(rectMin, rectMax, IM_COL32(22, 24, 28, 210), 4.0f);
+				drawList->AddText(ImVec2(rectMin.x + pad.x, rectMin.y + pad.y), IM_COL32(235, 238, 242, 255), overlay.c_str());
+			}
+		}
+
+		ImGui::Separator();
+		if (ImGui::CollapsingHeader("Settings"))
+		{
+			SceneViewportSettings viewportSettings = rendering.GetSceneViewportSettings();
+			int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
+			const char* resolutionModes[] = {"Window native", "1280 x 720", "1920 x 1080", "2560 x 1440", "Custom"};
+			bool viewportSettingsChanged = ImGui::Combo("Render resolution", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes)));
+			viewportSettings.resolutionMode = static_cast<SceneViewportResolutionMode>(resolutionMode);
+			int customExtent[2] = {static_cast<int>(viewportSettings.customExtent.width), static_cast<int>(viewportSettings.customExtent.height)};
+			ImGui::BeginDisabled(viewportSettings.resolutionMode != SceneViewportResolutionMode::Custom);
+			if (ImGui::InputInt2("Custom size", customExtent))
+			{
+				viewportSettings.customExtent.width = static_cast<std::uint32_t>(std::clamp(customExtent[0], 64, 8192));
+				viewportSettings.customExtent.height = static_cast<std::uint32_t>(std::clamp(customExtent[1], 64, 8192));
+				viewportSettingsChanged = true;
+			}
+			ImGui::EndDisabled();
+			if (viewportSettingsChanged)
+			{
+				ReleaseSceneViewportTexture(context);
+				rendering.SetSceneViewportSettings(context.services, viewportSettings);
+			}
+
+			const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
+			ImGui::Combo("Display mode", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
+			const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
+			ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
+			ImGui::Checkbox("Viewport stats", &m_viewportShowStats);
+			ImGui::SameLine();
+			ImGui::Checkbox("Mouse coords", &m_viewportShowMouse);
+
+			bool forward = rendering.IsForwardPassEnabled();
+			if (ImGui::Checkbox("Forward pass", &forward))
+			{
+				rendering.SetForwardPassEnabled(forward);
+			}
+		}
+
+		ImGui::End();
+	}
+} // namespace aether::app
