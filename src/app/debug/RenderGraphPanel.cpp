@@ -81,7 +81,7 @@ namespace aether::app
 		}
 	} // anonymous namespace
 
-	void RenderGraphPanel::OnGui(LayerContext& context)
+	void RenderGraphPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

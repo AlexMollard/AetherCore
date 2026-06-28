@@ -14,7 +14,7 @@
 
 namespace aether::app
 {
-	void PostProcessingPanel::OnGui(LayerContext& context)
+	void PostProcessingPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

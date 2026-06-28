@@ -313,7 +313,7 @@ namespace aether::app
 		}
 	}
 
-	void DebugLayer::OnGui(LayerContext& context)
+	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -400,7 +400,7 @@ namespace aether::app
 		{
 			if (panel->GetName() != "Render Graph"sv)
 			{
-				panel->OnGui(context);
+				panel->OnImGui(context);
 			}
 		}
 
@@ -410,7 +410,7 @@ namespace aether::app
 		{
 			if (panel->GetName() == "Render Graph"sv)
 			{
-				panel->OnGui(context);
+				panel->OnImGui(context);
 			}
 		}
 		ImGui::End();

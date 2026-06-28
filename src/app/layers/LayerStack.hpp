@@ -14,7 +14,7 @@ namespace aether::app
 		void AttachAll(LayerContext& context);
 		void DetachAll(LayerContext& context);
 		void UpdateAll(LayerContext& context);
-		void GuiAll(LayerContext& context);
+		void ImGuiAll(LayerContext& context);
 
 	private:
 		std::vector<std::unique_ptr<AppLayer>> m_layers;

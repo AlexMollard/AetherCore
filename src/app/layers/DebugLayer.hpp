@@ -30,7 +30,7 @@ namespace aether::app
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
 		void OnUpdate(LayerContext& context) override;
-		void OnGui(LayerContext& context) override;
+		void OnImGui(LayerContext& context) override;
 
 	private:
 		void PollScriptErrors(LayerContext& context);

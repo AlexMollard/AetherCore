@@ -17,7 +17,7 @@ namespace aether::app
 			return "Render Graph";
 		}
 
-		void OnGui(LayerContext& context) override;
+		void OnImGui(LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
 

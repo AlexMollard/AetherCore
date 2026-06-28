@@ -31,7 +31,7 @@ namespace aether::app
 		}
 	} // namespace
 
-	void DayNightPanel::OnGui(LayerContext& context)
+	void DayNightPanel::OnImGui(LayerContext& context)
 	{
 		ImGui::Begin("Day / Night");
 		if (auto dayNight = context.TryGet<DayNightSystem>())

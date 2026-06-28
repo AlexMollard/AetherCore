@@ -34,6 +34,6 @@ namespace aether::app
 		virtual void OnAttach(LayerContext& context);
 		virtual void OnDetach(LayerContext& context);
 		virtual void OnUpdate(LayerContext& context);
-		virtual void OnGui(LayerContext& context);
+		virtual void OnImGui(LayerContext& context);
 	};
 } // namespace aether::app

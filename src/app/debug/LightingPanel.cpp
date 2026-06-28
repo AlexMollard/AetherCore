@@ -168,7 +168,7 @@ namespace aether::app
 		}
 	}
 
-	void LightingPanel::OnGui(LayerContext& context)
+	void LightingPanel::OnImGui(LayerContext& context)
 	{
 		ImGui::Begin("Lighting");
 		{

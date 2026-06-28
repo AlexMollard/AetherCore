@@ -57,7 +57,7 @@ namespace aether::app
 		}
 	}
 
-	void DevToolsPanel::OnGui(LayerContext& context)
+	void DevToolsPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

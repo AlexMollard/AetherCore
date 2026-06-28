@@ -26,7 +26,7 @@ namespace aether::app
 		PushFrameSample(static_cast<float>(context.deltaTimeSeconds * 1000.0));
 	}
 
-	void PerformancePanel::OnGui(LayerContext& context)
+	void PerformancePanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

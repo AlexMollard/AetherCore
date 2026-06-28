@@ -5,7 +5,6 @@
 #include "Application.hpp"
 #include "platform/CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
-#include "layers/LoadingLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "scripting/SystemFactory.hpp"
@@ -49,7 +48,6 @@ int main()
 		application.AddService(systemFactory);
 
 		// Layers
-		application.PushLayer<aether::app::LoadingLayer>();
 		application.PushLayer<aether::app::DebugLayer>();
 		application.PushLayer<aether::app::ScriptedSceneLayer>("sandbox.das");
 

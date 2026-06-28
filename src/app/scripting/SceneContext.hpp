@@ -26,7 +26,6 @@ namespace aether::app
 {
 	class SystemFactory;
 	class DayNightSystem;
-	class LoadingLayer;
 } // namespace aether::app
 
 namespace aether::app::scripting
@@ -44,7 +43,6 @@ namespace aether::app::scripting
 		aether::GraphicsPipeline* defaultPipeline = nullptr;
 		aether::app::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
-		aether::app::LoadingLayer* loadingOverlay = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;
 		std::string scriptPath;

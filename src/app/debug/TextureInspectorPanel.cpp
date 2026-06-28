@@ -38,7 +38,7 @@ namespace aether::app
 		ReleaseTextures(context);
 	}
 
-	void TextureInspectorPanel::OnGui(LayerContext& context)
+	void TextureInspectorPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

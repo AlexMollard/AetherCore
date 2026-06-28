@@ -152,7 +152,7 @@ namespace aether::app
 		return entities;
 	}
 
-	void InspectorPanel::OnGui(LayerContext& context)
+	void InspectorPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 

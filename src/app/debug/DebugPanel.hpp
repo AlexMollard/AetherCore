@@ -78,25 +78,25 @@ namespace aether::app
 
 		virtual std::string_view GetName() const = 0;
 
-		virtual void OnAttach(LayerContext& context)
+		virtual void OnAttach(LayerContext&)
 		{
 		}
 
-		virtual void OnDetach(LayerContext& context)
+		virtual void OnDetach(LayerContext&)
 		{
 		}
 
-		virtual void OnUpdate(LayerContext& context)
+		virtual void OnUpdate(LayerContext&)
 		{
 		}
 
-		virtual void OnGui(LayerContext& context) = 0;
+		virtual void OnImGui(LayerContext& context) = 0;
 
-		virtual void LoadSettings(TomlConfig& config, LayerContext& context)
+		virtual void LoadSettings(TomlConfig&, LayerContext&)
 		{
 		}
 
-		virtual void SaveSettings(TomlConfig& config, LayerContext& context) const
+		virtual void SaveSettings(TomlConfig&, LayerContext&) const
 		{
 		}
 	};

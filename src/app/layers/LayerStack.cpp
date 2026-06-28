@@ -39,12 +39,12 @@ namespace aether::app
 		}
 	}
 
-	void LayerStack::GuiAll(LayerContext& context)
+	void LayerStack::ImGuiAll(LayerContext& context)
 	{
 		for (const auto& layer: m_layers)
 		{
 			AE_PROFILE_ZONE();
-			layer->OnGui(context);
+			layer->OnImGui(context);
 		}
 	}
 } // namespace aether::app

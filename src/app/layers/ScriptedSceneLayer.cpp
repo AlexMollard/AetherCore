@@ -10,7 +10,6 @@
 #include "camera/CameraManager.hpp"
 #include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
-#include "layers/LoadingLayer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
@@ -188,7 +187,6 @@ namespace aether::app
 		m_sceneCtx.renderer = &context.Get<Renderer>();
 		m_sceneCtx.input = &context.Get<Input>();
 		m_sceneCtx.effects = &m_effectManager;
-		m_sceneCtx.loadingOverlay = context.TryGet<aether::app::LoadingLayer>();
 		if (auto assetsSub = context.TryGet<aether::AssetSubsystem>())
 		{
 			m_sceneCtx.uploadPool = assetsSub->GetUploadContext().GetCommandPool();

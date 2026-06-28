@@ -64,7 +64,7 @@ namespace aether::app
 		(void) context;
 	}
 
-	void AppLayer::OnGui(LayerContext& context)
+	void AppLayer::OnImGui(LayerContext& context)
 	{
 		(void) context;
 	}
@@ -245,7 +245,7 @@ namespace aether::app
 				uiRenderer->SetWriteSlot(drawSlot);
 			}
 
-			// ECS UI system: hit-test, drag, widget state (runs before OnGui).
+			// ECS UI system: hit-test, drag, widget state (runs before OnImGui).
 			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())
 			{
 				auto& uiWorld = m_engine.GetServiceContainer().Get<World>();
@@ -254,7 +254,7 @@ namespace aether::app
 				uiSystem->BeginFrame(uiWorld, m_engine.GetServiceContainer().Get<Input>(), uiCtx, extent, static_cast<float>(scaledDt));
 
 				// Auto-render all ECS UI entities (panels, buttons, sliders, etc.).
-				// Replaces explicit per-layer OnGui manual Draw* calls for ECS UI.
+				// Replaces explicit per-layer OnImGui manual Draw* calls for ECS UI.
 				if (auto uiRenderer = m_engine.GetServiceContainer().TryGet<UIRenderer>())
 				{
 					uiSystem->RenderAll(uiWorld, *uiRenderer, m_engine.GetServiceContainer().Get<Input>(), extent);
@@ -273,7 +273,7 @@ namespace aether::app
 				{
 					imgui->BeginFrame(frameContext.services, static_cast<float>(deltaTime));
 				}
-				m_layers.GuiAll(frameContext);
+				m_layers.ImGuiAll(frameContext);
 			}
 
 			if (auto uiSystem = m_engine.GetServiceContainer().TryGet<ui::UiSystem>())

@@ -46,7 +46,7 @@ namespace aether::app
 		m_sceneViewportImageView = nullptr;
 	}
 
-	void ViewportPanel::OnGui(LayerContext& context)
+	void ViewportPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
