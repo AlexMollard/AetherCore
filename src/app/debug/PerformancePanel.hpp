@@ -27,7 +27,14 @@ namespace aether::app
 		void PushFrameSample(float frameMs);
 
 		std::array<float, kFrameSampleCount> m_frameSamples{};
+		std::array<float, kFrameSampleCount> m_orderedSamples{};
+		std::array<float, kFrameSampleCount> m_sorted{};
 		std::size_t m_frameSampleHead = 0;
 		std::size_t m_frameSampleCount = 0;
+
+		static constexpr float kTitleUpdateInterval = 0.5f;
+		float m_titleFps = 0.0f;
+		float m_titleMs = 0.0f;
+		float m_titleAccum = 0.0f;
 	};
 } // namespace aether::app

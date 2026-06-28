@@ -36,12 +36,11 @@ namespace aether::app
 		float maxMs = curMs;
 		float p95Ms = 0.0f;
 		float p99Ms = 0.0f;
-		std::array<float, kFrameSampleCount> orderedSamples{};
 		for (std::size_t i = 0; i < m_frameSampleCount; ++i)
 		{
 			const std::size_t idx = (m_frameSampleHead + m_frameSamples.size() - m_frameSampleCount + i) % m_frameSamples.size();
 			const float sample = m_frameSamples[idx];
-			orderedSamples[i] = sample;
+			m_orderedSamples[i] = sample;
 			totalMs += sample;
 			minMs = std::min(minMs, sample);
 			maxMs = std::max(maxMs, sample);
@@ -53,14 +52,22 @@ namespace aether::app
 
 		if (m_frameSampleCount > 0)
 		{
-			std::array<float, kFrameSampleCount> sorted = orderedSamples;
-			std::sort(sorted.begin(), sorted.begin() + static_cast<std::ptrdiff_t>(m_frameSampleCount));
+			m_sorted = m_orderedSamples;
+			std::sort(m_sorted.begin(), m_sorted.begin() + static_cast<std::ptrdiff_t>(m_frameSampleCount));
 			const std::size_t count = m_frameSampleCount;
-			p95Ms = sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.95f) % count];
-			p99Ms = sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.99f) % count];
+			p95Ms = m_sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.95f) % count];
+			p99Ms = m_sorted[static_cast<std::size_t>(static_cast<float>(count) * 0.99f) % count];
 		}
 
-		ImGui::Begin(std::format("Performance  |  {:.0f} FPS  |  {:.2f} ms###Performance", curFps, curMs).c_str());
+		m_titleAccum += static_cast<float>(context.deltaTimeSeconds);
+		if (m_titleFps == 0.0f || m_titleAccum >= kTitleUpdateInterval)
+		{
+			m_titleFps = avgFps;
+			m_titleMs = avgMs;
+			m_titleAccum = 0.0f;
+		}
+
+		ImGui::Begin(std::format("Performance  |  {:.0f} FPS  |  {:.2f} ms###Performance", m_titleFps, m_titleMs).c_str());
 
 		// Compact 4-column stats grid
 		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))
@@ -150,7 +157,7 @@ namespace aether::app
 			int bucketCounts[kBucketCount] = {};
 			for (std::size_t i = 0; i < m_frameSampleCount; ++i)
 			{
-				const float ms = orderedSamples[i];
+				const float ms = m_orderedSamples[i];
 				for (int b = 0; b < kBucketCount; ++b)
 				{
 					if (ms < kBucketThresholds[b])
@@ -163,36 +170,39 @@ namespace aether::app
 
 			const int maxBucket = *std::ranges::max_element(bucketCounts);
 			const float barWidth = (ImGui::GetContentRegionAvail().x - static_cast<float>(kBucketCount) * 4.0f) / static_cast<float>(kBucketCount);
-			ImDrawList* dl = ImGui::GetWindowDrawList();
-			const ImVec2 origin = ImGui::GetCursorScreenPos();
-			const float barMaxHeight = 60.0f;
-			const float barMinHeight = 4.0f;
-
-			for (int b = 0; b < kBucketCount; ++b)
+			if (barWidth > 0.0f)
 			{
-				const float t = maxBucket > 0 ? static_cast<float>(bucketCounts[b]) / static_cast<float>(maxBucket) : 0.0f;
-				const float h = barMinHeight + t * (barMaxHeight - barMinHeight);
-				const ImVec2 bMin(origin.x + static_cast<float>(b) * (barWidth + 4.0f), origin.y + barMaxHeight - h);
-				const ImVec2 bMax(bMin.x + barWidth, origin.y + barMaxHeight);
-				dl->AddRectFilled(bMin, bMax, kBucketColors[b], 3.0f);
-				dl->AddRect(bMin, bMax, ToU32(colors::Border), 3.0f);
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				const ImVec2 origin = ImGui::GetCursorScreenPos();
+				const float barMaxHeight = 60.0f;
+				const float barMinHeight = 4.0f;
 
-				const float labelY = origin.y + barMaxHeight + 2.0f;
-				const char* label = kBucketLabels[b];
-				const ImVec2 labelSize = ImGui::CalcTextSize(label);
-				dl->AddText(ImVec2(bMin.x + (barWidth - labelSize.x) * 0.5f, labelY), ToU32(colors::TextSecondary), label);
+				for (int b = 0; b < kBucketCount; ++b)
+				{
+					const float t = maxBucket > 0 ? static_cast<float>(bucketCounts[b]) / static_cast<float>(maxBucket) : 0.0f;
+					const float h = barMinHeight + t * (barMaxHeight - barMinHeight);
+					const ImVec2 bMin(origin.x + static_cast<float>(b) * (barWidth + 4.0f), origin.y + barMaxHeight - h);
+					const ImVec2 bMax(bMin.x + barWidth, origin.y + barMaxHeight);
+					dl->AddRectFilled(bMin, bMax, kBucketColors[b], 3.0f);
+					dl->AddRect(bMin, bMax, ToU32(colors::Border), 3.0f);
+
+					const float labelY = origin.y + barMaxHeight + 2.0f;
+					const char* label = kBucketLabels[b];
+					const ImVec2 labelSize = ImGui::CalcTextSize(label);
+					dl->AddText(ImVec2(bMin.x + (barWidth - labelSize.x) * 0.5f, labelY), ToU32(colors::TextSecondary), label);
+				}
 			}
 
-			ImGui::Dummy(ImVec2(0.0f, barMaxHeight + 20.0f));
+			ImGui::Dummy(ImVec2(0.0f, 60.0f + 20.0f));
 		}
 
 		// Frame time plot filling remaining panel space
 		{
 			const float minPlot = 0.0f;
-			const float maxPlot = 33.333f;
+			const float maxPlot = std::max(33.333f, maxMs * 1.1f);
 			const float plotHeight = std::max(40.0f, ImGui::GetContentRegionAvail().y);
 
-			ImGui::PlotLines("Frame Time", orderedSamples.data(), static_cast<int>(m_frameSampleCount), 0, nullptr, minPlot, maxPlot, ImVec2(-1.0f, plotHeight));
+			ImGui::PlotLines("##FrameTime", m_orderedSamples.data(), static_cast<int>(m_frameSampleCount), 0, nullptr, minPlot, maxPlot, ImVec2(-1.0f, plotHeight));
 		}
 
 		ImGui::End();
