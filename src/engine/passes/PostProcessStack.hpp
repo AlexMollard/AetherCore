@@ -69,6 +69,31 @@ namespace aether
 			return m_hdrColor;
 		}
 
+		[[nodiscard]] RGImage GetFinalColor() const
+		{
+			return m_finalColor;
+		}
+
+		[[nodiscard]] gpu::ImageView GetFinalColorImageView() const
+		{
+			return m_finalColorView;
+		}
+
+		[[nodiscard]] gpu::Extent2D GetExtent() const
+		{
+			return m_extent;
+		}
+
+		void SetOutputToTexture(bool enabled)
+		{
+			m_outputToTexture = enabled;
+		}
+
+		[[nodiscard]] bool IsOutputToTextureEnabled() const
+		{
+			return m_outputToTexture;
+		}
+
 		// Select the tonemap curve applied in $PostProcess (default: Reinhard).
 		void SetTonemapMode(TonemapMode mode)
 		{
@@ -116,11 +141,16 @@ namespace aether
 		gpu::TextureHandle m_ldrColorHandle; // R8G8B8A8_UNORM - tonemap output
 		RGImage m_ldrColor{};
 		std::uint32_t m_ldrBindlessSlot = 0xFFFFFFFFu;
-		GraphicsPipeline m_fxaaPipeline; // LDR -> swapchain (FXAA, can passthrough when disabled)
+		GraphicsPipeline m_fxaaPipeline;       // LDR -> swapchain (FXAA, can passthrough when disabled)
+		gpu::TextureHandle m_finalColorHandle; // swapchain-format final color for ImGui viewport mode
+		RGImage m_finalColor{};
+		gpu::ImageView m_finalColorView = nullptr;
 		gpu::Format m_swapchainFormat = gpu::Format::Undefined;
+		gpu::Extent2D m_extent{};
 
 		TonemapMode m_tonemapMode = TonemapMode::Reinhard;
 		float m_exposure = 1.0f;
 		bool m_fxaaEnabled = false;
+		bool m_outputToTexture = false;
 	};
 } // namespace aether

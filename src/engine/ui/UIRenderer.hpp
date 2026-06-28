@@ -55,6 +55,11 @@ namespace aether
 			m_quadRenderer.ReRegisterPass();
 		}
 
+		void SetRenderTarget(RGImage colorTarget, gpu::Extent2D extent = {})
+		{
+			m_quadRenderer.SetRenderTarget(colorTarget, extent);
+		}
+
 		void SetLayer(std::int32_t layer)
 		{
 			m_currentLayer = layer;

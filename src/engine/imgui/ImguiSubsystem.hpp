@@ -6,6 +6,11 @@
 #include <optional>
 #include <vector>
 
+#include <imgui.h>
+
+#include "gpu/GpuEnums.hpp"
+#include "gpu/GpuTypes.hpp"
+
 namespace aether
 {
 	class GpuDevice;
@@ -36,10 +41,17 @@ namespace aether
 		void BeginFrame(ServiceContainer& services, float deltaTimeSeconds);
 		void CaptureFrame(ImguiFrameData& outFrame);
 		void RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target);
+		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
+		void UnregisterTexture(ImTextureID textureId);
 
 		[[nodiscard]] bool IsInitialized() const noexcept
 		{
 			return m_initialized;
+		}
+
+		[[nodiscard]] bool WantsInputCapture() const noexcept
+		{
+			return m_wantsInputCapture;
 		}
 
 	private:
@@ -48,6 +60,7 @@ namespace aether
 
 		bool m_initialized = false;
 		bool m_backendsInitialized = false;
+		bool m_wantsInputCapture = false;
 		std::uint64_t m_frameIndex = 0;
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;

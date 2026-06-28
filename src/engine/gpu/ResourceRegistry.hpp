@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <source_location>
 #include <span>
+#include <string>
+#include <vector>
 
 #include "gpu/GpuEnums.hpp"
 #include "gpu/GpuHandles.hpp"
@@ -104,6 +106,21 @@ namespace aether::gpu
 		void* backendRegistry = nullptr;
 	};
 
+	struct DebugTextureInfo
+	{
+		TextureHandle handle;
+		ImageView view = nullptr;
+		Format format = Format::Undefined;
+		Extent2D extent;
+		ImageUsage usage = ImageUsage::None;
+		ImageAspect aspect = ImageAspect::None;
+		std::uint32_t mipLevels = 0;
+		std::uint32_t arrayLayers = 0;
+		bool hasBindlessSampled = false;
+		std::uint32_t bindlessSampledSlot = 0xFFFFFFFFu;
+		std::string debugName;
+	};
+
 	class ResourceRegistry
 	{
 	public:
@@ -190,6 +207,7 @@ namespace aether::gpu
 		[[nodiscard]] static std::uint32_t GetTextureMipLevels(TextureHandle handle);
 		[[nodiscard]] static std::uint32_t GetTextureArrayLayers(TextureHandle handle);
 		[[nodiscard]] static ImageUsage GetTextureUsage(TextureHandle handle);
+		[[nodiscard]] static std::vector<DebugTextureInfo> ListDebugTextures();
 
 		// Buffer property queries
 		[[nodiscard]] static DeviceSize GetBufferSize(BufferHandle handle);

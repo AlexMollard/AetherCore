@@ -83,9 +83,14 @@ namespace aether
 			return;
 		}
 
-		auto color = m_renderGraph->GetSwapchainColor();
-		m_renderGraph->AddPass(m_passName)
-		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
+		m_renderGraph->RemovePass(m_passName);
+		auto color = m_colorTarget.IsValid() ? m_colorTarget : m_renderGraph->GetSwapchainColor();
+		auto pass = m_renderGraph->AddPass(m_passName);
+		if (m_colorTarget.IsValid() && m_colorTargetExtent.width != 0 && m_colorTargetExtent.height != 0)
+		{
+			pass.SetExtent(m_colorTargetExtent);
+		}
+		pass.WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
@@ -178,7 +183,33 @@ namespace aether
 		{
 			return;
 		}
+
+		for (std::uint32_t slot = 0; slot < Swapchain::kMaxFramesInFlight; ++slot)
+		{
+			{
+				std::lock_guard lock(m_slotMutexes[slot]);
+				m_pendingQuads[slot].clear();
+				m_slotConsumed[slot] = true;
+			}
+			m_slotCvs[slot].notify_all();
+		}
+
 		RegisterPass();
+	}
+
+	void QuadRenderer::SetRenderTarget(RGImage colorTarget, gpu::Extent2D extent)
+	{
+		m_colorTarget = colorTarget;
+		m_colorTargetExtent = extent;
+	}
+
+	gpu::Extent2D QuadRenderer::GetRenderExtent() const
+	{
+		if (m_colorTarget.IsValid() && m_colorTargetExtent.width != 0 && m_colorTargetExtent.height != 0)
+		{
+			return m_colorTargetExtent;
+		}
+		return m_swapchain != nullptr ? m_swapchain->GetExtent() : gpu::Extent2D{};
 	}
 
 	void QuadRenderer::Init(ServiceContainer& services, std::string_view passName)
@@ -269,7 +300,7 @@ namespace aether
 			return;
 		}
 
-		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
+		const glm::vec4 pxRect = ResolveUiRectPx(GetRenderExtent(), rect);
 
 		if (!m_ready || pxRect.z <= 0.0f || pxRect.w <= 0.0f || IsClipped(pxRect) || !IsFullyInsideClip(pxRect))
 		{
@@ -295,7 +326,7 @@ namespace aether
 			return;
 		}
 
-		const gpu::Extent2D ext = m_swapchain->GetExtent();
+		const gpu::Extent2D ext = GetRenderExtent();
 		const glm::vec2 p0 = ResolveUiPointPx(ext, start);
 		const glm::vec2 p1 = ResolveUiPointPx(ext, end);
 		if (glm::length(p1 - p0) <= 0.5f)
@@ -329,7 +360,7 @@ namespace aether
 		{
 			return;
 		}
-		const glm::vec2 c = ResolveUiPointPx(m_swapchain->GetExtent(), center);
+		const glm::vec2 c = ResolveUiPointPx(GetRenderExtent(), center);
 		const glm::vec4 bounds{c.x - radiusPx, c.y - radiusPx, radiusPx * 2.f, radiusPx * 2.f};
 		if (IsClipped(bounds) || !IsFullyInsideClip(bounds))
 		{
@@ -354,7 +385,7 @@ namespace aether
 			return;
 		}
 
-		const glm::vec4 pxRect = ResolveUiRectPx(m_swapchain->GetExtent(), rect);
+		const glm::vec4 pxRect = ResolveUiRectPx(GetRenderExtent(), rect);
 		if (pxRect.z <= 0.f || pxRect.w <= 0.f || IsClipped(pxRect) || !IsFullyInsideClip(pxRect))
 		{
 			return;

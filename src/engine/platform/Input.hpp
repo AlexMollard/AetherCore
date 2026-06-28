@@ -174,6 +174,21 @@ namespace aether
 		// Frame-over-frame cursor displacement in pixels.
 		[[nodiscard]] glm::vec2 GetMouseDelta() const;
 
+		// Remap OS-window mouse coordinates into an editor viewport's render-target
+		// pixel space. Used when the game is rendered inside an ImGui viewport.
+		void SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize);
+		void ClearMouseViewportTransform();
+
+		void SetMouseViewportInputActive(bool active)
+		{
+			m_mouseViewportInputActive = active;
+		}
+
+		[[nodiscard]] bool IsMouseViewportInputActive() const
+		{
+			return m_mouseViewportInputActive;
+		}
+
 		// -- Scroll wheel ------------------------------------------------------
 
 		// Scroll offset accumulated since the last frame (zeroed each Update).
@@ -228,5 +243,13 @@ namespace aether
 
 		bool m_firstUpdate = true;
 		bool m_mouseCaptured = false;
+		bool m_mouseViewportInputActive = false;
+
+		bool m_mouseViewportTransformActive = false;
+		glm::vec2 m_mouseViewportMin{};
+		glm::vec2 m_mouseViewportSize{};
+		glm::vec2 m_mouseViewportTargetSize{};
+
+		[[nodiscard]] glm::vec2 TransformMousePos(glm::vec2 windowMousePos) const;
 	};
 } // namespace aether

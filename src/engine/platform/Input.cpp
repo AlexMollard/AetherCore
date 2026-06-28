@@ -3,6 +3,8 @@
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 
+#include <algorithm>
+
 #include "utils/Profiler.hpp"
 
 namespace aether
@@ -140,12 +142,18 @@ namespace aether
 
 	glm::vec2 Input::GetMousePos() const
 	{
-		return m_mousePos;
+		return TransformMousePos(m_mousePos);
 	}
 
 	glm::vec2 Input::GetMouseDelta() const
 	{
-		return m_mousePos - m_prevMousePos;
+		const glm::vec2 current = TransformMousePos(m_mousePos);
+		const glm::vec2 previous = TransformMousePos(m_prevMousePos);
+		if (current.x < -999999.0f || previous.x < -999999.0f)
+		{
+			return {};
+		}
+		return current - previous;
 	}
 
 	glm::vec2 Input::GetScrollDelta() const
@@ -156,6 +164,43 @@ namespace aether
 	const std::string& Input::GetTypedChars() const
 	{
 		return m_typedChars;
+	}
+
+	void Input::SetMouseViewportTransform(glm::vec2 viewportMin, glm::vec2 viewportSize, glm::vec2 targetSize)
+	{
+		m_mouseViewportTransformActive = viewportSize.x > 0.0f && viewportSize.y > 0.0f && targetSize.x > 0.0f && targetSize.y > 0.0f;
+		m_mouseViewportMin = viewportMin;
+		m_mouseViewportSize = viewportSize;
+		m_mouseViewportTargetSize = targetSize;
+	}
+
+	void Input::ClearMouseViewportTransform()
+	{
+		m_mouseViewportTransformActive = false;
+		m_mouseViewportInputActive = false;
+		m_mouseViewportMin = {};
+		m_mouseViewportSize = {};
+		m_mouseViewportTargetSize = {};
+	}
+
+	glm::vec2 Input::TransformMousePos(glm::vec2 windowMousePos) const
+	{
+		if (!m_mouseViewportTransformActive)
+		{
+			return windowMousePos;
+		}
+
+		const glm::vec2 local = windowMousePos - m_mouseViewportMin;
+		if (local.x < 0.0f || local.y < 0.0f || local.x >= m_mouseViewportSize.x || local.y >= m_mouseViewportSize.y)
+		{
+			return {-1000000.0f, -1000000.0f};
+		}
+
+		const glm::vec2 uv = local / m_mouseViewportSize;
+		return {
+		        std::clamp(uv.x, 0.0f, 1.0f) * m_mouseViewportTargetSize.x,
+		        std::clamp(uv.y, 0.0f, 1.0f) * m_mouseViewportTargetSize.y,
+		};
 	}
 
 	// -- GLFW callbacks --------------------------------------------------------

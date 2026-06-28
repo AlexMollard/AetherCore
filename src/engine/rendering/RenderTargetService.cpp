@@ -113,6 +113,30 @@ namespace aether
 		}
 	}
 
+	void RenderTargetService::ClearAllQueues()
+	{
+		AE_PROFILE_ZONE();
+		for (auto& [_, rt]: m_targets)
+		{
+			if (rt.renderQueue)
+			{
+				rt.renderQueue->DiscardAllPending();
+			}
+		}
+	}
+
+	void RenderTargetService::DiscardPendingQueues(const std::uint32_t slot)
+	{
+		AE_PROFILE_ZONE();
+		for (auto& [_, rt]: m_targets)
+		{
+			if (rt.renderQueue)
+			{
+				rt.renderQueue->DiscardPending(slot);
+			}
+		}
+	}
+
 	void RenderTargetService::SetAnimationDatabase(const AnimationDatabase* animationDb)
 	{
 		for (auto& [_, rt]: m_targets)
@@ -126,9 +150,11 @@ namespace aether
 		AE_PROFILE_ZONE();
 		AE_ASSERT_ALWAYS(m_context != nullptr && m_graph != nullptr && m_bindlessManager != nullptr, "RenderTargetService: runtime dependencies not bound before CreateCameraRenderTarget.");
 
+		const std::uint32_t id = m_nextId++;
 		Entry rt{};
 		rt.cameraHandleRaw = cameraHandleRaw;
 		rt.extent = extent;
+		rt.debugName = "CameraRT_" + std::to_string(id);
 
 		rt.rgColor = m_graph->CreateTransientColor(m_forwardColorFormat, extent, gpu::ImageUsage::Sampled);
 		const std::uint32_t slot = m_graph->EnsureBindlessSampled(rt.rgColor);
@@ -141,9 +167,8 @@ namespace aether
 		rt.constants = std::make_unique<FrameConstantsBuffer>();
 		rt.constants->Initialize();
 		rt.renderQueue = std::make_unique<RenderQueue>();
-		rt.renderQueue->Initialize(*m_sharedPipelines);
+		rt.renderQueue->Initialize(*m_sharedPipelines, RenderQueueConfig{.debugName = rt.debugName.c_str()});
 
-		const std::uint32_t id = m_nextId++;
 		m_targets.emplace(id, std::move(rt));
 		RegisterPassFor(id);
 		return id;

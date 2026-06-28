@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "imgui/ImguiFrameData.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "rendering/Renderer.hpp"
 
@@ -20,6 +21,7 @@ namespace aether
 		glm::mat4 view{1.0f};
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};
+		gpu::Extent2D renderExtent{};
 		bool hasCameraData = false;
 
 		// Lighting state snapshotted at end of simulation.

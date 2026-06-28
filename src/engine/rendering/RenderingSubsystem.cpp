@@ -1,5 +1,6 @@
 #include "rendering/RenderingSubsystem.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <span>
 
@@ -8,8 +9,10 @@
 #include "camera/CameraManager.hpp"
 #include "rendering/FrameContext.hpp"
 #include "rendering/LightingManager.hpp"
+#include "ui/UIRenderer.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/ResourceRegistry.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -23,6 +26,120 @@ namespace
 
 namespace aether
 {
+	gpu::Extent2D RenderingSubsystem::ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const
+	{
+		if (!m_sceneViewportEnabled)
+		{
+			return swapchainExtent;
+		}
+
+		auto clampExtent = [](gpu::Extent2D extent)
+		{
+			extent.width = std::clamp(extent.width, 64u, 8192u);
+			extent.height = std::clamp(extent.height, 64u, 8192u);
+			return extent;
+		};
+
+		switch (m_sceneViewportSettings.resolutionMode)
+		{
+			case SceneViewportResolutionMode::Fixed720p:
+				return {1280, 720};
+			case SceneViewportResolutionMode::Fixed1080p:
+				return {1920, 1080};
+			case SceneViewportResolutionMode::Fixed1440p:
+				return {2560, 1440};
+			case SceneViewportResolutionMode::Custom:
+				return clampExtent(m_sceneViewportSettings.customExtent);
+			case SceneViewportResolutionMode::WindowNative:
+			default:
+				return clampExtent(swapchainExtent);
+		}
+	}
+
+	gpu::Extent2D RenderingSubsystem::ResolveRequestedSceneViewportExtent(gpu::Extent2D swapchainExtent) const
+	{
+		auto clampExtent = [](gpu::Extent2D extent)
+		{
+			extent.width = std::clamp(extent.width, 64u, 8192u);
+			extent.height = std::clamp(extent.height, 64u, 8192u);
+			return extent;
+		};
+
+		SceneViewportSettings settings;
+		bool enabled = false;
+		{
+			std::lock_guard lock(m_sceneViewportMutex);
+			settings = m_requestedSceneViewportSettings;
+			enabled = m_requestedSceneViewportEnabled;
+		}
+		if (!enabled)
+		{
+			return swapchainExtent;
+		}
+
+		switch (settings.resolutionMode)
+		{
+			case SceneViewportResolutionMode::Fixed720p:
+				return {1280, 720};
+			case SceneViewportResolutionMode::Fixed1080p:
+				return {1920, 1080};
+			case SceneViewportResolutionMode::Fixed1440p:
+				return {2560, 1440};
+			case SceneViewportResolutionMode::Custom:
+				return clampExtent(settings.customExtent);
+			case SceneViewportResolutionMode::WindowNative:
+			default:
+				return clampExtent(swapchainExtent);
+		}
+	}
+
+	SceneViewportSettings RenderingSubsystem::GetSceneViewportSettings() const
+	{
+		std::lock_guard lock(m_sceneViewportMutex);
+		return m_requestedSceneViewportSettings;
+	}
+
+	bool RenderingSubsystem::IsSceneViewportEnabled() const
+	{
+		std::lock_guard lock(m_sceneViewportMutex);
+		return m_requestedSceneViewportEnabled;
+	}
+
+	void RenderingSubsystem::DestroySceneViewportDepth()
+	{
+		if (m_sceneDepthHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_sceneDepthHandle);
+			m_sceneDepthHandle = {};
+		}
+		m_sceneDepth = {};
+	}
+
+	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph)
+	{
+		(void) device;
+		if (!m_sceneViewportEnabled)
+		{
+			return;
+		}
+
+		const gpu::Extent2D extent = m_postProcessStack.GetExtent();
+		m_sceneDepthHandle = gpu::ResourceRegistry::CreateTexture({
+		        .format = depthFormat,
+		        .extent = extent,
+		        .usage = gpu::ImageUsage::DepthStencilAttachment,
+		        .aspect = gpu::ImageAspect::Depth,
+		        .debugName = "SceneViewport.Depth",
+		});
+		if (!m_sceneDepthHandle.IsValid())
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: SceneViewport.Depth CreateTexture failed"));
+		}
+
+		const auto depthTexture = gpu::ResourceRegistry::ResolveTexture(m_sceneDepthHandle);
+		m_sceneDepth = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_sceneDepthHandle), depthTexture.view, gpu::ImageAspect::Depth);
+	}
+
 	void RenderingSubsystem::Init(ServiceContainer& services)
 	{
 		AE_PROFILE_ZONE();
@@ -41,7 +158,7 @@ namespace aether
 
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
-		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = kRenderQueueMaxDraws});
+		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = kRenderQueueMaxDraws, .debugName = "Main"});
 		m_renderQueue.SetDebugForceVisible(true);
 		m_renderQueue.SetDebugBypassIndirect(false);
 		m_renderQueue.SetDebugDisableAnimation(false);
@@ -54,7 +171,7 @@ namespace aether
 
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = vk.GetDevice().device,
-		        .extent = swapchain.GetExtent(),
+		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
@@ -95,6 +212,7 @@ namespace aether
 	void RenderingSubsystem::Shutdown()
 	{
 		AE_PROFILE_ZONE();
+		DestroySceneViewportDepth();
 		m_postProcessStack.Destroy();
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
@@ -121,11 +239,16 @@ namespace aether
 		const float exposure = m_postProcessStack.GetExposure();
 		const bool fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
 
+		m_renderQueue.DiscardAllPending();
+		m_shadowService.ClearAllQueues();
+		m_localShadowService.ClearAllQueues();
+		m_renderTargetService.ClearAllQueues();
+		DestroySceneViewportDepth();
 		m_postProcessStack.Destroy();
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
 		        .device = gpu.GetDevice(),
-		        .extent = swapchain.GetExtent(),
+		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
 		        .swapchainFormat = swapchain.GetImageFormat(),
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
@@ -133,10 +256,75 @@ namespace aether
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
+		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
+		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph);
 
 		m_renderTargetService.OnRenderGraphReset(gpu.GetDevice(), swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
 
+		services.Get<LightingManager>().RegisterPasses(m_renderGraph);
 		RegisterPasses(services);
+	}
+
+	void RenderingSubsystem::SetSceneViewportEnabled(ServiceContainer& services, bool enabled)
+	{
+		{
+			std::lock_guard lock(m_sceneViewportMutex);
+			if (m_requestedSceneViewportEnabled == enabled)
+			{
+				return;
+			}
+			m_requestedSceneViewportEnabled = enabled;
+		}
+		m_sceneViewportRebuildPending.store(true, std::memory_order_release);
+		(void) services;
+	}
+
+	void RenderingSubsystem::SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings)
+	{
+		SceneViewportSettings next = settings;
+		next.customExtent.width = std::clamp(next.customExtent.width, 64u, 8192u);
+		next.customExtent.height = std::clamp(next.customExtent.height, 64u, 8192u);
+		{
+			std::lock_guard lock(m_sceneViewportMutex);
+			if (m_requestedSceneViewportSettings.resolutionMode == next.resolutionMode && m_requestedSceneViewportSettings.customExtent.width == next.customExtent.width
+			        && m_requestedSceneViewportSettings.customExtent.height == next.customExtent.height)
+			{
+				return;
+			}
+			m_requestedSceneViewportSettings = next;
+		}
+
+		m_sceneViewportRebuildPending.store(true, std::memory_order_release);
+		(void) services;
+	}
+
+	bool RenderingSubsystem::CommitPendingSceneViewportSettings()
+	{
+		if (!m_sceneViewportRebuildPending.exchange(false, std::memory_order_acq_rel))
+		{
+			return false;
+		}
+
+		std::lock_guard lock(m_sceneViewportMutex);
+		m_sceneViewportEnabled = m_requestedSceneViewportEnabled;
+		m_sceneViewportSettings = m_requestedSceneViewportSettings;
+		return true;
+	}
+
+	void RenderingSubsystem::ApplyPendingSceneViewportChanges(ServiceContainer& services)
+	{
+		if (CommitPendingSceneViewportSettings())
+		{
+			RecreateSwapchainResources(services);
+		}
+	}
+
+	void RenderingSubsystem::DiscardPendingFrameQueues(const std::uint32_t slot)
+	{
+		m_renderQueue.DiscardPending(slot);
+		m_shadowService.DiscardPendingQueue(slot);
+		m_localShadowService.DiscardPendingQueue(slot);
+		m_renderTargetService.DiscardPendingQueues(slot);
 	}
 
 	void RenderingSubsystem::RegisterPasses(ServiceContainer& services)
@@ -170,6 +358,7 @@ namespace aether
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			m_renderGraph.AddPass("$Skybox")
+			        .SetExtent(m_postProcessStack.GetExtent())
 			        .WriteColor(hdrColor, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f))
 			        .Execute(
 			                [this](PassContext& ctx)
@@ -188,8 +377,9 @@ namespace aether
 
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
-			const RGImage depth = m_renderGraph.GetSwapchainDepth();
-			auto* pass = &m_renderGraph.AddPass("$EngineForward").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f));
+			const RGImage depth = m_sceneViewportEnabled && m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
+			auto* pass =
+			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f));
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
@@ -227,7 +417,20 @@ namespace aether
 		}
 
 		m_renderTargetService.RegisterPasses();
+		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
-		m_physicsDebug.RegisterPass(m_renderGraph);
+		const gpu::Extent2D sceneExtent = m_postProcessStack.GetExtent();
+		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
+		if (auto ui = services.TryGet<UIRenderer>())
+		{
+			ui->SetRenderTarget(m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
+			ui->ReRegisterPass();
+		}
+		if (m_sceneViewportEnabled)
+		{
+			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});
+
+			m_renderGraph.AddPass("$SceneViewportClearSwapchain").WriteColor(m_renderGraph.GetSwapchainColor(), gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f)).Execute([](PassContext&) {});
+		}
 	}
 } // namespace aether

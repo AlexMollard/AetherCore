@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <unordered_map>
 
 #include "gpu/GpuFormat.hpp"
@@ -36,6 +37,8 @@ namespace aether
 		void RegisterPasses();
 
 		void PrepareQueues(std::uint32_t drawSlot, World& world);
+		void ClearAllQueues();
+		void DiscardPendingQueues(std::uint32_t slot);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
 		[[nodiscard]] Expected<std::uint32_t> CreateCameraRenderTarget(std::uint32_t cameraHandleRaw, gpu::Extent2D extent);
@@ -49,6 +52,7 @@ namespace aether
 		{
 			std::uint32_t cameraHandleRaw = 0;
 			gpu::Extent2D extent;
+			std::string debugName;
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;

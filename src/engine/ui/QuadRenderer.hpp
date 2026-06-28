@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "gpu/GpuHandles.hpp"
+#include "rendering/RenderGraph.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "ui/UiLayout.hpp"
@@ -77,8 +78,11 @@ namespace aether
 		// times - the underlying RegisterPass will add duplicate passes if
 		// called redundantly.
 		void ReRegisterPass();
+		void SetRenderTarget(RGImage colorTarget, gpu::Extent2D extent = {});
 
 	private:
+		[[nodiscard]] gpu::Extent2D GetRenderExtent() const;
+
 		struct QuadPush
 		{
 			glm::vec4 screenSize; // .xy = viewport pixels
@@ -135,6 +139,8 @@ namespace aether
 		[[nodiscard]] bool IsFullyInsideClip(glm::vec4 pxRect) const;
 
 		std::string m_passName;
+		RGImage m_colorTarget{};
+		gpu::Extent2D m_colorTargetExtent{};
 		VulkanContext* m_vkCtx = nullptr;
 		RenderGraph* m_renderGraph = nullptr;
 		BindlessManager* m_bindlessMgr = nullptr;

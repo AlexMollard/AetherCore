@@ -686,18 +686,28 @@ namespace aether
 		        });
 	}
 
-	void PhysicsDebugRenderer::RegisterPass(RenderGraph& graph)
+	void PhysicsDebugRenderer::RegisterPass(RenderGraph& graph, RGImage color, RGImage depth, gpu::Extent2D extent)
 	{
 		if (!m_enabled)
 		{
 			return;
 		}
 
-		auto color = graph.GetSwapchainColor();
-		auto depth = graph.GetSwapchainDepth();
+		if (!color.IsValid())
+		{
+			color = graph.GetSwapchainColor();
+		}
+		if (!depth.IsValid())
+		{
+			depth = graph.GetSwapchainDepth();
+		}
 
-		graph.AddPass("$Debug")
-		        .WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
+		auto pass = graph.AddPass("$Debug");
+		if (extent.width != 0 && extent.height != 0)
+		{
+			pass.SetExtent(extent);
+		}
+		pass.WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::DontCare)
 		        .Execute(
 		                [this](PassContext& ctx)

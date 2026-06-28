@@ -64,6 +64,22 @@ namespace aether
 			AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_ldrColorHandle), gpu::ImageLayout::ShaderReadOnly));
 		}
 
+		const gpu::TextureDesc finalDesc{
+		        .format = desc.swapchainFormat,
+		        .extent = desc.extent,
+		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+		        .aspect = gpu::ImageAspect::Color,
+		        .debugName = "PostProcess.FinalColor",
+		};
+		stack.m_finalColorHandle = gpu::ResourceRegistry::CreateTexture(finalDesc);
+		if (!stack.m_finalColorHandle.IsValid())
+		{
+			Throw(AetherError::Engine("PostProcessStack: FinalColor CreateTexture failed"));
+		}
+		const auto& finalTexture = gpu::ResourceRegistry::ResolveTexture(stack.m_finalColorHandle);
+		stack.m_finalColorView = finalTexture.view;
+		stack.m_finalColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_finalColorHandle), finalTexture.view);
+
 		AE_EXPECT_OR_THROW(tonemapPipeline,
 		        GraphicsPipeline::Create(desc.device,
 		                {
@@ -85,6 +101,7 @@ namespace aether
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 
 		stack.m_swapchainFormat = desc.swapchainFormat;
+		stack.m_extent = desc.extent;
 
 		return stack;
 	}
@@ -101,6 +118,13 @@ namespace aether
 		m_ldrColorHandle = {};
 		m_ldrColor = RGImage{};
 		m_ldrBindlessSlot = 0xFFFFFFFFu;
+		if (m_finalColorHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_finalColorHandle);
+		}
+		m_finalColorHandle = {};
+		m_finalColor = RGImage{};
+		m_finalColorView = nullptr;
 		if (m_hdrColorHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_hdrColorHandle);
@@ -108,7 +132,8 @@ namespace aether
 		m_hdrColorHandle = {};
 		m_hdrColor = RGImage{};
 		m_hdrBindlessSlot = 0xFFFFFFFFu;
-		m_hdrColor = RGImage{};
+		m_extent = {};
+		m_outputToTexture = false;
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -118,6 +143,7 @@ namespace aether
 		// FXAA toggling is handled at runtime via a push constant so the graph
 		// topology stays stable and toggles don't require a graph rebuild.
 		graph.AddPass("$PostProcess")
+		        .SetExtent(m_extent)
 		        .ReadTexture(m_hdrColor)
 		        .WriteColor(m_ldrColor, gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
 		        .Execute(
@@ -153,39 +179,42 @@ namespace aether
 			                cmd.Draw(3, 1, 0, 0);
 		                });
 
-		graph.AddPass("$FXAA")
-		        .ReadTexture(m_ldrColor)
-		        .WriteColor(graph.GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
-		        .Execute(
-		                [this, &bindless](PassContext& ctx)
-		                {
-			                gpu::CommandList cmd = ctx.recorder.View();
+		auto fxaaPass = graph.AddPass("$FXAA");
+		fxaaPass.ReadTexture(m_ldrColor).WriteColor(m_outputToTexture ? m_finalColor : graph.GetSwapchainColor(), gpu::LoadOp::DontCare, gpu::StoreOp::Store, {});
+		if (m_outputToTexture)
+		{
+			fxaaPass.SetExtent(m_extent);
+		}
+		fxaaPass.Execute(
+		        [this, &bindless](PassContext& ctx)
+		        {
+			        gpu::CommandList cmd = ctx.recorder.View();
 
-			                const gpu::Viewport vp{
-			                        .width = static_cast<float>(ctx.extent.width),
-			                        .height = static_cast<float>(ctx.extent.height),
-			                };
-			                const gpu::Rect2D scissor{
-			                        .width = ctx.extent.width,
-			                        .height = ctx.extent.height,
-			                };
-			                cmd.SetViewport(vp);
-			                cmd.SetScissor(scissor);
+			        const gpu::Viewport vp{
+			                .width = static_cast<float>(ctx.extent.width),
+			                .height = static_cast<float>(ctx.extent.height),
+			        };
+			        const gpu::Rect2D scissor{
+			                .width = ctx.extent.width,
+			                .height = ctx.extent.height,
+			        };
+			        cmd.SetViewport(vp);
+			        cmd.SetScissor(scissor);
 
-			                bindless.CmdBindHeaps(cmd);
+			        bindless.CmdBindHeaps(cmd);
 
-			                cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
+			        cmd.BindPipeline(m_fxaaPipeline.GetPipeline());
 
-			                struct
-			                {
-				                std::uint32_t ldrSlot;
-				                std::uint32_t fxaaEnabled;
-			                } push;
-			                push.ldrSlot = m_ldrBindlessSlot;
-			                push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+			        struct
+			        {
+				        std::uint32_t ldrSlot;
+				        std::uint32_t fxaaEnabled;
+			        } push;
+			        push.ldrSlot = m_ldrBindlessSlot;
+			        push.fxaaEnabled = m_fxaaEnabled ? 1u : 0u;
+			        cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
-			                cmd.Draw(3, 1, 0, 0);
-		                });
+			        cmd.Draw(3, 1, 0, 0);
+		        });
 	}
 } // namespace aether

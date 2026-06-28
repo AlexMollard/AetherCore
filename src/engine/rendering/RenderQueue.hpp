@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <mutex>
+#include <string>
 #include <vector>
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuHandles.hpp"
@@ -67,6 +68,7 @@ namespace aether
 		std::uint32_t maxBatches = 1024;
 		std::uint32_t maxAnimationDraws = UINT32_MAX;
 		std::uint32_t outputDrawCapacity = 0;
+		const char* debugName = "RenderQueue";
 	};
 
 	class RenderQueue
@@ -214,9 +216,8 @@ namespace aether
 		// Each slot is protected by m_slotMutexes[slot]. The game thread
 		// (Clear/Submit) and render thread (PrepareAndDispatch) can access
 		// the same slot concurrently when the render thread is kFramesInFlight
-		// behind. Clear() waits on m_slotCv until the render thread has
-		// consumed the slot (m_slotConsumed == true), preventing the game
-		// thread from destroying commands the render thread hasn't read yet.
+		// behind. Clear() waits until the render thread consumes the slot; lifecycle
+		// paths that skip graph execution must explicitly retire their queues.
 		std::array<std::vector<DrawCommand>, kFramesInFlight> m_commandSlots;
 		std::array<std::mutex, kFramesInFlight> m_slotMutexes;
 		std::array<std::condition_variable, kFramesInFlight> m_slotCv;
@@ -272,6 +273,7 @@ namespace aether
 		std::uint32_t m_maxAnimationDraws = 0;
 		std::uint32_t m_maxSkinJoints = 0;
 		std::uint32_t m_maxSampledPoses = 0;
+		std::string m_debugName = "RenderQueue";
 
 		// Batch metadata consumed by FlushDraw.
 		struct BatchRenderInfo

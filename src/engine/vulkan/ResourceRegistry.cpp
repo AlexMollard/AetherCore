@@ -765,6 +765,36 @@ namespace aether
 		return entry ? static_cast<gpu::ImageUsage>(entry->usage) : gpu::ImageUsage::None;
 	}
 
+	std::vector<gpu::DebugTextureInfo> ResourceRegistry::ListDebugTextures() const
+	{
+		std::vector<gpu::DebugTextureInfo> result;
+		result.reserve(m_liveTextureCount);
+		for (std::uint32_t i = 0; i < m_textures.size(); ++i)
+		{
+			const TextureSlot& slot = m_textures[i];
+			if (!slot.entry.has_value())
+			{
+				continue;
+			}
+
+			const TextureEntry& entry = *slot.entry;
+			result.push_back(gpu::DebugTextureInfo{
+			        .handle = gpu::TextureHandle::Make(i, slot.generation),
+			        .view = static_cast<gpu::ImageView>(entry.view),
+			        .format = gpu::FromVk(entry.format),
+			        .extent = gpu::Extent2D{entry.extent.width, entry.extent.height},
+			        .usage = static_cast<gpu::ImageUsage>(entry.usage),
+			        .aspect = static_cast<gpu::ImageAspect>(entry.aspect),
+			        .mipLevels = entry.mipLevels,
+			        .arrayLayers = entry.arrayLayers,
+			        .hasBindlessSampled = entry.hasBindlessSampled,
+			        .bindlessSampledSlot = entry.bindlessSampledSlot,
+			        .debugName = slot.debugName,
+			});
+		}
+		return result;
+	}
+
 	gpu::DeviceSize ResourceRegistry::GetBufferSize(gpu::BufferHandle handle) const
 	{
 		const BufferEntry* entry = Resolve(handle);
@@ -1492,6 +1522,11 @@ namespace aether::gpu
 	ImageUsage ResourceRegistry::GetTextureUsage(TextureHandle handle)
 	{
 		return s_reg->GetTextureUsage(handle);
+	}
+
+	std::vector<DebugTextureInfo> ResourceRegistry::ListDebugTextures()
+	{
+		return s_reg->ListDebugTextures();
 	}
 
 	DeviceSize ResourceRegistry::GetBufferSize(BufferHandle handle)

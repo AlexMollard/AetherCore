@@ -33,8 +33,9 @@ namespace aether
 		m_maxAnimationDraws = (config.maxAnimationDraws == UINT32_MAX) ? std::min(config.maxDraws, kDefaultMaxAnimationDraws) : config.maxAnimationDraws;
 		m_maxSkinJoints = m_maxAnimationDraws * 128u;
 		m_maxSampledPoses = m_maxSkinJoints * 2u;
+		m_debugName = config.debugName != nullptr ? config.debugName : "RenderQueue";
 		m_slotConsumed.fill(true);
-		AE_INFO(LogCategory::Render, "RenderQueue::Initialize: maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
+		AE_INFO(LogCategory::Render, "RenderQueue::Initialize({}): maxDraws={}, maxAnimationDraws={}, maxSkinJoints={}, maxSampledPoses={}", m_debugName, m_maxDraws, m_maxAnimationDraws, m_maxSkinJoints, m_maxSampledPoses);
 
 		constexpr gpu::BufferUsage kSsboFlags = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress;
 

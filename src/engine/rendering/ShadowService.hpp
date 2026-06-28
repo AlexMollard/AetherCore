@@ -54,6 +54,11 @@ namespace aether
 			m_shadowRenderQueue.DiscardAllPending();
 		}
 
+		void DiscardPendingQueue(std::uint32_t slot)
+		{
+			m_shadowRenderQueue.DiscardPending(slot);
+		}
+
 		[[nodiscard]] std::span<const RGImage> GetShadowDepthImages() const
 		{
 			return {m_shadowDepth.data(), m_shadowDepth.size()};

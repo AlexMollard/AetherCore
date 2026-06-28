@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <mutex>
 
 #include "passes/CullPass.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
@@ -23,6 +24,21 @@ namespace aether
 
 namespace aether
 {
+	enum class SceneViewportResolutionMode : std::uint32_t
+	{
+		WindowNative = 0,
+		Fixed720p,
+		Fixed1080p,
+		Fixed1440p,
+		Custom,
+	};
+
+	struct SceneViewportSettings
+	{
+		SceneViewportResolutionMode resolutionMode = SceneViewportResolutionMode::WindowNative;
+		gpu::Extent2D customExtent{1280, 720};
+	};
+
 	// Owns all rendering passes and the render graph. Depends on Vulkan context,
 	// camera, lighting, and material services from the container.
 	class RenderingSubsystem
@@ -33,6 +49,14 @@ namespace aether
 
 		// Called on swapchain recreation to rebuild extent-dependent resources.
 		void RecreateSwapchainResources(ServiceContainer& services);
+		void SetSceneViewportEnabled(ServiceContainer& services, bool enabled);
+		void SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings);
+		bool CommitPendingSceneViewportSettings();
+		void ApplyPendingSceneViewportChanges(ServiceContainer& services);
+		void DiscardPendingFrameQueues(std::uint32_t slot);
+
+		[[nodiscard]] SceneViewportSettings GetSceneViewportSettings() const;
+		[[nodiscard]] gpu::Extent2D ResolveRequestedSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
 
 		// Set by AetherCore after construction to provide the current frame index
 		// for RTT queue preparation and pass callbacks.
@@ -50,6 +74,8 @@ namespace aether
 		{
 			return m_forwardPassEnabled.load(std::memory_order_relaxed);
 		}
+
+		[[nodiscard]] bool IsSceneViewportEnabled() const;
 
 		[[nodiscard]] RenderGraph& GetRenderGraph()
 		{
@@ -103,6 +129,9 @@ namespace aether
 
 	private:
 		void RegisterPasses(ServiceContainer& services);
+		[[nodiscard]] gpu::Extent2D ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
+		void DestroySceneViewportDepth();
+		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph);
 
 		RenderQueueSharedPipelines m_renderQueuePipelines;
 		RenderGraph m_renderGraph;
@@ -115,8 +144,16 @@ namespace aether
 		CullPass m_cullPass;
 		GraphicsPipeline m_skyboxPipeline;
 		PostProcessStack m_postProcessStack;
+		gpu::TextureHandle m_sceneDepthHandle;
+		RGImage m_sceneDepth;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
 		std::atomic_bool m_forwardPassEnabled = true;
+		std::atomic_bool m_sceneViewportRebuildPending = false;
+		mutable std::mutex m_sceneViewportMutex;
+		bool m_sceneViewportEnabled = false;
+		bool m_requestedSceneViewportEnabled = false;
+		SceneViewportSettings m_sceneViewportSettings;
+		SceneViewportSettings m_requestedSceneViewportSettings;
 	};
 } // namespace aether

@@ -67,7 +67,7 @@ namespace aether
 		m_atlasManager.Initialize(bindless);
 		m_atlasBindlessSlot = m_atlasManager.GetBindlessSlot();
 
-		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u});
+		m_shadowRenderQueue.Initialize(pipelines, RenderQueueConfig{.maxDraws = 4096, .maxBatches = 512, .maxAnimationDraws = 1024u, .debugName = "LocalShadow"});
 		m_shadowRenderQueue.SetDebugDisableAnimation(false);
 		m_shadowRenderQueue.SetDebugAnimPassMask(0xFFFFFFFFu); // Test: PoseInit + AnimSample
 

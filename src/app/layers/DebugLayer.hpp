@@ -4,10 +4,12 @@
 #include <cstddef>
 #include <deque>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "AppLayer.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "rendering/Renderer.hpp"
 #include "scene/Entity.hpp"
 #include "utils/TomlConfig.hpp"
@@ -54,6 +56,10 @@ namespace aether::app
 		void PushFrameSample(float frameMs);
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
+		void DrawSceneViewport(LayerContext& context);
+		void DrawTextureInspector(LayerContext& context);
+		void ReleaseSceneViewportTexture(LayerContext& context);
+		void ReleaseTextureInspectorTextures(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
@@ -74,6 +80,19 @@ namespace aether::app
 		TomlConfig m_debugConfig;
 		std::deque<ScriptErrorToast> m_errorToasts;
 		Entity m_selectedSceneEntity;
-		std::unordered_set<std::uint32_t> m_expandedSceneEntities;
+		std::uint64_t m_sceneViewportTextureId = 0;
+		gpu::ImageView m_sceneViewportImageView = nullptr;
+		bool m_dockspaceBuilt = false;
+
+		int m_viewportDisplayMode = 0; // Fit, fill, actual, integer
+		int m_viewportAspectMode = 0;  // Render, free, 16:9, 16:10, 4:3, 1:1
+		bool m_viewportShowStats = true;
+		bool m_viewportShowMouse = true;
+
+		std::unordered_map<std::uint32_t, std::uint64_t> m_textureInspectorTextureIds;
+		std::uint32_t m_selectedTextureBits = 0;
+		int m_texturePreviewChannel = 0;
+		float m_texturePreviewZoom = 1.0f;
+		bool m_texturePreviewCheckerboard = true;
 	};
 } // namespace aether::app

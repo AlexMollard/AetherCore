@@ -168,8 +168,7 @@ namespace aether
 		        [this]()
 		        {
 			        m_rendering->RecreateSwapchainResources(m_services);
-			        m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
-			        if (auto ui = m_services.TryGet<UIRenderer>())
+			        if (auto ui = m_services.TryGet<UIRenderer>(); ui != nullptr && !m_rendering->IsSceneViewportEnabled())
 			        {
 				        ui->ReRegisterPass();
 			        }
@@ -222,8 +221,13 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		auto& platform = m_services.Get<PlatformSubsystem>();
-		platform.GetInput().Update();
-		m_cameras->GetCameraManager().Update(platform.GetInput(), dt);
+		auto& input = platform.GetInput();
+		input.Update();
+		if (m_imgui)
+		{
+			input.SetMouseCaptured(m_imgui->WantsInputCapture() && !input.IsMouseViewportInputActive());
+		}
+		m_cameras->GetCameraManager().Update(input, dt);
 	}
 
 	void AetherCore::BeginFrame()
@@ -231,7 +235,15 @@ namespace aether
 		AE_PROFILE_ZONE();
 		if (m_gpu->SwapchainNeedsRecreation())
 		{
+			if (m_rendering)
+			{
+				m_rendering->CommitPendingSceneViewportSettings();
+			}
 			RecreateSwapchain();
+		}
+		else if (m_rendering)
+		{
+			m_rendering->ApplyPendingSceneViewportChanges(m_services);
 		}
 
 		m_gpu->BeginSwapchainFrame();
@@ -277,7 +289,11 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto& assetsSub = m_services.Get<AssetSubsystem>();
 
-		gpu::Extent2D extent = m_gpu->GetSwapchainExtent();
+		gpu::Extent2D extent = m_rendering->ResolveRequestedSceneViewportExtent(m_gpu->GetSwapchainExtent());
+		if (extent.width == 0 || extent.height == 0)
+		{
+			extent = m_gpu->GetSwapchainExtent();
+		}
 		RenderQueue& renderQueue = m_rendering->GetRenderQueue();
 		World& world = m_services.Get<SceneSubsystem>().GetWorld();
 		RenderTargetService& rttService = m_rendering->GetRenderTargetService();
@@ -297,6 +313,7 @@ namespace aether
 		RenderFramePacket packet;
 		packet.frameIndex = frameIndex;
 		packet.drawSlot = drawSlot;
+		packet.renderExtent = extent;
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
 
 		if (const Camera* cam = cameras.TryGetMainCamera())
@@ -350,9 +367,14 @@ namespace aether
 	void AetherCore::EndFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
+		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
+			if (m_rendering)
+			{
+				m_rendering->DiscardPendingFrameQueues(frameIdx);
+			}
 			m_gpu->SubmitAndPresent();
 			AE_PROFILE_FRAME;
 			++m_frameIndex;
@@ -360,8 +382,6 @@ namespace aether
 			m_gpu->AdvanceResourceRegistryFrame();
 			return;
 		}
-
-		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
 
 		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
 
@@ -389,7 +409,8 @@ namespace aether
 			if (cam)
 			{
 				auto& lightingMgr = m_cameras->GetLightingManager();
-				const bool lightDataReady = lightingMgr.PrepareForRenderGraph(frameIdx, *cam, m_gpu->GetSwapchainExtent(), fc, packet.pointLights, packet.spotLights);
+				const gpu::Extent2D lightingExtent = packet.renderExtent.width != 0 && packet.renderExtent.height != 0 ? packet.renderExtent : m_gpu->GetSwapchainExtent();
+				const bool lightDataReady = lightingMgr.PrepareForRenderGraph(frameIdx, *cam, lightingExtent, fc, packet.pointLights, packet.spotLights);
 
 				if (!lightDataReady)
 				{

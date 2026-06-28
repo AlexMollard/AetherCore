@@ -218,6 +218,7 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetTextureMipLevels(gpu::TextureHandle handle) const;
 		[[nodiscard]] std::uint32_t GetTextureArrayLayers(gpu::TextureHandle handle) const;
 		[[nodiscard]] gpu::ImageUsage GetTextureUsage(gpu::TextureHandle handle) const;
+		[[nodiscard]] std::vector<gpu::DebugTextureInfo> ListDebugTextures() const;
 
 		[[nodiscard]] gpu::DeviceSize GetBufferSize(gpu::BufferHandle handle) const;
 		[[nodiscard]] gpu::BufferUsage GetBufferUsage(gpu::BufferHandle handle) const;

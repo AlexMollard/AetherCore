@@ -127,12 +127,16 @@ namespace aether
 		{
 			return;
 		}
+		if (input.IsMouseCaptured())
+		{
+			return;
+		}
 
 		if (m_mode == CameraMode::Free)
 		{
 			// Hold RMB to look around (delta mouse -> yaw/pitch).
 			// Skip while UI is interacting (e.g. dragging a panel).
-			if (!input.IsMouseCaptured() && input.IsMouseButtonDown(MouseButton::Right))
+			if (input.IsMouseButtonDown(MouseButton::Right))
 			{
 				const glm::vec2 delta = input.GetMouseDelta();
 				m_yaw -= delta.x * m_lookSpeed;
@@ -180,7 +184,7 @@ namespace aether
 		{
 			// Hold LMB: drag to orbit around target.
 			// Skip while UI is interacting (e.g. dragging a panel).
-			if (!input.IsMouseCaptured() && input.IsMouseButtonDown(MouseButton::Left))
+			if (input.IsMouseButtonDown(MouseButton::Left))
 			{
 				const glm::vec2 delta = input.GetMouseDelta();
 				m_orbitYaw += delta.x * m_orbitSpeed;

@@ -9,6 +9,7 @@
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "rendering/RenderGraph.hpp"
 
 namespace aether::gpu
 {
@@ -18,7 +19,6 @@ namespace aether::gpu
 namespace aether
 {
 	class World;
-	class RenderGraph;
 
 	class GpuDevice;
 
@@ -105,7 +105,7 @@ namespace aether
 		//   1. game-thread immediate-mode primitives from RenderFramePacket::debugVertices
 		//   2. self-test pattern (gizmo + world AABB) when m_selfTestEnabled
 		//   3. physics shape components (boxes/spheres/capsules) from the World when enabled
-		void RegisterPass(RenderGraph& graph);
+		void RegisterPass(RenderGraph& graph, RGImage color = {}, RGImage depth = {}, gpu::Extent2D extent = {});
 
 		// Toggle the always-on self-test pattern. Useful for diagnosing whether
 		// the pipeline is alive independent of any caller-supplied primitives.

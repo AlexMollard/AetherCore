@@ -28,16 +28,13 @@ namespace aether
 			auto& style = ImGui::GetStyle();
 			auto& colors = style.Colors;
 
-			using colors::Background, colors::Surface, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Green, colors::Red;
+			using colors::Background, colors::Surface, colors::SurfaceElevated, colors::Border, colors::TextPrimary, colors::TextSecondary, colors::Orange, colors::Yellow, colors::Green, colors::Red;
 
-			constexpr auto grey = [](int v, int a = 255)
-			{
-				return ImColor(v, v, v, a);
-			};
 			constexpr auto black = [](int a)
 			{
 				return ImColor(0, 0, 0, a);
 			};
+
 			constexpr auto withAlpha = [](const ImColor& c, int a)
 			{
 				return ImColor(c.Value.x, c.Value.y, c.Value.z, a / 255.0f);
@@ -47,22 +44,25 @@ namespace aether
 			{
 				return ImColor(c.r, c.g, c.b, c.a);
 			};
+
 			const auto bg = toIm(Background);
-			const auto bgAlt = toIm(Surface);
+			const auto bgSurface = toIm(Surface);
+			const auto bgElevated = toIm(SurfaceElevated);
+			const auto cBorder = toIm(Border);
 			const auto fg = toIm(TextPrimary);
-			const auto fgAlt = toIm(TextSecondary);
+			const auto fgMuted = toIm(TextSecondary);
 			const auto cOrange = toIm(Orange);
 			const auto cYellow = toIm(Yellow);
 			const auto cGreen = toIm(Green);
 			const auto cRed = toIm(Red);
 
 			// Rounding and spacing
-			style.FrameRounding = 6.0f;
-			style.GrabRounding = 6.0f;
-			style.ChildRounding = 6.0f;
-			style.PopupRounding = 6.0f;
-			style.TabRounding = 6.0f;
-			style.WindowRounding = 8.0f;
+			style.FrameRounding = 0.0f;
+			style.GrabRounding = 0.0f;
+			style.ChildRounding = 0.0f;
+			style.PopupRounding = 0.0f;
+			style.TabRounding = 0.0f;
+			style.WindowRounding = 0.0f;
 			style.FrameBorderSize = 0.0f;
 			style.WindowBorderSize = 1.0f;
 			style.ChildBorderSize = 0.0f;
@@ -70,36 +70,36 @@ namespace aether
 			style.TabBorderSize = 0.0f;
 			style.ScrollbarSize = 12.0f;
 			style.WindowMenuButtonPosition = ImGuiDir_Right;
-			style.ItemSpacing = ImVec2(10.0f, 6.0f);
-			style.ItemInnerSpacing = ImVec2(8.0f, 4.0f);
-			style.IndentSpacing = 20.0f;
-			style.ScrollbarRounding = 8.0f;
-			style.GrabMinSize = 10.0f;
+			style.ItemSpacing = ImVec2(10.0f, 3.0f);
+			style.ItemInnerSpacing = ImVec2(4.0f, 4.0f);
+			style.IndentSpacing = 10.0f;
+			style.ScrollbarRounding = 0.0f;
+			style.GrabMinSize = 5.0f;
 
 			// Text
 			colors[ImGuiCol_Text] = fg;
-			colors[ImGuiCol_TextDisabled] = fgAlt;
+			colors[ImGuiCol_TextDisabled] = fgMuted;
 			colors[ImGuiCol_TextLink] = cOrange;
 			colors[ImGuiCol_TextSelectedBg] = withAlpha(cOrange, 48);
 
 			// Window
 			colors[ImGuiCol_WindowBg] = bg;
 			colors[ImGuiCol_ChildBg] = bg;
-			colors[ImGuiCol_PopupBg] = bgAlt;
-			colors[ImGuiCol_Border] = fgAlt;
-			colors[ImGuiCol_BorderShadow] = grey(0, 0);
+			colors[ImGuiCol_PopupBg] = bgElevated; // elevated above surface
+			colors[ImGuiCol_Border] = cBorder;
+			colors[ImGuiCol_BorderShadow] = ImColor(0, 0, 0, 0);
 
 			// Title
-			colors[ImGuiCol_TitleBg] = bg;
-			colors[ImGuiCol_TitleBgActive] = bgAlt;
+			colors[ImGuiCol_TitleBg] = bgSurface;
+			colors[ImGuiCol_TitleBgActive] = bgElevated;
 			colors[ImGuiCol_TitleBgCollapsed] = bg;
 
 			// Menu
-			colors[ImGuiCol_MenuBarBg] = bgAlt;
+			colors[ImGuiCol_MenuBarBg] = bgSurface;
 
 			// Scrollbar
 			colors[ImGuiCol_ScrollbarBg] = bg;
-			colors[ImGuiCol_ScrollbarGrab] = bgAlt;
+			colors[ImGuiCol_ScrollbarGrab] = bgElevated;
 			colors[ImGuiCol_ScrollbarGrabHovered] = withAlpha(cOrange, 140);
 			colors[ImGuiCol_ScrollbarGrabActive] = cOrange;
 
@@ -110,27 +110,27 @@ namespace aether
 			colors[ImGuiCol_SliderGrabActive] = cYellow;
 
 			// Button
-			colors[ImGuiCol_Button] = bgAlt;
+			colors[ImGuiCol_Button] = bgSurface;
 			colors[ImGuiCol_ButtonHovered] = withAlpha(cOrange, 180);
 			colors[ImGuiCol_ButtonActive] = cOrange;
 
 			// Header (collapsing headers, tree nodes, selectables)
-			colors[ImGuiCol_Header] = bgAlt;
+			colors[ImGuiCol_Header] = bgSurface;
 			colors[ImGuiCol_HeaderHovered] = withAlpha(cOrange, 100);
 			colors[ImGuiCol_HeaderActive] = withAlpha(cOrange, 160);
 
 			// Separator
-			colors[ImGuiCol_Separator] = fgAlt;
+			colors[ImGuiCol_Separator] = cBorder;
 			colors[ImGuiCol_SeparatorHovered] = cOrange;
 			colors[ImGuiCol_SeparatorActive] = cYellow;
 
 			// Resize grip
-			colors[ImGuiCol_ResizeGrip] = bgAlt;
+			colors[ImGuiCol_ResizeGrip] = bgSurface;
 			colors[ImGuiCol_ResizeGripHovered] = withAlpha(cOrange, 140);
 			colors[ImGuiCol_ResizeGripActive] = cOrange;
 
 			// Frame BG (input fields, combo, etc.)
-			colors[ImGuiCol_FrameBg] = bgAlt;
+			colors[ImGuiCol_FrameBg] = bgSurface;
 			colors[ImGuiCol_FrameBgHovered] = withAlpha(cOrange, 60);
 			colors[ImGuiCol_FrameBgActive] = withAlpha(cOrange, 100);
 
@@ -140,10 +140,10 @@ namespace aether
 			// Tabs
 			colors[ImGuiCol_Tab] = bg;
 			colors[ImGuiCol_TabHovered] = withAlpha(cOrange, 80);
-			colors[ImGuiCol_TabSelected] = bgAlt;
+			colors[ImGuiCol_TabSelected] = bgSurface;
 			colors[ImGuiCol_TabSelectedOverline] = cOrange;
 			colors[ImGuiCol_TabDimmed] = bg;
-			colors[ImGuiCol_TabDimmedSelected] = bgAlt;
+			colors[ImGuiCol_TabDimmedSelected] = bgSurface;
 			colors[ImGuiCol_TabDimmedSelectedOverline] = withAlpha(cOrange, 80);
 
 			// Docking
@@ -151,20 +151,20 @@ namespace aether
 			colors[ImGuiCol_DockingEmptyBg] = bg;
 
 			// Plot
-			colors[ImGuiCol_PlotLines] = fgAlt;
+			colors[ImGuiCol_PlotLines] = fgMuted;
 			colors[ImGuiCol_PlotLinesHovered] = cOrange;
 			colors[ImGuiCol_PlotHistogram] = cOrange;
 			colors[ImGuiCol_PlotHistogramHovered] = cYellow;
 
 			// Tables
-			colors[ImGuiCol_TableHeaderBg] = bgAlt;
-			colors[ImGuiCol_TableBorderStrong] = fgAlt;
-			colors[ImGuiCol_TableBorderLight] = bgAlt;
+			colors[ImGuiCol_TableHeaderBg] = bgElevated;
+			colors[ImGuiCol_TableBorderStrong] = cBorder;
+			colors[ImGuiCol_TableBorderLight] = withAlpha(cBorder, 80);
 			colors[ImGuiCol_TableRowBg] = bg;
-			colors[ImGuiCol_TableRowBgAlt] = withAlpha(bgAlt, 160);
+			colors[ImGuiCol_TableRowBgAlt] = withAlpha(bgSurface, 160);
 
 			// Tree
-			colors[ImGuiCol_TreeLines] = fgAlt;
+			colors[ImGuiCol_TreeLines] = cBorder;
 
 			// Unsaved marker
 			colors[ImGuiCol_UnsavedMarker] = cYellow;
@@ -286,6 +286,8 @@ namespace aether
 		}
 
 		ImGui::Render();
+		const ImGuiIO& io = ImGui::GetIO();
+		m_wantsInputCapture = io.WantCaptureMouse || io.WantCaptureKeyboard;
 		outFrame.Capture(ImGui::GetDrawData());
 		m_gameThreadFrameLock.reset();
 	}
@@ -317,6 +319,27 @@ namespace aether
 		ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(frame.GetDrawData()), reinterpret_cast<VkCommandBuffer>(commands.GetCommandBuffer()));
 		commands.EndRendering();
 		commands.EndDebugLabel();
+	}
+
+	ImTextureID ImguiSubsystem::RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout)
+	{
+		if (!m_initialized || !m_backendsInitialized || imageView == nullptr)
+		{
+			return ImTextureID_Invalid;
+		}
+
+		const VkDescriptorSet descriptorSet = ImGui_ImplVulkan_AddTexture(static_cast<VkImageView>(imageView), ToVk(layout));
+		return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(descriptorSet));
+	}
+
+	void ImguiSubsystem::UnregisterTexture(ImTextureID textureId)
+	{
+		if (!m_initialized || !m_backendsInitialized || textureId == ImTextureID_Invalid)
+		{
+			return;
+		}
+
+		ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(textureId)));
 	}
 
 	void ImguiSubsystem::InitBackends(ServiceContainer& services)
