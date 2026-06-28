@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -54,6 +55,11 @@ namespace aether
 			return m_wantsInputCapture;
 		}
 
+		[[nodiscard]] float GetLastRenderCpuTimeMs() const noexcept
+		{
+			return m_lastRenderCpuTimeMs.load(std::memory_order_relaxed);
+		}
+
 	private:
 		void InitBackends(ServiceContainer& services);
 		void ShutdownBackends();
@@ -62,6 +68,7 @@ namespace aether
 		bool m_backendsInitialized = false;
 		bool m_wantsInputCapture = false;
 		std::uint64_t m_frameIndex = 0;
+		std::atomic<float> m_lastRenderCpuTimeMs = 0.0f;
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;
 		std::vector<std::byte> m_fontData;

@@ -3,9 +3,11 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <source_location>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -152,6 +154,11 @@ namespace aether
 
 			PassBuilder& ExecuteCompute(std::function<void(PassContext&)> fn);
 
+			// Optional housekeeping callback used when the debugger disables a pass.
+			// Keep this lightweight: release frame handshakes, consume queues, or
+			// publish fallback state without recording the pass's normal GPU work.
+			PassBuilder& OnDebugDisabled(std::function<void(PassContext&)> fn);
+
 			// Override pass extent (for render-to-texture and non-swapchain targets).
 			PassBuilder& SetExtent(gpu::Extent2D extent);
 
@@ -235,14 +242,49 @@ namespace aether
 
 		struct PassInfo
 		{
+			struct ResourceAccessInfo
+			{
+				enum class Kind
+				{
+					Image,
+					Buffer,
+				};
+
+				Kind kind = Kind::Image;
+				std::uint32_t id = 0;
+				std::string usage;
+				bool writes = false;
+			};
+
+			std::size_t index = 0;
+			std::size_t compiledIndex = 0;
 			std::string name;
+			std::string declaredFile;
+			std::uint_least32_t declaredLine = 0;
 			bool isGraphics = false;
 			bool isCompute = false;
 			bool isAsyncCompute = false;
+			bool isCompiled = false;
+			bool isCulled = false;
+			bool isDebugDisabled = false;
+			bool hasDepthWrite = false;
+			std::uint32_t colorWriteCount = 0;
+			std::uint32_t imageAccessCount = 0;
+			std::uint32_t bufferAccessCount = 0;
+			std::uint32_t preBarrierCount = 0;
+			std::uint32_t bufferBarrierCount = 0;
+			std::uint32_t waitCount = 0;
+			std::uint32_t signalBarrierCount = 0;
+			std::uint32_t splitEventIndex = UINT32_MAX;
+			std::optional<gpu::Extent2D> extentOverride;
+			std::vector<ResourceAccessInfo> resources;
 			float lastCpuTimeMs = 0.f;
 		};
 
 		[[nodiscard]] std::vector<PassInfo> GetPasses() const;
+		void SetPassDebugDisabled(std::string_view name, bool disabled);
+		[[nodiscard]] bool IsPassDebugDisabled(std::string_view name) const;
+		void ClearDebugDisabledPasses();
 
 		// Execute the compiled frame graph for the current frame.
 		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
@@ -398,8 +440,10 @@ namespace aether
 			std::vector<ImageAccessRef> imageAccesses;
 			std::vector<BufferAccessRef> bufferAccesses;
 			std::function<void(PassContext&)> execute;
+			std::function<void(PassContext&)> debugDisabledExecute;
 			std::optional<gpu::Extent2D> extentOverride;
 			float lastCpuTimeMs = 0.f;
+			bool debugDisabled = false;
 #ifndef NDEBUG
 			std::source_location declaredAt;
 #endif
@@ -457,6 +501,7 @@ namespace aether
 
 		// Opaque storage for all Vulkan-internal state.
 		std::unique_ptr<RenderGraphStorage> m_storage;
+		mutable std::mutex m_debugStateMutex;
 
 		// Diagnostic breadcrumb injection (nullable, not owned).
 		class DiagnosticEngine* m_diagnosticEngine = nullptr;
@@ -464,6 +509,7 @@ namespace aether
 		// Pass graph state (Vulkan-free).
 		std::vector<PassRecord> m_passes;
 		std::vector<CompiledPass> m_compiled;
+		std::vector<bool> m_lastCulledPasses;
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<gpu::Buffer> m_externalBuffers;
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;

@@ -124,6 +124,7 @@ namespace aether
 		};
 
 		void RegisterPass();
+		[[nodiscard]] std::vector<PendingQuad> ConsumeSlot(std::uint32_t readSlot);
 
 		void EnsureCommandBufferReady(std::uint32_t frameSlot, gpu::DeviceSize commandBytes);
 		void EnsureIndirectBufferReady(std::uint32_t frameSlot);

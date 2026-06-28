@@ -16,8 +16,9 @@
 
 namespace aether
 {
+	class RenderGraph;
 	class World;
-}
+} // namespace aether
 
 namespace aether::app::scripting
 {
@@ -49,6 +50,14 @@ namespace aether::app
 		static constexpr std::size_t kMaxRenderPassRows = 16;
 		static constexpr std::size_t kMaxSceneRows = 80;
 		static constexpr std::size_t kFrameSampleCount = 180;
+		static constexpr std::size_t kRenderBenchmarkSampleCount = 240;
+
+		struct RenderPassBenchmark
+		{
+			std::array<float, kRenderBenchmarkSampleCount> samples{};
+			std::size_t head = 0;
+			std::size_t count = 0;
+		};
 
 		static const char* GetTonemapModeName(aether::TonemapMode mode);
 
@@ -58,6 +67,7 @@ namespace aether::app
 		void SaveSettings(LayerContext& context);
 		void DrawSceneViewport(LayerContext& context);
 		void DrawTextureInspector(LayerContext& context);
+		void DrawRenderGraphDebugger(LayerContext& context, RenderGraph& graph);
 		void ReleaseSceneViewportTexture(LayerContext& context);
 		void ReleaseTextureInspectorTextures(LayerContext& context);
 
@@ -88,6 +98,13 @@ namespace aether::app
 		int m_viewportAspectMode = 0;  // Render, free, 16:9, 16:10, 4:3, 1:1
 		bool m_viewportShowStats = true;
 		bool m_viewportShowMouse = true;
+
+		std::unordered_map<std::string, RenderPassBenchmark> m_renderPassBenchmarks;
+		std::string m_selectedRenderPass;
+		char m_renderGraphFilter[96] = {};
+		bool m_renderGraphShowDisabled = true;
+		bool m_renderGraphShowCulled = true;
+		bool m_renderGraphAutoSelectHotPass = false;
 
 		std::unordered_map<std::uint32_t, std::uint64_t> m_textureInspectorTextureIds;
 		std::uint32_t m_selectedTextureBits = 0;

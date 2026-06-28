@@ -4,6 +4,7 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include <chrono>
 #include <span>
 
 #include "Color.hpp"
@@ -296,6 +297,7 @@ namespace aether
 	{
 		if (!m_initialized || !m_backendsInitialized || !frame.HasDrawData())
 		{
+			m_lastRenderCpuTimeMs.store(0.0f, std::memory_order_relaxed);
 			return;
 		}
 
@@ -316,7 +318,10 @@ namespace aether
 
 		commands.BeginDebugLabel("ImGui", 0.95f, 0.45f, 0.15f, 1.0f);
 		commands.BeginRendering(renderInfo);
+		const auto t0 = std::chrono::high_resolution_clock::now();
 		ImGui_ImplVulkan_RenderDrawData(const_cast<ImDrawData*>(frame.GetDrawData()), reinterpret_cast<VkCommandBuffer>(commands.GetCommandBuffer()));
+		const auto t1 = std::chrono::high_resolution_clock::now();
+		m_lastRenderCpuTimeMs.store(std::chrono::duration<float, std::milli>(t1 - t0).count(), std::memory_order_relaxed);
 		commands.EndRendering();
 		commands.EndDebugLabel();
 	}

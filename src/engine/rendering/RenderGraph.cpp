@@ -29,8 +29,45 @@ namespace aether
 
 	RenderGraph::~RenderGraph() = default;
 
-	RenderGraph::RenderGraph(RenderGraph&&) noexcept = default;
-	RenderGraph& RenderGraph::operator=(RenderGraph&&) noexcept = default;
+	RenderGraph::RenderGraph(RenderGraph&& other) noexcept
+	{
+		std::scoped_lock lock(other.m_debugStateMutex);
+		m_storage = std::move(other.m_storage);
+		m_diagnosticEngine = other.m_diagnosticEngine;
+		m_passes = std::move(other.m_passes);
+		m_compiled = std::move(other.m_compiled);
+		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
+		m_externalImages = std::move(other.m_externalImages);
+		m_externalBuffers = std::move(other.m_externalBuffers);
+		m_lastImageStates = std::move(other.m_lastImageStates);
+		m_lastBufferStates = std::move(other.m_lastBufferStates);
+		m_frameIndex = other.m_frameIndex;
+		m_compileDirty = other.m_compileDirty;
+		m_asyncComputeEnabled = other.m_asyncComputeEnabled;
+	}
+
+	RenderGraph& RenderGraph::operator=(RenderGraph&& other) noexcept
+	{
+		if (this == &other)
+		{
+			return *this;
+		}
+
+		std::scoped_lock lock(m_debugStateMutex, other.m_debugStateMutex);
+		m_storage = std::move(other.m_storage);
+		m_diagnosticEngine = other.m_diagnosticEngine;
+		m_passes = std::move(other.m_passes);
+		m_compiled = std::move(other.m_compiled);
+		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
+		m_externalImages = std::move(other.m_externalImages);
+		m_externalBuffers = std::move(other.m_externalBuffers);
+		m_lastImageStates = std::move(other.m_lastImageStates);
+		m_lastBufferStates = std::move(other.m_lastBufferStates);
+		m_frameIndex = other.m_frameIndex;
+		m_compileDirty = other.m_compileDirty;
+		m_asyncComputeEnabled = other.m_asyncComputeEnabled;
+		return *this;
+	}
 
 	void RenderGraph::Initialize(gpu::Device device, gpu::Allocator allocator)
 	{
@@ -44,10 +81,12 @@ namespace aether
 
 	void RenderGraph::Shutdown()
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		m_storage->Shutdown();
 		m_externalImages.clear();
 		m_passes.clear();
 		m_compiled.clear();
+		m_lastCulledPasses.clear();
 		m_lastImageStates.clear();
 		m_lastBufferStates.clear();
 		m_compileDirty = true;
@@ -76,6 +115,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteColor(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].colorWrites.push_back(AttachmentRef{
 		        .image = image,
 		        .loadOp = loadOp,
@@ -87,6 +127,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteDepth(RGImage image, gpu::LoadOp loadOp, gpu::StoreOp storeOp, gpu::ClearValue clearValue)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].depthWrite = AttachmentRef{
 		        .image = image,
 		        .loadOp = loadOp,
@@ -98,6 +139,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadTexture(RGImage image)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::SampledRead,
@@ -107,6 +149,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadStorageImage(RGImage image)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::StorageRead,
@@ -116,6 +159,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteStorageImage(RGImage image)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::StorageWrite,
@@ -125,6 +169,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBuffer(RGBuffer buffer)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageRead,
@@ -134,6 +179,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBuffer(RGBuffer buffer)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageWrite,
@@ -143,6 +189,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadWriteBuffer(RGBuffer buffer)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::StorageReadWrite,
@@ -152,6 +199,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadImageTransfer(RGImage image)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::TransferRead,
@@ -161,6 +209,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteImageTransfer(RGImage image)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].imageAccesses.push_back(ImageAccessRef{
 		        .image = image,
 		        .type = ImageAccessType::TransferWrite,
@@ -170,6 +219,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ReadBufferTransfer(RGBuffer buffer)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::TransferRead,
@@ -179,6 +229,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::WriteBufferTransfer(RGBuffer buffer)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].bufferAccesses.push_back(BufferAccessRef{
 		        .buffer = buffer,
 		        .type = BufferAccessType::TransferWrite,
@@ -188,25 +239,36 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::Execute(std::function<void(PassContext&)> fn)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ExecuteCompute(std::function<void(PassContext&)> fn)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].kind = PassKind::Compute;
 		m_graph.m_passes[m_passIndex].execute = std::move(fn);
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::OnDebugDisabled(std::function<void(PassContext&)> fn)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		m_graph.m_passes[m_passIndex].debugDisabledExecute = std::move(fn);
+		return *this;
+	}
+
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetExtent(gpu::Extent2D extent)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].extentOverride = gpu::Extent2D{extent.width, extent.height};
 		return *this;
 	}
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::SetQueueClass(QueueClass qc)
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].queueClass = qc;
 		m_graph.m_passes[m_passIndex].allowAsyncCompute = qc == QueueClass::AsyncCompute;
 		return *this;
@@ -214,6 +276,7 @@ namespace aether
 
 	RenderGraph::PassBuilder& RenderGraph::PassBuilder::DisableAsyncCompute()
 	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].allowAsyncCompute = false;
 		m_graph.m_passes[m_passIndex].queueClass = QueueClass::Graphics;
 		return *this;
@@ -223,6 +286,7 @@ namespace aether
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
 		if (!name.empty())
 		{
@@ -239,6 +303,7 @@ namespace aether
 
 	RenderGraph::PassBuilder RenderGraph::AddComputePass(std::string name, std::source_location loc)
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
 		if (!name.empty())
 		{
@@ -261,6 +326,7 @@ namespace aether
 
 	void RenderGraph::RemovePass(const std::string& name)
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& p) { return p.name == name; });
 		if (it != m_passes.end())
 		{
@@ -271,6 +337,7 @@ namespace aether
 
 	void RenderGraph::Clear()
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		for (auto& [id, state]: m_lastImageStates)
 		{
 			if (IsTransientId(id))
@@ -288,6 +355,7 @@ namespace aether
 		m_externalBuffers.clear();
 		m_passes.clear();
 		m_compiled.clear();
+		m_lastCulledPasses.clear();
 		m_lastImageStates.clear();
 		m_lastBufferStates.clear();
 		m_compileDirty = true;
@@ -295,19 +363,170 @@ namespace aether
 
 	std::vector<RenderGraph::PassInfo> RenderGraph::GetPasses() const
 	{
+		std::scoped_lock lock(m_debugStateMutex);
+		auto imageAccessName = [](ImageAccessType type) noexcept -> const char*
+		{
+			switch (type)
+			{
+				case ImageAccessType::SampledRead:
+					return "Sampled read";
+				case ImageAccessType::StorageRead:
+					return "Storage read";
+				case ImageAccessType::StorageWrite:
+					return "Storage write";
+				case ImageAccessType::TransferRead:
+					return "Transfer read";
+				case ImageAccessType::TransferWrite:
+					return "Transfer write";
+			}
+			return "Image access";
+		};
+
+		auto bufferAccessName = [](BufferAccessType type) noexcept -> const char*
+		{
+			switch (type)
+			{
+				case BufferAccessType::StorageRead:
+					return "Storage read";
+				case BufferAccessType::StorageWrite:
+					return "Storage write";
+				case BufferAccessType::StorageReadWrite:
+					return "Storage read/write";
+				case BufferAccessType::TransferRead:
+					return "Transfer read";
+				case BufferAccessType::TransferWrite:
+					return "Transfer write";
+			}
+			return "Buffer access";
+		};
+
+		auto imageAccessWrites = [](ImageAccessType type) noexcept
+		{
+			return type == ImageAccessType::StorageWrite || type == ImageAccessType::TransferWrite;
+		};
+
+		auto bufferAccessWrites = [](BufferAccessType type) noexcept
+		{
+			return type == BufferAccessType::StorageWrite || type == BufferAccessType::StorageReadWrite || type == BufferAccessType::TransferWrite;
+		};
+
+		std::vector<std::size_t> compiledIndexByPass(m_passes.size(), std::numeric_limits<std::size_t>::max());
+		for (std::size_t i = 0; i < m_compiled.size(); ++i)
+		{
+			if (m_compiled[i].passIndex < compiledIndexByPass.size())
+			{
+				compiledIndexByPass[m_compiled[i].passIndex] = i;
+			}
+		}
+
 		std::vector<PassInfo> result;
 		result.reserve(m_passes.size());
-		for (const auto& pass: m_passes)
+		for (std::size_t i = 0; i < m_passes.size(); ++i)
 		{
-			result.push_back(PassInfo{
+			const PassRecord& pass = m_passes[i];
+			PassInfo info{
+			        .index = i,
+			        .compiledIndex = compiledIndexByPass[i] != std::numeric_limits<std::size_t>::max() ? compiledIndexByPass[i] : 0,
 			        .name = pass.name,
 			        .isGraphics = pass.kind == PassKind::Graphics,
 			        .isCompute = pass.kind == PassKind::Compute,
 			        .isAsyncCompute = pass.queueClass == QueueClass::AsyncCompute,
+			        .isCompiled = compiledIndexByPass[i] != std::numeric_limits<std::size_t>::max(),
+			        .isCulled = i < m_lastCulledPasses.size() ? m_lastCulledPasses[i] : false,
+			        .isDebugDisabled = pass.debugDisabled,
+			        .hasDepthWrite = pass.depthWrite.has_value(),
+			        .colorWriteCount = static_cast<std::uint32_t>(pass.colorWrites.size()),
+			        .imageAccessCount = static_cast<std::uint32_t>(pass.imageAccesses.size()),
+			        .bufferAccessCount = static_cast<std::uint32_t>(pass.bufferAccesses.size()),
+			        .extentOverride = pass.extentOverride,
 			        .lastCpuTimeMs = pass.lastCpuTimeMs,
-			});
+			};
+
+#ifndef NDEBUG
+			info.declaredFile = pass.declaredAt.file_name();
+			info.declaredLine = pass.declaredAt.line();
+#endif
+
+			if (info.isCompiled)
+			{
+				const CompiledPass& compiled = m_compiled[info.compiledIndex];
+				info.preBarrierCount = static_cast<std::uint32_t>(compiled.preBarriers.size());
+				info.bufferBarrierCount = static_cast<std::uint32_t>(compiled.bufferBarriers.size());
+				info.waitCount = static_cast<std::uint32_t>(compiled.waits.size());
+				info.signalBarrierCount = static_cast<std::uint32_t>(compiled.signalBarriers.size());
+				info.splitEventIndex = compiled.splitEventIndex;
+			}
+
+			info.resources.reserve(pass.colorWrites.size() + pass.imageAccesses.size() + pass.bufferAccesses.size() + (pass.depthWrite.has_value() ? 1u : 0u));
+			for (const AttachmentRef& attachment: pass.colorWrites)
+			{
+				info.resources.push_back(PassInfo::ResourceAccessInfo{
+				        .kind = PassInfo::ResourceAccessInfo::Kind::Image,
+				        .id = attachment.image.id,
+				        .usage = "Color write",
+				        .writes = true,
+				});
+			}
+			if (pass.depthWrite.has_value())
+			{
+				info.resources.push_back(PassInfo::ResourceAccessInfo{
+				        .kind = PassInfo::ResourceAccessInfo::Kind::Image,
+				        .id = pass.depthWrite->image.id,
+				        .usage = "Depth write",
+				        .writes = true,
+				});
+			}
+			for (const ImageAccessRef& access: pass.imageAccesses)
+			{
+				info.resources.push_back(PassInfo::ResourceAccessInfo{
+				        .kind = PassInfo::ResourceAccessInfo::Kind::Image,
+				        .id = access.image.id,
+				        .usage = imageAccessName(access.type),
+				        .writes = imageAccessWrites(access.type),
+				});
+			}
+			for (const BufferAccessRef& access: pass.bufferAccesses)
+			{
+				info.resources.push_back(PassInfo::ResourceAccessInfo{
+				        .kind = PassInfo::ResourceAccessInfo::Kind::Buffer,
+				        .id = access.buffer.id,
+				        .usage = bufferAccessName(access.type),
+				        .writes = bufferAccessWrites(access.type),
+				});
+			}
+			result.push_back(std::move(info));
 		}
 		return result;
+	}
+
+	void RenderGraph::SetPassDebugDisabled(std::string_view name, bool disabled)
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		for (PassRecord& pass: m_passes)
+		{
+			if (pass.name == name)
+			{
+				pass.debugDisabled = disabled;
+				pass.lastCpuTimeMs = disabled ? 0.0f : pass.lastCpuTimeMs;
+				return;
+			}
+		}
+	}
+
+	bool RenderGraph::IsPassDebugDisabled(std::string_view name) const
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& pass) { return pass.name == name; });
+		return it != m_passes.end() && it->debugDisabled;
+	}
+
+	void RenderGraph::ClearDebugDisabledPasses()
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		for (PassRecord& pass: m_passes)
+		{
+			pass.debugDisabled = false;
+		}
 	}
 
 	void RenderGraph::EnableAsyncCompute(gpu::Queue computeQueue, std::uint32_t computeQueueFamily)
@@ -471,6 +690,7 @@ namespace aether
 
 	void RenderGraph::Compile()
 	{
+		std::scoped_lock lock(m_debugStateMutex);
 		if (!m_compileDirty)
 		{
 			return;
@@ -818,6 +1038,7 @@ namespace aether
 				}
 			}
 		}
+		m_lastCulledPasses = passCulledByPassIdx;
 
 		// Validate queue grouping: all async-compute passes must come before
 		// all graphics passes in topological order. Interleaving would require
@@ -1682,7 +1903,12 @@ namespace aether
 			}
 
 			const gpu::Extent2D passExtent = pass.extentOverride.value_or(target.extent);
-			const bool useDynamicRendering = pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
+			bool passDebugDisabled = false;
+			{
+				std::scoped_lock lock(m_debugStateMutex);
+				passDebugDisabled = pass.debugDisabled;
+			}
+			const bool useDynamicRendering = !passDebugDisabled && pass.kind == PassKind::Graphics && (!scratchColorInfos.empty() || depthInfo.has_value());
 			if (useDynamicRendering)
 			{
 				const gpu::RenderingInfo renderInfo{
@@ -1717,7 +1943,17 @@ namespace aether
 				m_diagnosticEngine->WriteBreadcrumb(reinterpret_cast<VkCommandBuffer>(cmd), breadcrumbValue);
 			}
 
-			if (pass.execute)
+			if (passDebugDisabled)
+			{
+				if (pass.debugDisabledExecute)
+				{
+					PassContext ctx{.recorder = recorder, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex};
+					pass.debugDisabledExecute(ctx);
+				}
+				std::scoped_lock lock(m_debugStateMutex);
+				pass.lastCpuTimeMs = 0.0f;
+			}
+			else if (pass.execute)
 			{
 				// Tracy GPU zone. The engine-side macro captures
 				// __FILE__/__LINE__ at this call site; the cast and
@@ -1727,6 +1963,7 @@ namespace aether
 				PassContext ctx{.recorder = recorder, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
+				std::scoped_lock lock(m_debugStateMutex);
 				pass.lastCpuTimeMs = std::chrono::duration<float, std::milli>(t1 - t0).count();
 			}
 

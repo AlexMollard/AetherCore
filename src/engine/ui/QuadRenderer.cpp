@@ -91,6 +91,12 @@ namespace aether
 			pass.SetExtent(m_colorTargetExtent);
 		}
 		pass.WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
+		        .OnDebugDisabled(
+		                [this](PassContext& ctx)
+		                {
+			                const std::uint32_t readSlot = ctx.frameIndex % Swapchain::kMaxFramesInFlight;
+			                ConsumeSlot(readSlot);
+		                })
 		        .Execute(
 		                [this](PassContext& ctx)
 		                {
@@ -102,12 +108,7 @@ namespace aether
 
 			                // Take ownership of the pending quads so the game thread
 			                // can immediately start writing to this slot again.
-			                auto pending = std::move(m_pendingQuads[readSlot]);
-			                {
-				                std::lock_guard lock(m_slotMutexes[readSlot]);
-				                m_slotConsumed[readSlot] = true;
-			                }
-			                m_slotCvs[readSlot].notify_one();
+			                auto pending = ConsumeSlot(readSlot);
 
 			                if (pending.empty())
 			                {
@@ -195,6 +196,17 @@ namespace aether
 		}
 
 		RegisterPass();
+	}
+
+	std::vector<QuadRenderer::PendingQuad> QuadRenderer::ConsumeSlot(const std::uint32_t readSlot)
+	{
+		auto pending = std::move(m_pendingQuads[readSlot]);
+		{
+			std::lock_guard lock(m_slotMutexes[readSlot]);
+			m_slotConsumed[readSlot] = true;
+		}
+		m_slotCvs[readSlot].notify_one();
+		return pending;
 	}
 
 	void QuadRenderer::SetRenderTarget(RGImage colorTarget, gpu::Extent2D extent)
