@@ -155,6 +155,11 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
+		if (!m_directionalShadowEnabled)
+		{
+			m_shadowRenderQueue.DiscardPending(drawSlot);
+			return;
+		}
 		m_shadowRenderQueue.Clear(drawSlot);
 	}
 
@@ -162,6 +167,10 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
+		if (!m_directionalShadowEnabled)
+		{
+			return;
+		}
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
 	}
 
@@ -191,6 +200,10 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
+			                if (!m_directionalShadowEnabled)
+			                {
+				                return;
+			                }
 			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
 			                gpu::DeviceAddress cascadeAddrs[kCullMultiFrustumCount];
 			                for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
@@ -213,6 +226,10 @@ namespace aether
 			        .Execute(
 			                [this, cascade](PassContext& ctx)
 			                {
+				                if (!m_directionalShadowEnabled)
+				                {
+					                return;
+				                }
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
 				                gpu::CommandList cmd = ctx.recorder.View();
 				                m_shadowRenderQueue.FlushDraw(cmd, nullptr, &m_shadowPipeline, cascadeOffset);
@@ -231,6 +248,18 @@ namespace aether
 			lightDir = glm::vec3(0.5f, 0.8f, 0.2f);
 		}
 		lightDir = glm::normalize(lightDir);
+
+		// When the light is at or below the horizon, shadows are not visible
+		// to a ground-level camera. Skip CSM entirely to save GPU work.
+		if (lightDir.y <= 0.0f)
+		{
+			return;
+		}
+
+		if (!m_directionalShadowEnabled)
+		{
+			return;
+		}
 
 		const Camera* mainCamForShadows = cameraManager.TryGetMainCamera();
 		const float camNear = (mainCamForShadows != nullptr) ? mainCamForShadows->GetNearPlane() : 0.1f;

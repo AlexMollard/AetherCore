@@ -43,6 +43,16 @@ namespace aether
 		void PrepareQueues(std::uint32_t drawSlot, World& world);
 		void SetAnimationDatabase(const AnimationDatabase* animationDb);
 
+		void SetDirectionalShadowEnabled(bool enabled)
+		{
+			m_directionalShadowEnabled = enabled;
+		}
+
+		[[nodiscard]] bool IsDirectionalShadowEnabled() const
+		{
+			return m_directionalShadowEnabled;
+		}
+
 		void RegisterPasses(RenderGraph& graph, const CullPass& cullPass);
 		void SetupPassResources(RenderGraph& graph);
 		void RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass);
@@ -75,6 +85,7 @@ namespace aether
 		std::array<gpu::Image, kShadowCascadeCount> m_shadowDepthImage{};
 		std::array<gpu::ImageView, kShadowCascadeCount> m_shadowDepthView{};
 		BindlessManager* m_bindless = nullptr;
+		bool m_directionalShadowEnabled = true;
 		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
 		        gpu::Extent2D{4096u, 4096u},
 		        gpu::Extent2D{2048u, 2048u},

@@ -307,6 +307,11 @@ namespace aether
 		WorldRenderer::Flush(world, renderQueue);
 
 		rttService.PrepareQueues(drawSlot, world);
+
+		{
+			const glm::vec4 sunDirIntensity = renderer.GetDirectionalLightVector();
+			shadowService.SetDirectionalShadowEnabled(glm::vec3(sunDirIntensity).y > 0.0f);
+		}
 		shadowService.PrepareQueues(drawSlot, world);
 		localShadowService.PrepareQueues(drawSlot, world);
 
