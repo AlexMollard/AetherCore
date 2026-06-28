@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <stdexcept>
@@ -997,7 +998,14 @@ namespace aether
 	{
 		const auto idx = slot % kFramesInFlight;
 		std::unique_lock lock(m_slotMutexes[idx]);
-		m_slotCv[idx].wait(lock, [this, idx] { return m_slotConsumed[idx]; });
+		while (!m_slotConsumed[idx])
+		{
+			if (m_slotCv[idx].wait_for(lock, std::chrono::seconds(2), [this, idx] { return m_slotConsumed[idx]; }))
+			{
+				break;
+			}
+			AE_WARN(LogCategory::Render, "RenderQueue::Clear({}): waiting for '{}' slot {} to be consumed. The cull pass for this queue may have been skipped or disabled.", slot, m_debugName, idx);
+		}
 		m_slotConsumed[idx] = false;
 		m_commandSlots[idx].clear();
 	}

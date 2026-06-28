@@ -145,6 +145,7 @@ namespace aether
 				packet = m_channel.read();
 				if (IsReloadInProgress())
 				{
+					m_engine->DiscardPendingFrameQueues(packet);
 					m_isIdle.store(true, std::memory_order_release);
 					m_reloadCv.notify_all();
 					continue;
@@ -165,6 +166,7 @@ namespace aether
 			catch (const std::exception& e)
 			{
 				AE_ERROR(LogCategory::Render, "RenderThread: ExecuteRenderFrame failed: {}", e.what());
+				m_engine->DiscardAllPendingFrameQueues();
 				{
 					std::lock_guard lock(m_reloadMutex);
 					m_shutdown = true;

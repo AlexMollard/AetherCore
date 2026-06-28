@@ -202,6 +202,7 @@ namespace aether
 		                {
 			                if (!m_directionalShadowEnabled)
 			                {
+				                m_shadowRenderQueue.DiscardPending(ctx.frameIndex);
 				                return;
 			                }
 			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
@@ -212,7 +213,8 @@ namespace aether
 			                }
 			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), ctx.frameIndex);
-		                });
+		                })
+		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameIndex); });
 	}
 
 	void ShadowService::RegisterGraphicsPasses(RenderGraph& graph)

@@ -475,7 +475,8 @@ namespace aether
 		                {
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
 			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameIndex);
-		                });
+		                })
+		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameIndex); });
 	}
 
 	void LocalShadowService::RegisterGraphicsPasses(RenderGraph& graph)

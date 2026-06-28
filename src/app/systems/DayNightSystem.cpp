@@ -1,5 +1,6 @@
 #include "DayNightSystem.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
@@ -9,6 +10,30 @@
 
 namespace aether::app
 {
+	namespace
+	{
+		constexpr float kSecondsPerHour = 3600.0f;
+		constexpr float kHoursPerDay = 24.0f;
+		constexpr float kSecondsPerDay = kHoursPerDay * kSecondsPerHour;
+		constexpr float kTau = 6.2832f;
+		constexpr float kHalfPi = 1.5708f;
+
+		float WrapDaySeconds(float seconds)
+		{
+			if (!std::isfinite(seconds))
+			{
+				return 0.0f;
+			}
+
+			seconds = std::fmod(seconds, kSecondsPerDay);
+			if (seconds < 0.0f)
+			{
+				seconds += kSecondsPerDay;
+			}
+			return seconds;
+		}
+	} // namespace
+
 	void DayNightSystem::Init(aether::Renderer& renderer)
 	{
 		AE_PROFILE_ZONE();
@@ -17,6 +42,26 @@ namespace aether::app
 
 	void DayNightSystem::OnRegister([[maybe_unused]] aether::World& world)
 	{
+	}
+
+	void DayNightSystem::SetTimeOfDay(float hours)
+	{
+		m_time = WrapDaySeconds(hours * kSecondsPerHour);
+	}
+
+	float DayNightSystem::GetTimeOfDay() const
+	{
+		return WrapDaySeconds(m_time) / kSecondsPerHour;
+	}
+
+	void DayNightSystem::SetTimeSpeed(float secondsPerSecond)
+	{
+		if (!std::isfinite(secondsPerSecond))
+		{
+			secondsPerSecond = kDefaultTimeSpeed;
+		}
+
+		m_timeSpeed = std::clamp(secondsPerSecond, kMinTimeSpeed, kMaxTimeSpeed);
 	}
 
 	void DayNightSystem::Update([[maybe_unused]] aether::World& world, float dt)
@@ -29,15 +74,11 @@ namespace aether::app
 
 		if (m_enabled)
 		{
-			m_time += dt * m_timeSpeed;
-			if (m_time >= 86400.0f)
-			{
-				m_time -= 86400.0f;
-			}
+			m_time = WrapDaySeconds(m_time + dt * m_timeSpeed);
 		}
 
-		const float hours = std::fmod(m_time / 3600.0f, 24.0f);
-		const float sunAngle = (hours / 24.0f) * 6.2832f - 1.5708f;
+		const float hours = GetTimeOfDay();
+		const float sunAngle = (hours / kHoursPerDay) * kTau - kHalfPi;
 
 		m_sunDirection = glm::normalize(glm::vec3(std::cos(sunAngle), std::sin(sunAngle), 0.15f));
 

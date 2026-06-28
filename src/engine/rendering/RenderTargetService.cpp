@@ -109,6 +109,7 @@ namespace aether
 		for (auto& [_, rt]: m_targets)
 		{
 			rt.renderQueue->SetWriteSlot(drawSlot);
+			rt.renderQueue->Clear(drawSlot);
 			WorldRenderer::Flush(world, *rt.renderQueue);
 		}
 	}
@@ -263,6 +264,7 @@ namespace aether
 			                Camera* cam = m_cameraManager->TryGet(CameraHandle{rit->second.cameraHandleRaw});
 			                if (cam == nullptr || !rit->second.constants)
 			                {
+				                rit->second.renderQueue->DiscardPending(ctx.frameIndex);
 				                return;
 			                }
 
@@ -287,6 +289,14 @@ namespace aether
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
 			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, ctx.frameIndex);
+		                })
+		        .OnDebugDisabled(
+		                [this, id](PassContext& ctx)
+		                {
+			                if (auto rit = m_targets.find(id); rit != m_targets.end())
+			                {
+				                rit->second.renderQueue->DiscardPending(ctx.frameIndex);
+			                }
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)

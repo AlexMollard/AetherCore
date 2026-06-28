@@ -348,6 +348,27 @@ namespace aether
 		AE_PROFILE_PLOT("Frame/RenderThreadExecNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - execStart).count()));
 	}
 
+	void AetherCore::DiscardPendingFrameQueues(const RenderFramePacket& packet)
+	{
+		if (m_rendering)
+		{
+			m_rendering->DiscardPendingFrameQueues(packet.drawSlot);
+		}
+	}
+
+	void AetherCore::DiscardAllPendingFrameQueues()
+	{
+		if (!m_rendering)
+		{
+			return;
+		}
+
+		for (std::uint32_t slot = 0; slot < kMaxFramesInFlight; ++slot)
+		{
+			m_rendering->DiscardPendingFrameQueues(slot);
+		}
+	}
+
 	void AetherCore::EndFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
@@ -355,10 +376,7 @@ namespace aether
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
-			if (m_rendering)
-			{
-				m_rendering->DiscardPendingFrameQueues(frameIdx);
-			}
+			DiscardPendingFrameQueues(packet);
 			m_gpu->SubmitAndPresent();
 			AE_PROFILE_FRAME;
 			++m_frameIndex;

@@ -56,6 +56,8 @@ namespace aether
 		void Tick(float dt);
 		[[nodiscard]] RenderFramePacket PrepareFrame(std::uint32_t drawSlot, std::uint64_t frameIndex);
 		void ExecuteRenderFrame(const RenderFramePacket& packet);
+		void DiscardPendingFrameQueues(const RenderFramePacket& packet);
+		void DiscardAllPendingFrameQueues();
 		void WaitIdle();
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
