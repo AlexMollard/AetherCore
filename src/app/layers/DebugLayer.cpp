@@ -1231,9 +1231,10 @@ namespace aether::app
 		ImGui::PopStyleVar(3);
 
 		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV2");
+		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
-		if (!m_dockspaceBuilt || !ImGui::DockBuilderGetNode(dockspace_id))
+		if (!m_dockspaceBuilt && !hasSavedDockspace)
 		{
 			ImGui::DockBuilderRemoveNode(dockspace_id);
 			ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
@@ -1244,7 +1245,6 @@ namespace aether::app
 			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.28f, nullptr, &remaining);
 			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.30f, nullptr, &remaining);
 
-			// TODO: if its the first time so no imgui.ini then we move the windows inot the correct do
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
 			ImGui::DockBuilderDockWindow("Inspector", dock_bottom);
@@ -1255,8 +1255,8 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Debug", dock_right);
 
 			ImGui::DockBuilderFinish(dockspace_id);
-			m_dockspaceBuilt = true;
 		}
+		m_dockspaceBuilt = true;
 
 		ImGui::End();
 
