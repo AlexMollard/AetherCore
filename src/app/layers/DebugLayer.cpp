@@ -17,6 +17,7 @@ using namespace std::string_view_literals;
 #	include <shellapi.h>
 #endif
 
+#include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/InspectorPanel.hpp"
 #include "debug/LightingPanel.hpp"
@@ -256,6 +257,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
+		m_panels.push_back(std::make_unique<DayNightPanel>());
 		for (auto& panel: m_panels)
 		{
 			panel->OnAttach(context);
@@ -381,6 +383,7 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Inspector", dock_bottom);
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
+			ImGui::DockBuilderDockWindow("Day / Night", dock_bottom);
 			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
 			ImGui::DockBuilderDockWindow("Render Graph", dock_right);
 			ImGui::DockBuilderDockWindow("Debug", dock_right);

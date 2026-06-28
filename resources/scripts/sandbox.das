@@ -32,20 +32,6 @@ var g_time           : float = 0.0;
 var g_orbit_radius   : float = 20.0;
 var g_orbit_height   : float = 3.0;
 
-// ── Day/Night cycle state ─────────────────────────────────────────────────────
-
-var g_day_night_enabled : bool  = true;
-var g_time_speed        : float = 60.0;
-var g_time_of_day       : float = 12.0;
-var g_manual_mode       : bool  = false;
-
-var g_dn_toggle_btn     : uint  = 0u;
-var g_time_slider       : uint  = 0u;
-var g_speed_slider_dn   : uint  = 0u;
-var g_manual_cb         : uint  = 0u;
-var g_time_label        : uint  = 0u;
-var g_sun_dir_label     : uint  = 0u;
-
 var g_plasma_sphere : uint = 0u;
 var g_player : uint = 0u;
 var g_player_idle_clip : int = 0;
@@ -390,31 +376,6 @@ def on_attach(world : World?)
 	set_ui_button_press_color(world, g_spawn_btn, float4(0.17, 0.27, 0.14, 1.0));
 	add_ui_child(world, panel, g_spawn_btn);
 
-	// ── Native UI - Day/Night Controls panel ────────────────────────────────
-	let dn_panel = create_ui_panel(world, 312.0, 16.0, 280.0, 216.0, "Day / Night");
-	set_ui_panel_collapsible(world, dn_panel, true);
-
-	g_time_label = create_ui_label(world, 328.0, 44.0, 260.0, 22.0, "Time: 12:00");
-	set_ui_font_size(world, g_time_label, 14.0);
-	set_ui_text_color(world, g_time_label, float4(0.98, 0.76, 0.38, 1.0));
-	add_ui_child(world, dn_panel, g_time_label);
-
-	g_sun_dir_label = create_ui_label(world, 328.0, 70.0, 260.0, 20.0, "Sun: (0.00, 1.00, 0.00)");
-	set_ui_font_size(world, g_sun_dir_label, 11.0);
-	set_ui_text_color(world, g_sun_dir_label, float4(0.60, 0.66, 0.62, 1.0));
-	add_ui_child(world, dn_panel, g_sun_dir_label);
-
-	g_time_slider = create_ui_slider(world, 328.0, 108.0, 260.0, 28.0, 0.0, 24.0, 12.0);
-	set_ui_slider_label(world, g_time_slider, "Time of day (hours)");
-	add_ui_child(world, dn_panel, g_time_slider);
-
-	g_speed_slider_dn = create_ui_slider(world, 328.0, 156.0, 260.0, 28.0, 0.0, 300.0, 60.0);
-	set_ui_slider_label(world, g_speed_slider_dn, "Time speed (sec/sec)");
-	add_ui_child(world, dn_panel, g_speed_slider_dn);
-
-	g_manual_cb = create_ui_checkbox(world, 328.0, 188.0, 260.0, 28.0, "Manual mode (pause auto)", false);
-	add_ui_child(world, dn_panel, g_manual_cb);
-
 	// ── NEW Native UI - Entity Inspector panel ──────────────────────────────
 	let ins_panel = create_ui_panel(world, 16.0, 280.0, 280.0, 376.0, "Entity Inspector");
 	set_ui_panel_collapsible(world, ins_panel, true);
@@ -676,34 +637,6 @@ def on_update(world : World?)
 	update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam);
 	update_third_person_camera(world, g_cam, g_player);
 
-	// ── Day/Night cycle controls ──────────────────────────────────────────────
-	g_manual_mode = get_ui_checked(world, g_manual_cb);
-	set_day_night_enabled(!g_manual_mode);
-
-	if (g_manual_mode)
-	{
-		let new_time = get_ui_slider_value(world, g_time_slider);
-		if (abs(new_time - g_time_of_day) > 0.01)
-		{
-			g_time_of_day = new_time;
-			set_time_of_day(g_time_of_day);
-		}
-	}
-	else
-	{
-		g_time_speed = get_ui_slider_value(world, g_speed_slider_dn);
-		set_time_speed(g_time_speed);
-		g_time_of_day = get_time_of_day();
-		set_ui_slider_value(world, g_time_slider, g_time_of_day);
-	}
-
-	let time_str = format_time(g_time_of_day);
-	set_ui_text(world, g_time_label, "Time: {time_str}");
-
-	let sun_dir = get_sun_direction();
-	let sun_str = "Sun: ({sun_dir.x:.2f}, {sun_dir.y:.2f}, {sun_dir.z:.2f})";
-	set_ui_text(world, g_sun_dir_label, sun_str);
-
 	// ── Physics toys UI ──────────────────────────────────────────────────────
 	let toy_sz = get_ui_slider_value(world, g_toy_sz_sl);
 	let toy_h  = get_ui_slider_value(world, g_toy_h_sl);
@@ -758,47 +691,6 @@ def on_update(world : World?)
 		set_ui_slider_value(world, g_speed_slider, g_speed_scale);
 	}
 
-	if (is_action_pressed("toggle_manual"))
-	{
-		g_manual_mode = !g_manual_mode;
-		set_ui_checked(world, g_manual_cb, g_manual_mode);
-		set_day_night_enabled(!g_manual_mode);
-	}
-
-	if (is_action_down("time_up") && g_manual_mode)
-	{
-		g_time_of_day = clamp(g_time_of_day + dt * 2.0, 0.0, 24.0);
-		if (g_time_of_day >= 24.0)
-		{
-			g_time_of_day = 0.0;
-		}
-		set_time_of_day(g_time_of_day);
-		set_ui_slider_value(world, g_time_slider, g_time_of_day);
-	}
-	if (is_action_down("time_down") && g_manual_mode)
-	{
-		g_time_of_day = g_time_of_day - dt * 2.0;
-		if (g_time_of_day < 0.0)
-		{
-			g_time_of_day = 24.0;
-		}
-		set_time_of_day(g_time_of_day);
-		set_ui_slider_value(world, g_time_slider, g_time_of_day);
-	}
-
-	if (is_action_pressed("time_noon"))
-	{
-		g_time_of_day = 12.0;
-		set_time_of_day(12.0);
-		set_ui_slider_value(world, g_time_slider, 12.0);
-	}
-
-	if (is_action_pressed("time_midnight"))
-	{
-		g_time_of_day = 0.0;
-		set_time_of_day(0.0);
-		set_ui_slider_value(world, g_time_slider, 0.0);
-	}
 }
 
 // ── on_detach ─────────────────────────────────────────────────────────────────
