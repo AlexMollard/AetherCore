@@ -50,7 +50,7 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Viewport");
+		ImGui::Begin(GetName().data(), nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 		auto& rendering = context.Get<aether::RenderingSubsystem>();
 		auto& post = rendering.GetPostProcessStack();
@@ -75,7 +75,10 @@ namespace aether::app
 			return;
 		}
 
-		const ImVec2 available = ImGui::GetContentRegionAvail();
+		const ImGuiStyle& style = ImGui::GetStyle();
+		const float settingsBarHeight = 1.0f + style.ItemSpacing.y * 2.0f + ImGui::GetFrameHeightWithSpacing();
+		const ImVec2 available(ImGui::GetContentRegionAvail().x, std::max(1.0f, ImGui::GetContentRegionAvail().y - settingsBarHeight));
+
 		gpu::Extent2D extent = post.GetExtent();
 		if (extent.width == 0 || extent.height == 0)
 		{
@@ -106,48 +109,53 @@ namespace aether::app
 		}
 
 		ImVec2 imageSize = available;
-		if (m_viewportDisplayMode == 2)
+		switch (m_viewportDisplayMode)
 		{
-			imageSize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
-		}
-		else if (m_viewportDisplayMode == 3)
-		{
-			const float sx = extent.width > 0 ? std::floor(available.x / static_cast<float>(extent.width)) : 1.0f;
-			const float sy = extent.height > 0 ? std::floor(available.y / static_cast<float>(extent.height)) : 1.0f;
-			const float scale = std::max(1.0f, std::min(sx, sy));
-			imageSize = ImVec2(static_cast<float>(extent.width) * scale, static_cast<float>(extent.height) * scale);
-		}
-		else if (m_viewportDisplayMode == 1)
-		{
-			if (imageSize.x < imageSize.y * targetAspect)
+			case 1: // Fill
+				if (imageSize.x < imageSize.y * targetAspect)
+				{
+					imageSize.x = imageSize.y * targetAspect;
+				}
+				else
+				{
+					imageSize.y = imageSize.x / targetAspect;
+				}
+				break;
+			case 2: // Actual
+				imageSize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+				break;
+			case 3: // Integer
 			{
-				imageSize.x = imageSize.y * targetAspect;
+				const float sx = extent.width > 0 ? std::floor(available.x / static_cast<float>(extent.width)) : 1.0f;
+				const float sy = extent.height > 0 ? std::floor(available.y / static_cast<float>(extent.height)) : 1.0f;
+				const float scale = std::max(1.0f, std::min(sx, sy));
+				imageSize = ImVec2(static_cast<float>(extent.width) * scale, static_cast<float>(extent.height) * scale);
+				break;
 			}
-			else
-			{
-				imageSize.y = imageSize.x / targetAspect;
-			}
-		}
-		else if (m_viewportAspectMode != 1)
-		{
-			if (imageSize.x > imageSize.y * targetAspect)
-			{
-				imageSize.x = imageSize.y * targetAspect;
-			}
-			else
-			{
-				imageSize.y = imageSize.x / targetAspect;
-			}
+			default: // Fit
+				if (m_viewportAspectMode != 1)
+				{
+					if (imageSize.x > imageSize.y * targetAspect)
+					{
+						imageSize.x = imageSize.y * targetAspect;
+					}
+					else
+					{
+						imageSize.y = imageSize.x / targetAspect;
+					}
+				}
+				break;
 		}
 
-		const ImVec2 cursor = ImGui::GetCursorPos();
-		ImGui::SetCursorPos(ImVec2(cursor.x + (available.x - imageSize.x) * 0.5f, cursor.y + (available.y - imageSize.y) * 0.5f));
 		if (imageSize.x <= 0.0f || imageSize.y <= 0.0f)
 		{
 			context.Get<Input>().SetMouseViewportInputActive(false);
 			ImGui::End();
 			return;
 		}
+
+		const ImVec2 imageCursorStart = ImGui::GetCursorPos();
+		ImGui::SetCursorPos(ImVec2(imageCursorStart.x + (available.x - imageSize.x) * 0.5f, imageCursorStart.y + (available.y - imageSize.y) * 0.5f));
 
 		ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
 		const ImVec2 imageMin = ImGui::GetItemRectMin();
@@ -186,43 +194,70 @@ namespace aether::app
 			}
 		}
 
+		// Inline toolbar pinned below the image region
+		ImGui::SetCursorPos(ImVec2(imageCursorStart.x, imageCursorStart.y + available.y));
 		ImGui::Separator();
-		if (ImGui::CollapsingHeader("Settings"))
+
+		SceneViewportSettings viewportSettings = rendering.GetSceneViewportSettings();
+		bool viewportSettingsChanged = false;
+		int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
+
+		const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom"};
+		ImGui::SetNextItemWidth(72.0f);
+		if (ImGui::Combo("##res", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
 		{
-			SceneViewportSettings viewportSettings = rendering.GetSceneViewportSettings();
-			int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
-			const char* resolutionModes[] = {"Window native", "1280 x 720", "1920 x 1080", "2560 x 1440", "Custom"};
-			bool viewportSettingsChanged = ImGui::Combo("Render resolution", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes)));
 			viewportSettings.resolutionMode = static_cast<SceneViewportResolutionMode>(resolutionMode);
-			int customExtent[2] = {static_cast<int>(viewportSettings.customExtent.width), static_cast<int>(viewportSettings.customExtent.height)};
-			ImGui::BeginDisabled(viewportSettings.resolutionMode != SceneViewportResolutionMode::Custom);
-			if (ImGui::InputInt2("Custom size", customExtent))
+			viewportSettingsChanged = true;
+		}
+		ImGui::SetItemTooltip("Render resolution");
+
+		if (static_cast<SceneViewportResolutionMode>(resolutionMode) == SceneViewportResolutionMode::Custom)
+		{
+			ImGui::SameLine(0.0f, 2.0f);
+			const std::string customLabel = std::format("{}x{}##csz", viewportSettings.customExtent.width, viewportSettings.customExtent.height);
+			if (ImGui::Button(customLabel.c_str()))
 			{
-				viewportSettings.customExtent.width = static_cast<std::uint32_t>(std::clamp(customExtent[0], 64, 8192));
-				viewportSettings.customExtent.height = static_cast<std::uint32_t>(std::clamp(customExtent[1], 64, 8192));
-				viewportSettingsChanged = true;
-			}
-			ImGui::EndDisabled();
-			if (viewportSettingsChanged)
-			{
-				ReleaseSceneViewportTexture(context);
-				rendering.SetSceneViewportSettings(context.services, viewportSettings);
+				ImGui::OpenPopup("##customres");
 			}
 
-			const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
-			ImGui::Combo("Display mode", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
-			const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
-			ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
-			ImGui::Checkbox("Viewport stats", &m_viewportShowStats);
-			ImGui::SameLine();
-			ImGui::Checkbox("Mouse coords", &m_viewportShowMouse);
-
-			bool forward = rendering.IsForwardPassEnabled();
-			if (ImGui::Checkbox("Forward pass", &forward))
+			if (ImGui::BeginPopup("##customres"))
 			{
-				rendering.SetForwardPassEnabled(forward);
+				int customExtent[2] = {static_cast<int>(viewportSettings.customExtent.width), static_cast<int>(viewportSettings.customExtent.height)};
+				ImGui::SetNextItemWidth(150.0f);
+				if (ImGui::InputInt2("Size", customExtent))
+				{
+					viewportSettings.customExtent.width = static_cast<std::uint32_t>(std::clamp(customExtent[0], 64, 8192));
+					viewportSettings.customExtent.height = static_cast<std::uint32_t>(std::clamp(customExtent[1], 64, 8192));
+					viewportSettingsChanged = true;
+				}
+				ImGui::EndPopup();
 			}
 		}
+
+		if (viewportSettingsChanged)
+		{
+			ReleaseSceneViewportTexture(context);
+			rendering.SetSceneViewportSettings(context.services, viewportSettings);
+		}
+
+		const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(72.0f);
+		ImGui::Combo("##display", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
+		ImGui::SetItemTooltip("Display mode");
+
+		const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(66.0f);
+		ImGui::Combo("##aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
+		ImGui::SetItemTooltip("Aspect ratio");
+
+		ImGui::SameLine();
+		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+		ImGui::SameLine();
+		ImGui::Checkbox("Stats", &m_viewportShowStats);
+		ImGui::SameLine();
+		ImGui::Checkbox("Mouse", &m_viewportShowMouse);
 
 		ImGui::End();
 	}
