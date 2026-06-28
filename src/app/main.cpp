@@ -7,7 +7,6 @@
 #include "layers/DebugLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
-#include "scripting/SystemFactory.hpp"
 #include "utils/Logger.hpp"
 
 namespace
@@ -43,9 +42,6 @@ int main()
 		// Services
 		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
 		application.AddService(scriptingSubsystem);
-
-		aether::app::SystemFactory systemFactory;
-		application.AddService(systemFactory);
 
 		// Layers
 		application.PushLayer<aether::app::DebugLayer>();

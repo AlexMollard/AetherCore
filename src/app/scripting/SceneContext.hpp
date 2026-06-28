@@ -24,7 +24,6 @@ namespace aether
 
 namespace aether::app
 {
-	class SystemFactory;
 	class DayNightSystem;
 } // namespace aether::app
 
@@ -39,7 +38,6 @@ namespace aether::app::scripting
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
-		aether::app::SystemFactory* systemFactory = nullptr;
 		aether::GraphicsPipeline* defaultPipeline = nullptr;
 		aether::app::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
@@ -54,10 +52,6 @@ namespace aether::app::scripting
 		// std::deque does not invalidate references on push_back.
 		std::deque<aether::LoadedModel> loadedModels;
 		std::unordered_map<std::string, size_t> loadedModelMap;
-
-		// Names of C++ systems registered via register_system().
-		// Unregistered from World on scene unload/reload.
-		std::vector<std::string> registeredSystems;
 
 		// -- Primitive mesh cache (for create_mesh / add_mesh) -----------------
 		struct CachedMesh

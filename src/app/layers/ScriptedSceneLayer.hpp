@@ -9,11 +9,6 @@
 #include "scripting/SceneContext.hpp"
 #include "scripting/ScriptHandle.hpp"
 
-namespace aether::app
-{
-	class SystemFactory;
-} // namespace aether::app
-
 namespace aether::app::scripting
 {
 	class ScriptingSubsystem;
@@ -26,7 +21,7 @@ namespace aether::app
 	// Lifecycle:
 	//   OnAttach  -> compile script, create default pipeline, call on_attach()
 	//   OnUpdate  -> call on_update(); handle hot-reload if requested
-	//   OnDetach  -> call on_detach(), destroy scene entities, unload systems
+	//   OnDetach  -> call on_detach(), destroy scene entities
 	class ScriptedSceneLayer final : public AppLayer
 	{
 	public:

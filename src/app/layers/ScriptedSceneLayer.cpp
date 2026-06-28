@@ -3,7 +3,6 @@
 #include <filesystem>
 
 #include "scripting/ScriptingSubsystem.hpp"
-#include "scripting/SystemFactory.hpp"
 
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
@@ -76,12 +75,6 @@ namespace aether::app
 		m_sceneCtx.loadedModels.clear();
 		m_sceneCtx.loadedModelMap.clear();
 		m_sceneCtx.meshCache.clear();
-
-		for (const auto& name: m_sceneCtx.registeredSystems)
-		{
-			world.UnregisterSystem(name.c_str());
-		}
-		m_sceneCtx.registeredSystems.clear();
 
 		// Clear script-created lights so reload doesn't stack duplicates.
 		context.Get<Renderer>().ClearPointLights();
@@ -195,7 +188,6 @@ namespace aether::app
 		{
 			m_sceneCtx.dayNight = dn;
 		}
-		m_sceneCtx.systemFactory = context.TryGet<aether::app::SystemFactory>();
 		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
 		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();
 		if (auto physSys = context.Get<World>().FindSystem("PhysicsSystem"))
