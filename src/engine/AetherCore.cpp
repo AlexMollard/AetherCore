@@ -387,6 +387,13 @@ namespace aether
 		}
 
 		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
+		const auto& gtaoPass = m_rendering->GetGtaoPass();
+		const gpu::Extent2D gtaoExtent = gtaoPass.GetAoExtent();
+		fc.gtaoInfo = glm::uvec4(
+		        gtaoPass.GetAoBindlessSlot(),
+		        gtaoExtent.width,
+		        gtaoExtent.height,
+		        gtaoPass.GetAoImage().IsValid() ? 1u : 0u);
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 

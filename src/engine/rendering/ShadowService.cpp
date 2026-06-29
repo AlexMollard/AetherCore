@@ -203,6 +203,7 @@ namespace aether
 	void ShadowService::RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass)
 	{
 		graph.AddComputePass("$CullDraws_Shadow")
+		        .DisableAsyncCompute()
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {

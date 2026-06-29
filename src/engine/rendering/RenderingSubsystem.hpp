@@ -6,6 +6,7 @@
 #include <mutex>
 
 #include "passes/CullPass.hpp"
+#include "passes/GTAOPass.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "passes/PostProcessStack.hpp"
@@ -19,6 +20,7 @@
 
 namespace aether
 {
+	class BindlessManager;
 	class ServiceContainer;
 }
 
@@ -117,6 +119,11 @@ namespace aether
 			return m_cullPass;
 		}
 
+		[[nodiscard]] GTAOPass& GetGtaoPass()
+		{
+			return m_gtaoPass;
+		}
+
 		[[nodiscard]] PostProcessStack& GetPostProcessStack()
 		{
 			return m_postProcessStack;
@@ -131,7 +138,7 @@ namespace aether
 		void RegisterPasses(ServiceContainer& services);
 		[[nodiscard]] gpu::Extent2D ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
 		void DestroySceneViewportDepth();
-		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph);
+		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless);
 
 		RenderQueueSharedPipelines m_renderQueuePipelines;
 		RenderGraph m_renderGraph;
@@ -142,10 +149,14 @@ namespace aether
 		LocalShadowService m_localShadowService;
 		RenderTargetService m_renderTargetService;
 		CullPass m_cullPass;
+		GraphicsPipeline m_preDepthPipeline;
 		GraphicsPipeline m_skyboxPipeline;
+		GTAOPass m_gtaoPass;
 		PostProcessStack m_postProcessStack;
 		gpu::TextureHandle m_sceneDepthHandle;
 		RGImage m_sceneDepth;
+		BindlessManager* m_bindlessManager = nullptr;
+		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
 		std::atomic_bool m_forwardPassEnabled = true;

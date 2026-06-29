@@ -53,6 +53,7 @@ namespace aether::app
 		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
+		        .depthCompareOp = gpu::CompareOp::LessOrEqual,
 		        .descriptorHeapMappings = context.Get<BindlessManager>().GetDescriptorHeapMappings(),
 		});
 

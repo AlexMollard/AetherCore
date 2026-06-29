@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstring>
 #include <span>
+#include <utility>
 
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -106,6 +107,11 @@ namespace aether
 
 	void RenderingSubsystem::DestroySceneViewportDepth()
 	{
+		if (m_bindlessManager != nullptr && m_sceneDepthBindlessSlot != 0xFFFFFFFFu)
+		{
+			m_bindlessManager->FreeSampledImageSlot(m_sceneDepthBindlessSlot);
+		}
+		m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		if (m_sceneDepthHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_sceneDepthHandle);
@@ -114,29 +120,35 @@ namespace aether
 		m_sceneDepth = {};
 	}
 
-	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph)
+	void RenderingSubsystem::CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless)
 	{
 		(void) device;
-		if (!m_sceneViewportEnabled)
-		{
-			return;
-		}
-
 		const gpu::Extent2D extent = m_postProcessStack.GetExtent();
 		m_sceneDepthHandle = gpu::ResourceRegistry::CreateTexture({
 		        .format = depthFormat,
 		        .extent = extent,
-		        .usage = gpu::ImageUsage::DepthStencilAttachment,
+		        .usage = gpu::ImageUsage::DepthStencilAttachment | gpu::ImageUsage::Sampled,
 		        .aspect = gpu::ImageAspect::Depth,
-		        .debugName = "SceneViewport.Depth",
+		        .debugName = "Scene.Depth",
 		});
 		if (!m_sceneDepthHandle.IsValid())
 		{
-			Throw(AetherError::Engine("RenderingSubsystem: SceneViewport.Depth CreateTexture failed"));
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth CreateTexture failed"));
 		}
 
 		const auto depthTexture = gpu::ResourceRegistry::ResolveTexture(m_sceneDepthHandle);
 		m_sceneDepth = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_sceneDepthHandle), depthTexture.view, gpu::ImageAspect::Depth);
+
+		const auto slot = bindless.AllocateSampledImageSlot();
+		if (!slot)
+		{
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth AllocateSampledImageSlot failed"));
+		}
+		m_sceneDepthBindlessSlot = *slot;
+		AE_EXPECT_OR_THROW_VOID(bindless.WriteSampledImage(
+		        m_sceneDepthBindlessSlot,
+		        gpu::ResourceRegistry::GetViewCreateInfo(m_sceneDepthHandle),
+		        gpu::ImageLayout::ShaderReadOnly));
 	}
 
 	void RenderingSubsystem::Init(ServiceContainer& services)
@@ -149,6 +161,7 @@ namespace aether
 		auto& lighting = services.Get<LightingManager>();
 		auto& materials = services.Get<MaterialBuffer>();
 		auto& gpu = services.Get<GpuDevice>();
+		m_bindlessManager = &bindless;
 
 		m_renderGraph.Initialize(static_cast<void*>(vk.GetDevice().device), static_cast<void*>(vk.GetAllocator()));
 		m_renderGraph.SetVulkanContext(&vk);
@@ -175,6 +188,14 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
+		CreateSceneViewportDepth(vk.GetDevice().device, swapchain.GetDepthFormat(), m_renderGraph, bindless);
+
+		m_gtaoPass.Create({
+		        .device = vk.GetDevice().device,
+		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
+		        .bindlessManager = &bindless,
+		        .renderGraph = &m_renderGraph,
+		});
 
 		m_renderer.Initialize(&m_postProcessStack);
 
@@ -188,6 +209,19 @@ namespace aether
 		                        .debugName = "Skybox",
 		                }));
 		m_skyboxPipeline = std::move(skyboxPipeline);
+
+		AE_EXPECT_OR_THROW(preDepthPipeline,
+		        GraphicsPipeline::Create(vk.GetDevice().device,
+		                {
+		                        .shaderVfsPath = "shaders://shadow_depth.spv",
+		                        .colorFormat = gpu::Format::Undefined,
+		                        .depthFormat = swapchain.GetDepthFormat(),
+		                        .depthTestEnable = true,
+		                        .depthWriteEnable = true,
+		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
+		                        .debugName = "Scene.PreDepth",
+		                }));
+		m_preDepthPipeline = std::move(preDepthPipeline);
 
 		m_renderTargetService.BindRuntime(FrameContext{
 		        .graph = &m_renderGraph,
@@ -212,7 +246,9 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		DestroySceneViewportDepth();
+		m_gtaoPass.Destroy();
 		m_postProcessStack.Destroy();
+		m_preDepthPipeline.Destroy();
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
@@ -223,6 +259,7 @@ namespace aether
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown();
 		m_physicsDebug.Shutdown();
+		m_bindlessManager = nullptr;
 	}
 
 	void RenderingSubsystem::RecreateSwapchainResources(ServiceContainer& services)
@@ -232,7 +269,26 @@ namespace aether
 		auto& swapchain = services.Get<Swapchain>();
 		auto& bindless = services.Get<BindlessManager>();
 
+		// Scene-viewport rebuilds can be requested independently of a swapchain
+		// recreate. Previous frames may still sample the old scene depth, GTAO,
+		// or postprocess textures through bindless descriptors, so retire GPU
+		// work before destroying and reusing those images/descriptors.
+		gpu.WaitIdle();
+
 		m_shadowService.RecreatePipeline(gpu.GetDevice(), swapchain.GetDepthFormat());
+		m_preDepthPipeline.Destroy();
+		AE_EXPECT_OR_THROW(preDepthPipeline,
+		        GraphicsPipeline::Create(gpu.GetDevice(),
+		                {
+		                        .shaderVfsPath = "shaders://shadow_depth.spv",
+		                        .colorFormat = gpu::Format::Undefined,
+		                        .depthFormat = swapchain.GetDepthFormat(),
+		                        .depthTestEnable = true,
+		                        .depthWriteEnable = true,
+		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
+		                        .debugName = "Scene.PreDepth",
+		                }));
+		m_preDepthPipeline = std::move(preDepthPipeline);
 
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
@@ -243,6 +299,7 @@ namespace aether
 		m_localShadowService.ClearAllQueues();
 		m_renderTargetService.ClearAllQueues();
 		DestroySceneViewportDepth();
+		m_gtaoPass.Destroy();
 		m_postProcessStack.Destroy();
 		m_renderGraph.Clear();
 		m_postProcessStack = PostProcessStack::Create({
@@ -252,11 +309,17 @@ namespace aether
 		        .bindlessManager = &bindless,
 		        .renderGraph = &m_renderGraph,
 		});
+		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph, bindless);
+		m_gtaoPass.Create({
+		        .device = gpu.GetDevice(),
+		        .extent = ResolveSceneViewportExtent(swapchain.GetExtent()),
+		        .bindlessManager = &bindless,
+		        .renderGraph = &m_renderGraph,
+		});
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
-		CreateSceneViewportDepth(gpu.GetDevice(), swapchain.GetDepthFormat(), m_renderGraph);
 
 		m_renderTargetService.OnRenderGraphReset(gpu.GetDevice(), swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());
 
@@ -354,6 +417,22 @@ namespace aether
 		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
 
+		if (m_sceneDepth.IsValid())
+		{
+			m_renderGraph.AddPass("$ScenePreDepth")
+			        .SetExtent(m_postProcessStack.GetExtent())
+			        .WriteDepth(m_sceneDepth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
+			        .Execute(
+			                [this](PassContext& ctx)
+			                {
+				                if (!IsForwardPassEnabled())
+				                {
+					                return;
+				                }
+				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
+			                });
+		}
+
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			m_renderGraph.AddPass("$Skybox")
@@ -373,12 +452,13 @@ namespace aether
 		}
 		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
 		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
+		m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, m_sceneDepthBindlessSlot);
 
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
-			const RGImage depth = m_sceneViewportEnabled && m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
+			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
 			auto* pass =
-			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f));
+			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
@@ -392,6 +472,12 @@ namespace aether
 			if (localShadowAtlas.IsValid())
 			{
 				pass->ReadTexture(localShadowAtlas);
+			}
+
+			const RGImage gtaoImage = m_gtaoPass.GetAoImage();
+			if (gtaoImage.IsValid())
+			{
+				pass->ReadTexture(gtaoImage);
 			}
 
 			if (auto* lighting = frame.lighting)

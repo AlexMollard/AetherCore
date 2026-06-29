@@ -22,7 +22,7 @@ namespace aether
 	//
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (736 bytes):
+	// Layout (816 bytes):
 	//   offset   0 : mat4     viewProj               (64)  Combined view-projection matrix
 	//   offset  64 : mat4     view                   (64)  View matrix
 	//   offset 128 : mat4     proj                   (64)  Projection matrix
@@ -45,8 +45,10 @@ namespace aether
 	//   offset 624 : uint     shadowAtlasSlot         ( 4)  Bindless slot for VSM atlas (0xFFFFFFFF = none, LocalShadowService)
 	//   offset 628 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
 	//   offset 632 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
-	//   offset 640 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
-	//   Total: 736 bytes
+	//   offset 640 : uvec4    gtaoInfo                (16)  x=bindless slot, y=width, z=height, w=enabled
+	//   offset 656 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
+	//   offset 752 : mat4     invViewProj             (64)  Inverse view-projection for screen-space reconstruction
+	//   Total: 816 bytes
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};                                                                                                           // offset 0
@@ -76,6 +78,7 @@ namespace aether
 		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu; // offset 624, local shadows
 		std::uint32_t shadowLightCount = 0;          // offset 628
 		std::uint64_t shadowLightDataAddr = 0;       // offset 632
+		glm::uvec4 gtaoInfo{0xFFFFFFFFu, 0u, 0u, 0u}; // offset 640
 		std::array<glm::vec4, 6> frustumPlanes{
 		        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
 		        glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f),
@@ -83,10 +86,13 @@ namespace aether
 		        glm::vec4(0.0f, -1.0f, 0.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, -1.0f, 1.0f),
-		}; // offset 640
+		}; // offset 656
+		glm::mat4 invViewProj{1.0f}; // offset 752
 
 		void RefreshDerived()
 		{
+			invViewProj = glm::inverse(viewProj);
+
 			const glm::vec4 row0{viewProj[0][0], viewProj[1][0], viewProj[2][0], viewProj[3][0]};
 			const glm::vec4 row1{viewProj[0][1], viewProj[1][1], viewProj[2][1], viewProj[3][1]};
 			const glm::vec4 row2{viewProj[0][2], viewProj[1][2], viewProj[2][2], viewProj[3][2]};
@@ -107,7 +113,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 736, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 816, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -130,6 +136,8 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowAtlasSlot) == 624);
 	static_assert(offsetof(FrameConstants, shadowLightCount) == 628);
 	static_assert(offsetof(FrameConstants, shadowLightDataAddr) == 632);
-	static_assert(offsetof(FrameConstants, frustumPlanes) == 640);
-	static_assert(sizeof(FrameConstants) == 736);
+	static_assert(offsetof(FrameConstants, gtaoInfo) == 640);
+	static_assert(offsetof(FrameConstants, frustumPlanes) == 656);
+	static_assert(offsetof(FrameConstants, invViewProj) == 752);
+	static_assert(sizeof(FrameConstants) == 816);
 } // namespace aether

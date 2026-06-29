@@ -246,13 +246,16 @@ namespace aether::app
 				m_layers.ImGuiAll(frameContext);
 			}
 
+			aether::ImguiFrameData imguiFrame;
+			if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
+			{
+				imgui->CaptureFrame(imguiFrame);
+			}
+
 			// Flush ECS draws and build a frame packet.
 			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
 			packet.elapsedTime = static_cast<float>(m_elapsedTimeSeconds);
-			if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
-			{
-				imgui->CaptureFrame(packet.imgui);
-			}
+			packet.imgui = std::move(imguiFrame);
 
 			// Hand the packet to the render thread.
 			const auto submitStart = std::chrono::steady_clock::now();

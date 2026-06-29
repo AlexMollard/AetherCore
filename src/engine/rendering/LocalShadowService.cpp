@@ -501,6 +501,7 @@ namespace aether
 	{
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
+		        .DisableAsyncCompute()
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {

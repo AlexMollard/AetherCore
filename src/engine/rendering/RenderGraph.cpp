@@ -833,14 +833,9 @@ namespace aether
 					return bAC; // true → b has higher priority
 				}
 
-				const auto aConsumers = adj[a].size();
-				const auto bConsumers = adj[b].size();
-				if (aConsumers != bConsumers)
-				{
-					return aConsumers < bConsumers; // true → b has more consumers
-				}
-
-				// Tiebreaker: declaration order (deterministic).
+				// Stable declaration order is part of the pass contract for
+				// side-effect-only work such as RenderQueue preparation. Resource
+				// edges still enforce all true producer/consumer dependencies.
 				return a > b;
 			}
 		};

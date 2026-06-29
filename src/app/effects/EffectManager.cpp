@@ -24,6 +24,7 @@ namespace aether::app::effects
 		        .depthFormat = depthFormat,
 		        .depthTestEnable = true,
 		        .depthWriteEnable = true,
+		        .depthCompareOp = aether::gpu::CompareOp::LessOrEqual,
 		        .descriptorHeapMappings = descriptorHeapMappings,
 		});
 
