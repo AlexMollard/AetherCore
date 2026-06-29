@@ -36,6 +36,7 @@ namespace aether::app
 		void PollScriptErrors(LayerContext& context);
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
+		void PersistSettings(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);

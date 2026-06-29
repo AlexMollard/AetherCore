@@ -244,6 +244,15 @@ namespace aether::app
 		}
 	}
 
+	void DebugLayer::PersistSettings(LayerContext& context)
+	{
+		for (auto& panel: m_panels)
+		{
+			panel->SaveSettings(m_debugConfig, context);
+		}
+		SaveSettings(context);
+	}
+
 	void DebugLayer::OnAttach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -272,17 +281,13 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		for (auto& panel: m_panels)
-		{
-			panel->SaveSettings(m_debugConfig, context);
-		}
+		PersistSettings(context);
 		for (auto& panel: m_panels)
 		{
 			panel->OnDetach(context);
 		}
 		m_panels.clear();
 
-		SaveSettings(context);
 		m_errorToasts.clear();
 		m_dockspaceBuilt = false;
 	}
@@ -295,6 +300,7 @@ namespace aether::app
 		if (input.IsKeyPressed(aether::Key::F1))
 		{
 			m_visible = !m_visible;
+			SaveSettings(context);
 		}
 
 		if (input.IsKeyPressed(aether::Key::F5))
@@ -414,5 +420,7 @@ namespace aether::app
 			}
 		}
 		ImGui::End();
+
+		PersistSettings(context);
 	}
 } // namespace aether::app
