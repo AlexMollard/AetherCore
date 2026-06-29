@@ -196,13 +196,13 @@ namespace aether
 		// Emit graphics draws from indirect output.
 		// cascadeOffset is added to the output buffer offset (in gpu::DrawIndexedIndirectCommand units);
 		// used by multi-frustum queues to select one cascade's output region.
-		void FlushDraw(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting = nullptr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
-		void FlushDrawPush(gpu::CommandList& cmd, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDraw(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting = nullptr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawPush(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -285,19 +285,32 @@ namespace aether
 			std::uint32_t drawCount = 0;   // capacity = max surviving draws
 		};
 
-		std::vector<BatchRenderInfo> m_batchRenderInfos;
+		struct PreparedFrame
+		{
+			std::vector<BatchRenderInfo> batchRenderInfos;
+			gpu::DeviceAddress frameAddr = 0;
+			gpu::DeviceAddress instanceDataAddr = 0;
+			gpu::DeviceAddress skinPaletteAddr = 0;
+			gpu::DeviceAddress nodeGlobalTransformsAddr = 0;
+			gpu::DeviceAddress drawBase = 0;
+			gpu::BufferHandle indirectHandle{};
+
+			void Reset()
+			{
+				batchRenderInfos.clear();
+				frameAddr = 0;
+				instanceDataAddr = 0;
+				skinPaletteAddr = 0;
+				nodeGlobalTransformsAddr = 0;
+				drawBase = 0;
+				indirectHandle = {};
+			}
+		};
+
+		std::array<PreparedFrame, kFramesInFlight> m_preparedFrames;
 
 		// Cached per-frame addresses/state for FlushDraw.
 		gpu::DeviceAddress m_multiFrameAddrs[3] = {};
-		gpu::DeviceAddress m_cachedFrameAddr = 0;
-		gpu::DeviceAddress m_cachedInstanceDataAddr = 0;         // BDA of DrawContracts::InstanceData[0] for current frame slot
-		gpu::DeviceAddress m_cachedSkinPaletteAddr = 0;          // BDA of global skin palette mat4[0] for current frame slot
-		gpu::DeviceAddress m_cachedNodeGlobalTransformsAddr = 0; // BDA of per-node global transforms for current frame slot
-		gpu::DeviceAddress m_cachedDrawBase = 0;                 // frameSlot * maxDraws
-		                                                         // Cached handle for the current frame's indirect buffer; resolved in
-		// PrepareAndDispatch (when frameSlot is known) and consumed in
-		// FlushDrawImpl where the per-frame slot is no longer in scope.
-		gpu::BufferHandle m_cachedIndirectHandle{};
 		bool m_debugForceVisible = false;
 		bool m_debugBypassIndirect = false;
 		bool m_debugDisableAnimation = false;
@@ -306,7 +319,7 @@ namespace aether
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
 		void FlushDrawImpl(
-		        gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
+		        gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

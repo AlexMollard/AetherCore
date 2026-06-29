@@ -201,6 +201,11 @@ namespace aether::app
 
 			m_engine.PumpEvents();
 
+			if (m_frameIndex >= aether::Swapchain::kMaxFramesInFlight)
+			{
+				m_renderThread.WaitUntilFrameCompleted(m_frameIndex - aether::Swapchain::kMaxFramesInFlight);
+			}
+
 			// Update engine-level per-frame systems (input + camera).
 			// Camera uses unscaled dt so it stays controllable during fast-forward.
 			m_engine.Tick(static_cast<float>(deltaTime));

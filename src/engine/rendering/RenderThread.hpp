@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <limits>
 #include <mutex>
 #include <thread>
 
@@ -44,6 +45,7 @@ namespace aether
 		// Returns immediately (microsecond latency).  The render thread picks
 		// up the packet from the channel and processes it asynchronously.
 		void SubmitFrame(RenderFramePacket packet);
+		void WaitUntilFrameCompleted(std::uint64_t frameIndex);
 
 		// Block until the render thread has no pending work.
 		// Call before tearing down Vulkan resources.
@@ -69,10 +71,12 @@ namespace aether
 
 		std::mutex m_reloadMutex;
 		std::condition_variable m_reloadCv;
+		std::mutex m_completionMutex;
+		std::condition_variable m_completionCv;
 
-		// Tracks the index of the last fully-executed frame (for shutdown /
-		// debugging / statistics).  Not used for per-frame synchronisation.
-		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{0};
+		// Tracks the last fully executed frame. The game thread uses this as
+		// the producer backpressure boundary before reusing frame slots.
+		std::atomic<std::uint64_t> m_lastCompletedFrameIndex{std::numeric_limits<std::uint64_t>::max()};
 		std::atomic<bool> m_shutdown{false};
 		std::atomic<bool> m_reloadInProgress{false};
 

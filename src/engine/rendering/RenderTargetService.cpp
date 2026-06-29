@@ -320,7 +320,7 @@ namespace aether
 			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
-			                rit->second.renderQueue->FlushDrawPush(cmd, lightingAddr);
+			                rit->second.renderQueue->FlushDrawPush(cmd, ctx.frameIndex, lightingAddr);
 		                });
 	}
 } // namespace aether

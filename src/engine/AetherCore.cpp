@@ -373,7 +373,8 @@ namespace aether
 	void AetherCore::EndFrame(const RenderFramePacket& packet)
 	{
 		AE_PROFILE_ZONE();
-		const auto frameIdx = static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight);
+		const auto frameIdx = static_cast<std::uint32_t>(packet.drawSlot % kMaxFramesInFlight);
+		AE_ASSERT_ALWAYS(frameIdx == static_cast<std::uint32_t>(packet.frameIndex % kMaxFramesInFlight), "Render frame packet slot/index mismatch.");
 
 		if (!m_gpu->IsSwapchainFrameValid())
 		{
@@ -405,7 +406,7 @@ namespace aether
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
 		m_imgui->RenderFrame(packet.imgui, m_currentCmdList, m_gpu->BuildFrameTarget());
 
-		SubmitAndAdvance();
+		SubmitAndAdvance(frameIdx);
 	}
 
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)
@@ -453,7 +454,7 @@ namespace aether
 		m_currentCmdList.EndDebugLabel();
 	}
 
-	void AetherCore::SubmitAndAdvance()
+	void AetherCore::SubmitAndAdvance(const std::uint32_t frameIdx)
 	{
 		auto& renderGraph = m_rendering->GetRenderGraph();
 
@@ -461,7 +462,7 @@ namespace aether
 		// submission, so both queues are dispatched to the GPU simultaneously.
 		// The graphics submission waits on the compute timeline semaphore,
 		// ensuring the GPU sees compute results before draw-indirect.
-		renderGraph.SubmitComputeWork(static_cast<std::uint32_t>(m_frameIndex % kMaxFramesInFlight));
+		renderGraph.SubmitComputeWork(frameIdx);
 
 		const gpu::TimelineSemaphoreHandle graphAsyncSem = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineSemaphore() : nullptr;
 		const std::uint64_t graphAsyncVal = renderGraph.HasAsyncComputeWork() ? renderGraph.GetComputeTimelineValue() : 0;

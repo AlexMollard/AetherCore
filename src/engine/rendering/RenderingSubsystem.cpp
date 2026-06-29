@@ -429,7 +429,7 @@ namespace aether
 				                {
 					                return;
 				                }
-				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
+				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameIndex, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
 			                });
 		}
 
@@ -497,7 +497,7 @@ namespace aether
 				        const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
-				        m_renderQueue.FlushDrawPush(ctx.recorder, lightingAddr);
+				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameIndex, lightingAddr);
 			        });
 		}
 

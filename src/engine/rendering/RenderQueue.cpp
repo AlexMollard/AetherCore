@@ -242,6 +242,10 @@ namespace aether
 		m_batchDescMapped = nullptr;
 		m_skinCopyJobsMapped = nullptr;
 		m_animationSampleJobsMapped = nullptr;
+		for (PreparedFrame& prepared: m_preparedFrames)
+		{
+			prepared.Reset();
+		}
 
 		m_maxDraws = 0;
 		m_outputDrawCapacity = 0;
@@ -268,8 +272,6 @@ namespace aether
 		const gpu::CommandBuffer rawCmd = cmdList.GetCommandBuffer();
 		// Move the commands out of the slot under the lock. This gives the
 		// render thread its own copy that the game thread cannot touch.
-		// Setting m_slotConsumed and notifying wakes the game thread's Clear()
-		// which is waiting for permission to reuse this slot.
 		const auto frameSlot = frameIndex % kFramesInFlight;
 		std::vector<DrawCommand> commands;
 		{
@@ -278,14 +280,14 @@ namespace aether
 			m_slotConsumed[frameSlot] = true;
 		}
 		m_slotCv[frameSlot].notify_one();
+		PreparedFrame& prepared = m_preparedFrames[frameSlot];
+		prepared.Reset();
 		if (commands.empty())
 		{
-			m_batchRenderInfos.clear();
 			return;
 		}
 
-		m_cachedFrameAddr = frameAddr;
-		m_batchRenderInfos.clear();
+		prepared.frameAddr = frameAddr;
 		m_animationSampleJobCount = 0;
 
 		const std::uint32_t animJobBase = 0;
@@ -331,14 +333,14 @@ namespace aether
 			}
 			cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 		}
-		m_cachedDrawBase = 0;
-		m_cachedIndirectHandle = m_outputIndirect[frameSlot].handle;
-		m_cachedInstanceDataAddr = m_instanceData[frameSlot].address;
+		prepared.drawBase = 0;
+		prepared.indirectHandle = m_outputIndirect[frameSlot].handle;
+		prepared.instanceDataAddr = m_instanceData[frameSlot].address;
 		const gpu::DeviceAddress currSkinPaletteAddr = (m_maxSkinJoints > 0u) ? m_skinPalette[frameSlot].address : 0;
 		const gpu::DeviceAddress currSampledPosesAddr = (m_maxSampledPoses > 0u) ? m_sampledPoses[frameSlot].address : 0;
 		const gpu::DeviceAddress currNodeGlobalTransformsAddr = (m_maxSampledPoses > 0u) ? m_nodeGlobalTransforms[frameSlot].address : 0;
-		m_cachedNodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
-		m_cachedSkinPaletteAddr = currSkinPaletteAddr;
+		prepared.nodeGlobalTransformsAddr = currNodeGlobalTransformsAddr;
+		prepared.skinPaletteAddr = currSkinPaletteAddr;
 		const bool gpuSamplingEnabled = m_animationSampleJobsMapped != nullptr && m_skinCopyJobsMapped != nullptr && m_maxAnimationDraws > 0u;
 
 		std::uint32_t skinJointCursor = 0;
@@ -506,7 +508,7 @@ namespace aether
 				        .instanceCount = 1u,
 				        .firstIndex = 0u,
 				        .vertexOffset = 0,
-				        .firstInstance = globalDrawIdx, // frame-relative; BDA base (m_cachedInstanceDataAddr) accounts for slot
+				        .firstInstance = globalDrawIdx, // frame-relative; BDA base accounts for slot
 				        .batchIndex = batchIdx,
 				};
 
@@ -522,7 +524,7 @@ namespace aether
 
 			m_batchDescMapped[batchIdx] = CullContracts::Batch{.inputStart = batchOutputStart, .drawCount = batchDrawCount, .outputStart = batchOutputStart};
 
-			m_batchRenderInfos.push_back(BatchRenderInfo{
+			prepared.batchRenderInfos.push_back(BatchRenderInfo{
 			        .pipeline = batchPipeline,
 			        .mesh = batchMesh,
 			        .meshGeneration = batchMesh ? batchMesh->GetGeneration() : 0,
@@ -836,7 +838,6 @@ namespace aether
 		const std::uint32_t totalDraws = globalDrawIdx;
 		if (totalDraws == 0)
 		{
-			m_batchRenderInfos.clear();
 			return;
 		}
 
@@ -858,7 +859,7 @@ namespace aether
 
 			const CullContracts::MultiPushConstants multiPc{
 			        .frameAddrs = {m_multiFrameAddrs[0], m_multiFrameAddrs[1], m_multiFrameAddrs[2]},
-			        .instanceDataAddr = m_cachedInstanceDataAddr,
+			        .instanceDataAddr = prepared.instanceDataAddr,
 			        .inputCmdAddr = m_cullInput[frameSlot].address + inputCmdOffset,
 			        .outputCmdAddr = m_outputIndirect[frameSlot].address + outputCmdOffset,
 			        .batchDescAddr = m_batchDesc[frameSlot].address + batchDescOffset,
@@ -883,7 +884,7 @@ namespace aether
 			const gpu::DeviceSize outputCmdOffset = 0;
 			const CullContracts::PushConstants pc{
 			        .frameAddr = frameAddr,
-			        .instanceDataAddr = m_cachedInstanceDataAddr,
+			        .instanceDataAddr = prepared.instanceDataAddr,
 			        .inputCmdAddr = m_cullInput[frameSlot].address + inputCmdOffset,
 			        .outputCmdAddr = m_outputIndirect[frameSlot].address + outputCmdOffset,
 			        .batchDescAddr = m_batchDesc[frameSlot].address + batchDescOffset,
@@ -918,30 +919,33 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDraw(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, m_cachedFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		const PreparedFrame& prepared = m_preparedFrames[frameIndex % kFramesInFlight];
+		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, m_cachedFrameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		const PreparedFrame& prepared = m_preparedFrames[frameIndex % kFramesInFlight];
+		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
-		FlushDrawImpl(cmd, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
+		FlushDrawImpl(cmd, frameIndex, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
 	void RenderQueue::FlushDrawImpl(
-	        gpu::CommandList& cmd, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
+	        gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
 	{
 		AE_PROFILE_ZONE();
 		if (!cmd.IsValid())
 		{
 			return;
 		}
-		if (m_batchRenderInfos.empty())
+		const PreparedFrame& prepared = m_preparedFrames[frameIndex % kFramesInFlight];
+		if (prepared.batchRenderInfos.empty())
 		{
 			return;
 		}
@@ -950,20 +954,20 @@ namespace aether
 
 		const DrawContracts::PushConstants sharedPc{
 		        .frameAddr = frameAddr,
-		        .instanceDataAddr = m_cachedInstanceDataAddr,
-		        .skinPaletteAddr = m_cachedSkinPaletteAddr,
+		        .instanceDataAddr = prepared.instanceDataAddr,
+		        .skinPaletteAddr = prepared.skinPaletteAddr,
 		        .lightDataAddr = lighting ? lighting->lightDataAddr : gpu::DeviceAddress{0},
 		        .tileHeadersAddr = lighting ? lighting->tileHeadersAddr : gpu::DeviceAddress{0},
 		        .tileLightIndicesAddr = lighting ? lighting->tileLightIndicesAddr : gpu::DeviceAddress{0},
 		};
-		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, m_cachedInstanceDataAddr, m_cachedSkinPaletteAddr, m_batchRenderInfos.size());
+		AE_VERBOSE(LogCategory::Render, "FlushDraw: frameAddr=0x{:x}, instanceDataAddr=0x{:x}, skinPaletteAddr=0x{:x}, batches={}", frameAddr, prepared.instanceDataAddr, prepared.skinPaletteAddr, prepared.batchRenderInfos.size());
 
 		const GraphicsPipeline* lastPipeline = nullptr;
 		gpu::BufferHandle lastIndexBuffer{};
 		gpu::DeviceSize lastIndexOffset = ~0ull;
 		const GraphicsPipeline* lastSetPipeline = nullptr;
 
-		for (const auto& batch: m_batchRenderInfos)
+		for (const auto& batch: prepared.batchRenderInfos)
 		{
 			const GraphicsPipeline* activePipeline = overridePipeline != nullptr ? overridePipeline : batch.pipeline;
 
@@ -1001,8 +1005,8 @@ namespace aether
 			}
 			else
 			{
-				cmd.DrawIndexedIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(m_cachedIndirectHandle),
-				        static_cast<gpu::DeviceSize>(m_cachedDrawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand),
+				cmd.DrawIndexedIndirect(gpu::ResourceRegistry::ResolveBufferVkHandle(prepared.indirectHandle),
+				        static_cast<gpu::DeviceSize>(prepared.drawBase + cascadeOffset + batch.outputStart) * sizeof(gpu::DrawIndexedIndirectCommand),
 				        batch.drawCount,
 				        sizeof(gpu::DrawIndexedIndirectCommand));
 			}

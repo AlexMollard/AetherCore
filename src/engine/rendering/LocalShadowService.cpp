@@ -550,7 +550,7 @@ namespace aether
 				                cmd.SetScissor(scissor);
 
 				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, nullptr, lightFcAddr, &m_shadowPipeline);
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, ctx.frameIndex, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 		                });
 

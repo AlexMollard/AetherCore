@@ -34,6 +34,7 @@ namespace aether
 			m_shutdown = true;
 		}
 		m_reloadCv.notify_one();
+		m_completionCv.notify_all();
 		m_channel.close();
 
 		if (m_thread.joinable())
@@ -53,6 +54,18 @@ namespace aether
 		m_channel.write(std::move(packet));
 	}
 
+	void RenderThread::WaitUntilFrameCompleted(const std::uint64_t frameIndex)
+	{
+		AE_PROFILE_ZONE();
+		std::unique_lock lock(m_completionMutex);
+		m_completionCv.wait(lock,
+		        [this, frameIndex]
+		        {
+			        const std::uint64_t completed = m_lastCompletedFrameIndex.load(std::memory_order_acquire);
+			        return m_shutdown.load(std::memory_order_acquire) || (completed != std::numeric_limits<std::uint64_t>::max() && completed >= frameIndex);
+		        });
+	}
+
 	void RenderThread::WaitIdle()
 	{
 		{
@@ -63,6 +76,7 @@ namespace aether
 			}
 		}
 		m_reloadCv.notify_one();
+		m_completionCv.notify_all();
 		m_channel.close();
 
 		if (m_thread.joinable())
@@ -172,12 +186,14 @@ namespace aether
 					m_shutdown = true;
 				}
 				m_reloadCv.notify_one();
+				m_completionCv.notify_all();
 				m_channel.close();
 				break;
 			}
 
 			// Publish the completed frame index (for statistics / shutdown).
 			m_lastCompletedFrameIndex.store(packet.frameIndex, std::memory_order_release);
+			m_completionCv.notify_all();
 			m_isIdle.store(true, std::memory_order_release);
 			m_reloadCv.notify_all();
 		}

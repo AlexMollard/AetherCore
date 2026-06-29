@@ -241,7 +241,7 @@ namespace aether
 				                }
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
 				                gpu::CommandList cmd = ctx.recorder.View();
-				                m_shadowRenderQueue.FlushDraw(cmd, nullptr, &m_shadowPipeline, cascadeOffset);
+				                m_shadowRenderQueue.FlushDraw(cmd, ctx.frameIndex, nullptr, &m_shadowPipeline, cascadeOffset);
 			                });
 		}
 
