@@ -931,13 +931,22 @@ namespace aether
 		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(
+	        gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
 	{
 		FlushDrawImpl(cmd, frameIndex, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
-	void RenderQueue::FlushDrawImpl(
-	        gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b)
+	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
+	        std::uint32_t frameIndex,
+	        gpu::DeviceAddress frameAddr,
+	        const DrawContracts::LightingAddresses* lighting,
+	        const GraphicsPipeline* overridePipeline,
+	        std::uint32_t cascadeOffset,
+	        const char* debugLabel,
+	        float r,
+	        float g,
+	        float b)
 	{
 		AE_PROFILE_ZONE();
 		if (!cmd.IsValid())

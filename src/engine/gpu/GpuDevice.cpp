@@ -88,6 +88,11 @@ namespace aether
 		return {extent.width, extent.height};
 	}
 
+	std::uint32_t GpuDevice::GetCurrentSwapchainImageIndex() const
+	{
+		return m_gfx->GetSwapchain().GetCurrentImageIndex();
+	}
+
 	bool GpuDevice::SwapchainNeedsRecreation() const
 	{
 		return m_gfx->GetSwapchain().NeedsRecreation();

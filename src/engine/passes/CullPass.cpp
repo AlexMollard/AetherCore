@@ -82,8 +82,9 @@ namespace aether
 
 		graph.AddComputePass(passName)
 		        .DisableAsyncCompute()
-		        .ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameIndex); })
-		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameIndex); });
+		        .HasSideEffects("produces RenderQueue prepared draw state")
+		        .ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameSlot); })
+		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameSlot); });
 	}
 
 	gpu::Pipeline CullPass::GetSinglePipeline() const

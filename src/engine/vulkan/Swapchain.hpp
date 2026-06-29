@@ -55,6 +55,7 @@ namespace aether
 		// Per-frame image/view accessors used by RenderGraph::Execute.
 		[[nodiscard]] VkImage GetCurrentImage() const;
 		[[nodiscard]] VkImageView GetCurrentImageView() const;
+		[[nodiscard]] std::uint32_t GetCurrentImageIndex() const;
 		[[nodiscard]] VkImage GetDepthImage() const;
 		[[nodiscard]] VkImageView GetDepthImageView() const;
 		[[nodiscard]] bool IsFrameValid() const;

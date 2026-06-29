@@ -502,19 +502,21 @@ namespace aether
 		// Compute pass: cull draws for local shadow casters.
 		graph.AddComputePass("$CullLocalShadowDraws")
 		        .DisableAsyncCompute()
+		        .HasSideEffects("produces local shadow RenderQueue prepared draw state")
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
 			                m_shadowRenderQueue.SetDebugForceVisible(true);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, cullPass.GetSinglePipeline(), ctx.frameSlot);
 		                })
-		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameIndex); });
+		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameSlot); });
 	}
 
 	void LocalShadowService::RegisterGraphicsPasses(RenderGraph& graph)
 	{
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
+		        .DependsOn("$CullLocalShadowDraws")
 		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
 		        .WriteDepth(m_atlasDepthImage, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
@@ -549,8 +551,8 @@ namespace aether
 				                };
 				                cmd.SetScissor(scissor);
 
-				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameIndex % kMaxFramesInFlight].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
-				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, ctx.frameIndex, nullptr, lightFcAddr, &m_shadowPipeline);
+				                const gpu::DeviceAddress lightFcAddr = m_lightConstantsBuffer[ctx.frameSlot].address + static_cast<gpu::DeviceSize>(li) * sizeof(FrameConstants);
+				                m_shadowRenderQueue.FlushDrawWithFrameAddr(cmd, ctx.frameSlot, nullptr, lightFcAddr, &m_shadowPipeline);
 			                }
 		                });
 

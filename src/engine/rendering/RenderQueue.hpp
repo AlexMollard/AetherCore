@@ -202,7 +202,8 @@ namespace aether
 		// Same as FlushDraw but overrides the frame constants BDA in push constants
 		// with overrideFrameAddr. Used for rendering the same geometry from multiple POVs
 		// (e.g., local shadow atlas where each light has a different VP matrix).
-		void FlushDrawWithFrameAddr(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
+		void FlushDrawWithFrameAddr(
+		        gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline = nullptr, std::uint32_t cascadeOffset = 0);
 
 		// Clear queued commands for a frame slot.
 		void Clear(std::uint32_t slot);
@@ -318,8 +319,16 @@ namespace aether
 		std::uint32_t m_debugLogSkinJobsFramesLeft = 0;
 
 		// Shared implementation for FlushDraw / FlushDrawWithFrameAddr / FlushDrawPush.
-		void FlushDrawImpl(
-		        gpu::CommandList& cmd, std::uint32_t frameIndex, gpu::DeviceAddress frameAddr, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const char* debugLabel, float r, float g, float b);
+		void FlushDrawImpl(gpu::CommandList& cmd,
+		        std::uint32_t frameIndex,
+		        gpu::DeviceAddress frameAddr,
+		        const DrawContracts::LightingAddresses* lighting,
+		        const GraphicsPipeline* overridePipeline,
+		        std::uint32_t cascadeOffset,
+		        const char* debugLabel,
+		        float r,
+		        float g,
+		        float b);
 
 		const RenderQueueSharedPipelines* m_sharedPipelines = nullptr;
 

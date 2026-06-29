@@ -483,6 +483,11 @@ namespace aether
 		return m_frameValid ? m_imageViews[m_imageIndex] : VK_NULL_HANDLE;
 	}
 
+	std::uint32_t Swapchain::GetCurrentImageIndex() const
+	{
+		return m_frameValid ? m_imageIndex : UINT32_MAX;
+	}
+
 	VkImage Swapchain::GetDepthImage() const
 	{
 		return m_depthImage;

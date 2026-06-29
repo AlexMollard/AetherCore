@@ -75,9 +75,9 @@ namespace aether
 		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
 		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
 		};
-		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu; // offset 624, local shadows
-		std::uint32_t shadowLightCount = 0;          // offset 628
-		std::uint64_t shadowLightDataAddr = 0;       // offset 632
+		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;  // offset 624, local shadows
+		std::uint32_t shadowLightCount = 0;           // offset 628
+		std::uint64_t shadowLightDataAddr = 0;        // offset 632
 		glm::uvec4 gtaoInfo{0xFFFFFFFFu, 0u, 0u, 0u}; // offset 640
 		std::array<glm::vec4, 6> frustumPlanes{
 		        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),

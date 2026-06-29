@@ -145,10 +145,7 @@ namespace aether
 			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth AllocateSampledImageSlot failed"));
 		}
 		m_sceneDepthBindlessSlot = *slot;
-		AE_EXPECT_OR_THROW_VOID(bindless.WriteSampledImage(
-		        m_sceneDepthBindlessSlot,
-		        gpu::ResourceRegistry::GetViewCreateInfo(m_sceneDepthHandle),
-		        gpu::ImageLayout::ShaderReadOnly));
+		AE_EXPECT_OR_THROW_VOID(bindless.WriteSampledImage(m_sceneDepthBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_sceneDepthHandle), gpu::ImageLayout::ShaderReadOnly));
 	}
 
 	void RenderingSubsystem::Init(ServiceContainer& services)
@@ -421,6 +418,7 @@ namespace aether
 		{
 			m_renderGraph.AddPass("$ScenePreDepth")
 			        .SetExtent(m_postProcessStack.GetExtent())
+			        .DependsOn("$CullDraws")
 			        .WriteDepth(m_sceneDepth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
 			        .Execute(
 			                [this](PassContext& ctx)
@@ -429,7 +427,7 @@ namespace aether
 				                {
 					                return;
 				                }
-				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameIndex, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
+				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
 			                });
 		}
 
@@ -458,7 +456,7 @@ namespace aether
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
 			auto* pass =
-			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
+			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).DependsOn("$CullDraws").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
@@ -494,10 +492,10 @@ namespace aether
 				        {
 					        return;
 				        }
-				        const auto frameSlot = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+				        const auto frameSlot = ctx.frameSlot;
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
-				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameIndex, lightingAddr);
+				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr);
 			        });
 		}
 

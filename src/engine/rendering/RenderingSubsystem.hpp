@@ -22,7 +22,7 @@ namespace aether
 {
 	class BindlessManager;
 	class ServiceContainer;
-}
+} // namespace aether
 
 namespace aether
 {

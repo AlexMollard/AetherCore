@@ -282,18 +282,32 @@ namespace aether
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::HasSideEffects(std::string reason)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		PassRecord& pass = m_graph.m_passes[m_passIndex];
+		pass.hasSideEffects = true;
+		pass.sideEffectReason = std::move(reason);
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::DependsOn(std::string passNamePrefix)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		m_graph.m_passes[m_passIndex].logicalDependencies.push_back(std::move(passNamePrefix));
+		return *this;
+	}
+
 	// -- Pass management ------------------------------------------------------
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
 	{
 		std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
-		if (!name.empty())
-		{
-			name += " (" + std::string(loc.file_name()) + ":" + std::to_string(loc.line()) + ")";
-		}
 #ifndef NDEBUG
 		rec.declaredAt = loc;
+#else
+		(void) loc;
 #endif
 		rec.name = std::move(name);
 		m_passes.push_back(std::move(rec));
@@ -305,12 +319,10 @@ namespace aether
 	{
 		std::scoped_lock lock(m_debugStateMutex);
 		PassRecord rec{};
-		if (!name.empty())
-		{
-			name += " (" + std::string(loc.file_name()) + ":" + std::to_string(loc.line()) + ")";
-		}
 #ifndef NDEBUG
 		rec.declaredAt = loc;
+#else
+		(void) loc;
 #endif
 		rec.name = std::move(name);
 		rec.kind = PassKind::Compute;
@@ -434,6 +446,7 @@ namespace aether
 			        .isCompiled = compiledIndexByPass[i] != std::numeric_limits<std::size_t>::max(),
 			        .isCulled = i < m_lastCulledPasses.size() ? m_lastCulledPasses[i] : false,
 			        .isDebugDisabled = pass.debugDisabled,
+			        .hasSideEffects = pass.hasSideEffects,
 			        .hasDepthWrite = pass.depthWrite.has_value(),
 			        .colorWriteCount = static_cast<std::uint32_t>(pass.colorWrites.size()),
 			        .imageAccessCount = static_cast<std::uint32_t>(pass.imageAccesses.size()),
@@ -717,6 +730,39 @@ namespace aether
 		std::vector<std::vector<std::size_t>> adj(N);
 		std::vector<std::size_t> inDegree(N, 0);
 
+		auto addEdge = [&](std::size_t from, std::size_t to)
+		{
+			if (from == to)
+			{
+				return;
+			}
+			if (std::ranges::find(adj[from], to) != adj[from].end())
+			{
+				return;
+			}
+			adj[from].push_back(to);
+			++inDegree[to];
+		};
+
+		auto passMatchesName = [](const PassRecord& pass, const std::string& requestedName) -> bool
+		{
+			return pass.name == requestedName;
+		};
+
+		for (std::size_t i = 0; i < N; ++i)
+		{
+			for (const std::string& dependencyName: m_passes[i].logicalDependencies)
+			{
+				const auto it = std::ranges::find_if(m_passes, [&](const PassRecord& candidate) { return passMatchesName(candidate, dependencyName); });
+				if (it == m_passes.end())
+				{
+					AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' depends on '{}', but no matching pass was found.", m_passes[i].name, dependencyName);
+					continue;
+				}
+				addEdge(static_cast<std::size_t>(std::distance(m_passes.begin(), it)), i);
+			}
+		}
+
 		auto passWrites = [&](std::size_t idx, uint32_t resId) -> bool
 		{
 			for (const AttachmentRef& a: m_passes[idx].colorWrites)
@@ -811,8 +857,7 @@ namespace aether
 				}
 				if (dependent)
 				{
-					adj[i].push_back(j);
-					++inDegree[j];
+					addEdge(i, j);
 				}
 			}
 		}
@@ -940,6 +985,10 @@ namespace aether
 			{
 				const std::size_t passIdx = sortedIndices[i];
 				const PassRecord& pass = m_passes[passIdx];
+				if (pass.hasSideEffects)
+				{
+					continue;
+				}
 
 				// Collect write targets
 				std::vector<uint32_t> writeTargets;
@@ -1652,7 +1701,7 @@ namespace aether
 
 	// -- Execution ------------------------------------------------------------
 
-	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex)
+	void RenderGraph::Execute(gpu::CommandList& cmdList, const FrameResourceContext& frame)
 	{
 		if (m_passes.empty())
 		{
@@ -1672,6 +1721,9 @@ namespace aether
 		}
 
 		// Two-pass transient heap preparation: query memory requirements, allocate heap, assign virtual offsets.
+		const FrameTarget& target = frame.target;
+		const std::uint32_t frameIndex = frame.frameSlot;
+
 		m_storage->PrepareTransientAllocations(target);
 
 		// Allocate aliased VkImage/VkBuffer handles from the pre-computed heap offsets.
@@ -1680,7 +1732,7 @@ namespace aether
 
 		m_storage->GetLastFrameStats().passCount = static_cast<std::uint32_t>(m_compiled.size());
 
-		auto frameAddr = static_cast<gpu::DeviceAddress>(frameConstantsAddr);
+		auto frameAddr = static_cast<gpu::DeviceAddress>(frame.frameConstantsAddr);
 
 		// Image resolution helper shared by pre-, wait-, and signal-barriers.
 		// Returns the opaque gpu::Image (the actual VkImage is obtained
@@ -1942,7 +1994,7 @@ namespace aether
 			{
 				if (pass.debugDisabledExecute)
 				{
-					PassContext ctx{.recorder = recorder, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex};
+					PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 					pass.debugDisabledExecute(ctx);
 				}
 				std::scoped_lock lock(m_debugStateMutex);
@@ -1955,7 +2007,7 @@ namespace aether
 				// Tracy plumbing live in vulkan/GpuProfiler.cpp.
 				AE_GPU_ZONE_SCOPED(cmd, pass.name);
 				const auto t0 = std::chrono::high_resolution_clock::now();
-				PassContext ctx{.recorder = recorder, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex};
+				PassContext ctx{.recorder = recorder, .frame = frame, .extent = passExtent, .frameConstantsAddr = frameAddr, .frameIndex = frameIndex, .frameSlot = frame.frameSlot};
 				pass.execute(ctx);
 				const auto t1 = std::chrono::high_resolution_clock::now();
 				std::scoped_lock lock(m_debugStateMutex);

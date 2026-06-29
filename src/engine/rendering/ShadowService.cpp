@@ -204,24 +204,25 @@ namespace aether
 	{
 		graph.AddComputePass("$CullDraws_Shadow")
 		        .DisableAsyncCompute()
+		        .HasSideEffects("produces directional shadow RenderQueue prepared draw state")
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
-			                if (!IsDirectionalShadowEnabledForFrame(ctx.frameIndex))
+			                if (!IsDirectionalShadowEnabledForFrame(ctx.frameSlot))
 			                {
-				                m_shadowRenderQueue.DiscardPending(ctx.frameIndex);
+				                m_shadowRenderQueue.DiscardPending(ctx.frameSlot);
 				                return;
 			                }
-			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+			                const auto frameIdx = ctx.frameSlot;
 			                gpu::DeviceAddress cascadeAddrs[kCullMultiFrustumCount];
 			                for (std::uint32_t c = 0; c < kCullMultiFrustumCount; ++c)
 			                {
 				                cascadeAddrs[c] = m_shadowFrameConstants[c].GetDeviceAddress(frameIdx);
 			                }
 			                m_shadowRenderQueue.SetMultiCullFrameAddrs(cascadeAddrs);
-			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), ctx.frameIndex);
+			                m_shadowRenderQueue.PrepareAndDispatch(ctx.recorder, cascadeAddrs[0], cullPass.GetMultiPipeline(), ctx.frameSlot);
 		                })
-		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameIndex); });
+		        .OnDebugDisabled([this](PassContext& ctx) { m_shadowRenderQueue.DiscardPending(ctx.frameSlot); });
 	}
 
 	void ShadowService::RegisterGraphicsPasses(RenderGraph& graph)
@@ -230,18 +231,19 @@ namespace aether
 		{
 			const std::string idx = std::to_string(cascade);
 			graph.AddPass("$DirectionalShadow_C" + idx)
+			        .DependsOn("$CullDraws_Shadow")
 			        .WriteDepth(m_shadowDepth[cascade], gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
 			        .SetExtent(gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height})
 			        .Execute(
 			                [this, cascade](PassContext& ctx)
 			                {
-				                if (!IsDirectionalShadowEnabledForFrame(ctx.frameIndex))
+				                if (!IsDirectionalShadowEnabledForFrame(ctx.frameSlot))
 				                {
 					                return;
 				                }
 				                const std::uint32_t cascadeOffset = cascade * m_shadowRenderQueue.GetMaxDraws();
 				                gpu::CommandList cmd = ctx.recorder.View();
-				                m_shadowRenderQueue.FlushDraw(cmd, ctx.frameIndex, nullptr, &m_shadowPipeline, cascadeOffset);
+				                m_shadowRenderQueue.FlushDraw(cmd, ctx.frameSlot, nullptr, &m_shadowPipeline, cascadeOffset);
 			                });
 		}
 

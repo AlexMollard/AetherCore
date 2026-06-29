@@ -61,12 +61,8 @@ namespace aether
 			Throw(AetherError::Engine("GTAOPass: Denoised AO CreateTexture failed"));
 		}
 
-		m_rawAoImage = desc.renderGraph->RegisterImage(
-		        gpu::ResourceRegistry::ResolveTextureImage(m_rawAoHandle),
-		        gpu::ResourceRegistry::ResolveTexture(m_rawAoHandle).view);
-		m_denoisedAoImage = desc.renderGraph->RegisterImage(
-		        gpu::ResourceRegistry::ResolveTextureImage(m_denoisedAoHandle),
-		        gpu::ResourceRegistry::ResolveTexture(m_denoisedAoHandle).view);
+		m_rawAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_rawAoHandle), gpu::ResourceRegistry::ResolveTexture(m_rawAoHandle).view);
+		m_denoisedAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_denoisedAoHandle), gpu::ResourceRegistry::ResolveTexture(m_denoisedAoHandle).view);
 
 		const auto rawSlot = desc.bindlessManager->AllocateSampledImageSlot();
 		if (!rawSlot)
@@ -74,10 +70,7 @@ namespace aether
 			Throw(AetherError::Engine("GTAOPass: raw AO AllocateSampledImageSlot failed"));
 		}
 		m_rawAoBindlessSlot = *rawSlot;
-		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(
-		        m_rawAoBindlessSlot,
-		        gpu::ResourceRegistry::GetViewCreateInfo(m_rawAoHandle),
-		        gpu::ImageLayout::ShaderReadOnly));
+		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(m_rawAoBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_rawAoHandle), gpu::ImageLayout::ShaderReadOnly));
 
 		const auto denoisedSlot = desc.bindlessManager->AllocateSampledImageSlot();
 		if (!denoisedSlot)
@@ -85,10 +78,7 @@ namespace aether
 			Throw(AetherError::Engine("GTAOPass: denoised AO AllocateSampledImageSlot failed"));
 		}
 		m_denoisedAoBindlessSlot = *denoisedSlot;
-		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(
-		        m_denoisedAoBindlessSlot,
-		        gpu::ResourceRegistry::GetViewCreateInfo(m_denoisedAoHandle),
-		        gpu::ImageLayout::ShaderReadOnly));
+		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(m_denoisedAoBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_denoisedAoHandle), gpu::ImageLayout::ShaderReadOnly));
 
 		AE_EXPECT_OR_THROW(mainPipeline,
 		        GraphicsPipeline::Create(desc.device,
@@ -185,7 +175,7 @@ namespace aether
 			                        .depthSlot = depthBindlessSlot,
 			                        .fullWidth = m_extent.width,
 			                        .fullHeight = m_extent.height,
-			                        .frameIndex = static_cast<std::uint32_t>(ctx.frameIndex),
+			                        .frameIndex = static_cast<std::uint32_t>(ctx.frame.frameIndex),
 			                        .frameConstantsAddr = ctx.frameConstantsAddr,
 			                        .radius = 1.5f,
 			                        .strength = 1.25f,

@@ -461,7 +461,7 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {
-			                const std::uint32_t slot = ctx.frameIndex % kMaxFramesInFlight;
+			                const std::uint32_t slot = ctx.frameSlot;
 			                if (!m_lightDataReady[slot] || m_lightTileGroups[slot] == 0)
 			                {
 				                return;
@@ -483,8 +483,7 @@ namespace aether
 		return PrepareForRenderGraph(frameSlot, camera.GetViewMatrix(), camera.GetProjectionMatrix(aspect), camera.GetNearPlane(), extent, fc, pointLights, spotLights);
 	}
 
-	bool LightingManager::PrepareForRenderGraph(
-	        const std::uint32_t frameSlot,
+	bool LightingManager::PrepareForRenderGraph(const std::uint32_t frameSlot,
 	        const glm::mat4& view,
 	        const glm::mat4& proj,
 	        const float nearPlane,

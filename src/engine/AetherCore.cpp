@@ -390,11 +390,7 @@ namespace aether
 		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
 		const auto& gtaoPass = m_rendering->GetGtaoPass();
 		const gpu::Extent2D gtaoExtent = gtaoPass.GetAoExtent();
-		fc.gtaoInfo = glm::uvec4(
-		        gtaoPass.GetAoBindlessSlot(),
-		        gtaoExtent.width,
-		        gtaoExtent.height,
-		        gtaoPass.GetAoImage().IsValid() ? 1u : 0u);
+		fc.gtaoInfo = glm::uvec4(gtaoPass.GetAoBindlessSlot(), gtaoExtent.width, gtaoExtent.height, gtaoPass.GetAoImage().IsValid() ? 1u : 0u);
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
@@ -447,10 +443,18 @@ namespace aether
 		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
+		const FrameResourceContext frameContext{
+		        .target = frameTarget,
+		        .extent = frameTarget.extent,
+		        .frameIndex = m_frameIndex,
+		        .frameSlot = frameIdx,
+		        .swapchainImageIndex = m_gpu->GetCurrentSwapchainImageIndex(),
+		        .frameConstantsAddr = frameAddr,
+		};
 
 		m_currentCmdList.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
-		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameTarget, frameAddr, frameIdx);
+		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();
 	}
 

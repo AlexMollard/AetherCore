@@ -252,6 +252,7 @@ namespace aether
 		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
 
 		m_graph->AddComputePass("$CullDraws_RTT_" + idStr)
+		        .HasSideEffects("produces render-target RenderQueue prepared draw state")
 		        .ExecuteCompute(
 		                [this, id, cullPipeline](PassContext& ctx)
 		                {
@@ -264,7 +265,7 @@ namespace aether
 			                Camera* cam = m_cameraManager->TryGet(CameraHandle{rit->second.cameraHandleRaw});
 			                if (cam == nullptr || !rit->second.constants)
 			                {
-				                rit->second.renderQueue->DiscardPending(ctx.frameIndex);
+				                rit->second.renderQueue->DiscardPending(ctx.frameSlot);
 				                return;
 			                }
 
@@ -283,23 +284,24 @@ namespace aether
 			                fc.skyZenithColor = m_renderer->GetSkyZenithColorVector();
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
-			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % aether::kMaxFramesInFlight);
+			                const auto frameIdx = ctx.frameSlot;
 			                m_lightingManager->UpdateForView(frameIdx, *cam, gpu::Extent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
 
-			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, ctx.frameIndex);
+			                rit->second.renderQueue->PrepareAndDispatch(ctx.recorder, frameAddr, cullPipeline, ctx.frameSlot);
 		                })
 		        .OnDebugDisabled(
 		                [this, id](PassContext& ctx)
 		                {
 			                if (auto rit = m_targets.find(id); rit != m_targets.end())
 			                {
-				                rit->second.renderQueue->DiscardPending(ctx.frameIndex);
+				                rit->second.renderQueue->DiscardPending(ctx.frameSlot);
 			                }
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)
+		        .DependsOn("$CullDraws_RTT_" + idStr)
 		        .WriteColor(color, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
 		        .WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{extent.width, extent.height})
@@ -316,11 +318,11 @@ namespace aether
 				                return;
 			                }
 
-			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
+			                const auto frameIdx = ctx.frameSlot;
 			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
-			                rit->second.renderQueue->FlushDrawPush(cmd, ctx.frameIndex, lightingAddr);
+			                rit->second.renderQueue->FlushDrawPush(cmd, ctx.frameSlot, lightingAddr);
 		                });
 	}
 } // namespace aether

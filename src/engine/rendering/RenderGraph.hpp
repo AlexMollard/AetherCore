@@ -69,13 +69,25 @@ namespace aether
 		return gpu::ClearDepth(depth, stencil);
 	}
 
+	struct FrameResourceContext
+	{
+		FrameTarget target{};
+		gpu::Extent2D extent{};
+		std::uint64_t frameIndex = 0;
+		std::uint32_t frameSlot = 0;
+		std::uint32_t swapchainImageIndex = UINT32_MAX;
+		std::uint64_t frameConstantsAddr = 0;
+	};
+
 	// Data made available inside pass execute callbacks.
 	struct PassContext
 	{
 		gpu::CommandList& recorder;
+		const FrameResourceContext& frame;
 		gpu::Extent2D extent;
 		std::uint64_t frameConstantsAddr = 0;
 		std::uint32_t frameIndex = 0;
+		std::uint32_t frameSlot = 0;
 	};
 
 	// Frame graph with pass/resource declarations and automatic image barriers.
@@ -169,6 +181,15 @@ namespace aether
 			// Keep this compute pass on the graphics queue even when async
 			// compute auto-promotion is enabled.
 			PassBuilder& DisableAsyncCompute();
+
+			// Declare non-resource work that must not be culled or reordered
+			// as if it were pure graph-local GPU resource work.
+			PassBuilder& HasSideEffects(std::string reason = {});
+
+			// Add a logical ordering edge to a previously declared pass. The
+			// name may be the user-facing pass prefix before source-location
+			// suffixes are appended, e.g. "$CullDraws".
+			PassBuilder& DependsOn(std::string passNamePrefix);
 
 			// Convenience: mark this compute pass for the async compute queue.
 			PassBuilder& SetAsyncCompute()
@@ -267,6 +288,7 @@ namespace aether
 			bool isCompiled = false;
 			bool isCulled = false;
 			bool isDebugDisabled = false;
+			bool hasSideEffects = false;
 			bool hasDepthWrite = false;
 			std::uint32_t colorWriteCount = 0;
 			std::uint32_t imageAccessCount = 0;
@@ -287,7 +309,7 @@ namespace aether
 		void ClearDebugDisabledPasses();
 
 		// Execute the compiled frame graph for the current frame.
-		void Execute(gpu::CommandList& recorder, const FrameTarget& target, std::uint64_t frameConstantsAddr, std::uint32_t frameIndex);
+		void Execute(gpu::CommandList& recorder, const FrameResourceContext& frame);
 
 		// Enable async compute scheduling. Call once after Initialize() when a
 		// dedicated compute queue is available. computeQueue is an opaque engine
@@ -444,6 +466,9 @@ namespace aether
 			std::optional<gpu::Extent2D> extentOverride;
 			float lastCpuTimeMs = 0.f;
 			bool debugDisabled = false;
+			bool hasSideEffects = false;
+			std::string sideEffectReason;
+			std::vector<std::string> logicalDependencies;
 #ifndef NDEBUG
 			std::source_location declaredAt;
 #endif

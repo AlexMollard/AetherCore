@@ -50,6 +50,7 @@ namespace aether
 		[[nodiscard]] GpuFormat GetSwapchainColorFormat() const;
 		[[nodiscard]] GpuFormat GetSwapchainDepthFormat() const;
 		[[nodiscard]] gpu::Extent2D GetSwapchainExtent() const;
+		[[nodiscard]] std::uint32_t GetCurrentSwapchainImageIndex() const;
 		[[nodiscard]] bool SwapchainNeedsRecreation() const;
 		void ClearSwapchainRecreationFlag();
 		[[nodiscard]] bool IsSwapchainFrameValid() const;
