@@ -180,9 +180,19 @@ namespace aether
 		{
 			const glm::vec4 viewPos4 = view * glm::vec4(light.positionRadius.x, light.positionRadius.y, light.positionRadius.z, 1.0f);
 			const float depth = -viewPos4.z;
-			if (depth < nearClip)
+			const float r = light.positionRadius.w;
+			if (depth + r < nearClip)
 			{
 				out.visible = false;
+				return;
+			}
+			if (depth <= nearClip + r)
+			{
+				out.minTx = 0;
+				out.maxTx = static_cast<int>(tilesX - 1u);
+				out.minTy = 0;
+				out.maxTy = static_cast<int>(tilesY - 1u);
+				out.visible = true;
 				return;
 			}
 
@@ -196,7 +206,6 @@ namespace aether
 			const glm::vec3 ndc = glm::vec3(clip) / clip.w;
 			const float screenX = (ndc.x * 0.5f + 0.5f) * static_cast<float>(extent.width);
 			const float screenY = (ndc.y * 0.5f + 0.5f) * static_cast<float>(extent.height);
-			const float r = light.positionRadius.w;
 			const float effectiveDepth = std::max(std::sqrt(std::max(depth * depth - r * r, 0.0f)), nearClip);
 			const float radiusPx = r * pixelScaleY / effectiveDepth;
 			if (radiusPx <= 0.5f)
@@ -452,15 +461,16 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {
-			                if (!m_lightDataReady || m_lightTileGroups == 0)
+			                const std::uint32_t slot = ctx.frameIndex % kMaxFramesInFlight;
+			                if (!m_lightDataReady[slot] || m_lightTileGroups[slot] == 0)
 			                {
 				                return;
 			                }
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 			                cmd.BindComputePipeline(cullPipeline);
-			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush));
-			                cmd.Dispatch(m_lightTileGroups, 1, 1);
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(m_lightPush[slot]));
+			                cmd.Dispatch(m_lightTileGroups[slot], 1, 1);
 		                });
 
 		m_rgPassesRegistered = true;
@@ -483,10 +493,11 @@ namespace aether
 	        const std::span<const Renderer::PointLight> pointLights,
 	        const std::span<const Renderer::SpotLight> spotLights)
 	{
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		if (extent.width == 0 || extent.height == 0)
 		{
 			DisableForView(fc);
-			m_lightDataReady = false;
+			m_lightDataReady[slot] = false;
 			return false;
 		}
 
@@ -496,7 +507,7 @@ namespace aether
 		if (lights.empty() && pointLights.empty() && spotLights.empty())
 		{
 			DisableForView(fc);
-			m_lightDataReady = false;
+			m_lightDataReady[slot] = false;
 			return false;
 		}
 
@@ -505,7 +516,6 @@ namespace aether
 		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
 		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
 
-		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		EnsureBuffers(slot, lights.size(), tileCount, indexCount);
 		auto& frame = m_buffers[slot];
 		if (!lights.empty())
@@ -516,17 +526,17 @@ namespace aether
 
 		EnsureComputePipeline();
 
-		m_lightPush.viewProj = proj * view;
-		m_lightPush.params0 = glm::vec4(nearPlane, 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
-		m_lightPush.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
-		m_lightPush.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
-		m_lightPush.lightDataAddr = frame.lightsDeviceAddr;
-		m_lightPush.tileHeadersAddr = frame.tileHeadersDeviceAddr;
-		m_lightPush.tileLightIndicesAddr = frame.tileIndicesDeviceAddr;
+		m_lightPush[slot].viewProj = proj * view;
+		m_lightPush[slot].params0 = glm::vec4(nearPlane, 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
+		m_lightPush[slot].params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
+		m_lightPush[slot].params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
+		m_lightPush[slot].lightDataAddr = frame.lightsDeviceAddr;
+		m_lightPush[slot].tileHeadersAddr = frame.tileHeadersDeviceAddr;
+		m_lightPush[slot].tileLightIndicesAddr = frame.tileIndicesDeviceAddr;
 
-		m_lightTileGroups = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
-		m_lightLightGroups = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
-		m_lightDataReady = true;
+		m_lightTileGroups[slot] = static_cast<std::uint32_t>((tileCount + 63u) / 64u);
+		m_lightLightGroups[slot] = static_cast<std::uint32_t>((lights.size() + 63u) / 64u);
+		m_lightDataReady[slot] = true;
 
 		fc.tiledLightGridInfo = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		fc.tiledLightBufferOffsets = glm::uvec4(0u, 0u, 0u, m_maxLightsPerTile);

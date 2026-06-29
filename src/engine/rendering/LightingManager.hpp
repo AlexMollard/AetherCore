@@ -186,14 +186,14 @@ namespace aether
 		bool m_gpuBinningEnabled = false;
 
 		// Render graph integration state.
-		mutable LightingComputePush m_lightPush; // set by PrepareForRenderGraph
-		mutable uint32_t m_lightTileGroups = 0;  // dispatch group count
-		mutable uint32_t m_lightLightGroups = 0; // dispatch group count
-		mutable bool m_lightDataReady = false;   // true when PrepareForRenderGraph was called this frame
-		RGBuffer m_rgLights{};                   // render graph handle for lights buffer
-		RGBuffer m_rgTileHeaders{};              // render graph handle for tile headers buffer
-		RGBuffer m_rgTileIndices{};              // render graph handle for tile indices buffer
-		bool m_rgPassesRegistered = false;       // true after RegisterPasses() called
+		mutable std::array<LightingComputePush, kMaxFramesInFlight> m_lightPush{};      // set by PrepareForRenderGraph
+		mutable std::array<uint32_t, kMaxFramesInFlight> m_lightTileGroups{};           // dispatch group count
+		mutable std::array<uint32_t, kMaxFramesInFlight> m_lightLightGroups{};          // dispatch group count
+		mutable std::array<bool, kMaxFramesInFlight> m_lightDataReady{};                // true when PrepareForRenderGraph was called this frame
+		RGBuffer m_rgLights{};                                                         // render graph handle for lights buffer
+		RGBuffer m_rgTileHeaders{};                                                    // render graph handle for tile headers buffer
+		RGBuffer m_rgTileIndices{};                                                    // render graph handle for tile indices buffer
+		bool m_rgPassesRegistered = false;                                             // true after RegisterPasses() called
 		std::uint32_t m_maxLightsPerTile = 128;
 		static constexpr std::uint32_t kTileSizePx = 16;
 	};

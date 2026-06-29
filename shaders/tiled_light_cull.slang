@@ -79,8 +79,21 @@ void binLights(uint3 tid : SV_DispatchThreadID)
         float radius = max(p0.w, 1e-4);
 
         float4 clip = mul(pc.viewProj, float4(worldPos, 1.0));
-        float depth = abs(clip.w);
-        if (depth < pc.params0.x || abs(clip.w) <= 1e-6)
+        float depth = clip.w;
+        if (depth + radius < pc.params0.x)
+        {
+            continue;
+        }
+        if (depth <= pc.params0.x + radius)
+        {
+            if (count < maxLightsPerTile)
+            {
+                pc.tileLightIndices.Store(tileOffset + count, lightIndex);
+                ++count;
+            }
+            continue;
+        }
+        if (abs(clip.w) <= 1e-6)
         {
             continue;
         }
