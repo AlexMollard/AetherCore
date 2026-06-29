@@ -33,17 +33,16 @@ def update_player_controller(world : World?; dt : float; player : uint; idleClip
     if (player == 0u) { return; }
 
     // ── 1. Camera Relative Vectors (Flattened to XZ plane) ───────────────────
-    // We remove the Y component so looking up/down doesn't slow movement.
+    // Orbit cameras keep their live rotation in orbit yaw; get_camera_forward()
+    // reads the free-camera yaw, which stays at its startup value.
     var camFwd = float3(0.0, 0.0, -1.0);
     var camRight = float3(1.0, 0.0, 0.0);
     if (camId != 0u)
     {
-        camFwd = get_camera_forward(camId);
-        camRight = get_camera_right(camId);
+        let yaw = get_camera_yaw(camId) * 0.01745329252;
+        camFwd = float3(-sin(yaw), 0.0, -cos(yaw));
+        camRight = float3(cos(yaw), 0.0, -sin(yaw));
     }
-    
-    camFwd.y = 0.0;
-    camRight.y = 0.0;
     
     let f_len = sqrt(camFwd.x * camFwd.x + camFwd.z * camFwd.z);
     let r_len = sqrt(camRight.x * camRight.x + camRight.z * camRight.z);
