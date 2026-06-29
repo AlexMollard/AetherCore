@@ -85,6 +85,7 @@ namespace aether
 		RenderQueue m_shadowRenderQueue;
 		std::array<FrameConstantsBuffer, kShadowCascadeCount> m_shadowFrameConstants;
 		GraphicsPipeline m_shadowPipeline;
+		PreparedDrawList m_shadowDrawList{};
 		std::array<RGImage, kShadowCascadeCount> m_shadowDepth{};
 		std::array<gpu::TextureHandle, kShadowCascadeCount> m_shadowDepthHandle{};
 		std::array<gpu::Image, kShadowCascadeCount> m_shadowDepthImage{};

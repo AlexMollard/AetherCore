@@ -202,9 +202,11 @@ namespace aether
 
 	void ShadowService::RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass)
 	{
-		graph.AddComputePass("$CullDraws_Shadow")
-		        .DisableAsyncCompute()
+		m_shadowDrawList = graph.CreatePreparedDrawList("DirectionalShadowDraws");
+		auto pass = graph.AddComputePass("$CullDraws_Shadow");
+		pass.DisableAsyncCompute()
 		        .HasSideEffects("produces directional shadow RenderQueue prepared draw state")
+		        .ProducesDrawList(m_shadowDrawList)
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
@@ -231,7 +233,7 @@ namespace aether
 		{
 			const std::string idx = std::to_string(cascade);
 			graph.AddPass("$DirectionalShadow_C" + idx)
-			        .DependsOn("$CullDraws_Shadow")
+			        .ConsumesDrawList(m_shadowDrawList)
 			        .WriteDepth(m_shadowDepth[cascade], gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
 			        .SetExtent(gpu::Extent2D{m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height})
 			        .Execute(

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -48,6 +49,17 @@ namespace aether
 
 	// Opaque handle to a render-graph-managed buffer resource.
 	struct RGBuffer
+	{
+		static constexpr uint32_t kInvalid = ~0u;
+		uint32_t id = kInvalid;
+
+		[[nodiscard]] bool IsValid() const
+		{
+			return id != kInvalid;
+		}
+	};
+
+	struct PreparedDrawList
 	{
 		static constexpr uint32_t kInvalid = ~0u;
 		uint32_t id = kInvalid;
@@ -187,9 +199,11 @@ namespace aether
 			PassBuilder& HasSideEffects(std::string reason = {});
 
 			// Add a logical ordering edge to a previously declared pass. The
-			// name may be the user-facing pass prefix before source-location
-			// suffixes are appended, e.g. "$CullDraws".
+			// name must match the stable user-facing pass name, e.g. "$CullDraws".
 			PassBuilder& DependsOn(std::string passNamePrefix);
+
+			PassBuilder& ProducesDrawList(PreparedDrawList drawList);
+			PassBuilder& ConsumesDrawList(PreparedDrawList drawList);
 
 			// Convenience: mark this compute pass for the async compute queue.
 			PassBuilder& SetAsyncCompute()
@@ -250,6 +264,9 @@ namespace aether
 
 		[[nodiscard]] PassBuilder AddComputePass(std::string name, std::source_location loc = std::source_location::current());
 
+		[[nodiscard]] PreparedDrawList CreatePreparedDrawList(std::string name);
+		void RemovePreparedDrawList(PreparedDrawList drawList);
+
 		void RemovePass(const std::string& name);
 		void Clear();
 
@@ -296,6 +313,8 @@ namespace aether
 			bool hasSideEffects = false;
 			std::string sideEffectReason;
 			std::vector<std::string> logicalDependencies;
+			std::vector<std::string> producedDrawLists;
+			std::vector<std::string> consumedDrawLists;
 			bool hasDepthWrite = false;
 			std::uint32_t colorWriteCount = 0;
 			std::uint32_t imageAccessCount = 0;
@@ -476,9 +495,19 @@ namespace aether
 			bool hasSideEffects = false;
 			std::string sideEffectReason;
 			std::vector<std::string> logicalDependencies;
+			std::vector<PreparedDrawList> producedDrawLists;
+			std::vector<PreparedDrawList> consumedDrawLists;
 #ifndef NDEBUG
 			std::source_location declaredAt;
 #endif
+		};
+
+		struct PreparedDrawListRecord
+		{
+			std::string name;
+			std::size_t producerPass = std::numeric_limits<std::size_t>::max();
+			std::vector<std::size_t> consumerPasses;
+			bool retired = false;
 		};
 
 		// External image entry (typed engine handles).
@@ -490,6 +519,7 @@ namespace aether
 		};
 
 		void Compile();
+		void RebuildPreparedDrawListLinks();
 
 #ifndef NDEBUG
 		struct BarrierIssue
@@ -544,6 +574,7 @@ namespace aether
 		std::vector<bool> m_lastCulledPasses;
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<gpu::Buffer> m_externalBuffers;
+		std::vector<PreparedDrawListRecord> m_preparedDrawLists;
 		FrameResourceContext m_lastFrameContext{};
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;

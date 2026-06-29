@@ -3,11 +3,11 @@
 #include <string>
 #include "gpu/GpuHandles.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "rendering/RenderGraph.hpp"
 #include "utils/Expected.hpp"
 
 namespace aether
 {
-	class RenderGraph;
 	class RenderQueue;
 
 	class CullPass
@@ -15,7 +15,7 @@ namespace aether
 	public:
 		void Initialize(gpu::Device device);
 		void Shutdown();
-		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {});
+		void RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix = {}, PreparedDrawList drawList = {});
 
 		// Bound each frame in PrepareAndDispatch. Returns the opaque
 		// pipeline state for the single-pass / multi-pass cull shaders.

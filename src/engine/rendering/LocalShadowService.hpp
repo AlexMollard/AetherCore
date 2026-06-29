@@ -114,6 +114,7 @@ namespace aether
 		ShadowAtlasManager m_atlasManager;
 		RenderQueue m_shadowRenderQueue;
 		GraphicsPipeline m_shadowPipeline;
+		PreparedDrawList m_shadowDrawList{};
 		RGImage m_atlasImage{};
 		RGImage m_atlasDepthImage{};
 		gpu::TextureHandle m_atlasDepthHandle{};

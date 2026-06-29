@@ -412,13 +412,14 @@ namespace aether
 
 		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
-		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue);
+		const PreparedDrawList mainSceneDraws = m_renderGraph.CreatePreparedDrawList("MainSceneDraws");
+		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue, {}, mainSceneDraws);
 
 		if (m_sceneDepth.IsValid())
 		{
 			m_renderGraph.AddPass("$ScenePreDepth")
 			        .SetExtent(m_postProcessStack.GetExtent())
-			        .DependsOn("$CullDraws")
+			        .ConsumesDrawList(mainSceneDraws)
 			        .WriteDepth(m_sceneDepth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
 			        .Execute(
 			                [this](PassContext& ctx)
@@ -455,37 +456,37 @@ namespace aether
 		{
 			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
-			auto* pass =
-			        &m_renderGraph.AddPass("$EngineForward").SetExtent(m_postProcessStack.GetExtent()).DependsOn("$CullDraws").WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
+			auto pass = m_renderGraph.AddPass("$EngineForward");
+			pass.SetExtent(m_postProcessStack.GetExtent()).ConsumesDrawList(mainSceneDraws).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
 				if (shadowMap.IsValid())
 				{
-					pass->ReadTexture(shadowMap);
+					pass.ReadTexture(shadowMap);
 				}
 			}
 
 			const RGImage localShadowAtlas = m_localShadowService.GetAtlasRGImage();
 			if (localShadowAtlas.IsValid())
 			{
-				pass->ReadTexture(localShadowAtlas);
+				pass.ReadTexture(localShadowAtlas);
 			}
 
 			const RGImage gtaoImage = m_gtaoPass.GetAoImage();
 			if (gtaoImage.IsValid())
 			{
-				pass->ReadTexture(gtaoImage);
+				pass.ReadTexture(gtaoImage);
 			}
 
 			if (auto* lighting = frame.lighting)
 			{
-				pass->ReadBuffer(lighting->GetLightsBufferHandle());
-				pass->ReadBuffer(lighting->GetTileHeadersBufferHandle());
-				pass->ReadBuffer(lighting->GetTileIndicesBufferHandle());
+				pass.ReadBuffer(lighting->GetLightsBufferHandle());
+				pass.ReadBuffer(lighting->GetTileHeadersBufferHandle());
+				pass.ReadBuffer(lighting->GetTileIndicesBufferHandle());
 			}
 
-			pass->Execute(
+			pass.Execute(
 			        [this, &m_renderQueue = m_renderQueue, bindless = frame.bindless, lighting = frame.lighting](PassContext& ctx)
 			        {
 				        if (!IsForwardPassEnabled())

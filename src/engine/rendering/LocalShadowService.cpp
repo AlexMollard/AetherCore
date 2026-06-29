@@ -500,9 +500,11 @@ namespace aether
 	void LocalShadowService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)
 	{
 		// Compute pass: cull draws for local shadow casters.
-		graph.AddComputePass("$CullLocalShadowDraws")
-		        .DisableAsyncCompute()
+		m_shadowDrawList = graph.CreatePreparedDrawList("LocalShadowDraws");
+		auto pass = graph.AddComputePass("$CullLocalShadowDraws");
+		pass.DisableAsyncCompute()
 		        .HasSideEffects("produces local shadow RenderQueue prepared draw state")
+		        .ProducesDrawList(m_shadowDrawList)
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
@@ -516,7 +518,7 @@ namespace aether
 	{
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
-		        .DependsOn("$CullLocalShadowDraws")
+		        .ConsumesDrawList(m_shadowDrawList)
 		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
 		        .WriteDepth(m_atlasDepthImage, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})

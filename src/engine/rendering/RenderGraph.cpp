@@ -288,6 +288,7 @@ namespace aether
 		PassRecord& pass = m_graph.m_passes[m_passIndex];
 		pass.hasSideEffects = true;
 		pass.sideEffectReason = std::move(reason);
+		m_graph.m_compileDirty = true;
 		return *this;
 	}
 
@@ -295,6 +296,44 @@ namespace aether
 	{
 		std::scoped_lock lock(m_graph.m_debugStateMutex);
 		m_graph.m_passes[m_passIndex].logicalDependencies.push_back(std::move(passNamePrefix));
+		m_graph.m_compileDirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ProducesDrawList(PreparedDrawList drawList)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		if (!drawList.IsValid() || drawList.id >= m_graph.m_preparedDrawLists.size() || m_graph.m_preparedDrawLists[drawList.id].retired)
+		{
+			AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' tried to produce an invalid PreparedDrawList.", m_graph.m_passes[m_passIndex].name);
+			return *this;
+		}
+		m_graph.m_passes[m_passIndex].producedDrawLists.push_back(drawList);
+		PreparedDrawListRecord& record = m_graph.m_preparedDrawLists[drawList.id];
+		if (record.producerPass != std::numeric_limits<std::size_t>::max() && record.producerPass != m_passIndex)
+		{
+			AE_WARN(LogCategory::Engine, "RenderGraph: PreparedDrawList '{}' already has producer '{}'; replacing with '{}'.", record.name, m_graph.m_passes[record.producerPass].name, m_graph.m_passes[m_passIndex].name);
+		}
+		record.producerPass = m_passIndex;
+		m_graph.m_compileDirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ConsumesDrawList(PreparedDrawList drawList)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		if (!drawList.IsValid() || drawList.id >= m_graph.m_preparedDrawLists.size() || m_graph.m_preparedDrawLists[drawList.id].retired)
+		{
+			AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' tried to consume an invalid PreparedDrawList.", m_graph.m_passes[m_passIndex].name);
+			return *this;
+		}
+		m_graph.m_passes[m_passIndex].consumedDrawLists.push_back(drawList);
+		PreparedDrawListRecord& record = m_graph.m_preparedDrawLists[drawList.id];
+		if (std::ranges::find(record.consumerPasses, m_passIndex) == record.consumerPasses.end())
+		{
+			record.consumerPasses.push_back(m_passIndex);
+		}
+		m_graph.m_compileDirty = true;
 		return *this;
 	}
 
@@ -331,6 +370,35 @@ namespace aether
 		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
+	PreparedDrawList RenderGraph::CreatePreparedDrawList(std::string name)
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		const auto id = static_cast<std::uint32_t>(m_preparedDrawLists.size());
+		m_preparedDrawLists.push_back(PreparedDrawListRecord{.name = std::move(name)});
+		m_compileDirty = true;
+		return PreparedDrawList{id};
+	}
+
+	void RenderGraph::RemovePreparedDrawList(PreparedDrawList drawList)
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		if (!drawList.IsValid() || drawList.id >= m_preparedDrawLists.size())
+		{
+			return;
+		}
+
+		PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+		record.retired = true;
+		record.producerPass = std::numeric_limits<std::size_t>::max();
+		record.consumerPasses.clear();
+		for (PassRecord& pass: m_passes)
+		{
+			std::erase_if(pass.producedDrawLists, [&](const PreparedDrawList candidate) { return candidate.id == drawList.id; });
+			std::erase_if(pass.consumedDrawLists, [&](const PreparedDrawList candidate) { return candidate.id == drawList.id; });
+		}
+		m_compileDirty = true;
+	}
+
 	const FrameStats& RenderGraph::GetFrameStats() const
 	{
 		return m_storage->GetLastFrameStats();
@@ -343,7 +411,44 @@ namespace aether
 		if (it != m_passes.end())
 		{
 			m_passes.erase(it);
+			RebuildPreparedDrawListLinks();
 			m_compileDirty = true;
+		}
+	}
+
+	void RenderGraph::RebuildPreparedDrawListLinks()
+	{
+		for (PreparedDrawListRecord& drawList: m_preparedDrawLists)
+		{
+			drawList.producerPass = std::numeric_limits<std::size_t>::max();
+			drawList.consumerPasses.clear();
+		}
+
+		for (std::size_t passIndex = 0; passIndex < m_passes.size(); ++passIndex)
+		{
+			const PassRecord& pass = m_passes[passIndex];
+			for (const PreparedDrawList drawList: pass.producedDrawLists)
+			{
+				if (drawList.IsValid() && drawList.id < m_preparedDrawLists.size())
+				{
+					PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+					if (!record.retired)
+					{
+						record.producerPass = passIndex;
+					}
+				}
+			}
+			for (const PreparedDrawList drawList: pass.consumedDrawLists)
+			{
+				if (drawList.IsValid() && drawList.id < m_preparedDrawLists.size())
+				{
+					PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+					if (!record.retired)
+					{
+						record.consumerPasses.push_back(passIndex);
+					}
+				}
+			}
 		}
 	}
 
@@ -365,6 +470,7 @@ namespace aether
 		m_externalImages.clear();
 		m_storage->ClearExternalBuffers();
 		m_externalBuffers.clear();
+		m_preparedDrawLists.clear();
 		m_passes.clear();
 		m_compiled.clear();
 		m_lastCulledPasses.clear();
@@ -470,6 +576,29 @@ namespace aether
 				info.waitCount = static_cast<std::uint32_t>(compiled.waits.size());
 				info.signalBarrierCount = static_cast<std::uint32_t>(compiled.signalBarriers.size());
 				info.splitEventIndex = compiled.splitEventIndex;
+			}
+
+			for (const PreparedDrawList drawList: pass.producedDrawLists)
+			{
+				if (drawList.IsValid() && drawList.id < m_preparedDrawLists.size())
+				{
+					const PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+					if (!record.retired)
+					{
+						info.producedDrawLists.push_back(record.name);
+					}
+				}
+			}
+			for (const PreparedDrawList drawList: pass.consumedDrawLists)
+			{
+				if (drawList.IsValid() && drawList.id < m_preparedDrawLists.size())
+				{
+					const PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+					if (!record.retired)
+					{
+						info.consumedDrawLists.push_back(record.name);
+					}
+				}
 			}
 
 			info.resources.reserve(pass.colorWrites.size() + pass.imageAccesses.size() + pass.bufferAccesses.size() + (pass.depthWrite.has_value() ? 1u : 0u));
@@ -734,6 +863,21 @@ namespace aether
 				AE_WARN(LogCategory::Engine, "RenderGraph: pass name '{}' is registered {} times. Stable pass names must be unique.", name, count);
 			}
 		}
+		for (const PreparedDrawListRecord& drawList: m_preparedDrawLists)
+		{
+			if (drawList.retired)
+			{
+				continue;
+			}
+			if (drawList.producerPass == std::numeric_limits<std::size_t>::max())
+			{
+				AE_WARN(LogCategory::Engine, "RenderGraph: PreparedDrawList '{}' has no producer pass.", drawList.name);
+			}
+			if (drawList.consumerPasses.empty())
+			{
+				AE_WARN(LogCategory::Engine, "RenderGraph: PreparedDrawList '{}' has no consumer passes.", drawList.name);
+			}
+		}
 
 		if (m_asyncComputeEnabled)
 		{
@@ -779,6 +923,22 @@ namespace aether
 					continue;
 				}
 				addEdge(static_cast<std::size_t>(std::distance(m_passes.begin(), it)), i);
+			}
+		}
+
+		for (const PreparedDrawListRecord& drawList: m_preparedDrawLists)
+		{
+			if (drawList.retired || drawList.producerPass == std::numeric_limits<std::size_t>::max())
+			{
+				continue;
+			}
+			for (const std::size_t consumerPass: drawList.consumerPasses)
+			{
+				if (consumerPass >= N)
+				{
+					continue;
+				}
+				addEdge(drawList.producerPass, consumerPass);
 			}
 		}
 

@@ -191,6 +191,7 @@ namespace aether
 
 		m_graph->RemovePass("$CameraRT_" + std::to_string(id));
 		m_graph->RemovePass("$CullDraws_RTT_" + std::to_string(id));
+		m_graph->RemovePreparedDrawList(it->second.drawList);
 		m_graph->ReleaseImage(it->second.rgColor);
 		m_graph->ReleaseImage(it->second.rgDepth);
 
@@ -250,9 +251,11 @@ namespace aether
 		const RGImage depth = it->second.rgDepth;
 		const gpu::Extent2D extent = it->second.extent;
 		const gpu::Pipeline cullPipeline = m_cullPass->GetSinglePipeline();
+		it->second.drawList = m_graph->CreatePreparedDrawList("CameraRTDraws_" + idStr);
 
-		m_graph->AddComputePass("$CullDraws_RTT_" + idStr)
-		        .HasSideEffects("produces render-target RenderQueue prepared draw state")
+		auto cullPass = m_graph->AddComputePass("$CullDraws_RTT_" + idStr);
+		cullPass.HasSideEffects("produces render-target RenderQueue prepared draw state")
+		        .ProducesDrawList(it->second.drawList)
 		        .ExecuteCompute(
 		                [this, id, cullPipeline](PassContext& ctx)
 		                {
@@ -301,7 +304,7 @@ namespace aether
 		                });
 
 		m_graph->AddPass("$CameraRT_" + idStr)
-		        .DependsOn("$CullDraws_RTT_" + idStr)
+		        .ConsumesDrawList(it->second.drawList)
 		        .WriteColor(color, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.02f, 0.02f, 0.03f, 1.0f))
 		        .WriteDepth(depth, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{extent.width, extent.height})

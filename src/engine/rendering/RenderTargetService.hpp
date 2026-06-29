@@ -53,6 +53,7 @@ namespace aether
 			std::uint32_t cameraHandleRaw = 0;
 			gpu::Extent2D extent;
 			std::string debugName;
+			PreparedDrawList drawList{};
 			RGImage rgColor{};
 			RGImage rgDepth{};
 			std::unique_ptr<FrameConstantsBuffer> constants;

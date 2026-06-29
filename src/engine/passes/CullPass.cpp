@@ -72,7 +72,7 @@ namespace aether
 		return {};
 	}
 
-	void CullPass::RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix)
+	void CullPass::RegisterPass(RenderGraph& graph, RenderQueue& renderQueue, const std::string& namePrefix, PreparedDrawList drawList)
 	{
 		AE_PROFILE_ZONE();
 		AE_EXPECT_OR_THROW_VOID(EnsureSinglePipeline());
@@ -80,10 +80,13 @@ namespace aether
 
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);
 
-		graph.AddComputePass(passName)
-		        .DisableAsyncCompute()
-		        .HasSideEffects("produces RenderQueue prepared draw state")
-		        .ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameSlot); })
+		auto pass = graph.AddComputePass(passName);
+		pass.DisableAsyncCompute().HasSideEffects("produces RenderQueue prepared draw state");
+		if (drawList.IsValid())
+		{
+			pass.ProducesDrawList(drawList);
+		}
+		pass.ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameSlot); })
 		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameSlot); });
 	}
 

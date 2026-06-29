@@ -76,19 +76,33 @@ namespace aether::app
 					return true;
 				}
 			}
+			for (const std::string& drawList: pass.producedDrawLists)
+			{
+				if (LowerCopy(drawList).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
+			for (const std::string& drawList: pass.consumedDrawLists)
+			{
+				if (LowerCopy(drawList).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
 			return false;
 		}
 
-		std::string JoinDependencies(const std::vector<std::string>& dependencies)
+		std::string JoinStrings(const std::vector<std::string>& values)
 		{
 			std::string joined;
-			for (const std::string& dependency: dependencies)
+			for (const std::string& value: values)
 			{
 				if (!joined.empty())
 				{
 					joined += ", ";
 				}
-				joined += dependency;
+				joined += value;
 			}
 			return joined;
 		}
@@ -279,6 +293,16 @@ namespace aether::app
 					ImGui::SameLine();
 					ImGui::TextColored(ImVec4{0.42f, 0.70f, 0.95f, 1.0f}, "+Dep");
 				}
+				if (!pass.producedDrawLists.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{0.52f, 0.86f, 0.62f, 1.0f}, "DL+");
+				}
+				if (!pass.consumedDrawLists.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{0.42f, 0.70f, 0.95f, 1.0f}, "DL-");
+				}
 				ImGui::TableSetColumnIndex(5);
 				ImGui::TextColored(MsColor(pass.lastCpuTimeMs), "%.3f", pass.lastCpuTimeMs);
 				ImGui::TableSetColumnIndex(6);
@@ -387,8 +411,12 @@ namespace aether::app
 			DrawMetricRow("Side effects",
 			        pass.hasSideEffects ? (pass.sideEffectReason.empty() ? "Yes" : pass.sideEffectReason.c_str()) : "No",
 			        pass.hasSideEffects ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a});
-			const std::string dependencies = JoinDependencies(pass.logicalDependencies);
+			const std::string dependencies = JoinStrings(pass.logicalDependencies);
+			const std::string producedDrawLists = JoinStrings(pass.producedDrawLists);
+			const std::string consumedDrawLists = JoinStrings(pass.consumedDrawLists);
 			DrawMetricRow("Dependencies", dependencies.empty() ? "None" : dependencies.c_str());
+			DrawMetricRow("Draw lists out", producedDrawLists.empty() ? "None" : producedDrawLists.c_str());
+			DrawMetricRow("Draw lists in", consumedDrawLists.empty() ? "None" : consumedDrawLists.c_str());
 			DrawMetricRow("Barriers", std::format("{} image, {} buffer, {} signal, {} wait groups", pass.preBarrierCount, pass.bufferBarrierCount, pass.signalBarrierCount, pass.waitCount).c_str());
 			DrawMetricRow("Writes", std::format("{} color, depth {}", pass.colorWriteCount, pass.hasDepthWrite ? "yes" : "no").c_str());
 			DrawMetricRow("Reads/accesses", std::format("{} images, {} buffers", pass.imageAccessCount, pass.bufferAccessCount).c_str());
