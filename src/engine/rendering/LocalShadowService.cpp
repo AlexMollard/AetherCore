@@ -29,7 +29,26 @@
 
 namespace
 {
-	constexpr float kPointLightFovDeg = 170.0f;
+	constexpr std::uint32_t kPointLightFaceCount = 6u;
+	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 24u;
+	constexpr std::uint32_t kPointShadowFaceRes = 384u;
+	constexpr float kPointLightFovDeg = 100.0f;
+	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
+
+	struct PointShadowFace
+	{
+		glm::vec3 direction;
+		glm::vec3 up;
+	};
+
+	constexpr std::array<PointShadowFace, kPointLightFaceCount> kPointShadowFaces{
+	        PointShadowFace{.direction = glm::vec3(1.0f, 0.0f, 0.0f), .up = glm::vec3(0.0f, -1.0f, 0.0f)},
+	        PointShadowFace{.direction = glm::vec3(-1.0f, 0.0f, 0.0f), .up = glm::vec3(0.0f, -1.0f, 0.0f)},
+	        PointShadowFace{.direction = glm::vec3(0.0f, 1.0f, 0.0f), .up = glm::vec3(0.0f, 0.0f, 1.0f)},
+	        PointShadowFace{.direction = glm::vec3(0.0f, -1.0f, 0.0f), .up = glm::vec3(0.0f, 0.0f, -1.0f)},
+	        PointShadowFace{.direction = glm::vec3(0.0f, 0.0f, 1.0f), .up = glm::vec3(0.0f, -1.0f, 0.0f)},
+	        PointShadowFace{.direction = glm::vec3(0.0f, 0.0f, -1.0f), .up = glm::vec3(0.0f, -1.0f, 0.0f)},
+	};
 } // namespace
 
 namespace aether
@@ -311,8 +330,21 @@ namespace aether
 			}
 		}
 
-		// Sort by distance (closest first = highest priority).
-		std::ranges::sort(candidates, [](const ShadowCandidate& a, const ShadowCandidate& b) { return a.distanceSq < b.distanceSq; });
+		// Sort by distance (closest first = highest priority), with a stable
+		// tie-break so the shadow budget does not reshuffle equal candidates.
+		std::ranges::sort(candidates,
+		        [](const ShadowCandidate& a, const ShadowCandidate& b)
+		        {
+			        if (std::abs(a.distanceSq - b.distanceSq) > 1e-4f)
+			        {
+				        return a.distanceSq < b.distanceSq;
+			        }
+			        if (a.lightType != b.lightType)
+			        {
+				        return a.lightType < b.lightType;
+			        }
+			        return a.lightIndex < b.lightIndex;
+		        });
 
 		// Clamp to budget.
 		const std::uint32_t budget = std::min(static_cast<std::uint32_t>(candidates.size()), kMaxLocalShadows);
@@ -337,52 +369,51 @@ namespace aether
 
 			if (c.lightType == 0u)
 			{
-				// Point light: two fixed hemisphere faces (upper +Y, lower -Y).
-				// Using fixed world-space directions instead of camera-relative
-				// ones eliminates flickering when the camera moves.
-				const std::uint32_t faceRes = std::max(kShadowRes / 2u, 64u);
+				if (shadowDataIdx + kPointLightFaceCount > kMaxRenderedLocalShadowEntries || shadowDataIdx + kPointLightFaceCount > kMaxLocalShadows)
+				{
+					continue;
+				}
 
-				ShadowAtlasManager::Region r0 = m_atlasManager.Allocate(faceRes, faceRes);
-				ShadowAtlasManager::Region r1 = m_atlasManager.Allocate(faceRes, faceRes);
-				if (!r0.IsValid() || !r1.IsValid())
+				// Point light: six fixed cube-style faces. The small FOV overlap
+				// avoids receiver shadows popping at face boundaries.
+				const std::uint32_t faceRes = kPointShadowFaceRes;
+				std::array<ShadowAtlasManager::Region, kPointLightFaceCount> regions{};
+				bool allocatedAllFaces = true;
+				for (std::uint32_t face = 0; face < kPointLightFaceCount; ++face)
+				{
+					regions[face] = m_atlasManager.Allocate(faceRes, faceRes);
+					allocatedAllFaces = allocatedAllFaces && regions[face].IsValid();
+				}
+				if (!allocatedAllFaces)
 				{
 					break;
 				}
 
-				// Upper hemisphere: look up from the light.
+				for (std::uint32_t face = 0; face < kPointLightFaceCount; ++face)
 				{
-					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
+					const PointShadowFace& faceDesc = kPointShadowFaces[face];
+					const glm::mat4 lightView = glm::lookAt(c.position, c.position + faceDesc.direction, faceDesc.up);
 					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(kPointLightFovDeg), 1.0f, 1.0f, 0.1f, c.radius);
-
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
-					        .region = r0,
+					        .region = regions[face],
 					        .depthBias = 0.005f,
 					        .normalBias = 0.015f,
-					        .lightType = 1u, // point
+					        .lightType = 1u,
 					});
 				}
 
-				// Lower hemisphere: look down from the light.
-				{
-					const glm::mat4 lightView = glm::lookAt(c.position, c.position + glm::vec3(0.0f, -1.0f, 0.0f), glm::vec3(0.0f, 0.0f, -1.0f));
-					const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(glm::radians(kPointLightFovDeg), 1.0f, 1.0f, 0.1f, c.radius);
-
-					m_perLightShadows.push_back(PerLightShadow{
-					        .viewProj = lightProj * lightView,
-					        .region = r1,
-					        .depthBias = 0.005f,
-					        .normalBias = 0.015f,
-					        .lightType = 1u, // point (same type, 2nd entry)
-					});
-				}
-
-				// Map this point light to the first of its 2 consecutive entries.
+				// Map this point light to the first of its consecutive face entries.
 				m_lightShadowIndices[c.lightIndex] = glm::vec2(static_cast<float>(shadowDataIdx), 1.0f);
-				shadowDataIdx += 2u;
+				shadowDataIdx += kPointLightFaceCount;
 			}
 			else
 			{
+				if (shadowDataIdx + 1u > kMaxRenderedLocalShadowEntries || shadowDataIdx + 1u > kMaxLocalShadows)
+				{
+					break;
+				}
+
 				// Spot light: single perspective region.
 				ShadowAtlasManager::Region r = m_atlasManager.Allocate(kShadowRes, kShadowRes);
 				if (!r.IsValid())
@@ -395,7 +426,7 @@ namespace aether
 				const glm::vec3 lightDir = glm::normalize(src.direction);
 				const glm::vec3 up = (std::abs(glm::dot(lightDir, glm::vec3(0.0f, 1.0f, 0.0f))) > 0.95f) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
 				const glm::mat4 lightView = glm::lookAt(src.position, src.position + lightDir, up);
-				const float fov = 2.0f * src.outerAngleRad;
+				const float fov = std::min(2.0f * (src.outerAngleRad + kSpotShadowFovPaddingRad), glm::radians(175.0f));
 				const glm::mat4 lightProj = glm::perspectiveFovRH_ZO(fov, 1.0f, 1.0f, 0.1f, src.radius);
 
 				m_perLightShadows.push_back(PerLightShadow{

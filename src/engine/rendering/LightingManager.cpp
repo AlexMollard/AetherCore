@@ -148,6 +148,7 @@ namespace aether
 	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights) const
 	{
 		AE_PROFILE_ZONE();
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
 		std::vector<GpuLight> lights;
 		BuildLightList(lights, pointLights, spotLights);
 
@@ -270,8 +271,8 @@ namespace aether
 			}
 		}
 
-		EnsureBuffers(frameSlot, lights.size(), headers.size(), indices.size());
-		auto& frame = m_buffers[frameSlot];
+		EnsureBuffers(slot, lights.size(), headers.size(), indices.size());
+		auto& frame = m_buffers[slot];
 		if (!lights.empty())
 		{
 			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
@@ -295,7 +296,8 @@ namespace aether
 	void LightingManager::EnsureBuffers(const std::uint32_t frameSlot, const std::size_t lightCount, const std::size_t tileCount, const std::size_t indexCount) const
 	{
 		AE_PROFILE_ZONE();
-		auto& frame = m_buffers[frameSlot];
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		auto& frame = m_buffers[slot];
 
 		// Retire stale buffers from kMaxFramesInFlight frames ago - this slot is
 		// guaranteed to have completed all GPU work referencing them.
@@ -396,7 +398,8 @@ namespace aether
 
 	DrawContracts::LightingAddresses LightingManager::GetLightingAddresses(std::uint32_t frameSlot) const
 	{
-		auto& frame = m_buffers[frameSlot];
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		auto& frame = m_buffers[slot];
 		return DrawContracts::LightingAddresses{
 		        .lightDataAddr = frame.lightsDeviceAddr,
 		        .tileHeadersAddr = frame.tileHeadersDeviceAddr,
@@ -407,8 +410,9 @@ namespace aether
 	void LightingManager::ApplyShadowIndices(const std::uint32_t frameSlot, const std::span<const glm::vec2> shadowIndices)
 	{
 		AE_PROFILE_ZONE();
-		auto& frame = m_buffers[frameSlot];
-		if (!frame.lightsHandle.IsValid() || shadowIndices.empty())
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		auto& frame = m_buffers[slot];
+		if (!frame.lightsHandle.IsValid() || frame.lightsMapped == nullptr || shadowIndices.empty())
 		{
 			return;
 		}
@@ -501,8 +505,9 @@ namespace aether
 		const std::size_t tileCount = static_cast<std::size_t>(tilesX) * static_cast<std::size_t>(tilesY);
 		const std::size_t indexCount = tileCount * static_cast<std::size_t>(m_maxLightsPerTile);
 
-		EnsureBuffers(frameSlot, lights.size(), tileCount, indexCount);
-		auto& frame = m_buffers[frameSlot];
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		EnsureBuffers(slot, lights.size(), tileCount, indexCount);
+		auto& frame = m_buffers[slot];
 		if (!lights.empty())
 		{
 			std::memcpy(frame.lightsMapped, lights.data(), lights.size() * sizeof(GpuLight));
@@ -531,7 +536,8 @@ namespace aether
 
 	void LightingManager::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot) const
 	{
-		auto& frame = m_buffers[frameSlot];
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		auto& frame = m_buffers[slot];
 		graph.UpdateExternalBuffer(m_rgLights, static_cast<void*>(frame.lightsBuffer));
 		graph.UpdateExternalBuffer(m_rgTileHeaders, static_cast<void*>(frame.tileHeadersBuffer));
 		graph.UpdateExternalBuffer(m_rgTileIndices, static_cast<void*>(frame.tileIndicesBuffer));

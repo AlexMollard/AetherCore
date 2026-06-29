@@ -6,7 +6,23 @@
 //
 // Light type encoding:
 //   0 = spot light  (1 consecutive entry in ShadowLightData)
-//   1 = point light (2 consecutive entries: front+back faces)
+//   1 = point light (6 consecutive cube-style face entries)
+
+static const uint kPointLightShadowFaceCount = 6u;
+
+uint SelectPointShadowFace(float3 lightToReceiver)
+{
+    float3 a = abs(lightToReceiver);
+    if (a.x >= a.y && a.x >= a.z)
+    {
+        return lightToReceiver.x >= 0.0 ? 0u : 1u;
+    }
+    if (a.y >= a.z)
+    {
+        return lightToReceiver.y >= 0.0 ? 2u : 3u;
+    }
+    return lightToReceiver.z >= 0.0 ? 4u : 5u;
+}
 
 struct ShadowLightData
 {
@@ -73,6 +89,11 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
 // Returns 1.0 = fully lit, 0.0 = fully shadowed.
 float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 worldNormal, float3 L, SamplerState samp, FrameConstantsData* fc)
 {
+    if (fc->shadowLightDataAddr == 0u || shadowIdx >= fc->shadowLightCount)
+    {
+        return 1.0;
+    }
+
     ShadowLightData* shadowData = (ShadowLightData*)(fc->shadowLightDataAddr);
     ShadowLightData sd = shadowData[shadowIdx];
 
@@ -83,11 +104,14 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 
     }
     else
     {
-        // Point light: two consecutive entries (front+back).
-        float vis0 = SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, samp);
-        ShadowLightData sd1 = shadowData[shadowIdx + 1u];
-        float vis1 = SampleVSM(sd1, worldPos, worldNormal, L, atlasSlot, samp);
-        return min(vis0, vis1);
+        // Point light: pick the cube face that contains this receiver instead
+        // of taking the darkest overlapping face, which creates false slivers.
+        uint face = SelectPointShadowFace(-normalize(L));
+        if (shadowIdx + face >= fc->shadowLightCount)
+        {
+            return 1.0;
+        }
+        return SampleVSM(shadowData[shadowIdx + face], worldPos, worldNormal, L, atlasSlot, samp);
     }
 }
 
