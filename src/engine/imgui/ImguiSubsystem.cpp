@@ -246,10 +246,12 @@ namespace aether
 			return;
 		}
 
+		m_gameThreadFrameLock.reset();
 		ShutdownBackends();
 		ImGui::DestroyContext();
 		m_initialized = false;
 		m_frameIndex = 0;
+		m_pendingTextureReleases.clear();
 		AE_INFO(LogCategory::UI, "Dear ImGui subsystem shutdown.");
 	}
 
@@ -262,6 +264,7 @@ namespace aether
 
 		m_gameThreadFrameLock.reset();
 		m_gameThreadFrameLock.emplace(m_mutex);
+		RetirePendingTextureReleases();
 		ImGuiIO& io = ImGui::GetIO();
 		if (auto window = services.TryGet<Window>())
 		{
@@ -344,7 +347,33 @@ namespace aether
 			return;
 		}
 
-		ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(textureId)));
+		constexpr std::uint64_t kTextureReleaseDelayFrames = kMaxFramesInFlight + 1u;
+		m_pendingTextureReleases.push_back(PendingTextureRelease{
+		        .textureId = textureId,
+		        .retireFrame = m_frameIndex + kTextureReleaseDelayFrames,
+		});
+	}
+
+	void ImguiSubsystem::RetirePendingTextureReleases()
+	{
+		if (!m_backendsInitialized)
+		{
+			m_pendingTextureReleases.clear();
+			return;
+		}
+
+		for (auto it = m_pendingTextureReleases.begin(); it != m_pendingTextureReleases.end();)
+		{
+			if (it->retireFrame <= m_frameIndex)
+			{
+				ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(it->textureId)));
+				it = m_pendingTextureReleases.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
 	}
 
 	void ImguiSubsystem::InitBackends(ServiceContainer& services)
@@ -374,7 +403,7 @@ namespace aether
 		initInfo.Device = vk.GetDevice().device;
 		initInfo.QueueFamily = vk.GetGraphicsQueueFamily();
 		initInfo.Queue = vk.GetGraphicsQueue();
-		initInfo.DescriptorPoolSize = 64;
+		initInfo.DescriptorPoolSize = 4096;
 		initInfo.MinImageCount = 2;
 		initInfo.ImageCount = Swapchain::kMaxFramesInFlight;
 		initInfo.PipelineCache = vk.GetPipelineCache();
@@ -407,6 +436,11 @@ namespace aether
 			return;
 		}
 
+		for (const PendingTextureRelease& pending: m_pendingTextureReleases)
+		{
+			ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(pending.textureId)));
+		}
+		m_pendingTextureReleases.clear();
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		m_backendsInitialized = false;

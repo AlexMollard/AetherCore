@@ -61,8 +61,15 @@ namespace aether
 		}
 
 	private:
+		struct PendingTextureRelease
+		{
+			ImTextureID textureId = ImTextureID_Invalid;
+			std::uint64_t retireFrame = 0;
+		};
+
 		void InitBackends(ServiceContainer& services);
 		void ShutdownBackends();
+		void RetirePendingTextureReleases();
 
 		bool m_initialized = false;
 		bool m_backendsInitialized = false;
@@ -72,5 +79,6 @@ namespace aether
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;
 		std::vector<std::byte> m_fontData;
+		std::vector<PendingTextureRelease> m_pendingTextureReleases;
 	};
 } // namespace aether

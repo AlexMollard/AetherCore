@@ -61,6 +61,9 @@ Thumbs.db
 # Mind memory protocol internal state
 /.mind/
 
+# Codebase memory MCP index artifact
+/.codebase-memory/
+
 # Knowledge graph (auto-generated, run `graphify update .` to regenerate)
 /graphify-out/
 

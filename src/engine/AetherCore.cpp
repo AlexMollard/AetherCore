@@ -287,10 +287,9 @@ namespace aether
 
 		rttService.PrepareQueues(drawSlot, world);
 
-		{
-			const glm::vec4 sunDirIntensity = renderer.GetDirectionalLightVector();
-			shadowService.SetDirectionalShadowEnabled(glm::vec3(sunDirIntensity).y > 0.0f);
-		}
+		const glm::vec4 sunDirIntensity = renderer.GetDirectionalLightVector();
+		const bool directionalShadowEnabled = glm::vec3(sunDirIntensity).y > 0.0f;
+		shadowService.SetDirectionalShadowEnabled(directionalShadowEnabled);
 		shadowService.PrepareQueues(drawSlot, world);
 		localShadowService.PrepareQueues(drawSlot, world);
 
@@ -307,9 +306,11 @@ namespace aether
 			const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 			packet.proj = cam->GetProjectionMatrix(aspect);
 			packet.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
+			packet.cameraNearPlane = cam->GetNearPlane();
 		}
 
-		packet.sunDirectionIntensity = renderer.GetDirectionalLightVector();
+		packet.sunDirectionIntensity = sunDirIntensity;
+		packet.directionalShadowEnabled = directionalShadowEnabled;
 		packet.ambientColor = renderer.GetAmbientLightVector();
 		packet.sunColor = renderer.GetSunColorVector();
 		packet.skyHorizonColor = renderer.GetSkyHorizonColorVector();
@@ -407,21 +408,17 @@ namespace aether
 
 		if (packet.hasCameraData)
 		{
-			const Camera* cam = m_cameras->GetCameraManager().TryGetMainCamera();
-			if (cam)
+			auto& lightingMgr = m_cameras->GetLightingManager();
+			const gpu::Extent2D lightingExtent = packet.renderExtent.width != 0 && packet.renderExtent.height != 0 ? packet.renderExtent : m_gpu->GetSwapchainExtent();
+			const bool lightDataReady = lightingMgr.PrepareForRenderGraph(frameIdx, packet.view, packet.proj, packet.cameraNearPlane, lightingExtent, fc, packet.pointLights, packet.spotLights);
+
+			if (!lightDataReady)
 			{
-				auto& lightingMgr = m_cameras->GetLightingManager();
-				const gpu::Extent2D lightingExtent = packet.renderExtent.width != 0 && packet.renderExtent.height != 0 ? packet.renderExtent : m_gpu->GetSwapchainExtent();
-				const bool lightDataReady = lightingMgr.PrepareForRenderGraph(frameIdx, *cam, lightingExtent, fc, packet.pointLights, packet.spotLights);
-
-				if (!lightDataReady)
-				{
-					m_gpu->ApplyNoCameraLightingFallback(fc);
-				}
-
-				// Update render graph buffer handles for the current frame's lighting buffers.
-				lightingMgr.UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
+				m_gpu->ApplyNoCameraLightingFallback(fc);
 			}
+
+			// Update render graph buffer handles for the current frame's lighting buffers.
+			lightingMgr.UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
 		}
 		else
 		{

@@ -62,8 +62,11 @@ namespace aether::app
 			if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
 			{
 				const ImTextureID textureId = imgui->RegisterTexture(imageView, gpu::ImageLayout::ShaderReadOnly);
-				m_sceneViewportTextureId = static_cast<std::uint64_t>(textureId);
-				m_sceneViewportImageView = imageView;
+				if (textureId != ImTextureID_Invalid)
+				{
+					m_sceneViewportTextureId = static_cast<std::uint64_t>(textureId);
+					m_sceneViewportImageView = imageView;
+				}
 			}
 		}
 

@@ -73,6 +73,15 @@ namespace aether
 		// Call before RenderGraph::Execute() each frame.
 		// Returns true if lighting should run (lights exist).
 		[[nodiscard]] bool PrepareForRenderGraph(std::uint32_t frameSlot, const Camera& camera, gpu::Extent2D extent, FrameConstants& fc, std::span<const Renderer::PointLight> pointLights, std::span<const Renderer::SpotLight> spotLights);
+		[[nodiscard]] bool PrepareForRenderGraph(
+		        std::uint32_t frameSlot,
+		        const glm::mat4& view,
+		        const glm::mat4& proj,
+		        float nearPlane,
+		        gpu::Extent2D extent,
+		        FrameConstants& fc,
+		        std::span<const Renderer::PointLight> pointLights,
+		        std::span<const Renderer::SpotLight> spotLights);
 
 		// Update the render graph's external buffer handles for the current frame.
 		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot) const;

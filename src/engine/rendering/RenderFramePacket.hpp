@@ -21,6 +21,7 @@ namespace aether
 		glm::mat4 view{1.0f};
 		glm::mat4 proj{1.0f};
 		glm::vec4 cameraWorldPos{0.0f};
+		float cameraNearPlane = 0.1f;
 		gpu::Extent2D renderExtent{};
 		bool hasCameraData = false;
 
@@ -31,6 +32,7 @@ namespace aether
 		glm::vec4 skyHorizonColor{1.0f};
 		glm::vec4 skyZenithColor{0.5f, 0.7f, 1.0f, 1.0f};
 		glm::vec4 skyVoidColor{0.0f};
+		bool directionalShadowEnabled = false;
 
 		// Local light lists snapshotted to avoid data race between game thread
 		// (SetPointLights/SetSpotLights) and render thread reads.

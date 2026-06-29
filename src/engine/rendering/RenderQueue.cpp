@@ -192,7 +192,7 @@ namespace aether
 		{
 			const gpu::BufferDesc desc{
 			        .size = static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand),
-			        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+			        .usage = gpu::BufferUsage::Indirect | gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst,
 			        .debugName = "RenderQueue.IndirectOutput",
 			};
 			m_outputIndirect[i].handle = gpu::ResourceRegistry::CreateBuffer(desc);
@@ -378,8 +378,8 @@ namespace aether
 			        return a.mesh < b.mesh;
 		        });
 
-		const auto totalDraws = static_cast<std::uint32_t>(commands.size());
-		AE_ASSERT_ALWAYS(totalDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
+		const auto submittedDraws = static_cast<std::uint32_t>(commands.size());
+		AE_ASSERT_ALWAYS(submittedDraws <= m_maxDraws, "RenderQueue: exceeded maxDraws - increase Initialize capacity.");
 
 		std::uint32_t globalDrawIdx = 0; // monotonically increasing index within this frame slot
 		std::uint32_t batchIdx = 0;
@@ -402,7 +402,6 @@ namespace aether
 			}
 
 			const std::uint32_t batchOutputStart = globalDrawIdx;
-			const auto batchDrawCount = static_cast<std::uint32_t>(batchEnd - i);
 
 			AE_ASSERT_ALWAYS(batchIdx < m_maxBatches, "RenderQueue: exceeded maxBatches - increase Initialize capacity.");
 
@@ -512,6 +511,13 @@ namespace aether
 				};
 
 				++globalDrawIdx;
+			}
+
+			const std::uint32_t batchDrawCount = globalDrawIdx - batchOutputStart;
+			if (batchDrawCount == 0)
+			{
+				i = batchEnd;
+				continue;
 			}
 
 			m_batchDescMapped[batchIdx] = CullContracts::Batch{.inputStart = batchOutputStart, .drawCount = batchDrawCount, .outputStart = batchOutputStart};
@@ -826,6 +832,17 @@ namespace aether
 		{
 			AE_WARN(LogCategory::Animation, "Animation dispatch DISABLED by debug flag ({} sampleJobs, {} skinJobs skipped)", sampleJobsThisFrame, skinJobCount);
 		}
+
+		const std::uint32_t totalDraws = globalDrawIdx;
+		if (totalDraws == 0)
+		{
+			m_batchRenderInfos.clear();
+			return;
+		}
+
+		const gpu::DeviceSize outputIndirectSize = static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand);
+		cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_outputIndirect[frameSlot].handle), 0, outputIndirectSize, 0);
+		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite);
 
 		// -- Cull dispatch: single or multi-frustum --
 		const gpu::DeviceSize inputCmdOffset = 0;

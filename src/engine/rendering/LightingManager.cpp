@@ -465,6 +465,20 @@ namespace aether
 	bool LightingManager::PrepareForRenderGraph(
 	        const std::uint32_t frameSlot, const Camera& camera, const gpu::Extent2D extent, FrameConstants& fc, const std::span<const Renderer::PointLight> pointLights, const std::span<const Renderer::SpotLight> spotLights)
 	{
+		const float aspect = extent.height != 0 ? static_cast<float>(extent.width) / static_cast<float>(extent.height) : 1.0f;
+		return PrepareForRenderGraph(frameSlot, camera.GetViewMatrix(), camera.GetProjectionMatrix(aspect), camera.GetNearPlane(), extent, fc, pointLights, spotLights);
+	}
+
+	bool LightingManager::PrepareForRenderGraph(
+	        const std::uint32_t frameSlot,
+	        const glm::mat4& view,
+	        const glm::mat4& proj,
+	        const float nearPlane,
+	        const gpu::Extent2D extent,
+	        FrameConstants& fc,
+	        const std::span<const Renderer::PointLight> pointLights,
+	        const std::span<const Renderer::SpotLight> spotLights)
+	{
 		if (extent.width == 0 || extent.height == 0)
 		{
 			DisableForView(fc);
@@ -497,10 +511,8 @@ namespace aether
 
 		EnsureComputePipeline();
 
-		const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
-		const glm::mat4 proj = camera.GetProjectionMatrix(aspect);
-		m_lightPush.viewProj = proj * camera.GetViewMatrix();
-		m_lightPush.params0 = glm::vec4(camera.GetNearPlane(), 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
+		m_lightPush.viewProj = proj * view;
+		m_lightPush.params0 = glm::vec4(nearPlane, 0.5f * static_cast<float>(extent.height) * std::abs(proj[1][1]), static_cast<float>(extent.width), static_cast<float>(extent.height));
 		m_lightPush.params1 = glm::uvec4(kTileSizePx, tilesX, tilesY, static_cast<std::uint32_t>(lights.size()));
 		m_lightPush.params2 = glm::uvec4(m_maxLightsPerTile, 0u, 0u, 0u);
 		m_lightPush.lightDataAddr = frame.lightsDeviceAddr;

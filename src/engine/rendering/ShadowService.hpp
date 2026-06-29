@@ -53,6 +53,11 @@ namespace aether
 			return m_directionalShadowEnabled;
 		}
 
+		[[nodiscard]] bool IsDirectionalShadowEnabledForFrame(std::uint32_t frameIdx) const
+		{
+			return m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight];
+		}
+
 		void RegisterPasses(RenderGraph& graph, const CullPass& cullPass);
 		void SetupPassResources(RenderGraph& graph);
 		void RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass);
@@ -86,6 +91,7 @@ namespace aether
 		std::array<gpu::ImageView, kShadowCascadeCount> m_shadowDepthView{};
 		BindlessManager* m_bindless = nullptr;
 		bool m_directionalShadowEnabled = true;
+		std::array<bool, kMaxFramesInFlight> m_directionalShadowFrameEnabled{true, true, true};
 		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
 		        gpu::Extent2D{4096u, 4096u},
 		        gpu::Extent2D{2048u, 2048u},

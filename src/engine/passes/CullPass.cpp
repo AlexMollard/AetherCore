@@ -81,6 +81,7 @@ namespace aether
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);
 
 		graph.AddComputePass(passName)
+		        .DisableAsyncCompute()
 		        .ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameIndex); })
 		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameIndex); });
 	}

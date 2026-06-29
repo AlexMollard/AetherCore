@@ -45,6 +45,16 @@ namespace
 	// neighbour cascade's map near its edge where the depth is 1.0
 	// (no shadow), producing a bright seam. 1.20 = 20 % geometric overlap.
 	constexpr float kCascadeOverlap = 1.20f;
+
+	void DisableDirectionalShadows(aether::FrameConstants& fc)
+	{
+		fc.shadowParams.z = 0.0f;
+		for (std::uint32_t cascade = 0; cascade < aether::kShadowCascadeCount; ++cascade)
+		{
+			fc.shadowViewProjCascades[cascade] = glm::mat4(1.0f);
+			fc.shadowCascadeInfo[cascade] = glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u);
+		}
+	}
 } // namespace
 
 namespace aether
@@ -155,11 +165,6 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
-		if (!m_directionalShadowEnabled)
-		{
-			m_shadowRenderQueue.DiscardPending(drawSlot);
-			return;
-		}
 		m_shadowRenderQueue.Clear(drawSlot);
 	}
 
@@ -169,6 +174,7 @@ namespace aether
 		m_shadowRenderQueue.SetWriteSlot(drawSlot);
 		if (!m_directionalShadowEnabled)
 		{
+			m_shadowRenderQueue.DiscardPending(drawSlot);
 			return;
 		}
 		WorldRenderer::Flush(world, m_shadowRenderQueue);
@@ -200,7 +206,7 @@ namespace aether
 		        .ExecuteCompute(
 		                [this, &cullPass](PassContext& ctx)
 		                {
-			                if (!m_directionalShadowEnabled)
+			                if (!IsDirectionalShadowEnabledForFrame(ctx.frameIndex))
 			                {
 				                m_shadowRenderQueue.DiscardPending(ctx.frameIndex);
 				                return;
@@ -228,7 +234,7 @@ namespace aether
 			        .Execute(
 			                [this, cascade](PassContext& ctx)
 			                {
-				                if (!m_directionalShadowEnabled)
+				                if (!IsDirectionalShadowEnabledForFrame(ctx.frameIndex))
 				                {
 					                return;
 				                }
@@ -251,15 +257,13 @@ namespace aether
 		}
 		lightDir = glm::normalize(lightDir);
 
+		m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight] = packet.directionalShadowEnabled;
+
 		// When the light is at or below the horizon, shadows are not visible
 		// to a ground-level camera. Skip CSM entirely to save GPU work.
-		if (lightDir.y <= 0.0f)
+		if (!packet.directionalShadowEnabled || lightDir.y <= 0.0f)
 		{
-			return;
-		}
-
-		if (!m_directionalShadowEnabled)
-		{
+			DisableDirectionalShadows(fc);
 			return;
 		}
 

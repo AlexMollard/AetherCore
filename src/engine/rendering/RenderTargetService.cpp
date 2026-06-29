@@ -283,7 +283,7 @@ namespace aether
 			                fc.skyZenithColor = m_renderer->GetSkyZenithColorVector();
 			                fc.skyVoidColor = m_renderer->GetSkyVoidColorVector();
 
-			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % aether::kMaxFramesInFlight);
+			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % aether::kMaxFramesInFlight);
 			                m_lightingManager->UpdateForView(frameIdx, *cam, gpu::Extent2D(rit->second.extent), fc, m_lightingManager->IsRttBinningEnabled());
 			                rit->second.constants->Write(frameIdx, fc);
 			                const gpu::DeviceAddress frameAddr = rit->second.constants->GetDeviceAddress(frameIdx);
@@ -316,7 +316,7 @@ namespace aether
 				                return;
 			                }
 
-			                const auto frameIdx = static_cast<std::uint32_t>(m_getFrameIndex() % Swapchain::kMaxFramesInFlight);
+			                const auto frameIdx = static_cast<std::uint32_t>(ctx.frameIndex % Swapchain::kMaxFramesInFlight);
 			                auto lightingAddr = m_lightingManager ? m_lightingManager->GetLightingAddresses(frameIdx) : DrawContracts::LightingAddresses{};
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
