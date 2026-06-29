@@ -65,7 +65,32 @@ namespace aether::app
 			{
 				return true;
 			}
+			if (LowerCopy(pass.sideEffectReason).find(needle) != std::string::npos)
+			{
+				return true;
+			}
+			for (const std::string& dependency: pass.logicalDependencies)
+			{
+				if (LowerCopy(dependency).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
 			return false;
+		}
+
+		std::string JoinDependencies(const std::vector<std::string>& dependencies)
+		{
+			std::string joined;
+			for (const std::string& dependency: dependencies)
+			{
+				if (!joined.empty())
+				{
+					joined += ", ";
+				}
+				joined += dependency;
+			}
+			return joined;
 		}
 
 		const char* ResourceKindName(RenderGraph::PassInfo::ResourceAccessInfo::Kind kind) noexcept
@@ -109,6 +134,7 @@ namespace aether::app
 	{
 		auto passes = graph.GetPasses();
 		const auto& frameStats = graph.GetFrameStats();
+		const auto& frame = graph.GetLastFrameContext();
 		const float imguiCpuMs = context.TryGet<ImguiSubsystem>() != nullptr ? context.Get<ImguiSubsystem>().GetLastRenderCpuTimeMs() : 0.0f;
 
 		float graphCpuMs = 0.0f;
@@ -153,6 +179,8 @@ namespace aether::app
 			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 			DrawMetricRow("Registered", std::format("{}", passes.size()).c_str());
 			DrawMetricRow("Compiled", std::format("{}", compiledCount).c_str());
+			DrawMetricRow("Frame", std::format("{} / slot {} / image {}", frame.frameIndex, frame.frameSlot, frame.swapchainImageIndex == UINT32_MAX ? std::string("-") : std::format("{}", frame.swapchainImageIndex)).c_str());
+			DrawMetricRow("Extent", std::format("{} x {}", frame.extent.width, frame.extent.height).c_str());
 			DrawMetricRow("Disabled",
 			        std::format("{}", disabledCount).c_str(),
 			        disabledCount == 0 ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a});
@@ -189,12 +217,14 @@ namespace aether::app
 		ImGui::Checkbox("Track hottest", &m_renderGraphAutoSelectHotPass);
 
 		const std::string_view filter(m_renderGraphFilter);
-		if (ImGui::BeginTable("RenderGraphPassTable", 8, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 300.0f)))
+		if (ImGui::BeginTable("RenderGraphPassTable", 10, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 300.0f)))
 		{
 			ImGui::TableSetupScrollFreeze(0, 1);
 			ImGui::TableSetupColumn("On", ImGuiTableColumnFlags_WidthFixed, 34.0f);
 			ImGui::TableSetupColumn("Queue", ImGuiTableColumnFlags_WidthFixed, 78.0f);
 			ImGui::TableSetupColumn("Pass");
+			ImGui::TableSetupColumn("Source", ImGuiTableColumnFlags_WidthFixed, 132.0f);
+			ImGui::TableSetupColumn("Contract", ImGuiTableColumnFlags_WidthFixed, 96.0f);
 			ImGui::TableSetupColumn("Last", ImGuiTableColumnFlags_WidthFixed, 74.0f);
 			ImGui::TableSetupColumn("Avg", ImGuiTableColumnFlags_WidthFixed, 74.0f);
 			ImGui::TableSetupColumn("Max", ImGuiTableColumnFlags_WidthFixed, 74.0f);
@@ -234,14 +264,30 @@ namespace aether::app
 					ImGui::TextDisabled("culled");
 				}
 				ImGui::TableSetColumnIndex(3);
-				ImGui::TextColored(MsColor(pass.lastCpuTimeMs), "%.3f", pass.lastCpuTimeMs);
+				ImGui::TextDisabled("%s:%u", pass.declaredFile.empty() ? "-" : pass.declaredFile.c_str(), pass.declaredLine);
 				ImGui::TableSetColumnIndex(4);
-				ImGui::TextColored(MsColor(stats.avg), "%.3f", stats.avg);
+				if (pass.hasSideEffects)
+				{
+					ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Effect");
+				}
+				else
+				{
+					ImGui::TextDisabled("-");
+				}
+				if (!pass.logicalDependencies.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{0.42f, 0.70f, 0.95f, 1.0f}, "+Dep");
+				}
 				ImGui::TableSetColumnIndex(5);
-				ImGui::TextColored(MsColor(stats.max), "%.3f", stats.max);
+				ImGui::TextColored(MsColor(pass.lastCpuTimeMs), "%.3f", pass.lastCpuTimeMs);
 				ImGui::TableSetColumnIndex(6);
-				ImGui::Text("%u", pass.preBarrierCount + pass.bufferBarrierCount + pass.signalBarrierCount);
+				ImGui::TextColored(MsColor(stats.avg), "%.3f", stats.avg);
 				ImGui::TableSetColumnIndex(7);
+				ImGui::TextColored(MsColor(stats.max), "%.3f", stats.max);
+				ImGui::TableSetColumnIndex(8);
+				ImGui::Text("%u", pass.preBarrierCount + pass.bufferBarrierCount + pass.signalBarrierCount);
+				ImGui::TableSetColumnIndex(9);
 				ImGui::Text("%zu", pass.resources.size());
 				ImGui::PopID();
 			}
@@ -267,14 +313,18 @@ namespace aether::app
 				ImGui::SameLine();
 				ImGui::TextDisabled("after graph");
 				ImGui::TableSetColumnIndex(3);
-				ImGui::TextColored(MsColor(imguiCpuMs), "%.3f", imguiCpuMs);
+				ImGui::TextDisabled("src/engine/imgui");
 				ImGui::TableSetColumnIndex(4);
-				ImGui::TextColored(MsColor(stats.avg), "%.3f", stats.avg);
+				ImGui::TextDisabled("External");
 				ImGui::TableSetColumnIndex(5);
-				ImGui::TextColored(MsColor(stats.max), "%.3f", stats.max);
+				ImGui::TextColored(MsColor(imguiCpuMs), "%.3f", imguiCpuMs);
 				ImGui::TableSetColumnIndex(6);
-				ImGui::TextDisabled("-");
+				ImGui::TextColored(MsColor(stats.avg), "%.3f", stats.avg);
 				ImGui::TableSetColumnIndex(7);
+				ImGui::TextColored(MsColor(stats.max), "%.3f", stats.max);
+				ImGui::TableSetColumnIndex(8);
+				ImGui::TextDisabled("-");
+				ImGui::TableSetColumnIndex(9);
 				ImGui::TextDisabled("-");
 			}
 			ImGui::EndTable();
@@ -334,6 +384,11 @@ namespace aether::app
 			        pass.isCulled ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a});
 			DrawMetricRow(
 			        "Disabled", pass.isDebugDisabled ? "Yes" : "No", pass.isDebugDisabled ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a});
+			DrawMetricRow("Side effects",
+			        pass.hasSideEffects ? (pass.sideEffectReason.empty() ? "Yes" : pass.sideEffectReason.c_str()) : "No",
+			        pass.hasSideEffects ? ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a} : ImVec4{colors::TextSecondary.r, colors::TextSecondary.g, colors::TextSecondary.b, colors::TextSecondary.a});
+			const std::string dependencies = JoinDependencies(pass.logicalDependencies);
+			DrawMetricRow("Dependencies", dependencies.empty() ? "None" : dependencies.c_str());
 			DrawMetricRow("Barriers", std::format("{} image, {} buffer, {} signal, {} wait groups", pass.preBarrierCount, pass.bufferBarrierCount, pass.signalBarrierCount, pass.waitCount).c_str());
 			DrawMetricRow("Writes", std::format("{} color, depth {}", pass.colorWriteCount, pass.hasDepthWrite ? "yes" : "no").c_str());
 			DrawMetricRow("Reads/accesses", std::format("{} images, {} buffers", pass.imageAccessCount, pass.bufferAccessCount).c_str());

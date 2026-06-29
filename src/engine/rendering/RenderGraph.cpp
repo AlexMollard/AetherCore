@@ -447,6 +447,8 @@ namespace aether
 			        .isCulled = i < m_lastCulledPasses.size() ? m_lastCulledPasses[i] : false,
 			        .isDebugDisabled = pass.debugDisabled,
 			        .hasSideEffects = pass.hasSideEffects,
+			        .sideEffectReason = pass.sideEffectReason,
+			        .logicalDependencies = pass.logicalDependencies,
 			        .hasDepthWrite = pass.depthWrite.has_value(),
 			        .colorWriteCount = static_cast<std::uint32_t>(pass.colorWrites.size()),
 			        .imageAccessCount = static_cast<std::uint32_t>(pass.imageAccesses.size()),
@@ -715,6 +717,23 @@ namespace aether
 		const std::size_t N = m_passes.size();
 		m_compiled.clear();
 		m_compiled.reserve(N);
+
+		std::unordered_map<std::string_view, std::size_t> passNameCounts;
+		for (const PassRecord& pass: m_passes)
+		{
+			++passNameCounts[pass.name];
+			if (pass.hasSideEffects && pass.sideEffectReason.empty())
+			{
+				AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' declares side effects without a reason string.", pass.name);
+			}
+		}
+		for (const auto& [name, count]: passNameCounts)
+		{
+			if (count > 1)
+			{
+				AE_WARN(LogCategory::Engine, "RenderGraph: pass name '{}' is registered {} times. Stable pass names must be unique.", name, count);
+			}
+		}
 
 		if (m_asyncComputeEnabled)
 		{
@@ -1707,6 +1726,7 @@ namespace aether
 		{
 			return;
 		}
+		m_lastFrameContext = frame;
 
 		Compile();
 

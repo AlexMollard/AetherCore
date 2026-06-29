@@ -256,6 +256,11 @@ namespace aether
 		// Per-frame allocation and execution statistics.
 		[[nodiscard]] const FrameStats& GetFrameStats() const;
 
+		[[nodiscard]] const FrameResourceContext& GetLastFrameContext() const
+		{
+			return m_lastFrameContext;
+		}
+
 		[[nodiscard]] bool IsEmpty() const
 		{
 			return m_passes.empty();
@@ -289,6 +294,8 @@ namespace aether
 			bool isCulled = false;
 			bool isDebugDisabled = false;
 			bool hasSideEffects = false;
+			std::string sideEffectReason;
+			std::vector<std::string> logicalDependencies;
 			bool hasDepthWrite = false;
 			std::uint32_t colorWriteCount = 0;
 			std::uint32_t imageAccessCount = 0;
@@ -537,6 +544,7 @@ namespace aether
 		std::vector<bool> m_lastCulledPasses;
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<gpu::Buffer> m_externalBuffers;
+		FrameResourceContext m_lastFrameContext{};
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;
 		std::uint32_t m_frameIndex = 0;
