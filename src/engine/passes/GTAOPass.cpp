@@ -151,6 +151,7 @@ namespace aether
 
 		graph.AddPass("$GTAO_Main")
 		        .SetExtent(m_aoExtent)
+		        .ConsumesProduct<SceneDepthProduct>(kFrameProductSceneDepth)
 		        .ReadTexture(depth)
 		        .WriteColor(m_rawAoImage, gpu::LoadOp::DontCare, gpu::StoreOp::Store)
 		        .Execute(
@@ -187,6 +188,8 @@ namespace aether
 
 		graph.AddPass("$GTAO_Denoise")
 		        .SetExtent(m_aoExtent)
+		        .ConsumesProduct<SceneDepthProduct>(kFrameProductSceneDepth)
+		        .ProducesProduct<GtaoProduct>(kFrameProductGtao)
 		        .ReadTexture(depth)
 		        .ReadTexture(m_rawAoImage)
 		        .WriteColor(m_denoisedAoImage, gpu::LoadOp::DontCare, gpu::StoreOp::Store)

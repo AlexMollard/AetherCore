@@ -9,6 +9,7 @@
 #include <source_location>
 #include <string>
 #include <string_view>
+#include <typeindex>
 #include <unordered_map>
 #include <vector>
 
@@ -16,6 +17,7 @@
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/Semaphore.hpp"
+#include "rendering/FrameBlackboard.hpp"
 
 namespace aether
 {
@@ -70,6 +72,66 @@ namespace aether
 		}
 	};
 
+	inline constexpr std::string_view kFrameProductMainView = "MainView";
+	inline constexpr std::string_view kFrameProductSceneDepth = "SceneDepth";
+	inline constexpr std::string_view kFrameProductHdrColor = "HdrColor";
+	inline constexpr std::string_view kFrameProductGtao = "GTAO";
+	inline constexpr std::string_view kFrameProductDirectionalShadows = "DirectionalShadows";
+	inline constexpr std::string_view kFrameProductLocalShadows = "LocalShadows";
+	inline constexpr std::string_view kFrameProductLightBuffers = "LightBuffers";
+
+	struct MainViewProduct
+	{
+		gpu::Extent2D extent{};
+		std::uint64_t frameIndex = 0;
+		std::uint32_t frameSlot = 0;
+		std::uint64_t frameConstantsAddr = 0;
+	};
+
+	struct SceneDepthProduct
+	{
+		RGImage image{};
+		gpu::Extent2D extent{};
+		gpu::Format format = gpu::Format::Undefined;
+		std::uint32_t bindlessSlot = UINT32_MAX;
+	};
+
+	struct HdrColorProduct
+	{
+		RGImage image{};
+		gpu::Extent2D extent{};
+		gpu::Format format = gpu::Format::Undefined;
+		std::uint32_t bindlessSlot = UINT32_MAX;
+	};
+
+	struct GtaoProduct
+	{
+		RGImage image{};
+		gpu::Extent2D extent{};
+		gpu::Format format = gpu::Format::R8Unorm;
+		std::uint32_t bindlessSlot = UINT32_MAX;
+	};
+
+	struct DirectionalShadowProduct
+	{
+		std::vector<RGImage> depthImages;
+		std::vector<std::uint32_t> bindlessSlots;
+	};
+
+	struct LocalShadowProduct
+	{
+		RGImage atlasImage{};
+		RGImage atlasDepthImage{};
+		std::uint32_t atlasBindlessSlot = UINT32_MAX;
+	};
+
+	struct LightBuffersProduct
+	{
+		RGBuffer lights{};
+		RGBuffer tileHeaders{};
+		RGBuffer tileIndices{};
+	};
+
 	// Backward-compatible shims. Prefer gpu::ClearColor / gpu::ClearDepth.
 	[[nodiscard]] inline gpu::ClearValue ClearColorValue(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
 	{
@@ -112,6 +174,65 @@ namespace aether
 			gpu::ImageUsage usage = gpu::ImageUsage::None;
 			gpu::ImageAspect aspect = gpu::ImageAspect::Color;
 			gpu::Extent2D extent; // {0,0} = match FrameTarget extent at Execute()
+		};
+
+		struct FullscreenPassDesc
+		{
+			std::string name;
+			RGImage color{};
+			gpu::Extent2D extent{};
+			gpu::LoadOp loadOp = gpu::LoadOp::Load;
+			gpu::StoreOp storeOp = gpu::StoreOp::Store;
+			gpu::ClearValue clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+		};
+
+		struct DepthOnlyPassDesc
+		{
+			std::string name;
+			RGImage depth{};
+			PreparedDrawList draws{};
+			gpu::Extent2D extent{};
+			gpu::LoadOp loadOp = gpu::LoadOp::Clear;
+			gpu::StoreOp storeOp = gpu::StoreOp::Store;
+			gpu::ClearValue clearValue = ClearDepthValue(1.0f);
+		};
+
+		struct DrawQueuePassDesc
+		{
+			std::string name;
+			RGImage color{};
+			RGImage depth{};
+			PreparedDrawList draws{};
+			gpu::Extent2D extent{};
+			gpu::LoadOp colorLoadOp = gpu::LoadOp::Load;
+			gpu::StoreOp colorStoreOp = gpu::StoreOp::Store;
+			gpu::LoadOp depthLoadOp = gpu::LoadOp::Load;
+			gpu::StoreOp depthStoreOp = gpu::StoreOp::Store;
+		};
+
+		struct QueuePreparePassDesc
+		{
+			std::string name;
+			PreparedDrawList produces{};
+			std::string sideEffectReason = "prepares draw queue state";
+			bool keepOnGraphicsQueue = true;
+		};
+
+		struct ComputeImagePassDesc
+		{
+			std::string name;
+			RGImage image{};
+			gpu::Extent2D extent{};
+			bool readsStorageImage = false;
+			bool writesStorageImage = true;
+			QueueClass queueClass = QueueClass::Graphics;
+		};
+
+		struct FrameProductRef
+		{
+			std::type_index type = std::type_index(typeid(void));
+			std::string name;
+			std::string typeName;
 		};
 
 		RenderGraph();
@@ -205,6 +326,28 @@ namespace aether
 			PassBuilder& ProducesDrawList(PreparedDrawList drawList);
 			PassBuilder& ConsumesDrawList(PreparedDrawList drawList);
 
+			template<typename T>
+			PassBuilder& ProducesProduct(std::string_view name)
+			{
+				std::scoped_lock lock(m_graph.m_debugStateMutex);
+				PassRecord& pass = m_graph.m_passes[m_passIndex];
+				pass.producedFrameProducts.push_back(FrameProductRef{.type = std::type_index(typeid(T)), .name = std::string{name}, .typeName = typeid(T).name()});
+				m_graph.m_blackboard.MarkProduced<T>(name, pass.name);
+				m_graph.m_compileDirty = true;
+				return *this;
+			}
+
+			template<typename T>
+			PassBuilder& ConsumesProduct(std::string_view name)
+			{
+				std::scoped_lock lock(m_graph.m_debugStateMutex);
+				PassRecord& pass = m_graph.m_passes[m_passIndex];
+				pass.consumedFrameProducts.push_back(FrameProductRef{.type = std::type_index(typeid(T)), .name = std::string{name}, .typeName = typeid(T).name()});
+				m_graph.m_blackboard.MarkConsumed<T>(name, pass.name);
+				m_graph.m_compileDirty = true;
+				return *this;
+			}
+
 			// Convenience: mark this compute pass for the async compute queue.
 			PassBuilder& SetAsyncCompute()
 			{
@@ -264,6 +407,12 @@ namespace aether
 
 		[[nodiscard]] PassBuilder AddComputePass(std::string name, std::source_location loc = std::source_location::current());
 
+		[[nodiscard]] PassBuilder AddFullscreenPass(FullscreenPassDesc desc, std::source_location loc = std::source_location::current());
+		[[nodiscard]] PassBuilder AddDepthOnlyPass(DepthOnlyPassDesc desc, std::source_location loc = std::source_location::current());
+		[[nodiscard]] PassBuilder AddDrawQueuePass(DrawQueuePassDesc desc, std::source_location loc = std::source_location::current());
+		[[nodiscard]] PassBuilder AddQueuePreparePass(QueuePreparePassDesc desc, std::source_location loc = std::source_location::current());
+		[[nodiscard]] PassBuilder AddComputeImagePass(ComputeImagePassDesc desc, std::source_location loc = std::source_location::current());
+
 		[[nodiscard]] PreparedDrawList CreatePreparedDrawList(std::string name);
 		void RemovePreparedDrawList(PreparedDrawList drawList);
 
@@ -276,6 +425,16 @@ namespace aether
 		[[nodiscard]] const FrameResourceContext& GetLastFrameContext() const
 		{
 			return m_lastFrameContext;
+		}
+
+		[[nodiscard]] FrameBlackboard& GetBlackboard()
+		{
+			return m_blackboard;
+		}
+
+		[[nodiscard]] const FrameBlackboard& GetBlackboard() const
+		{
+			return m_blackboard;
 		}
 
 		[[nodiscard]] bool IsEmpty() const
@@ -315,6 +474,9 @@ namespace aether
 			std::vector<std::string> logicalDependencies;
 			std::vector<std::string> producedDrawLists;
 			std::vector<std::string> consumedDrawLists;
+			std::vector<std::string> producedFrameProducts;
+			std::vector<std::string> consumedFrameProducts;
+			std::vector<std::string> contractWarnings;
 			bool hasDepthWrite = false;
 			std::uint32_t colorWriteCount = 0;
 			std::uint32_t imageAccessCount = 0;
@@ -497,6 +659,9 @@ namespace aether
 			std::vector<std::string> logicalDependencies;
 			std::vector<PreparedDrawList> producedDrawLists;
 			std::vector<PreparedDrawList> consumedDrawLists;
+			std::vector<FrameProductRef> producedFrameProducts;
+			std::vector<FrameProductRef> consumedFrameProducts;
+			std::vector<std::string> contractWarnings;
 #ifndef NDEBUG
 			std::source_location declaredAt;
 #endif
@@ -575,6 +740,7 @@ namespace aether
 		std::vector<ExternalImageEntry> m_externalImages;
 		std::vector<gpu::Buffer> m_externalBuffers;
 		std::vector<PreparedDrawListRecord> m_preparedDrawLists;
+		FrameBlackboard m_blackboard;
 		FrameResourceContext m_lastFrameContext{};
 		std::unordered_map<uint32_t, ResourceState> m_lastImageStates;
 		std::unordered_map<uint32_t, BufferState> m_lastBufferStates;

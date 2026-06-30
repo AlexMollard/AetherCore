@@ -144,6 +144,7 @@ namespace aether
 		// topology stays stable and toggles don't require a graph rebuild.
 		graph.AddPass("$PostProcess")
 		        .SetExtent(m_extent)
+		        .ConsumesProduct<HdrColorProduct>(kFrameProductHdrColor)
 		        .ReadTexture(m_hdrColor)
 		        .WriteColor(m_ldrColor, gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
 		        .Execute(

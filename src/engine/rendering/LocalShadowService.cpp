@@ -495,6 +495,12 @@ namespace aether
 
 		// Create a persistent depth attachment for the atlas render pass.
 		m_atlasDepthImage = graph.RegisterImage(m_atlasDepthImageVk, m_atlasDepthView, gpu::ImageAspect::Depth);
+		(void) graph.GetBlackboard().CreateOrReplace<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
+		        LocalShadowProduct{
+		                .atlasImage = m_atlasImage,
+		                .atlasDepthImage = m_atlasDepthImage,
+		                .atlasBindlessSlot = m_atlasBindlessSlot,
+		        });
 	}
 
 	void LocalShadowService::RegisterComputePasses(RenderGraph& graph, CullPass& cullPass)
@@ -648,6 +654,7 @@ namespace aether
 		                });
 
 		graph.AddComputePass("$VSMCopyToAtlas")
+		        .ProducesProduct<LocalShadowProduct>(kFrameProductLocalShadows)
 		        .ReadBufferTransfer(m_blurBufferRG)
 		        .WriteImageTransfer(m_atlasImage)
 		        .ExecuteCompute(

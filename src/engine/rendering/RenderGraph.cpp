@@ -39,6 +39,8 @@ namespace aether
 		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
 		m_externalImages = std::move(other.m_externalImages);
 		m_externalBuffers = std::move(other.m_externalBuffers);
+		m_preparedDrawLists = std::move(other.m_preparedDrawLists);
+		m_blackboard = std::move(other.m_blackboard);
 		m_lastImageStates = std::move(other.m_lastImageStates);
 		m_lastBufferStates = std::move(other.m_lastBufferStates);
 		m_frameIndex = other.m_frameIndex;
@@ -61,6 +63,8 @@ namespace aether
 		m_lastCulledPasses = std::move(other.m_lastCulledPasses);
 		m_externalImages = std::move(other.m_externalImages);
 		m_externalBuffers = std::move(other.m_externalBuffers);
+		m_preparedDrawLists = std::move(other.m_preparedDrawLists);
+		m_blackboard = std::move(other.m_blackboard);
 		m_lastImageStates = std::move(other.m_lastImageStates);
 		m_lastBufferStates = std::move(other.m_lastBufferStates);
 		m_frameIndex = other.m_frameIndex;
@@ -315,6 +319,7 @@ namespace aether
 			AE_WARN(LogCategory::Engine, "RenderGraph: PreparedDrawList '{}' already has producer '{}'; replacing with '{}'.", record.name, m_graph.m_passes[record.producerPass].name, m_graph.m_passes[m_passIndex].name);
 		}
 		record.producerPass = m_passIndex;
+		m_graph.m_blackboard.MarkProduced<PreparedDrawList>(record.name, m_graph.m_passes[m_passIndex].name);
 		m_graph.m_compileDirty = true;
 		return *this;
 	}
@@ -333,6 +338,7 @@ namespace aether
 		{
 			record.consumerPasses.push_back(m_passIndex);
 		}
+		m_graph.m_blackboard.MarkConsumed<PreparedDrawList>(record.name, m_graph.m_passes[m_passIndex].name);
 		m_graph.m_compileDirty = true;
 		return *this;
 	}
@@ -370,13 +376,101 @@ namespace aether
 		return PassBuilder{*this, m_passes.size() - 1};
 	}
 
+	RenderGraph::PassBuilder RenderGraph::AddFullscreenPass(FullscreenPassDesc desc, std::source_location loc)
+	{
+		PassBuilder pass = AddPass(std::move(desc.name), loc);
+		pass.SetExtent(desc.extent);
+		if (desc.color.IsValid())
+		{
+			pass.WriteColor(desc.color, desc.loadOp, desc.storeOp, desc.clearValue);
+		}
+		return pass;
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddDepthOnlyPass(DepthOnlyPassDesc desc, std::source_location loc)
+	{
+		PassBuilder pass = AddPass(std::move(desc.name), loc);
+		pass.SetExtent(desc.extent);
+		if (desc.draws.IsValid())
+		{
+			pass.ConsumesDrawList(desc.draws);
+		}
+		if (desc.depth.IsValid())
+		{
+			pass.WriteDepth(desc.depth, desc.loadOp, desc.storeOp, desc.clearValue);
+		}
+		return pass;
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddDrawQueuePass(DrawQueuePassDesc desc, std::source_location loc)
+	{
+		PassBuilder pass = AddPass(std::move(desc.name), loc);
+		pass.SetExtent(desc.extent);
+		if (desc.draws.IsValid())
+		{
+			pass.ConsumesDrawList(desc.draws);
+		}
+		if (desc.color.IsValid())
+		{
+			pass.WriteColor(desc.color, desc.colorLoadOp, desc.colorStoreOp);
+		}
+		if (desc.depth.IsValid())
+		{
+			pass.WriteDepth(desc.depth, desc.depthLoadOp, desc.depthStoreOp);
+		}
+		return pass;
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddQueuePreparePass(QueuePreparePassDesc desc, std::source_location loc)
+	{
+		PassBuilder pass = AddComputePass(std::move(desc.name), loc);
+		if (desc.keepOnGraphicsQueue)
+		{
+			pass.DisableAsyncCompute();
+		}
+		pass.HasSideEffects(std::move(desc.sideEffectReason));
+		if (desc.produces.IsValid())
+		{
+			pass.ProducesDrawList(desc.produces);
+		}
+		return pass;
+	}
+
+	RenderGraph::PassBuilder RenderGraph::AddComputeImagePass(ComputeImagePassDesc desc, std::source_location loc)
+	{
+		PassBuilder pass = AddComputePass(std::move(desc.name), loc);
+		pass.SetExtent(desc.extent);
+		if (desc.queueClass == QueueClass::AsyncCompute)
+		{
+			pass.SetAsyncCompute();
+		}
+		else
+		{
+			pass.DisableAsyncCompute();
+		}
+		if (desc.image.IsValid())
+		{
+			if (desc.readsStorageImage)
+			{
+				pass.ReadStorageImage(desc.image);
+			}
+			if (desc.writesStorageImage)
+			{
+				pass.WriteStorageImage(desc.image);
+			}
+		}
+		return pass;
+	}
+
 	PreparedDrawList RenderGraph::CreatePreparedDrawList(std::string name)
 	{
 		std::scoped_lock lock(m_debugStateMutex);
 		const auto id = static_cast<std::uint32_t>(m_preparedDrawLists.size());
 		m_preparedDrawLists.push_back(PreparedDrawListRecord{.name = std::move(name)});
+		PreparedDrawList drawList{id};
+		(void) m_blackboard.Create<PreparedDrawList>(m_preparedDrawLists.back().name, drawList);
 		m_compileDirty = true;
-		return PreparedDrawList{id};
+		return drawList;
 	}
 
 	void RenderGraph::RemovePreparedDrawList(PreparedDrawList drawList)
@@ -388,6 +482,7 @@ namespace aether
 		}
 
 		PreparedDrawListRecord& record = m_preparedDrawLists[drawList.id];
+		m_blackboard.Remove<PreparedDrawList>(record.name);
 		record.retired = true;
 		record.producerPass = std::numeric_limits<std::size_t>::max();
 		record.consumerPasses.clear();
@@ -471,6 +566,7 @@ namespace aether
 		m_storage->ClearExternalBuffers();
 		m_externalBuffers.clear();
 		m_preparedDrawLists.clear();
+		m_blackboard.Clear();
 		m_passes.clear();
 		m_compiled.clear();
 		m_lastCulledPasses.clear();
@@ -567,6 +663,20 @@ namespace aether
 			info.declaredFile = pass.declaredAt.file_name();
 			info.declaredLine = pass.declaredAt.line();
 #endif
+
+			auto frameProductLabel = [](const FrameProductRef& product)
+			{
+				return product.typeName + ":" + product.name;
+			};
+			for (const FrameProductRef& product: pass.producedFrameProducts)
+			{
+				info.producedFrameProducts.push_back(frameProductLabel(product));
+			}
+			for (const FrameProductRef& product: pass.consumedFrameProducts)
+			{
+				info.consumedFrameProducts.push_back(frameProductLabel(product));
+			}
+			info.contractWarnings = pass.contractWarnings;
 
 			if (info.isCompiled)
 			{
@@ -846,14 +956,36 @@ namespace aether
 		const std::size_t N = m_passes.size();
 		m_compiled.clear();
 		m_compiled.reserve(N);
+		for (PassRecord& pass: m_passes)
+		{
+			pass.contractWarnings.clear();
+		}
+
+		auto addPassWarning = [&](const std::size_t passIndex, std::string message)
+		{
+			if (passIndex < m_passes.size())
+			{
+				m_passes[passIndex].contractWarnings.push_back(message);
+			}
+			AE_WARN(LogCategory::Engine, "RenderGraph: {}", message);
+		};
 
 		std::unordered_map<std::string_view, std::size_t> passNameCounts;
-		for (const PassRecord& pass: m_passes)
+		for (std::size_t passIndex = 0; passIndex < m_passes.size(); ++passIndex)
 		{
+			const PassRecord& pass = m_passes[passIndex];
 			++passNameCounts[pass.name];
+			if (!pass.execute)
+			{
+				addPassWarning(passIndex, std::format("pass '{}' has no execute callback.", pass.name));
+			}
 			if (pass.hasSideEffects && pass.sideEffectReason.empty())
 			{
-				AE_WARN(LogCategory::Engine, "RenderGraph: pass '{}' declares side effects without a reason string.", pass.name);
+				addPassWarning(passIndex, std::format("pass '{}' declares side effects without a reason string.", pass.name));
+			}
+			if (!pass.producedDrawLists.empty() && !pass.debugDisabledExecute)
+			{
+				addPassWarning(passIndex, std::format("pass '{}' produces draw queue state but has no debug-disabled cleanup callback.", pass.name));
 			}
 		}
 		for (const auto& [name, count]: passNameCounts)
@@ -939,6 +1071,68 @@ namespace aether
 					continue;
 				}
 				addEdge(drawList.producerPass, consumerPass);
+			}
+		}
+
+		auto frameProductKey = [](const FrameProductRef& product)
+		{
+			return std::to_string(product.type.hash_code()) + ":" + product.name;
+		};
+		const auto blackboardProducts = m_blackboard.GetProducts();
+		auto blackboardHasProducer = [&](const FrameProductRef& product)
+		{
+			return std::ranges::any_of(blackboardProducts, [&](const FrameBlackboard::ProductInfo& info) { return info.name == product.name && info.typeName == product.typeName && !info.producerPass.empty(); });
+		};
+
+		std::unordered_map<std::string, std::size_t> frameProductProducers;
+		std::unordered_map<std::string, std::size_t> frameProductConsumerCounts;
+		for (std::size_t i = 0; i < N; ++i)
+		{
+			for (const FrameProductRef& product: m_passes[i].producedFrameProducts)
+			{
+				const std::string key = frameProductKey(product);
+				const auto [it, inserted] = frameProductProducers.emplace(key, i);
+				if (!inserted && it->second != i)
+				{
+					addPassWarning(i, std::format("frame product '{}:{}' has multiple producers ('{}' and '{}'). Keeping the first producer for ordering.", product.typeName, product.name, m_passes[it->second].name, m_passes[i].name));
+				}
+			}
+			for (const FrameProductRef& product: m_passes[i].consumedFrameProducts)
+			{
+				++frameProductConsumerCounts[frameProductKey(product)];
+			}
+		}
+
+		for (std::size_t consumerPass = 0; consumerPass < N; ++consumerPass)
+		{
+			for (const FrameProductRef& product: m_passes[consumerPass].consumedFrameProducts)
+			{
+				const auto it = frameProductProducers.find(frameProductKey(product));
+				if (it == frameProductProducers.end())
+				{
+					if (!blackboardHasProducer(product))
+					{
+						addPassWarning(consumerPass, std::format("pass '{}' consumes frame product '{}:{}', but no producer pass was found.", m_passes[consumerPass].name, product.typeName, product.name));
+					}
+					continue;
+				}
+				addEdge(it->second, consumerPass);
+			}
+		}
+
+		for (const auto& [key, producerPass]: frameProductProducers)
+		{
+			if (frameProductConsumerCounts.contains(key))
+			{
+				continue;
+			}
+			for (const FrameProductRef& product: m_passes[producerPass].producedFrameProducts)
+			{
+				if (frameProductKey(product) == key)
+				{
+					addPassWarning(producerPass, std::format("pass '{}' produces frame product '{}:{}' with no consumer pass.", m_passes[producerPass].name, product.typeName, product.name));
+					break;
+				}
 			}
 		}
 

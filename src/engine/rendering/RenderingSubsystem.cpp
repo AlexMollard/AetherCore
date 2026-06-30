@@ -412,15 +412,65 @@ namespace aether
 
 		m_shadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
 		m_localShadowService.RegisterComputePasses(m_renderGraph, m_cullPass);
-		const PreparedDrawList mainSceneDraws = m_renderGraph.CreatePreparedDrawList("MainSceneDraws");
+		(void) m_renderGraph.CreatePreparedDrawList("MainSceneDraws");
+		auto& blackboard = m_renderGraph.GetBlackboard();
+		const PreparedDrawList mainSceneDraws = blackboard.Require<PreparedDrawList>("MainSceneDraws");
+		const gpu::Extent2D sceneExtent = m_postProcessStack.GetExtent();
+		const RGImage hdrColor = m_postProcessStack.GetHdrColor();
+		(void) blackboard.CreateOrReplace<HdrColorProduct>(std::string{kFrameProductHdrColor},
+		        HdrColorProduct{
+		                .image = hdrColor,
+		                .extent = sceneExtent,
+		                .format = PostProcessStack::GetForwardColorFormat(),
+		                .bindlessSlot = m_postProcessStack.GetHdrBindlessSlot(),
+		        },
+		        FrameBlackboard::ProductMetadata{
+		                .extent = sceneExtent,
+		                .format = PostProcessStack::GetForwardColorFormat(),
+		                .bindlessSlot = m_postProcessStack.GetHdrBindlessSlot(),
+		        });
+		if (m_sceneDepth.IsValid())
+		{
+			(void) blackboard.CreateOrReplace<SceneDepthProduct>(std::string{kFrameProductSceneDepth},
+			        SceneDepthProduct{
+			                .image = m_sceneDepth,
+			                .extent = sceneExtent,
+			                .format = swapchain.GetDepthFormat(),
+			                .bindlessSlot = m_sceneDepthBindlessSlot,
+			        },
+			        FrameBlackboard::ProductMetadata{
+			                .extent = sceneExtent,
+			                .format = swapchain.GetDepthFormat(),
+			                .bindlessSlot = m_sceneDepthBindlessSlot,
+			        });
+		}
+		if (m_gtaoPass.GetAoImage().IsValid())
+		{
+			(void) blackboard.CreateOrReplace<GtaoProduct>(std::string{kFrameProductGtao},
+			        GtaoProduct{
+			                .image = m_gtaoPass.GetAoImage(),
+			                .extent = m_gtaoPass.GetAoExtent(),
+			                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
+			        },
+			        FrameBlackboard::ProductMetadata{
+			                .extent = m_gtaoPass.GetAoExtent(),
+			                .format = gpu::Format::R8Unorm,
+			                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
+			        });
+		}
 		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue, {}, mainSceneDraws);
 
 		if (m_sceneDepth.IsValid())
 		{
-			m_renderGraph.AddPass("$ScenePreDepth")
-			        .SetExtent(m_postProcessStack.GetExtent())
-			        .ConsumesDrawList(mainSceneDraws)
-			        .WriteDepth(m_sceneDepth, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearDepthValue(1.0f))
+			m_renderGraph
+			        .AddDepthOnlyPass({
+			                .name = "$ScenePreDepth",
+			                .depth = m_sceneDepth,
+			                .draws = mainSceneDraws,
+			                .extent = sceneExtent,
+			        })
+			        .ConsumesProduct<MainViewProduct>(kFrameProductMainView)
+			        .ProducesProduct<SceneDepthProduct>(kFrameProductSceneDepth)
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
@@ -433,10 +483,14 @@ namespace aether
 		}
 
 		{
-			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
-			m_renderGraph.AddPass("$Skybox")
-			        .SetExtent(m_postProcessStack.GetExtent())
-			        .WriteColor(hdrColor, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f))
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$Skybox",
+			                .color = hdrColor,
+			                .extent = sceneExtent,
+			                .loadOp = gpu::LoadOp::Clear,
+			        })
+			        .ConsumesProduct<MainViewProduct>(kFrameProductMainView)
 			        .Execute(
 			                [this](PassContext& ctx)
 			                {
@@ -454,10 +508,19 @@ namespace aether
 		m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, m_sceneDepthBindlessSlot);
 
 		{
-			const RGImage hdrColor = m_postProcessStack.GetHdrColor();
 			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
-			auto pass = m_renderGraph.AddPass("$EngineForward");
-			pass.SetExtent(m_postProcessStack.GetExtent()).ConsumesDrawList(mainSceneDraws).WriteColor(hdrColor, gpu::LoadOp::Load, gpu::StoreOp::Store).WriteDepth(depth, gpu::LoadOp::Load, gpu::StoreOp::Store);
+			auto pass = m_renderGraph.AddDrawQueuePass({
+			        .name = "$EngineForward",
+			        .color = hdrColor,
+			        .depth = depth,
+			        .draws = mainSceneDraws,
+			        .extent = sceneExtent,
+			});
+			pass.ConsumesProduct<MainViewProduct>(kFrameProductMainView).ProducesProduct<HdrColorProduct>(kFrameProductHdrColor);
+			if (m_sceneDepth.IsValid())
+			{
+				pass.ConsumesProduct<SceneDepthProduct>(kFrameProductSceneDepth);
+			}
 
 			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
 			{
@@ -466,17 +529,20 @@ namespace aether
 					pass.ReadTexture(shadowMap);
 				}
 			}
+			pass.ConsumesProduct<DirectionalShadowProduct>(kFrameProductDirectionalShadows);
 
 			const RGImage localShadowAtlas = m_localShadowService.GetAtlasRGImage();
 			if (localShadowAtlas.IsValid())
 			{
 				pass.ReadTexture(localShadowAtlas);
+				pass.ConsumesProduct<LocalShadowProduct>(kFrameProductLocalShadows);
 			}
 
 			const RGImage gtaoImage = m_gtaoPass.GetAoImage();
 			if (gtaoImage.IsValid())
 			{
 				pass.ReadTexture(gtaoImage);
+				pass.ConsumesProduct<GtaoProduct>(kFrameProductGtao);
 			}
 
 			if (auto* lighting = frame.lighting)
@@ -484,6 +550,7 @@ namespace aether
 				pass.ReadBuffer(lighting->GetLightsBufferHandle());
 				pass.ReadBuffer(lighting->GetTileHeadersBufferHandle());
 				pass.ReadBuffer(lighting->GetTileIndicesBufferHandle());
+				pass.ConsumesProduct<LightBuffersProduct>(kFrameProductLightBuffers);
 			}
 
 			pass.Execute(
@@ -503,13 +570,18 @@ namespace aether
 		m_renderTargetService.RegisterPasses();
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
-		const gpu::Extent2D sceneExtent = m_postProcessStack.GetExtent();
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
 		if (m_sceneViewportEnabled)
 		{
 			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});
 
-			m_renderGraph.AddPass("$SceneViewportClearSwapchain").WriteColor(m_renderGraph.GetSwapchainColor(), gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f)).Execute([](PassContext&) {});
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$SceneViewportClearSwapchain",
+			                .color = m_renderGraph.GetSwapchainColor(),
+			                .loadOp = gpu::LoadOp::Clear,
+			        })
+			        .Execute([](PassContext&) {});
 		}
 	}
 } // namespace aether

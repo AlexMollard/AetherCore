@@ -451,10 +451,18 @@ namespace aether
 		m_rgLights = graph.RegisterBuffer(nullptr);
 		m_rgTileHeaders = graph.RegisterBuffer(nullptr);
 		m_rgTileIndices = graph.RegisterBuffer(nullptr);
+		(void) graph.GetBlackboard().CreateOrReplace<LightBuffersProduct>(std::string{kFrameProductLightBuffers},
+		        LightBuffersProduct{
+		                .lights = m_rgLights,
+		                .tileHeaders = m_rgTileHeaders,
+		                .tileIndices = m_rgTileIndices,
+		        });
 
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
 
 		graph.AddComputePass("$Lighting.BinLights")
+		        .ConsumesProduct<MainViewProduct>(kFrameProductMainView)
+		        .ProducesProduct<LightBuffersProduct>(kFrameProductLightBuffers)
 		        .ReadBuffer(m_rgLights)
 		        .ReadWriteBuffer(m_rgTileHeaders)
 		        .ReadWriteBuffer(m_rgTileIndices)

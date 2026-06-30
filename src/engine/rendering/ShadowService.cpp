@@ -198,6 +198,11 @@ namespace aether
 		{
 			m_shadowDepth[cascade] = graph.RegisterImage(m_shadowDepthImage[cascade], m_shadowDepthView[cascade], gpu::ImageAspect::Depth);
 		}
+		(void) graph.GetBlackboard().CreateOrReplace<DirectionalShadowProduct>(std::string{kFrameProductDirectionalShadows},
+		        DirectionalShadowProduct{
+		                .depthImages = std::vector<RGImage>{m_shadowDepth.begin(), m_shadowDepth.end()},
+		                .bindlessSlots = std::vector<std::uint32_t>{m_shadowMapSlots.begin(), m_shadowMapSlots.end()},
+		        });
 	}
 
 	void ShadowService::RegisterComputePasses(RenderGraph& graph, const CullPass& cullPass)
@@ -249,7 +254,7 @@ namespace aether
 			                });
 		}
 
-		graph.AddPass("$ShadowDepthTransition").ReadTexture(m_shadowDepth[0]).ReadTexture(m_shadowDepth[1]).ReadTexture(m_shadowDepth[2]).Execute([](PassContext&) {});
+		graph.AddPass("$ShadowDepthTransition").ProducesProduct<DirectionalShadowProduct>(kFrameProductDirectionalShadows).ReadTexture(m_shadowDepth[0]).ReadTexture(m_shadowDepth[1]).ReadTexture(m_shadowDepth[2]).Execute([](PassContext&) {});
 	}
 
 	void ShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)

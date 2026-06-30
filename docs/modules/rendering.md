@@ -85,6 +85,16 @@ The channel is bounded to capacity 2 (double-buffered). Deep copy in the packet 
 
 This is what makes the renderer declarative - subsystems add passes, and the graph handles ordering.
 
+Modern pass work should follow the Vulkan 1.4 render graph plan in [`docs/plans/modern-vulkan-render-graph-practices.md`](../plans/modern-vulkan-render-graph-practices.md). In particular, non-resource readiness such as prepared `RenderQueue` state should use typed graph contracts like `PreparedDrawList`, while image and buffer declarations remain responsible for synchronization2 barrier generation.
+
+Recommended direction for new passes:
+
+1. Declare every image and buffer access.
+2. Declare non-resource dependencies through typed frame products, not ordering luck.
+3. Prefer pass templates for common fullscreen, depth-only, queue-prepare, draw-queue, compute-image, and temporal shapes.
+4. Keep optional resources explicit through frame blackboard lookups and validity flags.
+5. Make pass contracts visible in the render graph debug panel and compile export.
+
 ## `RenderQueue`
 
 `src/engine/rendering/RenderQueue.hpp:80`. Collects `DrawCommand` structs on the engine thread (one per visible mesh), then sorts them into a GPU-friendly order for `ForwardPass`. Each `DrawCommand` references:

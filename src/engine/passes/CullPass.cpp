@@ -80,12 +80,11 @@ namespace aether
 
 		const std::string passName = namePrefix.empty() ? "$CullDraws" : ("$CullDraws_" + namePrefix);
 
-		auto pass = graph.AddComputePass(passName);
-		pass.DisableAsyncCompute().HasSideEffects("produces RenderQueue prepared draw state");
-		if (drawList.IsValid())
-		{
-			pass.ProducesDrawList(drawList);
-		}
+		auto pass = graph.AddQueuePreparePass({
+		        .name = passName,
+		        .produces = drawList,
+		        .sideEffectReason = "produces RenderQueue prepared draw state",
+		});
 		pass.ExecuteCompute([&renderQueue, this](PassContext& ctx) { renderQueue.PrepareAndDispatch(ctx.recorder, ctx.frameConstantsAddr, GetSinglePipeline(), ctx.frameSlot); })
 		        .OnDebugDisabled([&renderQueue](PassContext& ctx) { renderQueue.DiscardPending(ctx.frameSlot); });
 	}

@@ -65,15 +65,110 @@ Passes should read `ctx.frame.frameSlot`, not recompute modulo arithmetic locall
 
 ## Prepared Draw Lists
 
-Draw preparation should become a typed graph resource:
+Draw preparation is a typed graph contract. A cull or queue-prepare pass produces a `PreparedDrawList`; every pass that flushes that queue consumes the same handle:
 
 ```cpp
-PreparedDrawListHandle mainDraws = graph.ProduceDrawList("$CullDraws", mainQueue);
-graph.AddPass("$ScenePreDepth").ConsumeDrawList(mainDraws);
-graph.AddPass("$EngineForward").ConsumeDrawList(mainDraws);
+PreparedDrawList mainDraws = graph.CreatePreparedDrawList("MainSceneDraws");
+cullPass.RegisterPass(graph, mainQueue, {}, mainDraws);
+graph.AddPass("$ScenePreDepth").ConsumesDrawList(mainDraws);
+graph.AddPass("$EngineForward").ConsumesDrawList(mainDraws);
 ```
 
-This avoids hidden dependencies between cull and draw passes. A pass that consumes a prepared draw list should be ordered after its producer by the graph compiler, not by declaration luck.
+This avoids hidden dependencies between cull and draw passes. A pass that consumes a prepared draw list is ordered after its producer by the graph compiler, not by declaration luck or string prefix coupling.
+
+Rules:
+
+- Prepared draw lists are not GPU resources; they model CPU/GPU queue side effects that normal image and buffer barriers cannot see.
+- Every prepared draw list should have exactly one producer and at least one consumer.
+- Dynamic systems, such as render-to-texture targets, must retire prepared draw-list handles when their passes are removed.
+- Debug tooling should expose produced and consumed draw lists next to pass source location, side effects, resources, and barriers.
+
+## Typed Frame Products
+
+Prepared draw lists are the first typed non-resource graph contract. The same pattern should be extended to other frame products that are expensive to debug when they are implicit:
+
+| Handle | Produced by | Consumed by | Purpose |
+|---|---|---|---|
+| `PreparedDrawList` | Cull / queue prepare passes | Predepth, forward, shadow, RTT draw passes | Orders side-effectful `RenderQueue` preparation before flushing. |
+| `PreparedLightGrid` | Tiled/clustered lighting build | Forward, transparent, decals, debug views | Ensures lighting GPU buffers and per-view binning are ready. |
+| `PreparedShadowData` | Shadow data composition | Forward, debug shadow views, post effects | Separates shadow metadata readiness from image layout transitions. |
+| `SceneDepthProduct` | Predepth or forward fallback | GTAO, HZB, SSR, TAA, depth debug | Names the frame's canonical depth source and bindless slot. |
+| `DepthPyramidProduct` | HZB build | Occlusion culling, SSR, volumetrics | Makes downsample chain readiness explicit. |
+| `TemporalHistoryProduct` | TAA/history resolve | TAA, motion blur, temporal denoisers | Couples current/history images with frame-index validity. |
+| `SceneViewProduct` | Frame composition / camera setup | View-dependent compute and draw passes | Carries view constants, extent, frame slot, and camera identity. |
+
+Typed handles should not replace image and buffer declarations. They describe higher-level readiness and ownership; resource access declarations still drive Vulkan barriers.
+
+## Frame Blackboard
+
+Add a typed frame blackboard so passes request named products instead of threading ad hoc handles through subsystem code:
+
+```cpp
+auto& blackboard = graph.GetBlackboard();
+const SceneDepthProduct sceneDepth = blackboard.Require<SceneDepthProduct>();
+PreparedLightGrid lightGrid = blackboard.Create<PreparedLightGrid>("MainLightGrid");
+```
+
+The blackboard should:
+
+- Store typed frame products with stable debug names.
+- Reject duplicate producers unless the type explicitly allows replacement.
+- Track source pass, consumer passes, frame slot, extent, format, bindless slot, and optional history validity.
+- Make optional products explicit with `TryGet<T>()` instead of sentinel integers scattered through passes.
+- Feed the render graph debug panel and JSON/DOT export.
+
+## Pass Contract Validation
+
+Render graph compile should act like a lint pass. It should warn or fail before frame execution when a pass contract is incomplete:
+
+- Pass has no execute callback.
+- Pass declares side effects without a reason.
+- Side-effectful pass can be culled accidentally.
+- Pass consumes a typed handle with no producer.
+- Pass produces a typed handle with no consumer.
+- Pass reads a graph image, buffer, or bindless sampled image without declaring the read.
+- Pass writes a bindless-exposed image while older frames may still sample the previous contents.
+- Pass uses async compute but writes/reads resources that require graphics-only stages.
+- Pass consumes async compute output without a timeline wait.
+- Pass extent, sample count, attachment format, or load/store policy is missing where graphics recording needs it.
+- Pass debug-disabled callback is missing for queue-preparation passes that must discard pending work.
+
+Validation should run in dev builds by default. Retail can strip most warnings, but the graph should still keep hard safety checks that prevent undefined behavior.
+
+## Debug Export and Labels
+
+Every compile should be exportable as a small artifact for debugging:
+
+- Ordered pass list, source file/line, queue class, culled/disabled state.
+- Resource lifetimes, aliases, final layouts, barriers, waits, and signal points.
+- Typed handle producers/consumers.
+- Transient heap allocations and alias groups.
+- Async compute timeline semaphore values.
+- Bindless slots sampled by each pass.
+
+The Vulkan backend should also label work aggressively:
+
+- `vkSetDebugUtilsObjectNameEXT` for graph images, buffers, pipelines, semaphores, events, and command buffers.
+- Command buffer labels around every pass.
+- Queue labels for graphics and async compute submissions.
+- Debug names should use the stable render graph pass/product names.
+
+This makes RenderDoc, Nsight, Aftermath, and validation messages point at the engine concept that caused the issue, not just a raw Vulkan handle.
+
+## Pass Templates
+
+Common pass shapes should be built through helpers that declare the boring parts automatically:
+
+| Template | Defaults |
+|---|---|
+| `AddFullscreenPass` | Fullscreen triangle, frame extent, color/depth reads, bindless heap binding. |
+| `AddDepthOnlyPass` | Depth attachment write, no color, depth compare/write policy, prepared draw-list consumption. |
+| `AddQueuePreparePass` | Graphics-queue compute, side-effect reason, prepared draw-list production, debug-disabled discard callback. |
+| `AddDrawQueuePass` | Prepared draw-list consumption, color/depth attachments, bindless heap binding. |
+| `AddComputeImagePass` | Storage image/buffer declarations, dispatch extent, async policy, sync2 usage mapping. |
+| `AddTemporalPass` | Current/history products, validity flags, history output ownership. |
+
+New passes should be unusual only when their work is unusual. Most future render features should be one of these templates plus shader-specific resource declarations.
 
 ## Synchronization2 Rules
 
@@ -141,7 +236,7 @@ Swapchain and scene viewport rebuilds should wait idle until the engine has a ro
 
 The render graph should reject or warn on:
 
-- Pass consumes a prepared draw list before its producer.
+- Pass consumes a prepared draw list or typed frame product before its producer.
 - Pass reads a texture/buffer without declaring it.
 - Pass samples an attachment without a compatible read-only layout transition.
 - Pass writes a bindless-exposed image while any in-flight pass can sample the previous contents.
@@ -157,17 +252,29 @@ When adding a pass:
 1. Declare all image and buffer reads/writes.
 2. Declare queue class and whether async compute is allowed.
 3. Declare extent, format, sample count, load/store behavior, and clear values.
-4. Declare prepared draw-list dependencies if drawing scene geometry.
-5. Allocate bindless slots only through graph/bindless lifetime APIs.
-6. Use `FrameResourceContext` values instead of recomputing frame slots.
-7. Make optional resources explicit with validity flags.
-8. Verify barriers in RenderDoc/Nsight once, then encode them as graph validation.
+4. Declare typed frame-product dependencies, including prepared draw lists.
+5. Prefer a pass template over raw `AddPass`/`AddComputePass` when a template fits.
+6. Allocate bindless slots only through graph/bindless lifetime APIs.
+7. Use `FrameResourceContext` values instead of recomputing frame slots.
+8. Make optional resources explicit with validity flags.
+9. Verify barriers in RenderDoc/Nsight once, then encode them as graph validation.
 
 ## Upgrade Order
+
+Completed foundation:
 
 1. Add `FrameResourceContext`.
 2. Add typed prepared draw-list handles.
 3. Add pass contract flags for side effects and logical dependencies.
-4. Add graph validation for frame-slot and resource usage.
-5. Add deferred destruction tied to completed frame/timeline state.
-6. Add a render graph debug export showing ordered passes, resources, barriers, queues, timeline waits, and frame slot.
+4. Add render graph debug-panel visibility for pass source, side effects, logical dependencies, frame context, and prepared draw-list contracts.
+
+Recommended next plan:
+
+1. Add a typed `FrameBlackboard` with `Create<T>()`, `Require<T>()`, and `TryGet<T>()`.
+2. Move canonical frame products into the blackboard: scene depth, GTAO output, HDR color, shadow maps, local shadow atlas, tiled light buffers, and main scene view.
+3. Add contract validation for missing execute callbacks, missing producers/consumers, side-effect culling risk, undeclared bindless reads, and missing debug-disabled queue cleanup.
+4. Add graph compile export as JSON first, then DOT/Graphviz once the schema settles.
+5. Add automatic Vulkan debug labels for passes, products, graph resources, and queue submissions.
+6. Add pass templates for queue preparation, draw-queue flushing, fullscreen post, depth-only, compute-image, and temporal passes.
+7. Add compile-only render graph tests that assert pass order, typed handle validation, pass removal behavior, and representative sync2 barrier mappings.
+8. Add deferred destruction tied to completed frame or timeline state, then remove remaining runtime `WaitIdle()` rebuild paths where safe.

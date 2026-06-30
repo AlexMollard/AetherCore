@@ -69,6 +69,11 @@ namespace aether
 			return m_hdrColor;
 		}
 
+		[[nodiscard]] std::uint32_t GetHdrBindlessSlot() const
+		{
+			return m_hdrBindlessSlot;
+		}
+
 		[[nodiscard]] RGImage GetFinalColor() const
 		{
 			return m_finalColor;

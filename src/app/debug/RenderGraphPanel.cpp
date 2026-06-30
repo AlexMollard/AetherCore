@@ -90,6 +90,27 @@ namespace aether::app
 					return true;
 				}
 			}
+			for (const std::string& product: pass.producedFrameProducts)
+			{
+				if (LowerCopy(product).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
+			for (const std::string& product: pass.consumedFrameProducts)
+			{
+				if (LowerCopy(product).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
+			for (const std::string& warning: pass.contractWarnings)
+			{
+				if (LowerCopy(warning).find(needle) != std::string::npos)
+				{
+					return true;
+				}
+			}
 			return false;
 		}
 
@@ -147,6 +168,7 @@ namespace aether::app
 	void RenderGraphPanel::DrawRenderGraphDebugger(LayerContext& context, RenderGraph& graph)
 	{
 		auto passes = graph.GetPasses();
+		const auto products = graph.GetBlackboard().GetProducts();
 		const auto& frameStats = graph.GetFrameStats();
 		const auto& frame = graph.GetLastFrameContext();
 		const float imguiCpuMs = context.TryGet<ImguiSubsystem>() != nullptr ? context.Get<ImguiSubsystem>().GetLastRenderCpuTimeMs() : 0.0f;
@@ -193,6 +215,7 @@ namespace aether::app
 			ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch, 1.0f);
 			DrawMetricRow("Registered", std::format("{}", passes.size()).c_str());
 			DrawMetricRow("Compiled", std::format("{}", compiledCount).c_str());
+			DrawMetricRow("Products", std::format("{}", products.size()).c_str());
 			DrawMetricRow("Frame", std::format("{} / slot {} / image {}", frame.frameIndex, frame.frameSlot, frame.swapchainImageIndex == UINT32_MAX ? std::string("-") : std::format("{}", frame.swapchainImageIndex)).c_str());
 			DrawMetricRow("Extent", std::format("{} x {}", frame.extent.width, frame.extent.height).c_str());
 			DrawMetricRow("Disabled",
@@ -302,6 +325,21 @@ namespace aether::app
 				{
 					ImGui::SameLine();
 					ImGui::TextColored(ImVec4{0.42f, 0.70f, 0.95f, 1.0f}, "DL-");
+				}
+				if (!pass.producedFrameProducts.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{0.52f, 0.86f, 0.62f, 1.0f}, "FP+");
+				}
+				if (!pass.consumedFrameProducts.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{0.42f, 0.70f, 0.95f, 1.0f}, "FP-");
+				}
+				if (!pass.contractWarnings.empty())
+				{
+					ImGui::SameLine();
+					ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Warn");
 				}
 				ImGui::TableSetColumnIndex(5);
 				ImGui::TextColored(MsColor(pass.lastCpuTimeMs), "%.3f", pass.lastCpuTimeMs);
@@ -414,9 +452,17 @@ namespace aether::app
 			const std::string dependencies = JoinStrings(pass.logicalDependencies);
 			const std::string producedDrawLists = JoinStrings(pass.producedDrawLists);
 			const std::string consumedDrawLists = JoinStrings(pass.consumedDrawLists);
+			const std::string producedProducts = JoinStrings(pass.producedFrameProducts);
+			const std::string consumedProducts = JoinStrings(pass.consumedFrameProducts);
+			const std::string contractWarnings = JoinStrings(pass.contractWarnings);
+			DrawMetricRow("Warnings",
+			        contractWarnings.empty() ? "None" : contractWarnings.c_str(),
+			        contractWarnings.empty() ? ImVec4{colors::Success.r, colors::Success.g, colors::Success.b, colors::Success.a} : ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a});
 			DrawMetricRow("Dependencies", dependencies.empty() ? "None" : dependencies.c_str());
 			DrawMetricRow("Draw lists out", producedDrawLists.empty() ? "None" : producedDrawLists.c_str());
 			DrawMetricRow("Draw lists in", consumedDrawLists.empty() ? "None" : consumedDrawLists.c_str());
+			DrawMetricRow("Products out", producedProducts.empty() ? "None" : producedProducts.c_str());
+			DrawMetricRow("Products in", consumedProducts.empty() ? "None" : consumedProducts.c_str());
 			DrawMetricRow("Barriers", std::format("{} image, {} buffer, {} signal, {} wait groups", pass.preBarrierCount, pass.bufferBarrierCount, pass.signalBarrierCount, pass.waitCount).c_str());
 			DrawMetricRow("Writes", std::format("{} color, depth {}", pass.colorWriteCount, pass.hasDepthWrite ? "yes" : "no").c_str());
 			DrawMetricRow("Reads/accesses", std::format("{} images, {} buffers", pass.imageAccessCount, pass.bufferAccessCount).c_str());
@@ -426,6 +472,53 @@ namespace aether::app
 				DrawMetricRow("Declared", std::format("{}:{}", pass.declaredFile, pass.declaredLine).c_str());
 			}
 			ImGui::EndTable();
+		}
+
+		if (!products.empty() && ImGui::CollapsingHeader("Frame Products", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			if (ImGui::BeginTable("RenderGraphFrameProducts", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+			{
+				ImGui::TableSetupColumn("Name");
+				ImGui::TableSetupColumn("Type");
+				ImGui::TableSetupColumn("Producer");
+				ImGui::TableSetupColumn("Consumers");
+				ImGui::TableSetupColumn("Metadata");
+				ImGui::TableHeadersRow();
+				for (const auto& product: products)
+				{
+					ImGui::TableNextRow();
+					ImGui::TableSetColumnIndex(0);
+					ImGui::TextUnformatted(product.name.c_str());
+					ImGui::TableSetColumnIndex(1);
+					ImGui::TextDisabled("%s", product.typeName.c_str());
+					ImGui::TableSetColumnIndex(2);
+					if (product.producerPass.empty())
+					{
+						ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Missing");
+					}
+					else
+					{
+						ImGui::TextUnformatted(product.producerPass.c_str());
+					}
+					ImGui::TableSetColumnIndex(3);
+					const std::string consumers = JoinStrings(product.consumerPasses);
+					if (consumers.empty())
+					{
+						ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "None");
+					}
+					else
+					{
+						ImGui::TextUnformatted(consumers.c_str());
+					}
+					ImGui::TableSetColumnIndex(4);
+					const std::string extent = product.metadata.extent.has_value() ? std::format("{}x{}", product.metadata.extent->width, product.metadata.extent->height) : std::string("-");
+					ImGui::TextDisabled("slot %s, extent %s, bindless %s",
+					        product.metadata.frameSlot == UINT32_MAX ? "-" : std::format("{}", product.metadata.frameSlot).c_str(),
+					        extent.c_str(),
+					        product.metadata.bindlessSlot == UINT32_MAX ? "-" : std::format("{}", product.metadata.bindlessSlot).c_str());
+				}
+				ImGui::EndTable();
+			}
 		}
 
 		if (ImGui::BeginTable("SelectedRenderPassResources", 4, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
