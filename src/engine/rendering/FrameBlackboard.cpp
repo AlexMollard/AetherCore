@@ -14,12 +14,15 @@ namespace aether
 		{
 			const std::size_t index = static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt));
 			ProductEntry& entry = m_products[index];
-			if (!allowReplace)
+			if (!allowReplace && entry.value.has_value())
 			{
 				AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' already exists; keeping the original producer.", entry.name, entry.typeName);
 				return entry.value;
 			}
 
+			entry.type = type;
+			entry.name = std::move(name);
+			entry.typeName = std::string{typeName};
 			entry.value = std::move(value);
 			entry.metadata = metadata;
 			return entry.value;
@@ -33,6 +36,24 @@ namespace aether
 		entry.value = std::move(value);
 		entry.metadata = metadata;
 		return entry.value;
+	}
+
+	FrameBlackboard::ProductEntry& FrameBlackboard::EnsureContractStorage(std::type_index type, std::string_view typeName, std::string name)
+	{
+		const std::string key = MakeKey(type, name);
+		const auto keyIt = std::ranges::find(m_keys, key);
+		if (keyIt != m_keys.end())
+		{
+			const std::size_t index = static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt));
+			return m_products[index];
+		}
+
+		m_keys.push_back(key);
+		ProductEntry& entry = m_products.emplace_back();
+		entry.type = type;
+		entry.name = std::move(name);
+		entry.typeName = std::string{typeName};
+		return entry;
 	}
 
 	std::any* FrameBlackboard::TryGetStorage(std::type_index type, std::string_view name)
@@ -84,14 +105,7 @@ namespace aether
 	{
 		const std::string key = MakeKey(type, name);
 		const auto keyIt = std::ranges::find(m_keys, key);
-		if (keyIt == m_keys.end())
-		{
-			AE_WARN(LogCategory::Engine, "FrameBlackboard: producer '{}' tried to produce missing product '{}'.", producerName, name);
-			return;
-		}
-
-		const std::size_t index = static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt));
-		ProductEntry& entry = m_products[index];
+		ProductEntry& entry = keyIt == m_keys.end() ? EnsureContractStorage(type, type.name(), std::string{name}) : m_products[static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt))];
 		if (!entry.producerPass.empty() && entry.producerPass != producerName)
 		{
 			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' already has producer '{}'; replacing with '{}'.", entry.name, entry.typeName, entry.producerPass, producerName);
@@ -113,14 +127,7 @@ namespace aether
 	{
 		const std::string key = MakeKey(type, name);
 		const auto keyIt = std::ranges::find(m_keys, key);
-		if (keyIt == m_keys.end())
-		{
-			AE_WARN(LogCategory::Engine, "FrameBlackboard: pass '{}' tried to consume missing product '{}'.", passName, name);
-			return;
-		}
-
-		const std::size_t index = static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt));
-		ProductEntry& entry = m_products[index];
+		ProductEntry& entry = keyIt == m_keys.end() ? EnsureContractStorage(type, type.name(), std::string{name}) : m_products[static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt))];
 		if (std::ranges::find(entry.consumerPasses, passName) == entry.consumerPasses.end())
 		{
 			entry.consumerPasses.emplace_back(passName);

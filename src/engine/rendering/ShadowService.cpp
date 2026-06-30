@@ -123,10 +123,6 @@ namespace aether
 
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
-			if (m_shadowMapSlots[cascade] != 0xFFFFFFFFu && m_bindless != nullptr)
-			{
-				m_bindless->FreeSampledImageSlot(m_shadowMapSlots[cascade]);
-			}
 			if (m_shadowDepthHandle[cascade].IsValid())
 			{
 				gpu::ResourceRegistry::Destroy(m_shadowDepthHandle[cascade]);

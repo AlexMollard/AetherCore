@@ -53,6 +53,7 @@ namespace aether
 	public:
 		void Init(ServiceContainer& services);
 		void Shutdown();
+		void RegisterPasses(ServiceContainer& services);
 
 		// Called on swapchain recreation to rebuild extent-dependent resources.
 		void RecreateSwapchainResources(ServiceContainer& services);
@@ -148,7 +149,6 @@ namespace aether
 		}
 
 	private:
-		void RegisterPasses(ServiceContainer& services);
 		[[nodiscard]] gpu::Extent2D ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
 		void DestroySceneViewportDepth();
 		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless);

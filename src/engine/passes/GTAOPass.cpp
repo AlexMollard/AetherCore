@@ -106,16 +106,6 @@ namespace aether
 		AE_PROFILE_ZONE();
 		m_denoisePipeline.Destroy();
 		m_mainPipeline.Destroy();
-		if (m_bindlessManager != nullptr && m_rawAoBindlessSlot != kInvalidBindlessSlot)
-		{
-			m_bindlessManager->FreeSampledImageSlot(m_rawAoBindlessSlot);
-		}
-		if (m_bindlessManager != nullptr && m_denoisedAoBindlessSlot != kInvalidBindlessSlot)
-		{
-			m_bindlessManager->FreeSampledImageSlot(m_denoisedAoBindlessSlot);
-		}
-		m_rawAoBindlessSlot = kInvalidBindlessSlot;
-		m_denoisedAoBindlessSlot = kInvalidBindlessSlot;
 
 		if (m_rawAoHandle.IsValid())
 		{
@@ -127,6 +117,8 @@ namespace aether
 			gpu::ResourceRegistry::Destroy(m_denoisedAoHandle);
 			m_denoisedAoHandle = {};
 		}
+		m_rawAoBindlessSlot = kInvalidBindlessSlot;
+		m_denoisedAoBindlessSlot = kInvalidBindlessSlot;
 		m_rawAoImage = RGImage{};
 		m_denoisedAoImage = RGImage{};
 		m_device = nullptr;

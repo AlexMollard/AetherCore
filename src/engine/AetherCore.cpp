@@ -140,6 +140,7 @@ namespace aether
 		// Register lighting compute passes in the render graph (after async
 		// compute enable so they can be scheduled on the async compute queue).
 		m_cameras->GetLightingManager().RegisterPasses(m_rendering->GetRenderGraph());
+		m_rendering->RegisterPasses(m_services);
 
 		// -- 11. Animation systems -------------------------------------------
 		m_animationBlend = std::make_unique<AnimationBlendSystem>();

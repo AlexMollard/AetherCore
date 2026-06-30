@@ -44,10 +44,6 @@ namespace aether
 	void ShadowAtlasManager::Shutdown()
 	{
 		AE_PROFILE_ZONE();
-		if (m_bindlessSlot != 0xFFFFFFFFu && m_bindless != nullptr)
-		{
-			m_bindless->FreeSampledImageSlot(m_bindlessSlot);
-		}
 		if (m_atlasHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_atlasHandle);

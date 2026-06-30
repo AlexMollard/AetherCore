@@ -154,6 +154,7 @@ namespace aether
 		};
 
 		[[nodiscard]] std::any& CreateStorage(std::type_index type, std::string_view typeName, std::string name, std::any value, ProductMetadata metadata, bool allowReplace);
+		[[nodiscard]] ProductEntry& EnsureContractStorage(std::type_index type, std::string_view typeName, std::string name);
 		[[nodiscard]] std::any* TryGetStorage(std::type_index type, std::string_view name);
 		[[nodiscard]] const std::any* TryGetStorage(std::type_index type, std::string_view name) const;
 		void RemoveStorage(std::type_index type, std::string_view name);

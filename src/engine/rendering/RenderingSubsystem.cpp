@@ -108,16 +108,12 @@ namespace aether
 
 	void RenderingSubsystem::DestroySceneViewportDepth()
 	{
-		if (m_bindlessManager != nullptr && m_sceneDepthBindlessSlot != 0xFFFFFFFFu)
-		{
-			m_bindlessManager->FreeSampledImageSlot(m_sceneDepthBindlessSlot);
-		}
-		m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		if (m_sceneDepthHandle.IsValid())
 		{
 			gpu::ResourceRegistry::Destroy(m_sceneDepthHandle);
 			m_sceneDepthHandle = {};
 		}
+		m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
 		m_sceneDepth = {};
 	}
 
@@ -254,8 +250,6 @@ namespace aether
 		});
 
 		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
-
-		RegisterPasses(services);
 	}
 
 	void RenderingSubsystem::Shutdown()
