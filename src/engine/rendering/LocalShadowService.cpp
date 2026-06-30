@@ -587,10 +587,11 @@ namespace aether
 			                cmd.CopyImageToBuffer(atlasImage, blurVkBuf, gpu::ImageLayout::TransferSrc, gpu::ImageAspect::Color, bounds.width, bounds.height, 0, static_cast<std::int32_t>(bounds.x), static_cast<std::int32_t>(bounds.y));
 		                });
 
-		graph.AddComputePass("$VSMBlurH")
-		        .DisableAsyncCompute()
-		        .ReadBuffer(m_blurBufferRG)
-		        .WriteBuffer(m_blurScratchBufferRG)
+		graph.AddComputeBufferPass({
+		                                   .name = "$VSMBlurH",
+		                                   .reads = {m_blurBufferRG},
+		                                   .writes = {m_blurScratchBufferRG},
+		                           })
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {
@@ -620,10 +621,11 @@ namespace aether
 			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
 		                });
 
-		graph.AddComputePass("$VSMBlurV")
-		        .DisableAsyncCompute()
-		        .ReadBuffer(m_blurScratchBufferRG)
-		        .WriteBuffer(m_blurBufferRG)
+		graph.AddComputeBufferPass({
+		                                   .name = "$VSMBlurV",
+		                                   .reads = {m_blurScratchBufferRG},
+		                                   .writes = {m_blurBufferRG},
+		                           })
 		        .ExecuteCompute(
 		                [this](PassContext& ctx)
 		                {

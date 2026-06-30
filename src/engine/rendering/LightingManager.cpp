@@ -460,12 +460,13 @@ namespace aether
 
 		const auto cullResolved = gpu::ResourceRegistry::ResolvePipeline(m_cullPipelineHandle);
 
-		graph.AddComputePass("$Lighting.BinLights")
-		        .ConsumesProduct<MainViewProduct>(kFrameProductMainView)
-		        .ProducesProduct<LightBuffersProduct>(kFrameProductLightBuffers)
-		        .ReadBuffer(m_rgLights)
-		        .ReadWriteBuffer(m_rgTileHeaders)
-		        .ReadWriteBuffer(m_rgTileIndices)
+		graph.AddComputeBufferPass({
+		                                   .name = "$Lighting.BinLights",
+		                                   .reads = {m_rgLights},
+		                                   .readWrites = {m_rgTileHeaders, m_rgTileIndices},
+		                                   .consumes = {RenderGraph::Product<MainViewProduct>(kFrameProductMainView)},
+		                                   .produces = {RenderGraph::Product<LightBuffersProduct>(kFrameProductLightBuffers)},
+		                           })
 		        .ExecuteCompute(
 		                [this, cullPipeline = const_cast<void*>(cullResolved.state)](PassContext& ctx)
 		                {

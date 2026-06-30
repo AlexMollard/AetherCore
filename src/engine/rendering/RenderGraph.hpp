@@ -14,10 +14,10 @@
 #include <vector>
 
 #include "gpu/CommandList.hpp"
-#include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "gpu/Semaphore.hpp"
 #include "rendering/FrameBlackboard.hpp"
+#include "rendering/RenderGraphTypes.hpp"
 
 namespace aether
 {
@@ -27,142 +27,6 @@ namespace aether
 	// Forward declarations - live in vulkan/RenderGraphStorage.hpp
 	struct RenderGraphStorage;
 	struct FrameStats;
-
-	// Which hardware queue a pass executes on.
-	enum class QueueClass : uint8_t
-	{
-		Graphics,     // main graphics queue (all rendering, inline compute)
-		AsyncCompute, // dedicated async compute queue (culling, lighting)
-	};
-
-	// Opaque handle to a render-graph-managed image resource.
-	// Acquired from RenderGraph::GetSwapchainColor/Depth or
-	// CreateTransient*.
-	struct RGImage
-	{
-		static constexpr uint32_t kInvalid = ~0u;
-		uint32_t id = kInvalid;
-
-		[[nodiscard]] bool IsValid() const
-		{
-			return id != kInvalid;
-		}
-	};
-
-	// Opaque handle to a render-graph-managed buffer resource.
-	struct RGBuffer
-	{
-		static constexpr uint32_t kInvalid = ~0u;
-		uint32_t id = kInvalid;
-
-		[[nodiscard]] bool IsValid() const
-		{
-			return id != kInvalid;
-		}
-	};
-
-	struct PreparedDrawList
-	{
-		static constexpr uint32_t kInvalid = ~0u;
-		uint32_t id = kInvalid;
-
-		[[nodiscard]] bool IsValid() const
-		{
-			return id != kInvalid;
-		}
-	};
-
-	inline constexpr std::string_view kFrameProductMainView = "MainView";
-	inline constexpr std::string_view kFrameProductSceneDepth = "SceneDepth";
-	inline constexpr std::string_view kFrameProductHdrColor = "HdrColor";
-	inline constexpr std::string_view kFrameProductGtao = "GTAO";
-	inline constexpr std::string_view kFrameProductDirectionalShadows = "DirectionalShadows";
-	inline constexpr std::string_view kFrameProductLocalShadows = "LocalShadows";
-	inline constexpr std::string_view kFrameProductLightBuffers = "LightBuffers";
-
-	struct MainViewProduct
-	{
-		gpu::Extent2D extent{};
-		std::uint64_t frameIndex = 0;
-		std::uint32_t frameSlot = 0;
-		std::uint64_t frameConstantsAddr = 0;
-	};
-
-	struct SceneDepthProduct
-	{
-		RGImage image{};
-		gpu::Extent2D extent{};
-		gpu::Format format = gpu::Format::Undefined;
-		std::uint32_t bindlessSlot = UINT32_MAX;
-	};
-
-	struct HdrColorProduct
-	{
-		RGImage image{};
-		gpu::Extent2D extent{};
-		gpu::Format format = gpu::Format::Undefined;
-		std::uint32_t bindlessSlot = UINT32_MAX;
-	};
-
-	struct GtaoProduct
-	{
-		RGImage image{};
-		gpu::Extent2D extent{};
-		gpu::Format format = gpu::Format::R8Unorm;
-		std::uint32_t bindlessSlot = UINT32_MAX;
-	};
-
-	struct DirectionalShadowProduct
-	{
-		std::vector<RGImage> depthImages;
-		std::vector<std::uint32_t> bindlessSlots;
-	};
-
-	struct LocalShadowProduct
-	{
-		RGImage atlasImage{};
-		RGImage atlasDepthImage{};
-		std::uint32_t atlasBindlessSlot = UINT32_MAX;
-	};
-
-	struct LightBuffersProduct
-	{
-		RGBuffer lights{};
-		RGBuffer tileHeaders{};
-		RGBuffer tileIndices{};
-	};
-
-	// Backward-compatible shims. Prefer gpu::ClearColor / gpu::ClearDepth.
-	[[nodiscard]] inline gpu::ClearValue ClearColorValue(float r = 0.0f, float g = 0.0f, float b = 0.0f, float a = 1.0f) noexcept
-	{
-		return gpu::ClearColor(r, g, b, a);
-	}
-
-	[[nodiscard]] inline gpu::ClearValue ClearDepthValue(float depth = 1.0f, uint32_t stencil = 0u) noexcept
-	{
-		return gpu::ClearDepth(depth, stencil);
-	}
-
-	struct FrameResourceContext
-	{
-		FrameTarget target{};
-		gpu::Extent2D extent{};
-		std::uint64_t frameIndex = 0;
-		std::uint32_t frameSlot = 0;
-		std::uint32_t swapchainImageIndex = UINT32_MAX;
-		std::uint64_t frameConstantsAddr = 0;
-	};
-
-	// Data made available inside pass execute callbacks.
-	struct PassContext
-	{
-		gpu::CommandList& recorder;
-		const FrameResourceContext& frame;
-		gpu::Extent2D extent;
-		std::uint64_t frameConstantsAddr = 0;
-		std::uint32_t frameIndex = 0;
-		std::uint32_t frameSlot = 0;
-	};
 
 	// Frame graph with pass/resource declarations and automatic image barriers.
 	class RenderGraph
@@ -246,6 +110,18 @@ namespace aether
 			gpu::Extent2D extent{};
 			bool readsStorageImage = false;
 			bool writesStorageImage = true;
+			QueueClass queueClass = QueueClass::Graphics;
+			std::vector<FrameProductRef> consumes;
+			std::vector<FrameProductRef> produces;
+		};
+
+		struct ComputeBufferPassDesc
+		{
+			std::string name;
+			std::vector<RGBuffer> reads;
+			std::vector<RGBuffer> writes;
+			std::vector<RGBuffer> readWrites;
+			gpu::Extent2D extent{};
 			QueueClass queueClass = QueueClass::Graphics;
 			std::vector<FrameProductRef> consumes;
 			std::vector<FrameProductRef> produces;
@@ -421,6 +297,7 @@ namespace aether
 		[[nodiscard]] PassBuilder AddDrawQueuePass(DrawQueuePassDesc desc, std::source_location loc = std::source_location::current());
 		[[nodiscard]] PassBuilder AddQueuePreparePass(QueuePreparePassDesc desc, std::source_location loc = std::source_location::current());
 		[[nodiscard]] PassBuilder AddComputeImagePass(ComputeImagePassDesc desc, std::source_location loc = std::source_location::current());
+		[[nodiscard]] PassBuilder AddComputeBufferPass(ComputeBufferPassDesc desc, std::source_location loc = std::source_location::current());
 
 		[[nodiscard]] PreparedDrawList CreatePreparedDrawList(std::string name);
 		void RemovePreparedDrawList(PreparedDrawList drawList);
