@@ -22,6 +22,7 @@
 namespace
 {
 	constexpr std::uint32_t kRenderQueueMaxDraws = 65536;
+	constexpr bool kEnableForwardGtao = false;
 } // namespace
 
 namespace aether
@@ -474,20 +475,23 @@ namespace aether
 			                .bindlessSlot = m_sceneDepthBindlessSlot,
 			        });
 		}
-		if (m_gtaoPass.GetAoImage().IsValid())
+		if constexpr (kEnableForwardGtao)
 		{
-			(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductGtao},
-			        FrameTextureProduct{
-			                .image = m_gtaoPass.GetAoImage(),
-			                .extent = m_gtaoPass.GetAoExtent(),
-			                .format = gpu::Format::R8Unorm,
-			                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
-			        },
-			        FrameBlackboard::ProductMetadata{
-			                .extent = m_gtaoPass.GetAoExtent(),
-			                .format = gpu::Format::R8Unorm,
-			                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
-			        });
+			if (m_gtaoPass.GetAoImage().IsValid())
+			{
+				(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductGtao},
+				        FrameTextureProduct{
+				                .image = m_gtaoPass.GetAoImage(),
+				                .extent = m_gtaoPass.GetAoExtent(),
+				                .format = gpu::Format::R8Unorm,
+				                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
+				        },
+				        FrameBlackboard::ProductMetadata{
+				                .extent = m_gtaoPass.GetAoExtent(),
+				                .format = gpu::Format::R8Unorm,
+				                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
+				        });
+			}
 		}
 		m_cullPass.RegisterPass(m_renderGraph, m_renderQueue, {}, mainSceneDraws);
 
@@ -536,7 +540,10 @@ namespace aether
 		}
 		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
 		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
-		m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth);
+		if constexpr (kEnableForwardGtao)
+		{
+			m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth);
+		}
 
 		{
 			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
@@ -563,7 +570,10 @@ namespace aether
 
 			pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
 			pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
-			pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
+			if constexpr (kEnableForwardGtao)
+			{
+				pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
+			}
 
 			if (auto* lighting = frame.lighting)
 			{

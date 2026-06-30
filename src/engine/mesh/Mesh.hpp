@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <span>
@@ -25,6 +26,16 @@ namespace aether
 			glm::uvec4 jointIndices{0u, 0u, 0u, 0u};
 			glm::vec4 jointWeights{1.0f, 0.0f, 0.0f, 0.0f};
 		};
+
+		static_assert(sizeof(Vertex) == 100, "Mesh::Vertex layout changed - update shaders/include/MeshVertex.slangh.");
+		static_assert(offsetof(Vertex, position) == 0);
+		static_assert(offsetof(Vertex, normal) == 12);
+		static_assert(offsetof(Vertex, tangent) == 24);
+		static_assert(offsetof(Vertex, uv) == 40);
+		static_assert(offsetof(Vertex, uv2) == 48);
+		static_assert(offsetof(Vertex, color) == 56);
+		static_assert(offsetof(Vertex, jointIndices) == 68);
+		static_assert(offsetof(Vertex, jointWeights) == 84);
 
 		Mesh() = default;
 		~Mesh();

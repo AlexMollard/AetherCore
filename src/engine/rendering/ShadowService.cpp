@@ -266,11 +266,9 @@ namespace aether
 		}
 		lightDir = glm::normalize(lightDir);
 
-		const bool directionalShadowFrameEnabled = packet.directionalShadowEnabled && lightDir.y > 0.0f;
+		const bool directionalShadowFrameEnabled = packet.directionalShadowEnabled;
 		m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight] = directionalShadowFrameEnabled;
 
-		// When the light is at or below the horizon, shadows are not visible
-		// to a ground-level camera. Skip CSM entirely to save GPU work.
 		if (!directionalShadowFrameEnabled)
 		{
 			DisableDirectionalShadows(fc);
@@ -348,6 +346,7 @@ namespace aether
 			shadowFc.skyHorizonColor = packet.skyHorizonColor;
 			shadowFc.skyZenithColor = packet.skyZenithColor;
 			shadowFc.skyVoidColor = packet.skyVoidColor;
+			shadowFc.RefreshDerived();
 
 			m_shadowFrameConstants[cascade].Write(frameIdx, shadowFc);
 			fc.shadowViewProjCascades[cascade] = shadowFc.viewProj;

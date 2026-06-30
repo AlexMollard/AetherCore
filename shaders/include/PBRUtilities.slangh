@@ -143,7 +143,7 @@ void AccumulateLocalLight(
     {
         ResourceEntry atlasEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_LocalShadowAtlas);
         uint shadowSlot = uint(atlasEntry.address);
-        if (atlasEntry.type == kResourceTypeBindlessTexture && shadowSlot != 0xFFFFFFFFu)
+        if (atlasEntry.type == kResourceTypeBindlessTexture && shadowSlot != 0xFFFFFFFFu && atlasEntry.width > 0u && atlasEntry.height > 0u)
         {
             uint shadowIdx = (uint)light.shadowIndex;
             shadowVis = SampleLocalShadow(shadowIdx, shadowSlot, worldPos, N, L, g_linearSampler, fc);

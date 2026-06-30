@@ -95,6 +95,8 @@ namespace aether
 		RGImage atlasImage{};
 		RGImage atlasDepthImage{};
 		std::uint32_t atlasBindlessSlot = UINT32_MAX;
+		gpu::Extent2D atlasExtent{};
+		gpu::Format atlasFormat = gpu::Format::Undefined;
 	};
 
 	struct LightBuffersProduct
@@ -316,6 +318,10 @@ namespace aether
 			{
 				warnings.push_back(std::format("frame product 'LocalShadowProduct:{}' has no bindless atlas slot.", name));
 			}
+			if (detail::IsZeroExtent(product.atlasExtent))
+			{
+				warnings.push_back(std::format("frame product 'LocalShadowProduct:{}' has zero atlas extent.", name));
+			}
 		}
 	};
 
@@ -329,7 +335,7 @@ namespace aether
 
 		static void WriteResourceTable(const LocalShadowProduct& product, FrameResourceId resourceId, std::span<ResourceEntry> entries)
 		{
-			detail::WriteTextureResourceEntry(entries, resourceId, product.atlasBindlessSlot);
+			detail::WriteTextureResourceEntry(entries, resourceId, product.atlasBindlessSlot, product.atlasExtent, product.atlasFormat);
 		}
 	};
 

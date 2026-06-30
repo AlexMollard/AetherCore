@@ -60,7 +60,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
     // Apply optional vertex color tint, but ignore clearly invalid all-zero streams.
     float3 vertexColor = input.vertexColor;
-    if (dot(vertexColor, vertexColor) < 1e-8)
+    if (any(vertexColor < 0.0) || any(vertexColor > 1.0) || dot(vertexColor, vertexColor) < 0.0025)
     {
         vertexColor = float3(1.0, 1.0, 1.0);
     }
@@ -241,7 +241,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // Image-based ambient (constant approximation - replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ao;
 
-    float3 finalColor = Lo + ambient + emissive;
+    float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
 
     return float4(finalColor, baseColor.a);
 }

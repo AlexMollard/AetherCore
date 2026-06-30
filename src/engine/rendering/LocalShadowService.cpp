@@ -499,6 +499,8 @@ namespace aether
 		                .atlasImage = m_atlasImage,
 		                .atlasDepthImage = m_atlasDepthImage,
 		                .atlasBindlessSlot = m_atlasBindlessSlot,
+		                .atlasExtent = gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight},
+		                .atlasFormat = gpu::Format::R32G32Sfloat,
 		        });
 	}
 

@@ -288,7 +288,7 @@ namespace aether
 		rttService.PrepareQueues(drawSlot, world);
 
 		const glm::vec4 sunDirIntensity = renderer.GetDirectionalLightVector();
-		const bool directionalShadowEnabled = glm::vec3(sunDirIntensity).y > 0.0f;
+		const bool directionalShadowEnabled = sunDirIntensity.w > 0.001f;
 		shadowService.SetDirectionalShadowEnabled(directionalShadowEnabled);
 		shadowService.PrepareQueues(drawSlot, world);
 		localShadowService.PrepareQueues(drawSlot, world);
