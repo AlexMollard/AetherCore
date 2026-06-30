@@ -22,7 +22,7 @@
 namespace
 {
 	constexpr std::uint32_t kRenderQueueMaxDraws = 65536;
-	constexpr bool kEnableForwardGtao = false;
+	constexpr bool kEnableForwardGtao = true;
 } // namespace
 
 namespace aether
@@ -136,13 +136,13 @@ namespace aether
 		const auto depthTexture = gpu::ResourceRegistry::ResolveTexture(m_sceneDepthHandle);
 		m_sceneDepth = graph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_sceneDepthHandle), depthTexture.view, gpu::ImageAspect::Depth);
 
-		const auto slot = bindless.AllocateSampledImageSlot();
-		if (!slot)
+		(void) bindless;
+		gpu::ResourceRegistry::EnsureBindlessSampled(m_sceneDepthHandle, gpu::ImageAspect::Depth, gpu::ImageLayout::ShaderReadOnly);
+		m_sceneDepthBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_sceneDepthHandle);
+		if (m_sceneDepthBindlessSlot == 0xFFFFFFFFu)
 		{
-			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth AllocateSampledImageSlot failed"));
+			Throw(AetherError::Engine("RenderingSubsystem: Scene.Depth bindless registration failed"));
 		}
-		m_sceneDepthBindlessSlot = *slot;
-		AE_EXPECT_OR_THROW_VOID(bindless.WriteSampledImage(m_sceneDepthBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_sceneDepthHandle), gpu::ImageLayout::ShaderReadOnly));
 	}
 
 	void RenderingSubsystem::Init(ServiceContainer& services)

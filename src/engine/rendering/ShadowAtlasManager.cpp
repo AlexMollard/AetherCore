@@ -26,18 +26,11 @@ namespace aether
 		m_atlasImage = gpu::ResourceRegistry::ResolveTextureImage(m_atlasHandle);
 		m_atlasView = gpu::ResourceRegistry::ResolveTexture(m_atlasHandle).view;
 
-		// Bindless registration: acquire a slot, then update the descriptor
-		// with the resolved image view + a linear sampler.
-		const auto slotResult = bindless.AllocateSampledImageSlot();
-		if (!slotResult)
+		gpu::ResourceRegistry::EnsureBindlessSampled(m_atlasHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_atlasHandle);
+		if (m_bindlessSlot == 0xFFFFFFFFu)
 		{
-			Throw(AetherError::Engine("ShadowAtlasManager: AllocateSampledImageSlot failed"));
-		}
-		m_bindlessSlot = *slotResult;
-		const auto updateResult = bindless.WriteSampledImage(m_bindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_atlasHandle), gpu::ImageLayout::ShaderReadOnly);
-		if (!updateResult)
-		{
-			Throw(AetherError::Engine("ShadowAtlasManager: WriteSampledImage failed"));
+			Throw(AetherError::Engine("ShadowAtlasManager: bindless registration failed"));
 		}
 	}
 

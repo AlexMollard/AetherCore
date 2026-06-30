@@ -68,8 +68,8 @@ namespace aether
 		}
 	} // namespace
 
-	static bool s_debugRenderingEnabled = true; // F6 toggles from DebugLayer
-	static bool s_physicsDebugShapesEnabled = true;
+	static bool s_debugRenderingEnabled = false; // F6 toggles from DebugLayer
+	static bool s_physicsDebugShapesEnabled = false;
 
 	void SetDebugRenderingEnabled(bool enabled)
 	{

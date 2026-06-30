@@ -31,14 +31,11 @@ namespace aether
 			Throw(AetherError::Engine("PostProcessStack: HdrColor CreateTexture failed"));
 		}
 		stack.m_hdrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_hdrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_hdrColorHandle).view);
+		gpu::ResourceRegistry::EnsureBindlessSampled(stack.m_hdrColorHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		stack.m_hdrBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(stack.m_hdrColorHandle);
+		if (stack.m_hdrBindlessSlot == 0xFFFFFFFFu)
 		{
-			const auto slot = desc.bindlessManager->AllocateSampledImageSlot();
-			if (!slot)
-			{
-				Throw(AetherError::Engine("PostProcessStack: HdrColor AllocateSampledImageSlot failed"));
-			}
-			stack.m_hdrBindlessSlot = *slot;
-			AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(stack.m_hdrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_hdrColorHandle), gpu::ImageLayout::ShaderReadOnly));
+			Throw(AetherError::Engine("PostProcessStack: HdrColor bindless registration failed"));
 		}
 
 		const gpu::TextureDesc ldrDesc{
@@ -54,14 +51,11 @@ namespace aether
 			Throw(AetherError::Engine("PostProcessStack: LdrColor CreateTexture failed"));
 		}
 		stack.m_ldrColor = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(stack.m_ldrColorHandle), gpu::ResourceRegistry::ResolveTexture(stack.m_ldrColorHandle).view);
+		gpu::ResourceRegistry::EnsureBindlessSampled(stack.m_ldrColorHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		stack.m_ldrBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(stack.m_ldrColorHandle);
+		if (stack.m_ldrBindlessSlot == 0xFFFFFFFFu)
 		{
-			const auto slot = desc.bindlessManager->AllocateSampledImageSlot();
-			if (!slot)
-			{
-				Throw(AetherError::Engine("PostProcessStack: LdrColor AllocateSampledImageSlot failed"));
-			}
-			stack.m_ldrBindlessSlot = *slot;
-			AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(stack.m_ldrBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(stack.m_ldrColorHandle), gpu::ImageLayout::ShaderReadOnly));
+			Throw(AetherError::Engine("PostProcessStack: LdrColor bindless registration failed"));
 		}
 
 		const gpu::TextureDesc finalDesc{

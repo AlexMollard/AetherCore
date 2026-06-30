@@ -139,7 +139,7 @@ namespace aether
 		static void AppendSelfTestPattern(std::vector<DebugVertex>& out);
 
 		bool m_enabled = false;
-		bool m_selfTestEnabled = true; // on by default to surface the pipeline immediately
+		bool m_selfTestEnabled = false;
 		PhysicsDebugColorMode m_colorMode = PhysicsDebugColorMode::None;
 
 		World* m_world = nullptr;

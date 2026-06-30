@@ -64,21 +64,19 @@ namespace aether
 		m_rawAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_rawAoHandle), gpu::ResourceRegistry::ResolveTexture(m_rawAoHandle).view);
 		m_denoisedAoImage = desc.renderGraph->RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_denoisedAoHandle), gpu::ResourceRegistry::ResolveTexture(m_denoisedAoHandle).view);
 
-		const auto rawSlot = desc.bindlessManager->AllocateSampledImageSlot();
-		if (!rawSlot)
+		gpu::ResourceRegistry::EnsureBindlessSampled(m_rawAoHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		m_rawAoBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_rawAoHandle);
+		if (m_rawAoBindlessSlot == kInvalidBindlessSlot)
 		{
-			Throw(AetherError::Engine("GTAOPass: raw AO AllocateSampledImageSlot failed"));
+			Throw(AetherError::Engine("GTAOPass: raw AO bindless registration failed"));
 		}
-		m_rawAoBindlessSlot = *rawSlot;
-		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(m_rawAoBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_rawAoHandle), gpu::ImageLayout::ShaderReadOnly));
 
-		const auto denoisedSlot = desc.bindlessManager->AllocateSampledImageSlot();
-		if (!denoisedSlot)
+		gpu::ResourceRegistry::EnsureBindlessSampled(m_denoisedAoHandle, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		m_denoisedAoBindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(m_denoisedAoHandle);
+		if (m_denoisedAoBindlessSlot == kInvalidBindlessSlot)
 		{
-			Throw(AetherError::Engine("GTAOPass: denoised AO AllocateSampledImageSlot failed"));
+			Throw(AetherError::Engine("GTAOPass: denoised AO bindless registration failed"));
 		}
-		m_denoisedAoBindlessSlot = *denoisedSlot;
-		AE_EXPECT_OR_THROW_VOID(desc.bindlessManager->WriteSampledImage(m_denoisedAoBindlessSlot, gpu::ResourceRegistry::GetViewCreateInfo(m_denoisedAoHandle), gpu::ImageLayout::ShaderReadOnly));
 
 		AE_EXPECT_OR_THROW(mainPipeline,
 		        GraphicsPipeline::Create(desc.device,

@@ -89,16 +89,11 @@ namespace aether
 			m_shadowDepthImage[cascade] = gpu::ResourceRegistry::ResolveTextureImage(m_shadowDepthHandle[cascade]);
 			m_shadowDepthView[cascade] = gpu::ResourceRegistry::ResolveTexture(m_shadowDepthHandle[cascade]).view;
 
-			const auto slotResult = bindless.AllocateSampledImageSlot();
-			if (!slotResult)
+			gpu::ResourceRegistry::EnsureBindlessSampled(m_shadowDepthHandle[cascade], gpu::ImageAspect::Depth, gpu::ImageLayout::ShaderReadOnly);
+			m_shadowMapSlots[cascade] = gpu::ResourceRegistry::GetBindlessSampledSlot(m_shadowDepthHandle[cascade]);
+			if (m_shadowMapSlots[cascade] == 0xFFFFFFFFu)
 			{
-				Throw(AetherError::Engine("ShadowService: AllocateSampledImageSlot failed for cascade " + std::to_string(cascade)));
-			}
-			m_shadowMapSlots[cascade] = *slotResult;
-			const auto updateResult = bindless.WriteSampledImage(m_shadowMapSlots[cascade], gpu::ResourceRegistry::GetViewCreateInfo(m_shadowDepthHandle[cascade]), gpu::ImageLayout::ShaderReadOnly);
-			if (!updateResult)
-			{
-				Throw(AetherError::Engine("ShadowService: WriteSampledImage failed for cascade " + std::to_string(cascade)));
+				Throw(AetherError::Engine("ShadowService: bindless registration failed for cascade " + std::to_string(cascade)));
 			}
 		}
 
