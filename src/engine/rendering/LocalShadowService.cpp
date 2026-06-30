@@ -495,7 +495,7 @@ namespace aether
 
 		// Create a persistent depth attachment for the atlas render pass.
 		m_atlasDepthImage = graph.RegisterImage(m_atlasDepthImageVk, m_atlasDepthView, gpu::ImageAspect::Depth);
-		(void) graph.GetBlackboard().CreateOrReplace<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
+		(void) graph.GetBlackboard().DeclareGraphProduct<LocalShadowProduct>(std::string{kFrameProductLocalShadows},
 		        LocalShadowProduct{
 		                .atlasImage = m_atlasImage,
 		                .atlasDepthImage = m_atlasDepthImage,

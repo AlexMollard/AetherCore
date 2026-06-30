@@ -452,7 +452,7 @@ namespace aether
 		        .frameConstantsAddr = frameAddr,
 		};
 		auto& blackboard = m_rendering->GetRenderGraph().GetBlackboard();
-		(void) blackboard.CreateOrReplace<MainViewProduct>(std::string{kFrameProductMainView},
+		(void) blackboard.SetFrameProduct<MainViewProduct>(std::string{kFrameProductMainView},
 		        MainViewProduct{
 		                .extent = frameTarget.extent,
 		                .frameIndex = m_frameIndex,
@@ -463,7 +463,6 @@ namespace aether
 		                .frameSlot = frameIdx,
 		                .extent = frameTarget.extent,
 		        });
-		blackboard.MarkProduced<MainViewProduct>(kFrameProductMainView, "FrameSetup");
 
 		m_currentCmdList.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);

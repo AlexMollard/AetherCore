@@ -149,11 +149,14 @@ namespace aether
 			return;
 		}
 
-		graph.AddPass("$GTAO_Main")
-		        .SetExtent(m_aoExtent)
-		        .ConsumesProduct<SceneDepthProduct>(kFrameProductSceneDepth)
+		graph.AddFullscreenPass({
+		                                .name = "$GTAO_Main",
+		                                .color = m_rawAoImage,
+		                                .extent = m_aoExtent,
+		                                .loadOp = gpu::LoadOp::DontCare,
+		                                .consumes = {RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth)},
+		                        })
 		        .ReadTexture(depth)
-		        .WriteColor(m_rawAoImage, gpu::LoadOp::DontCare, gpu::StoreOp::Store)
 		        .Execute(
 		                [this, depthBindlessSlot](PassContext& ctx)
 		                {
@@ -186,13 +189,16 @@ namespace aether
 			                cmd.Draw(3, 1, 0, 0);
 		                });
 
-		graph.AddPass("$GTAO_Denoise")
-		        .SetExtent(m_aoExtent)
-		        .ConsumesProduct<SceneDepthProduct>(kFrameProductSceneDepth)
-		        .ProducesProduct<GtaoProduct>(kFrameProductGtao)
+		graph.AddFullscreenPass({
+		                                .name = "$GTAO_Denoise",
+		                                .color = m_denoisedAoImage,
+		                                .extent = m_aoExtent,
+		                                .loadOp = gpu::LoadOp::DontCare,
+		                                .consumes = {RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth)},
+		                                .produces = {RenderGraph::Product<GtaoProduct>(kFrameProductGtao)},
+		                        })
 		        .ReadTexture(depth)
 		        .ReadTexture(m_rawAoImage)
-		        .WriteColor(m_denoisedAoImage, gpu::LoadOp::DontCare, gpu::StoreOp::Store)
 		        .Execute(
 		                [this, depthBindlessSlot](PassContext& ctx)
 		                {

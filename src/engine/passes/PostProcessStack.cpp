@@ -142,11 +142,14 @@ namespace aether
 		// Tonemap -> LDR intermediate (always), then FXAA -> swapchain.
 		// FXAA toggling is handled at runtime via a push constant so the graph
 		// topology stays stable and toggles don't require a graph rebuild.
-		graph.AddPass("$PostProcess")
-		        .SetExtent(m_extent)
-		        .ConsumesProduct<HdrColorProduct>(kFrameProductHdrColor)
+		graph.AddFullscreenPass({
+		                                .name = "$PostProcess",
+		                                .color = m_ldrColor,
+		                                .extent = m_extent,
+		                                .loadOp = gpu::LoadOp::DontCare,
+		                                .consumes = {RenderGraph::Product<HdrColorProduct>(kFrameProductHdrColor)},
+		                        })
 		        .ReadTexture(m_hdrColor)
-		        .WriteColor(m_ldrColor, gpu::LoadOp::DontCare, gpu::StoreOp::Store, {})
 		        .Execute(
 		                [this, &bindless](PassContext& ctx)
 		                {

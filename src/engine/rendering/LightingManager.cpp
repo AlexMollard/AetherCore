@@ -451,7 +451,7 @@ namespace aether
 		m_rgLights = graph.RegisterBuffer(nullptr);
 		m_rgTileHeaders = graph.RegisterBuffer(nullptr);
 		m_rgTileIndices = graph.RegisterBuffer(nullptr);
-		(void) graph.GetBlackboard().CreateOrReplace<LightBuffersProduct>(std::string{kFrameProductLightBuffers},
+		(void) graph.GetBlackboard().DeclareGraphProduct<LightBuffersProduct>(std::string{kFrameProductLightBuffers},
 		        LightBuffersProduct{
 		                .lights = m_rgLights,
 		                .tileHeaders = m_rgTileHeaders,

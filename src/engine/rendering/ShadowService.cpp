@@ -198,7 +198,7 @@ namespace aether
 		{
 			m_shadowDepth[cascade] = graph.RegisterImage(m_shadowDepthImage[cascade], m_shadowDepthView[cascade], gpu::ImageAspect::Depth);
 		}
-		(void) graph.GetBlackboard().CreateOrReplace<DirectionalShadowProduct>(std::string{kFrameProductDirectionalShadows},
+		(void) graph.GetBlackboard().DeclareGraphProduct<DirectionalShadowProduct>(std::string{kFrameProductDirectionalShadows},
 		        DirectionalShadowProduct{
 		                .depthImages = std::vector<RGImage>{m_shadowDepth.begin(), m_shadowDepth.end()},
 		                .bindlessSlots = std::vector<std::uint32_t>{m_shadowMapSlots.begin(), m_shadowMapSlots.end()},

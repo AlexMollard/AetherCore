@@ -139,6 +139,20 @@ namespace aether::app
 			}
 			return "Resource";
 		}
+
+		const char* ProductSourceName(FrameBlackboard::ProductSource source) noexcept
+		{
+			switch (source)
+			{
+				case FrameBlackboard::ProductSource::Imported:
+					return "Imported";
+				case FrameBlackboard::ProductSource::FrameSetup:
+					return "FrameSetup";
+				case FrameBlackboard::ProductSource::GraphPass:
+					return "GraphPass";
+			}
+			return "Unknown";
+		}
 	} // anonymous namespace
 
 	void RenderGraphPanel::OnImGui(LayerContext& context)
@@ -476,10 +490,11 @@ namespace aether::app
 
 		if (!products.empty() && ImGui::CollapsingHeader("Frame Products", ImGuiTreeNodeFlags_DefaultOpen))
 		{
-			if (ImGui::BeginTable("RenderGraphFrameProducts", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
+			if (ImGui::BeginTable("RenderGraphFrameProducts", 6, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchProp))
 			{
 				ImGui::TableSetupColumn("Name");
 				ImGui::TableSetupColumn("Type");
+				ImGui::TableSetupColumn("Source");
 				ImGui::TableSetupColumn("Producer");
 				ImGui::TableSetupColumn("Consumers");
 				ImGui::TableSetupColumn("Metadata");
@@ -492,6 +507,8 @@ namespace aether::app
 					ImGui::TableSetColumnIndex(1);
 					ImGui::TextDisabled("%s", product.typeName.c_str());
 					ImGui::TableSetColumnIndex(2);
+					ImGui::TextDisabled("%s", ProductSourceName(product.metadata.source));
+					ImGui::TableSetColumnIndex(3);
 					if (product.producerPass.empty())
 					{
 						ImGui::TextColored(ImVec4{colors::Warn.r, colors::Warn.g, colors::Warn.b, colors::Warn.a}, "Missing");
@@ -500,7 +517,7 @@ namespace aether::app
 					{
 						ImGui::TextUnformatted(product.producerPass.c_str());
 					}
-					ImGui::TableSetColumnIndex(3);
+					ImGui::TableSetColumnIndex(4);
 					const std::string consumers = JoinStrings(product.consumerPasses);
 					if (consumers.empty())
 					{
@@ -510,7 +527,7 @@ namespace aether::app
 					{
 						ImGui::TextUnformatted(consumers.c_str());
 					}
-					ImGui::TableSetColumnIndex(4);
+					ImGui::TableSetColumnIndex(5);
 					const std::string extent = product.metadata.extent.has_value() ? std::format("{}x{}", product.metadata.extent->width, product.metadata.extent->height) : std::string("-");
 					ImGui::TextDisabled("slot %s, extent %s, bindless %s",
 					        product.metadata.frameSlot == UINT32_MAX ? "-" : std::format("{}", product.metadata.frameSlot).c_str(),

@@ -19,6 +19,13 @@ namespace aether
 	class FrameBlackboard
 	{
 	public:
+		enum class ProductSource : std::uint8_t
+		{
+			Imported,
+			FrameSetup,
+			GraphPass,
+		};
+
 		struct ProductMetadata
 		{
 			std::uint32_t frameSlot = UINT32_MAX;
@@ -26,6 +33,7 @@ namespace aether
 			gpu::Format format = gpu::Format::Undefined;
 			std::uint32_t bindlessSlot = UINT32_MAX;
 			bool historyValid = false;
+			ProductSource source = ProductSource::GraphPass;
 		};
 
 		struct ProductInfo
@@ -53,6 +61,31 @@ namespace aether
 			T* product = std::any_cast<T>(&storage);
 			AE_ASSERT_ALWAYS(product != nullptr, "FrameBlackboard product storage type mismatch.");
 			return *product;
+		}
+
+		template<typename T>
+		[[nodiscard]] T& Import(std::string name, T value = {}, ProductMetadata metadata = {}, std::string_view producerName = "Imported")
+		{
+			metadata.source = ProductSource::Imported;
+			T& product = CreateOrReplace<T>(name, std::move(value), metadata);
+			MarkProducer(std::type_index(typeid(T)), name, producerName, ProductSource::Imported);
+			return product;
+		}
+
+		template<typename T>
+		[[nodiscard]] T& SetFrameProduct(std::string name, T value = {}, ProductMetadata metadata = {}, std::string_view producerName = "FrameSetup")
+		{
+			metadata.source = ProductSource::FrameSetup;
+			T& product = CreateOrReplace<T>(name, std::move(value), metadata);
+			MarkProducer(std::type_index(typeid(T)), name, producerName, ProductSource::FrameSetup);
+			return product;
+		}
+
+		template<typename T>
+		[[nodiscard]] T& DeclareGraphProduct(std::string name, T value = {}, ProductMetadata metadata = {})
+		{
+			metadata.source = ProductSource::GraphPass;
+			return CreateOrReplace<T>(std::move(name), std::move(value), metadata);
 		}
 
 		template<typename T>
@@ -101,6 +134,9 @@ namespace aether
 			MarkConsumed(std::type_index(typeid(T)), name, passName);
 		}
 
+		void MarkProduced(std::type_index type, std::string_view name, std::string_view passName);
+		void MarkConsumed(std::type_index type, std::string_view name, std::string_view passName);
+
 		void Clear();
 
 		[[nodiscard]] std::vector<ProductInfo> GetProducts() const;
@@ -121,8 +157,7 @@ namespace aether
 		[[nodiscard]] std::any* TryGetStorage(std::type_index type, std::string_view name);
 		[[nodiscard]] const std::any* TryGetStorage(std::type_index type, std::string_view name) const;
 		void RemoveStorage(std::type_index type, std::string_view name);
-		void MarkProduced(std::type_index type, std::string_view name, std::string_view passName);
-		void MarkConsumed(std::type_index type, std::string_view name, std::string_view passName);
+		void MarkProducer(std::type_index type, std::string_view name, std::string_view producerName, ProductSource source);
 
 		[[nodiscard]] static std::string MakeKey(std::type_index type, std::string_view name);
 

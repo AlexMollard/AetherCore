@@ -343,6 +343,26 @@ namespace aether
 		return *this;
 	}
 
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ProducesProductRef(const FrameProductRef& product)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		PassRecord& pass = m_graph.m_passes[m_passIndex];
+		pass.producedFrameProducts.push_back(product);
+		m_graph.m_blackboard.MarkProduced(product.type, product.name, pass.name);
+		m_graph.m_compileDirty = true;
+		return *this;
+	}
+
+	RenderGraph::PassBuilder& RenderGraph::PassBuilder::ConsumesProductRef(const FrameProductRef& product)
+	{
+		std::scoped_lock lock(m_graph.m_debugStateMutex);
+		PassRecord& pass = m_graph.m_passes[m_passIndex];
+		pass.consumedFrameProducts.push_back(product);
+		m_graph.m_blackboard.MarkConsumed(product.type, product.name, pass.name);
+		m_graph.m_compileDirty = true;
+		return *this;
+	}
+
 	// -- Pass management ------------------------------------------------------
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)
@@ -380,6 +400,14 @@ namespace aether
 	{
 		PassBuilder pass = AddPass(std::move(desc.name), loc);
 		pass.SetExtent(desc.extent);
+		for (const FrameProductRef& product: desc.consumes)
+		{
+			pass.ConsumesProductRef(product);
+		}
+		for (const FrameProductRef& product: desc.produces)
+		{
+			pass.ProducesProductRef(product);
+		}
 		if (desc.color.IsValid())
 		{
 			pass.WriteColor(desc.color, desc.loadOp, desc.storeOp, desc.clearValue);
@@ -391,6 +419,14 @@ namespace aether
 	{
 		PassBuilder pass = AddPass(std::move(desc.name), loc);
 		pass.SetExtent(desc.extent);
+		for (const FrameProductRef& product: desc.consumes)
+		{
+			pass.ConsumesProductRef(product);
+		}
+		for (const FrameProductRef& product: desc.produces)
+		{
+			pass.ProducesProductRef(product);
+		}
 		if (desc.draws.IsValid())
 		{
 			pass.ConsumesDrawList(desc.draws);
@@ -406,6 +442,14 @@ namespace aether
 	{
 		PassBuilder pass = AddPass(std::move(desc.name), loc);
 		pass.SetExtent(desc.extent);
+		for (const FrameProductRef& product: desc.consumes)
+		{
+			pass.ConsumesProductRef(product);
+		}
+		for (const FrameProductRef& product: desc.produces)
+		{
+			pass.ProducesProductRef(product);
+		}
 		if (desc.draws.IsValid())
 		{
 			pass.ConsumesDrawList(desc.draws);
@@ -424,6 +468,14 @@ namespace aether
 	RenderGraph::PassBuilder RenderGraph::AddQueuePreparePass(QueuePreparePassDesc desc, std::source_location loc)
 	{
 		PassBuilder pass = AddComputePass(std::move(desc.name), loc);
+		for (const FrameProductRef& product: desc.consumesProducts)
+		{
+			pass.ConsumesProductRef(product);
+		}
+		for (const FrameProductRef& product: desc.producesProducts)
+		{
+			pass.ProducesProductRef(product);
+		}
 		if (desc.keepOnGraphicsQueue)
 		{
 			pass.DisableAsyncCompute();
@@ -440,6 +492,14 @@ namespace aether
 	{
 		PassBuilder pass = AddComputePass(std::move(desc.name), loc);
 		pass.SetExtent(desc.extent);
+		for (const FrameProductRef& product: desc.consumes)
+		{
+			pass.ConsumesProductRef(product);
+		}
+		for (const FrameProductRef& product: desc.produces)
+		{
+			pass.ProducesProductRef(product);
+		}
 		if (desc.queueClass == QueueClass::AsyncCompute)
 		{
 			pass.SetAsyncCompute();
@@ -1079,9 +1139,10 @@ namespace aether
 			return std::to_string(product.type.hash_code()) + ":" + product.name;
 		};
 		const auto blackboardProducts = m_blackboard.GetProducts();
-		auto blackboardHasProducer = [&](const FrameProductRef& product)
+		auto blackboardExternalProducer = [&](const FrameProductRef& product)
 		{
-			return std::ranges::any_of(blackboardProducts, [&](const FrameBlackboard::ProductInfo& info) { return info.name == product.name && info.typeName == product.typeName && !info.producerPass.empty(); });
+			return std::ranges::any_of(blackboardProducts,
+			        [&](const FrameBlackboard::ProductInfo& info) { return info.name == product.name && info.typeName == product.typeName && !info.producerPass.empty() && info.metadata.source != FrameBlackboard::ProductSource::GraphPass; });
 		};
 
 		std::unordered_map<std::string, std::size_t> frameProductProducers;
@@ -1110,7 +1171,7 @@ namespace aether
 				const auto it = frameProductProducers.find(frameProductKey(product));
 				if (it == frameProductProducers.end())
 				{
-					if (!blackboardHasProducer(product))
+					if (!blackboardExternalProducer(product))
 					{
 						addPassWarning(consumerPass, std::format("pass '{}' consumes frame product '{}:{}', but no producer pass was found.", m_passes[consumerPass].name, product.typeName, product.name));
 					}

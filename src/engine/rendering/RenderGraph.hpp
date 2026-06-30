@@ -176,6 +176,19 @@ namespace aether
 			gpu::Extent2D extent; // {0,0} = match FrameTarget extent at Execute()
 		};
 
+		struct FrameProductRef
+		{
+			std::type_index type = std::type_index(typeid(void));
+			std::string name;
+			std::string typeName;
+		};
+
+		template<typename T>
+		[[nodiscard]] static FrameProductRef Product(std::string_view name)
+		{
+			return FrameProductRef{.type = std::type_index(typeid(T)), .name = std::string{name}, .typeName = typeid(T).name()};
+		}
+
 		struct FullscreenPassDesc
 		{
 			std::string name;
@@ -184,6 +197,8 @@ namespace aether
 			gpu::LoadOp loadOp = gpu::LoadOp::Load;
 			gpu::StoreOp storeOp = gpu::StoreOp::Store;
 			gpu::ClearValue clearValue = ClearColorValue(0.0f, 0.0f, 0.0f, 1.0f);
+			std::vector<FrameProductRef> consumes;
+			std::vector<FrameProductRef> produces;
 		};
 
 		struct DepthOnlyPassDesc
@@ -195,6 +210,8 @@ namespace aether
 			gpu::LoadOp loadOp = gpu::LoadOp::Clear;
 			gpu::StoreOp storeOp = gpu::StoreOp::Store;
 			gpu::ClearValue clearValue = ClearDepthValue(1.0f);
+			std::vector<FrameProductRef> consumes;
+			std::vector<FrameProductRef> produces;
 		};
 
 		struct DrawQueuePassDesc
@@ -208,6 +225,8 @@ namespace aether
 			gpu::StoreOp colorStoreOp = gpu::StoreOp::Store;
 			gpu::LoadOp depthLoadOp = gpu::LoadOp::Load;
 			gpu::StoreOp depthStoreOp = gpu::StoreOp::Store;
+			std::vector<FrameProductRef> consumes;
+			std::vector<FrameProductRef> produces;
 		};
 
 		struct QueuePreparePassDesc
@@ -216,6 +235,8 @@ namespace aether
 			PreparedDrawList produces{};
 			std::string sideEffectReason = "prepares draw queue state";
 			bool keepOnGraphicsQueue = true;
+			std::vector<FrameProductRef> consumesProducts;
+			std::vector<FrameProductRef> producesProducts;
 		};
 
 		struct ComputeImagePassDesc
@@ -226,13 +247,8 @@ namespace aether
 			bool readsStorageImage = false;
 			bool writesStorageImage = true;
 			QueueClass queueClass = QueueClass::Graphics;
-		};
-
-		struct FrameProductRef
-		{
-			std::type_index type = std::type_index(typeid(void));
-			std::string name;
-			std::string typeName;
+			std::vector<FrameProductRef> consumes;
+			std::vector<FrameProductRef> produces;
 		};
 
 		RenderGraph();
@@ -326,26 +342,19 @@ namespace aether
 			PassBuilder& ProducesDrawList(PreparedDrawList drawList);
 			PassBuilder& ConsumesDrawList(PreparedDrawList drawList);
 
+			PassBuilder& ProducesProductRef(const FrameProductRef& product);
+			PassBuilder& ConsumesProductRef(const FrameProductRef& product);
+
 			template<typename T>
 			PassBuilder& ProducesProduct(std::string_view name)
 			{
-				std::scoped_lock lock(m_graph.m_debugStateMutex);
-				PassRecord& pass = m_graph.m_passes[m_passIndex];
-				pass.producedFrameProducts.push_back(FrameProductRef{.type = std::type_index(typeid(T)), .name = std::string{name}, .typeName = typeid(T).name()});
-				m_graph.m_blackboard.MarkProduced<T>(name, pass.name);
-				m_graph.m_compileDirty = true;
-				return *this;
+				return ProducesProductRef(RenderGraph::Product<T>(name));
 			}
 
 			template<typename T>
 			PassBuilder& ConsumesProduct(std::string_view name)
 			{
-				std::scoped_lock lock(m_graph.m_debugStateMutex);
-				PassRecord& pass = m_graph.m_passes[m_passIndex];
-				pass.consumedFrameProducts.push_back(FrameProductRef{.type = std::type_index(typeid(T)), .name = std::string{name}, .typeName = typeid(T).name()});
-				m_graph.m_blackboard.MarkConsumed<T>(name, pass.name);
-				m_graph.m_compileDirty = true;
-				return *this;
+				return ConsumesProductRef(RenderGraph::Product<T>(name));
 			}
 
 			// Convenience: mark this compute pass for the async compute queue.

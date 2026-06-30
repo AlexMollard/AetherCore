@@ -22,8 +22,6 @@ namespace aether
 
 			entry.value = std::move(value);
 			entry.metadata = metadata;
-			entry.producerPass.clear();
-			entry.consumerPasses.clear();
 			return entry.value;
 		}
 
@@ -79,22 +77,36 @@ namespace aether
 
 	void FrameBlackboard::MarkProduced(std::type_index type, std::string_view name, std::string_view passName)
 	{
+		MarkProducer(type, name, passName, ProductSource::GraphPass);
+	}
+
+	void FrameBlackboard::MarkProducer(std::type_index type, std::string_view name, std::string_view producerName, ProductSource source)
+	{
 		const std::string key = MakeKey(type, name);
 		const auto keyIt = std::ranges::find(m_keys, key);
 		if (keyIt == m_keys.end())
 		{
-			AE_WARN(LogCategory::Engine, "FrameBlackboard: pass '{}' tried to produce missing product '{}'.", passName, name);
+			AE_WARN(LogCategory::Engine, "FrameBlackboard: producer '{}' tried to produce missing product '{}'.", producerName, name);
 			return;
 		}
 
 		const std::size_t index = static_cast<std::size_t>(std::distance(m_keys.begin(), keyIt));
 		ProductEntry& entry = m_products[index];
-		if (!entry.producerPass.empty() && entry.producerPass != passName)
+		if (!entry.producerPass.empty() && entry.producerPass != producerName)
 		{
-			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' already has producer '{}'; rejecting duplicate producer '{}'.", entry.name, entry.typeName, entry.producerPass, passName);
+			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' already has producer '{}'; replacing with '{}'.", entry.name, entry.typeName, entry.producerPass, producerName);
+		}
+		if (entry.metadata.source != source && entry.metadata.source == ProductSource::GraphPass && source != ProductSource::GraphPass)
+		{
+			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' changed from graph-produced to external setup source.", entry.name, entry.typeName);
+		}
+		else if (entry.metadata.source != source && entry.metadata.source != ProductSource::GraphPass && source == ProductSource::GraphPass)
+		{
+			AE_WARN(LogCategory::Engine, "FrameBlackboard: product '{}' of type '{}' changed from external setup source to graph-produced.", entry.name, entry.typeName);
 			return;
 		}
-		entry.producerPass = std::string{passName};
+		entry.metadata.source = source;
+		entry.producerPass = std::string{producerName};
 	}
 
 	void FrameBlackboard::MarkConsumed(std::type_index type, std::string_view name, std::string_view passName)
