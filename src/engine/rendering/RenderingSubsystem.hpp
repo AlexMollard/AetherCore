@@ -1,13 +1,18 @@
 #pragma once
 
 #include <atomic>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <mutex>
+#include <span>
 
+#include "gpu/GpuHandles.hpp"
+#include "gpu/GpuTypes.hpp"
 #include "passes/CullPass.hpp"
 #include "passes/GTAOPass.hpp"
 #include "rendering/FrameConstantsBuffer.hpp"
+#include "rendering/GpuContracts.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "rendering/LocalShadowService.hpp"
@@ -134,17 +139,32 @@ namespace aether
 			return m_physicsDebug;
 		}
 
+		void WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries);
+
+		[[nodiscard]] gpu::DeviceAddress GetResourceTableAddress(std::uint32_t frameIndex) const
+		{
+			return m_resourceTableBuffers[frameIndex].address;
+		}
+
 	private:
 		void RegisterPasses(ServiceContainer& services);
 		[[nodiscard]] gpu::Extent2D ResolveSceneViewportExtent(gpu::Extent2D swapchainExtent) const;
 		void DestroySceneViewportDepth();
 		void CreateSceneViewportDepth(gpu::Device device, gpu::Format depthFormat, RenderGraph& graph, BindlessManager& bindless);
 
+		struct PerFrameResourceTable
+		{
+			gpu::BufferHandle handle{};
+			void* mapped = nullptr;
+			gpu::DeviceAddress address = 0;
+		};
+
 		RenderQueueSharedPipelines m_renderQueuePipelines;
 		RenderGraph m_renderGraph;
 		RenderQueue m_renderQueue;
 		Renderer m_renderer;
 		FrameConstantsBuffer m_frameConstantsBuffer;
+		std::array<PerFrameResourceTable, kMaxFramesInFlight> m_resourceTableBuffers{};
 		ShadowService m_shadowService;
 		LocalShadowService m_localShadowService;
 		RenderTargetService m_renderTargetService;

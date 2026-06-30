@@ -165,6 +165,24 @@ namespace aether
 		m_renderGraph.SetDiagnosticEngine(&services.Get<DiagnosticEngine>());
 		m_frameConstantsBuffer.Initialize();
 
+		for (std::uint32_t i = 0; i < kMaxFramesInFlight; ++i)
+		{
+			const gpu::MappedBufferDesc desc{
+			        .size = sizeof(ResourceEntry) * kFrameResourceCount,
+			        .usage = gpu::BufferUsage::Storage | gpu::BufferUsage::ShaderDeviceAddress,
+			        .memoryUsage = gpu::MappedMemoryUsage::CpuToGpu,
+			        .debugName = "ResourceTable",
+			};
+			m_resourceTableBuffers[i].handle = gpu::ResourceRegistry::CreateMappedBuffer(desc);
+			if (!m_resourceTableBuffers[i].handle.IsValid())
+			{
+				Throw(AetherError::Engine("RenderingSubsystem: ResourceTable CreateMappedBuffer failed"));
+			}
+			const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_resourceTableBuffers[i].handle);
+			m_resourceTableBuffers[i].mapped = view.mappedPtr;
+			m_resourceTableBuffers[i].address = view.deviceAddress;
+		}
+
 		m_renderQueuePipelines.Initialize(vk.GetDevice().device);
 
 		m_renderQueue.Initialize(m_renderQueuePipelines, RenderQueueConfig{.maxDraws = kRenderQueueMaxDraws, .debugName = "Main"});
@@ -249,6 +267,18 @@ namespace aether
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
 		m_frameConstantsBuffer.Shutdown();
+
+		for (auto& buf: m_resourceTableBuffers)
+		{
+			if (buf.handle.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(buf.handle);
+			}
+			buf.handle = {};
+			buf.mapped = nullptr;
+			buf.address = 0;
+		}
+
 		m_renderQueue.Shutdown();
 		m_shadowService.Shutdown();
 		m_localShadowService.Shutdown();
@@ -596,5 +626,14 @@ namespace aether
 			        })
 			        .Execute([](PassContext&) {});
 		}
+	}
+
+	void RenderingSubsystem::WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries)
+	{
+		AE_PROFILE_ZONE();
+		AE_ASSERT(entries.size() <= kFrameResourceCount, "ResourceEntry count exceeds kFrameResourceCount");
+		const std::size_t byteCount = entries.size() * sizeof(ResourceEntry);
+		std::memcpy(m_resourceTableBuffers[frameIndex].mapped, entries.data(), byteCount);
+		gpu::ResourceRegistry::FlushMappedBuffer(m_resourceTableBuffers[frameIndex].handle, 0, static_cast<gpu::DeviceSize>(byteCount));
 	}
 } // namespace aether

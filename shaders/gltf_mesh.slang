@@ -141,10 +141,13 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         float aoSample = g_textures[mat.occlusionSlot].Sample(g_linearSampler, uv).r;
         ao = lerp(1.0, aoSample, mat.occlusionStrength);
     }
-    if (fc->gtaoInfo.w != 0u && fc->gtaoInfo.x != 0xFFFFFFFFu && fc->gtaoInfo.y > 0u && fc->gtaoInfo.z > 0u)
+    // Sample GTAO from the resource table.
+    ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
+    if (aoEntry.type != kResourceTypeInvalid && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
     {
-        float2 aoUv = (input.svPosition.xy * 0.5f + 0.5f) / float2(fc->gtaoInfo.y, fc->gtaoInfo.z);
-        float gtao = g_textures[fc->gtaoInfo.x].SampleLevel(g_linearSampler, saturate(aoUv), 0.0f).r;
+        uint aoSlot = uint(aoEntry.address);
+        float2 aoUv = (input.svPosition.xy * 0.5f + 0.5f) / float2(aoEntry.width, aoEntry.height);
+        float gtao = g_textures[aoSlot].SampleLevel(g_linearSampler, saturate(aoUv), 0.0f).r;
         ao *= lerp(1.0f, saturate(gtao), 0.7f);
     }
 

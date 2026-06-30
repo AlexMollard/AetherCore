@@ -49,11 +49,6 @@ namespace
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
 	{
 		fc.shadowParams.z = 0.0f;
-		for (std::uint32_t cascade = 0; cascade < aether::kShadowCascadeCount; ++cascade)
-		{
-			fc.shadowViewProjCascades[cascade] = glm::mat4(1.0f);
-			fc.shadowCascadeInfo[cascade] = glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u);
-		}
 	}
 } // namespace
 
@@ -297,12 +292,6 @@ namespace aether
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
 		fc.shadowParams = glm::vec4(0.0007f, 0.0012f, 1.0f, 1.5f);
-		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
-		{
-			fc.shadowViewProjCascades[cascade] = glm::mat4(1.0f);
-			fc.shadowCascadeInfo[cascade] = glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u);
-		}
-
 		glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
 		glm::vec3 camForward(0.0f, 0.0f, -1.0f);
 		if (packet.hasCameraData)
@@ -357,7 +346,6 @@ namespace aether
 
 			m_shadowFrameConstants[cascade].Write(frameIdx, shadowFc);
 			fc.shadowViewProjCascades[cascade] = shadowFc.viewProj;
-			fc.shadowCascadeInfo[cascade] = glm::uvec4(m_shadowMapSlots[cascade], m_shadowMapExtents[cascade].width, m_shadowMapExtents[cascade].height, 0u);
 		}
 	}
 } // namespace aether

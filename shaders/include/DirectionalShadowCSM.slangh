@@ -15,9 +15,9 @@ float ComputeDirectionalShadowCascade(
     float3 worldNormal,
     float3 lightDir)
 {
-    const uint4 cascadeInfo = fc->shadowCascadeInfo[cascadeIdx];
-    const uint shadowSlot = cascadeInfo.x;
-    if (shadowSlot == 0xFFFFFFFFu)
+    ResourceEntry entry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_DirectionalShadowC0 + cascadeIdx);
+    const uint shadowSlot = uint(entry.address);
+    if (entry.type == kResourceTypeInvalid || shadowSlot == 0xFFFFFFFFu)
     {
         return 1.0;
     }
@@ -46,8 +46,8 @@ float ComputeDirectionalShadowCascade(
     const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(lightDir)));
     const float bias = depthBias + normalBias * slope;
 
-    const uint shadowW = max(cascadeInfo.y, 1u);
-    const uint shadowH = max(cascadeInfo.z, 1u);
+    const uint shadowW = max(entry.width, 1u);
+    const uint shadowH = max(entry.height, 1u);
     const float2 texel = 1.0 / float2((float)shadowW, (float)shadowH);
     const float pcfRadiusTexels = max(fc->shadowParams.w, 0.5);
 

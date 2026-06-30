@@ -388,15 +388,86 @@ namespace aether
 		}
 
 		FrameConstants fc = m_gpu->ComposeBaseFrameConstants(packet, glm::mat4(1.0f));
-		const auto& gtaoPass = m_rendering->GetGtaoPass();
-		const gpu::Extent2D gtaoExtent = gtaoPass.GetAoExtent();
-		fc.gtaoInfo = glm::uvec4(gtaoPass.GetAoBindlessSlot(), gtaoExtent.width, gtaoExtent.height, gtaoPass.GetAoImage().IsValid() ? 1u : 0u);
 
 		BuildShadowsAndRunLighting(packet, frameIdx, fc);
 
 		if (packet.hasCameraData)
 		{
 			PatchShadowIndices(frameIdx);
+		}
+
+		// Populate GPU resource table from blackboard products and services for shader access.
+		{
+			auto& blackboard = m_rendering->GetRenderGraph().GetBlackboard();
+			std::array<ResourceEntry, kFrameResourceCount> resourceTable{};
+			std::size_t entryCount = 0;
+
+			auto writeEntry = [&](FrameResourceId id, const ResourceEntry& entry)
+			{
+				resourceTable[static_cast<std::size_t>(id)] = entry;
+				entryCount = (std::max) (entryCount, static_cast<std::size_t>(id) + 1u);
+			};
+
+			if (const auto* sceneDepth = blackboard.TryGet<SceneDepthProduct>(std::string{kFrameProductSceneDepth}))
+			{
+				writeEntry(FrameResourceId::SceneDepth,
+				        ResourceEntry{
+				                .address = sceneDepth->bindlessSlot,
+				                .type = kResourceTypeBindlessTexture,
+				                .width = sceneDepth->extent.width,
+				                .height = sceneDepth->extent.height,
+				                .format = static_cast<std::uint32_t>(sceneDepth->format),
+				        });
+			}
+
+			if (const auto* hdrColor = blackboard.TryGet<HdrColorProduct>(std::string{kFrameProductHdrColor}))
+			{
+				writeEntry(FrameResourceId::HdrColor,
+				        ResourceEntry{
+				                .address = hdrColor->bindlessSlot,
+				                .type = kResourceTypeBindlessTexture,
+				                .width = hdrColor->extent.width,
+				                .height = hdrColor->extent.height,
+				                .format = static_cast<std::uint32_t>(hdrColor->format),
+				        });
+			}
+
+			if (const auto* gtao = blackboard.TryGet<GtaoProduct>(std::string{kFrameProductGtao}))
+			{
+				writeEntry(FrameResourceId::Gtao,
+				        ResourceEntry{
+				                .address = gtao->bindlessSlot,
+				                .type = kResourceTypeBindlessTexture,
+				                .width = gtao->extent.width,
+				                .height = gtao->extent.height,
+				                .format = static_cast<std::uint32_t>(gtao->format),
+				        });
+			}
+
+			// Directional shadow cascades — slots and extents are owned by ShadowService.
+			auto& shadowSvc = m_rendering->GetShadowService();
+			for (std::uint32_t c = 0; c < kShadowCascadeCount; ++c)
+			{
+				const gpu::Extent2D ext = shadowSvc.GetShadowMapExtent(c);
+				writeEntry(static_cast<FrameResourceId>(static_cast<std::uint32_t>(FrameResourceId::DirectionalShadowC0) + c),
+				        ResourceEntry{
+				                .address = shadowSvc.GetShadowMapSlot(c),
+				                .type = kResourceTypeBindlessTexture,
+				                .width = ext.width,
+				                .height = ext.height,
+				        });
+			}
+
+			// Local shadow atlas — owned by LocalShadowService.
+			auto& localShadowSvc = m_rendering->GetLocalShadowService();
+			writeEntry(FrameResourceId::LocalShadowAtlas,
+			        ResourceEntry{
+			                .address = localShadowSvc.GetAtlasBindlessSlot(),
+			                .type = kResourceTypeBindlessTexture,
+			        });
+
+			m_rendering->WriteResourceTable(frameIdx, std::span(resourceTable.data(), entryCount));
+			fc.resourceTableAddr = static_cast<std::uint64_t>(m_rendering->GetResourceTableAddress(frameIdx));
 		}
 
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);

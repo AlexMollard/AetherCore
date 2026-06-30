@@ -472,7 +472,6 @@ namespace aether
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));
 
 		// Fill FrameConstants for the shader.
-		fc.shadowAtlasSlot = m_atlasBindlessSlot;
 		fc.shadowLightCount = shadowCount;
 		fc.shadowLightDataAddr = m_shadowDataBuffer[bufSlot].address;
 	}

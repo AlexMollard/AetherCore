@@ -1,6 +1,8 @@
 #ifndef AETHER_FRAME_CONSTANTS_SLANGH
 #define AETHER_FRAME_CONSTANTS_SLANGH
 
+#include "ResourceTable.slangh"
+
 // Shared per-frame constants layout for Slang shaders.
 // Keep this struct in lockstep with aether::FrameConstants in
 // src/engine/FrameConstants.hpp.
@@ -24,13 +26,12 @@ struct FrameConstantsData
     [[vk::offset(352)]] float4x4 shadowViewProjCascades[3]; // light clip transforms for CSM cascades
     [[vk::offset(544)]] float4 shadowCascadeSplits;         // xyz=split far distances in view-space units
     [[vk::offset(560)]] float4 shadowParams;                // x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
-    [[vk::offset(576)]] uint4 shadowCascadeInfo[3];         // x=bindless slot (0xFFFFFFFF=disabled), y=width, z=height
-    [[vk::offset(624)]] uint    shadowAtlasSlot;            // VSM atlas bindless slot (0xFFFFFFFF = none)
-    [[vk::offset(628)]] uint    shadowLightCount;           // number of active local shadow lights
-    [[vk::offset(632)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
-    [[vk::offset(640)]] uint4   gtaoInfo;                   // x=bindless slot, y=width, z=height, w=enabled
-    [[vk::offset(656)]] float4  frustumPlanes[6];           // normalized planes, xyz=n, w=d
-    [[vk::offset(752)]] float4x4 invViewProj;                // inverse view-projection for screen-space reconstruction
+    [[vk::offset(576)]] uint    shadowLightCount;           // number of active local shadow lights
+    [[vk::offset(584)]] uint64_t shadowLightDataAddr;       // BDA -> ShadowLightData[]
+    [[vk::offset(592)]] float4  frustumPlanes[6];           // normalized planes, xyz=n, w=d
+    [[vk::offset(688)]] float4x4 invViewProj;               // inverse view-projection for screen-space reconstruction
+    [[vk::offset(752)]] uint64_t resourceTableAddr;         // BDA -> ResourceEntry[kFrameResourceCount]
+    [[vk::offset(760)]] uint64_t _padEnd;                   // end padding (16-byte alignment)
 };
 
 #endif

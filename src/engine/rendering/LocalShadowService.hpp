@@ -83,6 +83,11 @@ namespace aether
 			return m_atlasImage;
 		}
 
+		[[nodiscard]] std::uint32_t GetAtlasBindlessSlot() const
+		{
+			return m_atlasBindlessSlot;
+		}
+
 		// Returns per-light shadow indices (shadowIndex, shadowStrength) for all lights
 		// in the GpuLight buffer order (points first, then spots).
 		// -1 = no shadow for this light.

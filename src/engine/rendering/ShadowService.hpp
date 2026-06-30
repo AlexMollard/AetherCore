@@ -79,6 +79,16 @@ namespace aether
 			return {m_shadowDepth.data(), m_shadowDepth.size()};
 		}
 
+		[[nodiscard]] std::uint32_t GetShadowMapSlot(std::uint32_t cascade) const
+		{
+			return m_shadowMapSlots[cascade];
+		}
+
+		[[nodiscard]] gpu::Extent2D GetShadowMapExtent(std::uint32_t cascade) const
+		{
+			return m_shadowMapExtents[cascade];
+		}
+
 	private:
 		// Single queue replaces the per-cascade arrays - multi-frustum culling
 		// handles all 3 cascades in one dispatch on shared draw data.

@@ -369,4 +369,46 @@ namespace aether
 		static_assert(sizeof(AnimationBlendPush) == 80, "AnimationBlendPush layout changed - update shaders/include/AnimationContracts.slangh.");
 
 	} // namespace AnimationContracts
+
+	// -------------------------------------------------------------------------
+	// Resource Table Contracts
+	// -------------------------------------------------------------------------
+	// GPU resource table: flat array of ResourceEntry entries addressed by
+	// FrameResourceId. Accessed via fc.resourceTableAddr in shaders.
+	// Sync with shaders/include/ResourceTable.slangh.
+	//
+	inline constexpr std::uint32_t kFrameResourceCount = 16;
+
+	enum class FrameResourceId : std::uint32_t
+	{
+		SceneDepth = 0,
+		HdrColor = 1,
+		Gtao = 2,
+		DirectionalShadowC0 = 3,
+		DirectionalShadowC1 = 4,
+		DirectionalShadowC2 = 5,
+		LocalShadowAtlas = 6,
+		Count,
+	};
+
+	inline constexpr std::uint32_t kResourceTypeBindlessTexture = 0u;
+	inline constexpr std::uint32_t kResourceTypeDeviceAddress = 1u;
+
+	struct ResourceEntry
+	{
+		std::uint64_t address = 0; // bindless slot or BDA
+		std::uint32_t type = 0;    // kResourceTypeBindlessTexture / kResourceTypeDeviceAddress
+		std::uint32_t width = 0;   // resource width in texels
+		std::uint32_t height = 0;  // resource height in texels
+		std::uint32_t format = 0;  // resource format (VkFormat)
+		std::uint32_t _pad0 = 0;   // padding to 32 bytes
+	};
+
+	static_assert(sizeof(ResourceEntry) == 32, "ResourceEntry must be 32 bytes - update shaders/include/ResourceTable.slangh.");
+	static_assert(offsetof(ResourceEntry, address) == 0);
+	static_assert(offsetof(ResourceEntry, type) == 8);
+	static_assert(offsetof(ResourceEntry, width) == 12);
+	static_assert(offsetof(ResourceEntry, height) == 16);
+	static_assert(offsetof(ResourceEntry, format) == 20);
+	static_assert(offsetof(ResourceEntry, _pad0) == 24);
 } // namespace aether

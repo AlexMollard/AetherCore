@@ -1,0 +1,46 @@
+#ifndef AETHER_RESOURCE_TABLE_SLANGH
+#define AETHER_RESOURCE_TABLE_SLANGH
+
+// GPU resource table: flat array accessed via fc.resourceTableAddr BDA.
+// Each entry stores a bindless slot or BDA address with a type tag.
+// Sync with aether::ResourceEntry / aether::FrameResourceId in GpuContracts.hpp.
+
+#define kFrameResourceCount 16
+
+#define kResourceTypeInvalid         0xFFFFFFFFu
+#define kResourceTypeBindlessTexture 0u
+#define kResourceTypeDeviceAddress   1u
+
+#define kFrameResourceId_SceneDepth           0u
+#define kFrameResourceId_HdrColor             1u
+#define kFrameResourceId_Gtao                 2u
+#define kFrameResourceId_DirectionalShadowC0  3u
+#define kFrameResourceId_DirectionalShadowC1  4u
+#define kFrameResourceId_DirectionalShadowC2  5u
+#define kFrameResourceId_LocalShadowAtlas     6u
+
+struct ResourceEntry
+{
+    uint64_t address;
+    uint  type;
+    uint  width;
+    uint  height;
+    uint  format;
+    uint  _pad0;
+};
+
+// Load the bindless slot from a resource table entry by ID.
+// Returns 0xFFFFFFFF if the entry is empty or not a texture.
+uint LoadBindlessSlot(uint64_t tableAddr, uint resourceId)
+{
+    ResourceEntry entry = ((ResourceEntry*)(tableAddr))[resourceId];
+    return entry.type == kResourceTypeBindlessTexture ? uint(entry.address) : 0xFFFFFFFFu;
+}
+
+// Load the full resource entry (with metadata) from the resource table.
+ResourceEntry LoadResourceEntry(uint64_t tableAddr, uint resourceId)
+{
+    return ((ResourceEntry*)(tableAddr))[resourceId];
+}
+
+#endif

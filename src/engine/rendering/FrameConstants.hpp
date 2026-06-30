@@ -13,16 +13,15 @@ namespace aether
 	//
 	// Usage Notes:
 	// - skyVoidColor: Active feature used by skybox.slang:208 for void/space rendering, set by DayNightSystem
-	// - shadowCascadeInfo: Populated by ShadowService for CSM (3 cascades)
 	// - tiledLightGridInfo/tiledLightBufferOffsets: Used by tiled_light_cull.slang for local lights
 	// - shadowViewProjCascades: Directional light cascade matrices (ShadowService)
-	// - shadowAtlasSlot: Bindless slot for local shadow atlas (LocalShadowService)
+	// - Bindless slots (shadow, GTAO, etc.) are now accessed via fc.resourceTableAddr resource entries.
 	//
 	// Sync with shaders/include/FrameConstants.slangh - update both when modifying.
 	//
 	inline constexpr std::uint32_t kShadowCascadeCount = 3u;
 
-	// Layout (816 bytes):
+	// Layout (768 bytes):
 	//   offset   0 : mat4     viewProj               (64)  Combined view-projection matrix
 	//   offset  64 : mat4     view                   (64)  View matrix
 	//   offset 128 : mat4     proj                   (64)  Projection matrix
@@ -41,14 +40,14 @@ namespace aether
 	//   offset 352 : mat4[3]  shadowViewProjCascades (192)  Light clip transforms for CSM cascades (ShadowService)
 	//   offset 544 : vec4     shadowCascadeSplits     (16)  xyz=split far distances for 3 cascades
 	//   offset 560 : vec4     shadowParams            (16)  x=depthBias, y=normalBias, z=strength, w=pcfRadiusTexels
-	//   offset 576 : uvec4[3] shadowCascadeInfo       (48)  Each: x=bindlessSlot, y=width, z=height, w=unused
-	//   offset 624 : uint     shadowAtlasSlot         ( 4)  Bindless slot for VSM atlas (0xFFFFFFFF = none, LocalShadowService)
-	//   offset 628 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
-	//   offset 632 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
-	//   offset 640 : uvec4    gtaoInfo                (16)  x=bindless slot, y=width, z=height, w=enabled
-	//   offset 656 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
-	//   offset 752 : mat4     invViewProj             (64)  Inverse view-projection for screen-space reconstruction
-	//   Total: 816 bytes
+	//   offset 576 : uint     shadowLightCount        ( 4)  Number of active shadow-casting lights
+	//   offset 580 : uint     _padShadowAlign         ( 4)  Alignment before uint64
+	//   offset 584 : uint64   shadowLightDataAddr     ( 8)  BDA to ShadowLightData[]
+	//   offset 592 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
+	//   offset 688 : mat4     invViewProj             (64)  Inverse view-projection for screen-space reconstruction
+	//   offset 752 : uint64   resourceTableAddr       ( 8)  BDA to ResourceEntry[kFrameResourceCount]
+	//   offset 760 : uint64   _padEnd                 ( 8)  End padding (16-byte alignment for SPIR-V)
+	//   Total: 768 bytes
 	struct FrameConstants
 	{
 		glm::mat4 viewProj{1.0f};                                                                                                           // offset 0
@@ -69,16 +68,9 @@ namespace aether
 		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};               // offset 352
 		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};                                                                          // offset 544, CSM splits
 		glm::vec4 shadowParams{0.0008f, 0.0012f, 1.0f, 1.5f};                                                                               // offset 560, shadow params
-		std::array<glm::uvec4, kShadowCascadeCount> shadowCascadeInfo{
-		        // offset 576, CSM bindless slots
-		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
-		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
-		        glm::uvec4(0xFFFFFFFFu, 0u, 0u, 0u),
-		};
-		std::uint32_t shadowAtlasSlot = 0xFFFFFFFFu;  // offset 624, local shadows
-		std::uint32_t shadowLightCount = 0;           // offset 628
-		std::uint64_t shadowLightDataAddr = 0;        // offset 632
-		glm::uvec4 gtaoInfo{0xFFFFFFFFu, 0u, 0u, 0u}; // offset 640
+		std::uint32_t shadowLightCount = 0;                                                                                                 // offset 576
+		std::uint32_t _padShadowAlign = 0;                                                                                                  // offset 580, alignment before uint64
+		std::uint64_t shadowLightDataAddr = 0;                                                                                              // offset 584
 		std::array<glm::vec4, 6> frustumPlanes{
 		        glm::vec4(1.0f, 0.0f, 0.0f, 1.0f),
 		        glm::vec4(-1.0f, 0.0f, 0.0f, 1.0f),
@@ -86,8 +78,10 @@ namespace aether
 		        glm::vec4(0.0f, -1.0f, 0.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, -1.0f, 1.0f),
-		}; // offset 656
-		glm::mat4 invViewProj{1.0f}; // offset 752
+		}; // offset 592
+		glm::mat4 invViewProj{1.0f};         // offset 688
+		std::uint64_t resourceTableAddr = 0; // offset 752
+		std::uint64_t _padEnd = 0;           // offset 760
 
 		void RefreshDerived()
 		{
@@ -113,7 +107,7 @@ namespace aether
 		}
 	};
 
-	static_assert(sizeof(FrameConstants) == 816, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
+	static_assert(sizeof(FrameConstants) == 768, "FrameConstants layout changed - update shaders/include/FrameConstants.slangh.");
 	static_assert(offsetof(FrameConstants, viewProj) == 0);
 	static_assert(offsetof(FrameConstants, view) == 64);
 	static_assert(offsetof(FrameConstants, proj) == 128);
@@ -132,12 +126,12 @@ namespace aether
 	static_assert(offsetof(FrameConstants, shadowViewProjCascades) == 352);
 	static_assert(offsetof(FrameConstants, shadowCascadeSplits) == 544);
 	static_assert(offsetof(FrameConstants, shadowParams) == 560);
-	static_assert(offsetof(FrameConstants, shadowCascadeInfo) == 576);
-	static_assert(offsetof(FrameConstants, shadowAtlasSlot) == 624);
-	static_assert(offsetof(FrameConstants, shadowLightCount) == 628);
-	static_assert(offsetof(FrameConstants, shadowLightDataAddr) == 632);
-	static_assert(offsetof(FrameConstants, gtaoInfo) == 640);
-	static_assert(offsetof(FrameConstants, frustumPlanes) == 656);
-	static_assert(offsetof(FrameConstants, invViewProj) == 752);
-	static_assert(sizeof(FrameConstants) == 816);
+	static_assert(offsetof(FrameConstants, shadowLightCount) == 576);
+	static_assert(offsetof(FrameConstants, _padShadowAlign) == 580);
+	static_assert(offsetof(FrameConstants, shadowLightDataAddr) == 584);
+	static_assert(offsetof(FrameConstants, frustumPlanes) == 592);
+	static_assert(offsetof(FrameConstants, invViewProj) == 688);
+	static_assert(offsetof(FrameConstants, resourceTableAddr) == 752);
+	static_assert(offsetof(FrameConstants, _padEnd) == 760);
+	static_assert(sizeof(FrameConstants) == 768);
 } // namespace aether

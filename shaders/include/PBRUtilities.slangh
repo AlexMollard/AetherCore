@@ -139,11 +139,16 @@ void AccumulateLocalLight(
     const float localSpecularWeight = 0.28;
     float shadowVis = 1.0;
 
-    if (light.shadowIndex >= 0.0 && fc->shadowAtlasSlot != 0xFFFFFFFFu)
+    if (light.shadowIndex >= 0.0)
     {
-        uint shadowIdx = (uint)light.shadowIndex;
-        shadowVis = SampleLocalShadow(shadowIdx, fc->shadowAtlasSlot, worldPos, N, L, g_linearSampler, fc);
-        shadowVis = lerp(1.0, shadowVis, light.shadowStrength);
+        ResourceEntry atlasEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_LocalShadowAtlas);
+        uint shadowSlot = uint(atlasEntry.address);
+        if (atlasEntry.type != kResourceTypeInvalid && shadowSlot != 0xFFFFFFFFu)
+        {
+            uint shadowIdx = (uint)light.shadowIndex;
+            shadowVis = SampleLocalShadow(shadowIdx, shadowSlot, worldPos, N, L, g_linearSampler, fc);
+            shadowVis = lerp(1.0, shadowVis, light.shadowStrength);
+        }
     }
 
     sum += (diffuse + specular * localSpecularWeight) * radiance * NdotL * shadowVis;
