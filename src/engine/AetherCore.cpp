@@ -396,80 +396,6 @@ namespace aether
 			PatchShadowIndices(frameIdx);
 		}
 
-		// Populate GPU resource table from blackboard products and services for shader access.
-		{
-			auto& blackboard = m_rendering->GetRenderGraph().GetBlackboard();
-			std::array<ResourceEntry, kFrameResourceCount> resourceTable{};
-			std::size_t entryCount = 0;
-
-			auto writeEntry = [&](FrameResourceId id, const ResourceEntry& entry)
-			{
-				resourceTable[static_cast<std::size_t>(id)] = entry;
-				entryCount = (std::max) (entryCount, static_cast<std::size_t>(id) + 1u);
-			};
-
-			if (const auto* sceneDepth = blackboard.TryGet<SceneDepthProduct>(std::string{kFrameProductSceneDepth}))
-			{
-				writeEntry(FrameResourceId::SceneDepth,
-				        ResourceEntry{
-				                .address = sceneDepth->bindlessSlot,
-				                .type = kResourceTypeBindlessTexture,
-				                .width = sceneDepth->extent.width,
-				                .height = sceneDepth->extent.height,
-				                .format = static_cast<std::uint32_t>(sceneDepth->format),
-				        });
-			}
-
-			if (const auto* hdrColor = blackboard.TryGet<HdrColorProduct>(std::string{kFrameProductHdrColor}))
-			{
-				writeEntry(FrameResourceId::HdrColor,
-				        ResourceEntry{
-				                .address = hdrColor->bindlessSlot,
-				                .type = kResourceTypeBindlessTexture,
-				                .width = hdrColor->extent.width,
-				                .height = hdrColor->extent.height,
-				                .format = static_cast<std::uint32_t>(hdrColor->format),
-				        });
-			}
-
-			if (const auto* gtao = blackboard.TryGet<GtaoProduct>(std::string{kFrameProductGtao}))
-			{
-				writeEntry(FrameResourceId::Gtao,
-				        ResourceEntry{
-				                .address = gtao->bindlessSlot,
-				                .type = kResourceTypeBindlessTexture,
-				                .width = gtao->extent.width,
-				                .height = gtao->extent.height,
-				                .format = static_cast<std::uint32_t>(gtao->format),
-				        });
-			}
-
-			// Directional shadow cascades — slots and extents are owned by ShadowService.
-			auto& shadowSvc = m_rendering->GetShadowService();
-			for (std::uint32_t c = 0; c < kShadowCascadeCount; ++c)
-			{
-				const gpu::Extent2D ext = shadowSvc.GetShadowMapExtent(c);
-				writeEntry(static_cast<FrameResourceId>(static_cast<std::uint32_t>(FrameResourceId::DirectionalShadowC0) + c),
-				        ResourceEntry{
-				                .address = shadowSvc.GetShadowMapSlot(c),
-				                .type = kResourceTypeBindlessTexture,
-				                .width = ext.width,
-				                .height = ext.height,
-				        });
-			}
-
-			// Local shadow atlas — owned by LocalShadowService.
-			auto& localShadowSvc = m_rendering->GetLocalShadowService();
-			writeEntry(FrameResourceId::LocalShadowAtlas,
-			        ResourceEntry{
-			                .address = localShadowSvc.GetAtlasBindlessSlot(),
-			                .type = kResourceTypeBindlessTexture,
-			        });
-
-			m_rendering->WriteResourceTable(frameIdx, std::span(resourceTable.data(), entryCount));
-			fc.resourceTableAddr = static_cast<std::uint64_t>(m_rendering->GetResourceTableAddress(frameIdx));
-		}
-
 		UploadFrameConstantsAndExecuteRenderGraph(frameIdx, fc);
 		m_imgui->RenderFrame(packet.imgui, m_currentCmdList, m_gpu->BuildFrameTarget());
 
@@ -506,14 +432,10 @@ namespace aether
 		m_cameras->GetLightingManager().ApplyShadowIndices(frameIdx, m_rendering->GetLocalShadowService().GetLightShadowIndices());
 	}
 
-	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc)
+	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc)
 	{
-		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
-		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
-
-		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
-
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
+		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 		const FrameResourceContext frameContext{
 		        .target = frameTarget,
 		        .extent = frameTarget.extent,
@@ -537,6 +459,9 @@ namespace aether
 
 		m_currentCmdList.BeginDebugLabel("Frame.RenderGraph", 0.35f, 0.55f, 0.95f, 1.0f);
 		m_rendering->GetRenderGraph().BeginFrame(frameIdx);
+		fc.resourceTableAddr = static_cast<std::uint64_t>(m_rendering->PublishFrameResourceTable(frameIdx));
+		m_rendering->GetFrameConstantsBuffer().Write(frameIdx, fc);
+		m_currentCmdList.PipelineMemoryBarrier(gpu::PipelineStage::Host, gpu::AccessFlags::HostWrite, gpu::PipelineStage::AllCommands, gpu::AccessFlags::ShaderRead | gpu::AccessFlags::ShaderWrite);
 		m_rendering->GetRenderGraph().Execute(m_currentCmdList, frameContext);
 		m_currentCmdList.EndDebugLabel();
 	}

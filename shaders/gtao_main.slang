@@ -8,7 +8,6 @@
 
 struct GTAOPush
 {
-    uint depthSlot;
     uint fullWidth;
     uint fullHeight;
     uint frameIndex;
@@ -42,9 +41,14 @@ static uint2 ClampFull(int2 p)
         uint(clamp(p.y, 0, int(pc.fullHeight) - 1)));
 }
 
-static float LoadDepth(uint2 px)
+static float LoadDepth(uint2 px, FrameConstantsData* fc)
 {
-    return g_textures[pc.depthSlot].Load(int3(px, 0)).r;
+    ResourceEntry depthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+    if (depthEntry.type != kResourceTypeBindlessTexture || depthEntry.address == 0xFFFFFFFFu || depthEntry.width == 0u || depthEntry.height == 0u)
+    {
+        return 1.0f;
+    }
+    return g_textures[uint(depthEntry.address)].Load(int3(px, 0)).r;
 }
 
 static float3 ReconstructWorld(uint2 px, float depth, FrameConstantsData* fc)
@@ -63,10 +67,10 @@ static float3 NormalFromDepth(uint2 px, float centerDepth, FrameConstantsData* f
     uint2 u = ClampFull(int2(px) + int2(0, -1));
     uint2 d = ClampFull(int2(px) + int2(0, 1));
 
-    float3 wl = ReconstructWorld(l, LoadDepth(l), fc);
-    float3 wr = ReconstructWorld(r, LoadDepth(r), fc);
-    float3 wu = ReconstructWorld(u, LoadDepth(u), fc);
-    float3 wd = ReconstructWorld(d, LoadDepth(d), fc);
+    float3 wl = ReconstructWorld(l, LoadDepth(l, fc), fc);
+    float3 wr = ReconstructWorld(r, LoadDepth(r, fc), fc);
+    float3 wu = ReconstructWorld(u, LoadDepth(u, fc), fc);
+    float3 wd = ReconstructWorld(d, LoadDepth(d, fc), fc);
 
     float3 n = normalize(cross(wd - wu, wr - wl));
     return (dot(n, n) > 0.0f) ? n : float3(0.0f, 0.0f, 1.0f);
@@ -114,7 +118,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
             }
 
             uint2 samplePx = ClampFull(int2(sampleUv * float2(pc.fullWidth, pc.fullHeight)));
-            float sampleDepth = LoadDepth(samplePx);
+            float sampleDepth = LoadDepth(samplePx, fc);
             if (sampleDepth >= 1.0f)
             {
                 continue;
@@ -146,7 +150,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     }
 
     uint2 fullPx = ClampFull(int2(halfPx * 2u));
-    float depth = LoadDepth(fullPx);
+    float depth = LoadDepth(fullPx, fc);
     if (depth >= 1.0f)
     {
         return float4(1.0f, 0.0f, 0.0f, 1.0f);

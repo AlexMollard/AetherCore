@@ -140,6 +140,7 @@ namespace aether
 		}
 
 		void WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries);
+		[[nodiscard]] gpu::DeviceAddress PublishFrameResourceTable(std::uint32_t frameIndex);
 
 		[[nodiscard]] gpu::DeviceAddress GetResourceTableAddress(std::uint32_t frameIndex) const
 		{

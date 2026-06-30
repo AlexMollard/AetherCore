@@ -260,6 +260,18 @@ namespace aether
 		return *this;
 	}
 
+	void RenderGraph::PopulateResourceTable(std::span<ResourceEntry> entries) const
+	{
+		std::scoped_lock lock(m_debugStateMutex);
+		for (const PassRecord& pass: m_passes)
+		{
+			for (const ShaderResourceBinding& binding: pass.shaderResourceBindings)
+			{
+				binding.writeResourceTable(m_blackboard, entries);
+			}
+		}
+	}
+
 	// -- Pass management ------------------------------------------------------
 
 	RenderGraph::PassBuilder RenderGraph::AddPass(std::string name, std::source_location loc)

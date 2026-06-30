@@ -447,8 +447,8 @@ namespace aether
 		const PreparedDrawList mainSceneDraws = blackboard.Require<PreparedDrawList>("MainSceneDraws");
 		const gpu::Extent2D sceneExtent = m_postProcessStack.GetExtent();
 		const RGImage hdrColor = m_postProcessStack.GetHdrColor();
-		(void) blackboard.DeclareGraphProduct<HdrColorProduct>(std::string{kFrameProductHdrColor},
-		        HdrColorProduct{
+		(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductHdrColor},
+		        FrameTextureProduct{
 		                .image = hdrColor,
 		                .extent = sceneExtent,
 		                .format = PostProcessStack::GetForwardColorFormat(),
@@ -461,8 +461,8 @@ namespace aether
 		        });
 		if (m_sceneDepth.IsValid())
 		{
-			(void) blackboard.DeclareGraphProduct<SceneDepthProduct>(std::string{kFrameProductSceneDepth},
-			        SceneDepthProduct{
+			(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductSceneDepth},
+			        FrameTextureProduct{
 			                .image = m_sceneDepth,
 			                .extent = sceneExtent,
 			                .format = swapchain.GetDepthFormat(),
@@ -476,10 +476,11 @@ namespace aether
 		}
 		if (m_gtaoPass.GetAoImage().IsValid())
 		{
-			(void) blackboard.DeclareGraphProduct<GtaoProduct>(std::string{kFrameProductGtao},
-			        GtaoProduct{
+			(void) blackboard.DeclareGraphProduct<FrameTextureProduct>(std::string{kFrameProductGtao},
+			        FrameTextureProduct{
 			                .image = m_gtaoPass.GetAoImage(),
 			                .extent = m_gtaoPass.GetAoExtent(),
+			                .format = gpu::Format::R8Unorm,
 			                .bindlessSlot = m_gtaoPass.GetAoBindlessSlot(),
 			        },
 			        FrameBlackboard::ProductMetadata{
@@ -499,7 +500,7 @@ namespace aether
 			                .draws = mainSceneDraws,
 			                .extent = sceneExtent,
 			                .consumes = {RenderGraph::Product<MainViewProduct>(kFrameProductMainView)},
-			                .produces = {RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth)},
+			                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
 			        })
 			        .Execute(
 			                [this](PassContext& ctx)
@@ -535,25 +536,16 @@ namespace aether
 		}
 		m_shadowService.RegisterGraphicsPasses(m_renderGraph);
 		m_localShadowService.RegisterGraphicsPasses(m_renderGraph);
-		m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth, m_sceneDepthBindlessSlot);
+		m_gtaoPass.RegisterPasses(m_renderGraph, m_sceneDepth);
 
 		{
 			const RGImage depth = m_sceneDepth.IsValid() ? m_sceneDepth : m_renderGraph.GetSwapchainDepth();
 			std::vector<RenderGraph::FrameProductRef> forwardConsumes{
 			        RenderGraph::Product<MainViewProduct>(kFrameProductMainView),
-			        RenderGraph::Product<DirectionalShadowProduct>(kFrameProductDirectionalShadows),
 			};
 			if (m_sceneDepth.IsValid())
 			{
-				forwardConsumes.push_back(RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth));
-			}
-			if (m_localShadowService.GetAtlasRGImage().IsValid())
-			{
-				forwardConsumes.push_back(RenderGraph::Product<LocalShadowProduct>(kFrameProductLocalShadows));
-			}
-			if (m_gtaoPass.GetAoImage().IsValid())
-			{
-				forwardConsumes.push_back(RenderGraph::Product<GtaoProduct>(kFrameProductGtao));
+				forwardConsumes.push_back(RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth));
 			}
 			if (frame.lighting != nullptr)
 			{
@@ -566,28 +558,12 @@ namespace aether
 			        .draws = mainSceneDraws,
 			        .extent = sceneExtent,
 			        .consumes = std::move(forwardConsumes),
-			        .produces = {RenderGraph::Product<HdrColorProduct>(kFrameProductHdrColor)},
+			        .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 			});
 
-			for (const RGImage shadowMap: m_shadowService.GetShadowDepthImages())
-			{
-				if (shadowMap.IsValid())
-				{
-					pass.ReadTexture(shadowMap);
-				}
-			}
-
-			const RGImage localShadowAtlas = m_localShadowService.GetAtlasRGImage();
-			if (localShadowAtlas.IsValid())
-			{
-				pass.ReadTexture(localShadowAtlas);
-			}
-
-			const RGImage gtaoImage = m_gtaoPass.GetAoImage();
-			if (gtaoImage.IsValid())
-			{
-				pass.ReadTexture(gtaoImage);
-			}
+			pass.ConsumeTextureProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows, FrameResourceId::DirectionalShadowC0);
+			pass.ConsumeTextureProduct<LocalShadowProduct>(kFrameProductLocalShadows, FrameResourceId::LocalShadowAtlas);
+			pass.ConsumeTextureProduct<FrameTextureProduct>(kFrameProductGtao, FrameResourceId::Gtao);
 
 			if (auto* lighting = frame.lighting)
 			{
@@ -635,5 +611,26 @@ namespace aether
 		const std::size_t byteCount = entries.size() * sizeof(ResourceEntry);
 		std::memcpy(m_resourceTableBuffers[frameIndex].mapped, entries.data(), byteCount);
 		gpu::ResourceRegistry::FlushMappedBuffer(m_resourceTableBuffers[frameIndex].handle, 0, static_cast<gpu::DeviceSize>(byteCount));
+	}
+
+	gpu::DeviceAddress RenderingSubsystem::PublishFrameResourceTable(std::uint32_t frameIndex)
+	{
+		AE_PROFILE_ZONE();
+		std::array<ResourceEntry, kFrameResourceCount> resourceTable{};
+		resourceTable.fill(ResourceEntry{});
+
+		m_renderGraph.PopulateResourceTable(std::span(resourceTable));
+
+		if (!m_shadowService.IsDirectionalShadowEnabledForFrame(frameIndex))
+		{
+			for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
+			{
+				const auto id = static_cast<std::size_t>(static_cast<std::uint32_t>(FrameResourceId::DirectionalShadowC0) + cascade);
+				resourceTable[id] = ResourceEntry{};
+			}
+		}
+
+		WriteResourceTable(frameIndex, std::span(resourceTable));
+		return GetResourceTableAddress(frameIndex);
 	}
 } // namespace aether

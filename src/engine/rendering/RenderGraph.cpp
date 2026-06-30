@@ -729,8 +729,7 @@ namespace aether
 		{
 			std::vector<std::string> warnings;
 			const bool knownProduct = validateBlackboardProduct.template operator()<PreparedDrawList>(info, warnings) || validateBlackboardProduct.template operator()<MainViewProduct>(info, warnings)
-			                          || validateBlackboardProduct.template operator()<SceneDepthProduct>(info, warnings) || validateBlackboardProduct.template operator()<HdrColorProduct>(info, warnings)
-			                          || validateBlackboardProduct.template operator()<GtaoProduct>(info, warnings) || validateBlackboardProduct.template operator()<DirectionalShadowProduct>(info, warnings)
+			                          || validateBlackboardProduct.template operator()<FrameTextureProduct>(info, warnings) || validateBlackboardProduct.template operator()<FrameTextureArrayProduct>(info, warnings)
 			                          || validateBlackboardProduct.template operator()<LocalShadowProduct>(info, warnings) || validateBlackboardProduct.template operator()<LightBuffersProduct>(info, warnings);
 			if (knownProduct && !warnings.empty())
 			{

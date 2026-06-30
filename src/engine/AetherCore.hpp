@@ -77,7 +77,7 @@ namespace aether
 
 		void BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc);
 		void PatchShadowIndices(std::uint32_t frameIdx);
-		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, const FrameConstants& fc);
+		void UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc);
 		void SubmitAndAdvance(std::uint32_t frameIdx);
 
 		ServiceContainer m_services;

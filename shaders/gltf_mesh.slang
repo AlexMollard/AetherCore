@@ -143,10 +143,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     }
     // Sample GTAO from the resource table.
     ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
-    if (aoEntry.type != kResourceTypeInvalid && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
+    if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
     {
         uint aoSlot = uint(aoEntry.address);
-        float2 aoUv = (input.svPosition.xy * 0.5f + 0.5f) / float2(aoEntry.width, aoEntry.height);
+        float2 aoUv = input.svPosition.xy / (float2(aoEntry.width, aoEntry.height) * 2.0f);
         float gtao = g_textures[aoSlot].SampleLevel(g_linearSampler, saturate(aoUv), 0.0f).r;
         ao *= lerp(1.0f, saturate(gtao), 0.7f);
     }

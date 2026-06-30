@@ -391,13 +391,14 @@ namespace aether
 		Count,
 	};
 
+	inline constexpr std::uint32_t kResourceTypeInvalid = 0xFFFFFFFFu;
 	inline constexpr std::uint32_t kResourceTypeBindlessTexture = 0u;
 	inline constexpr std::uint32_t kResourceTypeDeviceAddress = 1u;
 
 	struct ResourceEntry
 	{
 		std::uint64_t address = 0; // bindless slot or BDA
-		std::uint32_t type = 0;    // kResourceTypeBindlessTexture / kResourceTypeDeviceAddress
+		std::uint32_t type = kResourceTypeInvalid;
 		std::uint32_t width = 0;   // resource width in texels
 		std::uint32_t height = 0;  // resource height in texels
 		std::uint32_t format = 0;  // resource format (VkFormat)

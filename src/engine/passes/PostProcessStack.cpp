@@ -147,7 +147,7 @@ namespace aether
 		                                .color = m_ldrColor,
 		                                .extent = m_extent,
 		                                .loadOp = gpu::LoadOp::DontCare,
-		                                .consumes = {RenderGraph::Product<HdrColorProduct>(kFrameProductHdrColor)},
+		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 		                        })
 		        .ReadTexture(m_hdrColor)
 		        .Execute(

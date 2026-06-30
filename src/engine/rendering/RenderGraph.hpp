@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -127,6 +128,13 @@ namespace aether
 			std::vector<FrameProductRef> produces;
 		};
 
+		struct ShaderResourceBinding
+		{
+			FrameProductRef product;
+			FrameResourceId resourceId = FrameResourceId::Count;
+			std::function<void(const FrameBlackboard& blackboard, std::span<ResourceEntry> entries)> writeResourceTable;
+		};
+
 		RenderGraph();
 		~RenderGraph();
 
@@ -231,6 +239,39 @@ namespace aether
 			PassBuilder& ConsumesProduct(std::string_view name)
 			{
 				return ConsumesProductRef(RenderGraph::Product<T>(name));
+			}
+
+			template<typename T>
+			PassBuilder& ConsumeTextureProduct(std::string_view name, FrameResourceId resourceId)
+			{
+				ConsumesProduct<T>(name);
+
+				if (const T* product = m_graph.m_blackboard.TryGet<T>(name))
+				{
+					std::vector<RGImage> sampledImages;
+					FrameProductShaderResources<T>::AppendSampledImages(*product, sampledImages);
+					for (const RGImage image: sampledImages)
+					{
+						ReadTexture(image);
+					}
+				}
+
+				std::string productName{name};
+				ShaderResourceBinding binding{
+				        .product = RenderGraph::Product<T>(name),
+				        .resourceId = resourceId,
+				        .writeResourceTable = [productName = std::move(productName), resourceId](const FrameBlackboard& blackboard, std::span<ResourceEntry> entries)
+				        {
+					        if (const T* product = blackboard.TryGet<T>(productName))
+					        {
+						        FrameProductShaderResources<T>::WriteResourceTable(*product, resourceId, entries);
+					        }
+				        },
+				};
+
+				std::scoped_lock lock(m_graph.m_debugStateMutex);
+				m_graph.m_passes[m_passIndex].shaderResourceBindings.push_back(std::move(binding));
+				return *this;
 			}
 
 			// Convenience: mark this compute pass for the async compute queue.
@@ -381,6 +422,7 @@ namespace aether
 		void SetPassDebugDisabled(std::string_view name, bool disabled);
 		[[nodiscard]] bool IsPassDebugDisabled(std::string_view name) const;
 		void ClearDebugDisabledPasses();
+		void PopulateResourceTable(std::span<ResourceEntry> entries) const;
 
 		// Execute the compiled frame graph for the current frame.
 		void Execute(gpu::CommandList& recorder, const FrameResourceContext& frame);
@@ -547,6 +589,7 @@ namespace aether
 			std::vector<PreparedDrawList> consumedDrawLists;
 			std::vector<FrameProductRef> producedFrameProducts;
 			std::vector<FrameProductRef> consumedFrameProducts;
+			std::vector<ShaderResourceBinding> shaderResourceBindings;
 			std::vector<std::string> contractWarnings;
 #ifndef NDEBUG
 			std::source_location declaredAt;

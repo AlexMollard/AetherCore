@@ -29,7 +29,7 @@ namespace aether
 		void Create(const Desc& desc);
 		void Destroy();
 
-		void RegisterPasses(RenderGraph& graph, RGImage depth, std::uint32_t depthBindlessSlot);
+		void RegisterPasses(RenderGraph& graph, RGImage depth);
 
 		[[nodiscard]] std::uint32_t GetAoBindlessSlot() const
 		{

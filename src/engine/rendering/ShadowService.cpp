@@ -71,6 +71,7 @@ namespace aether
 		};
 
 		const gpu::Format depthFormat = swapchain.GetDepthFormat();
+		m_shadowDepthFormat = depthFormat;
 		for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)
 		{
 			const gpu::TextureDesc desc{
@@ -136,6 +137,7 @@ namespace aether
 			m_shadowMapSlots[cascade] = 0xFFFFFFFFu;
 		}
 		m_bindless = nullptr;
+		m_shadowDepthFormat = gpu::Format::Undefined;
 	}
 
 	void ShadowService::RecreatePipeline(gpu::Device device, gpu::Format depthFormat)
@@ -193,10 +195,12 @@ namespace aether
 		{
 			m_shadowDepth[cascade] = graph.RegisterImage(m_shadowDepthImage[cascade], m_shadowDepthView[cascade], gpu::ImageAspect::Depth);
 		}
-		(void) graph.GetBlackboard().DeclareGraphProduct<DirectionalShadowProduct>(std::string{kFrameProductDirectionalShadows},
-		        DirectionalShadowProduct{
-		                .depthImages = std::vector<RGImage>{m_shadowDepth.begin(), m_shadowDepth.end()},
+		(void) graph.GetBlackboard().DeclareGraphProduct<FrameTextureArrayProduct>(std::string{kFrameProductDirectionalShadows},
+		        FrameTextureArrayProduct{
+		                .images = std::vector<RGImage>{m_shadowDepth.begin(), m_shadowDepth.end()},
 		                .bindlessSlots = std::vector<std::uint32_t>{m_shadowMapSlots.begin(), m_shadowMapSlots.end()},
+		                .extents = std::vector<gpu::Extent2D>(m_shadowMapExtents.begin(), m_shadowMapExtents.end()),
+		                .format = m_shadowDepthFormat,
 		        });
 	}
 
@@ -249,7 +253,7 @@ namespace aether
 			                });
 		}
 
-		graph.AddPass("$ShadowDepthTransition").ProducesProduct<DirectionalShadowProduct>(kFrameProductDirectionalShadows).ReadTexture(m_shadowDepth[0]).ReadTexture(m_shadowDepth[1]).ReadTexture(m_shadowDepth[2]).Execute([](PassContext&) {});
+		graph.AddPass("$ShadowDepthTransition").ProducesProduct<FrameTextureArrayProduct>(kFrameProductDirectionalShadows).ReadTexture(m_shadowDepth[0]).ReadTexture(m_shadowDepth[1]).ReadTexture(m_shadowDepth[2]).Execute([](PassContext&) {});
 	}
 
 	void ShadowService::BuildFrameShadowData(const RenderFramePacket& packet, const std::uint32_t frameIdx, CameraManager& cameraManager, FrameConstants& fc)
@@ -262,11 +266,12 @@ namespace aether
 		}
 		lightDir = glm::normalize(lightDir);
 
-		m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight] = packet.directionalShadowEnabled;
+		const bool directionalShadowFrameEnabled = packet.directionalShadowEnabled && lightDir.y > 0.0f;
+		m_directionalShadowFrameEnabled[frameIdx % kMaxFramesInFlight] = directionalShadowFrameEnabled;
 
 		// When the light is at or below the horizon, shadows are not visible
 		// to a ground-level camera. Skip CSM entirely to save GPU work.
-		if (!packet.directionalShadowEnabled || lightDir.y <= 0.0f)
+		if (!directionalShadowFrameEnabled)
 		{
 			DisableDirectionalShadows(fc);
 			return;

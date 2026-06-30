@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <format>
 #include <limits>
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -10,6 +11,7 @@
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "rendering/FrameBlackboard.hpp"
+#include "rendering/GpuContracts.hpp"
 
 namespace aether
 {
@@ -72,7 +74,7 @@ namespace aether
 		std::uint64_t frameConstantsAddr = 0;
 	};
 
-	struct SceneDepthProduct
+	struct FrameTextureProduct
 	{
 		RGImage image{};
 		gpu::Extent2D extent{};
@@ -80,26 +82,12 @@ namespace aether
 		std::uint32_t bindlessSlot = UINT32_MAX;
 	};
 
-	struct HdrColorProduct
+	struct FrameTextureArrayProduct
 	{
-		RGImage image{};
-		gpu::Extent2D extent{};
-		gpu::Format format = gpu::Format::Undefined;
-		std::uint32_t bindlessSlot = UINT32_MAX;
-	};
-
-	struct GtaoProduct
-	{
-		RGImage image{};
-		gpu::Extent2D extent{};
-		gpu::Format format = gpu::Format::R8Unorm;
-		std::uint32_t bindlessSlot = UINT32_MAX;
-	};
-
-	struct DirectionalShadowProduct
-	{
-		std::vector<RGImage> depthImages;
+		std::vector<RGImage> images;
 		std::vector<std::uint32_t> bindlessSlots;
+		std::vector<gpu::Extent2D> extents;
+		gpu::Format format = gpu::Format::Undefined;
 	};
 
 	struct LocalShadowProduct
@@ -116,15 +104,7 @@ namespace aether
 		RGBuffer tileIndices{};
 	};
 
-	template<typename T>
-	struct FrameProductTraits
-	{
-		static void Validate(std::string_view /*name*/, const T& /*product*/, const FrameBlackboard::ProductMetadata& /*metadata*/, std::vector<std::string>& /*warnings*/)
-		{
-		}
-	};
-
-	namespace render_graph_detail
+	namespace detail
 	{
 		[[nodiscard]] inline bool IsZeroExtent(gpu::Extent2D extent) noexcept
 		{
@@ -136,46 +116,113 @@ namespace aether
 			return lhs.width != rhs.width || lhs.height != rhs.height;
 		}
 
-		inline void ValidateImageProduct(
-		        std::string_view name, std::string_view label, RGImage image, gpu::Extent2D extent, gpu::Format format, std::uint32_t bindlessSlot, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
+		inline void ValidateImageProduct(std::string_view name, RGImage image, gpu::Extent2D extent, gpu::Format format, std::uint32_t bindlessSlot, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
 		{
 			if (!image.IsValid())
 			{
-				warnings.push_back(std::format("frame product '{}:{}' has no valid image handle.", label, name));
+				warnings.push_back(std::format("frame product '{}' has no valid image handle.", name));
 			}
 			if (IsZeroExtent(extent))
 			{
-				warnings.push_back(std::format("frame product '{}:{}' has zero extent.", label, name));
+				warnings.push_back(std::format("frame product '{}' has zero extent.", name));
 			}
 			if (format == gpu::Format::Undefined)
 			{
-				warnings.push_back(std::format("frame product '{}:{}' has undefined format.", label, name));
+				warnings.push_back(std::format("frame product '{}' has undefined format.", name));
 			}
 			if (bindlessSlot == UINT32_MAX)
 			{
-				warnings.push_back(std::format("frame product '{}:{}' has no bindless sampled slot.", label, name));
+				warnings.push_back(std::format("frame product '{}' has no bindless sampled slot.", name));
 			}
 			if (metadata.extent.has_value() && ExtentMismatch(*metadata.extent, extent))
 			{
-				warnings.push_back(std::format("frame product '{}:{}' metadata extent does not match product extent.", label, name));
+				warnings.push_back(std::format("frame product '{}' metadata extent does not match product extent.", name));
 			}
 			if (metadata.format != gpu::Format::Undefined && metadata.format != format)
 			{
-				warnings.push_back(std::format("frame product '{}:{}' metadata format does not match product format.", label, name));
+				warnings.push_back(std::format("frame product '{}' metadata format does not match product format.", name));
 			}
 			if (metadata.bindlessSlot != UINT32_MAX && metadata.bindlessSlot != bindlessSlot)
 			{
-				warnings.push_back(std::format("frame product '{}:{}' metadata bindless slot does not match product bindless slot.", label, name));
+				warnings.push_back(std::format("frame product '{}' metadata bindless slot does not match product bindless slot.", name));
 			}
 		}
-	} // namespace render_graph_detail
+
+		inline void AppendValidImage(RGImage image, std::vector<RGImage>& images)
+		{
+			if (image.IsValid())
+			{
+				images.push_back(image);
+			}
+		}
+
+		inline void WriteTextureResourceEntry(std::span<ResourceEntry> entries, FrameResourceId id, std::uint32_t bindlessSlot, gpu::Extent2D extent = {}, gpu::Format format = gpu::Format::Undefined)
+		{
+			const auto index = static_cast<std::size_t>(id);
+			if (index >= entries.size() || bindlessSlot == UINT32_MAX)
+			{
+				return;
+			}
+
+			entries[index] = ResourceEntry{
+			        .address = bindlessSlot,
+			        .type = kResourceTypeBindlessTexture,
+			        .width = extent.width,
+			        .height = extent.height,
+			        .format = static_cast<std::uint32_t>(format),
+			};
+		}
+	} // namespace detail
+
+	template<typename T>
+	struct FrameProductTraits
+	{
+		static void Validate(std::string_view /*name*/, const T& /*product*/, const FrameBlackboard::ProductMetadata& /*metadata*/, std::vector<std::string>& /*warnings*/)
+		{
+		}
+	};
+
+	template<typename T>
+	struct FrameProductShaderResources
+	{
+		static void AppendSampledImages(const T& /*product*/, std::vector<RGImage>& /*images*/)
+		{
+		}
+
+		static void WriteResourceTable(const T& /*product*/, FrameResourceId /*resourceId*/, std::span<ResourceEntry> /*entries*/)
+		{
+		}
+	};
+
+	template<>
+	struct FrameProductTraits<FrameTextureProduct>
+	{
+		static void Validate(std::string_view name, const FrameTextureProduct& product, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
+		{
+			detail::ValidateImageProduct(name, product.image, product.extent, product.format, product.bindlessSlot, metadata, warnings);
+		}
+	};
+
+	template<>
+	struct FrameProductShaderResources<FrameTextureProduct>
+	{
+		static void AppendSampledImages(const FrameTextureProduct& product, std::vector<RGImage>& images)
+		{
+			detail::AppendValidImage(product.image, images);
+		}
+
+		static void WriteResourceTable(const FrameTextureProduct& product, FrameResourceId resourceId, std::span<ResourceEntry> entries)
+		{
+			detail::WriteTextureResourceEntry(entries, resourceId, product.bindlessSlot, product.extent, product.format);
+		}
+	};
 
 	template<>
 	struct FrameProductTraits<MainViewProduct>
 	{
 		static void Validate(std::string_view name, const MainViewProduct& product, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
 		{
-			if (render_graph_detail::IsZeroExtent(product.extent))
+			if (detail::IsZeroExtent(product.extent))
 			{
 				warnings.push_back(std::format("frame product 'MainViewProduct:{}' has zero extent.", name));
 			}
@@ -183,7 +230,7 @@ namespace aether
 			{
 				warnings.push_back(std::format("frame product 'MainViewProduct:{}' has no frame constants address.", name));
 			}
-			if (metadata.extent.has_value() && render_graph_detail::ExtentMismatch(*metadata.extent, product.extent))
+			if (metadata.extent.has_value() && detail::ExtentMismatch(*metadata.extent, product.extent))
 			{
 				warnings.push_back(std::format("frame product 'MainViewProduct:{}' metadata extent does not match product extent.", name));
 			}
@@ -195,55 +242,59 @@ namespace aether
 	};
 
 	template<>
-	struct FrameProductTraits<SceneDepthProduct>
+	struct FrameProductTraits<FrameTextureArrayProduct>
 	{
-		static void Validate(std::string_view name, const SceneDepthProduct& product, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
+		static void Validate(std::string_view name, const FrameTextureArrayProduct& product, const FrameBlackboard::ProductMetadata& /*metadata*/, std::vector<std::string>& warnings)
 		{
-			render_graph_detail::ValidateImageProduct(name, "SceneDepthProduct", product.image, product.extent, product.format, product.bindlessSlot, metadata, warnings);
-		}
-	};
-
-	template<>
-	struct FrameProductTraits<HdrColorProduct>
-	{
-		static void Validate(std::string_view name, const HdrColorProduct& product, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
-		{
-			render_graph_detail::ValidateImageProduct(name, "HdrColorProduct", product.image, product.extent, product.format, product.bindlessSlot, metadata, warnings);
-		}
-	};
-
-	template<>
-	struct FrameProductTraits<GtaoProduct>
-	{
-		static void Validate(std::string_view name, const GtaoProduct& product, const FrameBlackboard::ProductMetadata& metadata, std::vector<std::string>& warnings)
-		{
-			render_graph_detail::ValidateImageProduct(name, "GtaoProduct", product.image, product.extent, product.format, product.bindlessSlot, metadata, warnings);
-		}
-	};
-
-	template<>
-	struct FrameProductTraits<DirectionalShadowProduct>
-	{
-		static void Validate(std::string_view name, const DirectionalShadowProduct& product, const FrameBlackboard::ProductMetadata& /*metadata*/, std::vector<std::string>& warnings)
-		{
-			if (product.depthImages.empty())
+			if (product.images.empty())
 			{
-				warnings.push_back(std::format("frame product 'DirectionalShadowProduct:{}' has no cascade images.", name));
+				warnings.push_back(std::format("frame texture array product '{}' has no images.", name));
 			}
-			if (product.depthImages.size() != product.bindlessSlots.size())
+			if (product.images.size() != product.bindlessSlots.size())
 			{
-				warnings.push_back(std::format("frame product 'DirectionalShadowProduct:{}' image count does not match bindless slot count.", name));
+				warnings.push_back(std::format("frame texture array product '{}' image count does not match bindless slot count.", name));
 			}
-			for (std::size_t index = 0; index < product.depthImages.size(); ++index)
+			if (!product.extents.empty() && product.images.size() != product.extents.size())
 			{
-				if (!product.depthImages[index].IsValid())
+				warnings.push_back(std::format("frame texture array product '{}' image count does not match extent count.", name));
+			}
+			for (std::size_t index = 0; index < product.images.size(); ++index)
+			{
+				if (!product.images[index].IsValid())
 				{
-					warnings.push_back(std::format("frame product 'DirectionalShadowProduct:{}' cascade {} has no valid image handle.", name, index));
+					warnings.push_back(std::format("frame texture array product '{}' image {} has no valid image handle.", name, index));
 				}
 				if (index >= product.bindlessSlots.size() || product.bindlessSlots[index] == UINT32_MAX)
 				{
-					warnings.push_back(std::format("frame product 'DirectionalShadowProduct:{}' cascade {} has no bindless sampled slot.", name, index));
+					warnings.push_back(std::format("frame texture array product '{}' image {} has no bindless sampled slot.", name, index));
 				}
+			}
+		}
+	};
+
+	template<>
+	struct FrameProductShaderResources<FrameTextureArrayProduct>
+	{
+		static void AppendSampledImages(const FrameTextureArrayProduct& product, std::vector<RGImage>& images)
+		{
+			for (const RGImage image: product.images)
+			{
+				detail::AppendValidImage(image, images);
+			}
+		}
+
+		static void WriteResourceTable(const FrameTextureArrayProduct& product, FrameResourceId resourceId, std::span<ResourceEntry> entries)
+		{
+			const auto baseId = static_cast<std::uint32_t>(resourceId);
+			for (std::size_t index = 0; index < product.bindlessSlots.size(); ++index)
+			{
+				if (index >= product.images.size() || !product.images[index].IsValid())
+				{
+					continue;
+				}
+				const auto entryId = static_cast<FrameResourceId>(baseId + static_cast<std::uint32_t>(index));
+				const gpu::Extent2D extent = index < product.extents.size() ? product.extents[index] : gpu::Extent2D{};
+				detail::WriteTextureResourceEntry(entries, entryId, product.bindlessSlots[index], extent, product.format);
 			}
 		}
 	};
@@ -265,6 +316,20 @@ namespace aether
 			{
 				warnings.push_back(std::format("frame product 'LocalShadowProduct:{}' has no bindless atlas slot.", name));
 			}
+		}
+	};
+
+	template<>
+	struct FrameProductShaderResources<LocalShadowProduct>
+	{
+		static void AppendSampledImages(const LocalShadowProduct& product, std::vector<RGImage>& images)
+		{
+			detail::AppendValidImage(product.atlasImage, images);
+		}
+
+		static void WriteResourceTable(const LocalShadowProduct& product, FrameResourceId resourceId, std::span<ResourceEntry> entries)
+		{
+			detail::WriteTextureResourceEntry(entries, resourceId, product.atlasBindlessSlot);
 		}
 	};
 

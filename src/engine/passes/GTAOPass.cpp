@@ -137,14 +137,14 @@ namespace aether
 		m_passesRegistered = false;
 	}
 
-	void GTAOPass::RegisterPasses(RenderGraph& graph, RGImage depth, const std::uint32_t depthBindlessSlot)
+	void GTAOPass::RegisterPasses(RenderGraph& graph, RGImage depth)
 	{
 		AE_PROFILE_ZONE();
 		if (m_passesRegistered)
 		{
 			return;
 		}
-		if (!depth.IsValid() || depthBindlessSlot == kInvalidBindlessSlot || !m_rawAoImage.IsValid() || !m_denoisedAoImage.IsValid())
+		if (!depth.IsValid() || !m_rawAoImage.IsValid() || !m_denoisedAoImage.IsValid())
 		{
 			return;
 		}
@@ -154,11 +154,11 @@ namespace aether
 		                                .color = m_rawAoImage,
 		                                .extent = m_aoExtent,
 		                                .loadOp = gpu::LoadOp::DontCare,
-		                                .consumes = {RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth)},
+		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
 		                        })
-		        .ReadTexture(depth)
+		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 		        .Execute(
-		                [this, depthBindlessSlot](PassContext& ctx)
+		                [this](PassContext& ctx)
 		                {
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
@@ -166,7 +166,6 @@ namespace aether
 
 			                struct
 			                {
-				                std::uint32_t depthSlot;
 				                std::uint32_t fullWidth;
 				                std::uint32_t fullHeight;
 				                std::uint32_t frameIndex;
@@ -176,7 +175,6 @@ namespace aether
 				                std::uint32_t _pad0;
 				                std::uint32_t _pad1;
 			                } push{
-			                        .depthSlot = depthBindlessSlot,
 			                        .fullWidth = m_extent.width,
 			                        .fullHeight = m_extent.height,
 			                        .frameIndex = static_cast<std::uint32_t>(ctx.frame.frameIndex),
@@ -194,13 +192,13 @@ namespace aether
 		                                .color = m_denoisedAoImage,
 		                                .extent = m_aoExtent,
 		                                .loadOp = gpu::LoadOp::DontCare,
-		                                .consumes = {RenderGraph::Product<SceneDepthProduct>(kFrameProductSceneDepth)},
-		                                .produces = {RenderGraph::Product<GtaoProduct>(kFrameProductGtao)},
+		                                .consumes = {RenderGraph::Product<FrameTextureProduct>(kFrameProductSceneDepth)},
+		                                .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductGtao)},
 		                        })
-		        .ReadTexture(depth)
+		        .ConsumeTextureProduct<FrameTextureProduct>(kFrameProductSceneDepth, FrameResourceId::SceneDepth)
 		        .ReadTexture(m_rawAoImage)
 		        .Execute(
-		                [this, depthBindlessSlot](PassContext& ctx)
+		                [this](PassContext& ctx)
 		                {
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                m_bindlessManager->CmdBindHeaps(cmd);
@@ -208,8 +206,8 @@ namespace aether
 
 			                struct
 			                {
-				                std::uint32_t depthSlot;
 				                std::uint32_t srcAoSlot;
+				                std::uint64_t frameConstantsAddr;
 				                std::uint32_t fullWidth;
 				                std::uint32_t fullHeight;
 				                std::uint32_t aoWidth;
@@ -217,8 +215,8 @@ namespace aether
 				                float edgeThreshold;
 				                float spatialSigma;
 			                } push{
-			                        .depthSlot = depthBindlessSlot,
 			                        .srcAoSlot = m_rawAoBindlessSlot,
+			                        .frameConstantsAddr = ctx.frameConstantsAddr,
 			                        .fullWidth = m_extent.width,
 			                        .fullHeight = m_extent.height,
 			                        .aoWidth = m_aoExtent.width,

@@ -109,5 +109,6 @@ namespace aether
 		        gpu::Extent2D{1024u, 1024u},
 		};
 		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
+		gpu::Format m_shadowDepthFormat = gpu::Format::Undefined;
 	};
 } // namespace aether
