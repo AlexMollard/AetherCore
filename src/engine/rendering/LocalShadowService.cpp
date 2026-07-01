@@ -61,8 +61,8 @@ namespace aether
 		std::uint32_t blurOffsetX;
 		std::uint32_t blurOffsetY;
 		std::uint32_t isHorizontal;
-		float _pad0;
-		float _pad1;
+		std::uint32_t blurWidth;
+		std::uint32_t blurHeight;
 		float _pad2;
 		gpu::DeviceAddress srcAddr;
 		gpu::DeviceAddress dstAddr;
@@ -72,8 +72,8 @@ namespace aether
 	static_assert(offsetof(BlurPushConstants, atlasWidth) == 0, "BlurPushConstants atlasWidth offset mismatch");
 	static_assert(offsetof(BlurPushConstants, blurOffsetX) == 8, "BlurPushConstants blurOffsetX offset mismatch");
 	static_assert(offsetof(BlurPushConstants, isHorizontal) == 16, "BlurPushConstants isHorizontal offset mismatch");
-	static_assert(offsetof(BlurPushConstants, _pad0) == 20, "BlurPushConstants _pad0 offset mismatch");
-	static_assert(offsetof(BlurPushConstants, _pad1) == 24, "BlurPushConstants _pad1 offset mismatch");
+	static_assert(offsetof(BlurPushConstants, blurWidth) == 20, "BlurPushConstants blurWidth offset mismatch");
+	static_assert(offsetof(BlurPushConstants, blurHeight) == 24, "BlurPushConstants blurHeight offset mismatch");
 	static_assert(offsetof(BlurPushConstants, _pad2) == 28, "BlurPushConstants _pad2 offset mismatch");
 	static_assert(offsetof(BlurPushConstants, srcAddr) == 32, "BlurPushConstants srcAddr offset mismatch");
 	static_assert(offsetof(BlurPushConstants, dstAddr) == 40, "BlurPushConstants dstAddr offset mismatch");
@@ -606,20 +606,28 @@ namespace aether
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
-			                const BlurPushConstants hPc{
-			                        .atlasWidth = bounds.width,
-			                        .atlasHeight = bounds.height,
-			                        .blurOffsetX = 0,
-			                        .blurOffsetY = 0,
-			                        .isHorizontal = 1u,
-			                        ._pad0 = 0.0f,
-			                        ._pad1 = 0.0f,
-			                        ._pad2 = 0.0f,
-			                        .srcAddr = m_blurBufferAddr,
-			                        .dstAddr = m_blurScratchBufferAddr,
-			                };
-			                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
-			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                for (const PerLightShadow& pls: m_perLightShadows)
+			                {
+				                if (!pls.region.IsValid())
+				                {
+					                continue;
+				                }
+
+				                const BlurPushConstants hPc{
+				                        .atlasWidth = bounds.width,
+				                        .atlasHeight = bounds.height,
+				                        .blurOffsetX = pls.region.x - bounds.x,
+				                        .blurOffsetY = pls.region.y - bounds.y,
+				                        .isHorizontal = 1u,
+				                        .blurWidth = pls.region.width,
+				                        .blurHeight = pls.region.height,
+				                        ._pad2 = 0.0f,
+				                        .srcAddr = m_blurBufferAddr,
+				                        .dstAddr = m_blurScratchBufferAddr,
+				                };
+				                cmd.PushDataRaw(0, std::as_bytes(std::span{&hPc, 1}));
+				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
+			                }
 		                });
 
 		graph.AddComputeBufferPass({
@@ -640,20 +648,28 @@ namespace aether
 
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                cmd.BindComputePipeline(const_cast<void*>(blurPipeline.state));
-			                const BlurPushConstants vPc{
-			                        .atlasWidth = bounds.width,
-			                        .atlasHeight = bounds.height,
-			                        .blurOffsetX = 0,
-			                        .blurOffsetY = 0,
-			                        .isHorizontal = 0u,
-			                        ._pad0 = 0.0f,
-			                        ._pad1 = 0.0f,
-			                        ._pad2 = 0.0f,
-			                        .srcAddr = m_blurScratchBufferAddr,
-			                        .dstAddr = m_blurBufferAddr,
-			                };
-			                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
-			                cmd.Dispatch((bounds.width + 15u) / 16u, (bounds.height + 15u) / 16u, 1u);
+			                for (const PerLightShadow& pls: m_perLightShadows)
+			                {
+				                if (!pls.region.IsValid())
+				                {
+					                continue;
+				                }
+
+				                const BlurPushConstants vPc{
+				                        .atlasWidth = bounds.width,
+				                        .atlasHeight = bounds.height,
+				                        .blurOffsetX = pls.region.x - bounds.x,
+				                        .blurOffsetY = pls.region.y - bounds.y,
+				                        .isHorizontal = 0u,
+				                        .blurWidth = pls.region.width,
+				                        .blurHeight = pls.region.height,
+				                        ._pad2 = 0.0f,
+				                        .srcAddr = m_blurScratchBufferAddr,
+				                        .dstAddr = m_blurBufferAddr,
+				                };
+				                cmd.PushDataRaw(0, std::as_bytes(std::span{&vPc, 1}));
+				                cmd.Dispatch((pls.region.width + 15u) / 16u, (pls.region.height + 15u) / 16u, 1u);
+			                }
 		                });
 
 		graph.AddComputePass("$VSMCopyToAtlas")

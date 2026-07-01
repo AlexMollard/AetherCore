@@ -16,8 +16,7 @@ struct BlurPushConstants
     [[vk::offset(0)]]  uint2  atlasSize;
     [[vk::offset(8)]]  uint2  blurOffset;  // Top-left corner of the region to blur
     [[vk::offset(16)]] uint   isHorizontal;
-    [[vk::offset(20)]] float  _pad0;
-    [[vk::offset(24)]] float  _pad1;
+    [[vk::offset(20)]] uint2  blurExtent;
     [[vk::offset(28)]] float  _pad2;
     [[vk::offset(32)]] DevicePtr<float2> srcData;
     [[vk::offset(40)]] DevicePtr<float2> dstData;
@@ -35,10 +34,9 @@ groupshared float2 tile[20][20];
 
 uint2 ClampCoord(int2 p, uint2 atlasSize)
 {
-    return uint2(
-        uint(clamp(p.x, 0, int(atlasSize.x) - 1)),
-        uint(clamp(p.y, 0, int(atlasSize.y) - 1))
-    );
+    int2 minP = int2(pc.blurOffset);
+    int2 maxP = int2(min(pc.blurOffset + pc.blurExtent - uint2(1u, 1u), atlasSize - uint2(1u, 1u)));
+    return uint2(clamp(p, minP, maxP));
 }
 
 float2 LoadInput(uint2 coord, uint2 atlasSize, DevicePtr<float2> src)
@@ -55,7 +53,7 @@ void StoreOutput(uint2 coord, uint2 atlasSize, float2 value, DevicePtr<float2> d
 [shader("compute")]
 void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
 {
-    if (pc.srcData.addr == 0 || pc.dstData.addr == 0 || pc.atlasSize.x == 0 || pc.atlasSize.y == 0)
+    if (pc.srcData.addr == 0 || pc.dstData.addr == 0 || pc.atlasSize.x == 0 || pc.atlasSize.y == 0 || pc.blurExtent.x == 0 || pc.blurExtent.y == 0)
     {
         return;
     }
@@ -116,7 +114,7 @@ void main(uint3 dtid : SV_DispatchThreadID, uint3 gtid : SV_GroupThreadID)
     // ── Phase 2: Compute convolution from LDS ──
     // Only valid threads (within blur region bounds) produce output.
     uint2 localPos = dtid.xy;
-    if (localPos.x < pc.atlasSize.x && localPos.y < pc.atlasSize.y)
+    if (localPos.x < pc.blurExtent.x && localPos.y < pc.blurExtent.y && globalPos.x < pc.atlasSize.x && globalPos.y < pc.atlasSize.y)
     {
         float2 result = float2(0.0, 0.0);
         [unroll]

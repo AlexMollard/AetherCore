@@ -44,8 +44,34 @@ float2 LocalShadowUV(float3 worldPos, float4x4 viewProj, float4 atlasRegion)
     return atlasRegion.xy + uv * atlasRegion.zw;
 }
 
+float2 LoadVsmMoments(uint atlasSlot, float2 atlasUV, float4 atlasRegion, uint2 atlasSize)
+{
+    float2 atlasSizeF = float2(atlasSize);
+    uint2 regionMin = uint2(floor(atlasRegion.xy * atlasSizeF + 0.5f));
+    uint2 regionSize = max(uint2(1u, 1u), uint2(floor(atlasRegion.zw * atlasSizeF + 0.5f)));
+    uint2 regionMax = min(atlasSize - uint2(1u, 1u), regionMin + regionSize - uint2(1u, 1u));
+
+    float2 texelPos = atlasUV * atlasSizeF - 0.5f;
+    int2 base = int2(floor(texelPos));
+    float2 f = frac(texelPos);
+
+    int2 minPx = int2(regionMin);
+    int2 maxPx = int2(regionMax);
+    uint2 p00 = uint2(clamp(base, minPx, maxPx));
+    uint2 p10 = uint2(clamp(base + int2(1, 0), minPx, maxPx));
+    uint2 p01 = uint2(clamp(base + int2(0, 1), minPx, maxPx));
+    uint2 p11 = uint2(clamp(base + int2(1, 1), minPx, maxPx));
+
+    float2 m00 = g_textures[atlasSlot].Load(int3(p00, 0)).rg;
+    float2 m10 = g_textures[atlasSlot].Load(int3(p10, 0)).rg;
+    float2 m01 = g_textures[atlasSlot].Load(int3(p01, 0)).rg;
+    float2 m11 = g_textures[atlasSlot].Load(int3(p11, 0)).rg;
+
+    return lerp(lerp(m00, m10, f.x), lerp(m01, m11, f.x), f.y);
+}
+
 // Evaluate VSM shadow for a single face entry.
-float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 L, uint atlasSlot, SamplerState samp)
+float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 L, uint atlasSlot, uint2 atlasSize)
 {
     float4 clipPos = mul(sd.viewProj, float4(worldPos, 1.0));
     float3 ndc = clipPos.xyz / clipPos.w;
@@ -58,7 +84,7 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
     float2 uv = ndc.xy * 0.5 + 0.5;
     float2 atlasUV = sd.atlasRegion.xy + uv * sd.atlasRegion.zw;
 
-    float2 moments = g_textures[atlasSlot].SampleLevel(samp, atlasUV, 0.0).rg;
+    float2 moments = LoadVsmMoments(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
 
     // Normal-based slope bias (world-space). Scaled by near/viewDepth² to
     // keep world-space offset constant regardless of perspective non-linearity.
@@ -87,7 +113,7 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
 
 // Evaluate shadow visibility for a local light by its ShadowLightData index.
 // Returns 1.0 = fully lit, 0.0 = fully shadowed.
-float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 worldNormal, float3 L, SamplerState samp, FrameConstantsData* fc)
+float SampleLocalShadow(uint shadowIdx, uint atlasSlot, uint2 atlasSize, float3 worldPos, float3 worldNormal, float3 L, FrameConstantsData* fc)
 {
     if (fc->shadowLightDataAddr == 0u || shadowIdx >= fc->shadowLightCount)
     {
@@ -100,7 +126,7 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 
     if (sd.lightType == 0u)
     {
         // Spot light: single perspective entry.
-        return SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, samp);
+        return SampleVSM(sd, worldPos, worldNormal, L, atlasSlot, atlasSize);
     }
     else
     {
@@ -111,7 +137,7 @@ float SampleLocalShadow(uint shadowIdx, uint atlasSlot, float3 worldPos, float3 
         {
             return 1.0;
         }
-        return SampleVSM(shadowData[shadowIdx + face], worldPos, worldNormal, L, atlasSlot, samp);
+        return SampleVSM(shadowData[shadowIdx + face], worldPos, worldNormal, L, atlasSlot, atlasSize);
     }
 }
 
