@@ -34,7 +34,7 @@ namespace
 		{
 			return;
 		}
-		phys->SetLinearVelocity(rb->bodyId, {x, y, z});
+		phys->SetLinearVelocity(rb->body, {x, y, z});
 	}
 
 	// get_linear_velocity(world, entity_id) -> float3
@@ -44,7 +44,7 @@ namespace
 		{
 			if (const auto rb = w->TryGet<aether::RigidBodyComponent>(aether::Entity{id}))
 			{
-				return to_das(phys->GetLinearVelocity(rb->bodyId));
+				return to_das(phys->GetLinearVelocity(rb->body));
 			}
 		}
 		return {0.f, 0.f, 0.f};

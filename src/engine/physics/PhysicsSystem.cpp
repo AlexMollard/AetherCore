@@ -23,7 +23,9 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtc/packing.hpp>
 
+#include <mutex>
 #include <thread>
+#include <unordered_map>
 
 // Platform thread configuration (name / priority for the physics thread).
 #if defined(_WIN32)
@@ -60,7 +62,7 @@ namespace aether
 
 	// -- PhysicsSystem internal Jolt interface implementations --------------------
 
-	struct PhysicsSystem::BPLayerInterface final : public JPH::BroadPhaseLayerInterface
+	struct BPLayerInterface final : public JPH::BroadPhaseLayerInterface
 	{
 		[[nodiscard]] uint32_t GetNumBroadPhaseLayers() const override
 		{
@@ -99,7 +101,7 @@ namespace aether
 #endif
 	};
 
-	struct PhysicsSystem::ObjVsBPLayerFilter final : public JPH::ObjectVsBroadPhaseLayerFilter
+	struct ObjVsBPLayerFilter final : public JPH::ObjectVsBroadPhaseLayerFilter
 	{
 		[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer object, JPH::BroadPhaseLayer bp) const override
 		{
@@ -117,7 +119,7 @@ namespace aether
 		}
 	};
 
-	struct PhysicsSystem::ObjVsObjLayerFilter final : public JPH::ObjectLayerPairFilter
+	struct ObjVsObjLayerFilter final : public JPH::ObjectLayerPairFilter
 	{
 		[[nodiscard]] bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override
 		{
@@ -185,6 +187,16 @@ namespace aether
 		return {q.x, q.y, q.z, q.w};
 	}
 
+	static JPH::BodyID ToJolt(PhysicsBodyHandle handle)
+	{
+		return handle.IsValid() ? JPH::BodyID(handle.value) : JPH::BodyID();
+	}
+
+	static PhysicsBodyHandle FromJolt(JPH::BodyID id)
+	{
+		return id.IsInvalid() ? PhysicsBodyHandle{} : PhysicsBodyHandle{id.GetIndexAndSequenceNumber()};
+	}
+
 	static glm::mat4 ToTransform(glm::vec3 pos, glm::quat rot, glm::vec3 scale = glm::vec3(1.f))
 	{
 		return glm::scale(glm::translate(glm::mat4(1.f), pos) * glm::mat4_cast(rot), scale);
@@ -212,9 +224,58 @@ namespace aether
 		return (uint64_t(h) << 16) | uint64_t(r);
 	}
 
+	class JoltRuntime final
+	{
+	public:
+		JoltRuntime()
+		{
+			std::lock_guard lock(s_mutex);
+			if (s_refCount++ == 0)
+			{
+				JPH::RegisterDefaultAllocator();
+				JPH::Factory::sInstance = new JPH::Factory();
+				JPH::RegisterTypes();
+			}
+		}
+
+		~JoltRuntime()
+		{
+			std::lock_guard lock(s_mutex);
+			--s_refCount;
+			if (s_refCount == 0)
+			{
+				JPH::UnregisterTypes();
+				delete JPH::Factory::sInstance;
+				JPH::Factory::sInstance = nullptr;
+			}
+		}
+
+		JoltRuntime(const JoltRuntime&) = delete;
+		JoltRuntime& operator=(const JoltRuntime&) = delete;
+
+	private:
+		static inline std::mutex s_mutex;
+		static inline uint32_t s_refCount = 0;
+	};
+
+	struct PhysicsSystem::Impl
+	{
+		std::unique_ptr<JoltRuntime> runtime;
+		std::unique_ptr<BPLayerInterface> bpLayerInterface;
+		std::unique_ptr<ObjVsBPLayerFilter> objVsBPFilter;
+		std::unique_ptr<ObjVsObjLayerFilter> objVsObjFilter;
+		std::unique_ptr<JPH::TempAllocatorImpl> tempAllocator;
+		std::unique_ptr<JPH::JobSystemThreadPool> jobSystem;
+		std::unique_ptr<JPH::PhysicsSystem> physics;
+		std::unordered_map<uint64_t, JPH::ShapeRefC> shapeCache;
+	};
+
 	// -- PhysicsSystem -------------------------------------------------------------
 
-	PhysicsSystem::PhysicsSystem() = default;
+	PhysicsSystem::PhysicsSystem()
+	      : m_impl(std::make_unique<Impl>())
+	{
+	}
 
 	PhysicsSystem::~PhysicsSystem()
 	{
@@ -292,40 +353,34 @@ namespace aether
 	void PhysicsSystem::OnRegister(World& world)
 	{
 		AE_PROFILE_ZONE();
-		JPH::RegisterDefaultAllocator();
-
-		if (!JPH::Factory::sInstance)
-		{
-			JPH::Factory::sInstance = new JPH::Factory();
-			JPH::RegisterTypes();
-		}
+		m_impl->runtime = std::make_unique<JoltRuntime>();
 
 		// 10 MB scratch for per-step allocations; does not persist between steps.
-		m_tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
+		m_impl->tempAllocator = std::make_unique<JPH::TempAllocatorImpl>(10u * 1024u * 1024u);
 
 		// One worker thread per logical CPU minus the calling thread and the
 		// dedicated physics thread (which kicks Jolt jobs but doesn't run them).
 		const int workerThreads = std::max(1, static_cast<int>(std::thread::hardware_concurrency()) - 2);
-		m_jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreads);
+		m_impl->jobSystem = std::make_unique<JPH::JobSystemThreadPool>(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, workerThreads);
 
-		m_bpLayerInterface = std::make_unique<BPLayerInterface>();
-		m_objVsBPFilter = std::make_unique<ObjVsBPLayerFilter>();
-		m_objVsObjFilter = std::make_unique<ObjVsObjLayerFilter>();
+		m_impl->bpLayerInterface = std::make_unique<BPLayerInterface>();
+		m_impl->objVsBPFilter = std::make_unique<ObjVsBPLayerFilter>();
+		m_impl->objVsObjFilter = std::make_unique<ObjVsObjLayerFilter>();
 
-		m_physics = std::make_unique<JPH::PhysicsSystem>();
-		m_physics->Init(
+		m_impl->physics = std::make_unique<JPH::PhysicsSystem>();
+		m_impl->physics->Init(
 		        /*maxBodies*/ 64'536,
 		        /*numBodyMutexes*/ 0, // 0 = auto
 		        /*maxBodyPairs*/ 64'536,
 		        /*maxContactConstraints*/ 10'240,
-		        *m_bpLayerInterface,
-		        *m_objVsBPFilter,
-		        *m_objVsObjFilter);
+		        *m_impl->bpLayerInterface,
+		        *m_impl->objVsBPFilter,
+		        *m_impl->objVsObjFilter);
 
-		m_physics->SetGravity(JPH::Vec3(0.f, -9.81f, 0.f));
+		m_impl->physics->SetGravity(JPH::Vec3(0.f, -9.81f, 0.f));
 
 		// Auto-cleanup: when an entity with RigidBodyComponent is destroyed, the
-		// backing Jolt body is removed and freed so it doesn't leak into the next
+		// backing physics body is removed and freed so it doesn't leak into the next
 		// scene load. This fires for every destruction path (world.Destroy(),
 		// registry.remove<RigidBodyComponent>(), etc.).
 		m_rigidBodyDestroyConn = world.GetRegistry().on_destroy<RigidBodyComponent>().connect<&PhysicsSystem::OnRigidBodyDestroyed>(this);
@@ -340,16 +395,14 @@ namespace aether
 		AE_PROFILE_ZONE();
 		StopPhysicsThread();
 
-		m_physics.reset();
-		m_jobSystem.reset();
-		m_tempAllocator.reset();
-		m_objVsObjFilter.reset();
-		m_objVsBPFilter.reset();
-		m_bpLayerInterface.reset();
-
-		JPH::UnregisterTypes();
-		delete JPH::Factory::sInstance;
-		JPH::Factory::sInstance = nullptr;
+		m_impl->physics.reset();
+		m_impl->shapeCache.clear();
+		m_impl->jobSystem.reset();
+		m_impl->tempAllocator.reset();
+		m_impl->objVsObjFilter.reset();
+		m_impl->objVsBPFilter.reset();
+		m_impl->bpLayerInterface.reset();
+		m_impl->runtime.reset();
 	}
 
 	// -- Fixed-step update ---------------------------------------------------------
@@ -406,28 +459,29 @@ namespace aether
 	void PhysicsSystem::StepPhysics()
 	{
 		AE_PROFILE_ZONE_N("Phys.Step");
-		AE_PROFILE_PLOT("Phys.TotalBodies", static_cast<int64_t>(m_physics->GetNumBodies()));
-		AE_PROFILE_PLOT("Phys.ActiveBodies", static_cast<int64_t>(m_physics->GetNumActiveBodies(JPH::EBodyType::RigidBody)));
+		AE_PROFILE_PLOT("Phys.TotalBodies", static_cast<int64_t>(m_impl->physics->GetNumBodies()));
+		AE_PROFILE_PLOT("Phys.ActiveBodies", static_cast<int64_t>(m_impl->physics->GetNumActiveBodies(JPH::EBodyType::RigidBody)));
 		// collision_steps = 1 is fine for most games at 60 Hz.
-		m_physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_tempAllocator.get(), m_jobSystem.get());
+		m_impl->physics->Update(kFixedTimestep, /*collision_steps*/ 1, m_impl->tempAllocator.get(), m_impl->jobSystem.get());
 	}
 
 	void PhysicsSystem::SyncTransforms(World& world, float alpha)
 	{
 		AE_PROFILE_ZONE_N("Phys.SyncTransforms");
 		// WaitForStep() has already run; no step is in flight, NoLock is safe.
-		const auto& bi = m_physics->GetBodyInterfaceNoLock();
+		const auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 
 		int64_t synced = 0;
 		for (const auto& [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 		{
-			if (rigid.bodyId.IsInvalid())
+			const JPH::BodyID id = ToJolt(rigid.body);
+			if (id.IsInvalid())
 			{
 				continue;
 			}
 
 			// Skip sleeping bodies — prev == curr, no update needed.
-			if (!bi.IsActive(rigid.bodyId))
+			if (!bi.IsActive(id))
 			{
 				continue;
 			}
@@ -435,7 +489,7 @@ namespace aether
 			// Read current physics state (single call instead of two).
 			JPH::RVec3 pos;
 			JPH::Quat rot;
-			bi.GetPositionAndRotation(rigid.bodyId, pos, rot);
+			bi.GetPositionAndRotation(id, pos, rot);
 			state.currPosition = FromJolt(pos);
 			state.currRotation = FromJolt(rot);
 
@@ -479,7 +533,7 @@ namespace aether
 		const JPH::BodyID id = body->GetID();
 		bodyInterface.AddBody(id, startActive ? JPH::EActivation::Activate : JPH::EActivation::DontActivate);
 
-		world.Emplace<RigidBodyComponent>(entity, id, motionType);
+		world.Emplace<RigidBodyComponent>(entity, FromJolt(id), motionType);
 
 		// Seed both prev and curr to current position so there's no initial interpolation pop.
 		const glm::vec3 pos = FromJolt(bodyInterface.GetCenterOfMassPosition(id));
@@ -496,7 +550,7 @@ namespace aether
 	void PhysicsSystem::FlushPendingBodies(World& world)
 	{
 		AE_PROFILE_ZONE_N("Phys.FlushPending");
-		auto& bi = m_physics->GetBodyInterfaceNoLock();
+		auto& bi = m_impl->physics->GetBodyInterfaceNoLock();
 		auto& reg = world.GetRegistry();
 		bool addedStatic = false;
 
@@ -521,7 +575,7 @@ namespace aether
 			{
 				if (const auto r = reg.try_get<RigidBodyComponent>(e))
 				{
-					bi.SetLinearVelocity(r->bodyId, ToJolt(v));
+					bi.SetLinearVelocity(ToJolt(r->body), ToJolt(v));
 				}
 			}
 		};
@@ -538,8 +592,8 @@ namespace aether
 
 				const auto tc = reg.try_get<TransformComponent>(entity);
 				const uint64_t boxKey = BoxKey(desc.halfExtents);
-				auto cachedIt = m_shapeCache.find(boxKey);
-				if (cachedIt == m_shapeCache.end())
+				auto cachedIt = m_impl->shapeCache.find(boxKey);
+				if (cachedIt == m_impl->shapeCache.end())
 				{
 					JPH::BoxShapeSettings ss{ToJolt(desc.halfExtents)};
 					ss.mMaterial = nullptr;
@@ -550,7 +604,7 @@ namespace aether
 						reg.remove<BoxBodyDesc>(entity);
 						continue;
 					}
-					cachedIt = m_shapeCache.emplace(boxKey, result.Get()).first;
+					cachedIt = m_impl->shapeCache.emplace(boxKey, result.Get()).first;
 				}
 
 				const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
@@ -592,8 +646,8 @@ namespace aether
 
 				const auto tc = reg.try_get<TransformComponent>(entity);
 				const uint64_t sphereKey = SphereKey(desc.radius);
-				auto cachedIt = m_shapeCache.find(sphereKey);
-				if (cachedIt == m_shapeCache.end())
+				auto cachedIt = m_impl->shapeCache.find(sphereKey);
+				if (cachedIt == m_impl->shapeCache.end())
 				{
 					JPH::SphereShapeSettings ss{desc.radius};
 					auto result = ss.Create();
@@ -603,7 +657,7 @@ namespace aether
 						reg.remove<SphereBodyDesc>(entity);
 						continue;
 					}
-					cachedIt = m_shapeCache.emplace(sphereKey, result.Get()).first;
+					cachedIt = m_impl->shapeCache.emplace(sphereKey, result.Get()).first;
 				}
 
 				const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
@@ -645,8 +699,8 @@ namespace aether
 
 				const auto tc = reg.try_get<TransformComponent>(entity);
 				const uint64_t capsuleKey = CapsuleKey(desc.halfHeight, desc.radius);
-				auto cachedIt = m_shapeCache.find(capsuleKey);
-				if (cachedIt == m_shapeCache.end())
+				auto cachedIt = m_impl->shapeCache.find(capsuleKey);
+				if (cachedIt == m_impl->shapeCache.end())
 				{
 					JPH::CapsuleShapeSettings ss{desc.halfHeight, desc.radius};
 					auto result = ss.Create();
@@ -656,7 +710,7 @@ namespace aether
 						reg.remove<CapsuleBodyDesc>(entity);
 						continue;
 					}
-					cachedIt = m_shapeCache.emplace(capsuleKey, result.Get()).first;
+					cachedIt = m_impl->shapeCache.emplace(capsuleKey, result.Get()).first;
 				}
 
 				const glm::vec3 pos = tc ? ExtractPosition(*tc) : glm::vec3(0.f);
@@ -691,7 +745,7 @@ namespace aether
 		if (addedStatic)
 		{
 			AE_PROFILE_ZONE_N("Phys.OptimizeBroadPhase");
-			m_physics->OptimizeBroadPhase();
+			m_impl->physics->OptimizeBroadPhase();
 		}
 	}
 
@@ -700,17 +754,17 @@ namespace aether
 		WaitForStep();
 
 		auto rigid = world.TryGet<RigidBodyComponent>(entity);
-		if (!rigid || rigid->bodyId.IsInvalid())
+		if (!rigid || !rigid->body.IsValid())
 		{
 			return;
 		}
 
-		auto& bodyInterface = m_physics->GetBodyInterfaceNoLock();
-		const JPH::BodyID id = rigid->bodyId;
+		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
+		const JPH::BodyID id = ToJolt(rigid->body);
 
 		// Invalidate BEFORE Remove fires on_destroy — otherwise
 		// OnRigidBodyDestroyed re-enters and double-destroys the body.
-		rigid->bodyId = JPH::BodyID();
+		rigid->body = {};
 
 		bodyInterface.RemoveBody(id);
 		bodyInterface.DestroyBody(id);
@@ -724,70 +778,111 @@ namespace aether
 	{
 		WaitForStep();
 
-		if (!m_physics)
+		if (!m_impl->physics)
 		{
 			return;
 		}
 
 		auto rigid = registry.try_get<RigidBodyComponent>(enttEntity);
-		if (!rigid || rigid->bodyId.IsInvalid())
+		if (!rigid || !rigid->body.IsValid())
 		{
 			return;
 		}
 
-		auto& bodyInterface = m_physics->GetBodyInterfaceNoLock();
-		bodyInterface.RemoveBody(rigid->bodyId);
-		bodyInterface.DestroyBody(rigid->bodyId);
+		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
+		const JPH::BodyID id = ToJolt(rigid->body);
+		bodyInterface.RemoveBody(id);
+		bodyInterface.DestroyBody(id);
 	}
 
 	// -- Body control --------------------------------------------------------------
 
-	void PhysicsSystem::SetLinearVelocity(JPH::BodyID id, glm::vec3 v)
+	void PhysicsSystem::SetLinearVelocity(PhysicsBodyHandle body, glm::vec3 v)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().SetLinearVelocity(id, ToJolt(v));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().SetLinearVelocity(id, ToJolt(v));
 	}
 
-	glm::vec3 PhysicsSystem::GetLinearVelocity(JPH::BodyID id)
+	glm::vec3 PhysicsSystem::GetLinearVelocity(PhysicsBodyHandle body)
 	{
 		WaitForStep();
-		return FromJolt(m_physics->GetBodyInterfaceNoLock().GetLinearVelocity(id));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return {};
+		}
+		return FromJolt(m_impl->physics->GetBodyInterfaceNoLock().GetLinearVelocity(id));
 	}
 
-	void PhysicsSystem::SetAngularVelocity(JPH::BodyID id, glm::vec3 v)
+	void PhysicsSystem::SetAngularVelocity(PhysicsBodyHandle body, glm::vec3 v)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().SetAngularVelocity(id, ToJolt(v));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().SetAngularVelocity(id, ToJolt(v));
 	}
 
-	glm::vec3 PhysicsSystem::GetAngularVelocity(JPH::BodyID id)
+	glm::vec3 PhysicsSystem::GetAngularVelocity(PhysicsBodyHandle body)
 	{
 		WaitForStep();
-		return FromJolt(m_physics->GetBodyInterfaceNoLock().GetAngularVelocity(id));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return {};
+		}
+		return FromJolt(m_impl->physics->GetBodyInterfaceNoLock().GetAngularVelocity(id));
 	}
 
-	void PhysicsSystem::AddImpulse(JPH::BodyID id, glm::vec3 impulse)
+	void PhysicsSystem::AddImpulse(PhysicsBodyHandle body, glm::vec3 impulse)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().AddImpulse(id, ToJolt(impulse));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().AddImpulse(id, ToJolt(impulse));
 	}
 
-	void PhysicsSystem::AddForce(JPH::BodyID id, glm::vec3 force)
+	void PhysicsSystem::AddForce(PhysicsBodyHandle body, glm::vec3 force)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().AddForce(id, ToJolt(force));
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().AddForce(id, ToJolt(force));
 	}
 
-	void PhysicsSystem::SetPosition(JPH::BodyID id, glm::vec3 pos)
+	void PhysicsSystem::SetPosition(PhysicsBodyHandle body, glm::vec3 pos)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().SetPosition(id, JPH::RVec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().SetPosition(id, JPH::RVec3(pos.x, pos.y, pos.z), JPH::EActivation::Activate);
 	}
 
-	void PhysicsSystem::SetRotation(JPH::BodyID id, glm::quat rot)
+	void PhysicsSystem::SetRotation(PhysicsBodyHandle body, glm::quat rot)
 	{
 		WaitForStep();
-		m_physics->GetBodyInterfaceNoLock().SetRotation(id, ToJolt(rot), JPH::EActivation::Activate);
+		const JPH::BodyID id = ToJolt(body);
+		if (id.IsInvalid())
+		{
+			return;
+		}
+		m_impl->physics->GetBodyInterfaceNoLock().SetRotation(id, ToJolt(rot), JPH::EActivation::Activate);
 	}
 
 	// -- Raycasting --------------------------------------------------------------
@@ -811,12 +906,12 @@ namespace aether
 
 		JPH::RayCastResult joltResult;
 
-		m_physics->GetNarrowPhaseQuery().CastRay(ray, joltResult, JPH::BroadPhaseLayerFilter{}, JPH::ObjectLayerFilter{}, JPH::BodyFilter{});
+		m_impl->physics->GetNarrowPhaseQuery().CastRay(ray, joltResult, JPH::BroadPhaseLayerFilter{}, JPH::ObjectLayerFilter{}, JPH::BodyFilter{});
 
 		if (!joltResult.mBodyID.IsInvalid())
 		{
 			result.hit = true;
-			result.bodyId = joltResult.mBodyID.GetIndexAndSequenceNumber();
+			result.body = FromJolt(joltResult.mBodyID);
 			result.fraction = joltResult.mFraction;
 
 			// Hit position: mOrigin + fraction * mDirection (both in RVec3/double).
@@ -824,7 +919,7 @@ namespace aether
 			result.position = {hitPosR.GetX(), hitPosR.GetY(), hitPosR.GetZ()};
 
 			// Surface normal: lock the body and query the shape.
-			JPH::BodyLockRead lock(m_physics->GetBodyLockInterface(), joltResult.mBodyID);
+			JPH::BodyLockRead lock(m_impl->physics->GetBodyLockInterface(), joltResult.mBodyID);
 			if (lock.Succeeded())
 			{
 				const JPH::Body& body = lock.GetBody();

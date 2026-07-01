@@ -3,8 +3,6 @@
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <Jolt/Jolt.h>
-#include <Jolt/Physics/Body/BodyID.h>
 
 namespace aether
 {
@@ -24,6 +22,18 @@ namespace aether
 		Static,    // Immovable; never added to the network sync list
 		Kinematic, // Moved by game code; velocity used for contact solving
 		Dynamic,   // Fully simulated by the physics engine
+	};
+
+	struct PhysicsBodyHandle
+	{
+		static constexpr std::uint32_t kInvalidValue = UINT32_MAX;
+
+		std::uint32_t value = kInvalidValue;
+
+		[[nodiscard]] bool IsValid() const
+		{
+			return value != kInvalidValue;
+		}
 	};
 
 	// -- Shape descriptor components -------------------------------------------
@@ -71,10 +81,10 @@ namespace aether
 	// -- Runtime components (managed by PhysicsSystem) -------------------------
 
 	// Attached to any entity that participates in physics simulation.
-	// bodyId is a stable 32-bit handle - safe to use as a network replication key.
+	// body is an engine-level stable 32-bit handle - safe to use as a network replication key.
 	struct RigidBodyComponent
 	{
-		JPH::BodyID bodyId;
+		PhysicsBodyHandle body;
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
 	};
 
