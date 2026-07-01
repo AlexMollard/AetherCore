@@ -60,7 +60,7 @@ static float3 ReconstructWorld(uint2 px, float depth, FrameConstantsData* fc)
     return worldPos.xyz / max(worldPos.w, 1e-6f);
 }
 
-static float3 NormalFromDepth(uint2 px, float centerDepth, FrameConstantsData* fc)
+static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* fc)
 {
     uint2 l = ClampFull(int2(px) + int2(-1, 0));
     uint2 r = ClampFull(int2(px) + int2(1, 0));
@@ -72,8 +72,17 @@ static float3 NormalFromDepth(uint2 px, float centerDepth, FrameConstantsData* f
     float3 wu = ReconstructWorld(u, LoadDepth(u, fc), fc);
     float3 wd = ReconstructWorld(d, LoadDepth(d, fc), fc);
 
-    float3 n = normalize(cross(wd - wu, wr - wl));
-    return (dot(n, n) > 0.0f) ? n : float3(0.0f, 0.0f, 1.0f);
+    float3 n = normalize(cross(wr - wl, wd - wu));
+    if (dot(n, n) <= 0.0f)
+    {
+        return normalize(fc->cameraWorldPos.xyz - centerWorld);
+    }
+
+    if (dot(n, fc->cameraWorldPos.xyz - centerWorld) < 0.0f)
+    {
+        n = -n;
+    }
+    return n;
 }
 
 static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsData* fc)
@@ -97,7 +106,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
         float s;
         float c;
         sincos(angle, s, c);
-        float3 dir = normalize(c * tangent + s * bitangent + normal * 0.35f);
+        float3 dir = normalize(c * tangent + s * bitangent + normal * 0.15f);
 
         [unroll]
         for (uint step = 1u; step <= kStepCount; ++step)
@@ -127,8 +136,13 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
             float3 depthWorld = ReconstructWorld(samplePx, sampleDepth, fc);
             float3 delta = depthWorld - worldPos;
             float dist = length(delta);
+            if (dist <= 1e-4f)
+            {
+                continue;
+            }
+
             float rangeWeight = saturate(1.0f - (dist / max(pc.radius, 1e-3f)));
-            float horizon = saturate(dot(normalize(delta), normal) * -2.0f);
+            float horizon = saturate((dot(delta / dist, normal) - 0.05f) * 2.0f);
             occlusion += horizon * rangeWeight;
             weightSum += rangeWeight;
         }
@@ -157,7 +171,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
     }
 
     float3 worldPos = ReconstructWorld(fullPx, depth, fc);
-    float3 normal = NormalFromDepth(fullPx, depth, fc);
+    float3 normal = NormalFromDepth(fullPx, worldPos, fc);
     float ao = ComputeAO(fullPx, worldPos, normal, fc);
     return float4(ao, 0.0f, 0.0f, 1.0f);
 }
