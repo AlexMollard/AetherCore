@@ -92,6 +92,7 @@ namespace aether::gpu
 		// (debug renderers, etc.). Defaults match the standard MeshDraw path.
 		PrimitiveTopology topology = PrimitiveTopology::TriangleList;
 		PolygonMode polygonMode = PolygonMode::Fill;
+		CullMode cullMode = CullMode::None;
 		std::span<const VertexInputBinding> vertexBindings;
 		std::span<const VertexInputAttribute> vertexAttributes;
 		bool lineWidthDynamic = false;

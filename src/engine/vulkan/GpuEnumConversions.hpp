@@ -56,6 +56,7 @@ namespace aether::gpu
 	// Primitive topology and polygon mode conversions.
 	[[nodiscard]] VkPrimitiveTopology ToVk(PrimitiveTopology topology) noexcept;
 	[[nodiscard]] VkPolygonMode ToVk(PolygonMode mode) noexcept;
+	[[nodiscard]] VkCullModeFlags ToVk(CullMode mode) noexcept;
 
 	// Barrier + dynamic-rendering conversions. The .image/.buffer fields are opaque gpu::Image/gpu::Buffer; the caller passes the resolved Vk* via the second argument.
 	[[nodiscard]] VkImageMemoryBarrier2 ToVk(const ImageMemoryBarrier& barrier, VkImage resolvedImage) noexcept;

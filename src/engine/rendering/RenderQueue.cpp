@@ -919,22 +919,27 @@ namespace aether
 #endif
 	}
 
-	void RenderQueue::FlushDraw(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDraw(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const gpu::CullMode* cullModeOverride)
 	{
 		const PreparedFrame& prepared = m_preparedFrames[frameIndex % kFramesInFlight];
-		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, lighting, overridePipeline, cascadeOffset, cullModeOverride, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawPush(gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses& lighting, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset, const gpu::CullMode* cullModeOverride)
 	{
 		const PreparedFrame& prepared = m_preparedFrames[frameIndex % kFramesInFlight];
-		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, &lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
+		FlushDrawImpl(cmd, frameIndex, prepared.frameAddr, &lighting, overridePipeline, cascadeOffset, cullModeOverride, "RenderQueue.FlushDraw", 0.85f, 0.60f, 0.18f);
 	}
 
-	void RenderQueue::FlushDrawWithFrameAddr(
-	        gpu::CommandList& cmd, std::uint32_t frameIndex, const DrawContracts::LightingAddresses* lighting, const gpu::DeviceAddress overrideFrameAddr, const GraphicsPipeline* overridePipeline, std::uint32_t cascadeOffset)
+	void RenderQueue::FlushDrawWithFrameAddr(gpu::CommandList& cmd,
+	        std::uint32_t frameIndex,
+	        const DrawContracts::LightingAddresses* lighting,
+	        const gpu::DeviceAddress overrideFrameAddr,
+	        const GraphicsPipeline* overridePipeline,
+	        std::uint32_t cascadeOffset,
+	        const gpu::CullMode* cullModeOverride)
 	{
-		FlushDrawImpl(cmd, frameIndex, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
+		FlushDrawImpl(cmd, frameIndex, overrideFrameAddr, lighting, overridePipeline, cascadeOffset, cullModeOverride, "RenderQueue.FlushDrawWithAddr", 0.85f, 0.40f, 0.60f);
 	}
 
 	void RenderQueue::FlushDrawImpl(gpu::CommandList& cmd,
@@ -943,6 +948,7 @@ namespace aether
 	        const DrawContracts::LightingAddresses* lighting,
 	        const GraphicsPipeline* overridePipeline,
 	        std::uint32_t cascadeOffset,
+	        const gpu::CullMode* cullModeOverride,
 	        const char* debugLabel,
 	        float r,
 	        float g,
@@ -983,6 +989,10 @@ namespace aether
 			if (activePipeline != nullptr && activePipeline != lastPipeline)
 			{
 				cmd.BindPipeline(activePipeline->GetPipeline());
+				if (cullModeOverride != nullptr)
+				{
+					cmd.SetCullMode(*cullModeOverride);
+				}
 				lastPipeline = activePipeline;
 				lastSetPipeline = nullptr;
 			}

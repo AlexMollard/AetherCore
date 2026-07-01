@@ -507,7 +507,8 @@ namespace aether
 				                {
 					                return;
 				                }
-				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline);
+				                const gpu::CullMode cullMode = m_renderer.GetCullMode();
+				                m_renderQueue.FlushDrawWithFrameAddr(ctx.recorder, ctx.frameSlot, nullptr, ctx.frameConstantsAddr, &m_preDepthPipeline, 0, &cullMode);
 			                });
 		}
 
@@ -587,7 +588,8 @@ namespace aether
 				        const auto frameSlot = ctx.frameSlot;
 				        const DrawContracts::LightingAddresses lightingAddr = lighting != nullptr ? lighting->GetLightingAddresses(frameSlot) : DrawContracts::LightingAddresses{};
 				        bindless->CmdBindHeaps(ctx.recorder);
-				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr);
+				        const gpu::CullMode cullMode = m_renderer.GetCullMode();
+				        m_renderQueue.FlushDrawPush(ctx.recorder, ctx.frameSlot, lightingAddr, nullptr, 0, &cullMode);
 			        });
 		}
 

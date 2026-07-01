@@ -319,6 +319,15 @@ namespace aether::gpu
 		Line = 1,
 	};
 
+	// Triangle cull mode. Mirrors VkCullModeFlagBits.
+	enum class CullMode : std::uint32_t
+	{
+		None = 0,
+		Front = 1,
+		Back = 2,
+		FrontAndBack = 3,
+	};
+
 	// Per-vertex input binding description. Mirrors
 	// VkVertexInputBindingDescription. The engine does not expose vertex-input
 	// rate enums in the gpu/ layer; just use 0 for per-vertex, 1 for per-instance

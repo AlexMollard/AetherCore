@@ -1,5 +1,6 @@
 #include "debug/PostProcessingPanel.hpp"
 
+#include <algorithm>
 #include <imgui.h>
 
 #include "layers/AppLayer.hpp"
@@ -14,6 +15,11 @@
 
 namespace aether::app
 {
+	namespace
+	{
+		constexpr const char* kCullModeSettingKey = "debug.scene_cullmode";
+	} // namespace
+
 	void PostProcessingPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -34,6 +40,13 @@ namespace aether::app
 			if (ImGui::Checkbox("FXAA", &fxaa))
 			{
 				renderer.SetFxaaEnabled(fxaa);
+			}
+
+			int cullMode = static_cast<int>(renderer.GetCullMode());
+			const char* cullModeNames[] = {"None", "Front", "Back", "Front + Back"};
+			if (ImGui::Combo("Cull mode", &cullMode, cullModeNames, static_cast<int>(std::size(cullModeNames))))
+			{
+				renderer.SetCullMode(static_cast<aether::gpu::CullMode>(cullMode));
 			}
 
 			float exposure = rendering.GetPostProcessStack().GetExposure();
@@ -83,11 +96,17 @@ namespace aether::app
 		}
 	}
 
-	void PostProcessingPanel::LoadSettings(TomlConfig& /*config*/, LayerContext& /*context*/)
+	void PostProcessingPanel::LoadSettings(TomlConfig& config, LayerContext& context)
 	{
+		constexpr int kMinCullMode = static_cast<int>(aether::gpu::CullMode::None);
+		constexpr int kMaxCullMode = static_cast<int>(aether::gpu::CullMode::FrontAndBack);
+		int cullMode = static_cast<int>(config.GetFloat(kCullModeSettingKey, static_cast<float>(static_cast<int>(aether::gpu::CullMode::Back))));
+		cullMode = std::clamp(cullMode, kMinCullMode, kMaxCullMode);
+		context.Get<Renderer>().SetCullMode(static_cast<aether::gpu::CullMode>(cullMode));
 	}
 
-	void PostProcessingPanel::SaveSettings(TomlConfig& /*config*/, LayerContext& /*context*/) const
+	void PostProcessingPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
 	{
+		config.Set(kCullModeSettingKey, static_cast<float>(static_cast<int>(context.Get<Renderer>().GetCullMode())));
 	}
 } // namespace aether::app

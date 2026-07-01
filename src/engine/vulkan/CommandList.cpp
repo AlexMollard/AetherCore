@@ -223,6 +223,15 @@ namespace aether::gpu
 		vkCmdSetLineWidth(AsVkCmd(m_cmd), lineWidth);
 	}
 
+	void CommandList::SetCullMode(CullMode cullMode) noexcept
+	{
+		if (m_cmd == nullptr)
+		{
+			return;
+		}
+		vkCmdSetCullModeEXT(AsVkCmd(m_cmd), ToVk(cullMode));
+	}
+
 	void CommandList::DrawIndirect(void* vkBuffer, DeviceAddress offset, std::uint32_t drawCount, std::uint32_t stride)
 	{
 		if (m_cmd == nullptr || vkBuffer == nullptr)

@@ -31,6 +31,7 @@ namespace aether
 			// Defaults match the standard MeshDraw path.
 			gpu::PrimitiveTopology topology = gpu::PrimitiveTopology::TriangleList;
 			gpu::PolygonMode polygonMode = gpu::PolygonMode::Fill;
+			gpu::CullMode cullMode = gpu::CullMode::None;
 			std::span<const gpu::VertexInputBinding> vertexBindings;
 			std::span<const gpu::VertexInputAttribute> vertexAttributes;
 			bool lineWidthDynamic = false;

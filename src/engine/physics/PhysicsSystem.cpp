@@ -314,9 +314,9 @@ namespace aether
 
 		m_physics = std::make_unique<JPH::PhysicsSystem>();
 		m_physics->Init(
-		        /*maxBodies*/ 65'536,
+		        /*maxBodies*/ 64'536,
 		        /*numBodyMutexes*/ 0, // 0 = auto
-		        /*maxBodyPairs*/ 65'536,
+		        /*maxBodyPairs*/ 64'536,
 		        /*maxContactConstraints*/ 10'240,
 		        *m_bpLayerInterface,
 		        *m_objVsBPFilter,

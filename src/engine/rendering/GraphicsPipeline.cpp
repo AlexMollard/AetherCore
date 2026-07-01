@@ -57,6 +57,7 @@ namespace aether
 		        .blendEnable = desc.blendEnable,
 		        .topology = desc.topology,
 		        .polygonMode = desc.polygonMode,
+		        .cullMode = desc.cullMode,
 		        .vertexBindings = desc.vertexBindings,
 		        .vertexAttributes = desc.vertexAttributes,
 		        .lineWidthDynamic = desc.lineWidthDynamic,

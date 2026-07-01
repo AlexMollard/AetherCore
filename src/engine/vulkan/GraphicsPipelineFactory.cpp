@@ -137,7 +137,7 @@ namespace aether::vkutil
 
 		entry.topology = gpu::ToVk(desc.topology);
 		entry.polygonMode = gpu::ToVk(desc.polygonMode);
-		entry.cullMode = VK_CULL_MODE_NONE;
+		entry.cullMode = gpu::ToVk(desc.cullMode);
 		entry.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 		entry.depthTestEnable = desc.depthTestEnable ? VK_TRUE : VK_FALSE;
 		entry.depthWriteEnable = desc.depthWriteEnable ? VK_TRUE : VK_FALSE;

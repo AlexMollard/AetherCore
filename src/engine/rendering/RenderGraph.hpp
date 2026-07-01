@@ -261,7 +261,8 @@ namespace aether
 				ShaderResourceBinding binding{
 				        .product = RenderGraph::Product<T>(name),
 				        .resourceId = resourceId,
-				        .writeResourceTable = [productName = std::move(productName), resourceId](const FrameBlackboard& blackboard, std::span<ResourceEntry> entries)
+				        .writeResourceTable =
+				                [productName = std::move(productName), resourceId](const FrameBlackboard& blackboard, std::span<ResourceEntry> entries)
 				        {
 					        if (const T* product = blackboard.TryGet<T>(productName))
 					        {

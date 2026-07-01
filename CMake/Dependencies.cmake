@@ -192,13 +192,6 @@ CPMAddPackage(
         "USE_AVX512 OFF"
 )
 
-if(TARGET Jolt AND MSVC)
-    # App/Engine are built with Control Flow Guard. Jolt's allocator hooks and
-    # virtual interfaces are hit during startup, so keep the static library
-    # instrumented too or CFG can reject valid indirect calls inside Jolt.
-    target_compile_options(Jolt PRIVATE /guard:cf)
-endif()
-
 # ── Hashing ───────────────────────────────────────────────────────────────────
 CPMAddPackage(
     NAME xxHash

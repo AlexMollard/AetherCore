@@ -52,6 +52,10 @@ namespace aether
 		void SetFxaaEnabled(bool enabled);
 		[[nodiscard]] bool IsFxaaEnabled() const;
 
+		// Runtime rasterization controls for scene draw queues.
+		void SetCullMode(gpu::CullMode mode);
+		[[nodiscard]] gpu::CullMode GetCullMode() const;
+
 		// Directional light (key light) controls.
 		void SetDirectionalLight(glm::vec3 direction, float intensity);
 		[[nodiscard]] glm::vec3 GetDirectionalLightDirection() const;
@@ -136,6 +140,7 @@ namespace aether
 		PostProcessStack* m_postProcessStack = nullptr;
 
 		// Cached light parameters (also written to frame constants).
+		gpu::CullMode m_cullMode = gpu::CullMode::Back;
 		glm::vec4 m_sunDirectionIntensity{std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, std::numbers::egamma_v<float>, 3.0f};
 		glm::vec4 m_sunColor{1.0f, 0.96f, 0.90f, 1.0f};
 		glm::vec4 m_ambientColor{0.03f, 0.04f, 0.06f, 1.0f};

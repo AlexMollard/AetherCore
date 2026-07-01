@@ -600,6 +600,25 @@ namespace aether::gpu
 		return VK_POLYGON_MODE_FILL;
 	}
 
+	// -------------------------------------------------------------------------
+	// CullMode
+	// -------------------------------------------------------------------------
+	VkCullModeFlags ToVk(CullMode mode) noexcept
+	{
+		switch (mode)
+		{
+			case CullMode::None:
+				return VK_CULL_MODE_NONE;
+			case CullMode::Front:
+				return VK_CULL_MODE_FRONT_BIT;
+			case CullMode::Back:
+				return VK_CULL_MODE_BACK_BIT;
+			case CullMode::FrontAndBack:
+				return VK_CULL_MODE_FRONT_AND_BACK;
+		}
+		return VK_CULL_MODE_BACK_BIT;
+	}
+
 	// The engine-side barrier structs hold opaque gpu::Image / gpu::Buffer
 	// handles; the storage knows the actual VkImage / VkBuffer to plug in.
 	// The translation here is otherwise a one-for-one field copy.

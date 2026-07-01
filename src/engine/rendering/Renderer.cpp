@@ -41,6 +41,16 @@ namespace aether
 		return m_postProcessStack ? m_postProcessStack->IsFxaaEnabled() : false;
 	}
 
+	void Renderer::SetCullMode(gpu::CullMode mode)
+	{
+		m_cullMode = mode;
+	}
+
+	gpu::CullMode Renderer::GetCullMode() const
+	{
+		return m_cullMode;
+	}
+
 	void Renderer::SetDirectionalLight(glm::vec3 direction, const float intensity)
 	{
 		AE_PROFILE_ZONE();

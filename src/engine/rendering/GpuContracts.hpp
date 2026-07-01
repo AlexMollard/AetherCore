@@ -399,10 +399,10 @@ namespace aether
 	{
 		std::uint64_t address = 0; // bindless slot or BDA
 		std::uint32_t type = kResourceTypeInvalid;
-		std::uint32_t width = 0;   // resource width in texels
-		std::uint32_t height = 0;  // resource height in texels
-		std::uint32_t format = 0;  // resource format (VkFormat)
-		std::uint32_t _pad0 = 0;   // padding to 32 bytes
+		std::uint32_t width = 0;  // resource width in texels
+		std::uint32_t height = 0; // resource height in texels
+		std::uint32_t format = 0; // resource format (VkFormat)
+		std::uint32_t _pad0 = 0;  // padding to 32 bytes
 	};
 
 	static_assert(sizeof(ResourceEntry) == 32, "ResourceEntry must be 32 bytes - update shaders/include/ResourceTable.slangh.");
