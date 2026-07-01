@@ -285,7 +285,7 @@ namespace aether
 		}
 
 		fc.shadowCascadeSplits = glm::vec4(split0, split1, split2, 0.0f);
-		fc.shadowParams = glm::vec4(0.0007f, 0.0012f, 1.0f, 1.5f);
+		fc.shadowParams = glm::vec4(0.0014f, 0.0030f, 1.0f, 2.0f);
 		glm::vec3 camPos = packet.hasCameraData ? glm::vec3(packet.cameraWorldPos) : glm::vec3(0.0f);
 		glm::vec3 camForward(0.0f, 0.0f, -1.0f);
 		if (packet.hasCameraData)

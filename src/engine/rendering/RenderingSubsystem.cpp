@@ -558,6 +558,7 @@ namespace aether
 			        .depth = depth,
 			        .draws = mainSceneDraws,
 			        .extent = sceneExtent,
+			        .depthLoadOp = gpu::LoadOp::Clear,
 			        .consumes = std::move(forwardConsumes),
 			        .produces = {RenderGraph::Product<FrameTextureProduct>(kFrameProductHdrColor)},
 			});

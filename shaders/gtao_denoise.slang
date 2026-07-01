@@ -66,7 +66,7 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
 
     float sum = 0.0f;
     float weightSum = 0.0f;
-    const int radius = 2;
+    const int radius = 3;
 
     [unroll]
     for (int y = -radius; y <= radius; ++y)
@@ -79,7 +79,8 @@ float4 fragmentMain(float4 svPos : SV_Position) : SV_Target0
             float2 ofs = float2(float(x), float(y));
             float spatial = exp(-dot(ofs, ofs) / max(2.0f * pc.spatialSigma * pc.spatialSigma, 1e-3f));
             float depthDiff = abs(depth - centerDepth);
-            float range = exp(-(depthDiff * depthDiff) / max(pc.edgeThreshold, 1e-6f));
+            float rangeSigma = max(pc.edgeThreshold, 1e-6f);
+            float range = exp(-(depthDiff * depthDiff) / max(2.0f * rangeSigma * rangeSigma, 1e-8f));
             float weight = spatial * range;
             sum += LoadAO(p) * weight;
             weightSum += weight;

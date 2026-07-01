@@ -169,8 +169,8 @@ namespace aether
 			                        .fullHeight = m_extent.height,
 			                        .frameIndex = static_cast<std::uint32_t>(ctx.frame.frameIndex),
 			                        .frameConstantsAddr = ctx.frameConstantsAddr,
-			                        .radius = 1.5f,
-			                        .strength = 1.25f,
+			                        .radius = 1.4f,
+			                        .strength = 1.35f,
 			                };
 
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
@@ -211,8 +211,8 @@ namespace aether
 			                        .fullHeight = m_extent.height,
 			                        .aoWidth = m_aoExtent.width,
 			                        .aoHeight = m_aoExtent.height,
-			                        .edgeThreshold = 0.0025f,
-			                        .spatialSigma = 2.0f,
+			                        .edgeThreshold = 0.0012f,
+			                        .spatialSigma = 1.6f,
 			                };
 
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));

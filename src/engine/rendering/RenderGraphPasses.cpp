@@ -369,7 +369,7 @@ namespace aether
 		}
 		if (desc.depth.IsValid())
 		{
-			pass.WriteDepth(desc.depth, desc.depthLoadOp, desc.depthStoreOp);
+			pass.WriteDepth(desc.depth, desc.depthLoadOp, desc.depthStoreOp, desc.depthClearValue);
 		}
 		return pass;
 	}

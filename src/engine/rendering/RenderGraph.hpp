@@ -90,6 +90,7 @@ namespace aether
 			gpu::StoreOp colorStoreOp = gpu::StoreOp::Store;
 			gpu::LoadOp depthLoadOp = gpu::LoadOp::Load;
 			gpu::StoreOp depthStoreOp = gpu::StoreOp::Store;
+			gpu::ClearValue depthClearValue = ClearDepthValue(1.0f);
 			std::vector<FrameProductRef> consumes;
 			std::vector<FrameProductRef> produces;
 		};

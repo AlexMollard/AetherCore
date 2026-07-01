@@ -120,6 +120,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
         float3 tn = g_textures[mat.normalSlot].Sample(g_linearSampler, uv).xyz;
         tn = tn * 2.0 - 1.0;
         N = normalize(mul(tn, TBN));
+        N = normalize(lerp(Ngeom, N, 0.60f));
     }
 
     // ── Metallic / Roughness ──────────────────────────────────────────────
@@ -147,10 +148,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
     {
         uint aoSlot = uint(aoEntry.address);
-        float2 aoUv = input.svPosition.xy / (float2(aoEntry.width, aoEntry.height) * 2.0f);
-        float gtao = g_textures[aoSlot].SampleLevel(g_linearSampler, saturate(aoUv), 0.0f).r;
-        ao *= lerp(1.0f, saturate(gtao), 0.7f);
+        uint2 aoPx = min(uint2(input.svPosition.xy * 0.5f), uint2(aoEntry.width - 1u, aoEntry.height - 1u));
+        float gtao = g_textures[aoSlot].Load(int3(aoPx, 0)).r;
+        ao *= saturate(gtao);
     }
+    ao = saturate(ao);
 
     // ── Emissive ──────────────────────────────────────────────────────────
     float3 emissive = mat.emissiveFactor.xyz;
@@ -191,10 +193,12 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 specular = (D * G * F) / max(4.0 * NdotL * NdotV, 1e-4);
 
     float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
-    float3 diffuse = kD * baseColor.rgb / kPI;
+    const float directAo = lerp(1.0f, ao, 0.35f);
+    float3 diffuse = kD * baseColor.rgb * directAo / kPI;
 
-    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, N, L);
-    float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadow, fc->shadowParams.z)));
+    const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L);
+    const float shadowVisibility = max(shadow, 0.35f);
+    float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
     // Tiled local lights (point + spot).
     // Blend toward geometric normal so local lights remain visibly radial on
@@ -238,6 +242,7 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 Lo);
         }
     }
+    Lo *= lerp(1.0f, ao, 0.18f);
 
     // Image-based ambient (constant approximation - replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ao;

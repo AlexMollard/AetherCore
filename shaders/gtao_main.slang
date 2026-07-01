@@ -78,8 +78,8 @@ static float3 NormalFromDepth(uint2 px, float centerDepth, FrameConstantsData* f
 
 static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsData* fc)
 {
-    static const uint kDirectionCount = 4u;
-    static const uint kStepCount = 4u;
+    static const uint kDirectionCount = 6u;
+    static const uint kStepCount = 5u;
 
     float2 noise = Hash2(px);
     float3 viewDir = normalize(fc->cameraWorldPos.xyz - worldPos);
@@ -135,7 +135,7 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     }
 
     float ao = 1.0f - occlusion / max(weightSum, 1e-3f);
-    return max(pow(saturate(ao), pc.strength), 0.45f);
+    return max(pow(saturate(ao), pc.strength), 0.35f);
 }
 
 [shader("fragment")]

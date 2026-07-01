@@ -67,7 +67,7 @@ namespace aether
 		glm::uvec4 tiledLightBufferOffsets{0u, 0u, 0u, 0u};                                                                                 // offset 336, tiled lighting
 		std::array<glm::mat4, kShadowCascadeCount> shadowViewProjCascades{glm::mat4(1.0f), glm::mat4(1.0f), glm::mat4(1.0f)};               // offset 352
 		glm::vec4 shadowCascadeSplits{24.0f, 80.0f, 220.0f, 0.0f};                                                                          // offset 544, CSM splits
-		glm::vec4 shadowParams{0.0008f, 0.0012f, 1.0f, 1.5f};                                                                               // offset 560, shadow params
+		glm::vec4 shadowParams{0.0014f, 0.0030f, 1.0f, 2.0f};                                                                               // offset 560, shadow params
 		std::uint32_t shadowLightCount = 0;                                                                                                 // offset 576
 		std::uint32_t _padShadowAlign = 0;                                                                                                  // offset 580, alignment before uint64
 		std::uint64_t shadowLightDataAddr = 0;                                                                                              // offset 584
