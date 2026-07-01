@@ -402,7 +402,8 @@ namespace aether
 		std::uint32_t width = 0;  // resource width in texels
 		std::uint32_t height = 0; // resource height in texels
 		std::uint32_t format = 0; // resource format (VkFormat)
-		std::uint32_t _pad0 = 0;  // padding to 32 bytes
+		std::uint32_t _pad0 = 0;
+		std::uint32_t _pad1 = 0; // explicit tail padding; shader pointer indexing must use 32-byte stride
 	};
 
 	static_assert(sizeof(ResourceEntry) == 32, "ResourceEntry must be 32 bytes - update shaders/include/ResourceTable.slangh.");
@@ -412,4 +413,5 @@ namespace aether
 	static_assert(offsetof(ResourceEntry, height) == 16);
 	static_assert(offsetof(ResourceEntry, format) == 20);
 	static_assert(offsetof(ResourceEntry, _pad0) == 24);
+	static_assert(offsetof(ResourceEntry, _pad1) == 28);
 } // namespace aether

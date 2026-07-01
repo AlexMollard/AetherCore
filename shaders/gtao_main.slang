@@ -72,11 +72,21 @@ static float3 NormalFromDepth(uint2 px, float3 centerWorld, FrameConstantsData* 
     float3 wu = ReconstructWorld(u, LoadDepth(u, fc), fc);
     float3 wd = ReconstructWorld(d, LoadDepth(d, fc), fc);
 
-    float3 n = normalize(cross(wr - wl, wd - wu));
-    if (dot(n, n) <= 0.0f)
+    float3 dxL = centerWorld - wl;
+    float3 dxR = wr - centerWorld;
+    float3 dyU = centerWorld - wu;
+    float3 dyD = wd - centerWorld;
+
+    float3 dx = dot(dxL, dxL) < dot(dxR, dxR) ? dxL : dxR;
+    float3 dy = dot(dyU, dyU) < dot(dyD, dyD) ? dyU : dyD;
+
+    float3 n = cross(dx, dy);
+    float nLen2 = dot(n, n);
+    if (nLen2 <= 1e-12f)
     {
         return normalize(fc->cameraWorldPos.xyz - centerWorld);
     }
+    n *= rsqrt(nLen2);
 
     if (dot(n, fc->cameraWorldPos.xyz - centerWorld) < 0.0f)
     {
@@ -134,6 +144,12 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
             }
 
             float3 depthWorld = ReconstructWorld(samplePx, sampleDepth, fc);
+            float sampleError = length(depthWorld - sampleWorld);
+            if (sampleError > pc.radius * 0.75f)
+            {
+                continue;
+            }
+
             float3 delta = depthWorld - worldPos;
             float dist = length(delta);
             if (dist <= 1e-4f)

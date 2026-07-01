@@ -342,7 +342,7 @@ def on_attach(world : World?)
     // ── spawn a human player (At the start of the Eastern Stairs) ─────────────
     g_player = entity_create(world);
     add_transform(world, g_player);
-    set_transform(world, g_player, float3(25.0, 1.0, 0.0), float3(0.0, -90.0, 0.0), float3(0.05, 0.05, 0.05));
+    set_transform(world, g_player, float3(25.0, 0.0, 0.0), float3(0.0, -90.0, 0.0), float3(0.05, 0.05, 0.05));
     load_model(world, g_player, "assets://models/Human/Human.mesh");
     g_player_idle_clip = get_current_animation(world, g_player);
     set_playback_speed(world, g_player, 1.0);

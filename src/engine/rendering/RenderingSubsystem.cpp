@@ -628,6 +628,22 @@ namespace aether
 
 		m_renderGraph.PopulateResourceTable(std::span(resourceTable));
 
+		if constexpr (kEnableForwardGtao)
+		{
+			const auto id = static_cast<std::size_t>(FrameResourceId::Gtao);
+			if (id < resourceTable.size() && m_gtaoPass.GetAoBindlessSlot() != 0xFFFFFFFFu)
+			{
+				const gpu::Extent2D extent = m_gtaoPass.GetAoExtent();
+				resourceTable[id] = ResourceEntry{
+				        .address = m_gtaoPass.GetAoBindlessSlot(),
+				        .type = kResourceTypeBindlessTexture,
+				        .width = extent.width,
+				        .height = extent.height,
+				        .format = static_cast<std::uint32_t>(gpu::Format::R8Unorm),
+				};
+			}
+		}
+
 		if (!m_shadowService.IsDirectionalShadowEnabledForFrame(frameIndex))
 		{
 			for (std::uint32_t cascade = 0; cascade < kShadowCascadeCount; ++cascade)

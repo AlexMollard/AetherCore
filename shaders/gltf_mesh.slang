@@ -3,10 +3,13 @@
 // Vertex data is fetched via buffer device address (BDA) stored in
 // DrawInstanceData.vertexBufferAddr.  No vertex input bindings.
 //
-// Push constants (24 bytes, matches aether::DrawPushConstants):
+// Push constants (48 bytes, matches aether::DrawContracts::PushConstants):
 //   offset  0 : uint64_t  frameAddr         BDA -> FrameConstantsData
 //   offset  8 : uint64_t  instanceDataAddr  BDA -> DrawInstanceData[]
 //   offset 16 : uint64_t  skinPaletteAddr   BDA -> float4x4[] skin matrices
+//   offset 24 : uint64_t  lightDataAddr      BDA -> LocalLight[]
+//   offset 32 : uint64_t  tileHeadersAddr    BDA -> uint2[]
+//   offset 40 : uint64_t  tileLightIndices   BDA -> uint[]
 
 // ── Bindless resources (descriptor set 0) ────────────────────────────────
 [[vk::binding(0, 0)]] Texture2D    g_textures[];
@@ -137,21 +140,23 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     metallic  = saturate(metallic);
 
     // ── Occlusion ─────────────────────────────────────────────────────────
-    float ao = 1.0;
+    float materialAo = 1.0;
     if (mat.occlusionSlot != kNoTexture)
     {
         float aoSample = g_textures[mat.occlusionSlot].Sample(g_linearSampler, uv).r;
-        ao = lerp(1.0, aoSample, mat.occlusionStrength);
+        materialAo = lerp(1.0, aoSample, mat.occlusionStrength);
     }
+    float gtaoVisibility = 1.0;
+
     // Sample GTAO from the resource table.
     ResourceEntry aoEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_Gtao);
     if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
     {
         uint aoSlot = uint(aoEntry.address);
-        uint2 aoPx = min(uint2(input.svPosition.xy * 0.5f), uint2(aoEntry.width - 1u, aoEntry.height - 1u));
-        float gtao = g_textures[aoSlot].Load(int3(aoPx, 0)).r;
-        ao *= saturate(gtao);
+        float2 aoUv = saturate(input.svPosition.xy / (float2(aoEntry.width, aoEntry.height) * 2.0f));
+        gtaoVisibility = saturate(g_textures[aoSlot].Sample(g_linearSampler, aoUv).r);
     }
+    float ao = saturate(materialAo * gtaoVisibility);
     ao = saturate(ao);
 
     // ── Emissive ──────────────────────────────────────────────────────────
@@ -193,11 +198,17 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     float3 specular = (D * G * F) / max(4.0 * NdotL * NdotV, 1e-4);
 
     float3 kD = (float3(1.0, 1.0, 1.0) - F) * (1.0 - metallic);
-    const float directAo = lerp(1.0f, ao, 0.35f);
-    float3 diffuse = kD * baseColor.rgb * directAo / kPI;
+
+    // AO is a visibility term, not a light source. Apply it to diffuse and
+    // indirect fill, but keep it out of the final whole-lighting multiplier so
+    // shadows do not look like they are being re-lit by surrounding AO contrast.
+    const float diffuseAo = lerp(1.0f, ao, 0.70f);
+    const float localLightingAo = lerp(1.0f, ao, 0.35f);
+    const float ambientAo = ao;
+    float3 diffuse = kD * baseColor.rgb * diffuseAo / kPI;
 
     const float shadow = ComputeDirectionalShadow(fc, input.worldPos, Ngeom, L);
-    const float shadowVisibility = max(shadow, 0.35f);
+    const float shadowVisibility = max(shadow, 0.08f);
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
     // Tiled local lights (point + spot).
@@ -242,10 +253,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 Lo);
         }
     }
-    Lo *= lerp(1.0f, ao, 0.18f);
+    Lo *= localLightingAo;
 
     // Image-based ambient (constant approximation - replace with IBL later).
-    float3 ambient = ambientColor * baseColor.rgb * ao;
+    float3 ambient = ambientColor * baseColor.rgb * ambientAo;
 
     float3 finalColor = max(Lo + ambient + emissive, float3(0.0, 0.0, 0.0));
 

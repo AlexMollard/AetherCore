@@ -27,6 +27,7 @@ struct ResourceEntry
     uint  height;
     uint  format;
     uint  _pad0;
+    uint  _pad1;
 };
 
 // Load the bindless slot from a resource table entry by ID.

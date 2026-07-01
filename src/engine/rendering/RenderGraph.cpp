@@ -999,12 +999,37 @@ namespace aether
 					resourceReaders[resId].push_back(i);
 				};
 
+				auto recordFrameProductReads = [&]<typename T>(const FrameProductRef& product)
+				{
+					if (product.type != std::type_index(typeid(T)))
+					{
+						return false;
+					}
+
+					if (const T* value = m_blackboard.TryGet<T>(product.name))
+					{
+						std::vector<RGImage> sampledImages;
+						FrameProductShaderResources<T>::AppendSampledImages(*value, sampledImages);
+						for (const RGImage image: sampledImages)
+						{
+							recordRead(image.id);
+						}
+					}
+					return true;
+				};
+
 				for (const ImageAccessRef& r: pass.imageAccesses)
 				{
 					if (r.type != ImageAccessType::StorageWrite && r.type != ImageAccessType::TransferWrite)
 					{
 						recordRead(r.image.id);
 					}
+				}
+
+				for (const FrameProductRef& product: pass.consumedFrameProducts)
+				{
+					(void)(recordFrameProductReads.template operator()<FrameTextureProduct>(product) || recordFrameProductReads.template operator()<FrameTextureArrayProduct>(product)
+					       || recordFrameProductReads.template operator()<LocalShadowProduct>(product));
 				}
 
 				for (const AttachmentRef& a: pass.colorWrites)
