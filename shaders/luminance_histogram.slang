@@ -1,10 +1,13 @@
-// Compute histogram of log2(luminance) for both the HDR (pre-tonemap) and LDR
+// Compute luminance histograms for the HDR (pre-tonemap) and LDR
 // (post-tonemap) color buffers. Output is a pair of 256-bin uint histograms
-// written to a mapped GpuToCpu buffer via BDA.
+// written to a mapped GpuToCpu buffer via BDA. HDR uses log2 luminance for
+// exposure debugging; LDR uses linear 0..1 luminance because the tonemapped
+// target is already display-range.
 //
-// Single workgroup (256 threads) processes every pixel by striding the pixel
-// index by 256. Groupshared counters avoid global-memory atomics; the final
-// accumulation is written in one coherent store per thread.
+// The host clears the output buffer, then this shader runs many workgroups over
+// a downsampled pixel grid. Each workgroup builds local groupshared bins and
+// only contributes nonzero bins to the global output. Keep the log range in
+// sync with PostProcessStack::kHistogramLogMin/kHistogramLogMax.
 
 #include "include/DevicePointer.slangh"
 #include "include/BindlessContract.slangh"
@@ -19,26 +22,38 @@ struct HistogramPush
     DevicePtr<uint> output; // 512 uints: [0..255] HDR, [256..511] LDR
     uint        width;
     uint        height;
+    uint        sampleStride;
 };
 [[vk::push_constant]] HistogramPush pc;
 
-static const float kLogMin   = -20.0;
-static const float kLogRange =  30.0;
+static const float kLogMin   = -10.0;
+static const float kLogRange =  20.0;
 static const float kEpsilon  =  1e-6;
+static const uint  kThreadCount = 256;
 
 groupshared uint g_hdrHist[256];
 groupshared uint g_ldrHist[256];
 
-uint LuminanceBin(float3 color)
+float Luminance(float3 color)
 {
-    float lum = dot(color, float3(0.2126, 0.7152, 0.0722));
+    return dot(color, float3(0.2126, 0.7152, 0.0722));
+}
+
+uint HdrLuminanceBin(float3 color)
+{
+    float lum = Luminance(color);
     float logLum = log2(max(lum, kEpsilon));
     return uint(clamp((logLum - kLogMin) * (255.0 / kLogRange), 0.0, 255.0));
 }
 
+uint LdrLuminanceBin(float3 color)
+{
+    return uint(clamp(Luminance(color), 0.0, 1.0) * 255.0);
+}
+
 [shader("compute")]
 [numthreads(256, 1, 1)]
-void main(uint3 gtid : SV_GroupThreadID)
+void main(uint3 gtid : SV_GroupThreadID, uint3 gid : SV_GroupID)
 {
     uint idx = gtid.x;
 
@@ -46,22 +61,37 @@ void main(uint3 gtid : SV_GroupThreadID)
     g_ldrHist[idx] = 0;
     GroupMemoryBarrierWithGroupSync();
 
-    uint totalPixels = pc.width * pc.height;
+    uint stride = max(pc.sampleStride, 1);
+    uint sampleWidth = (pc.width + stride - 1) / stride;
+    uint sampleHeight = (pc.height + stride - 1) / stride;
+    uint sampleIndex = gid.x * kThreadCount + idx;
+    uint totalSamples = sampleWidth * sampleHeight;
 
-    for (uint i = idx; i < totalPixels; i += 256)
+    if (sampleIndex < totalSamples)
     {
-        uint x = i % pc.width;
-        uint y = i / pc.width;
+        uint sampleX = sampleIndex % sampleWidth;
+        uint sampleY = sampleIndex / sampleWidth;
+        uint x = min(sampleX * stride, pc.width - 1);
+        uint y = min(sampleY * stride, pc.height - 1);
 
         float3 hdr = g_textures[pc.hdrSlot].Load(int3(x, y, 0)).rgb;
-        InterlockedAdd(g_hdrHist[LuminanceBin(hdr)], 1);
+        InterlockedAdd(g_hdrHist[HdrLuminanceBin(hdr)], 1);
 
         float3 ldr = g_textures[pc.ldrSlot].Load(int3(x, y, 0)).rgb;
-        InterlockedAdd(g_ldrHist[LuminanceBin(ldr)], 1);
+        InterlockedAdd(g_ldrHist[LdrLuminanceBin(ldr)], 1);
     }
 
     GroupMemoryBarrierWithGroupSync();
 
-    pc.output.Store(idx,       g_hdrHist[idx]);
-    pc.output.Store(idx + 256, g_ldrHist[idx]);
+    uint hdrCount = g_hdrHist[idx];
+    if (hdrCount != 0)
+    {
+        InterlockedAdd(pc.output.At(idx)[0], hdrCount);
+    }
+
+    uint ldrCount = g_ldrHist[idx];
+    if (ldrCount != 0)
+    {
+        InterlockedAdd(pc.output.At(idx + 256)[0], ldrCount);
+    }
 }

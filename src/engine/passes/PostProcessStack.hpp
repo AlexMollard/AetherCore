@@ -152,7 +152,44 @@ namespace aether
 			return m_debugModeCount;
 		}
 
-		// ── Luminance histogram access (debug) ──────────────────────────────
+		// Luminance histogram access (debug)
+		void SetHistogramCaptureEnabled(bool enabled)
+		{
+			if (m_histogramCaptureEnabled == enabled)
+			{
+				return;
+			}
+
+			m_histogramCaptureEnabled = enabled;
+			if (!enabled)
+			{
+				for (auto& ready: m_perFrameHistogramReady)
+				{
+					ready = false;
+				}
+				m_histogramDataValid = false;
+			}
+		}
+		[[nodiscard]] bool IsHistogramCaptureEnabled() const
+		{
+			return m_histogramCaptureEnabled;
+		}
+		void SetHistogramUpdatePeriod(std::uint32_t frames)
+		{
+			m_histogramUpdatePeriod = frames > 0u ? frames : 1u;
+		}
+		[[nodiscard]] std::uint32_t GetHistogramUpdatePeriod() const
+		{
+			return m_histogramUpdatePeriod;
+		}
+		void SetHistogramSampleStride(std::uint32_t stride)
+		{
+			m_histogramSampleStride = stride > 0u ? stride : 1u;
+		}
+		[[nodiscard]] std::uint32_t GetHistogramSampleStride() const
+		{
+			return m_histogramSampleStride;
+		}
 		[[nodiscard]] const float* GetHdrHistogramBins() const
 		{
 			return m_histogramBins;
@@ -168,6 +205,14 @@ namespace aether
 		static constexpr std::uint32_t GetHistogramBinCount()
 		{
 			return kHistogramBins;
+		}
+		static constexpr float GetHistogramLogMin()
+		{
+			return kHistogramLogMin;
+		}
+		static constexpr float GetHistogramLogMax()
+		{
+			return kHistogramLogMax;
 		}
 
 		// Adds the $PostProcess (tonemap) and $FXAA passes to the render graph.
@@ -197,9 +242,11 @@ namespace aether
 		bool m_debugCompare = false;
 		std::uint32_t m_debugModeCount = 0;
 
-		// ── Luminance histogram (debug) ─────────────────────────────────
+		// Luminance histogram (debug)
 		void ReadbackHistogram(std::uint32_t frameSlot);
 		static constexpr std::uint32_t kHistogramBins = 256;
+		static constexpr float kHistogramLogMin = -10.0f;
+		static constexpr float kHistogramLogMax = 10.0f;
 
 		gpu::PipelineHandle m_histogramPipeline;
 		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{}; // per-frame mapped, 512 uint32 each
@@ -207,5 +254,8 @@ namespace aether
 		float m_histogramBins[kHistogramBins]{};
 		float m_ldrHistogramBins[kHistogramBins]{};
 		bool m_histogramDataValid = false;
+		bool m_histogramCaptureEnabled = false;
+		std::uint32_t m_histogramUpdatePeriod = 6;
+		std::uint32_t m_histogramSampleStride = 4;
 	};
 } // namespace aether

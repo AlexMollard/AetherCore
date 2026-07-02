@@ -117,7 +117,7 @@ namespace aether
 			{
 				buf = gpu::ResourceRegistry::CreateMappedBuffer({
 				        .size = kHistogramBufferSize,
-				        .usage = gpu::BufferUsage::ShaderDeviceAddress,
+				        .usage = gpu::BufferUsage::ShaderDeviceAddress | gpu::BufferUsage::TransferDst,
 				        .memoryUsage = gpu::MappedMemoryUsage::GpuToCpu,
 				        .debugName = "PostProcess.HistogramOutput",
 				});
@@ -190,6 +190,9 @@ namespace aether
 		{
 			return;
 		}
+
+		constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+		gpu::ResourceRegistry::InvalidateMappedBuffer(m_histogramOutput[frameSlot % kMaxFramesInFlight], 0, kHistogramBufferSize);
 
 		const std::uint32_t* bins = static_cast<const std::uint32_t*>(view.mappedPtr);
 
@@ -317,7 +320,7 @@ namespace aether
 			        cmd.Draw(3, 1, 0, 0);
 		        });
 
-		// ── GPU luminance histogram (debug) ─────────────────────────
+		// GPU luminance histogram (debug)
 		const auto histogramResolved = gpu::ResourceRegistry::ResolvePipeline(m_histogramPipeline);
 		graph.AddComputePass("$Histogram")
 		        .ReadTexture(m_hdrColor)
@@ -330,19 +333,46 @@ namespace aether
 			                gpu::CommandList cmd = ctx.recorder.View();
 			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
 
-			                // Bind the bindless descriptor heap so g_textures[] resolves correctly.
-			                bindless.CmdBindHeaps(cmd);
+			                if (!m_histogramCaptureEnabled)
+			                {
+				                return;
+			                }
 
 			                // Readback this slot's output from kMaxFramesInFlight
 			                // frames ago (guaranteed complete by frame pacing).
 			                if (m_perFrameHistogramReady[slot])
 			                {
 				                ReadbackHistogram(slot);
+				                m_perFrameHistogramReady[slot] = false;
 				                m_histogramDataValid = true;
+			                }
+
+			                const std::uint32_t updatePeriod = m_histogramUpdatePeriod > 0u ? m_histogramUpdatePeriod : 1u;
+			                if (updatePeriod > 1u && (ctx.frameIndex % updatePeriod) != 0u)
+			                {
+				                return;
+			                }
+
+			                const std::uint32_t sampleStride = m_histogramSampleStride > 0u ? m_histogramSampleStride : 1u;
+			                const std::uint32_t sampleWidth = (ctx.extent.width + sampleStride - 1u) / sampleStride;
+			                const std::uint32_t sampleHeight = (ctx.extent.height + sampleStride - 1u) / sampleStride;
+			                const std::uint32_t sampleCount = sampleWidth * sampleHeight;
+			                if (sampleCount == 0u)
+			                {
+				                return;
 			                }
 
 			                // Dispatch histogram compute to this slot
 			                const auto mappedView = gpu::ResourceRegistry::ResolveMappedBuffer(m_histogramOutput[slot]);
+			                constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+			                cmd.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]), 0, kHistogramBufferSize, 0);
+			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Transfer,
+			                        gpu::AccessFlags::TransferWrite,
+			                        gpu::PipelineStage::ComputeShader,
+			                        gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
+
+			                // Bind the bindless descriptor heap so g_textures[] resolves correctly.
+			                bindless.CmdBindHeaps(cmd);
 
 			                cmd.BindComputePipeline(histogramPipeline);
 
@@ -353,15 +383,18 @@ namespace aether
 				                std::uint64_t output;
 				                std::uint32_t width;
 				                std::uint32_t height;
+				                std::uint32_t sampleStride;
 			                } push;
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.ldrSlot = m_ldrBindlessSlot;
 			                push.output = mappedView.deviceAddress;
 			                push.width = ctx.extent.width;
 			                push.height = ctx.extent.height;
+			                push.sampleStride = sampleStride;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
-			                cmd.Dispatch(1, 1, 1);
+			                constexpr std::uint32_t kHistogramThreads = 256;
+			                cmd.Dispatch((sampleCount + kHistogramThreads - 1u) / kHistogramThreads, 1, 1);
 
 			                m_perFrameHistogramReady[slot] = true;
 		                });

@@ -125,9 +125,11 @@ void TonemapPanel::OnImGui(LayerContext& context)
 
 	if (!ImGui::Begin(GetName().data()))
 	{
+		stack.SetHistogramCaptureEnabled(false);
 		ImGui::End();
 		return;
 	}
+	stack.SetHistogramCaptureEnabled(true);
 
 	// ── Tonemap selection ──────────────────────────────────────────────
 	const char* preview = kTonemapDefs[static_cast<std::size_t>(stack.GetTonemapMode())].name;
@@ -292,8 +294,30 @@ void TonemapPanel::OnImGui(LayerContext& context)
 
 	ImGui::Separator();
 
-	// ── Luminance histograms ──────────────────────────────────────
-	auto drawHistogram = [](const char* label, const float* bins, std::uint32_t binCount, ImU32 color)
+	// Luminance histograms
+	{
+		int updatePeriod = static_cast<int>(stack.GetHistogramUpdatePeriod());
+		ImGui::SetNextItemWidth(120.0f);
+		if (ImGui::SliderInt("Histogram period", &updatePeriod, 1, 30))
+		{
+			stack.SetHistogramUpdatePeriod(static_cast<std::uint32_t>(updatePeriod));
+		}
+
+		int sampleStride = static_cast<int>(stack.GetHistogramSampleStride());
+		ImGui::SetNextItemWidth(120.0f);
+		if (ImGui::SliderInt("Histogram stride", &sampleStride, 1, 16))
+		{
+			stack.SetHistogramSampleStride(static_cast<std::uint32_t>(sampleStride));
+		}
+	}
+
+	enum class HistogramAxis
+	{
+		HdrLog,
+		LdrLinear,
+	};
+
+	auto drawHistogram = [](const char* label, const float* bins, std::uint32_t binCount, ImU32 color, HistogramAxis axis)
 	{
 		const float plotW = (std::max)(ImGui::GetContentRegionAvail().x, 1.0f);
 		const float plotH = 80.0f;
@@ -310,7 +334,7 @@ void TonemapPanel::OnImGui(LayerContext& context)
 		const float barW = plotW / static_cast<float>(binCount);
 		for (std::uint32_t i = 0; i < binCount; ++i)
 		{
-			const float h = bins[i] * plotH;
+			const float h = std::sqrt((std::min)((std::max)(bins[i], 0.0f), 1.0f)) * plotH;
 			if (h > 0.0f)
 			{
 				const float x0 = plotPos.x + static_cast<float>(i) * barW;
@@ -319,17 +343,46 @@ void TonemapPanel::OnImGui(LayerContext& context)
 			}
 		}
 
-		// Axis markers
-		dl->AddText(ImVec2(plotPos.x + 2, plotPos.y + plotH - 14), IM_COL32(140, 140, 140, 200), "0.001");
-		dl->AddText(ImVec2(plotPos.x + plotW * 0.5f - 6, plotPos.y + plotH - 14), IM_COL32(140, 140, 140, 200), "1");
-		dl->AddText(ImVec2(plotPos.x + plotW - 32, plotPos.y + plotH - 14), IM_COL32(140, 140, 140, 200), "~1000");
+		auto markerX = [&](float luminance)
+		{
+			float t = luminance;
+			if (axis == HistogramAxis::HdrLog)
+			{
+				const float logMin = PostProcessStack::GetHistogramLogMin();
+				const float logMax = PostProcessStack::GetHistogramLogMax();
+				t = (std::log2(luminance) - logMin) / (logMax - logMin);
+			}
+			return plotPos.x + (std::min)((std::max)(t, 0.0f), 1.0f) * plotW;
+		};
+
+		auto drawMarker = [&](float luminance, const char* text)
+		{
+			const float x = markerX(luminance);
+			dl->AddLine(ImVec2(x, plotPos.y), ImVec2(x, plotPos.y + plotH), IM_COL32(70, 70, 80, 180));
+			const ImVec2 textSize = ImGui::CalcTextSize(text);
+			const float textX = (std::min)((std::max)(x - textSize.x * 0.5f, plotPos.x + 2.0f), plotPos.x + plotW - textSize.x - 2.0f);
+			dl->AddText(ImVec2(textX, plotPos.y + plotH - 14.0f), IM_COL32(140, 140, 140, 200), text);
+		};
+
+		if (axis == HistogramAxis::HdrLog)
+		{
+			drawMarker(0.001f, "0.001");
+			drawMarker(1.0f, "1");
+			drawMarker(1000.0f, "~1000");
+		}
+		else
+		{
+			drawMarker(0.0f, "0");
+			drawMarker(0.5f, "0.5");
+			drawMarker(1.0f, "1");
+		}
 	};
 
 	if (stack.IsHistogramValid())
 	{
 		constexpr std::uint32_t kBinCount = PostProcessStack::GetHistogramBinCount();
-		drawHistogram("HDR (pre-tonemap)",   stack.GetHdrHistogramBins(), kBinCount, IM_COL32(100, 200, 255, 160));
-		drawHistogram("LDR (post-tonemap)",  stack.GetLdrHistogramBins(), kBinCount, IM_COL32(255, 180, 100, 160));
+		drawHistogram("HDR log luminance (pre-tonemap)", stack.GetHdrHistogramBins(), kBinCount, IM_COL32(100, 200, 255, 160), HistogramAxis::HdrLog);
+		drawHistogram("LDR luminance 0..1 (post-tonemap)", stack.GetLdrHistogramBins(), kBinCount, IM_COL32(255, 180, 100, 160), HistogramAxis::LdrLinear);
 	}
 	else
 	{

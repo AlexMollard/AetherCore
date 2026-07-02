@@ -354,6 +354,10 @@ namespace aether::app
 
 		if (!m_visible)
 		{
+			if (auto* rendering = context.TryGet<RenderingSubsystem>())
+			{
+				rendering->GetPostProcessStack().SetHistogramCaptureEnabled(false);
+			}
 			context.Get<Input>().ClearMouseViewportTransform();
 			return;
 		}

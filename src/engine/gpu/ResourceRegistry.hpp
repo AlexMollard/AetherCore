@@ -133,6 +133,7 @@ namespace aether::gpu
 		[[nodiscard]] static MappedBufferView ResolveMappedBuffer(BufferHandle handle) noexcept;
 
 		static void FlushMappedBuffer(BufferHandle handle, DeviceSize offset, DeviceSize size) noexcept;
+		static void InvalidateMappedBuffer(BufferHandle handle, DeviceSize offset, DeviceSize size) noexcept;
 
 		static void Destroy(BufferHandle handle) noexcept;
 		static void Destroy(TextureHandle handle) noexcept;

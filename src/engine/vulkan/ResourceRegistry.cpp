@@ -450,6 +450,22 @@ namespace aether
 		vmaFlushAllocation(m_allocator, entry->allocation, offset, size);
 	}
 
+	void ResourceRegistry::InvalidateMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept
+	{
+		if (!handle.IsValid())
+		{
+			return;
+		}
+
+		const auto entry = Resolve(handle);
+		if (!entry || entry->allocation == VK_NULL_HANDLE)
+		{
+			return;
+		}
+
+		vmaInvalidateAllocation(m_allocator, entry->allocation, offset, size);
+	}
+
 	void ResourceRegistry::SetBufferName(gpu::BufferHandle handle, const char* name)
 	{
 		const BufferEntry* entry = Resolve(handle);
@@ -1337,6 +1353,11 @@ namespace aether::gpu
 	void ResourceRegistry::FlushMappedBuffer(BufferHandle h, DeviceSize o, DeviceSize s) noexcept
 	{
 		s_reg->FlushMappedBuffer(h, o, s);
+	}
+
+	void ResourceRegistry::InvalidateMappedBuffer(BufferHandle h, DeviceSize o, DeviceSize s) noexcept
+	{
+		s_reg->InvalidateMappedBuffer(h, o, s);
 	}
 
 	void ResourceRegistry::Destroy(BufferHandle h) noexcept

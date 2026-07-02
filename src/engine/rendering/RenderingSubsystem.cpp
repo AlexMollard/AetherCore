@@ -315,6 +315,9 @@ namespace aether
 		const TonemapMode tonemapMode = m_postProcessStack.GetTonemapMode();
 		const float exposure = m_postProcessStack.GetExposure();
 		const bool fxaaEnabled = m_postProcessStack.IsFxaaEnabled();
+		const bool histogramCaptureEnabled = m_postProcessStack.IsHistogramCaptureEnabled();
+		const std::uint32_t histogramUpdatePeriod = m_postProcessStack.GetHistogramUpdatePeriod();
+		const std::uint32_t histogramSampleStride = m_postProcessStack.GetHistogramSampleStride();
 
 		m_renderQueue.DiscardAllPending();
 		m_shadowService.ClearAllQueues();
@@ -341,6 +344,9 @@ namespace aether
 		m_postProcessStack.SetTonemapMode(tonemapMode);
 		m_postProcessStack.SetExposure(exposure);
 		m_postProcessStack.SetFxaaEnabled(fxaaEnabled);
+		m_postProcessStack.SetHistogramCaptureEnabled(histogramCaptureEnabled);
+		m_postProcessStack.SetHistogramUpdatePeriod(histogramUpdatePeriod);
+		m_postProcessStack.SetHistogramSampleStride(histogramSampleStride);
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
 
 		m_renderTargetService.OnRenderGraphReset(gpu.GetDevice(), swapchain.GetDepthFormat(), PostProcessStack::GetForwardColorFormat());

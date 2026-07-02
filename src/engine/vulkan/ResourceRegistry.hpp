@@ -195,6 +195,7 @@ namespace aether
 
 		[[nodiscard]] gpu::MappedBufferView ResolveMappedBuffer(gpu::BufferHandle handle) const noexcept;
 		void FlushMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
+		void InvalidateMappedBuffer(gpu::BufferHandle handle, gpu::DeviceSize offset, gpu::DeviceSize size) noexcept;
 
 		void SetBufferName(gpu::BufferHandle handle, const char* name);
 		void SetTextureName(gpu::TextureHandle handle, const char* name);
