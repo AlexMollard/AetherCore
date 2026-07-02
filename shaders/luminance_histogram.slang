@@ -10,9 +10,10 @@
 // sync with PostProcessStack::kHistogramLogMin/kHistogramLogMax.
 
 #include "include/DevicePointer.slangh"
-#include "include/BindlessContract.slangh"
 
-MEOW_BINDLESS_BINDING
+// Bindless sampled images at set 0 (no per-draw set in this pass), matching
+// the engine-wide descriptor heap mapping (see BindlessManager).
+[[vk::binding(0, 0)]]
 Texture2D g_textures[];
 
 struct HistogramPush

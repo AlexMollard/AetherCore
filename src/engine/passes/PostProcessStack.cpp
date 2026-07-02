@@ -177,6 +177,7 @@ namespace aether
 		{
 			ready = false;
 		}
+		m_histogramOutputRG = {};
 		m_histogramDataValid = false;
 		m_extent = {};
 		m_outputToTexture = false;
@@ -320,35 +321,39 @@ namespace aether
 			        cmd.Draw(3, 1, 0, 0);
 		        });
 
-		// GPU luminance histogram (debug)
-		const auto histogramResolved = gpu::ResourceRegistry::ResolvePipeline(m_histogramPipeline);
-		graph.AddComputePass("$Histogram")
-		        .ReadTexture(m_hdrColor)
-		        .ReadTexture(m_ldrColor)
-		        .SetExtent(m_extent)
-		        .HasSideEffects("reads HDR/LDR via bindless textures, writes to mapped BDA buffer")
-		        .ExecuteCompute(
-		                [this, &bindless, histogramPipeline = const_cast<void*>(histogramResolved.state)](PassContext& ctx)
-		                {
-			                gpu::CommandList cmd = ctx.recorder.View();
-			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
+		// GPU luminance histogram (debug). The per-frame-slot output buffer is
+		// registered as an external graph buffer whose backing is swapped each
+		// frame via UpdateBufferHandles; clear and dispatch are separate passes
+		// so the graph owns all synchronization between them.
+		m_histogramOutputRG = graph.RegisterBuffer(nullptr);
 
-			                if (!m_histogramCaptureEnabled)
+		graph.AddComputePass("$HistogramClear")
+		        .DisableAsyncCompute()
+		        .WriteBufferTransfer(m_histogramOutputRG)
+		        .ExecuteCompute(
+		                [this](PassContext& ctx)
+		                {
+			                if (!ShouldRecordHistogram(ctx.frameIndex))
 			                {
 				                return;
 			                }
 
-			                // Readback this slot's output from kMaxFramesInFlight
-			                // frames ago (guaranteed complete by frame pacing).
-			                if (m_perFrameHistogramReady[slot])
-			                {
-				                ReadbackHistogram(slot);
-				                m_perFrameHistogramReady[slot] = false;
-				                m_histogramDataValid = true;
-			                }
+			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
+			                constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+			                gpu::CommandList cmd = ctx.recorder.View();
+			                cmd.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]), 0, kHistogramBufferSize, 0);
+		                });
 
-			                const std::uint32_t updatePeriod = m_histogramUpdatePeriod > 0u ? m_histogramUpdatePeriod : 1u;
-			                if (updatePeriod > 1u && (ctx.frameIndex % updatePeriod) != 0u)
+		const auto histogramResolved = gpu::ResourceRegistry::ResolvePipeline(m_histogramPipeline);
+		graph.AddComputePass("$Histogram")
+		        .ReadTexture(m_hdrColor)
+		        .ReadTexture(m_ldrColor)
+		        .ReadWriteBuffer(m_histogramOutputRG)
+		        .SetExtent(m_extent)
+		        .ExecuteCompute(
+		                [this, &bindless, histogramPipeline = const_cast<void*>(histogramResolved.state)](PassContext& ctx)
+		                {
+			                if (!ShouldRecordHistogram(ctx.frameIndex))
 			                {
 				                return;
 			                }
@@ -362,18 +367,11 @@ namespace aether
 				                return;
 			                }
 
-			                // Dispatch histogram compute to this slot
+			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
 			                const auto mappedView = gpu::ResourceRegistry::ResolveMappedBuffer(m_histogramOutput[slot]);
-			                constexpr gpu::DeviceSize kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
-			                cmd.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]), 0, kHistogramBufferSize, 0);
-			                cmd.PipelineMemoryBarrier(gpu::PipelineStage::Transfer,
-			                        gpu::AccessFlags::TransferWrite,
-			                        gpu::PipelineStage::ComputeShader,
-			                        gpu::AccessFlags::ShaderStorageRead | gpu::AccessFlags::ShaderStorageWrite);
 
-			                // Bind the bindless descriptor heap so g_textures[] resolves correctly.
+			                gpu::CommandList cmd = ctx.recorder.View();
 			                bindless.CmdBindHeaps(cmd);
-
 			                cmd.BindComputePipeline(histogramPipeline);
 
 			                struct
@@ -398,5 +396,36 @@ namespace aether
 
 			                m_perFrameHistogramReady[slot] = true;
 		                });
+	}
+
+	void PostProcessStack::UpdateBufferHandles(RenderGraph& graph, const std::uint32_t frameSlot)
+	{
+		if (!m_histogramOutputRG.IsValid())
+		{
+			return;
+		}
+
+		const std::uint32_t slot = frameSlot % kMaxFramesInFlight;
+		graph.UpdateExternalBuffer(m_histogramOutputRG, gpu::ResourceRegistry::ResolveBufferVkHandle(m_histogramOutput[slot]));
+
+		// Readback this slot's output from kMaxFramesInFlight frames ago
+		// (guaranteed complete by frame pacing).
+		if (m_histogramCaptureEnabled && m_perFrameHistogramReady[slot])
+		{
+			ReadbackHistogram(slot);
+			m_perFrameHistogramReady[slot] = false;
+			m_histogramDataValid = true;
+		}
+	}
+
+	bool PostProcessStack::ShouldRecordHistogram(const std::uint32_t frameIndex) const
+	{
+		if (!m_histogramCaptureEnabled)
+		{
+			return false;
+		}
+
+		const std::uint32_t updatePeriod = m_histogramUpdatePeriod > 0u ? m_histogramUpdatePeriod : 1u;
+		return updatePeriod <= 1u || (frameIndex % updatePeriod) == 0u;
 	}
 } // namespace aether

@@ -9,7 +9,6 @@
 // Output:
 //   - Per-animator TRS samples (translation, rotation as quat, scale)
 
-#include "include/BindlessContract.slangh"
 #include "include/AnimationContracts.slangh"
 
 [[vk::push_constant]] AnimationSamplePush pc;

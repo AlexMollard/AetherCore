@@ -435,6 +435,10 @@ namespace aether
 
 	void AetherCore::UploadFrameConstantsAndExecuteRenderGraph(std::uint32_t frameIdx, FrameConstants fc)
 	{
+		// Update render graph buffer handles for the current frame's histogram
+		// readback buffer and collect completed histogram data.
+		m_rendering->GetPostProcessStack().UpdateBufferHandles(m_rendering->GetRenderGraph(), frameIdx);
+
 		const FrameTarget frameTarget = m_gpu->BuildFrameTarget();
 		const std::uint64_t frameAddr = m_rendering->GetFrameConstantsBuffer().GetDeviceAddressU64(frameIdx);
 		const FrameResourceContext frameContext{

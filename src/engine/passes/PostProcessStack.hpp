@@ -219,6 +219,12 @@ namespace aether
 		// bindless must outlive the graph (it is captured by the pass lambdas).
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
 
+		// Update the render graph's external buffer handles for the current frame
+		// and read back completed histogram data from kMaxFramesInFlight frames
+		// ago (guaranteed complete by frame pacing). Call once per frame before
+		// the graph executes, alongside LightingManager::UpdateBufferHandles.
+		void UpdateBufferHandles(RenderGraph& graph, std::uint32_t frameSlot);
+
 	private:
 		gpu::TextureHandle m_hdrColorHandle; // R16G16B16A16_SFLOAT - forward output
 		RGImage m_hdrColor{};
@@ -244,12 +250,14 @@ namespace aether
 
 		// Luminance histogram (debug)
 		void ReadbackHistogram(std::uint32_t frameSlot);
+		[[nodiscard]] bool ShouldRecordHistogram(std::uint32_t frameIndex) const;
 		static constexpr std::uint32_t kHistogramBins = 256;
 		static constexpr float kHistogramLogMin = -10.0f;
 		static constexpr float kHistogramLogMax = 10.0f;
 
 		gpu::PipelineHandle m_histogramPipeline;
 		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{}; // per-frame mapped, 512 uint32 each
+		RGBuffer m_histogramOutputRG{}; // graph handle; backing buffer updated per frame via UpdateBufferHandles
 		bool m_perFrameHistogramReady[kMaxFramesInFlight]{};
 		float m_histogramBins[kHistogramBins]{};
 		float m_ldrHistogramBins[kHistogramBins]{};
