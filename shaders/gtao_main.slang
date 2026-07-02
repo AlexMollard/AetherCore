@@ -122,6 +122,10 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
         for (uint step = 1u; step <= kStepCount; ++step)
         {
             float t = (float(step) + noise.y) / float(kStepCount);
+            // Quadratic step distribution: denser samples near the receiver so
+            // small ground-contact occluders (feet, prop bases) register, while
+            // the last step still reaches the full radius.
+            t *= t;
             float3 sampleWorld = worldPos + dir * (pc.radius * t);
             float4 sampleClip = mul(fc->viewProj, float4(sampleWorld, 1.0f));
             if (sampleClip.w <= 1e-5f)
@@ -165,7 +169,10 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
     }
 
     float ao = 1.0f - occlusion / max(weightSum, 1e-3f);
-    return max(pow(saturate(ao), pc.strength), 0.35f);
+    // Low floor: creases and contact points are allowed to get genuinely dark.
+    // The old 0.35 floor capped worst-case darkening so hard that AO was
+    // invisible in scenes lit mostly by local lights.
+    return max(pow(saturate(ao), pc.strength), 0.05f);
 }
 
 [shader("fragment")]

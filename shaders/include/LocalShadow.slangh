@@ -28,10 +28,11 @@ struct ShadowLightData
 {
     [[vk::offset(0)]]  float4x4 viewProj;
     [[vk::offset(64)]] float4   atlasRegion;   // xy=UV offset, zw=UV scale
-    [[vk::offset(80)]] float    depthBias;
+    [[vk::offset(80)]] float    depthBias;     // world units
     [[vk::offset(84)]] uint     lightType;     // 0=spot, 1=point
-    [[vk::offset(88)]] float    normalBias;
+    [[vk::offset(88)]] float    normalBias;    // world units
     [[vk::offset(92)]] float    _pad;
+    [[vk::offset(96)]] float4   lightPosRange; // xyz=light world position, w=range
 };
 
 // Convert world-space position to shadow atlas UV for a perspective light.
@@ -86,13 +87,14 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
 
     float2 moments = LoadVsmMoments(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
 
-    // Normal-based slope bias (world-space). Scaled by near/viewDepth² to
-    // keep world-space offset constant regardless of perspective non-linearity.
-    const float viewDepth = abs(clipPos.w);
+    // Receiver depth in the same space the caster writes: linear radial
+    // distance from the light normalized by range (local_shadow_depth.slang).
+    // Biases are plain world-space offsets toward the light.
+    const float range = max(sd.lightPosRange.w, 1e-3);
     const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(L)));
     const float worldBias = sd.depthBias + sd.normalBias * slope;
-    const float ndcBias = worldBias * (0.1 / max(viewDepth * viewDepth, 0.01));
-    float receiverDepth = ndc.z - ndcBias;
+    const float receiverDist = distance(worldPos, sd.lightPosRange.xyz);
+    float receiverDepth = saturate((receiverDist - worldBias) / range);
 
     float ex = moments.x;
     float exSq = moments.y;
@@ -103,7 +105,10 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
         return 1.0;
     }
 
-    float variance = max(exSq - ex * ex, 0.0001);
+    // Variance floor in normalized-linear-depth units: (~0.3% of range)^2.
+    // Large enough to absorb R32G32 quantization + blur noise, small enough
+    // not to eat real occluder/receiver separation at distance.
+    float variance = max(exSq - ex * ex, 1e-5);
     float md = receiverDepth - ex;
     float p = variance / (variance + md * md);
 

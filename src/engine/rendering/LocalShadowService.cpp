@@ -101,7 +101,13 @@ namespace aether
 		                        .depthTestEnable = true,
 		                        .depthWriteEnable = true,
 		                        .depthCompareOp = gpu::CompareOp::LessOrEqual,
-		                        .cullMode = gpu::CullMode::Front,
+		                        // Render only the faces pointing AWAY from the light (the standard
+		                        // VSM anti-acne setup). The light projections do not Y-flip like the
+		                        // main camera (Camera.cpp proj[1][1] *= -1), which mirrors screen-space
+		                        // winding in atlas space - so with frontFace=CCW, Back here culls the
+		                        // light-facing faces. CullMode::Front would keep them and re-introduce
+		                        // self-shadow banding at grazing angles.
+		                        .cullMode = gpu::CullMode::Back,
 		                        .debugName = "LocalShadow.Depth",
 		                }));
 		m_shadowPipeline = std::move(pipeline);
@@ -398,9 +404,10 @@ namespace aether
 					m_perLightShadows.push_back(PerLightShadow{
 					        .viewProj = lightProj * lightView,
 					        .region = regions[face],
-					        .depthBias = 0.005f,
-					        .normalBias = 0.015f,
+					        .depthBias = 0.01f,
+					        .normalBias = 0.03f,
 					        .lightType = 1u,
+					        .lightPosRange = glm::vec4(c.position, c.radius),
 					});
 				}
 
@@ -433,9 +440,10 @@ namespace aether
 				m_perLightShadows.push_back(PerLightShadow{
 				        .viewProj = lightProj * lightView,
 				        .region = r,
-				        .depthBias = 0.005f,
-				        .normalBias = 0.015f,
+				        .depthBias = 0.01f,
+				        .normalBias = 0.03f,
 				        .lightType = 0u, // spot
+				        .lightPosRange = glm::vec4(src.position, src.radius),
 				});
 
 				// Map this spot light to its single entry.
@@ -459,6 +467,7 @@ namespace aether
 			mapped[i].depthBias = pls.depthBias;
 			mapped[i].normalBias = pls.normalBias;
 			mapped[i].lightType = pls.lightType;
+			mapped[i].lightPosRange = pls.lightPosRange;
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_shadowDataBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(ShadowLightData));
 
@@ -467,7 +476,9 @@ namespace aether
 		for (std::uint32_t i = 0; i < shadowCount; ++i)
 		{
 			lightFc[i].viewProj = m_perLightShadows[i].viewProj;
-			lightFc[i].cameraWorldPos = glm::vec4(camPos, 1.0f);
+			// local_shadow_depth.slang reads this as light position (xyz) + range (w)
+			// to write linear radial depth; the "camera" of the atlas pass is the light.
+			lightFc[i].cameraWorldPos = m_perLightShadows[i].lightPosRange;
 			lightFc[i].RefreshDerived();
 		}
 		gpu::ResourceRegistry::FlushMappedBuffer(m_lightConstantsBuffer[bufSlot].handle, 0, static_cast<gpu::DeviceSize>(shadowCount) * sizeof(FrameConstants));

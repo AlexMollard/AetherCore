@@ -153,7 +153,14 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     if (aoEntry.type == kResourceTypeBindlessTexture && aoEntry.address != 0xFFFFFFFFu && aoEntry.width > 0u && aoEntry.height > 0u)
     {
         uint aoSlot = uint(aoEntry.address);
-        float2 aoUv = saturate(input.svPosition.xy / (float2(aoEntry.width, aoEntry.height) * 2.0f));
+        // Map full-res pixel coords to [0,1] using the actual scene extent.
+        // The AO image is half-res with rounded-up dimensions, so aoEntry*2 can
+        // overshoot the true extent by a pixel when the scene extent is odd.
+        ResourceEntry sceneDepthEntry = LoadResourceEntry(fc->resourceTableAddr, kFrameResourceId_SceneDepth);
+        float2 fullExtent = (sceneDepthEntry.type == kResourceTypeBindlessTexture && sceneDepthEntry.width > 0u && sceneDepthEntry.height > 0u)
+            ? float2(sceneDepthEntry.width, sceneDepthEntry.height)
+            : float2(aoEntry.width, aoEntry.height) * 2.0f;
+        float2 aoUv = saturate(input.svPosition.xy / fullExtent);
         gtaoVisibility = saturate(g_textures[aoSlot].Sample(g_linearSampler, aoUv).r);
     }
     float ao = saturate(materialAo * gtaoVisibility);
@@ -203,7 +210,9 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     // indirect fill, but keep it out of the final whole-lighting multiplier so
     // shadows do not look like they are being re-lit by surrounding AO contrast.
     const float diffuseAo = lerp(1.0f, ao, 0.70f);
-    const float localLightingAo = lerp(1.0f, ao, 0.35f);
+    // Local lights carry most scenes at night/indoors; at 0.35 the AO term was
+    // capped to ~10% darkening and contact shadows vanished entirely.
+    const float localLightingAo = lerp(1.0f, ao, 0.65f);
     const float ambientAo = ao;
     float3 diffuse = kD * baseColor.rgb * diffuseAo / kPI;
 

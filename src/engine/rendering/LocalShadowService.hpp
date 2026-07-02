@@ -34,9 +34,10 @@ namespace aether
 		std::uint32_t lightType = 0; // 0=spot, 1=point
 		float normalBias = 0.015f;
 		float _pad1 = 0.0f;
+		glm::vec4 lightPosRange{0.0f}; // xyz=light world position, w=range (normalizes VSM linear depth)
 	};
 
-	static_assert(sizeof(ShadowLightData) == 96, "ShadowLightData must be 96 bytes for GPU layout");
+	static_assert(sizeof(ShadowLightData) == 112, "ShadowLightData must be 112 bytes for GPU layout");
 
 	// Maximum number of local shadow lights rendered per frame.
 	inline constexpr std::uint32_t kMaxLocalShadows = 256u;
@@ -114,6 +115,7 @@ namespace aether
 			float depthBias = 0.005f;
 			float normalBias = 0.015f;
 			std::uint32_t lightType = 0;
+			glm::vec4 lightPosRange{0.0f}; // xyz=light world position, w=range
 		};
 
 		ShadowAtlasManager m_atlasManager;
