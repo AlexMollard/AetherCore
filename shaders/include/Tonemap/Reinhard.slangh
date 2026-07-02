@@ -1,0 +1,6 @@
+// Reinhard: LDR curve with white point at infinity.
+//   x / (x + 1)  =>  maps (0, inf) to [0, 1].
+float3 Reinhard(float3 x)
+{
+    return x / (x + float3(1.0f));
+}

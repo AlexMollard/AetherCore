@@ -1,0 +1,5 @@
+// Exponential — 1 - e^(-x), simple smooth rolloff, no hard clip.
+float3 Exponential(float3 x)
+{
+    return float3(1.0f) - exp(-x);
+}

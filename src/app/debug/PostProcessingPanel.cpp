@@ -4,10 +4,8 @@
 #include <imgui.h>
 
 #include "layers/AppLayer.hpp"
-#include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
 #include "rendering/Renderer.hpp"
-#include "rendering/RenderingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
@@ -27,14 +25,6 @@ namespace aether::app
 		ImGui::Begin("Post Processing");
 		{
 			Renderer& renderer = context.Get<Renderer>();
-			auto& rendering = context.Get<aether::RenderingSubsystem>();
-
-			int tonemapMode = static_cast<int>(renderer.GetTonemapMode());
-			const char* tonemapNames[] = {"Reinhard", "ACES Filmic", "Uncharted2"};
-			if (ImGui::Combo("Tonemap", &tonemapMode, tonemapNames, static_cast<int>(std::size(tonemapNames))))
-			{
-				renderer.SetTonemapMode(static_cast<aether::TonemapMode>(tonemapMode));
-			}
 
 			bool fxaa = renderer.IsFxaaEnabled();
 			if (ImGui::Checkbox("FXAA", &fxaa))
@@ -47,12 +37,6 @@ namespace aether::app
 			if (ImGui::Combo("Cull mode", &cullMode, cullModeNames, static_cast<int>(std::size(cullModeNames))))
 			{
 				renderer.SetCullMode(static_cast<aether::gpu::CullMode>(cullMode));
-			}
-
-			float exposure = rendering.GetPostProcessStack().GetExposure();
-			if (ImGui::SliderFloat("Exposure", &exposure, 0.1f, 4.0f, "%.2f"))
-			{
-				rendering.GetPostProcessStack().SetExposure(exposure);
 			}
 
 			const gpu::Extent2D ext = context.Get<Swapchain>().GetExtent();
@@ -70,29 +54,6 @@ namespace aether::app
 			const bool enabled = !context.Get<Renderer>().IsFxaaEnabled();
 			context.Get<Renderer>().SetFxaaEnabled(enabled);
 			AE_INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
-		}
-
-		if (input.IsKeyPressed(aether::Key::T))
-		{
-			const auto next = static_cast<aether::TonemapMode>((static_cast<int>(context.Get<Renderer>().GetTonemapMode()) + 1) % 3);
-			context.Get<Renderer>().SetTonemapMode(next);
-
-			auto TonemapModeName = [](aether::TonemapMode mode) -> const char*
-			{
-				switch (mode)
-				{
-					case aether::TonemapMode::Reinhard:
-						return "Reinhard";
-					case aether::TonemapMode::AcesFilmic:
-						return "ACES Filmic";
-					case aether::TonemapMode::Uncharted2:
-						return "Uncharted2";
-					default:
-						return "Unknown";
-				}
-			};
-
-			AE_INFO(aether::LogCategory::App, "Tonemap: {}", TonemapModeName(next));
 		}
 	}
 

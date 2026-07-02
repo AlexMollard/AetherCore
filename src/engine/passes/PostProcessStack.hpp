@@ -1,22 +1,19 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <span>
 
 #include "gpu/BindlessManager.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "passes/TonemapDefs.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "rendering/RenderGraph.hpp"
 
 namespace aether
 {
-	// Tonemap operator applied in the $PostProcess pass.
-	enum class TonemapMode : uint32_t
-	{
-		Reinhard = 0,   // x / (x + 1) - simple, cheap
-		AcesFilmic = 1, // Narkowicz 2015 fit - filmic toe + shoulder
-		Uncharted2 = 2, // John Hable curve - warm filmic look
-	};
+	// Forward-declared in Renderer.hpp as `enum class TonemapMode : std::uint32_t`.
+	// Full definition lives in passes/TonemapDefs.hpp.
 
 	// Owns the offscreen images and pipelines for the engine's post-processing
 	// chain: forward HDR buffer -> tonemap -> FXAA -> swapchain.
@@ -133,6 +130,46 @@ namespace aether
 			return m_fxaaEnabled;
 		}
 
+		// Debug side-by-side tonemap comparison. When enabled the shader splits
+		// the screen into vertical strips, one operator per strip.
+		void SetDebugCompare(bool enabled)
+		{
+			m_debugCompare = enabled;
+		}
+
+		[[nodiscard]] bool IsDebugCompareEnabled() const
+		{
+			return m_debugCompare;
+		}
+
+		void SetDebugModeCount(std::uint32_t count)
+		{
+			m_debugModeCount = count;
+		}
+
+		[[nodiscard]] std::uint32_t GetDebugModeCount() const
+		{
+			return m_debugModeCount;
+		}
+
+		// ── Luminance histogram access (debug) ──────────────────────────────
+		[[nodiscard]] const float* GetHdrHistogramBins() const
+		{
+			return m_histogramBins;
+		}
+		[[nodiscard]] const float* GetLdrHistogramBins() const
+		{
+			return m_ldrHistogramBins;
+		}
+		[[nodiscard]] bool IsHistogramValid() const
+		{
+			return m_histogramDataValid;
+		}
+		static constexpr std::uint32_t GetHistogramBinCount()
+		{
+			return kHistogramBins;
+		}
+
 		// Adds the $PostProcess (tonemap) and $FXAA passes to the render graph.
 		// bindless must outlive the graph (it is captured by the pass lambdas).
 		void RegisterPasses(RenderGraph& graph, BindlessManager& bindless);
@@ -157,5 +194,18 @@ namespace aether
 		float m_exposure = 1.0f;
 		bool m_fxaaEnabled = false;
 		bool m_outputToTexture = false;
+		bool m_debugCompare = false;
+		std::uint32_t m_debugModeCount = 0;
+
+		// ── Luminance histogram (debug) ─────────────────────────────────
+		void ReadbackHistogram(std::uint32_t frameSlot);
+		static constexpr std::uint32_t kHistogramBins = 256;
+
+		gpu::PipelineHandle m_histogramPipeline;
+		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{}; // per-frame mapped, 512 uint32 each
+		bool m_perFrameHistogramReady[kMaxFramesInFlight]{};
+		float m_histogramBins[kHistogramBins]{};
+		float m_ldrHistogramBins[kHistogramBins]{};
+		bool m_histogramDataValid = false;
 	};
 } // namespace aether

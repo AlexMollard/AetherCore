@@ -1,0 +1,5 @@
+// RomBinDaHouse — filmic curve with a soft shoulder.
+float3 RomBinDaHouse(float3 x)
+{
+    return clamp(x * (x * 0.26f + 0.68f) / (x * (x * 0.26f + 1.14f) + 0.14f), 0.0f, 1.0f);
+}

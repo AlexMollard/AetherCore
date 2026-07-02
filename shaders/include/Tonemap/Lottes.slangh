@@ -1,0 +1,5 @@
+// Lottes — punchy film curve with added mid-contrast.
+float3 Lottes(float3 x)
+{
+    return x * (1.47f * x + 0.12f) / (x * (1.47f * x + 1.46f) + 0.12f);
+}

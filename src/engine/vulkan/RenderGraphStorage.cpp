@@ -9,7 +9,6 @@
 #include "gpu/BindlessManager.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "gpu/GpuEnums.hpp"
-#include "gpu/ResourceRegistry.hpp"
 #include "gpu/Semaphore.hpp"
 #include "utils/Assert.hpp"
 #include "utils/Expected.hpp"

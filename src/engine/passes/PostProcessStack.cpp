@@ -1,6 +1,11 @@
 #include "passes/PostProcessStack.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/packing.hpp>
 
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
@@ -21,7 +26,7 @@ namespace aether
 		const gpu::TextureDesc hdrDesc{
 		        .format = gpu::Format::R16G16B16A16Sfloat,
 		        .extent = desc.extent,
-		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+		        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled | gpu::ImageUsage::TransferSrc,
 		        .aspect = gpu::ImageAspect::Color,
 		        .debugName = "PostProcess.HdrColor",
 		};
@@ -94,6 +99,35 @@ namespace aether
 		                }));
 		stack.m_fxaaPipeline = std::move(fxaaPipeline);
 
+		// Compute pipeline + per-frame mapped output buffers for GPU luminance histogram
+		{
+			stack.m_histogramPipeline = gpu::ResourceRegistry::CreateComputePipeline(desc.device,
+			        gpu::ComputePipelineDesc{
+			                .shaderVfsPath = "shaders://luminance_histogram.spv",
+			                .debugName = "LuminanceHistogram",
+			                .descriptorHeapMappings = desc.bindlessManager->GetDescriptorHeapMappings(),
+			        });
+			if (!stack.m_histogramPipeline.IsValid())
+			{
+				Throw(AetherError::Engine("PostProcessStack: LuminanceHistogram CreateComputePipeline failed"));
+			}
+
+			constexpr auto kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
+			for (auto& buf : stack.m_histogramOutput)
+			{
+				buf = gpu::ResourceRegistry::CreateMappedBuffer({
+				        .size = kHistogramBufferSize,
+				        .usage = gpu::BufferUsage::ShaderDeviceAddress,
+				        .memoryUsage = gpu::MappedMemoryUsage::GpuToCpu,
+				        .debugName = "PostProcess.HistogramOutput",
+				});
+				if (!buf.IsValid())
+				{
+					Throw(AetherError::Engine("PostProcessStack: HistogramOutput CreateMappedBuffer failed"));
+				}
+			}
+		}
+
 		stack.m_swapchainFormat = desc.swapchainFormat;
 		stack.m_extent = desc.extent;
 
@@ -126,8 +160,64 @@ namespace aether
 		m_hdrColorHandle = {};
 		m_hdrColor = RGImage{};
 		m_hdrBindlessSlot = 0xFFFFFFFFu;
+		if (m_histogramPipeline.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_histogramPipeline);
+		}
+		m_histogramPipeline = {};
+		for (auto& buf : m_histogramOutput)
+		{
+			if (buf.IsValid())
+			{
+				gpu::ResourceRegistry::Destroy(buf);
+			}
+			buf = {};
+		}
+		for (auto& ready : m_perFrameHistogramReady)
+		{
+			ready = false;
+		}
+		m_histogramDataValid = false;
 		m_extent = {};
 		m_outputToTexture = false;
+	}
+
+	void PostProcessStack::ReadbackHistogram(const std::uint32_t frameSlot)
+	{
+		AE_PROFILE_ZONE();
+		const auto view = gpu::ResourceRegistry::ResolveMappedBuffer(m_histogramOutput[frameSlot % kMaxFramesInFlight]);
+		if (!view.mappedPtr)
+		{
+			return;
+		}
+
+		const std::uint32_t* bins = static_cast<const std::uint32_t*>(view.mappedPtr);
+
+		auto normalise = [](const std::uint32_t* src, float* dst, std::uint32_t count)
+		{
+			float maxBin = 0.0f;
+			for (std::uint32_t i = 0; i < count; ++i)
+			{
+				const float v = static_cast<float>(src[i]);
+				if (v > maxBin) maxBin = v;
+			}
+
+			if (maxBin > 0.0f)
+			{
+				const float invMax = 1.0f / maxBin;
+				for (std::uint32_t i = 0; i < count; ++i)
+				{
+					dst[i] = static_cast<float>(src[i]) * invMax;
+				}
+			}
+			else
+			{
+				std::memset(dst, 0, count * sizeof(float));
+			}
+		};
+
+		normalise(bins,          m_histogramBins,     kHistogramBins); // HDR first 256
+		normalise(bins + 256,    m_ldrHistogramBins,  kHistogramBins); // LDR next 256
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -145,8 +235,8 @@ namespace aether
 		                        })
 		        .ReadTexture(m_hdrColor)
 		        .Execute(
-		                [this, &bindless](PassContext& ctx)
-		                {
+		                        [this, &bindless](PassContext& ctx)
+		                        {
 			                gpu::CommandList& cmd = ctx.recorder;
 
 			                const gpu::Viewport vp{
@@ -168,10 +258,22 @@ namespace aether
 				                std::uint32_t hdrSlot;
 				                std::uint32_t mode;
 				                float exposure;
+				                std::uint32_t debugCompare;
+				                std::uint32_t debugModeCount;
+				                std::int32_t inspectX;
+				                std::int32_t inspectY;
+				                std::uint32_t screenWidth;
+			                std::uint32_t screenHeight;
 			                } push;
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);
 			                push.exposure = m_exposure;
+			                push.debugCompare = m_debugCompare ? 1u : 0u;
+			                push.debugModeCount = m_debugModeCount;
+			                push.inspectX = -1;
+			                push.inspectY = -1;
+			                push.screenWidth = m_extent.width;
+			                push.screenHeight = m_extent.height;
 			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
 
 			                cmd.Draw(3, 1, 0, 0);
@@ -214,5 +316,54 @@ namespace aether
 
 			        cmd.Draw(3, 1, 0, 0);
 		        });
+
+		// ── GPU luminance histogram (debug) ─────────────────────────
+		const auto histogramResolved = gpu::ResourceRegistry::ResolvePipeline(m_histogramPipeline);
+		graph.AddComputePass("$Histogram")
+		        .ReadTexture(m_hdrColor)
+		        .ReadTexture(m_ldrColor)
+		        .SetExtent(m_extent)
+		        .HasSideEffects("reads HDR/LDR via bindless textures, writes to mapped BDA buffer")
+		        .ExecuteCompute(
+		                [this, &bindless, histogramPipeline = const_cast<void*>(histogramResolved.state)](PassContext& ctx)
+		                {
+			                gpu::CommandList cmd = ctx.recorder.View();
+			                const std::uint32_t slot = ctx.frameSlot % kMaxFramesInFlight;
+
+			                // Bind the bindless descriptor heap so g_textures[] resolves correctly.
+			                bindless.CmdBindHeaps(cmd);
+
+			                // Readback this slot's output from kMaxFramesInFlight
+			                // frames ago (guaranteed complete by frame pacing).
+			                if (m_perFrameHistogramReady[slot])
+			                {
+				                ReadbackHistogram(slot);
+				                m_histogramDataValid = true;
+			                }
+
+			                // Dispatch histogram compute to this slot
+			                const auto mappedView = gpu::ResourceRegistry::ResolveMappedBuffer(m_histogramOutput[slot]);
+
+			                cmd.BindComputePipeline(histogramPipeline);
+
+			                struct
+			                {
+				                std::uint32_t hdrSlot;
+				                std::uint32_t ldrSlot;
+				                std::uint64_t output;
+				                std::uint32_t width;
+				                std::uint32_t height;
+			                } push;
+			                push.hdrSlot = m_hdrBindlessSlot;
+			                push.ldrSlot = m_ldrBindlessSlot;
+			                push.output = mappedView.deviceAddress;
+			                push.width = ctx.extent.width;
+			                push.height = ctx.extent.height;
+			                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+
+			                cmd.Dispatch(1, 1, 1);
+
+			                m_perFrameHistogramReady[slot] = true;
+		                });
 	}
 } // namespace aether

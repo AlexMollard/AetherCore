@@ -24,6 +24,7 @@ using namespace std::string_view_literals;
 #include "debug/PerformancePanel.hpp"
 #include "debug/PostProcessingPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
+#include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "platform/Input.hpp"
@@ -263,6 +264,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());
+		m_panels.push_back(std::make_unique<TonemapPanel>());
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
@@ -393,6 +395,7 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
 			ImGui::DockBuilderDockWindow("Render Graph", dock_right);
 			ImGui::DockBuilderDockWindow("Debug", dock_right);
+			ImGui::DockBuilderDockWindow("Tonemap", dock_right);
 			ImGui::DockBuilderDockWindow("Post Processing", dock_right);
 
 			ImGui::DockBuilderFinish(dockspace_id);

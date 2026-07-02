@@ -1,0 +1,33 @@
+// TonemapOperator family files — each is a self-contained curve.
+// Add a new .slangh here and register it in TonemapByIndex below.
+
+#include "Reinhard.slangh"
+#include "AcesFilmic.slangh"
+#include "Uncharted2.slangh"
+#include "HejlRichard.slangh"
+#include "Linear.slangh"
+#include "Exponential.slangh"
+#include "FilmicDice.slangh"
+#include "Lottes.slangh"
+#include "RomBinDaHouse.slangh"
+#include "Vanilla.slangh"
+
+// Dispatch by index — single switch site for operator selection.
+// Slot order must match kTonemapDefs in TonemapDefs.hpp.
+float3 TonemapByIndex(uint idx, float3 x)
+{
+    switch (idx)
+    {
+        case 0u: return Reinhard(x);
+        case 1u: return AcesFilmic(x);
+        case 2u: return Uncharted2(x);
+        case 3u: return HejlRichard(x);
+        case 4u: return Linear(x);
+        case 5u: return Exponential(x);
+        case 6u: return FilmicDice(x);
+        case 7u: return Lottes(x);
+        case 8u: return RomBinDaHouse(x);
+        case 9u: return Vanilla(x);
+        default: return Reinhard(x);
+    }
+}

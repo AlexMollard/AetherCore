@@ -1,0 +1,5 @@
+// Vanilla — identity pass-through for debug reference (no tonemapping).
+float3 Vanilla(float3 x)
+{
+    return x;
+}
