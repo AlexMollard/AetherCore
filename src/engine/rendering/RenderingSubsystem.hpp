@@ -61,6 +61,13 @@ namespace aether
 		void SetSceneViewportSettings(ServiceContainer& services, const SceneViewportSettings& settings);
 		bool CommitPendingSceneViewportSettings();
 		void ApplyPendingSceneViewportChanges(ServiceContainer& services);
+		// Non-consuming peek used by the main-thread quiesced recreate to decide
+		// whether a rebuild is pending. CommitPendingSceneViewportSettings is the
+		// sole consumer of the flag.
+		[[nodiscard]] bool IsSceneViewportRebuildPending() const
+		{
+			return m_sceneViewportRebuildPending.load(std::memory_order_acquire);
+		}
 		void DiscardPendingFrameQueues(std::uint32_t slot);
 
 		[[nodiscard]] SceneViewportSettings GetSceneViewportSettings() const;

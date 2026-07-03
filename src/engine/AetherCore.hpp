@@ -1,12 +1,17 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
+#include "EngineClient.hpp"
+#include "IEngineRuntime.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuEnums.hpp"
 #include "rendering/RenderFramePacket.hpp"
+#include "rendering/RenderThread.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/FramePacer.hpp"
 #include "utils/ServiceContainer.hpp"
 
 namespace aether
@@ -19,7 +24,10 @@ namespace aether
 	class ImguiSubsystem;
 	class RenderingSubsystem;
 
-	class AetherCore
+	// Owns the whole frame lifecycle: the render thread, the producer/game-thread
+	// frame loop, swapchain/viewport recreation, and the exclusive-mutation
+	// primitive. The application injects behaviour through EngineClient hooks.
+	class AetherCore : public IEngineRuntime
 	{
 	public:
 		struct Config
@@ -43,14 +51,38 @@ namespace aether
 
 		explicit AetherCore(const Config& config);
 		AetherCore(const Config& config, const EngineSettings& settings);
-		~AetherCore();
+		~AetherCore() override;
 
 		[[nodiscard]] ServiceContainer& GetServiceContainer()
 		{
 			return m_services;
 		}
 
-		// Frame lifecycle.
+		// --- Engine-owned frame lifecycle -------------------------------------
+		// Start/stop the dedicated render thread. Start registers the render-thread
+		// and IEngineRuntime services; call before layers that consume them attach.
+		// Stop joins the thread and waits the GPU idle (call before destroying any
+		// GPU-referenced resources, e.g. layer detach).
+		void StartRenderThread();
+		void StopRenderThread();
+
+		// Run the producer/game-thread frame loop until the window closes. The
+		// EngineClient supplies per-frame game logic, UI, and target invalidation.
+		int RunFrameLoop(EngineClient& client);
+
+		// IEngineRuntime: quiesce the pipeline, run a mutation exclusively, resume.
+		void RunExclusive(QuiesceMode mode, std::function<void()> mutation) override;
+
+		void SetTargetFps(float fps)
+		{
+			m_framePacer.SetTargetFps(fps);
+		}
+		[[nodiscard]] float GetTargetFps() const
+		{
+			return m_framePacer.GetTargetFps();
+		}
+
+		// Frame lifecycle steps (used by the loop and the render thread).
 		[[nodiscard]] bool ShouldClose();
 		void PumpEvents();
 		void Tick(float dt);
@@ -59,6 +91,16 @@ namespace aether
 		void DiscardPendingFrameQueues(const RenderFramePacket& packet);
 		void DiscardAllPendingFrameQueues();
 		void WaitIdle();
+
+		// --- Main-thread quiesced swapchain / scene-viewport recreate ----------
+		// The producer (main) thread polls NeedsSwapchainOrViewportRecreate() each
+		// iteration; when true it drains + parks the render thread, waits the GPU
+		// idle, invalidates retained references, then calls RecreateSwapchainAnd
+		// Resources() single-threaded. This replaces the old render-thread-inline
+		// recreate that raced ImGui's retained viewport-texture descriptors.
+		[[nodiscard]] bool NeedsSwapchainOrViewportRecreate();
+		void RecreateSwapchainAndResources();
+		void FlushImguiPendingTextureReleases();
 
 		[[nodiscard]] static GpuFormat GetForwardColorFormat();
 
@@ -90,8 +132,15 @@ namespace aether
 
 		std::unique_ptr<AnimationBlendSystem> m_animationBlend;
 
+		// Producer/game-thread frame loop state (distinct from the render-side
+		// m_frameIndex below, which is stamped from the packet on the render thread).
+		RenderThread m_renderThread;
+		FramePacer m_framePacer;
+		std::uint64_t m_producerFrameIndex = 0;
+		double m_gameElapsedSeconds = 0.0;
+
 		gpu::CommandList m_currentCmdList;
-		std::uint64_t m_frameIndex = 0;
+		std::uint64_t m_frameIndex = 0; // render/consumer-side, set from packet.frameIndex
 
 		EngineSettings m_settings{};
 	};

@@ -47,4 +47,12 @@ namespace aether::app
 			layer->OnImGui(context);
 		}
 	}
+
+	void LayerStack::RenderTargetsInvalidatedAll(LayerContext& context)
+	{
+		for (const auto& layer: m_layers)
+		{
+			layer->OnRenderTargetsInvalidated(context);
+		}
+	}
 } // namespace aether::app

@@ -354,6 +354,21 @@ namespace aether
 		});
 	}
 
+	void ImguiSubsystem::FlushPendingTextureReleasesImmediate()
+	{
+		if (!m_backendsInitialized)
+		{
+			m_pendingTextureReleases.clear();
+			return;
+		}
+
+		for (const auto& pending: m_pendingTextureReleases)
+		{
+			ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(pending.textureId)));
+		}
+		m_pendingTextureReleases.clear();
+	}
+
 	void ImguiSubsystem::RetirePendingTextureReleases()
 	{
 		if (!m_backendsInitialized)

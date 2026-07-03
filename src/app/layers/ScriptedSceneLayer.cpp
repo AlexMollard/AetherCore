@@ -4,6 +4,7 @@
 
 #include "scripting/ScriptingSubsystem.hpp"
 
+#include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "camera/CameraManager.hpp"
@@ -91,33 +92,27 @@ namespace aether::app
 		{
 			m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 
-			// Signal that a reload is in progress - the render thread will skip
-			// executing any new frames until we've destroyed the old scene entities.
-			auto& renderThread = context.Get<aether::RenderThread>();
-			renderThread.SetReloadInProgress(true);
-			renderThread.WaitPaused();
-
-			// Frames in flight may still reference the buffers backing the scene
-			// entities we're about to destroy. Hot-reload is out-of-band, so a
-			// device-wide wait is acceptable.
-			context.Get<GpuDevice>().WaitIdle();
-
-			// Clear all render queues to remove any pending commands that reference
-			// destroyed meshes/animation databases.
-			auto& renderQueue = context.Get<RenderQueue>();
-			renderQueue.DiscardAllPending();
-			if (auto shadowService = context.TryGet<ShadowService>())
-			{
-				shadowService->ClearAllQueues();
-			}
-			if (auto localShadowService = context.TryGet<LocalShadowService>())
-			{
-				localShadowService->ClearAllQueues();
-			}
-
-			DestroySceneEntities(context);
-
-			renderThread.SetReloadInProgress(false);
+			// Hot-reload frees the buffers backing the scene entities. Route the
+			// teardown through the engine's exclusive-mutation primitive in Discard
+			// mode: the render thread drops in-flight frames (which still reference
+			// those buffers) as it parks, rather than draining and rendering them
+			// against freed memory. RunExclusive supplies the park + GPU WaitIdle.
+			context.Get<aether::IEngineRuntime>().RunExclusive(aether::QuiesceMode::Discard,
+			        [&]()
+			        {
+				        // Clear render queues that reference destroyed meshes /
+				        // animation databases BEFORE destroying the entities.
+				        context.Get<RenderQueue>().DiscardAllPending();
+				        if (auto shadowService = context.TryGet<ShadowService>())
+				        {
+					        shadowService->ClearAllQueues();
+				        }
+				        if (auto localShadowService = context.TryGet<LocalShadowService>())
+				        {
+					        localShadowService->ClearAllQueues();
+				        }
+				        DestroySceneEntities(context);
+			        });
 		}
 
 		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);

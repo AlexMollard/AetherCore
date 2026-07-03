@@ -27,7 +27,18 @@ namespace aether
 			throw WindowError("Failed to create GLFW window.");
 		}
 
+		glfwSetWindowUserPointer(m_window, this);
+		glfwSetFramebufferSizeCallback(m_window, &Window::FramebufferSizeCallback);
+
 		AE_INFO(LogCategory::Window, "Window created successfully.");
+	}
+
+	void Window::FramebufferSizeCallback(GLFWwindow* window, int /*width*/, int /*height*/)
+	{
+		if (auto* self = static_cast<Window*>(glfwGetWindowUserPointer(window)))
+		{
+			self->m_framebufferResized.store(true, std::memory_order_release);
+		}
 	}
 
 	Window::~Window()

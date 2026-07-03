@@ -83,11 +83,12 @@ namespace aether::app
 		        .services = m_engine.GetServiceContainer(),
 		        .deltaTimeSeconds = 0.0,
 		        .elapsedTimeSeconds = 0.0,
-		        .frameIndex = m_frameIndex,
+		        .frameIndex = 0,
 		};
 
-		m_renderThread.Stop();
-		m_engine.WaitIdle();
+		// Join the render thread AND wait the GPU idle BEFORE detaching layers,
+		// which destroy GPU-referenced resources. StopRenderThread() does both.
+		m_engine.StopRenderThread();
 
 		// Reset the default executor so no more continuations are dispatched.
 		aether::coro::set_default_executor(nullptr);
@@ -130,10 +131,10 @@ namespace aether::app
 		// dispatch correctly.
 		aether::coro::set_default_executor(&m_coroExecutor);
 
-		// Start the dedicated render thread early so that loading-screen
-		// frames can be submitted while assets load incrementally.
-		m_renderThread.Start(m_engine);
-		m_engine.GetServiceContainer().Register<aether::RenderThread>(m_renderThread);
+		// Start the engine-owned render thread early (also registers the
+		// RenderThread + IEngineRuntime services) so loading-screen frames can be
+		// submitted while assets load incrementally and layers can resolve them.
+		m_engine.StartRenderThread();
 
 		LayerContext attachContext{
 		        .services = m_engine.GetServiceContainer(),
@@ -165,7 +166,7 @@ namespace aether::app
 		if (m_settings.app.targetFps > 0.0f)
 		{
 			AE_INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
-			m_framePacer.SetTargetFps(m_settings.app.targetFps);
+			m_engine.SetTargetFps(m_settings.app.targetFps);
 		}
 		else if (m_settings.graphics.vsync)
 		{
@@ -176,106 +177,61 @@ namespace aether::app
 			AE_INFO(LogCategory::App, "VSync is off and TargetFPS is 0 - frame pacer running uncapped.");
 		}
 
-		auto previousFrameTime = std::chrono::steady_clock::now();
-
-		while (!m_engine.ShouldClose())
-		{
-			AE_PROFILE_ZONE();
-
-			const auto frameStartTime = std::chrono::steady_clock::now();
-
-			m_framePacer.Wait();
-
-			// Resume any coroutines whose async I/O completed on the background
-			// thread since the last frame.
-			m_coroExecutor.drain();
-
-			Logger::SetFrameNumber(m_frameIndex);
-
-			// Measure dt before PumpEvents so drag stalls and window-event jitter
-			// don't inflate simulation timing or cause camera/object jumps.
-			constexpr double kMaxDeltaTime = 1.0 / 30.0;
-			const auto currentFrameTime = std::chrono::steady_clock::now();
-			const auto deltaTime = std::min(std::chrono::duration<double>(currentFrameTime - previousFrameTime).count(), kMaxDeltaTime);
-			previousFrameTime = currentFrameTime;
-
-			m_engine.PumpEvents();
-
-			if (m_frameIndex >= aether::Swapchain::kMaxFramesInFlight)
-			{
-				m_renderThread.WaitUntilFrameCompleted(m_frameIndex - aether::Swapchain::kMaxFramesInFlight);
-			}
-
-			// Update engine-level per-frame systems (input + camera).
-			// Camera uses unscaled dt so it stays controllable during fast-forward.
-			m_engine.Tick(static_cast<float>(deltaTime));
-
-			// Fast-forward: hold GraveAccent (` / ~) to multiply game speed.
-			constexpr double kFastForwardScale = 10.0;
-			const auto& input = m_engine.GetServiceContainer().Get<Input>();
-			const double timeScale = input.IsKeyDown(Key::GraveAccent) ? kFastForwardScale : 1.0;
-			const double scaledDt = deltaTime * timeScale;
-			m_elapsedTimeSeconds += scaledDt;
-
-			LayerContext frameContext{
-			        .services = m_engine.GetServiceContainer(),
-			        .deltaTimeSeconds = scaledDt,
-			        .elapsedTimeSeconds = m_elapsedTimeSeconds,
-			        .frameIndex = m_frameIndex,
-			};
-
-			// Update ECS systems (game logic) with scaled dt.
-			{
-				AE_PROFILE_ZONE();
-				frameContext.Get<World>().UpdateSystems(static_cast<float>(scaledDt));
-			}
-
-			// Compute the CPU double-buffer write slot for this frame.
-			const auto drawSlot = static_cast<std::uint32_t>(m_frameIndex % aether::Swapchain::kMaxFramesInFlight);
-			m_engine.GetServiceContainer().Get<RenderQueue>().SetWriteSlot(drawSlot);
-			m_engine.GetServiceContainer().Get<RenderQueue>().Clear(drawSlot);
-			m_engine.GetServiceContainer().Get<ShadowService>().PrepareWriteSlot(drawSlot);
-
-			// Layer game-logic update.
-			{
-				AE_PROFILE_ZONE();
-				m_layers.UpdateAll(frameContext);
-			}
-			// Layer UI / overlay submission.
-			{
-				AE_PROFILE_ZONE();
-				if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
-				{
-					imgui->BeginFrame(frameContext.services, static_cast<float>(deltaTime));
-				}
-				m_layers.ImGuiAll(frameContext);
-			}
-
-			aether::ImguiFrameData imguiFrame;
-			if (auto imgui = frameContext.TryGet<aether::ImguiSubsystem>())
-			{
-				imgui->CaptureFrame(imguiFrame);
-			}
-
-			// Flush ECS draws and build a frame packet.
-			auto packet = m_engine.PrepareFrame(drawSlot, m_frameIndex);
-			packet.elapsedTime = static_cast<float>(m_elapsedTimeSeconds);
-			packet.imgui = std::move(imguiFrame);
-
-			// Hand the packet to the render thread.
-			const auto submitStart = std::chrono::steady_clock::now();
-			m_renderThread.SubmitFrame(std::move(packet));
-			AE_PROFILE_PLOT("Frame/ChannelSubmitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - submitStart).count()));
-			AE_PROFILE_PLOT("Frame/GameThreadTotalNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - frameStartTime).count()));
-
-			++m_frameIndex;
-		}
+		// Hand control to the engine-owned frame loop. This Application supplies
+		// per-frame game logic, UI, and target invalidation through EngineClient
+		// hooks; the engine owns the render thread, scheduling, and recreate.
+		const int rc = m_engine.RunFrameLoop(*this);
 
 		AE_INFO(LogCategory::App, "Application run loop exited.");
-		m_renderThread.Stop();
-		Logger::ClearFrameNumber();
+		return rc;
+	}
 
-		return 0;
+	LayerContext Application::MakeLayerContext(double dtSeconds, std::uint64_t frameIndex)
+	{
+		return LayerContext{
+		        .services = m_engine.GetServiceContainer(),
+		        .deltaTimeSeconds = dtSeconds,
+		        .elapsedTimeSeconds = 0.0, // layers do not read elapsed time
+		        .frameIndex = frameIndex,
+		};
+	}
+
+	void Application::OnFrameBegin()
+	{
+		// Resume any coroutines whose async I/O completed since the last frame.
+		m_coroExecutor.drain();
+	}
+
+	double Application::GetTimeScale()
+	{
+		// Fast-forward: hold GraveAccent (` / ~) to multiply game speed. Polled
+		// after input is updated (inside the engine's Tick), so it reads fresh.
+		constexpr double kFastForwardScale = 10.0;
+		const auto& input = m_engine.GetServiceContainer().Get<Input>();
+		return input.IsKeyDown(Key::GraveAccent) ? kFastForwardScale : 1.0;
+	}
+
+	void Application::OnUpdate(double gameDt, std::uint64_t frameIndex)
+	{
+		AE_PROFILE_ZONE();
+		LayerContext ctx = MakeLayerContext(gameDt, frameIndex);
+		ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
+		m_layers.UpdateAll(ctx);
+	}
+
+	void Application::OnBuildUI(double gameDt, std::uint64_t frameIndex)
+	{
+		AE_PROFILE_ZONE();
+		// gameDt (scaled) so the performance panel reflects fast-forward, matching
+		// pre-refactor behaviour.
+		LayerContext ctx = MakeLayerContext(gameDt, frameIndex);
+		m_layers.ImGuiAll(ctx);
+	}
+
+	void Application::OnRenderTargetsInvalidated()
+	{
+		LayerContext ctx = MakeLayerContext(0.0, 0);
+		m_layers.RenderTargetsInvalidatedAll(ctx);
 	}
 
 	aether::AetherCore& Application::GetEngine()

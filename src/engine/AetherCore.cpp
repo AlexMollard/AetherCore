@@ -26,13 +26,16 @@
 #include "gpu/GpuProfiler.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "gpu/CommandList.hpp"
+#include "imgui/ImguiFrameData.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "platform/PlatformSubsystem.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/RenderFramePacket.hpp"
+#include "rendering/RenderQueue.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "rendering/ShadowService.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "scene/EcsHelpers.hpp"
 #include "scene/SceneSubsystem.hpp"
@@ -160,6 +163,12 @@ namespace aether
 
 	AetherCore::~AetherCore()
 	{
+		// Ensure the render thread is joined before we tear anything down. Stop()
+		// is idempotent, so this is safe even if StopRenderThread() already ran;
+		// it also guarantees no joinable std::thread at destruction (which would
+		// otherwise std::terminate if the loop threw).
+		m_renderThread.Stop();
+
 		m_gpu->WaitIdle();
 
 		m_services.Get<AsyncComputeContext>().Shutdown(*m_gpu);
@@ -185,6 +194,142 @@ namespace aether
 	void AetherCore::WaitIdle()
 	{
 		m_gpu->WaitIdle();
+	}
+
+	void AetherCore::StartRenderThread()
+	{
+		m_renderThread.Start(*this);
+		// Registered before the app attaches layers so consumers (e.g. hot-reload)
+		// can resolve them. RenderThread is kept registered for compatibility;
+		// IEngineRuntime is the supported surface for app-side exclusive mutations.
+		m_services.Register<RenderThread>(m_renderThread);
+		m_services.Register<IEngineRuntime>(static_cast<IEngineRuntime&>(*this));
+	}
+
+	void AetherCore::StopRenderThread()
+	{
+		// Join the render thread, THEN drain the GPU. RenderThread::Stop() does not
+		// wait the GPU, so callers that destroy GPU-referenced resources afterwards
+		// (e.g. layer detach) rely on this WaitIdle.
+		m_renderThread.Stop();
+		m_gpu->WaitIdle();
+	}
+
+	void AetherCore::RunExclusive(QuiesceMode mode, std::function<void()> mutation)
+	{
+		// Non-reentrant: both callers (recreate, hot-reload) are sequential on the
+		// main thread. A mutation that transitively re-enters would prematurely
+		// clear the park flag, so fail loudly instead.
+		AE_ASSERT_ALWAYS(!m_renderThread.IsReloadInProgress(), "RunExclusive is non-reentrant");
+
+		// (A) DRAIN (Drain mode only, and STRICTLY before parking). With the park
+		//     flag not yet set, every submitted frame completes and publishes, so
+		//     this cannot hang. Discard mode skips this: the render thread drops
+		//     queued frames as it parks (used when the mutation frees resources
+		//     those frames reference).
+		if (mode == QuiesceMode::Drain && m_producerFrameIndex > 0)
+		{
+			m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - 1);
+		}
+
+		// (B) PARK the render thread outside ExecuteRenderFrame.
+		m_renderThread.SetReloadInProgress(true);
+		m_renderThread.WaitPaused();
+
+		// (C) GPU idle. AetherCore::WaitIdle (m_gpu->WaitIdle), NOT the render
+		//     thread's identically-named join method.
+		WaitIdle();
+
+		// (D) Mutation runs single-threaded, GPU idle, render thread parked. Any
+		//     queue clearing / entity destruction is the mutation's responsibility.
+		if (mutation)
+		{
+			mutation();
+		}
+
+		// (F) Resume.
+		m_renderThread.SetReloadInProgress(false);
+	}
+
+	int AetherCore::RunFrameLoop(EngineClient& client)
+	{
+		AE_PROFILE_ZONE();
+		auto previousFrameTime = std::chrono::steady_clock::now();
+
+		while (!ShouldClose())
+		{
+			AE_PROFILE_ZONE_N("Frame");
+
+			m_framePacer.Wait();
+			client.OnFrameBegin(); // app drains its coroutine executor here
+			Logger::SetFrameNumber(m_producerFrameIndex);
+
+			// Measure dt before PumpEvents so window-event stalls don't inflate it.
+			constexpr double kMaxDeltaTime = 1.0 / 30.0;
+			const auto now = std::chrono::steady_clock::now();
+			const double rawDt = std::min(std::chrono::duration<double>(now - previousFrameTime).count(), kMaxDeltaTime);
+			previousFrameTime = now;
+
+			PumpEvents();
+
+			// Handle window resize / scene-viewport rebuild before building a frame
+			// so the channel is provably empty when the render thread is parked.
+			if (NeedsSwapchainOrViewportRecreate())
+			{
+				RunExclusive(QuiesceMode::Drain,
+				        [this, &client]()
+				        {
+					        client.OnRenderTargetsInvalidated();
+					        FlushImguiPendingTextureReleases();
+					        RecreateSwapchainAndResources();
+				        });
+			}
+
+			// Producer backpressure: stay at most kMaxFramesInFlight ahead.
+			if (m_producerFrameIndex >= Swapchain::kMaxFramesInFlight)
+			{
+				m_renderThread.WaitUntilFrameCompleted(m_producerFrameIndex - Swapchain::kMaxFramesInFlight);
+			}
+
+			// Camera/input use UNSCALED dt so they stay controllable during
+			// fast-forward; the game clock uses the scaled dt.
+			Tick(static_cast<float>(rawDt));
+			const double gameDt = rawDt * client.GetTimeScale();
+			m_gameElapsedSeconds += gameDt;
+
+			// Reset this frame's double-buffer write slot BEFORE the update so game
+			// logic writes its draws into a cleared slot.
+			const auto drawSlot = static_cast<std::uint32_t>(m_producerFrameIndex % Swapchain::kMaxFramesInFlight);
+			auto& renderQueue = m_services.Get<RenderQueue>();
+			renderQueue.SetWriteSlot(drawSlot);
+			renderQueue.Clear(drawSlot);
+			m_services.Get<ShadowService>().PrepareWriteSlot(drawSlot);
+
+			client.OnUpdate(gameDt, m_producerFrameIndex);
+
+			if (m_imgui)
+			{
+				m_imgui->BeginFrame(m_services, static_cast<float>(rawDt));
+			}
+			client.OnBuildUI(gameDt, m_producerFrameIndex);
+
+			ImguiFrameData imguiFrame;
+			if (m_imgui)
+			{
+				m_imgui->CaptureFrame(imguiFrame);
+			}
+
+			RenderFramePacket packet = PrepareFrame(drawSlot, m_producerFrameIndex);
+			packet.elapsedTime = static_cast<float>(m_gameElapsedSeconds);
+			packet.imgui = std::move(imguiFrame);
+
+			m_renderThread.SubmitFrame(std::move(packet));
+
+			++m_producerFrameIndex;
+		}
+
+		Logger::ClearFrameNumber();
+		return 0;
 	}
 
 	bool AetherCore::ShouldClose()
@@ -213,21 +358,58 @@ namespace aether
 	void AetherCore::BeginFrame()
 	{
 		AE_PROFILE_ZONE();
-		if (m_gpu->SwapchainNeedsRecreation())
-		{
-			if (m_rendering)
-			{
-				m_rendering->CommitPendingSceneViewportSettings();
-			}
-			RecreateSwapchain();
-		}
-		else if (m_rendering)
-		{
-			m_rendering->ApplyPendingSceneViewportChanges(m_services);
-		}
-
+		// Swapchain / scene-viewport recreation is NOT done here. It is driven from
+		// the producer (main) thread via NeedsSwapchainOrViewportRecreate() +
+		// RecreateSwapchainAndResources() while the render thread is parked, so no
+		// in-flight packet's retained ImGui descriptor can reference a resource
+		// this thread just destroyed. If the swapchain is out of date, acquire
+		// below marks it and BeginSwapchainFrame produces an invalid frame that
+		// EndFrame cleanly discards + advances; the main thread recreates next
+		// iteration.
 		m_gpu->BeginSwapchainFrame();
 		m_currentCmdList = gpu::CommandList(m_gpu->GetSwapchain().GetCurrentCommandBuffer());
+	}
+
+	bool AetherCore::NeedsSwapchainOrViewportRecreate()
+	{
+		const bool framebufferResized = m_services.Get<PlatformSubsystem>().GetWindow().PeekFramebufferResized();
+		const bool swapchainOutOfDate = m_gpu->SwapchainNeedsRecreation();
+		const bool viewportPending = m_rendering != nullptr && m_rendering->IsSceneViewportRebuildPending();
+		return framebufferResized || swapchainOutOfDate || viewportPending;
+	}
+
+	void AetherCore::RecreateSwapchainAndResources()
+	{
+		// Consume the resize triggers. The swapchain flag is cleared inside
+		// RecreateSwapchain()/GpuDevice::RecreateSwapchain (ClearRecreationFlag);
+		// the framebuffer-resized flag is exchanged here.
+		const bool framebufferResized = m_services.Get<PlatformSubsystem>().GetWindow().ConsumeFramebufferResized();
+		const bool swapchainDirty = framebufferResized || m_gpu->SwapchainNeedsRecreation();
+
+		// Commit any pending scene-viewport settings first so the resource rebuild
+		// uses the new extent. Sole consumer of the pending flag.
+		const bool viewportCommitted = m_rendering != nullptr && m_rendering->CommitPendingSceneViewportSettings();
+
+		if (swapchainDirty)
+		{
+			// Recreates the VkSwapchain (new extent) and fires the recreated
+			// callback -> RenderingSubsystem::RecreateSwapchainResources.
+			RecreateSwapchain();
+		}
+		else if (viewportCommitted && m_rendering != nullptr)
+		{
+			// Viewport-only change (toggle / resolution): rebuild extent-dependent
+			// resources without touching the swapchain.
+			m_rendering->RecreateSwapchainResources(m_services);
+		}
+	}
+
+	void AetherCore::FlushImguiPendingTextureReleases()
+	{
+		if (m_imgui)
+		{
+			m_imgui->FlushPendingTextureReleasesImmediate();
+		}
 	}
 
 	std::vector<std::string> AetherCore::GetRenderPassNames() const

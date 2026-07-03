@@ -20,6 +20,7 @@ namespace aether::app
 
 		void OnDetach(LayerContext& context) override;
 		void OnImGui(LayerContext& context) override;
+		void OnRenderTargetsInvalidated(LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
 

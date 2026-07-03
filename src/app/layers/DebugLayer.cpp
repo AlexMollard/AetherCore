@@ -321,6 +321,14 @@ namespace aether::app
 		}
 	}
 
+	void DebugLayer::OnRenderTargetsInvalidated(LayerContext& context)
+	{
+		for (auto& panel: m_panels)
+		{
+			panel->OnRenderTargetsInvalidated(context);
+		}
+	}
+
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();

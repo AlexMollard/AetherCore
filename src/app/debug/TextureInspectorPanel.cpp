@@ -208,6 +208,13 @@ namespace aether::app
 		config.Set("textureInspector.PreviewCheckerboard", m_texturePreviewCheckerboard);
 	}
 
+	void TextureInspectorPanel::OnRenderTargetsInvalidated(LayerContext& context)
+	{
+		// Preview descriptors may reference render targets that were just
+		// recreated; drop the whole cache so each is re-registered on demand.
+		ReleaseTextures(context);
+	}
+
 	void TextureInspectorPanel::ReleaseTextures(LayerContext& context)
 	{
 		if (auto imgui = context.TryGet<aether::ImguiSubsystem>())

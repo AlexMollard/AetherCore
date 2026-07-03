@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <vector>
 #include <VkBootstrap.h>
@@ -87,7 +88,10 @@ namespace aether
 		std::uint32_t m_imageIndex = 0;
 		std::uint32_t m_graphicsQueueFamily = 0;
 		bool m_frameValid = false;
-		bool m_needsRecreation = false;
+		// Written on the render thread (acquire/present OUT_OF_DATE/SUBOPTIMAL) and
+		// polled on the main thread by the quiesced recreate; atomic to make that
+		// cross-thread read/write race-free.
+		std::atomic<bool> m_needsRecreation{false};
 		VkImageLayout m_depthLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 		VkDevice m_device = VK_NULL_HANDLE;
 		bool m_shutdown = false;

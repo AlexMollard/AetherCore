@@ -32,6 +32,15 @@ namespace aether::app
 		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, false);
 	}
 
+	void ViewportPanel::OnRenderTargetsInvalidated(LayerContext& context)
+	{
+		// The post-process final-color image (and its view) were just destroyed
+		// and recreated. Drop our cached ImGui descriptor AND cached view so the
+		// lazy re-register in OnImGui fires next frame even if the allocator
+		// recycled the same VkImageView handle value for the new image.
+		ReleaseSceneViewportTexture(context);
+	}
+
 	void ViewportPanel::ReleaseSceneViewportTexture(LayerContext& context)
 	{
 		if (m_sceneViewportTextureId != 0)

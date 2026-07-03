@@ -45,6 +45,12 @@ namespace aether
 		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
 		void UnregisterTexture(ImTextureID textureId);
 
+		// Free every queued ImGui descriptor immediately, ignoring the deferred
+		// retire frame. Only safe to call when the GPU is idle and the render
+		// thread is parked (i.e. inside the quiesced swapchain/viewport recreate),
+		// so no in-flight command buffer still references the descriptors.
+		void FlushPendingTextureReleasesImmediate();
+
 		[[nodiscard]] bool IsInitialized() const noexcept
 		{
 			return m_initialized;

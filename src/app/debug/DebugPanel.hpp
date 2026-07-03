@@ -92,6 +92,13 @@ namespace aether::app
 
 		virtual void OnImGui(LayerContext& context) = 0;
 
+		// See AppLayer::OnRenderTargetsInvalidated. DebugLayer forwards the
+		// broadcast to each panel so panels holding ImGui texture descriptors
+		// (viewport, texture inspector) can drop them on recreate.
+		virtual void OnRenderTargetsInvalidated(LayerContext&)
+		{
+		}
+
 		virtual void LoadSettings(TomlConfig&, LayerContext&)
 		{
 		}

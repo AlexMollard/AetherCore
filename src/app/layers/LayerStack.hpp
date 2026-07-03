@@ -15,6 +15,7 @@ namespace aether::app
 		void DetachAll(LayerContext& context);
 		void UpdateAll(LayerContext& context);
 		void ImGuiAll(LayerContext& context);
+		void RenderTargetsInvalidatedAll(LayerContext& context);
 
 	private:
 		std::vector<std::unique_ptr<AppLayer>> m_layers;

@@ -13,11 +13,15 @@
 
 namespace aether::app
 {
-	class Application
+	// The application is now a thin EngineClient: it owns layers and game/editor
+	// policy, and plugs into the engine-owned frame loop via hooks. The engine
+	// (AetherCore) owns the render thread, frame scheduling, and resource
+	// lifecycle.
+	class Application : public aether::EngineClient
 	{
 	public:
 		explicit Application(const aether::AetherCore::Config& engineConfig = {});
-		~Application();
+		~Application() override;
 
 		Application(const Application&) = delete;
 		Application& operator=(const Application&) = delete;
@@ -58,16 +62,23 @@ namespace aether::app
 
 		void SetTargetFps(float fps)
 		{
-			m_framePacer.SetTargetFps(fps);
+			m_engine.SetTargetFps(fps);
 		}
 
 		[[nodiscard]] float GetTargetFps() const
 		{
-			return m_framePacer.GetTargetFps();
+			return m_engine.GetTargetFps();
 		}
 
 		[[nodiscard]] aether::AetherCore& GetEngine();
 		[[nodiscard]] const aether::AetherCore& GetEngine() const;
+
+		// --- EngineClient hooks (called by AetherCore::RunFrameLoop) -----------
+		void OnFrameBegin() override;
+		double GetTimeScale() override;
+		void OnUpdate(double gameDt, std::uint64_t frameIndex) override;
+		void OnBuildUI(double gameDt, std::uint64_t frameIndex) override;
+		void OnRenderTargetsInvalidated() override;
 
 		// Shortcut to the engine's ServiceContainer.
 		[[nodiscard]] aether::ServiceContainer& Services()
@@ -78,14 +89,14 @@ namespace aether::app
 	private:
 		Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings);
 
+		// Builds a LayerContext for the given per-frame timing. Layers do not read
+		// elapsedTimeSeconds, so it is left at 0.
+		[[nodiscard]] LayerContext MakeLayerContext(double dtSeconds, std::uint64_t frameIndex);
+
 		aether::EngineSettings m_settings;
 		aether::AetherCore m_engine;
-		aether::RenderThread m_renderThread;
-		aether::FramePacer m_framePacer;
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;
 		bool m_layersAttached = false;
-		std::uint64_t m_frameIndex = 0;
-		double m_elapsedTimeSeconds = 0.0;
 	};
 } // namespace aether::app

@@ -280,7 +280,7 @@ namespace aether
 		if (acquireResult == VK_ERROR_OUT_OF_DATE_KHR)
 		{
 			AE_WARN(LogCategory::Vulkan, "Swapchain out of date - recreation needed.");
-			m_needsRecreation = true;
+			m_needsRecreation.store(true, std::memory_order_release);
 			return;
 		}
 
@@ -289,7 +289,7 @@ namespace aether
 			// Suboptimal: we can still present this frame, but request recreation
 			// afterwards.
 			AE_WARN(LogCategory::Vulkan, "Swapchain suboptimal - will recreate after present.");
-			m_needsRecreation = true;
+			m_needsRecreation.store(true, std::memory_order_release);
 		}
 
 		if (vkResetFences(device, 1, &frame.inFlight) != VK_SUCCESS)
@@ -443,7 +443,7 @@ namespace aether
 		}
 		if (presentResult == VK_ERROR_OUT_OF_DATE_KHR || presentResult == VK_SUBOPTIMAL_KHR)
 		{
-			m_needsRecreation = true;
+			m_needsRecreation.store(true, std::memory_order_release);
 		}
 
 		m_currentFrame = (m_currentFrame + 1) % kMaxFramesInFlight;
@@ -505,11 +505,11 @@ namespace aether
 
 	bool Swapchain::NeedsRecreation() const
 	{
-		return m_needsRecreation;
+		return m_needsRecreation.load(std::memory_order_acquire);
 	}
 
 	void Swapchain::ClearRecreationFlag()
 	{
-		m_needsRecreation = false;
+		m_needsRecreation.store(false, std::memory_order_release);
 	}
 } // namespace aether

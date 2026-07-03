@@ -35,5 +35,14 @@ namespace aether::app
 		virtual void OnDetach(LayerContext& context);
 		virtual void OnUpdate(LayerContext& context);
 		virtual void OnImGui(LayerContext& context);
+
+		// Broadcast when swapchain/scene-viewport render targets have been
+		// destroyed and recreated. Layers holding retained GPU references (e.g.
+		// ImGui texture descriptors) must drop them here so they re-acquire
+		// against the new resources. Runs on the main thread with the render
+		// thread parked and the GPU idle.
+		virtual void OnRenderTargetsInvalidated(LayerContext& /*context*/)
+		{
+		}
 	};
 } // namespace aether::app
