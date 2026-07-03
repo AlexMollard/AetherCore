@@ -121,10 +121,10 @@ static float ComputeAO(uint2 px, float3 worldPos, float3 normal, FrameConstantsD
         [unroll]
         for (uint step = 1u; step <= kStepCount; ++step)
         {
-            float t = (float(step) + noise.y) / float(kStepCount);
             // Quadratic step distribution: denser samples near the receiver so
             // small ground-contact occluders (feet, prop bases) register, while
-            // the last step still reaches the full radius.
+            // the last step still reaches (but never exceeds) the full radius.
+            float t = (float(step) + noise.y) / float(kStepCount + 1u);
             t *= t;
             float3 sampleWorld = worldPos + dir * (pc.radius * t);
             float4 sampleClip = mul(fc->viewProj, float4(sampleWorld, 1.0f));

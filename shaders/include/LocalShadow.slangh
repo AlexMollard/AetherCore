@@ -88,28 +88,34 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
     float2 moments = LoadVsmMoments(atlasSlot, atlasUV, sd.atlasRegion, atlasSize);
 
     // Receiver depth in the same space the caster writes: linear radial
-    // distance from the light normalized by range (local_shadow_depth.slang).
-    // Biases are plain world-space offsets toward the light.
+    // distance from the light normalized by range, exponentially warped
+    // (local_shadow_depth.slang). Biases are world-space offsets toward the
+    // light, applied in linear space before the warp.
+    // Must match kEvsmExponent in local_shadow_depth.slang and the atlas
+    // clear color exp(c)/exp(2c) in LocalShadowService.cpp.
+    const float kEvsmExponent = 40.0;
     const float range = max(sd.lightPosRange.w, 1e-3);
     const float slope = 1.0 - saturate(dot(normalize(worldNormal), normalize(L)));
-    const float worldBias = sd.depthBias + sd.normalBias * slope;
+    // Clamp the world-space bias to a fraction of the light range so small
+    // lights (range < ~1m) do not peter-pan by a large slice of their depth.
+    const float worldBias = min(sd.depthBias + sd.normalBias * slope, 0.02 * range);
     const float receiverDist = distance(worldPos, sd.lightPosRange.xyz);
-    float receiverDepth = saturate((receiverDist - worldBias) / range);
+    const float receiverDepth = saturate((receiverDist - worldBias) / range);
+    const float warpedReceiver = exp(kEvsmExponent * receiverDepth);
 
     float ex = moments.x;
     float exSq = moments.y;
 
     // Receiver is in front of all stored occluders - definitely lit.
-    if (receiverDepth <= ex)
+    if (warpedReceiver <= ex)
     {
         return 1.0;
     }
 
-    // Variance floor in normalized-linear-depth units: (~0.3% of range)^2.
-    // Large enough to absorb R32G32 quantization + blur noise, small enough
-    // not to eat real occluder/receiver separation at distance.
-    float variance = max(exSq - ex * ex, 1e-5);
-    float md = receiverDepth - ex;
+    // Relative variance floor: exp-warped moments scale with e^(c*d), so an
+    // absolute floor would be wrong at both ends of the range.
+    float variance = max(exSq - ex * ex, 1e-4 * ex * ex);
+    float md = warpedReceiver - ex;
     float p = variance / (variance + md * md);
 
     const float kLightBleed = 0.40;

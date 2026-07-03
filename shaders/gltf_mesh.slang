@@ -220,6 +220,11 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     const float shadowVisibility = max(shadow, 0.08f);
     float3 Lo = (diffuse + specular) * (sunColor * (sunIntensity * NdotL * lerp(1.0, shadowVisibility, fc->shadowParams.z)));
 
+    // Local lights accumulate separately so their AO weight does not also hit
+    // the sun term: sun diffuse already carries diffuseAo, and occluding sun
+    // specular with AO double-darkens sunlit geometry.
+    float3 LoLocal = float3(0.0, 0.0, 0.0);
+
     // Tiled local lights (point + spot).
     // Blend toward geometric normal so local lights remain visibly radial on
     // the ground while still retaining some normal-map detail.
@@ -259,10 +264,10 @@ float4 fragmentMain(VSOutput input) : SV_Target0
                 metallic,
                 roughness,
                 fc,
-                Lo);
+                LoLocal);
         }
     }
-    Lo *= localLightingAo;
+    Lo += LoLocal * localLightingAo;
 
     // Image-based ambient (constant approximation - replace with IBL later).
     float3 ambient = ambientColor * baseColor.rgb * ambientAo;

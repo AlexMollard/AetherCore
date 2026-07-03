@@ -30,9 +30,26 @@
 namespace
 {
 	constexpr std::uint32_t kPointLightFaceCount = 6u;
-	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 24u;
+	// Max atlas entries rendered per frame. Each point light needs 6 (one per
+	// cube face), each spot needs 1. At 24 this truncated to 4 point lights, and
+	// because candidates are sorted by camera distance, *which* lights cast
+	// shadows flipped as the camera moved — shadows popped on/off frame to frame.
+	// 48 fits 8 point lights (or 6 points + 12 spots) with headroom; the 8192²
+	// atlas holds far more (48 * 384² ≈ 7M of 67M texels).
+	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 48u;
+	// EVSM exponential warp constant. Must match kEvsmExponent in
+	// local_shadow_depth.slang and LocalShadow.slangh. Empty atlas texels must
+	// read as "occluder at max range", i.e. exp(c*1), or everything outside a
+	// caster's silhouette would be treated as shadowed by a phantom at d=0.
+	constexpr float kEvsmExponent = 40.0f;
 	constexpr std::uint32_t kPointShadowFaceRes = 384u;
-	constexpr float kPointLightFovDeg = 100.0f;
+	// Per-face FOV for cube-style point shadows. SelectPointShadowFace picks a
+	// face by dominant axis, so a receiver in a cube-corner direction sits up to
+	// atan(sqrt(2)) = 54.74 deg off the face axis. The half-FOV must exceed that
+	// or corner directions fall outside every face frustum and read as lit,
+	// producing 4-fold radial light/shadow wedges where point lights overlap.
+	// 120 deg (half = 60 deg) covers the corner with ~5 deg margin.
+	constexpr float kPointLightFovDeg = 120.0f;
 	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
 
 	struct PointShadowFace
@@ -538,7 +555,7 @@ namespace aether
 		// Graphics pass: render all shadow casters into the atlas with per-light scissoring.
 		graph.AddPass("$LocalShadowAtlasRender")
 		        .ConsumesDrawList(m_shadowDrawList)
-		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(1.0f, 1.0f, 1.0f, 1.0f))
+		        .WriteColor(m_atlasImage, gpu::LoadOp::Clear, gpu::StoreOp::Store, ClearColorValue(std::exp(kEvsmExponent), std::exp(2.0f * kEvsmExponent), 0.0f, 0.0f))
 		        .WriteDepth(m_atlasDepthImage, gpu::LoadOp::Clear, gpu::StoreOp::DontCare, ClearDepthValue(1.0f))
 		        .SetExtent(gpu::Extent2D{ShadowAtlasManager::kAtlasWidth, ShadowAtlasManager::kAtlasHeight})
 		        .Execute(

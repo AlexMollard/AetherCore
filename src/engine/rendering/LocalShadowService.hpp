@@ -25,19 +25,26 @@ namespace aether
 	class VulkanContext;
 	class World;
 
-	// GPU-side per-light shadow data.
+	// GPU-side per-light shadow data. Must match ShadowLightData in
+	// shaders/include/LocalShadow.slangh (explicit [[vk::offset]] layout).
 	struct ShadowLightData
 	{
 		glm::mat4 viewProj{1.0f};
 		glm::vec4 atlasRegion{0.0f}; // xy=UV offset, zw=UV scale
-		float depthBias = 0.005f;
+		float depthBias = 0.01f;     // world units
 		std::uint32_t lightType = 0; // 0=spot, 1=point
-		float normalBias = 0.015f;
+		float normalBias = 0.03f;    // world units
 		float _pad1 = 0.0f;
-		glm::vec4 lightPosRange{0.0f}; // xyz=light world position, w=range (normalizes VSM linear depth)
+		glm::vec4 lightPosRange{0.0f}; // xyz=light world position, w=range (normalizes EVSM linear depth)
 	};
 
 	static_assert(sizeof(ShadowLightData) == 112, "ShadowLightData must be 112 bytes for GPU layout");
+	static_assert(offsetof(ShadowLightData, viewProj) == 0, "ShadowLightData viewProj offset mismatch");
+	static_assert(offsetof(ShadowLightData, atlasRegion) == 64, "ShadowLightData atlasRegion offset mismatch");
+	static_assert(offsetof(ShadowLightData, depthBias) == 80, "ShadowLightData depthBias offset mismatch");
+	static_assert(offsetof(ShadowLightData, lightType) == 84, "ShadowLightData lightType offset mismatch");
+	static_assert(offsetof(ShadowLightData, normalBias) == 88, "ShadowLightData normalBias offset mismatch");
+	static_assert(offsetof(ShadowLightData, lightPosRange) == 96, "ShadowLightData lightPosRange offset mismatch");
 
 	// Maximum number of local shadow lights rendered per frame.
 	inline constexpr std::uint32_t kMaxLocalShadows = 256u;
@@ -112,8 +119,8 @@ namespace aether
 		{
 			glm::mat4 viewProj{1.0f};
 			ShadowAtlasManager::Region region;
-			float depthBias = 0.005f;
-			float normalBias = 0.015f;
+			float depthBias = 0.01f;  // world units
+			float normalBias = 0.03f; // world units
 			std::uint32_t lightType = 0;
 			glm::vec4 lightPosRange{0.0f}; // xyz=light world position, w=range
 		};

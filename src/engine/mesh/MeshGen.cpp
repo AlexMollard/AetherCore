@@ -125,19 +125,21 @@ namespace aether::MeshGen
 				const auto tr = tl + 1u;
 				const auto bl = static_cast<std::uint32_t>((s + 1) * (slices + 1) + t);
 				const auto br = bl + 1u;
-				// CCW winding viewed from outside the sphere.
+				// CCW winding viewed from outside the sphere (matches cube/plane/
+				// cylinder). With theta wrapping +X toward +Z and stacks running
+				// top-down, that means stepping theta BEFORE stepping down a stack.
 				// Skip degenerate triangles at the poles.
 				if (s != 0)
 				{
 					data.indices.push_back(tl);
-					data.indices.push_back(bl);
 					data.indices.push_back(tr);
+					data.indices.push_back(bl);
 				}
 				if (s != stacks - 1)
 				{
 					data.indices.push_back(tr);
-					data.indices.push_back(bl);
 					data.indices.push_back(br);
+					data.indices.push_back(bl);
 				}
 			}
 		}
