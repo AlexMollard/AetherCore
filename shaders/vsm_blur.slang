@@ -24,12 +24,13 @@ struct BlurPushConstants
 
 [[vk::push_constant]] BlurPushConstants pc;
 
-// 5-tap Gaussian weights.
+// 5-tap Gaussian weights. A tight blur that only anti-aliases the EVSM
+// silhouette; heavy blur reads as a waxy "shrink-wrapped" shadow.
 static const float kWeights[5] = { 0.153388, 0.221461, 0.250301, 0.221461, 0.153388 };
 static const int kOffsets[5] = { -2, -1, 0, 1, 2 };
 
-// Shared tile: 20x20 float2 (3200 bytes) covers the 16x16 output region
-// plus a 2-texel border on each side for the [-2, +2] kernel radius.
+// Shared tile: 20x20 float2 covers the 16x16 output region plus a 2-texel
+// border on each side for the [-2, +2] kernel radius.
 groupshared float2 tile[20][20];
 
 uint2 ClampCoord(int2 p, uint2 atlasSize)

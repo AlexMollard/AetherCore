@@ -43,13 +43,15 @@ namespace
 	// caster's silhouette would be treated as shadowed by a phantom at d=0.
 	constexpr float kEvsmExponent = 40.0f;
 	constexpr std::uint32_t kPointShadowFaceRes = 384u;
-	// Per-face FOV for cube-style point shadows. SelectPointShadowFace picks a
-	// face by dominant axis, so a receiver in a cube-corner direction sits up to
-	// atan(sqrt(2)) = 54.74 deg off the face axis. The half-FOV must exceed that
-	// or corner directions fall outside every face frustum and read as lit,
-	// producing 4-fold radial light/shadow wedges where point lights overlap.
-	// 120 deg (half = 60 deg) covers the corner with ~5 deg margin.
-	constexpr float kPointLightFovDeg = 120.0f;
+	// Per-face FOV for cube-style point shadows. 90 deg exactly tiles the cube:
+	// SelectPointShadowFace assigns a direction to its dominant-axis face, and
+	// that face's +-45-deg square covers the whole quadrant INCLUDING the corner
+	// (the corner sits at 45 deg per-axis; the 54.7-deg figure is the DIAGONAL,
+	// which needs no separate coverage). Radial depth is face-invariant, so the
+	// faces join seamlessly. Wider FOVs (100/120) only add perspective
+	// distortion that stretches and pinches shadows toward the frustum edge -
+	// this was the "warped further from the caster / narrow arm" artifact.
+	constexpr float kPointLightFovDeg = 90.0f;
 	constexpr float kSpotShadowFovPaddingRad = glm::radians(4.0f);
 
 	struct PointShadowFace

@@ -99,8 +99,8 @@ float ComputeDirectionalShadowCascade(
     // Wider blend regions reduce visible seams by cross-fading over a larger
     // depth range.  The orthographic frustums also overlap (kCascadeOverlap)
     // so that blend samples stay inside the neighbour cascade's valid map area.
-    const float blendWidth0 = max(split0 * 0.20, 6.0);
-    const float blendWidth1 = max((split1 - split0) * 0.20, 8.0);
+    const float blendWidth0 = max(split0 * 0.32, 8.0);
+    const float blendWidth1 = max((split1 - split0) * 0.32, 10.0);
 
     float shadow = ComputeDirectionalShadowCascade(fc, cascade, worldPos, worldNormal, lightDir);
 

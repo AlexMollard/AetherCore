@@ -105,22 +105,19 @@ def wall(world : World?; pos : float3; euler : float3; w : float; h : float) : u
     return e;
 }
 
-// Big neutral floor: a flat plane for clean shading + an invisible box collider
-// whose top face sits exactly at y = 0 so toys rest on the visible surface.
+// Big floor as a thin BOX. A rotated plane's +Z normal did not receive light
+// once laid flat (the non-skinned normal transform mishandles the plane's
+// rotate + extreme non-uniform scale), so the ground read as fully in shadow.
+// The cube's +Y face has a baked up-normal and no rotation, so it lights
+// correctly (same as the blocks). Top face sits at y = 0 so toys rest on it.
 def build_floor(world : World?)
 {
-    let visual = entity_create(world);
-    add_transform(world, visual);
-    // Plane primitive lies in XY facing +Z; rotate -90 about X to lay it flat,
-    // normal pointing up. Local (X,Y) -> world (X,Z).
-    set_transform(world, visual, float3(0.0, 0.0, 0.0), float3(-90.0, 0.0, 0.0), float3(120.0, 120.0, 1.0));
-    add_mesh(world, visual, g_plane);
-
-    let collider = entity_create(world);
-    add_transform(world, collider);
-    set_transform(world, collider, float3(0.0, -1.0, 0.0), float3(0.0, 0.0, 0.0), float3(1.0, 1.0, 1.0));
-    add_box_body(world, collider, float3(60.0, 1.0, 60.0), false);
-    add_tag(world, collider, g_ground_tag);
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, float3(0.0, -1.0, 0.0), float3(0.0, 0.0, 0.0), float3(112.0, 2.0, 112.0));
+    add_mesh(world, e, g_cube);
+    add_box_body(world, e, float3(56.0, 1.0, 56.0), false);
+    add_tag(world, e, g_ground_tag);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -274,7 +271,7 @@ def build_zone_ao(world : World?)
 // A ring of separated spheres each throws one clean radial shadow.
 def build_zone_point_shadow(world : World?)
 {
-    add_point_light(float3(-40.0, 13.0, 40.0), float3(1.0, 0.9, 0.8), 22.0, 30.0, true);
+    add_point_light(float3(-40.0, 13.0, 40.0), float3(1.0, 0.85, 0.6), 45.0, 34.0, true);
 
     static_box(world, float3(-40.0, 3.0, 40.0), float3(0.0, 0.0, 0.0), float3(2.5, 6.0, 2.5)); // centre pillar
     for (i in 0..6)
@@ -291,9 +288,9 @@ def build_zone_point_shadow(world : World?)
 // cluster -> overlapping coloured shadows.
 def build_zone_light_overlap(world : World?)
 {
-    add_point_light(float3(34.0, 11.0, 40.0), float3(1.0, 0.2, 0.2), 18.0, 26.0, true); // red
-    add_point_light(float3(46.0, 11.0, 40.0), float3(0.2, 1.0, 0.3), 18.0, 26.0, true); // green
-    add_point_light(float3(40.0, 11.0, 47.0), float3(0.3, 0.4, 1.0), 18.0, 26.0, true); // blue
+    add_point_light(float3(34.0, 11.0, 40.0), float3(1.0, 0.25, 0.25), 36.0, 30.0, true); // red
+    add_point_light(float3(46.0, 11.0, 40.0), float3(0.3, 1.0, 0.4), 36.0, 30.0, true);   // green
+    add_point_light(float3(40.0, 11.0, 47.0), float3(0.4, 0.5, 1.0), 36.0, 30.0, true);   // blue
 
     static_box(world, float3(40.0, 3.5, 40.0), float3(0.0, 0.0, 0.0), float3(2.5, 7.0, 2.5));
     for (i in 0..4)
@@ -310,7 +307,7 @@ def build_zone_spot(world : World?)
     wall(world, float3(0.0, 6.0, -54.0), float3(0.0, 0.0, 0.0), 20.0, 12.0);
 
     // Spot in front of the wall, aimed at it and slightly down.
-    add_spot_light(float3(0.0, 13.0, -44.0), float3(0.8, 0.9, 1.0), 30.0, 45.0, float3(0.0, -0.15, -1.0), 0.35, 0.55, true);
+    add_spot_light(float3(0.0, 13.0, -44.0), float3(0.85, 0.92, 1.0), 60.0, 50.0, float3(0.0, -0.15, -1.0), 0.35, 0.55, true);
 
     static_box(world, float3(0.0, 3.0, -49.0), float3(0.0, 0.0, 0.0), float3(3.0, 6.0, 3.0)); // caster
     decor_sphere(world, float3(5.0, 2.0, -49.0), 4.0);                                        // round caster
@@ -333,14 +330,15 @@ def on_attach(world : World?)
     g_toy_tag    = create_tag("phys_toy");
 
     // ── Global lighting ──────────────────────────────────────────────────────
-    // Low neutral ambient so AO and shadows read but nothing goes fully black.
+    // Soft sky-fill ambient: bright enough that nothing crushes to black, but low
+    // enough that sun shadows and AO still read.
     clear_lights();
-    set_ambient(float3(0.06, 0.07, 0.09));
+    set_ambient(float3(0.20, 0.22, 0.27));
 
-    // Warm key sun at a raking angle for long, legible shadows.
-    set_sun(float3(0.35, -0.8, 0.45), 2.2, float3(1.0, 0.95, 0.85));
-    set_sky(float3(0.5, 0.6, 0.75), float3(0.15, 0.2, 0.35));
-    set_sky_void(float3(0.02, 0.03, 0.05));
+    // Bright warm key sun at a raking angle for clear, legible shadows.
+    set_sun(float3(0.4, -0.7, 0.5), 4.0, float3(1.0, 0.94, 0.82));
+    set_sky(float3(0.6, 0.7, 0.95), float3(0.28, 0.38, 0.6));
+    set_sky_void(float3(0.05, 0.06, 0.1));
 
     // ── World ────────────────────────────────────────────────────────────────
     build_floor(world);
@@ -360,7 +358,7 @@ def on_attach(world : World?)
     set_effect_speed(world, g_plasma, 1.0);
     set_effect_intensity(world, g_plasma, 1.8);
 
-    // ── Foxes (animation test - Run in place, staggered) ─────────────────────
+    // ── Foxes (animation test - patrol the plaza in circles, staggered) ──────
     spawn_fox(world, float3(14.0, 0.0, 15.0),  40.0, 0.0);
     spawn_fox(world, float3(20.0, 0.0,  8.0), -60.0, 0.3);
     spawn_fox(world, float3(-16.0, 0.0, 14.0), 20.0, 0.6);
@@ -422,6 +420,18 @@ def on_update(world : World?)
         p.y = 20.0 + sin(g_time * 0.8) * 1.5;
         set_position(world, g_plasma, p);
     }
+
+    // ── Foxes patrol in circles so the run animation matches real motion ──────
+    // (each fox orbits the plaza centre at its own spawn radius, facing along
+    // its direction of travel — no more running in place).
+    for_each_with_tag_transform(world, g_fox_tag) $(e : uint; pos : float3; euler : float3; scale : float3)
+    {
+        let radius = max(sqrt(pos.x * pos.x + pos.z * pos.z), 6.0);
+        let ang    = atan2(pos.x, pos.z) + dt * 0.45;
+        let np     = float3(sin(ang) * radius, pos.y, cos(ang) * radius);
+        let ny     = ang * 57.2958 + 90.0;
+        set_transform(world, e, np, float3(0.0, ny, 0.0), scale);
+    };
 
     // ── Physics toys, spawned above the player ───────────────────────────────
     let pp = get_position(world, g_player);

@@ -40,11 +40,10 @@ namespace
 	// Base orthographic half-extent = cascadeFar * kOrthoHalfViewRangeRatio.
 	constexpr float kOrthoHalfViewRangeRatio = 0.60f;
 
-	// Extra extent multiplier that forces cascade frustums to overlap.
-	// Without overlap, the shader blend at cascade boundaries samples a
-	// neighbour cascade's map near its edge where the depth is 1.0
-	// (no shadow), producing a bright seam. 1.20 = 20 % geometric overlap.
-	constexpr float kCascadeOverlap = 1.20f;
+	// Extra extent multiplier that forces cascade frustums to overlap. Beyond
+	// hiding the boundary seam, overlap keeps a caster fully inside a cascade's
+	// ortho box instead of being clipped at the edge ("half a shadow").
+	constexpr float kCascadeOverlap = 1.30f;
 
 	void DisableDirectionalShadows(aether::FrameConstants& fc)
 	{

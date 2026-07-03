@@ -118,7 +118,10 @@ float SampleVSM(ShadowLightData sd, float3 worldPos, float3 worldNormal, float3 
     float md = warpedReceiver - ex;
     float p = variance / (variance + md * md);
 
-    const float kLightBleed = 0.40;
+    // Moderate light-bleed reduction: dark enough to read as a defined shadow
+    // (not the washed-out VSM membrane) but not so aggressive that the core goes
+    // harsh/black. Between the waxy 0.40 and the harsh 0.60.
+    const float kLightBleed = 0.50;
     return saturate((p - kLightBleed) / (1.0 - kLightBleed));
 }
 

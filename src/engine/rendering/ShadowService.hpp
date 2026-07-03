@@ -103,10 +103,13 @@ namespace aether
 		BindlessManager* m_bindless = nullptr;
 		bool m_directionalShadowEnabled = true;
 		std::array<bool, kMaxFramesInFlight> m_directionalShadowFrameEnabled{true, true, true};
+		// C0 4096 (crisp near), C1 2048, C2 2048 (raised from 1024 so distant
+		// shadows do not dissolve when the camera zooms out - the cheapest bump
+		// that addresses the far-fade without the fill-rate hit of a 4096 C1).
 		std::array<gpu::Extent2D, kShadowCascadeCount> m_shadowMapExtents{
 		        gpu::Extent2D{4096u, 4096u},
 		        gpu::Extent2D{2048u, 2048u},
-		        gpu::Extent2D{1024u, 1024u},
+		        gpu::Extent2D{2048u, 2048u},
 		};
 		std::array<std::uint32_t, kShadowCascadeCount> m_shadowMapSlots{0xFFFFFFFFu, 0xFFFFFFFFu, 0xFFFFFFFFu};
 		gpu::Format m_shadowDepthFormat = gpu::Format::Undefined;
