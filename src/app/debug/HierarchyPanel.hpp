@@ -1,5 +1,10 @@
 #pragma once
 
+#include <cstdint>
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "debug/DebugPanel.hpp"
@@ -29,6 +34,7 @@ namespace aether::app
 
 	private:
 		void DrawNode(World& world, SceneSelection& selection, Entity e);
+		void DrawRowBackdrop(const SceneSelection& selection, Entity e);
 		void DrawRowContent(World& world, Entity e);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
@@ -52,5 +58,16 @@ namespace aether::app
 		std::vector<Entity> m_rowsCur;
 		std::vector<Entity> m_rowsPrev;
 		Entity m_rangeAnchor{};
+
+		// Drag-drop reparent is queued during the tree walk and applied after it:
+		// SetParent mutates children vectors the recursion may still be iterating.
+		std::optional<std::pair<Entity, Entity>> m_pendingReparent; // {child, newParent}
+
+		// Juice: newly-seen entities flash briefly; selection changes pulse.
+		std::unordered_set<std::uint32_t> m_knownIds;
+		std::unordered_map<std::uint32_t, double> m_spawnFlash; // id -> first-seen time
+		bool m_knownSeeded = false;                             // no flash on the initial population
+		std::uint64_t m_seenSelectionSerial = 0;
+		double m_pulseStart = -1.0;
 	};
 } // namespace aether::app

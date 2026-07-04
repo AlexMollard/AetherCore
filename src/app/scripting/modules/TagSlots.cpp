@@ -124,6 +124,14 @@ namespace
 			m_tagOps[tagId].for_each(world, callback);
 		}
 
+		void ForEachTag(const std::function<void(const std::string&, uint32_t)>& callback) const
+		{
+			for (const auto& [name, id]: m_nameToId)
+			{
+				callback(name, id);
+			}
+		}
+
 	private:
 		std::array<TagOps, kMaxTagSlots> m_tagOps;
 		std::unordered_map<std::string, uint32_t> m_nameToId;
@@ -163,6 +171,11 @@ namespace aether
 	void TagRemove(World* world, uint32_t entityId, uint32_t tagId)
 	{
 		GetGlobalTagRegistry().RemoveTag(world, entityId, tagId);
+	}
+
+	void ForEachTag(const std::function<void(const std::string&, uint32_t)>& callback)
+	{
+		GetGlobalTagRegistry().ForEachTag(callback);
 	}
 
 	void ForEachWithTag(World* world, uint32_t tagId, const std::function<void(uint32_t)>& callback)

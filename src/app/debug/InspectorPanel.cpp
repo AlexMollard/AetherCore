@@ -1,74 +1,57 @@
 #include "debug/InspectorPanel.hpp"
 
+#include <cctype>
+#include <cstdio>
 #include <string>
 
 #include <imgui.h>
 
+#include "debug/ComponentDrawers.hpp"
+#include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
-#include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
+#include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
 {
+	namespace
+	{
+		// One filterable row of the add-component palette.
+		bool PaletteEntry(const char* label, const char* filter, bool alreadyPresent)
+		{
+			if (alreadyPresent)
+			{
+				return false;
+			}
+			if (filter[0] != '\0')
+			{
+				const std::string_view l(label);
+				std::string lower(l);
+				std::string needle(filter);
+				for (auto& c: lower)
+				{
+					c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+				}
+				for (auto& c: needle)
+				{
+					c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+				}
+				if (lower.find(needle) == std::string::npos)
+				{
+					return false;
+				}
+			}
+			return ImGui::MenuItem(label);
+		}
+	} // namespace
+
 	bool InspectorPanel::IsAlive(const World& world, Entity entity)
 	{
 		return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
-	}
-
-	std::string InspectorPanel::ComponentSummary(const World& world, Entity entity)
-	{
-		std::string out;
-		auto add = [&](std::string_view name)
-		{
-			if (!out.empty())
-			{
-				out += ", ";
-			}
-			out += name;
-		};
-
-		if (world.Has<TransformComponent>(entity))
-		{
-			add("Transform");
-		}
-		if (world.Has<MeshComponent>(entity))
-		{
-			add("Mesh");
-		}
-		if (world.Has<MaterialComponent>(entity))
-		{
-			add("Material");
-		}
-		if (world.Has<PipelineComponent>(entity))
-		{
-			add("Pipeline");
-		}
-		if (world.Has<SkinnedMeshComponent>(entity))
-		{
-			add("Skinned");
-		}
-		if (world.Has<HierarchyComponent>(entity))
-		{
-			add("Hierarchy");
-		}
-		if (world.Has<RigidBodyComponent>(entity))
-		{
-			add("RigidBody");
-		}
-		if (world.Has<PhysicsStateComponent>(entity))
-		{
-			add("Physics");
-		}
-		if (world.Has<PhysicsDebugShapeComponent>(entity))
-		{
-			add("DebugShape");
-		}
-
-		return out.empty() ? "Entity" : out;
 	}
 
 	void InspectorPanel::OnImGui(LayerContext& context)
@@ -76,46 +59,106 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 
 		ImGui::Begin("Inspector");
+		World& world = context.Get<World>();
+		auto& selection = context.Get<SceneSelection>();
+		const Entity entity = selection.Primary();
+
+		if (!IsAlive(world, entity))
 		{
-			World& world = context.Get<World>();
-			const Entity selected = context.Get<SceneSelection>().Primary();
-			if (!IsAlive(world, selected))
+			ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
+			const char* msg = "Nothing selected";
+			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
+			ImGui::TextDisabled("%s", msg);
+			ImGui::End();
+			return;
+		}
+
+		// ── Header: kind icon, editable name, muted id ─────────────────────────
+		const KindBadge badge = EntityKindBadge(world, entity);
+		ImGui::TextColored(badge.color, "%s", badge.icon);
+		ImGui::SameLine();
+		if (auto* nc = world.TryGet<NameComponent>(entity))
+		{
+			char buf[128];
+			std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
+			ImGui::SetNextItemWidth(-64.0f);
+			if (ImGui::InputText("##name", buf, sizeof(buf)))
 			{
-				ImGui::TextDisabled("No selection");
-			}
-			else
-			{
-				ImGui::Text("#%u", selected.id);
-				ImGui::Text("Components: %s", ComponentSummary(world, selected).c_str());
-				if (const auto transform = world.TryGet<TransformComponent>(selected))
-				{
-					const glm::vec3 pos = glm::vec3(transform->localToWorld[3]);
-					ImGui::Text("Position: %.2f, %.2f, %.2f", pos.x, pos.y, pos.z);
-				}
-				if (const auto skinned = world.TryGet<SkinnedMeshComponent>(selected))
-				{
-					ImGui::Text("Animation: clip %u, time %.2f, speed %.2f", skinned->clipIndex, skinned->animTime, skinned->playbackSpeed);
-				}
-				if (const auto rigid = world.TryGet<RigidBodyComponent>(selected))
-				{
-					const char* motion = "Dynamic";
-					if (rigid->motionType == PhysicsMotionType::Static)
-					{
-						motion = "Static";
-					}
-					else if (rigid->motionType == PhysicsMotionType::Kinematic)
-					{
-						motion = "Kinematic";
-					}
-					ImGui::Text("Rigid body: %s", motion);
-				}
-				if (const auto physics = world.TryGet<PhysicsStateComponent>(selected))
-				{
-					ImGui::Text("Physics pos: %.2f, %.2f, %.2f", physics->currPosition.x, physics->currPosition.y, physics->currPosition.z);
-					ImGui::Text("Physics scale: %.2f, %.2f, %.2f", physics->scale.x, physics->scale.y, physics->scale.z);
-				}
+				nc->name = buf;
 			}
 		}
+		else
+		{
+			if (ImGui::SmallButton("Add name"))
+			{
+				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
+			}
+		}
+		ImGui::SameLine();
+		ImGui::TextDisabled("#%u", entity.id);
+
+		if (selection.All().size() > 1)
+		{
+			ImGui::TextDisabled("Editing primary of %zu selected", selection.All().size());
+		}
+
+		// ── Add Component palette + delete entity ──────────────────────────────
+		if (ImGui::Button(ICON_FA_PLUS "  Add Component"))
+		{
+			m_addFilter[0] = '\0';
+			m_addFocusPending = true;
+			ImGui::OpenPopup("AddComponent");
+		}
+		ImGui::SameLine();
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.45f, 0.45f, 1.0f));
+		const bool deleteClicked = ImGui::Button(ICON_FA_TRASH "  Delete");
+		ImGui::PopStyleColor();
+		if (deleteClicked)
+		{
+			ecs::DestroyHierarchy(world, entity);
+			selection.Clear();
+			ImGui::End();
+			return;
+		}
+
+		if (ImGui::BeginPopup("AddComponent"))
+		{
+			if (m_addFocusPending)
+			{
+				ImGui::SetKeyboardFocusHere();
+				m_addFocusPending = false;
+			}
+			ImGui::SetNextItemWidth(200.0f);
+			ImGui::InputTextWithHint("##addFilter", "Search...", m_addFilter, sizeof(m_addFilter));
+			ImGui::Separator();
+			// Safely default-constructible components only; asset-bearing ones
+			// (Mesh/Pipeline/Material) need a picker - later spec.
+			if (PaletteEntry(ICON_FA_UP_DOWN_LEFT_RIGHT "  Transform", m_addFilter, world.Has<TransformComponent>(entity)))
+			{
+				world.Emplace<TransformComponent>(entity);
+			}
+			if (PaletteEntry(ICON_FA_PEN "  Name", m_addFilter, world.Has<NameComponent>(entity)))
+			{
+				world.Emplace<NameComponent>(entity, NameComponent{.name = "Entity"});
+			}
+			if (PaletteEntry(ICON_FA_SITEMAP "  Hierarchy", m_addFilter, world.Has<HierarchyComponent>(entity)))
+			{
+				world.Emplace<HierarchyComponent>(entity);
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::Separator();
+
+		// ── Component sections ─────────────────────────────────────────────────
+		DrawTransform(context, world, entity);
+		DrawSkinnedMesh(world, entity);
+		DrawMaterial(context, world, entity);
+		DrawEffectParams(context, world, entity);
+		DrawPhysics(world, entity);
+		DrawMeshPipeline(world, entity);
+		DrawHierarchy(world, entity, selection);
+		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
+
 		ImGui::End();
 	}
 } // namespace aether::app

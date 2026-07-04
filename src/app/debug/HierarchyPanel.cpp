@@ -10,6 +10,7 @@
 #include <imgui.h>
 
 #include "assets/AssetManager.hpp"
+#include "debug/ComponentDrawers.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
@@ -26,40 +27,6 @@ namespace aether::app
 {
 	namespace
 	{
-		const char* EntityDisplayName(const World& world, Entity e)
-		{
-			const auto* nc = world.TryGet<NameComponent>(e);
-			return (nc && !nc->name.empty()) ? nc->name.c_str() : "Entity";
-		}
-
-		// Colored icon describing the entity's dominant kind (most specific wins).
-		struct KindBadge
-		{
-			const char* icon;
-			ImVec4 color;
-		};
-
-		KindBadge BadgeFor(const World& world, Entity e)
-		{
-			if (world.Has<SkinnedMeshComponent>(e))
-			{
-				return {ICON_FA_PERSON_RUNNING, ImVec4(0.55f, 0.75f, 1.00f, 1.0f)};
-			}
-			if (world.Has<EffectParamsComponent>(e))
-			{
-				return {ICON_FA_WAND_MAGIC_SPARKLES, ImVec4(0.80f, 0.55f, 1.00f, 1.0f)};
-			}
-			if (world.Has<RigidBodyComponent>(e))
-			{
-				return {ICON_FA_WEIGHT_HANGING, ImVec4(1.00f, 0.72f, 0.35f, 1.0f)};
-			}
-			if (world.Has<MeshComponent>(e))
-			{
-				return {ICON_FA_CUBE, ImVec4(0.62f, 0.88f, 0.62f, 1.0f)};
-			}
-			return {ICON_FA_CIRCLE, ImVec4(0.50f, 0.50f, 0.50f, 1.0f)};
-		}
-
 		std::string ToLower(std::string_view s)
 		{
 			std::string out(s);
@@ -105,6 +72,41 @@ namespace aether::app
 			selection.Select(e);
 		}
 	} // namespace
+
+	// Subtle stripes plus the two juice overlays (spawn flash, selection pulse),
+	// drawn behind the row before its widgets so highlights and text sit on top.
+	void HierarchyPanel::DrawRowBackdrop(const SceneSelection& selection, Entity e)
+	{
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+		const ImVec2 rowMax = ImVec2(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
+		const double now = ImGui::GetTime();
+
+		if ((m_rowsCur.size() & 1) == 1)
+		{
+			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 4));
+		}
+
+		if (const auto it = m_spawnFlash.find(e.id); it != m_spawnFlash.end())
+		{
+			const float t = static_cast<float>((now - it->second) / 0.75);
+			if (t < 1.0f)
+			{
+				const float eased = (1.0f - t) * (1.0f - t); // quadratic fade-out
+				drawList->AddRectFilled(rowMin, rowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(0.35f, 0.85f, 0.45f, eased * 0.30f)));
+			}
+		}
+
+		if (m_pulseStart >= 0.0 && selection.Contains(e))
+		{
+			const float t = static_cast<float>((now - m_pulseStart) / 0.20);
+			if (t < 1.0f)
+			{
+				const float eased = (1.0f - t) * (1.0f - t);
+				drawList->AddRectFilled(rowMin, rowMax, ImGui::ColorConvertFloat4ToU32(ImVec4(0.30f, 0.62f, 1.00f, eased * 0.35f)));
+			}
+		}
+	}
 
 	void HierarchyPanel::BeginRename(const World& world, Entity e)
 	{
@@ -185,7 +187,7 @@ namespace aether::app
 
 	void HierarchyPanel::DrawRowContent(World& world, Entity e)
 	{
-		const KindBadge badge = BadgeFor(world, e);
+		const KindBadge badge = EntityKindBadge(world, e);
 		ImGui::SameLine();
 		ImGui::TextColored(badge.color, "%s", badge.icon);
 
@@ -236,9 +238,28 @@ namespace aether::app
 		}
 
 		ImGui::PushID(static_cast<int>(e.id));
+		DrawRowBackdrop(selection, e);
 		const bool open = ImGui::TreeNodeEx("##node", flags);
 		m_rowsCur.push_back(e);
 		HandleRowClick(selection, e);
+
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+		{
+			ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
+			ImGui::TextUnformatted(EntityDisplayName(world, e));
+			ImGui::TextDisabled("drop on a row to parent, empty space to unparent");
+			ImGui::EndDragDropSource();
+		}
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
+			{
+				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
+				m_pendingReparent = {Entity{draggedId}, e};
+			}
+			ImGui::EndDragDropTarget();
+		}
+
 		const bool destroyed = DrawRowContextMenu(world, selection, e);
 		if (!destroyed)
 		{
@@ -273,6 +294,42 @@ namespace aether::app
 
 		m_rowsPrev = std::move(m_rowsCur);
 		m_rowsCur.clear();
+
+		// ── Juice bookkeeping ──────────────────────────────────────────────────
+		const double now = ImGui::GetTime();
+		{
+			// Rebuilding the id set each frame keeps recycled ids flashing too.
+			std::unordered_set<std::uint32_t> current;
+			for (const auto handle: reg.storage<entt::entity>())
+			{
+				if (!reg.valid(handle))
+				{
+					continue;
+				}
+				const Entity e = World::FromEntt(handle);
+				if (!e.IsValid())
+				{
+					continue;
+				}
+				current.insert(e.id);
+				if (m_knownSeeded && !m_knownIds.contains(e.id))
+				{
+					m_spawnFlash[e.id] = now;
+				}
+			}
+			m_knownIds = std::move(current);
+			m_knownSeeded = true;
+
+			for (auto it = m_spawnFlash.begin(); it != m_spawnFlash.end();)
+			{
+				it = (now - it->second > 1.0) ? m_spawnFlash.erase(it) : std::next(it);
+			}
+		}
+		if (selection.ChangeSerial() != m_seenSelectionSerial)
+		{
+			m_seenSelectionSerial = selection.ChangeSerial();
+			m_pulseStart = now;
+		}
 
 		ImGui::Begin("Scene");
 		{
@@ -386,6 +443,7 @@ namespace aether::app
 					{
 						const Entity e = matches[static_cast<std::size_t>(i)];
 						ImGui::PushID(static_cast<int>(e.id));
+						DrawRowBackdrop(selection, e);
 						if (ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns))
 						{
 							// Selectable consumed the click; route modifiers manually.
@@ -416,6 +474,13 @@ namespace aether::app
 					ImGui::TextDisabled("%s", msg);
 				}
 			}
+			else if (count == 0)
+			{
+				ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
+				const char* msg = "Scene is empty";
+				ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
+				ImGui::TextDisabled("%s", msg);
+			}
 			else
 			{
 				// Roots: no HierarchyComponent, or an explicit root parent ({0}).
@@ -436,8 +501,36 @@ namespace aether::app
 						DrawNode(world, selection, e);
 					}
 				}
+
+				// Remaining empty area: drop here to detach to root.
+				const float remaining = ImGui::GetContentRegionAvail().y;
+				if (remaining > 4.0f)
+				{
+					ImGui::InvisibleButton("##emptyDrop", ImVec2(ImGui::GetContentRegionAvail().x, remaining));
+					if (ImGui::BeginDragDropTarget())
+					{
+						if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
+						{
+							const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
+							m_pendingReparent = {Entity{draggedId}, Entity{}};
+						}
+						ImGui::EndDragDropTarget();
+					}
+				}
 			}
 			ImGui::EndChild();
+
+			// Apply the queued reparent now that no children vector is being
+			// walked. SetParent is cycle-guarded: bad drops are silent no-ops.
+			if (m_pendingReparent)
+			{
+				const auto [child, parent] = *m_pendingReparent;
+				m_pendingReparent.reset();
+				if (world.GetRegistry().valid(World::ToEntt(child)))
+				{
+					ecs::SetParent(world, child, parent);
+				}
+			}
 
 			// ── Keyboard (window-scope) ────────────────────────────────────────
 			if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput)
