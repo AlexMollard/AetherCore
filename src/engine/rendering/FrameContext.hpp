@@ -13,6 +13,7 @@ namespace aether
 	class CullPass;
 	class LightingManager;
 	class MaterialBuffer;
+	class EffectParamBuffer;
 	class RenderGraph;
 	class Renderer;
 
@@ -37,6 +38,7 @@ namespace aether
 		LightingManager* lighting = nullptr;
 		Renderer* renderer = nullptr;
 		MaterialBuffer* materials = nullptr;
+		EffectParamBuffer* effectParams = nullptr;
 		const CullPass* cullPass = nullptr;
 		std::function<std::uint64_t()> frameIndex;
 		gpu::Format depthFormat = gpu::Format::Undefined;

@@ -499,6 +499,7 @@ namespace aether
 				        .materialIndex = dc.materialIndex,
 				        .skinPaletteOffset = skinPaletteOffset,
 				        .skinJointCount = skinJointCount,
+				        .effectParamIndex = dc.effectParamIndex,
 				        .worldBoundingSphere = dc.worldBoundingSphere,
 				        .vertexBufferAddr = (dc.mesh != nullptr) ? dc.mesh->GetVertexDeviceAddress() : 0,
 				};

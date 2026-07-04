@@ -4,7 +4,9 @@
 
 #include "assets/AssetManager.hpp"
 #include "effects/EffectManager.hpp"
-#include "material/MaterialSystem.hpp"
+#include "material/EffectParamBuffer.hpp"
+#include "material/PipelineCache.hpp"
+#include "rendering/GraphicsPipeline.hpp"
 #include "scene/Components.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/Logger.hpp"
@@ -12,72 +14,87 @@
 namespace
 {
 	using namespace aether::app::scripting;
-	using aether::app::effects::EffectMaterialComponent;
 
 	// set_entity_effect(world, entity_id, "effect_name")
-	// Replaces PipelineComponent + MaterialComponent with the named effect's data.
+	// Resolves the effect pipeline via PipelineCache, allocates a per-entity
+	// EffectParams slot, and writes the effect's default params. The presence of
+	// EffectParamsComponent marks the entity effect-driven (so a later set_material
+	// repaints colour without dropping the effect pipeline).
 	void das_set_entity_effect(aether::World* w, uint32_t id, const char* name)
 	{
 		auto& ctx = ActiveContext();
-		if (!ctx.effects)
+		if (!ctx.effects || !ctx.assets)
 		{
-			AE_WARN(aether::LogCategory::App, "set_entity_effect: no EffectManager available");
+			AE_WARN(aether::LogCategory::App, "set_entity_effect: no EffectManager/assets");
 			return;
 		}
-		const auto effect = ctx.effects->Find(name);
-		if (!effect)
+		const auto* def = ctx.effects->Find(name);
+		if (!def)
 		{
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: unknown effect '{}'", name);
 			return;
 		}
 
 		const aether::Entity e{id};
-		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = &effect->pipeline});
-		// Keep the authoring data on the entity so the parameter setters below
-		// can rebuild + re-acquire (materials are immutable in the registry).
-		w->EmplaceOrReplace<EffectMaterialComponent>(e, EffectMaterialComponent{.asset = effect->material});
-		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), effect->material);
+		auto& buffer = ctx.assets->GetEffectParamBuffer();
+
+		const aether::GraphicsPipeline* pipeline = ctx.assets->GetPipelineCache().Acquire(def->templateDesc);
+		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = pipeline});
+
+		// Reuse an existing slot (re-applying an effect) so we neither leak nor
+		// double-allocate; otherwise allocate one.
+		std::uint32_t slot = aether::EffectParamBuffer::kInvalidSlot;
+		if (const auto* existing = w->TryGet<aether::EffectParamsComponent>(e))
+		{
+			slot = existing->paramSlot;
+		}
+		if (slot == aether::EffectParamBuffer::kInvalidSlot)
+		{
+			slot = buffer.AllocateSlot();
+		}
+		w->EmplaceOrReplace<aether::EffectParamsComponent>(e, aether::EffectParamsComponent{slot, def->defaultParams});
+		buffer.Write(slot, def->defaultParams);
 	}
 
 	// -- Effect parameter setters ---------------------------------------------
-	// Each mutates the entity's stored effect asset and re-acquires a material
-	// (the shader reinterprets the material fields for effect-specific meaning).
-
+	// One EffectParamBuffer::Write per call after a CPU-side read-modify-write of
+	// the entity's EffectParams (no material re-acquire, no slot churn). No-op on
+	// entities without an active effect.
 	template<typename Mutate>
-	void MutateEffectMaterial(aether::World* w, uint32_t id, Mutate mutate)
+	void MutateEffectParams(aether::World* w, uint32_t id, Mutate mutate)
 	{
 		const aether::Entity e{id};
-		auto* state = w->TryGet<EffectMaterialComponent>(e);
-		if (!state)
+		auto* comp = w->TryGet<aether::EffectParamsComponent>(e);
+		if (!comp)
 		{
 			return;
 		}
-		mutate(state->asset);
-		aether::MaterialSystem::AssignMaterial(*w, e, ActiveContext().assets->GetMaterialRegistry(), state->asset);
+		mutate(comp->params);
+		ActiveContext().assets->GetEffectParamBuffer().Write(comp->paramSlot, comp->params);
 	}
 
-	// set_effect_color(world, entity_id, r, g, b) -> sets emissiveFactor.xyz
+	// set_effect_color(world, entity_id, r, g, b) -> tint.rgb
 	void das_set_effect_color(aether::World* w, uint32_t id, float r, float g, float b)
 	{
-		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.emissiveFactor = glm::vec3(r, g, b); });
+		MutateEffectParams(w, id, [&](aether::EffectParams& p) { p.tint = glm::vec4(r, g, b, p.tint.w); });
 	}
 
-	// set_effect_speed(world, entity_id, speed) -> sets metallicFactor
+	// set_effect_speed(world, entity_id, speed) -> speed
 	void das_set_effect_speed(aether::World* w, uint32_t id, float speed)
 	{
-		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.metallicFactor = speed; });
+		MutateEffectParams(w, id, [&](aether::EffectParams& p) { p.speed = speed; });
 	}
 
-	// set_effect_scale(world, entity_id, scale) -> sets roughnessFactor
+	// set_effect_scale(world, entity_id, scale) -> scale
 	void das_set_effect_scale(aether::World* w, uint32_t id, float scale)
 	{
-		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.roughnessFactor = scale; });
+		MutateEffectParams(w, id, [&](aether::EffectParams& p) { p.scale = scale; });
 	}
 
-	// set_effect_intensity(world, entity_id, intensity) -> sets occlusionStrength
+	// set_effect_intensity(world, entity_id, intensity) -> intensity
 	void das_set_effect_intensity(aether::World* w, uint32_t id, float intensity)
 	{
-		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.occlusionStrength = intensity; });
+		MutateEffectParams(w, id, [&](aether::EffectParams& p) { p.intensity = intensity; });
 	}
 } // namespace
 

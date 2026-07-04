@@ -33,7 +33,7 @@ namespace aether
 			std::uint32_t materialIndex = 0;
 			std::uint32_t skinPaletteOffset = 0;
 			std::uint32_t skinJointCount = 0;
-			std::uint32_t _pad0 = 0;
+			std::uint32_t effectParamIndex = 0xFFFFFFFFu; // per-entity EffectParams slot; 0xFFFF... = no effect
 			glm::vec4 worldBoundingSphere{};
 			gpu::DeviceAddress vertexBufferAddr = 0;
 		};
@@ -43,7 +43,7 @@ namespace aether
 		static_assert(offsetof(InstanceData, materialIndex) == 64);
 		static_assert(offsetof(InstanceData, skinPaletteOffset) == 68);
 		static_assert(offsetof(InstanceData, skinJointCount) == 72);
-		static_assert(offsetof(InstanceData, _pad0) == 76);
+		static_assert(offsetof(InstanceData, effectParamIndex) == 76);
 		static_assert(offsetof(InstanceData, worldBoundingSphere) == 80);
 		static_assert(offsetof(InstanceData, vertexBufferAddr) == 96);
 

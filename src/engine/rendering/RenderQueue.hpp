@@ -43,16 +43,17 @@ namespace aether
 		const GraphicsPipeline* pipeline = nullptr;
 		const Mesh* mesh = nullptr; // must be indexed; null draws are not supported
 		std::uint32_t instanceCount = 1;
-		glm::mat4 modelMatrix{1.0f};               // per-object world transform
-		std::uint32_t materialIndex = 0xFFFFFFFFu; // index into MaterialBuffer; 0xFFFF... = fallback
-		std::int32_t skinIndex = -1;               // skin index in AnimationDatabase; -1 = not skinned
-		std::uint32_t skinJointCount = 0;          // number of joints in the skin
-		std::uint32_t animClipIndex = 0;           // active clip for GPU sampling
-		float animTime = 0.0f;                     // active clip time for GPU sampling
-		glm::vec4 worldBoundingSphere{};           // xyz=world center, w=radius; w<=0 = skip culling
-		const AnimationDatabase* animDb = nullptr; // per-draw animation database for GPU sampling
-		std::uint32_t animDbGeneration = 0;        // generation counter for validity check
-		std::uint32_t meshGeneration = 0;          // generation counter for mesh validity check
+		glm::mat4 modelMatrix{1.0f};                  // per-object world transform
+		std::uint32_t materialIndex = 0xFFFFFFFFu;    // index into MaterialBuffer; 0xFFFF... = fallback
+		std::uint32_t effectParamIndex = 0xFFFFFFFFu; // per-entity EffectParams slot; 0xFFFF... = no effect
+		std::int32_t skinIndex = -1;                  // skin index in AnimationDatabase; -1 = not skinned
+		std::uint32_t skinJointCount = 0;             // number of joints in the skin
+		std::uint32_t animClipIndex = 0;              // active clip for GPU sampling
+		float animTime = 0.0f;                        // active clip time for GPU sampling
+		glm::vec4 worldBoundingSphere{};              // xyz=world center, w=radius; w<=0 = skip culling
+		const AnimationDatabase* animDb = nullptr;    // per-draw animation database for GPU sampling
+		std::uint32_t animDbGeneration = 0;           // generation counter for validity check
+		std::uint32_t meshGeneration = 0;             // generation counter for mesh validity check
 	};
 
 	// Collects draws, runs cull/animation compute, then emits indirect draws.

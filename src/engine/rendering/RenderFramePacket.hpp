@@ -46,6 +46,7 @@ namespace aether
 
 		// Stable GPU resource addresses.
 		std::uint64_t materialBufferAddr = 0;
+		std::uint64_t effectParamBufferAddr = 0;
 
 		// Dear ImGui draw data snapshotted on the game thread and consumed by
 		// the render thread after world/runtime UI/debug geometry.
