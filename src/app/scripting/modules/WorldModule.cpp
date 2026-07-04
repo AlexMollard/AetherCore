@@ -14,7 +14,9 @@
 #include "scene/TagSlots.hpp"
 #include "assets/AssetManager.hpp"
 #include "material/MaterialAsset.hpp"
+#include "material/MaterialAuthoring.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/DasHelpers.hpp"
@@ -199,9 +201,9 @@ namespace
 	{
 		auto& ctx = ActiveContext();
 
-		if (!ctx.defaultPipeline)
+		if (!ctx.assets)
 		{
-			AE_WARN(aether::LogCategory::App, "load_model: no default pipeline set");
+			AE_WARN(aether::LogCategory::App, "load_model: no asset manager");
 			return;
 		}
 
@@ -247,7 +249,7 @@ namespace
 		// Spawn instance with parent link
 		// -------------------------------------------------------------------------
 
-		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, *ctx.defaultPipeline, id);
+		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, id);
 
 		for (aether::Entity meshEntity: meshEntities)
 		{
@@ -368,7 +370,7 @@ namespace
 	{
 		(void) w;
 		auto& ctx = ActiveContext();
-		if (!ctx.primitives || !ctx.defaultPipeline)
+		if (!ctx.primitives)
 		{
 			return 0u;
 		}
@@ -410,12 +412,16 @@ namespace
 			ctx.defaultMaterial.metallicFactor = 0.0f;
 			// Primitive meshes carry meaningful vertex colours (rainbow cubes).
 			ctx.defaultMaterial.modulateVertexColor = true;
+			// Two-sided by default: primitives include the single-sided plane
+			// (used for walls), which must stay visible from both faces - this
+			// matches the pre-phase-3 default pipeline (CullMode::None). Authored
+			// materials via set_material still default single-sided (back-culled).
+			ctx.defaultMaterial.doubleSided = true;
 			ctx.defaultMaterialInitialized = true;
 		}
 
 		SceneContext::CachedMesh entry;
 		entry.mesh = &ctx.primitives->Get(primType);
-		entry.pipeline = ctx.defaultPipeline;
 		entry.materialAsset = ctx.defaultMaterial;
 		ctx.meshCache.push_back(std::move(entry));
 		return static_cast<uint32_t>(ctx.meshCache.size() - 1u);
@@ -433,28 +439,24 @@ namespace
 		}
 
 		const auto& entry = ctx.meshCache[meshHandle];
-		if (!entry.mesh || !entry.pipeline)
+		if (!entry.mesh || !ctx.assets)
 		{
 			return;
 		}
 
 		const aether::Entity e{entityId};
-		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = entry.pipeline});
 		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = entry.mesh});
-		if (ctx.assets)
-		{
-			aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), entry.materialAsset);
-		}
+		// AssignMaterial resolves the pipeline through PipelineCache and emplaces
+		// PipelineComponent, so every add_mesh entity gets a pipeline.
+		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), entry.materialAsset);
 	}
 
-	// -- Material painting (phase-2 preview) ------------------------------------
-	// Minimal painting surface over the MaterialRegistry until the full das
-	// authoring API (create_material / set_material_*) lands in phase 2.
-	// Materials are immutable and content-addressed: entities painted with
-	// identical values share a single GPU material slot.
+	// -- Material painting: one-shot solid paint --------------------------------
+	// Content-addressed and immutable: entities painted identical values share a
+	// single GPU material slot. Painted materials are solid (vertex-colour
+	// modulation flag stays off).
 
 	// set_material(world, entity_id, color, metallic, roughness)
-	// Painted materials are solid: the vertex-colour modulation flag stays off.
 	void das_set_material(aether::World* w, uint32_t id, das::float3 color, float metallic, float roughness)
 	{
 		auto& ctx = ActiveContext();
@@ -466,7 +468,11 @@ namespace
 		asset.baseColorFactor = glm::vec4(to_glm(color), 1.0f);
 		asset.metallicFactor = metallic;
 		asset.roughnessFactor = roughness;
-		aether::MaterialSystem::AssignMaterial(*w, aether::Entity{id}, ctx.assets->GetMaterialRegistry(), asset);
+		// Seed the editable instance so later entity_material_set_* edits compose
+		// on this paint instead of restarting from a blank default.
+		const aether::Entity e{id};
+		w->EmplaceOrReplace<aether::MaterialInstanceComponent>(e, aether::MaterialInstanceComponent{asset});
+		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), asset);
 	}
 
 	// set_material_color(world, entity_id, color) - paint with the default
@@ -474,6 +480,134 @@ namespace
 	void das_set_material_color(aether::World* w, uint32_t id, das::float3 color)
 	{
 		das_set_material(w, id, color, 0.0f, 0.6f);
+	}
+
+	// -- Named / shared authoring materials -------------------------------------
+	// Build once, edit fields, bind to many entities. Editing re-binds every
+	// bound entity. Sharing is content-honest (identical content dedups to one
+	// GPU slot) but each id stays an independently editable authored material.
+
+	// make_material(color, metallic, roughness) -> material_id
+	uint32_t das_make_material(das::float3 color, float metallic, float roughness)
+	{
+		auto& ctx = ActiveContext();
+		if (!ctx.assets)
+		{
+			return aether::MaterialAuthoring::kInvalidId;
+		}
+		aether::MaterialAsset asset;
+		asset.baseColorFactor = glm::vec4(to_glm(color), 1.0f);
+		asset.metallicFactor = metallic;
+		asset.roughnessFactor = roughness;
+		return ctx.assets->GetMaterialAuthoring().Create(asset);
+	}
+
+	// bind_material(world, entity_id, material_id)
+	void das_bind_material(aether::World* w, uint32_t entityId, uint32_t materialId)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			ctx.assets->GetMaterialAuthoring().Bind(*w, aether::Entity{entityId}, materialId);
+		}
+	}
+
+	// material_set_color/metallic/roughness/emissive(world, material_id, ...)
+	void das_material_set_color(aether::World* w, uint32_t materialId, das::float3 color)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			ctx.assets->GetMaterialAuthoring().SetBaseColor(*w, materialId, to_glm(color));
+		}
+	}
+
+	void das_material_set_metallic(aether::World* w, uint32_t materialId, float value)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			ctx.assets->GetMaterialAuthoring().SetMetallic(*w, materialId, value);
+		}
+	}
+
+	void das_material_set_roughness(aether::World* w, uint32_t materialId, float value)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			ctx.assets->GetMaterialAuthoring().SetRoughness(*w, materialId, value);
+		}
+	}
+
+	void das_material_set_emissive(aether::World* w, uint32_t materialId, das::float3 color)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			ctx.assets->GetMaterialAuthoring().SetEmissive(*w, materialId, to_glm(color));
+		}
+	}
+
+	// -- Per-entity material instance edits -------------------------------------
+	// Mutate this one entity's material a field at a time (copy-on-write). Seeds
+	// a default material if the entity has none. A no-op value change is free.
+
+	void das_entity_material_set_color(aether::World* w, uint32_t entityId, das::float3 color)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			aether::MaterialSystem::SetBaseColor(*w, aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), to_glm(color));
+		}
+	}
+
+	void das_entity_material_set_metallic(aether::World* w, uint32_t entityId, float value)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			aether::MaterialSystem::SetMetallic(*w, aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
+		}
+	}
+
+	void das_entity_material_set_roughness(aether::World* w, uint32_t entityId, float value)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			aether::MaterialSystem::SetRoughness(*w, aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
+		}
+	}
+
+	void das_entity_material_set_emissive(aether::World* w, uint32_t entityId, das::float3 color)
+	{
+		auto& ctx = ActiveContext();
+		if (ctx.assets)
+		{
+			aether::MaterialSystem::SetEmissive(*w, aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), to_glm(color));
+		}
+	}
+
+	// set_material_texture(world, entity_id, path) - set the entity's albedo map
+	// from a VFS texture path. A MISSING/failed path resolves to the magenta
+	// fallback (the visible "missing texture" marker), so this is the script-side
+	// hook for exercising the texture-fallback path.
+	void das_set_material_texture(aether::World* w, uint32_t entityId, const char* path)
+	{
+		auto& ctx = ActiveContext();
+		if (!ctx.assets)
+		{
+			return;
+		}
+		auto& texReg = ctx.assets->GetTextureRegistry();
+		// Acquire a loader ref (missing path -> broken handle -> magenta), hand the
+		// handle to the material (whose slot cascade takes its OWN ref), then drop
+		// the loader ref. Balanced + dedup-safe for real textures; a pure no-op on
+		// refcounts for the broken handle.
+		const aether::TextureHandle tex = texReg.Acquire(path);
+		aether::MaterialSystem::SetAlbedoTexture(*w, aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), tex);
+		texReg.Release(tex);
 	}
 
 } // namespace
@@ -522,9 +656,24 @@ namespace aether::app::scripting
 			Bind<das_create_mesh>(lib, "create_mesh", SE::modifyExternal);
 			Bind<das_add_mesh>(lib, "add_mesh", SE::modifyExternal);
 
-			// Material painting (phase-2 preview over the MaterialRegistry)
+			// Material painting (one-shot solid paint)
 			Bind<das_set_material>(lib, "set_material", SE::modifyExternal);
 			Bind<das_set_material_color>(lib, "set_material_color", SE::modifyExternal);
+
+			// Named / shared authoring materials
+			Bind<das_make_material>(lib, "make_material", SE::modifyExternal);
+			Bind<das_bind_material>(lib, "bind_material", SE::modifyExternal);
+			Bind<das_material_set_color>(lib, "material_set_color", SE::modifyExternal);
+			Bind<das_material_set_metallic>(lib, "material_set_metallic", SE::modifyExternal);
+			Bind<das_material_set_roughness>(lib, "material_set_roughness", SE::modifyExternal);
+			Bind<das_material_set_emissive>(lib, "material_set_emissive", SE::modifyExternal);
+
+			// Per-entity material instance edits
+			Bind<das_entity_material_set_color>(lib, "entity_material_set_color", SE::modifyExternal);
+			Bind<das_entity_material_set_metallic>(lib, "entity_material_set_metallic", SE::modifyExternal);
+			Bind<das_entity_material_set_roughness>(lib, "entity_material_set_roughness", SE::modifyExternal);
+			Bind<das_entity_material_set_emissive>(lib, "entity_material_set_emissive", SE::modifyExternal);
+			Bind<das_set_material_texture>(lib, "set_material_texture", SE::modifyExternal);
 
 			// Entity iteration
 			Bind<das_for_each_with_transform>(lib, "for_each_with_transform", SE::modifyExternal);

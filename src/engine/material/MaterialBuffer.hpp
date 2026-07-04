@@ -7,6 +7,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "gpu/ResourceRegistry.hpp"
 
+#include "material/DeferredSlotFreeList.hpp"
 #include "material/GpuMaterial.hpp"
 #include "material/IMaterialSlotSink.hpp"
 
@@ -51,6 +52,11 @@ namespace aether
 			return kMaxMaterials;
 		}
 
+		// Advance the deferred-free clock. Slots freed several frames ago (past
+		// the in-flight window) become reusable. Call once per frame from the
+		// render loop, alongside BindlessManager::AdvanceFrame.
+		void AdvanceFrame(std::uint64_t frameIndex);
+
 		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress() const
 		{
 			return m_address;
@@ -66,6 +72,6 @@ namespace aether
 		gpu::BufferHandle m_handle{};
 		GpuMaterial* m_mapped = nullptr;
 		gpu::DeviceAddress m_address = 0;
-		std::vector<uint32_t> m_freeSlots;
+		DeferredSlotFreeList m_slotAllocator;
 	};
 } // namespace aether

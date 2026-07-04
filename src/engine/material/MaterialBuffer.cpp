@@ -32,11 +32,7 @@ namespace aether
 		m_mapped = static_cast<GpuMaterial*>(view.mappedPtr);
 		m_address = view.deviceAddress;
 
-		m_freeSlots.reserve(kMaxMaterials);
-		for (std::uint32_t i = kMaxMaterials; i-- > 0;)
-		{
-			m_freeSlots.push_back(i);
-		}
+		m_slotAllocator.Reset(kMaxMaterials);
 	}
 
 	void MaterialBuffer::Shutdown()
@@ -51,20 +47,14 @@ namespace aether
 		m_handle = {};
 		m_mapped = nullptr;
 		m_address = 0;
-		m_freeSlots.clear();
+		m_slotAllocator.Clear();
 	}
 
 	std::uint32_t MaterialBuffer::AllocateSlot()
 	{
 		AE_PROFILE_ZONE();
 		std::scoped_lock lock(m_mutex);
-		if (m_freeSlots.empty())
-		{
-			return kInvalidSlot;
-		}
-		const std::uint32_t slot = m_freeSlots.back();
-		m_freeSlots.pop_back();
-		return slot;
+		return m_slotAllocator.Allocate();
 	}
 
 	void MaterialBuffer::FreeSlot(std::uint32_t slot)
@@ -74,7 +64,15 @@ namespace aether
 			return;
 		}
 		std::scoped_lock lock(m_mutex);
-		m_freeSlots.push_back(slot);
+		// Deferred: the slot's GPU bytes may still be read by in-flight frames,
+		// so it is not returned to circulation until AdvanceFrame retires it.
+		m_slotAllocator.Free(slot);
+	}
+
+	void MaterialBuffer::AdvanceFrame(std::uint64_t frameIndex)
+	{
+		std::scoped_lock lock(m_mutex);
+		m_slotAllocator.AdvanceFrame(frameIndex);
 	}
 
 	void MaterialBuffer::Write(std::uint32_t slot, const GpuMaterial& material)

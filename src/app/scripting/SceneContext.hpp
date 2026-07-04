@@ -38,7 +38,6 @@ namespace aether::app::scripting
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
-		aether::GraphicsPipeline* defaultPipeline = nullptr;
 		aether::app::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
@@ -57,7 +56,6 @@ namespace aether::app::scripting
 		struct CachedMesh
 		{
 			const aether::Mesh* mesh = nullptr;
-			const aether::GraphicsPipeline* pipeline = nullptr;
 			aether::MaterialAsset materialAsset{};
 		};
 

@@ -1,10 +1,11 @@
 #include "material/MaterialPacking.hpp"
 
 #include "material/MaterialAsset.hpp"
+#include "material/TextureRegistry.hpp"
 
 namespace aether
 {
-	GpuMaterial PackMaterial(const MaterialAsset& a)
+	GpuMaterial PackMaterial(const MaterialAsset& a, const TextureRegistry& textures)
 	{
 		GpuMaterial g{};
 		g.baseColorFactor = a.baseColorFactor;
@@ -15,17 +16,37 @@ namespace aether
 		g.emissiveFactor = glm::vec4(a.emissiveFactor, 0.0f);
 
 		std::uint32_t flags = 0u;
-		if (a.doubleSided) flags |= GpuMaterial::kDoubleSided;
-		if (a.alphaBlend) flags |= GpuMaterial::kAlphaBlend;
-		if (a.alphaMask) flags |= GpuMaterial::kAlphaMask;
-		if (a.modulateVertexColor) flags |= GpuMaterial::kModulateVertexColor;
+		if (a.doubleSided)
+		{
+			flags |= GpuMaterial::kDoubleSided;
+		}
+		if (a.alphaBlend)
+		{
+			flags |= GpuMaterial::kAlphaBlend;
+		}
+		if (a.alphaMask)
+		{
+			flags |= GpuMaterial::kAlphaMask;
+		}
+		if (a.modulateVertexColor)
+		{
+			flags |= GpuMaterial::kModulateVertexColor;
+		}
 		g.flags = flags;
 
-		g.albedoSlot = a.albedoSlot;
-		g.normalSlot = a.normalSlot;
-		g.metallicRoughnessSlot = a.metallicRoughnessSlot;
-		g.occlusionSlot = a.occlusionSlot;
-		g.emissiveSlot = a.emissiveSlot;
+		// Optional map not set (default-constructed handle) -> kNoTexture so the
+		// shader skips the sample. Otherwise the registry resolves to the live
+		// heap slot, or the fallback default for a stale handle.
+		auto slotFor = [&textures](const TextureHandle h) -> std::uint32_t
+		{
+			return h.IsValid() ? textures.ResolveSlot(h) : GpuMaterial::kNoTexture;
+		};
+
+		g.albedoSlot = slotFor(a.albedoTex);
+		g.normalSlot = slotFor(a.normalTex);
+		g.metallicRoughnessSlot = slotFor(a.metallicRoughnessTex);
+		g.occlusionSlot = slotFor(a.occlusionTex);
+		g.emissiveSlot = slotFor(a.emissiveTex);
 		return g;
 	}
 } // namespace aether

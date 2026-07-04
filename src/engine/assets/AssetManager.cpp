@@ -16,6 +16,9 @@
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/PipelineCache.hpp"
+#include "material/TextureRegistry.hpp"
+#include "scene/LoadedModel.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
@@ -261,15 +264,49 @@ namespace aether
 		}
 	} // namespace
 
-	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialRegistry& materialRegistry, World& world, gpu::UploadContext& uploadContext)
+	void AssetManager::Initialize(VulkanContext& context,
+	        BindlessManager& bindlessManager,
+	        MaterialRegistry& materialRegistry,
+	        MaterialAuthoring& materialAuthoring,
+	        PipelineCache& pipelineCache,
+	        EffectParamBuffer& effectParamBuffer,
+	        TextureRegistry& textureRegistry,
+	        World& world,
+	        gpu::UploadContext& uploadContext)
 	{
 		AE_PROFILE_ZONE();
 		m_context = &context;
 		m_bindlessManager = &bindlessManager;
 		m_materialRegistry = &materialRegistry;
+		m_materialAuthoring = &materialAuthoring;
+		m_pipelineCache = &pipelineCache;
+		m_effectParamBuffer = &effectParamBuffer;
+		m_textureRegistry = &textureRegistry;
 		m_world = &world;
 		m_uploadContext = &uploadContext;
 		MaterialSystem::ConnectLifecycle(world, materialRegistry);
+	}
+
+	void AssetManager::ReleaseModelTextures(LoadedModel& model)
+	{
+		if (m_textureRegistry == nullptr)
+		{
+			return;
+		}
+		for (LoadedModelPrimitive& prim: model.primitives)
+		{
+			MaterialAsset& mat = prim.material;
+			const TextureHandle handles[5] = {mat.albedoTex, mat.normalTex, mat.metallicRoughnessTex, mat.occlusionTex, mat.emissiveTex};
+			for (const TextureHandle h: handles)
+			{
+				m_textureRegistry->Release(h); // generation-guarded no-op on invalid/stale
+			}
+			mat.albedoTex = {};
+			mat.normalTex = {};
+			mat.metallicRoughnessTex = {};
+			mat.occlusionTex = {};
+			mat.emissiveTex = {};
+		}
 	}
 
 	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices)
@@ -310,7 +347,7 @@ namespace aether
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}
 
-	Expected<MaterialAsset> AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
+	Expected<MaterialAsset> AssetManager::LoadMaterialPreset(std::string_view path)
 	{
 		AE_PROFILE_ZONE();
 		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
@@ -357,54 +394,27 @@ namespace aether
 						std::string texRelPath = reader.ReadString();
 						std::string texPath = ResolvePathRelativeTo(presetPath, texRelPath);
 
-						// Try .texture sibling first.
-						if (!io::FileSystem::Exists(texPath))
-						{
-							const std::size_t ss = texPath.find("://");
-							if (ss != std::string_view::npos)
-							{
-								const std::filesystem::path rel(texPath.substr(ss + 3));
-								const std::string candidate = texPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
-								if (io::FileSystem::Exists(candidate))
-								{
-									texPath = candidate;
-								}
-							}
-						}
-
-						auto loadSlot = [this, &outTextures, &texPath]() -> std::uint32_t
-						{
-							if (!io::FileSystem::Exists(texPath))
-							{
-								return MaterialAsset::kNoTexture;
-							}
-							auto texResult = CreateTexture(texPath);
-							if (!texResult.has_value())
-							{
-								return MaterialAsset::kNoTexture;
-							}
-							const std::uint32_t slot = texResult->GetBindlessSlot();
-							outTextures.push_back(std::move(*texResult));
-							return slot;
-						};
+						// The registry sink owns .texture-sibling resolution; Acquire
+						// dedups + ref-counts and returns an invalid handle on failure.
+						const TextureHandle tex = m_textureRegistry->Acquire(texPath);
 
 						auto texType = static_cast<TextureTypeDisk>(type);
 						switch (texType)
 						{
 							case TextureTypeDisk::BaseColor:
-								material.albedoSlot = loadSlot();
+								material.albedoTex = tex;
 								break;
 							case TextureTypeDisk::Normal:
-								material.normalSlot = loadSlot();
+								material.normalTex = tex;
 								break;
 							case TextureTypeDisk::MetallicRoughness:
-								material.metallicRoughnessSlot = loadSlot();
+								material.metallicRoughnessTex = tex;
 								break;
 							case TextureTypeDisk::Occlusion:
-								material.occlusionSlot = loadSlot();
+								material.occlusionTex = tex;
 								break;
 							case TextureTypeDisk::Emissive:
-								material.emissiveSlot = loadSlot();
+								material.emissiveTex = tex;
 								break;
 						}
 					}
@@ -420,39 +430,15 @@ namespace aether
 		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
 		MaterialAsset material = spec.material;
 
-		auto loadTextureSlot = [this, &outTextures](std::string_view texturePath) -> Expected<std::uint32_t>
+		// The sink owns .texture-sibling resolution; Acquire dedups + ref-counts.
+		// Empty path or load failure -> invalid handle (optional map not set).
+		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
 		{
 			if (texturePath.empty())
 			{
-				return MaterialAsset::kNoTexture;
+				return {};
 			}
-
-			// If the original path doesn't exist, try the pre-transcoded .texture sibling.
-			std::string resolvedPath(texturePath);
-			if (!io::FileSystem::Exists(resolvedPath))
-			{
-				const std::size_t ss = resolvedPath.find("://");
-				if (ss != std::string::npos)
-				{
-					const std::filesystem::path rel(resolvedPath.substr(ss + 3));
-					const std::string candidate = resolvedPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
-					if (io::FileSystem::Exists(candidate))
-					{
-						resolvedPath = candidate;
-					}
-				}
-			}
-
-			if (!io::FileSystem::Exists(resolvedPath))
-			{
-				AE_WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
-				return MaterialAsset::kNoTexture;
-			}
-
-			AE_TRY(tex, CreateTexture(resolvedPath));
-			const std::uint32_t slot = tex->GetBindlessSlot();
-			outTextures.push_back(std::move(*tex));
-			return slot;
+			return m_textureRegistry->Acquire(texturePath);
 		};
 
 		std::string autoAlbedo;
@@ -475,25 +461,20 @@ namespace aether
 		const std::string occlusionPath = !spec.occlusionPath.empty() ? spec.occlusionPath : autoOcclusion;
 		const std::string emissivePath = !spec.emissivePath.empty() ? spec.emissivePath : autoEmissive;
 
-		AE_TRY(albedoSlot, loadTextureSlot(albedoPath));
-		material.albedoSlot = *albedoSlot;
-		AE_TRY(normalSlot, loadTextureSlot(normalPath));
-		material.normalSlot = *normalSlot;
-		AE_TRY(metallicRoughnessSlot, loadTextureSlot(metallicRoughnessPath));
-		material.metallicRoughnessSlot = *metallicRoughnessSlot;
-		AE_TRY(occlusionSlot, loadTextureSlot(occlusionPath));
-		material.occlusionSlot = *occlusionSlot;
-		AE_TRY(emissiveSlot, loadTextureSlot(emissivePath));
-		material.emissiveSlot = *emissiveSlot;
+		material.albedoTex = acquireTexture(albedoPath);
+		material.normalTex = acquireTexture(normalPath);
+		material.metallicRoughnessTex = acquireTexture(metallicRoughnessPath);
+		material.occlusionTex = acquireTexture(occlusionPath);
+		material.emissiveTex = acquireTexture(emissivePath);
 
 		AE_INFO(LogCategory::Engine,
 		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
 		        requestedPath,
-		        material.albedoSlot != MaterialAsset::kNoTexture ? "yes" : "no",
-		        material.normalSlot != MaterialAsset::kNoTexture ? "yes" : "no",
-		        material.metallicRoughnessSlot != MaterialAsset::kNoTexture ? "yes" : "no",
-		        material.occlusionSlot != MaterialAsset::kNoTexture ? "yes" : "no",
-		        material.emissiveSlot != MaterialAsset::kNoTexture ? "yes" : "no");
+		        material.albedoTex.IsValid() ? "yes" : "no",
+		        material.normalTex.IsValid() ? "yes" : "no",
+		        material.metallicRoughnessTex.IsValid() ? "yes" : "no",
+		        material.occlusionTex.IsValid() ? "yes" : "no",
+		        material.emissiveTex.IsValid() ? "yes" : "no");
 
 		return material;
 	}
@@ -509,9 +490,9 @@ namespace aether
 
 		// New format: materials have texture paths, not embedded images.
 		// Textures are loaded in FinaliseModelLoad.
-		std::vector<std::uint32_t> imageSlots;
+		std::vector<TextureHandle> imageHandles;
 
-		FinaliseModelLoad(loaded, *source, imageSlots, path);
+		FinaliseModelLoad(loaded, *source, imageHandles, path);
 		return std::move(loaded);
 	}
 
@@ -539,13 +520,13 @@ namespace aether
 		LoadedModel loaded;
 
 		// New format: textures are loaded in FinaliseModelLoad from material paths.
-		std::vector<std::uint32_t> imageSlots;
+		std::vector<TextureHandle> imageHandles;
 
-		FinaliseModelLoad(loaded, *source, imageSlots, pathStr);
+		FinaliseModelLoad(loaded, *source, imageHandles, pathStr);
 		co_return std::move(loaded);
 	}
 
-	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path)
+	void AssetManager::FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<TextureHandle>& imageHandles, std::string_view path)
 	{
 		AE_PROFILE_ZONE();
 		AE_VERBOSE(LogCategory::Engine, "Finalising model: {} nodes, {} primitives, {} skins, {} materials", source.nodes.size(), source.primitives.size(), source.skins.size(), source.materials.size());
@@ -579,48 +560,16 @@ namespace aether
 			worldNodeTransforms[nodeIndex] = transform;
 		}
 
-		// Helper: load a texture from a VFS path, trying .texture sibling first.
-		auto loadTextureFromPath = [this, &loaded](std::string_view texturePath) -> std::uint32_t
+		// Helper: acquire a ref-counted texture handle from the registry (dedup +
+		// deferred free; the sink owns .texture-sibling resolution). Empty path ->
+		// invalid handle (optional map not set).
+		auto acquireTexture = [this](std::string_view texturePath) -> TextureHandle
 		{
 			if (texturePath.empty())
 			{
-				return MaterialAsset::kNoTexture;
+				return {};
 			}
-
-			std::string resolvedPath(texturePath);
-			// Try .texture sibling first (pre-transcoded DDS).
-			if (!io::FileSystem::Exists(resolvedPath))
-			{
-				const std::size_t ss = resolvedPath.find("://");
-				if (ss != std::string_view::npos)
-				{
-					const std::filesystem::path rel(resolvedPath.substr(ss + 3));
-					const std::string candidate = resolvedPath.substr(0, ss) + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
-					if (io::FileSystem::Exists(candidate))
-					{
-						AE_VERBOSE(LogCategory::Engine, "    Texture resolved: {} -> {}", texturePath, candidate);
-						resolvedPath = candidate;
-					}
-				}
-			}
-
-			if (!io::FileSystem::Exists(resolvedPath))
-			{
-				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture missing '{}'.", texturePath);
-				return MaterialAsset::kNoTexture;
-			}
-
-			auto texResult = CreateTexture(resolvedPath);
-			if (!texResult.has_value())
-			{
-				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture load failed '{}'.", resolvedPath);
-				return MaterialAsset::kNoTexture;
-			}
-
-			AE_VERBOSE(LogCategory::Engine, "    Texture loaded: {} (slot={})", resolvedPath, texResult->GetBindlessSlot());
-			const std::uint32_t slot = texResult->GetBindlessSlot();
-			loaded.textures.push_back(std::move(*texResult));
-			return slot;
+			return m_textureRegistry->Acquire(texturePath);
 		};
 
 		loaded.primitives.reserve(source.primitives.size());
@@ -661,39 +610,45 @@ namespace aether
 				mat.alphaMask = srcMat.alphaMask;
 
 				// New format: resolve texture paths from GltfMaterial.
-				// Old format: resolve via imageSlots index chain.
-				if (imageSlots.empty())
+				// Old format: resolve via imageHandles index chain.
+				if (imageHandles.empty())
 				{
-					mat.albedoSlot = loadTextureFromPath(srcMat.albedoPath);
-					mat.normalSlot = loadTextureFromPath(srcMat.normalPath);
-					mat.metallicRoughnessSlot = loadTextureFromPath(srcMat.metallicRoughnessPath);
-					mat.occlusionSlot = loadTextureFromPath(srcMat.occlusionPath);
-					mat.emissiveSlot = loadTextureFromPath(srcMat.emissivePath);
+					mat.albedoTex = acquireTexture(srcMat.albedoPath);
+					mat.normalTex = acquireTexture(srcMat.normalPath);
+					mat.metallicRoughnessTex = acquireTexture(srcMat.metallicRoughnessPath);
+					mat.occlusionTex = acquireTexture(srcMat.occlusionPath);
+					mat.emissiveTex = acquireTexture(srcMat.emissivePath);
 				}
 				else
 				{
-					auto resolveSlot = [&](const std::int32_t texIdx) -> std::uint32_t
+					auto resolveHandle = [&](const std::int32_t texIdx) -> TextureHandle
 					{
 						if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
 						{
-							return MaterialAsset::kNoTexture;
+							return {};
 						}
 						const assets::GltfTexture& tex = source.textures[static_cast<std::size_t>(texIdx)];
-						if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageSlots.size())
+						if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageHandles.size())
 						{
-							return MaterialAsset::kNoTexture;
+							return {};
 						}
-						return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
+						return imageHandles[static_cast<std::size_t>(tex.imageIndex)];
 					};
 
-					mat.albedoSlot = resolveSlot(srcMat.baseColorTexture);
-					mat.normalSlot = resolveSlot(srcMat.normalTexture);
-					mat.metallicRoughnessSlot = resolveSlot(srcMat.metallicRoughnessTexture);
-					mat.occlusionSlot = resolveSlot(srcMat.occlusionTexture);
-					mat.emissiveSlot = resolveSlot(srcMat.emissiveTexture);
+					mat.albedoTex = resolveHandle(srcMat.baseColorTexture);
+					mat.normalTex = resolveHandle(srcMat.normalTexture);
+					mat.metallicRoughnessTex = resolveHandle(srcMat.metallicRoughnessTexture);
+					mat.occlusionTex = resolveHandle(srcMat.occlusionTexture);
+					mat.emissiveTex = resolveHandle(srcMat.emissiveTexture);
 				}
 
-				AE_VERBOSE(LogCategory::Engine, "  Material slots: albedo={}, normal={}, orm={}, occlusion={}, emissive={}", mat.albedoSlot, mat.normalSlot, mat.metallicRoughnessSlot, mat.occlusionSlot, mat.emissiveSlot);
+				AE_VERBOSE(LogCategory::Engine,
+				        "  Material textures present: albedo={}, normal={}, orm={}, occlusion={}, emissive={}",
+				        mat.albedoTex.IsValid(),
+				        mat.normalTex.IsValid(),
+				        mat.metallicRoughnessTex.IsValid(),
+				        mat.occlusionTex.IsValid(),
+				        mat.emissiveTex.IsValid());
 			}
 			else
 			{
@@ -703,7 +658,7 @@ namespace aether
 			loaded.primitives.push_back(std::move(loadedPrim));
 		}
 
-		AE_VERBOSE(LogCategory::Engine, "Loaded model '{}': {} primitive(s), {} texture(s), {} animation(s).", std::string(path), loaded.primitives.size(), loaded.textures.size(), source.animations.size());
+		AE_VERBOSE(LogCategory::Engine, "Loaded model '{}': {} primitive(s), {} animation(s).", std::string(path), loaded.primitives.size(), source.animations.size());
 
 		if (!source.skins.empty() && !source.animations.empty())
 		{
@@ -724,7 +679,7 @@ namespace aether
 		}
 	}
 
-	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId, float scale)
+	std::vector<Entity> AssetManager::SpawnModel(LoadedModel& model, std::uint32_t parentEntityId, float scale)
 	{
 		AE_PROFILE_ZONE();
 		std::vector<Entity> entities;
@@ -739,10 +694,18 @@ namespace aether
 
 		const glm::mat4 scaleMat = glm::scale(glm::mat4(1.0f), glm::vec3(scale));
 
+		// Default pipeline for material-less primitives (vertex-colour fallback),
+		// resolved once through the cache. Two-sided (CullMode::None) to match the
+		// pre-phase-3 default pipeline, since a material-less primitive carries no
+		// authored doubleSided intent and may be single-sided.
+		MaterialTemplate defaultTemplate{.shaderVfsPath = "shaders://gltf_mesh.spv"};
+		defaultTemplate.cullMode = gpu::CullMode::None;
+		const GraphicsPipeline* defaultPipeline = m_pipelineCache->Acquire(defaultTemplate);
+
 		for (const LoadedModelPrimitive& primitive: model.primitives)
 		{
-			const Entity entity = primitive.hasMaterial ? aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, *m_materialRegistry, primitive.material, scaleMat * primitive.localTransform)
-			                                            : aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, scaleMat * primitive.localTransform);
+			const Entity entity = primitive.hasMaterial ? aether::ecs::SpawnMesh(*m_world, primitive.mesh, *m_materialRegistry, *m_pipelineCache, primitive.material, scaleMat * primitive.localTransform)
+			                                            : aether::ecs::SpawnMesh(*m_world, defaultPipeline, primitive.mesh, scaleMat * primitive.localTransform);
 
 			if (parentEntityId != 0)
 			{

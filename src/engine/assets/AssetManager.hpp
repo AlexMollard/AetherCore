@@ -8,6 +8,7 @@
 #include "rendering/GraphicsPipeline.hpp"
 #include "mesh/Mesh.hpp"
 #include "material/Texture.hpp"
+#include "material/TextureHandle.hpp"
 #include "utils/coro/Task.hpp"
 #include "gpu/UploadContext.hpp"
 
@@ -15,6 +16,10 @@ namespace aether
 {
 	struct MaterialAsset;
 	class MaterialRegistry;
+	class MaterialAuthoring;
+	class PipelineCache;
+	class EffectParamBuffer;
+	class TextureRegistry;
 	class VulkanContext;
 
 	namespace assets
@@ -52,10 +57,15 @@ namespace aether
 		// Pipeline creation.
 		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 
-		// Load a material preset file and keep referenced textures alive in
-		// outTextures. Returns pure authoring data; callers acquire a GPU slot
-		// through the MaterialRegistry (e.g. MaterialSystem::AssignMaterial).
-		[[nodiscard]] Expected<MaterialAsset> LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
+		// Load a material preset file. Returns pure authoring data; referenced
+		// textures are acquired (ref-counted) from the TextureRegistry and held by
+		// the returned MaterialAsset's TextureHandles.
+		[[nodiscard]] Expected<MaterialAsset> LoadMaterialPreset(std::string_view path);
+
+		// Release the texture handles a LoadedModel's primitives hold (the loader
+		// refs taken in FinaliseModelLoad). Call before discarding a cached model
+		// so its textures free once no spawned entity references them anymore.
+		void ReleaseModelTextures(LoadedModel& model);
 
 		// Model loading and spawning.
 		[[nodiscard]] Expected<LoadedModel> LoadModel(std::string_view path);
@@ -64,18 +74,46 @@ namespace aether
 		// then parse and upload textures on the game thread.
 		[[nodiscard]] coro::async<Expected<LoadedModel>> LoadModelAsync(std::string_view path);
 
-		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId = 0, float scale = 1.0f);
+		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, std::uint32_t parentEntityId = 0, float scale = 1.0f);
 
 		// Bind runtime dependencies once during engine startup.
-		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialRegistry& materialRegistry, World& world, gpu::UploadContext& uploadContext);
+		void Initialize(VulkanContext& context,
+		        BindlessManager& bindlessManager,
+		        MaterialRegistry& materialRegistry,
+		        MaterialAuthoring& materialAuthoring,
+		        PipelineCache& pipelineCache,
+		        EffectParamBuffer& effectParamBuffer,
+		        TextureRegistry& textureRegistry,
+		        World& world,
+		        gpu::UploadContext& uploadContext);
 
 		[[nodiscard]] MaterialRegistry& GetMaterialRegistry()
 		{
 			return *m_materialRegistry;
 		}
 
+		[[nodiscard]] MaterialAuthoring& GetMaterialAuthoring()
+		{
+			return *m_materialAuthoring;
+		}
+
+		[[nodiscard]] PipelineCache& GetPipelineCache()
+		{
+			return *m_pipelineCache;
+		}
+
+		[[nodiscard]] EffectParamBuffer& GetEffectParamBuffer()
+		{
+			return *m_effectParamBuffer;
+		}
+
+		[[nodiscard]] TextureRegistry& GetTextureRegistry()
+		{
+			return *m_textureRegistry;
+		}
+
 		// Shared finalisation step for both synchronous and async model loading.
-		void FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path);
+		void FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<TextureHandle>& imageHandles, std::string_view path);
 
 		// Set rendering dependencies after the rendering subsystem initializes.
 		void SetRenderQueue(RenderQueue& renderQueue)
@@ -97,6 +135,10 @@ namespace aether
 		VulkanContext* m_context = nullptr;
 		BindlessManager* m_bindlessManager = nullptr;
 		MaterialRegistry* m_materialRegistry = nullptr;
+		MaterialAuthoring* m_materialAuthoring = nullptr;
+		PipelineCache* m_pipelineCache = nullptr;
+		EffectParamBuffer* m_effectParamBuffer = nullptr;
+		TextureRegistry* m_textureRegistry = nullptr;
 		RenderQueue* m_renderQueue = nullptr;
 		ShadowService* m_shadowService = nullptr;
 		RenderTargetService* m_renderTargetService = nullptr;
