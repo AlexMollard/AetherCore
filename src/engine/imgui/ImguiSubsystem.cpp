@@ -234,6 +234,28 @@ namespace aether
 			}
 		}
 
+		// Merge Font Awesome 6 Free-Solid into the same atlas: icon codepoints sit
+		// in the Private Use Area (0xE000-0xF8FF) so text rendering stays Roboto.
+		// Consumers use the ICON_FA_* UTF-8 literals (app: debug/Icons.hpp).
+		constexpr std::string_view kIconFontPath = "assets://fonts/fa-solid-900.ttf";
+		if (!io.Fonts->Fonts.empty() && io::FileSystem::Exists(kIconFontPath))
+		{
+			auto result = io::FileSystem::ReadFile(kIconFontPath);
+			if (result)
+			{
+				m_iconFontData = std::move(*result);
+				static const ImWchar kIconRange[] = {0xE000, 0xF8FF, 0};
+				ImFontConfig iconConfig{};
+				iconConfig.FontDataOwnedByAtlas = false;
+				iconConfig.MergeMode = true;
+				iconConfig.PixelSnapH = true;
+				iconConfig.SizePixels = 13.0f;
+				iconConfig.GlyphMinAdvanceX = 16.0f;
+				iconConfig.GlyphOffset = ImVec2(0.0f, 1.0f);
+				io.Fonts->AddFontFromMemoryTTF(m_iconFontData.data(), static_cast<int>(m_iconFontData.size()), iconConfig.SizePixels, &iconConfig, kIconRange);
+			}
+		}
+
 		m_initialized = true;
 		InitBackends(services);
 		AE_INFO(LogCategory::UI, "Dear ImGui subsystem initialized.");

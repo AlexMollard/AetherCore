@@ -19,6 +19,7 @@ using namespace std::string_view_literals;
 
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
+#include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
 #include "debug/LightingPanel.hpp"
 #include "debug/PerformancePanel.hpp"
@@ -29,6 +30,7 @@ using namespace std::string_view_literals;
 #include "debug/ViewportPanel.hpp"
 #include "platform/Input.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/World.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -259,8 +261,13 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 		LoadSettings(context);
 
+		// Shared selection service: registered before panels attach so every
+		// panel can resolve it for its whole lifetime.
+		context.services.Register<SceneSelection>(m_selection);
+
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
+		m_panels.push_back(std::make_unique<HierarchyPanel>());
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());
@@ -289,6 +296,7 @@ namespace aether::app
 			panel->OnDetach(context);
 		}
 		m_panels.clear();
+		context.services.Unregister<SceneSelection>();
 
 		m_errorToasts.clear();
 		m_dockspaceBuilt = false;
@@ -314,6 +322,10 @@ namespace aether::app
 		}
 
 		PollScriptErrors(context);
+
+		// Entities can be destroyed by scripts/physics at any point; keep the
+		// shared selection free of dangling ids before panels read it.
+		m_selection.Prune(context.Get<World>());
 
 		for (auto& panel: m_panels)
 		{

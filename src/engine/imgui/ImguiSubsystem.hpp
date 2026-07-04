@@ -85,6 +85,7 @@ namespace aether
 		std::mutex m_mutex;
 		std::optional<std::unique_lock<std::mutex>> m_gameThreadFrameLock;
 		std::vector<std::byte> m_fontData;
+		std::vector<std::byte> m_iconFontData;
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
 	};
 } // namespace aether

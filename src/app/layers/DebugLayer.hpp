@@ -10,6 +10,7 @@
 #include "utils/TomlConfig.hpp"
 
 #include "debug/DebugPanel.hpp"
+#include "debug/SceneSelection.hpp"
 
 namespace aether::app
 {
@@ -44,6 +45,7 @@ namespace aether::app
 
 		bool m_visible = true;
 
+		SceneSelection m_selection;
 		TomlConfig m_debugConfig;
 		std::deque<ScriptErrorToast> m_errorToasts;
 		bool m_dockspaceBuilt = false;
