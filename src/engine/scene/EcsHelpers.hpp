@@ -8,20 +8,30 @@
 #include "scene/Components.hpp"
 #include "scene/LoadedModel.hpp"
 #include "rendering/GraphicsPipeline.hpp"
-#include "material/Material.hpp"
+#include "material/MaterialAsset.hpp"
+#include "material/MaterialSystem.hpp"
 #include "mesh/Mesh.hpp"
 #include "scene/World.hpp"
 
 namespace aether::ecs
 {
-	// Creates a single entity from an explicit mesh + material.
-	inline aether::Entity SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::Material material, const glm::mat4& transform = glm::mat4(1.0f))
+	// Creates a single entity from an explicit mesh, without a material
+	// (renders via the shader's vertex-colour fallback).
+	inline aether::Entity SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, const glm::mat4& transform = glm::mat4(1.0f))
 	{
 		aether::Entity e = world.Create();
 		world.EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = &pipeline});
 		world.EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = &mesh});
-		world.EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{.material = material});
 		world.EmplaceOrReplace<aether::TransformComponent>(e, aether::TransformComponent{.localToWorld = transform});
+		return e;
+	}
+
+	// Creates a single entity from an explicit mesh + material asset, acquiring
+	// the material through the registry.
+	inline aether::Entity SpawnMesh(aether::World& world, aether::GraphicsPipeline& pipeline, const aether::Mesh& mesh, aether::MaterialRegistry& materials, const aether::MaterialAsset& asset, const glm::mat4& transform = glm::mat4(1.0f))
+	{
+		const aether::Entity e = SpawnMesh(world, pipeline, mesh, transform);
+		aether::MaterialSystem::AssignMaterial(world, e, materials, asset);
 		return e;
 	}
 

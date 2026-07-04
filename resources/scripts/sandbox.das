@@ -23,15 +23,21 @@ require systems/third_person_camera;
 //        -Z (far)
 //     A ───────── B          A  Sun-shadow calibration  (NW)
 //     │    E      │          B  Ambient-occlusion crease (NE)
-//     │   (P)     │          C  Single point-light shadow (SW)
+//     M   (P)     │          C  Single point-light shadow (SW)
 //     C ───────── D          D  3-colour light overlap    (SE)
 //        +Z (near)           E  Spot light on a wall      (far centre)
+//                            M  Material registry gallery (W)
 //                            P  Player + foxes (centre)
 //
 //  Neutral white surfaces (plane floor, plane walls, spheres) are the light/AO
 //  RECEIVERS so colour and darkening read truthfully. Cubes (rainbow vertex
 //  colours) are used as shadow CASTERS - the shadow they throw is neutral, and
 //  their colour makes them easy to pick out.
+//
+//  Zone M exercises the content-addressed MaterialRegistry: a PBR sweep
+//  (25 unique materials), a dedup block (36 identical cubes -> 1 GPU slot),
+//  a hue ramp (12 unique slots), and the vertex-colour flag pair. Sphere
+//  toys are painted cyan - spawn as many as you like, they share one slot.
 //
 //  Controls: WASD move, Shift sprint, LMB-drag orbit, scroll zoom.
 //            1 drop cube, 2 drop sphere, 3 sphere rain, 4 box tower,
@@ -105,6 +111,33 @@ def wall(world : World?; pos : float3; euler : float3; w : float; h : float) : u
     return e;
 }
 
+// Solid-painted static cube (visual only). Identical colours dedup to one
+// GPU material slot in the registry.
+def painted_box(world : World?; pos : float3; size : float3; color : float3)
+{
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, pos, float3(0.0, 0.0, 0.0), size);
+    add_mesh(world, e, g_cube);
+    set_material_color(world, e, color);
+}
+
+// Painted sphere with explicit PBR response (for the metallic/roughness sweep).
+def painted_sphere(world : World?; pos : float3; diameter : float; color : float3; metallic : float; roughness : float)
+{
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(diameter, diameter, diameter));
+    add_mesh(world, e, g_sphere);
+    set_material(world, e, color, metallic, roughness);
+}
+
+// Cheap smooth hue wheel (cosine palette), t in radians.
+def hue_color(t : float) : float3
+{
+    return float3(0.5 + 0.5 * cos(t), 0.5 + 0.5 * cos(t - 2.094), 0.5 + 0.5 * cos(t - 4.188));
+}
+
 // Big floor as a thin BOX. A rotated plane's +Z normal did not receive light
 // once laid flat (the non-skinned normal transform mishandles the plane's
 // rotate + extreme non-uniform scale), so the ground read as fully in shadow.
@@ -132,6 +165,9 @@ def spawn_toy(world : World?; is_sphere : bool; pos : float3; size : float)
     if (is_sphere)
     {
         add_mesh(world, e, g_sphere);
+        // Painted toys dedup in the registry: any number of cyan spheres
+        // consumes exactly one material slot.
+        set_material_color(world, e, float3(0.2, 0.75, 0.9));
         add_sphere_body(world, e, size * 0.5, true);
     }
     else
@@ -300,6 +336,56 @@ def build_zone_light_overlap(world : World?)
     }
 }
 
+// Zone M (W): material registry showcase. Everything here goes through the
+// content-addressed MaterialRegistry via set_material / set_material_color.
+def build_zone_materials(world : World?)
+{
+    // 1. PBR sweep - 5x5 gold spheres: metallic 0->1 across rows (+Z),
+    //    roughness 0.05->1 across columns (+X). 25 unique materials = 25 slots.
+    for (row in 0..5)
+    {
+        for (col in 0..5)
+        {
+            let metallic  = float(row) * 0.25;
+            let roughness = 0.05 + float(col) * 0.2375;
+            painted_sphere(world,
+                float3(-50.0 + float(col) * 2.0, 0.8, 1.0 + float(row) * 2.0),
+                1.6, float3(1.0, 0.766, 0.336), metallic, roughness);
+        }
+    }
+
+    // 2. Dedup proof - 36 crimson cubes with IDENTICAL values. The registry
+    //    content-hashes the packed material: all 36 share ONE GPU slot.
+    for (i in 0..6)
+    {
+        for (j in 0..6)
+        {
+            painted_box(world,
+                float3(-36.0 + float(i) * 1.15, 0.5, 1.0 + float(j) * 1.15),
+                float3(1.0, 1.0, 1.0), float3(0.75, 0.11, 0.14));
+        }
+    }
+
+    // 3. Hue ramp - every cube's colour differs, so each acquires its own slot.
+    for (i in 0..12)
+    {
+        painted_box(world,
+            float3(-49.0 + float(i) * 1.7, 0.6, 12.0),
+            float3(1.2, 1.2, 1.2), hue_color(float(i) * 0.524));
+    }
+
+    // 4. Vertex-colour flag pair - left cube keeps the default primitive
+    //    material (kModulateVertexColor set -> rainbow vertex colours), right
+    //    cube is PAINTED the same neutral gray (flag cleared -> solid).
+    //    The difference is now designed, not emergent shader behaviour.
+    let rainbow = entity_create(world);
+    add_transform(world, rainbow);
+    set_transform(world, rainbow, float3(-36.0, 1.0, 16.5), float3(0.0, 0.0, 0.0), float3(2.0, 2.0, 2.0));
+    add_mesh(world, rainbow, g_cube);
+
+    painted_box(world, float3(-32.5, 1.0, 16.5), float3(2.0, 2.0, 2.0), float3(0.85, 0.85, 0.82));
+}
+
 // Zone E (far centre): spot light projecting a caster's shadow onto a wall.
 // Wall faces +Z toward the start camera.
 def build_zone_spot(world : World?)
@@ -347,6 +433,7 @@ def on_attach(world : World?)
     build_zone_point_shadow(world);
     build_zone_light_overlap(world);
     build_zone_spot(world);
+    build_zone_materials(world);
 
     // ── Effects showcase: one isolated plasma orb floating high overhead ──────
     g_plasma = entity_create(world);

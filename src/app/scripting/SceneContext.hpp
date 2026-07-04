@@ -8,7 +8,7 @@
 #include "scene/Entity.hpp"
 #include "scene/LoadedModel.hpp"
 #include "effects/EffectManager.hpp"
-#include "material/Material.hpp"
+#include "material/MaterialAsset.hpp"
 
 namespace aether
 {
@@ -58,13 +58,15 @@ namespace aether::app::scripting
 		{
 			const aether::Mesh* mesh = nullptr;
 			const aether::GraphicsPipeline* pipeline = nullptr;
-			aether::Material material{};
+			aether::MaterialAsset materialAsset{};
 		};
 
 		aether::PrimitiveMeshes* primitives = nullptr;
 		std::vector<CachedMesh> meshCache;
-		aether::Material defaultMaterial{};
-		bool defaultMaterialRegistered = false;
+		// Authoring data for the primitive default; a registry slot is acquired
+		// per entity at add_mesh time (deduped by the registry).
+		aether::MaterialAsset defaultMaterial{};
+		bool defaultMaterialInitialized = false;
 	};
 
 	// The active SceneContext for the current script call.

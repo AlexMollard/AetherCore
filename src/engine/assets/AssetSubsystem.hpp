@@ -6,6 +6,7 @@
 #include "mesh/MeshArena.hpp"
 #include "mesh/MeshUploadQueue.hpp"
 #include "material/MaterialBuffer.hpp"
+#include "material/MaterialRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "assets/AssetManager.hpp"
 
@@ -20,6 +21,7 @@ namespace aether
 	class ShadowService;
 	class RenderTargetService;
 	class VulkanContext;
+	class World;
 
 	// Owns the asset loading and GPU resource creation services.
 	class AssetSubsystem
@@ -52,6 +54,11 @@ namespace aether
 			return m_materialBuffer;
 		}
 
+		[[nodiscard]] MaterialRegistry& GetMaterialRegistry()
+		{
+			return m_materialRegistry;
+		}
+
 		[[nodiscard]] PrimitiveMeshes& GetPrimitiveMeshes()
 		{
 			return m_primitiveMeshes;
@@ -70,8 +77,12 @@ namespace aether
 		MeshArena m_meshArena;
 		MeshUploadQueue m_meshUploadQueue;
 		MaterialBuffer m_materialBuffer;
+		// Declared after m_materialBuffer: the registry's sink reference must bind
+		// to a constructed buffer.
+		MaterialRegistry m_materialRegistry{m_materialBuffer};
 		PrimitiveMeshes m_primitiveMeshes;
 		gpu::UploadContext m_uploadContext;
 		VulkanContext* m_context = nullptr;
+		World* m_world = nullptr;
 	};
 } // namespace aether

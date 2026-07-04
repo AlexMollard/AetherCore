@@ -28,6 +28,7 @@ namespace aether
 		static constexpr std::uint32_t kDoubleSided = 1u << 0;
 		static constexpr std::uint32_t kAlphaBlend = 1u << 1;
 		static constexpr std::uint32_t kAlphaMask = 1u << 2;
+		static constexpr std::uint32_t kModulateVertexColor = 1u << 3;
 
 		glm::vec4 baseColorFactor{1.0f};
 		float metallicFactor{1.0f};

@@ -338,3 +338,12 @@ foreach(_dep IN ITEMS
 endforeach()
 
 set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
+
+# ── Unit test framework ───────────────────────────────────────────────────────
+CPMAddPackage(
+    NAME doctest
+    GITHUB_REPOSITORY doctest/doctest
+    GIT_TAG v2.4.11
+    GIT_SHALLOW TRUE
+    OPTIONS "CMAKE_POLICY_VERSION_MINIMUM 3.5"
+)

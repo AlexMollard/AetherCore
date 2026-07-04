@@ -2,7 +2,9 @@
 
 #include "daScript/daScript.h"
 
+#include "assets/AssetManager.hpp"
 #include "effects/EffectManager.hpp"
+#include "material/MaterialSystem.hpp"
 #include "scene/Components.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/Logger.hpp"
@@ -10,6 +12,7 @@
 namespace
 {
 	using namespace aether::app::scripting;
+	using aether::app::effects::EffectMaterialComponent;
 
 	// set_entity_effect(world, entity_id, "effect_name")
 	// Replaces PipelineComponent + MaterialComponent with the named effect's data.
@@ -30,51 +33,51 @@ namespace
 
 		const aether::Entity e{id};
 		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = &effect->pipeline});
-		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{.material = effect->material});
+		// Keep the authoring data on the entity so the parameter setters below
+		// can rebuild + re-acquire (materials are immutable in the registry).
+		w->EmplaceOrReplace<EffectMaterialComponent>(e, EffectMaterialComponent{.asset = effect->material});
+		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), effect->material);
 	}
 
 	// -- Effect parameter setters ---------------------------------------------
-	// These update fields on the entity's MaterialComponent. The shader
-	// reinterprets the material fields for effect-specific meaning.
+	// Each mutates the entity's stored effect asset and re-acquires a material
+	// (the shader reinterprets the material fields for effect-specific meaning).
+
+	template<typename Mutate>
+	void MutateEffectMaterial(aether::World* w, uint32_t id, Mutate mutate)
+	{
+		const aether::Entity e{id};
+		auto* state = w->TryGet<EffectMaterialComponent>(e);
+		if (!state)
+		{
+			return;
+		}
+		mutate(state->asset);
+		aether::MaterialSystem::AssignMaterial(*w, e, ActiveContext().assets->GetMaterialRegistry(), state->asset);
+	}
 
 	// set_effect_color(world, entity_id, r, g, b) -> sets emissiveFactor.xyz
 	void das_set_effect_color(aether::World* w, uint32_t id, float r, float g, float b)
 	{
-		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
-		if (mc)
-		{
-			mc->material.emissiveFactor = glm::vec3(r, g, b);
-		}
+		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.emissiveFactor = glm::vec3(r, g, b); });
 	}
 
 	// set_effect_speed(world, entity_id, speed) -> sets metallicFactor
 	void das_set_effect_speed(aether::World* w, uint32_t id, float speed)
 	{
-		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
-		if (mc)
-		{
-			mc->material.metallicFactor = speed;
-		}
+		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.metallicFactor = speed; });
 	}
 
 	// set_effect_scale(world, entity_id, scale) -> sets roughnessFactor
 	void das_set_effect_scale(aether::World* w, uint32_t id, float scale)
 	{
-		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
-		if (mc)
-		{
-			mc->material.roughnessFactor = scale;
-		}
+		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.roughnessFactor = scale; });
 	}
 
 	// set_effect_intensity(world, entity_id, intensity) -> sets occlusionStrength
 	void das_set_effect_intensity(aether::World* w, uint32_t id, float intensity)
 	{
-		auto mc = w->TryGet<aether::MaterialComponent>(aether::Entity{id});
-		if (mc)
-		{
-			mc->material.occlusionStrength = intensity;
-		}
+		MutateEffectMaterial(w, id, [&](aether::MaterialAsset& a) { a.occlusionStrength = intensity; });
 	}
 } // namespace
 

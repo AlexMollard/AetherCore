@@ -13,6 +13,8 @@
 #include "scene/World.hpp"
 #include "scene/TagSlots.hpp"
 #include "assets/AssetManager.hpp"
+#include "material/MaterialAsset.hpp"
+#include "material/MaterialSystem.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/DasHelpers.hpp"
@@ -398,21 +400,23 @@ namespace
 			return 0u;
 		}
 
-		// Register default material on first use.
-		if (!ctx.defaultMaterialRegistered && ctx.assets)
+		// Build the default primitive material on first use. Pure authoring data;
+		// the registry acquires (and dedups) a GPU slot at add_mesh time.
+		if (!ctx.defaultMaterialInitialized)
 		{
 			ctx.defaultMaterial = {};
 			ctx.defaultMaterial.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.f);
 			ctx.defaultMaterial.roughnessFactor = 0.6f;
 			ctx.defaultMaterial.metallicFactor = 0.0f;
-			ctx.assets->RegisterMaterial(ctx.defaultMaterial);
-			ctx.defaultMaterialRegistered = true;
+			// Primitive meshes carry meaningful vertex colours (rainbow cubes).
+			ctx.defaultMaterial.modulateVertexColor = true;
+			ctx.defaultMaterialInitialized = true;
 		}
 
 		SceneContext::CachedMesh entry;
 		entry.mesh = &ctx.primitives->Get(primType);
 		entry.pipeline = ctx.defaultPipeline;
-		entry.material = ctx.defaultMaterial;
+		entry.materialAsset = ctx.defaultMaterial;
 		ctx.meshCache.push_back(std::move(entry));
 		return static_cast<uint32_t>(ctx.meshCache.size() - 1u);
 	}
@@ -437,7 +441,39 @@ namespace
 		const aether::Entity e{entityId};
 		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = entry.pipeline});
 		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = entry.mesh});
-		w->EmplaceOrReplace<aether::MaterialComponent>(e, aether::MaterialComponent{.material = entry.material});
+		if (ctx.assets)
+		{
+			aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), entry.materialAsset);
+		}
+	}
+
+	// -- Material painting (phase-2 preview) ------------------------------------
+	// Minimal painting surface over the MaterialRegistry until the full das
+	// authoring API (create_material / set_material_*) lands in phase 2.
+	// Materials are immutable and content-addressed: entities painted with
+	// identical values share a single GPU material slot.
+
+	// set_material(world, entity_id, color, metallic, roughness)
+	// Painted materials are solid: the vertex-colour modulation flag stays off.
+	void das_set_material(aether::World* w, uint32_t id, das::float3 color, float metallic, float roughness)
+	{
+		auto& ctx = ActiveContext();
+		if (!ctx.assets)
+		{
+			return;
+		}
+		aether::MaterialAsset asset;
+		asset.baseColorFactor = glm::vec4(to_glm(color), 1.0f);
+		asset.metallicFactor = metallic;
+		asset.roughnessFactor = roughness;
+		aether::MaterialSystem::AssignMaterial(*w, aether::Entity{id}, ctx.assets->GetMaterialRegistry(), asset);
+	}
+
+	// set_material_color(world, entity_id, color) - paint with the default
+	// surface response (dielectric, roughness matching the primitive default).
+	void das_set_material_color(aether::World* w, uint32_t id, das::float3 color)
+	{
+		das_set_material(w, id, color, 0.0f, 0.6f);
 	}
 
 } // namespace
@@ -485,6 +521,10 @@ namespace aether::app::scripting
 			// Primitive mesh cache
 			Bind<das_create_mesh>(lib, "create_mesh", SE::modifyExternal);
 			Bind<das_add_mesh>(lib, "add_mesh", SE::modifyExternal);
+
+			// Material painting (phase-2 preview over the MaterialRegistry)
+			Bind<das_set_material>(lib, "set_material", SE::modifyExternal);
+			Bind<das_set_material_color>(lib, "set_material_color", SE::modifyExternal);
 
 			// Entity iteration
 			Bind<das_for_each_with_transform>(lib, "for_each_with_transform", SE::modifyExternal);

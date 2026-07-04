@@ -160,7 +160,7 @@ namespace aether::app
 			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
 			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
 
-			aether::Material plasmaMat{};
+			aether::MaterialAsset plasmaMat{};
 			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 			plasmaMat.emissiveFactor = glm::vec3(1.0f, 0.3f, 0.8f); // tint = pink
 			plasmaMat.metallicFactor = 0.5f;                        // speed
@@ -192,16 +192,8 @@ namespace aether::app
 		}
 		m_sceneCtx.scriptPath = m_scriptPath;
 
-		// Register a default white material for primitive meshes.
-		if (!m_sceneCtx.defaultMaterialRegistered)
-		{
-			m_sceneCtx.defaultMaterial = {};
-			m_sceneCtx.defaultMaterial.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.f);
-			m_sceneCtx.defaultMaterial.roughnessFactor = 0.6f;
-			m_sceneCtx.defaultMaterial.metallicFactor = 0.0f;
-			context.Get<AssetManager>().RegisterMaterial(m_sceneCtx.defaultMaterial);
-			m_sceneCtx.defaultMaterialRegistered = true;
-		}
+		// The default primitive material is built lazily by create_mesh and
+		// acquired through the MaterialRegistry per entity - nothing to register.
 
 		m_handle = m_scripting->Compile(m_scriptPath);
 		if (!m_handle.IsValid())
@@ -226,14 +218,10 @@ namespace aether::app
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
 
-		m_effectManager.DestroyAll(context.Get<AssetManager>());
+		m_effectManager.DestroyAll();
 
-		if (m_sceneCtx.defaultMaterialRegistered)
-		{
-			context.Get<AssetManager>().UnregisterMaterial(m_sceneCtx.defaultMaterial);
-			m_sceneCtx.defaultMaterialRegistered = false;
-			m_sceneCtx.defaultMaterial = {};
-		}
+		m_sceneCtx.defaultMaterialInitialized = false;
+		m_sceneCtx.defaultMaterial = {};
 		m_sceneCtx.meshCache.clear();
 
 		m_scripting->FreeHandle(m_handle);

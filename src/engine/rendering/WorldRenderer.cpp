@@ -2,7 +2,6 @@
 
 #include <algorithm>
 
-#include "material/Material.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -44,10 +43,10 @@ namespace aether
 				continue;
 			}
 
-			std::uint32_t materialIndex = Material::kNoTexture;
+			std::uint32_t materialIndex = 0xFFFFFFFFu;
 			if (const auto material = world.GetRegistry().try_get<MaterialComponent>(enttEntity))
 			{
-				materialIndex = material->material.materialSlot;
+				materialIndex = material->gpuSlot;
 			}
 
 			std::int32_t skinIndex = -1;

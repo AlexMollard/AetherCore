@@ -30,6 +30,7 @@
 #include "imgui/ImguiSubsystem.hpp"
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
+#include "material/MaterialRegistry.hpp"
 #include "platform/PlatformSubsystem.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/RenderFramePacket.hpp"
@@ -93,6 +94,7 @@ namespace aether
 		m_services.Register<MeshArena>(assetsSub.GetMeshArena());
 		m_services.Register<MeshUploadQueue>(assetsSub.GetMeshUploadQueue());
 		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
+		m_services.Register<MaterialRegistry>(assetsSub.GetMaterialRegistry());
 		m_services.Register<AssetSubsystem>(assetsSub);
 
 		// -- 5. Cameras ------------------------------------------------------

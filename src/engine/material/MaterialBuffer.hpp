@@ -8,6 +8,7 @@
 #include "gpu/ResourceRegistry.hpp"
 
 #include "material/GpuMaterial.hpp"
+#include "material/IMaterialSlotSink.hpp"
 
 namespace aether
 {
@@ -19,7 +20,7 @@ namespace aether
 	// destruction ring. CPU writes go through ResolveMappedBuffer().mappedPtr;
 	// GPU addresses through ResolveBuffer().deviceAddress. No raw VkBuffer
 	// is held, no UniqueBuffer member, no engine-side vk* token.
-	class MaterialBuffer
+	class MaterialBuffer final : public IMaterialSlotSink
 	{
 	public:
 		static constexpr std::uint32_t kMaxMaterials = 4096;
@@ -39,11 +40,16 @@ namespace aether
 			return m_handle.IsValid();
 		}
 
-		[[nodiscard]] std::uint32_t AllocateSlot();
+		[[nodiscard]] std::uint32_t AllocateSlot() override;
 
-		void FreeSlot(std::uint32_t slot);
+		void FreeSlot(std::uint32_t slot) override;
 
-		void Write(std::uint32_t slot, const GpuMaterial& material);
+		void Write(std::uint32_t slot, const GpuMaterial& material) override;
+
+		[[nodiscard]] std::uint32_t Capacity() const override
+		{
+			return kMaxMaterials;
+		}
 
 		[[nodiscard]] gpu::DeviceAddress GetDeviceAddress() const
 		{

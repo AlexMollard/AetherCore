@@ -62,8 +62,15 @@ float4 fragmentMain(VSOutput input) : SV_Target0
     {
         baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv);
     }
-    // Apply optional vertex color tint, but ignore clearly invalid all-zero streams.
-    float3 vertexColor = hasMaterial ? float3(1.0, 1.0, 1.0) : input.vertexColor;
+    // Vertex color modulates base color only when the material opts in
+    // (primitive meshes with meaningful vertex colors). Painted materials
+    // clear the flag; material-less draws keep the legacy fallback.
+    // Clearly invalid all-zero/out-of-range streams are ignored.
+    float3 vertexColor = float3(1.0, 1.0, 1.0);
+    if (!hasMaterial || (mat.flags & kFlagModulateVertexColor) != 0u)
+    {
+        vertexColor = input.vertexColor;
+    }
     if (any(vertexColor < 0.0) || any(vertexColor > 1.0) || dot(vertexColor, vertexColor) < 0.0025)
     {
         vertexColor = float3(1.0, 1.0, 1.0);

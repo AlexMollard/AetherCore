@@ -45,5 +45,11 @@ add_subdirectory(tools/scripts)
 add_subdirectory(src/engine)
 add_subdirectory(src/app)
 
+option(AETHERCORE_BUILD_TESTS "Build the engine unit test target" ON)
+if(AETHERCORE_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
 # App is the thing you actually run - make it the default F5 target.
 set_property(DIRECTORY PROPERTY VS_STARTUP_PROJECT App)

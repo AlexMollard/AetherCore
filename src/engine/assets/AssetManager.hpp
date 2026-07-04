@@ -13,7 +13,8 @@
 
 namespace aether
 {
-	struct Material;
+	struct MaterialAsset;
+	class MaterialRegistry;
 	class VulkanContext;
 
 	namespace assets
@@ -21,7 +22,6 @@ namespace aether
 		struct GltfAsset;
 	}
 	class BindlessManager;
-	class MaterialBuffer;
 	class RenderQueue;
 	class ShadowService;
 	class RenderTargetService;
@@ -52,13 +52,10 @@ namespace aether
 		// Pipeline creation.
 		[[nodiscard]] Expected<GraphicsPipeline> CreateGraphicsPipeline(const GraphicsPipeline::Desc& desc);
 
-		// Material management.
-		void RegisterMaterial(Material& mat);
-		void UnregisterMaterial(Material& mat);
-
 		// Load a material preset file and keep referenced textures alive in
-		// outTextures. The returned material is already registered on GPU.
-		[[nodiscard]] Expected<Material> LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
+		// outTextures. Returns pure authoring data; callers acquire a GPU slot
+		// through the MaterialRegistry (e.g. MaterialSystem::AssignMaterial).
+		[[nodiscard]] Expected<MaterialAsset> LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures);
 
 		// Model loading and spawning.
 		[[nodiscard]] Expected<LoadedModel> LoadModel(std::string_view path);
@@ -70,7 +67,12 @@ namespace aether
 		[[nodiscard]] std::vector<Entity> SpawnModel(LoadedModel& model, GraphicsPipeline& pipeline, std::uint32_t parentEntityId = 0, float scale = 1.0f);
 
 		// Bind runtime dependencies once during engine startup.
-		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, gpu::UploadContext& uploadContext);
+		void Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialRegistry& materialRegistry, World& world, gpu::UploadContext& uploadContext);
+
+		[[nodiscard]] MaterialRegistry& GetMaterialRegistry()
+		{
+			return *m_materialRegistry;
+		}
 
 		// Shared finalisation step for both synchronous and async model loading.
 		void FinaliseModelLoad(LoadedModel& loaded, const assets::GltfAsset& source, const std::vector<std::uint32_t>& imageSlots, std::string_view path);
@@ -94,7 +96,7 @@ namespace aether
 	private:
 		VulkanContext* m_context = nullptr;
 		BindlessManager* m_bindlessManager = nullptr;
-		MaterialBuffer* m_materialBuffer = nullptr;
+		MaterialRegistry* m_materialRegistry = nullptr;
 		RenderQueue* m_renderQueue = nullptr;
 		ShadowService* m_shadowService = nullptr;
 		RenderTargetService* m_renderTargetService = nullptr;

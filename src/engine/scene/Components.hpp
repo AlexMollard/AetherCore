@@ -6,7 +6,7 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
-#include "material/Material.hpp"
+#include "material/MaterialHandle.hpp"
 
 namespace aether
 {
@@ -28,10 +28,13 @@ namespace aether
 		const Mesh* mesh = nullptr;
 	};
 
-	// Surface shading properties (textures, tint, ...).
+	// Reference to a registry material + the cached GPU slot for the render loop.
+	// The handle is authoritative for lifetime; gpuSlot is refreshed on assignment
+	// (MaterialSystem::AssignMaterial). Default-constructed = "no material".
 	struct MaterialComponent
 	{
-		Material material{};
+		MaterialHandle handle{};
+		std::uint32_t gpuSlot = 0xFFFFFFFFu;
 	};
 
 	// Pipeline (shader + raster state) used to draw the entity.

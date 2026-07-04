@@ -13,8 +13,9 @@
 #include "io/FileGlobOptions.hpp"
 #include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
-#include "material/Material.hpp"
-#include "material/MaterialBuffer.hpp"
+#include "material/MaterialAsset.hpp"
+#include "material/MaterialRegistry.hpp"
+#include "material/MaterialSystem.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
@@ -30,7 +31,7 @@ namespace aether
 	{
 		struct MaterialPresetSpec
 		{
-			Material material{};
+			MaterialAsset material{};
 			std::string albedoPath;
 			std::string normalPath;
 			std::string metallicRoughnessPath; // glTF ORM: G=roughness, B=metallic
@@ -260,14 +261,15 @@ namespace aether
 		}
 	} // namespace
 
-	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialBuffer& materialBuffer, World& world, gpu::UploadContext& uploadContext)
+	void AssetManager::Initialize(VulkanContext& context, BindlessManager& bindlessManager, MaterialRegistry& materialRegistry, World& world, gpu::UploadContext& uploadContext)
 	{
 		AE_PROFILE_ZONE();
 		m_context = &context;
 		m_bindlessManager = &bindlessManager;
-		m_materialBuffer = &materialBuffer;
+		m_materialRegistry = &materialRegistry;
 		m_world = &world;
 		m_uploadContext = &uploadContext;
+		MaterialSystem::ConnectLifecycle(world, materialRegistry);
 	}
 
 	Mesh AssetManager::CreateMesh(std::span<const Mesh::Vertex> vertices)
@@ -308,63 +310,7 @@ namespace aether
 		return GraphicsPipeline::Create(m_context->GetDevice().device, desc);
 	}
 
-	void AssetManager::RegisterMaterial(Material& mat)
-	{
-		if (mat.materialSlot != Material::kNoTexture)
-		{
-			GpuMaterial gpu{};
-			gpu.baseColorFactor = mat.baseColorFactor;
-			gpu.metallicFactor = mat.metallicFactor;
-			gpu.roughnessFactor = mat.roughnessFactor;
-			gpu.occlusionStrength = mat.occlusionStrength;
-			gpu.alphaCutoff = mat.alphaCutoff;
-			gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
-			gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u) | (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u) | (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
-			gpu.albedoSlot = mat.albedoSlot;
-			gpu.normalSlot = mat.normalSlot;
-			gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
-			gpu.occlusionSlot = mat.occlusionSlot;
-			gpu.emissiveSlot = mat.emissiveSlot;
-			m_materialBuffer->Write(mat.materialSlot, gpu);
-			return;
-		}
-
-		const std::uint32_t slot = m_materialBuffer->AllocateSlot();
-		if (slot == MaterialBuffer::kInvalidSlot)
-		{
-			AE_WARN(LogCategory::Engine, "RegisterMaterial: MaterialBuffer is full - material will render as default.");
-			return;
-		}
-
-		GpuMaterial gpu{};
-		gpu.baseColorFactor = mat.baseColorFactor;
-		gpu.metallicFactor = mat.metallicFactor;
-		gpu.roughnessFactor = mat.roughnessFactor;
-		gpu.occlusionStrength = mat.occlusionStrength;
-		gpu.alphaCutoff = mat.alphaCutoff;
-		gpu.emissiveFactor = glm::vec4(mat.emissiveFactor, 0.0f);
-		gpu.flags = (mat.doubleSided ? GpuMaterial::kDoubleSided : 0u) | (mat.alphaBlend ? GpuMaterial::kAlphaBlend : 0u) | (mat.alphaMask ? GpuMaterial::kAlphaMask : 0u);
-		gpu.albedoSlot = mat.albedoSlot;
-		gpu.normalSlot = mat.normalSlot;
-		gpu.metallicRoughnessSlot = mat.metallicRoughnessSlot;
-		gpu.occlusionSlot = mat.occlusionSlot;
-		gpu.emissiveSlot = mat.emissiveSlot;
-
-		m_materialBuffer->Write(slot, gpu);
-		mat.materialSlot = slot;
-	}
-
-	void AssetManager::UnregisterMaterial(Material& mat)
-	{
-		if (mat.materialSlot == Material::kNoTexture)
-		{
-			return;
-		}
-		m_materialBuffer->FreeSlot(mat.materialSlot);
-		mat.materialSlot = Material::kNoTexture;
-	}
-
-	Expected<Material> AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
+	Expected<MaterialAsset> AssetManager::LoadMaterialPreset(std::string_view path, std::vector<Texture>& outTextures)
 	{
 		AE_PROFILE_ZONE();
 		const std::string requestedPath = NormalizeVirtualFolder(std::string(path));
@@ -394,7 +340,7 @@ namespace aether
 				auto hdr = reader.Read<MaterialHeaderDisk>();
 				if (CheckMagic(hdr))
 				{
-					Material material;
+					MaterialAsset material;
 					material.baseColorFactor = glm::vec4(hdr.baseColorFactor[0], hdr.baseColorFactor[1], hdr.baseColorFactor[2], hdr.baseColorFactor[3]);
 					material.metallicFactor = hdr.metallicFactor;
 					material.roughnessFactor = hdr.roughnessFactor;
@@ -430,12 +376,12 @@ namespace aether
 						{
 							if (!io::FileSystem::Exists(texPath))
 							{
-								return Material::kNoTexture;
+								return MaterialAsset::kNoTexture;
 							}
 							auto texResult = CreateTexture(texPath);
 							if (!texResult.has_value())
 							{
-								return Material::kNoTexture;
+								return MaterialAsset::kNoTexture;
 							}
 							const std::uint32_t slot = texResult->GetBindlessSlot();
 							outTextures.push_back(std::move(*texResult));
@@ -463,7 +409,6 @@ namespace aether
 						}
 					}
 
-					RegisterMaterial(material);
 					AE_INFO(LogCategory::Engine, "Loaded binary material '{}'.", requestedPath);
 					return material;
 				}
@@ -473,13 +418,13 @@ namespace aether
 		// TOML fallback.
 		AE_TRY(text, ReadTextFile(presetPath));
 		const MaterialPresetSpec spec = ParseMaterialPreset(presetPath, *text);
-		Material material = spec.material;
+		MaterialAsset material = spec.material;
 
 		auto loadTextureSlot = [this, &outTextures](std::string_view texturePath) -> Expected<std::uint32_t>
 		{
 			if (texturePath.empty())
 			{
-				return Material::kNoTexture;
+				return MaterialAsset::kNoTexture;
 			}
 
 			// If the original path doesn't exist, try the pre-transcoded .texture sibling.
@@ -501,7 +446,7 @@ namespace aether
 			if (!io::FileSystem::Exists(resolvedPath))
 			{
 				AE_WARN(LogCategory::Engine, "LoadMaterialPreset: texture missing '{}'.", texturePath);
-				return Material::kNoTexture;
+				return MaterialAsset::kNoTexture;
 			}
 
 			AE_TRY(tex, CreateTexture(resolvedPath));
@@ -541,15 +486,14 @@ namespace aether
 		AE_TRY(emissiveSlot, loadTextureSlot(emissivePath));
 		material.emissiveSlot = *emissiveSlot;
 
-		RegisterMaterial(material);
 		AE_INFO(LogCategory::Engine,
 		        "Loaded material preset '{}' (albedo={}, normal={}, metallicRoughness={}, occlusion={}, emissive={}).",
 		        requestedPath,
-		        material.albedoSlot != Material::kNoTexture ? "yes" : "no",
-		        material.normalSlot != Material::kNoTexture ? "yes" : "no",
-		        material.metallicRoughnessSlot != Material::kNoTexture ? "yes" : "no",
-		        material.occlusionSlot != Material::kNoTexture ? "yes" : "no",
-		        material.emissiveSlot != Material::kNoTexture ? "yes" : "no");
+		        material.albedoSlot != MaterialAsset::kNoTexture ? "yes" : "no",
+		        material.normalSlot != MaterialAsset::kNoTexture ? "yes" : "no",
+		        material.metallicRoughnessSlot != MaterialAsset::kNoTexture ? "yes" : "no",
+		        material.occlusionSlot != MaterialAsset::kNoTexture ? "yes" : "no",
+		        material.emissiveSlot != MaterialAsset::kNoTexture ? "yes" : "no");
 
 		return material;
 	}
@@ -640,7 +584,7 @@ namespace aether
 		{
 			if (texturePath.empty())
 			{
-				return Material::kNoTexture;
+				return MaterialAsset::kNoTexture;
 			}
 
 			std::string resolvedPath(texturePath);
@@ -663,14 +607,14 @@ namespace aether
 			if (!io::FileSystem::Exists(resolvedPath))
 			{
 				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture missing '{}'.", texturePath);
-				return Material::kNoTexture;
+				return MaterialAsset::kNoTexture;
 			}
 
 			auto texResult = CreateTexture(resolvedPath);
 			if (!texResult.has_value())
 			{
 				AE_WARN(LogCategory::Engine, "FinaliseModelLoad: texture load failed '{}'.", resolvedPath);
-				return Material::kNoTexture;
+				return MaterialAsset::kNoTexture;
 			}
 
 			AE_VERBOSE(LogCategory::Engine, "    Texture loaded: {} (slot={})", resolvedPath, texResult->GetBindlessSlot());
@@ -702,7 +646,8 @@ namespace aether
 			if (primitive.materialIndex >= 0 && static_cast<std::size_t>(primitive.materialIndex) < source.materials.size())
 			{
 				const assets::GltfMaterial& srcMat = source.materials[static_cast<std::size_t>(primitive.materialIndex)];
-				Material& mat = loadedPrim.material;
+				MaterialAsset& mat = loadedPrim.material;
+				loadedPrim.hasMaterial = true;
 
 				AE_VERBOSE(LogCategory::Engine, "  Material '{}': albedo='{}', normal='{}', orm='{}'", srcMat.name, srcMat.albedoPath, srcMat.normalPath, srcMat.metallicRoughnessPath);
 
@@ -731,12 +676,12 @@ namespace aether
 					{
 						if (texIdx < 0 || static_cast<std::size_t>(texIdx) >= source.textures.size())
 						{
-							return Material::kNoTexture;
+							return MaterialAsset::kNoTexture;
 						}
 						const assets::GltfTexture& tex = source.textures[static_cast<std::size_t>(texIdx)];
 						if (tex.imageIndex < 0 || static_cast<std::size_t>(tex.imageIndex) >= imageSlots.size())
 						{
-							return Material::kNoTexture;
+							return MaterialAsset::kNoTexture;
 						}
 						return imageSlots[static_cast<std::size_t>(tex.imageIndex)];
 					};
@@ -749,8 +694,6 @@ namespace aether
 				}
 
 				AE_VERBOSE(LogCategory::Engine, "  Material slots: albedo={}, normal={}, orm={}, occlusion={}, emissive={}", mat.albedoSlot, mat.normalSlot, mat.metallicRoughnessSlot, mat.occlusionSlot, mat.emissiveSlot);
-
-				RegisterMaterial(mat);
 			}
 			else
 			{
@@ -798,7 +741,8 @@ namespace aether
 
 		for (const LoadedModelPrimitive& primitive: model.primitives)
 		{
-			const Entity entity = aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, primitive.material, scaleMat * primitive.localTransform);
+			const Entity entity = primitive.hasMaterial ? aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, *m_materialRegistry, primitive.material, scaleMat * primitive.localTransform)
+			                                            : aether::ecs::SpawnMesh(*m_world, pipeline, primitive.mesh, scaleMat * primitive.localTransform);
 
 			if (parentEntityId != 0)
 			{

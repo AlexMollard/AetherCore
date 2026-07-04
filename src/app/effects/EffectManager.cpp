@@ -5,7 +5,7 @@
 
 namespace aether::app::effects
 {
-	void EffectManager::Register(const char* name, aether::GraphicsPipeline pipeline, const aether::Material& material)
+	void EffectManager::Register(const char* name, aether::GraphicsPipeline pipeline, const aether::MaterialAsset& material)
 	{
 		AE_PROFILE_ZONE();
 		EffectData data;
@@ -15,7 +15,7 @@ namespace aether::app::effects
 	}
 
 	bool EffectManager::CreateAndRegister(
-	        const char* name, aether::AssetManager& assets, const void* descriptorHeapMappings, aether::gpu::Format colorFormat, aether::gpu::Format depthFormat, const char* shaderVfsPath, const aether::Material& material)
+	        const char* name, aether::AssetManager& assets, const void* descriptorHeapMappings, aether::gpu::Format colorFormat, aether::gpu::Format depthFormat, const char* shaderVfsPath, const aether::MaterialAsset& material)
 	{
 		AE_PROFILE_ZONE();
 		auto result = assets.CreateGraphicsPipeline({
@@ -33,11 +33,7 @@ namespace aether::app::effects
 			return false;
 		}
 
-		// Make a copy we can register; the caller can keep theirs for further use.
-		aether::Material matCopy = material;
-		assets.RegisterMaterial(matCopy);
-
-		Register(name, std::move(result.value()), matCopy);
+		Register(name, std::move(result.value()), material);
 		return true;
 	}
 
@@ -47,12 +43,11 @@ namespace aether::app::effects
 		return it != m_effects.end() ? &it->second : nullptr;
 	}
 
-	void EffectManager::DestroyAll(aether::AssetManager& assets)
+	void EffectManager::DestroyAll()
 	{
 		AE_PROFILE_ZONE();
 		for (auto& [name, data]: m_effects)
 		{
-			assets.UnregisterMaterial(data.material);
 			data.pipeline.Destroy();
 		}
 		m_effects.clear();

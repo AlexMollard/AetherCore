@@ -2,6 +2,8 @@
 
 #include <stdexcept>
 
+#include "material/MaterialAsset.hpp"
+#include "material/MaterialSystem.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "gpu/BindlessManager.hpp"
@@ -32,6 +34,13 @@ namespace aether
 		m_uploadContext = gpu::UploadContext::Create(static_cast<void*>(vk.GetDevice().device), vk.GetGraphicsQueueFamily(), static_cast<void*>(vk.GetGraphicsQueue()), static_cast<void*>(&registry));
 
 		m_materialBuffer.Initialize();
+
+		MaterialAsset defaultAsset;
+		defaultAsset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.0f);
+		defaultAsset.roughnessFactor = 0.6f;
+		defaultAsset.metallicFactor = 0.0f;
+		m_materialRegistry.InitializeDefault(defaultAsset);
+
 		m_meshArena.Initialize(vk, {});
 
 		// Wire GPU memory tracking to the arena's GpuHeap instances so
@@ -44,7 +53,8 @@ namespace aether
 
 		m_meshUploadQueue.Initialize();
 		m_primitiveMeshes.Initialize(m_uploadContext);
-		m_assetManager.Initialize(vk, bindless, m_materialBuffer, world, m_uploadContext);
+		m_world = &world;
+		m_assetManager.Initialize(vk, bindless, m_materialRegistry, world, m_uploadContext);
 	}
 
 	void AssetSubsystem::LinkRenderingDeps(ServiceContainer& services)
@@ -83,6 +93,13 @@ namespace aether
 	void AssetSubsystem::Shutdown()
 	{
 		AE_PROFILE_ZONE();
+		// The world may outlive this subsystem; make sure late component teardown
+		// cannot release handles into a destroyed registry.
+		if (m_world != nullptr)
+		{
+			MaterialSystem::DisconnectLifecycle(*m_world);
+			m_world = nullptr;
+		}
 		m_assetManager = AssetManager{};
 		m_primitiveMeshes.Destroy();
 		m_meshUploadQueue.Shutdown();
