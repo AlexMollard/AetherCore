@@ -49,6 +49,12 @@ namespace aether
 				materialIndex = material->gpuSlot;
 			}
 
+			std::uint32_t effectParamIndex = 0xFFFFFFFFu;
+			if (const auto fx = world.GetRegistry().try_get<EffectParamsComponent>(enttEntity))
+			{
+				effectParamIndex = fx->paramSlot;
+			}
+
 			std::int32_t skinIndex = -1;
 			std::uint32_t skinJointCount = 0;
 			std::uint32_t animClipIndex = 0;
@@ -80,6 +86,7 @@ namespace aether
 			        .mesh = meshComp.mesh,
 			        .modelMatrix = transformComp.localToWorld,
 			        .materialIndex = materialIndex,
+			        .effectParamIndex = effectParamIndex,
 			        .skinIndex = skinIndex,
 			        .skinJointCount = skinJointCount,
 			        .animClipIndex = animClipIndex,

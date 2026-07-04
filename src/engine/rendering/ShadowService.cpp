@@ -330,6 +330,7 @@ namespace aether
 			shadowFc.viewProj = shadowFc.proj * shadowFc.view;
 			shadowFc.cameraWorldPos = glm::vec4(lightEye, 1.0f);
 			shadowFc.materialBufferAddr = packet.materialBufferAddr;
+			shadowFc.effectParamBufferAddr = packet.effectParamBufferAddr;
 			shadowFc.sunDirectionIntensity = packet.sunDirectionIntensity;
 			shadowFc.ambientColor = packet.ambientColor;
 			shadowFc.sunColor = packet.sunColor;

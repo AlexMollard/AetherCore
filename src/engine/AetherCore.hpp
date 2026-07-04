@@ -77,6 +77,7 @@ namespace aether
 		{
 			m_framePacer.SetTargetFps(fps);
 		}
+
 		[[nodiscard]] float GetTargetFps() const
 		{
 			return m_framePacer.GetTargetFps();

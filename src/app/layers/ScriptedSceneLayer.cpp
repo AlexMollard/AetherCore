@@ -7,6 +7,7 @@
 #include "IEngineRuntime.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
+#include "material/MaterialAuthoring.hpp"
 #include "camera/CameraManager.hpp"
 #include "effects/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
@@ -43,29 +44,6 @@ namespace aether::app
 
 	// -- Helpers ---------------------------------------------------------------
 
-	void ScriptedSceneLayer::BuildDefaultPipeline(LayerContext& context)
-	{
-		AE_PROFILE_ZONE();
-		auto& assets = context.Get<AssetManager>();
-
-		auto result = assets.CreateGraphicsPipeline({
-		        .shaderVfsPath = "shaders://gltf_mesh.spv",
-		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
-		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
-		        .depthTestEnable = true,
-		        .depthWriteEnable = true,
-		        .depthCompareOp = gpu::CompareOp::LessOrEqual,
-		        .descriptorHeapMappings = context.Get<BindlessManager>().GetDescriptorHeapMappings(),
-		});
-
-		if (!result)
-		{
-			AE_ERROR(LogCategory::App, "ScriptedSceneLayer: failed to create default pipeline");
-			return;
-		}
-		m_defaultPipeline = std::move(result.value());
-	}
-
 	void ScriptedSceneLayer::DestroySceneEntities(LayerContext& context)
 	{
 		auto& world = context.Get<World>();
@@ -74,9 +52,23 @@ namespace aether::app
 			world.Destroy(e);
 		}
 		m_sceneCtx.sceneEntities.clear();
+		// Release each cached model's loader-held texture refs before dropping the
+		// models (spawned entities already released their material->texture refs on
+		// destruction above); the textures free once no ref remains.
+		{
+			auto& assets = context.Get<AssetManager>();
+			for (auto& model: m_sceneCtx.loadedModels)
+			{
+				assets.ReleaseModelTextures(model);
+			}
+		}
 		m_sceneCtx.loadedModels.clear();
 		m_sceneCtx.loadedModelMap.clear();
 		m_sceneCtx.meshCache.clear();
+
+		// Drop authored-material bookkeeping so reloads don't accumulate ids
+		// (entities' material handles were already released by their destruction).
+		context.Get<AssetManager>().GetMaterialAuthoring().ReleaseAll();
 
 		// Clear script-created lights so reload doesn't stack duplicates.
 		context.Get<Renderer>().ClearPointLights();
@@ -153,21 +145,38 @@ namespace aether::app
 			return;
 		}
 
-		BuildDefaultPipeline(context);
+		// Initialize the content-addressed pipeline cache with the frame-graph-
+		// constant formats + bindless heap mappings (replaces the old default
+		// pipeline; every entity's pipeline now resolves through the cache).
+		context.Get<aether::AssetSubsystem>().InitializePipelineCache({
+		        .colorFormat = aether::PostProcessStack::GetForwardColorFormat(),
+		        .depthFormat = context.Get<Swapchain>().GetDepthFormat(),
+		        .descriptorHeapMappings = context.Get<BindlessManager>().GetDescriptorHeapMappings(),
+		});
 
-		// Register effects so script can use set_entity_effect().
+		// Register effects so script can use set_entity_effect(). The pipeline is
+		// resolved lazily by PipelineCache; the manager only holds the template +
+		// default params. Parity defaults copied from the old plasmaMat.
 		{
-			const auto colorFormat = aether::PostProcessStack::GetForwardColorFormat();
-			const auto depthFormat = context.Get<Swapchain>().GetDepthFormat();
+			aether::app::effects::EffectDef plasma;
+			plasma.templateDesc.shaderVfsPath = "shaders://plasma.spv";
+			plasma.templateDesc.depthWriteEnable = true;
+			plasma.defaultParams.tint = glm::vec4(1.0f, 0.3f, 0.8f, 1.0f); // pink
+			plasma.defaultParams.speed = 0.5f;
+			plasma.defaultParams.scale = 2.0f;
+			plasma.defaultParams.intensity = 0.8f;
+			m_effectManager.Register("plasma", plasma);
 
-			aether::MaterialAsset plasmaMat{};
-			plasmaMat.baseColorFactor = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
-			plasmaMat.emissiveFactor = glm::vec3(1.0f, 0.3f, 0.8f); // tint = pink
-			plasmaMat.metallicFactor = 0.5f;                        // speed
-			plasmaMat.roughnessFactor = 2.0f;                       // scale
-			plasmaMat.occlusionStrength = 0.8f;                     // intensity
-
-			m_effectManager.CreateAndRegister("plasma", context.Get<AssetManager>(), context.Get<BindlessManager>().GetDescriptorHeapMappings(), colorFormat, depthFormat, "shaders://plasma.spv", plasmaMat);
+			// Molten: a dark obsidian crust broken by flowing white-hot veins - a
+			// visual counterpoint to plasma over the same per-entity EffectParams.
+			aether::app::effects::EffectDef molten;
+			molten.templateDesc.shaderVfsPath = "shaders://molten.spv";
+			molten.templateDesc.depthWriteEnable = true;
+			molten.defaultParams.tint = glm::vec4(1.0f, 0.35f, 0.05f, 1.0f); // ember orange
+			molten.defaultParams.speed = 1.0f;
+			molten.defaultParams.scale = 1.6f;
+			molten.defaultParams.intensity = 1.2f;
+			m_effectManager.Register("molten", molten);
 		}
 
 		m_sceneCtx.world = &context.Get<World>();
@@ -184,7 +193,6 @@ namespace aether::app
 		{
 			m_sceneCtx.dayNight = dn;
 		}
-		m_sceneCtx.defaultPipeline = &m_defaultPipeline;
 		m_sceneCtx.primitives = &context.Get<PrimitiveMeshes>();
 		if (auto physSys = context.Get<World>().FindSystem("PhysicsSystem"))
 		{
@@ -218,7 +226,8 @@ namespace aether::app
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
 
-		m_effectManager.DestroyAll();
+		// Effects no longer own GPU pipelines (PipelineCache does, torn down in
+		// AssetSubsystem::Shutdown), so there is nothing to destroy here.
 
 		m_sceneCtx.defaultMaterialInitialized = false;
 		m_sceneCtx.defaultMaterial = {};

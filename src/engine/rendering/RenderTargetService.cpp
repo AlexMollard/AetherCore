@@ -9,6 +9,7 @@
 #include "passes/CullPass.hpp"
 #include "rendering/LightingManager.hpp"
 #include "material/MaterialBuffer.hpp"
+#include "material/EffectParamBuffer.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/WorldRenderer.hpp"
 #include "utils/Assert.hpp"
@@ -62,6 +63,7 @@ namespace aether
 		m_lightingManager = frame.lighting;
 		m_renderer = frame.renderer;
 		m_materialBuffer = frame.materials;
+		m_effectParamBuffer = frame.effectParams;
 		m_cullPass = frame.cullPass;
 		m_getFrameIndex = frame.frameIndex;
 		m_device = static_cast<gpu::Device>(m_context->GetDevice().device);
@@ -280,6 +282,7 @@ namespace aether
 			                fc.viewProj = fc.proj * fc.view;
 			                fc.cameraWorldPos = glm::vec4(cam->GetPosition(), 1.0f);
 			                fc.materialBufferAddr = m_materialBuffer->GetDeviceAddressU64();
+			                fc.effectParamBufferAddr = (m_effectParamBuffer != nullptr) ? m_effectParamBuffer->GetDeviceAddressU64() : 0;
 			                fc.sunDirectionIntensity = m_renderer->GetDirectionalLightVector();
 			                fc.ambientColor = m_renderer->GetAmbientLightVector();
 			                fc.sunColor = m_renderer->GetSunColorVector();

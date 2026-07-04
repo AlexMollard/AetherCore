@@ -83,6 +83,7 @@ VSOutput vertexMain(uint vertexId : SV_VertexID, uint startInstance : SV_StartIn
     o.uv2         = input.uv2;
     o.vertexColor = input.color;
     o.materialIndex = instance.materialIndex;
+    o.effectParamIndex = instance.effectParamIndex;
     return o;
 }
 

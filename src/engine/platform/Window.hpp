@@ -38,6 +38,7 @@ namespace aether
 		{
 			return m_framebufferResized.load(std::memory_order_acquire);
 		}
+
 		[[nodiscard]] bool ConsumeFramebufferResized()
 		{
 			return m_framebufferResized.exchange(false, std::memory_order_acq_rel);

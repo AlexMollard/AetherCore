@@ -17,7 +17,7 @@ struct DrawInstanceData
     [[vk::offset(64)]] uint     materialIndex;
     [[vk::offset(68)]] uint     skinPaletteOffset;
     [[vk::offset(72)]] uint     skinJointCount;
-    [[vk::offset(76)]] uint     _pad0;
+    [[vk::offset(76)]] uint     effectParamIndex; // per-entity EffectParams slot; 0xFFFFFFFF = no effect
     [[vk::offset(80)]] float4   worldBoundingSphere;
     [[vk::offset(96)]] uint64_t vertexBufferAddr; // BDA of the vertex data for this draw
 };

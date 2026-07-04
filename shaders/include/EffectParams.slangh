@@ -1,0 +1,15 @@
+#ifndef AETHER_EFFECT_PARAMS_SLANGH
+#define AETHER_EFFECT_PARAMS_SLANGH
+
+// Must stay binary-compatible with aether::EffectParams (32 bytes).
+
+struct EffectParams
+{
+    [[vk::offset(0)]]  float4 tint;
+    [[vk::offset(16)]] float  speed;
+    [[vk::offset(20)]] float  scale;
+    [[vk::offset(24)]] float  intensity;
+    [[vk::offset(28)]] uint   _pad;
+};
+
+#endif

@@ -5,15 +5,15 @@
 namespace aether::app
 {
 
-class TonemapPanel final : public DebugPanel
-{
-public:
-	std::string_view GetName() const override
+	class TonemapPanel final : public DebugPanel
 	{
-		return "Tonemap";
-	}
+	public:
+		std::string_view GetName() const override
+		{
+			return "Tonemap";
+		}
 
-	void OnImGui(LayerContext& context) override;
-};
+		void OnImGui(LayerContext& context) override;
+	};
 
 } // namespace aether::app

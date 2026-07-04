@@ -21,6 +21,7 @@ namespace aether
 	class CullPass;
 	class LightingManager;
 	class MaterialBuffer;
+	class EffectParamBuffer;
 	class Renderer;
 	class VulkanContext;
 	class World;
@@ -73,6 +74,7 @@ namespace aether
 		LightingManager* m_lightingManager = nullptr;
 		Renderer* m_renderer = nullptr;
 		MaterialBuffer* m_materialBuffer = nullptr;
+		EffectParamBuffer* m_effectParamBuffer = nullptr;
 		const CullPass* m_cullPass = nullptr;
 		std::function<std::uint64_t()> m_getFrameIndex;
 		gpu::Device m_device = nullptr;

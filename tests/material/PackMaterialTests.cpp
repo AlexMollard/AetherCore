@@ -1,10 +1,15 @@
 #include <doctest/doctest.h>
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialPacking.hpp"
+#include "material/TextureRegistry.hpp"
+#include "FakeTextureSink.hpp"
 
 using namespace aether;
 
 TEST_CASE("PackMaterial copies PBR factors verbatim") {
+    FakeTextureSink texSink(8);
+    TextureRegistry tex(texSink);
+
     MaterialAsset a;
     a.baseColorFactor = {0.1f, 0.2f, 0.3f, 0.4f};
     a.metallicFactor = 0.6f;
@@ -13,7 +18,7 @@ TEST_CASE("PackMaterial copies PBR factors verbatim") {
     a.alphaCutoff = 0.25f;
     a.emissiveFactor = {1.0f, 0.5f, 0.0f};
 
-    GpuMaterial g = PackMaterial(a);
+    GpuMaterial g = PackMaterial(a, tex);
 
     CHECK(g.baseColorFactor.x == doctest::Approx(0.1f));
     CHECK(g.baseColorFactor.w == doctest::Approx(0.4f));
@@ -25,22 +30,48 @@ TEST_CASE("PackMaterial copies PBR factors verbatim") {
     CHECK(g.emissiveFactor.z == doctest::Approx(0.0f));
 }
 
-TEST_CASE("PackMaterial packs bools into flags and copies texture slots") {
+TEST_CASE("PackMaterial packs bools into flags") {
+    FakeTextureSink texSink(8);
+    TextureRegistry tex(texSink);
+
     MaterialAsset a;
     a.doubleSided = true;
     a.alphaMask = true;
     a.modulateVertexColor = true;
     a.alphaBlend = false;
-    a.albedoSlot = 5;
-    a.emissiveSlot = 9;
 
-    GpuMaterial g = PackMaterial(a);
+    GpuMaterial g = PackMaterial(a, tex);
 
     CHECK((g.flags & GpuMaterial::kDoubleSided) != 0u);
     CHECK((g.flags & GpuMaterial::kAlphaMask) != 0u);
     CHECK((g.flags & GpuMaterial::kModulateVertexColor) != 0u);
     CHECK((g.flags & GpuMaterial::kAlphaBlend) == 0u);
-    CHECK(g.albedoSlot == 5u);
-    CHECK(g.emissiveSlot == 9u);
-    CHECK(g.normalSlot == GpuMaterial::kNoTexture);
+}
+
+TEST_CASE("PackMaterial resolves handles to heap slots and freezes the 80-byte layout") {
+    FakeTextureSink texSink(8);
+    TextureRegistry tex(texSink);
+    static_assert(sizeof(GpuMaterial) == 80);
+
+    MaterialAsset a;
+    a.albedoTex = tex.Acquire("brick.png");
+    const std::uint32_t expected = tex.ResolveSlot(a.albedoTex);
+
+    GpuMaterial g = PackMaterial(a, tex);
+    CHECK(g.albedoSlot == expected);
+    CHECK(g.normalSlot == GpuMaterial::kNoTexture); // default-constructed handle -> skip sample
+}
+
+TEST_CASE("PackMaterial distinguishes a broken (requested-but-missing) map from an absent one") {
+    FakeTextureSink texSink(8);
+    TextureRegistry tex(texSink);
+    tex.InitializeDefault(TextureResource{99u}); // magenta fallback lives at slot 99
+
+    MaterialAsset a;
+    a.albedoTex = TextureHandle::Broken(); // texture requested, load failed
+    // normalTex left default-constructed = "no normal map requested"
+
+    GpuMaterial g = PackMaterial(a, tex);
+    CHECK(g.albedoSlot == 99u);                     // broken -> VISIBLE magenta default
+    CHECK(g.normalSlot == GpuMaterial::kNoTexture); // absent -> skip the sample (base response)
 }

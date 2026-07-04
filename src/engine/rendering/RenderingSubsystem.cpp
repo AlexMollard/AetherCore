@@ -15,6 +15,7 @@
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/GpuTypes.hpp"
 #include "material/MaterialBuffer.hpp"
+#include "material/EffectParamBuffer.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/VulkanContext.hpp"
 #include "vulkan/DiagnosticEngine.hpp"
@@ -154,6 +155,7 @@ namespace aether
 		auto& cameras = services.Get<CameraManager>();
 		auto& lighting = services.Get<LightingManager>();
 		auto& materials = services.Get<MaterialBuffer>();
+		auto& effectParams = services.Get<EffectParamBuffer>();
 		auto& gpu = services.Get<GpuDevice>();
 		m_bindlessManager = &bindless;
 
@@ -242,6 +244,7 @@ namespace aether
 		        .lighting = &lighting,
 		        .renderer = &m_renderer,
 		        .materials = &materials,
+		        .effectParams = &effectParams,
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),
@@ -431,6 +434,7 @@ namespace aether
 		        .lighting = &lightingManager,
 		        .renderer = &m_renderer,
 		        .materials = &services.Get<MaterialBuffer>(),
+		        .effectParams = &services.Get<EffectParamBuffer>(),
 		        .cullPass = &m_cullPass,
 		        .frameIndex = [this]() { return m_frameIndexProvider ? m_frameIndexProvider() : 0ULL; },
 		        .depthFormat = swapchain.GetDepthFormat(),

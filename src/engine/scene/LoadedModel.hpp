@@ -5,7 +5,6 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "material/MaterialAsset.hpp"
-#include "material/Texture.hpp"
 #include "mesh/Mesh.hpp"
 
 namespace aether
@@ -24,7 +23,6 @@ namespace aether
 
 	struct LoadedModel
 	{
-		std::vector<Texture> textures;
 		std::vector<LoadedModelPrimitive> primitives;
 		AnimationDatabase animationDb;
 	};

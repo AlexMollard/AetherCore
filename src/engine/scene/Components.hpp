@@ -6,6 +6,8 @@
 
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
+#include "material/EffectParams.hpp"
+#include "material/MaterialAsset.hpp"
 #include "material/MaterialHandle.hpp"
 
 namespace aether
@@ -35,6 +37,25 @@ namespace aether
 	{
 		MaterialHandle handle{};
 		std::uint32_t gpuSlot = 0xFFFFFFFFu;
+	};
+
+	// A per-entity editable material (copy-on-write over the immutable registry).
+	// Holds the authoring asset between edits; the typed setters in MaterialSystem
+	// mutate one field and re-acquire. Used by material instances and effects.
+	struct MaterialInstanceComponent
+	{
+		MaterialAsset asset{};
+	};
+
+	// Per-entity effect-parameter slot, independent of MaterialComponent.gpuSlot.
+	// Its presence also marks the entity as effect-driven for the effect-override
+	// rule in MaterialSystem::AssignMaterial. Freed via EffectSystem's on_destroy hook.
+	// `params` is the CPU-authoritative copy the effect setters read-modify-write
+	// (so a single-field edit does not clobber the others) before one buffer Write.
+	struct EffectParamsComponent
+	{
+		std::uint32_t paramSlot = 0xFFFFFFFFu;
+		EffectParams params{};
 	};
 
 	// Pipeline (shader + raster state) used to draw the entity.

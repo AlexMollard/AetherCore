@@ -46,7 +46,7 @@ namespace aether
 	//   offset 592 : vec4[6]  frustumPlanes           (96)  Normalized world-space cull planes (xyz=n, w=d)
 	//   offset 688 : mat4     invViewProj             (64)  Inverse view-projection for screen-space reconstruction
 	//   offset 752 : uint64   resourceTableAddr       ( 8)  BDA to ResourceEntry[kFrameResourceCount]
-	//   offset 760 : uint64   _padEnd                 ( 8)  End padding (16-byte alignment for SPIR-V)
+	//   offset 760 : uint64   effectParamBufferAddr   ( 8)  BDA of EffectParamBuffer (0 = no effects active)
 	//   Total: 768 bytes
 	struct FrameConstants
 	{
@@ -79,9 +79,9 @@ namespace aether
 		        glm::vec4(0.0f, 0.0f, 1.0f, 1.0f),
 		        glm::vec4(0.0f, 0.0f, -1.0f, 1.0f),
 		}; // offset 592
-		glm::mat4 invViewProj{1.0f};         // offset 688
-		std::uint64_t resourceTableAddr = 0; // offset 752
-		std::uint64_t _padEnd = 0;           // offset 760
+		glm::mat4 invViewProj{1.0f};             // offset 688
+		std::uint64_t resourceTableAddr = 0;     // offset 752
+		std::uint64_t effectParamBufferAddr = 0; // offset 760 : BDA of EffectParamBuffer (0 = no effects active)
 
 		void RefreshDerived()
 		{
@@ -132,6 +132,6 @@ namespace aether
 	static_assert(offsetof(FrameConstants, frustumPlanes) == 592);
 	static_assert(offsetof(FrameConstants, invViewProj) == 688);
 	static_assert(offsetof(FrameConstants, resourceTableAddr) == 752);
-	static_assert(offsetof(FrameConstants, _padEnd) == 760);
+	static_assert(offsetof(FrameConstants, effectParamBufferAddr) == 760);
 	static_assert(sizeof(FrameConstants) == 768);
 } // namespace aether

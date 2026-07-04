@@ -31,6 +31,7 @@
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
+#include "material/EffectParamBuffer.hpp"
 #include "platform/PlatformSubsystem.hpp"
 #include "rendering/FrameConstants.hpp"
 #include "rendering/RenderFramePacket.hpp"
@@ -94,6 +95,7 @@ namespace aether
 		m_services.Register<MeshArena>(assetsSub.GetMeshArena());
 		m_services.Register<MeshUploadQueue>(assetsSub.GetMeshUploadQueue());
 		m_services.Register<MaterialBuffer>(assetsSub.GetMaterialBuffer());
+		m_services.Register<EffectParamBuffer>(assetsSub.GetEffectParamBuffer());
 		m_services.Register<MaterialRegistry>(assetsSub.GetMaterialRegistry());
 		m_services.Register<AssetSubsystem>(assetsSub);
 
@@ -464,6 +466,7 @@ namespace aether
 		ShadowService& shadowService = m_rendering->GetShadowService();
 		LocalShadowService& localShadowService = m_rendering->GetLocalShadowService();
 		MaterialBuffer& materialBuffer = assetsSub.GetMaterialBuffer();
+		EffectParamBuffer& effectParamBuffer = assetsSub.GetEffectParamBuffer();
 		CameraManager& cameras = m_cameras->GetCameraManager();
 		Renderer& renderer = m_rendering->GetRenderer();
 
@@ -483,6 +486,7 @@ namespace aether
 		packet.drawSlot = drawSlot;
 		packet.renderExtent = extent;
 		packet.materialBufferAddr = materialBuffer.GetDeviceAddressU64();
+		packet.effectParamBufferAddr = effectParamBuffer.GetDeviceAddressU64();
 
 		if (const Camera* cam = cameras.TryGetMainCamera())
 		{
@@ -568,6 +572,7 @@ namespace aether
 			AE_PROFILE_FRAME;
 			++m_frameIndex;
 			m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
+			m_services.Get<AssetSubsystem>().AdvanceFrame(m_frameIndex);
 			m_gpu->AdvanceResourceRegistryFrame();
 			return;
 		}
@@ -682,6 +687,7 @@ namespace aether
 		AE_PROFILE_FRAME;
 		++m_frameIndex;
 		m_gpu->GetBindlessManager().AdvanceFrame(m_frameIndex);
+		m_services.Get<AssetSubsystem>().AdvanceFrame(m_frameIndex);
 		m_gpu->AdvanceResourceRegistryFrame();
 	}
 

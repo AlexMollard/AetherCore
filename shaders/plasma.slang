@@ -1,10 +1,7 @@
 // Animated spherical plasma ball shader.
 //
-// Reinterprets GpuMaterial fields for effect control:
-//   emissiveFactor.xyz = tint (color modulation)
-//   roughnessFactor     = pattern scale
-//   metallicFactor      = animation speed
-//   occlusionStrength   = intensity multiplier
+// Reads per-entity EffectParams (tint / speed / scale / intensity) by name from
+// the EffectParamBuffer, indexed by the per-entity effectParamIndex varying.
 //
 // Uses FrameConstantsData.elapsedTime for time-driven animation.
 
@@ -13,7 +10,7 @@
 
 #include "include/FrameConstants.slangh"
 #include "include/RenderContracts.slangh"
-#include "include/GpuMaterial.slangh"
+#include "include/EffectParams.slangh"
 #include "include/MeshVertex.slangh"
 #include "include/DefaultVertex.slangh"
 
@@ -37,45 +34,25 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 {
     FrameConstantsData* fc = pc.frame.Ptr();
     float elapsed = fc->elapsedTime;
-    GpuMaterial* materials = (GpuMaterial*)(fc->materialBufferAddr);
 
-    GpuMaterial mat;
-    mat.baseColorFactor = float4(1.0, 1.0, 1.0, 1.0);
-    mat.metallicFactor = 1.0;
-    mat.roughnessFactor = 1.0;
-    mat.occlusionStrength = 1.0;
-    mat.alphaCutoff = 0.5;
-    mat.emissiveFactor = float4(0.0, 0.0, 0.0, 0.0);
-    mat.flags = 0u;
-    mat.albedoSlot = kNoTexture;
-    mat.normalSlot = kNoTexture;
-    mat.metallicRoughnessSlot = kNoTexture;
-    mat.occlusionSlot = kNoTexture;
-    mat.emissiveSlot = kNoTexture;
-
-    if (input.materialIndex != kNoTexture)
+    EffectParams fx;
+    fx.tint = float4(1.0, 1.0, 1.0, 1.0);
+    fx.speed = 1.0;
+    fx.scale = 1.0;
+    fx.intensity = 1.0;
+    // Guard on the BDA too: passes that do not wire the effect buffer (e.g.
+    // render-to-texture camera views) ship effectParamBufferAddr == 0, and
+    // dereferencing it would be a null read. Fall back to default params there.
+    if (input.effectParamIndex != 0xFFFFFFFFu && fc->effectParamBufferAddr != 0)
     {
-        mat = materials[input.materialIndex];
+        EffectParams* params = (EffectParams*)(fc->effectParamBufferAddr);
+        fx = params[input.effectParamIndex];
     }
 
-    float2 uv = input.uv;
-
-    float3 baseColor = mat.baseColorFactor.rgb;
-    if (mat.albedoSlot != kNoTexture)
-    {
-        baseColor *= g_textures[mat.albedoSlot].Sample(g_linearSampler, uv).rgb;
-    }
-    float3 vertexColor = input.vertexColor;
-    if (dot(vertexColor, vertexColor) < 1e-8)
-    {
-        vertexColor = float3(1.0, 1.0, 1.0);
-    }
-    baseColor *= vertexColor;
-
-    float scale = max(mat.roughnessFactor, 0.01);
-    float speed = max(mat.metallicFactor, 0.0);
-    float intensity = max(mat.occlusionStrength, 0.0);
-    float3 tint = mat.emissiveFactor.xyz;
+    float scale = max(fx.scale, 0.01);
+    float speed = max(fx.speed, 0.0);
+    float intensity = max(fx.intensity, 0.0);
+    float3 tint = fx.tint.rgb;
 
     float t = elapsed * speed;
 
@@ -148,5 +125,5 @@ float4 fragmentMain(VSOutput input) : SV_Target0
 
     float3 finalColor = plasmaColor + volGlow * float3(0.05, 0.1, 0.2);
 
-    return float4(finalColor, mat.baseColorFactor.a);
+    return float4(finalColor, fx.tint.a);
 }

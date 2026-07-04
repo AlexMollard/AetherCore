@@ -58,6 +58,12 @@ var g_toy_tag    : uint = 0u;
 var g_player           : uint = 0u;
 var g_cam              : uint = 0u;
 var g_plasma           : uint = 0u;
+var g_plasma2          : uint = 0u;
+var g_plasma3          : uint = 0u;
+var g_molten           : uint = 0u;    // molten-effect orb (new pipeline)
+var g_missing_cube     : uint = 0u;    // cube with a deliberately-missing texture
+var g_shared_mat       : uint = 0u;    // authored material shared by a row of cubes
+var g_have_shared_mat  : bool = false; // set once the shared material is created
 var g_player_idle_clip : int  = 0;
 var g_player_walk_clip : int  = 1;
 var g_time             : float = 0.0;
@@ -254,6 +260,57 @@ def spawn_bounce(world : World?; base : float3)
 //  Models
 // ════════════════════════════════════════════════════════════════════════════
 
+// Spawn a plasma effect orb with its own per-entity effect params. Several orbs
+// sharing the "plasma" effect prove the params are per-entity (phase 3): each
+// reads its own EffectParams slot, so colour/speed/scale/intensity are independent.
+def spawn_plasma(world : World?; pos : float3; size : float; color : float3; speed : float; scale : float; intensity : float) : uint
+{
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
+    add_mesh(world, e, g_sphere);
+    set_entity_effect(world, e, "plasma");
+    set_effect_color(world, e, color.x, color.y, color.z);
+    set_effect_speed(world, e, speed);
+    set_effect_scale(world, e, scale);
+    set_effect_intensity(world, e, intensity);
+    return e;
+}
+
+// Spawn a "molten" effect orb: a dark obsidian crust broken by flowing white-hot
+// veins. Same per-entity EffectParams path as plasma (tint/speed/scale/intensity),
+// but a completely different look - proves a second runtime pipeline coexists with
+// plasma and reads its own params slot.
+def spawn_molten(world : World?; pos : float3; size : float; color : float3; speed : float; scale : float; intensity : float) : uint
+{
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
+    add_mesh(world, e, g_sphere);
+    set_entity_effect(world, e, "molten");
+    set_effect_color(world, e, color.x, color.y, color.z);
+    set_effect_speed(world, e, speed);
+    set_effect_scale(world, e, scale);
+    set_effect_intensity(world, e, intensity);
+    return e;
+}
+
+// Spawn a cube whose albedo map points at a texture path that does NOT exist.
+// The registry can't load it, so it hands back a "broken" handle that resolves to
+// the 1x1 magenta fallback: the cube should render FLAT MAGENTA on every face.
+// This is the visible proof that the missing-texture path works end to end. A cube
+// with NO texture (the rest of Zone M) stays its normal colour - only a REQUESTED-
+// but-missing map goes magenta.
+def missing_texture_cube(world : World?; pos : float3; size : float) : uint
+{
+    let e = entity_create(world);
+    add_transform(world, e);
+    set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
+    add_mesh(world, e, g_cube);
+    set_material_texture(world, e, "assets://textures/this_texture_does_not_exist.png");
+    return e;
+}
+
 def spawn_fox(world : World?; pos : float3; yaw : float; desync : float)
 {
     let fox = entity_create(world);
@@ -384,6 +441,33 @@ def build_zone_materials(world : World?)
     add_mesh(world, rainbow, g_cube);
 
     painted_box(world, float3(-32.5, 1.0, 16.5), float3(2.0, 2.0, 2.0), float3(0.85, 0.85, 0.82));
+
+    // 5. Shared AUTHORED material (phase 2): one material bound to a row of six
+    //    cubes. on_update pulses its emissive, so all six glow in unison from a
+    //    single edit - and they dedup to one GPU slot until it diverges.
+    g_shared_mat = make_material(float3(0.85, 0.25, 0.15), 0.0, 0.4);
+    g_have_shared_mat = true;
+    for (i in 0..6)
+    {
+        let e = entity_create(world);
+        add_transform(world, e);
+        set_transform(world, e, float3(-49.0 + float(i) * 2.2, 0.7, 20.0), float3(0.0, 0.0, 0.0), float3(1.6, 1.6, 1.6));
+        add_mesh(world, e, g_cube);
+        bind_material(world, e, g_shared_mat);
+    }
+
+    // 6. Per-entity material INSTANCES (phase 2): each cube built field-by-field
+    //    with entity_material_set_* - independent copy-on-write materials.
+    for (i in 0..4)
+    {
+        let e = entity_create(world);
+        add_transform(world, e);
+        set_transform(world, e, float3(-49.0 + float(i) * 2.2, 0.7, 22.5), float3(0.0, 0.0, 0.0), float3(1.6, 1.6, 1.6));
+        add_mesh(world, e, g_cube);
+        entity_material_set_color(world, e, float3(0.15, 0.55, 0.85));
+        entity_material_set_metallic(world, e, float(i) * 0.33);   // metal sweep
+        entity_material_set_roughness(world, e, 0.15 + float(i) * 0.2);
+    }
 }
 
 // Zone E (far centre): spot light projecting a caster's shadow onto a wall.
@@ -435,15 +519,20 @@ def on_attach(world : World?)
     build_zone_spot(world);
     build_zone_materials(world);
 
-    // ── Effects showcase: one isolated plasma orb floating high overhead ──────
-    g_plasma = entity_create(world);
-    add_transform(world, g_plasma);
-    set_transform(world, g_plasma, float3(-20.0, 20.0, -18.0), float3(0.0, 0.0, 0.0), float3(3.0, 3.0, 3.0));
-    add_mesh(world, g_plasma, g_sphere);
-    set_entity_effect(world, g_plasma, "plasma");
-    set_effect_color(world, g_plasma, 0.9, 0.4, 1.0);
-    set_effect_speed(world, g_plasma, 1.0);
-    set_effect_intensity(world, g_plasma, 1.8);
+    // ── Effects showcase: THREE plasma orbs, one shared "plasma" effect, but
+    //    INDEPENDENT per-entity params (phase 3). If they all looked identical,
+    //    the per-entity EffectParamBuffer would be broken; distinct colours /
+    //    speeds / scales prove each orb owns its own params slot. ────────────────
+    g_plasma  = spawn_plasma(world, float3(-24.0, 20.0, -18.0), 3.0, float3(0.90, 0.40, 1.00), 1.0, 2.0, 1.8); // violet, medium
+    g_plasma2 = spawn_plasma(world, float3(-18.0, 20.0, -18.0), 3.0, float3(1.00, 0.45, 0.10), 2.2, 1.2, 1.3); // fiery orange, fast + tight
+    g_plasma3 = spawn_plasma(world, float3(-12.0, 20.0, -18.0), 3.0, float3(0.20, 1.00, 0.70), 0.5, 3.4, 2.4); // teal, slow + broad + bright
+
+    // ── NEW effect pipeline: a molten orb sharing the row, its own params slot.
+    g_molten  = spawn_molten(world, float3(-6.0, 20.0, -18.0), 3.0, float3(1.00, 0.30, 0.05), 1.0, 1.6, 1.4);  // ember, flowing crust
+
+    // ── Missing-texture proof: a slowly spinning cube whose albedo map path does
+    //    not exist -> renders FLAT MAGENTA (the 1x1 fallback) on every face. ──────
+    g_missing_cube = missing_texture_cube(world, float3(-9.0, 3.0, 4.0), 3.0);
 
     // ── Foxes (animation test - patrol the plaza in circles, staggered) ──────
     spawn_fox(world, float3(14.0, 0.0, 15.0),  40.0, 0.0);
@@ -500,12 +589,44 @@ def on_update(world : World?)
     update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam, is_sprinting, -1);
     update_third_person_camera(world, g_cam, g_player);
 
-    // ── Gentle plasma bob (isolated overhead, never enters geometry) ──────────
+    // ── Gentle plasma bob (all three orbs, phase-offset so they weave) ────────
     if (entity_valid(g_plasma))
     {
         var p = get_position(world, g_plasma);
         p.y = 20.0 + sin(g_time * 0.8) * 1.5;
         set_position(world, g_plasma, p);
+    }
+    if (entity_valid(g_plasma2))
+    {
+        var p = get_position(world, g_plasma2);
+        p.y = 20.0 + sin(g_time * 0.8 + 2.1) * 1.5;
+        set_position(world, g_plasma2, p);
+    }
+    if (entity_valid(g_plasma3))
+    {
+        var p = get_position(world, g_plasma3);
+        p.y = 20.0 + sin(g_time * 0.8 + 4.2) * 1.5;
+        set_position(world, g_plasma3, p);
+    }
+    if (entity_valid(g_molten))
+    {
+        var p = get_position(world, g_molten);
+        p.y = 20.0 + sin(g_time * 0.8 + 6.3) * 1.5;
+        set_position(world, g_molten, p);
+    }
+
+    // ── Spin the missing-texture cube so the magenta fallback is visible on
+    //    every face (a static face could hide behind ambiguous lighting). ──────
+    if (entity_valid(g_missing_cube))
+    {
+        set_euler(world, g_missing_cube, float3(20.0, g_time * 40.0, 0.0));
+    }
+
+    // ── Pulse the shared authored material: one edit re-binds all six cubes ───
+    if (g_have_shared_mat)
+    {
+        let pulse = 0.5 + 0.5 * sin(g_time * 2.0);
+        material_set_emissive(world, g_shared_mat, float3(pulse * 0.9, pulse * 0.2, 0.05));
     }
 
     // ── Foxes patrol in circles so the run animation matches real motion ──────

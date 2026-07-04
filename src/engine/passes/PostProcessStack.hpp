@@ -170,46 +170,57 @@ namespace aether
 				m_histogramDataValid = false;
 			}
 		}
+
 		[[nodiscard]] bool IsHistogramCaptureEnabled() const
 		{
 			return m_histogramCaptureEnabled;
 		}
+
 		void SetHistogramUpdatePeriod(std::uint32_t frames)
 		{
 			m_histogramUpdatePeriod = frames > 0u ? frames : 1u;
 		}
+
 		[[nodiscard]] std::uint32_t GetHistogramUpdatePeriod() const
 		{
 			return m_histogramUpdatePeriod;
 		}
+
 		void SetHistogramSampleStride(std::uint32_t stride)
 		{
 			m_histogramSampleStride = stride > 0u ? stride : 1u;
 		}
+
 		[[nodiscard]] std::uint32_t GetHistogramSampleStride() const
 		{
 			return m_histogramSampleStride;
 		}
+
 		[[nodiscard]] const float* GetHdrHistogramBins() const
 		{
 			return m_histogramBins;
 		}
+
 		[[nodiscard]] const float* GetLdrHistogramBins() const
 		{
 			return m_ldrHistogramBins;
 		}
+
 		[[nodiscard]] bool IsHistogramValid() const
 		{
 			return m_histogramDataValid;
 		}
+
 		static constexpr std::uint32_t GetHistogramBinCount()
 		{
 			return kHistogramBins;
 		}
+
 		static constexpr float GetHistogramLogMin()
 		{
 			return kHistogramLogMin;
 		}
+
 		static constexpr float GetHistogramLogMax()
 		{
 			return kHistogramLogMax;
@@ -257,7 +268,7 @@ namespace aether
 
 		gpu::PipelineHandle m_histogramPipeline;
 		std::array<gpu::BufferHandle, kMaxFramesInFlight> m_histogramOutput{}; // per-frame mapped, 512 uint32 each
-		RGBuffer m_histogramOutputRG{}; // graph handle; backing buffer updated per frame via UpdateBufferHandles
+		RGBuffer m_histogramOutputRG{};                                        // graph handle; backing buffer updated per frame via UpdateBufferHandles
 		bool m_perFrameHistogramReady[kMaxFramesInFlight]{};
 		float m_histogramBins[kHistogramBins]{};
 		float m_ldrHistogramBins[kHistogramBins]{};

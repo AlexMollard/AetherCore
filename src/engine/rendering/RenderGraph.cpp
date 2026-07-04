@@ -1028,8 +1028,8 @@ namespace aether
 
 				for (const FrameProductRef& product: pass.consumedFrameProducts)
 				{
-					(void)(recordFrameProductReads.template operator()<FrameTextureProduct>(product) || recordFrameProductReads.template operator()<FrameTextureArrayProduct>(product)
-					       || recordFrameProductReads.template operator()<LocalShadowProduct>(product));
+					(void) (recordFrameProductReads.template operator()<FrameTextureProduct>(product) || recordFrameProductReads.template operator()<FrameTextureArrayProduct>(product)
+					        || recordFrameProductReads.template operator()<LocalShadowProduct>(product));
 				}
 
 				for (const AttachmentRef& a: pass.colorWrites)

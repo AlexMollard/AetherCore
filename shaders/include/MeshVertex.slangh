@@ -27,6 +27,7 @@ struct VSOutput
     [[vk::location(5)]] float2 uv2             : TEXCOORD5;
     [[vk::location(6)]] float3 vertexColor     : TEXCOORD6;
     [[vk::location(7)]] nointerpolation uint materialIndex : TEXCOORD7;
+    [[vk::location(8)]] nointerpolation uint effectParamIndex : TEXCOORD8;
 };
 
 // Transform direction vectors (normal/tangent) through a world matrix basis,

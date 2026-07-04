@@ -113,7 +113,7 @@ namespace aether
 			}
 
 			constexpr auto kHistogramBufferSize = kHistogramBins * 2u * sizeof(std::uint32_t);
-			for (auto& buf : stack.m_histogramOutput)
+			for (auto& buf: stack.m_histogramOutput)
 			{
 				buf = gpu::ResourceRegistry::CreateMappedBuffer({
 				        .size = kHistogramBufferSize,
@@ -165,7 +165,7 @@ namespace aether
 			gpu::ResourceRegistry::Destroy(m_histogramPipeline);
 		}
 		m_histogramPipeline = {};
-		for (auto& buf : m_histogramOutput)
+		for (auto& buf: m_histogramOutput)
 		{
 			if (buf.IsValid())
 			{
@@ -173,7 +173,7 @@ namespace aether
 			}
 			buf = {};
 		}
-		for (auto& ready : m_perFrameHistogramReady)
+		for (auto& ready: m_perFrameHistogramReady)
 		{
 			ready = false;
 		}
@@ -203,7 +203,10 @@ namespace aether
 			for (std::uint32_t i = 0; i < count; ++i)
 			{
 				const float v = static_cast<float>(src[i]);
-				if (v > maxBin) maxBin = v;
+				if (v > maxBin)
+				{
+					maxBin = v;
+				}
 			}
 
 			if (maxBin > 0.0f)
@@ -220,8 +223,8 @@ namespace aether
 			}
 		};
 
-		normalise(bins,          m_histogramBins,     kHistogramBins); // HDR first 256
-		normalise(bins + 256,    m_ldrHistogramBins,  kHistogramBins); // LDR next 256
+		normalise(bins, m_histogramBins, kHistogramBins);          // HDR first 256
+		normalise(bins + 256, m_ldrHistogramBins, kHistogramBins); // LDR next 256
 	}
 
 	void PostProcessStack::RegisterPasses(RenderGraph& graph, BindlessManager& bindless)
@@ -239,8 +242,8 @@ namespace aether
 		                        })
 		        .ReadTexture(m_hdrColor)
 		        .Execute(
-		                        [this, &bindless](PassContext& ctx)
-		                        {
+		                [this, &bindless](PassContext& ctx)
+		                {
 			                gpu::CommandList& cmd = ctx.recorder;
 
 			                const gpu::Viewport vp{
@@ -267,7 +270,7 @@ namespace aether
 				                std::int32_t inspectX;
 				                std::int32_t inspectY;
 				                std::uint32_t screenWidth;
-			                std::uint32_t screenHeight;
+				                std::uint32_t screenHeight;
 			                } push;
 			                push.hdrSlot = m_hdrBindlessSlot;
 			                push.mode = static_cast<std::uint32_t>(m_tonemapMode);

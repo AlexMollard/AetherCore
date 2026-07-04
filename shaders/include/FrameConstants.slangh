@@ -31,7 +31,7 @@ struct FrameConstantsData
     [[vk::offset(592)]] float4  frustumPlanes[6];           // normalized planes, xyz=n, w=d
     [[vk::offset(688)]] float4x4 invViewProj;               // inverse view-projection for screen-space reconstruction
     [[vk::offset(752)]] uint64_t resourceTableAddr;         // BDA -> ResourceEntry[kFrameResourceCount]
-    [[vk::offset(760)]] uint64_t _padEnd;                   // end padding (16-byte alignment)
+    [[vk::offset(760)]] uint64_t effectParamBufferAddr;     // BDA of EffectParamBuffer (0 = no effects active)
 };
 
 #endif

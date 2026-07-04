@@ -227,6 +227,7 @@ namespace aether
 		}
 
 		fc.materialBufferAddr = packet.materialBufferAddr;
+		fc.effectParamBufferAddr = packet.effectParamBufferAddr;
 		fc.elapsedTime = packet.elapsedTime;
 		fc.sunDirectionIntensity = packet.sunDirectionIntensity;
 		fc.ambientColor = packet.ambientColor;
