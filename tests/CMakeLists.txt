@@ -2,6 +2,7 @@ add_executable(EngineTests
     TestMain.cpp
     material/PackMaterialTests.cpp
     material/MaterialRegistryTests.cpp
+    material/MaterialSystemTests.cpp
 )
 target_link_libraries(EngineTests PRIVATE Engine doctest::doctest)
 aethercore_target_defaults(EngineTests)
