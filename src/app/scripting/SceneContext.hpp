@@ -57,6 +57,8 @@ namespace aether::app::scripting
 		{
 			const aether::Mesh* mesh = nullptr;
 			aether::MaterialAsset materialAsset{};
+			// Display name given to entities this mesh is attached to ("Cube", ...).
+			std::string displayName;
 		};
 
 		aether::PrimitiveMeshes* primitives = nullptr;

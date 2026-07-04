@@ -23,7 +23,7 @@ namespace aether
 			return;
 		}
 
-		const auto sec = world.TryGet<SpawnedEntitiesComponent>(Entity{entityId});
+		const auto hier = world.TryGet<HierarchyComponent>(Entity{entityId});
 
 		auto compileOne = [&uploadPool](SkinnedMeshComponent& smc)
 		{
@@ -152,11 +152,11 @@ namespace aether
 			compileOne(*smc);
 		}
 
-		if (sec)
+		if (hier)
 		{
-			for (const auto eid: sec->entityIds)
+			for (const Entity child: hier->children)
 			{
-				if (auto smc = world.TryGet<SkinnedMeshComponent>(Entity{eid}))
+				if (auto smc = world.TryGet<SkinnedMeshComponent>(child))
 				{
 					compileOne(*smc);
 				}

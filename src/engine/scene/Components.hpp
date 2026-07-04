@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 #include <glm/glm.hpp>
 
@@ -9,6 +10,7 @@
 #include "material/EffectParams.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialHandle.hpp"
+#include "scene/Entity.hpp"
 
 namespace aether
 {
@@ -22,6 +24,21 @@ namespace aether
 	struct TransformComponent
 	{
 		glm::mat4 localToWorld{1.0f};
+	};
+
+	// Human-readable display name (auto-assigned at spawn, editable in the inspector).
+	struct NameComponent
+	{
+		std::string name;
+	};
+
+	// Canonical scene-graph link. Both sides are kept consistent exclusively
+	// through aether::ecs::SetParent (see scene/Hierarchy.hpp) — never mutate
+	// parent/children directly.
+	struct HierarchyComponent
+	{
+		Entity parent{};              // {0} == root
+		std::vector<Entity> children; // ordered
 	};
 
 	// Reference to a GPU vertex/index buffer.
@@ -78,18 +95,6 @@ namespace aether
 		// Runtime-loaded animation clips, kept on CPU for duration queries.
 		// Cleared after compile_animations() bakes them into animDb.
 		std::vector<assets::GltfAnimation> pendingExternalAnims;
-	};
-
-	// Links a spawned mesh entity back to its parent script entity.
-	struct ParentEntityComponent
-	{
-		std::uint32_t parentId = 0;
-	};
-
-	// Stores spawned mesh entity IDs on the script entity.
-	struct SpawnedEntitiesComponent
-	{
-		std::vector<std::uint32_t> entityIds;
 	};
 
 	// -- Animation blend -----------------------------------------------------

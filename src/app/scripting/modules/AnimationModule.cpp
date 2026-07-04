@@ -29,24 +29,24 @@ namespace
 		{
 			return smc;
 		}
-		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(e);
-		if (sec && !sec->entityIds.empty())
+		const auto hier = w->TryGet<aether::HierarchyComponent>(e);
+		if (hier && !hier->children.empty())
 		{
-			return w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{sec->entityIds.front()});
+			return w->TryGet<aether::SkinnedMeshComponent>(hier->children.front());
 		}
 		return nullptr;
 	}
 
 	void ForEachSpawnedSmc(aether::World* w, uint32_t id, auto&& f)
 	{
-		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		if (!sec)
+		const auto hier = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
+		if (!hier)
 		{
 			return;
 		}
-		for (const auto eid: sec->entityIds)
+		for (const aether::Entity child: hier->children)
 		{
-			if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(aether::Entity{eid}))
+			if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(child))
 			{
 				f(*smc);
 			}

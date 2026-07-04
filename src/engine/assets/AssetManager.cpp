@@ -9,6 +9,7 @@
 #include "assets/GltfAsset.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "scene/EcsHelpers.hpp"
+#include "scene/Hierarchy.hpp"
 #include "io/FileSystem.hpp"
 #include "io/FileGlobOptions.hpp"
 #include "utils/BinaryReader.hpp"
@@ -709,7 +710,7 @@ namespace aether
 
 			if (parentEntityId != 0)
 			{
-				m_world->Emplace<ParentEntityComponent>(entity, ParentEntityComponent{.parentId = parentEntityId});
+				aether::ecs::SetParent(*m_world, entity, Entity{parentEntityId});
 			}
 
 			if (model.animationDb.IsValid() && primitive.skinIndex >= 0)

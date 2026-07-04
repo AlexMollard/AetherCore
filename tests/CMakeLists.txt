@@ -1,5 +1,7 @@
 add_executable(EngineTests
     TestMain.cpp
+    scene/HierarchyTests.cpp
+    scene/TransformUtilsTests.cpp
     material/PackMaterialTests.cpp
     material/MaterialRegistryTests.cpp
     material/MaterialSystemTests.cpp

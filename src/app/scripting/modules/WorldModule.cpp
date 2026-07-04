@@ -10,6 +10,8 @@
 #include "daScript/daScript.h"
 
 #include "scene/Components.hpp"
+#include "scene/Hierarchy.hpp"
+#include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scene/TagSlots.hpp"
 #include "assets/AssetManager.hpp"
@@ -21,45 +23,6 @@
 #include "scripting/SceneContext.hpp"
 #include "scripting/DasHelpers.hpp"
 #include "utils/Logger.hpp"
-
-// -- Helpers -------------------------------------------------------------------
-
-namespace
-{
-	// Compose a TRS matrix from pos/euler(degrees)/scale - YXZ rotation order.
-	glm::mat4 ComposeTransform(glm::vec3 pos, glm::vec3 rotEulerDeg, glm::vec3 scale)
-	{
-		glm::mat4 t = glm::translate(glm::mat4(1.0f), pos);
-		glm::mat4 r = glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.y), glm::vec3(0, 1, 0));
-		r = r * glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.x), glm::vec3(1, 0, 0));
-		r = r * glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.z), glm::vec3(0, 0, 1));
-		glm::mat4 s = glm::scale(glm::mat4(1.0f), scale);
-		return t * r * s;
-	}
-
-	// Extract YXZ euler angles (degrees) + per-axis scale from a TRS matrix.
-	void DecomposeTRS(const glm::mat4& m, glm::vec3& pos, glm::vec3& eulerDeg, glm::vec3& scale)
-	{
-		pos = glm::vec3(m[3]);
-		float sx = glm::length(glm::vec3(m[0]));
-		float sy = glm::length(glm::vec3(m[1]));
-		float sz = glm::length(glm::vec3(m[2]));
-		scale = {sx, sy, sz};
-		glm::vec3 c2 = sz > 1e-6f ? glm::vec3(m[2]) / sz : glm::vec3(0, 0, 1);
-		float sinX = glm::clamp(-c2.y, -1.0f, 1.0f);
-		float rotXRad = std::asin(sinX);
-		float rotYRad = std::atan2(c2.x, c2.z);
-		float rotZRad = 0.0f;
-		float cosX = std::cos(rotXRad);
-		if (std::abs(cosX) > 1e-4f)
-		{
-			glm::vec3 c0 = sx > 1e-6f ? glm::vec3(m[0]) / sx : glm::vec3(1, 0, 0);
-			glm::vec3 c1 = sy > 1e-6f ? glm::vec3(m[1]) / sy : glm::vec3(0, 1, 0);
-			rotZRad = std::atan2(c0.y, c1.y);
-		}
-		eulerDeg = {glm::degrees(rotXRad), glm::degrees(rotYRad), glm::degrees(rotZRad)};
-	}
-} // namespace
 
 // -- Binding functions ---------------------------------------------------------
 
@@ -73,6 +36,7 @@ namespace
 	uint32_t das_entity_create(aether::World* w)
 	{
 		aether::Entity e = w->Create();
+		w->Emplace<aether::NameComponent>(e, aether::NameComponent{.name = "Entity"});
 		ActiveContext().sceneEntities.push_back(e);
 		return e.id;
 	}
@@ -87,6 +51,19 @@ namespace
 	bool das_entity_valid(uint32_t id)
 	{
 		return id != 0;
+	}
+
+	// set_name(world, entity_id, name)
+	void das_set_name(aether::World* w, uint32_t id, const char* name)
+	{
+		w->EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = das_to_std_string(name)});
+	}
+
+	// get_name(world, entity_id) -> string  (empty string when unnamed)
+	char* das_get_name(aether::World* w, uint32_t id, das::Context* ctx)
+	{
+		const auto nc = w->TryGet<aether::NameComponent>(aether::Entity{id});
+		return nc ? das_string(ctx, nc->name) : nullptr;
 	}
 
 	// -- TransformComponent field access ---------------------------------------
@@ -136,7 +113,7 @@ namespace
 			return {};
 		}
 		glm::vec3 pos{}, euler{}, scale{};
-		DecomposeTRS(tc->localToWorld, pos, euler, scale);
+		aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
 		return to_das(euler);
 	}
 
@@ -150,19 +127,19 @@ namespace
 		}
 
 		glm::vec3 pos{}, curEuler{}, scale{};
-		DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
+		aether::DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
 		const glm::vec3 e = to_glm(euler);
 
-		tc->localToWorld = ComposeTransform(pos, e, scale);
+		tc->localToWorld = aether::ComposeTransform(pos, e, scale);
 
-		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		if (sec)
+		const auto hier = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
+		if (hier)
 		{
-			for (const auto eid: sec->entityIds)
+			for (const aether::Entity child: hier->children)
 			{
-				if (auto stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
+				if (auto stc = w->TryGet<aether::TransformComponent>(child))
 				{
-					stc->localToWorld = ComposeTransform(pos, e, scale);
+					stc->localToWorld = aether::ComposeTransform(pos, e, scale);
 				}
 			}
 		}
@@ -172,7 +149,7 @@ namespace
 	// Recomposes the full TRS matrix from the three float3 arguments.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
 	{
-		const auto xform = ComposeTransform(to_glm(pos), to_glm(euler), to_glm(scale));
+		const auto xform = aether::ComposeTransform(to_glm(pos), to_glm(euler), to_glm(scale));
 
 		// Update script entity transform.
 		if (auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
@@ -181,12 +158,12 @@ namespace
 		}
 
 		// Propagate to spawned mesh entities.
-		const auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		if (sec)
+		const auto hier = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
+		if (hier)
 		{
-			for (const auto eid: sec->entityIds)
+			for (const aether::Entity child: hier->children)
 			{
-				if (auto stc = w->TryGet<aether::TransformComponent>(aether::Entity{eid}))
+				if (auto stc = w->TryGet<aether::TransformComponent>(child))
 				{
 					stc->localToWorld = xform;
 				}
@@ -249,6 +226,33 @@ namespace
 		// Spawn instance with parent link
 		// -------------------------------------------------------------------------
 
+		// Name the logical entity after the model file stem (e.g. "fox").
+		std::string stem = path ? path : "";
+		if (const auto slash = stem.find_last_of("/\\"); slash != std::string::npos)
+		{
+			stem = stem.substr(slash + 1);
+		}
+		if (const auto dot = stem.find_last_of('.'); dot != std::string::npos)
+		{
+			stem = stem.substr(0, dot);
+		}
+		if (stem.empty())
+		{
+			stem = "Model";
+		}
+		w->EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = stem});
+
+		// Mirror the legacy entityIds.clear() below: reloading a model onto the
+		// same logical entity re-links its children instead of accumulating.
+		if (const auto* h = w->TryGet<aether::HierarchyComponent>(aether::Entity{id}))
+		{
+			const std::vector<aether::Entity> stale = h->children;
+			for (const aether::Entity s: stale)
+			{
+				aether::ecs::DetachFromParent(*w, s);
+			}
+		}
+
 		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, id);
 
 		for (aether::Entity meshEntity: meshEntities)
@@ -257,20 +261,9 @@ namespace
 			{
 				tc->localToWorld = xform * tc->localToWorld;
 			}
+			// SpawnModel already linked meshEntity under id via ecs::SetParent.
+			w->EmplaceOrReplace<aether::NameComponent>(meshEntity, aether::NameComponent{.name = stem + " mesh"});
 			ctx.sceneEntities.push_back(meshEntity);
-		}
-
-		// Store spawned entity IDs for script-level propagation.
-		auto sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		if (!sec)
-		{
-			w->Emplace<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-			sec = w->TryGet<aether::SpawnedEntitiesComponent>(aether::Entity{id});
-		}
-		sec->entityIds.clear();
-		for (const aether::Entity me: meshEntities)
-		{
-			sec->entityIds.push_back(me.id);
 		}
 	}
 
@@ -352,7 +345,7 @@ namespace
 				        return;
 			        }
 			        glm::vec3 pos{}, euler{}, scale{};
-			        DecomposeTRS(tc->localToWorld, pos, euler, scale);
+			        aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
 			        vec4f args[4];
 			        args[0] = das::cast<uint32_t>::from(id);
 			        args[1] = das::cast<das::float3>::from(to_das(pos));
@@ -376,26 +369,32 @@ namespace
 		}
 
 		aether::PrimitiveMesh primType{};
+		const char* displayName = "Mesh";
 		const std::string_view sv(type ? type : "");
 		if (sv == "cube")
 		{
 			primType = aether::PrimitiveMesh::Cube;
+			displayName = "Cube";
 		}
 		else if (sv == "sphere")
 		{
 			primType = aether::PrimitiveMesh::Sphere;
+			displayName = "Sphere";
 		}
 		else if (sv == "plane")
 		{
 			primType = aether::PrimitiveMesh::Plane;
+			displayName = "Plane";
 		}
 		else if (sv == "quad")
 		{
 			primType = aether::PrimitiveMesh::Quad;
+			displayName = "Quad";
 		}
 		else if (sv == "triangle")
 		{
 			primType = aether::PrimitiveMesh::Triangle;
+			displayName = "Triangle";
 		}
 		else
 		{
@@ -423,6 +422,7 @@ namespace
 		SceneContext::CachedMesh entry;
 		entry.mesh = &ctx.primitives->Get(primType);
 		entry.materialAsset = ctx.defaultMaterial;
+		entry.displayName = displayName;
 		ctx.meshCache.push_back(std::move(entry));
 		return static_cast<uint32_t>(ctx.meshCache.size() - 1u);
 	}
@@ -449,6 +449,13 @@ namespace
 		// AssignMaterial resolves the pipeline through PipelineCache and emplaces
 		// PipelineComponent, so every add_mesh entity gets a pipeline.
 		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), entry.materialAsset);
+
+		// Keep an explicit user rename ("Entity" is the entity_create default).
+		const auto* nc = w->TryGet<aether::NameComponent>(e);
+		if (!nc || nc->name.empty() || nc->name == "Entity")
+		{
+			w->EmplaceOrReplace<aether::NameComponent>(e, aether::NameComponent{.name = entry.displayName});
+		}
 	}
 
 	// -- Material painting: one-shot solid paint --------------------------------
@@ -631,6 +638,8 @@ namespace aether::app::scripting
 			Bind<das_entity_create>(lib, "entity_create", SE::modifyExternal);
 			Bind<das_entity_destroy>(lib, "entity_destroy", SE::modifyExternal);
 			Bind<das_entity_valid>(lib, "entity_valid", SE::none);
+			Bind<das_set_name>(lib, "set_name", SE::modifyExternal);
+			Bind<das_get_name>(lib, "get_name", SE::accessExternal);
 
 			// TransformComponent - structural ops (add/has/remove)
 			BIND_COMPONENT("transform", aether::TransformComponent)

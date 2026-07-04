@@ -56,13 +56,9 @@ namespace aether::app
 		{
 			add("Skinned");
 		}
-		if (world.Has<SpawnedEntitiesComponent>(entity))
+		if (world.Has<HierarchyComponent>(entity))
 		{
-			add("Spawned");
-		}
-		if (world.Has<ParentEntityComponent>(entity))
-		{
-			add("Child");
+			add("Hierarchy");
 		}
 		if (world.Has<RigidBodyComponent>(entity))
 		{
@@ -122,12 +118,7 @@ namespace aether::app
 			(void) component;
 			addCandidate(World::FromEntt(raw));
 		}
-		for (const auto& [raw, component]: world.View<SpawnedEntitiesComponent>().each())
-		{
-			(void) component;
-			addCandidate(World::FromEntt(raw));
-		}
-		for (const auto& [raw, component]: world.View<ParentEntityComponent>().each())
+		for (const auto& [raw, component]: world.View<HierarchyComponent>().each())
 		{
 			(void) component;
 			addCandidate(World::FromEntt(raw));

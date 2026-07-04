@@ -152,6 +152,7 @@ def hue_color(t : float) : float3
 def build_floor(world : World?)
 {
     let e = entity_create(world);
+    set_name(world, e, "Floor");
     add_transform(world, e);
     set_transform(world, e, float3(0.0, -1.0, 0.0), float3(0.0, 0.0, 0.0), float3(112.0, 2.0, 112.0));
     add_mesh(world, e, g_cube);
@@ -166,6 +167,7 @@ def build_floor(world : World?)
 def spawn_toy(world : World?; is_sphere : bool; pos : float3; size : float)
 {
     let e = entity_create(world);
+    set_name(world, e, is_sphere ? "Toy Sphere" : "Toy Cube");
     add_transform(world, e);
     set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
     if (is_sphere)
@@ -269,6 +271,7 @@ def spawn_plasma(world : World?; pos : float3; size : float; color : float3; spe
     add_transform(world, e);
     set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
     add_mesh(world, e, g_sphere);
+    set_name(world, e, "Plasma Orb");
     set_entity_effect(world, e, "plasma");
     set_effect_color(world, e, color.x, color.y, color.z);
     set_effect_speed(world, e, speed);
@@ -287,6 +290,7 @@ def spawn_molten(world : World?; pos : float3; size : float; color : float3; spe
     add_transform(world, e);
     set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
     add_mesh(world, e, g_sphere);
+    set_name(world, e, "Molten Orb");
     set_entity_effect(world, e, "molten");
     set_effect_color(world, e, color.x, color.y, color.z);
     set_effect_speed(world, e, speed);
@@ -307,6 +311,7 @@ def missing_texture_cube(world : World?; pos : float3; size : float) : uint
     add_transform(world, e);
     set_transform(world, e, pos, float3(0.0, 0.0, 0.0), float3(size, size, size));
     add_mesh(world, e, g_cube);
+    set_name(world, e, "Missing Texture Cube");
     set_material_texture(world, e, "assets://textures/this_texture_does_not_exist.png");
     return e;
 }

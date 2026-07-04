@@ -2,35 +2,52 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Turn the debug panel's flat "Scene" list and read-only "Inspector" into a real hierarchical outliner + live-editing inspector, backed by new `NameComponent`/`HierarchyComponent` ECS identity and a shared `SceneSelection` service.
+**Goal:** Turn the debug panel's flat "Scene" list and read-only "Inspector" into a real hierarchical outliner + live-editing inspector — including a **live material editor** built on the new material-instance system — backed by new `NameComponent`/`HierarchyComponent` ECS identity and a shared `SceneSelection` service.
 
-**Architecture:** Add identity/hierarchy components and a cycle-guarded `SetParent` helper; fully migrate the two legacy relationship components (`SpawnedEntitiesComponent`, `ParentEntityComponent`) onto `HierarchyComponent` with no compat layer; register a `SceneSelection` service in the `ServiceContainer` that all panels share; split the monolithic `InspectorPanel` into a `HierarchyPanel` (outliner) + `InspectorPanel` (editor shell) + `ComponentDrawers`.
+**Architecture:** Add identity/hierarchy components and a cycle-guarded `SetParent` helper; fully migrate the two legacy relationship components (`SpawnedEntitiesComponent`, `ParentEntityComponent`) onto `HierarchyComponent` with no compat layer; register a `SceneSelection` service in the `ServiceContainer`; split the monolithic `InspectorPanel` into `HierarchyPanel` (outliner) + `InspectorPanel` (editor shell) + `ComponentDrawers`; merge a Font Awesome icon subset into the ImGui font atlas; add `MaterialRegistry::TryDescribe` + seed-from-current instances so the inspector (and das setters) edit materials without clobbering textures.
 
-**Tech Stack:** C++20, EnTT v3.16 (ECS), Dear ImGui (docking), glm, daScript bindings, CMake presets.
+**Tech Stack:** C++23, EnTT (ECS), Dear ImGui v1.92.8-docking, glm, daScript bindings, doctest (`EngineTests`), CMake presets.
+
+---
+
+## Revision changelog — 2026-07-04 (v2)
+
+The v1 plan (committed 6abc734, 2026-07-03) predates the material-system overhaul (6 commits, 2026-07-04). Verified against HEAD 2688262; none of v1 had been implemented. Changes:
+
+1. **Old Task 16 (read-only material) replaced** by Task 18 (live material editor). `MaterialComponent` is now `{MaterialHandle, gpuSlot}`; `MaterialInstanceComponent`/`EffectParamsComponent` exist; `MaterialSystem` typed setters give a copy-on-write edit path with next-frame GPU visibility.
+2. **v1 Task 5 would not have built**: `InspectorPanel.cpp` references the legacy components (lines 59/63/125/130) but v1 deleted them before the panel rewrite. Task 5 now strips those references too.
+3. **CMakeLists steps removed** — `src/app/CMakeLists.txt` GLOBs sources; new `.cpp` files are picked up automatically.
+4. **Physics teleport extended**: `PhysicsStateComponent` carries `prevRotation/currRotation` quats + `scale`; the transform drawer writes those too, not just positions.
+5. **TagSlots needs a small enumeration API** for the tag drawer (only per-tag ops exist today) — added in Task 17.
+6. Line drift: WorldModule TRS helpers 29-61 (was ~26-58); AssetManager `ParentEntityComponent` emplace at 712 (was ~805).
+7. **The repo now HAS a test harness** (doctest `EngineTests`, added with the material work). Pure-logic pieces get unit tests: hierarchy helpers (T1), TRS round-trip (T2), `TryDescribe`/seed-from-current (T18).
+8. **Latent das bug fixed by T18**: `entity_material_set_*` on a textured entity seeds a *default* instance and wipes its textures; seed-from-current fixes script + inspector paths.
+9. New tasks from the AAA/juice decisions (2026-07-04): T8 icon font (FA6 solid subset merged into the atlas — supersedes v1's "no new font dependency" stance), T14 juice pass (selection pulse, spawn flash, empty states; micro-animations only — no jokey content), T20 gains the editor dock layout (Scene left / Inspector right / Viewport center).
+10. Undo/redo confirmed deferred to a later spec; drawers funnel edits through small helpers to keep the retrofit clean.
 
 ---
 
 ## Verification model (read first)
 
-The repo has **no unit-test harness** (confirmed — no Catch2/gtest/doctest, no `tests/` tree). Per the approved spec §9, every task's verification gate is:
+The repo has a **doctest harness**: `EngineTests` links the full `Engine` lib; test sources live in `tests/` and `tests/material/`; register new files in `tests/CMakeLists.txt`.
 
-1. **Build succeeds**, and
-2. Where behavior changes, **manual verification via the `/run` skill** (launches the `App` target and drives the debug panel).
-
-**Build command (used in every task — referred to as “BUILD”):**
+**Build command ("BUILD"):**
 ```bash
-# First time only (configures the worktree build dir):
-cmake --preset vs2022-clang
-# Every build:
-cmake --build --preset vs2022-clang --config Debug --target App
+cmake --build build-vs2022-msvc --config Debug --target App
 ```
-Expected: `App.vcxproj -> …\App.exe` with no errors. If clang-cl is unavailable, substitute `vs2022-msvc`.
+(`build-vs2022-msvc` is the primary configured build dir with a live cache. If the Vulkan SDK moved, purge stale cache entries first — see the known gotcha: `cmake -S . -B build-vs2022-msvc -U "Vulkan_*" -U "AETHERCORE_SLANG_ROOT" -U "SLANGC_EXECUTABLE" -U "FIND_PACKAGE_MESSAGE_DETAILS_Vulkan"`.)
 
-**Manual-check command (referred to as “RUN”):** invoke the `/run` skill, or launch `build-vs2022-clang/src/app/Debug/App.exe`. The debug panel toggles with **F1**; the sandbox scene (`resources/scripts/sandbox.das`) spawns the fox, floor, walls, and toys used in the checks below.
-
-**Commit convention:** each commit ends with the repo footer:
+**Test command ("TEST"):**
+```bash
+cmake --build build-vs2022-msvc --config Debug --target EngineTests
+ctest --test-dir build-vs2022-msvc -C Debug --output-on-failure
 ```
-Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+
+**Manual check ("RUN"):** the app is GPU-driven and runs on Alex's machine — launch `build-vs2022-msvc/src/app/Debug/App.exe` (or `/run`), **F1** toggles the debug panel, **F5** hot-reloads `resources/scripts/sandbox.das`. Tasks marked RUN end with a concise hand-off checklist instead of an agent-side claim of visual correctness.
+
+**Commit convention:** one commit per task, footer:
+```
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>
 ```
 
 ---
@@ -40,35 +57,41 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 **New files**
 | File | Responsibility |
 |------|----------------|
-| `src/engine/scene/TransformUtils.hpp` | `ComposeTransform` / `DecomposeTRS` (hoisted out of `WorldModule.cpp`). Single TRS implementation. |
+| `src/engine/scene/TransformUtils.hpp` | `ComposeTransform` / `DecomposeTRS` (hoisted from `WorldModule.cpp`). |
 | `src/engine/scene/Hierarchy.hpp` | `SetParent`, `DetachFromParent`, `DestroyHierarchy`, `IsAncestor` — the only sanctioned way to mutate `HierarchyComponent`. |
 | `src/app/debug/SceneSelection.hpp` | Shared multi-select state; registered as a service. |
-| `src/app/debug/HierarchyPanel.hpp` / `.cpp` | The outliner (draws the window titled **"Scene"**). |
-| `src/app/debug/ComponentDrawers.hpp` / `.cpp` | Per-component `Draw*` functions used by the inspector. |
+| `src/app/debug/HierarchyPanel.hpp/.cpp` | The outliner (window titled **"Scene"**). |
+| `src/app/debug/ComponentDrawers.hpp/.cpp` | Per-component `Draw*` functions used by the inspector. |
+| `src/app/debug/Icons.hpp` | FA6 codepoint defines (no external header dep). |
+| `resources/fonts/fa-solid-900.ttf` | Font Awesome 6 Free-Solid (OFL) — packed into assets.pak automatically. |
+| `tests/scene/HierarchyTests.cpp`, `tests/scene/TransformUtilsTests.cpp`, `tests/material/MaterialDescribeTests.cpp` | doctest coverage for the pure-logic pieces. |
 
 **Modified files**
 | File | Change |
 |------|--------|
-| `src/engine/scene/Components.hpp` | Add `NameComponent`, `HierarchyComponent`; **remove** `SpawnedEntitiesComponent`, `ParentEntityComponent`. |
-| `src/engine/assets/AssetManager.cpp` | Parent spawned mesh entities via `SetParent` instead of `ParentEntityComponent`. |
-| `src/engine/animation/AnimationCompiler.cpp` | Read child list from `HierarchyComponent.children`. |
-| `src/app/scripting/modules/AnimationModule.cpp` | Read child list from `HierarchyComponent.children`. |
-| `src/app/scripting/modules/WorldModule.cpp` | Use `TransformUtils`; parent + auto-name in `load_model`/`create_mesh`/`entity_create`; propagate via `HierarchyComponent.children`; add `set_name`/`get_name`. |
-| `src/app/debug/InspectorPanel.hpp` / `.cpp` | Reduce to the editor shell + header; stop drawing the "Scene" window. |
-| `src/app/layers/DebugLayer.hpp` / `.cpp` | Own + register `SceneSelection`; register `HierarchyPanel`. |
-| `src/app/CMakeLists.txt` | Add the new `.cpp` translation units. |
+| `src/engine/scene/Components.hpp` | Add `NameComponent`, `HierarchyComponent`; **remove** `SpawnedEntitiesComponent`, `ParentEntityComponent` (T5). |
+| `src/engine/assets/AssetManager.cpp` (:712) | Parent spawned mesh entities via `SetParent`. |
+| `src/engine/animation/AnimationCompiler.cpp` (:26), `src/app/scripting/modules/AnimationModule.cpp` (:32, :42) | Read children from `HierarchyComponent`. |
+| `src/app/scripting/modules/WorldModule.cpp` | Use `TransformUtils`; parent + auto-name in spawn paths; propagate via `HierarchyComponent.children`; add `set_name`/`get_name`. |
+| `src/app/debug/InspectorPanel.hpp/.cpp` | Editor shell + header; stops drawing the "Scene" window. |
+| `src/app/layers/DebugLayer.hpp/.cpp` | Own + register `SceneSelection`; register `HierarchyPanel`; dock layout V3 (T20). |
+| `src/engine/imgui/ImguiSubsystem.cpp` | Merge-load the icon font after Roboto. |
+| `src/engine/material/MaterialRegistry.hpp/.cpp`, `MaterialSystem.cpp` | `TryDescribe`; `GetOrSeedInstance` seeds from current. |
+| `src/engine/scene/TagSlots.hpp/.cpp` | Minimal tag-enumeration accessor. |
+| `resources/scripts/sandbox.das` | `set_name` on key entities (fox, floor, zone props). |
+| `tests/CMakeLists.txt` | Register new test files. |
+
+Services reachable from panels: `World`, `MaterialRegistry`, `MaterialBuffer`, `EffectParamBuffer`, `AssetManager` (→ `GetPipelineCache()`), `ImguiSubsystem` (AetherCore.cpp:65-115). `PipelineCache` is **not** a service — go through `AssetManager`.
 
 ---
 
 # Phase A — ECS Foundation
 
-## Task 1: Add identity + hierarchy components and helpers
+## Task 1: Identity + hierarchy components, helpers, tests
 
-**Files:**
-- Modify: `src/engine/scene/Components.hpp`
-- Create: `src/engine/scene/Hierarchy.hpp`
+**Files:** modify `src/engine/scene/Components.hpp`; create `src/engine/scene/Hierarchy.hpp`, `tests/scene/HierarchyTests.cpp`; modify `tests/CMakeLists.txt`.
 
-- [ ] **Step 1: Add the two components.** In `src/engine/scene/Components.hpp`, add `#include <string>` and `#include "scene/Entity.hpp"` to the include block, then add these structs inside `namespace aether` (near the top, after the `TransformComponent`):
+- [ ] **Step 1: Add the two components** in `Components.hpp` (add `#include <string>`, `#include <vector>`, `#include "scene/Entity.hpp"` as needed), after `TransformComponent`:
 
 ```cpp
 	// Human-readable display name (auto-assigned at spawn, editable in the inspector).
@@ -87,9 +110,9 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
 	};
 ```
 
-> **Migration note:** `ParentEntityComponent` and `SpawnedEntitiesComponent` are **left in place** through Tasks 1–4 so the tree stays green on every commit. They are deleted only in Task 5, once every reader and writer has moved to `HierarchyComponent`. Do not remove them here.
+> **Migration note:** `ParentEntityComponent` and `SpawnedEntitiesComponent` stay through Tasks 1-4 so the tree is green on every commit; deleted in Task 5.
 
-- [ ] **Step 2: Create `src/engine/scene/Hierarchy.hpp`:**
+- [ ] **Step 2: Create `src/engine/scene/Hierarchy.hpp`** (verbatim from v1 — verified against the real `World` API):
 
 ```cpp
 #pragma once
@@ -193,97 +216,29 @@ namespace aether::ecs
 } // namespace aether::ecs
 ```
 
-- [ ] **Step 3: BUILD** (compiles — additive only; legacy structs still present).
-Expected: success.
-
-- [ ] **Step 4: Commit:**
-```bash
-git add src/engine/scene/Components.hpp src/engine/scene/Hierarchy.hpp
-git commit -m "feat(scene): add NameComponent, HierarchyComponent and SetParent helpers"
-```
+- [ ] **Step 3: doctest coverage** — `tests/scene/HierarchyTests.cpp` (+ register in `tests/CMakeLists.txt`, matching the existing style): reparent moves the child between parents' lists; `SetParent(child, descendant)` returns false and mutates nothing; self-parent rejected; `DetachFromParent` → root; `DestroyHierarchy` kills the subtree and removes the node from its parent's list; parent `{0}` semantics.
+- [ ] **Step 4: BUILD + TEST.** Expected: green (additive only).
+- [ ] **Step 5: Commit** `feat(scene): add NameComponent, HierarchyComponent and SetParent helpers`.
 
 ---
 
-## Task 2: Hoist TRS math into a shared header
+## Task 2: Hoist TRS math into a shared header (+ round-trip test)
 
-**Files:**
-- Create: `src/engine/scene/TransformUtils.hpp`
-- Modify: `src/app/scripting/modules/WorldModule.cpp:26-58` (remove local copies), call sites
+**Files:** create `src/engine/scene/TransformUtils.hpp`, `tests/scene/TransformUtilsTests.cpp`; modify `src/app/scripting/modules/WorldModule.cpp` (delete locals at :29-61, qualify call sites), `tests/CMakeLists.txt`.
 
-- [ ] **Step 1: Create `src/engine/scene/TransformUtils.hpp`** with the exact bodies currently in `WorldModule.cpp`'s anonymous namespace, promoted into `namespace aether`:
-
-```cpp
-#pragma once
-
-#include <cmath>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-namespace aether
-{
-	// Compose a TRS matrix from pos / euler(degrees) / scale — YXZ rotation order.
-	inline glm::mat4 ComposeTransform(glm::vec3 pos, glm::vec3 rotEulerDeg, glm::vec3 scale)
-	{
-		glm::mat4 t = glm::translate(glm::mat4(1.0f), pos);
-		glm::mat4 r = glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.y), glm::vec3(0, 1, 0));
-		r = r * glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.x), glm::vec3(1, 0, 0));
-		r = r * glm::rotate(glm::mat4(1.0f), glm::radians(rotEulerDeg.z), glm::vec3(0, 0, 1));
-		glm::mat4 s = glm::scale(glm::mat4(1.0f), scale);
-		return t * r * s;
-	}
-
-	// Extract YXZ euler angles (degrees) + per-axis scale from a TRS matrix.
-	inline void DecomposeTRS(const glm::mat4& m, glm::vec3& pos, glm::vec3& eulerDeg, glm::vec3& scale)
-	{
-		pos = glm::vec3(m[3]);
-		float sx = glm::length(glm::vec3(m[0]));
-		float sy = glm::length(glm::vec3(m[1]));
-		float sz = glm::length(glm::vec3(m[2]));
-		scale = {sx, sy, sz};
-		glm::vec3 c2 = sz > 1e-6f ? glm::vec3(m[2]) / sz : glm::vec3(0, 0, 1);
-		float sinX = glm::clamp(-c2.y, -1.0f, 1.0f);
-		float rotXRad = std::asin(sinX);
-		float rotYRad = std::atan2(c2.x, c2.z);
-		float rotZRad = 0.0f;
-		float cosX = std::cos(rotXRad);
-		if (std::abs(cosX) > 1e-4f)
-		{
-			glm::vec3 c0 = sx > 1e-6f ? glm::vec3(m[0]) / sx : glm::vec3(1, 0, 0);
-			glm::vec3 c1 = sy > 1e-6f ? glm::vec3(m[1]) / sy : glm::vec3(0, 1, 0);
-			rotZRad = std::atan2(c0.y, c1.y);
-		}
-		eulerDeg = {glm::degrees(rotXRad), glm::degrees(rotYRad), glm::degrees(rotZRad)};
-	}
-} // namespace aether
-```
-
-- [ ] **Step 2: Delete the two functions** from `WorldModule.cpp`'s top anonymous namespace (lines ~26-58) and add `#include "scene/TransformUtils.hpp"` to its includes.
-
-- [ ] **Step 3: Qualify the call sites.** In `WorldModule.cpp`, the anon-namespace helpers were called unqualified. Prefix each with `aether::`:
-  - `das_set_euler`: `tc->localToWorld = aether::ComposeTransform(pos, e, scale);` and both `stc->localToWorld = aether::ComposeTransform(...)`.
-  - `das_set_transform`: `const auto xform = aether::ComposeTransform(...)`.
-  - `das_get_euler` and `das_for_each_with_tag_transform`: `aether::DecomposeTRS(...)`.
-
-- [ ] **Step 4: BUILD.** Expected: success.
-
-- [ ] **Step 5: Commit:**
-```bash
-git add src/engine/scene/TransformUtils.hpp src/app/scripting/modules/WorldModule.cpp
-git commit -m "refactor(scene): hoist TRS compose/decompose into TransformUtils.hpp"
-```
+- [ ] **Step 1:** Create `TransformUtils.hpp` with the exact bodies from `WorldModule.cpp`'s anonymous namespace (lines 29-61), promoted into `namespace aether` (v1 Task 2 snippet is verbatim-correct).
+- [ ] **Step 2:** Delete the two local functions; add `#include "scene/TransformUtils.hpp"`; prefix call sites with `aether::` in `das_set_euler`, `das_set_transform`, `das_get_euler`, `das_get_scale`, `das_for_each_with_tag_transform` (any other `ComposeTransform`/`DecomposeTRS` users `git grep` finds).
+- [ ] **Step 3:** `tests/scene/TransformUtilsTests.cpp`: compose→decompose round-trip across representative pos/euler/scale sets (including negative angles, near-gimbal ±90° X), tolerance ~1e-3.
+- [ ] **Step 4: BUILD + TEST.**
+- [ ] **Step 5: Commit** `refactor(scene): hoist TRS compose/decompose into TransformUtils.hpp`.
 
 ---
 
 ## Task 3: Populate hierarchy + names at spawn (writers)
 
-**Files:**
-- Modify: `src/engine/assets/AssetManager.cpp:~803-806`
-- Modify: `src/app/scripting/modules/WorldModule.cpp` (`load_model`, `create_mesh`, `entity_create`)
+**Files:** modify `src/engine/assets/AssetManager.cpp` (:712), `src/app/scripting/modules/WorldModule.cpp`.
 
-This task makes the new components **populated** while the legacy ones are still written (transitional — readers migrate in Task 4).
-
-- [ ] **Step 1: Parent spawned mesh entities in AssetManager.** In `AssetManager.cpp`, add `#include "scene/Hierarchy.hpp"`. Replace the `ParentEntityComponent` emplace (~805) — keep it for now, add the hierarchy link beside it:
+- [ ] **Step 1: AssetManager.** Add `#include "scene/Hierarchy.hpp"`; beside the legacy emplace at :712 (keep it until T5):
 
 ```cpp
 			if (parentEntityId != 0)
@@ -293,1049 +248,241 @@ This task makes the new components **populated** while the legacy ones are still
 			}
 ```
 
-- [ ] **Step 2: Parent + name in `load_model`.** In `WorldModule.cpp`'s `das_load_model`, add `#include "scene/Hierarchy.hpp"` and, in the loop that pushes spawned mesh entities, add the hierarchy link and a name derived from the model path stem:
-
-```cpp
-			for (aether::Entity meshEntity: meshEntities)
-			{
-				if (auto tc = w->TryGet<aether::TransformComponent>(meshEntity))
-				{
-					tc->localToWorld = xform * tc->localToWorld;
-				}
-				aether::ecs::SetParent(*w, meshEntity, aether::Entity{id});
-				ctx.sceneEntities.push_back(meshEntity);
-			}
-
-			// Name the parent entity after the model file stem (e.g. "fox").
-			{
-				std::string stem = path;
-				const auto slash = stem.find_last_of("/\\");
-				if (slash != std::string::npos) stem = stem.substr(slash + 1);
-				const auto dot = stem.find_last_of('.');
-				if (dot != std::string::npos) stem = stem.substr(0, dot);
-				w->EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = stem});
-			}
-```
-
-- [ ] **Step 3: Name primitives + bare entities.** In `das_create_mesh`, after resolving `primType`, capture a display string and name the entity in `das_add_mesh` (the entity is known there). Simplest: name in `das_add_mesh` from the primitive kind cached on the `CachedMesh`. If `CachedMesh` has no kind field, name generically in `das_add_mesh`:
-
-```cpp
-	// in das_add_mesh, after the EmplaceOrReplace calls:
-	if (!w->TryGet<aether::NameComponent>(e))
-	{
-		w->Emplace<aether::NameComponent>(e, aether::NameComponent{.name = "Mesh"});
-	}
-```
-And in `das_entity_create`, give a default name:
-```cpp
-	uint32_t das_entity_create(aether::World* w)
-	{
-		aether::Entity e = w->Create();
-		w->Emplace<aether::NameComponent>(e, aether::NameComponent{.name = "Entity"});
-		ActiveContext().sceneEntities.push_back(e);
-		return e.id;
-	}
-```
-> Note: to name primitives precisely ("Cube"/"Sphere"/…), thread the kind string from `das_create_mesh` into the `CachedMesh` entry and copy it in `das_add_mesh`. Optional polish; the generic "Mesh" default is acceptable for Spec 1.
-
-- [ ] **Step 4: BUILD.** Expected: success (legacy + new components both written).
-
-- [ ] **Step 5: Commit:**
-```bash
-git add src/engine/assets/AssetManager.cpp src/app/scripting/modules/WorldModule.cpp
-git commit -m "feat(scene): populate HierarchyComponent + NameComponent at spawn"
-```
+- [ ] **Step 2: `das_load_model`** — SetParent each spawned mesh entity under `Entity{id}` (keep the `SpawnedEntitiesComponent` bookkeeping until T5), and name the parent from the model path stem (e.g. `"fox"`), `EmplaceOrReplace<NameComponent>`.
+- [ ] **Step 3: Names for primitives + bare entities.** `das_add_mesh`: if no `NameComponent`, emplace one — use the primitive kind if cheap to thread through the mesh cache, else `"Mesh"`. `das_entity_create`: emplace `NameComponent{"Entity"}`.
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(scene): populate HierarchyComponent + NameComponent at spawn`.
 
 ---
 
 ## Task 4: Migrate readers to HierarchyComponent
 
-**Files:**
-- Modify: `src/engine/animation/AnimationCompiler.cpp:~26`
-- Modify: `src/app/scripting/modules/AnimationModule.cpp:~32-45`
-- Modify: `src/app/scripting/modules/WorldModule.cpp` (`das_set_euler`, `das_set_transform` propagation)
+**Files:** modify `src/engine/animation/AnimationCompiler.cpp` (:26), `src/app/scripting/modules/AnimationModule.cpp` (:32, :42), `src/app/scripting/modules/WorldModule.cpp` (`das_set_euler` :158, `das_set_transform` :184).
 
-- [ ] **Step 1: AnimationCompiler.** Replace the `SpawnedEntitiesComponent` read with a `HierarchyComponent` read:
-```cpp
-		const auto sec = world.TryGet<HierarchyComponent>(Entity{entityId});
-```
-and update the subsequent iteration to use `sec->children` (a `std::vector<Entity>`), passing `child` / `child.id` where `entityIds` ids were used. (Add `#include "scene/Components.hpp"` if not already included.)
-
-- [ ] **Step 2: AnimationModule.** In `AnimationModule.cpp`, the two `SpawnedEntitiesComponent` reads become `HierarchyComponent`:
-```cpp
-		const auto sec = w->TryGet<aether::HierarchyComponent>(e);
-		if (sec && !sec->children.empty())
-		{
-			return w->TryGet<aether::SkinnedMeshComponent>(sec->children.front());
-		}
-```
-and in `ForEachSpawnedSmc`:
-```cpp
-	void ForEachSpawnedSmc(aether::World* w, uint32_t id, auto&& f)
-	{
-		const auto sec = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
-		if (!sec)
-		{
-			return;
-		}
-		for (const aether::Entity child: sec->children)
-		{
-			if (auto smc = w->TryGet<aether::SkinnedMeshComponent>(child))
-			{
-				f(*smc);
-			}
-		}
-	}
-```
-(Match the existing body shape; the key change is `entityIds` → `children` and `Entity{eid}` → `child`.)
-
-- [ ] **Step 3: WorldModule propagation.** In `das_set_euler` and `das_set_transform`, replace the `SpawnedEntitiesComponent` propagation with `HierarchyComponent.children`:
-```cpp
-		const auto sec = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
-		if (sec)
-		{
-			for (const aether::Entity child: sec->children)
-			{
-				if (auto stc = w->TryGet<aether::TransformComponent>(child))
-				{
-					stc->localToWorld = aether::ComposeTransform(pos, e, scale); // set_euler
-					// (set_transform uses: stc->localToWorld = xform;)
-				}
-			}
-		}
-```
-
-- [ ] **Step 4: BUILD.** Expected: success.
-
-- [ ] **Step 5: RUN — regression check.** F1, confirm the **fox still animates** (proves AnimationModule/Compiler still find the skinned child through the hierarchy) and moving objects (plasma light target, toys) still move. No crash.
-
-- [ ] **Step 6: Commit:**
-```bash
-git add src/engine/animation/AnimationCompiler.cpp src/app/scripting/modules/AnimationModule.cpp src/app/scripting/modules/WorldModule.cpp
-git commit -m "refactor(scene): read child links from HierarchyComponent"
-```
+- [ ] **Step 1:** All five read sites switch `SpawnedEntitiesComponent`/`entityIds` (`vector<uint32_t>`) → `HierarchyComponent`/`children` (`vector<Entity>`); pass `child`/`child.id` accordingly. Propagation behavior in `set_euler`/`set_transform` is preserved verbatim (children get the parent's composed matrix).
+- [ ] **Step 2: BUILD.**
+- [ ] **Step 3: RUN (hand-off): fox still animates; plasma target + toys still move; no crash.**
+- [ ] **Step 4: Commit** `refactor(scene): read child links from HierarchyComponent`.
 
 ---
 
 ## Task 5: Delete the legacy components (finish the migration)
 
-**Files:**
-- Modify: `src/engine/scene/Components.hpp`
-- Modify: `src/engine/assets/AssetManager.cpp`, `src/app/scripting/modules/WorldModule.cpp` (remove now-dead legacy writes)
+**Files:** modify `src/engine/scene/Components.hpp`, `src/engine/assets/AssetManager.cpp`, `src/app/scripting/modules/WorldModule.cpp`, **`src/app/debug/InspectorPanel.cpp`**.
 
-- [ ] **Step 1: Remove dead writes.** Delete the `m_world->Emplace<ParentEntityComponent>(...)` line in `AssetManager.cpp` (keep the `SetParent` call). In `WorldModule.cpp`'s `das_load_model`, delete the `SpawnedEntitiesComponent` block (the `sec->entityIds` bookkeeping at the end) — the hierarchy now carries this.
-
-- [ ] **Step 2: Delete the structs.** Remove `ParentEntityComponent` and `SpawnedEntitiesComponent` from `Components.hpp`.
-
-- [ ] **Step 3: Prove zero references.**
-Run: `git grep -n "SpawnedEntitiesComponent\|ParentEntityComponent"`
-Expected: **no matches** (outside this plan/spec docs).
-
-- [ ] **Step 4: BUILD.** Expected: success — migration complete, single source of truth.
-
-- [ ] **Step 5: Commit:**
-```bash
-git add -A
-git commit -m "refactor(scene)!: remove SpawnedEntitiesComponent/ParentEntityComponent"
-```
+- [ ] **Step 1:** Remove the legacy writes: `Emplace<ParentEntityComponent>` (AssetManager :712 block), the `SpawnedEntitiesComponent` bookkeeping in `das_load_model` (:264-274).
+- [ ] **Step 2:** **Strip InspectorPanel's legacy references** (v2 correction): the two `Has<>` lines in `ComponentSummary` (:59, :63) and the two `View<>` unions in `CollectSceneEntities` (:125, :130). The panel is rewritten in Phase C; this just keeps the build green.
+- [ ] **Step 3:** Delete both structs from `Components.hpp`.
+- [ ] **Step 4:** `git grep -n "SpawnedEntitiesComponent\|ParentEntityComponent"` → no matches outside docs.
+- [ ] **Step 5: BUILD + TEST.**
+- [ ] **Step 6: Commit** `refactor(scene)!: remove SpawnedEntitiesComponent/ParentEntityComponent`.
 
 ---
 
-## Task 6: `.das` name bindings
+## Task 6: `.das` name bindings + sandbox names
 
-**Files:**
-- Modify: `src/app/scripting/modules/WorldModule.cpp`
+**Files:** modify `src/app/scripting/modules/WorldModule.cpp`, `resources/scripts/sandbox.das`.
 
-- [ ] **Step 1: Add binding functions** (in the anonymous namespace, near `das_entity_create`):
-```cpp
-	// set_name(world, entity_id, name)
-	void das_set_name(aether::World* w, uint32_t id, const char* name)
-	{
-		w->EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = name ? name : ""});
-	}
-
-	// get_name(world, entity_id) -> string
-	char* das_get_name(aether::World* w, uint32_t id, das::Context* ctx)
-	{
-		const auto nc = w->TryGet<aether::NameComponent>(aether::Entity{id});
-		return ctx->stringHeap->allocateString(nc ? nc->name.c_str() : "", nc ? static_cast<uint32_t>(nc->name.size()) : 0u);
-	}
-```
-> Confirm the exact daScript string-return idiom against a sibling binding that returns a string in this codebase; match it. If none exists, expose only `set_name` for Spec 1 and drop `get_name`.
-
-- [ ] **Step 2: Register them** in the `WorldModule` ctor beside the transform binds:
-```cpp
-				Bind<das_set_name>(lib, "set_name", SE::modifyExternal);
-				Bind<das_get_name>(lib, "get_name", SE::accessExternal);
-```
-
-- [ ] **Step 3: BUILD.** Expected: success.
-
-- [ ] **Step 4: RUN.** Add a temporary `set_name(world, g_player, "Player")` in `sandbox.das` `on_attach`, F5 to reload, confirm no script error (visual confirmation of the name lands in Task 8). Revert the temporary line.
-
-- [ ] **Step 5: Commit:**
-```bash
-git add src/app/scripting/modules/WorldModule.cpp
-git commit -m "feat(scripting): add set_name/get_name das bindings"
-```
+- [ ] **Step 1:** `das_set_name(World*, uint32_t, const char*)` → `EmplaceOrReplace<NameComponent>`; register `Bind<das_set_name>(lib, "set_name", SE::modifyExternal)`. Add `get_name` **only if** the daScript string-return idiom (`ctx->stringHeap->allocateString`) checks out against the vendored daScript (no existing binding returns a string — verify or drop).
+- [ ] **Step 2:** In `sandbox.das`, `set_name` the memorable actors: fox, floor, walls, plasma light target, Zone M gallery groups. (Doubles as binding verification and makes the outliner demo read well.)
+- [ ] **Step 3: BUILD.** F5-reload check happens at the Phase B RUN gate.
+- [ ] **Step 4: Commit** `feat(scripting): add set_name das binding + name sandbox actors`.
 
 ---
 
 ## Task 7: `SceneSelection` service
 
-**Files:**
-- Create: `src/app/debug/SceneSelection.hpp`
-- Modify: `src/app/layers/DebugLayer.hpp`, `src/app/layers/DebugLayer.cpp`
+**Files:** create `src/app/debug/SceneSelection.hpp`; modify `src/app/layers/DebugLayer.hpp/.cpp`.
 
-- [ ] **Step 1: Create `src/app/debug/SceneSelection.hpp`:**
-```cpp
-#pragma once
-
-#include <algorithm>
-#include <vector>
-
-#include "scene/Entity.hpp"
-#include "scene/World.hpp"
-
-namespace aether::app
-{
-	// Shared editor selection state (multi-select + a "primary" for the inspector).
-	// Registered in the ServiceContainer by DebugLayer; read by the outliner,
-	// the inspector, and (Spec 2) viewport picking.
-	class SceneSelection
-	{
-	public:
-		void Select(Entity e)
-		{
-			m_selected.clear();
-			if (e.IsValid())
-			{
-				m_selected.push_back(e);
-			}
-			m_primary = e;
-		}
-
-		void AddToSelection(Entity e)
-		{
-			if (e.IsValid() && !Contains(e))
-			{
-				m_selected.push_back(e);
-			}
-			m_primary = e;
-		}
-
-		void ToggleSelection(Entity e)
-		{
-			if (!e.IsValid())
-			{
-				return;
-			}
-			const auto it = std::find(m_selected.begin(), m_selected.end(), e);
-			if (it != m_selected.end())
-			{
-				m_selected.erase(it);
-				m_primary = m_selected.empty() ? Entity{} : m_selected.back();
-			}
-			else
-			{
-				m_selected.push_back(e);
-				m_primary = e;
-			}
-		}
-
-		void Clear()
-		{
-			m_selected.clear();
-			m_primary = {};
-		}
-
-		[[nodiscard]] bool Contains(Entity e) const
-		{
-			return std::find(m_selected.begin(), m_selected.end(), e) != m_selected.end();
-		}
-
-		[[nodiscard]] Entity Primary() const
-		{
-			return m_primary;
-		}
-
-		[[nodiscard]] const std::vector<Entity>& All() const
-		{
-			return m_selected;
-		}
-
-		// Drops entities that are no longer alive (call once per frame).
-		void Prune(const World& world)
-		{
-			const auto dead = [&](Entity e) { return !e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e)); };
-			std::erase_if(m_selected, dead);
-			if (dead(m_primary))
-			{
-				m_primary = m_selected.empty() ? Entity{} : m_selected.back();
-			}
-		}
-
-	private:
-		std::vector<Entity> m_selected;
-		Entity m_primary{};
-	};
-} // namespace aether::app
-```
-
-- [ ] **Step 2: Own + register it in `DebugLayer`.** In `DebugLayer.hpp`, add `#include "debug/SceneSelection.hpp"` and a member `SceneSelection m_selection;`. In `DebugLayer.cpp` `OnAttach` (before creating panels), register it into the container; unregister in `OnDetach`:
-```cpp
-	// OnAttach, top:
-	context.services.Register<SceneSelection>(m_selection);
-	// OnDetach, before m_panels.clear():
-	context.services.Unregister<SceneSelection>();
-```
-And in `OnUpdate`, prune once per frame:
-```cpp
-	m_selection.Prune(context.Get<World>());
-```
-(Add `#include "scene/World.hpp"` to `DebugLayer.cpp` if needed.)
-
-- [ ] **Step 3: BUILD.** Expected: success (service registered, not yet consumed).
-
-- [ ] **Step 4: Commit:**
-```bash
-git add src/app/debug/SceneSelection.hpp src/app/layers/DebugLayer.hpp src/app/layers/DebugLayer.cpp
-git commit -m "feat(debug): add shared SceneSelection service"
-```
+- [ ] **Step 1:** Create `SceneSelection` exactly per the v1 snippet (Select / AddToSelection / ToggleSelection / Clear / Contains / Primary / All / Prune-dead-entities; `std::vector<Entity>` + primary).
+- [ ] **Step 2:** `DebugLayer` member `SceneSelection m_selection;` — `context.services.Register<SceneSelection>(m_selection)` in `OnAttach` (before panel creation), `Unregister` in `OnDetach`, `m_selection.Prune(context.Get<World>())` in `OnUpdate`.
+- [ ] **Step 3: BUILD.**
+- [ ] **Step 4: Commit** `feat(debug): add shared SceneSelection service`.
 
 ---
 
 # Phase B — Entity List (the outliner)
 
-## Task 8: Extract `HierarchyPanel`, flat all-entity list
+## Task 8: Icon font foundation
 
-**Files:**
-- Create: `src/app/debug/HierarchyPanel.hpp`, `src/app/debug/HierarchyPanel.cpp`
-- Modify: `src/app/debug/InspectorPanel.cpp` (remove the "Scene" window block), `InspectorPanel.hpp`
-- Modify: `src/app/layers/DebugLayer.cpp` (register `HierarchyPanel`), `src/app/CMakeLists.txt`
+**Files:** add `resources/fonts/fa-solid-900.ttf`; create `src/app/debug/Icons.hpp`; modify `src/engine/imgui/ImguiSubsystem.cpp` (font load, ~:219-233).
 
-- [ ] **Step 1: Create `HierarchyPanel.hpp`:**
-```cpp
-#pragma once
-
-#include "debug/DebugPanel.hpp"
-
-namespace aether::app
-{
-	// The scene outliner. Draws the window titled "Scene" (dock mapping unchanged).
-	class HierarchyPanel final : public DebugPanel
-	{
-	public:
-		std::string_view GetName() const override
-		{
-			return "Scene Outliner";
-		}
-
-		void OnImGui(LayerContext& context) override;
-	};
-} // namespace aether::app
-```
-> `GetName()` differs from the window title on purpose — `DebugLayer` iterates panels by `GetName()`, and the window title is what `ImGui::Begin` uses. Keep the `Begin("Scene")` title so the saved dock node still matches.
-
-- [ ] **Step 2: Create `HierarchyPanel.cpp`** — flat list of every live entity, names + `#id`, selection through `SceneSelection`:
-```cpp
-#include "debug/HierarchyPanel.hpp"
-
-#include <string>
-
-#include <entt/entt.hpp>
-#include <imgui.h>
-
-#include "debug/SceneSelection.hpp"
-#include "layers/AppLayer.hpp"
-#include "scene/Components.hpp"
-#include "scene/World.hpp"
-#include "utils/Profiler.hpp"
-
-namespace aether::app
-{
-	namespace
-	{
-		std::string EntityLabel(const World& world, Entity e)
-		{
-			const auto* nc = world.TryGet<NameComponent>(e);
-			const std::string name = (nc && !nc->name.empty()) ? nc->name : std::string("Entity");
-			return name + "  ##" + std::to_string(e.id);
-		}
-	} // namespace
-
-	void HierarchyPanel::OnImGui(LayerContext& context)
-	{
-		AE_PROFILE_ZONE();
-		World& world = context.Get<World>();
-		auto& selection = context.Get<SceneSelection>();
-		auto& reg = world.GetRegistry();
-
-		ImGui::Begin("Scene");
-		{
-			std::size_t count = 0;
-			for (const auto handle: reg.storage<entt::entity>())
-			{
-				if (reg.valid(handle))
-				{
-					++count;
-				}
-			}
-			ImGui::Text("%zu entities", count);
-
-			ImGui::BeginChild("SceneList", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
-			for (const auto handle: reg.storage<entt::entity>())
-			{
-				if (!reg.valid(handle))
-				{
-					continue;
-				}
-				const Entity e = World::FromEntt(handle);
-				const bool selected = selection.Contains(e);
-				const std::string label = std::string("#") + std::to_string(e.id) + "  " + EntityLabel(world, e);
-				if (ImGui::Selectable(label.c_str(), selected))
-				{
-					selection.Select(e);
-				}
-			}
-			ImGui::EndChild();
-		}
-		ImGui::End();
-	}
-} // namespace aether::app
-```
-
-- [ ] **Step 3: Remove the "Scene" window from `InspectorPanel`.** Delete the entire `ImGui::Begin("Scene") { … } ImGui::End();` block from `InspectorPanel::OnImGui` and the `CollectSceneEntities`/`SceneEntityLabel`/`kMaxSceneRows` members it used. Change the inspector's selection source from `m_selectedSceneEntity` to `context.Get<SceneSelection>().Primary()` (full editor comes in Phase C; for now just read the primary). Remove `m_selectedSceneEntity` from `InspectorPanel.hpp`.
-
-- [ ] **Step 4: Register the panel + add to build.** In `DebugLayer.cpp` add `#include "debug/HierarchyPanel.hpp"` and `m_panels.push_back(std::make_unique<HierarchyPanel>());` (near the InspectorPanel push). In `src/app/CMakeLists.txt`, add `debug/HierarchyPanel.cpp` to the `App` sources list (match how the other `debug/*.cpp` files are listed).
-
-- [ ] **Step 5: BUILD.** Expected: success.
-
-- [ ] **Step 6: RUN.** F1 → the **Scene** window now lists **every** entity (well past the old 80 cap), each showing `#id Name`. Clicking one selects it; the Inspector reflects the same primary. The fox parent shows its model-stem name.
-
-- [ ] **Step 7: Commit:**
-```bash
-git add src/app/debug/HierarchyPanel.hpp src/app/debug/HierarchyPanel.cpp src/app/debug/InspectorPanel.hpp src/app/debug/InspectorPanel.cpp src/app/layers/DebugLayer.cpp src/app/CMakeLists.txt
-git commit -m "feat(debug): extract HierarchyPanel with uncapped all-entity list"
-```
+- [ ] **Step 1:** Vendor Font Awesome 6 Free-Solid TTF (OFL-1.1) into `resources/fonts/` (pak pipeline picks it up beside Roboto).
+- [ ] **Step 2:** `Icons.hpp` — small self-contained codepoint defines (no IconFontCppHeaders dependency), e.g. `ICON_FA_CUBE "\xef\x86\xb2"` (U+F1B2), person-running, weight-hanging, bolt, tag, magnifying-glass, plus, trash, palette, sitemap, eye, gears, film, wand.
+- [ ] **Step 3:** In `ImguiSubsystem` after the Roboto load: second `AddFontFromMemoryTTF` with `ImFontConfig{MergeMode=true, PixelSnapH=true, GlyphMinAdvanceX=15}` and static glyph range `{0xE000, 0xF8FF, 0}` (FA6 solid glyphs live in the PUA); read via the same `assets://fonts/…` VFS path.
+- [ ] **Step 4: BUILD.** Fallback if the TTF can't be obtained: keep `Icons.hpp` names but map to colored Unicode `●■▲◆` and proceed — call sites don't change.
+- [ ] **Step 5: Commit** `feat(imgui): merge FA6 solid icon subset into the font atlas`.
 
 ---
 
-## Task 9: Tree rendering + type badges
+## Task 9: Extract `HierarchyPanel`, flat uncapped list
 
-**Files:**
-- Modify: `src/app/debug/HierarchyPanel.cpp`
+**Files:** create `src/app/debug/HierarchyPanel.hpp/.cpp`; modify `src/app/debug/InspectorPanel.hpp/.cpp`, `src/app/layers/DebugLayer.cpp`.
 
-- [ ] **Step 1: Add a badge helper** (anonymous namespace in `HierarchyPanel.cpp`). Include `Color.hpp` and `physics/PhysicsComponents.hpp`:
-```cpp
-		// Returns a short bracket-tag + color describing the entity's dominant kind.
-		struct Badge { const char* tag; ImVec4 color; };
-		Badge KindBadge(const World& world, Entity e)
-		{
-			if (world.Has<SkinnedMeshComponent>(e)) return {"[S]", {0.55f, 0.75f, 1.0f, 1.0f}};
-			if (world.Has<RigidBodyComponent>(e))   return {"[P]", {1.0f, 0.72f, 0.35f, 1.0f}};
-			if (world.Has<MeshComponent>(e))         return {"[M]", {0.65f, 0.9f, 0.65f, 1.0f}};
-			return {"[ ]", {0.6f, 0.6f, 0.6f, 1.0f}};
-		}
-```
-(Add `#include "physics/PhysicsComponents.hpp"` for `RigidBodyComponent`.)
-
-- [ ] **Step 2: Replace the flat loop with a recursive tree.** Add a recursive draw function and drive it from roots:
-```cpp
-		void DrawNode(World& world, SceneSelection& selection, Entity e)
-		{
-			const auto* h = world.TryGet<HierarchyComponent>(e);
-			const bool hasKids = h && !h->children.empty();
-
-			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
-			if (selection.Contains(e)) flags |= ImGuiTreeNodeFlags_Selected;
-			if (!hasKids) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-
-			const Badge b = KindBadge(world, e);
-			ImGui::PushID(static_cast<int>(e.id));
-			ImGui::TextColored(b.color, "%s", b.tag);
-			ImGui::SameLine();
-			const bool open = ImGui::TreeNodeEx("node", flags, "%s  #%u",
-				world.TryGet<NameComponent>(e) && !world.Get<NameComponent>(e).name.empty()
-					? world.Get<NameComponent>(e).name.c_str() : "Entity", e.id);
-			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-			{
-				selection.Select(e);
-			}
-			if (open && hasKids)
-			{
-				for (const Entity c: h->children) DrawNode(world, selection, c);
-				ImGui::TreePop();
-			}
-			ImGui::PopID();
-		}
-```
-In `OnImGui`, replace the `Selectable` loop with: iterate all valid entities, and for each **root** (no `HierarchyComponent` or `parent == {0}`) call `DrawNode`:
-```cpp
-			for (const auto handle: reg.storage<entt::entity>())
-			{
-				if (!reg.valid(handle)) continue;
-				const Entity e = World::FromEntt(handle);
-				const auto* h = world.TryGet<HierarchyComponent>(e);
-				if (!h || !h->parent.IsValid())
-				{
-					DrawNode(world, selection, e);
-				}
-			}
-```
-
-- [ ] **Step 3: BUILD.** Expected: success.
-
-- [ ] **Step 4: RUN.** The fox's spawned mesh children now nest under the fox node; badges show `[S]`/`[M]`/`[P]` in color; expand/collapse works; clicking a row (not the arrow) selects it.
-
-- [ ] **Step 5: Commit:**
-```bash
-git add src/app/debug/HierarchyPanel.cpp
-git commit -m "feat(debug): render entity hierarchy as a tree with type badges"
-```
+- [ ] **Step 1:** `HierarchyPanel : DebugPanel` (`GetName()` = "Scene Outliner", window still `Begin("Scene")` so the saved dock mapping holds). Body per v1 Task 8: entity count + `BeginChild` list over `reg.storage<entt::entity>()` (skip invalid), rows `#id Name` via `Selectable`, click → `selection.Select(e)`.
+- [ ] **Step 2:** InspectorPanel: delete the whole `Begin("Scene")` block + `CollectSceneEntities`/`SceneEntityLabel`/`kMaxSceneRows`/`m_selectedSceneEntity`; selection source becomes `context.Get<SceneSelection>().Primary()`.
+- [ ] **Step 3:** DebugLayer: `m_panels.push_back(std::make_unique<HierarchyPanel>());` near the InspectorPanel push. (No CMake edit — sources are GLOBed.)
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(debug): extract HierarchyPanel with uncapped all-entity list`.
 
 ---
 
-## Task 10: Search/filter, count, create menu
+## Task 10: Tree rendering + icon badges
 
-**Files:**
-- Modify: `src/app/debug/HierarchyPanel.hpp`, `src/app/debug/HierarchyPanel.cpp`
+**Files:** modify `src/app/debug/HierarchyPanel.cpp`.
 
-- [ ] **Step 1: Add state** to `HierarchyPanel.hpp`: `char m_search[64] = {};`.
-
-- [ ] **Step 2: Toolbar.** At the top of `OnImGui` (inside `Begin("Scene")`), draw a `+` create menu and a search box:
-```cpp
-			if (ImGui::Button("+"))
-			{
-				ImGui::OpenPopup("CreateEntity");
-			}
-			if (ImGui::BeginPopup("CreateEntity"))
-			{
-				if (ImGui::MenuItem("Empty entity"))
-				{
-					Entity e = world.Create();
-					world.Emplace<NameComponent>(e, NameComponent{.name = "Entity"});
-					selection.Select(e);
-				}
-				ImGui::EndPopup();
-			}
-			ImGui::SameLine();
-			ImGui::SetNextItemWidth(-FLT_MIN);
-			ImGui::InputTextWithHint("##search", "Search…", m_search, sizeof(m_search));
-```
-
-- [ ] **Step 3: Filter mode.** When `m_search[0] != '\0'`, skip the tree and draw a flat, filtered list (case-insensitive substring match on name or `#id`), each row a `Selectable` like Task 8. Otherwise draw the tree (Task 9). Add a small `std::string` lowercase helper in the anon namespace.
-
-- [ ] **Step 4: BUILD.** Expected: success.
-
-- [ ] **Step 5: RUN.** Typing `fox` filters to matching rows; clearing restores the tree; `+ → Empty entity` adds a selectable "Entity".
-
-- [ ] **Step 6: Commit:**
-```bash
-git add src/app/debug/HierarchyPanel.hpp src/app/debug/HierarchyPanel.cpp
-git commit -m "feat(debug): outliner search filter + create-entity menu"
-```
+- [ ] **Step 1:** Kind badge helper returning `{icon, color}` from components — skinned (`ICON_FA_PERSON_RUNNING`, blue), physics (`ICON_FA_WEIGHT_HANGING`, orange), effect (`ICON_FA_WAND_MAGIC_SPARKLES`, purple), mesh (`ICON_FA_CUBE`, green), empty (dim dot). Include `physics/PhysicsComponents.hpp`.
+- [ ] **Step 2:** Recursive `DrawNode` per v1 Task 9 (TreeNodeEx `OpenOnArrow|SpanAvailWidth`, leaf flags for childless, click-not-toggle selects), driven from roots (`!h || !h->parent.IsValid()`); icon drawn colored before the label, muted `#id` after.
+- [ ] **Step 3:** Enable tree indent guides with `ImGuiTreeNodeFlags_DrawLinesToNodes` (present in 1.92.8).
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(debug): render entity hierarchy as a tree with icon badges`.
 
 ---
 
-## Task 11: Multi-select, context menu, keyboard
+## Task 11: Toolbar — search, create, count, filter chips
 
-**Files:**
-- Modify: `src/app/debug/HierarchyPanel.cpp`
+**Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp`.
 
-- [ ] **Step 1: Ctrl-select.** In the tree/flat click handlers, branch on `ImGui::GetIO().KeyCtrl`:
-```cpp
-			if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
-			{
-				if (ImGui::GetIO().KeyCtrl) selection.ToggleSelection(e);
-				else selection.Select(e);
-			}
-```
-(Shift-range is optional for Spec 1; Ctrl covers the multi-select need for bulk ops.)
-
-- [ ] **Step 2: Per-node context menu.** Inside `DrawNode`, after the tree node, add:
-```cpp
-			if (ImGui::BeginPopupContextItem("ctx"))
-			{
-				if (ImGui::MenuItem("Rename")) { selection.Select(e); /* F2 flow below */ }
-				if (ImGui::MenuItem("Create child"))
-				{
-					Entity child = world.Create();
-					world.Emplace<NameComponent>(child, NameComponent{.name = "Entity"});
-					ecs::SetParent(world, child, e);
-					selection.Select(child);
-				}
-				ImGui::Separator();
-				if (ImGui::MenuItem("Delete"))
-				{
-					ecs::DestroyHierarchy(world, e);
-					selection.Clear();
-				}
-				ImGui::EndPopup();
-			}
-```
-(Add `#include "scene/Hierarchy.hpp"`.)
-
-- [ ] **Step 3: Inline rename.** Add `Entity m_renaming{}; char m_renameBuf[64] = {};` to the header. When `Rename` is chosen (or `F2` with a primary), set `m_renaming = e` and seed the buffer from the name. While `m_renaming == e`, draw an `InputText` in place of the label; commit on Enter/focus-loss into `NameComponent`, then clear `m_renaming`.
-
-- [ ] **Step 4: Delete/F2 keys.** After the tree, when the "Scene" window is focused:
-```cpp
-			if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows))
-			{
-				if (ImGui::IsKeyPressed(ImGuiKey_Delete))
-				{
-					for (const Entity e: selection.All()) ecs::DestroyHierarchy(world, e);
-					selection.Clear();
-				}
-				if (ImGui::IsKeyPressed(ImGuiKey_F2) && selection.Primary().IsValid())
-				{
-					m_renaming = selection.Primary();
-					// seed m_renameBuf from the name
-				}
-			}
-```
-> Deleting while iterating the registry: collect the selection into a local vector before destroying, since `DestroyHierarchy` mutates storage.
-
-- [ ] **Step 5: BUILD.** Expected: success.
-
-- [ ] **Step 6: RUN.** Ctrl-click selects multiple; right-click → Create child / Delete works; Delete key removes the selection (and its subtree); F2 / context Rename edits the name inline and it sticks in the tree.
-
-- [ ] **Step 7: Commit:**
-```bash
-git add src/app/debug/HierarchyPanel.hpp src/app/debug/HierarchyPanel.cpp
-git commit -m "feat(debug): outliner multi-select, context menu, rename + delete keys"
-```
+- [ ] **Step 1:** Toolbar row: `ICON_FA_PLUS` create menu (Empty entity; Cube/Sphere/Plane via the primitive-mesh spawn path used by `das_create_mesh`/`PrimitiveMeshes` — auto-named, selected on create), `ICON_FA_MAGNIFYING_GLASS` search `InputTextWithHint` (`m_search[64]`), right-aligned live entity count.
+- [ ] **Step 2:** Filter mode: when searching, flat `ImGuiListClipper` list (case-insensitive substring on name or `#id`); tree otherwise.
+- [ ] **Step 3:** Component-type filter chips (toggle buttons: mesh/skinned/physics/effect) applied in both modes.
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(debug): outliner toolbar — search, create menu, type filters`.
 
 ---
 
-## Task 12: Drag-drop reparent
+## Task 12: Multi-select, context menu, keyboard
 
-**Files:**
-- Modify: `src/app/debug/HierarchyPanel.cpp`
+**Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp`.
 
-- [ ] **Step 1: Drag source + drop target** inside `DrawNode`, right after the tree node is drawn:
-```cpp
-			if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-			{
-				ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
-				ImGui::Text("Move %s", world.TryGet<NameComponent>(e) ? world.Get<NameComponent>(e).name.c_str() : "entity");
-				ImGui::EndDragDropSource();
-			}
-			if (ImGui::BeginDragDropTarget())
-			{
-				if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
-				{
-					const std::uint32_t draggedId = *static_cast<const std::uint32_t*>(p->Data);
-					ecs::SetParent(world, Entity{draggedId}, e); // cycle-guarded; no-op if invalid
-				}
-				ImGui::EndDragDropTarget();
-			}
-```
+- [ ] **Step 1:** Ctrl-click `ToggleSelection`; **shift-click range** over the currently visible row order (panel records the flattened visible list each frame); plain click `Select`.
+- [ ] **Step 2:** Context menu per node: Rename (→ inline edit), Create child (new named entity + `SetParent`), Delete (subtree via `DestroyHierarchy`).
+- [ ] **Step 3:** Inline rename state (`m_renaming`, `m_renameBuf`): InputText swaps in for the label, commits to `NameComponent` on Enter/defocus.
+- [ ] **Step 4:** Window-focused keys: Delete (collect selection to a local vector first, then destroy), F2 (rename primary).
+- [ ] **Step 5: BUILD.**
+- [ ] **Step 6: Commit** `feat(debug): outliner multi-select, context menu, rename + delete keys`.
 
-- [ ] **Step 2: Drop-on-empty to unparent.** After the root loop, add an invisible full-child drop target that calls `ecs::SetParent(world, Entity{draggedId}, Entity{})` (detach to root).
+---
 
-- [ ] **Step 3: BUILD.** Expected: success.
+## Task 13: Drag-drop reparent
 
-- [ ] **Step 4: RUN.** Drag one entity onto another → it nests; drag a child onto empty space → it returns to root; dragging a parent onto its own descendant is silently rejected (cycle guard) — no crash, no broken tree.
+**Files:** modify `src/app/debug/HierarchyPanel.cpp`.
 
-- [ ] **Step 5: Commit:**
-```bash
-git add src/app/debug/HierarchyPanel.cpp
-git commit -m "feat(debug): drag-drop reparenting in the outliner"
-```
+- [ ] **Step 1:** `BeginDragDropSource` with `AETHER_ENTITY` payload (entity id) + drag label; `BeginDragDropTarget` on each node → `ecs::SetParent(world, Entity{draggedId}, e)` (cycle guard makes bad drops silent no-ops).
+- [ ] **Step 2:** Empty-space drop target after the root loop → detach to root (`SetParent(world, dragged, {})`).
+- [ ] **Step 3: BUILD.**
+- [ ] **Step 4: RUN (hand-off): tree with names + icons; search filters; + creates; ctrl/shift multi-select; right-click ops; F2 rename sticks; Delete removes subtree; drag-drop nests / unparents / rejects cycles; F5 reload rebuilds names + hierarchy; entity count well past 80.**
+- [ ] **Step 5: Commit** `feat(debug): drag-drop reparenting in the outliner`.
+
+---
+
+## Task 14: Juice pass (micro-animations)
+
+**Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp` (and small shared helpers if the inspector reuses them).
+
+- [ ] **Step 1: Selection pulse** — on selection change, record `ImGui::GetTime()`; selected-row highlight lerps from an accent-bright tint to the normal selection color over ~0.2s (drawlist rect behind the row, eased).
+- [ ] **Step 2: Spawn flash** — panel tracks seen entity ids (`unordered_set` + first-seen time); rows younger than ~0.75s get a fading glow tint. Set is pruned with dead ids.
+- [ ] **Step 3: Hover + rows** — subtle alternating row tint and a hover brighten (drawlist, respecting the theme's flat look).
+- [ ] **Step 4: Empty states** — centered, dimmed: outliner "No entities match" (search mode with zero hits); inspector "Nothing selected".
+- [ ] **Step 5: BUILD.**
+- [ ] **Step 6: Commit** `feat(debug): outliner micro-animations + empty states`.
 
 ---
 
 # Phase C — Inspector
 
-## Task 13: Inspector shell + header + drawer scaffold
+## Task 15: Editor shell + header + drawer scaffold
 
-**Files:**
-- Create: `src/app/debug/ComponentDrawers.hpp`, `src/app/debug/ComponentDrawers.cpp`
-- Modify: `src/app/debug/InspectorPanel.cpp`, `src/app/CMakeLists.txt`
+**Files:** create `src/app/debug/ComponentDrawers.hpp/.cpp`; modify `src/app/debug/InspectorPanel.cpp`.
 
-- [ ] **Step 1: Create `ComponentDrawers.hpp`:**
-```cpp
-#pragma once
-
-namespace aether { class World; struct Entity; }
-
-namespace aether::app
-{
-	struct LayerContext;
-
-	// Each draws one CollapsingHeader section for `entity` if that component is present.
-	void DrawTransform(LayerContext& context, World& world, Entity entity);
-	void DrawSkinnedMesh(World& world, Entity entity);
-	void DrawMaterial(World& world, Entity entity);   // read-only (material system mid-rewrite)
-	void DrawPhysics(World& world, Entity entity);
-	void DrawMeshPipeline(World& world, Entity entity);
-	void DrawHierarchy(World& world, Entity entity, class SceneSelection& selection);
-	void DrawTags(World& world, Entity entity);
-} // namespace aether::app
-```
-
-- [ ] **Step 2: Create `ComponentDrawers.cpp`** with empty-but-guarded stubs that compile (each `TryGet`s its component and early-returns if absent). Real bodies land in Tasks 14–17. Example stub:
-```cpp
-#include "debug/ComponentDrawers.hpp"
-#include <imgui.h>
-#include "layers/AppLayer.hpp"
-#include "scene/Components.hpp"
-#include "scene/World.hpp"
-
-namespace aether::app
-{
-	void DrawSkinnedMesh(World& world, Entity entity) { (void)world; (void)entity; }
-	// … one stub per declared function …
-}
-```
-
-- [ ] **Step 3: Rewrite `InspectorPanel::OnImGui`** as the editor shell reading the primary selection:
-```cpp
-	void InspectorPanel::OnImGui(LayerContext& context)
-	{
-		AE_PROFILE_ZONE();
-		World& world = context.Get<World>();
-		auto& selection = context.Get<SceneSelection>();
-		const Entity e = selection.Primary();
-
-		ImGui::Begin("Inspector");
-		if (!e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e)))
-		{
-			ImGui::TextDisabled("No selection");
-			ImGui::End();
-			return;
-		}
-
-		// Header: editable name + id
-		if (auto* nc = world.TryGet<NameComponent>(e))
-		{
-			char buf[64];
-			std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
-			ImGui::SetNextItemWidth(-60.0f);
-			if (ImGui::InputText("##name", buf, sizeof(buf)))
-			{
-				nc->name = buf;
-			}
-		}
-		else if (ImGui::SmallButton("Add name"))
-		{
-			world.Emplace<NameComponent>(e, NameComponent{.name = "Entity"});
-		}
-		ImGui::SameLine();
-		ImGui::TextDisabled("#%u", e.id);
-
-		if (selection.All().size() > 1)
-		{
-			ImGui::TextDisabled("Editing primary of %zu selected", selection.All().size());
-		}
-		ImGui::Separator();
-
-		DrawTransform(context, world, e);
-		DrawSkinnedMesh(world, e);
-		DrawMaterial(world, e);
-		DrawPhysics(world, e);
-		DrawMeshPipeline(world, e);
-		DrawHierarchy(world, e, selection);
-		DrawTags(world, e);
-
-		ImGui::End();
-	}
-```
-Add includes for `SceneSelection.hpp`, `ComponentDrawers.hpp`, `<cstdio>`. Drop the now-unused physics/animation includes the old body used if they're no longer referenced.
-
-- [ ] **Step 4: Add `ComponentDrawers.cpp` to `src/app/CMakeLists.txt`.**
-
-- [ ] **Step 5: BUILD.** Expected: success.
-
-- [ ] **Step 6: RUN.** Selecting an entity shows an editable name field + `#id`; multi-select shows the "primary of N" note. Sections are empty (stubs) — fleshed out next.
-
-- [ ] **Step 7: Commit:**
-```bash
-git add src/app/debug/ComponentDrawers.hpp src/app/debug/ComponentDrawers.cpp src/app/debug/InspectorPanel.cpp src/app/CMakeLists.txt
-git commit -m "feat(debug): inspector editor shell with editable name header"
-```
+- [ ] **Step 1:** `ComponentDrawers.hpp` declares: `DrawTransform(LayerContext&, World&, Entity)`, `DrawSkinnedMesh`, `DrawMaterial(LayerContext&, World&, Entity)`, `DrawEffectParams(LayerContext&, World&, Entity)`, `DrawPhysics`, `DrawMeshPipeline`, `DrawHierarchy(World&, Entity, SceneSelection&)`, `DrawTags`. `.cpp` = guarded stubs (TryGet + early-return).
+- [ ] **Step 2:** InspectorPanel shell: no-selection empty state; header = kind icon + editable name InputText (emplace-on-edit if missing) + muted `#id` + "Editing primary of N selected" note; then the Draw* list.
+- [ ] **Step 3:** **Add Component palette**: button opens a popup with an InputText filter over safely-default-constructible components (Transform, Name, Hierarchy) — type-to-filter, click/Enter adds. `Delete entity` button (DestroyHierarchy + selection.Clear).
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(debug): inspector editor shell, header, add-component palette`.
 
 ---
 
-## Task 14: Transform drawer (physics-aware)
+## Task 16: Transform drawer (per-axis colors, physics-aware)
 
-**Files:**
-- Modify: `src/app/debug/ComponentDrawers.cpp`
+**Files:** modify `src/app/debug/ComponentDrawers.cpp`.
 
-- [ ] **Step 1: Implement `DrawTransform`:**
+- [ ] **Step 1:** `DrawVec3Row(label, glm::vec3&, resetValue, speed)` helper — per-axis colored badge (X red / Y green / Z blue accent bar or mini-button that resets that axis), `DragFloat` per axis, row reset button; returns changed.
+- [ ] **Step 2:** `DrawTransform`: `DecomposeTRS` → Position/Rotation/Scale rows → on change `ComposeTransform`; propagate to `HierarchyComponent.children` exactly like `set_transform`; **physics-aware teleport** if `PhysicsStateComponent` present:
+
 ```cpp
-	void DrawTransform(LayerContext& context, World& world, Entity entity)
-	{
-		auto* tc = world.TryGet<TransformComponent>(entity);
-		if (!tc)
+		if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
 		{
-			return;
+			const glm::quat q = glm::quat(glm::radians(euler)); // matches YXZ compose order — verify axis order against ComposeTransform
+			ps->prevPosition = pos;   ps->currPosition = pos;
+			ps->prevRotation = q;     ps->currRotation = q;
+			ps->scale = scale;
 		}
-		if (!ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen))
-		{
-			return;
-		}
-
-		glm::vec3 pos{}, euler{}, scale{};
-		DecomposeTRS(tc->localToWorld, pos, euler, scale);
-		bool changed = false;
-		changed |= ImGui::DragFloat3("Position", &pos.x, 0.05f);
-		changed |= ImGui::DragFloat3("Rotation", &euler.x, 0.5f);
-		changed |= ImGui::DragFloat3("Scale", &scale.x, 0.02f, 0.001f, 1000.0f);
-
-		if (changed)
-		{
-			tc->localToWorld = ComposeTransform(pos, euler, scale);
-			// Propagate to children like set_transform does.
-			if (const auto* h = world.TryGet<HierarchyComponent>(entity))
-			{
-				for (const Entity c: h->children)
-				{
-					if (auto* stc = world.TryGet<TransformComponent>(c))
-					{
-						stc->localToWorld = tc->localToWorld;
-					}
-				}
-			}
-			// Physics-aware teleport so the body doesn't stomp the edit next frame.
-			if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
-			{
-				ps->prevPosition = pos;
-				ps->currPosition = pos;
-			}
-		}
-	}
 ```
-Add includes: `scene/TransformUtils.hpp`, `scene/Hierarchy.hpp` (for `HierarchyComponent`; it's in Components.hpp already), `physics/PhysicsComponents.hpp`.
 
-- [ ] **Step 2: BUILD.** Expected: success.
-
-- [ ] **Step 3: RUN.** Select a **static wall/floor** → drag Position/Rotation/Scale, it moves live and stays. Select a **physics toy** (dynamic body) → drag Position; it teleports and does **not** snap back next frame. Fox children follow the fox's transform edits.
-
-- [ ] **Step 4: Commit:**
-```bash
-git add src/app/debug/ComponentDrawers.cpp
-git commit -m "feat(debug): editable physics-aware transform section"
-```
+- [ ] **Step 3: BUILD.**
+- [ ] **Step 4: RUN (hand-off): static wall edit sticks; dynamic toy teleports (position AND rotation) without snap-back; fox children follow parent edits.**
+- [ ] **Step 5: Commit** `feat(debug): editable physics-aware transform section with per-axis rows`.
 
 ---
 
-## Task 15: Skinned-mesh, hierarchy, tags drawers
+## Task 17: Skinned-mesh, hierarchy, tags drawers (+ TagSlots enumeration)
 
-**Files:**
-- Modify: `src/app/debug/ComponentDrawers.cpp`
+**Files:** modify `src/app/debug/ComponentDrawers.cpp`, `src/engine/scene/TagSlots.hpp/.cpp`.
 
-- [ ] **Step 1: `DrawSkinnedMesh`:**
-```cpp
-	void DrawSkinnedMesh(World& world, Entity entity)
-	{
-		auto* smc = world.TryGet<SkinnedMeshComponent>(entity);
-		if (!smc || !ImGui::CollapsingHeader("Skinned Mesh"))
-		{
-			return;
-		}
-		int clip = static_cast<int>(smc->clipIndex);
-		if (ImGui::InputInt("Clip", &clip)) smc->clipIndex = static_cast<std::uint32_t>(std::max(0, clip));
-		ImGui::DragFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f);
-		ImGui::DragFloat("Time", &smc->animTime, 0.01f, 0.0f, 1000.0f);
-		ImGui::Checkbox("Looping", &smc->looping);
-	}
-```
-
-- [ ] **Step 2: `DrawHierarchy`** (parent/children navigation + unparent):
-```cpp
-	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection)
-	{
-		auto* h = world.TryGet<HierarchyComponent>(entity);
-		if (!h || !ImGui::CollapsingHeader("Hierarchy"))
-		{
-			return;
-		}
-		if (h->parent.IsValid())
-		{
-			ImGui::Text("Parent:");
-			ImGui::SameLine();
-			if (ImGui::SmallButton((std::string("#") + std::to_string(h->parent.id)).c_str()))
-			{
-				selection.Select(h->parent);
-			}
-			ImGui::SameLine();
-			if (ImGui::SmallButton("Unparent"))
-			{
-				ecs::SetParent(world, entity, Entity{});
-			}
-		}
-		else
-		{
-			ImGui::TextDisabled("Root");
-		}
-		ImGui::Text("Children: %zu", h->children.size());
-		for (const Entity c: h->children)
-		{
-			if (ImGui::SmallButton((std::string("#") + std::to_string(c.id)).c_str()))
-			{
-				selection.Select(c);
-			}
-			ImGui::SameLine();
-		}
-		ImGui::NewLine();
-	}
-```
-(Add `#include "debug/SceneSelection.hpp"`, `#include "scene/Hierarchy.hpp"`, `<string>`.)
-
-- [ ] **Step 3: `DrawTags`** using the existing `TagSlots` API. Confirm the query/list signatures in `scene/TagSlots.hpp`; wire "add tag by name" (`TagGetId`/`TagCreate` + `TagAdd`) and a remove per listed tag (`TagRemove`). Keep it a single collapsing section.
-
-- [ ] **Step 4: BUILD.** Expected: success.
-
-- [ ] **Step 5: RUN.** Fox: Skinned Mesh section scrubs the animation (drag Time / change Speed visibly changes the pose). Hierarchy section jumps selection to parent/children. Tags add/remove reflected.
-
-- [ ] **Step 6: Commit:**
-```bash
-git add src/app/debug/ComponentDrawers.cpp
-git commit -m "feat(debug): skinned-mesh, hierarchy, tag inspector sections"
-```
+- [ ] **Step 1:** `DrawSkinnedMesh`: clip InputInt, playback-speed drag (−4..4), anim-time scrub, looping checkbox (v1 snippet valid).
+- [ ] **Step 2:** `DrawHierarchy`: parent button (click-to-select) + Unparent; children as click-to-select buttons (v1 snippet valid).
+- [ ] **Step 3:** TagSlots: add a minimal read API (e.g. `void ForEachTag(const std::function<void(const std::string&, uint32_t)>&)` over the name→id map — match the existing file's style). `DrawTags`: list entity's tags (ForEachTag + TagHas) with per-tag remove, add-by-name field (TagCreate/TagGetId + TagAdd).
+- [ ] **Step 4: BUILD.**
+- [ ] **Step 5: Commit** `feat(debug): skinned-mesh, hierarchy, tag inspector sections`.
 
 ---
 
-## Task 16: Read-only material / mesh / physics sections
+## Task 18: Material live editor (flagship)
 
-**Files:**
-- Modify: `src/app/debug/ComponentDrawers.cpp`
+**Files:** modify `src/engine/material/MaterialRegistry.hpp/.cpp`, `src/engine/material/MaterialSystem.cpp`, `src/app/debug/ComponentDrawers.cpp`; create `tests/material/MaterialDescribeTests.cpp`; modify `tests/CMakeLists.txt`.
 
-> **Material is read-only for Spec 1** — the material system is mid-rewrite, so no live-edit path. Show values only.
-
-- [ ] **Step 1: `DrawMaterial` (read-only):**
-```cpp
-	void DrawMaterial(World& world, Entity entity)
-	{
-		const auto* mc = world.TryGet<MaterialComponent>(entity);
-		if (!mc || !ImGui::CollapsingHeader("Material"))
-		{
-			return;
-		}
-		const Material& m = mc->material;
-		ImGui::ColorButton("Base", ImVec4(m.baseColorFactor.r, m.baseColorFactor.g, m.baseColorFactor.b, m.baseColorFactor.a));
-		ImGui::SameLine();
-		ImGui::Text("Base color");
-		ImGui::Text("Metallic %.2f   Roughness %.2f", m.metallicFactor, m.roughnessFactor);
-		ImGui::Text("Emissive %.2f %.2f %.2f", m.emissiveFactor.r, m.emissiveFactor.g, m.emissiveFactor.b);
-		ImGui::TextDisabled("Editing disabled (material system rewrite in progress)");
-	}
-```
-
-- [ ] **Step 2: `DrawMeshPipeline` (read-only identity):**
-```cpp
-	void DrawMeshPipeline(World& world, Entity entity)
-	{
-		const bool hasMesh = world.Has<MeshComponent>(entity);
-		const bool hasPipe = world.Has<PipelineComponent>(entity);
-		if ((!hasMesh && !hasPipe) || !ImGui::CollapsingHeader("Render"))
-		{
-			return;
-		}
-		ImGui::Text("Mesh: %s", hasMesh ? "present" : "none");
-		ImGui::Text("Pipeline: %s", hasPipe ? "present" : "none");
-		ImGui::TextDisabled("Asset swapping: later spec");
-	}
-```
-
-- [ ] **Step 3: `DrawPhysics`** (state + read-only motion type; teleport already handled in Transform):
-```cpp
-	void DrawPhysics(World& world, Entity entity)
-	{
-		const auto* rb = world.TryGet<RigidBodyComponent>(entity);
-		const auto* ps = world.TryGet<PhysicsStateComponent>(entity);
-		if ((!rb && !ps) || !ImGui::CollapsingHeader("Physics"))
-		{
-			return;
-		}
-		if (rb)
-		{
-			const char* motion = rb->motionType == PhysicsMotionType::Static ? "Static"
-				: rb->motionType == PhysicsMotionType::Kinematic ? "Kinematic" : "Dynamic";
-			ImGui::Text("Motion: %s", motion);
-			ImGui::TextDisabled("(motion/shape changes need body rebuild — out of scope)");
-		}
-		if (ps)
-		{
-			ImGui::Text("Pos: %.2f %.2f %.2f", ps->currPosition.x, ps->currPosition.y, ps->currPosition.z);
-			ImGui::Text("Scale: %.2f %.2f %.2f", ps->scale.x, ps->scale.y, ps->scale.z);
-		}
-	}
-```
-(Add `#include "material/Material.hpp"`, `#include "physics/PhysicsComponents.hpp"` if not already included.)
-
-- [ ] **Step 4: BUILD.** Expected: success.
-
-- [ ] **Step 5: RUN.** Material shows the base-color swatch + values with the "editing disabled" note; Render shows mesh/pipeline presence; Physics shows motion type + live position on a toy.
-
-- [ ] **Step 6: Commit:**
-```bash
-git add src/app/debug/ComponentDrawers.cpp
-git commit -m "feat(debug): read-only material/render/physics inspector sections"
-```
+- [ ] **Step 1: `MaterialRegistry::TryDescribe(MaterialHandle, MaterialAsset& out) const`** — validate handle (alive + generation), reconstruct: factors + flags unpacked from the slot's stored `GpuMaterial` (inverse of `PackMaterial` for the factor/flag fields), the 5 stored `TextureHandle`s copied directly, `templateDesc` left default. Returns false for stale/invalid handles.
+- [ ] **Step 2: Seed-from-current** — `GetOrSeedInstance` gains a registry + current-handle path: when creating the instance, seed `asset` via `TryDescribe(currentHandle)` when the entity has a valid `MaterialComponent` (falls back to default asset otherwise). Typed setters pass the registry through. **Fixes the latent das clobber bug** (`entity_material_set_*` on textured entities).
+- [ ] **Step 3: doctest** — pack→describe round-trip for factors/flags/textures; describe-stale-handle fails; seed-from-current preserves texture handles when a setter touches one factor.
+- [ ] **Step 4: `DrawMaterial`** — requires `MaterialComponent`; seeds/reads `MaterialInstanceComponent.asset`:
+  - `ColorEdit4` baseColorFactor; sliders metallic/roughness (0-1), occlusion (0-1); `ColorEdit3` emissive; alpha-cutoff drag (shown when alphaMask); checkboxes doubleSided / alphaBlend / alphaMask / modulateVertexColor.
+  - Any change → **one** `MaterialSystem::AssignMaterial(world, e, registry, context.Get<AssetManager>().GetPipelineCache(), inst.asset)` (dedup-safe; flags re-resolve the pipeline; effect-driven entities keep their pipeline via the existing override).
+  - Read-only texture rows: albedo/normal/metallicRoughness/occlusion/emissive — valid/broken/none per `TextureHandle` state. Thumbnails only if an ImageView accessor is already cheap via `ImguiSubsystem::RegisterTexture`; otherwise defer.
+  - Footer: `GPU slot %u` from `MaterialComponent.gpuSlot`.
+- [ ] **Step 5: `DrawEffectParams`** — if `EffectParamsComponent`: tint `ColorEdit4`, speed/scale/intensity drags → mutate CPU `params` then `context.Get<EffectParamBuffer>().Write(paramSlot, params)` (same path as the das setters; skip when `paramSlot` invalid).
+- [ ] **Step 6: BUILD + TEST.**
+- [ ] **Step 7: RUN (hand-off): recolor one of the 36 dedup crimson cubes → only it changes (splits to its own slot); edit fox roughness → textures stay; Zone M shared-material pulse (sandbox.das:629) unaffected by per-entity edits; plasma entity tint/speed scrub live. This is also the outstanding GPU verify for material phases 3-4.**
+- [ ] **Step 8: Commit** `feat(material,debug): live material editor with seed-from-current instances`.
 
 ---
 
-## Task 17: Add/remove component menu + final pass
+## Task 19: Physics + render read-only drawers
 
-**Files:**
-- Modify: `src/app/debug/InspectorPanel.cpp`
+**Files:** modify `src/app/debug/ComponentDrawers.cpp`.
 
-- [ ] **Step 1: Add-component menu** in the header (after the name row):
-```cpp
-		if (ImGui::Button("Add Component"))
-		{
-			ImGui::OpenPopup("AddComponent");
-		}
-		if (ImGui::BeginPopup("AddComponent"))
-		{
-			if (!world.Has<TransformComponent>(e) && ImGui::MenuItem("Transform"))
-			{
-				world.Emplace<TransformComponent>(e);
-			}
-			if (!world.Has<HierarchyComponent>(e) && ImGui::MenuItem("Hierarchy"))
-			{
-				world.Emplace<HierarchyComponent>(e);
-			}
-			if (!world.Has<NameComponent>(e) && ImGui::MenuItem("Name"))
-			{
-				world.Emplace<NameComponent>(e, NameComponent{.name = "Entity"});
-			}
-			ImGui::EndPopup();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Delete entity"))
-		{
-			ecs::DestroyHierarchy(world, e);
-			selection.Clear();
-			ImGui::End();
-			return;
-		}
-```
-(Add `#include "scene/Hierarchy.hpp"`.) Asset-bearing components (Mesh/Pipeline/Material) are intentionally excluded — they need an asset picker.
-
-- [ ] **Step 2: Remove-component affordance.** For safely-removable sections (e.g. Hierarchy, Name), add a right-aligned `SmallButton("x")` on the collapsing header row that calls `world.Remove<T>(e)`. (Do not offer remove for Transform on entities the renderer/physics rely on — keep the menu conservative.)
-
-- [ ] **Step 3: BUILD.** Expected: success.
-
-- [ ] **Step 4: RUN — full acceptance pass:**
-  - Outliner: tree with names + badges, search filters, `+` creates, Ctrl multi-select, right-click create-child/delete, F2 rename, drag-drop reparent (cycle-guarded), no 80-cap.
-  - Inspector: name edit; Transform edits a static prop and teleports a physics body; skinned-mesh scrub on the fox; hierarchy nav; tags; read-only material/render/physics; Add Component adds Transform/Hierarchy/Name; Delete entity removes the subtree.
-  - Reload (`F5`) — no crash, scene rebuilds, hierarchy/names re-populate.
-
-- [ ] **Step 5: Commit:**
-```bash
-git add src/app/debug/InspectorPanel.cpp
-git commit -m "feat(debug): add/remove component menu and inspector polish"
-```
+- [ ] **Step 1:** `DrawPhysics`: motion type text (Static/Kinematic/Dynamic), live `currPosition`/`scale`; note "(motion/shape changes need body rebuild — out of scope)".
+- [ ] **Step 2:** `DrawMeshPipeline`: mesh/pipeline presence lines; "Asset swapping: later spec".
+- [ ] **Step 3: BUILD.**
+- [ ] **Step 4: Commit** `feat(debug): read-only physics/render inspector sections`.
 
 ---
 
-## Self-Review notes (author)
+## Task 20: Final pass — remove-x, dock layout V3, acceptance
 
-- **Spec coverage:** §4.1 Name → T1/T3/T6/T13; §4.2 Hierarchy+SetParent → T1; §4.3 full migration → T3–T5; §4.4 SceneSelection → T7; §5 outliner (tree/search/badges/create/rename/delete/reparent/multi-select/no-cap) → T8–T12; §6 inspector (header/transform/skinned/material/physics/mesh/hierarchy/tags/add-remove/multi-select note) → T13–T17; §7 TransformUtils hoist + file split → T2/T8/T13. All spec sections map to tasks.
-- **Deviation from spec (approved by user):** material is **read-only** (system mid-rewrite) rather than live-edited; the spec's live-edit path is dropped. Reflected in T16.
-- **Type consistency:** `SetParent`/`DetachFromParent`/`DestroyHierarchy`/`IsAncestor` (Hierarchy.hpp) used verbatim across T3–T17; `SceneSelection::{Select,AddToSelection,ToggleSelection,Clear,Contains,Primary,All,Prune}` consistent T7→T17; `ComposeTransform`/`DecomposeTRS` (aether::) consistent T2→T14; `HierarchyComponent.children` (vector<Entity>) consistent everywhere.
-- **Known confirmations deferred to execution (flagged inline, not placeholders):** daScript string-return idiom for `get_name` (T6 Step 1); `TagSlots` list/query signatures (T15 Step 3); exact `src/app/CMakeLists.txt` source-list style.
+**Files:** modify `src/app/debug/InspectorPanel.cpp`, `src/app/debug/ComponentDrawers.cpp`, `src/app/layers/DebugLayer.cpp`, this plan + the spec.
+
+- [ ] **Step 1:** Remove-"x" on safely-removable section headers (Name, Hierarchy — conservative list).
+- [ ] **Step 2:** **Dock layout V3**: bump the dockspace id string (`AetherDebugDockSpaceV3`) and rebuild the default layout — Scene left ~20%, **Inspector right ~27%**, bottom row Performance/Lighting/Day-Night/Textures, right stack Render Graph/Debug/Tonemap/Post Processing, Viewport center.
+- [ ] **Step 3: BUILD.**
+- [ ] **Step 4: RUN — full acceptance (hand-off):** outliner (tree/icons/search/chips/create/rename/delete/reparent/multi-select/no-cap/juice), inspector (header/palette/transform/skinned/material-live/effects/physics/render/hierarchy/tags/remove-x), F5 reload clean, new dock layout, fox intact.
+- [ ] **Step 5:** Tick all checkboxes here; finalize the spec addendum; update memory notes.
+- [ ] **Step 6: Commit** `feat(debug): inspector polish, editor dock layout, acceptance pass`.
+
+---
+
+## Self-review notes (v2)
+
+- **Spec coverage:** identity §4.1 → T1/T3/T6; hierarchy §4.2 → T1; migration §4.3 → T3-T5; selection §4.4 → T7; outliner §5 → T9-T14 (badges upgraded to icon font per 2026-07-04 decision); inspector §6 → T15-T19 (material upgraded read-only → live per decision; physics teleport extended to rotation+scale); plumbing §7 → T2/T9/T15; risks §8.1 resolved (cheap GPU update exists — instance + AssignMaterial); §9 updated (doctest harness exists).
+- **New engine surface:** `ecs::SetParent` family (T1), `TryDescribe` + seed-from-current (T18), TagSlots enumeration (T17), icon-font merge (T8) — each is small, tested where pure-logic.
+- **Known execution-time confirmations:** daScript string-return idiom (T6); FA6 TTF availability (T8 — fallback defined); `ImGuiTreeNodeFlags_DrawLinesToNodes` exact name in 1.92.8 (T10 — skip if absent); quat axis-order vs `ComposeTransform` YXZ (T16); thumbnail ImageView accessor cost (T18 — defer if not cheap).
