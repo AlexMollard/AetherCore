@@ -395,7 +395,10 @@ namespace aether::app
 		ImGui::Begin("DebugDockSpace", nullptr, hostFlags);
 		ImGui::PopStyleVar(3);
 
-		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV2");
+		// V3: classic editor arrangement - outliner left, Inspector right (over a
+		// tabbed tool stack), utility tabs bottom, Viewport center. The id bump
+		// retires saved V2 layouts so the new default actually applies once.
+		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV3");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -407,20 +410,21 @@ namespace aether::app
 
 			ImGuiID remaining = dockspace_id;
 			ImGuiID dock_left = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Left, 0.20f, nullptr, &remaining);
-			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.28f, nullptr, &remaining);
-			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.30f, nullptr, &remaining);
+			ImGuiID dock_right = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Right, 0.27f, nullptr, &remaining);
+			ImGuiID dock_right_tools = ImGui::DockBuilderSplitNode(dock_right, ImGuiDir_Down, 0.38f, nullptr, &dock_right);
+			ImGuiID dock_bottom = ImGui::DockBuilderSplitNode(remaining, ImGuiDir_Down, 0.28f, nullptr, &remaining);
 
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
-			ImGui::DockBuilderDockWindow("Inspector", dock_bottom);
+			ImGui::DockBuilderDockWindow("Inspector", dock_right);
+			ImGui::DockBuilderDockWindow("Render Graph", dock_right_tools);
+			ImGui::DockBuilderDockWindow("Debug", dock_right_tools);
+			ImGui::DockBuilderDockWindow("Tonemap", dock_right_tools);
+			ImGui::DockBuilderDockWindow("Post Processing", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
 			ImGui::DockBuilderDockWindow("Day / Night", dock_bottom);
 			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
-			ImGui::DockBuilderDockWindow("Render Graph", dock_right);
-			ImGui::DockBuilderDockWindow("Debug", dock_right);
-			ImGui::DockBuilderDockWindow("Tonemap", dock_right);
-			ImGui::DockBuilderDockWindow("Post Processing", dock_right);
 
 			ImGui::DockBuilderFinish(dockspace_id);
 		}

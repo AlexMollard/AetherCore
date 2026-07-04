@@ -6,9 +6,14 @@
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
 
+#include "assets/AssetManager.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
+#include "material/EffectParamBuffer.hpp"
+#include "material/MaterialAsset.hpp"
+#include "material/MaterialRegistry.hpp"
+#include "material/MaterialSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
@@ -185,34 +190,173 @@ namespace aether::app
 
 	void DrawMaterial(LayerContext& context, World& world, Entity entity)
 	{
-		(void) context;
-		(void) world;
-		(void) entity;
+		auto* mc = world.TryGet<MaterialComponent>(entity);
+		if (!mc || !ImGui::CollapsingHeader(ICON_FA_PALETTE "  Material", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		auto* assets = context.TryGet<AssetManager>();
+		if (!assets)
+		{
+			ImGui::TextDisabled("Asset manager unavailable");
+			return;
+		}
+		MaterialRegistry& registry = assets->GetMaterialRegistry();
+
+		// Copy-on-write: edits go through a per-entity instance seeded from the
+		// entity's current registry material, so the fox keeps its textures when
+		// a single factor is dragged.
+		auto* inst = world.TryGet<MaterialInstanceComponent>(entity);
+		if (!inst)
+		{
+			MaterialAsset seed{};
+			if (!registry.TryDescribe(mc->handle, seed))
+			{
+				ImGui::TextDisabled("Stale material handle (GPU slot %u)", mc->gpuSlot);
+				return;
+			}
+			inst = &world.Emplace<MaterialInstanceComponent>(entity, MaterialInstanceComponent{seed});
+		}
+		MaterialAsset& asset = inst->asset;
+
+		bool changed = false;
+		changed |= ImGui::ColorEdit4("Base color", &asset.baseColorFactor.x);
+		changed |= ImGui::SliderFloat("Metallic", &asset.metallicFactor, 0.0f, 1.0f);
+		changed |= ImGui::SliderFloat("Roughness", &asset.roughnessFactor, 0.0f, 1.0f);
+		changed |= ImGui::SliderFloat("Occlusion", &asset.occlusionStrength, 0.0f, 1.0f);
+		changed |= ImGui::ColorEdit3("Emissive", &asset.emissiveFactor.x);
+
+		changed |= ImGui::Checkbox("Two-sided", &asset.doubleSided);
+		ImGui::SameLine();
+		changed |= ImGui::Checkbox("Blend", &asset.alphaBlend);
+		ImGui::SameLine();
+		changed |= ImGui::Checkbox("Mask", &asset.alphaMask);
+		ImGui::SameLine();
+		changed |= ImGui::Checkbox("Vtx color", &asset.modulateVertexColor);
+		if (asset.alphaMask)
+		{
+			changed |= ImGui::DragFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f);
+		}
+
+		if (changed)
+		{
+			// One dedup-safe reassign per edited frame; flag changes re-resolve the
+			// pipeline (two-sided/blend), and effect-driven entities keep theirs.
+			MaterialSystem::AssignMaterial(world, entity, registry, assets->GetPipelineCache(), asset);
+		}
+
+		// Texture slots are read-only; swapping needs an asset picker (later spec).
+		auto textureRow = [](const char* label, TextureHandle h)
+		{
+			ImGui::TextDisabled("%s", label);
+			ImGui::SameLine(120.0f);
+			if (h.index == TextureHandle::kBrokenIndex)
+			{
+				ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.85f, 1.0f), ICON_FA_IMAGE "  missing (magenta fallback)");
+			}
+			else if (h.IsValid())
+			{
+				ImGui::Text(ICON_FA_IMAGE "  entry %u", h.index);
+			}
+			else
+			{
+				ImGui::TextDisabled("(none)");
+			}
+		};
+		if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_SpanAvailWidth))
+		{
+			textureRow("Albedo", asset.albedoTex);
+			textureRow("Normal", asset.normalTex);
+			textureRow("Metal/Rough", asset.metallicRoughnessTex);
+			textureRow("Occlusion", asset.occlusionTex);
+			textureRow("Emissive", asset.emissiveTex);
+			ImGui::TreePop();
+		}
+		ImGui::TextDisabled("GPU slot %u", mc->gpuSlot);
 	}
 
 	void DrawEffectParams(LayerContext& context, World& world, Entity entity)
 	{
-		(void) context;
-		(void) world;
-		(void) entity;
+		auto* ep = world.TryGet<EffectParamsComponent>(entity);
+		if (!ep || !ImGui::CollapsingHeader(ICON_FA_BOLT "  Effect Params", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		bool changed = false;
+		changed |= ImGui::ColorEdit4("Tint", &ep->params.tint.x);
+		changed |= ImGui::DragFloat("Speed", &ep->params.speed, 0.02f, 0.0f, 10.0f);
+		changed |= ImGui::DragFloat("Scale", &ep->params.scale, 0.02f, 0.0f, 10.0f);
+		changed |= ImGui::DragFloat("Intensity", &ep->params.intensity, 0.02f, 0.0f, 10.0f);
+
+		// Same path as the das set_effect_* bindings: mutate the CPU-authoritative
+		// copy, one buffer write. GPU reads it next frame.
+		if (changed && ep->paramSlot != 0xFFFFFFFFu)
+		{
+			if (auto* buffer = context.TryGet<EffectParamBuffer>())
+			{
+				buffer->Write(ep->paramSlot, ep->params);
+			}
+		}
+		ImGui::TextDisabled("Param slot %u", ep->paramSlot);
 	}
 
 	void DrawPhysics(World& world, Entity entity)
 	{
-		(void) world;
-		(void) entity;
+		const auto* rb = world.TryGet<RigidBodyComponent>(entity);
+		const auto* ps = world.TryGet<PhysicsStateComponent>(entity);
+		if ((!rb && !ps) || !ImGui::CollapsingHeader(ICON_FA_WEIGHT_HANGING "  Physics"))
+		{
+			return;
+		}
+		if (rb)
+		{
+			const char* motion = rb->motionType == PhysicsMotionType::Static ? "Static" : rb->motionType == PhysicsMotionType::Kinematic ? "Kinematic" : "Dynamic";
+			ImGui::Text("Motion: %s", motion);
+			ImGui::TextDisabled("(motion/shape changes need a body rebuild - later spec)");
+		}
+		if (ps)
+		{
+			ImGui::Text("Position  %.2f  %.2f  %.2f", ps->currPosition.x, ps->currPosition.y, ps->currPosition.z);
+			ImGui::Text("Scale     %.2f  %.2f  %.2f", ps->scale.x, ps->scale.y, ps->scale.z);
+		}
 	}
 
 	void DrawMeshPipeline(World& world, Entity entity)
 	{
-		(void) world;
-		(void) entity;
+		const auto* mesh = world.TryGet<MeshComponent>(entity);
+		const auto* pipe = world.TryGet<PipelineComponent>(entity);
+		if ((!mesh && !pipe) || !ImGui::CollapsingHeader(ICON_FA_GEARS "  Render"))
+		{
+			return;
+		}
+		ImGui::Text("Mesh: %s", (mesh && mesh->mesh) ? "present" : "none");
+		ImGui::Text("Pipeline: %s", (pipe && pipe->pipeline) ? "present" : "none");
+		ImGui::TextDisabled("Asset swapping needs a picker - later spec");
 	}
 
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection)
 	{
 		auto* h = world.TryGet<HierarchyComponent>(entity);
-		if (!h || !ImGui::CollapsingHeader(ICON_FA_SITEMAP "  Hierarchy"))
+		if (!h)
+		{
+			return;
+		}
+		const bool open = ImGui::CollapsingHeader(ICON_FA_SITEMAP "  Hierarchy");
+		// Removable only when the link is inert - removing a live link would
+		// orphan parent/children bookkeeping.
+		if (!h->parent.IsValid() && h->children.empty())
+		{
+			ImGui::SameLine();
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
+			if (ImGui::SmallButton(ICON_FA_XMARK "##removeHierarchy"))
+			{
+				world.Remove<HierarchyComponent>(entity);
+				return;
+			}
+		}
+		if (!open)
 		{
 			return;
 		}

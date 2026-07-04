@@ -32,6 +32,13 @@ namespace aether
 		void Release(MaterialHandle handle);
 		[[nodiscard]] std::uint32_t ResolveSlot(MaterialHandle handle) const;
 
+		// Reconstructs an authoring asset from a live slot: factors/flags unpacked
+		// from the stored GpuMaterial, texture handles copied from the slot's refs
+		// (NOT re-AddRef'd - the caller relies on the slot keeping them alive).
+		// templateDesc stays default (slots don't record it). False for stale or
+		// invalid handles. Powers instance seed-from-current and the inspector.
+		bool TryDescribe(MaterialHandle handle, MaterialAsset& out) const;
+
 		[[nodiscard]] MaterialHandle DefaultHandle() const
 		{
 			return m_defaultHandle;

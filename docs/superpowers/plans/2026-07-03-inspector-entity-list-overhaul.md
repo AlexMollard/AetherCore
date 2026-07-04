@@ -91,7 +91,7 @@ Services reachable from panels: `World`, `MaterialRegistry`, `MaterialBuffer`, `
 
 **Files:** modify `src/engine/scene/Components.hpp`; create `src/engine/scene/Hierarchy.hpp`, `tests/scene/HierarchyTests.cpp`; modify `tests/CMakeLists.txt`.
 
-- [ ] **Step 1: Add the two components** in `Components.hpp` (add `#include <string>`, `#include <vector>`, `#include "scene/Entity.hpp"` as needed), after `TransformComponent`:
+- [x] **Step 1: Add the two components** in `Components.hpp` (add `#include <string>`, `#include <vector>`, `#include "scene/Entity.hpp"` as needed), after `TransformComponent`:
 
 ```cpp
 	// Human-readable display name (auto-assigned at spawn, editable in the inspector).
@@ -112,7 +112,7 @@ Services reachable from panels: `World`, `MaterialRegistry`, `MaterialBuffer`, `
 
 > **Migration note:** `ParentEntityComponent` and `SpawnedEntitiesComponent` stay through Tasks 1-4 so the tree is green on every commit; deleted in Task 5.
 
-- [ ] **Step 2: Create `src/engine/scene/Hierarchy.hpp`** (verbatim from v1 — verified against the real `World` API):
+- [x] **Step 2: Create `src/engine/scene/Hierarchy.hpp`** (verbatim from v1 — verified against the real `World` API):
 
 ```cpp
 #pragma once
@@ -216,9 +216,9 @@ namespace aether::ecs
 } // namespace aether::ecs
 ```
 
-- [ ] **Step 3: doctest coverage** — `tests/scene/HierarchyTests.cpp` (+ register in `tests/CMakeLists.txt`, matching the existing style): reparent moves the child between parents' lists; `SetParent(child, descendant)` returns false and mutates nothing; self-parent rejected; `DetachFromParent` → root; `DestroyHierarchy` kills the subtree and removes the node from its parent's list; parent `{0}` semantics.
-- [ ] **Step 4: BUILD + TEST.** Expected: green (additive only).
-- [ ] **Step 5: Commit** `feat(scene): add NameComponent, HierarchyComponent and SetParent helpers`.
+- [x] **Step 3: doctest coverage** — `tests/scene/HierarchyTests.cpp` (+ register in `tests/CMakeLists.txt`, matching the existing style): reparent moves the child between parents' lists; `SetParent(child, descendant)` returns false and mutates nothing; self-parent rejected; `DetachFromParent` → root; `DestroyHierarchy` kills the subtree and removes the node from its parent's list; parent `{0}` semantics.
+- [x] **Step 4: BUILD + TEST.** Expected: green (additive only).
+- [x] **Step 5: Commit** `feat(scene): add NameComponent, HierarchyComponent and SetParent helpers`.
 
 ---
 
@@ -226,11 +226,11 @@ namespace aether::ecs
 
 **Files:** create `src/engine/scene/TransformUtils.hpp`, `tests/scene/TransformUtilsTests.cpp`; modify `src/app/scripting/modules/WorldModule.cpp` (delete locals at :29-61, qualify call sites), `tests/CMakeLists.txt`.
 
-- [ ] **Step 1:** Create `TransformUtils.hpp` with the exact bodies from `WorldModule.cpp`'s anonymous namespace (lines 29-61), promoted into `namespace aether` (v1 Task 2 snippet is verbatim-correct).
-- [ ] **Step 2:** Delete the two local functions; add `#include "scene/TransformUtils.hpp"`; prefix call sites with `aether::` in `das_set_euler`, `das_set_transform`, `das_get_euler`, `das_get_scale`, `das_for_each_with_tag_transform` (any other `ComposeTransform`/`DecomposeTRS` users `git grep` finds).
-- [ ] **Step 3:** `tests/scene/TransformUtilsTests.cpp`: compose→decompose round-trip across representative pos/euler/scale sets (including negative angles, near-gimbal ±90° X), tolerance ~1e-3.
-- [ ] **Step 4: BUILD + TEST.**
-- [ ] **Step 5: Commit** `refactor(scene): hoist TRS compose/decompose into TransformUtils.hpp`.
+- [x] **Step 1:** Create `TransformUtils.hpp` with the exact bodies from `WorldModule.cpp`'s anonymous namespace (lines 29-61), promoted into `namespace aether` (v1 Task 2 snippet is verbatim-correct).
+- [x] **Step 2:** Delete the two local functions; add `#include "scene/TransformUtils.hpp"`; prefix call sites with `aether::` in `das_set_euler`, `das_set_transform`, `das_get_euler`, `das_get_scale`, `das_for_each_with_tag_transform` (any other `ComposeTransform`/`DecomposeTRS` users `git grep` finds).
+- [x] **Step 3:** `tests/scene/TransformUtilsTests.cpp`: compose→decompose round-trip across representative pos/euler/scale sets (including negative angles, near-gimbal ±90° X), tolerance ~1e-3.
+- [x] **Step 4: BUILD + TEST.**
+- [x] **Step 5: Commit** `refactor(scene): hoist TRS compose/decompose into TransformUtils.hpp`.
 
 ---
 
@@ -238,7 +238,7 @@ namespace aether::ecs
 
 **Files:** modify `src/engine/assets/AssetManager.cpp` (:712), `src/app/scripting/modules/WorldModule.cpp`.
 
-- [ ] **Step 1: AssetManager.** Add `#include "scene/Hierarchy.hpp"`; beside the legacy emplace at :712 (keep it until T5):
+- [x] **Step 1: AssetManager.** Add `#include "scene/Hierarchy.hpp"`; beside the legacy emplace at :712 (keep it until T5):
 
 ```cpp
 			if (parentEntityId != 0)
@@ -248,10 +248,10 @@ namespace aether::ecs
 			}
 ```
 
-- [ ] **Step 2: `das_load_model`** — SetParent each spawned mesh entity under `Entity{id}` (keep the `SpawnedEntitiesComponent` bookkeeping until T5), and name the parent from the model path stem (e.g. `"fox"`), `EmplaceOrReplace<NameComponent>`.
-- [ ] **Step 3: Names for primitives + bare entities.** `das_add_mesh`: if no `NameComponent`, emplace one — use the primitive kind if cheap to thread through the mesh cache, else `"Mesh"`. `das_entity_create`: emplace `NameComponent{"Entity"}`.
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(scene): populate HierarchyComponent + NameComponent at spawn`.
+- [x] **Step 2: `das_load_model`** — SetParent each spawned mesh entity under `Entity{id}` (keep the `SpawnedEntitiesComponent` bookkeeping until T5), and name the parent from the model path stem (e.g. `"fox"`), `EmplaceOrReplace<NameComponent>`.
+- [x] **Step 3: Names for primitives + bare entities.** `das_add_mesh`: if no `NameComponent`, emplace one — use the primitive kind if cheap to thread through the mesh cache, else `"Mesh"`. `das_entity_create`: emplace `NameComponent{"Entity"}`.
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(scene): populate HierarchyComponent + NameComponent at spawn`.
 
 ---
 
@@ -259,10 +259,10 @@ namespace aether::ecs
 
 **Files:** modify `src/engine/animation/AnimationCompiler.cpp` (:26), `src/app/scripting/modules/AnimationModule.cpp` (:32, :42), `src/app/scripting/modules/WorldModule.cpp` (`das_set_euler` :158, `das_set_transform` :184).
 
-- [ ] **Step 1:** All five read sites switch `SpawnedEntitiesComponent`/`entityIds` (`vector<uint32_t>`) → `HierarchyComponent`/`children` (`vector<Entity>`); pass `child`/`child.id` accordingly. Propagation behavior in `set_euler`/`set_transform` is preserved verbatim (children get the parent's composed matrix).
-- [ ] **Step 2: BUILD.**
+- [x] **Step 1:** All five read sites switch `SpawnedEntitiesComponent`/`entityIds` (`vector<uint32_t>`) → `HierarchyComponent`/`children` (`vector<Entity>`); pass `child`/`child.id` accordingly. Propagation behavior in `set_euler`/`set_transform` is preserved verbatim (children get the parent's composed matrix).
+- [x] **Step 2: BUILD.**
 - [ ] **Step 3: RUN (hand-off): fox still animates; plasma target + toys still move; no crash.**
-- [ ] **Step 4: Commit** `refactor(scene): read child links from HierarchyComponent`.
+- [x] **Step 4: Commit** `refactor(scene): read child links from HierarchyComponent`.
 
 ---
 
@@ -270,12 +270,12 @@ namespace aether::ecs
 
 **Files:** modify `src/engine/scene/Components.hpp`, `src/engine/assets/AssetManager.cpp`, `src/app/scripting/modules/WorldModule.cpp`, **`src/app/debug/InspectorPanel.cpp`**.
 
-- [ ] **Step 1:** Remove the legacy writes: `Emplace<ParentEntityComponent>` (AssetManager :712 block), the `SpawnedEntitiesComponent` bookkeeping in `das_load_model` (:264-274).
-- [ ] **Step 2:** **Strip InspectorPanel's legacy references** (v2 correction): the two `Has<>` lines in `ComponentSummary` (:59, :63) and the two `View<>` unions in `CollectSceneEntities` (:125, :130). The panel is rewritten in Phase C; this just keeps the build green.
-- [ ] **Step 3:** Delete both structs from `Components.hpp`.
-- [ ] **Step 4:** `git grep -n "SpawnedEntitiesComponent\|ParentEntityComponent"` → no matches outside docs.
-- [ ] **Step 5: BUILD + TEST.**
-- [ ] **Step 6: Commit** `refactor(scene)!: remove SpawnedEntitiesComponent/ParentEntityComponent`.
+- [x] **Step 1:** Remove the legacy writes: `Emplace<ParentEntityComponent>` (AssetManager :712 block), the `SpawnedEntitiesComponent` bookkeeping in `das_load_model` (:264-274).
+- [x] **Step 2:** **Strip InspectorPanel's legacy references** (v2 correction): the two `Has<>` lines in `ComponentSummary` (:59, :63) and the two `View<>` unions in `CollectSceneEntities` (:125, :130). The panel is rewritten in Phase C; this just keeps the build green.
+- [x] **Step 3:** Delete both structs from `Components.hpp`.
+- [x] **Step 4:** `git grep -n "SpawnedEntitiesComponent\|ParentEntityComponent"` → no matches outside docs.
+- [x] **Step 5: BUILD + TEST.**
+- [x] **Step 6: Commit** `refactor(scene)!: remove SpawnedEntitiesComponent/ParentEntityComponent`.
 
 ---
 
@@ -283,10 +283,10 @@ namespace aether::ecs
 
 **Files:** modify `src/app/scripting/modules/WorldModule.cpp`, `resources/scripts/sandbox.das`.
 
-- [ ] **Step 1:** `das_set_name(World*, uint32_t, const char*)` → `EmplaceOrReplace<NameComponent>`; register `Bind<das_set_name>(lib, "set_name", SE::modifyExternal)`. Add `get_name` **only if** the daScript string-return idiom (`ctx->stringHeap->allocateString`) checks out against the vendored daScript (no existing binding returns a string — verify or drop).
-- [ ] **Step 2:** In `sandbox.das`, `set_name` the memorable actors: fox, floor, walls, plasma light target, Zone M gallery groups. (Doubles as binding verification and makes the outliner demo read well.)
+- [x] **Step 1:** `das_set_name(World*, uint32_t, const char*)` → `EmplaceOrReplace<NameComponent>`; register `Bind<das_set_name>(lib, "set_name", SE::modifyExternal)`. Add `get_name` **only if** the daScript string-return idiom (`ctx->stringHeap->allocateString`) checks out against the vendored daScript (no existing binding returns a string — verify or drop).
+- [x] **Step 2:** In `sandbox.das`, `set_name` the memorable actors: fox, floor, walls, plasma light target, Zone M gallery groups. (Doubles as binding verification and makes the outliner demo read well.)
 - [ ] **Step 3: BUILD.** F5-reload check happens at the Phase B RUN gate.
-- [ ] **Step 4: Commit** `feat(scripting): add set_name das binding + name sandbox actors`.
+- [x] **Step 4: Commit** `feat(scripting): add set_name das binding + name sandbox actors`.
 
 ---
 
@@ -294,10 +294,10 @@ namespace aether::ecs
 
 **Files:** create `src/app/debug/SceneSelection.hpp`; modify `src/app/layers/DebugLayer.hpp/.cpp`.
 
-- [ ] **Step 1:** Create `SceneSelection` exactly per the v1 snippet (Select / AddToSelection / ToggleSelection / Clear / Contains / Primary / All / Prune-dead-entities; `std::vector<Entity>` + primary).
-- [ ] **Step 2:** `DebugLayer` member `SceneSelection m_selection;` — `context.services.Register<SceneSelection>(m_selection)` in `OnAttach` (before panel creation), `Unregister` in `OnDetach`, `m_selection.Prune(context.Get<World>())` in `OnUpdate`.
-- [ ] **Step 3: BUILD.**
-- [ ] **Step 4: Commit** `feat(debug): add shared SceneSelection service`.
+- [x] **Step 1:** Create `SceneSelection` exactly per the v1 snippet (Select / AddToSelection / ToggleSelection / Clear / Contains / Primary / All / Prune-dead-entities; `std::vector<Entity>` + primary).
+- [x] **Step 2:** `DebugLayer` member `SceneSelection m_selection;` — `context.services.Register<SceneSelection>(m_selection)` in `OnAttach` (before panel creation), `Unregister` in `OnDetach`, `m_selection.Prune(context.Get<World>())` in `OnUpdate`.
+- [x] **Step 3: BUILD.**
+- [x] **Step 4: Commit** `feat(debug): add shared SceneSelection service`.
 
 ---
 
@@ -307,11 +307,11 @@ namespace aether::ecs
 
 **Files:** add `resources/fonts/fa-solid-900.ttf`; create `src/app/debug/Icons.hpp`; modify `src/engine/imgui/ImguiSubsystem.cpp` (font load, ~:219-233).
 
-- [ ] **Step 1:** Vendor Font Awesome 6 Free-Solid TTF (OFL-1.1) into `resources/fonts/` (pak pipeline picks it up beside Roboto).
-- [ ] **Step 2:** `Icons.hpp` — small self-contained codepoint defines (no IconFontCppHeaders dependency), e.g. `ICON_FA_CUBE "\xef\x86\xb2"` (U+F1B2), person-running, weight-hanging, bolt, tag, magnifying-glass, plus, trash, palette, sitemap, eye, gears, film, wand.
-- [ ] **Step 3:** In `ImguiSubsystem` after the Roboto load: second `AddFontFromMemoryTTF` with `ImFontConfig{MergeMode=true, PixelSnapH=true, GlyphMinAdvanceX=15}` and static glyph range `{0xE000, 0xF8FF, 0}` (FA6 solid glyphs live in the PUA); read via the same `assets://fonts/…` VFS path.
-- [ ] **Step 4: BUILD.** Fallback if the TTF can't be obtained: keep `Icons.hpp` names but map to colored Unicode `●■▲◆` and proceed — call sites don't change.
-- [ ] **Step 5: Commit** `feat(imgui): merge FA6 solid icon subset into the font atlas`.
+- [x] **Step 1:** Vendor Font Awesome 6 Free-Solid TTF (OFL-1.1) into `resources/fonts/` (pak pipeline picks it up beside Roboto).
+- [x] **Step 2:** `Icons.hpp` — small self-contained codepoint defines (no IconFontCppHeaders dependency), e.g. `ICON_FA_CUBE "\xef\x86\xb2"` (U+F1B2), person-running, weight-hanging, bolt, tag, magnifying-glass, plus, trash, palette, sitemap, eye, gears, film, wand.
+- [x] **Step 3:** In `ImguiSubsystem` after the Roboto load: second `AddFontFromMemoryTTF` with `ImFontConfig{MergeMode=true, PixelSnapH=true, GlyphMinAdvanceX=15}` and static glyph range `{0xE000, 0xF8FF, 0}` (FA6 solid glyphs live in the PUA); read via the same `assets://fonts/…` VFS path.
+- [x] **Step 4: BUILD.** Fallback if the TTF can't be obtained: keep `Icons.hpp` names but map to colored Unicode `●■▲◆` and proceed — call sites don't change.
+- [x] **Step 5: Commit** `feat(imgui): merge FA6 solid icon subset into the font atlas`.
 
 ---
 
@@ -319,11 +319,11 @@ namespace aether::ecs
 
 **Files:** create `src/app/debug/HierarchyPanel.hpp/.cpp`; modify `src/app/debug/InspectorPanel.hpp/.cpp`, `src/app/layers/DebugLayer.cpp`.
 
-- [ ] **Step 1:** `HierarchyPanel : DebugPanel` (`GetName()` = "Scene Outliner", window still `Begin("Scene")` so the saved dock mapping holds). Body per v1 Task 8: entity count + `BeginChild` list over `reg.storage<entt::entity>()` (skip invalid), rows `#id Name` via `Selectable`, click → `selection.Select(e)`.
-- [ ] **Step 2:** InspectorPanel: delete the whole `Begin("Scene")` block + `CollectSceneEntities`/`SceneEntityLabel`/`kMaxSceneRows`/`m_selectedSceneEntity`; selection source becomes `context.Get<SceneSelection>().Primary()`.
-- [ ] **Step 3:** DebugLayer: `m_panels.push_back(std::make_unique<HierarchyPanel>());` near the InspectorPanel push. (No CMake edit — sources are GLOBed.)
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(debug): extract HierarchyPanel with uncapped all-entity list`.
+- [x] **Step 1:** `HierarchyPanel : DebugPanel` (`GetName()` = "Scene Outliner", window still `Begin("Scene")` so the saved dock mapping holds). Body per v1 Task 8: entity count + `BeginChild` list over `reg.storage<entt::entity>()` (skip invalid), rows `#id Name` via `Selectable`, click → `selection.Select(e)`.
+- [x] **Step 2:** InspectorPanel: delete the whole `Begin("Scene")` block + `CollectSceneEntities`/`SceneEntityLabel`/`kMaxSceneRows`/`m_selectedSceneEntity`; selection source becomes `context.Get<SceneSelection>().Primary()`.
+- [x] **Step 3:** DebugLayer: `m_panels.push_back(std::make_unique<HierarchyPanel>());` near the InspectorPanel push. (No CMake edit — sources are GLOBed.)
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(debug): extract HierarchyPanel with uncapped all-entity list`.
 
 ---
 
@@ -332,10 +332,10 @@ namespace aether::ecs
 **Files:** modify `src/app/debug/HierarchyPanel.cpp`.
 
 - [ ] **Step 1:** Kind badge helper returning `{icon, color}` from components — skinned (`ICON_FA_PERSON_RUNNING`, blue), physics (`ICON_FA_WEIGHT_HANGING`, orange), effect (`ICON_FA_WAND_MAGIC_SPARKLES`, purple), mesh (`ICON_FA_CUBE`, green), empty (dim dot). Include `physics/PhysicsComponents.hpp`.
-- [ ] **Step 2:** Recursive `DrawNode` per v1 Task 9 (TreeNodeEx `OpenOnArrow|SpanAvailWidth`, leaf flags for childless, click-not-toggle selects), driven from roots (`!h || !h->parent.IsValid()`); icon drawn colored before the label, muted `#id` after.
-- [ ] **Step 3:** Enable tree indent guides with `ImGuiTreeNodeFlags_DrawLinesToNodes` (present in 1.92.8).
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(debug): render entity hierarchy as a tree with icon badges`.
+- [x] **Step 2:** Recursive `DrawNode` per v1 Task 9 (TreeNodeEx `OpenOnArrow|SpanAvailWidth`, leaf flags for childless, click-not-toggle selects), driven from roots (`!h || !h->parent.IsValid()`); icon drawn colored before the label, muted `#id` after.
+- [x] **Step 3:** Enable tree indent guides with `ImGuiTreeNodeFlags_DrawLinesToNodes` (present in 1.92.8).
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(debug): render entity hierarchy as a tree with icon badges`.
 
 ---
 
@@ -343,11 +343,11 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp`.
 
-- [ ] **Step 1:** Toolbar row: `ICON_FA_PLUS` create menu (Empty entity; Cube/Sphere/Plane via the primitive-mesh spawn path used by `das_create_mesh`/`PrimitiveMeshes` — auto-named, selected on create), `ICON_FA_MAGNIFYING_GLASS` search `InputTextWithHint` (`m_search[64]`), right-aligned live entity count.
-- [ ] **Step 2:** Filter mode: when searching, flat `ImGuiListClipper` list (case-insensitive substring on name or `#id`); tree otherwise.
-- [ ] **Step 3:** Component-type filter chips (toggle buttons: mesh/skinned/physics/effect) applied in both modes.
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(debug): outliner toolbar — search, create menu, type filters`.
+- [x] **Step 1:** Toolbar row: `ICON_FA_PLUS` create menu (Empty entity; Cube/Sphere/Plane via the primitive-mesh spawn path used by `das_create_mesh`/`PrimitiveMeshes` — auto-named, selected on create), `ICON_FA_MAGNIFYING_GLASS` search `InputTextWithHint` (`m_search[64]`), right-aligned live entity count.
+- [x] **Step 2:** Filter mode: when searching, flat `ImGuiListClipper` list (case-insensitive substring on name or `#id`); tree otherwise.
+- [x] **Step 3:** Component-type filter chips (toggle buttons: mesh/skinned/physics/effect) applied in both modes.
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(debug): outliner toolbar — search, create menu, type filters`.
 
 ---
 
@@ -355,12 +355,12 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp`.
 
-- [ ] **Step 1:** Ctrl-click `ToggleSelection`; **shift-click range** over the currently visible row order (panel records the flattened visible list each frame); plain click `Select`.
-- [ ] **Step 2:** Context menu per node: Rename (→ inline edit), Create child (new named entity + `SetParent`), Delete (subtree via `DestroyHierarchy`).
-- [ ] **Step 3:** Inline rename state (`m_renaming`, `m_renameBuf`): InputText swaps in for the label, commits to `NameComponent` on Enter/defocus.
-- [ ] **Step 4:** Window-focused keys: Delete (collect selection to a local vector first, then destroy), F2 (rename primary).
-- [ ] **Step 5: BUILD.**
-- [ ] **Step 6: Commit** `feat(debug): outliner multi-select, context menu, rename + delete keys`.
+- [x] **Step 1:** Ctrl-click `ToggleSelection`; **shift-click range** over the currently visible row order (panel records the flattened visible list each frame); plain click `Select`.
+- [x] **Step 2:** Context menu per node: Rename (→ inline edit), Create child (new named entity + `SetParent`), Delete (subtree via `DestroyHierarchy`).
+- [x] **Step 3:** Inline rename state (`m_renaming`, `m_renameBuf`): InputText swaps in for the label, commits to `NameComponent` on Enter/defocus.
+- [x] **Step 4:** Window-focused keys: Delete (collect selection to a local vector first, then destroy), F2 (rename primary).
+- [x] **Step 5: BUILD.**
+- [x] **Step 6: Commit** `feat(debug): outliner multi-select, context menu, rename + delete keys`.
 
 ---
 
@@ -368,11 +368,11 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/HierarchyPanel.cpp`.
 
-- [ ] **Step 1:** `BeginDragDropSource` with `AETHER_ENTITY` payload (entity id) + drag label; `BeginDragDropTarget` on each node → `ecs::SetParent(world, Entity{draggedId}, e)` (cycle guard makes bad drops silent no-ops).
-- [ ] **Step 2:** Empty-space drop target after the root loop → detach to root (`SetParent(world, dragged, {})`).
-- [ ] **Step 3: BUILD.**
+- [x] **Step 1:** `BeginDragDropSource` with `AETHER_ENTITY` payload (entity id) + drag label; `BeginDragDropTarget` on each node → `ecs::SetParent(world, Entity{draggedId}, e)` (cycle guard makes bad drops silent no-ops).
+- [x] **Step 2:** Empty-space drop target after the root loop → detach to root (`SetParent(world, dragged, {})`).
+- [x] **Step 3: BUILD.**
 - [ ] **Step 4: RUN (hand-off): tree with names + icons; search filters; + creates; ctrl/shift multi-select; right-click ops; F2 rename sticks; Delete removes subtree; drag-drop nests / unparents / rejects cycles; F5 reload rebuilds names + hierarchy; entity count well past 80.**
-- [ ] **Step 5: Commit** `feat(debug): drag-drop reparenting in the outliner`.
+- [x] **Step 5: Commit** `feat(debug): drag-drop reparenting in the outliner`.
 
 ---
 
@@ -380,12 +380,12 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/HierarchyPanel.hpp/.cpp` (and small shared helpers if the inspector reuses them).
 
-- [ ] **Step 1: Selection pulse** — on selection change, record `ImGui::GetTime()`; selected-row highlight lerps from an accent-bright tint to the normal selection color over ~0.2s (drawlist rect behind the row, eased).
-- [ ] **Step 2: Spawn flash** — panel tracks seen entity ids (`unordered_set` + first-seen time); rows younger than ~0.75s get a fading glow tint. Set is pruned with dead ids.
-- [ ] **Step 3: Hover + rows** — subtle alternating row tint and a hover brighten (drawlist, respecting the theme's flat look).
-- [ ] **Step 4: Empty states** — centered, dimmed: outliner "No entities match" (search mode with zero hits); inspector "Nothing selected".
-- [ ] **Step 5: BUILD.**
-- [ ] **Step 6: Commit** `feat(debug): outliner micro-animations + empty states`.
+- [x] **Step 1: Selection pulse** — on selection change, record `ImGui::GetTime()`; selected-row highlight lerps from an accent-bright tint to the normal selection color over ~0.2s (drawlist rect behind the row, eased).
+- [x] **Step 2: Spawn flash** — panel tracks seen entity ids (`unordered_set` + first-seen time); rows younger than ~0.75s get a fading glow tint. Set is pruned with dead ids.
+- [x] **Step 3: Hover + rows** — subtle alternating row tint and a hover brighten (drawlist, respecting the theme's flat look).
+- [x] **Step 4: Empty states** — centered, dimmed: outliner "No entities match" (search mode with zero hits); inspector "Nothing selected".
+- [x] **Step 5: BUILD.**
+- [x] **Step 6: Commit** `feat(debug): outliner micro-animations + empty states`.
 
 ---
 
@@ -395,11 +395,11 @@ namespace aether::ecs
 
 **Files:** create `src/app/debug/ComponentDrawers.hpp/.cpp`; modify `src/app/debug/InspectorPanel.cpp`.
 
-- [ ] **Step 1:** `ComponentDrawers.hpp` declares: `DrawTransform(LayerContext&, World&, Entity)`, `DrawSkinnedMesh`, `DrawMaterial(LayerContext&, World&, Entity)`, `DrawEffectParams(LayerContext&, World&, Entity)`, `DrawPhysics`, `DrawMeshPipeline`, `DrawHierarchy(World&, Entity, SceneSelection&)`, `DrawTags`. `.cpp` = guarded stubs (TryGet + early-return).
-- [ ] **Step 2:** InspectorPanel shell: no-selection empty state; header = kind icon + editable name InputText (emplace-on-edit if missing) + muted `#id` + "Editing primary of N selected" note; then the Draw* list.
-- [ ] **Step 3:** **Add Component palette**: button opens a popup with an InputText filter over safely-default-constructible components (Transform, Name, Hierarchy) — type-to-filter, click/Enter adds. `Delete entity` button (DestroyHierarchy + selection.Clear).
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(debug): inspector editor shell, header, add-component palette`.
+- [x] **Step 1:** `ComponentDrawers.hpp` declares: `DrawTransform(LayerContext&, World&, Entity)`, `DrawSkinnedMesh`, `DrawMaterial(LayerContext&, World&, Entity)`, `DrawEffectParams(LayerContext&, World&, Entity)`, `DrawPhysics`, `DrawMeshPipeline`, `DrawHierarchy(World&, Entity, SceneSelection&)`, `DrawTags`. `.cpp` = guarded stubs (TryGet + early-return).
+- [x] **Step 2:** InspectorPanel shell: no-selection empty state; header = kind icon + editable name InputText (emplace-on-edit if missing) + muted `#id` + "Editing primary of N selected" note; then the Draw* list.
+- [x] **Step 3:** **Add Component palette**: button opens a popup with an InputText filter over safely-default-constructible components (Transform, Name, Hierarchy) — type-to-filter, click/Enter adds. `Delete entity` button (DestroyHierarchy + selection.Clear).
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(debug): inspector editor shell, header, add-component palette`.
 
 ---
 
@@ -407,8 +407,8 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/ComponentDrawers.cpp`.
 
-- [ ] **Step 1:** `DrawVec3Row(label, glm::vec3&, resetValue, speed)` helper — per-axis colored badge (X red / Y green / Z blue accent bar or mini-button that resets that axis), `DragFloat` per axis, row reset button; returns changed.
-- [ ] **Step 2:** `DrawTransform`: `DecomposeTRS` → Position/Rotation/Scale rows → on change `ComposeTransform`; propagate to `HierarchyComponent.children` exactly like `set_transform`; **physics-aware teleport** if `PhysicsStateComponent` present:
+- [x] **Step 1:** `DrawVec3Row(label, glm::vec3&, resetValue, speed)` helper — per-axis colored badge (X red / Y green / Z blue accent bar or mini-button that resets that axis), `DragFloat` per axis, row reset button; returns changed.
+- [x] **Step 2:** `DrawTransform`: `DecomposeTRS` → Position/Rotation/Scale rows → on change `ComposeTransform`; propagate to `HierarchyComponent.children` exactly like `set_transform`; **physics-aware teleport** if `PhysicsStateComponent` present:
 
 ```cpp
 		if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
@@ -420,9 +420,9 @@ namespace aether::ecs
 		}
 ```
 
-- [ ] **Step 3: BUILD.**
+- [x] **Step 3: BUILD.**
 - [ ] **Step 4: RUN (hand-off): static wall edit sticks; dynamic toy teleports (position AND rotation) without snap-back; fox children follow parent edits.**
-- [ ] **Step 5: Commit** `feat(debug): editable physics-aware transform section with per-axis rows`.
+- [x] **Step 5: Commit** `feat(debug): editable physics-aware transform section with per-axis rows`.
 
 ---
 
@@ -430,11 +430,11 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/ComponentDrawers.cpp`, `src/engine/scene/TagSlots.hpp/.cpp`.
 
-- [ ] **Step 1:** `DrawSkinnedMesh`: clip InputInt, playback-speed drag (−4..4), anim-time scrub, looping checkbox (v1 snippet valid).
-- [ ] **Step 2:** `DrawHierarchy`: parent button (click-to-select) + Unparent; children as click-to-select buttons (v1 snippet valid).
-- [ ] **Step 3:** TagSlots: add a minimal read API (e.g. `void ForEachTag(const std::function<void(const std::string&, uint32_t)>&)` over the name→id map — match the existing file's style). `DrawTags`: list entity's tags (ForEachTag + TagHas) with per-tag remove, add-by-name field (TagCreate/TagGetId + TagAdd).
-- [ ] **Step 4: BUILD.**
-- [ ] **Step 5: Commit** `feat(debug): skinned-mesh, hierarchy, tag inspector sections`.
+- [x] **Step 1:** `DrawSkinnedMesh`: clip InputInt, playback-speed drag (−4..4), anim-time scrub, looping checkbox (v1 snippet valid).
+- [x] **Step 2:** `DrawHierarchy`: parent button (click-to-select) + Unparent; children as click-to-select buttons (v1 snippet valid).
+- [x] **Step 3:** TagSlots: add a minimal read API (e.g. `void ForEachTag(const std::function<void(const std::string&, uint32_t)>&)` over the name→id map — match the existing file's style). `DrawTags`: list entity's tags (ForEachTag + TagHas) with per-tag remove, add-by-name field (TagCreate/TagGetId + TagAdd).
+- [x] **Step 4: BUILD.**
+- [x] **Step 5: Commit** `feat(debug): skinned-mesh, hierarchy, tag inspector sections`.
 
 ---
 
@@ -442,18 +442,18 @@ namespace aether::ecs
 
 **Files:** modify `src/engine/material/MaterialRegistry.hpp/.cpp`, `src/engine/material/MaterialSystem.cpp`, `src/app/debug/ComponentDrawers.cpp`; create `tests/material/MaterialDescribeTests.cpp`; modify `tests/CMakeLists.txt`.
 
-- [ ] **Step 1: `MaterialRegistry::TryDescribe(MaterialHandle, MaterialAsset& out) const`** — validate handle (alive + generation), reconstruct: factors + flags unpacked from the slot's stored `GpuMaterial` (inverse of `PackMaterial` for the factor/flag fields), the 5 stored `TextureHandle`s copied directly, `templateDesc` left default. Returns false for stale/invalid handles.
-- [ ] **Step 2: Seed-from-current** — `GetOrSeedInstance` gains a registry + current-handle path: when creating the instance, seed `asset` via `TryDescribe(currentHandle)` when the entity has a valid `MaterialComponent` (falls back to default asset otherwise). Typed setters pass the registry through. **Fixes the latent das clobber bug** (`entity_material_set_*` on textured entities).
-- [ ] **Step 3: doctest** — pack→describe round-trip for factors/flags/textures; describe-stale-handle fails; seed-from-current preserves texture handles when a setter touches one factor.
-- [ ] **Step 4: `DrawMaterial`** — requires `MaterialComponent`; seeds/reads `MaterialInstanceComponent.asset`:
+- [x] **Step 1: `MaterialRegistry::TryDescribe(MaterialHandle, MaterialAsset& out) const`** — validate handle (alive + generation), reconstruct: factors + flags unpacked from the slot's stored `GpuMaterial` (inverse of `PackMaterial` for the factor/flag fields), the 5 stored `TextureHandle`s copied directly, `templateDesc` left default. Returns false for stale/invalid handles.
+- [x] **Step 2: Seed-from-current** — `GetOrSeedInstance` gains a registry + current-handle path: when creating the instance, seed `asset` via `TryDescribe(currentHandle)` when the entity has a valid `MaterialComponent` (falls back to default asset otherwise). Typed setters pass the registry through. **Fixes the latent das clobber bug** (`entity_material_set_*` on textured entities).
+- [x] **Step 3: doctest** — pack→describe round-trip for factors/flags/textures; describe-stale-handle fails; seed-from-current preserves texture handles when a setter touches one factor.
+- [x] **Step 4: `DrawMaterial`** — requires `MaterialComponent`; seeds/reads `MaterialInstanceComponent.asset`:
   - `ColorEdit4` baseColorFactor; sliders metallic/roughness (0-1), occlusion (0-1); `ColorEdit3` emissive; alpha-cutoff drag (shown when alphaMask); checkboxes doubleSided / alphaBlend / alphaMask / modulateVertexColor.
   - Any change → **one** `MaterialSystem::AssignMaterial(world, e, registry, context.Get<AssetManager>().GetPipelineCache(), inst.asset)` (dedup-safe; flags re-resolve the pipeline; effect-driven entities keep their pipeline via the existing override).
   - Read-only texture rows: albedo/normal/metallicRoughness/occlusion/emissive — valid/broken/none per `TextureHandle` state. Thumbnails only if an ImageView accessor is already cheap via `ImguiSubsystem::RegisterTexture`; otherwise defer.
   - Footer: `GPU slot %u` from `MaterialComponent.gpuSlot`.
-- [ ] **Step 5: `DrawEffectParams`** — if `EffectParamsComponent`: tint `ColorEdit4`, speed/scale/intensity drags → mutate CPU `params` then `context.Get<EffectParamBuffer>().Write(paramSlot, params)` (same path as the das setters; skip when `paramSlot` invalid).
-- [ ] **Step 6: BUILD + TEST.**
+- [x] **Step 5: `DrawEffectParams`** — if `EffectParamsComponent`: tint `ColorEdit4`, speed/scale/intensity drags → mutate CPU `params` then `context.Get<EffectParamBuffer>().Write(paramSlot, params)` (same path as the das setters; skip when `paramSlot` invalid).
+- [x] **Step 6: BUILD + TEST.**
 - [ ] **Step 7: RUN (hand-off): recolor one of the 36 dedup crimson cubes → only it changes (splits to its own slot); edit fox roughness → textures stay; Zone M shared-material pulse (sandbox.das:629) unaffected by per-entity edits; plasma entity tint/speed scrub live. This is also the outstanding GPU verify for material phases 3-4.**
-- [ ] **Step 8: Commit** `feat(material,debug): live material editor with seed-from-current instances`.
+- [x] **Step 8: Commit** `feat(material,debug): live material editor with seed-from-current instances`.
 
 ---
 
@@ -461,10 +461,10 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/ComponentDrawers.cpp`.
 
-- [ ] **Step 1:** `DrawPhysics`: motion type text (Static/Kinematic/Dynamic), live `currPosition`/`scale`; note "(motion/shape changes need body rebuild — out of scope)".
-- [ ] **Step 2:** `DrawMeshPipeline`: mesh/pipeline presence lines; "Asset swapping: later spec".
-- [ ] **Step 3: BUILD.**
-- [ ] **Step 4: Commit** `feat(debug): read-only physics/render inspector sections`.
+- [x] **Step 1:** `DrawPhysics`: motion type text (Static/Kinematic/Dynamic), live `currPosition`/`scale`; note "(motion/shape changes need body rebuild — out of scope)".
+- [x] **Step 2:** `DrawMeshPipeline`: mesh/pipeline presence lines; "Asset swapping: later spec".
+- [x] **Step 3: BUILD.**
+- [x] **Step 4: Commit** `feat(debug): read-only physics/render inspector sections`.
 
 ---
 
@@ -472,12 +472,12 @@ namespace aether::ecs
 
 **Files:** modify `src/app/debug/InspectorPanel.cpp`, `src/app/debug/ComponentDrawers.cpp`, `src/app/layers/DebugLayer.cpp`, this plan + the spec.
 
-- [ ] **Step 1:** Remove-"x" on safely-removable section headers (Name, Hierarchy — conservative list).
-- [ ] **Step 2:** **Dock layout V3**: bump the dockspace id string (`AetherDebugDockSpaceV3`) and rebuild the default layout — Scene left ~20%, **Inspector right ~27%**, bottom row Performance/Lighting/Day-Night/Textures, right stack Render Graph/Debug/Tonemap/Post Processing, Viewport center.
-- [ ] **Step 3: BUILD.**
+- [x] **Step 1:** Remove-"x" on safely-removable section headers (Name, Hierarchy — conservative list).
+- [x] **Step 2:** **Dock layout V3**: bump the dockspace id string (`AetherDebugDockSpaceV3`) and rebuild the default layout — Scene left ~20%, **Inspector right ~27%**, bottom row Performance/Lighting/Day-Night/Textures, right stack Render Graph/Debug/Tonemap/Post Processing, Viewport center.
+- [x] **Step 3: BUILD.**
 - [ ] **Step 4: RUN — full acceptance (hand-off):** outliner (tree/icons/search/chips/create/rename/delete/reparent/multi-select/no-cap/juice), inspector (header/palette/transform/skinned/material-live/effects/physics/render/hierarchy/tags/remove-x), F5 reload clean, new dock layout, fox intact.
-- [ ] **Step 5:** Tick all checkboxes here; finalize the spec addendum; update memory notes.
-- [ ] **Step 6: Commit** `feat(debug): inspector polish, editor dock layout, acceptance pass`.
+- [x] **Step 5:** Tick all checkboxes here; finalize the spec addendum; update memory notes.
+- [x] **Step 6: Commit** `feat(debug): inspector polish, editor dock layout, acceptance pass`.
 
 ---
 

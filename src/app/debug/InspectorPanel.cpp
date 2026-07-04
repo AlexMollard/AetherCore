@@ -81,10 +81,15 @@ namespace aether::app
 		{
 			char buf[128];
 			std::snprintf(buf, sizeof(buf), "%s", nc->name.c_str());
-			ImGui::SetNextItemWidth(-64.0f);
+			ImGui::SetNextItemWidth(-88.0f);
 			if (ImGui::InputText("##name", buf, sizeof(buf)))
 			{
 				nc->name = buf;
+			}
+			ImGui::SameLine();
+			if (ImGui::SmallButton(ICON_FA_XMARK "##removeName"))
+			{
+				world.Remove<NameComponent>(entity);
 			}
 		}
 		else

@@ -68,7 +68,10 @@ namespace aether
 
 	namespace
 	{
-		// Get the entity's instance component, seeding a default one if absent.
+		// Get the entity's instance component, seeding one if absent. The seed is
+		// the entity's CURRENT registry material (TryDescribe) so a single-field
+		// edit tints what is on screen instead of resetting everything - textures
+		// included - to a default asset; entities with no material seed a default.
 		// Returns {ref, created}; a newly created instance is always assigned by
 		// the caller so the entity gains a MaterialComponent even on a no-op value.
 		struct InstanceRef
@@ -77,19 +80,24 @@ namespace aether
 			bool created;
 		};
 
-		InstanceRef GetOrSeedInstance(entt::registry& r, entt::entity e)
+		InstanceRef GetOrSeedInstance(entt::registry& r, entt::entity e, const MaterialRegistry& registry)
 		{
 			if (auto* existing = r.try_get<MaterialInstanceComponent>(e))
 			{
 				return {*existing, false};
 			}
-			return {r.emplace<MaterialInstanceComponent>(e, MaterialInstanceComponent{}), true};
+			MaterialAsset seed{};
+			if (const auto* mc = r.try_get<MaterialComponent>(e))
+			{
+				registry.TryDescribe(mc->handle, seed); // default-constructed seed on failure
+			}
+			return {r.emplace<MaterialInstanceComponent>(e, MaterialInstanceComponent{seed}), true};
 		}
 	} // namespace
 
 	void MaterialSystem::SetBaseColor(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, const glm::vec3& color)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && glm::vec3(ref.inst.asset.baseColorFactor) == color)
 		{
 			return;
@@ -100,7 +108,7 @@ namespace aether
 
 	void MaterialSystem::SetMetallic(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, float value)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && ref.inst.asset.metallicFactor == value)
 		{
 			return;
@@ -111,7 +119,7 @@ namespace aether
 
 	void MaterialSystem::SetRoughness(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, float value)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && ref.inst.asset.roughnessFactor == value)
 		{
 			return;
@@ -122,7 +130,7 @@ namespace aether
 
 	void MaterialSystem::SetEmissive(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, const glm::vec3& color)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && ref.inst.asset.emissiveFactor == color)
 		{
 			return;
@@ -133,7 +141,7 @@ namespace aether
 
 	void MaterialSystem::SetOcclusion(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, float value)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && ref.inst.asset.occlusionStrength == value)
 		{
 			return;
@@ -144,7 +152,7 @@ namespace aether
 
 	void MaterialSystem::SetAlbedoTexture(World& world, Entity entity, MaterialRegistry& registry, PipelineCache& pipelineCache, TextureHandle texture)
 	{
-		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity));
+		const InstanceRef ref = GetOrSeedInstance(world.GetRegistry(), World::ToEntt(entity), registry);
 		if (!ref.created && ref.inst.asset.albedoTex == texture)
 		{
 			return;

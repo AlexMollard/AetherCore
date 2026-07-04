@@ -149,4 +149,38 @@ namespace aether
 		}
 		return m_defaultSlot;
 	}
+
+	bool MaterialRegistry::TryDescribe(MaterialHandle handle, MaterialAsset& out) const
+	{
+		if (!handle.IsValid() || handle.index >= m_slots.size())
+		{
+			return false;
+		}
+		std::scoped_lock lock(m_mutex);
+		const SlotEntry& e = m_slots[handle.index];
+		if (!e.alive || e.generation != handle.generation)
+		{
+			return false;
+		}
+
+		const GpuMaterial& g = e.packed;
+		out = MaterialAsset{};
+		out.baseColorFactor = g.baseColorFactor;
+		out.metallicFactor = g.metallicFactor;
+		out.roughnessFactor = g.roughnessFactor;
+		out.occlusionStrength = g.occlusionStrength;
+		out.alphaCutoff = g.alphaCutoff;
+		out.emissiveFactor = glm::vec3(g.emissiveFactor);
+		out.doubleSided = (g.flags & GpuMaterial::kDoubleSided) != 0;
+		out.alphaBlend = (g.flags & GpuMaterial::kAlphaBlend) != 0;
+		out.alphaMask = (g.flags & GpuMaterial::kAlphaMask) != 0;
+		out.modulateVertexColor = (g.flags & GpuMaterial::kModulateVertexColor) != 0;
+		// Same order the acquire cascade recorded them in.
+		out.albedoTex = e.textures[0];
+		out.normalTex = e.textures[1];
+		out.metallicRoughnessTex = e.textures[2];
+		out.occlusionTex = e.textures[3];
+		out.emissiveTex = e.textures[4];
+		return true;
+	}
 } // namespace aether
