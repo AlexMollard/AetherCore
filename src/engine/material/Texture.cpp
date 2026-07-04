@@ -243,25 +243,19 @@ namespace aether
 		return texture;
 	}
 
-	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+	Expected<Texture> Texture::CreateSolidColor(std::array<std::uint8_t, 4> rgba, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
 	{
-		AE_PROFILE_ZONE();
-		AE_PROFILE_SET_ZONE_NAME(path.data());
+		// A 1x1 image samples identically at every UV, so a solid colour needs
+		// exactly one pixel regardless of how it is stretched over a mesh.
+		static_assert(sizeof(stbi_uc) == sizeof(std::uint8_t));
+		Texture texture;
+		texture.m_handle = UploadRgbaToGpuImage(rgba.data(), 1, 1, device, uploadQueue, uploadPool, "builtin:solid-color");
+		texture.m_bindlessSlot = gpu::ResourceRegistry::GetBindlessSampledSlot(texture.m_handle);
+		return texture;
+	}
 
-		// Try the pre-transcoded .texture (DDS) version first, then fall back to
-		// the original path for assets not processed by AssetPacker.
-		auto TryLoad = [&](std::string_view tryPath) -> std::vector<std::byte>
-		{
-			if (io::FileSystem::Exists(tryPath))
-			{
-				if (auto result = io::FileSystem::ReadFile(tryPath); result.has_value())
-				{
-					return std::move(*result);
-				}
-			}
-			return {};
-		};
-
+	std::string Texture::ResolveTexturePath(std::string_view path)
+	{
 		// Derive the .texture sibling path (e.g. "assets://foo/bar.png" -> ".../bar.texture")
 		const std::string pathStr(path);
 		std::string texturePath;
@@ -278,15 +272,19 @@ namespace aether
 				texturePath = mount + "://" + (rel.parent_path() / rel.stem()).generic_string() + ".texture";
 			}
 		}
+		// Prefer the pre-transcoded .texture (DDS) sibling if present; else the
+		// original path (assets not processed by AssetPacker).
+		return io::FileSystem::Exists(texturePath) ? texturePath : pathStr;
+	}
 
-		std::vector<std::byte> fileData = TryLoad(texturePath);
-		if (fileData.empty())
-		{
-			AE_TRY(data, io::FileSystem::ReadFile(path));
-			fileData = std::move(*data);
-		}
+	Expected<Texture> Texture::LoadFromFile(std::string_view path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
+	{
+		AE_PROFILE_ZONE();
+		AE_PROFILE_SET_ZONE_NAME(path.data());
 
-		return LoadFromFileData(fileData, pathStr, device, uploadQueue, uploadPool);
+		const std::string resolved = ResolveTexturePath(path);
+		AE_TRY(data, io::FileSystem::ReadFile(resolved));
+		return LoadFromFileData(*data, resolved, device, uploadQueue, uploadPool);
 	}
 
 	Expected<Texture> Texture::LoadFromDiskPath(const std::filesystem::path& path, gpu::Device device, gpu::Queue uploadQueue, gpu::CommandPool uploadPool)
