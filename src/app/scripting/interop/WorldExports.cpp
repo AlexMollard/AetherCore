@@ -116,6 +116,22 @@ AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int
 
 // ── TransformComponent ────────────────────────────────────────────────────────
 
+AE_SCRIPT_API void aether_add_transform(std::uint32_t id)
+{
+	ActiveWorld().EmplaceOrReplace<aether::TransformComponent>(
+		aether::Entity{id}, aether::TransformComponent{.localToWorld = glm::mat4(1.0f)});
+}
+
+AE_SCRIPT_API std::int32_t aether_has_transform(std::uint32_t id)
+{
+	return ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id}) != nullptr ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_remove_transform(std::uint32_t id)
+{
+	ActiveWorld().Remove<aether::TransformComponent>(aether::Entity{id});
+}
+
 AE_SCRIPT_API Vec3 aether_get_position(std::uint32_t id)
 {
 	const auto* tc = ActiveWorld().TryGet<aether::TransformComponent>(aether::Entity{id});

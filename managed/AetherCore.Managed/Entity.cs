@@ -52,6 +52,13 @@ public readonly struct Entity : IEquatable<Entity>
     /// <summary>Exclude this entity (and subtree) from scene serialization.</summary>
     public void MarkTransient() => Native.aether_mark_transient(Id);
 
+    /// <summary>Give the entity an identity transform (needed before SetTransform).</summary>
+    public void AddTransform() => Native.aether_add_transform(Id);
+
+    public bool HasTransform => Native.aether_has_transform(Id) != 0;
+
+    public void RemoveTransform() => Native.aether_remove_transform(Id);
+
     // ── Behaviors ─────────────────────────────────────────────────────────────
     public void AddBob(float amplitude, float frequency, float phase = 0f) => Native.aether_add_bob(Id, amplitude, frequency, phase);
 

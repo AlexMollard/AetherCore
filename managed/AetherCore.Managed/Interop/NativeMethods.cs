@@ -35,6 +35,16 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     internal static partial void aether_mark_transient(uint id);
 
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_transform(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_has_transform(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_remove_transform(uint id);
+
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_set_name(uint id, string name);
 
