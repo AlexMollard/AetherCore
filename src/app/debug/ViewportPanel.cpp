@@ -468,6 +468,30 @@ namespace aether::app
 			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive());
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
+
+		// F frames the primary selection with the editor camera (keeps the
+		// current view direction, moves back far enough to see the object).
+		if (m_editorCamActive && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F, false) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+		{
+			auto& selection = context.Get<SceneSelection>();
+			World& world = context.Get<World>();
+			const Entity primary = selection.Primary();
+			if (primary.IsValid() && world.GetRegistry().valid(World::ToEntt(primary)))
+			{
+				if (const auto* tc = world.TryGet<TransformComponent>(primary))
+				{
+					if (Camera* cam = context.Get<CameraManager>().TryGet(CameraHandle{m_editorCamId}))
+					{
+						const glm::vec3 target = glm::vec3(tc->localToWorld[3]);
+						const float sx = glm::length(glm::vec3(tc->localToWorld[0]));
+						const float sy = glm::length(glm::vec3(tc->localToWorld[1]));
+						const float sz = glm::length(glm::vec3(tc->localToWorld[2]));
+						const float dist = glm::max(4.0f, 2.5f * glm::max(sx, glm::max(sy, sz)));
+						cam->SetPosition(target - cam->GetForward() * dist);
+					}
+				}
+			}
+		}
 		if (m_viewportShowStats || m_viewportShowMouse)
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();

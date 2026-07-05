@@ -113,6 +113,19 @@ namespace aether
 	{
 	};
 
+	// Entity-attached script, by path under the scripts root (e.g.
+	// "entities/player.das"). Pure data: the app-side ScriptComponentSystem
+	// compiles each unique path once and calls on_entity_attach /
+	// on_entity_update(self, dt) while the editor is Playing (das today; the
+	// component and its serialization outlive the planned C# swap). `attached`
+	// is runtime state - scene apply leaves it false, so loads and
+	// Stop-restores re-run the attach on the next play tick.
+	struct ScriptComponent
+	{
+		std::string path;
+		bool attached = false;
+	};
+
 	// Drives GPU-based skeletal animation for a skinned mesh entity.
 	struct SkinnedMeshComponent
 	{

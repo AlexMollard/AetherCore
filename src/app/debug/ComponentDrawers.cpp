@@ -574,6 +574,34 @@ namespace aether::app
 		}
 	}
 
+	void DrawScript(World& world, Entity entity)
+	{
+		auto* sc = world.TryGet<ScriptComponent>(entity);
+		if (sc == nullptr)
+		{
+			return;
+		}
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_CODE "  Script", ICON_FA_XMARK "##removeScript", removed, ImGuiTreeNodeFlags_DefaultOpen);
+		if (removed)
+		{
+			world.Remove<ScriptComponent>(entity);
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+		ImGui::TextUnformatted(sc->path.c_str());
+		ImGui::TextDisabled(sc->attached ? "Attached (running while playing)" : "Attaches on the next Play tick");
+		if (sc->attached && ImGui::SmallButton("Re-attach"))
+		{
+			// Next play tick re-runs on_entity_attach (handy after F5-editing
+			// the script's setup code).
+			sc->attached = false;
+		}
+	}
+
 	void DrawSceneTransient(World& world, Entity entity)
 	{
 		if (!world.Has<SceneTransientComponent>(entity))

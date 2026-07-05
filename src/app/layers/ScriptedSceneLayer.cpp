@@ -25,6 +25,7 @@
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "systems/DayNightSystem.hpp"
+#include "systems/ScriptComponentSystem.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -139,6 +140,12 @@ namespace aether::app
 		// renderer's lights cleared and any later save capturing the gutted
 		// world.
 		LoadStartupScene(context);
+
+		// Entity scripts recompile from fresh sources on the next play tick.
+		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
+		{
+			scriptSystem->Invalidate(context.Get<World>());
+		}
 
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
 	}

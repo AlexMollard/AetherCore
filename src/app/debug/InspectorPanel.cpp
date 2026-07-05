@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <imgui.h>
@@ -13,6 +14,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "io/FileSystem.hpp"
 #include "material/EffectManager.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
@@ -125,6 +127,13 @@ namespace aether::app
 		{
 			m_addFilter[0] = '\0';
 			m_addFocusPending = true;
+			// Entity-script list refreshes once per open.
+			m_scriptList.clear();
+			if (const auto scripts = io::FileSystem::Glob("scripts://entities/*.das"); scripts.has_value())
+			{
+				m_scriptList = *scripts;
+				std::sort(m_scriptList.begin(), m_scriptList.end());
+			}
 			ImGui::OpenPopup("AddComponent");
 		}
 		ImGui::SameLine();
@@ -241,6 +250,32 @@ namespace aether::app
 				}
 			}
 
+			if (!m_scriptList.empty())
+			{
+				ImGui::SeparatorText("Scripts");
+				const bool hasScript = world.Has<ScriptComponent>(entity);
+				for (const std::string& fullPath: m_scriptList)
+				{
+					// Glob yields "scripts://entities/x.das"; the compiler wants
+					// the path relative to the scripts root.
+					std::string relative = fullPath;
+					if (constexpr std::string_view kPrefix = "scripts://"; relative.starts_with(kPrefix))
+					{
+						relative = relative.substr(kPrefix.size());
+					}
+					std::string label = relative;
+					if (const auto slash = label.find_last_of("/\\"); slash != std::string::npos)
+					{
+						label = label.substr(slash + 1);
+					}
+					const std::string entry = std::string(ICON_FA_CODE "  Script - ") + label;
+					if (PaletteEntry(entry.c_str(), m_addFilter, hasScript))
+					{
+						world.Emplace<ScriptComponent>(entity, ScriptComponent{.path = relative});
+					}
+				}
+			}
+
 			ImGui::SeparatorText("Behaviors");
 			if (PaletteEntry(ICON_FA_WAVE_SQUARE "  Bob", m_addFilter, world.Has<BobComponent>(entity)))
 			{
@@ -312,6 +347,7 @@ namespace aether::app
 		DrawMaterial(context, world, entity);
 		DrawEffectParams(context, world, entity);
 		DrawLights(world, entity);
+		DrawScript(world, entity);
 		DrawBehaviors(world, entity);
 		DrawPhysics(world, entity);
 		DrawMeshPipeline(world, entity);

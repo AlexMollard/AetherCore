@@ -18,6 +18,7 @@
 #include "scene/BehaviorSystem.hpp"
 #include "scene/LightSystem.hpp"
 #include "systems/DayNightSystem.hpp"
+#include "systems/ScriptComponentSystem.hpp"
 
 namespace aether::app
 {
@@ -97,6 +98,7 @@ namespace aether::app
 		aether::coro::set_default_executor(nullptr);
 
 		// Unregister engine-level systems before detaching layers.
+		context.Get<World>().UnregisterSystem("ScriptComponentSystem");
 		context.Get<World>().UnregisterSystem("LightSystem");
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
@@ -181,6 +183,13 @@ namespace aether::app
 			// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
 			// with the rest of the simulation while Editing.
 			attachContext.Get<World>().RegisterSystem(std::make_unique<BehaviorSystem>(attachContext.Get<AssetManager>()));
+
+			// Entity-attached scripts (ScriptComponent) - also play-gated. The
+			// service registration is for the F5 path (handle invalidation).
+			auto scriptSystem = std::make_unique<ScriptComponentSystem>(services);
+			auto scriptPtr = scriptSystem.get();
+			attachContext.Get<World>().RegisterSystem(std::move(scriptSystem));
+			services.Register<ScriptComponentSystem>(*scriptPtr);
 		}
 
 		m_layers.AttachAll(attachContext);

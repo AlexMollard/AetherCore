@@ -102,6 +102,8 @@ namespace aether::app::scene
 		// Entity lights (v3+): position/aim come from the TRS above.
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
+		// Entity script path (v4+, ScriptComponent). Attach state is runtime.
+		std::optional<std::string> script;
 	};
 
 	// LEGACY (pre-v3): renderer-level light list. Still parsed so old files
@@ -136,8 +138,9 @@ namespace aether::app::scene
 	// absence silently degrades a loaded scene; ParseToml warns on older files.
 	// v1 = Spec-3 (no behavior components, no lights/environment);
 	// v2 = Spec-4 (behaviors, renderer-level [[lights]], environment);
-	// v3 = lights are entities (per-entity point_light/spot_light tables).
-	inline constexpr int kSceneFormatVersion = 3;
+	// v3 = lights are entities (per-entity point_light/spot_light tables);
+	// v4 = entity script components (script = "entities/x.das").
+	inline constexpr int kSceneFormatVersion = 4;
 
 	struct SceneDescription
 	{

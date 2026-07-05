@@ -245,6 +245,14 @@ namespace aether::app
 			ecs::SetParent(world, child, e);
 			selection.Select(child);
 		}
+		if (ImGui::MenuItem(ICON_FA_CLONE "  Duplicate", "Ctrl+D"))
+		{
+			if (!selection.Contains(e))
+			{
+				selection.Select(e);
+			}
+			m_pendingDuplicate = true; // applied after the walk (creates entities)
+		}
 		if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Save as Prefab"))
 		{
 			// The name popup is begun at window level after the tree walk
@@ -771,6 +779,75 @@ namespace aether::app
 				}
 			}
 			ImGui::EndChild();
+
+			// Ctrl+D duplicates the selection (roots only; nested selected
+			// entities ride with their ancestor's copy).
+			if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false) && !ImGui::GetIO().WantTextInput)
+			{
+				m_pendingDuplicate = true;
+			}
+			if (m_pendingDuplicate)
+			{
+				m_pendingDuplicate = false;
+				auto* dupAssets = context.TryGet<AssetManager>();
+				if (dupAssets != nullptr)
+				{
+					std::vector<Entity> roots;
+					for (const Entity e: selection.All())
+					{
+						if (!reg.valid(World::ToEntt(e)))
+						{
+							continue;
+						}
+						bool ancestorSelected = false;
+						Entity cur = e;
+						while (true)
+						{
+							const auto* h = world.TryGet<HierarchyComponent>(cur);
+							if (h == nullptr || !h->parent.IsValid())
+							{
+								break;
+							}
+							cur = h->parent;
+							if (selection.Contains(cur))
+							{
+								ancestorSelected = true;
+								break;
+							}
+						}
+						if (!ancestorSelected)
+						{
+							roots.push_back(e);
+						}
+					}
+					// A duplicate is an in-memory prefab round trip: capture the
+					// subtree, instantiate nudged +1 X, select the copies.
+					bool first = true;
+					for (const Entity root: roots)
+					{
+						const auto prefab = scene::CapturePrefab(world, root, dupAssets->GetMaterialRegistry(), dupAssets->GetTextureRegistry());
+						glm::mat4 placed(1.0f);
+						if (const auto* tc = world.TryGet<TransformComponent>(root))
+						{
+							placed = tc->localToWorld;
+						}
+						placed[3].x += 1.0f;
+						const Entity copy = scene::InstantiatePrefab(prefab, world, MakeSceneDeps(context), placed);
+						if (copy.IsValid())
+						{
+							if (first)
+							{
+								selection.Select(copy);
+								first = false;
+							}
+							else
+							{
+								selection.ToggleSelection(copy);
+							}
+						}
+					}
+				}
+			}
 
 			// Apply the queued reparent now that no children vector is being
 			// walked. SetParent is cycle-guarded: bad drops are silent no-ops.

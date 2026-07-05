@@ -178,6 +178,8 @@ namespace aether::app::scripting
 		handle.onAttach = ctx->findFunction("on_attach");
 		handle.onUpdate = ctx->findFunction("on_update");
 		handle.onDetach = ctx->findFunction("on_detach");
+		handle.onEntityAttach = ctx->findFunction("on_entity_attach");
+		handle.onEntityUpdate = ctx->findFunction("on_entity_update");
 
 		AE_INFO(LogCategory::App, "Script compiled: '{}' (attach={} update={} detach={})", resolvedPath, handle.onAttach != nullptr, handle.onUpdate != nullptr, handle.onDetach != nullptr);
 
@@ -225,6 +227,48 @@ namespace aether::app::scripting
 	{
 		AE_PROFILE_ZONE();
 		InvokeWithWorld(handle.ctx, handle.onDetach, ctx, *this);
+	}
+
+	// Invoke an entity-script entry point: (world, self[, dt]).
+	static bool InvokeEntityFn(das::Context* ctx, das::SimFunction* fn, SceneContext& activeCtx, ScriptingSubsystem& subsystem, std::uint32_t self, const float* dt)
+	{
+		if (!fn || !ctx)
+		{
+			return false;
+		}
+
+		g_activeContext = &activeCtx;
+
+		vec4f args[3];
+		args[0] = das::cast<aether::World*>::from(activeCtx.world);
+		args[1] = das::cast<uint32_t>::from(self);
+		if (dt != nullptr)
+		{
+			args[2] = das::cast<float>::from(*dt);
+		}
+		ctx->evalWithCatch(fn, args, nullptr);
+
+		g_activeContext = nullptr;
+
+		if (const char* ex = ctx->getException())
+		{
+			std::string msg = "Runtime exception:\n" + std::string(ex);
+			AE_ERROR(LogCategory::App, "daScript exception: {}", ex);
+			subsystem.ReportScriptError(msg);
+		}
+		return true;
+	}
+
+	bool ScriptingSubsystem::CallEntityAttach(ScriptHandle& handle, SceneContext& ctx, std::uint32_t self)
+	{
+		AE_PROFILE_ZONE();
+		return InvokeEntityFn(handle.ctx, handle.onEntityAttach, ctx, *this, self, nullptr);
+	}
+
+	bool ScriptingSubsystem::CallEntityUpdate(ScriptHandle& handle, SceneContext& ctx, std::uint32_t self, float dt)
+	{
+		AE_PROFILE_ZONE();
+		return InvokeEntityFn(handle.ctx, handle.onEntityUpdate, ctx, *this, self, &dt);
 	}
 
 	void ScriptingSubsystem::ReportScriptError(const std::string& error)

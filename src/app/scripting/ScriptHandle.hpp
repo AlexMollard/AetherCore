@@ -25,6 +25,10 @@ namespace aether::app::scripting
 		das::SimFunction* onAttach = nullptr;
 		das::SimFunction* onUpdate = nullptr;
 		das::SimFunction* onDetach = nullptr;
+		// Entity-script entry points (ScriptComponent runner): receive the
+		// owning entity id (and dt for update) after the world pointer.
+		das::SimFunction* onEntityAttach = nullptr;
+		das::SimFunction* onEntityUpdate = nullptr;
 
 		[[nodiscard]] bool IsValid() const
 		{

@@ -254,6 +254,10 @@ namespace aether::app::scene
 				{
 					rec.spotLight = *sl;
 				}
+				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr && !script->path.empty())
+				{
+					rec.script = script->path;
+				}
 				scene.entities.push_back(std::move(rec));
 			}
 		}
@@ -521,6 +525,10 @@ namespace aether::app::scene
 				l.insert("shadow", rec.spotLight->castsShadow);
 				t.insert("spot_light", std::move(l));
 			}
+			if (rec.script)
+			{
+				t.insert("script", *rec.script);
+			}
 			entities.push_back(std::move(t));
 		}
 		root.insert("entities", std::move(entities));
@@ -706,6 +714,10 @@ namespace aether::app::scene
 			{
 				const toml::node_view<const toml::node> lv{*l};
 				rec.spotLight = SpotLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(30.0)), .radius = static_cast<float>(lv["radius"].value_or(30.0)), .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)), .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)), .castsShadow = lv["shadow"].value_or(false)};
+			}
+			if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
+			{
+				rec.script = *script;
 			}
 			scene.entities.push_back(std::move(rec));
 		}
@@ -1071,6 +1083,12 @@ namespace aether::app::scene
 			if (rec.spotLight)
 			{
 				world.Emplace<SpotLightComponent>(e, *rec.spotLight);
+			}
+			if (rec.script)
+			{
+				// attached stays false: the script system re-attaches on the
+				// next play tick (loads and Stop-restores restart scripts).
+				world.Emplace<ScriptComponent>(e, ScriptComponent{.path = *rec.script});
 			}
 		}
 

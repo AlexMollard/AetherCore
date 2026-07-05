@@ -92,6 +92,14 @@ namespace
 		w->EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id}, aether::MaterialPulseComponent{.emissiveA = to_glm(emissiveA), .emissiveB = to_glm(emissiveB), .frequency = frequency});
 	}
 
+	// add_script(world, entity_id, "entities/foo.das") - attach an entity
+	// script (ScriptComponent). It runs while Playing via the
+	// ScriptComponentSystem and serializes with the scene.
+	void das_add_script(aether::World* w, uint32_t id, const char* path)
+	{
+		w->EmplaceOrReplace<aether::ScriptComponent>(aether::Entity{id}, aether::ScriptComponent{.path = path ? path : ""});
+	}
+
 	// mark_transient(world, entity_id) - exclude the entity (and its subtree)
 	// from scene capture; script-owned runtime actors use this.
 	void das_mark_transient(aether::World* w, uint32_t id)
@@ -713,6 +721,7 @@ namespace aether::app::scripting
 			Bind<das_add_spin>(lib, "add_spin", SE::modifyExternal);
 			Bind<das_add_orbit>(lib, "add_orbit", SE::modifyExternal);
 			Bind<das_add_material_pulse>(lib, "add_material_pulse", SE::modifyExternal);
+			Bind<das_add_script>(lib, "add_script", SE::modifyExternal);
 			Bind<das_mark_transient>(lib, "mark_transient", SE::modifyExternal);
 			Bind<das_scene_file_exists>(lib, "scene_file_exists", SE::accessExternal);
 

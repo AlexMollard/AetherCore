@@ -1,5 +1,8 @@
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "debug/DebugPanel.hpp"
 #include "scene/Entity.hpp"
 
@@ -28,5 +31,7 @@ namespace aether::app
 		char m_addFilter[48] = {};
 		bool m_addFocusPending = false;
 		char m_addTagBuf[48] = {};
+		// Entity-script files under scripts://entities (refreshed per popup open).
+		std::vector<std::string> m_scriptList;
 	};
 } // namespace aether::app

@@ -80,6 +80,9 @@ namespace aether::app
 		// Drag-drop reparent is queued during the tree walk and applied after it:
 		// SetParent mutates children vectors the recursion may still be iterating.
 		std::optional<std::pair<Entity, Entity>> m_pendingReparent; // {child, newParent}
+		// Duplicate (context menu / Ctrl+D) also defers past the walk: it
+		// creates entities, which would invalidate the iteration.
+		bool m_pendingDuplicate = false;
 
 		// Juice: newly-seen entities flash briefly; selection changes pulse.
 		std::unordered_set<std::uint32_t> m_knownIds;

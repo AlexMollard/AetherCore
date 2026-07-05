@@ -51,6 +51,8 @@ namespace aether::app
 	// Point/spot light sections, live-editable and removable (LightSystem
 	// republishes to the renderer every frame, edit mode included).
 	void DrawLights(World& world, Entity entity);
+	// Entity script section (path, attach state), removable.
+	void DrawScript(World& world, Entity entity);
 	// Scene-transient marker (excluded from captures), removable.
 	void DrawSceneTransient(World& world, Entity entity);
 	void DrawPhysics(World& world, Entity entity);

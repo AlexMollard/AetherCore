@@ -55,8 +55,6 @@ var g_fox_tag    : uint = 0u;
 var g_toy_tag    : uint = 0u;
 
 // ── Entities / state ─────────────────────────────────────────────────────────
-var g_player           : uint = 0u;
-var g_cam              : uint = 0u;
 var g_plasma           : uint = 0u;
 var g_plasma2          : uint = 0u;
 var g_plasma3          : uint = 0u;
@@ -64,8 +62,6 @@ var g_molten           : uint = 0u;    // molten-effect orb (new pipeline)
 var g_missing_cube     : uint = 0u;    // cube with a deliberately-missing texture
 var g_shared_mat       : uint = 0u;    // authored material shared by a row of cubes
 var g_have_shared_mat  : bool = false; // set once the shared material is created
-var g_player_idle_clip : int  = 0;
-var g_player_walk_clip : int  = 1;
 var g_time             : float = 0.0;
 
 // ── Physics-toy tuning ───────────────────────────────────────────────────────
@@ -564,30 +560,23 @@ def on_attach(world : World?)
         spawn_fox(world, float3(14.0, 0.0, 15.0),  40.0, 0.0);
         spawn_fox(world, float3(20.0, 0.0,  8.0), -60.0, 0.3);
         spawn_fox(world, float3(-16.0, 0.0, 14.0), 20.0, 0.6);
+
+        // ── Player: ordinary scene content driven by an ENTITY SCRIPT ────────
+        // A bare entity + entities/player.das; the script builds the model,
+        // animations and camera on the first play tick. Captured into the
+        // scene file like everything else (no transient marker any more).
+        var player = entity_create(world);
+        add_transform(world, player);
+        set_transform(world, player, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.05, 0.05, 0.05));
+        set_name(world, player, "Player");
+        add_tag(world, player, create_tag("player"));
+        add_script(world, player, "entities/player.das");
     }
 
-    // ── Player (Human, third-person controlled) at the centre ────────────────
-    // Script-owned runtime actor: marked transient so scene captures (boot
-    // auto-generation, Play snapshots, manual saves) never duplicate it.
-    g_player = entity_create(world);
-    mark_transient(world, g_player);
-    add_transform(world, g_player);
-    set_transform(world, g_player, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.05, 0.05, 0.05));
-    load_model(world, g_player, "assets://models/Human/Human.mesh");
-    g_player_idle_clip = get_current_animation(world, g_player);
-    set_playback_speed(world, g_player, 1.0);
-    add_tag(world, g_player, create_tag("player"));
-
-    g_player_walk_clip = add_animation(world, g_player, "assets://animations/Walking_mixamo.com.anim", true);
-    if (g_player_walk_clip >= 0)
-    {
-        compile_animations(world, g_player);
-    }
-
-    // ── Camera & input ───────────────────────────────────────────────────────
-    g_cam = create_orbit_camera(float3(0.0, 30.0, 50.0), float3(0.0, 3.0, 0.0), 65.0);
-    set_main_camera(g_cam);
-
+    // ── Input ────────────────────────────────────────────────────────────────
+    // The player (model, controller, camera) lives in entities/player.das as
+    // an entity script on the "Player" scene entity. Action registration stays
+    // global here.
     init_default_bindings();
     register_action("sprint_key",   KEY_LEFT_SHIFT, 0);
     register_action("spawn_cube",   KEY_1, 0);
@@ -608,24 +597,16 @@ def on_update(world : World?)
     let dt = get_delta_time();
     g_time += dt;
 
-    // ── Player movement + third-person camera ────────────────────────────────
-    var inputX = 0.0; var inputZ = 0.0;
-    if (is_action_down("move_forward"))  { inputZ += 1.0; }
-    if (is_action_down("move_backward")) { inputZ -= 1.0; }
-    if (is_action_down("move_left"))     { inputX -= 1.0; }
-    if (is_action_down("move_right"))    { inputX += 1.0; }
-
-    let is_sprinting = is_action_down("sprint_key") && inputZ > 0.0;
-    update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam, is_sprinting, -1);
-    update_third_person_camera(world, g_cam, g_player);
+    // Player movement + camera moved to entities/player.das (entity script on
+    // the "Player" scene entity, run by the ScriptComponentSystem).
 
     // Orb bobbing, missing-cube spin, the Zone-M emissive pulse and the fox
     // patrol are all data now (Bob/Spin/MaterialPulse/Orbit components,
     // advanced by the engine's BehaviorSystem) - they serialize with the scene
     // and pause with the editor. The script keeps only interactive logic.
 
-    // ── Physics toys, spawned above the player ───────────────────────────────
-    let pp = get_position(world, g_player);
+    // ── Physics toys, dropped over the plaza centre ──────────────────────────
+    let pp = float3(0.0, 0.0, 0.0);
     if (is_action_pressed("spawn_cube"))   { spawn_toy(world, false, float3(pp.x, g_toy_drop, pp.z), g_toy_size); }
     if (is_action_pressed("spawn_sphere")) { spawn_toy(world, true,  float3(pp.x, g_toy_drop, pp.z), g_toy_size); }
     if (is_action_pressed("spawn_rain"))   { spawn_rain(world, pp); }

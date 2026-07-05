@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -36,6 +37,13 @@ namespace aether::app::scripting
 
 		// Invoke on_detach(). Sets the TLS active context before the call.
 		void CallOnDetach(ScriptHandle& handle, SceneContext& ctx);
+
+		// Entity-script entry points (ScriptComponent runner):
+		//   def on_entity_attach(world : World?; self : uint)
+		//   def on_entity_update(world : World?; self : uint; dt : float)
+		// No-ops (returning false) when the script does not export them.
+		bool CallEntityAttach(ScriptHandle& handle, SceneContext& ctx, std::uint32_t self);
+		bool CallEntityUpdate(ScriptHandle& handle, SceneContext& ctx, std::uint32_t self, float dt);
 
 		// Signal that the active script should be reloaded on the next
 		// CallOnUpdate.  Called by DebugLayer when F5 is pressed.

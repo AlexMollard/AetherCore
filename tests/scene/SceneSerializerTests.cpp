@@ -531,3 +531,30 @@ TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
     CHECK(armM[3].y == doctest::Approx(1.0f));
     CHECK(fresh.TryGet<SpinComponent>(h->children[0]) != nullptr);
 }
+
+TEST_CASE("Script components round-trip through capture, TOML and apply") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+    Entity e = world.Create();
+    world.Emplace<NameComponent>(e, NameComponent{.name = "Scripted"});
+    world.Emplace<TransformComponent>(e, TransformComponent{});
+    world.Emplace<ScriptComponent>(e, ScriptComponent{.path = "entities/spinner.das", .attached = true});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->version == kSceneFormatVersion);
+    const EntityRecord& rec = RecordOf(*parsed, "Scripted");
+    REQUIRE(rec.script.has_value());
+    CHECK(*rec.script == "entities/spinner.das");
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity applied = AppliedOf(*parsed, created, "Scripted");
+    const auto* sc = fresh.TryGet<ScriptComponent>(applied);
+    REQUIRE(sc != nullptr);
+    CHECK(sc->path == "entities/spinner.das");
+    CHECK(!sc->attached); // runtime state resets: scripts re-attach on the next play tick
+}
