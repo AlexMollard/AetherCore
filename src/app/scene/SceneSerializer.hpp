@@ -128,9 +128,15 @@ namespace aether::app::scene
 		glm::vec3 skyVoid{0.05f};
 	};
 
+	// Format version written to [scene]. Bump when records gain fields whose
+	// absence silently degrades a loaded scene; ParseToml warns on older files.
+	// v1 = Spec-3 (no behavior components, no lights/environment); v2 = Spec-4+.
+	inline constexpr int kSceneFormatVersion = 2;
+
 	struct SceneDescription
 	{
 		std::string name;
+		int version = kSceneFormatVersion;
 		std::vector<EntityRecord> entities;
 		std::vector<LightRecord> lights;
 		std::optional<EnvironmentRecord> environment;
@@ -163,6 +169,7 @@ namespace aether::app::scene
 		PrimitiveMeshes* primitives = nullptr;           // primitive mesh resolve
 		effects::EffectManager* effectManager = nullptr; // effect-by-name re-apply
 		EffectParamBuffer* effectParams = nullptr;
+		PipelineCache* pipelines = nullptr;              // effect pipeline resolve (headless-testable, unlike assets)
 		scripting::SceneContext* sceneContext = nullptr; // model cache + sceneEntities registration
 		PhysicsSystem* physics = nullptr;                // step-idle guard before replace-all destroys
 		Renderer* renderer = nullptr;                    // lights + environment re-apply

@@ -48,6 +48,17 @@ namespace aether::app::effects
 			return m_effects.size();
 		}
 
+		// Enumerate registered effect names (unordered) - the editor's
+		// add-component palette builds its effect entries from this.
+		template<typename Fn>
+		void ForEachEffect(Fn&& fn) const
+		{
+			for (const auto& [name, def]: m_effects)
+			{
+				fn(name, def);
+			}
+		}
+
 	private:
 		std::unordered_map<std::string, EffectDef> m_effects;
 	};

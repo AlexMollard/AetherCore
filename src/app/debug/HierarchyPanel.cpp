@@ -468,11 +468,13 @@ namespace aether::app
 					if (ImGui::MenuItem(name.c_str(), isStartup ? "startup" : nullptr))
 					{
 						auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+						auto* sceneAssets = context.TryGet<AssetManager>();
 						scene::ApplySceneDeps deps{};
-						deps.assets = context.TryGet<AssetManager>();
+						deps.assets = sceneAssets;
 						deps.primitives = context.TryGet<PrimitiveMeshes>();
 						deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
 						deps.effectParams = context.TryGet<EffectParamBuffer>();
+						deps.pipelines = sceneAssets ? &sceneAssets->GetPipelineCache() : nullptr;
 						deps.sceneContext = sceneCtx;
 						deps.physics = context.TryGet<PhysicsSystem>();
 						deps.renderer = context.TryGet<Renderer>();

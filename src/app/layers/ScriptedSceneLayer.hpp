@@ -33,6 +33,12 @@ namespace aether::app
 	private:
 		void DestroySceneEntities(LayerContext& context);
 		void DoReload(LayerContext& context);
+		// Startup-scene boot: additive load of settings->app.startupScene, or
+		// auto-generate it from legacy script content on first run. Called from
+		// OnAttach AND after every F5 reload (DoReload destroys the loaded scene
+		// entities along with the script's, so the file must re-apply or the
+		// world comes back missing everything the script no longer builds).
+		void LoadStartupScene(LayerContext& context);
 
 		std::string m_scriptPath;
 		scripting::SceneContext m_sceneCtx;

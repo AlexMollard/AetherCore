@@ -132,6 +132,14 @@ namespace aether::app
 		m_scripting->ClearErrors();
 		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 
+		// DestroySceneEntities above tore down the FILE-loaded world along with
+		// the script's entities (both live in sceneEntities), and the script's
+		// legacy builders skip when the startup scene file exists - so without
+		// this re-load, F5 leaves the world empty of scene content, with the
+		// renderer's lights cleared and any later save capturing the gutted
+		// world.
+		LoadStartupScene(context);
+
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
 	}
 
@@ -226,30 +234,38 @@ namespace aether::app
 		// content). Load the startup scene ADDITIVELY into that world, or
 		// auto-generate it from the legacy content on first run (transient
 		// entities are excluded from the capture).
-		if (const auto* settings = context.TryGet<aether::EngineSettings>(); settings != nullptr && !settings->app.startupScene.empty())
-		{
-			const std::string& sceneName = settings->app.startupScene;
-			scene::ApplySceneDeps deps{};
-			deps.assets = m_sceneCtx.assets;
-			deps.primitives = m_sceneCtx.primitives;
-			deps.effectManager = m_sceneCtx.effects;
-			deps.effectParams = m_sceneCtx.assets ? &m_sceneCtx.assets->GetEffectParamBuffer() : nullptr;
-			deps.sceneContext = &m_sceneCtx;
-			deps.physics = m_sceneCtx.physics;
-			deps.renderer = m_sceneCtx.renderer;
+		LoadStartupScene(context);
+	}
 
-			if (const auto desc = scene::ReadSceneFile(sceneName))
+	void ScriptedSceneLayer::LoadStartupScene(LayerContext& context)
+	{
+		const auto* settings = context.TryGet<aether::EngineSettings>();
+		if (settings == nullptr || settings->app.startupScene.empty())
+		{
+			return;
+		}
+		const std::string& sceneName = settings->app.startupScene;
+		scene::ApplySceneDeps deps{};
+		deps.assets = m_sceneCtx.assets;
+		deps.primitives = m_sceneCtx.primitives;
+		deps.effectManager = m_sceneCtx.effects;
+		deps.effectParams = m_sceneCtx.assets ? &m_sceneCtx.assets->GetEffectParamBuffer() : nullptr;
+		deps.pipelines = m_sceneCtx.assets ? &m_sceneCtx.assets->GetPipelineCache() : nullptr;
+		deps.sceneContext = &m_sceneCtx;
+		deps.physics = m_sceneCtx.physics;
+		deps.renderer = m_sceneCtx.renderer;
+
+		if (const auto desc = scene::ReadSceneFile(sceneName))
+		{
+			scene::ApplyScene(*desc, context.Get<World>(), deps);
+			AE_INFO(LogCategory::App, "Startup scene '{}' loaded ({} entities)", sceneName, desc->entities.size());
+		}
+		else if (m_sceneCtx.assets != nullptr)
+		{
+			const auto captured = scene::CaptureScene(context.Get<World>(), m_sceneCtx.assets->GetMaterialRegistry(), m_sceneCtx.assets->GetTextureRegistry(), m_sceneCtx.renderer);
+			if (scene::SaveSceneFile(sceneName, captured))
 			{
-				scene::ApplyScene(*desc, context.Get<World>(), deps);
-				AE_INFO(LogCategory::App, "Startup scene '{}' loaded ({} entities)", sceneName, desc->entities.size());
-			}
-			else if (m_sceneCtx.assets != nullptr)
-			{
-				const auto captured = scene::CaptureScene(context.Get<World>(), m_sceneCtx.assets->GetMaterialRegistry(), m_sceneCtx.assets->GetTextureRegistry(), m_sceneCtx.renderer);
-				if (scene::SaveSceneFile(sceneName, captured))
-				{
-					AE_INFO(LogCategory::App, "Startup scene '{}' auto-generated from script content - commit resources/scenes/{}.scene.toml", sceneName, sceneName);
-				}
+				AE_INFO(LogCategory::App, "Startup scene '{}' auto-generated from script content - commit resources/scenes/{}.scene.toml", sceneName, sceneName);
 			}
 		}
 	}

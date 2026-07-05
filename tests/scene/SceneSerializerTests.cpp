@@ -2,7 +2,10 @@
 
 #include <glm/glm.hpp>
 
+#include "effects/EffectManager.hpp"
+#include "material/EffectParamBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
+#include "material/PipelineCache.hpp"
 #include "material/TextureRegistry.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
@@ -11,6 +14,7 @@
 #include "scene/TagSlots.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "../material/FakePipelineFactory.hpp"
 #include "../material/FakeSlotSink.hpp"
 #include "../material/FakeTextureSink.hpp"
 
@@ -309,4 +313,70 @@ TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierar
     CHECK(capsule->radius == doctest::Approx(0.3f));
     CHECK(capsule->halfHeight == doctest::Approx(0.9f));
     CHECK(capsule->motionType == PhysicsMotionType::Kinematic);
+}
+
+TEST_CASE("Effect records apply through the real effect path on load") {
+    // Record-level scene: one effect-driven orb. The effect path needs no
+    // mesh/material - it resolves the pipeline and params independently.
+    SceneDescription scene;
+    EntityRecord orb;
+    orb.name = "Orb";
+    orb.hasTransform = true;
+    EffectRecord fx;
+    fx.name = "molten";
+    fx.params.tint = {1.0f, 0.25f, 0.05f, 1.0f};
+    fx.params.speed = 3.5f;
+    fx.params.scale = 1.25f;
+    fx.params.intensity = 2.0f;
+    orb.effect = fx;
+    scene.entities.push_back(orb);
+
+    const auto parsed = ParseToml(WriteToml(scene));
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->version == kSceneFormatVersion);
+
+    // Real EffectManager + pipeline cache over the fake factory. The param
+    // buffer stays uninitialized (no GPU): slot allocation fails SAFELY and
+    // the components must still apply with the saved override params.
+    aether::app::effects::EffectManager effects;
+    aether::app::effects::EffectDef molten;
+    molten.templateDesc.shaderVfsPath = "shaders://molten.spv";
+    effects.Register("molten", molten);
+    PipelineCache pipelines;
+    FakePipelineFactory factory;
+    pipelines.Initialize({}, std::ref(factory));
+    EffectParamBuffer params;
+
+    World world = MakeWorld();
+    ApplySceneDeps deps{};
+    deps.effectManager = &effects;
+    deps.effectParams = &params;
+    deps.pipelines = &pipelines;
+    const auto created = ApplyScene(*parsed, world, deps);
+    const Entity e = AppliedOf(*parsed, created, "Orb");
+    REQUIRE(e.IsValid());
+
+    const auto* ref = world.TryGet<EffectRefComponent>(e);
+    REQUIRE(ref != nullptr);
+    CHECK(ref->name == "molten");
+    const auto* ep = world.TryGet<EffectParamsComponent>(e);
+    REQUIRE(ep != nullptr);
+    // Saved params override the effect's defaults on load.
+    CHECK(ep->params.speed == doctest::Approx(3.5f));
+    CHECK(ep->params.intensity == doctest::Approx(2.0f));
+    CHECK(ep->params.tint.x == doctest::Approx(1.0f));
+    const auto* pipe = world.TryGet<PipelineComponent>(e);
+    REQUIRE(pipe != nullptr);
+    CHECK(pipe->pipeline != nullptr);
+    CHECK(factory.buildCount == 1);
+}
+
+TEST_CASE("Pre-versioning scene files parse as format v1") {
+    const char* oldToml = "[scene]\nname = 'legacy'\n\n[[entities]]\nname = 'Box'\nposition = [1.0, 2.0, 3.0]\neuler = [0.0, 0.0, 0.0]\nscale = [1.0, 1.0, 1.0]\n";
+    const auto parsed = ParseToml(oldToml);
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->version == 1);
+    REQUIRE(parsed->entities.size() == 1);
+    CHECK(parsed->entities[0].name == "Box");
+    CHECK(!parsed->entities[0].orbit.has_value());
 }

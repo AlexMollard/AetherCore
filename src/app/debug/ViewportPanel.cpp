@@ -42,11 +42,13 @@ namespace aether::app
 		scene::ApplySceneDeps MakeSceneDeps(LayerContext& context)
 		{
 			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			auto* assets = context.TryGet<AssetManager>();
 			scene::ApplySceneDeps deps{};
-			deps.assets = context.TryGet<AssetManager>();
+			deps.assets = assets;
 			deps.primitives = context.TryGet<PrimitiveMeshes>();
 			deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
 			deps.effectParams = context.TryGet<EffectParamBuffer>();
+			deps.pipelines = assets ? &assets->GetPipelineCache() : nullptr;
 			deps.sceneContext = sceneCtx;
 			deps.physics = context.TryGet<PhysicsSystem>();
 			deps.renderer = context.TryGet<Renderer>();

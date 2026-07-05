@@ -31,7 +31,6 @@ namespace aether::app::scene
 {
 	namespace
 	{
-		constexpr int kSceneVersion = 1;
 
 		// ── enum <-> string ────────────────────────────────────────────────────
 
@@ -328,7 +327,7 @@ namespace aether::app::scene
 	{
 		toml::table root;
 		toml::table header;
-		header.insert("version", kSceneVersion);
+		header.insert("version", kSceneFormatVersion);
 		header.insert("name", scene.name);
 		root.insert("scene", std::move(header));
 
@@ -514,6 +513,11 @@ namespace aether::app::scene
 
 		SceneDescription scene;
 		scene.name = root["scene"]["name"].value_or(std::string{});
+		scene.version = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
+		if (scene.version < kSceneFormatVersion)
+		{
+			AE_WARN(LogCategory::App, "Scene file '{}' is format v{} (current v{}): records added since it was written (behavior components, lights/environment) are absent. Re-save from the editor to upgrade.", scene.name, scene.version, kSceneFormatVersion);
+		}
 
 		if (const auto* e = root["environment"].as_table())
 		{
@@ -767,6 +771,12 @@ namespace aether::app::scene
 			created.push_back(world.Create());
 		}
 
+		// Apply-health counters: surfaced in the summary log below so a load
+		// that silently degrades (missing deps, unknown effects, old file
+		// format) is visible in the log instead of just "looking wrong".
+		std::size_t behaviorCount = 0;
+		std::size_t effectCount = 0;
+
 		for (std::size_t i = 0; i < scene.entities.size(); ++i)
 		{
 			const EntityRecord& rec = scene.entities[i];
@@ -925,29 +935,41 @@ namespace aether::app::scene
 				}
 			}
 
-			if (rec.effect && !rec.effect->name.empty() && deps.effectManager != nullptr && deps.effectParams != nullptr && deps.assets != nullptr)
+			if (rec.effect && !rec.effect->name.empty() && deps.effectManager != nullptr && deps.effectParams != nullptr && deps.pipelines != nullptr)
 			{
-				if (!effects::ApplyEntityEffect(world, e, rec.effect->name, *deps.effectManager, deps.assets->GetPipelineCache(), *deps.effectParams, &rec.effect->params))
+				if (effects::ApplyEntityEffect(world, e, rec.effect->name, *deps.effectManager, *deps.pipelines, *deps.effectParams, &rec.effect->params))
+				{
+					++effectCount;
+				}
+				else
 				{
 					AE_WARN(LogCategory::App, "Scene load: unknown effect '{}'", rec.effect->name);
 				}
+			}
+			else if (rec.effect)
+			{
+				AE_WARN(LogCategory::App, "Scene load: effect '{}' on '{}' skipped (missing effect deps)", rec.effect->name, rec.name);
 			}
 
 			if (rec.bob)
 			{
 				world.Emplace<BobComponent>(e, *rec.bob);
+				++behaviorCount;
 			}
 			if (rec.spin)
 			{
 				world.Emplace<SpinComponent>(e, *rec.spin);
+				++behaviorCount;
 			}
 			if (rec.orbit)
 			{
 				world.Emplace<OrbitComponent>(e, *rec.orbit);
+				++behaviorCount;
 			}
 			if (rec.materialPulse)
 			{
 				world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
+				++behaviorCount;
 			}
 		}
 
@@ -968,6 +990,7 @@ namespace aether::app::scene
 				deps.sceneContext->sceneEntities.push_back(e);
 			}
 		}
+		AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size(), behaviorCount, effectCount, scene.version);
 		return created;
 	}
 
