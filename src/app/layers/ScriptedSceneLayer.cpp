@@ -216,6 +216,7 @@ namespace aether::app
 		{
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
 		}
+		m_sceneCtx.engineRuntime = &context.Get<aether::IEngineRuntime>();
 		m_sceneCtx.scriptPath = m_scriptPath;
 
 		// Scene tooling (the debug-UI serializer) reaches the model cache, the

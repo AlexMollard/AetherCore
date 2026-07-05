@@ -20,6 +20,7 @@ namespace aether
 	class GraphicsPipeline;
 	class PrimitiveMeshes;
 	class PhysicsSystem;
+	class IEngineRuntime;
 } // namespace aether
 
 namespace aether::app
@@ -40,6 +41,9 @@ namespace aether::app::scripting
 		aether::app::DayNightSystem* dayNight = nullptr;
 		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
+		// Used to quiesce the render thread around script-triggered GPU work
+		// (e.g. animation compilation) so it can't race in-flight frames.
+		aether::IEngineRuntime* engineRuntime = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;
 		std::string scriptPath;

@@ -243,11 +243,17 @@ namespace aether::app::scene
 		}
 
 		// Legacy scenes referenced daScript files (e.g. "entities/player.das");
-		// map those to the C# script type name ("Player"). Non-.das paths pass
-		// through unchanged.
+		// this maps them to the C# script type name ("Player"). Non-.das paths
+		// pass through unchanged.
+		//
+		// DISABLED for now: the ported C# gameplay scripts caused a hard crash on
+		// Play, so ".das" paths are left as-is to keep running the known-good
+		// daScript. Flip kEnableDasMigration to true once the C# scripts are
+		// verified safe in Play mode.
 		std::string MigrateLegacyScriptPath(const std::string& path)
 		{
-			if (!path.ends_with(".das"))
+			static constexpr bool kEnableDasMigration = false;
+			if (!kEnableDasMigration || !path.ends_with(".das"))
 			{
 				return path;
 			}

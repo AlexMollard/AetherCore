@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "BinaryFormats.hpp"
+#include "IEngineRuntime.hpp"
 #include "animation/AnimationCompiler.hpp"
 #include "animation/AnimationDatabase.hpp"
 #include "assets/GltfAsset.hpp"
@@ -295,7 +296,30 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 		AE_WARN(aether::LogCategory::Animation, "compile_animations: no upload pool available");
 		return;
 	}
-	aether::CompileAnimations(ActiveWorld(), id, ctx.uploadPool);
+
+	// Nothing to compile if the entity has no animator with pending clips. Guards
+	// against a script calling compile on the wrong / SMC-less entity.
+	auto& world = ActiveWorld();
+	if (FindSmcOrSpawned(world, id) == nullptr)
+	{
+		AE_WARN(aether::LogCategory::Animation, "compile_animations: entity {} has no SkinnedMeshComponent", id);
+		return;
+	}
+
+	// AppendAnimations reallocates GPU animation buffers the render thread reads.
+	// Running it bare on the game thread races in-flight frames -> device-lost ->
+	// a hung GPU (which can take the whole machine down). Quiesce the render thread
+	// for the duration, exactly like hot-reload's teardown does.
+	auto* uploadPool = ctx.uploadPool;
+	if (ctx.engineRuntime != nullptr)
+	{
+		ctx.engineRuntime->RunExclusive(aether::QuiesceMode::Drain,
+			[&world, id, uploadPool]() { aether::CompileAnimations(world, id, uploadPool); });
+	}
+	else
+	{
+		aether::CompileAnimations(world, id, uploadPool);
+	}
 }
 
 AE_SCRIPT_API void aether_anim_clear_pending(std::uint32_t id)
