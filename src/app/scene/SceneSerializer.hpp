@@ -22,6 +22,7 @@ namespace aether
 	class PipelineCache;
 	class PrimitiveMeshes;
 	class Renderer;
+	class ServiceContainer;
 	class TextureRegistry;
 	class World;
 } // namespace aether
@@ -163,6 +164,11 @@ namespace aether::app::scene
 	// exclusion - a prefab captures exactly the subtree you point it at.
 	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures);
 
+	// Multi-root variant (clipboard copy of a whole selection): each root's
+	// subtree in parent-first order, roots recording parentIndex -1. Callers
+	// pass selection ROOTS (no root inside another root's subtree).
+	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures);
+
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
 
@@ -194,6 +200,10 @@ namespace aether::app::scene
 		PhysicsSystem* physics = nullptr;                // step-idle guard before replace-all destroys
 		Renderer* renderer = nullptr;                    // lights + environment re-apply
 	};
+
+	// Resolves every apply dependency from the service container - the shared
+	// path for editor panels, undo and any other tooling.
+	ApplySceneDeps MakeApplySceneDeps(ServiceContainer& services);
 
 	// Instantiates the description into the world (asset resolution degrades
 	// gracefully when a dep is missing - entities and value components still

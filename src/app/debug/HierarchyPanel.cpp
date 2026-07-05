@@ -23,11 +23,13 @@
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "rendering/Renderer.hpp"
+#include "debug/UndoStack.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
 #include "scene/ModelSpawn.hpp"
 #include "scene/SceneSerializer.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/EngineSettings.hpp"
@@ -59,24 +61,44 @@ namespace aether::app
 			}
 		}
 
-		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
-		// defaults (neutral two-sided material) via the same AssignMaterial path.
-		scene::ApplySceneDeps MakeSceneDeps(LayerContext& context)
+		// Selection ROOTS: drop any entity whose ancestor is also selected (it
+		// rides along with the ancestor). Shared by duplicate, copy and cut.
+		std::vector<Entity> CollectSelectionRoots(World& world, const SceneSelection& selection)
 		{
-			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
-			auto* assets = context.TryGet<AssetManager>();
-			scene::ApplySceneDeps deps{};
-			deps.assets = assets;
-			deps.primitives = context.TryGet<PrimitiveMeshes>();
-			deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
-			deps.effectParams = context.TryGet<EffectParamBuffer>();
-			deps.pipelines = assets ? &assets->GetPipelineCache() : nullptr;
-			deps.sceneContext = sceneCtx;
-			deps.physics = context.TryGet<PhysicsSystem>();
-			deps.renderer = context.TryGet<Renderer>();
-			return deps;
+			std::vector<Entity> roots;
+			auto& reg = world.GetRegistry();
+			for (const Entity e: selection.All())
+			{
+				if (!reg.valid(World::ToEntt(e)))
+				{
+					continue;
+				}
+				bool ancestorSelected = false;
+				Entity cur = e;
+				while (true)
+				{
+					const auto* h = world.TryGet<HierarchyComponent>(cur);
+					if (h == nullptr || !h->parent.IsValid())
+					{
+						break;
+					}
+					cur = h->parent;
+					if (selection.Contains(cur))
+					{
+						ancestorSelected = true;
+						break;
+					}
+				}
+				if (!ancestorSelected)
+				{
+					roots.push_back(e);
+				}
+			}
+			return roots;
 		}
 
+		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
+		// defaults (neutral two-sided material) via the same AssignMaterial path.
 		void CreatePrimitive(LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
 		{
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
@@ -252,6 +274,26 @@ namespace aether::app
 				selection.Select(e);
 			}
 			m_pendingDuplicate = true; // applied after the walk (creates entities)
+		}
+		if (ImGui::MenuItem(ICON_FA_CLONE "  Copy", "Ctrl+C"))
+		{
+			if (!selection.Contains(e))
+			{
+				selection.Select(e);
+			}
+			m_pendingCopy = true;
+		}
+		if (ImGui::MenuItem(ICON_FA_CLONE "  Cut", "Ctrl+X"))
+		{
+			if (!selection.Contains(e))
+			{
+				selection.Select(e);
+			}
+			m_pendingCut = true;
+		}
+		if (ImGui::MenuItem(ICON_FA_CLONE "  Paste", "Ctrl+V"))
+		{
+			m_pendingPaste = true;
 		}
 		if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Save as Prefab"))
 		{
@@ -506,7 +548,7 @@ namespace aether::app
 						{
 							if (const auto prefab = scene::ReadPrefabFile(name))
 							{
-								const Entity root = scene::InstantiatePrefab(*prefab, world, MakeSceneDeps(context), glm::mat4(1.0f));
+								const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
 								if (root.IsValid())
 								{
 									selection.Select(root);
@@ -578,7 +620,7 @@ namespace aether::app
 					const bool isStartup = settings != nullptr && settings->app.startupScene == name;
 					if (ImGui::MenuItem(name.c_str(), isStartup ? "startup" : nullptr))
 					{
-						if (scene::LoadSceneFile(name, world, MakeSceneDeps(context)))
+						if (scene::LoadSceneFile(name, world, scene::MakeApplySceneDeps(context.services)))
 						{
 							selection.Clear();
 						}
@@ -780,45 +822,96 @@ namespace aether::app
 			}
 			ImGui::EndChild();
 
-			// Ctrl+D duplicates the selection (roots only; nested selected
-			// entities ride with their ancestor's copy).
-			if (ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && ImGui::GetIO().KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D, false) && !ImGui::GetIO().WantTextInput)
+			// ── Clipboard + duplicate (edit shortcuts, outliner-focused) ──────
+			const bool panelKeys = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl;
+			auto* clipAssets = context.TryGet<AssetManager>();
+			auto* undo = context.TryGet<UndoStack>();
+
+			if (panelKeys && ImGui::IsKeyPressed(ImGuiKey_D, false))
 			{
 				m_pendingDuplicate = true;
 			}
+			const bool copyKey = m_pendingCopy || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_C, false));
+			const bool cutKey = m_pendingCut || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_X, false));
+			const bool pasteKey = m_pendingPaste || (panelKeys && ImGui::IsKeyPressed(ImGuiKey_V, false));
+			m_pendingCopy = m_pendingCut = m_pendingPaste = false;
+
+			// Copy/cut put the selection roots on the OS CLIPBOARD as scene
+			// TOML - pasteable in this session, another session, or a text
+			// editor. Paste applies additively, nudged +1 X.
+			if ((copyKey || cutKey) && clipAssets != nullptr && !selection.All().empty())
+			{
+				const std::vector<Entity> roots = CollectSelectionRoots(world, selection);
+				if (!roots.empty())
+				{
+					ImGui::SetClipboardText(scene::WriteToml(scene::CaptureSubtrees(world, roots, clipAssets->GetMaterialRegistry(), clipAssets->GetTextureRegistry())).c_str());
+					if (cutKey)
+					{
+						if (undo != nullptr)
+						{
+							undo->Push(world, context.services);
+						}
+						for (const Entity r: roots)
+						{
+							if (reg.valid(World::ToEntt(r)))
+							{
+								ecs::DestroyHierarchy(world, r);
+							}
+						}
+						selection.Clear();
+					}
+				}
+			}
+			if (pasteKey)
+			{
+				if (const char* clip = ImGui::GetClipboardText(); clip != nullptr && clip[0] != '\0')
+				{
+					if (const auto parsed = scene::ParseToml(clip); parsed.has_value() && !parsed->entities.empty())
+					{
+						if (undo != nullptr)
+						{
+							undo->Push(world, context.services);
+						}
+						const auto created = scene::ApplyScene(*parsed, world, scene::MakeApplySceneDeps(context.services));
+						bool first = true;
+						for (std::size_t i = 0; i < parsed->entities.size() && i < created.size(); ++i)
+						{
+							if (parsed->entities[i].parentIndex >= 0)
+							{
+								continue;
+							}
+							if (auto* tc = world.TryGet<TransformComponent>(created[i]))
+							{
+								glm::mat4 m = tc->localToWorld;
+								m[3].x += 1.0f;
+								ecs::SetWorldTransform(world, created[i], m);
+							}
+							if (first)
+							{
+								selection.Select(created[i]);
+								first = false;
+							}
+							else
+							{
+								selection.ToggleSelection(created[i]);
+							}
+						}
+					}
+				}
+			}
+
+			// Ctrl+D duplicates the selection (roots only; nested selected
+			// entities ride with their ancestor's copy).
 			if (m_pendingDuplicate)
 			{
 				m_pendingDuplicate = false;
 				auto* dupAssets = context.TryGet<AssetManager>();
 				if (dupAssets != nullptr)
 				{
-					std::vector<Entity> roots;
-					for (const Entity e: selection.All())
+					const std::vector<Entity> roots = CollectSelectionRoots(world, selection);
+					if (!roots.empty() && undo != nullptr)
 					{
-						if (!reg.valid(World::ToEntt(e)))
-						{
-							continue;
-						}
-						bool ancestorSelected = false;
-						Entity cur = e;
-						while (true)
-						{
-							const auto* h = world.TryGet<HierarchyComponent>(cur);
-							if (h == nullptr || !h->parent.IsValid())
-							{
-								break;
-							}
-							cur = h->parent;
-							if (selection.Contains(cur))
-							{
-								ancestorSelected = true;
-								break;
-							}
-						}
-						if (!ancestorSelected)
-						{
-							roots.push_back(e);
-						}
+						undo->Push(world, context.services);
 					}
 					// A duplicate is an in-memory prefab round trip: capture the
 					// subtree, instantiate nudged +1 X, select the copies.
@@ -832,7 +925,7 @@ namespace aether::app
 							placed = tc->localToWorld;
 						}
 						placed[3].x += 1.0f;
-						const Entity copy = scene::InstantiatePrefab(prefab, world, MakeSceneDeps(context), placed);
+						const Entity copy = scene::InstantiatePrefab(prefab, world, scene::MakeApplySceneDeps(context.services), placed);
 						if (copy.IsValid())
 						{
 							if (first)
@@ -906,6 +999,10 @@ namespace aether::app
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
 				{
+					if (auto* undoStack = context.TryGet<UndoStack>())
+					{
+						undoStack->Push(world, context.services);
+					}
 					// Copy first: DestroyHierarchy mutates the selection source, and
 					// an earlier subtree delete may swallow later selected entities.
 					const std::vector<Entity> doomed = selection.All();

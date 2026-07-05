@@ -35,6 +35,7 @@ using namespace std::string_view_literals;
 #include "platform/Input.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/Components.hpp"
+#include "PlayState.hpp"
 #include "scene/World.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
@@ -289,6 +290,9 @@ namespace aether::app
 		// Shared selection service: registered before panels attach so every
 		// panel can resolve it for its whole lifetime.
 		context.services.Register<SceneSelection>(m_selection);
+		// Editor undo: panels push explicit points for keyboard-driven edits;
+		// mouse gestures are covered by the per-click push in OnImGui.
+		context.services.Register<UndoStack>(m_undoStack);
 
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
@@ -321,6 +325,7 @@ namespace aether::app
 			panel->OnDetach(context);
 		}
 		m_panels.clear();
+		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();
 
 		m_errorToasts.clear();
@@ -412,6 +417,34 @@ namespace aether::app
 
 		// Once per ImGui frame, before any panel might call Manipulate.
 		ImGuizmo::BeginFrame();
+
+		// ── Editor undo (edit mode only) ──────────────────────────────────────
+		// Every LMB press records a pre-gesture snapshot (deduped against the
+		// stack top), so a whole gizmo drag, slider drag or destructive click
+		// coalesces into ONE undo step - no per-widget instrumentation.
+		if (const auto* playState = context.TryGet<PlayState>(); playState != nullptr && !playState->IsPlaying())
+		{
+			const ImGuiIO& io = ImGui::GetIO();
+			if (ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+			{
+				m_undoStack.Push(context.Get<World>(), context.services);
+			}
+			if (io.KeyCtrl && !io.WantTextInput)
+			{
+				const bool zKey = ImGui::IsKeyPressed(ImGuiKey_Z, false);
+				const bool redoCombo = ImGui::IsKeyPressed(ImGuiKey_Y, false) || (zKey && io.KeyShift);
+				const bool undoCombo = zKey && !io.KeyShift;
+				if (undoCombo || redoCombo)
+				{
+					const bool did = redoCombo ? m_undoStack.Redo(context.Get<World>(), context.services) : m_undoStack.Undo(context.Get<World>(), context.services);
+					if (did)
+					{
+						// Restored entities have fresh ids.
+						m_selection.Clear();
+					}
+				}
+			}
+		}
 
 		if (!m_errorToasts.empty())
 		{

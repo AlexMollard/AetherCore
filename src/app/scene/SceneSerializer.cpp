@@ -27,6 +27,7 @@
 #include "scripting/SceneContext.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
+#include "utils/ServiceContainer.hpp"
 
 namespace aether::app::scene
 {
@@ -307,25 +308,25 @@ namespace aether::app::scene
 		return scene;
 	}
 
-	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures)
+	SceneDescription CaptureSubtrees(World& world, const std::vector<Entity>& roots, const MaterialRegistry& materials, const TextureRegistry& textures)
 	{
-		SceneDescription prefab;
-		if (const auto* nc = world.TryGet<NameComponent>(root))
-		{
-			prefab.name = nc->name;
-		}
-
-		// The subtree in parent-before-child order. The root's own parent (if
+		// Each subtree in parent-before-child order. A root's own parent (if
 		// any) is outside the index map, so its record naturally gets
-		// parentIndex -1 - InstantiatePrefab re-roots by that. Unlike scene
-		// capture there is NO transient exclusion: a prefab captures exactly
-		// what you point it at (the transient player is the flagship case).
-		std::vector<Entity> order{root};
-		for (std::size_t i = 0; i < order.size(); ++i)
+		// parentIndex -1. Unlike scene capture there is NO transient
+		// exclusion: subtree capture takes exactly what you point it at (the
+		// scripted player prefab is the flagship case).
+		SceneDescription desc;
+		std::vector<Entity> order;
+		for (const Entity root: roots)
 		{
-			if (const auto* h = world.TryGet<HierarchyComponent>(order[i]))
+			const std::size_t start = order.size();
+			order.push_back(root);
+			for (std::size_t i = start; i < order.size(); ++i)
 			{
-				order.insert(order.end(), h->children.begin(), h->children.end());
+				if (const auto* h = world.TryGet<HierarchyComponent>(order[i]))
+				{
+					order.insert(order.end(), h->children.begin(), h->children.end());
+				}
 			}
 		}
 		std::unordered_map<std::uint32_t, int> indexOf;
@@ -333,7 +334,17 @@ namespace aether::app::scene
 		{
 			indexOf[order[i].id] = static_cast<int>(i);
 		}
-		AppendEntityRecords(prefab, world, order, indexOf, materials, textures);
+		AppendEntityRecords(desc, world, order, indexOf, materials, textures);
+		return desc;
+	}
+
+	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures)
+	{
+		SceneDescription prefab = CaptureSubtrees(world, {root}, materials, textures);
+		if (const auto* nc = world.TryGet<NameComponent>(root))
+		{
+			prefab.name = nc->name;
+		}
 		return prefab;
 	}
 
@@ -853,6 +864,22 @@ namespace aether::app::scene
 	}
 
 	// ── Apply / load ────────────────────────────────────────────────────────────
+
+	ApplySceneDeps MakeApplySceneDeps(ServiceContainer& services)
+	{
+		auto* sceneCtx = services.TryGet<scripting::SceneContext>();
+		auto* assets = services.TryGet<AssetManager>();
+		ApplySceneDeps deps{};
+		deps.assets = assets;
+		deps.primitives = services.TryGet<PrimitiveMeshes>();
+		deps.effectManager = sceneCtx != nullptr ? sceneCtx->effects : nullptr;
+		deps.effectParams = services.TryGet<EffectParamBuffer>();
+		deps.pipelines = assets != nullptr ? &assets->GetPipelineCache() : nullptr;
+		deps.sceneContext = sceneCtx;
+		deps.physics = services.TryGet<PhysicsSystem>();
+		deps.renderer = services.TryGet<Renderer>();
+		return deps;
+	}
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{

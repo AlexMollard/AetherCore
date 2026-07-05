@@ -81,8 +81,12 @@ namespace aether::app
 		// SetParent mutates children vectors the recursion may still be iterating.
 		std::optional<std::pair<Entity, Entity>> m_pendingReparent; // {child, newParent}
 		// Duplicate (context menu / Ctrl+D) also defers past the walk: it
-		// creates entities, which would invalidate the iteration.
+		// creates entities, which would invalidate the iteration. The
+		// clipboard trio defers the same way for the context menu items.
 		bool m_pendingDuplicate = false;
+		bool m_pendingCopy = false;
+		bool m_pendingCut = false;
+		bool m_pendingPaste = false;
 
 		// Juice: newly-seen entities flash briefly; selection changes pulse.
 		std::unordered_set<std::uint32_t> m_knownIds;

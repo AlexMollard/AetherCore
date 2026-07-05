@@ -558,3 +558,34 @@ TEST_CASE("Script components round-trip through capture, TOML and apply") {
     CHECK(sc->path == "entities/spinner.das");
     CHECK(!sc->attached); // runtime state resets: scripts re-attach on the next play tick
 }
+
+TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    Entity a = world.Create();
+    world.Emplace<NameComponent>(a, NameComponent{.name = "A"});
+    world.Emplace<TransformComponent>(a, TransformComponent{});
+    Entity aChild = world.Create();
+    world.Emplace<NameComponent>(aChild, NameComponent{.name = "A child"});
+    world.Emplace<TransformComponent>(aChild, TransformComponent{});
+    REQUIRE(ecs::SetParent(world, aChild, a));
+
+    Entity b = world.Create();
+    world.Emplace<NameComponent>(b, NameComponent{.name = "B"});
+    world.Emplace<TransformComponent>(b, TransformComponent{});
+
+    Entity outside = world.Create();
+    world.Emplace<NameComponent>(outside, NameComponent{.name = "Outside"});
+
+    const auto parsed = ParseToml(WriteToml(CaptureSubtrees(world, {a, b}, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 3);
+    CHECK(IndexOf(*parsed, "Outside") == -1);
+    CHECK(RecordOf(*parsed, "A").parentIndex == -1);
+    CHECK(RecordOf(*parsed, "B").parentIndex == -1);
+    CHECK(RecordOf(*parsed, "A child").parentIndex == IndexOf(*parsed, "A"));
+}

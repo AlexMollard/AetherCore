@@ -37,25 +37,6 @@
 
 namespace aether::app
 {
-	namespace
-	{
-		scene::ApplySceneDeps MakeSceneDeps(LayerContext& context)
-		{
-			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
-			auto* assets = context.TryGet<AssetManager>();
-			scene::ApplySceneDeps deps{};
-			deps.assets = assets;
-			deps.primitives = context.TryGet<PrimitiveMeshes>();
-			deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
-			deps.effectParams = context.TryGet<EffectParamBuffer>();
-			deps.pipelines = assets ? &assets->GetPipelineCache() : nullptr;
-			deps.sceneContext = sceneCtx;
-			deps.physics = context.TryGet<PhysicsSystem>();
-			deps.renderer = context.TryGet<Renderer>();
-			return deps;
-		}
-	} // namespace
-
 	void ViewportPanel::OnUpdate(LayerContext& context)
 	{
 		// Editor camera policy: while Editing the viewport is driven by a
@@ -144,7 +125,7 @@ namespace aether::app
 				playState->SetMode(PlayState::Mode::Editing);
 				if (playState->stopSnapshot)
 				{
-					scene::ReplaceScene(*playState->stopSnapshot, world, MakeSceneDeps(context));
+					scene::ReplaceScene(*playState->stopSnapshot, world, scene::MakeApplySceneDeps(context.services));
 					playState->stopSnapshot.reset();
 					context.Get<SceneSelection>().Clear();
 				}

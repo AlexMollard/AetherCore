@@ -11,6 +11,7 @@
 
 #include "debug/DebugPanel.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/UndoStack.hpp"
 
 namespace aether::app
 {
@@ -46,6 +47,7 @@ namespace aether::app
 		bool m_visible = true;
 
 		SceneSelection m_selection;
+		UndoStack m_undoStack;
 		// Selection-outline pulse bookkeeping (brightness eases after changes).
 		std::uint64_t m_outlineSeenSerial = 0;
 		double m_outlinePulseStart = -1.0;
