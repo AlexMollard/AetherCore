@@ -1,5 +1,4 @@
 #include <exception>
-#include <filesystem>
 #include <memory>
 
 #include "utils/AetherExceptions.hpp"
@@ -7,32 +6,12 @@
 #include "platform/CrashHandler.hpp"
 #include "layers/DebugLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
-#include "scripting/DotNetHost.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 
 namespace
 {
-	// Locate the deployed managed assemblies (data/scripts/managed) relative to
-	// the working directory, mirroring ScriptingSubsystem's script-path search.
-	// TODO(phase1): fold this into CSharpScriptingSubsystem.
-	std::filesystem::path ResolveManagedDir()
-	{
-		const auto cwd = std::filesystem::current_path();
-		const std::filesystem::path candidates[] = {
-			cwd / "data" / "scripts" / "managed",
-			cwd / ".." / "data" / "scripts" / "managed",
-			cwd / ".." / ".." / "data" / "scripts" / "managed",
-		};
-		for (const auto& dir: candidates)
-		{
-			if (std::filesystem::exists(dir / "AetherCore.Managed.dll"))
-			{
-				return dir;
-			}
-		}
-		return candidates[0];
-	}
 
 	class RuntimeSystemsGuard
 	{
@@ -65,11 +44,10 @@ int main()
 		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
 		application.AddService(scriptingSubsystem);
 
-		// Boot the .NET runtime for C# scripting. Disabled-safe: a missing runtime
-		// logs a warning and leaves the host unavailable. TODO(phase1): own this
-		// from CSharpScriptingSubsystem and register it as a service.
-		aether::scripting::DotNetHost dotnetHost;
-		dotnetHost.Initialize(ResolveManagedDir());
+		// C# scripting: boots CoreCLR and loads the game-scripts assembly.
+		// Disabled-safe - a missing runtime just leaves the runner on daScript.
+		aether::app::scripting::CSharpScriptingSubsystem csharpScripting;
+		application.AddService(csharpScripting);
 
 		// Layers
 		application.PushLayer<aether::app::DebugLayer>();

@@ -39,10 +39,27 @@ internal static unsafe class Bootstrap
 
         try
         {
+            Native.RegisterResolver();
+
             *outApi = default;
+
+            // Assembly / registry lifecycle
+            outApi->LoadScripts = &ScriptRegistry.LoadScripts;
+            outApi->UnloadScripts = &ScriptRegistry.UnloadScripts;
+            outApi->GetScriptTypeCount = &ScriptRegistry.GetScriptTypeCount;
+            outApi->GetScriptTypeName = &ScriptRegistry.GetScriptTypeName;
+
+            // Per-entity instance lifecycle
+            outApi->CreateInstance = &ScriptRegistry.CreateInstance;
+            outApi->DestroyInstance = &ScriptRegistry.DestroyInstance;
+            outApi->InvokeAttach = &ScriptRegistry.InvokeAttach;
+            outApi->InvokeUpdate = &ScriptRegistry.InvokeUpdate;
+            outApi->InvokeDetach = &ScriptRegistry.InvokeDetach;
+
+            // GC policy
             outApi->SetPlayMode = &Api_SetPlayMode;
             outApi->CollectFull = &Api_CollectFull;
-            // Registry, instance-lifecycle, and property entries are wired in Phase 1.
+            // Property entries are wired in Phase 4.
 
             Log.Info($"AetherCore.Managed bootstrap OK (.NET {Environment.Version})");
             return 0;

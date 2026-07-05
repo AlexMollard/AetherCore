@@ -46,18 +46,27 @@ target_compile_definitions(App PRIVATE
 # obj/bin output inside the CMake build tree (never in the source resources/).
 # Gated on AETHER_HAS_DOTNET so a machine without the .NET SDK still builds.
 if(AETHER_HAS_DOTNET)
-    set(_aether_managed_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Managed/AetherCore.Managed.csproj")
+    # Build the game scripts project; its ProjectReference pulls in AetherCore.Managed,
+    # so a single `dotnet build` produces both assemblies. ArtifactsPath routes all
+    # obj/bin into the CMake tree.
+    set(_aether_scripts_proj "${CMAKE_SOURCE_DIR}/resources/scripts/AetherScripts.csproj")
     set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
-    set(_aether_managed_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Managed/$<IF:$<CONFIG:Debug>,debug,release>")
+    set(_aether_managed_cfgdir "$<IF:$<CONFIG:Debug>,debug,release>")
+    set(_aether_engine_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Managed/${_aether_managed_cfgdir}")
+    set(_aether_scripts_out "${CMAKE_BINARY_DIR}/managed/bin/AetherScripts/${_aether_managed_cfgdir}")
 
     add_custom_target(ManagedAssemblies ALL
-        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_managed_proj}"
+        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_scripts_proj}"
                 -c ${_aether_managed_cfg} --nologo -v:m
                 -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        # Engine assembly first (dll + runtimeconfig the host boots from), then the
+        # game scripts assembly on top.
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${_aether_managed_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        COMMENT "Building C# managed assemblies (AetherCore.Managed)"
+                "${_aether_engine_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                "${_aether_scripts_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        COMMENT "Building C# managed assemblies (AetherCore.Managed + AetherScripts)"
         VERBATIM USES_TERMINAL)
 
     add_dependencies(App ManagedAssemblies)
