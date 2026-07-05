@@ -77,6 +77,36 @@ def spawn_bounce(world : World?; base : float3)
     set_linear_velocity(world, e, 0.0, 20.0, 0.0);
 }
 
+// Tag enumeration helpers (das-side, built on for_each_with_tag - these
+// lived in the old sandbox.das). Globals because das blocks cannot capture
+// mutable locals.
+var g_enum_count  : int = 0;
+var g_enum_target : int = 0;
+var g_enum_result : uint = 0u;
+
+def count_tagged(world : World?; tag : uint) : int
+{
+    g_enum_count = 0;
+    for_each_with_tag(world, tag) $(e : uint)
+    {
+        g_enum_count += 1;
+    };
+    return g_enum_count;
+}
+
+def find_nth_tagged(world : World?; tag : uint; target : int) : uint
+{
+    g_enum_count = 0;
+    g_enum_target = target;
+    g_enum_result = 0u;
+    for_each_with_tag(world, tag) $(e : uint)
+    {
+        if (g_enum_count == g_enum_target) { g_enum_result = e; }
+        g_enum_count += 1;
+    };
+    return g_enum_result;
+}
+
 def clear_all_toys(world : World?)
 {
     var k = count_tagged(world, g_toy_tag);

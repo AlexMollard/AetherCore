@@ -26,11 +26,15 @@ var g_walk_clip : int  = -1;
 [export]
 def on_entity_attach(world : World?; self : uint)
 {
-    // Build only when needed: a Stop-restore hands back the fully built
-    // player (model children + baked animation clips survive in the shared
-    // model cache), so rebuilding would stack a second model.
-    if (get_animation_count(world, self) == 0)
+    // Build only when needed. The guard is a TAG on the entity itself
+    // (tags serialize, so a scene saved with a built player stays
+    // consistent): load_model on an already-built player only DETACHES the
+    // old parts - it does not destroy them - so a double build leaves an
+    // orphaned static copy of the model behind.
+    let built_tag = create_tag("player_built");
+    if (!has_tag(world, self, built_tag))
     {
+        print("player: attach - building model\n");
         load_model(world, self, "assets://models/Human/Human.mesh");
         set_playback_speed(world, self, 1.0);
         // The walk clip bakes into the model's SHARED animation database -
@@ -44,11 +48,18 @@ def on_entity_attach(world : World?; self : uint)
                 compile_animations(world, self);
             }
         }
+        add_tag(world, self, built_tag);
+    }
+    else
+    {
+        print("player: attach - already built, skipping model load\n");
     }
 
-    // Clip layout after the bake: 0 = model idle, 1 = appended walk.
+    // Clip layout after the bake: 0 = model idle, last = appended walk.
+    let clip_count = get_animation_count(world, self);
     g_idle_clip = 0;
-    g_walk_clip = get_animation_count(world, self) > 1 ? 1 : -1;
+    g_walk_clip = clip_count > 1 ? clip_count - 1 : -1;
+    print("player: clips ready (count includes walk when > 1)\n");
 
     // One orbit camera per session; every attach reclaims it as main (the
     // editor's viewport hands the view back to it on Play).
