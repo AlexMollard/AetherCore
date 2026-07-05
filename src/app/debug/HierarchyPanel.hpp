@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -44,6 +45,10 @@ namespace aether::app
 		void BeginRename(const World& world, Entity e);
 
 		char m_search[64] = {};
+		// Scene save/load popups.
+		char m_sceneNameBuf[48] = "scene";
+		std::vector<std::string> m_sceneList;
+		bool m_sceneListDirty = true;
 		// Kind filter chips (OR-combined; none active == show everything).
 		bool m_filterMesh = false;
 		bool m_filterSkinned = false;

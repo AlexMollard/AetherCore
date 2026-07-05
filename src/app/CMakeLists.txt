@@ -32,9 +32,11 @@ set_target_properties(App PROPERTIES
 )
 
 # In dev builds, let the scripting subsystem find .das files in the source tree
-# so hot-reload (F5) picks up edits without a C++ rebuild.
+# so hot-reload (F5) picks up edits without a C++ rebuild, and let the scene
+# serializer save/load committable scene files from the source tree.
 target_compile_definitions(App PRIVATE
     AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scripts"
+    AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
 )
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────

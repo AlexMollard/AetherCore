@@ -81,6 +81,30 @@ namespace aether
 		const GraphicsPipeline* pipeline = nullptr;
 	};
 
+	// Stable identity of the entity's mesh, recorded at spawn time (there is no
+	// Mesh* -> source reverse map). Scene serialization re-resolves the pointer
+	// from this: a model primitive by (path, index) or a primitive by kind name.
+	struct MeshSourceComponent
+	{
+		enum class Kind : std::uint8_t
+		{
+			Model,     // path = model VFS path, primitiveIndex = LoadedModel primitive
+			Primitive, // path = primitive kind name ("cube", "sphere", ...)
+		};
+
+		Kind kind = Kind::Primitive;
+		std::string path;
+		std::uint32_t primitiveIndex = 0;
+	};
+
+	// Which named effect drives this entity (set_entity_effect). The effect
+	// pipeline/param slot are runtime state; the name is the stable identity a
+	// scene load re-applies through the EffectManager.
+	struct EffectRefComponent
+	{
+		std::string name;
+	};
+
 	// Drives GPU-based skeletal animation for a skinned mesh entity.
 	struct SkinnedMeshComponent
 	{

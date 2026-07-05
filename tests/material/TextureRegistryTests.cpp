@@ -28,6 +28,25 @@ TEST_CASE("Same resolved path dedups; two spellings still dedup") {
     CHECK(reg.ResolveSlot(a) == reg.ResolveSlot(c));
 }
 
+TEST_CASE("TryGetPath returns the resolved path for live handles only") {
+    FakeTextureSink sink(8);
+    TextureRegistry reg(sink);
+
+    TextureHandle h = reg.Acquire("brick.png");
+    REQUIRE(h.IsValid());
+
+    std::string path;
+    CHECK(reg.TryGetPath(h, path));
+    CHECK(!path.empty());
+
+    // Re-acquiring by the returned path must dedup onto the same entry - the
+    // path IS the texture's stable identity for scene serialization.
+    CHECK(reg.Acquire(path) == h);
+
+    CHECK(!reg.TryGetPath(TextureHandle{}, path));
+    CHECK(!reg.TryGetPath(TextureHandle::Broken(), path));
+}
+
 TEST_CASE("Distinct paths get distinct entries and slots") {
     FakeTextureSink sink(8);
     TextureRegistry reg(sink);

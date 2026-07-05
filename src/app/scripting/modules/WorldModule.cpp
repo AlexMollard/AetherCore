@@ -255,14 +255,18 @@ namespace
 
 		std::vector<aether::Entity> meshEntities = ctx.assets->SpawnModel(*modelPtr, id);
 
-		for (aether::Entity meshEntity: meshEntities)
+		for (std::size_t i = 0; i < meshEntities.size(); ++i)
 		{
+			const aether::Entity meshEntity = meshEntities[i];
 			if (auto tc = w->TryGet<aether::TransformComponent>(meshEntity))
 			{
 				tc->localToWorld = xform * tc->localToWorld;
 			}
 			// SpawnModel already linked meshEntity under id via ecs::SetParent.
 			w->EmplaceOrReplace<aether::NameComponent>(meshEntity, aether::NameComponent{.name = stem + " mesh"});
+			// Stable identity for serialization: SpawnModel emits one entity per
+			// primitive in order, so i is the LoadedModel primitive index.
+			w->EmplaceOrReplace<aether::MeshSourceComponent>(meshEntity, aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Model, .path = path ? path : "", .primitiveIndex = static_cast<std::uint32_t>(i)});
 			ctx.sceneEntities.push_back(meshEntity);
 		}
 	}
@@ -423,6 +427,7 @@ namespace
 		entry.mesh = &ctx.primitives->Get(primType);
 		entry.materialAsset = ctx.defaultMaterial;
 		entry.displayName = displayName;
+		entry.kindName = std::string(sv);
 		ctx.meshCache.push_back(std::move(entry));
 		return static_cast<uint32_t>(ctx.meshCache.size() - 1u);
 	}
@@ -446,6 +451,7 @@ namespace
 
 		const aether::Entity e{entityId};
 		w->EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = entry.mesh});
+		w->EmplaceOrReplace<aether::MeshSourceComponent>(e, aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Primitive, .path = entry.kindName, .primitiveIndex = 0});
 		// AssignMaterial resolves the pipeline through PipelineCache and emplaces
 		// PipelineComponent, so every add_mesh entity gets a pipeline.
 		aether::MaterialSystem::AssignMaterial(*w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), entry.materialAsset);

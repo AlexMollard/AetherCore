@@ -200,6 +200,10 @@ namespace aether::app
 		}
 		m_sceneCtx.scriptPath = m_scriptPath;
 
+		// Scene tooling (the debug-UI serializer) reaches the model cache, the
+		// effect manager and sceneEntities through the service container.
+		context.services.Register<scripting::SceneContext>(m_sceneCtx);
+
 		// The default primitive material is built lazily by create_mesh and
 		// acquired through the MaterialRegistry per entity - nothing to register.
 
@@ -225,6 +229,7 @@ namespace aether::app
 		}
 		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
+		context.services.Unregister<scripting::SceneContext>();
 
 		// Effects no longer own GPU pipelines (PipelineCache does, torn down in
 		// AssetSubsystem::Shutdown), so there is nothing to destroy here.

@@ -16,10 +16,11 @@ namespace
 	using namespace aether::app::scripting;
 
 	// set_entity_effect(world, entity_id, "effect_name")
-	// Resolves the effect pipeline via PipelineCache, allocates a per-entity
-	// EffectParams slot, and writes the effect's default params. The presence of
-	// EffectParamsComponent marks the entity effect-driven (so a later set_material
-	// repaints colour without dropping the effect pipeline).
+	// Shared apply path (effects::ApplyEntityEffect): resolves the effect
+	// pipeline, keeps/allocates the per-entity params slot, writes defaults and
+	// records EffectRefComponent. The presence of EffectParamsComponent marks the
+	// entity effect-driven (so a later set_material repaints colour without
+	// dropping the effect pipeline).
 	void das_set_entity_effect(aether::World* w, uint32_t id, const char* name)
 	{
 		auto& ctx = ActiveContext();
@@ -28,32 +29,10 @@ namespace
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: no EffectManager/assets");
 			return;
 		}
-		const auto* def = ctx.effects->Find(name);
-		if (!def)
+		if (!aether::app::effects::ApplyEntityEffect(*w, aether::Entity{id}, name ? name : "", *ctx.effects, ctx.assets->GetPipelineCache(), ctx.assets->GetEffectParamBuffer()))
 		{
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: unknown effect '{}'", name);
-			return;
 		}
-
-		const aether::Entity e{id};
-		auto& buffer = ctx.assets->GetEffectParamBuffer();
-
-		const aether::GraphicsPipeline* pipeline = ctx.assets->GetPipelineCache().Acquire(def->templateDesc);
-		w->EmplaceOrReplace<aether::PipelineComponent>(e, aether::PipelineComponent{.pipeline = pipeline});
-
-		// Reuse an existing slot (re-applying an effect) so we neither leak nor
-		// double-allocate; otherwise allocate one.
-		std::uint32_t slot = aether::EffectParamBuffer::kInvalidSlot;
-		if (const auto* existing = w->TryGet<aether::EffectParamsComponent>(e))
-		{
-			slot = existing->paramSlot;
-		}
-		if (slot == aether::EffectParamBuffer::kInvalidSlot)
-		{
-			slot = buffer.AllocateSlot();
-		}
-		w->EmplaceOrReplace<aether::EffectParamsComponent>(e, aether::EffectParamsComponent{slot, def->defaultParams});
-		buffer.Write(slot, def->defaultParams);
 	}
 
 	// -- Effect parameter setters ---------------------------------------------

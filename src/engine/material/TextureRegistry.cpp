@@ -182,4 +182,20 @@ namespace aether
 		}
 		return m_defaultSlot; // stale/invalid -> fallback (visible error)
 	}
+
+	bool TextureRegistry::TryGetPath(TextureHandle handle, std::string& outPath) const
+	{
+		std::scoped_lock lock(m_mutex);
+		if (!handle.IsValid() || handle.index >= m_entries.size())
+		{
+			return false;
+		}
+		const Entry& e = m_entries[handle.index];
+		if (!e.alive || e.generation != handle.generation)
+		{
+			return false;
+		}
+		outPath = e.resolvedPath;
+		return true;
+	}
 } // namespace aether

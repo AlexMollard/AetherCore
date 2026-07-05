@@ -51,6 +51,11 @@ namespace aether
 
 		[[nodiscard]] std::uint32_t ResolveSlot(TextureHandle handle) const;
 
+		// Resolved VFS path of a live entry - the texture's stable identity for
+		// serialization (a loader re-Acquires by this path). False for invalid,
+		// broken or stale handles.
+		bool TryGetPath(TextureHandle handle, std::string& outPath) const;
+
 		[[nodiscard]] TextureHandle DefaultHandle() const
 		{
 			return m_defaultHandle;

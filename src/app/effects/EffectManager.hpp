@@ -1,10 +1,19 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include "material/EffectParams.hpp"
 #include "material/MaterialTemplate.hpp"
+
+namespace aether
+{
+	class EffectParamBuffer;
+	class PipelineCache;
+	class World;
+	struct Entity;
+} // namespace aether
 
 namespace aether::app::effects
 {
@@ -42,4 +51,12 @@ namespace aether::app::effects
 	private:
 		std::unordered_map<std::string, EffectDef> m_effects;
 	};
+
+	// Makes `entity` effect-driven by name: resolves the effect pipeline, keeps
+	// (or allocates) the per-entity param slot, writes params to the buffer and
+	// records EffectRefComponent for scene serialization. `overrideParams`
+	// replaces the effect's defaults (scene load restores saved params through
+	// it). Shared by the set_entity_effect das binding and the scene loader.
+	// Returns false for an unknown effect name.
+	bool ApplyEntityEffect(World& world, Entity entity, std::string_view name, const EffectManager& effects, PipelineCache& pipelineCache, EffectParamBuffer& buffer, const EffectParams* overrideParams = nullptr);
 } // namespace aether::app::effects

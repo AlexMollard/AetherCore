@@ -24,6 +24,8 @@
 #define ICON_FA_PEN "\xef\x8c\x84"                     // U+F304 rename
 #define ICON_FA_XMARK "\xef\x80\x8d"                   // U+F00D close/remove
 #define ICON_FA_FILTER "\xef\x82\xb0"                  // U+F0B0 type filters
+#define ICON_FA_FLOPPY_DISK "\xef\x83\x87"             // U+F0C7 save scene
+#define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"             // U+F07C load scene
 
 // Inspector sections
 #define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"      // U+F0B2 transform

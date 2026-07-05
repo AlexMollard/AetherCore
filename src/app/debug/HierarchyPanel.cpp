@@ -18,10 +18,13 @@
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "material/EffectParamBuffer.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
+#include "scripting/SceneContext.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
@@ -52,7 +55,7 @@ namespace aether::app
 
 		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
 		// defaults (neutral two-sided material) via the same AssignMaterial path.
-		void CreatePrimitive(LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name)
+		void CreatePrimitive(LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
 		{
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
 			auto* assets = context.TryGet<AssetManager>();
@@ -64,6 +67,7 @@ namespace aether::app
 			world.Emplace<NameComponent>(e, NameComponent{.name = name});
 			world.Emplace<TransformComponent>(e);
 			world.Emplace<MeshComponent>(e, MeshComponent{.mesh = &primitives->Get(kind)});
+			world.Emplace<MeshSourceComponent>(e, MeshSourceComponent{.kind = MeshSourceComponent::Kind::Primitive, .path = kindName, .primitiveIndex = 0});
 			MaterialAsset asset{};
 			asset.baseColorFactor = glm::vec4(0.85f, 0.85f, 0.82f, 1.f);
 			asset.roughnessFactor = 0.6f;
@@ -389,15 +393,88 @@ namespace aether::app
 				ImGui::Separator();
 				if (ImGui::MenuItem(ICON_FA_CUBE "  Cube"))
 				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Cube, "Cube");
+					CreatePrimitive(context, world, selection, PrimitiveMesh::Cube, "Cube", "cube");
 				}
 				if (ImGui::MenuItem(ICON_FA_CIRCLE "  Sphere"))
 				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Sphere, "Sphere");
+					CreatePrimitive(context, world, selection, PrimitiveMesh::Sphere, "Sphere", "sphere");
 				}
 				if (ImGui::MenuItem(ICON_FA_IMAGE "  Plane"))
 				{
-					CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane");
+					CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane", "plane");
+				}
+				ImGui::EndPopup();
+			}
+
+			// Scene save/load.
+			ImGui::SameLine();
+			if (ImGui::Button(ICON_FA_FLOPPY_DISK))
+			{
+				ImGui::OpenPopup("SaveScene");
+			}
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			{
+				ImGui::SetTooltip("Save scene");
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(ICON_FA_FOLDER_OPEN))
+			{
+				m_sceneListDirty = true;
+				ImGui::OpenPopup("LoadScene");
+			}
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			{
+				ImGui::SetTooltip("Load scene (replaces all entities)");
+			}
+
+			if (ImGui::BeginPopup("SaveScene"))
+			{
+				ImGui::SetNextItemWidth(180.0f);
+				const bool entered = ImGui::InputTextWithHint("##sceneName", "Scene name...", m_sceneNameBuf, sizeof(m_sceneNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+				ImGui::SameLine();
+				const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
+				ImGui::TextDisabled("-> %s", scene::ScenesDirectory().c_str());
+				if (save && m_sceneNameBuf[0] != '\0')
+				{
+					if (auto* assets = context.TryGet<AssetManager>())
+					{
+						const auto captured = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry());
+						scene::SaveSceneFile(m_sceneNameBuf, captured);
+						m_sceneListDirty = true;
+					}
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+			if (ImGui::BeginPopup("LoadScene"))
+			{
+				if (m_sceneListDirty)
+				{
+					m_sceneList = scene::ListSceneFiles();
+					m_sceneListDirty = false;
+				}
+				if (m_sceneList.empty())
+				{
+					ImGui::TextDisabled("No scenes in %s", scene::ScenesDirectory().c_str());
+				}
+				for (const std::string& name: m_sceneList)
+				{
+					ImGui::PushID(name.c_str());
+					if (ImGui::MenuItem(name.c_str()))
+					{
+						auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+						scene::ApplySceneDeps deps{};
+						deps.assets = context.TryGet<AssetManager>();
+						deps.primitives = context.TryGet<PrimitiveMeshes>();
+						deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
+						deps.effectParams = context.TryGet<EffectParamBuffer>();
+						deps.sceneContext = sceneCtx;
+						if (scene::LoadSceneFile(name, world, deps))
+						{
+							selection.Clear();
+						}
+					}
+					ImGui::PopID();
 				}
 				ImGui::EndPopup();
 			}

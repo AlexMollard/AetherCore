@@ -59,6 +59,9 @@ namespace aether::app::scripting
 			aether::MaterialAsset materialAsset{};
 			// Display name given to entities this mesh is attached to ("Cube", ...).
 			std::string displayName;
+			// Canonical primitive kind string as passed to create_mesh ("cube", ...);
+			// recorded into MeshSourceComponent for scene serialization.
+			std::string kindName;
 		};
 
 		aether::PrimitiveMeshes* primitives = nullptr;
