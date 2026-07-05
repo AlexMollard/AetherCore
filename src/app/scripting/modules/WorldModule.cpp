@@ -9,6 +9,10 @@
 
 #include "daScript/daScript.h"
 
+#include <glm/gtc/quaternion.hpp>
+
+#include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
@@ -130,6 +134,38 @@ namespace
 		return to_das(glm::vec3(tc->localToWorld[3]));
 	}
 
+	// Script movement carries the entity's body - the same true-teleport
+	// semantics as the editor's ApplyWorldTransform (Jolt SetPosition/Rotation
+	// + prev==curr interp state). Without this, a body added to a
+	// script-driven entity (a capsule on the player) simulates away from
+	// where the script keeps putting the visuals and the two owners yank the
+	// transform back and forth every frame.
+	void TeleportBodyToTransform(aether::World& w, aether::Entity e)
+	{
+		auto* ps = w.TryGet<aether::PhysicsStateComponent>(e);
+		const auto* tc = w.TryGet<aether::TransformComponent>(e);
+		if (ps == nullptr || tc == nullptr)
+		{
+			return;
+		}
+		glm::vec3 pos{}, euler{}, scale{};
+		aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
+		const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
+		ps->prevPosition = pos;
+		ps->currPosition = pos;
+		ps->prevRotation = q;
+		ps->currRotation = q;
+		ps->scale = glm::max(scale, glm::vec3(0.001f));
+
+		const auto* rb = w.TryGet<aether::RigidBodyComponent>(e);
+		auto* physics = ActiveContext().physics;
+		if (rb != nullptr && physics != nullptr)
+		{
+			physics->SetPosition(rb->body, pos);
+			physics->SetRotation(rb->body, q);
+		}
+	}
+
 	// set_position(world, entity_id, pos)
 	// Only updates the translation column - leaves rotation/scale intact.
 	// Children ride along with the delta, keeping their relative offsets.
@@ -143,6 +179,7 @@ namespace
 		glm::mat4 m = tc->localToWorld;
 		m[3] = glm::vec4(to_glm(pos), 1.0f);
 		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, m);
+		TeleportBodyToTransform(*w, aether::Entity{id});
 	}
 
 	// get_scale(world, entity_id) -> float3
@@ -183,6 +220,7 @@ namespace
 		glm::vec3 pos{}, curEuler{}, scale{};
 		aether::DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
 		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, aether::ComposeTransform(pos, to_glm(euler), scale));
+		TeleportBodyToTransform(*w, aether::Entity{id});
 	}
 
 	// set_transform(world, entity_id, pos, euler_deg, scale)
@@ -193,6 +231,7 @@ namespace
 	{
 		const auto xform = aether::ComposeTransform(to_glm(pos), to_glm(euler), to_glm(scale));
 		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, xform);
+		TeleportBodyToTransform(*w, aether::Entity{id});
 	}
 
 	// -- Model loading ---------------------------------------------------------

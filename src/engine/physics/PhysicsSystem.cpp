@@ -36,6 +36,7 @@
 
 #include "physics/PhysicsSystem.hpp"
 #include "scene/Components.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -474,6 +475,7 @@ namespace aether
 		int64_t synced = 0;
 		for (const auto& [entity, rigid, state, transform]: world.View<RigidBodyComponent, PhysicsStateComponent, TransformComponent>().each())
 		{
+			(void) transform; // written through ecs::SetWorldTransform below
 			const JPH::BodyID id = ToJolt(rigid.body);
 			if (id.IsInvalid())
 			{
@@ -497,7 +499,11 @@ namespace aether
 			const glm::vec3 renderPos = glm::mix(state.prevPosition, state.currPosition, alpha);
 			const glm::quat renderRot = glm::slerp(state.prevRotation, state.currRotation, alpha);
 
-			transform.localToWorld = ToTransform(renderPos, renderRot, state.scale);
+			// Delta-propagating write: children ride the body (a physics-driven
+			// parent used to abandon its subtree - a body on a multi-part model
+			// root scattered the mesh parts). Children with their own bodies
+			// re-sync from those bodies in this same loop, so order is moot.
+			ecs::SetWorldTransform(world, World::FromEntt(entity), ToTransform(renderPos, renderRot, state.scale));
 			++synced;
 		}
 
