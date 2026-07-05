@@ -8,6 +8,7 @@
 
 #include <entt/entt.hpp>
 #include <imgui.h>
+#include <imgui_internal.h> // IsMouseDragPastThreshold / IsDragDropActive
 
 #include "assets/AssetManager.hpp"
 #include "debug/ComponentDrawers.hpp"
@@ -117,41 +118,85 @@ namespace aether::app
 
 	void HierarchyPanel::HandleRowClick(SceneSelection& selection, Entity e)
 	{
-		if (!ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemToggledOpen())
-		{
-			return;
-		}
 		const ImGuiIO& io = ImGui::GetIO();
-		if (io.KeyCtrl)
+		const bool inMultiSelection = selection.Contains(e) && selection.All().size() > 1;
+
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 		{
-			selection.ToggleSelection(e);
-			m_rangeAnchor = e;
-		}
-		else if (io.KeyShift && m_rangeAnchor.IsValid())
-		{
-			const auto& rows = m_rowsPrev;
-			const auto ia = std::find(rows.begin(), rows.end(), m_rangeAnchor);
-			const auto ib = std::find(rows.begin(), rows.end(), e);
-			if (ia != rows.end() && ib != rows.end())
+			if (io.KeyCtrl)
 			{
-				const auto lo = std::min(ia, ib);
-				const auto hi = std::max(ia, ib);
-				selection.Clear();
-				for (auto it = lo; it != hi + 1; ++it)
+				selection.ToggleSelection(e);
+				m_rangeAnchor = e;
+			}
+			else if (io.KeyShift && m_rangeAnchor.IsValid())
+			{
+				const auto& rows = m_rowsPrev;
+				const auto ia = std::find(rows.begin(), rows.end(), m_rangeAnchor);
+				const auto ib = std::find(rows.begin(), rows.end(), e);
+				if (ia != rows.end() && ib != rows.end())
 				{
-					selection.AddToSelection(*it);
+					const auto lo = std::min(ia, ib);
+					const auto hi = std::max(ia, ib);
+					selection.Clear();
+					for (auto it = lo; it != hi + 1; ++it)
+					{
+						selection.AddToSelection(*it);
+					}
+				}
+				else
+				{
+					selection.Select(e);
+					m_rangeAnchor = e;
 				}
 			}
-			else
+			else if (!inMultiSelection)
 			{
 				selection.Select(e);
 				m_rangeAnchor = e;
 			}
+			else
+			{
+				// Pressing a row that is part of a multi-selection must NOT
+				// collapse it yet - the press may start a multi-entity drag. The
+				// collapse happens on release, only if no drag occurred.
+				m_pendingCollapse = e;
+			}
 		}
-		else
+
+		if (m_pendingCollapse == e && inMultiSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f) && !ImGui::IsDragDropActive())
 		{
 			selection.Select(e);
 			m_rangeAnchor = e;
+			m_pendingCollapse = {};
+		}
+	}
+
+	void HierarchyPanel::HandleRowDragDrop(World& world, SceneSelection& selection, Entity e)
+	{
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+		{
+			ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
+			// Dragging a selected row carries the whole selection.
+			const std::size_t count = (selection.Contains(e) && selection.All().size() > 1) ? selection.All().size() : 1;
+			if (count > 1)
+			{
+				ImGui::Text("Move %zu entities", count);
+			}
+			else
+			{
+				ImGui::TextUnformatted(EntityDisplayName(world, e));
+			}
+			ImGui::TextDisabled("drop on a row to parent, empty space to unparent");
+			ImGui::EndDragDropSource();
+		}
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
+			{
+				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
+				m_pendingReparent = {Entity{draggedId}, e};
+			}
+			ImGui::EndDragDropTarget();
 		}
 	}
 
@@ -242,24 +287,7 @@ namespace aether::app
 		const bool open = ImGui::TreeNodeEx("##node", flags);
 		m_rowsCur.push_back(e);
 		HandleRowClick(selection, e);
-
-		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
-		{
-			ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
-			ImGui::TextUnformatted(EntityDisplayName(world, e));
-			ImGui::TextDisabled("drop on a row to parent, empty space to unparent");
-			ImGui::EndDragDropSource();
-		}
-		if (ImGui::BeginDragDropTarget())
-		{
-			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
-			{
-				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
-				m_pendingReparent = {Entity{draggedId}, e};
-			}
-			ImGui::EndDragDropTarget();
-		}
-
+		HandleRowDragDrop(world, selection, e);
 		const bool destroyed = DrawRowContextMenu(world, selection, e);
 		if (!destroyed)
 		{
@@ -294,6 +322,14 @@ namespace aether::app
 
 		m_rowsPrev = std::move(m_rowsCur);
 		m_rowsCur.clear();
+
+		// A release anywhere retires any pending collapse the row handlers did
+		// not consume this frame (e.g. the mouse was released off-row or after a
+		// drag) so a stale press can never collapse a later selection.
+		if (ImGui::IsMouseReleased(ImGuiMouseButton_Left) && m_pendingCollapse.IsValid())
+		{
+			m_pendingCollapse = {};
+		}
 
 		// ── Juice bookkeeping ──────────────────────────────────────────────────
 		const double now = ImGui::GetTime();
@@ -444,21 +480,12 @@ namespace aether::app
 						const Entity e = matches[static_cast<std::size_t>(i)];
 						ImGui::PushID(static_cast<int>(e.id));
 						DrawRowBackdrop(selection, e);
-						if (ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns))
-						{
-							// Selectable consumed the click; route modifiers manually.
-							const ImGuiIO& io = ImGui::GetIO();
-							if (io.KeyCtrl)
-							{
-								selection.ToggleSelection(e);
-							}
-							else
-							{
-								selection.Select(e);
-							}
-							m_rangeAnchor = e;
-						}
+						// Same interaction path as tree rows: modifier-aware click
+						// (ctrl/shift/deferred collapse) + multi-entity drag-drop.
+						ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns);
 						m_rowsCur.push_back(e);
+						HandleRowClick(selection, e);
+						HandleRowDragDrop(world, selection, e);
 						if (!DrawRowContextMenu(world, selection, e))
 						{
 							DrawRowContent(world, e);
@@ -524,11 +551,51 @@ namespace aether::app
 			// walked. SetParent is cycle-guarded: bad drops are silent no-ops.
 			if (m_pendingReparent)
 			{
-				const auto [child, parent] = *m_pendingReparent;
+				const auto [dragged, parent] = *m_pendingReparent;
 				m_pendingReparent.reset();
-				if (world.GetRegistry().valid(World::ToEntt(child)))
+				if (world.GetRegistry().valid(World::ToEntt(dragged)))
 				{
-					ecs::SetParent(world, child, parent);
+					// Dragging a selected row moves the WHOLE selection - but only
+					// its topmost roots: an entity whose ancestor is also selected
+					// follows that ancestor, preserving structure inside the
+					// selection (and the drop target itself is a no-op via the
+					// child==parent guard).
+					std::vector<Entity> moved;
+					if (selection.Contains(dragged) && selection.All().size() > 1)
+					{
+						for (const Entity e: selection.All())
+						{
+							if (!world.GetRegistry().valid(World::ToEntt(e)))
+							{
+								continue;
+							}
+							bool ancestorSelected = false;
+							const auto* h = world.TryGet<HierarchyComponent>(e);
+							Entity cur = h ? h->parent : Entity{};
+							while (cur.IsValid())
+							{
+								if (selection.Contains(cur))
+								{
+									ancestorSelected = true;
+									break;
+								}
+								const auto* ch = world.TryGet<HierarchyComponent>(cur);
+								cur = ch ? ch->parent : Entity{};
+							}
+							if (!ancestorSelected)
+							{
+								moved.push_back(e);
+							}
+						}
+					}
+					else
+					{
+						moved.push_back(dragged);
+					}
+					for (const Entity e: moved)
+					{
+						ecs::SetParent(world, e, parent);
+					}
 				}
 			}
 

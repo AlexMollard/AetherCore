@@ -61,6 +61,21 @@ namespace aether
 #ifdef _WIN32
 			LPTOP_LEVEL_EXCEPTION_FILTER previousExceptionFilter = nullptr;
 #endif
+
+			~LoggerBackend()
+			{
+				// Safety net for binaries that never call Logger::Shutdown()
+				// explicitly (e.g. the test harness and the assetpack tool).
+				// Running the full shutdown here stops and joins the worker
+				// thread while this object's members (fileStream) and the
+				// standard streams are still alive. Without it, static
+				// destruction tears down a still-joinable std::thread ->
+				// std::terminate() -> abort() (process exit code 3), and the
+				// worker races CRT teardown, intermittently tripping the debug
+				// heap. Shutdown() is idempotent, so an explicit prior call
+				// (the app's RuntimeSystemsGuard) makes this a no-op.
+				Logger::Shutdown();
+			}
 		};
 
 		std::atomic<bool> g_crashHandlerActive{false};

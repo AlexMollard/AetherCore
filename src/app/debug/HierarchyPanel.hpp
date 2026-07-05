@@ -37,6 +37,8 @@ namespace aether::app
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e);
 		void DrawRowContent(World& world, Entity e);
 		void HandleRowClick(SceneSelection& selection, Entity e);
+		// Drag source + drop target for one row (tree node or flat Selectable).
+		void HandleRowDragDrop(World& world, SceneSelection& selection, Entity e);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
 		bool DrawRowContextMenu(World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
@@ -58,6 +60,9 @@ namespace aether::app
 		std::vector<Entity> m_rowsCur;
 		std::vector<Entity> m_rowsPrev;
 		Entity m_rangeAnchor{};
+		// Plain-press on a multi-selected row defers the collapse to release (the
+		// press may start a multi-entity drag); this remembers where it landed.
+		Entity m_pendingCollapse{};
 
 		// Drag-drop reparent is queued during the tree walk and applied after it:
 		// SetParent mutates children vectors the recursion may still be iterating.
