@@ -36,5 +36,6 @@
 #define ICON_FA_IMAGE "\xef\x80\xbe"                   // U+F03E texture
 #define ICON_FA_LINK "\xef\x83\x81"                    // U+F0C1 parent link
 #define ICON_FA_EYE "\xef\x81\xae"                     // U+F06E visibility
-#define ICON_FA_ROTATE "\xef\x8b\xb1"                  // U+F2F1 reset/refresh
+#define ICON_FA_ROTATE "\xef\x8b\xb1"                  // U+F2F1 reset/refresh/rotate op
+#define ICON_FA_EXPAND "\xef\x81\xa5"                  // U+F065 scale op
 #define ICON_FA_DIAGRAM_PROJECT "\xef\x95\x82"         // U+F542 render graph

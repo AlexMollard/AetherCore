@@ -8,18 +8,149 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 
+#include <ImGuizmo.h>
+
 #include "AetherCore.hpp"
+#include "camera/CameraManager.hpp"
+#include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
+#include "debug/Icons.hpp"
+#include "debug/SceneSelection.hpp"
+#include "debug/ScenePicker.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
 #include "passes/PostProcessStack.hpp"
+#include "physics/PhysicsSystem.hpp"
 #include "platform/Input.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/World.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/Ray.hpp"
 #include "vulkan/Swapchain.hpp"
 
 namespace aether::app
 {
+	void ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		// W/E/R switch ops while the mouse is over the viewport - but not while
+		// the right button is down, which is the free-camera's WASD-fly chord.
+		if (ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows) && !ImGui::GetIO().WantTextInput && !ImGui::IsMouseDown(ImGuiMouseButton_Right))
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_W))
+			{
+				m_gizmoOp = 0;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_E))
+			{
+				m_gizmoOp = 1;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_R))
+			{
+				m_gizmoOp = 2;
+			}
+		}
+
+		auto& selection = context.Get<SceneSelection>();
+		World& world = context.Get<World>();
+		const Entity primary = selection.Primary();
+		if (!primary.IsValid() || !world.GetRegistry().valid(World::ToEntt(primary)))
+		{
+			return;
+		}
+		auto* tc = world.TryGet<TransformComponent>(primary);
+		if (tc == nullptr)
+		{
+			return;
+		}
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (camera == nullptr)
+		{
+			return;
+		}
+
+		ImGuizmo::SetOrthographic(false);
+		ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
+		ImGuizmo::SetRect(imageMin.x, imageMin.y, imageSize.x, imageSize.y);
+
+		const glm::mat4 view = camera->GetViewMatrix();
+		glm::mat4 proj = camera->GetProjectionMatrix(renderAspect);
+		proj[1][1] *= -1.0f; // undo the Vulkan Y-flip: ImGuizmo assumes GL clip conventions
+
+		const ImGuizmo::OPERATION op = m_gizmoOp == 0 ? ImGuizmo::TRANSLATE : m_gizmoOp == 1 ? ImGuizmo::ROTATE : ImGuizmo::SCALE;
+		// ImGuizmo scales in local space only; WORLD+SCALE misbehaves.
+		const ImGuizmo::MODE mode = (op == ImGuizmo::SCALE || m_gizmoLocal) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+
+		// Ctrl-hold snapping: half-metre steps, 15 degrees, 0.1 scale.
+		float snapValues[3] = {0.5f, 0.5f, 0.5f};
+		if (op == ImGuizmo::ROTATE)
+		{
+			snapValues[0] = 15.0f;
+		}
+		else if (op == ImGuizmo::SCALE)
+		{
+			snapValues[0] = snapValues[1] = snapValues[2] = 0.1f;
+		}
+		const float* snap = ImGui::GetIO().KeyCtrl ? snapValues : nullptr;
+
+		glm::mat4 model = tc->localToWorld;
+		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
+		{
+			ApplyWorldTransform(context, world, primary, model);
+		}
+	}
+
+	void ViewportPanel::HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	{
+		// The gizmo owns the mouse while hovered or dragging.
+		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
+		{
+			return;
+		}
+		// A click is a release that never dragged: camera orbits/looks move past
+		// the threshold and never select.
+		if (!ImGui::IsItemHovered() || !ImGui::IsMouseReleased(ImGuiMouseButton_Left) || ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f))
+		{
+			return;
+		}
+
+		const ImGuiIO& io = ImGui::GetIO();
+		const glm::vec2 uv{(io.MousePos.x - imageMin.x) / imageSize.x, (io.MousePos.y - imageMin.y) / imageSize.y};
+		if (uv.x < 0.0f || uv.x > 1.0f || uv.y < 0.0f || uv.y > 1.0f)
+		{
+			return;
+		}
+
+		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
+		if (camera == nullptr)
+		{
+			return;
+		}
+
+		// Identical matrices to the renderer (projection at render-target
+		// aspect), so letterboxed/stretched display modes pick what is shown.
+		const glm::mat4 viewProj = camera->GetProjectionMatrix(renderAspect) * camera->GetViewMatrix();
+		const Ray ray = BuildCameraRay(glm::inverse(viewProj), uv, camera->GetPosition());
+
+		auto& selection = context.Get<SceneSelection>();
+		const PickHit hit = PickEntity(context.Get<World>(), context.TryGet<PhysicsSystem>(), ray, camera->GetFarPlane());
+
+		if (io.KeyCtrl)
+		{
+			if (hit.IsValid())
+			{
+				selection.ToggleSelection(hit.entity);
+			}
+		}
+		else if (hit.IsValid())
+		{
+			selection.Select(hit.entity);
+		}
+		else
+		{
+			selection.Clear();
+		}
+	}
+
 	void ViewportPanel::OnAttach(LayerContext& context)
 	{
 		context.Get<aether::RenderingSubsystem>().SetSceneViewportEnabled(context.services, true);
@@ -175,6 +306,9 @@ namespace aether::app
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
 		context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive());
 		context.Get<Input>().SetMouseViewportTransform(glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
+		// Gizmo first so this frame's IsOver/IsUsing state guards the pick.
+		DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		if (m_viewportShowStats || m_viewportShowMouse)
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -270,6 +404,37 @@ namespace aether::app
 		ImGui::Checkbox("Stats", &m_viewportShowStats);
 		ImGui::SameLine();
 		ImGui::Checkbox("Mouse", &m_viewportShowMouse);
+
+		// Gizmo controls
+		ImGui::SameLine();
+		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+		ImGui::SameLine();
+		const auto opButton = [&](const char* icon, int op, const char* tooltip)
+		{
+			const bool active = m_gizmoOp == op;
+			if (active)
+			{
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.72f, 0.2f, 1.0f));
+			}
+			if (ImGui::SmallButton(icon))
+			{
+				m_gizmoOp = op;
+			}
+			if (active)
+			{
+				ImGui::PopStyleColor();
+			}
+			ImGui::SetItemTooltip("%s", tooltip);
+			ImGui::SameLine();
+		};
+		opButton(ICON_FA_UP_DOWN_LEFT_RIGHT, 0, "Translate (W)");
+		opButton(ICON_FA_ROTATE, 1, "Rotate (E)");
+		opButton(ICON_FA_EXPAND, 2, "Scale (R)");
+		if (ImGui::SmallButton(m_gizmoLocal ? "Local" : "World"))
+		{
+			m_gizmoLocal = !m_gizmoLocal;
+		}
+		ImGui::SetItemTooltip("Gizmo orientation (Ctrl-drag snaps)");
 
 		ImGui::End();
 	}

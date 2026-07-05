@@ -2,6 +2,7 @@
 
 #include <cstddef>
 
+#include <glm/glm.hpp>
 #include <imgui.h>
 
 namespace aether
@@ -27,6 +28,13 @@ namespace aether::app
 		ImVec4 color;
 	};
 	KindBadge EntityKindBadge(const World& world, Entity entity);
+
+	// Writes a full world transform to the entity with the editor's shared edit
+	// semantics: children follow verbatim (same rule as das set_transform) and
+	// physics entities get a true teleport (Jolt body SetPosition/SetRotation +
+	// prev==curr interpolation state). The inspector transform drawer and the
+	// viewport gizmo both funnel through here; the future undo spec hooks this.
+	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld);
 
 	// ── Inspector component sections ───────────────────────────────────────────
 	// Each draws one collapsing section for `entity` when the matching component

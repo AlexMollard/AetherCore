@@ -175,6 +175,23 @@ if(imgui_ADDED)
     endif()
 endif()
 
+# ImGuizmo (viewport transform gizmo) compiles into the imgui target so it
+# shares the same ImGui context/atlas. Pinned to a master commit - the 1.83
+# release tag (2021) predates the imgui 1.9x API.
+CPMAddPackage(
+    NAME imguizmo
+    GIT_REPOSITORY https://github.com/CedricGuillemet/ImGuizmo.git
+    GIT_TAG        87fb88b13a4f6bb04cd6ecd4e9d1625929935ff1
+    DOWNLOAD_ONLY  YES
+)
+
+if(imguizmo_ADDED AND TARGET imgui)
+    # Master keeps the widget sources under src/; only the gizmo itself is
+    # compiled (not the sequencer/graph/curve extras).
+    target_sources(imgui PRIVATE "${imguizmo_SOURCE_DIR}/src/ImGuizmo.cpp")
+    target_include_directories(imgui PUBLIC "${imguizmo_SOURCE_DIR}/src")
+endif()
+
 # ── Physics ───────────────────────────────────────────────────────────────────
 # Cross-platform determinism is required for future lockstep / rollback networking.
 CPMAddPackage(

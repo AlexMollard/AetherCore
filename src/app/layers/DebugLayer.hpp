@@ -46,6 +46,9 @@ namespace aether::app
 		bool m_visible = true;
 
 		SceneSelection m_selection;
+		// Selection-outline pulse bookkeeping (brightness eases after changes).
+		std::uint64_t m_outlineSeenSerial = 0;
+		double m_outlinePulseStart = -1.0;
 		TomlConfig m_debugConfig;
 		std::deque<ScriptErrorToast> m_errorToasts;
 		bool m_dockspaceBuilt = false;

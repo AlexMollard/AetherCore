@@ -106,8 +106,50 @@ namespace aether::app
 		return {ICON_FA_CIRCLE, ImVec4(0.50f, 0.50f, 0.50f, 1.0f)};
 	}
 
-	// Remaining section bodies land task-by-task (skinned/hierarchy/tags ->
-	// material/effects -> physics/render); each is a guarded no-op until then.
+	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld)
+	{
+		auto* tc = world.TryGet<TransformComponent>(entity);
+		if (!tc)
+		{
+			return;
+		}
+		tc->localToWorld = localToWorld;
+
+		// Children follow the parent verbatim - same rule as das set_transform.
+		if (const auto* h = world.TryGet<HierarchyComponent>(entity))
+		{
+			for (const Entity child: h->children)
+			{
+				if (auto* childTc = world.TryGet<TransformComponent>(child))
+				{
+					childTc->localToWorld = localToWorld;
+				}
+			}
+		}
+
+		// True physics teleport: move the Jolt body AND rewrite the interpolation
+		// state (prev == curr), otherwise the next sync stomps the edit or the
+		// renderer lerps across the jump. Quat order mirrors ComposeTransform (YXZ).
+		if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
+		{
+			glm::vec3 pos{}, euler{}, scale{};
+			DecomposeTRS(localToWorld, pos, euler, scale);
+			const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
+			ps->prevPosition = pos;
+			ps->currPosition = pos;
+			ps->prevRotation = q;
+			ps->currRotation = q;
+			ps->scale = glm::max(scale, glm::vec3(0.001f));
+
+			const auto* rb = world.TryGet<RigidBodyComponent>(entity);
+			auto* physics = context.TryGet<PhysicsSystem>();
+			if (rb && physics)
+			{
+				physics->SetPosition(rb->body, pos);
+				physics->SetRotation(rb->body, q);
+			}
+		}
+	}
 
 	void DrawTransform(LayerContext& context, World& world, Entity entity)
 	{
@@ -134,40 +176,7 @@ namespace aether::app
 		}
 
 		scale = glm::max(scale, glm::vec3(0.001f)); // zero scale breaks decompose
-		tc->localToWorld = ComposeTransform(pos, euler, scale);
-
-		// Children follow the parent verbatim - same rule as das set_transform.
-		if (const auto* h = world.TryGet<HierarchyComponent>(entity))
-		{
-			for (const Entity child: h->children)
-			{
-				if (auto* childTc = world.TryGet<TransformComponent>(child))
-				{
-					childTc->localToWorld = tc->localToWorld;
-				}
-			}
-		}
-
-		// True physics teleport: move the Jolt body AND rewrite the interpolation
-		// state (prev == curr), otherwise the next sync stomps the edit or the
-		// renderer lerps across the jump. Quat order mirrors ComposeTransform (YXZ).
-		if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
-		{
-			const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
-			ps->prevPosition = pos;
-			ps->currPosition = pos;
-			ps->prevRotation = q;
-			ps->currRotation = q;
-			ps->scale = scale;
-
-			const auto* rb = world.TryGet<RigidBodyComponent>(entity);
-			auto* physics = context.TryGet<PhysicsSystem>();
-			if (rb && physics)
-			{
-				physics->SetPosition(rb->body, pos);
-				physics->SetRotation(rb->body, q);
-			}
-		}
+		ApplyWorldTransform(context, world, entity, ComposeTransform(pos, euler, scale));
 	}
 
 	void DrawSkinnedMesh(World& world, Entity entity)

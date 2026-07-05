@@ -9,6 +9,7 @@
 
 using namespace std::string_view_literals;
 
+#include <ImGuizmo.h>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -28,8 +29,12 @@ using namespace std::string_view_literals;
 #include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/ViewportPanel.hpp"
+#include "AetherCore.hpp"
+#include "mesh/Mesh.hpp"
+#include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
 #include "rendering/RenderingSubsystem.hpp"
+#include "scene/Components.hpp"
 #include "scene/World.hpp"
 #include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
@@ -38,6 +43,26 @@ using namespace std::string_view_literals;
 
 namespace aether::app
 {
+	namespace
+	{
+		// 12 wireframe edges of a local AABB under an arbitrary affine transform
+		// (AddDebugBox's quat form cannot represent non-uniform scale or shear).
+		void AppendObbEdges(std::vector<DebugVertex>& out, const glm::mat4& m, const glm::vec3& mn, const glm::vec3& mx, const glm::vec4& color)
+		{
+			glm::vec3 corners[8];
+			for (int i = 0; i < 8; ++i)
+			{
+				const glm::vec3 local{(i & 1) ? mx.x : mn.x, (i & 2) ? mx.y : mn.y, (i & 4) ? mx.z : mn.z};
+				corners[i] = glm::vec3(m * glm::vec4(local, 1.0f));
+			}
+			static constexpr int kEdges[12][2] = {{0, 1}, {1, 3}, {3, 2}, {2, 0}, {4, 5}, {5, 7}, {7, 6}, {6, 4}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+			for (const auto& edge: kEdges)
+			{
+				AddDebugLine(out, corners[edge[0]], corners[edge[1]], color);
+			}
+		}
+	} // namespace
+
 	void DebugLayer::ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine)
 	{
 		outPath.clear();
@@ -327,6 +352,46 @@ namespace aether::app
 		// shared selection free of dangling ids before panels read it.
 		m_selection.Prune(context.Get<World>());
 
+		// Selection outlines: world-space wireframe boxes through the debug-line
+		// pass (same submission path as the light gizmos).
+		if (m_visible && IsDebugRenderingEnabled() && !m_selection.All().empty())
+		{
+			if (auto* engine = context.TryGet<AetherCore>())
+			{
+				if (m_selection.ChangeSerial() != m_outlineSeenSerial)
+				{
+					m_outlineSeenSerial = m_selection.ChangeSerial();
+					m_outlinePulseStart = context.elapsedTimeSeconds;
+				}
+				const float pulseT = m_outlinePulseStart >= 0.0 ? std::clamp(static_cast<float>((context.elapsedTimeSeconds - m_outlinePulseStart) / 0.5), 0.0f, 1.0f) : 1.0f;
+				const float brightness = 1.6f - 0.6f * pulseT; // eases back to 1.0
+
+				auto& verts = engine->GetPendingDebugVertices();
+				World& world = context.Get<World>();
+				const Entity primary = m_selection.Primary();
+				for (const Entity e: m_selection.All())
+				{
+					const auto* tc = world.TryGet<TransformComponent>(e);
+					if (tc == nullptr)
+					{
+						continue;
+					}
+					// Mesh bounds when present, else a small marker box so empty
+					// entities are still visibly selected.
+					glm::vec3 mn{-0.125f};
+					glm::vec3 mx{0.125f};
+					if (const auto* mc = world.TryGet<MeshComponent>(e); mc != nullptr && mc->mesh != nullptr && mc->mesh->GetAABBMin() != mc->mesh->GetAABBMax())
+					{
+						mn = mc->mesh->GetAABBMin();
+						mx = mc->mesh->GetAABBMax();
+					}
+					const float alpha = (e == primary) ? 1.0f : 0.45f;
+					const glm::vec4 gold{1.0f * brightness, 0.72f * brightness, 0.2f * brightness, alpha};
+					AppendObbEdges(verts, tc->localToWorld, mn, mx, gold);
+				}
+			}
+		}
+
 		for (auto& panel: m_panels)
 		{
 			panel->OnUpdate(context);
@@ -344,6 +409,9 @@ namespace aether::app
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
+
+		// Once per ImGui frame, before any panel might call Manipulate.
+		ImGuizmo::BeginFrame();
 
 		if (!m_errorToasts.empty())
 		{
