@@ -40,6 +40,48 @@ target_compile_definitions(App PRIVATE
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
 )
 
+# ── Managed (C#) assemblies ────────────────────────────────────────────────
+# Build the .NET scripting assemblies with `dotnet build` and deploy them next to
+# the app's data/ so DotNetHost can load them at startup. ArtifactsPath keeps all
+# obj/bin output inside the CMake build tree (never in the source resources/).
+# Gated on AETHER_HAS_DOTNET so a machine without the .NET SDK still builds.
+if(AETHER_HAS_DOTNET)
+    set(_aether_managed_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Managed/AetherCore.Managed.csproj")
+    set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
+    set(_aether_managed_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Managed/$<IF:$<CONFIG:Debug>,debug,release>")
+
+    add_custom_target(ManagedAssemblies ALL
+        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_managed_proj}"
+                -c ${_aether_managed_cfg} --nologo -v:m
+                -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                "${_aether_managed_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        COMMENT "Building C# managed assemblies (AetherCore.Managed)"
+        VERBATIM USES_TERMINAL)
+
+    add_dependencies(App ManagedAssemblies)
+    target_link_libraries(App PRIVATE DotNet::NetHost)
+
+    # Mirror the managed assemblies next to the executable for standalone runs.
+    add_custom_command(TARGET App POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/scripts/managed"
+        COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                "${CMAKE_BINARY_DIR}/data/scripts/managed" "$<TARGET_FILE_DIR:App>/data/scripts/managed"
+        COMMENT "Copying managed assemblies to app output"
+        VERBATIM)
+
+    # nethost.dll must sit next to App.exe (loader search path) so get_hostfxr_path
+    # resolves at startup.
+    if(WIN32 AND AETHER_NETHOST_DLL)
+        add_custom_command(TARGET App POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:App>"
+            COMMENT "Copying nethost.dll to app output"
+            VERBATIM)
+    endif()
+endif()
+
 # ── Asset pipeline ─────────────────────────────────────────────────────────
 # Pack every file under resources/ into a single binary file that the runtime
 # PakBackend mounts as "assets://".  The pak is regenerated on every build so

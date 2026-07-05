@@ -1,0 +1,5 @@
+# Managed build output. Normal builds route obj/bin into the CMake build tree via
+# -p:ArtifactsPath, but guard against stray in-tree output from ad-hoc dotnet runs.
+bin/
+obj/
+artifacts/

@@ -32,7 +32,15 @@ target_link_libraries(Engine
         freetype
 )
 
+# ── .NET (CoreCLR) hosting ────────────────────────────────────────────────────
+# DotNetHost links nethost statically to bootstrap the C# runtime. When the .NET
+# SDK is absent AETHER_HAS_DOTNET is 0 and DotNetHost compiles as a stub.
+if(AETHER_HAS_DOTNET)
+    target_link_libraries(Engine PRIVATE DotNet::NetHost)
+endif()
+
 target_compile_definitions(Engine PUBLIC
+    AETHER_HAS_DOTNET=$<BOOL:${AETHER_HAS_DOTNET}>
     VK_NO_PROTOTYPES
     $<$<PLATFORM_ID:Windows>:VK_USE_PLATFORM_WIN32_KHR>
     GLM_FORCE_DEPTH_ZERO_TO_ONE   # Vulkan depth range is [0, 1], not [-1, 1]

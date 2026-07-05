@@ -27,6 +27,7 @@ option(AETHERCORE_DEAD_STRIP_REPORT
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(Dependencies)
+include(DotNet)
 include(TargetDefaults)
 include(SlangShaders)
 include(DeadStripReport)
