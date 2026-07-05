@@ -164,7 +164,7 @@ namespace aether::app
 		}
 	}
 
-	void ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
+	bool ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		// W/E/R switch ops while the mouse is over the viewport - but not while
 		// the right button is down, which is the free-camera's WASD-fly chord.
@@ -189,17 +189,17 @@ namespace aether::app
 		const Entity primary = selection.Primary();
 		if (!primary.IsValid() || !world.GetRegistry().valid(World::ToEntt(primary)))
 		{
-			return;
+			return false;
 		}
 		auto* tc = world.TryGet<TransformComponent>(primary);
 		if (tc == nullptr)
 		{
-			return;
+			return false;
 		}
 		const Camera* camera = context.Get<CameraManager>().TryGetMainCamera();
 		if (camera == nullptr)
 		{
-			return;
+			return false;
 		}
 
 		ImGuizmo::SetOrthographic(false);
@@ -231,6 +231,7 @@ namespace aether::app
 		{
 			ApplyWorldTransform(context, world, primary, model);
 		}
+		return true;
 	}
 
 	void ViewportPanel::HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
@@ -434,32 +435,39 @@ namespace aether::app
 		const ImVec2 imageCursorStart = ImGui::GetCursorPos();
 		ImGui::SetCursorPos(ImVec2(imageCursorStart.x + (available.x - imageSize.x) * 0.5f, imageCursorStart.y + (available.y - imageSize.y) * 0.5f));
 
-		// The image and the gizmo are submitted BEFORE the InvisibleButton on
-		// purpose: ImGuizmo's CanActivate() refuses to start a drag while any
-		// ImGui item is hovered or active, and the button - hovered whenever
-		// the mouse is over the viewport - permanently vetoed it (handles
-		// highlighted, drags never began). At this point in the frame nothing
-		// has claimed the mouse yet, so the gizmo can grab it; once dragging,
-		// it keeps the drag no matter what the button reports. The pick
-		// handler still runs after the button because it reads the button's
-		// hover/click state, and it stays guarded by this frame's gizmo state.
+		// Image + gizmo submit before any input item so Manipulate sees this
+		// frame's mouse first.
 		const ImVec2 imageMin = ImGui::GetCursorScreenPos();
 		const ImVec2 imageMax = ImVec2(imageMin.x + imageSize.x, imageMin.y + imageSize.y);
 		ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(m_sceneViewportTextureId)), imageMin, imageMax, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f));
-		DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		const bool gizmoDrawn = DrawTransformGizmo(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 
-		ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
-		// A hot gizmo makes the viewport mouse UI-owned: reporting the viewport
-		// as inactive flips the engine's per-frame capture on (Tick sets
-		// captured = WantsInputCapture && !viewportActive BEFORE cameras
-		// update), so orbit/free cameras skip mouse processing for the whole
-		// drag instead of rotating the view out from under it. Setting
-		// Input::SetMouseCaptured here would be futile - Tick overwrites it
-		// next frame before any camera reads it.
-		const bool gizmoHot = ImGuizmo::IsOver() || ImGuizmo::IsUsingAny();
-		context.Get<Input>().SetMouseViewportInputActive((ImGui::IsItemHovered() || ImGui::IsItemActive()) && !gizmoHot);
+		// ImGuizmo's CanActivate() consults ImGui::IsAnyItemHovered(), which
+		// includes the PREVIOUS frame's hovered item - so merely submitting the
+		// gizmo before the viewport's InvisibleButton is not enough: the button
+		// hovered last frame still vetoes this frame's grab, forever (handles
+		// highlight, drags never start). While a handle is hot the button is
+		// therefore NOT SUBMITTED AT ALL; the hovered-id drains for a frame and
+		// the grab activates. RMB is carved out (the gizmo only activates from
+		// an LMB press) so flying across a handle never stalls the camera.
+		// IsOver/IsUsing are only trusted on frames the gizmo actually drew -
+		// they go stale when the selection clears.
+		// Reporting the viewport as input-inactive while hot also flips the
+		// engine's per-frame mouse capture on (Tick recomputes captured =
+		// WantsInputCapture && !viewportActive BEFORE cameras update), so no
+		// camera mode fights the drag.
+		const bool gizmoHot = gizmoDrawn && (ImGuizmo::IsUsingAny() || (ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right)));
 		context.Get<Input>().SetMouseViewportTransform(glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
-		HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		if (gizmoHot)
+		{
+			context.Get<Input>().SetMouseViewportInputActive(false);
+		}
+		else
+		{
+			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive());
+			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
+		}
 		if (m_viewportShowStats || m_viewportShowMouse)
 		{
 			ImDrawList* drawList = ImGui::GetWindowDrawList();

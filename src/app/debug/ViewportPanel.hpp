@@ -30,7 +30,10 @@ namespace aether::app
 		// still ImGui's last item (hover/click state reads from it).
 		void HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// ImGuizmo manipulator on the primary selection, drawn over the image.
-		void DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// Returns true when a gizmo was actually submitted this frame (valid
+		// selection + camera), so the caller can trust ImGuizmo's IsOver/IsUsing
+		// state - those are stale leftovers on frames where Manipulate never ran.
+		bool DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// Play/Stop toolbar buttons (snapshot on Play, restore on Stop).
 		void DrawPlayControls(LayerContext& context);
 
