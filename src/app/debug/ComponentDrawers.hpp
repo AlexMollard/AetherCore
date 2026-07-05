@@ -30,10 +30,11 @@ namespace aether::app
 	KindBadge EntityKindBadge(const World& world, Entity entity);
 
 	// Writes a full world transform to the entity with the editor's shared edit
-	// semantics: children follow verbatim (same rule as das set_transform) and
-	// physics entities get a true teleport (Jolt body SetPosition/SetRotation +
-	// prev==curr interpolation state). The inspector transform drawer and the
-	// viewport gizmo both funnel through here; the future undo spec hooks this.
+	// semantics: the subtree follows with the same world-space delta (children
+	// keep their relative offsets - ecs::SetWorldTransform), and every moved
+	// body gets a true teleport (Jolt SetPosition/SetRotation + prev==curr
+	// interpolation state). The inspector transform drawer and the viewport
+	// gizmo both funnel through here; the future undo spec hooks this.
 	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld);
 
 	// ── Inspector component sections ───────────────────────────────────────────
@@ -44,6 +45,11 @@ namespace aether::app
 	void DrawSkinnedMesh(World& world, Entity entity);
 	void DrawMaterial(LayerContext& context, World& world, Entity entity);
 	void DrawEffectParams(LayerContext& context, World& world, Entity entity);
+	// One section per present behavior component (Bob/Spin/Orbit/MaterialPulse),
+	// each live-editable and removable.
+	void DrawBehaviors(World& world, Entity entity);
+	// Scene-transient marker (excluded from captures), removable.
+	void DrawSceneTransient(World& world, Entity entity);
 	void DrawPhysics(World& world, Entity entity);
 	void DrawMeshPipeline(World& world, Entity entity);
 	void DrawHierarchy(World& world, Entity entity, SceneSelection& selection);

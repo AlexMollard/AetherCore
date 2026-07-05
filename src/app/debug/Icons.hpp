@@ -43,3 +43,9 @@
 #define ICON_FA_ROTATE "\xef\x8b\xb1"                  // U+F2F1 reset/refresh/rotate op
 #define ICON_FA_EXPAND "\xef\x81\xa5"                  // U+F065 scale op
 #define ICON_FA_DIAGRAM_PROJECT "\xef\x95\x82"         // U+F542 render graph
+
+// Behavior components + editor markers
+#define ICON_FA_WAVE_SQUARE "\xef\xa0\xbe"             // U+F83E bob
+#define ICON_FA_CIRCLE_NOTCH "\xef\x87\x8e"            // U+F1CE orbit
+#define ICON_FA_HEART_PULSE "\xef\x88\x9e"             // U+F21E material pulse
+#define ICON_FA_GHOST "\xef\x9b\xa2"                   // U+F6E2 scene transient

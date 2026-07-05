@@ -17,6 +17,7 @@
 #include "material/MaterialSystem.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
@@ -350,12 +351,54 @@ namespace aether::app
 		ImGui::TextDisabled("GPU slot %u", mc->gpuSlot);
 	}
 
+	namespace
+	{
+		// Right-aligned remove-x on the section header row (the hierarchy
+		// drawer's inert-link pattern, shared by the removable sections).
+		bool HeaderRemoveButton(const char* id)
+		{
+			ImGui::SameLine();
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
+			return ImGui::SmallButton(id);
+		}
+	} // namespace
+
 	void DrawEffectParams(LayerContext& context, World& world, Entity entity)
 	{
 		auto* ep = world.TryGet<EffectParamsComponent>(entity);
-		if (!ep || !ImGui::CollapsingHeader(ICON_FA_BOLT "  Effect Params", ImGuiTreeNodeFlags_DefaultOpen))
+		if (!ep)
 		{
 			return;
+		}
+		const bool open = ImGui::CollapsingHeader(ICON_FA_BOLT "  Effect Params", ImGuiTreeNodeFlags_DefaultOpen);
+		if (HeaderRemoveButton(ICON_FA_XMARK "##removeEffect"))
+		{
+			// The param slot frees through the on_destroy hook. The material
+			// pipeline the effect was overriding comes back via a plain
+			// re-assign (AssignMaterial's effect guard no longer trips once
+			// EffectParamsComponent is gone).
+			world.Remove<EffectParamsComponent>(entity);
+			world.Remove<EffectRefComponent>(entity);
+			auto* assets = context.TryGet<AssetManager>();
+			const auto* mc = world.TryGet<MaterialComponent>(entity);
+			MaterialAsset asset{};
+			if (assets && mc && assets->GetMaterialRegistry().TryDescribe(mc->handle, asset))
+			{
+				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
+			}
+			else
+			{
+				world.Remove<PipelineComponent>(entity); // effect-only pipeline: nothing to restore
+			}
+			return;
+		}
+		if (!open)
+		{
+			return;
+		}
+		if (const auto* er = world.TryGet<EffectRefComponent>(entity))
+		{
+			ImGui::TextDisabled("Effect '%s'", er->name.c_str());
 		}
 
 		bool changed = false;
@@ -394,6 +437,99 @@ namespace aether::app
 		{
 			ImGui::Text("Position  %.2f  %.2f  %.2f", ps->currPosition.x, ps->currPosition.y, ps->currPosition.z);
 			ImGui::Text("Scale     %.2f  %.2f  %.2f", ps->scale.x, ps->scale.y, ps->scale.z);
+		}
+	}
+
+	void DrawBehaviors(World& world, Entity entity)
+	{
+		if (auto* bob = world.TryGet<BobComponent>(entity))
+		{
+			const bool open = ImGui::CollapsingHeader(ICON_FA_WAVE_SQUARE "  Bob");
+			if (HeaderRemoveButton(ICON_FA_XMARK "##removeBob"))
+			{
+				world.Remove<BobComponent>(entity);
+			}
+			else if (open)
+			{
+				ImGui::DragFloat("Amplitude##bob", &bob->amplitude, 0.02f, 0.0f, 50.0f);
+				ImGui::DragFloat("Frequency##bob", &bob->frequency, 0.01f, 0.0f, 20.0f);
+				ImGui::DragFloat("Phase##bob", &bob->phase, 0.02f);
+				if (bob->baseCaptured)
+				{
+					ImGui::TextDisabled("Base Y %.2f", bob->baseY);
+					ImGui::SameLine();
+					if (ImGui::SmallButton("Re-base"))
+					{
+						// Next behavior tick re-captures from the current
+						// transform (same as a fresh scene apply).
+						bob->baseCaptured = false;
+					}
+				}
+			}
+		}
+
+		if (auto* spin = world.TryGet<SpinComponent>(entity))
+		{
+			const bool open = ImGui::CollapsingHeader(ICON_FA_ROTATE "  Spin");
+			if (HeaderRemoveButton(ICON_FA_XMARK "##removeSpin"))
+			{
+				world.Remove<SpinComponent>(entity);
+			}
+			else if (open)
+			{
+				DrawVec3Row("Deg/sec", spin->eulerDegPerSec, 0.0f, 0.5f);
+			}
+		}
+
+		if (auto* orbit = world.TryGet<OrbitComponent>(entity))
+		{
+			const bool open = ImGui::CollapsingHeader(ICON_FA_CIRCLE_NOTCH "  Orbit");
+			if (HeaderRemoveButton(ICON_FA_XMARK "##removeOrbit"))
+			{
+				world.Remove<OrbitComponent>(entity);
+			}
+			else if (open)
+			{
+				DrawVec3Row("Center", orbit->center, 0.0f, 0.05f);
+				ImGui::DragFloat("Radius##orbit", &orbit->radius, 0.05f, 0.0f, 500.0f);
+				ImGui::DragFloat("Speed deg/s##orbit", &orbit->angularSpeedDeg, 0.2f, -720.0f, 720.0f);
+				ImGui::DragFloat("Angle##orbit", &orbit->angleDeg, 0.5f);
+				ImGui::DragFloat("Yaw offset##orbit", &orbit->yawOffsetDeg, 0.5f);
+				ImGui::DragFloat("Height##orbit", &orbit->height, 0.05f);
+			}
+		}
+
+		if (auto* pulse = world.TryGet<MaterialPulseComponent>(entity))
+		{
+			const bool open = ImGui::CollapsingHeader(ICON_FA_HEART_PULSE "  Material Pulse");
+			if (HeaderRemoveButton(ICON_FA_XMARK "##removePulse"))
+			{
+				world.Remove<MaterialPulseComponent>(entity);
+			}
+			else if (open)
+			{
+				ImGui::ColorEdit3("Emissive A##pulse", &pulse->emissiveA.x);
+				ImGui::ColorEdit3("Emissive B##pulse", &pulse->emissiveB.x);
+				ImGui::DragFloat("Frequency##pulse", &pulse->frequency, 0.02f, 0.0f, 20.0f);
+			}
+		}
+	}
+
+	void DrawSceneTransient(World& world, Entity entity)
+	{
+		if (!world.Has<SceneTransientComponent>(entity))
+		{
+			return;
+		}
+		const bool open = ImGui::CollapsingHeader(ICON_FA_GHOST "  Scene Transient");
+		if (HeaderRemoveButton(ICON_FA_XMARK "##removeTransient"))
+		{
+			world.Remove<SceneTransientComponent>(entity);
+			return;
+		}
+		if (open)
+		{
+			ImGui::TextWrapped("Excluded from scene capture (saves and Play snapshots), whole subtree included. Script-owned runtime actors carry this so loads don't duplicate them.");
 		}
 	}
 
