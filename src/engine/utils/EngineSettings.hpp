@@ -28,7 +28,7 @@ namespace aether
 			// Scene file (resources/scenes/<name>.scene.toml) loaded at boot after
 			// the scene script's on_attach; auto-generated from the script content
 			// on first run. Empty disables boot-from-scene.
-			std::string startupScene = "sandbox";
+			std::string startupScene = "main";
 			// false = boot into the editor's frozen Editing mode (press Play).
 			bool autoplay = false;
 		} app;

@@ -11,11 +11,11 @@ require systems/character_controller;
 require systems/third_person_camera;
 
 // ── Player entity script ─────────────────────────────────────────────────────
-// The player is ordinary SCENE CONTENT now: a bare entity carrying this
-// script (see sandbox.das first-boot block). On the first play tick the
-// attach builds the model/animations/camera; Stop restores the scene record
-// and the next play re-attaches. Movement actions (move_*/sprint_key) are
-// registered globally by sandbox.das.
+// The player rig is AUTHORED SCENE CONTENT: the 'Player' entity carries this
+// script and owns two 'Human mesh' children (the model's body + joints
+// primitives), all saved in the .scene.toml. Attach only tops up what the
+// scene file cannot store: the external walk clip, the orbit camera, and
+// input bindings.
 //
 // Single-instance script: the globals below assume ONE player entity.
 
@@ -26,40 +26,25 @@ var g_walk_clip : int  = -1;
 [export]
 def on_entity_attach(world : World?; self : uint)
 {
-    // Build only when needed. The guard is a TAG on the entity itself
-    // (tags serialize, so a scene saved with a built player stays
-    // consistent): load_model on an already-built player only DETACHES the
-    // old parts - it does not destroy them - so a double build leaves an
-    // orphaned static copy of the model behind.
-    let built_tag = create_tag("player_built");
-    if (!has_tag(world, self, built_tag))
+    set_playback_speed(world, self, 1.0);
+
+    // The walk clip lives in a separate .anim file, so the scene can't
+    // author it - append it into the model's SHARED animation database.
+    // Only once per session (clip 0 = model idle), or every play/stop
+    // cycle would grow the clip list.
+    if (get_animation_count(world, self) < 2)
     {
-        print("player: attach - building model\n");
-        load_model(world, self, "assets://models/Human/Human.mesh");
-        set_playback_speed(world, self, 1.0);
-        // The walk clip bakes into the model's SHARED animation database -
-        // only append it the first time this session, or every play/stop
-        // cycle would grow the clip list.
-        if (get_animation_count(world, self) < 2)
+        let walk = add_animation(world, self, "assets://animations/Walking_mixamo.com.anim", true);
+        if (walk >= 0)
         {
-            let walk = add_animation(world, self, "assets://animations/Walking_mixamo.com.anim", true);
-            if (walk >= 0)
-            {
-                compile_animations(world, self);
-            }
+            compile_animations(world, self);
         }
-        add_tag(world, self, built_tag);
-    }
-    else
-    {
-        print("player: attach - already built, skipping model load\n");
     }
 
     // Clip layout after the bake: 0 = model idle, last = appended walk.
     let clip_count = get_animation_count(world, self);
     g_idle_clip = 0;
     g_walk_clip = clip_count > 1 ? clip_count - 1 : -1;
-    print("player: clips ready (count includes walk when > 1)\n");
 
     // One orbit camera per session; every attach reclaims it as main (the
     // editor's viewport hands the view back to it on Play).

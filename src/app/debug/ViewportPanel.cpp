@@ -13,6 +13,7 @@
 #include "AetherCore.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
+#include "utils/Logger.hpp" // TEMP(camtest)
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
@@ -51,6 +52,13 @@ namespace aether::app
 
 		const bool editing = !playState->IsPlaying();
 		const CameraHandle main = cameras->GetMainCamera();
+		// TEMP(camtest): drive Editing->Play headlessly and log the main cam.
+		{
+			static int s_ctf = 0;
+			++s_ctf;
+			if (editing && s_ctf == 150) { playState->SetMode(PlayState::Mode::Playing); }
+			if (!editing && s_ctf % 90 == 0) { AE_INFO(aether::LogCategory::App, "[camtest] main={} gameCamId={}", cameras->GetMainCamera().id, m_gameCamId); }
+		}
 
 		// F5 script reload re-runs set_main_camera while Editing: the game took
 		// the view back. Drop our claim so the block below re-seeds and reswaps.
@@ -92,7 +100,14 @@ namespace aether::app
 		}
 		else if (!editing && m_editorCamActive)
 		{
-			if (m_gameCamId != 0 && cameras->TryGet(CameraHandle{m_gameCamId}) != nullptr)
+			// A script OnAttach runs in UpdateSystems (before this layer), so if it
+			// claimed the view this first Play frame, main is already its camera -
+			// keep it. Otherwise restore the remembered game camera.
+			if (main.IsValid() && main.id != m_editorCamId)
+			{
+				m_gameCamId = main.id;
+			}
+			else if (m_gameCamId != 0 && cameras->TryGet(CameraHandle{m_gameCamId}) != nullptr)
 			{
 				cameras->SetMainCamera(CameraHandle{m_gameCamId});
 			}

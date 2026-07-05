@@ -614,28 +614,55 @@ namespace aether::app
 					ImGui::TextDisabled("No scenes in %s", scene::ScenesDirectory().c_str());
 				}
 				auto* settings = context.TryGet<aether::EngineSettings>();
+
+				// Fixed name-column width keeps the row layout (and thus the popup
+				// width) stable. Deriving the button X from GetContentRegionMax()
+				// inside an auto-sizing popup feedback-loops the window wider each frame.
+				float nameColWidth = ImGui::CalcTextSize("startup").x;
+				for (const std::string& name: m_sceneList)
+				{
+					const float w = ImGui::CalcTextSize(name.c_str()).x;
+					if (w > nameColWidth)
+					{
+						nameColWidth = w;
+					}
+				}
+				nameColWidth += ImGui::GetStyle().ItemSpacing.x + 8.0f;
+
 				for (const std::string& name: m_sceneList)
 				{
 					ImGui::PushID(name.c_str());
 					const bool isStartup = settings != nullptr && settings->app.startupScene == name;
-					if (ImGui::MenuItem(name.c_str(), isStartup ? "startup" : nullptr))
+					// A full-width MenuItem swallowed clicks meant for the trailing
+					// startup button. A fixed-width Selectable with AllowOverlap keeps
+					// the button clickable and the popup a stable width; Selectable does
+					// not auto-close, so do it here.
+					if (ImGui::Selectable(name.c_str(), false, ImGuiSelectableFlags_AllowOverlap, ImVec2(nameColWidth, 0.0f)))
 					{
 						if (scene::LoadSceneFile(name, world, scene::MakeApplySceneDeps(context.services)))
 						{
 							selection.Clear();
 						}
+						ImGui::CloseCurrentPopup();
 					}
-					if (settings != nullptr && !isStartup)
+					if (settings != nullptr)
 					{
 						ImGui::SameLine();
-						if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
+						if (isStartup)
 						{
-							settings->app.startupScene = name;
-							aether::EngineSettingsIO::Save(*settings, aether::EngineSettingsIO::ResolvePath());
+							ImGui::TextDisabled("startup");
 						}
-						if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+						else
 						{
-							ImGui::SetTooltip("Set as startup scene (writes engine.toml)");
+							if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
+							{
+								settings->app.startupScene = name;
+								aether::EngineSettingsIO::Save(*settings, aether::EngineSettingsIO::ResolvePath());
+							}
+							if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+							{
+								ImGui::SetTooltip("Set as startup scene (writes engine.toml)");
+							}
 						}
 					}
 					ImGui::PopID();

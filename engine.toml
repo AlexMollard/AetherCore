@@ -12,3 +12,5 @@ asyncCompute = true
 [app]
 # 0 = auto policy (swapchain-paced when VSync on, uncapped when off)
 targetFps = 0
+# Scene file loaded at boot (resources/scenes/<name>.scene.toml); empty disables
+startupScene = "main"

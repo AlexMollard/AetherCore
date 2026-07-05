@@ -70,5 +70,12 @@ public sealed class Player : EntityScript
         bool isSprinting = InputActions.IsDown("sprint_key") && inputZ > 0.0f;
         _controller.Update(Self, dt, _idleClip, _walkClip, inputX, inputZ, s_camera, isSprinting, runClip: -1);
         ThirdPersonCamera.Update(s_camera, Self);
+
+        if (++_dbgFrame % 60 == 0)
+        {
+            Log.Info($"[playerdbg] f={_dbgFrame} pos={Self.Position} inZ={inputZ} wDown={Input.IsKeyDown(Key.W)} fwdAction={InputActions.IsDown("move_forward")}");
+        }
     }
+
+    private int _dbgFrame;
 }
