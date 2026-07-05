@@ -328,4 +328,69 @@ internal static unsafe partial class Native
 
     [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void aether_set_material_texture(uint entityId, string path);
+
+    // ── Animation ─────────────────────────────────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_anim_add(uint id, string animPath, int lockRoot);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_anim_load_external(uint id, string animPath);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_compile(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_clear_pending(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_clip(uint id, int clipIndex);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_anim_get_current(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_playback_speed(uint id, float speed);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_anim_get_playback_speed(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_time(uint id, float t);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_anim_get_time(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_anim_get_count(uint id);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_anim_get_name(uint id, int index, byte* buf, int bufLen);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial float aether_anim_get_duration(uint id);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_anim_find(uint id, string name);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_anim_get_entities_with_animator(uint* buf, int cap);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_blend(uint id, int secondaryClipIndex, float transitionSpeed);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_anim_set_root_motion_enabled(uint id, int enabled);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_anim_get_root_motion_enabled(uint id);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial Vector3 aether_anim_get_root_motion_delta(uint id);
 }
