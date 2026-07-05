@@ -482,3 +482,52 @@ TEST_CASE("Legacy [[lights]] records migrate to light entities on apply") {
     }
     CHECK(spots == 1);
 }
+
+TEST_CASE("Prefabs capture one subtree and instantiate re-rooted") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    // Bystander that must NOT be captured.
+    Entity outside = world.Create();
+    world.Emplace<NameComponent>(outside, NameComponent{.name = "Outside"});
+    world.Emplace<TransformComponent>(outside, TransformComponent{});
+
+    Entity root = world.Create();
+    world.Emplace<NameComponent>(root, NameComponent{.name = "Rig"});
+    world.Emplace<TransformComponent>(root, TransformComponent{.localToWorld = ComposeTransform({2, 0, 0}, {0, 0, 0}, {1, 1, 1})});
+    // A transient marker must NOT exclude prefab capture (the player is the
+    // flagship prefab case) - prefabs take exactly what you point them at.
+    world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(root));
+
+    Entity arm = world.Create();
+    world.Emplace<NameComponent>(arm, NameComponent{.name = "Arm"});
+    world.Emplace<TransformComponent>(arm, TransformComponent{.localToWorld = ComposeTransform({3, 1, 0}, {0, 0, 0}, {1, 1, 1})});
+    world.Emplace<SpinComponent>(arm, SpinComponent{.eulerDegPerSec = {0, 90, 0}});
+    REQUIRE(ecs::SetParent(world, arm, root));
+
+    const auto parsed = ParseToml(WriteToml(CapturePrefab(world, root, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->entities.size() == 2); // root + arm, bystander excluded
+    CHECK(parsed->entities[0].name == "Rig");
+    CHECK(parsed->entities[0].parentIndex == -1);
+    CHECK(IndexOf(*parsed, "Outside") == -1);
+    const EntityRecord& armRec = RecordOf(*parsed, "Arm");
+    CHECK(armRec.parentIndex == 0);
+    REQUIRE(armRec.spin.has_value());
+
+    // Instantiate re-rooted at x=12: the arm keeps its (+1, +1) offset.
+    World fresh = MakeWorld();
+    const Entity newRoot = InstantiatePrefab(*parsed, fresh, ApplySceneDeps{}, ComposeTransform({12, 0, 0}, {0, 0, 0}, {1, 1, 1}));
+    REQUIRE(newRoot.IsValid());
+    CHECK(fresh.Get<TransformComponent>(newRoot).localToWorld[3].x == doctest::Approx(12.0f));
+    const auto* h = fresh.TryGet<HierarchyComponent>(newRoot);
+    REQUIRE(h != nullptr);
+    REQUIRE(h->children.size() == 1);
+    const glm::mat4& armM = fresh.Get<TransformComponent>(h->children[0]).localToWorld;
+    CHECK(armM[3].x == doctest::Approx(13.0f));
+    CHECK(armM[3].y == doctest::Approx(1.0f));
+    CHECK(fresh.TryGet<SpinComponent>(h->children[0]) != nullptr);
+}

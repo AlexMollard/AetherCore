@@ -49,6 +49,14 @@ namespace aether::app
 		char m_sceneNameBuf[48] = "scene";
 		std::vector<std::string> m_sceneList;
 		bool m_sceneListDirty = true;
+		// Create-menu asset lists (refreshed when the create popup opens).
+		std::vector<std::string> m_modelList;
+		std::vector<std::string> m_prefabList;
+		// Save-as-prefab popup (opened from the row context menu; the popup is
+		// begun at window level after the tree walk).
+		Entity m_prefabSaveTarget{};
+		char m_prefabNameBuf[48] = "";
+		bool m_openPrefabSave = false;
 		// Kind filter chips (OR-combined; none active == show everything).
 		bool m_filterMesh = false;
 		bool m_filterSkinned = false;

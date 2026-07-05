@@ -21,6 +21,7 @@
 #include "rendering/Renderer.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
@@ -138,6 +139,126 @@ namespace aether::app::scene
 
 	// ── Capture ─────────────────────────────────────────────────────────────────
 
+	namespace
+	{
+		// One EntityRecord per entity in `order` (parent refs resolve through
+		// `indexOf`; parents outside the map record -1). Shared by full-scene
+		// capture and prefab (subtree) capture.
+		void AppendEntityRecords(SceneDescription& scene, World& world, const std::vector<Entity>& order, const std::unordered_map<std::uint32_t, int>& indexOf, const MaterialRegistry& materials, const TextureRegistry& textures)
+		{
+			scene.entities.reserve(scene.entities.size() + order.size());
+			for (const Entity e: order)
+			{
+				EntityRecord rec;
+				if (const auto* nc = world.TryGet<NameComponent>(e))
+				{
+					rec.name = nc->name;
+				}
+				ForEachTag(
+				        [&](const std::string& tagName, std::uint32_t tagId)
+				        {
+					        if (TagHas(&world, e.id, tagId))
+					        {
+						        rec.tags.push_back(tagName);
+					        }
+				        });
+				if (const auto* tc = world.TryGet<TransformComponent>(e))
+				{
+					rec.hasTransform = true;
+					DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
+				}
+				if (const auto* h = world.TryGet<HierarchyComponent>(e); h != nullptr && h->parent.IsValid())
+				{
+					const auto it = indexOf.find(h->parent.id);
+					rec.parentIndex = it != indexOf.end() ? it->second : -1;
+				}
+				if (const auto* ms = world.TryGet<MeshSourceComponent>(e))
+				{
+					rec.mesh = *ms;
+				}
+				if (const auto* mc = world.TryGet<MaterialComponent>(e))
+				{
+					MaterialRecord mat;
+					bool haveAsset = false;
+					if (const auto* inst = world.TryGet<MaterialInstanceComponent>(e))
+					{
+						mat.asset = inst->asset;
+						haveAsset = true;
+					}
+					else
+					{
+						haveAsset = materials.TryDescribe(mc->handle, mat.asset);
+					}
+					if (haveAsset)
+					{
+						const auto pathOf = [&textures](TextureHandle h, std::string& out)
+						{
+							if (h.IsValid() && h.index != TextureHandle::kBrokenIndex)
+							{
+								textures.TryGetPath(h, out);
+							}
+						};
+						pathOf(mat.asset.albedoTex, mat.albedoPath);
+						pathOf(mat.asset.normalTex, mat.normalPath);
+						pathOf(mat.asset.metallicRoughnessTex, mat.metallicRoughnessPath);
+						pathOf(mat.asset.occlusionTex, mat.occlusionPath);
+						pathOf(mat.asset.emissiveTex, mat.emissivePath);
+						rec.material = std::move(mat);
+					}
+				}
+				if (const auto* smc = world.TryGet<SkinnedMeshComponent>(e))
+				{
+					rec.skinned = SkinnedRecord{.clipIndex = smc->clipIndex, .animTime = smc->animTime, .playbackSpeed = smc->playbackSpeed, .looping = smc->looping};
+				}
+				if (const auto* shape = world.TryGet<PhysicsDebugShapeComponent>(e))
+				{
+					const auto* rb = world.TryGet<RigidBodyComponent>(e);
+					rec.physics = PhysicsRecord{.shapeType = shape->shapeType, .halfExtents = shape->halfExtents, .radius = shape->radius, .halfHeight = shape->halfHeight, .motionType = rb ? rb->motionType : PhysicsMotionType::Static};
+				}
+				if (const auto* er = world.TryGet<EffectRefComponent>(e))
+				{
+					EffectRecord fx;
+					fx.name = er->name;
+					if (const auto* ep = world.TryGet<EffectParamsComponent>(e))
+					{
+						fx.params = ep->params;
+					}
+					rec.effect = std::move(fx);
+				}
+				if (const auto* bob = world.TryGet<BobComponent>(e))
+				{
+					BobComponent clean = *bob;
+					clean.baseCaptured = false; // re-base from the restored transform
+					clean.time = 0.0f;
+					rec.bob = clean;
+				}
+				if (const auto* spin = world.TryGet<SpinComponent>(e))
+				{
+					rec.spin = *spin;
+				}
+				if (const auto* orbit = world.TryGet<OrbitComponent>(e))
+				{
+					rec.orbit = *orbit;
+				}
+				if (const auto* pulse = world.TryGet<MaterialPulseComponent>(e))
+				{
+					MaterialPulseComponent clean = *pulse;
+					clean.time = 0.0f;
+					rec.materialPulse = clean;
+				}
+				if (const auto* pl = world.TryGet<PointLightComponent>(e))
+				{
+					rec.pointLight = *pl;
+				}
+				if (const auto* sl = world.TryGet<SpotLightComponent>(e))
+				{
+					rec.spotLight = *sl;
+				}
+				scene.entities.push_back(std::move(rec));
+			}
+		}
+	} // namespace
+
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)
 	{
 		SceneDescription scene;
@@ -178,117 +299,38 @@ namespace aether::app::scene
 			order.push_back(e);
 		}
 
-		scene.entities.reserve(order.size());
-		for (const Entity e: order)
-		{
-			EntityRecord rec;
-			if (const auto* nc = world.TryGet<NameComponent>(e))
-			{
-				rec.name = nc->name;
-			}
-			ForEachTag(
-			        [&](const std::string& tagName, std::uint32_t tagId)
-			        {
-				        if (TagHas(&world, e.id, tagId))
-				        {
-					        rec.tags.push_back(tagName);
-				        }
-			        });
-			if (const auto* tc = world.TryGet<TransformComponent>(e))
-			{
-				rec.hasTransform = true;
-				DecomposeTRS(tc->localToWorld, rec.position, rec.eulerDeg, rec.scale);
-			}
-			if (const auto* h = world.TryGet<HierarchyComponent>(e); h != nullptr && h->parent.IsValid())
-			{
-				const auto it = indexOf.find(h->parent.id);
-				rec.parentIndex = it != indexOf.end() ? it->second : -1;
-			}
-			if (const auto* ms = world.TryGet<MeshSourceComponent>(e))
-			{
-				rec.mesh = *ms;
-			}
-			if (const auto* mc = world.TryGet<MaterialComponent>(e))
-			{
-				MaterialRecord mat;
-				bool haveAsset = false;
-				if (const auto* inst = world.TryGet<MaterialInstanceComponent>(e))
-				{
-					mat.asset = inst->asset;
-					haveAsset = true;
-				}
-				else
-				{
-					haveAsset = materials.TryDescribe(mc->handle, mat.asset);
-				}
-				if (haveAsset)
-				{
-					const auto pathOf = [&textures](TextureHandle h, std::string& out)
-					{
-						if (h.IsValid() && h.index != TextureHandle::kBrokenIndex)
-						{
-							textures.TryGetPath(h, out);
-						}
-					};
-					pathOf(mat.asset.albedoTex, mat.albedoPath);
-					pathOf(mat.asset.normalTex, mat.normalPath);
-					pathOf(mat.asset.metallicRoughnessTex, mat.metallicRoughnessPath);
-					pathOf(mat.asset.occlusionTex, mat.occlusionPath);
-					pathOf(mat.asset.emissiveTex, mat.emissivePath);
-					rec.material = std::move(mat);
-				}
-			}
-			if (const auto* smc = world.TryGet<SkinnedMeshComponent>(e))
-			{
-				rec.skinned = SkinnedRecord{.clipIndex = smc->clipIndex, .animTime = smc->animTime, .playbackSpeed = smc->playbackSpeed, .looping = smc->looping};
-			}
-			if (const auto* shape = world.TryGet<PhysicsDebugShapeComponent>(e))
-			{
-				const auto* rb = world.TryGet<RigidBodyComponent>(e);
-				rec.physics = PhysicsRecord{.shapeType = shape->shapeType, .halfExtents = shape->halfExtents, .radius = shape->radius, .halfHeight = shape->halfHeight, .motionType = rb ? rb->motionType : PhysicsMotionType::Static};
-			}
-			if (const auto* er = world.TryGet<EffectRefComponent>(e))
-			{
-				EffectRecord fx;
-				fx.name = er->name;
-				if (const auto* ep = world.TryGet<EffectParamsComponent>(e))
-				{
-					fx.params = ep->params;
-				}
-				rec.effect = std::move(fx);
-			}
-			if (const auto* bob = world.TryGet<BobComponent>(e))
-			{
-				BobComponent clean = *bob;
-				clean.baseCaptured = false; // re-base from the restored transform
-				clean.time = 0.0f;
-				rec.bob = clean;
-			}
-			if (const auto* spin = world.TryGet<SpinComponent>(e))
-			{
-				rec.spin = *spin;
-			}
-			if (const auto* orbit = world.TryGet<OrbitComponent>(e))
-			{
-				rec.orbit = *orbit;
-			}
-			if (const auto* pulse = world.TryGet<MaterialPulseComponent>(e))
-			{
-				MaterialPulseComponent clean = *pulse;
-				clean.time = 0.0f;
-				rec.materialPulse = clean;
-			}
-			if (const auto* pl = world.TryGet<PointLightComponent>(e))
-			{
-				rec.pointLight = *pl;
-			}
-			if (const auto* sl = world.TryGet<SpotLightComponent>(e))
-			{
-				rec.spotLight = *sl;
-			}
-			scene.entities.push_back(std::move(rec));
-		}
+		AppendEntityRecords(scene, world, order, indexOf, materials, textures);
 		return scene;
+	}
+
+	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures)
+	{
+		SceneDescription prefab;
+		if (const auto* nc = world.TryGet<NameComponent>(root))
+		{
+			prefab.name = nc->name;
+		}
+
+		// The subtree in parent-before-child order. The root's own parent (if
+		// any) is outside the index map, so its record naturally gets
+		// parentIndex -1 - InstantiatePrefab re-roots by that. Unlike scene
+		// capture there is NO transient exclusion: a prefab captures exactly
+		// what you point it at (the transient player is the flagship case).
+		std::vector<Entity> order{root};
+		for (std::size_t i = 0; i < order.size(); ++i)
+		{
+			if (const auto* h = world.TryGet<HierarchyComponent>(order[i]))
+			{
+				order.insert(order.end(), h->children.begin(), h->children.end());
+			}
+		}
+		std::unordered_map<std::uint32_t, int> indexOf;
+		for (std::size_t i = 0; i < order.size(); ++i)
+		{
+			indexOf[order[i].id] = static_cast<int>(i);
+		}
+		AppendEntityRecords(prefab, world, order, indexOf, materials, textures);
+		return prefab;
 	}
 
 	// ── TOML write ──────────────────────────────────────────────────────────────
@@ -679,6 +721,69 @@ namespace aether::app::scene
 #else
 		return EngineSettingsIO::ResolvePath("scenes").string();
 #endif
+	}
+
+	std::string PrefabsDirectory()
+	{
+#ifdef AETHER_PREFABS_SOURCE_DIR
+		return AETHER_PREFABS_SOURCE_DIR;
+#else
+		return EngineSettingsIO::ResolvePath("prefabs").string();
+#endif
+	}
+
+	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab)
+	{
+		const std::filesystem::path dir{PrefabsDirectory()};
+		std::error_code ec;
+		std::filesystem::create_directories(dir, ec);
+		const std::filesystem::path path = dir / (prefabName + ".prefab.toml");
+
+		std::ofstream out(path, std::ios::trunc);
+		if (!out.is_open())
+		{
+			AE_WARN(LogCategory::App, "SavePrefabFile: cannot open '{}'", path.string());
+			return false;
+		}
+		out << WriteToml(prefab);
+		AE_INFO(LogCategory::App, "Prefab saved: {} ({} entities)", path.string(), prefab.entities.size());
+		return true;
+	}
+
+	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName)
+	{
+		const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
+		std::ifstream in(path);
+		if (!in.is_open())
+		{
+			AE_WARN(LogCategory::App, "ReadPrefabFile: cannot open '{}'", path.string());
+			return std::nullopt;
+		}
+		std::stringstream buffer;
+		buffer << in.rdbuf();
+		return ParseToml(buffer.str());
+	}
+
+	std::vector<std::string> ListPrefabFiles()
+	{
+		std::vector<std::string> names;
+		const std::filesystem::path dir{PrefabsDirectory()};
+		std::error_code ec;
+		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
+		{
+			if (!entry.is_regular_file())
+			{
+				continue;
+			}
+			std::string file = entry.path().filename().string();
+			constexpr std::string_view kSuffix = ".prefab.toml";
+			if (file.size() > kSuffix.size() && file.ends_with(kSuffix))
+			{
+				names.push_back(file.substr(0, file.size() - kSuffix.size()));
+			}
+		}
+		std::sort(names.begin(), names.end());
+		return names;
 	}
 
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene)
@@ -1080,5 +1185,24 @@ namespace aether::app::scene
 		ReplaceScene(*scene, world, deps);
 		AE_INFO(LogCategory::App, "Scene loaded: {} ({} entities)", sceneName, scene->entities.size());
 		return true;
+	}
+
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld)
+	{
+		const std::vector<Entity> created = ApplyScene(prefab, world, deps);
+
+		// Re-root: the capture order guarantees exactly one parentless record
+		// (the subtree root, always first, but search to stay robust to
+		// hand-edited files). The subtree keeps its internal offsets via the
+		// delta-propagating transform write.
+		for (std::size_t i = 0; i < prefab.entities.size() && i < created.size(); ++i)
+		{
+			if (prefab.entities[i].parentIndex < 0)
+			{
+				ecs::SetWorldTransform(world, created[i], localToWorld);
+				return created[i];
+			}
+		}
+		return created.empty() ? Entity{} : created.front();
 	}
 } // namespace aether::app::scene

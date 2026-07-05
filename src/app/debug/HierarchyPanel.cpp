@@ -14,6 +14,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
+#include "io/FileSystem.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"
@@ -25,6 +26,7 @@
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/LightComponents.hpp"
+#include "scene/ModelSpawn.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
@@ -59,6 +61,22 @@ namespace aether::app
 
 		// Origin-spawned primitive for the "+" menu; mirrors das create_mesh/add_mesh
 		// defaults (neutral two-sided material) via the same AssignMaterial path.
+		scene::ApplySceneDeps MakeSceneDeps(LayerContext& context)
+		{
+			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			auto* assets = context.TryGet<AssetManager>();
+			scene::ApplySceneDeps deps{};
+			deps.assets = assets;
+			deps.primitives = context.TryGet<PrimitiveMeshes>();
+			deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
+			deps.effectParams = context.TryGet<EffectParamBuffer>();
+			deps.pipelines = assets ? &assets->GetPipelineCache() : nullptr;
+			deps.sceneContext = sceneCtx;
+			deps.physics = context.TryGet<PhysicsSystem>();
+			deps.renderer = context.TryGet<Renderer>();
+			return deps;
+		}
+
 		void CreatePrimitive(LayerContext& context, World& world, SceneSelection& selection, PrimitiveMesh kind, const char* name, const char* kindName)
 		{
 			auto* primitives = context.TryGet<PrimitiveMeshes>();
@@ -227,6 +245,18 @@ namespace aether::app
 			ecs::SetParent(world, child, e);
 			selection.Select(child);
 		}
+		if (ImGui::MenuItem(ICON_FA_BOX_OPEN "  Save as Prefab"))
+		{
+			// The name popup is begun at window level after the tree walk
+			// (opening it from inside the row's context popup would nest).
+			m_prefabSaveTarget = e;
+			std::snprintf(m_prefabNameBuf, sizeof(m_prefabNameBuf), "%s", EntityDisplayName(world, e));
+			for (char* c = m_prefabNameBuf; *c != '\0'; ++c)
+			{
+				*c = *c == ' ' ? '_' : static_cast<char>(std::tolower(static_cast<unsigned char>(*c)));
+			}
+			m_openPrefabSave = true;
+		}
 		ImGui::Separator();
 		if (ImGui::MenuItem(ICON_FA_TRASH "  Delete (subtree)"))
 		{
@@ -380,6 +410,14 @@ namespace aether::app
 			// ── Toolbar ────────────────────────────────────────────────────────
 			if (ImGui::Button(ICON_FA_PLUS))
 			{
+				// Refresh the asset lists once per open, not per frame.
+				m_modelList.clear();
+				if (const auto models = io::FileSystem::Glob("assets://models/**/*.mesh"); models.has_value())
+				{
+					m_modelList = *models;
+					std::sort(m_modelList.begin(), m_modelList.end());
+				}
+				m_prefabList = scene::ListPrefabFiles();
 				ImGui::OpenPopup("CreateEntity");
 			}
 			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
@@ -416,6 +454,60 @@ namespace aether::app
 				{
 					// Spawn aimed forward-down so the cone lands in front of you.
 					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
+				}
+				ImGui::Separator();
+				if (ImGui::BeginMenu(ICON_FA_PERSON_RUNNING "  Model"))
+				{
+					if (m_modelList.empty())
+					{
+						ImGui::TextDisabled("No .mesh files under assets://models");
+					}
+					auto* assets = context.TryGet<AssetManager>();
+					auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+					for (const std::string& path: m_modelList)
+					{
+						std::string label = path;
+						if (const auto slash = label.find_last_of("/\\"); slash != std::string::npos)
+						{
+							label = label.substr(slash + 1);
+						}
+						ImGui::PushID(path.c_str());
+						if (ImGui::MenuItem(label.c_str()) && assets != nullptr && sceneCtx != nullptr)
+						{
+							const Entity root = scene::SpawnModelEntity(world, *assets, *sceneCtx, path, glm::mat4(1.0f));
+							if (root.IsValid())
+							{
+								selection.Select(root);
+							}
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndMenu();
+				}
+				if (ImGui::BeginMenu(ICON_FA_BOX_OPEN "  Prefab"))
+				{
+					if (m_prefabList.empty())
+					{
+						ImGui::TextDisabled("No prefabs in %s", scene::PrefabsDirectory().c_str());
+						ImGui::TextDisabled("(right-click an entity -> Save as Prefab)");
+					}
+					for (const std::string& name: m_prefabList)
+					{
+						ImGui::PushID(name.c_str());
+						if (ImGui::MenuItem(name.c_str()))
+						{
+							if (const auto prefab = scene::ReadPrefabFile(name))
+							{
+								const Entity root = scene::InstantiatePrefab(*prefab, world, MakeSceneDeps(context), glm::mat4(1.0f));
+								if (root.IsValid())
+								{
+									selection.Select(root);
+								}
+							}
+						}
+						ImGui::PopID();
+					}
+					ImGui::EndMenu();
 				}
 				ImGui::EndPopup();
 			}
@@ -478,18 +570,7 @@ namespace aether::app
 					const bool isStartup = settings != nullptr && settings->app.startupScene == name;
 					if (ImGui::MenuItem(name.c_str(), isStartup ? "startup" : nullptr))
 					{
-						auto* sceneCtx = context.TryGet<scripting::SceneContext>();
-						auto* sceneAssets = context.TryGet<AssetManager>();
-						scene::ApplySceneDeps deps{};
-						deps.assets = sceneAssets;
-						deps.primitives = context.TryGet<PrimitiveMeshes>();
-						deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
-						deps.effectParams = context.TryGet<EffectParamBuffer>();
-						deps.pipelines = sceneAssets ? &sceneAssets->GetPipelineCache() : nullptr;
-						deps.sceneContext = sceneCtx;
-						deps.physics = context.TryGet<PhysicsSystem>();
-						deps.renderer = context.TryGet<Renderer>();
-						if (scene::LoadSceneFile(name, world, deps))
+						if (scene::LoadSceneFile(name, world, MakeSceneDeps(context)))
 						{
 							selection.Clear();
 						}
@@ -508,6 +589,40 @@ namespace aether::app
 						}
 					}
 					ImGui::PopID();
+				}
+				ImGui::EndPopup();
+			}
+
+			// Save-as-prefab (armed by the row context menu during the walk;
+			// fires here at window level the next frame).
+			if (m_openPrefabSave)
+			{
+				ImGui::OpenPopup("SavePrefab");
+				m_openPrefabSave = false;
+			}
+			if (ImGui::BeginPopup("SavePrefab"))
+			{
+				auto& reg2 = world.GetRegistry();
+				if (!m_prefabSaveTarget.IsValid() || !reg2.valid(World::ToEntt(m_prefabSaveTarget)))
+				{
+					ImGui::CloseCurrentPopup();
+				}
+				else
+				{
+					ImGui::TextDisabled("Prefab of '%s' (subtree)", EntityDisplayName(world, m_prefabSaveTarget));
+					ImGui::SetNextItemWidth(180.0f);
+					const bool entered = ImGui::InputTextWithHint("##prefabName", "Prefab name...", m_prefabNameBuf, sizeof(m_prefabNameBuf), ImGuiInputTextFlags_EnterReturnsTrue);
+					ImGui::SameLine();
+					const bool save = ImGui::Button(ICON_FA_FLOPPY_DISK " Save") || entered;
+					ImGui::TextDisabled("-> %s", scene::PrefabsDirectory().c_str());
+					if (save && m_prefabNameBuf[0] != '\0')
+					{
+						if (auto* assets = context.TryGet<AssetManager>())
+						{
+							scene::SavePrefabFile(m_prefabNameBuf, scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
+						}
+						ImGui::CloseCurrentPopup();
+					}
 				}
 				ImGui::EndPopup();
 			}

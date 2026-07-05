@@ -155,6 +155,11 @@ namespace aether::app::scene
 	// lookup).
 	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer = nullptr);
 
+	// Prefab = a scene description of ONE subtree (root record first,
+	// parentIndex -1). No environment/lights sections and no transient
+	// exclusion - a prefab captures exactly the subtree you point it at.
+	SceneDescription CapturePrefab(World& world, Entity root, const MaterialRegistry& materials, const TextureRegistry& textures);
+
 	std::string WriteToml(const SceneDescription& scene);
 	std::optional<SceneDescription> ParseToml(std::string_view text);
 
@@ -166,6 +171,12 @@ namespace aether::app::scene
 	bool SaveSceneFile(const std::string& sceneName, const SceneDescription& scene);
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName);
 	std::vector<std::string> ListSceneFiles();
+
+	// Prefab files: same TOML format, ".prefab.toml" under resources/prefabs.
+	std::string PrefabsDirectory();
+	bool SavePrefabFile(const std::string& prefabName, const SceneDescription& prefab);
+	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName);
+	std::vector<std::string> ListPrefabFiles();
 
 	// ── Apply (load) ────────────────────────────────────────────────────────────
 
@@ -195,4 +206,9 @@ namespace aether::app::scene
 
 	// ReplaceScene from a scene file on disk.
 	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps);
+
+	// Additively instantiates a prefab and places its root at `localToWorld`
+	// (the subtree keeps its internal offsets - delta-propagating re-root).
+	// Returns the instantiated root entity, invalid if the prefab is empty.
+	Entity InstantiatePrefab(const SceneDescription& prefab, World& world, const ApplySceneDeps& deps, const glm::mat4& localToWorld);
 } // namespace aether::app::scene

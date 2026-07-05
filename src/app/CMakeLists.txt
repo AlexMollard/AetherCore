@@ -37,6 +37,7 @@ set_target_properties(App PROPERTIES
 target_compile_definitions(App PRIVATE
     AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scripts"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
+    AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
 )
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────

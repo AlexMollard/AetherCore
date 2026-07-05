@@ -50,3 +50,4 @@
 #define ICON_FA_HEART_PULSE "\xef\x88\x9e"             // U+F21E material pulse
 #define ICON_FA_GHOST "\xef\x9b\xa2"                   // U+F6E2 scene transient
 #define ICON_FA_LIGHTBULB "\xef\x83\xab"               // U+F0EB lights
+#define ICON_FA_BOX_OPEN "\xef\x92\x9e"                // U+F49E prefabs
