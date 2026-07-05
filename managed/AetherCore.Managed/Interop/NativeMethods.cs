@@ -238,4 +238,94 @@ internal static unsafe partial class Native
     [LibraryImport(Lib)]
     [SuppressGCTransition]
     internal static partial Vector3 aether_daynight_get_sun_direction();
+
+    // ── World: behaviors / scripts / tags / iteration ─────────────────────────
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_bob(uint id, float amplitude, float frequency, float phase);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_spin(uint id, Vector3 eulerDegPerSec);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_orbit(uint id, Vector3 center, float radius, float speedDeg, float startAngleDeg, float yawOffsetDeg, float height);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_material_pulse(uint id, Vector3 emissiveA, Vector3 emissiveB, float frequency);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_add_script(uint id, string typeName);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int aether_scene_file_exists(string name);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_tag_create(string name);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_tag_get_id(string name);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_tag_add(uint entityId, uint tagId);
+
+    [LibraryImport(Lib)]
+    [SuppressGCTransition]
+    internal static partial int aether_tag_has(uint entityId, uint tagId);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_tag_remove(uint entityId, uint tagId);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_world_get_entities_with_transform(uint* buf, int cap);
+
+    [LibraryImport(Lib)]
+    internal static partial int aether_tag_get_entities(uint tagId, uint* buf, int cap);
+
+    // ── World: model / mesh / material ────────────────────────────────────────
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_load_model(uint id, string path);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial uint aether_create_mesh(string type);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_add_mesh(uint entityId, uint meshHandle);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_set_material(uint id, Vector3 color, float metallic, float roughness);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_set_material_color(uint id, Vector3 color);
+
+    [LibraryImport(Lib)]
+    internal static partial uint aether_make_material(Vector3 color, float metallic, float roughness);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_bind_material(uint entityId, uint materialId);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_material_set_color(uint materialId, Vector3 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_material_set_metallic(uint materialId, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_material_set_roughness(uint materialId, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_material_set_emissive(uint materialId, Vector3 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_material_set_color(uint entityId, Vector3 color);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_material_set_metallic(uint entityId, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_material_set_roughness(uint entityId, float value);
+
+    [LibraryImport(Lib)]
+    internal static partial void aether_entity_material_set_emissive(uint entityId, Vector3 color);
+
+    [LibraryImport(Lib, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void aether_set_material_texture(uint entityId, string path);
 }

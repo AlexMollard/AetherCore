@@ -7,8 +7,11 @@
 
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
+#include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
+#include "scene/SceneSerializer.hpp"
+#include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
@@ -182,4 +185,119 @@ AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, 
 	const aether::Entity e{id};
 	aether::ecs::SetWorldTransform(w, e, aether::ComposeTransform(ToGlm(pos), ToGlm(euler), ToGlm(scale)));
 	TeleportBodyToTransform(w, e);
+}
+
+// ── Data-driven behaviors (advanced by BehaviorSystem while playing) ──────────
+
+AE_SCRIPT_API void aether_add_bob(std::uint32_t id, float amplitude, float frequency, float phase)
+{
+	ActiveWorld().EmplaceOrReplace<aether::BobComponent>(
+		aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
+}
+
+AE_SCRIPT_API void aether_add_spin(std::uint32_t id, Vec3 eulerDegPerSec)
+{
+	ActiveWorld().EmplaceOrReplace<aether::SpinComponent>(
+		aether::Entity{id}, aether::SpinComponent{.eulerDegPerSec = ToGlm(eulerDegPerSec)});
+}
+
+AE_SCRIPT_API void aether_add_orbit(std::uint32_t id, Vec3 center, float radius, float speedDeg, float startAngleDeg,
+	float yawOffsetDeg, float height)
+{
+	ActiveWorld().EmplaceOrReplace<aether::OrbitComponent>(aether::Entity{id},
+		aether::OrbitComponent{.center = ToGlm(center),
+			.radius = radius,
+			.angularSpeedDeg = speedDeg,
+			.angleDeg = startAngleDeg,
+			.yawOffsetDeg = yawOffsetDeg,
+			.height = height});
+}
+
+AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, Vec3 emissiveB, float frequency)
+{
+	ActiveWorld().EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id},
+		aether::MaterialPulseComponent{
+			.emissiveA = ToGlm(emissiveA), .emissiveB = ToGlm(emissiveB), .frequency = frequency});
+}
+
+// ── Entity scripts ────────────────────────────────────────────────────────────
+
+// Attach a script component by type name; runs while playing and serializes.
+AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
+{
+	ActiveWorld().EmplaceOrReplace<aether::ScriptComponent>(
+		aether::Entity{id}, aether::ScriptComponent{.path = typeName != nullptr ? typeName : ""});
+}
+
+AE_SCRIPT_API std::int32_t aether_scene_file_exists(const char* name)
+{
+	return aether::app::scene::ReadSceneFile(name != nullptr ? name : "").has_value() ? 1 : 0;
+}
+
+// ── Dynamic tags ──────────────────────────────────────────────────────────────
+
+AE_SCRIPT_API std::uint32_t aether_tag_create(const char* name)
+{
+	return aether::TagCreate(name != nullptr ? name : "");
+}
+
+AE_SCRIPT_API std::uint32_t aether_tag_get_id(const char* name)
+{
+	return aether::TagGetId(name != nullptr ? name : "");
+}
+
+AE_SCRIPT_API void aether_tag_add(std::uint32_t entityId, std::uint32_t tagId)
+{
+	aether::TagAdd(&ActiveWorld(), entityId, tagId);
+}
+
+AE_SCRIPT_API std::int32_t aether_tag_has(std::uint32_t entityId, std::uint32_t tagId)
+{
+	return aether::TagHas(&ActiveWorld(), entityId, tagId) ? 1 : 0;
+}
+
+AE_SCRIPT_API void aether_tag_remove(std::uint32_t entityId, std::uint32_t tagId)
+{
+	aether::TagRemove(&ActiveWorld(), entityId, tagId);
+}
+
+// ── Iteration (buffer-fill; no per-item boundary crossings) ───────────────────
+
+// Fills `buf` with up to `cap` entity ids that carry a TransformComponent;
+// returns the number written.
+AE_SCRIPT_API std::int32_t aether_world_get_entities_with_transform(std::uint32_t* buf, std::int32_t cap)
+{
+	if (buf == nullptr || cap <= 0)
+	{
+		return 0;
+	}
+	std::int32_t n = 0;
+	for (const auto enttE: ActiveWorld().View<aether::TransformComponent>())
+	{
+		if (n >= cap)
+		{
+			break;
+		}
+		buf[n++] = aether::World::FromEntt(enttE).id;
+	}
+	return n;
+}
+
+// Fills `buf` with up to `cap` entity ids that carry `tagId`; returns count written.
+AE_SCRIPT_API std::int32_t aether_tag_get_entities(std::uint32_t tagId, std::uint32_t* buf, std::int32_t cap)
+{
+	if (buf == nullptr || cap <= 0)
+	{
+		return 0;
+	}
+	std::int32_t n = 0;
+	aether::ForEachWithTag(&ActiveWorld(), tagId,
+		[&](std::uint32_t id)
+		{
+			if (n < cap)
+			{
+				buf[n++] = id;
+			}
+		});
+	return n;
 }
