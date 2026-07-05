@@ -116,6 +116,24 @@ namespace aether::app::scripting
 				}
 			}
 		}
+		else
+		{
+			// Slashless requires can be das FILE modules at the scripts ROOT
+			// (input_bindings.das, keycodes.das). Default resolution looks
+			// relative to the REQUIRING file, which breaks for scripts in
+			// subdirectories (entities/player.das), so probe the VFS root and
+			// redirect when the file actually exists there. Native C++
+			// modules (world, camera, ...) have no such file and fall through
+			// to the name-based lookup exactly as before.
+			const das::string candidate = "scripts://" + req + ".das";
+			if (io::FileSystem::IsInitialized() && io::FileSystem::ReadFile(candidate).has_value())
+			{
+				das::ModuleInfo info;
+				info.moduleName = req;
+				info.fileName = candidate;
+				return info;
+			}
+		}
 
 		// Fall back to the default resolution (daslib, native modules, etc.)
 		// Call parent implementation which handles daslib, native modules, and extraRoots

@@ -132,8 +132,15 @@ namespace aether::app::scripting
 
 		auto fAccess = das::make_smart<VfsFileAccess>();
 
-		const std::string scriptsRoot = "scripts://";
-		fAccess->AddSearchRoot("scripts", scriptsRoot + "scripts");
+		// Root-relative module resolution. The default FsFileAccess resolves
+		// `require systems/x` relative to the REQUIRING file's directory -
+		// fine for scripts at the scripts root (sandbox.das), broken for
+		// scripts in subdirectories (entities/player.das requiring
+		// systems/character_controller). These prefixes pin the scripts-root
+		// subdirectories to the VFS mount so requires resolve the same way
+		// from anywhere.
+		fAccess->AddSearchRoot("systems", "scripts://systems");
+		fAccess->AddSearchRoot("entities", "scripts://entities");
 
 		das::ModuleGroup moduleGroup;
 		das::TextPrinter logs;

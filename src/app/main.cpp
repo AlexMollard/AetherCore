@@ -45,7 +45,10 @@ int main()
 
 		// Layers
 		application.PushLayer<aether::app::DebugLayer>();
-		application.PushLayer<aether::app::ScriptedSceneLayer>("sandbox.das");
+		// Scene-only operation: world content comes from the startup scene
+		// file (engine.toml app.startupScene), behavior from entity scripts
+		// (ScriptComponent). Pass a .das path here to add a main script back.
+		application.PushLayer<aether::app::ScriptedSceneLayer>("");
 
 		return application.Run();
 	}

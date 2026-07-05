@@ -4,6 +4,8 @@ require world;
 require animation;
 require camera;
 require input;
+require input_bindings; // is_action_down and friends
+require keycodes;       // KEY_ constants for register_action
 require math;
 require systems/character_controller;
 require systems/third_person_camera;
@@ -55,6 +57,11 @@ def on_entity_attach(world : World?; self : uint)
         g_cam = create_orbit_camera(float3(0.0, 30.0, 50.0), float3(0.0, 3.0, 0.0), 65.0);
     }
     set_main_camera(g_cam);
+
+    // Input: the WASD/time-of-day defaults plus the sprint chord. The player
+    // owns these now that sandbox.das is gone (re-registering is harmless).
+    init_default_bindings();
+    register_action("sprint_key", KEY_LEFT_SHIFT, 0);
 }
 
 [export]

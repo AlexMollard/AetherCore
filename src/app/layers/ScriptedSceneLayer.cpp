@@ -81,64 +81,65 @@ namespace aether::app
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath);
+		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath.empty() ? "<scene + entity scripts>" : m_scriptPath);
 
 		if (m_handle.IsValid())
 		{
 			m_scripting->CallOnDetach(m_handle, m_sceneCtx);
-
-			// Hot-reload frees the buffers backing the scene entities. Route the
-			// teardown through the engine's exclusive-mutation primitive in Discard
-			// mode: the render thread drops in-flight frames (which still reference
-			// those buffers) as it parks, rather than draining and rendering them
-			// against freed memory. RunExclusive supplies the park + GPU WaitIdle.
-			context.Get<aether::IEngineRuntime>().RunExclusive(aether::QuiesceMode::Discard,
-			        [&]()
-			        {
-				        // Clear render queues that reference destroyed meshes /
-				        // animation databases BEFORE destroying the entities.
-				        context.Get<RenderQueue>().DiscardAllPending();
-				        if (auto shadowService = context.TryGet<ShadowService>())
-				        {
-					        shadowService->ClearAllQueues();
-				        }
-				        if (auto localShadowService = context.TryGet<LocalShadowService>())
-				        {
-					        localShadowService->ClearAllQueues();
-				        }
-				        DestroySceneEntities(context);
-			        });
 		}
 
-		scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
-		if (!newHandle.IsValid())
+		// Hot-reload frees the buffers backing the scene entities. Route the
+		// teardown through the engine's exclusive-mutation primitive in Discard
+		// mode: the render thread drops in-flight frames (which still reference
+		// those buffers) as it parks, rather than draining and rendering them
+		// against freed memory. RunExclusive supplies the park + GPU WaitIdle.
+		// This runs regardless of the main script: the scene file loaded
+		// entities that reference the model cache DestroySceneEntities frees.
+		context.Get<aether::IEngineRuntime>().RunExclusive(aether::QuiesceMode::Discard,
+		        [&]()
+		        {
+			        // Clear render queues that reference destroyed meshes /
+			        // animation databases BEFORE destroying the entities.
+			        context.Get<RenderQueue>().DiscardAllPending();
+			        if (auto shadowService = context.TryGet<ShadowService>())
+			        {
+				        shadowService->ClearAllQueues();
+			        }
+			        if (auto localShadowService = context.TryGet<LocalShadowService>())
+			        {
+				        localShadowService->ClearAllQueues();
+			        }
+			        DestroySceneEntities(context);
+		        });
+
+		if (!m_scriptPath.empty())
 		{
-			m_scriptBroken = true;
-			AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed");
-			if (m_handle.IsValid())
+			scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
+			if (!newHandle.IsValid())
 			{
-				AE_WARN(LogCategory::App, "Keeping old scene");
+				m_scriptBroken = true;
+				AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed - keeping the old script");
+				if (m_handle.IsValid())
+				{
+					m_scripting->CallOnAttach(m_handle, m_sceneCtx);
+				}
+			}
+			else
+			{
+				if (m_handle.IsValid())
+				{
+					m_scripting->FreeHandle(m_handle);
+				}
+				m_handle = std::move(newHandle);
+				m_scriptBroken = false;
+				m_scripting->ClearErrors();
 				m_scripting->CallOnAttach(m_handle, m_sceneCtx);
 			}
-			return;
 		}
 
-		// Swap to the new script and call on_attach.
-		if (m_handle.IsValid())
-		{
-			m_scripting->FreeHandle(m_handle);
-		}
-		m_handle = std::move(newHandle);
-		m_scriptBroken = false;
-		m_scripting->ClearErrors();
-		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
-
-		// DestroySceneEntities above tore down the FILE-loaded world along with
-		// the script's entities (both live in sceneEntities), and the script's
-		// legacy builders skip when the startup scene file exists - so without
-		// this re-load, F5 leaves the world empty of scene content, with the
-		// renderer's lights cleared and any later save capturing the gutted
-		// world.
+		// DestroySceneEntities above tore down the FILE-loaded world; re-load
+		// it (or a broken-script F5 would leave a void that a later save
+		// captures).
 		LoadStartupScene(context);
 
 		// Entity scripts recompile from fresh sources on the next play tick.
@@ -224,23 +225,28 @@ namespace aether::app
 		// The default primitive material is built lazily by create_mesh and
 		// acquired through the MaterialRegistry per entity - nothing to register.
 
-		m_handle = m_scripting->Compile(m_scriptPath);
-		if (!m_handle.IsValid())
+		// A main script is OPTIONAL: world content lives in the scene file and
+		// behavior lives in entity scripts (ScriptComponent). An empty path
+		// means scene-only operation.
+		if (!m_scriptPath.empty())
 		{
-			m_scriptBroken = true;
-			AE_WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
-			return;
+			m_handle = m_scripting->Compile(m_scriptPath);
+			if (!m_handle.IsValid())
+			{
+				m_scriptBroken = true;
+				AE_WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
+			}
+			else
+			{
+				m_scriptBroken = false;
+				m_scripting->ClearErrors();
+				m_scripting->CallOnAttach(m_handle, m_sceneCtx);
+			}
 		}
 
-		m_scriptBroken = false;
-		m_scripting->ClearErrors();
-		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
-
-		// Boot-from-scene: on_attach prepared the script-owned runtime (camera,
-		// tags, player - and, when the scene file is missing, the legacy scene
-		// content). Load the startup scene ADDITIVELY into that world, or
-		// auto-generate it from the legacy content on first run (transient
-		// entities are excluded from the capture).
+		// Boot-from-scene. Runs even when the main script is absent or broken
+		// - a script failure must not take the whole world down with it (it
+		// used to early-return here, booting into a void).
 		LoadStartupScene(context);
 	}
 

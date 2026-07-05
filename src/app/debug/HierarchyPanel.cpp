@@ -822,8 +822,12 @@ namespace aether::app
 			}
 			ImGui::EndChild();
 
-			// ── Clipboard + duplicate (edit shortcuts, outliner-focused) ──────
-			const bool panelKeys = ImGui::IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl;
+			// ── Clipboard + duplicate (EDITOR-GLOBAL edit shortcuts) ──────────
+			// The selection is the context, not window focus: Ctrl+D then a
+			// gizmo drag then Ctrl+D again must work without re-clicking the
+			// outliner. Only active text input suppresses them (this panel
+			// runs every frame, so evaluating global key state here is fine).
+			const bool panelKeys = !ImGui::GetIO().WantTextInput && ImGui::GetIO().KeyCtrl;
 			auto* clipAssets = context.TryGet<AssetManager>();
 			auto* undo = context.TryGet<UndoStack>();
 
@@ -994,8 +998,10 @@ namespace aether::app
 				}
 			}
 
-			// ── Keyboard (window-scope) ────────────────────────────────────────
-			if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput)
+			// ── Keyboard ───────────────────────────────────────────────────────
+			// Delete is editor-global like the clipboard shortcuts: it acts on
+			// the shared selection from any window (undo covers slips).
+			if (!ImGui::GetIO().WantTextInput)
 			{
 				if (ImGui::IsKeyPressed(ImGuiKey_Delete) && !selection.All().empty())
 				{
@@ -1015,7 +1021,8 @@ namespace aether::app
 					}
 					selection.Clear();
 				}
-				if (ImGui::IsKeyPressed(ImGuiKey_F2) && selection.Primary().IsValid())
+				// F2 stays window-scoped: it opens the outliner's inline editor.
+				if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && ImGui::IsKeyPressed(ImGuiKey_F2) && selection.Primary().IsValid())
 				{
 					BeginRename(world, selection.Primary());
 				}
