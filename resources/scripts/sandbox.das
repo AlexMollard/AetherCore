@@ -313,6 +313,9 @@ def missing_texture_cube(world : World?; pos : float3; size : float) : uint
     add_mesh(world, e, g_cube);
     set_name(world, e, "Missing Texture Cube");
     set_material_texture(world, e, "assets://textures/this_texture_does_not_exist.png");
+    // Fixed tilt + data-driven Y spin (replaces the old on_update set_euler).
+    set_euler(world, e, float3(20.0, 0.0, 0.0));
+    add_spin(world, e, float3(0.0, 40.0, 0.0));
     return e;
 }
 
@@ -326,6 +329,13 @@ def spawn_fox(world : World?; pos : float3; yaw : float; desync : float)
     set_playback_speed(world, fox, 0.8);
     set_anim_time(world, fox, desync);     // stagger the herd
     add_tag(world, fox, g_fox_tag);
+
+    // Data-driven patrol (OrbitComponent): same circle the old on_update math
+    // walked - radius from spawn, plaza-centred, tangent-facing. Serializes
+    // with the scene and pauses with the editor.
+    let r = max(sqrt(pos.x * pos.x + pos.z * pos.z), 6.0);
+    let theta = 90.0 - atan2(pos.x, pos.z) * 57.2958;
+    add_orbit(world, fox, float3(0.0, 0.0, 0.0), r, -25.783, theta, 180.0, pos.y);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -448,8 +458,9 @@ def build_zone_materials(world : World?)
     painted_box(world, float3(-32.5, 1.0, 16.5), float3(2.0, 2.0, 2.0), float3(0.85, 0.85, 0.82));
 
     // 5. Shared AUTHORED material (phase 2): one material bound to a row of six
-    //    cubes. on_update pulses its emissive, so all six glow in unison from a
-    //    single edit - and they dedup to one GPU slot until it diverges.
+    //    cubes. A data-driven MaterialPulseComponent glows all six in unison -
+    //    identical per-step values dedup to one GPU slot, and the behavior
+    //    serializes with the scene (survives save/load, pauses with the editor).
     g_shared_mat = make_material(float3(0.85, 0.25, 0.15), 0.0, 0.4);
     g_have_shared_mat = true;
     for (i in 0..6)
@@ -459,6 +470,7 @@ def build_zone_materials(world : World?)
         set_transform(world, e, float3(-49.0 + float(i) * 2.2, 0.7, 20.0), float3(0.0, 0.0, 0.0), float3(1.6, 1.6, 1.6));
         add_mesh(world, e, g_cube);
         bind_material(world, e, g_shared_mat);
+        add_material_pulse(world, e, float3(0.0, 0.0, 0.05), float3(0.9, 0.2, 0.05), 2.0);
     }
 
     // 6. Per-entity material INSTANCES (phase 2): each cube built field-by-field
@@ -504,48 +516,61 @@ def on_attach(world : World?)
     g_fox_tag    = create_tag("fox");
     g_toy_tag    = create_tag("phys_toy");
 
-    // ── Global lighting ──────────────────────────────────────────────────────
-    // Soft sky-fill ambient: bright enough that nothing crushes to black, but low
-    // enough that sun shadows and AO still read.
-    clear_lights();
-    set_ambient(float3(0.20, 0.22, 0.27));
+    // ── Scene content ─────────────────────────────────────────────────────────
+    // The world (lights, zones, orbs, foxes) lives in resources/scenes/
+    // sandbox.scene.toml, loaded by the engine right after on_attach. The
+    // builders below are the LEGACY GENERATION PATH: they run only when the
+    // scene file is missing, and the engine captures their output into the
+    // file on that first run. Delete the file to regenerate it from here.
+    if (!scene_file_exists("sandbox"))
+    {
+        // ── Global lighting ──────────────────────────────────────────────────
+        // Soft sky-fill ambient: bright enough that nothing crushes to black,
+        // but low enough that sun shadows and AO still read.
+        clear_lights();
+        set_ambient(float3(0.20, 0.22, 0.27));
 
-    // Bright warm key sun at a raking angle for clear, legible shadows.
-    set_sun(float3(0.4, -0.7, 0.5), 4.0, float3(1.0, 0.94, 0.82));
-    set_sky(float3(0.6, 0.7, 0.95), float3(0.28, 0.38, 0.6));
-    set_sky_void(float3(0.05, 0.06, 0.1));
+        // Bright warm key sun at a raking angle for clear, legible shadows.
+        set_sun(float3(0.4, -0.7, 0.5), 4.0, float3(1.0, 0.94, 0.82));
+        set_sky(float3(0.6, 0.7, 0.95), float3(0.28, 0.38, 0.6));
+        set_sky_void(float3(0.05, 0.06, 0.1));
 
-    // ── World ────────────────────────────────────────────────────────────────
-    build_floor(world);
-    build_zone_sun_shadows(world);
-    build_zone_ao(world);
-    build_zone_point_shadow(world);
-    build_zone_light_overlap(world);
-    build_zone_spot(world);
-    build_zone_materials(world);
+        // ── World ────────────────────────────────────────────────────────────
+        build_floor(world);
+        build_zone_sun_shadows(world);
+        build_zone_ao(world);
+        build_zone_point_shadow(world);
+        build_zone_light_overlap(world);
+        build_zone_spot(world);
+        build_zone_materials(world);
 
-    // ── Effects showcase: THREE plasma orbs, one shared "plasma" effect, but
-    //    INDEPENDENT per-entity params (phase 3). If they all looked identical,
-    //    the per-entity EffectParamBuffer would be broken; distinct colours /
-    //    speeds / scales prove each orb owns its own params slot. ────────────────
-    g_plasma  = spawn_plasma(world, float3(-24.0, 20.0, -18.0), 3.0, float3(0.90, 0.40, 1.00), 1.0, 2.0, 1.8); // violet, medium
-    g_plasma2 = spawn_plasma(world, float3(-18.0, 20.0, -18.0), 3.0, float3(1.00, 0.45, 0.10), 2.2, 1.2, 1.3); // fiery orange, fast + tight
-    g_plasma3 = spawn_plasma(world, float3(-12.0, 20.0, -18.0), 3.0, float3(0.20, 1.00, 0.70), 0.5, 3.4, 2.4); // teal, slow + broad + bright
+        // ── Effects showcase: THREE plasma orbs, one shared "plasma" effect,
+        //    but INDEPENDENT per-entity params; bobbing is a BobComponent. ─────
+        g_plasma  = spawn_plasma(world, float3(-24.0, 20.0, -18.0), 3.0, float3(0.90, 0.40, 1.00), 1.0, 2.0, 1.8); // violet, medium
+        add_bob(world, g_plasma, 1.5, 0.8, 0.0);
+        g_plasma2 = spawn_plasma(world, float3(-18.0, 20.0, -18.0), 3.0, float3(1.00, 0.45, 0.10), 2.2, 1.2, 1.3); // fiery orange, fast + tight
+        add_bob(world, g_plasma2, 1.5, 0.8, 2.1);
+        g_plasma3 = spawn_plasma(world, float3(-12.0, 20.0, -18.0), 3.0, float3(0.20, 1.00, 0.70), 0.5, 3.4, 2.4); // teal, slow + broad + bright
+        add_bob(world, g_plasma3, 1.5, 0.8, 4.2);
 
-    // ── NEW effect pipeline: a molten orb sharing the row, its own params slot.
-    g_molten  = spawn_molten(world, float3(-6.0, 20.0, -18.0), 3.0, float3(1.00, 0.30, 0.05), 1.0, 1.6, 1.4);  // ember, flowing crust
+        // ── NEW effect pipeline: a molten orb sharing the row, its own slot.
+        g_molten  = spawn_molten(world, float3(-6.0, 20.0, -18.0), 3.0, float3(1.00, 0.30, 0.05), 1.0, 1.6, 1.4); // ember, flowing crust
+        add_bob(world, g_molten, 1.5, 0.8, 6.3);
 
-    // ── Missing-texture proof: a slowly spinning cube whose albedo map path does
-    //    not exist -> renders FLAT MAGENTA (the 1x1 fallback) on every face. ──────
-    g_missing_cube = missing_texture_cube(world, float3(-9.0, 3.0, 4.0), 3.0);
+        // ── Missing-texture proof: spinning magenta-fallback cube. ───────────
+        g_missing_cube = missing_texture_cube(world, float3(-9.0, 3.0, 4.0), 3.0);
 
-    // ── Foxes (animation test - patrol the plaza in circles, staggered) ──────
-    spawn_fox(world, float3(14.0, 0.0, 15.0),  40.0, 0.0);
-    spawn_fox(world, float3(20.0, 0.0,  8.0), -60.0, 0.3);
-    spawn_fox(world, float3(-16.0, 0.0, 14.0), 20.0, 0.6);
+        // ── Foxes (animation test - OrbitComponent patrol, staggered) ────────
+        spawn_fox(world, float3(14.0, 0.0, 15.0),  40.0, 0.0);
+        spawn_fox(world, float3(20.0, 0.0,  8.0), -60.0, 0.3);
+        spawn_fox(world, float3(-16.0, 0.0, 14.0), 20.0, 0.6);
+    }
 
     // ── Player (Human, third-person controlled) at the centre ────────────────
+    // Script-owned runtime actor: marked transient so scene captures (boot
+    // auto-generation, Play snapshots, manual saves) never duplicate it.
     g_player = entity_create(world);
+    mark_transient(world, g_player);
     add_transform(world, g_player);
     set_transform(world, g_player, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.05, 0.05, 0.05));
     load_model(world, g_player, "assets://models/Human/Human.mesh");
@@ -594,57 +619,10 @@ def on_update(world : World?)
     update_player_controller(world, dt, g_player, g_player_idle_clip, g_player_walk_clip, inputX, inputZ, g_cam, is_sprinting, -1);
     update_third_person_camera(world, g_cam, g_player);
 
-    // ── Gentle plasma bob (all three orbs, phase-offset so they weave) ────────
-    if (entity_valid(g_plasma))
-    {
-        var p = get_position(world, g_plasma);
-        p.y = 20.0 + sin(g_time * 0.8) * 1.5;
-        set_position(world, g_plasma, p);
-    }
-    if (entity_valid(g_plasma2))
-    {
-        var p = get_position(world, g_plasma2);
-        p.y = 20.0 + sin(g_time * 0.8 + 2.1) * 1.5;
-        set_position(world, g_plasma2, p);
-    }
-    if (entity_valid(g_plasma3))
-    {
-        var p = get_position(world, g_plasma3);
-        p.y = 20.0 + sin(g_time * 0.8 + 4.2) * 1.5;
-        set_position(world, g_plasma3, p);
-    }
-    if (entity_valid(g_molten))
-    {
-        var p = get_position(world, g_molten);
-        p.y = 20.0 + sin(g_time * 0.8 + 6.3) * 1.5;
-        set_position(world, g_molten, p);
-    }
-
-    // ── Spin the missing-texture cube so the magenta fallback is visible on
-    //    every face (a static face could hide behind ambiguous lighting). ──────
-    if (entity_valid(g_missing_cube))
-    {
-        set_euler(world, g_missing_cube, float3(20.0, g_time * 40.0, 0.0));
-    }
-
-    // ── Pulse the shared authored material: one edit re-binds all six cubes ───
-    if (g_have_shared_mat)
-    {
-        let pulse = 0.5 + 0.5 * sin(g_time * 2.0);
-        material_set_emissive(world, g_shared_mat, float3(pulse * 0.9, pulse * 0.2, 0.05));
-    }
-
-    // ── Foxes patrol in circles so the run animation matches real motion ──────
-    // (each fox orbits the plaza centre at its own spawn radius, facing along
-    // its direction of travel — no more running in place).
-    for_each_with_tag_transform(world, g_fox_tag) $(e : uint; pos : float3; euler : float3; scale : float3)
-    {
-        let radius = max(sqrt(pos.x * pos.x + pos.z * pos.z), 6.0);
-        let ang    = atan2(pos.x, pos.z) + dt * 0.45;
-        let np     = float3(sin(ang) * radius, pos.y, cos(ang) * radius);
-        let ny     = ang * 57.2958 + 90.0;
-        set_transform(world, e, np, float3(0.0, ny, 0.0), scale);
-    };
+    // Orb bobbing, missing-cube spin, the Zone-M emissive pulse and the fox
+    // patrol are all data now (Bob/Spin/MaterialPulse/Orbit components,
+    // advanced by the engine's BehaviorSystem) - they serialize with the scene
+    // and pause with the editor. The script keeps only interactive logic.
 
     // ── Physics toys, spawned above the player ───────────────────────────────
     let pp = get_position(world, g_player);

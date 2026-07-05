@@ -885,6 +885,20 @@ namespace aether
 		m_impl->physics->GetBodyInterfaceNoLock().SetRotation(id, ToJolt(rot), JPH::EActivation::Activate);
 	}
 
+	void PhysicsSystem::WaitForStepIdle()
+	{
+		WaitForStep();
+	}
+
+	void PhysicsSystem::FlushPendingOnly(World& world)
+	{
+		AE_PROFILE_ZONE();
+		// No step is kicked while the editor is paused, but an in-flight step
+		// from the frame Play toggled off must still be waited out once.
+		WaitForStep();
+		FlushPendingBodies(world);
+	}
+
 	// -- Raycasting --------------------------------------------------------------
 
 	PhysicsSystem::RaycastResult PhysicsSystem::CastRay(glm::vec3 origin, glm::vec3 direction, float maxDistance)

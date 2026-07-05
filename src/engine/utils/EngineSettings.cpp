@@ -64,6 +64,24 @@ namespace aether
 					        {
 						        settings.app.targetFps = *parsed;
 					        }
+					        return;
+				        }
+				        if (entry.fullKey == "app.startupscene")
+				        {
+					        std::string_view value = entry.value;
+					        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+					        {
+						        value = value.substr(1, value.size() - 2);
+					        }
+					        settings.app.startupScene = std::string(value);
+					        return;
+				        }
+				        if (entry.fullKey == "app.autoplay")
+				        {
+					        if (const auto parsed = text::ParseBool(entry.value))
+					        {
+						        settings.app.autoplay = *parsed;
+					        }
 				        }
 			        });
 		}
@@ -131,6 +149,10 @@ namespace aether
 		out << "[app]\n";
 		out << "# 0 = auto policy (swapchain-paced when VSync on, uncapped when off)\n";
 		out << "targetFps = " << settings.app.targetFps << "\n";
+		out << "# Scene file loaded at boot (resources/scenes/<name>.scene.toml); empty disables\n";
+		out << "startupScene = \"" << settings.app.startupScene << "\"\n";
+		out << "# false = boot into the editor's frozen Editing mode (press Play to simulate)\n";
+		out << "autoplay = " << (settings.app.autoplay ? "true" : "false") << "\n";
 	}
 
 	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view fileName)

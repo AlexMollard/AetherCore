@@ -4,6 +4,7 @@
 #include <type_traits>
 
 #include "AetherCore.hpp"
+#include "PlayState.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/FramePacer.hpp"
@@ -97,6 +98,7 @@ namespace aether::app
 		aether::AetherCore m_engine;
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;
+		PlayState m_playState;
 		bool m_layersAttached = false;
 	};
 } // namespace aether::app

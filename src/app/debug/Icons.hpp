@@ -26,6 +26,8 @@
 #define ICON_FA_FILTER "\xef\x82\xb0"                  // U+F0B0 type filters
 #define ICON_FA_FLOPPY_DISK "\xef\x83\x87"             // U+F0C7 save scene
 #define ICON_FA_FOLDER_OPEN "\xef\x81\xbc"             // U+F07C load scene
+#define ICON_FA_PLAY "\xef\x81\x8b"                    // U+F04B play simulation
+#define ICON_FA_STOP "\xef\x81\x8d"                    // U+F04D stop + restore
 
 // Inspector sections
 #define ICON_FA_UP_DOWN_LEFT_RIGHT "\xef\x82\xb2"      // U+F0B2 transform

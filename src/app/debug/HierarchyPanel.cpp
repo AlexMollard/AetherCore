@@ -20,11 +20,14 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "physics/PhysicsComponents.hpp"
+#include "physics/PhysicsSystem.hpp"
+#include "rendering/Renderer.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
@@ -438,7 +441,7 @@ namespace aether::app
 				{
 					if (auto* assets = context.TryGet<AssetManager>())
 					{
-						const auto captured = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry());
+						const auto captured = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
 						scene::SaveSceneFile(m_sceneNameBuf, captured);
 						m_sceneListDirty = true;
 					}
@@ -457,10 +460,12 @@ namespace aether::app
 				{
 					ImGui::TextDisabled("No scenes in %s", scene::ScenesDirectory().c_str());
 				}
+				auto* settings = context.TryGet<aether::EngineSettings>();
 				for (const std::string& name: m_sceneList)
 				{
 					ImGui::PushID(name.c_str());
-					if (ImGui::MenuItem(name.c_str()))
+					const bool isStartup = settings != nullptr && settings->app.startupScene == name;
+					if (ImGui::MenuItem(name.c_str(), isStartup ? "startup" : nullptr))
 					{
 						auto* sceneCtx = context.TryGet<scripting::SceneContext>();
 						scene::ApplySceneDeps deps{};
@@ -469,9 +474,24 @@ namespace aether::app
 						deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
 						deps.effectParams = context.TryGet<EffectParamBuffer>();
 						deps.sceneContext = sceneCtx;
+						deps.physics = context.TryGet<PhysicsSystem>();
+						deps.renderer = context.TryGet<Renderer>();
 						if (scene::LoadSceneFile(name, world, deps))
 						{
 							selection.Clear();
+						}
+					}
+					if (settings != nullptr && !isStartup)
+					{
+						ImGui::SameLine();
+						if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
+						{
+							settings->app.startupScene = name;
+							aether::EngineSettingsIO::Save(*settings, aether::EngineSettingsIO::ResolvePath());
+						}
+						if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+						{
+							ImGui::SetTooltip("Set as startup scene (writes engine.toml)");
 						}
 					}
 					ImGui::PopID();

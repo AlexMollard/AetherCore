@@ -11,17 +11,24 @@
 #include <ImGuizmo.h>
 
 #include "AetherCore.hpp"
+#include "PlayState.hpp"
+#include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "debug/ScenePicker.hpp"
+#include "material/EffectParamBuffer.hpp"
+#include "mesh/PrimitiveMeshes.hpp"
+#include "scene/SceneSerializer.hpp"
+#include "scripting/SceneContext.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "platform/Input.hpp"
+#include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
@@ -30,6 +37,131 @@
 
 namespace aether::app
 {
+	namespace
+	{
+		scene::ApplySceneDeps MakeSceneDeps(LayerContext& context)
+		{
+			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			scene::ApplySceneDeps deps{};
+			deps.assets = context.TryGet<AssetManager>();
+			deps.primitives = context.TryGet<PrimitiveMeshes>();
+			deps.effectManager = sceneCtx ? sceneCtx->effects : nullptr;
+			deps.effectParams = context.TryGet<EffectParamBuffer>();
+			deps.sceneContext = sceneCtx;
+			deps.physics = context.TryGet<PhysicsSystem>();
+			deps.renderer = context.TryGet<Renderer>();
+			return deps;
+		}
+	} // namespace
+
+	void ViewportPanel::OnUpdate(LayerContext& context)
+	{
+		// Editor camera policy: while Editing the viewport is driven by a
+		// free-fly editor camera (RMB-fly chord); the game's camera - whatever
+		// the script made main - is remembered and restored on Play.
+		auto* playState = context.TryGet<PlayState>();
+		auto* cameras = context.TryGet<CameraManager>();
+		if (playState == nullptr || cameras == nullptr)
+		{
+			return;
+		}
+
+		const bool editing = !playState->IsPlaying();
+		const CameraHandle main = cameras->GetMainCamera();
+
+		// F5 script reload re-runs set_main_camera while Editing: the game took
+		// the view back. Drop our claim so the block below re-seeds and reswaps.
+		if (editing && m_editorCamActive && main.IsValid() && main.id != m_editorCamId)
+		{
+			m_editorCamActive = false;
+		}
+
+		if (editing && !m_editorCamActive)
+		{
+			if (main.IsValid() && main.id != m_editorCamId)
+			{
+				m_gameCamId = main.id;
+			}
+			if (m_editorCamId == 0)
+			{
+				CameraDesc desc;
+				desc.mode = CameraMode::Free;
+				desc.moveSpeed = 15.0f; // the sandbox plaza is ~100 units across
+				m_editorCamId = cameras->Create(desc).id;
+			}
+			if (Camera* editorCam = cameras->TryGet(CameraHandle{m_editorCamId}))
+			{
+				// Seed the editor pose from whatever the player was looking at so
+				// the swap is seamless.
+				if (const Camera* from = cameras->TryGet(CameraHandle{m_gameCamId}); from != nullptr && main.IsValid() && main.id != m_editorCamId)
+				{
+					const glm::mat4 inv = glm::inverse(from->GetViewMatrix());
+					const glm::vec3 eye = glm::vec3(inv[3]);
+					const glm::vec3 fwd = glm::normalize(-glm::vec3(inv[2]));
+					const float pitch = glm::degrees(std::asin(glm::clamp(fwd.y, -1.0f, 1.0f)));
+					const float yaw = glm::degrees(std::atan2(-fwd.x, -fwd.z));
+					editorCam->SetPosition(eye);
+					editorCam->SetYawPitch(yaw, pitch);
+				}
+				cameras->SetMainCamera(CameraHandle{m_editorCamId});
+				m_editorCamActive = true;
+			}
+		}
+		else if (!editing && m_editorCamActive)
+		{
+			if (m_gameCamId != 0 && cameras->TryGet(CameraHandle{m_gameCamId}) != nullptr)
+			{
+				cameras->SetMainCamera(CameraHandle{m_gameCamId});
+			}
+			m_editorCamActive = false;
+		}
+	}
+
+	void ViewportPanel::DrawPlayControls(LayerContext& context)
+	{
+		auto* playState = context.TryGet<PlayState>();
+		if (playState == nullptr)
+		{
+			return;
+		}
+		auto* assets = context.TryGet<AssetManager>();
+		World& world = context.Get<World>();
+
+		ImGui::SameLine();
+		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+		ImGui::SameLine();
+
+		if (playState->IsPlaying())
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
+			const bool stop = ImGui::SmallButton(ICON_FA_STOP " Stop");
+			ImGui::PopStyleColor();
+			ImGui::SetItemTooltip("Stop and restore the scene captured at Play");
+			if (stop)
+			{
+				playState->SetMode(PlayState::Mode::Editing);
+				if (playState->stopSnapshot)
+				{
+					scene::ReplaceScene(*playState->stopSnapshot, world, MakeSceneDeps(context));
+					playState->stopSnapshot.reset();
+					context.Get<SceneSelection>().Clear();
+				}
+			}
+		}
+		else
+		{
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.85f, 0.45f, 1.0f));
+			const bool play = ImGui::SmallButton(ICON_FA_PLAY " Play");
+			ImGui::PopStyleColor();
+			ImGui::SetItemTooltip("Snapshot the scene and simulate");
+			if (play && assets != nullptr)
+			{
+				playState->stopSnapshot = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+				playState->SetMode(PlayState::Mode::Playing);
+			}
+		}
+	}
+
 	void ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)
 	{
 		// W/E/R switch ops while the mouse is over the viewport - but not while
@@ -96,6 +228,13 @@ namespace aether::app
 		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
 		{
 			ApplyWorldTransform(context, world, primary, model);
+		}
+
+		// A hot gizmo owns the mouse: silence camera mouse processing (orbit
+		// cameras would otherwise rotate the view out from under the drag).
+		if (ImGuizmo::IsOver() || ImGuizmo::IsUsingAny())
+		{
+			context.Get<Input>().SetMouseCaptured(true);
 		}
 	}
 
@@ -435,6 +574,8 @@ namespace aether::app
 			m_gizmoLocal = !m_gizmoLocal;
 		}
 		ImGui::SetItemTooltip("Gizmo orientation (Ctrl-drag snaps)");
+
+		DrawPlayControls(context);
 
 		ImGui::End();
 	}

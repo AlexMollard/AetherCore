@@ -134,50 +134,51 @@ namespace aether
 
 		if (m_mode == CameraMode::Free)
 		{
-			// Hold RMB to look around (delta mouse -> yaw/pitch).
-			// Skip while UI is interacting (e.g. dragging a panel).
+			// Unreal-editor style: the fly chord is HOLD RMB. Look, WASD/QE
+			// movement and the scroll speed-scale all live inside it, so bare
+			// W/E/R stay free for editor hotkeys (gizmo ops) and typing.
 			if (input.IsMouseButtonDown(MouseButton::Right))
 			{
 				const glm::vec2 delta = input.GetMouseDelta();
 				m_yaw -= delta.x * m_lookSpeed;
 				m_pitch -= delta.y * m_lookSpeed; // inverted: drag up = look up
 				m_pitch = std::clamp(m_pitch, -kPitchLimit, kPitchLimit);
-			}
 
-			// WASD + Q/E to move in camera-local space.
-			const glm::vec3 fwd = GetForward();
-			const glm::vec3 right = GetRight();
+				// WASD + Q/E to move in camera-local space.
+				const glm::vec3 fwd = GetForward();
+				const glm::vec3 right = GetRight();
 
-			if (input.IsKeyDown(Key::W))
-			{
-				m_position += fwd * m_moveSpeed * dt;
-			}
-			if (input.IsKeyDown(Key::S))
-			{
-				m_position -= fwd * m_moveSpeed * dt;
-			}
-			if (input.IsKeyDown(Key::D))
-			{
-				m_position += right * m_moveSpeed * dt;
-			}
-			if (input.IsKeyDown(Key::A))
-			{
-				m_position -= right * m_moveSpeed * dt;
-			}
-			if (input.IsKeyDown(Key::E))
-			{
-				m_position.y += m_moveSpeed * dt;
-			}
-			if (input.IsKeyDown(Key::Q))
-			{
-				m_position.y -= m_moveSpeed * dt;
-			}
+				if (input.IsKeyDown(Key::W))
+				{
+					m_position += fwd * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::S))
+				{
+					m_position -= fwd * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::D))
+				{
+					m_position += right * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::A))
+				{
+					m_position -= right * m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::E))
+				{
+					m_position.y += m_moveSpeed * dt;
+				}
+				if (input.IsKeyDown(Key::Q))
+				{
+					m_position.y -= m_moveSpeed * dt;
+				}
 
-			// Scroll wheel: scale move speed (min 0.5).
-			const float scroll = input.GetScrollDelta().y;
-			if (scroll != 0.0f)
-			{
-				m_moveSpeed = std::max(0.5f, m_moveSpeed + scroll * 0.5f);
+				// Scroll wheel: scale move speed (min 0.5).
+				const float scroll = input.GetScrollDelta().y;
+				if (scroll != 0.0f)
+				{
+					m_moveSpeed = std::max(0.5f, m_moveSpeed + scroll * 0.5f);
+				}
 			}
 		}
 		else if (m_mode == CameraMode::Orbit)

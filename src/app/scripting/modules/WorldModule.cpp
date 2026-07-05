@@ -9,6 +9,7 @@
 
 #include "daScript/daScript.h"
 
+#include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformUtils.hpp"
@@ -20,6 +21,7 @@
 #include "material/MaterialSystem.hpp"
 #include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/DasHelpers.hpp"
 #include "utils/Logger.hpp"
@@ -57,6 +59,53 @@ namespace
 	void das_set_name(aether::World* w, uint32_t id, const char* name)
 	{
 		w->EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = das_to_std_string(name)});
+	}
+
+	// -- Data-driven behaviors (BehaviorSystem advances these while Playing) ----
+
+	// add_bob(world, entity_id, amplitude, frequency, phase)
+	void das_add_bob(aether::World* w, uint32_t id, float amplitude, float frequency, float phase)
+	{
+		w->EmplaceOrReplace<aether::BobComponent>(aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
+	}
+
+	// add_spin(world, entity_id, euler_deg_per_sec)
+	void das_add_spin(aether::World* w, uint32_t id, das::float3 eulerDegPerSec)
+	{
+		w->EmplaceOrReplace<aether::SpinComponent>(aether::Entity{id}, aether::SpinComponent{.eulerDegPerSec = to_glm(eulerDegPerSec)});
+	}
+
+	// add_orbit(world, entity_id, center, radius, speed_deg, start_angle_deg, yaw_offset_deg, height)
+	void das_add_orbit(aether::World* w, uint32_t id, das::float3 center, float radius, float speedDeg, float startAngleDeg, float yawOffsetDeg, float height)
+	{
+		w->EmplaceOrReplace<aether::OrbitComponent>(aether::Entity{id}, aether::OrbitComponent{.center = to_glm(center), .radius = radius, .angularSpeedDeg = speedDeg, .angleDeg = startAngleDeg, .yawOffsetDeg = yawOffsetDeg, .height = height});
+	}
+
+	// add_material_pulse(world, entity_id, emissive_a, emissive_b, frequency)
+	void das_add_material_pulse(aether::World* w, uint32_t id, das::float3 emissiveA, das::float3 emissiveB, float frequency)
+	{
+		w->EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id}, aether::MaterialPulseComponent{.emissiveA = to_glm(emissiveA), .emissiveB = to_glm(emissiveB), .frequency = frequency});
+	}
+
+	// mark_transient(world, entity_id) - exclude the entity (and its subtree)
+	// from scene capture; script-owned runtime actors use this.
+	void das_mark_transient(aether::World* w, uint32_t id)
+	{
+		// Empty tag component: entt's empty-type storage returns void from
+		// emplace, so the World wrapper (which returns T&) cannot be used.
+		auto& reg = w->GetRegistry();
+		const auto e = aether::World::ToEntt(aether::Entity{id});
+		if (!reg.all_of<aether::SceneTransientComponent>(e))
+		{
+			reg.emplace<aether::SceneTransientComponent>(e);
+		}
+	}
+
+	// scene_file_exists(name) -> bool - lets on_attach skip its legacy content
+	// builders once the startup scene file has been generated.
+	bool das_scene_file_exists(const char* name)
+	{
+		return aether::app::scene::ReadSceneFile(name ? name : "").has_value();
 	}
 
 	// get_name(world, entity_id) -> string  (empty string when unnamed)
@@ -646,6 +695,12 @@ namespace aether::app::scripting
 			Bind<das_entity_valid>(lib, "entity_valid", SE::none);
 			Bind<das_set_name>(lib, "set_name", SE::modifyExternal);
 			Bind<das_get_name>(lib, "get_name", SE::accessExternal);
+			Bind<das_add_bob>(lib, "add_bob", SE::modifyExternal);
+			Bind<das_add_spin>(lib, "add_spin", SE::modifyExternal);
+			Bind<das_add_orbit>(lib, "add_orbit", SE::modifyExternal);
+			Bind<das_add_material_pulse>(lib, "add_material_pulse", SE::modifyExternal);
+			Bind<das_mark_transient>(lib, "mark_transient", SE::modifyExternal);
+			Bind<das_scene_file_exists>(lib, "scene_file_exists", SE::accessExternal);
 
 			// TransformComponent - structural ops (add/has/remove)
 			BIND_COMPONENT("transform", aether::TransformComponent)

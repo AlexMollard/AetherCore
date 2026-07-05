@@ -20,6 +20,7 @@ namespace aether::app
 
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
+		void OnUpdate(LayerContext& context) override;
 		void OnImGui(LayerContext& context) override;
 		void OnRenderTargetsInvalidated(LayerContext& context) override;
 
@@ -30,6 +31,8 @@ namespace aether::app
 		void HandleViewportPicking(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
 		// ImGuizmo manipulator on the primary selection, drawn over the image.
 		void DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect);
+		// Play/Stop toolbar buttons (snapshot on Play, restore on Stop).
+		void DrawPlayControls(LayerContext& context);
 
 		std::uint64_t m_sceneViewportTextureId = 0;
 		gpu::ImageView m_sceneViewportImageView = nullptr;
@@ -41,5 +44,12 @@ namespace aether::app
 
 		int m_gizmoOp = 0;         // 0 translate, 1 rotate, 2 scale
 		bool m_gizmoLocal = false; // world-space handles by default
+
+		// Editor free-fly camera: takes over as main while Editing (seeded from
+		// the game camera's view), hands back on Play. Stored as raw ids to keep
+		// this header camera-include-free.
+		std::uint32_t m_editorCamId = 0;
+		std::uint32_t m_gameCamId = 0;
+		bool m_editorCamActive = false;
 	};
 } // namespace aether::app

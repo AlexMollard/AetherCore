@@ -105,6 +105,14 @@ namespace aether
 		std::string name;
 	};
 
+	// Excludes an entity (and, via the hierarchy, its whole subtree) from scene
+	// capture. Script-owned runtime entities (the player, its model children)
+	// mark themselves transient so boot auto-generation and Play snapshots do
+	// not duplicate them.
+	struct SceneTransientComponent
+	{
+	};
+
 	// Drives GPU-based skeletal animation for a skinned mesh entity.
 	struct SkinnedMeshComponent
 	{

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 #include <string_view>
 
 namespace aether
@@ -24,6 +25,12 @@ namespace aether
 		{
 			// 0 = automatic policy (swapchain-paced when VSync is on, uncapped when off)
 			float targetFps = 0.0f;
+			// Scene file (resources/scenes/<name>.scene.toml) loaded at boot after
+			// the scene script's on_attach; auto-generated from the script content
+			// on first run. Empty disables boot-from-scene.
+			std::string startupScene = "sandbox";
+			// false = boot into the editor's frozen Editing mode (press Play).
+			bool autoplay = false;
 		} app;
 	};
 

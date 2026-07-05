@@ -147,6 +147,118 @@ TEST_CASE("Capture -> WriteToml -> ParseToml round-trips every record type") {
     CHECK(!o.skinned->looping);
 }
 
+TEST_CASE("Behavior components round-trip through capture, TOML and apply") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World source = MakeWorld();
+
+    Entity orb = source.Create();
+    source.Emplace<NameComponent>(orb, NameComponent{.name = "Orb"});
+    source.Emplace<TransformComponent>(orb, TransformComponent{});
+    source.Emplace<BobComponent>(orb, BobComponent{.amplitude = 1.5f, .frequency = 0.8f, .phase = 2.1f, .baseCaptured = true, .baseY = 20.0f, .time = 33.0f});
+
+    Entity cube = source.Create();
+    source.Emplace<NameComponent>(cube, NameComponent{.name = "Spinner"});
+    source.Emplace<TransformComponent>(cube, TransformComponent{});
+    source.Emplace<SpinComponent>(cube, SpinComponent{.eulerDegPerSec = {20.0f, 40.0f, 0.0f}});
+    source.Emplace<MaterialPulseComponent>(cube, MaterialPulseComponent{.emissiveA = {0.1f, 0.0f, 0.0f}, .emissiveB = {2.0f, 1.0f, 0.2f}, .frequency = 2.0f, .time = 9.0f});
+
+    Entity fox = source.Create();
+    source.Emplace<NameComponent>(fox, NameComponent{.name = "Fox"});
+    source.Emplace<TransformComponent>(fox, TransformComponent{});
+    source.Emplace<OrbitComponent>(fox, OrbitComponent{.center = {14, 0, 15}, .radius = 6.0f, .angularSpeedDeg = 25.0f, .angleDeg = 123.0f, .yawOffsetDeg = 90.0f, .height = 0.0f});
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(source, mreg, treg)));
+    REQUIRE(parsed.has_value());
+
+    const EntityRecord& o = RecordOf(*parsed, "Orb");
+    REQUIRE(o.bob.has_value());
+    CHECK(o.bob->amplitude == doctest::Approx(1.5f));
+    CHECK(o.bob->frequency == doctest::Approx(0.8f));
+    CHECK(o.bob->phase == doctest::Approx(2.1f));
+    CHECK(!o.bob->baseCaptured); // transient state resets through the round-trip
+    CHECK(o.bob->time == doctest::Approx(0.0f));
+
+    const EntityRecord& s = RecordOf(*parsed, "Spinner");
+    REQUIRE(s.spin.has_value());
+    CHECK(s.spin->eulerDegPerSec.x == doctest::Approx(20.0f));
+    REQUIRE(s.materialPulse.has_value());
+    CHECK(s.materialPulse->emissiveB.r == doctest::Approx(2.0f));
+    CHECK(s.materialPulse->frequency == doctest::Approx(2.0f));
+    CHECK(s.materialPulse->time == doctest::Approx(0.0f));
+
+    const EntityRecord& f = RecordOf(*parsed, "Fox");
+    REQUIRE(f.orbit.has_value());
+    CHECK(f.orbit->center.x == doctest::Approx(14.0f));
+    CHECK(f.orbit->radius == doctest::Approx(6.0f));
+    CHECK(f.orbit->angleDeg == doctest::Approx(123.0f)); // resumes in place
+    CHECK(f.orbit->yawOffsetDeg == doctest::Approx(90.0f));
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity appliedFox = AppliedOf(*parsed, created, "Fox");
+    REQUIRE(appliedFox.IsValid());
+    REQUIRE(fresh.TryGet<OrbitComponent>(appliedFox) != nullptr);
+    CHECK(fresh.Get<OrbitComponent>(appliedFox).angleDeg == doctest::Approx(123.0f));
+    const Entity appliedOrb = AppliedOf(*parsed, created, "Orb");
+    REQUIRE(fresh.TryGet<BobComponent>(appliedOrb) != nullptr);
+    CHECK(!fresh.Get<BobComponent>(appliedOrb).baseCaptured);
+}
+
+TEST_CASE("Lights and environment records round-trip through TOML") {
+    SceneDescription scene;
+    scene.name = "lit";
+
+    EnvironmentRecord env;
+    env.ambient = {0.20f, 0.22f, 0.27f};
+    env.sunDirection = {-0.4f, -0.8f, -0.3f};
+    env.sunIntensity = 4.0f;
+    env.sunColor = {1.0f, 0.95f, 0.85f};
+    env.skyHorizon = {0.55f, 0.65f, 0.80f};
+    env.skyZenith = {0.15f, 0.25f, 0.50f};
+    env.skyVoid = {0.02f, 0.02f, 0.03f};
+    scene.environment = env;
+
+    LightRecord point;
+    point.isSpot = false;
+    point.position = {-30, 6, -30};
+    point.radius = 18.0f;
+    point.color = {1.0f, 0.6f, 0.3f};
+    point.intensity = 12.0f;
+    point.castsShadow = true;
+    scene.lights.push_back(point);
+
+    LightRecord spot;
+    spot.isSpot = true;
+    spot.position = {10, 12, -35};
+    spot.direction = {0.0f, -1.0f, 0.2f};
+    spot.innerAngleRad = 0.30f;
+    spot.outerAngleRad = 0.55f;
+    spot.intensity = 20.0f;
+    scene.lights.push_back(spot);
+
+    const auto parsed = ParseToml(WriteToml(scene));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->environment.has_value());
+    CHECK(parsed->environment->sunIntensity == doctest::Approx(4.0f));
+    CHECK(parsed->environment->ambient.b == doctest::Approx(0.27f));
+    CHECK(parsed->environment->skyZenith.b == doctest::Approx(0.50f));
+
+    REQUIRE(parsed->lights.size() == 2);
+    const LightRecord& p = parsed->lights[0];
+    CHECK(!p.isSpot);
+    CHECK(p.position.x == doctest::Approx(-30.0f));
+    CHECK(p.radius == doctest::Approx(18.0f));
+    CHECK(p.castsShadow);
+    const LightRecord& s = parsed->lights[1];
+    CHECK(s.isSpot);
+    CHECK(s.innerAngleRad == doctest::Approx(0.30f));
+    CHECK(s.outerAngleRad == doctest::Approx(0.55f));
+    CHECK(s.direction.z == doctest::Approx(0.2f));
+}
+
 TEST_CASE("ApplyScene rebuilds names, tags, transforms, physics descs and hierarchy") {
     // No GPU-facing deps: mesh/material/effect resolution is skipped gracefully,
     // everything value-typed must round-trip into a fresh world.

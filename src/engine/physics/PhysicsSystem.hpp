@@ -86,6 +86,16 @@ namespace aether
 		void SetPosition(PhysicsBodyHandle body, glm::vec3 position);
 		void SetRotation(PhysicsBodyHandle body, glm::quat rotation);
 
+		// Block until no async physics step is in flight. Callers that destroy
+		// bodies outside Update (scene replace-all, editor stop-restore) MUST
+		// call this first - Jolt body removal must not race the stepping thread.
+		void WaitForStepIdle();
+
+		// Editor-paused variant of Update: consume pending *BodyDesc components
+		// into live bodies (so loaded/created entities are pickable and
+		// teleportable) without stepping the simulation.
+		void FlushPendingOnly(World& world);
+
 		// -- Raycasting ----------------------------------------------------------
 
 		// Result of a single raycast query.

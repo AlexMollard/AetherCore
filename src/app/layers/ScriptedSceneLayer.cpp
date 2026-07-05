@@ -5,6 +5,7 @@
 #include "scripting/ScriptingSubsystem.hpp"
 
 #include "IEngineRuntime.hpp"
+#include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "material/MaterialAuthoring.hpp"
@@ -24,6 +25,7 @@
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "systems/DayNightSystem.hpp"
+#include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "vulkan/GpuEnumConversions.hpp"
@@ -218,6 +220,38 @@ namespace aether::app
 		m_scriptBroken = false;
 		m_scripting->ClearErrors();
 		m_scripting->CallOnAttach(m_handle, m_sceneCtx);
+
+		// Boot-from-scene: on_attach prepared the script-owned runtime (camera,
+		// tags, player - and, when the scene file is missing, the legacy scene
+		// content). Load the startup scene ADDITIVELY into that world, or
+		// auto-generate it from the legacy content on first run (transient
+		// entities are excluded from the capture).
+		if (const auto* settings = context.TryGet<aether::EngineSettings>(); settings != nullptr && !settings->app.startupScene.empty())
+		{
+			const std::string& sceneName = settings->app.startupScene;
+			scene::ApplySceneDeps deps{};
+			deps.assets = m_sceneCtx.assets;
+			deps.primitives = m_sceneCtx.primitives;
+			deps.effectManager = m_sceneCtx.effects;
+			deps.effectParams = m_sceneCtx.assets ? &m_sceneCtx.assets->GetEffectParamBuffer() : nullptr;
+			deps.sceneContext = &m_sceneCtx;
+			deps.physics = m_sceneCtx.physics;
+			deps.renderer = m_sceneCtx.renderer;
+
+			if (const auto desc = scene::ReadSceneFile(sceneName))
+			{
+				scene::ApplyScene(*desc, context.Get<World>(), deps);
+				AE_INFO(LogCategory::App, "Startup scene '{}' loaded ({} entities)", sceneName, desc->entities.size());
+			}
+			else if (m_sceneCtx.assets != nullptr)
+			{
+				const auto captured = scene::CaptureScene(context.Get<World>(), m_sceneCtx.assets->GetMaterialRegistry(), m_sceneCtx.assets->GetTextureRegistry(), m_sceneCtx.renderer);
+				if (scene::SaveSceneFile(sceneName, captured))
+				{
+					AE_INFO(LogCategory::App, "Startup scene '{}' auto-generated from script content - commit resources/scenes/{}.scene.toml", sceneName, sceneName);
+				}
+			}
+		}
 	}
 
 	void ScriptedSceneLayer::OnDetach(LayerContext& context)
@@ -259,6 +293,13 @@ namespace aether::app
 		}
 
 		if (!m_handle.IsValid())
+		{
+			return;
+		}
+
+		// Edit mode freezes script simulation; F5 reload handling above stays
+		// live. Absent PlayState (headless/tests) means always-playing.
+		if (const auto* playState = context.TryGet<PlayState>(); playState != nullptr && !playState->IsPlaying())
 		{
 			return;
 		}

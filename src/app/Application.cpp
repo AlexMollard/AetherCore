@@ -3,6 +3,7 @@
 #include <chrono>
 
 #include "animation/AnimationSystem.hpp"
+#include "assets/AssetManager.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "io/FileSystem.hpp"
@@ -14,6 +15,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "systems/BehaviorSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app
@@ -146,6 +148,15 @@ namespace aether::app
 		// can already find them (via ServiceContainer or World system lookup).
 		{
 			auto& services = attachContext.services;
+
+			// Editor simulation state: the app boots frozen (Editing) unless the
+			// autoplay setting flips it; panels toggle it via Play/Stop.
+			m_playState.SetMode(m_settings.app.autoplay ? PlayState::Mode::Playing : PlayState::Mode::Editing);
+			services.Register<PlayState>(m_playState);
+			// Settings service: layers read app.startupScene; the scene UI's
+			// set-as-startup writes it back through EngineSettingsIO::Save.
+			services.Register<aether::EngineSettings>(m_settings);
+
 			attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
 			auto physicsSystem = std::make_unique<aether::PhysicsSystem>();
@@ -158,6 +169,10 @@ namespace aether::app
 			auto dayNightPtr = dayNightSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
 			services.Register<aether::app::DayNightSystem>(*dayNightPtr);
+
+			// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
+			// with the rest of the simulation while Editing.
+			attachContext.Get<World>().RegisterSystem(std::make_unique<BehaviorSystem>(attachContext.Get<AssetManager>()));
 		}
 
 		m_layers.AttachAll(attachContext);
@@ -215,7 +230,27 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 		LayerContext ctx = MakeLayerContext(gameDt, frameIndex);
-		ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
+		if (m_playState.IsPlaying())
+		{
+			ctx.Get<World>().UpdateSystems(static_cast<float>(gameDt));
+		}
+		else
+		{
+			// Edit mode: simulation systems (physics steps, animation time,
+			// day/night) are frozen, but pending body descriptors still become
+			// live bodies so loaded/created entities are pickable/teleportable.
+			if (auto* physics = ctx.TryGet<aether::PhysicsSystem>())
+			{
+				physics->FlushPendingOnly(ctx.Get<World>());
+			}
+			// Day/night still APPLIES its current time to the renderer (dt = 0
+			// advances nothing) so the panel's time-of-day scrub previews live
+			// while paused.
+			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>())
+			{
+				dayNight->Update(ctx.Get<World>(), 0.0f);
+			}
+		}
 		m_layers.UpdateAll(ctx);
 	}
 

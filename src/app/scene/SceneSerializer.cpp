@@ -17,6 +17,8 @@
 #include "material/TextureRegistry.hpp"
 #include "mesh/Mesh.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
+#include "physics/PhysicsSystem.hpp"
+#include "rendering/Renderer.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/TransformUtils.hpp"
@@ -137,10 +139,66 @@ namespace aether::app::scene
 
 	// ── Capture ─────────────────────────────────────────────────────────────────
 
-	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures)
+	SceneDescription CaptureScene(World& world, const MaterialRegistry& materials, const TextureRegistry& textures, const Renderer* renderer)
 	{
 		SceneDescription scene;
 		auto& reg = world.GetRegistry();
+
+		if (renderer != nullptr)
+		{
+			for (const auto& p: renderer->GetPointLights())
+			{
+				LightRecord light;
+				light.isSpot = false;
+				light.position = p.position;
+				light.radius = p.radius;
+				light.color = p.color;
+				light.intensity = p.intensity;
+				light.castsShadow = p.castsShadow;
+				scene.lights.push_back(light);
+			}
+			for (const auto& s: renderer->GetSpotLights())
+			{
+				LightRecord light;
+				light.isSpot = true;
+				light.position = s.position;
+				light.radius = s.radius;
+				light.color = s.color;
+				light.intensity = s.intensity;
+				light.castsShadow = s.castsShadow;
+				light.direction = s.direction;
+				light.innerAngleRad = s.innerAngleRad;
+				light.outerAngleRad = s.outerAngleRad;
+				scene.lights.push_back(light);
+			}
+			EnvironmentRecord env;
+			env.ambient = renderer->GetAmbientLight();
+			env.sunDirection = renderer->GetDirectionalLightDirection();
+			env.sunIntensity = renderer->GetDirectionalLightIntensity();
+			env.sunColor = renderer->GetSunColor();
+			env.skyHorizon = renderer->GetSkyHorizonColor();
+			env.skyZenith = renderer->GetSkyZenithColor();
+			env.skyVoid = renderer->GetSkyVoidColor();
+			scene.environment = env;
+		}
+
+		// Transient entities (and their subtrees) are script-owned runtime state
+		// - excluded so boot auto-generation and Play snapshots never duplicate
+		// them when the script respawns its own actors.
+		const auto isTransient = [&world](Entity e)
+		{
+			Entity cur = e;
+			while (cur.IsValid())
+			{
+				if (world.Has<SceneTransientComponent>(cur))
+				{
+					return true;
+				}
+				const auto* h = world.TryGet<HierarchyComponent>(cur);
+				cur = h ? h->parent : Entity{};
+			}
+			return false;
+		};
 
 		std::vector<Entity> order;
 		std::unordered_map<std::uint32_t, int> indexOf;
@@ -151,7 +209,7 @@ namespace aether::app::scene
 				continue;
 			}
 			const Entity e = World::FromEntt(handle);
-			if (!e.IsValid())
+			if (!e.IsValid() || isTransient(e))
 			{
 				continue;
 			}
@@ -238,6 +296,27 @@ namespace aether::app::scene
 				}
 				rec.effect = std::move(fx);
 			}
+			if (const auto* bob = world.TryGet<BobComponent>(e))
+			{
+				BobComponent clean = *bob;
+				clean.baseCaptured = false; // re-base from the restored transform
+				clean.time = 0.0f;
+				rec.bob = clean;
+			}
+			if (const auto* spin = world.TryGet<SpinComponent>(e))
+			{
+				rec.spin = *spin;
+			}
+			if (const auto* orbit = world.TryGet<OrbitComponent>(e))
+			{
+				rec.orbit = *orbit;
+			}
+			if (const auto* pulse = world.TryGet<MaterialPulseComponent>(e))
+			{
+				MaterialPulseComponent clean = *pulse;
+				clean.time = 0.0f;
+				rec.materialPulse = clean;
+			}
 			scene.entities.push_back(std::move(rec));
 		}
 		return scene;
@@ -252,6 +331,43 @@ namespace aether::app::scene
 		header.insert("version", kSceneVersion);
 		header.insert("name", scene.name);
 		root.insert("scene", std::move(header));
+
+		if (scene.environment)
+		{
+			const EnvironmentRecord& env = *scene.environment;
+			toml::table e;
+			e.insert("ambient", Vec3ToToml(env.ambient));
+			e.insert("sun_direction", Vec3ToToml(env.sunDirection));
+			e.insert("sun_intensity", env.sunIntensity);
+			e.insert("sun_color", Vec3ToToml(env.sunColor));
+			e.insert("sky_horizon", Vec3ToToml(env.skyHorizon));
+			e.insert("sky_zenith", Vec3ToToml(env.skyZenith));
+			e.insert("sky_void", Vec3ToToml(env.skyVoid));
+			root.insert("environment", std::move(e));
+		}
+
+		if (!scene.lights.empty())
+		{
+			toml::array lights;
+			for (const LightRecord& light: scene.lights)
+			{
+				toml::table l;
+				l.insert("type", light.isSpot ? "spot" : "point");
+				l.insert("position", Vec3ToToml(light.position));
+				l.insert("radius", light.radius);
+				l.insert("color", Vec3ToToml(light.color));
+				l.insert("intensity", light.intensity);
+				l.insert("shadow", light.castsShadow);
+				if (light.isSpot)
+				{
+					l.insert("direction", Vec3ToToml(light.direction));
+					l.insert("inner_rad", light.innerAngleRad);
+					l.insert("outer_rad", light.outerAngleRad);
+				}
+				lights.push_back(std::move(l));
+			}
+			root.insert("lights", std::move(lights));
+		}
 
 		toml::array entities;
 		for (const EntityRecord& rec: scene.entities)
@@ -339,6 +455,39 @@ namespace aether::app::scene
 				f.insert("intensity", rec.effect->params.intensity);
 				t.insert("effect", std::move(f));
 			}
+			if (rec.bob)
+			{
+				toml::table b;
+				b.insert("amplitude", rec.bob->amplitude);
+				b.insert("frequency", rec.bob->frequency);
+				b.insert("phase", rec.bob->phase);
+				t.insert("bob", std::move(b));
+			}
+			if (rec.spin)
+			{
+				toml::table s;
+				s.insert("euler_deg_per_sec", Vec3ToToml(rec.spin->eulerDegPerSec));
+				t.insert("spin", std::move(s));
+			}
+			if (rec.orbit)
+			{
+				toml::table o;
+				o.insert("center", Vec3ToToml(rec.orbit->center));
+				o.insert("radius", rec.orbit->radius);
+				o.insert("speed_deg", rec.orbit->angularSpeedDeg);
+				o.insert("angle_deg", rec.orbit->angleDeg);
+				o.insert("yaw_offset_deg", rec.orbit->yawOffsetDeg);
+				o.insert("height", rec.orbit->height);
+				t.insert("orbit", std::move(o));
+			}
+			if (rec.materialPulse)
+			{
+				toml::table p;
+				p.insert("emissive_a", Vec3ToToml(rec.materialPulse->emissiveA));
+				p.insert("emissive_b", Vec3ToToml(rec.materialPulse->emissiveB));
+				p.insert("frequency", rec.materialPulse->frequency);
+				t.insert("material_pulse", std::move(p));
+			}
 			entities.push_back(std::move(t));
 		}
 		root.insert("entities", std::move(entities));
@@ -365,6 +514,44 @@ namespace aether::app::scene
 
 		SceneDescription scene;
 		scene.name = root["scene"]["name"].value_or(std::string{});
+
+		if (const auto* e = root["environment"].as_table())
+		{
+			const toml::node_view<const toml::node> ev{*e};
+			EnvironmentRecord env;
+			env.ambient = Vec3FromToml(ev["ambient"], env.ambient);
+			env.sunDirection = Vec3FromToml(ev["sun_direction"], env.sunDirection);
+			env.sunIntensity = static_cast<float>(ev["sun_intensity"].value_or(1.0));
+			env.sunColor = Vec3FromToml(ev["sun_color"], env.sunColor);
+			env.skyHorizon = Vec3FromToml(ev["sky_horizon"], env.skyHorizon);
+			env.skyZenith = Vec3FromToml(ev["sky_zenith"], env.skyZenith);
+			env.skyVoid = Vec3FromToml(ev["sky_void"], env.skyVoid);
+			scene.environment = env;
+		}
+
+		if (const auto* lights = root["lights"].as_array())
+		{
+			for (const auto& node: *lights)
+			{
+				const auto* l = node.as_table();
+				if (l == nullptr)
+				{
+					continue;
+				}
+				const toml::node_view<const toml::node> lv{*l};
+				LightRecord light;
+				light.isSpot = lv["type"].value_or(std::string{"point"}) == "spot";
+				light.position = Vec3FromToml(lv["position"], light.position);
+				light.radius = static_cast<float>(lv["radius"].value_or(1.0));
+				light.color = Vec3FromToml(lv["color"], light.color);
+				light.intensity = static_cast<float>(lv["intensity"].value_or(1.0));
+				light.castsShadow = lv["shadow"].value_or(false);
+				light.direction = Vec3FromToml(lv["direction"], light.direction);
+				light.innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35));
+				light.outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60));
+				scene.lights.push_back(light);
+			}
+		}
 
 		const auto* entities = root["entities"].as_array();
 		if (entities == nullptr)
@@ -452,6 +639,26 @@ namespace aether::app::scene
 				fx.params.intensity = static_cast<float>(fv["intensity"].value_or(1.0));
 				rec.effect = std::move(fx);
 			}
+			if (const auto* b = tv["bob"].as_table())
+			{
+				const toml::node_view<const toml::node> bv{*b};
+				rec.bob = BobComponent{.amplitude = static_cast<float>(bv["amplitude"].value_or(1.0)), .frequency = static_cast<float>(bv["frequency"].value_or(1.0)), .phase = static_cast<float>(bv["phase"].value_or(0.0))};
+			}
+			if (const auto* s = tv["spin"].as_table())
+			{
+				const toml::node_view<const toml::node> sv{*s};
+				rec.spin = SpinComponent{.eulerDegPerSec = Vec3FromToml(sv["euler_deg_per_sec"], glm::vec3(0.0f, 40.0f, 0.0f))};
+			}
+			if (const auto* o = tv["orbit"].as_table())
+			{
+				const toml::node_view<const toml::node> ov{*o};
+				rec.orbit = OrbitComponent{.center = Vec3FromToml(ov["center"], glm::vec3(0.0f)), .radius = static_cast<float>(ov["radius"].value_or(5.0)), .angularSpeedDeg = static_cast<float>(ov["speed_deg"].value_or(30.0)), .angleDeg = static_cast<float>(ov["angle_deg"].value_or(0.0)), .yawOffsetDeg = static_cast<float>(ov["yaw_offset_deg"].value_or(0.0)), .height = static_cast<float>(ov["height"].value_or(0.0))};
+			}
+			if (const auto* p = tv["material_pulse"].as_table())
+			{
+				const toml::node_view<const toml::node> pv{*p};
+				rec.materialPulse = MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
+			}
 			scene.entities.push_back(std::move(rec));
 		}
 		return scene;
@@ -526,6 +733,33 @@ namespace aether::app::scene
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
+		// Lights + environment: an environment record marks the description's
+		// light list authoritative (old files without one leave the renderer
+		// untouched, keeping Spec-3 scenes loadable).
+		if (deps.renderer != nullptr && scene.environment)
+		{
+			const EnvironmentRecord& env = *scene.environment;
+			deps.renderer->SetAmbientLight(env.ambient);
+			deps.renderer->SetDirectionalLight(env.sunDirection, env.sunIntensity);
+			deps.renderer->SetSunColor(env.sunColor);
+			deps.renderer->SetSkyGradient(env.skyHorizon, env.skyZenith);
+			deps.renderer->SetSkyVoidColor(env.skyVoid);
+
+			deps.renderer->ClearPointLights();
+			deps.renderer->ClearSpotLights();
+			for (const LightRecord& light: scene.lights)
+			{
+				if (light.isSpot)
+				{
+					deps.renderer->AddSpotLight(Renderer::SpotLight{.position = light.position, .radius = light.radius, .direction = light.direction, .innerAngleRad = light.innerAngleRad, .color = light.color, .intensity = light.intensity, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow});
+				}
+				else
+				{
+					deps.renderer->AddPointLight(Renderer::PointLight{.position = light.position, .radius = light.radius, .color = light.color, .intensity = light.intensity, .castsShadow = light.castsShadow});
+				}
+			}
+		}
+
 		std::vector<Entity> created;
 		created.reserve(scene.entities.size());
 		for (std::size_t i = 0; i < scene.entities.size(); ++i)
@@ -698,6 +932,23 @@ namespace aether::app::scene
 					AE_WARN(LogCategory::App, "Scene load: unknown effect '{}'", rec.effect->name);
 				}
 			}
+
+			if (rec.bob)
+			{
+				world.Emplace<BobComponent>(e, *rec.bob);
+			}
+			if (rec.spin)
+			{
+				world.Emplace<SpinComponent>(e, *rec.spin);
+			}
+			if (rec.orbit)
+			{
+				world.Emplace<OrbitComponent>(e, *rec.orbit);
+			}
+			if (rec.materialPulse)
+			{
+				world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
+			}
 		}
 
 		// Hierarchy after every entity exists.
@@ -720,16 +971,15 @@ namespace aether::app::scene
 		return created;
 	}
 
-	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps)
+	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
-		const auto scene = ReadSceneFile(sceneName);
-		if (!scene)
+		// Collect first (Destroy mutates storage), then destroy - on_destroy
+		// hooks release physics bodies, material slots, effect slots. Body
+		// removal must not race the async physics step.
+		if (deps.physics != nullptr)
 		{
-			return false;
+			deps.physics->WaitForStepIdle();
 		}
-
-		// Replace-all: collect first (Destroy mutates storage), then destroy -
-		// on_destroy hooks release physics bodies, material slots, effect slots.
 		auto& reg = world.GetRegistry();
 		std::vector<Entity> doomed;
 		for (const auto handle: reg.storage<entt::entity>())
@@ -755,7 +1005,17 @@ namespace aether::app::scene
 			deps.sceneContext->sceneEntities.clear();
 		}
 
-		ApplyScene(*scene, world, deps);
+		ApplyScene(scene, world, deps);
+	}
+
+	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps)
+	{
+		const auto scene = ReadSceneFile(sceneName);
+		if (!scene)
+		{
+			return false;
+		}
+		ReplaceScene(*scene, world, deps);
 		AE_INFO(LogCategory::App, "Scene loaded: {} ({} entities)", sceneName, scene->entities.size());
 		return true;
 	}
