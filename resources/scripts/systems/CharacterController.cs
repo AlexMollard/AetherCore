@@ -6,9 +6,8 @@ namespace AetherScripts.Systems;
 
 /// <summary>
 /// Camera-relative character movement with momentum, shortest-path turning, and
-/// animation state driven by speed. Ported from character_controller.das; the das
-/// module globals are now instance fields, so each controller has independent
-/// momentum (fixing the shared-state bug when multiple characters use it).
+/// animation state driven by speed. Momentum and turn state are instance fields,
+/// so each controller is independent — multiple characters never share state.
 /// </summary>
 public sealed class CharacterController
 {

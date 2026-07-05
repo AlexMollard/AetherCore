@@ -247,88 +247,6 @@ if(TARGET libzstd_static AND NOT TARGET zstd::libzstd_static)
     add_library(zstd::libzstd_static ALIAS libzstd_static)
 endif()
 
-# ── Scripting ─────────────────────────────────────────────────────────────────
-CPMAddPackage(
-    NAME daScript
-    GITHUB_REPOSITORY GaijinEntertainment/daScript
-    GIT_TAG        v0.6.0
-    GIT_SHALLOW    TRUE
-    OPTIONS
-        "DAS_TUTORIAL_DISABLED ON"
-        "DAS_TESTS_DISABLED ON"
-        "DAS_AOT_EXAMPLES_DISABLED ON"
-        "DAS_TOOLS_DISABLED ON"
-        "DAS_GLFW_DISABLED ON"
-        "DAS_STBIMAGE_DISABLED ON"
-        "DAS_STBTRUETYPE_DISABLED ON"
-        "DAS_STDDLG_DISABLED ON"
-        "DAS_UNIT_TEST_DISABLED ON"
-        "DAS_OPENGL_DISABLED ON"
-        "DAS_GLSL_DISABLED ON"
-        "DAS_PEG_DISABLED ON"
-)
-
-if(TARGET libDaScriptDyn_xxd AND TARGET libDaScript_xxd)
-    add_dependencies(libDaScriptDyn_xxd libDaScript_xxd)
-endif()
-
-# ── daScript ABI / layout defines (consumer-side ODR fix) ─────────────────────
-if(TARGET libDaScript)
-    target_compile_definitions(libDaScript INTERFACE
-        $<$<CONFIG:Debug>:DAS_SMART_PTR_DEBUG=1>
-        $<$<CONFIG:Release>:DAS_FUSION=2 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
-        $<$<CONFIG:MinSizeRel>:DAS_FUSION=1 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
-        $<$<CONFIG:RelWithDebInfo>:DAS_FUSION=1 DAS_RELWITHDEBINFO=1 DAS_SMART_PTR_DEBUG=1>
-    )
-endif()
-
-# When Tracy is active (Debug/Dev), the engine defines its own global operator
-# new/delete (via MemoryTracker.cpp) to hook allocation profiling. daScript's
-# free_list also defines them when DAS_FREE_LIST=1. Prevent the ODR violation
-# by telling daScript to skip its global operator new/delete.
-# The config guard matches Defines.hpp: Debug and Dev (RelWithDebInfo).
-if(TARGET libDaScript)
-    target_compile_definitions(libDaScript PRIVATE
-        $<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:DAS_NO_GLOBAL_NEW_AND_DELETE>
-    )
-endif()
-if(TARGET libDaScriptDyn)
-    target_compile_definitions(libDaScriptDyn INTERFACE
-        $<$<CONFIG:Debug>:DAS_SMART_PTR_DEBUG=1>
-        $<$<CONFIG:Release>:DAS_FUSION=2 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
-        $<$<CONFIG:MinSizeRel>:DAS_FUSION=1 DAS_DEBUGGER=1 DAS_FREE_LIST=1>
-        $<$<CONFIG:RelWithDebInfo>:DAS_FUSION=1 DAS_RELWITHDEBINFO=1 DAS_SMART_PTR_DEBUG=1>
-    )
-endif()
-
-# ── Silence warnings from third-party daScript build targets ─────────────────
-# daScript and its bundled deps emit hundreds of clang/MSVC warnings that we
-# can't fix upstream. Suppress them on every target the daScript package adds.
-if(MSVC OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32))
-    set(_das_warning_flag /w)
-else()
-    set(_das_warning_flag -w)
-endif()
-foreach(_das_target IN ITEMS
-    libDaScript libDaScriptDyn
-    libDaScript_xxd libDaScriptDyn_xxd
-    libUriParser libUriParserDyn
-    daslang need_and_resolve)
-    if(TARGET ${_das_target})
-        get_target_property(_t_type ${_das_target} TYPE)
-        if(NOT _t_type STREQUAL "UTILITY" AND NOT _t_type STREQUAL "INTERFACE_LIBRARY")
-            target_compile_options(${_das_target} PRIVATE ${_das_warning_flag})
-        endif()
-        # daScript's xxd codegen rules declare .inc outputs but skip writing
-        # them on no-op runs ("has not been modified"). MSBuild flags that as
-        # MSB8065. Demote it to a message so the build log stays quiet.
-        if(MSVC)
-            set_property(TARGET ${_das_target} PROPERTY
-                VS_GLOBAL_MSBuildWarningsAsMessages "MSB8065")
-        endif()
-    endif()
-endforeach()
-
 # ── Solution folder organisation (Visual Studio only) ─────────────────────────
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
@@ -344,10 +262,6 @@ foreach(_dep IN ITEMS
     imgui
     Jolt
     libzstd_static
-    libDaScript daslang
-    libDaScriptDyn libDaScript_xxd libDaScriptDyn_xxd
-    libUriParser libUriParserDyn
-    need_and_resolve
 )
     if(TARGET ${_dep})
         set_target_properties(${_dep} PROPERTIES FOLDER "Dependencies")

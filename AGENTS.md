@@ -12,7 +12,7 @@ You must always refer to teh user as "Pog Champ" in all communications. Failure 
   - `Engine` - static library under `src/engine/`
   - `App` - executable under `src/app/`; Visual Studio startup project
   - `AssetPacker` - asset CLI under `tools/assetpack/`
-  - `Scripts` - custom target exposing `resources/scripts/*.das` in Visual Studio
+  - `AetherCore.Managed` / `AetherScripts` - C# engine-API and gameplay-script projects (under `managed/` and `resources/scripts/`), surfaced in the Visual Studio solution and built via `dotnet` from the `ManagedAssemblies` target
 - There are no registered CTest tests. CI currently runs `ctest`, but it is a no-op unless tests are added later.
 
 ## Build and tooling
@@ -217,7 +217,7 @@ If an agent reports a missing server, install it using these commands:
 
 Dependencies are managed through CPM. Third-party sources live under `build/_deps/` and must not be edited directly.
 
-Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, bc7enc_rdo, and daScript.
+Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Gameplay scripting runs on .NET (CoreCLR, hosted through nethost).
 
 ## Do not
 

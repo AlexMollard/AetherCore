@@ -7,7 +7,6 @@
 #include "layers/DebugLayer.hpp"
 #include "layers/ScriptedSceneLayer.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
-#include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 
 namespace
@@ -41,20 +40,16 @@ int main()
 		aether::app::Application application;
 
 		// Services
-		aether::app::scripting::ScriptingSubsystem scriptingSubsystem;
-		application.AddService(scriptingSubsystem);
-
 		// C# scripting: boots CoreCLR and loads the game-scripts assembly.
-		// Disabled-safe - a missing runtime just leaves the runner on daScript.
+		// Disabled-safe - a missing runtime just means no entity-script behavior.
 		aether::app::scripting::CSharpScriptingSubsystem csharpScripting;
 		application.AddService(csharpScripting);
 
 		// Layers
 		application.PushLayer<aether::app::DebugLayer>();
-		// Scene-only operation: world content comes from the startup scene
-		// file (engine.toml app.startupScene), behavior from entity scripts
-		// (ScriptComponent). Pass a .das path here to add a main script back.
-		application.PushLayer<aether::app::ScriptedSceneLayer>("");
+		// World content comes from the startup scene file (engine.toml
+		// app.startupScene); behavior comes from entity scripts (ScriptComponent).
+		application.PushLayer<aether::app::ScriptedSceneLayer>();
 
 		return application.Run();
 	}

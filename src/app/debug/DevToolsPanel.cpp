@@ -13,7 +13,7 @@
 #include "platform/Input.hpp"
 #include "rendering/RenderQueue.hpp"
 #include "rendering/RenderingSubsystem.hpp"
-#include "scripting/ScriptingSubsystem.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
@@ -102,9 +102,9 @@ namespace aether::app
 				renderQueue.SetDebugDisableAnimation(disableAnimation);
 			}
 
-			if (ImGui::Button("Reload Script"))
+			if (ImGui::Button("Reload Scripts"))
 			{
-				if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
+				if (auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 				{
 					scripting->RequestReload();
 				}

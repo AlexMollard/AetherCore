@@ -16,9 +16,9 @@
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 
-// Entity lifecycle + TransformComponent access exported to C#. Bodies match the
-// old daScript WorldModule semantics (true-teleport of physics bodies, subtree
-// delta propagation) so ported scripts behave identically.
+// Entity lifecycle + TransformComponent access exported to C#: setting a
+// transform true-teleports physics bodies and propagates the delta through the
+// entity's subtree.
 
 using namespace aether::app::scripting::interop;
 

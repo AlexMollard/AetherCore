@@ -37,7 +37,7 @@ using namespace std::string_view_literals;
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
 #include "scene/World.hpp"
-#include "scripting/ScriptingSubsystem.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
@@ -69,31 +69,34 @@ namespace aether::app
 		outPath.clear();
 		outLine = 0;
 
+		// .NET exception stack traces read "... in <path>\Script.cs:line 42".
+		// Anchor on the ".cs:" marker, then take the preceding path and the line
+		// number after an optional "line " token so the toast can offer to open
+		// the offending script.
 		std::size_t searchPos = 0;
 		while (searchPos < error.size())
 		{
-			const auto dasPos = error.find(".das:", searchPos);
-			if (dasPos == std::string::npos)
+			const auto extPos = error.find(".cs:", searchPos);
+			if (extPos == std::string::npos)
 			{
 				break;
 			}
 
-			const std::size_t colonPos = dasPos + 4;
-			if (colonPos >= error.size() || !std::isdigit(static_cast<unsigned char>(error[colonPos])))
-			{
-				searchPos = dasPos + 1;
-				continue;
-			}
-
-			std::size_t start = dasPos;
+			// Path: walk back from ".cs" to the preceding whitespace.
+			std::size_t start = extPos;
 			while (start > 0 && error[start - 1] != ' ' && error[start - 1] != '\n' && error[start - 1] != '\r')
 			{
 				--start;
 			}
+			outPath = error.substr(start, extPos + 3 - start); // include ".cs"
 
-			outPath = error.substr(start, dasPos + 4 - start);
+			// Skip the ':' and an optional "line " token before the number.
+			std::size_t lineStart = extPos + 4;
+			if (error.compare(lineStart, 5, "line ") == 0)
+			{
+				lineStart += 5;
+			}
 
-			std::size_t lineStart = colonPos + 1;
 			std::size_t lineEnd = lineStart;
 			while (lineEnd < error.size() && std::isdigit(static_cast<unsigned char>(error[lineEnd])))
 			{
@@ -117,7 +120,8 @@ namespace aether::app
 				break;
 			}
 
-			searchPos = dasPos + 1;
+			outPath.clear();
+			searchPos = extPos + 1;
 		}
 	}
 
@@ -169,7 +173,7 @@ namespace aether::app
 
 	void DebugLayer::PollScriptErrors(LayerContext& context)
 	{
-		auto scripting = context.TryGet<scripting::ScriptingSubsystem>();
+		auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>();
 		if (!scripting)
 		{
 			return;
@@ -345,7 +349,7 @@ namespace aether::app
 
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
-			if (auto scripting = context.TryGet<scripting::ScriptingSubsystem>())
+			if (auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
 			{
 				scripting->RequestReload();
 			}

@@ -255,24 +255,12 @@ namespace aether::app
 			{
 				ImGui::SeparatorText("Scripts");
 				const bool hasScript = world.Has<ScriptComponent>(entity);
-				for (const std::string& fullPath: m_scriptList)
+				for (const std::string& typeName: m_scriptList)
 				{
-					// Glob yields "scripts://entities/x.das"; the compiler wants
-					// the path relative to the scripts root.
-					std::string relative = fullPath;
-					if (constexpr std::string_view kPrefix = "scripts://"; relative.starts_with(kPrefix))
-					{
-						relative = relative.substr(kPrefix.size());
-					}
-					std::string label = relative;
-					if (const auto slash = label.find_last_of("/\\"); slash != std::string::npos)
-					{
-						label = label.substr(slash + 1);
-					}
-					const std::string entry = std::string(ICON_FA_CODE "  Script - ") + label;
+					const std::string entry = std::string(ICON_FA_CODE "  Script - ") + typeName;
 					if (PaletteEntry(entry.c_str(), m_addFilter, hasScript))
 					{
-						world.Emplace<ScriptComponent>(entity, ScriptComponent{.path = relative});
+						world.Emplace<ScriptComponent>(entity, ScriptComponent{.path = typeName});
 					}
 				}
 			}

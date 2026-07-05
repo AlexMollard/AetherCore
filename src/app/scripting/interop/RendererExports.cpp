@@ -8,7 +8,7 @@
 #include "systems/DayNightSystem.hpp"
 
 // Lighting, sky, and day/night control exported to C#. Lights are entities
-// (LightSystem republishes them each frame); mirrors the daScript RendererModule.
+// (LightSystem republishes them each frame).
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

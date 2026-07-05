@@ -18,8 +18,8 @@
 #include "utils/BinaryReader.hpp"
 #include "utils/Logger.hpp"
 
-// Skeletal animation control exported to C#. Bodies mirror the daScript
-// AnimationModule, including the .anim binary loader and bone-name remapping.
+// Skeletal animation control exported to C#, including the .anim binary loader
+// and bone-name remapping.
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

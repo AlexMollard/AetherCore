@@ -8,8 +8,8 @@ namespace AetherScripts;
 /// Physics-toy hotkeys, spawned over this entity's position:
 ///   1 drop cube   2 drop sphere   3 sphere rain   4 box tower
 ///   B bounce test  C clear toys
-/// Ported from toy_spawner.das. Spawned toys are marked transient so they never
-/// pollute the saved scene; the tag-enumeration globals become a Span buffer fill.
+/// Spawned toys are marked transient so they never pollute the saved scene; tag
+/// enumeration fills a Span buffer.
 /// </summary>
 public sealed class ToySpawner : EntityScript
 {

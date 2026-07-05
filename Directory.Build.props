@@ -1,0 +1,21 @@
+<Project>
+
+  <!--
+    Repo-wide MSBuild defaults for the managed (C#) projects: AetherCore.Managed
+    and AetherScripts.
+
+    ArtifactsPath routes obj/bin out of the source tree. The CMake build overrides
+    it on the `dotnet build` command line to target the CMake binary dir, so this
+    default only applies when Visual Studio (or a bare `dotnet build`) evaluates a
+    project directly - e.g. on solution load, restore, or right-click Build. That
+    keeps resources/scripts clean so build intermediates never get packed into
+    assets.pak.
+
+    Conditioned to .csproj so the CMake-generated C++ .vcxproj under build/ (which
+    also import Directory.Build.props) are left untouched.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
+  </PropertyGroup>
+
+</Project>

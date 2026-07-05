@@ -9,8 +9,8 @@ namespace AetherScripts;
 /// content; this script tops up what the scene can't store — the external walk
 /// clip, the orbit camera, and input bindings — then drives movement each tick.
 ///
-/// Ported from player.das. The single-camera-per-session global becomes a static
-/// field; movement state lives on the CharacterController instance.
+/// The single-camera-per-session value is a static field; movement state lives
+/// on the CharacterController instance.
 /// </summary>
 public sealed class Player : EntityScript
 {

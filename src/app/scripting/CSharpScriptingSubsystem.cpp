@@ -9,7 +9,7 @@ namespace aether::app::scripting
 	namespace
 	{
 		// Locate the deployed managed assemblies (data/scripts/managed) relative to
-		// the working directory, mirroring ScriptingSubsystem's script search.
+		// the working directory.
 		std::filesystem::path ResolveManagedDir()
 		{
 			const auto cwd = std::filesystem::current_path();

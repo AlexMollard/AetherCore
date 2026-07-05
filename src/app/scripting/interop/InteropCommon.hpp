@@ -19,8 +19,7 @@
 // cross as int32 (0/1) because LibraryImport requires explicit bool marshalling.
 //
 // Every export runs inside a managed script call, so scripting::ActiveContext()
-// (the TLS SceneContext the runner installs) is valid — the same contract the old
-// daScript bindings relied on.
+// (the TLS SceneContext the runner installs) is valid inside an export body.
 
 #ifdef _WIN32
 	#define AE_SCRIPT_API extern "C" __declspec(dllexport)

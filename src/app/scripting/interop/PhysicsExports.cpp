@@ -5,9 +5,8 @@
 #include "physics/PhysicsSystem.hpp"
 #include "scene/World.hpp"
 
-// Physics control exported to C#. Bodies mirror the old daScript PhysicsModule:
-// shape descriptors are emplaced for PhysicsSystem to consume, velocity/state go
-// through the live rigid body.
+// Physics control exported to C#: shape descriptors are emplaced for
+// PhysicsSystem to consume, velocity/state go through the live rigid body.
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

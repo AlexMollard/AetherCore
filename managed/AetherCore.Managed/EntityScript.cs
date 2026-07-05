@@ -2,8 +2,8 @@ namespace AetherCore.Managed;
 
 /// <summary>
 /// Base class for gameplay scripts attached to entities via a ScriptComponent.
-/// One instance is created per entity, so instance fields are per-entity state
-/// (unlike the old daScript module globals, which were shared across entities).
+/// One instance is created per entity, so instance fields are naturally
+/// per-entity state (no cross-entity sharing of behavior state).
 ///
 /// The runner calls <see cref="OnAttach"/> the first tick the entity is seen
 /// while playing, <see cref="OnUpdate"/> every tick after, and

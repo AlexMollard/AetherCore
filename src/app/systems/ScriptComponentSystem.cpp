@@ -6,7 +6,6 @@
 #include "scene/World.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
-#include "scripting/ScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -32,51 +31,13 @@ namespace aether::app
 			ActiveContextScope(const ActiveContextScope&) = delete;
 			ActiveContextScope& operator=(const ActiveContextScope&) = delete;
 		};
-
-		[[nodiscard]] bool IsDasPath(const std::string& path)
-		{
-			return path.ends_with(".das");
-		}
 	} // namespace
 
 	ScriptComponentSystem::~ScriptComponentSystem()
 	{
-		for (auto& [path, handle]: m_handles)
-		{
-			scripting::ScriptingSubsystem::FreeHandle(handle);
-		}
 		// Managed GCHandles are intentionally not freed here: at shutdown the host
 		// may already be gone and CoreCLR never unloads, so leaking them is inert.
 		m_instances.clear();
-	}
-
-	scripting::ScriptHandle* ScriptComponentSystem::HandleFor(const std::string& path)
-	{
-		if (const auto it = m_handles.find(path); it != m_handles.end())
-		{
-			return &it->second;
-		}
-		if (m_failed.contains(path))
-		{
-			return nullptr;
-		}
-		auto* scripting = m_services.TryGet<scripting::ScriptingSubsystem>();
-		if (scripting == nullptr)
-		{
-			return nullptr;
-		}
-		scripting::ScriptHandle handle = scripting->Compile(path);
-		if (!handle.IsValid())
-		{
-			AE_WARN(LogCategory::App, "ScriptComponent: '{}' failed to compile - disabled until the next reload", path);
-			m_failed.insert(path);
-			return nullptr;
-		}
-		if (handle.onEntityAttach == nullptr && handle.onEntityUpdate == nullptr)
-		{
-			AE_WARN(LogCategory::App, "ScriptComponent: '{}' exports neither on_entity_attach nor on_entity_update", path);
-		}
-		return &m_handles.emplace(path, std::move(handle)).first->second;
 	}
 
 	std::uint64_t ScriptComponentSystem::GetInstanceHandle(std::uint32_t entityId) const
@@ -170,8 +131,8 @@ namespace aether::app
 			const auto enttE = World::ToEntt(Entity{id});
 			const bool alive = reg.valid(enttE);
 			const auto* sc = alive ? world.TryGet<ScriptComponent>(Entity{id}) : nullptr;
-			const bool stillCSharp = sc != nullptr && !sc->path.empty() && !IsDasPath(sc->path);
-			if (!stillCSharp)
+			const bool stillScripted = sc != nullptr && !sc->path.empty();
+			if (!stillScripted)
 			{
 				stale.push_back(id);
 			}
@@ -230,10 +191,13 @@ namespace aether::app
 		{
 			return;
 		}
-		auto* dasScripting = m_services.TryGet<scripting::ScriptingSubsystem>();
 		auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>();
+		if (csScripting == nullptr || !csScripting->IsAvailable())
+		{
+			return;
+		}
 
-		// Keep delta current for Input.DeltaTime / get_delta_time.
+		// Keep delta current for Input.DeltaTime.
 		sceneCtx->deltaTime = dt;
 
 		// Snapshot first: scripts may create/destroy entities (spawns) which
@@ -257,52 +221,16 @@ namespace aether::app
 				continue;
 			}
 
-			if (IsDasPath(sc->path))
-			{
-				if (dasScripting == nullptr)
-				{
-					continue;
-				}
-				scripting::ScriptHandle* handle = HandleFor(sc->path);
-				if (handle == nullptr)
-				{
-					continue;
-				}
-				if (!sc->attached)
-				{
-					// Flag first: a throwing attach must not retry every frame.
-					sc->attached = true;
-					dasScripting->CallEntityAttach(*handle, *sceneCtx, e.id);
-				}
-				dasScripting->CallEntityUpdate(*handle, *sceneCtx, e.id, dt);
-			}
-			else
-			{
-				if (csScripting == nullptr || !csScripting->IsAvailable())
-				{
-					continue;
-				}
-				ActiveContextScope scope(*sceneCtx);
-				UpdateCSharpEntity(*csScripting, *sceneCtx, e, sc->path, sc->properties, sc->attached, dt);
-			}
+			ActiveContextScope scope(*sceneCtx);
+			UpdateCSharpEntity(*csScripting, *sceneCtx, e, sc->path, sc->properties, sc->attached, dt);
 		}
 
 		// Detach C# instances whose entity/component went away this frame.
-		if (csScripting != nullptr && csScripting->IsAvailable())
-		{
-			PurgeStaleCSharpInstances(world, *csScripting, *sceneCtx);
-		}
+		PurgeStaleCSharpInstances(world, *csScripting, *sceneCtx);
 	}
 
 	void ScriptComponentSystem::Invalidate(World& world)
 	{
-		for (auto& [path, handle]: m_handles)
-		{
-			scripting::ScriptingSubsystem::FreeHandle(handle);
-		}
-		m_handles.clear();
-		m_failed.clear();
-
 		// Tear down all live C# instances so a reload starts fresh.
 		if (auto* csScripting = m_services.TryGet<scripting::CSharpScriptingSubsystem>())
 		{

@@ -6,25 +6,31 @@
 #include "AppLayer.hpp"
 #include "material/EffectManager.hpp"
 #include "scripting/SceneContext.hpp"
-#include "scripting/ScriptHandle.hpp"
 
 namespace aether::app::scripting
 {
-	class ScriptingSubsystem;
+	class CSharpScriptingSubsystem;
 }
 
 namespace aether::app
 {
-	// Generic scene layer that drives a .das script.
+	// Scene-bootstrap layer.
+	//
+	// World content comes from the startup scene file (engine.toml
+	// app.startupScene) and behavior from entity scripts (ScriptComponent, run by
+	// ScriptComponentSystem through C#). This layer owns the per-scene
+	// SceneContext, registers effects, boots the startup scene, and services F5
+	// hot-reload (reload the managed assembly + re-apply the scene).
 	//
 	// Lifecycle:
-	//   OnAttach  -> compile script, create default pipeline, call on_attach()
-	//   OnUpdate  -> call on_update(); handle hot-reload if requested
-	//   OnDetach  -> call on_detach(), destroy scene entities
+	//   OnAttach  -> build pipeline cache, register effects, publish SceneContext,
+	//                load the startup scene
+	//   OnUpdate  -> handle hot-reload if requested
+	//   OnDetach  -> destroy scene entities, unpublish SceneContext
 	class ScriptedSceneLayer final : public AppLayer
 	{
 	public:
-		explicit ScriptedSceneLayer(std::string scriptPath);
+		ScriptedSceneLayer() = default;
 
 		void OnAttach(LayerContext& context) override;
 		void OnDetach(LayerContext& context) override;
@@ -34,17 +40,13 @@ namespace aether::app
 		void DestroySceneEntities(LayerContext& context);
 		void DoReload(LayerContext& context);
 		// Startup-scene boot: additive load of settings->app.startupScene, or
-		// auto-generate it from legacy script content on first run. Called from
+		// auto-generate it from the current world on first run. Called from
 		// OnAttach AND after every F5 reload (DoReload destroys the loaded scene
-		// entities along with the script's, so the file must re-apply or the
-		// world comes back missing everything the script no longer builds).
+		// entities, so the file must re-apply or the world comes back empty).
 		void LoadStartupScene(LayerContext& context);
 
-		std::string m_scriptPath;
 		scripting::SceneContext m_sceneCtx;
-		scripting::ScriptHandle m_handle;
 		aether::effects::EffectManager m_effectManager;
-		scripting::ScriptingSubsystem* m_scripting = nullptr;
-		bool m_scriptBroken = false;
+		scripting::CSharpScriptingSubsystem* m_csharp = nullptr;
 	};
 } // namespace aether::app

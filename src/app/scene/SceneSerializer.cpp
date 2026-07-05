@@ -242,39 +242,6 @@ namespace aether::app::scene
 			return out;
 		}
 
-		// Legacy scenes referenced daScript files (e.g. "entities/player.das");
-		// this maps them to the C# script type name ("Player"). Non-.das paths
-		// pass through unchanged. The GPU-race crash on the animation compile is
-		// fixed (aether_anim_compile now quiesces the render thread), so the
-		// migration is re-enabled for Play-mode verification.
-		std::string MigrateLegacyScriptPath(const std::string& path)
-		{
-			static constexpr bool kEnableDasMigration = true;
-			if (!kEnableDasMigration || !path.ends_with(".das"))
-			{
-				return path;
-			}
-			std::string name = path;
-			if (const auto slash = name.find_last_of('/'); slash != std::string::npos)
-			{
-				name = name.substr(slash + 1);
-			}
-			name = name.substr(0, name.size() - 4); // drop the .das extension
-
-			std::string typeName;
-			bool upper = true;
-			for (const char c: name)
-			{
-				if (c == '_')
-				{
-					upper = true;
-					continue;
-				}
-				typeName += (upper && c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
-				upper = false;
-			}
-			return typeName;
-		}
 	} // namespace
 
 	// ── Capture ─────────────────────────────────────────────────────────────────
@@ -872,7 +839,7 @@ namespace aether::app::scene
 			}
 			if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
 			{
-				rec.script = MigrateLegacyScriptPath(*script);
+				rec.script = *script;
 			}
 			if (const auto* props = tv["script_properties"].as_table())
 			{

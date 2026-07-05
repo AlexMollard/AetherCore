@@ -15,9 +15,9 @@
 #include "scene/World.hpp"
 #include "utils/Logger.hpp"
 
-// Model loading, primitive meshes, and materials exported to C#. Bodies mirror
-// the daScript WorldModule: model/mesh caches live on the SceneContext, materials
-// go through MaterialSystem (per-entity) and MaterialAuthoring (shared).
+// Model loading, primitive meshes, and materials exported to C#: model/mesh
+// caches live on the SceneContext, materials go through MaterialSystem
+// (per-entity) and MaterialAuthoring (shared).
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

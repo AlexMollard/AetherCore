@@ -4,7 +4,7 @@ using AetherCore.Managed;
 
 namespace AetherScripts.Systems;
 
-/// <summary>Spawns a ring of animated foxes. Ported from fox_system.das.</summary>
+/// <summary>Spawns a ring of animated foxes.</summary>
 public static class FoxSystem
 {
     public static void SpawnFoxes(int count, float radius, TagId foxTag)

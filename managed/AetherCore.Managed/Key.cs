@@ -2,7 +2,6 @@ namespace AetherCore.Managed;
 
 /// <summary>
 /// Keyboard keys, matching the engine's <c>aether::Key</c> (GLFW key codes).
-/// Ported from the old keycodes.das.
 /// </summary>
 public enum Key
 {

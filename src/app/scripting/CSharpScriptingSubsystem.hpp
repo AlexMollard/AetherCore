@@ -19,14 +19,13 @@ namespace aether::app::scripting
 	};
 
 	// Owns the .NET host and the loaded game-scripts assembly, and drives the C#
-	// scripting lifecycle for ScriptComponentSystem. Mirrors the daScript
-	// ScriptingSubsystem's reload/error surface so DebugLayer / DevToolsPanel can
-	// treat either runtime the same way.
+	// scripting lifecycle for ScriptComponentSystem. Exposes a reload/error
+	// surface consumed by DebugLayer / DevToolsPanel (F5 hot-reload, error toasts).
 	//
 	// Constructed once per application. On construction it locates the deployed
 	// managed assemblies, boots CoreCLR, and loads AetherScripts.dll. Everything
-	// degrades safely: without .NET, IsAvailable() is false and the runner falls
-	// back to daScript.
+	// degrades safely: without .NET, IsAvailable() is false and entity scripts
+	// simply do not run.
 	class CSharpScriptingSubsystem
 	{
 	public:
@@ -64,7 +63,7 @@ namespace aether::app::scripting
 		void ApplyProperties(
 			std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const;
 
-		// ── Reload / error surface (mirrors ScriptingSubsystem) ────────────────
+		// ── Reload / error surface (F5 hot-reload + error toasts) ──────────────
 		void RequestReload()
 		{
 			m_reloadRequested = true;

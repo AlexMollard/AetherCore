@@ -191,8 +191,6 @@ Checks: >-
   readability-use-anyofallof,
 
 # Hard errors: these are UB, crashes, or silent data corruption
-# clang-analyzer-cplusplus.NewDelete removed from WarningsAsErrors due to
-# daScript smart_ptr.h false positives (delRef check after decrement)
 WarningsAsErrors: >-
   bugprone-dangling-handle,
   bugprone-undefined-memory-manipulation,

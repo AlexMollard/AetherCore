@@ -603,12 +603,6 @@ namespace aether::app
 			sc->attached = false;
 		}
 
-		// daScript scripts carry no inspector-exposed properties.
-		if (sc->path.ends_with(".das"))
-		{
-			return;
-		}
-
 		auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>();
 		if (cs == nullptr || !cs->IsAvailable())
 		{

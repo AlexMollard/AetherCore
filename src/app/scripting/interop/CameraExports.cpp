@@ -4,7 +4,7 @@
 #include "camera/CameraManager.hpp"
 
 // Camera control exported to C#. Camera handles are opaque uint ids (managed
-// CameraId). Bodies mirror the old daScript CameraModule.
+// CameraId).
 
 using namespace aether::app::scripting;
 using namespace aether::app::scripting::interop;

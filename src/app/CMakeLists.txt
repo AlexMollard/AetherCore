@@ -13,16 +13,6 @@ target_include_directories(App PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 target_link_libraries(App PRIVATE Engine)
 
-if(TARGET libDaScript)
-    target_link_libraries(App PRIVATE libDaScript)
-    # daScript headers are C++17; suppress warnings from them in our C++26 project.
-    target_include_directories(App SYSTEM PRIVATE "${daScript_SOURCE_DIR}/include")
-    # /bigobj needed for daScript's heavy template instantiation on MSVC / clang-cl.
-    if(MSVC OR (CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND WIN32))
-        target_compile_options(App PRIVATE /bigobj)
-    endif()
-endif()
-
 aethercore_target_defaults(App)
 aethercore_enable_slang_shader_compilation(App)
 aethercore_enable_dead_strip_report(App)
@@ -31,11 +21,9 @@ set_target_properties(App PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
 )
 
-# In dev builds, let the scripting subsystem find .das files in the source tree
-# so hot-reload (F5) picks up edits without a C++ rebuild, and let the scene
-# serializer save/load committable scene files from the source tree.
+# In dev builds, let the scene serializer save/load committable scene and prefab
+# files directly from the source tree.
 target_compile_definitions(App PRIVATE
-    AETHER_SCRIPTS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scripts"
     AETHER_SCENES_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/scenes"
     AETHER_PREFABS_SOURCE_DIR="${CMAKE_SOURCE_DIR}/resources/prefabs"
 )
@@ -89,6 +77,30 @@ if(AETHER_HAS_DOTNET)
             COMMENT "Copying nethost.dll to app output"
             VERBATIM)
     endif()
+
+    # Surface the C# projects in the Visual Studio solution for editing with full
+    # IntelliSense. These are the same projects the ManagedAssemblies target
+    # already builds via `dotnet build`, so they are excluded from the default
+    # "Build Solution" batch (EXCLUDE_FROM_DEFAULT_BUILD) to avoid a redundant
+    # second build - the App still consumes the ManagedAssemblies output. Editing
+    # a script and rebuilding the solution recompiles it through that target.
+    #
+    # Requires an MSBuild that can load SDK-style .csproj, i.e. a full Visual
+    # Studio install with a .NET workload. VS Build Tools alone cannot resolve
+    # Microsoft.NET.Sdk and fails to even load the projects, so allow opting out
+    # (e.g. on CI runners that only have Build Tools) with -DAETHER_ADD_CSHARP_PROJECTS=OFF.
+    option(AETHER_ADD_CSHARP_PROJECTS "Add the C# projects to the Visual Studio solution for editing" ON)
+    if(AETHER_ADD_CSHARP_PROJECTS AND CMAKE_GENERATOR MATCHES "Visual Studio")
+        set(_aether_managed_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Managed/AetherCore.Managed.csproj")
+        # C# project type GUID so VS loads them as real C# projects.
+        include_external_msproject(AetherCore.Managed "${_aether_managed_proj}"
+            TYPE FAE04EC0-301F-11D3-BF4B-00C04F79EFBC)
+        include_external_msproject(AetherScripts "${_aether_scripts_proj}"
+            TYPE FAE04EC0-301F-11D3-BF4B-00C04F79EFBC)
+        set_target_properties(AetherCore.Managed AetherScripts PROPERTIES
+            FOLDER "Managed"
+            EXCLUDE_FROM_DEFAULT_BUILD ON)
+    endif()
 endif()
 
 # ── Asset pipeline ─────────────────────────────────────────────────────────
@@ -124,17 +136,11 @@ add_custom_command(TARGET App POST_BUILD
     VERBATIM
 )
 
-# Copy scene scripts (*.das) directly to data/scripts/ so hot-reload can read
-# them from the filesystem without unpacking the pak.
+# Copy loose runtime data (resources/data) directly to data/data/ so it can be
+# read from the filesystem without unpacking the pak. C# scripts are compiled
+# into the managed assemblies (deployed to data/scripts/managed above), so the
+# source scripts do not need to be copied.
 add_custom_command(TARGET App POST_BUILD
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/scripts"
-        "${CMAKE_BINARY_DIR}/data/scripts"
-    COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/scripts"
-    COMMAND "${CMAKE_COMMAND}" -E copy_directory
-        "${CMAKE_SOURCE_DIR}/resources/scripts"
-        "$<TARGET_FILE_DIR:App>/data/scripts"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/data"
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/data"
@@ -143,7 +149,7 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_directory
         "${CMAKE_SOURCE_DIR}/resources/data"
         "$<TARGET_FILE_DIR:App>/data/data"
-    COMMENT "Copying scripts and data to build output"
+    COMMENT "Copying runtime data to build output"
     VERBATIM
 )
 

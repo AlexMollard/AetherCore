@@ -9,7 +9,6 @@
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/System.hpp"
-#include "scripting/ScriptHandle.hpp"
 
 namespace aether
 {
@@ -31,10 +30,8 @@ namespace aether::app
 	// component's `attached` flag, loads and Stop-restores re-run attach on the
 	// next play tick with no extra bookkeeping.
 	//
-	// Dual-runtime during the daScript->C# migration: a ScriptComponent whose
-	// path ends in ".das" runs through the daScript subsystem; any other path is
-	// a C# script type name run through CSharpScriptingSubsystem. The two coexist
-	// so scripts can be ported one at a time.
+	// A ScriptComponent's `path` is a C# script type name run through
+	// CSharpScriptingSubsystem; behavior lives in the AetherScripts assembly.
 	class ScriptComponentSystem final : public System
 	{
 	public:
@@ -62,10 +59,6 @@ namespace aether::app
 		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId) const;
 
 	private:
-		// ── daScript path ──────────────────────────────────────────────────────
-		scripting::ScriptHandle* HandleFor(const std::string& path);
-
-		// ── C# path ────────────────────────────────────────────────────────────
 		// Attaches/updates one C# entity; the caller has installed the active
 		// SceneContext. Returns false if the type could not be instantiated.
 		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity,
@@ -75,10 +68,6 @@ namespace aether::app
 		void DestroyAllCSharpInstances(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
 
 		ServiceContainer& m_services;
-		std::unordered_map<std::string, scripting::ScriptHandle> m_handles;
-		// Paths that failed to compile: skipped until Invalidate, so a broken
-		// script logs once instead of recompiling every frame.
-		std::unordered_set<std::string> m_failed;
 
 		// C# per-entity script instances: entity id -> managed GCHandle (u64).
 		std::unordered_map<std::uint32_t, std::uint64_t> m_instances;

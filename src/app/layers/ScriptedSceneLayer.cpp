@@ -2,10 +2,9 @@
 
 #include <filesystem>
 
-#include "scripting/ScriptingSubsystem.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include "IEngineRuntime.hpp"
-#include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
 #include "assets/AssetSubsystem.hpp"
 #include "material/MaterialAuthoring.hpp"
@@ -17,6 +16,7 @@
 #include "platform/Input.hpp"
 #include "rendering/RenderThread.hpp"
 #include "rendering/LightingManager.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/ShadowService.hpp"
 #include "rendering/LocalShadowService.hpp"
@@ -32,19 +32,8 @@
 #include "vulkan/GpuEnumConversions.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app::scripting
-{
-
-	void SetPhysicsDebugRendererCallback(std::function<void(bool)> callback);
-} // namespace aether::app::scripting
-
 namespace aether::app
 {
-	ScriptedSceneLayer::ScriptedSceneLayer(std::string scriptPath)
-	      : m_scriptPath(std::move(scriptPath))
-	{
-	}
-
 	// -- Helpers ---------------------------------------------------------------
 
 	void ScriptedSceneLayer::DestroySceneEntities(LayerContext& context)
@@ -81,12 +70,7 @@ namespace aether::app
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading '{}'", m_scriptPath.empty() ? "<scene + entity scripts>" : m_scriptPath);
-
-		if (m_handle.IsValid())
-		{
-			m_scripting->CallOnDetach(m_handle, m_sceneCtx);
-		}
+		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading scene + entity scripts");
 
 		// Hot-reload frees the buffers backing the scene entities. Route the
 		// teardown through the engine's exclusive-mutation primitive in Discard
@@ -112,40 +96,24 @@ namespace aether::app
 			        DestroySceneEntities(context);
 		        });
 
-		if (!m_scriptPath.empty())
-		{
-			scripting::ScriptHandle newHandle = m_scripting->Compile(m_scriptPath);
-			if (!newHandle.IsValid())
-			{
-				m_scriptBroken = true;
-				AE_WARN(LogCategory::App, "ScriptedSceneLayer: reload failed - keeping the old script");
-				if (m_handle.IsValid())
-				{
-					m_scripting->CallOnAttach(m_handle, m_sceneCtx);
-				}
-			}
-			else
-			{
-				if (m_handle.IsValid())
-				{
-					m_scripting->FreeHandle(m_handle);
-				}
-				m_handle = std::move(newHandle);
-				m_scriptBroken = false;
-				m_scripting->ClearErrors();
-				m_scripting->CallOnAttach(m_handle, m_sceneCtx);
-			}
-		}
-
 		// DestroySceneEntities above tore down the FILE-loaded world; re-load
-		// it (or a broken-script F5 would leave a void that a later save
+		// it (or a broken-reload F5 would leave a void that a later save
 		// captures).
 		LoadStartupScene(context);
 
-		// Entity scripts recompile from fresh sources on the next play tick.
+		// Tear down every live managed instance before reloading the assembly so
+		// the collectible load context can unload (no live GCHandles remain).
 		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
 		{
 			scriptSystem->Invalidate(context.Get<World>());
+		}
+
+		// Reload the game-scripts assembly so edits take effect; instances
+		// re-create from the fresh types on the next play tick.
+		if (m_csharp != nullptr && m_csharp->IsAvailable())
+		{
+			m_csharp->ClearErrors();
+			m_csharp->LoadScripts();
 		}
 
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reload complete.");
@@ -156,12 +124,9 @@ namespace aether::app
 	void ScriptedSceneLayer::OnAttach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		m_scripting = context.TryGet<scripting::ScriptingSubsystem>();
-		if (!m_scripting)
-		{
-			AE_ERROR(LogCategory::App, "ScriptedSceneLayer: ScriptingSubsystem not in ServiceContainer");
-			return;
-		}
+		// C# is optional: a missing runtime just means no entity-script behavior;
+		// the scene still boots and renders.
+		m_csharp = context.TryGet<scripting::CSharpScriptingSubsystem>();
 
 		// Initialize the content-addressed pipeline cache with the frame-graph-
 		// constant formats + bindless heap mappings (replaces the old default
@@ -217,37 +182,16 @@ namespace aether::app
 			m_sceneCtx.physics = static_cast<aether::PhysicsSystem*>(physSys);
 		}
 		m_sceneCtx.engineRuntime = &context.Get<aether::IEngineRuntime>();
-		m_sceneCtx.scriptPath = m_scriptPath;
 
 		// Scene tooling (the debug-UI serializer) reaches the model cache, the
 		// effect manager and sceneEntities through the service container.
 		context.services.Register<scripting::SceneContext>(m_sceneCtx);
 
-		// The default primitive material is built lazily by create_mesh and
-		// acquired through the MaterialRegistry per entity - nothing to register.
+		// The default primitive material is built lazily and acquired through the
+		// MaterialRegistry per entity - nothing to register here.
 
-		// A main script is OPTIONAL: world content lives in the scene file and
-		// behavior lives in entity scripts (ScriptComponent). An empty path
-		// means scene-only operation.
-		if (!m_scriptPath.empty())
-		{
-			m_handle = m_scripting->Compile(m_scriptPath);
-			if (!m_handle.IsValid())
-			{
-				m_scriptBroken = true;
-				AE_WARN(LogCategory::App, "ScriptedSceneLayer: initial compile failed for '{}'", m_scriptPath);
-			}
-			else
-			{
-				m_scriptBroken = false;
-				m_scripting->ClearErrors();
-				m_scripting->CallOnAttach(m_handle, m_sceneCtx);
-			}
-		}
-
-		// Boot-from-scene. Runs even when the main script is absent or broken
-		// - a script failure must not take the whole world down with it (it
-		// used to early-return here, booting into a void).
+		// Boot-from-scene: world content lives in the scene file and behavior in
+		// entity scripts (ScriptComponent).
 		LoadStartupScene(context);
 	}
 
@@ -287,11 +231,6 @@ namespace aether::app
 	void ScriptedSceneLayer::OnDetach(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		if (!m_scripting)
-		{
-			return;
-		}
-		m_scripting->CallOnDetach(m_handle, m_sceneCtx);
 		DestroySceneEntities(context);
 		context.services.Unregister<scripting::SceneContext>();
 
@@ -301,41 +240,17 @@ namespace aether::app
 		m_sceneCtx.defaultMaterialInitialized = false;
 		m_sceneCtx.defaultMaterial = {};
 		m_sceneCtx.meshCache.clear();
-
-		m_scripting->FreeHandle(m_handle);
 	}
 
 	void ScriptedSceneLayer::OnUpdate(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		if (!m_scripting)
-		{
-			return;
-		}
 
-		// Handle hot-reload even when the script hasn't compiled yet
-		// (e.g. initial compile failed) so the user can fix errors via F5.
-		if (m_scripting->HasReloadRequest())
+		// F5 hot-reload: reload the managed assembly and re-apply the scene.
+		if (m_csharp != nullptr && m_csharp->HasReloadRequest())
 		{
-			m_scripting->ClearReloadRequest();
+			m_csharp->ClearReloadRequest();
 			DoReload(context);
-			return;
 		}
-
-		if (!m_handle.IsValid())
-		{
-			return;
-		}
-
-		// Edit mode freezes script simulation; F5 reload handling above stays
-		// live. Absent PlayState (headless/tests) means always-playing.
-		if (const auto* playState = context.TryGet<PlayState>(); playState != nullptr && !playState->IsPlaying())
-		{
-			return;
-		}
-
-		m_sceneCtx.deltaTime = static_cast<float>(context.deltaTimeSeconds);
-
-		m_scripting->CallOnUpdate(m_handle, m_sceneCtx);
 	}
 } // namespace aether::app

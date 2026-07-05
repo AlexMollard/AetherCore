@@ -5,6 +5,9 @@
 /bin/
 /lib/
 
+# .NET artifacts (IDE-side C# builds; ArtifactsPath in Directory.Build.props)
+/artifacts/
+
 # CMake generated files
 /CMakeFiles/
 /CMakeCache.txt

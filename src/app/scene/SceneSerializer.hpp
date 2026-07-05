@@ -143,7 +143,7 @@ namespace aether::app::scene
 	// v1 = Spec-3 (no behavior components, no lights/environment);
 	// v2 = Spec-4 (behaviors, renderer-level [[lights]], environment);
 	// v3 = lights are entities (per-entity point_light/spot_light tables);
-	// v4 = entity script components (script = "entities/x.das");
+	// v4 = entity script components (path-referenced scripts);
 	// v5 = C# script type names + serialized script_properties.
 	inline constexpr int kSceneFormatVersion = 5;
 

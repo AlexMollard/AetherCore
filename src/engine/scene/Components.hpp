@@ -114,13 +114,11 @@ namespace aether
 	{
 	};
 
-	// Entity-attached script, by path under the scripts root (e.g.
-	// "entities/player.das"). Pure data: the app-side ScriptComponentSystem
-	// compiles each unique path once and calls on_entity_attach /
-	// on_entity_update(self, dt) while the editor is Playing (das today; the
-	// component and its serialization outlive the planned C# swap). `attached`
-	// is runtime state - scene apply leaves it false, so loads and
-	// Stop-restores re-run the attach on the next play tick.
+	// Entity-attached script, by C# script type name (e.g. "Player"). Pure data:
+	// the app-side ScriptComponentSystem instantiates the type from the
+	// AetherScripts assembly and drives OnAttach / OnUpdate(dt) while the editor
+	// is Playing. `attached` is runtime state - scene apply leaves it false, so
+	// loads and Stop-restores re-run the attach on the next play tick.
 	// A single serialized script field override (Unity-style [SerializeField]).
 	// The tag mirrors the scripting PropertyType wire enum.
 	struct ScriptPropertyValue
@@ -144,7 +142,7 @@ namespace aether
 
 	struct ScriptComponent
 	{
-		// daScript file path (ends in ".das") or C# script type name.
+		// C# script type name, resolved in the AetherScripts assembly.
 		std::string path;
 		bool attached = false;
 		// Per-entity field overrides applied to the script instance on attach and
