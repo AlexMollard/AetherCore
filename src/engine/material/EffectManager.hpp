@@ -15,7 +15,7 @@ namespace aether
 	struct Entity;
 } // namespace aether
 
-namespace aether::app::effects
+namespace aether::effects
 {
 	// A named effect definition: the pipeline template + default per-entity params.
 	// Holds no GPU resources - the pipeline is resolved lazily by PipelineCache and
@@ -70,4 +70,4 @@ namespace aether::app::effects
 	// it). Shared by the set_entity_effect das binding and the scene loader.
 	// Returns false for an unknown effect name.
 	bool ApplyEntityEffect(World& world, Entity entity, std::string_view name, const EffectManager& effects, PipelineCache& pipelineCache, EffectParamBuffer& buffer, const EffectParams* overrideParams = nullptr);
-} // namespace aether::app::effects
+} // namespace aether::effects

@@ -15,7 +15,7 @@
 #include "vulkan/Swapchain.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
-#include "systems/BehaviorSystem.hpp"
+#include "scene/BehaviorSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app

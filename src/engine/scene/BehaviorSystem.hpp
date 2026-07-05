@@ -5,10 +5,7 @@
 namespace aether
 {
 	class AssetManager;
-} // namespace aether
 
-namespace aether::app
-{
 	// Advances the data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse -
 	// scene/BehaviorComponents.hpp). Registered with the World's system list,
 	// so the editor's play gate (Application::OnUpdate skipping UpdateSystems
@@ -31,4 +28,4 @@ namespace aether::app
 	private:
 		AssetManager& m_assets;
 	};
-} // namespace aether::app
+} // namespace aether

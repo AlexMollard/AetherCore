@@ -10,7 +10,7 @@
 #include "assets/AssetSubsystem.hpp"
 #include "material/MaterialAuthoring.hpp"
 #include "camera/CameraManager.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "gpu/BindlessManager.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
@@ -168,7 +168,7 @@ namespace aether::app
 		// resolved lazily by PipelineCache; the manager only holds the template +
 		// default params. Parity defaults copied from the old plasmaMat.
 		{
-			aether::app::effects::EffectDef plasma;
+			aether::effects::EffectDef plasma;
 			plasma.templateDesc.shaderVfsPath = "shaders://plasma.spv";
 			plasma.templateDesc.depthWriteEnable = true;
 			plasma.defaultParams.tint = glm::vec4(1.0f, 0.3f, 0.8f, 1.0f); // pink
@@ -179,7 +179,7 @@ namespace aether::app
 
 			// Molten: a dark obsidian crust broken by flowing white-hot veins - a
 			// visual counterpoint to plasma over the same per-entity EffectParams.
-			aether::app::effects::EffectDef molten;
+			aether::effects::EffectDef molten;
 			molten.templateDesc.shaderVfsPath = "shaders://molten.spv";
 			molten.templateDesc.depthWriteEnable = true;
 			molten.defaultParams.tint = glm::vec4(1.0f, 0.35f, 0.05f, 1.0f); // ember orange

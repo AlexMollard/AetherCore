@@ -10,7 +10,7 @@
 #include <toml++/toml.hpp>
 
 #include "assets/AssetManager.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"

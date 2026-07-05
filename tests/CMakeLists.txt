@@ -19,7 +19,6 @@ add_executable(EngineTests
     # the scene serializer and the app pieces it needs compile in directly.
     "${CMAKE_SOURCE_DIR}/src/app/scene/SceneSerializer.cpp"
     "${CMAKE_SOURCE_DIR}/src/app/scripting/modules/TagSlots.cpp"
-    "${CMAKE_SOURCE_DIR}/src/app/effects/EffectManager.cpp"
 )
 target_include_directories(EngineTests PRIVATE "${CMAKE_SOURCE_DIR}/src/app")
 target_link_libraries(EngineTests PRIVATE Engine doctest::doctest)

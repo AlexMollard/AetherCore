@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/PipelineCache.hpp"
@@ -338,8 +338,8 @@ TEST_CASE("Effect records apply through the real effect path on load") {
     // Real EffectManager + pipeline cache over the fake factory. The param
     // buffer stays uninitialized (no GPU): slot allocation fails SAFELY and
     // the components must still apply with the saved override params.
-    aether::app::effects::EffectManager effects;
-    aether::app::effects::EffectDef molten;
+    aether::effects::EffectManager effects;
+    aether::effects::EffectDef molten;
     molten.templateDesc.shaderVfsPath = "shaders://molten.spv";
     effects.Register("molten", molten);
     PipelineCache pipelines;

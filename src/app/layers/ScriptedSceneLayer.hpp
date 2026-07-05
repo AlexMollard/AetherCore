@@ -4,7 +4,7 @@
 #include <string>
 
 #include "AppLayer.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "scripting/SceneContext.hpp"
 #include "scripting/ScriptHandle.hpp"
 
@@ -43,7 +43,7 @@ namespace aether::app
 		std::string m_scriptPath;
 		scripting::SceneContext m_sceneCtx;
 		scripting::ScriptHandle m_handle;
-		aether::app::effects::EffectManager m_effectManager;
+		aether::effects::EffectManager m_effectManager;
 		scripting::ScriptingSubsystem* m_scripting = nullptr;
 		bool m_scriptBroken = false;
 	};

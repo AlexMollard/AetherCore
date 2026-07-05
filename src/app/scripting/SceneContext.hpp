@@ -7,7 +7,7 @@
 #include "gpu/GpuTypes.hpp"
 #include "scene/Entity.hpp"
 #include "scene/LoadedModel.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "material/MaterialAsset.hpp"
 
 namespace aether
@@ -38,7 +38,7 @@ namespace aether::app::scripting
 		aether::Renderer* renderer = nullptr;
 		aether::Input* input = nullptr;
 		aether::app::DayNightSystem* dayNight = nullptr;
-		aether::app::effects::EffectManager* effects = nullptr;
+		aether::effects::EffectManager* effects = nullptr;
 		aether::PhysicsSystem* physics = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;

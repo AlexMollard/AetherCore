@@ -3,7 +3,7 @@
 #include "daScript/daScript.h"
 
 #include "assets/AssetManager.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/PipelineCache.hpp"
 #include "rendering/GraphicsPipeline.hpp"
@@ -29,7 +29,7 @@ namespace
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: no EffectManager/assets");
 			return;
 		}
-		if (!aether::app::effects::ApplyEntityEffect(*w, aether::Entity{id}, name ? name : "", *ctx.effects, ctx.assets->GetPipelineCache(), ctx.assets->GetEffectParamBuffer()))
+		if (!aether::effects::ApplyEntityEffect(*w, aether::Entity{id}, name ? name : "", *ctx.effects, ctx.assets->GetPipelineCache(), ctx.assets->GetEffectParamBuffer()))
 		{
 			AE_WARN(aether::LogCategory::App, "set_entity_effect: unknown effect '{}'", name);
 		}

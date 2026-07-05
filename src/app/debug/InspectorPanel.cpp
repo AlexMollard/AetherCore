@@ -13,7 +13,7 @@
 #include "debug/ComponentDrawers.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
-#include "effects/EffectManager.hpp"
+#include "material/EffectManager.hpp"
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"

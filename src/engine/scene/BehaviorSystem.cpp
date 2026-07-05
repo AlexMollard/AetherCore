@@ -1,4 +1,4 @@
-#include "systems/BehaviorSystem.hpp"
+#include "scene/BehaviorSystem.hpp"
 
 #include <cmath>
 
@@ -13,7 +13,7 @@
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
 
-namespace aether::app
+namespace aether
 {
 	void BehaviorSystem::Update(World& world, float dt)
 	{
@@ -77,4 +77,4 @@ namespace aether::app
 			MaterialSystem::SetEmissive(world, World::FromEntt(enttE), materials, pipelines, emissive);
 		}
 	}
-} // namespace aether::app
+} // namespace aether

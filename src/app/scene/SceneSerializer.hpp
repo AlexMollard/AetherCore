@@ -25,10 +25,10 @@ namespace aether
 	class World;
 } // namespace aether
 
-namespace aether::app::effects
+namespace aether::effects
 {
 	class EffectManager;
-} // namespace aether::app::effects
+} // namespace aether::effects
 
 namespace aether::app::scripting
 {
