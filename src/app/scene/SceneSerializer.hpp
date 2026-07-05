@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -103,8 +104,10 @@ namespace aether::app::scene
 		// Entity lights (v3+): position/aim come from the TRS above.
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
-		// Entity script path (v4+, ScriptComponent). Attach state is runtime.
+		// Entity script path/type (v4+, ScriptComponent). Attach state is runtime.
 		std::optional<std::string> script;
+		// Serialized C# script field overrides (v5+). Empty when none.
+		std::map<std::string, ScriptPropertyValue> scriptProperties;
 	};
 
 	// LEGACY (pre-v3): renderer-level light list. Still parsed so old files
@@ -140,8 +143,9 @@ namespace aether::app::scene
 	// v1 = Spec-3 (no behavior components, no lights/environment);
 	// v2 = Spec-4 (behaviors, renderer-level [[lights]], environment);
 	// v3 = lights are entities (per-entity point_light/spot_light tables);
-	// v4 = entity script components (script = "entities/x.das").
-	inline constexpr int kSceneFormatVersion = 4;
+	// v4 = entity script components (script = "entities/x.das");
+	// v5 = C# script type names + serialized script_properties.
+	inline constexpr int kSceneFormatVersion = 5;
 
 	struct SceneDescription
 	{

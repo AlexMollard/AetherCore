@@ -1,6 +1,7 @@
 #include "debug/ComponentDrawers.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,8 @@
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
+#include "systems/ScriptComponentSystem.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialRegistry.hpp"
@@ -574,7 +577,7 @@ namespace aether::app
 		}
 	}
 
-	void DrawScript(World& world, Entity entity)
+	void DrawScript(LayerContext& context, World& world, Entity entity)
 	{
 		auto* sc = world.TryGet<ScriptComponent>(entity);
 		if (sc == nullptr)
@@ -596,9 +599,131 @@ namespace aether::app
 		ImGui::TextDisabled(sc->attached ? "Attached (running while playing)" : "Attaches on the next Play tick");
 		if (sc->attached && ImGui::SmallButton("Re-attach"))
 		{
-			// Next play tick re-runs on_entity_attach (handy after F5-editing
-			// the script's setup code).
+			// Next play tick re-runs OnAttach (handy after editing setup code).
 			sc->attached = false;
+		}
+
+		// daScript scripts carry no inspector-exposed properties.
+		if (sc->path.ends_with(".das"))
+		{
+			return;
+		}
+
+		auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>();
+		if (cs == nullptr || !cs->IsAvailable())
+		{
+			return;
+		}
+		const auto props = cs->GetScriptProperties(sc->path);
+		if (props.empty())
+		{
+			return;
+		}
+
+		// A live instance (while playing) is the source of truth; otherwise the
+		// value is the stored override, falling back to the type default.
+		std::uint64_t handle = 0;
+		if (auto* runner = context.TryGet<ScriptComponentSystem>())
+		{
+			handle = runner->GetInstanceHandle(entity.id);
+		}
+
+		ImGui::SeparatorText("Properties");
+		for (int i = 0; i < static_cast<int>(props.size()); ++i)
+		{
+			const auto& info = props[i];
+			ScriptPropertyValue value;
+			value.type = info.type;
+			bool haveValue = false;
+			if (handle != 0 && cs->GetPropertyValue(handle, i, value))
+			{
+				haveValue = true;
+			}
+			else if (const auto it = sc->properties.find(info.name); it != sc->properties.end())
+			{
+				value = it->second;
+				haveValue = true;
+			}
+			else if (cs->GetDefaultPropertyValue(sc->path, i, value))
+			{
+				haveValue = true;
+			}
+			if (!haveValue)
+			{
+				continue;
+			}
+
+			bool edited = false;
+			switch (info.type)
+			{
+				case ScriptPropertyValue::Type::Float:
+				{
+					float f = value.f4[0];
+					if (ImGui::DragFloat(info.name.c_str(), &f, 0.1f))
+					{
+						value.f4[0] = f;
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::Int:
+				case ScriptPropertyValue::Type::Enum:
+				{
+					int n = static_cast<int>(value.i64);
+					if (ImGui::DragInt(info.name.c_str(), &n))
+					{
+						value.i64 = n;
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::Bool:
+				{
+					bool b = value.i64 != 0;
+					if (ImGui::Checkbox(info.name.c_str(), &b))
+					{
+						value.i64 = b ? 1 : 0;
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::Vector3:
+				{
+					float v[3] = {value.f4[0], value.f4[1], value.f4[2]};
+					if (ImGui::DragFloat3(info.name.c_str(), v, 0.1f))
+					{
+						value.f4[0] = v[0];
+						value.f4[1] = v[1];
+						value.f4[2] = v[2];
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::String:
+				{
+					char buf[256];
+					std::snprintf(buf, sizeof(buf), "%s", value.str.c_str());
+					if (ImGui::InputText(info.name.c_str(), buf, sizeof(buf)))
+					{
+						value.str = buf;
+						edited = true;
+					}
+					break;
+				}
+				case ScriptPropertyValue::Type::None:
+				default:
+					break;
+			}
+
+			if (edited)
+			{
+				value.type = info.type;
+				sc->properties[info.name] = value; // persist the override
+				if (handle != 0)
+				{
+					cs->SetPropertyValue(handle, i, value); // live-apply while playing
+				}
+			}
 		}
 	}
 

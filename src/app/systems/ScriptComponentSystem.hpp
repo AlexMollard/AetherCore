@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
+#include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "scene/System.hpp"
 #include "scripting/ScriptHandle.hpp"
@@ -55,6 +57,10 @@ namespace aether::app
 		// recompiles and re-attaches from fresh sources.
 		void Invalidate(World& world);
 
+		// The live managed instance handle for an entity (0 if none). Used by the
+		// inspector to read/write script properties on the running instance.
+		[[nodiscard]] std::uint64_t GetInstanceHandle(std::uint32_t entityId) const;
+
 	private:
 		// ── daScript path ──────────────────────────────────────────────────────
 		scripting::ScriptHandle* HandleFor(const std::string& path);
@@ -62,8 +68,8 @@ namespace aether::app
 		// ── C# path ────────────────────────────────────────────────────────────
 		// Attaches/updates one C# entity; the caller has installed the active
 		// SceneContext. Returns false if the type could not be instantiated.
-		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx,
-			Entity entity, const std::string& typeName, bool& attached, float dt);
+		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity,
+			const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached, float dt);
 		// Detach + free every managed instance whose entity is no longer scripted.
 		void PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
 		void DestroyAllCSharpInstances(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);

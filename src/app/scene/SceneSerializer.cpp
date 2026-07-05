@@ -1,6 +1,7 @@
 #include "scene/SceneSerializer.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -136,6 +137,141 @@ namespace aether::app::scene
 			}
 			return fallback;
 		}
+
+		// ── Script property (de)serialization ─────────────────────────────────────
+		// Each property is an inline table with an explicit type tag so values
+		// round-trip unambiguously (int vs float, enum vs int):
+		//   WalkSpeed = { t = "float", v = 12.0 }
+		//   Tint      = { t = "vec3",  v = [1.0, 0.5, 0.0] }
+		const char* ScriptPropTypeTag(ScriptPropertyValue::Type type)
+		{
+			switch (type)
+			{
+				case ScriptPropertyValue::Type::Float: return "float";
+				case ScriptPropertyValue::Type::Int: return "int";
+				case ScriptPropertyValue::Type::Bool: return "bool";
+				case ScriptPropertyValue::Type::Vector3: return "vec3";
+				case ScriptPropertyValue::Type::String: return "string";
+				case ScriptPropertyValue::Type::Enum: return "enum";
+				case ScriptPropertyValue::Type::None:
+				default: return "none";
+			}
+		}
+
+		toml::table ScriptPropsToToml(const std::map<std::string, ScriptPropertyValue>& props)
+		{
+			toml::table out;
+			for (const auto& [name, value]: props)
+			{
+				toml::table entry;
+				entry.insert("t", ScriptPropTypeTag(value.type));
+				switch (value.type)
+				{
+					case ScriptPropertyValue::Type::Float:
+						entry.insert("v", static_cast<double>(value.f4[0]));
+						break;
+					case ScriptPropertyValue::Type::Int:
+					case ScriptPropertyValue::Type::Enum:
+						entry.insert("v", static_cast<std::int64_t>(value.i64));
+						break;
+					case ScriptPropertyValue::Type::Bool:
+						entry.insert("v", value.i64 != 0);
+						break;
+					case ScriptPropertyValue::Type::Vector3:
+						entry.insert("v", toml::array{value.f4[0], value.f4[1], value.f4[2]});
+						break;
+					case ScriptPropertyValue::Type::String:
+						entry.insert("v", value.str);
+						break;
+					case ScriptPropertyValue::Type::None:
+					default:
+						break;
+				}
+				out.insert(name, std::move(entry));
+			}
+			return out;
+		}
+
+		std::map<std::string, ScriptPropertyValue> ScriptPropsFromToml(const toml::table& tbl)
+		{
+			std::map<std::string, ScriptPropertyValue> out;
+			for (const auto& [key, node]: tbl)
+			{
+				const auto* entry = node.as_table();
+				if (entry == nullptr)
+				{
+					continue;
+				}
+				const std::string tag = (*entry)["t"].value_or(std::string{});
+				const auto value = (*entry)["v"];
+				ScriptPropertyValue pv;
+				if (tag == "float")
+				{
+					pv.type = ScriptPropertyValue::Type::Float;
+					pv.f4[0] = static_cast<float>(value.value_or(0.0));
+				}
+				else if (tag == "int" || tag == "enum")
+				{
+					pv.type = tag == "enum" ? ScriptPropertyValue::Type::Enum : ScriptPropertyValue::Type::Int;
+					pv.i64 = value.value_or(std::int64_t{0});
+				}
+				else if (tag == "bool")
+				{
+					pv.type = ScriptPropertyValue::Type::Bool;
+					pv.i64 = value.value_or(false) ? 1 : 0;
+				}
+				else if (tag == "vec3")
+				{
+					pv.type = ScriptPropertyValue::Type::Vector3;
+					const glm::vec3 v = Vec3FromToml(value, glm::vec3(0.0f));
+					pv.f4[0] = v.x;
+					pv.f4[1] = v.y;
+					pv.f4[2] = v.z;
+				}
+				else if (tag == "string")
+				{
+					pv.type = ScriptPropertyValue::Type::String;
+					pv.str = value.value_or(std::string{});
+				}
+				else
+				{
+					continue;
+				}
+				out.emplace(std::string(key.str()), std::move(pv));
+			}
+			return out;
+		}
+
+		// Legacy scenes referenced daScript files (e.g. "entities/player.das");
+		// map those to the C# script type name ("Player"). Non-.das paths pass
+		// through unchanged.
+		std::string MigrateLegacyScriptPath(const std::string& path)
+		{
+			if (!path.ends_with(".das"))
+			{
+				return path;
+			}
+			std::string name = path;
+			if (const auto slash = name.find_last_of('/'); slash != std::string::npos)
+			{
+				name = name.substr(slash + 1);
+			}
+			name = name.substr(0, name.size() - 4); // drop the .das extension
+
+			std::string typeName;
+			bool upper = true;
+			for (const char c: name)
+			{
+				if (c == '_')
+				{
+					upper = true;
+					continue;
+				}
+				typeName += (upper && c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
+				upper = false;
+			}
+			return typeName;
+		}
 	} // namespace
 
 	// ── Capture ─────────────────────────────────────────────────────────────────
@@ -258,6 +394,7 @@ namespace aether::app::scene
 				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr && !script->path.empty())
 				{
 					rec.script = script->path;
+					rec.scriptProperties = script->properties;
 				}
 				scene.entities.push_back(std::move(rec));
 			}
@@ -540,6 +677,10 @@ namespace aether::app::scene
 			{
 				t.insert("script", *rec.script);
 			}
+			if (!rec.scriptProperties.empty())
+			{
+				t.insert("script_properties", ScriptPropsToToml(rec.scriptProperties));
+			}
 			entities.push_back(std::move(t));
 		}
 		root.insert("entities", std::move(entities));
@@ -728,7 +869,11 @@ namespace aether::app::scene
 			}
 			if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
 			{
-				rec.script = *script;
+				rec.script = MigrateLegacyScriptPath(*script);
+			}
+			if (const auto* props = tv["script_properties"].as_table())
+			{
+				rec.scriptProperties = ScriptPropsFromToml(*props);
 			}
 			scene.entities.push_back(std::move(rec));
 		}
@@ -1115,7 +1260,7 @@ namespace aether::app::scene
 			{
 				// attached stays false: the script system re-attaches on the
 				// next play tick (loads and Stop-restores restart scripts).
-				world.Emplace<ScriptComponent>(e, ScriptComponent{.path = *rec.script});
+				world.Emplace<ScriptComponent>(e, ScriptComponent{.path = *rec.script, .properties = rec.scriptProperties});
 			}
 		}
 

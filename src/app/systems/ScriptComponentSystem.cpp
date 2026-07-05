@@ -79,8 +79,15 @@ namespace aether::app
 		return &m_handles.emplace(path, std::move(handle)).first->second;
 	}
 
+	std::uint64_t ScriptComponentSystem::GetInstanceHandle(std::uint32_t entityId) const
+	{
+		const auto it = m_instances.find(entityId);
+		return it != m_instances.end() ? it->second : 0;
+	}
+
 	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/,
-		Entity entity, const std::string& typeName, bool& attached, float dt)
+		Entity entity, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached,
+		float dt)
 	{
 		const auto* api = cs.Api();
 		if (api == nullptr)
@@ -124,6 +131,8 @@ namespace aether::app
 				return false;
 			}
 			m_instances[entity.id] = handle;
+			// Apply serialized field overrides before OnAttach sees them.
+			cs.ApplyProperties(handle, typeName, properties);
 			attached = false; // a freshly created instance must attach
 		}
 
@@ -274,7 +283,7 @@ namespace aether::app
 					continue;
 				}
 				ActiveContextScope scope(*sceneCtx);
-				UpdateCSharpEntity(*csScripting, *sceneCtx, e, sc->path, sc->attached, dt);
+				UpdateCSharpEntity(*csScripting, *sceneCtx, e, sc->path, sc->properties, sc->attached, dt);
 			}
 		}
 

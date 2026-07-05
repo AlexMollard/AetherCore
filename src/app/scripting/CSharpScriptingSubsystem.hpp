@@ -2,13 +2,22 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
+#include "scene/Components.hpp"
 #include "scripting/DotNetHost.hpp"
 
 namespace aether::app::scripting
 {
+	// Metadata for one inspector-exposed script property.
+	struct ScriptPropertyInfo
+	{
+		std::string name;
+		aether::ScriptPropertyValue::Type type = aether::ScriptPropertyValue::Type::None;
+	};
+
 	// Owns the .NET host and the loaded game-scripts assembly, and drives the C#
 	// scripting lifecycle for ScriptComponentSystem. Mirrors the daScript
 	// ScriptingSubsystem's reload/error surface so DebugLayer / DevToolsPanel can
@@ -40,6 +49,20 @@ namespace aether::app::scripting
 		{
 			return m_typeNames;
 		}
+
+		// ── Script properties (inspector + scene overrides) ────────────────────
+		// The inspector-exposed fields of a script type.
+		[[nodiscard]] std::vector<ScriptPropertyInfo> GetScriptProperties(const std::string& typeName) const;
+		// Index of a named property within a type, or -1.
+		[[nodiscard]] int FindPropertyIndex(const std::string& typeName, const std::string& name) const;
+		// Read/write a property value on a live script instance (GCHandle).
+		[[nodiscard]] bool GetPropertyValue(std::uint64_t handle, int index, aether::ScriptPropertyValue& out) const;
+		void SetPropertyValue(std::uint64_t handle, int index, const aether::ScriptPropertyValue& value) const;
+		// Read a type's default field value (edit mode, no live instance).
+		[[nodiscard]] bool GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const;
+		// Apply stored per-entity overrides to a freshly created instance.
+		void ApplyProperties(
+			std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const;
 
 		// ── Reload / error surface (mirrors ScriptingSubsystem) ────────────────
 		void RequestReload()

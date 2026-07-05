@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 #include <glm/glm.hpp>
@@ -120,10 +121,35 @@ namespace aether
 	// component and its serialization outlive the planned C# swap). `attached`
 	// is runtime state - scene apply leaves it false, so loads and
 	// Stop-restores re-run the attach on the next play tick.
+	// A single serialized script field override (Unity-style [SerializeField]).
+	// The tag mirrors the scripting PropertyType wire enum.
+	struct ScriptPropertyValue
+	{
+		enum class Type : std::int32_t
+		{
+			None = 0,
+			Float = 1,
+			Int = 2,
+			Bool = 3,
+			Vector3 = 4,
+			String = 5,
+			Enum = 6,
+		};
+
+		Type type = Type::None;
+		float f4[4] = {}; // Float (x), Vector3 (xyz)
+		std::int64_t i64 = 0; // Int, Bool (0/1), Enum
+		std::string str; // String
+	};
+
 	struct ScriptComponent
 	{
+		// daScript file path (ends in ".das") or C# script type name.
 		std::string path;
 		bool attached = false;
+		// Per-entity field overrides applied to the script instance on attach and
+		// persisted with the scene. Ordered for stable serialization.
+		std::map<std::string, ScriptPropertyValue> properties;
 	};
 
 	// Drives GPU-based skeletal animation for a skinned mesh entity.

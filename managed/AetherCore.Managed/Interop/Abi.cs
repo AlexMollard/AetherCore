@@ -66,4 +66,7 @@ internal unsafe struct ManagedScriptApi
     // GC policy
     public delegate* unmanaged<int, void> SetPlayMode;
     public delegate* unmanaged<void> CollectFull;
+
+    // Default field value from a cached default instance (inspector, edit mode).
+    public delegate* unmanaged<byte*, int, PropertyValue*, int> GetDefaultProperty;
 }

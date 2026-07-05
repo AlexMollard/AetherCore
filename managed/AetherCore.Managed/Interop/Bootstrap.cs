@@ -56,10 +56,17 @@ internal static unsafe class Bootstrap
             outApi->InvokeUpdate = &ScriptRegistry.InvokeUpdate;
             outApi->InvokeDetach = &ScriptRegistry.InvokeDetach;
 
+            // Serialized script properties (inspector / scene overrides)
+            outApi->GetPropertyCount = &ScriptRegistry.GetPropertyCount;
+            outApi->GetPropertyInfo = &ScriptRegistry.GetPropertyInfo;
+            outApi->GetProperty = &ScriptRegistry.GetProperty;
+            outApi->SetProperty = &ScriptRegistry.SetProperty;
+
+            outApi->GetDefaultProperty = &ScriptRegistry.GetDefaultProperty;
+
             // GC policy
             outApi->SetPlayMode = &Api_SetPlayMode;
             outApi->CollectFull = &Api_CollectFull;
-            // Property entries are wired in Phase 4.
 
             Log.Info($"AetherCore.Managed bootstrap OK (.NET {Environment.Version})");
             return 0;

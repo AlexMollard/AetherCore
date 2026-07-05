@@ -37,6 +37,58 @@ internal static unsafe class ScriptRegistry
     private static readonly Dictionary<string, Type> s_types = new(StringComparer.Ordinal);
     private static string[] s_typeNames = Array.Empty<string>();
 
+    // One reflected property table per script type (built once at load).
+    private sealed class Prop
+    {
+        public required string Name;
+        public required PropertyType Type;
+        public required System.Reflection.FieldInfo Field;
+    }
+
+    private static readonly Dictionary<string, Prop[]> s_props = new(StringComparer.Ordinal);
+
+    // A default-constructed instance per type, so the inspector can show default
+    // field values when no live instance exists (edit mode).
+    private static readonly Dictionary<string, EntityScript> s_defaults = new(StringComparer.Ordinal);
+
+    // Scratch for returning a string property across the boundary. GetProperty is
+    // called synchronously by the inspector, so a single pending buffer suffices.
+    private static IntPtr s_stringScratch = IntPtr.Zero;
+
+    private static PropertyType MapPropertyType(Type t)
+    {
+        if (t == typeof(float)) return PropertyType.Float;
+        if (t == typeof(int)) return PropertyType.Int;
+        if (t == typeof(bool)) return PropertyType.Bool;
+        if (t == typeof(System.Numerics.Vector3)) return PropertyType.Vector3;
+        if (t == typeof(string)) return PropertyType.String;
+        if (t.IsEnum) return PropertyType.Enum;
+        return PropertyType.None;
+    }
+
+    private static Prop[] BuildProps(Type type)
+    {
+        var props = new List<Prop>();
+        foreach (System.Reflection.FieldInfo field in type.GetFields(
+                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+        {
+            if (field.IsInitOnly || field.IsLiteral)
+            {
+                continue;
+            }
+            if (field.IsDefined(typeof(HideInInspectorAttribute), inherit: true))
+            {
+                continue;
+            }
+            PropertyType pt = MapPropertyType(field.FieldType);
+            if (pt != PropertyType.None)
+            {
+                props.Add(new Prop { Name = field.Name, Type = pt, Field = field });
+            }
+        }
+        return props.ToArray();
+    }
+
     // ── Assembly / registry lifecycle ─────────────────────────────────────────
 
     [UnmanagedCallersOnly]
@@ -88,6 +140,8 @@ internal static unsafe class ScriptRegistry
         }
 
         s_types.Clear();
+        s_props.Clear();
+        s_defaults.Clear();
         var names = new List<string>();
         foreach (Type type in assembly.GetTypes())
         {
@@ -96,7 +150,16 @@ internal static unsafe class ScriptRegistry
                 continue;
             }
             s_types[type.Name] = type;
+            s_props[type.Name] = BuildProps(type);
             names.Add(type.Name);
+            try
+            {
+                s_defaults[type.Name] = (EntityScript)Activator.CreateInstance(type)!;
+            }
+            catch
+            {
+                // A throwing default constructor just means no cached defaults.
+            }
         }
         names.Sort(StringComparer.Ordinal);
         s_typeNames = names.ToArray();
@@ -200,5 +263,142 @@ internal static unsafe class ScriptRegistry
     private static EntityScript? Resolve(ulong handle)
     {
         return handle == 0 ? null : GCHandle.FromIntPtr((IntPtr)(long)handle).Target as EntityScript;
+    }
+
+    // ── Serialized script properties (inspector / scene overrides) ────────────
+
+    [UnmanagedCallersOnly]
+    internal static int GetPropertyCount(byte* typeNameUtf8)
+    {
+        return s_props.TryGetValue(Utf8.ToString(typeNameUtf8), out Prop[]? props) ? props.Length : 0;
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int GetPropertyInfo(byte* typeNameUtf8, int index, byte* nameBuf, int nameBufLen, int* outType)
+    {
+        if (!s_props.TryGetValue(Utf8.ToString(typeNameUtf8), out Prop[]? props) || index < 0 || index >= props.Length)
+        {
+            return 0;
+        }
+        Prop p = props[index];
+        if (outType != null)
+        {
+            *outType = (int)p.Type;
+        }
+        return Utf8.Write(p.Name, nameBuf, nameBufLen);
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int GetProperty(ulong handle, int index, PropertyValue* outValue)
+    {
+        if (outValue == null || Resolve(handle) is not { } script)
+        {
+            return 0;
+        }
+        if (!s_props.TryGetValue(script.GetType().Name, out Prop[]? props) || index < 0 || index >= props.Length)
+        {
+            return 0;
+        }
+        return FillValue(script, props[index], outValue);
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int GetDefaultProperty(byte* typeNameUtf8, int index, PropertyValue* outValue)
+    {
+        string typeName = Utf8.ToString(typeNameUtf8);
+        if (outValue == null || !s_defaults.TryGetValue(typeName, out EntityScript? script))
+        {
+            return 0;
+        }
+        if (!s_props.TryGetValue(typeName, out Prop[]? props) || index < 0 || index >= props.Length)
+        {
+            return 0;
+        }
+        return FillValue(script, props[index], outValue);
+    }
+
+    private static int FillValue(object script, Prop p, PropertyValue* outValue)
+    {
+        object? value = p.Field.GetValue(script);
+        outValue->Type = (int)p.Type;
+        switch (p.Type)
+        {
+            case PropertyType.Float:
+                outValue->F4[0] = (float)value!;
+                break;
+            case PropertyType.Int:
+                outValue->I64 = (int)value!;
+                break;
+            case PropertyType.Bool:
+                outValue->I64 = (bool)value! ? 1 : 0;
+                break;
+            case PropertyType.Enum:
+                outValue->I64 = Convert.ToInt64(value);
+                break;
+            case PropertyType.Vector3:
+                var v = (System.Numerics.Vector3)value!;
+                outValue->F4[0] = v.X;
+                outValue->F4[1] = v.Y;
+                outValue->F4[2] = v.Z;
+                break;
+            case PropertyType.String:
+                if (s_stringScratch != IntPtr.Zero)
+                {
+                    Marshal.FreeCoTaskMem(s_stringScratch);
+                }
+                s_stringScratch = Marshal.StringToCoTaskMemUTF8((string?)value ?? string.Empty);
+                outValue->Str = (byte*)s_stringScratch;
+                break;
+            default:
+                return 0;
+        }
+        return 1;
+    }
+
+    [UnmanagedCallersOnly]
+    internal static int SetProperty(ulong handle, int index, PropertyValue* value)
+    {
+        if (value == null || Resolve(handle) is not { } script)
+        {
+            return 0;
+        }
+        if (!s_props.TryGetValue(script.GetType().Name, out Prop[]? props) || index < 0 || index >= props.Length)
+        {
+            return 0;
+        }
+
+        Prop p = props[index];
+        try
+        {
+            switch (p.Type)
+            {
+                case PropertyType.Float:
+                    p.Field.SetValue(script, value->F4[0]);
+                    break;
+                case PropertyType.Int:
+                    p.Field.SetValue(script, (int)value->I64);
+                    break;
+                case PropertyType.Bool:
+                    p.Field.SetValue(script, value->I64 != 0);
+                    break;
+                case PropertyType.Enum:
+                    p.Field.SetValue(script, Enum.ToObject(p.Field.FieldType, value->I64));
+                    break;
+                case PropertyType.Vector3:
+                    p.Field.SetValue(script, new System.Numerics.Vector3(value->F4[0], value->F4[1], value->F4[2]));
+                    break;
+                case PropertyType.String:
+                    p.Field.SetValue(script, Utf8.ToString(value->Str));
+                    break;
+                default:
+                    return 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            Bootstrap.ReportError($"SetProperty({p.Name}): {ex.Message}");
+            return 0;
+        }
+        return 1;
     }
 }

@@ -28,6 +28,7 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/Profiler.hpp"
 
@@ -129,9 +130,9 @@ namespace aether::app
 			m_addFocusPending = true;
 			// Entity-script list refreshes once per open.
 			m_scriptList.clear();
-			if (const auto scripts = io::FileSystem::Glob("scripts://entities/*.das"); scripts.has_value())
+			if (auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>())
 			{
-				m_scriptList = *scripts;
+				m_scriptList = cs->GetScriptTypeNames();
 				std::sort(m_scriptList.begin(), m_scriptList.end());
 			}
 			ImGui::OpenPopup("AddComponent");
@@ -347,7 +348,7 @@ namespace aether::app
 		DrawMaterial(context, world, entity);
 		DrawEffectParams(context, world, entity);
 		DrawLights(world, entity);
-		DrawScript(world, entity);
+		DrawScript(context, world, entity);
 		DrawBehaviors(world, entity);
 		DrawPhysics(world, entity);
 		DrawMeshPipeline(world, entity);

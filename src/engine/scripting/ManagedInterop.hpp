@@ -88,6 +88,10 @@ namespace aether::scripting
 		// ── GC policy ────────────────────────────────────────────────────────
 		void (*SetPlayMode)(std::int32_t playing) = nullptr; // SustainedLowLatency <-> Interactive
 		void (*CollectFull)() = nullptr;
+
+		// Reads a type's default field value from a cached default instance (for
+		// the inspector when no live instance exists).
+		std::int32_t (*GetDefaultProperty)(const char* typeNameUtf8, std::int32_t index, PropertyValue* outValue) = nullptr;
 	};
 
 	// Signature of the managed Bootstrap.Init entry point resolved via
