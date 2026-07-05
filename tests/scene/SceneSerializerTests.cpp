@@ -380,3 +380,105 @@ TEST_CASE("Pre-versioning scene files parse as format v1") {
     CHECK(parsed->entities[0].name == "Box");
     CHECK(!parsed->entities[0].orbit.has_value());
 }
+
+TEST_CASE("ReplaceScene spares transient subtrees (script-owned actors)") {
+    World world = MakeWorld();
+
+    // Player-like transient root with a mesh child, plus a normal prop.
+    const Entity player = world.Create();
+    world.Emplace<NameComponent>(player, NameComponent{.name = "Player"});
+    world.Emplace<TransformComponent>(player, TransformComponent{});
+    world.GetRegistry().emplace<SceneTransientComponent>(World::ToEntt(player));
+    const Entity playerMesh = world.Create();
+    world.Emplace<TransformComponent>(playerMesh, TransformComponent{});
+    REQUIRE(ecs::SetParent(world, playerMesh, player));
+
+    const Entity prop = world.Create();
+    world.Emplace<NameComponent>(prop, NameComponent{.name = "Prop"});
+    world.Emplace<TransformComponent>(prop, TransformComponent{});
+
+    // Restore an empty snapshot: the prop must go, the player subtree must stay.
+    ReplaceScene(SceneDescription{}, world, ApplySceneDeps{});
+
+    auto& reg = world.GetRegistry();
+    CHECK(reg.valid(World::ToEntt(player)));
+    CHECK(reg.valid(World::ToEntt(playerMesh)));
+    CHECK(!reg.valid(World::ToEntt(prop)));
+}
+
+TEST_CASE("Light entities round-trip through capture, TOML and apply (v3)") {
+    FakeSlotSink sink(8);
+    FakeTextureSink tsink;
+    TextureRegistry treg(tsink);
+    MaterialRegistry mreg(sink, treg);
+    World world = MakeWorld();
+
+    const glm::vec3 spotDir = glm::normalize(glm::vec3(0.3f, -0.8f, 0.5f));
+    (void) ecs::CreatePointLightEntity(world, {-40.0f, 13.0f, 40.0f}, PointLightComponent{.color = {1.0f, 0.85f, 0.6f, }, .intensity = 45.0f, .radius = 34.0f, .castsShadow = true}, "Plaza Light");
+    (void) ecs::CreateSpotLightEntity(world, {0.0f, 13.0f, -44.0f}, spotDir, SpotLightComponent{.color = {0.85f, 0.92f, 1.0f}, .intensity = 60.0f, .radius = 50.0f, .innerAngleRad = 0.35f, .outerAngleRad = 0.55f, .castsShadow = true}, "Stage Spot");
+
+    const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
+    REQUIRE(parsed.has_value());
+    CHECK(parsed->version == kSceneFormatVersion);
+    CHECK(parsed->lights.empty()); // no legacy list emitted for entity lights
+
+    const EntityRecord& p = RecordOf(*parsed, "Plaza Light");
+    REQUIRE(p.pointLight.has_value());
+    CHECK(p.pointLight->intensity == doctest::Approx(45.0f));
+    CHECK(p.pointLight->radius == doctest::Approx(34.0f));
+    CHECK(p.pointLight->castsShadow);
+    CHECK(p.position.x == doctest::Approx(-40.0f));
+
+    const EntityRecord& s = RecordOf(*parsed, "Stage Spot");
+    REQUIRE(s.spotLight.has_value());
+    CHECK(s.spotLight->innerAngleRad == doctest::Approx(0.35f));
+    CHECK(s.spotLight->outerAngleRad == doctest::Approx(0.55f));
+
+    World fresh = MakeWorld();
+    const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
+    const Entity spot = AppliedOf(*parsed, created, "Stage Spot");
+    REQUIRE(spot.IsValid());
+    REQUIRE(fresh.TryGet<SpotLightComponent>(spot) != nullptr);
+    // Aim survives the TRS round trip: local -Z still points along spotDir.
+    const glm::mat4& m = fresh.Get<TransformComponent>(spot).localToWorld;
+    const glm::vec3 fwd = -glm::normalize(glm::vec3(m[2]));
+    CHECK(glm::dot(fwd, spotDir) == doctest::Approx(1.0f).epsilon(1e-3));
+    const Entity point = AppliedOf(*parsed, created, "Plaza Light");
+    REQUIRE(fresh.TryGet<PointLightComponent>(point) != nullptr);
+    CHECK(fresh.Get<PointLightComponent>(point).intensity == doctest::Approx(45.0f));
+}
+
+TEST_CASE("Legacy [[lights]] records migrate to light entities on apply") {
+    const char* v2Toml =
+        "[scene]\nname = 'legacy'\nversion = 2\n\n"
+        "[[lights]]\ntype = 'point'\nposition = [34.0, 11.0, 40.0]\ncolor = [1.0, 0.25, 0.25]\nintensity = 36.0\nradius = 30.0\nshadow = true\n\n"
+        "[[lights]]\ntype = 'spot'\nposition = [0.0, 13.0, -44.0]\ncolor = [0.85, 0.92, 1.0]\nintensity = 60.0\nradius = 50.0\ndirection = [0.0, -0.15, -1.0]\ninner_rad = 0.35\nouter_rad = 0.55\nshadow = true\n";
+    const auto parsed = ParseToml(v2Toml);
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->lights.size() == 2);
+
+    World world = MakeWorld();
+    (void) ApplyScene(*parsed, world, ApplySceneDeps{});
+
+    auto& reg = world.GetRegistry();
+    int points = 0;
+    for (const auto e: reg.view<PointLightComponent>())
+    {
+        const auto& l = reg.get<PointLightComponent>(e);
+        CHECK(l.intensity == doctest::Approx(36.0f));
+        CHECK(l.castsShadow);
+        const auto& tc = reg.get<TransformComponent>(e);
+        CHECK(tc.localToWorld[3].x == doctest::Approx(34.0f));
+        ++points;
+    }
+    CHECK(points == 1);
+    int spots = 0;
+    for (const auto e: reg.view<SpotLightComponent>())
+    {
+        const auto& tc = reg.get<TransformComponent>(e);
+        const glm::vec3 fwd = -glm::normalize(glm::vec3(tc.localToWorld[2]));
+        CHECK(glm::dot(fwd, glm::normalize(glm::vec3(0.0f, -0.15f, -1.0f))) == doctest::Approx(1.0f).epsilon(1e-3));
+        ++spots;
+    }
+    CHECK(spots == 1);
+}

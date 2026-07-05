@@ -20,6 +20,7 @@
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/TagSlots.hpp"
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
@@ -90,6 +91,10 @@ namespace aether::app
 
 	KindBadge EntityKindBadge(const World& world, Entity entity)
 	{
+		if (world.Has<PointLightComponent>(entity) || world.Has<SpotLightComponent>(entity))
+		{
+			return {ICON_FA_LIGHTBULB, ImVec4(1.00f, 0.86f, 0.40f, 1.0f)};
+		}
 		if (world.Has<SkinnedMeshComponent>(entity))
 		{
 			return {ICON_FA_PERSON_RUNNING, ImVec4(0.55f, 0.75f, 1.00f, 1.0f)};
@@ -353,13 +358,18 @@ namespace aether::app
 
 	namespace
 	{
-		// Right-aligned remove-x on the section header row (the hierarchy
-		// drawer's inert-link pattern, shared by the removable sections).
-		bool HeaderRemoveButton(const char* id)
+		// CollapsingHeader with a right-aligned remove-x. AllowOverlap is the
+		// load-bearing part: the header is a full-row item submitted FIRST, so
+		// without it the header grabs the click (ActiveId) and the x underneath
+		// can never be pressed - it just toggles the section. Returns the open
+		// state; `removed` reports the x.
+		bool RemovableSection(const char* label, const char* removeId, bool& removed, ImGuiTreeNodeFlags flags = 0)
 		{
+			const bool open = ImGui::CollapsingHeader(label, flags | ImGuiTreeNodeFlags_AllowOverlap);
 			ImGui::SameLine();
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 22.0f);
-			return ImGui::SmallButton(id);
+			removed = ImGui::SmallButton(removeId);
+			return open;
 		}
 	} // namespace
 
@@ -370,8 +380,9 @@ namespace aether::app
 		{
 			return;
 		}
-		const bool open = ImGui::CollapsingHeader(ICON_FA_BOLT "  Effect Params", ImGuiTreeNodeFlags_DefaultOpen);
-		if (HeaderRemoveButton(ICON_FA_XMARK "##removeEffect"))
+		bool removeEffect = false;
+		const bool open = RemovableSection(ICON_FA_BOLT "  Effect Params", ICON_FA_XMARK "##removeEffect", removeEffect, ImGuiTreeNodeFlags_DefaultOpen);
+		if (removeEffect)
 		{
 			// The param slot frees through the on_destroy hook. The material
 			// pipeline the effect was overriding comes back via a plain
@@ -444,8 +455,9 @@ namespace aether::app
 	{
 		if (auto* bob = world.TryGet<BobComponent>(entity))
 		{
-			const bool open = ImGui::CollapsingHeader(ICON_FA_WAVE_SQUARE "  Bob");
-			if (HeaderRemoveButton(ICON_FA_XMARK "##removeBob"))
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_WAVE_SQUARE "  Bob", ICON_FA_XMARK "##removeBob", removed);
+			if (removed)
 			{
 				world.Remove<BobComponent>(entity);
 			}
@@ -470,8 +482,9 @@ namespace aether::app
 
 		if (auto* spin = world.TryGet<SpinComponent>(entity))
 		{
-			const bool open = ImGui::CollapsingHeader(ICON_FA_ROTATE "  Spin");
-			if (HeaderRemoveButton(ICON_FA_XMARK "##removeSpin"))
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_ROTATE "  Spin", ICON_FA_XMARK "##removeSpin", removed);
+			if (removed)
 			{
 				world.Remove<SpinComponent>(entity);
 			}
@@ -483,8 +496,9 @@ namespace aether::app
 
 		if (auto* orbit = world.TryGet<OrbitComponent>(entity))
 		{
-			const bool open = ImGui::CollapsingHeader(ICON_FA_CIRCLE_NOTCH "  Orbit");
-			if (HeaderRemoveButton(ICON_FA_XMARK "##removeOrbit"))
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_CIRCLE_NOTCH "  Orbit", ICON_FA_XMARK "##removeOrbit", removed);
+			if (removed)
 			{
 				world.Remove<OrbitComponent>(entity);
 			}
@@ -501,8 +515,9 @@ namespace aether::app
 
 		if (auto* pulse = world.TryGet<MaterialPulseComponent>(entity))
 		{
-			const bool open = ImGui::CollapsingHeader(ICON_FA_HEART_PULSE "  Material Pulse");
-			if (HeaderRemoveButton(ICON_FA_XMARK "##removePulse"))
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_HEART_PULSE "  Material Pulse", ICON_FA_XMARK "##removePulse", removed);
+			if (removed)
 			{
 				world.Remove<MaterialPulseComponent>(entity);
 			}
@@ -515,14 +530,59 @@ namespace aether::app
 		}
 	}
 
+	void DrawLights(World& world, Entity entity)
+	{
+		if (auto* pl = world.TryGet<PointLightComponent>(entity))
+		{
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_LIGHTBULB "  Point Light", ICON_FA_XMARK "##removePointLight", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			if (removed)
+			{
+				world.Remove<PointLightComponent>(entity);
+			}
+			else if (open)
+			{
+				ImGui::ColorEdit3("Color##pl", &pl->color.x);
+				ImGui::DragFloat("Intensity##pl", &pl->intensity, 0.2f, 0.0f, 1000.0f);
+				ImGui::DragFloat("Radius##pl", &pl->radius, 0.1f, 0.0f, 500.0f);
+				ImGui::Checkbox("Casts shadow##pl", &pl->castsShadow);
+			}
+		}
+
+		if (auto* sl = world.TryGet<SpotLightComponent>(entity))
+		{
+			bool removed = false;
+			const bool open = RemovableSection(ICON_FA_LIGHTBULB "  Spot Light", ICON_FA_XMARK "##removeSpotLight", removed, ImGuiTreeNodeFlags_DefaultOpen);
+			if (removed)
+			{
+				world.Remove<SpotLightComponent>(entity);
+			}
+			else if (open)
+			{
+				ImGui::ColorEdit3("Color##sl", &sl->color.x);
+				ImGui::DragFloat("Intensity##sl", &sl->intensity, 0.2f, 0.0f, 1000.0f);
+				ImGui::DragFloat("Radius##sl", &sl->radius, 0.1f, 0.0f, 500.0f);
+				ImGui::SliderAngle("Inner angle##sl", &sl->innerAngleRad, 1.0f, 89.0f);
+				ImGui::SliderAngle("Outer angle##sl", &sl->outerAngleRad, 1.0f, 89.0f);
+				if (sl->outerAngleRad < sl->innerAngleRad)
+				{
+					sl->outerAngleRad = sl->innerAngleRad;
+				}
+				ImGui::Checkbox("Casts shadow##sl", &sl->castsShadow);
+				ImGui::TextDisabled("Aims along the entity's -Z: rotate to aim the cone");
+			}
+		}
+	}
+
 	void DrawSceneTransient(World& world, Entity entity)
 	{
 		if (!world.Has<SceneTransientComponent>(entity))
 		{
 			return;
 		}
-		const bool open = ImGui::CollapsingHeader(ICON_FA_GHOST "  Scene Transient");
-		if (HeaderRemoveButton(ICON_FA_XMARK "##removeTransient"))
+		bool removed = false;
+		const bool open = RemovableSection(ICON_FA_GHOST "  Scene Transient", ICON_FA_XMARK "##removeTransient", removed);
+		if (removed)
 		{
 			world.Remove<SceneTransientComponent>(entity);
 			return;
@@ -553,7 +613,7 @@ namespace aether::app
 		{
 			return;
 		}
-		const bool open = ImGui::CollapsingHeader(ICON_FA_SITEMAP "  Hierarchy");
+		const bool open = ImGui::CollapsingHeader(ICON_FA_SITEMAP "  Hierarchy", ImGuiTreeNodeFlags_AllowOverlap);
 		// Removable only when the link is inert - removing a live link would
 		// orphan parent/children bookkeeping.
 		if (!h->parent.IsValid() && h->children.empty())

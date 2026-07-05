@@ -24,6 +24,7 @@
 #include "rendering/Renderer.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
@@ -405,6 +406,16 @@ namespace aether::app
 				if (ImGui::MenuItem(ICON_FA_IMAGE "  Plane"))
 				{
 					CreatePrimitive(context, world, selection, PrimitiveMesh::Plane, "Plane", "plane");
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Point Light"))
+				{
+					selection.Select(ecs::CreatePointLightEntity(world, {0.0f, 5.0f, 0.0f}, PointLightComponent{}));
+				}
+				if (ImGui::MenuItem(ICON_FA_LIGHTBULB "  Spot Light"))
+				{
+					// Spawn aimed forward-down so the cone lands in front of you.
+					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
 				}
 				ImGui::EndPopup();
 			}

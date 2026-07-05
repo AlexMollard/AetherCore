@@ -9,6 +9,24 @@
 
 namespace aether::ecs
 {
+	// True if the entity or any of its ancestors carries SceneTransientComponent.
+	// Transient subtrees are script-owned runtime state: scene capture excludes
+	// them and replace-all restores spare them (the script respawns/keeps them).
+	inline bool HasSceneTransientAncestor(World& world, Entity entity)
+	{
+		Entity cur = entity;
+		while (cur.IsValid())
+		{
+			if (world.Has<SceneTransientComponent>(cur))
+			{
+				return true;
+			}
+			const auto* h = world.TryGet<HierarchyComponent>(cur);
+			cur = h ? h->parent : Entity{};
+		}
+		return false;
+	}
+
 	// True if `possibleAncestor` is `entity` itself or any ancestor of it.
 	inline bool IsAncestor(World& world, Entity entity, Entity possibleAncestor)
 	{

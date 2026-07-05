@@ -1,8 +1,12 @@
 #include "scripting/DasModuleBase.hpp"
 
+#include <vector>
+
 #include "daScript/daScript.h"
 
 #include "rendering/Renderer.hpp"
+#include "scene/LightComponents.hpp"
+#include "scene/World.hpp"
 #include "scripting/DasHelpers.hpp"
 #include "scripting/SceneContext.hpp"
 #include "systems/DayNightSystem.hpp"
@@ -23,29 +27,21 @@ namespace
 		r.SetSunColor(to_glm(color));
 	}
 
+	// Lights are entities now (scene/LightComponents.hpp): the bindings spawn a
+	// named, transform-carrying entity and LightSystem republishes it to the
+	// renderer each frame. Same signatures as the old renderer-level calls.
 	void das_add_point_light(das::float3 pos, das::float3 color, float intensity, float radius, bool castsShadow)
 	{
-		ActiveContext().renderer->AddPointLight({
-		        .position = to_glm(pos),
-		        .radius = radius,
-		        .color = to_glm(color),
-		        .intensity = intensity,
-		        .castsShadow = castsShadow,
-		});
+		auto& ctx = ActiveContext();
+		const aether::Entity e = aether::ecs::CreatePointLightEntity(*ctx.world, to_glm(pos), aether::PointLightComponent{.color = to_glm(color), .intensity = intensity, .radius = radius, .castsShadow = castsShadow});
+		ctx.sceneEntities.push_back(e);
 	}
 
 	void das_add_spot_light(das::float3 pos, das::float3 color, float intensity, float radius, das::float3 dir, float innerAngle, float outerAngle, bool castsShadow)
 	{
-		ActiveContext().renderer->AddSpotLight({
-		        .position = to_glm(pos),
-		        .radius = radius,
-		        .direction = to_glm(dir),
-		        .innerAngleRad = innerAngle,
-		        .color = to_glm(color),
-		        .intensity = intensity,
-		        .outerAngleRad = outerAngle,
-		        .castsShadow = castsShadow,
-		});
+		auto& ctx = ActiveContext();
+		const aether::Entity e = aether::ecs::CreateSpotLightEntity(*ctx.world, to_glm(pos), to_glm(dir), aether::SpotLightComponent{.color = to_glm(color), .intensity = intensity, .radius = radius, .innerAngleRad = innerAngle, .outerAngleRad = outerAngle, .castsShadow = castsShadow});
+		ctx.sceneEntities.push_back(e);
 	}
 
 	void das_set_sky(das::float3 horizon, das::float3 zenith)
@@ -95,9 +91,25 @@ namespace
 
 	void das_clear_lights()
 	{
-		auto& r = *ActiveContext().renderer;
-		r.ClearPointLights();
-		r.ClearSpotLights();
+		// Destroys every light ENTITY (renderer lists rebuild from the live
+		// set each frame). Collect first: Destroy mutates storage.
+		auto& ctx = ActiveContext();
+		auto& world = *ctx.world;
+		auto& reg = world.GetRegistry();
+		std::vector<aether::Entity> doomed;
+		for (const auto e: reg.view<aether::PointLightComponent>())
+		{
+			doomed.push_back(aether::World::FromEntt(e));
+		}
+		for (const auto e: reg.view<aether::SpotLightComponent>())
+		{
+			doomed.push_back(aether::World::FromEntt(e));
+		}
+		for (const aether::Entity e: doomed)
+		{
+			std::erase(ctx.sceneEntities, e);
+			world.Destroy(e);
+		}
 	}
 
 	void das_set_sky_void(das::float3 color)

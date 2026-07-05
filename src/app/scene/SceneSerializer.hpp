@@ -11,6 +11,7 @@
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/LightComponents.hpp"
 
 namespace aether
 {
@@ -98,11 +99,14 @@ namespace aether::app::scene
 		std::optional<SpinComponent> spin;
 		std::optional<OrbitComponent> orbit;
 		std::optional<MaterialPulseComponent> materialPulse;
+		// Entity lights (v3+): position/aim come from the TRS above.
+		std::optional<PointLightComponent> pointLight;
+		std::optional<SpotLightComponent> spotLight;
 	};
 
-	// Non-entity scene state: renderer lights and the environment rig. Captured
-	// when a Renderer is supplied; on apply, a present environment record makes
-	// the light list authoritative (clear + re-add).
+	// LEGACY (pre-v3): renderer-level light list. Still parsed so old files
+	// load - ApplyScene migrates each record to a light ENTITY - but capture
+	// and write emit per-entity light components instead.
 	struct LightRecord
 	{
 		bool isSpot = false;
@@ -130,8 +134,10 @@ namespace aether::app::scene
 
 	// Format version written to [scene]. Bump when records gain fields whose
 	// absence silently degrades a loaded scene; ParseToml warns on older files.
-	// v1 = Spec-3 (no behavior components, no lights/environment); v2 = Spec-4+.
-	inline constexpr int kSceneFormatVersion = 2;
+	// v1 = Spec-3 (no behavior components, no lights/environment);
+	// v2 = Spec-4 (behaviors, renderer-level [[lights]], environment);
+	// v3 = lights are entities (per-entity point_light/spot_light tables).
+	inline constexpr int kSceneFormatVersion = 3;
 
 	struct SceneDescription
 	{

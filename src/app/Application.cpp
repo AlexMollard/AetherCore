@@ -16,6 +16,7 @@
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
 #include "scene/BehaviorSystem.hpp"
+#include "scene/LightSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 
 namespace aether::app
@@ -96,6 +97,7 @@ namespace aether::app
 		aether::coro::set_default_executor(nullptr);
 
 		// Unregister engine-level systems before detaching layers.
+		context.Get<World>().UnregisterSystem("LightSystem");
 		context.Get<World>().UnregisterSystem("DayNightSystem");
 		context.Get<World>().UnregisterSystem("AnimationSystem");
 		context.Get<World>().UnregisterSystem("PhysicsSystem");
@@ -169,6 +171,12 @@ namespace aether::app
 			auto dayNightPtr = dayNightSystem.get();
 			attachContext.Get<World>().RegisterSystem(std::move(dayNightSystem));
 			services.Register<aether::app::DayNightSystem>(*dayNightPtr);
+
+			// Entity lights -> renderer, every frame (see LightSystem).
+			auto lightSystem = std::make_unique<aether::LightSystem>(*attachContext.TryGet<Renderer>());
+			auto lightPtr = lightSystem.get();
+			attachContext.Get<World>().RegisterSystem(std::move(lightSystem));
+			services.Register<aether::LightSystem>(*lightPtr);
 
 			// Data-driven scene behaviors (Bob/Spin/Orbit/MaterialPulse) - frozen
 			// with the rest of the simulation while Editing.
@@ -249,6 +257,12 @@ namespace aether::app
 			if (auto* dayNight = ctx.TryGet<aether::app::DayNightSystem>())
 			{
 				dayNight->Update(ctx.Get<World>(), 0.0f);
+			}
+			// Entity lights republish while paused too - light edits, gizmo
+			// moves and freshly added lights preview live in the frozen scene.
+			if (auto* lights = ctx.TryGet<aether::LightSystem>())
+			{
+				lights->Update(ctx.Get<World>(), 0.0f);
 			}
 		}
 		m_layers.UpdateAll(ctx);

@@ -143,33 +143,10 @@ namespace aether::app::scene
 		SceneDescription scene;
 		auto& reg = world.GetRegistry();
 
+		// Punctual lights are entities now (LightComponents.hpp) and serialize
+		// per-entity below; only the environment rig is renderer-level state.
 		if (renderer != nullptr)
 		{
-			for (const auto& p: renderer->GetPointLights())
-			{
-				LightRecord light;
-				light.isSpot = false;
-				light.position = p.position;
-				light.radius = p.radius;
-				light.color = p.color;
-				light.intensity = p.intensity;
-				light.castsShadow = p.castsShadow;
-				scene.lights.push_back(light);
-			}
-			for (const auto& s: renderer->GetSpotLights())
-			{
-				LightRecord light;
-				light.isSpot = true;
-				light.position = s.position;
-				light.radius = s.radius;
-				light.color = s.color;
-				light.intensity = s.intensity;
-				light.castsShadow = s.castsShadow;
-				light.direction = s.direction;
-				light.innerAngleRad = s.innerAngleRad;
-				light.outerAngleRad = s.outerAngleRad;
-				scene.lights.push_back(light);
-			}
 			EnvironmentRecord env;
 			env.ambient = renderer->GetAmbientLight();
 			env.sunDirection = renderer->GetDirectionalLightDirection();
@@ -184,21 +161,6 @@ namespace aether::app::scene
 		// Transient entities (and their subtrees) are script-owned runtime state
 		// - excluded so boot auto-generation and Play snapshots never duplicate
 		// them when the script respawns its own actors.
-		const auto isTransient = [&world](Entity e)
-		{
-			Entity cur = e;
-			while (cur.IsValid())
-			{
-				if (world.Has<SceneTransientComponent>(cur))
-				{
-					return true;
-				}
-				const auto* h = world.TryGet<HierarchyComponent>(cur);
-				cur = h ? h->parent : Entity{};
-			}
-			return false;
-		};
-
 		std::vector<Entity> order;
 		std::unordered_map<std::uint32_t, int> indexOf;
 		for (const auto handle: reg.storage<entt::entity>())
@@ -208,7 +170,7 @@ namespace aether::app::scene
 				continue;
 			}
 			const Entity e = World::FromEntt(handle);
-			if (!e.IsValid() || isTransient(e))
+			if (!e.IsValid() || ecs::HasSceneTransientAncestor(world, e))
 			{
 				continue;
 			}
@@ -316,6 +278,14 @@ namespace aether::app::scene
 				clean.time = 0.0f;
 				rec.materialPulse = clean;
 			}
+			if (const auto* pl = world.TryGet<PointLightComponent>(e))
+			{
+				rec.pointLight = *pl;
+			}
+			if (const auto* sl = world.TryGet<SpotLightComponent>(e))
+			{
+				rec.spotLight = *sl;
+			}
 			scene.entities.push_back(std::move(rec));
 		}
 		return scene;
@@ -345,6 +315,8 @@ namespace aether::app::scene
 			root.insert("environment", std::move(e));
 		}
 
+		// Legacy [[lights]] only survives a parse -> write round trip of an old
+		// file that was never applied; fresh captures serialize per-entity.
 		if (!scene.lights.empty())
 		{
 			toml::array lights;
@@ -487,6 +459,26 @@ namespace aether::app::scene
 				p.insert("frequency", rec.materialPulse->frequency);
 				t.insert("material_pulse", std::move(p));
 			}
+			if (rec.pointLight)
+			{
+				toml::table l;
+				l.insert("color", Vec3ToToml(rec.pointLight->color));
+				l.insert("intensity", rec.pointLight->intensity);
+				l.insert("radius", rec.pointLight->radius);
+				l.insert("shadow", rec.pointLight->castsShadow);
+				t.insert("point_light", std::move(l));
+			}
+			if (rec.spotLight)
+			{
+				toml::table l;
+				l.insert("color", Vec3ToToml(rec.spotLight->color));
+				l.insert("intensity", rec.spotLight->intensity);
+				l.insert("radius", rec.spotLight->radius);
+				l.insert("inner_rad", rec.spotLight->innerAngleRad);
+				l.insert("outer_rad", rec.spotLight->outerAngleRad);
+				l.insert("shadow", rec.spotLight->castsShadow);
+				t.insert("spot_light", std::move(l));
+			}
 			entities.push_back(std::move(t));
 		}
 		root.insert("entities", std::move(entities));
@@ -516,7 +508,7 @@ namespace aether::app::scene
 		scene.version = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
 		if (scene.version < kSceneFormatVersion)
 		{
-			AE_WARN(LogCategory::App, "Scene file '{}' is format v{} (current v{}): records added since it was written (behavior components, lights/environment) are absent. Re-save from the editor to upgrade.", scene.name, scene.version, kSceneFormatVersion);
+			AE_WARN(LogCategory::App, "Scene file '{}' is format v{} (current v{}): records added since it was written are absent (v2 added behaviors + lights/environment; v3 made lights entities - legacy [[lights]] migrate on load). Re-save from the editor to upgrade.", scene.name, scene.version, kSceneFormatVersion);
 		}
 
 		if (const auto* e = root["environment"].as_table())
@@ -663,6 +655,16 @@ namespace aether::app::scene
 				const toml::node_view<const toml::node> pv{*p};
 				rec.materialPulse = MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
 			}
+			if (const auto* l = tv["point_light"].as_table())
+			{
+				const toml::node_view<const toml::node> lv{*l};
+				rec.pointLight = PointLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(20.0)), .radius = static_cast<float>(lv["radius"].value_or(15.0)), .castsShadow = lv["shadow"].value_or(false)};
+			}
+			if (const auto* l = tv["spot_light"].as_table())
+			{
+				const toml::node_view<const toml::node> lv{*l};
+				rec.spotLight = SpotLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(30.0)), .radius = static_cast<float>(lv["radius"].value_or(30.0)), .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)), .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)), .castsShadow = lv["shadow"].value_or(false)};
+			}
 			scene.entities.push_back(std::move(rec));
 		}
 		return scene;
@@ -737,9 +739,9 @@ namespace aether::app::scene
 
 	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
-		// Lights + environment: an environment record marks the description's
-		// light list authoritative (old files without one leave the renderer
-		// untouched, keeping Spec-3 scenes loadable).
+		// Environment rig (sun/ambient/sky) is renderer-level state; punctual
+		// lights are entities and arrive with the records below (or migrate
+		// from the legacy [[lights]] list at the end).
 		if (deps.renderer != nullptr && scene.environment)
 		{
 			const EnvironmentRecord& env = *scene.environment;
@@ -748,20 +750,6 @@ namespace aether::app::scene
 			deps.renderer->SetSunColor(env.sunColor);
 			deps.renderer->SetSkyGradient(env.skyHorizon, env.skyZenith);
 			deps.renderer->SetSkyVoidColor(env.skyVoid);
-
-			deps.renderer->ClearPointLights();
-			deps.renderer->ClearSpotLights();
-			for (const LightRecord& light: scene.lights)
-			{
-				if (light.isSpot)
-				{
-					deps.renderer->AddSpotLight(Renderer::SpotLight{.position = light.position, .radius = light.radius, .direction = light.direction, .innerAngleRad = light.innerAngleRad, .color = light.color, .intensity = light.intensity, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow});
-				}
-				else
-				{
-					deps.renderer->AddPointLight(Renderer::PointLight{.position = light.position, .radius = light.radius, .color = light.color, .intensity = light.intensity, .castsShadow = light.castsShadow});
-				}
-			}
 		}
 
 		std::vector<Entity> created;
@@ -971,6 +959,33 @@ namespace aether::app::scene
 				world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
 				++behaviorCount;
 			}
+			if (rec.pointLight)
+			{
+				world.Emplace<PointLightComponent>(e, *rec.pointLight);
+			}
+			if (rec.spotLight)
+			{
+				world.Emplace<SpotLightComponent>(e, *rec.spotLight);
+			}
+		}
+
+		// Legacy [[lights]] (pre-v3 files): promote each record to a light
+		// entity so it shows in the outliner and re-saves in the new format.
+		std::vector<Entity> migratedLights;
+		for (const LightRecord& light: scene.lights)
+		{
+			if (light.isSpot)
+			{
+				migratedLights.push_back(ecs::CreateSpotLightEntity(world, light.position, light.direction, SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow}));
+			}
+			else
+			{
+				migratedLights.push_back(ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow}));
+			}
+		}
+		if (!migratedLights.empty())
+		{
+			AE_INFO(LogCategory::App, "Scene load: migrated {} legacy light record(s) to light entities - re-save to upgrade the file", migratedLights.size());
 		}
 
 		// Hierarchy after every entity exists.
@@ -989,8 +1004,13 @@ namespace aether::app::scene
 			{
 				deps.sceneContext->sceneEntities.push_back(e);
 			}
+			// Migrated legacy lights are scene content too - F5 teardown owns them.
+			for (const Entity e: migratedLights)
+			{
+				deps.sceneContext->sceneEntities.push_back(e);
+			}
 		}
-		AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size(), behaviorCount, effectCount, scene.version);
+		AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.version);
 		return created;
 	}
 
@@ -1005,12 +1025,26 @@ namespace aether::app::scene
 		}
 		auto& reg = world.GetRegistry();
 		std::vector<Entity> doomed;
+		std::vector<Entity> spared;
 		for (const auto handle: reg.storage<entt::entity>())
 		{
 			if (reg.valid(handle))
 			{
 				const Entity e = World::FromEntt(handle);
-				if (e.IsValid())
+				if (!e.IsValid())
+				{
+					continue;
+				}
+				// Transient subtrees are the mirror image of capture's
+				// exclusion: the snapshot deliberately left them out (script-
+				// owned actors like the player), so replace-all must leave
+				// them ALIVE - destroying them here left no player until the
+				// script next respawned it, and their das-held ids went stale.
+				if (ecs::HasSceneTransientAncestor(world, e))
+				{
+					spared.push_back(e);
+				}
+				else
 				{
 					doomed.push_back(e);
 				}
@@ -1025,7 +1059,12 @@ namespace aether::app::scene
 		}
 		if (deps.sceneContext != nullptr)
 		{
+			// Spared entities stay registered so F5's teardown still owns them.
 			deps.sceneContext->sceneEntities.clear();
+			for (const Entity e: spared)
+			{
+				deps.sceneContext->sceneEntities.push_back(e);
+			}
 		}
 
 		ApplyScene(scene, world, deps);

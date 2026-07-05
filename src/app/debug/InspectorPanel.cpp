@@ -21,6 +21,7 @@
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/LightComponents.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformUtils.hpp"
@@ -208,6 +209,22 @@ namespace aether::app
 				asset.roughnessFactor = 0.6f;
 				MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 			}
+			if (PaletteEntry(ICON_FA_LIGHTBULB "  Point Light", m_addFilter, world.Has<PointLightComponent>(entity)))
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+				}
+				world.Emplace<PointLightComponent>(entity);
+			}
+			if (PaletteEntry(ICON_FA_LIGHTBULB "  Spot Light", m_addFilter, world.Has<SpotLightComponent>(entity)))
+			{
+				if (!world.Has<TransformComponent>(entity))
+				{
+					world.Emplace<TransformComponent>(entity);
+				}
+				world.Emplace<SpotLightComponent>(entity);
+			}
 			if (sceneCtx != nullptr && sceneCtx->effects != nullptr && assets != nullptr)
 			{
 				const bool hasEffect = world.Has<EffectRefComponent>(entity);
@@ -294,6 +311,7 @@ namespace aether::app
 		DrawSkinnedMesh(world, entity);
 		DrawMaterial(context, world, entity);
 		DrawEffectParams(context, world, entity);
+		DrawLights(world, entity);
 		DrawBehaviors(world, entity);
 		DrawPhysics(world, entity);
 		DrawMeshPipeline(world, entity);
