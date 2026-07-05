@@ -2,6 +2,7 @@ add_executable(EngineTests
     TestMain.cpp
     scene/HierarchyTests.cpp
     scene/SceneSerializerTests.cpp
+    scene/TransformEditTests.cpp
     scene/TransformUtilsTests.cpp
     utils/RayTests.cpp
     material/MaterialDescribeTests.cpp

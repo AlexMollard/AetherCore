@@ -12,6 +12,7 @@
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scene/TagSlots.hpp"
@@ -131,6 +132,7 @@ namespace
 
 	// set_position(world, entity_id, pos)
 	// Only updates the translation column - leaves rotation/scale intact.
+	// Children ride along with the delta, keeping their relative offsets.
 	void das_set_position(aether::World* w, uint32_t id, das::float3 pos)
 	{
 		auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
@@ -138,7 +140,9 @@ namespace
 		{
 			return;
 		}
-		tc->localToWorld[3] = glm::vec4(to_glm(pos), 1.0f);
+		glm::mat4 m = tc->localToWorld;
+		m[3] = glm::vec4(to_glm(pos), 1.0f);
+		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, m);
 	}
 
 	// get_scale(world, entity_id) -> float3
@@ -166,7 +170,8 @@ namespace
 		return to_das(euler);
 	}
 
-	// set_euler(world, entity_id, euler_deg) - updates only rotation, preserves translation and scale
+	// set_euler(world, entity_id, euler_deg) - updates only rotation, preserves translation and scale.
+	// The subtree follows with the same world-space delta (relative offsets kept).
 	void das_set_euler(aether::World* w, uint32_t id, das::float3 euler)
 	{
 		auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id});
@@ -177,47 +182,17 @@ namespace
 
 		glm::vec3 pos{}, curEuler{}, scale{};
 		aether::DecomposeTRS(tc->localToWorld, pos, curEuler, scale);
-		const glm::vec3 e = to_glm(euler);
-
-		tc->localToWorld = aether::ComposeTransform(pos, e, scale);
-
-		const auto hier = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
-		if (hier)
-		{
-			for (const aether::Entity child: hier->children)
-			{
-				if (auto stc = w->TryGet<aether::TransformComponent>(child))
-				{
-					stc->localToWorld = aether::ComposeTransform(pos, e, scale);
-				}
-			}
-		}
+		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, aether::ComposeTransform(pos, to_glm(euler), scale));
 	}
 
 	// set_transform(world, entity_id, pos, euler_deg, scale)
-	// Recomposes the full TRS matrix from the three float3 arguments.
+	// Recomposes the full TRS matrix from the three float3 arguments. Spawned
+	// mesh children (and anything else parented under the entity) follow with
+	// the same world-space delta, so per-primitive local offsets survive.
 	void das_set_transform(aether::World* w, uint32_t id, das::float3 pos, das::float3 euler, das::float3 scale)
 	{
 		const auto xform = aether::ComposeTransform(to_glm(pos), to_glm(euler), to_glm(scale));
-
-		// Update script entity transform.
-		if (auto tc = w->TryGet<aether::TransformComponent>(aether::Entity{id}))
-		{
-			tc->localToWorld = xform;
-		}
-
-		// Propagate to spawned mesh entities.
-		const auto hier = w->TryGet<aether::HierarchyComponent>(aether::Entity{id});
-		if (hier)
-		{
-			for (const aether::Entity child: hier->children)
-			{
-				if (auto stc = w->TryGet<aether::TransformComponent>(child))
-				{
-					stc->localToWorld = xform;
-				}
-			}
-		}
+		aether::ecs::SetWorldTransform(*w, aether::Entity{id}, xform);
 	}
 
 	// -- Model loading ---------------------------------------------------------

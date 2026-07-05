@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <string>
+#include <vector>
 
 #include <glm/gtc/quaternion.hpp>
 #include <imgui.h>
@@ -19,6 +20,7 @@
 #include "scene/Components.hpp"
 #include "scene/Hierarchy.hpp"
 #include "scene/TagSlots.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 
@@ -108,32 +110,38 @@ namespace aether::app
 
 	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld)
 	{
-		auto* tc = world.TryGet<TransformComponent>(entity);
-		if (!tc)
+		if (world.TryGet<TransformComponent>(entity) == nullptr)
 		{
 			return;
 		}
-		tc->localToWorld = localToWorld;
+		// Children keep their RELATIVE offsets: the edit's world-space delta
+		// cascades through the whole subtree (grandchildren included).
+		ecs::SetWorldTransform(world, entity, localToWorld);
 
-		// Children follow the parent verbatim - same rule as das set_transform.
-		if (const auto* h = world.TryGet<HierarchyComponent>(entity))
+		// True physics teleport for every body the edit moved (the entity and
+		// any descendant with one): set the Jolt body AND rewrite the
+		// interpolation state (prev == curr), otherwise the next sync stomps
+		// the edit or the renderer lerps across the jump. Quat order mirrors
+		// ComposeTransform (YXZ).
+		auto* physics = context.TryGet<PhysicsSystem>();
+		std::vector<Entity> subtree{entity};
+		for (std::size_t i = 0; i < subtree.size(); ++i)
 		{
-			for (const Entity child: h->children)
+			if (const auto* h = world.TryGet<HierarchyComponent>(subtree[i]))
 			{
-				if (auto* childTc = world.TryGet<TransformComponent>(child))
-				{
-					childTc->localToWorld = localToWorld;
-				}
+				subtree.insert(subtree.end(), h->children.begin(), h->children.end());
 			}
 		}
-
-		// True physics teleport: move the Jolt body AND rewrite the interpolation
-		// state (prev == curr), otherwise the next sync stomps the edit or the
-		// renderer lerps across the jump. Quat order mirrors ComposeTransform (YXZ).
-		if (auto* ps = world.TryGet<PhysicsStateComponent>(entity))
+		for (const Entity e: subtree)
 		{
+			auto* ps = world.TryGet<PhysicsStateComponent>(e);
+			const auto* etc = world.TryGet<TransformComponent>(e);
+			if (ps == nullptr || etc == nullptr)
+			{
+				continue;
+			}
 			glm::vec3 pos{}, euler{}, scale{};
-			DecomposeTRS(localToWorld, pos, euler, scale);
+			DecomposeTRS(etc->localToWorld, pos, euler, scale);
 			const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
 			ps->prevPosition = pos;
 			ps->currPosition = pos;
@@ -141,8 +149,7 @@ namespace aether::app
 			ps->currRotation = q;
 			ps->scale = glm::max(scale, glm::vec3(0.001f));
 
-			const auto* rb = world.TryGet<RigidBodyComponent>(entity);
-			auto* physics = context.TryGet<PhysicsSystem>();
+			const auto* rb = world.TryGet<RigidBodyComponent>(e);
 			if (rb && physics)
 			{
 				physics->SetPosition(rb->body, pos);
@@ -186,15 +193,73 @@ namespace aether::app
 		{
 			return;
 		}
+
+		// A multi-mesh model spawns one entity per primitive, each with its
+		// own SkinnedMeshComponent - editing just the selected part desyncs
+		// the model (parts on different clips/phases). Edits drive the whole
+		// group: the part's parent (its model root) scopes the subtree, and
+		// the shared animation database filters out other skinned models that
+		// happen to sit under the same root. Mirrors das set_animation.
+		std::vector<SkinnedMeshComponent*> group;
+		{
+			Entity groupRoot = entity;
+			if (const auto* h = world.TryGet<HierarchyComponent>(entity); h && h->parent.IsValid())
+			{
+				groupRoot = h->parent;
+			}
+			std::vector<Entity> subtree{groupRoot};
+			for (std::size_t i = 0; i < subtree.size(); ++i)
+			{
+				if (const auto* h = world.TryGet<HierarchyComponent>(subtree[i]))
+				{
+					subtree.insert(subtree.end(), h->children.begin(), h->children.end());
+				}
+			}
+			for (const Entity e: subtree)
+			{
+				if (auto* part = world.TryGet<SkinnedMeshComponent>(e); part && part->animDb == smc->animDb)
+				{
+					group.push_back(part);
+				}
+			}
+		}
+
 		int clip = static_cast<int>(smc->clipIndex);
 		if (ImGui::InputInt("Clip", &clip))
 		{
-			smc->clipIndex = static_cast<std::uint32_t>(std::max(0, clip));
+			const auto clipIndex = static_cast<std::uint32_t>(std::max(0, clip));
+			for (auto* part: group)
+			{
+				part->clipIndex = clipIndex;
+				part->animTime = 0.0f; // restart together so parts stay in phase
+			}
 		}
-		ImGui::DragFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f);
-		ImGui::DragFloat("Time", &smc->animTime, 0.01f, 0.0f, 1000.0f);
-		ImGui::Checkbox("Looping", &smc->looping);
+		if (ImGui::DragFloat("Speed", &smc->playbackSpeed, 0.01f, -4.0f, 4.0f))
+		{
+			for (auto* part: group)
+			{
+				part->playbackSpeed = smc->playbackSpeed;
+			}
+		}
+		if (ImGui::DragFloat("Time", &smc->animTime, 0.01f, 0.0f, 1000.0f))
+		{
+			for (auto* part: group)
+			{
+				part->animTime = smc->animTime;
+			}
+		}
+		if (ImGui::Checkbox("Looping", &smc->looping))
+		{
+			for (auto* part: group)
+			{
+				part->looping = smc->looping;
+			}
+		}
 		ImGui::TextDisabled("Skin %u, %u joints", smc->skinIndex, smc->jointCount);
+		if (group.size() > 1)
+		{
+			ImGui::TextDisabled("Drives all %zu skinned parts of this model", group.size());
+		}
 	}
 
 	void DrawMaterial(LayerContext& context, World& world, Entity entity)

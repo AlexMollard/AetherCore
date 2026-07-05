@@ -8,6 +8,7 @@
 #include "material/MaterialSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
 #include "scene/Components.hpp"
+#include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "utils/Profiler.hpp"
@@ -19,6 +20,11 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 		auto& reg = world.GetRegistry();
 
+		// All three transform behaviors move entities through
+		// ecs::SetWorldTransform: the subtree rides along with the same
+		// world-space delta, so children keep their relative offsets (the
+		// fox's mesh children, or anything hand-parented in the editor).
+
 		// Bob: sine Y around the base captured on first update (so a gizmo move
 		// while paused re-bases naturally after the component is re-applied).
 		for (auto&& [enttE, bob, tc]: reg.view<BobComponent, TransformComponent>().each())
@@ -29,7 +35,9 @@ namespace aether::app
 				bob.baseCaptured = true;
 			}
 			bob.time += dt;
-			tc.localToWorld[3].y = bob.baseY + std::sin(bob.time * bob.frequency + bob.phase) * bob.amplitude;
+			glm::mat4 m = tc.localToWorld;
+			m[3].y = bob.baseY + std::sin(bob.time * bob.frequency + bob.phase) * bob.amplitude;
+			ecs::SetWorldTransform(world, World::FromEntt(enttE), m);
 		}
 
 		// Spin: additive euler rate, translation/scale preserved.
@@ -38,12 +46,10 @@ namespace aether::app
 			glm::vec3 pos{}, euler{}, scale{};
 			DecomposeTRS(tc.localToWorld, pos, euler, scale);
 			euler += spin.eulerDegPerSec * dt;
-			tc.localToWorld = ComposeTransform(pos, euler, scale);
+			ecs::SetWorldTransform(world, World::FromEntt(enttE), ComposeTransform(pos, euler, scale));
 		}
 
 		// Orbit: circular patrol around a center, facing along the tangent.
-		// Children follow verbatim - same propagation rule as das set_transform
-		// (the fox's mesh children ride along).
 		for (auto&& [enttE, orbit, tc]: reg.view<OrbitComponent, TransformComponent>().each())
 		{
 			orbit.angleDeg = std::fmod(orbit.angleDeg + orbit.angularSpeedDeg * dt, 360.0f);
@@ -55,19 +61,7 @@ namespace aether::app
 			// Tangent yaw for a +Y counter-clockwise orbit; yawOffset absorbs the
 			// model's forward convention.
 			const float yawDeg = -orbit.angleDeg + orbit.yawOffsetDeg;
-			tc.localToWorld = ComposeTransform(pos, glm::vec3(0.0f, yawDeg, 0.0f), curScale);
-
-			const Entity e = World::FromEntt(enttE);
-			if (const auto* h = world.TryGet<HierarchyComponent>(e))
-			{
-				for (const Entity child: h->children)
-				{
-					if (auto* childTc = world.TryGet<TransformComponent>(child))
-					{
-						childTc->localToWorld = tc.localToWorld;
-					}
-				}
-			}
+			ecs::SetWorldTransform(world, World::FromEntt(enttE), ComposeTransform(pos, glm::vec3(0.0f, yawDeg, 0.0f), curScale));
 		}
 
 		// MaterialPulse: sine-lerped emissive through the instance setters -
