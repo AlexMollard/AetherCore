@@ -107,7 +107,14 @@ namespace aether::app
 		config.Set("debug.daynightmanual", m_manualMode);
 		if (auto dayNight = context.TryGet<DayNightSystem>())
 		{
-			config.Set("debug.daynighttime", dayNight->GetTimeOfDay());
+			// Time of day auto-advances every frame while the cycle runs. SaveSettings
+			// is called each frame (SaveIfDirty), so persisting the live value would
+			// re-dirty the config and save debug.toml on every tick. Only remember it
+			// when the cycle is paused - a deliberate, stable value worth restoring.
+			if (!dayNight->IsEnabled())
+			{
+				config.Set("debug.daynighttime", dayNight->GetTimeOfDay());
+			}
 			config.Set("debug.daynightspeed", dayNight->GetTimeSpeed());
 		}
 	}
