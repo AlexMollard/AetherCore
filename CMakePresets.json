@@ -113,7 +113,7 @@
     {
       "name": "vs2022-msvc-retail",
       "displayName": "VS 2022 MSVC Retail",
-      "description": "Retail build — LTCG enabled, all diagnostics stripped.",
+      "description": "Retail build - LTCG enabled, all diagnostics stripped.",
       "inherits": "vs2022-msvc",
       "binaryDir": "${sourceDir}/build-vs2022-msvc-retail",
       "cacheVariables": {

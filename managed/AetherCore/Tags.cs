@@ -8,7 +8,7 @@ public readonly record struct TagId(uint Value)
     public bool IsValid => Value != 0xFFFFFFFF;
 }
 
-/// <summary>Dynamic entity tags — register a name once, then tag/query entities.</summary>
+/// <summary>Dynamic entity tags - register a name once, then tag/query entities.</summary>
 public static unsafe class Tags
 {
     /// <summary>Register (or fetch) a tag by name.</summary>

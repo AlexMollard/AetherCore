@@ -828,7 +828,7 @@ namespace aether
 		auto vkEvent = static_cast<VkEvent>(event);
 
 		// Device-only events retain their signaled state across frames
-		// (vkCmdWaitEvents2 does NOT reset the event — it stays signaled).
+		// (vkCmdWaitEvents2 does NOT reset the event - it stays signaled).
 		// Explicitly reset the event before setting it to avoid the 'already
 		// signaled' validation warning and ensure the dependency info in
 		// vkCmdSetEvent2 is honored. vkCmdResetEvent2 on an already-unsignaled

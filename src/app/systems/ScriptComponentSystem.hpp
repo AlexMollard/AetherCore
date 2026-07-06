@@ -61,8 +61,7 @@ namespace aether::app
 	private:
 		// Attaches/updates one C# entity; the caller has installed the active
 		// SceneContext. Returns false if the type could not be instantiated.
-		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity,
-			const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached, float dt);
+		bool UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx, Entity entity, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached, float dt);
 		// Detach + free every managed instance whose entity is no longer scripted.
 		void PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);
 		void DestroyAllCSharpInstances(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx);

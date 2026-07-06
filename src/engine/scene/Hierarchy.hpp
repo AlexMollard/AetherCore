@@ -102,7 +102,7 @@ namespace aether::ecs
 	// Recursively destroys `entity` and its whole subtree, keeping parent links tidy.
 	inline void DestroyHierarchy(World& world, Entity entity)
 	{
-		std::vector<Entity> kids; // copy — the loop mutates the source vector
+		std::vector<Entity> kids; // copy - the loop mutates the source vector
 		if (const auto* h = world.TryGet<HierarchyComponent>(entity))
 		{
 			kids = h->children;

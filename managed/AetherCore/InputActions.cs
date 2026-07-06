@@ -4,7 +4,7 @@ namespace AetherCore;
 
 /// <summary>
 /// Semantic input actions mapping a name to one or two physical keys, fully
-/// rebindable at runtime. Pure C# over <see cref="Input"/> — the action table is
+/// rebindable at runtime. Pure C# over <see cref="Input"/> - the action table is
 /// process-global, so <see cref="Register"/> is an idempotent upsert safe to
 /// call every attach.
 /// </summary>

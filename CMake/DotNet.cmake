@@ -6,7 +6,7 @@
 #
 # Everything downstream is gated on AETHER_HAS_DOTNET. When the SDK or nethost
 # pack is missing (e.g. a bare CI runner), the flag stays OFF and the engine
-# compiles a stubbed DotNetHost that reports scripting as unavailable — the build
+# compiles a stubbed DotNetHost that reports scripting as unavailable - the build
 # never fails just because .NET is absent.
 #
 # Result variables:
@@ -30,7 +30,7 @@ find_program(AETHER_DOTNET_EXE NAMES dotnet)
 # The host pack ships nethost.lib/.a and the hostfxr/coreclr headers under a
 # versioned directory. We pick the highest version available.
 # On Windows we link nethost.dll via its import lib (nethost.lib) and ship the
-# DLL — the static libnethost.lib is built with the static CRT (/MT) and clashes
+# DLL - the static libnethost.lib is built with the static CRT (/MT) and clashes
 # with AetherCore's dynamic CRT (/MD). On Unix the static archive links cleanly.
 if(WIN32)
     set(_aether_host_rid "win-x64")

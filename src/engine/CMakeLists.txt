@@ -48,7 +48,7 @@ target_compile_definitions(Engine PUBLIC
     VMA_DYNAMIC_VULKAN_FUNCTIONS=1
     AETHER_DEFAULT_ASSET_PAK="${CMAKE_BINARY_DIR}/data/assets.pak"
     AETHER_DEFAULT_ASSET_DIR="${CMAKE_SOURCE_DIR}/resources"
-    # Build-tier config — Defines.hpp reads these for policy (Tracy, asserts, etc.)
+    # Build-tier config - Defines.hpp reads these for policy (Tracy, asserts, etc.)
     $<$<CONFIG:Debug>:AE_CONFIG_DEBUG>
     $<$<CONFIG:RelWithDebInfo>:AE_CONFIG_DEV>
     $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${AETHERCORE_RETAIL}>>>:AE_CONFIG_SHIP>
@@ -74,7 +74,7 @@ target_compile_definitions(Engine PUBLIC
 #
 # Note the quote placement: "/FI${path}" quotes the whole option so CMake sees
 # one clean argument. Writing /FI"${path}" instead embeds literal quotes that
-# Ninja shell-escapes to /FI\"...\" in compile_commands.json — cl.exe copes,
+# Ninja shell-escapes to /FI\"...\" in compile_commands.json - cl.exe copes,
 # but clang-tidy mis-parses it into a bogus 'empty filename' error.
 if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     target_compile_options(Engine PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp")

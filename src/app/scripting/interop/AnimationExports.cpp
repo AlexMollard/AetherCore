@@ -114,8 +114,7 @@ namespace
 		return boneMap;
 	}
 
-	void RemapAnimationByBoneName(aether::assets::GltfAnimation& anim,
-		const std::unordered_map<std::string, std::uint32_t>& boneNameToJointIndex, const aether::AnimationDatabase* animDb)
+	void RemapAnimationByBoneName(aether::assets::GltfAnimation& anim, const std::unordered_map<std::string, std::uint32_t>& boneNameToJointIndex, const aether::AnimationDatabase* animDb)
 	{
 		bool hasBoneNames = false;
 		for (auto& ch: anim.channels)
@@ -173,6 +172,7 @@ namespace
 		}
 
 #pragma pack(push, 1)
+
 		struct V1Header
 		{
 			char magic[4];
@@ -180,6 +180,7 @@ namespace
 			std::uint32_t channelCount;
 			std::uint16_t nameLen;
 		};
+
 #pragma pack(pop)
 
 		aether::BinaryReader reader(*data);
@@ -313,8 +314,7 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 	auto* uploadPool = ctx.uploadPool;
 	if (ctx.engineRuntime != nullptr)
 	{
-		ctx.engineRuntime->RunExclusive(aether::QuiesceMode::Drain,
-			[&world, id, uploadPool]() { aether::CompileAnimations(world, id, uploadPool); });
+		ctx.engineRuntime->RunExclusive(aether::QuiesceMode::Drain, [&world, id, uploadPool]() { aether::CompileAnimations(world, id, uploadPool); });
 	}
 	else
 	{
@@ -325,7 +325,10 @@ AE_SCRIPT_API void aether_anim_compile(std::uint32_t id)
 AE_SCRIPT_API void aether_anim_clear_pending(std::uint32_t id)
 {
 	auto& w = ActiveWorld();
-	const auto clearFn = [](aether::SkinnedMeshComponent& smc) { smc.pendingExternalAnims.clear(); };
+	const auto clearFn = [](aether::SkinnedMeshComponent& smc)
+	{
+		smc.pendingExternalAnims.clear();
+	};
 	if (auto* smc = w.TryGet<aether::SkinnedMeshComponent>(aether::Entity{id}))
 	{
 		clearFn(*smc);
@@ -550,14 +553,15 @@ AE_SCRIPT_API void aether_anim_set_root_motion_enabled(std::uint32_t id, std::in
 	{
 		rmComp->enabled = on;
 	}
-	ForEachSpawnedSmc(w, id,
-		[&](aether::SkinnedMeshComponent&)
-		{
-			if (auto* comp = w.TryGet<aether::RootMotionComponent>(aether::Entity{id}))
-			{
-				comp->enabled = on;
-			}
-		});
+	ForEachSpawnedSmc(w,
+	        id,
+	        [&](aether::SkinnedMeshComponent&)
+	        {
+		        if (auto* comp = w.TryGet<aether::RootMotionComponent>(aether::Entity{id}))
+		        {
+			        comp->enabled = on;
+		        }
+	        });
 }
 
 AE_SCRIPT_API std::int32_t aether_anim_get_root_motion_enabled(std::uint32_t id)

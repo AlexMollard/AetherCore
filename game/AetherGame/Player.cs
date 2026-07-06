@@ -6,8 +6,8 @@ namespace AetherGame;
 
 /// <summary>
 /// Player controller. The rig (mesh children, transform) is authored scene
-/// content; this script tops up what the scene can't store — the external walk
-/// clip, the orbit camera, and input bindings — then drives movement each tick.
+/// content; this script tops up what the scene can't store - the external walk
+/// clip, the orbit camera, and input bindings - then drives movement each tick.
 ///
 /// The single-camera-per-session value is a static field; movement state lives
 /// on the CharacterController instance.
@@ -29,7 +29,7 @@ public sealed class Player : EntityScript
     {
         Animation.SetPlaybackSpeed(Self, 1.0f);
 
-        // The walk clip lives in a separate .anim file the scene can't author —
+        // The walk clip lives in a separate .anim file the scene can't author -
         // append it once per session (clip 0 is the model idle).
         if (Animation.ClipCount(Self) < 2)
         {

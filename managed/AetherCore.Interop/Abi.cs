@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace AetherCore.Interop;
 
 // Managed mirrors of the native structs in src/engine/scripting/ManagedInterop.hpp.
-// Field order, count, and sizes must match exactly — Bootstrap.Init validates the
+// Field order, count, and sizes must match exactly - Bootstrap.Init validates the
 // struct sizes against the values the host passes in.
 
 /// <summary>Wire type tag for a serialized script property. Mirrors native PropertyType.</summary>

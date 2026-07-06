@@ -1,4 +1,4 @@
-// Uncharted 2 / John Hable — tunable filmic curve.
+// Uncharted 2 / John Hable - tunable filmic curve.
 float3 Uncharted2Partial(float3 x)
 {
     const float A = 0.15f, B = 0.50f, C = 0.10f, D = 0.20f, E = 0.02f, F = 0.30f;

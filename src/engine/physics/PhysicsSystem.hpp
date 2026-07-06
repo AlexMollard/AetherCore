@@ -24,7 +24,7 @@ namespace aether
 	//   - determinism across machines (required for lockstep networking)
 	//   - stable simulation regardless of render framerate
 	//
-	// Threading model (pipelined, 1 frame of latency — same pattern as RenderThread):
+	// Threading model (pipelined, 1 frame of latency - same pattern as RenderThread):
 	//   Game thread:   FlushPendingBodies → Kick step N → [other systems overlap] → ...
 	//   Physics thread:                      Run step N → Done
 	//   Game thread (next frame): Wait for step N → SyncTransforms(N-1) → ...
@@ -153,14 +153,14 @@ namespace aether
 
 		float m_accumulator = 0.0f;
 
-		// Dedicated physics thread — runs m_physics->Update() off the game thread.
+		// Dedicated physics thread - runs m_physics->Update() off the game thread.
 		// Ping-pong semaphores: Kick signals "start a step", Done signals "step finished".
 		std::thread m_physicsThread;
 		std::binary_semaphore m_stepKick{0};
 		std::binary_semaphore m_stepDone{0};
 		std::atomic<bool> m_physicsThreadRunning{false};
 
-		// Game-thread-only flag: true between Kick and Wait.  Not atomic — only
+		// Game-thread-only flag: true between Kick and Wait.  Not atomic - only
 		// ever read/written on the game thread.
 		bool m_stepInFlight = false;
 

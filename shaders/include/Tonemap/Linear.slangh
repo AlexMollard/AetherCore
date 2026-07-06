@@ -1,4 +1,4 @@
-// Linear / clamp — debug reference: no tonemap applied.
+// Linear / clamp - debug reference: no tonemap applied.
 float3 Linear(float3 x)
 {
     return clamp(x, 0.0f, 1.0f);

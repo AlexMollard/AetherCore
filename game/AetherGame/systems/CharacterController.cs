@@ -7,7 +7,7 @@ namespace AetherGame.Systems;
 /// <summary>
 /// Camera-relative character movement with momentum, shortest-path turning, and
 /// animation state driven by speed. Momentum and turn state are instance fields,
-/// so each controller is independent — multiple characters never share state.
+/// so each controller is independent - multiple characters never share state.
 /// </summary>
 public sealed class CharacterController
 {

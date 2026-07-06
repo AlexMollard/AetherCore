@@ -270,7 +270,7 @@ namespace aether
 		const float camFar = (mainCamForShadows != nullptr) ? std::min(mainCamForShadows->GetFarPlane(), kShadowFarCap) : kShadowFarCap;
 		const float viewRange = std::max(camFar - camNear, 1.0f);
 
-		// Practical split (PSSM) — mixes logarithmic and uniform to balance
+		// Practical split (PSSM) - mixes logarithmic and uniform to balance
 		// perspective aliasing against cascade count.
 		float split0, split1, split2;
 		{

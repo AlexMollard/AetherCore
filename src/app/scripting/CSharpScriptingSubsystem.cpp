@@ -17,9 +17,9 @@ namespace aether::app::scripting
 		{
 			const auto cwd = std::filesystem::current_path();
 			const std::array<std::filesystem::path, 3> candidates = {
-				cwd / "data" / "scripts" / "managed",
-				cwd / ".." / "data" / "scripts" / "managed",
-				cwd / ".." / ".." / "data" / "scripts" / "managed",
+			        cwd / "data" / "scripts" / "managed",
+			        cwd / ".." / "data" / "scripts" / "managed",
+			        cwd / ".." / ".." / "data" / "scripts" / "managed",
 			};
 			for (const auto& dir: candidates)
 			{
@@ -77,11 +77,11 @@ namespace aether::app::scripting
 		// process exit code (0 == success), or -1 if the process failed to start.
 		int RunCapture(const std::string& command, std::string& output)
 		{
-#ifdef _WIN32
+#	ifdef _WIN32
 			FILE* pipe = _popen(command.c_str(), "r");
-#else
+#	else
 			FILE* pipe = popen(command.c_str(), "r");
-#endif
+#	endif
 			if (pipe == nullptr)
 			{
 				output = "failed to start build process";
@@ -92,11 +92,11 @@ namespace aether::app::scripting
 			{
 				output += buffer;
 			}
-#ifdef _WIN32
+#	ifdef _WIN32
 			return _pclose(pipe);
-#else
+#	else
 			return pclose(pipe);
-#endif
+#	endif
 		}
 #endif
 	} // namespace
@@ -113,15 +113,13 @@ namespace aether::app::scripting
 
 		// Incremental `dotnet build` of the game project (a no-op when it was just
 		// built in VS). ArtifactsPath mirrors the CMake managed build.
-		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + AETHER_GAME_PROJECT
-			+ "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS
-			+ "\" 2>&1";
-#ifdef _WIN32
+		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + AETHER_GAME_PROJECT + "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS + "\" 2>&1";
+#	ifdef _WIN32
 		// cmd.exe needs the whole command re-wrapped so the quoted, spaced exe path parses.
 		const std::string command = "\"" + inner + "\"";
-#else
+#	else
 		const std::string command = inner;
-#endif
+#	endif
 
 		std::string output;
 		const int rc = RunCapture(command, output);
@@ -194,8 +192,7 @@ namespace aether::app::scripting
 			const int written = api->GetPropertyInfo(typeName.c_str(), i, buffer.data(), static_cast<int>(buffer.size()), &typeTag);
 			if (written > 0)
 			{
-				out.push_back(ScriptPropertyInfo{.name = std::string(buffer.data(), static_cast<size_t>(written)),
-					.type = static_cast<aether::ScriptPropertyValue::Type>(typeTag)});
+				out.push_back(ScriptPropertyInfo{.name = std::string(buffer.data(), static_cast<size_t>(written)), .type = static_cast<aether::ScriptPropertyValue::Type>(typeTag)});
 			}
 		}
 		return out;
@@ -276,8 +273,7 @@ namespace aether::app::scripting
 		return true;
 	}
 
-	void CSharpScriptingSubsystem::ApplyProperties(
-		std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const
+	void CSharpScriptingSubsystem::ApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const
 	{
 		if (props.empty() || handle == 0)
 		{

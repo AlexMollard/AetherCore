@@ -22,14 +22,14 @@ namespace AetherCore.Interop;
 internal static unsafe class ScriptRegistry
 {
     // The engine API assembly (this one), used to bind script references back to
-    // the exact AetherCore the host loaded — same type identity, and it
+    // the exact AetherCore the host loaded - same type identity, and it
     // resolves regardless of which load context the host placed it in.
     private static readonly Assembly EngineAssembly = typeof(EntityScript).Assembly;
 
     private sealed class ScriptsLoadContext : AssemblyLoadContext
     {
         // Resolves the game assembly's NuGet dependencies from its .deps.json so
-        // they load into — and unload with — this collectible context.
+        // they load into - and unload with - this collectible context.
         private readonly AssemblyDependencyResolver _resolver;
 
         public ScriptsLoadContext(string mainAssemblyPath)
@@ -120,7 +120,7 @@ internal static unsafe class ScriptRegistry
         }
         catch (ReflectionTypeLoadException ex)
         {
-            // Surface the underlying loader failures — usually a missing reference.
+            // Surface the underlying loader failures - usually a missing reference.
             Bootstrap.ReportError("LoadScripts type-load failure: " + ex);
             foreach (Exception? loaderEx in ex.LoaderExceptions)
             {

@@ -59,7 +59,7 @@ namespace aether
 	{
 		AE_PROFILE_ZONE();
 		// WaitIdle may throw VK_ERROR_DEVICE_LOST, which triggers the fault
-		// callback — keep it set until after the wait.
+		// callback - keep it set until after the wait.
 		vkDeviceWaitIdle(m_vulkanContext->GetDevice().device);
 		m_vulkanContext->SetGlobalAddressBindingTracker(nullptr);
 		m_vulkanContext->SetFaultCallback(nullptr);

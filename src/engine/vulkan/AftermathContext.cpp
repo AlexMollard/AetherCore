@@ -278,7 +278,7 @@ namespace aether
 				}
 				else
 				{
-					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: GetShaderDebugInfoIdentifier failed (result={}) — debug info won't be available for lookup", static_cast<std::uint32_t>(idResult));
+					AE_WARN(LogCategory::Vulkan, "NVIDIA Aftermath: GetShaderDebugInfoIdentifier failed (result={}) - debug info won't be available for lookup", static_cast<std::uint32_t>(idResult));
 					path = BuildDumpPath(debugInfoDir, "shader_debug", ".nvdbg");
 				}
 

@@ -90,7 +90,10 @@ namespace aether::app
 		// Drops entities that are no longer alive (call once per frame).
 		void Prune(const World& world)
 		{
-			const auto dead = [&](Entity e) { return !e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e)); };
+			const auto dead = [&](Entity e)
+			{
+				return !e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e));
+			};
 			const auto before = m_selected.size();
 			std::erase_if(m_selected, dead);
 			if (m_selected.size() != before)

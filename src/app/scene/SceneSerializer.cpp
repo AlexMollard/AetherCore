@@ -41,9 +41,12 @@ namespace aether::app::scene
 		{
 			switch (t)
 			{
-				case PhysicsShapeType::Sphere: return "sphere";
-				case PhysicsShapeType::Capsule: return "capsule";
-				default: return "box";
+				case PhysicsShapeType::Sphere:
+					return "sphere";
+				case PhysicsShapeType::Capsule:
+					return "capsule";
+				default:
+					return "box";
 			}
 		}
 
@@ -64,9 +67,12 @@ namespace aether::app::scene
 		{
 			switch (t)
 			{
-				case PhysicsMotionType::Static: return "static";
-				case PhysicsMotionType::Kinematic: return "kinematic";
-				default: return "dynamic";
+				case PhysicsMotionType::Static:
+					return "static";
+				case PhysicsMotionType::Kinematic:
+					return "kinematic";
+				default:
+					return "dynamic";
 			}
 		}
 
@@ -147,14 +153,21 @@ namespace aether::app::scene
 		{
 			switch (type)
 			{
-				case ScriptPropertyValue::Type::Float: return "float";
-				case ScriptPropertyValue::Type::Int: return "int";
-				case ScriptPropertyValue::Type::Bool: return "bool";
-				case ScriptPropertyValue::Type::Vector3: return "vec3";
-				case ScriptPropertyValue::Type::String: return "string";
-				case ScriptPropertyValue::Type::Enum: return "enum";
+				case ScriptPropertyValue::Type::Float:
+					return "float";
+				case ScriptPropertyValue::Type::Int:
+					return "int";
+				case ScriptPropertyValue::Type::Bool:
+					return "bool";
+				case ScriptPropertyValue::Type::Vector3:
+					return "vec3";
+				case ScriptPropertyValue::Type::String:
+					return "string";
+				case ScriptPropertyValue::Type::Enum:
+					return "enum";
 				case ScriptPropertyValue::Type::None:
-				default: return "none";
+				default:
+					return "none";
 			}
 		}
 
@@ -680,7 +693,12 @@ namespace aether::app::scene
 		scene.version = static_cast<int>(root["scene"]["version"].value_or(std::int64_t{1}));
 		if (scene.version < kSceneFormatVersion)
 		{
-			AE_WARN(LogCategory::App, "Scene file '{}' is format v{} (current v{}): records added since it was written are absent (v2 added behaviors + lights/environment; v3 made lights entities - legacy [[lights]] migrate on load). Re-save from the editor to upgrade.", scene.name, scene.version, kSceneFormatVersion);
+			AE_WARN(LogCategory::App,
+			        "Scene file '{}' is format v{} (current v{}): records added since it was written are absent (v2 added behaviors + lights/environment; v3 made lights entities - legacy [[lights]] migrate on load). Re-save from the editor to "
+			        "upgrade.",
+			        scene.name,
+			        scene.version,
+			        kSceneFormatVersion);
 		}
 
 		if (const auto* e = root["environment"].as_table())
@@ -789,12 +807,19 @@ namespace aether::app::scene
 			if (const auto* s = tv["skinned"].as_table())
 			{
 				const toml::node_view<const toml::node> sv{*s};
-				rec.skinned = SkinnedRecord{.clipIndex = static_cast<std::uint32_t>(sv["clip"].value_or(std::int64_t{0})), .animTime = static_cast<float>(sv["time"].value_or(0.0)), .playbackSpeed = static_cast<float>(sv["speed"].value_or(1.0)), .looping = sv["looping"].value_or(true)};
+				rec.skinned = SkinnedRecord{.clipIndex = static_cast<std::uint32_t>(sv["clip"].value_or(std::int64_t{0})),
+				        .animTime = static_cast<float>(sv["time"].value_or(0.0)),
+				        .playbackSpeed = static_cast<float>(sv["speed"].value_or(1.0)),
+				        .looping = sv["looping"].value_or(true)};
 			}
 			if (const auto* p = tv["physics"].as_table())
 			{
 				const toml::node_view<const toml::node> pv{*p};
-				rec.physics = PhysicsRecord{.shapeType = ShapeFromName(pv["shape"].value_or(std::string{"box"})), .halfExtents = Vec3FromToml(pv["half_extents"], glm::vec3(0.5f)), .radius = static_cast<float>(pv["radius"].value_or(0.5)), .halfHeight = static_cast<float>(pv["half_height"].value_or(0.5)), .motionType = MotionFromName(pv["motion"].value_or(std::string{"dynamic"}))};
+				rec.physics = PhysicsRecord{.shapeType = ShapeFromName(pv["shape"].value_or(std::string{"box"})),
+				        .halfExtents = Vec3FromToml(pv["half_extents"], glm::vec3(0.5f)),
+				        .radius = static_cast<float>(pv["radius"].value_or(0.5)),
+				        .halfHeight = static_cast<float>(pv["half_height"].value_or(0.5)),
+				        .motionType = MotionFromName(pv["motion"].value_or(std::string{"dynamic"}))};
 			}
 			if (const auto* f = tv["effect"].as_table())
 			{
@@ -820,22 +845,34 @@ namespace aether::app::scene
 			if (const auto* o = tv["orbit"].as_table())
 			{
 				const toml::node_view<const toml::node> ov{*o};
-				rec.orbit = OrbitComponent{.center = Vec3FromToml(ov["center"], glm::vec3(0.0f)), .radius = static_cast<float>(ov["radius"].value_or(5.0)), .angularSpeedDeg = static_cast<float>(ov["speed_deg"].value_or(30.0)), .angleDeg = static_cast<float>(ov["angle_deg"].value_or(0.0)), .yawOffsetDeg = static_cast<float>(ov["yaw_offset_deg"].value_or(0.0)), .height = static_cast<float>(ov["height"].value_or(0.0))};
+				rec.orbit = OrbitComponent{.center = Vec3FromToml(ov["center"], glm::vec3(0.0f)),
+				        .radius = static_cast<float>(ov["radius"].value_or(5.0)),
+				        .angularSpeedDeg = static_cast<float>(ov["speed_deg"].value_or(30.0)),
+				        .angleDeg = static_cast<float>(ov["angle_deg"].value_or(0.0)),
+				        .yawOffsetDeg = static_cast<float>(ov["yaw_offset_deg"].value_or(0.0)),
+				        .height = static_cast<float>(ov["height"].value_or(0.0))};
 			}
 			if (const auto* p = tv["material_pulse"].as_table())
 			{
 				const toml::node_view<const toml::node> pv{*p};
-				rec.materialPulse = MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
+				rec.materialPulse =
+				        MaterialPulseComponent{.emissiveA = Vec3FromToml(pv["emissive_a"], glm::vec3(0.0f)), .emissiveB = Vec3FromToml(pv["emissive_b"], glm::vec3(1.0f, 0.5f, 0.1f)), .frequency = static_cast<float>(pv["frequency"].value_or(2.0))};
 			}
 			if (const auto* l = tv["point_light"].as_table())
 			{
 				const toml::node_view<const toml::node> lv{*l};
-				rec.pointLight = PointLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(20.0)), .radius = static_cast<float>(lv["radius"].value_or(15.0)), .castsShadow = lv["shadow"].value_or(false)};
+				rec.pointLight = PointLightComponent{
+				        .color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(20.0)), .radius = static_cast<float>(lv["radius"].value_or(15.0)), .castsShadow = lv["shadow"].value_or(false)};
 			}
 			if (const auto* l = tv["spot_light"].as_table())
 			{
 				const toml::node_view<const toml::node> lv{*l};
-				rec.spotLight = SpotLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)), .intensity = static_cast<float>(lv["intensity"].value_or(30.0)), .radius = static_cast<float>(lv["radius"].value_or(30.0)), .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)), .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)), .castsShadow = lv["shadow"].value_or(false)};
+				rec.spotLight = SpotLightComponent{.color = Vec3FromToml(lv["color"], glm::vec3(1.0f)),
+				        .intensity = static_cast<float>(lv["intensity"].value_or(30.0)),
+				        .radius = static_cast<float>(lv["radius"].value_or(30.0)),
+				        .innerAngleRad = static_cast<float>(lv["inner_rad"].value_or(0.35)),
+				        .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)),
+				        .castsShadow = lv["shadow"].value_or(false)};
 			}
 			if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
 			{
@@ -1241,7 +1278,10 @@ namespace aether::app::scene
 		{
 			if (light.isSpot)
 			{
-				migratedLights.push_back(ecs::CreateSpotLightEntity(world, light.position, light.direction, SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow}));
+				migratedLights.push_back(ecs::CreateSpotLightEntity(world,
+				        light.position,
+				        light.direction,
+				        SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow}));
 			}
 			else
 			{

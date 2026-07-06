@@ -211,7 +211,8 @@ namespace aether::app
 			}
 		}
 
-		if (m_pendingCollapse == e && inMultiSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f) && !ImGui::IsDragDropActive())
+		if (m_pendingCollapse == e && inMultiSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f)
+		        && !ImGui::IsDragDropActive())
 		{
 			selection.Select(e);
 			m_rangeAnchor = e;

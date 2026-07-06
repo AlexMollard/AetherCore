@@ -50,6 +50,7 @@ namespace aether::app
 				ImVec4 color;
 				float* component;
 			};
+
 			AxisChip axes[3] = {
 			        {"X", ImVec4(0.79f, 0.29f, 0.32f, 1.0f), &value.x},
 			        {"Y", ImVec4(0.38f, 0.64f, 0.31f, 1.0f), &value.y},

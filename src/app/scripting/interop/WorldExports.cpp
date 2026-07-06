@@ -25,7 +25,7 @@ using namespace aether::app::scripting::interop;
 namespace
 {
 	// Carry a physics body with a script-driven transform change, exactly as the
-	// editor's ApplyWorldTransform does — otherwise a body simulates away from the
+	// editor's ApplyWorldTransform does - otherwise a body simulates away from the
 	// visuals and the two owners fight over the transform each frame.
 	void TeleportBodyToTransform(aether::World& w, aether::Entity e)
 	{
@@ -38,9 +38,7 @@ namespace
 
 		glm::vec3 pos{}, euler{}, scale{};
 		aether::DecomposeTRS(tc->localToWorld, pos, euler, scale);
-		const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0))
-			* glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0))
-			* glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
+		const glm::quat q = glm::angleAxis(glm::radians(euler.y), glm::vec3(0, 1, 0)) * glm::angleAxis(glm::radians(euler.x), glm::vec3(1, 0, 0)) * glm::angleAxis(glm::radians(euler.z), glm::vec3(0, 0, 1));
 		ps->prevPosition = pos;
 		ps->currPosition = pos;
 		ps->prevRotation = q;
@@ -93,8 +91,7 @@ AE_SCRIPT_API void aether_mark_transient(std::uint32_t id)
 
 AE_SCRIPT_API void aether_set_name(std::uint32_t id, const char* name)
 {
-	ActiveWorld().EmplaceOrReplace<aether::NameComponent>(
-		aether::Entity{id}, aether::NameComponent{.name = name != nullptr ? name : ""});
+	ActiveWorld().EmplaceOrReplace<aether::NameComponent>(aether::Entity{id}, aether::NameComponent{.name = name != nullptr ? name : ""});
 }
 
 // Writes the entity name into a caller-provided UTF-8 buffer, returning the byte
@@ -118,8 +115,7 @@ AE_SCRIPT_API std::int32_t aether_get_name(std::uint32_t id, char* buf, std::int
 
 AE_SCRIPT_API void aether_add_transform(std::uint32_t id)
 {
-	ActiveWorld().EmplaceOrReplace<aether::TransformComponent>(
-		aether::Entity{id}, aether::TransformComponent{.localToWorld = glm::mat4(1.0f)});
+	ActiveWorld().EmplaceOrReplace<aether::TransformComponent>(aether::Entity{id}, aether::TransformComponent{.localToWorld = glm::mat4(1.0f)});
 }
 
 AE_SCRIPT_API std::int32_t aether_has_transform(std::uint32_t id)
@@ -207,33 +203,22 @@ AE_SCRIPT_API void aether_set_transform(std::uint32_t id, Vec3 pos, Vec3 euler, 
 
 AE_SCRIPT_API void aether_add_bob(std::uint32_t id, float amplitude, float frequency, float phase)
 {
-	ActiveWorld().EmplaceOrReplace<aether::BobComponent>(
-		aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
+	ActiveWorld().EmplaceOrReplace<aether::BobComponent>(aether::Entity{id}, aether::BobComponent{.amplitude = amplitude, .frequency = frequency, .phase = phase});
 }
 
 AE_SCRIPT_API void aether_add_spin(std::uint32_t id, Vec3 eulerDegPerSec)
 {
-	ActiveWorld().EmplaceOrReplace<aether::SpinComponent>(
-		aether::Entity{id}, aether::SpinComponent{.eulerDegPerSec = ToGlm(eulerDegPerSec)});
+	ActiveWorld().EmplaceOrReplace<aether::SpinComponent>(aether::Entity{id}, aether::SpinComponent{.eulerDegPerSec = ToGlm(eulerDegPerSec)});
 }
 
-AE_SCRIPT_API void aether_add_orbit(std::uint32_t id, Vec3 center, float radius, float speedDeg, float startAngleDeg,
-	float yawOffsetDeg, float height)
+AE_SCRIPT_API void aether_add_orbit(std::uint32_t id, Vec3 center, float radius, float speedDeg, float startAngleDeg, float yawOffsetDeg, float height)
 {
-	ActiveWorld().EmplaceOrReplace<aether::OrbitComponent>(aether::Entity{id},
-		aether::OrbitComponent{.center = ToGlm(center),
-			.radius = radius,
-			.angularSpeedDeg = speedDeg,
-			.angleDeg = startAngleDeg,
-			.yawOffsetDeg = yawOffsetDeg,
-			.height = height});
+	ActiveWorld().EmplaceOrReplace<aether::OrbitComponent>(aether::Entity{id}, aether::OrbitComponent{.center = ToGlm(center), .radius = radius, .angularSpeedDeg = speedDeg, .angleDeg = startAngleDeg, .yawOffsetDeg = yawOffsetDeg, .height = height});
 }
 
 AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, Vec3 emissiveB, float frequency)
 {
-	ActiveWorld().EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id},
-		aether::MaterialPulseComponent{
-			.emissiveA = ToGlm(emissiveA), .emissiveB = ToGlm(emissiveB), .frequency = frequency});
+	ActiveWorld().EmplaceOrReplace<aether::MaterialPulseComponent>(aether::Entity{id}, aether::MaterialPulseComponent{.emissiveA = ToGlm(emissiveA), .emissiveB = ToGlm(emissiveB), .frequency = frequency});
 }
 
 // ── Entity scripts ────────────────────────────────────────────────────────────
@@ -241,8 +226,7 @@ AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, V
 // Attach a script component by type name; runs while playing and serializes.
 AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
 {
-	ActiveWorld().EmplaceOrReplace<aether::ScriptComponent>(
-		aether::Entity{id}, aether::ScriptComponent{.path = typeName != nullptr ? typeName : ""});
+	ActiveWorld().EmplaceOrReplace<aether::ScriptComponent>(aether::Entity{id}, aether::ScriptComponent{.path = typeName != nullptr ? typeName : ""});
 }
 
 AE_SCRIPT_API std::int32_t aether_scene_file_exists(const char* name)
@@ -307,13 +291,14 @@ AE_SCRIPT_API std::int32_t aether_tag_get_entities(std::uint32_t tagId, std::uin
 		return 0;
 	}
 	std::int32_t n = 0;
-	aether::ForEachWithTag(&ActiveWorld(), tagId,
-		[&](std::uint32_t id)
-		{
-			if (n < cap)
-			{
-				buf[n++] = id;
-			}
-		});
+	aether::ForEachWithTag(&ActiveWorld(),
+	        tagId,
+	        [&](std::uint32_t id)
+	        {
+		        if (n < cap)
+		        {
+			        buf[n++] = id;
+		        }
+	        });
 	return n;
 }

@@ -10,7 +10,7 @@ namespace aether
 	//
 	// The engine owns the loop; the app implements these hooks. Deliberately free
 	// of any app types (e.g. LayerContext) so the engine has zero dependency on the
-	// application layer — the app reconstructs whatever context it needs from the
+	// application layer - the app reconstructs whatever context it needs from the
 	// primitives passed here.
 	class EngineClient
 	{

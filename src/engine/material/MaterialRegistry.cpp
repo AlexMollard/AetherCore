@@ -67,7 +67,7 @@ namespace aether
 		if (slot == IMaterialSlotSink::kInvalidSlot || slot >= m_slots.size())
 		{
 			// Sink full: return an invalid handle. ResolveSlot() falls back to the
-			// default slot for it, and Release() is a safe no-op — so this never
+			// default slot for it, and Release() is a safe no-op - so this never
 			// touches the default material's refcount (returning m_defaultHandle
 			// here would let the caller's later Release() free the default).
 			return MaterialHandle{};

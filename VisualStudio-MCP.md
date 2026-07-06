@@ -2,11 +2,11 @@
 
 ## Overview
 
-MCP AI Server exposes 19 debugging tools that let AI assistants interact with the Visual Studio debugger. The debugger is **state-based** — you must check the current mode before calling tools, and use **polling** to detect state changes.
+MCP AI Server exposes 19 debugging tools that let AI assistants interact with the Visual Studio debugger. The debugger is **state-based** - you must check the current mode before calling tools, and use **polling** to detect state changes.
 
 There are two fundamental ways to start a debug session:
-1. **`debug_start`** — Press F5, launches the startup project with debugger attached
-2. **`debug_attach`** — Attach to an already-running process (local, Docker, or WSL)
+1. **`debug_start`** - Press F5, launches the startup project with debugger attached
+2. **`debug_attach`** - Attach to an already-running process (local, Docker, or WSL)
 
 In both cases, once in Break mode, all inspection tools work identically.
 
@@ -25,7 +25,7 @@ In both cases, once in Break mode, all inspection tools work identically.
 | Tool | Required Mode | Description |
 |------|--------------|-------------|
 | `debug_get_mode` | Any | Returns current mode: Design, Running, or Break |
-| `debug_start` | Design | Start debugging (F5). Fire-and-forget — returns immediately |
+| `debug_start` | Design | Start debugging (F5). Fire-and-forget - returns immediately |
 | `debug_stop` | Running/Break | Stop debugging session (detach + terminate) |
 | `debug_break` | Running | Pause the running application |
 | `debug_continue` | Break | Resume execution |
@@ -56,7 +56,7 @@ In both cases, once in Break mode, all inspection tools work identically.
 
 ## Core Concept: Polling
 
-MCP is request-response — there are **no push notifications**. You must poll `debug_get_mode` to detect state changes.
+MCP is request-response - there are **no push notifications**. You must poll `debug_get_mode` to detect state changes.
 
 ```
 debug_start → returns immediately
@@ -74,7 +74,7 @@ The same polling applies after `debug_attach` + `debug_break`, or after `debug_c
 
 ## Workflows
 
-### 1. Attach to a Running Process — THE PRIMARY AI WORKFLOW
+### 1. Attach to a Running Process - THE PRIMARY AI WORKFLOW
 
 This is the most natural and powerful debugging workflow for AI:
 - The application is already running (launched by user, by a script, or as a service)
@@ -148,7 +148,7 @@ User: "I started debugging, it hit a breakpoint, help me investigate"
 7. debug_evaluate ("result")     → check return value
 ```
 
-The AI doesn't need to launch the debug session — it just needs `debug_get_mode` to return "Break", and all inspection tools work regardless of who started the session.
+The AI doesn't need to launch the debug session - it just needs `debug_get_mode` to return "Break", and all inspection tools work regardless of who started the session.
 
 ### 5. TDD: Debug a Failing Test
 
@@ -205,7 +205,7 @@ AI:   debug_get_callstack → investigate
 
 ```
 1. exception_settings_set ("System.NullReferenceException", breakWhenThrown: true)
-2. "Please run the failing scenario — I configured VS to break on NullReferenceException"
+2. "Please run the failing scenario - I configured VS to break on NullReferenceException"
 3. User runs the app or test
 4. debug_get_mode → "Break" (exception hit!)
 5. debug_get_callstack → see exactly where it crashed
@@ -290,7 +290,7 @@ For `debug_attach` to work with Docker containers, the container needs a **debug
 
 ### What the Container Needs
 
-1. **vsdbg installed inside the container** — This is the .NET Core debugger that VS connects to.
+1. **vsdbg installed inside the container** - This is the .NET Core debugger that VS connects to.
 
    In your Dockerfile, add:
    ```dockerfile
@@ -305,7 +305,7 @@ For `debug_attach` to work with Docker containers, the container needs a **debug
        && curl -sSL https://aka.ms/getvsdbgsh | bash /dev/stdin -v latest -l /vsdbg
    ```
 
-2. **The app must be built in Debug configuration** — Release builds strip debug symbols.
+2. **The app must be built in Debug configuration** - Release builds strip debug symbols.
 
    ```dockerfile
    # Build stage
@@ -326,9 +326,9 @@ For `debug_attach` to work with Docker containers, the container needs a **debug
    ENTRYPOINT ["dotnet", "MyApp.dll"]
    ```
 
-3. **PDB files present** — The `.pdb` debug symbol files must be in the container alongside the DLLs. `dotnet publish -c Debug` includes them automatically.
+3. **PDB files present** - The `.pdb` debug symbol files must be in the container alongside the DLLs. `dotnet publish -c Debug` includes them automatically.
 
-4. **Source code in VS matches the container build** — VS maps the source from the container back to local files. The source must match or breakpoints won't bind.
+4. **Source code in VS matches the container build** - VS maps the source from the container back to local files. The source must match or breakpoints won't bind.
 
 ### Docker Compose Debug Profile
 
@@ -355,9 +355,9 @@ services:
 If you use **Visual Studio Container Tools** (right-click project → Add → Docker Support), VS handles everything automatically:
 - Generates a multi-stage Dockerfile with vsdbg
 - Configures `launchSettings.json` with Docker profile
-- F5 builds, deploys to container, and attaches — all automatic
+- F5 builds, deploys to container, and attaches - all automatic
 
-For projects already using VS Container Tools, `debug_attach` via MCP works the same way — VS has the transport set up.
+For projects already using VS Container Tools, `debug_attach` via MCP works the same way - VS has the transport set up.
 
 ### Minimal Docker Setup (Without VS Container Tools)
 
@@ -379,9 +379,9 @@ docker run -d --name myapp-debug -p 5000:5000 myapp:debug
 
 For WSL debugging:
 
-1. **Same source code** — The VS solution must contain the same source as what's running in WSL
-2. **Debug build** — The app must be built with `dotnet build -c Debug` inside WSL
-3. **No extra setup needed** — VS 2022 has built-in WSL transport support, no remote debugger needed
+1. **Same source code** - The VS solution must contain the same source as what's running in WSL
+2. **Debug build** - The app must be built with `dotnet build -c Debug` inside WSL
+3. **No extra setup needed** - VS 2022 has built-in WSL transport support, no remote debugger needed
 
 ```bash
 # Inside WSL:
@@ -411,7 +411,7 @@ All inspection tools validate the debugger mode and return helpful errors:
 `debug_start` returns immediately. VS builds the project and launches it in the background. This can take seconds to minutes for large solutions. **Always poll `debug_get_mode` after starting.**
 
 ### No Internal Timeouts
-DTE operations have **no internal timeout** — they await until VS completes the operation. The MCP client (e.g. Claude Code) controls timeouts externally. This is by design: DTE COM calls are not cancellable once started on the UI thread, so an internal timeout would only return null while leaving VS blocked.
+DTE operations have **no internal timeout** - they await until VS completes the operation. The MCP client (e.g. Claude Code) controls timeouts externally. This is by design: DTE COM calls are not cancellable once started on the UI thread, so an internal timeout would only return null while leaving VS blocked.
 
 ### Function Breakpoint Validation
 Function breakpoints (`breakpoint_set` with `functionName`) are **pre-validated via Roslyn** before calling DTE. If the symbol doesn't exist in the solution, the tool returns an error immediately instead of risking a VS hang. Use `ClassName.MethodName` format.
@@ -445,14 +445,14 @@ Local variables are trees. `debug_get_locals` returns root-level variables with 
    → members: { "Key": "username", "Value": "alice_doe" }
 ```
 
-**Pattern:** Each `debug_evaluate` call goes one level deeper. The expression path is standard C# — array indexing, property access, LINQ methods all work.
+**Pattern:** Each `debug_evaluate` call goes one level deeper. The expression path is standard C# - array indexing, property access, LINQ methods all work.
 
 ## Compact Output
 
 All tools default to **compact** output format, optimized for token efficiency:
 
 - **Callstack:** `"0": "Main|MyApp|Program.cs|14"` (function|module|file|line)
-- **Processes:** `"svchost": "2360,2544,2588"` (name: PIDs) — paths stripped to just the name
+- **Processes:** `"svchost": "2360,2544,2588"` (name: PIDs) - paths stripped to just the name
 - **Locals:** `"testCases": "List<TestCase>[7]"` (expandable with memberCount)
 - **Breakpoints:** `"Program.cs:10": "bound|enabled"` (file:line: type|state)
 - **Errors:** `"Validator.cs:42": "CS1002: ; expected"` (file:line: description)
@@ -495,7 +495,7 @@ The user selects code they want to investigate. The AI reads the selection, sets
 ```
 1. get_selection                                    → read what the user selected
 2. breakpoint_set (file: "...", line: startLine)   → breakpoint on the selected code
-3. [navigate to the breakpoint — escape loops, bypass checks as needed]
+3. [navigate to the breakpoint - escape loops, bypass checks as needed]
 4. debug_get_locals                                 → see variable state at that point
 5. debug_step (direction: "over")                   → execute the selected line
 6. debug_get_locals                                 → see result (e.g. testCases.Count = 7)
@@ -510,19 +510,19 @@ This pattern lets the user say "investigate this code" by selecting it, and the 
 
 2. **Poll, don't assume.** After `debug_start`, `debug_attach`, `debug_continue`, or `debug_step`, always check `debug_get_mode` before inspecting state.
 
-3. **Prefer function breakpoints** over file+line when you know the method name. They're more reliable across code changes. Symbols are pre-validated via Roslyn — you get an immediate error if the function doesn't exist.
+3. **Prefer function breakpoints** over file+line when you know the method name. They're more reliable across code changes. Symbols are pre-validated via Roslyn - you get an immediate error if the function doesn't exist.
 
 4. **The user can start debug themselves.** You don't always need `debug_start` or `debug_attach`. The most common TDD workflow is: user runs "Debug Test" in VS, AI investigates when it hits Break.
 
-5. **Use `output_read` and `error_list_get` freely** — they work in any mode, no debug session needed.
+5. **Use `output_read` and `error_list_get` freely** - they work in any mode, no debug session needed.
 
-6. **Don't call inspection tools in Design or Running mode** — they'll return errors. Always check mode first or handle the error gracefully.
+6. **Don't call inspection tools in Design or Running mode** - they'll return errors. Always check mode first or handle the error gracefully.
 
-7. **Use `immediate_execute` carefully** — it can modify program state. `debug_evaluate` is read-only and safer for just looking at values.
+7. **Use `immediate_execute` carefully** - it can modify program state. `debug_evaluate` is read-only and safer for just looking at values.
 
 8. **When debugging tests:** You cannot launch a test in debug mode via MCP. Ask the user to right-click → Debug Test. Once they hit a breakpoint, you have full access to inspect and step.
 
-9. **After `debug_step`**, the mode is still Break — you can immediately call inspection tools without polling.
+9. **After `debug_step`**, the mode is still Break - you can immediately call inspection tools without polling.
 
 10. **After `debug_continue`**, poll for the next Break or Design (program exited).
 
@@ -532,4 +532,4 @@ This pattern lets the user say "investigate this code" by selecting it, and the 
 
 13. **For Docker/WSL**, the process name is usually `dotnet` for .NET apps. Use `debug_list_processes` to discover the exact process name and PID.
 
-14. **After attaching to Docker/WSL**, all tools work identically to local debugging — callstack, locals, evaluate, step, breakpoints all work the same way.
+14. **After attaching to Docker/WSL**, all tools work identically to local debugging - callstack, locals, evaluate, step, breakpoints all work the same way.

@@ -1,4 +1,4 @@
-// Hejl Richard / Filmic ALU — cost-effective curve used in Frostbite.
+// Hejl Richard / Filmic ALU - cost-effective curve used in Frostbite.
 // Dark offset prevents division-by-near-zero noise.
 float3 HejlRichard(float3 x)
 {

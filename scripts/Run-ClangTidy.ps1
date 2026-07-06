@@ -127,7 +127,7 @@ $elapsed = Measure-Command {
 
         # Build the argument list explicitly. Passing an empty '' string (the old
         # behaviour when -Fix was off) made clang-tidy treat it as an extra source
-        # path — the current directory — and emit spurious "expected exactly one
+        # path - the current directory - and emit spurious "expected exactly one
         # compiler job" errors, so only append --fix when actually fixing.
         $tidyArgs = @("--checks=$checks", "-p=$db")
         if ($doFix) { $tidyArgs += '--fix' }

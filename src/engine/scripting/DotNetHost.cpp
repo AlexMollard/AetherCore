@@ -4,17 +4,17 @@
 
 #if AETHER_HAS_DOTNET
 
-	#include <string_view>
+#	include <string_view>
 
-	#include <nethost.h>
-	#include <coreclr_delegates.h>
-	#include <hostfxr.h>
+#	include <nethost.h>
+#	include <coreclr_delegates.h>
+#	include <hostfxr.h>
 
-	#ifdef _WIN32
-		#include <windows.h>
-	#else
-		#include <dlfcn.h>
-	#endif
+#	ifdef _WIN32
+#		include <windows.h>
+#	else
+#		include <dlfcn.h>
+#	endif
 
 namespace aether::scripting
 {
@@ -24,7 +24,7 @@ namespace aether::scripting
 		// route back into it. CoreCLR is a process singleton, so is this.
 		DotNetHost* g_host = nullptr;
 
-	#ifdef _WIN32
+#	ifdef _WIN32
 		using string_t = std::wstring;
 
 		string_t ToCharT(const std::filesystem::path& p)
@@ -58,7 +58,7 @@ namespace aether::scripting
 		{
 			return reinterpret_cast<void*>(::GetProcAddress(reinterpret_cast<HMODULE>(lib), name));
 		}
-	#else
+#	else
 		using string_t = std::string;
 
 		string_t ToCharT(const std::filesystem::path& p)
@@ -80,7 +80,7 @@ namespace aether::scripting
 		{
 			return ::dlsym(lib, name);
 		}
-	#endif
+#	endif
 
 		// ── Native callbacks exposed to managed code ─────────────────────────────
 		void NativeLog(std::int32_t level, const char* messageUtf8)
@@ -165,8 +165,7 @@ namespace aether::scripting
 		size_t hostfxrPathLen = std::size(hostfxrPath);
 		if (const int rc = get_hostfxr_path(hostfxrPath, &hostfxrPathLen, nullptr); rc != 0)
 		{
-			AE_WARN(LogCategory::App,
-				".NET runtime not found (get_hostfxr_path=0x{:08X}) - C# scripting disabled", static_cast<unsigned>(rc));
+			AE_WARN(LogCategory::App, ".NET runtime not found (get_hostfxr_path=0x{:08X}) - C# scripting disabled", static_cast<unsigned>(rc));
 			return false;
 		}
 
@@ -177,13 +176,10 @@ namespace aether::scripting
 			return false;
 		}
 
-		auto initForConfig = reinterpret_cast<hostfxr_initialize_for_runtime_config_fn>(
-			GetHostExport(hostfxrLib, "hostfxr_initialize_for_runtime_config"));
-		auto getDelegate = reinterpret_cast<hostfxr_get_runtime_delegate_fn>(
-			GetHostExport(hostfxrLib, "hostfxr_get_runtime_delegate"));
+		auto initForConfig = reinterpret_cast<hostfxr_initialize_for_runtime_config_fn>(GetHostExport(hostfxrLib, "hostfxr_initialize_for_runtime_config"));
+		auto getDelegate = reinterpret_cast<hostfxr_get_runtime_delegate_fn>(GetHostExport(hostfxrLib, "hostfxr_get_runtime_delegate"));
 		auto closeCtx = reinterpret_cast<hostfxr_close_fn>(GetHostExport(hostfxrLib, "hostfxr_close"));
-		auto setErrorWriter = reinterpret_cast<hostfxr_set_error_writer_fn>(
-			GetHostExport(hostfxrLib, "hostfxr_set_error_writer"));
+		auto setErrorWriter = reinterpret_cast<hostfxr_set_error_writer_fn>(GetHostExport(hostfxrLib, "hostfxr_set_error_writer"));
 
 		if (initForConfig == nullptr || getDelegate == nullptr || closeCtx == nullptr)
 		{
@@ -204,9 +200,7 @@ namespace aether::scripting
 		// Success(0), Success_HostAlreadyInitialized(1), Success_DifferentRuntimeProperties(2).
 		if (initRc < 0 || ctx == nullptr)
 		{
-			AE_WARN(LogCategory::App,
-				"hostfxr_initialize_for_runtime_config failed (0x{:08X}) for '{}' - C# scripting disabled",
-				static_cast<unsigned>(initRc), (managedDir / "AetherCore.Interop.runtimeconfig.json").string());
+			AE_WARN(LogCategory::App, "hostfxr_initialize_for_runtime_config failed (0x{:08X}) for '{}' - C# scripting disabled", static_cast<unsigned>(initRc), (managedDir / "AetherCore.Interop.runtimeconfig.json").string());
 			if (ctx != nullptr)
 			{
 				closeCtx(ctx);
@@ -220,8 +214,7 @@ namespace aether::scripting
 		closeCtx(ctx);
 		if (delRc != 0 || loadAssemblyPtr == nullptr)
 		{
-			AE_WARN(LogCategory::App,
-				"hostfxr_get_runtime_delegate failed (0x{:08X}) - C# scripting disabled", static_cast<unsigned>(delRc));
+			AE_WARN(LogCategory::App, "hostfxr_get_runtime_delegate failed (0x{:08X}) - C# scripting disabled", static_cast<unsigned>(delRc));
 			return false;
 		}
 		auto loadAssembly = reinterpret_cast<load_assembly_and_get_function_pointer_fn>(loadAssemblyPtr);
@@ -230,17 +223,19 @@ namespace aether::scripting
 		const string_t assemblyPath = ToCharT(managedDir / "AetherCore.Interop.dll");
 		ManagedBootstrapFn bootstrapInit = nullptr;
 		const int fnRc = loadAssembly(assemblyPath.c_str(),
-	#ifdef _WIN32
-			L"AetherCore.Interop.Bootstrap, AetherCore.Interop", L"Init",
-	#else
-			"AetherCore.Interop.Bootstrap, AetherCore.Interop", "Init",
-	#endif
-			UNMANAGEDCALLERSONLY_METHOD, nullptr, reinterpret_cast<void**>(&bootstrapInit));
+#	ifdef _WIN32
+		        L"AetherCore.Interop.Bootstrap, AetherCore.Interop",
+		        L"Init",
+#	else
+		        "AetherCore.Interop.Bootstrap, AetherCore.Interop",
+		        "Init",
+#	endif
+		        UNMANAGEDCALLERSONLY_METHOD,
+		        nullptr,
+		        reinterpret_cast<void**>(&bootstrapInit));
 		if (fnRc != 0 || bootstrapInit == nullptr)
 		{
-			AE_WARN(LogCategory::App,
-				"Failed to bind AetherCore.Interop Bootstrap.Init (0x{:08X}) - C# scripting disabled",
-				static_cast<unsigned>(fnRc));
+			AE_WARN(LogCategory::App, "Failed to bind AetherCore.Interop Bootstrap.Init (0x{:08X}) - C# scripting disabled", static_cast<unsigned>(fnRc));
 			return false;
 		}
 
@@ -249,12 +244,10 @@ namespace aether::scripting
 		callbacks.Log = &NativeLog;
 		callbacks.ReportScriptError = &NativeReportScriptError;
 
-		const int bootRc = bootstrapInit(&callbacks, static_cast<std::int32_t>(sizeof(callbacks)), &m_api,
-			static_cast<std::int32_t>(sizeof(m_api)));
+		const int bootRc = bootstrapInit(&callbacks, static_cast<std::int32_t>(sizeof(callbacks)), &m_api, static_cast<std::int32_t>(sizeof(m_api)));
 		if (bootRc != 0)
 		{
-			AE_WARN(LogCategory::App,
-				"AetherCore.Interop rejected the interop ABI (code {}) - C# scripting disabled", bootRc);
+			AE_WARN(LogCategory::App, "AetherCore.Interop rejected the interop ABI (code {}) - C# scripting disabled", bootRc);
 			m_api = {};
 			return false;
 		}
@@ -276,7 +269,9 @@ namespace aether::scripting
 		m_errorHandler = std::move(handler);
 	}
 
-	void DotNetHost::OnManagedError(const std::string&) { }
+	void DotNetHost::OnManagedError(const std::string&)
+	{
+	}
 
 	bool DotNetHost::Initialize(const std::filesystem::path&)
 	{

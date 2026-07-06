@@ -6,10 +6,10 @@
 // Exactly one AE_CONFIG_* macro is defined by the build system via CMake
 // generator expressions (see src/engine/CMakeLists.txt):
 //
-//   AE_CONFIG_DEBUG    — Debug build,    full diagnostics, Tracy ON
-//   AE_CONFIG_DEV      — Dev build       (RelWithDebInfo), Tracy ON, optimized
-//   AE_CONFIG_SHIP     — Shipping build  (Release), Tracy OFF, minimal checks
-//   AE_CONFIG_RETAIL   — Retail build    (like Ship but no asserts, LTCG)
+//   AE_CONFIG_DEBUG    - Debug build,    full diagnostics, Tracy ON
+//   AE_CONFIG_DEV      - Dev build       (RelWithDebInfo), Tracy ON, optimized
+//   AE_CONFIG_SHIP     - Shipping build  (Release), Tracy OFF, minimal checks
+//   AE_CONFIG_RETAIL   - Retail build    (like Ship but no asserts, LTCG)
 //
 // Policy decisions (Tracy, assertions, logging) flow from these defines
 // so the same binary directory can produce Debug/Dev/Ship/Retail outputs.
@@ -26,9 +26,9 @@
 
 // ── Sub-feature toggles (passed as compile definitions from CMake) ───────────
 // These are user-configurable at configure time:
-//   AETHERCORE_ENABLE_TRACY_GPU     — Vulkan GPU tracing    (default ON)
-//   AETHERCORE_ENABLE_TRACY_PLOTS   — Tracy plot/counters   (default ON)
-//   AETHERCORE_ENABLE_TRACY_MEMORY  — Tracy memory tracking  (default ON)
+//   AETHERCORE_ENABLE_TRACY_GPU     - Vulkan GPU tracing    (default ON)
+//   AETHERCORE_ENABLE_TRACY_PLOTS   - Tracy plot/counters   (default ON)
+//   AETHERCORE_ENABLE_TRACY_MEMORY  - Tracy memory tracking  (default ON)
 // They appear here for documentation; CMake unconditionally defines them
 // for all targets so Profiler.hpp / GpuProfiler can check them at runtime.
 

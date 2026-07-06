@@ -42,8 +42,8 @@ namespace aether
 		else
 		{
 			// Gimbal lock (X = ±90°): Y and Z merge and column 2 no longer carries
-			// Y. Recover the merged angle from column 0 — (cos(Y∓Z), 0, ∓sin(Y∓Z))
-			// at X = ±90° — and fold it into Y with Z := 0 so recomposition still
+			// Y. Recover the merged angle from column 0 - (cos(Y∓Z), 0, ∓sin(Y∓Z))
+			// at X = ±90° - and fold it into Y with Z := 0 so recomposition still
 			// reproduces the matrix.
 			rotYRad = std::atan2(-c0.z, c0.x);
 		}

@@ -130,7 +130,7 @@ CPMAddPackage(
         "TRACY_ON_DEMAND ON"
 )
 
-# Strip TRACY_ENABLE from TracyClient's public interface — Defines.hpp manages
+# Strip TRACY_ENABLE from TracyClient's public interface - Defines.hpp manages
 # it per config, which is impossible with a PUBLIC define on a static library
 # in multi-config generators.
 if(TARGET TracyClient)

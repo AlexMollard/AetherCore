@@ -95,10 +95,7 @@ AE_SCRIPT_API void aether_load_model(std::uint32_t id, const char* pathC)
 			tc->localToWorld = xform * tc->localToWorld;
 		}
 		w.EmplaceOrReplace<aether::NameComponent>(meshEntity, aether::NameComponent{.name = stem + " mesh"});
-		w.EmplaceOrReplace<aether::MeshSourceComponent>(meshEntity,
-			aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Model,
-				.path = path,
-				.primitiveIndex = static_cast<std::uint32_t>(i)});
+		w.EmplaceOrReplace<aether::MeshSourceComponent>(meshEntity, aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Model, .path = path, .primitiveIndex = static_cast<std::uint32_t>(i)});
 		ctx.sceneEntities.push_back(meshEntity);
 	}
 }
@@ -186,11 +183,8 @@ AE_SCRIPT_API void aether_add_mesh(std::uint32_t entityId, std::uint32_t meshHan
 
 	const aether::Entity e{entityId};
 	w.EmplaceOrReplace<aether::MeshComponent>(e, aether::MeshComponent{.mesh = entry.mesh});
-	w.EmplaceOrReplace<aether::MeshSourceComponent>(e,
-		aether::MeshSourceComponent{
-			.kind = aether::MeshSourceComponent::Kind::Primitive, .path = entry.kindName, .primitiveIndex = 0});
-	aether::MaterialSystem::AssignMaterial(
-		w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), entry.materialAsset);
+	w.EmplaceOrReplace<aether::MeshSourceComponent>(e, aether::MeshSourceComponent{.kind = aether::MeshSourceComponent::Kind::Primitive, .path = entry.kindName, .primitiveIndex = 0});
+	aether::MaterialSystem::AssignMaterial(w, e, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), entry.materialAsset);
 
 	const auto* nc = w.TryGet<aether::NameComponent>(e);
 	if (nc == nullptr || nc->name.empty() || nc->name == "Entity")
@@ -291,8 +285,7 @@ AE_SCRIPT_API void aether_entity_material_set_color(std::uint32_t entityId, Vec3
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
-		aether::MaterialSystem::SetBaseColor(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(),
-			ctx.assets->GetPipelineCache(), ToGlm(color));
+		aether::MaterialSystem::SetBaseColor(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), ToGlm(color));
 	}
 }
 
@@ -301,8 +294,7 @@ AE_SCRIPT_API void aether_entity_material_set_metallic(std::uint32_t entityId, f
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
-		aether::MaterialSystem::SetMetallic(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(),
-			ctx.assets->GetPipelineCache(), value);
+		aether::MaterialSystem::SetMetallic(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
 	}
 }
 
@@ -311,8 +303,7 @@ AE_SCRIPT_API void aether_entity_material_set_roughness(std::uint32_t entityId, 
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
-		aether::MaterialSystem::SetRoughness(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(),
-			ctx.assets->GetPipelineCache(), value);
+		aether::MaterialSystem::SetRoughness(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), value);
 	}
 }
 
@@ -321,8 +312,7 @@ AE_SCRIPT_API void aether_entity_material_set_emissive(std::uint32_t entityId, V
 	auto& ctx = ActiveContext();
 	if (ctx.assets != nullptr)
 	{
-		aether::MaterialSystem::SetEmissive(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(),
-			ctx.assets->GetPipelineCache(), ToGlm(color));
+		aether::MaterialSystem::SetEmissive(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), ToGlm(color));
 	}
 }
 
@@ -335,7 +325,6 @@ AE_SCRIPT_API void aether_set_material_texture(std::uint32_t entityId, const cha
 	}
 	auto& texReg = ctx.assets->GetTextureRegistry();
 	const aether::TextureHandle tex = texReg.Acquire(path != nullptr ? path : "");
-	aether::MaterialSystem::SetAlbedoTexture(
-		ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), tex);
+	aether::MaterialSystem::SetAlbedoTexture(ActiveWorld(), aether::Entity{entityId}, ctx.assets->GetMaterialRegistry(), ctx.assets->GetPipelineCache(), tex);
 	texReg.Release(tex);
 }

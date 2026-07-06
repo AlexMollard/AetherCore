@@ -12,7 +12,7 @@
 // App executable. C# binds them with [LibraryImport("AetherHost")] and a
 // DllImportResolver that maps "AetherHost" to the running module. Each binding is
 // therefore just one AE_SCRIPT_API function here plus one partial-method line on
-// the managed side — no registration tables, no per-call marshalling.
+// the managed side - no registration tables, no per-call marshalling.
 //
 // The ABI is deliberately blittable: entity ids are uint32, vectors are Vec3
 // (== System.Numerics.Vector3), strings are UTF-8 byte pointers, and booleans
@@ -22,9 +22,9 @@
 // (the TLS SceneContext the runner installs) is valid inside an export body.
 
 #ifdef _WIN32
-	#define AE_SCRIPT_API extern "C" __declspec(dllexport)
+#	define AE_SCRIPT_API extern "C" __declspec(dllexport)
 #else
-	#define AE_SCRIPT_API extern "C" __attribute__((visibility("default")))
+#	define AE_SCRIPT_API extern "C" __attribute__((visibility("default")))
 #endif
 
 namespace aether::app::scripting::interop

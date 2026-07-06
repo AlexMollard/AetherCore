@@ -27,6 +27,7 @@ namespace aether::app
 		const char* icon;
 		ImVec4 color;
 	};
+
 	KindBadge EntityKindBadge(const World& world, Entity entity);
 
 	// Writes a full world transform to the entity with the editor's shared edit

@@ -28,23 +28,15 @@ AE_SCRIPT_API void aether_render_set_sun(Vec3 dir, float intensity, Vec3 color)
 AE_SCRIPT_API void aether_render_add_point_light(Vec3 pos, Vec3 color, float intensity, float radius, std::int32_t castsShadow)
 {
 	auto& ctx = ActiveContext();
-	const aether::Entity e = aether::ecs::CreatePointLightEntity(*ctx.world, ToGlm(pos),
-		aether::PointLightComponent{
-			.color = ToGlm(color), .intensity = intensity, .radius = radius, .castsShadow = castsShadow != 0});
+	const aether::Entity e = aether::ecs::CreatePointLightEntity(*ctx.world, ToGlm(pos), aether::PointLightComponent{.color = ToGlm(color), .intensity = intensity, .radius = radius, .castsShadow = castsShadow != 0});
 	ctx.sceneEntities.push_back(e);
 }
 
-AE_SCRIPT_API void aether_render_add_spot_light(Vec3 pos, Vec3 color, float intensity, float radius, Vec3 dir,
-	float innerAngle, float outerAngle, std::int32_t castsShadow)
+AE_SCRIPT_API void aether_render_add_spot_light(Vec3 pos, Vec3 color, float intensity, float radius, Vec3 dir, float innerAngle, float outerAngle, std::int32_t castsShadow)
 {
 	auto& ctx = ActiveContext();
-	const aether::Entity e = aether::ecs::CreateSpotLightEntity(*ctx.world, ToGlm(pos), ToGlm(dir),
-		aether::SpotLightComponent{.color = ToGlm(color),
-			.intensity = intensity,
-			.radius = radius,
-			.innerAngleRad = innerAngle,
-			.outerAngleRad = outerAngle,
-			.castsShadow = castsShadow != 0});
+	const aether::Entity e = aether::ecs::CreateSpotLightEntity(
+	        *ctx.world, ToGlm(pos), ToGlm(dir), aether::SpotLightComponent{.color = ToGlm(color), .intensity = intensity, .radius = radius, .innerAngleRad = innerAngle, .outerAngleRad = outerAngle, .castsShadow = castsShadow != 0});
 	ctx.sceneEntities.push_back(e);
 }
 

@@ -11,7 +11,7 @@
 //   * Bootstrap.Init fills a ManagedScriptApi and returns it to the host.
 //
 // After that handshake every call in either direction is a raw function-pointer
-// call — no reflection, no marshalling layer. The managed side mirrors these
+// call - no reflection, no marshalling layer. The managed side mirrors these
 // structs field-for-field as [StructLayout(Sequential)] with `delegate* unmanaged`
 // members, so the two must stay in lockstep.
 //
@@ -41,8 +41,8 @@ namespace aether::scripting
 	{
 		PropertyType type = PropertyType::None;
 		std::int32_t reserved = 0; // padding / future flags
-		float f4[4] = {}; // Float (x), Vector3 (xyz)
-		std::int64_t i64 = 0; // Int, Bool (0/1), Enum
+		float f4[4] = {};          // Float (x), Vector3 (xyz)
+		std::int64_t i64 = 0;      // Int, Bool (0/1), Enum
 		const char* str = nullptr; // String
 	};
 
@@ -80,8 +80,7 @@ namespace aether::scripting
 
 		// ── Serialized script properties (inspector / scene overrides) ───────
 		std::int32_t (*GetPropertyCount)(const char* typeNameUtf8) = nullptr;
-		std::int32_t (*GetPropertyInfo)(const char* typeNameUtf8, std::int32_t index, char* nameBuf,
-			std::int32_t nameBufLen, std::int32_t* outType) = nullptr;
+		std::int32_t (*GetPropertyInfo)(const char* typeNameUtf8, std::int32_t index, char* nameBuf, std::int32_t nameBufLen, std::int32_t* outType) = nullptr;
 		std::int32_t (*GetProperty)(std::uint64_t handle, std::int32_t index, PropertyValue* outValue) = nullptr;
 		std::int32_t (*SetProperty)(std::uint64_t handle, std::int32_t index, const PropertyValue* value) = nullptr;
 
@@ -98,6 +97,5 @@ namespace aether::scripting
 	// load_assembly_and_get_function_pointer with UNMANAGEDCALLERSONLY_METHOD.
 	// Returns 0 on success; nonzero signals an ABI/version mismatch (the sizes
 	// let managed reject a host built against a different struct layout).
-	using ManagedBootstrapFn = std::int32_t (*)(const NativeHostCallbacks* callbacks, std::int32_t callbacksSize,
-		ManagedScriptApi* outApi, std::int32_t apiSize);
+	using ManagedBootstrapFn = std::int32_t (*)(const NativeHostCallbacks* callbacks, std::int32_t callbacksSize, ManagedScriptApi* outApi, std::int32_t apiSize);
 } // namespace aether::scripting

@@ -1,4 +1,4 @@
-// ACES Filmic — Narkowicz 2015 curve fit to the Academy RRT+ODT.
+// ACES Filmic - Narkowicz 2015 curve fit to the Academy RRT+ODT.
 // Slight toe and shoulder with pleasant saturation.
 float3 AcesFilmic(float3 x)
 {

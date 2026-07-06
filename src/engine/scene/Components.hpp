@@ -34,7 +34,7 @@ namespace aether
 	};
 
 	// Canonical scene-graph link. Both sides are kept consistent exclusively
-	// through aether::ecs::SetParent (see scene/Hierarchy.hpp) — never mutate
+	// through aether::ecs::SetParent (see scene/Hierarchy.hpp) - never mutate
 	// parent/children directly.
 	struct HierarchyComponent
 	{
@@ -135,9 +135,9 @@ namespace aether
 		};
 
 		Type type = Type::None;
-		float f4[4] = {}; // Float (x), Vector3 (xyz)
+		float f4[4] = {};     // Float (x), Vector3 (xyz)
 		std::int64_t i64 = 0; // Int, Bool (0/1), Enum
-		std::string str; // String
+		std::string str;      // String
 	};
 
 	struct ScriptComponent

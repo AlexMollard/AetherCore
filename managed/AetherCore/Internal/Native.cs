@@ -7,7 +7,7 @@ namespace AetherCore;
 
 /// <summary>
 /// Source-generated P/Invokes into the engine's C exports. "AetherHost" resolves
-/// to the running executable (App.exe), which exports the aether_* functions —
+/// to the running executable (App.exe), which exports the aether_* functions -
 /// no separate native DLL is loaded.
 /// </summary>
 internal static unsafe partial class Native

@@ -37,8 +37,7 @@ AE_SCRIPT_API void aether_effect_set(std::uint32_t id, const char* name)
 		AE_WARN(aether::LogCategory::App, "set_effect: no EffectManager/assets");
 		return;
 	}
-	if (!aether::effects::ApplyEntityEffect(ActiveWorld(), aether::Entity{id}, name != nullptr ? name : "",
-			*ctx.effects, ctx.assets->GetPipelineCache(), ctx.assets->GetEffectParamBuffer()))
+	if (!aether::effects::ApplyEntityEffect(ActiveWorld(), aether::Entity{id}, name != nullptr ? name : "", *ctx.effects, ctx.assets->GetPipelineCache(), ctx.assets->GetEffectParamBuffer()))
 	{
 		AE_WARN(aether::LogCategory::App, "set_effect: unknown effect '{}'", name != nullptr ? name : "");
 	}

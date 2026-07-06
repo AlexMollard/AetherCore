@@ -56,16 +56,16 @@ static const uint kDigitRows[10][5] = {
 
 // Unique hue per operator for the header bar.
 static const float3 kBarColors[10] = {
-    float3(0.78f, 0.39f, 0.39f), // 0 Reinhard      — muted red
-    float3(0.39f, 0.78f, 0.39f), // 1 ACES Filmic   — muted green
-    float3(0.39f, 0.39f, 0.78f), // 2 Uncharted 2   — muted blue
-    float3(0.78f, 0.78f, 0.31f), // 3 HejlRichard    — yellow
-    float3(0.47f, 0.47f, 0.47f), // 4 Linear         — gray
-    float3(0.78f, 0.47f, 0.78f), // 5 Exponential    — pink
-    float3(0.31f, 0.78f, 0.78f), // 6 Filmic Dice    — cyan
-    float3(0.78f, 0.59f, 0.31f), // 7 Lottes         — orange
-    float3(0.31f, 0.78f, 0.59f), // 8 RomBinDaHouse  — teal
-    float3(1.00f, 1.00f, 1.00f), // 9 Vanilla        — white
+    float3(0.78f, 0.39f, 0.39f), // 0 Reinhard      - muted red
+    float3(0.39f, 0.78f, 0.39f), // 1 ACES Filmic   - muted green
+    float3(0.39f, 0.39f, 0.78f), // 2 Uncharted 2   - muted blue
+    float3(0.78f, 0.78f, 0.31f), // 3 HejlRichard    - yellow
+    float3(0.47f, 0.47f, 0.47f), // 4 Linear         - gray
+    float3(0.78f, 0.47f, 0.78f), // 5 Exponential    - pink
+    float3(0.31f, 0.78f, 0.78f), // 6 Filmic Dice    - cyan
+    float3(0.78f, 0.59f, 0.31f), // 7 Lottes         - orange
+    float3(0.31f, 0.78f, 0.59f), // 8 RomBinDaHouse  - teal
+    float3(1.00f, 1.00f, 1.00f), // 9 Vanilla        - white
 };
 
 // ── Fragment shader ────────────────────────────────────────────────────────

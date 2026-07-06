@@ -67,8 +67,7 @@ namespace aether::app::scripting
 		// Read a type's default field value (edit mode, no live instance).
 		[[nodiscard]] bool GetDefaultPropertyValue(const std::string& typeName, int index, aether::ScriptPropertyValue& out) const;
 		// Apply stored per-entity overrides to a freshly created instance.
-		void ApplyProperties(
-			std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const;
+		void ApplyProperties(std::uint64_t handle, const std::string& typeName, const std::map<std::string, aether::ScriptPropertyValue>& props) const;
 
 		// ── Reload / error surface (F5 hot-reload + error toasts) ──────────────
 		void RequestReload()

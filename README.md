@@ -9,7 +9,7 @@ C# gameplay scripting** hosted on .NET 10 (CoreCLR).
   (or tell me the path you used and I'll update this reference).
 -->
 <p align="center">
-  <img src="docs/images/aethercore.png" alt="AetherCore — the engine running with its ImGui editor, viewport, and scene inspector" width="860">
+  <img src="docs/images/aethercore.png" alt="AetherCore - the engine running with its ImGui editor, viewport, and scene inspector" width="860">
 </p>
 
 ---
@@ -17,30 +17,30 @@ C# gameplay scripting** hosted on .NET 10 (CoreCLR).
 ## ✨ Highlights
 
 **Rendering & GPU**
-- **GPU abstraction layer** — `GpuDevice`/`GpuTypes` wrap Vulkan behind a generic interface; core engine code never touches Vulkan directly.
-- **Bindless resources** — materials, textures, and vertex data accessed via bindless descriptors + BDA (buffer device address).
-- **GPU heap allocator** — device-local memory arena with typed `GpuSpan<T>` suballocations (GPU malloc/free), used by `MeshArena` and the animation database.
-- **Render graph** — GPU culling, forward pass, tiled lighting, CSM shadows, post-processing, triple buffering.
-- **Async compute** — dedicated async compute context for overlapping GPU work.
-- **Offscreen rendering** — render-to-texture camera targets.
+- **GPU abstraction layer** - `GpuDevice`/`GpuTypes` wrap Vulkan behind a generic interface; core engine code never touches Vulkan directly.
+- **Bindless resources** - materials, textures, and vertex data accessed via bindless descriptors + BDA (buffer device address).
+- **GPU heap allocator** - device-local memory arena with typed `GpuSpan<T>` suballocations (GPU malloc/free), used by `MeshArena` and the animation database.
+- **Render graph** - GPU culling, forward pass, tiled lighting, CSM shadows, post-processing, triple buffering.
+- **Async compute** - dedicated async compute context for overlapping GPU work.
+- **Offscreen rendering** - render-to-texture camera targets.
 
 **Simulation & gameplay**
-- **ECS world** — EnTT-based entity/component system with typed entity handles.
-- **Jolt physics** — component-based rigid body and shape authoring.
-- **Skeletal animation** — GPU skinning pipeline with blending and root motion.
-- **Day/night cycle** — time-of-day driven lighting.
-- **C# scripting** — hot-reloadable gameplay logic on .NET 10 (see [C# Scripting](#-c-scripting)).
+- **ECS world** - EnTT-based entity/component system with typed entity handles.
+- **Jolt physics** - component-based rigid body and shape authoring.
+- **Skeletal animation** - GPU skinning pipeline with blending and root motion.
+- **Day/night cycle** - time-of-day driven lighting.
+- **C# scripting** - hot-reloadable gameplay logic on .NET 10 (see [C# Scripting](#-c-scripting)).
 
 **Engine foundations**
-- **Subsystem orchestrator** — engine decomposed into `RenderingSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `CameraSubsystem`, `PlatformSubsystem`, and other focused services wired through a `ServiceContainer` service locator.
-- **Coroutine runtime** — `async<T>`, `executor`, `queued_executor`, `channel<T>`, `sleep_for` under `aether::coro`; lazy async for asset I/O and render-thread sync.
-- **Error handling** — `Expected<T>` over C++26 `std::expected`, `AetherError` with typed log categories, `AE_ASSERT`/`AE_TRY` macros; Vulkan calls, asset loads, and I/O are all error-checked.
-- **Frame pacer** — regulates game-thread cadence to a target FPS with coarse-sleep + fine-spin timing.
+- **Subsystem orchestrator** - engine decomposed into `RenderingSubsystem`, `SceneSubsystem`, `AssetSubsystem`, `CameraSubsystem`, `PlatformSubsystem`, and other focused services wired through a `ServiceContainer` service locator.
+- **Coroutine runtime** - `async<T>`, `executor`, `queued_executor`, `channel<T>`, `sleep_for` under `aether::coro`; lazy async for asset I/O and render-thread sync.
+- **Error handling** - `Expected<T>` over C++26 `std::expected`, `AetherError` with typed log categories, `AE_ASSERT`/`AE_TRY` macros; Vulkan calls, asset loads, and I/O are all error-checked.
+- **Frame pacer** - regulates game-thread cadence to a target FPS with coarse-sleep + fine-spin timing.
 
 **Tooling**
-- **ImGui debug tooling** — dockable panels for render stats, scene inspection, viewport controls, lighting, and diagnostics.
-- **Asset pipeline** — virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML, plus a processor for mesh optimization, texture compression, and SPIR-V optimization.
-- **Tracy profiling** — integrated instrumentation via engine macros, stripped in Ship builds.
+- **ImGui debug tooling** - dockable panels for render stats, scene inspection, viewport controls, lighting, and diagnostics.
+- **Asset pipeline** - virtual file paths (`assets://`, `shaders://`), `.pak` bundles with zstd compression, PBR material presets via TOML, plus a processor for mesh optimization, texture compression, and SPIR-V optimization.
+- **Tracy profiling** - integrated instrumentation via engine macros, stripped in Ship builds.
 
 ---
 
@@ -53,7 +53,7 @@ engine exposes a C ABI that a thin managed layer binds; game scripts see only a 
 
 | Assembly | Role |
 |---|---|
-| `AetherCore` (`managed/AetherCore`) | The **SDK** — the public gameplay API (`Entity`, `World`, `Input`, `Camera`, `Physics`, …). This is all game code sees. |
+| `AetherCore` (`managed/AetherCore`) | The **SDK** - the public gameplay API (`Entity`, `World`, `Input`, `Camera`, `Physics`, …). This is all game code sees. |
 | `AetherCore.Interop` (`managed/AetherCore.Interop`) | The **ABI + host boot** layer the native `DotNetHost` binds. Hidden from game code. |
 | `AetherGame` (`game/AetherGame`) | Your **gameplay scripts**, loaded into a collectible load context that swaps at runtime for hot reload. |
 
@@ -79,18 +79,18 @@ public sealed class Spinner : EntityScript
 
 **Authoring workflow**
 - **Edit → F5 → live.** Press F5 in-game and the engine rebuilds `AetherGame` from source
-  and reloads it into a fresh load context — no restart. (Dev builds only; a packaged build
+  and reloads it into a fresh load context - no restart. (Dev builds only; a packaged build
   reloads the prebuilt assembly.)
 - **Full IDE support.** Open the checked-in `AetherCore.sln` in **Visual Studio or Rider**
   for IntelliSense, refactoring, and breakpoint debugging of scripts while the engine runs.
   (CLion opens `CMakeLists.txt` for the C++ side; the solution is a cross-platform IDE
-  convenience — the build never depends on it.)
+  convenience - the build never depends on it.)
 - **NuGet.** Add `PackageReference` items to `AetherGame`; dependencies resolve into the
   script load context at runtime.
 
 > The C# projects are built by CMake via `dotnet build` (gated on the .NET SDK being
 > present) and deployed next to the executable, so a machine without .NET still builds the
-> engine — scripting simply disables itself.
+> engine - scripting simply disables itself.
 
 ---
 
@@ -121,7 +121,7 @@ AetherCore.sln             Hand-authored C# solution (VS / Rider entry point)
 <summary><strong>src/engine/ breakdown</strong></summary>
 
 ```
-AetherCore.hpp/cpp       Engine orchestrator — owns all subsystems
+AetherCore.hpp/cpp       Engine orchestrator - owns all subsystems
 ServiceContainer.hpp     Service locator for subsystem wiring
 animation/               Skeletal animation system
 assets/                  Asset subsystem, glTF loader, asset manager
@@ -153,7 +153,7 @@ vulkan/                  Vulkan context, swapchain, resource pools, GPU heap, sh
 ### Windows
 
 **Prerequisites:** Visual Studio 2022 or 2026, CMake 4.0+, Vulkan SDK, and (for C# scripting)
-the **.NET 10 SDK**. Rider works too — open `AetherCore.sln` for the scripts.
+the **.NET 10 SDK**. Rider works too - open `AetherCore.sln` for the scripts.
 
 **Compiler support:** Clang-cl uses C++26. MSVC uses C++23 (MSVC does not yet support C++26).
 
@@ -179,7 +179,7 @@ cmake --build --preset linux-clang
 ```
 
 > If you use a non-standard Vulkan SDK, set `VULKAN_SDK` in your environment before running
-> CMake. To build without C# scripting, no extra flag is needed — the managed build is
+> CMake. To build without C# scripting, no extra flag is needed - the managed build is
 > skipped automatically when the .NET SDK is absent.
 
 ### CMake Options

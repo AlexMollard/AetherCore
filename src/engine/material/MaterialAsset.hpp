@@ -8,7 +8,7 @@
 
 namespace aether
 {
-	// Pure authoring description of a surface. No GPU slot — that lives in the
+	// Pure authoring description of a surface. No GPU slot - that lives in the
 	// MaterialRegistry. Texture refs are ref-counted TextureHandles (resolved to
 	// raw bindless heap indices at pack time). Packed into a GpuMaterial by
 	// PackMaterial().

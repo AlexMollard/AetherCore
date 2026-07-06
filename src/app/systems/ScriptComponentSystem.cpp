@@ -46,9 +46,8 @@ namespace aether::app
 		return it != m_instances.end() ? it->second : 0;
 	}
 
-	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/,
-		Entity entity, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached,
-		float dt)
+	bool ScriptComponentSystem::UpdateCSharpEntity(
+	        scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/, Entity entity, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached, float dt)
 	{
 		const auto* api = cs.Api();
 		if (api == nullptr)
@@ -115,8 +114,7 @@ namespace aether::app
 		return true;
 	}
 
-	void ScriptComponentSystem::PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs,
-		scripting::SceneContext& ctx)
+	void ScriptComponentSystem::PurgeStaleCSharpInstances(World& world, scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& ctx)
 	{
 		const auto* api = cs.Api();
 		if (api == nullptr || m_instances.empty())

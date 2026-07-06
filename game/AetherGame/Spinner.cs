@@ -4,7 +4,7 @@ using AetherCore;
 namespace AetherGame;
 
 /// <summary>
-/// Spins its entity about the Y axis. The first C# entity script — proves the
+/// Spins its entity about the Y axis. The first C# entity script - proves the
 /// full round trip: native runner -> managed instance -> transform exports.
 /// </summary>
 public sealed class Spinner : EntityScript

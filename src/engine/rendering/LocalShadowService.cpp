@@ -33,7 +33,7 @@ namespace
 	// Max atlas entries rendered per frame. Each point light needs 6 (one per
 	// cube face), each spot needs 1. At 24 this truncated to 4 point lights, and
 	// because candidates are sorted by camera distance, *which* lights cast
-	// shadows flipped as the camera moved — shadows popped on/off frame to frame.
+	// shadows flipped as the camera moved - shadows popped on/off frame to frame.
 	// 48 fits 8 point lights (or 6 points + 12 spots) with headroom; the 8192²
 	// atlas holds far more (48 * 384² ≈ 7M of 67M texels).
 	constexpr std::uint32_t kMaxRenderedLocalShadowEntries = 48u;

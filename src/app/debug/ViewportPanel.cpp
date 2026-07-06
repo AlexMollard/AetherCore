@@ -56,8 +56,14 @@ namespace aether::app
 		{
 			static int s_ctf = 0;
 			++s_ctf;
-			if (editing && s_ctf == 150) { playState->SetMode(PlayState::Mode::Playing); }
-			if (!editing && s_ctf % 90 == 0) { AE_INFO(aether::LogCategory::App, "[camtest] main={} gameCamId={}", cameras->GetMainCamera().id, m_gameCamId); }
+			if (editing && s_ctf == 150)
+			{
+				playState->SetMode(PlayState::Mode::Playing);
+			}
+			if (!editing && s_ctf % 90 == 0)
+			{
+				AE_INFO(aether::LogCategory::App, "[camtest] main={} gameCamId={}", cameras->GetMainCamera().id, m_gameCamId);
+			}
 		}
 
 		// F5 script reload re-runs set_main_camera while Editing: the game took

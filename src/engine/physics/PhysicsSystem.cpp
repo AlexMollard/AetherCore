@@ -416,7 +416,7 @@ namespace aether
 		WaitForStep();
 
 		// 2. Sync transforms from the completed step.
-		//    One frame of latency — same pipelining pattern as RenderThread.
+		//    One frame of latency - same pipelining pattern as RenderThread.
 		SyncTransforms(world, m_lastAlpha);
 
 		// 3. Flush pending body descriptors (safe: no step is running).
@@ -452,7 +452,7 @@ namespace aether
 		AE_PROFILE_PLOT("Phys.AccumulatorMs", static_cast<int64_t>(m_accumulator * 1000.0f));
 		AE_PROFILE_PLOT("Phys.RigidBodyCount", static_cast<int64_t>(world.View<RigidBodyComponent>().size()));
 
-		// Step is in flight — other systems now run concurrently with the
+		// Step is in flight - other systems now run concurrently with the
 		// physics step until WaitForStep() is called (next Update or a physics
 		// API call).
 	}
@@ -482,7 +482,7 @@ namespace aether
 				continue;
 			}
 
-			// Skip sleeping bodies — prev == curr, no update needed.
+			// Skip sleeping bodies - prev == curr, no update needed.
 			if (!bi.IsActive(id))
 			{
 				continue;
@@ -768,7 +768,7 @@ namespace aether
 		auto& bodyInterface = m_impl->physics->GetBodyInterfaceNoLock();
 		const JPH::BodyID id = ToJolt(rigid->body);
 
-		// Invalidate BEFORE Remove fires on_destroy — otherwise
+		// Invalidate BEFORE Remove fires on_destroy - otherwise
 		// OnRigidBodyDestroyed re-enters and double-destroys the body.
 		rigid->body = {};
 
