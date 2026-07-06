@@ -96,6 +96,20 @@ namespace aether::app
 		ReleaseTextures(context);
 	}
 
+	void TextureInspectorPanel::OnUpdate(LayerContext& context)
+	{
+		// Runs every frame even while the panel is hidden (unlike OnImGui). Disable
+		// the GPU preview request here; OnImGui re-enables it with a live bindless
+		// slot only when the panel is actually drawn. Without this, hiding the panel
+		// (e.g. via the Window menu) leaves the request stuck on a slot that a later
+		// target recreation frees, so the $TexturePreview pass samples freed memory
+		// (GPU DMA page fault).
+		if (auto* rendering = context.TryGet<RenderingSubsystem>())
+		{
+			rendering->SetTexturePreviewRequest(0xFFFFFFFFu, gpu::Extent2D{}, 0, 1.0f, 0, 0, false);
+		}
+	}
+
 	void TextureInspectorPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -403,6 +417,12 @@ namespace aether::app
 		// Preview descriptors may reference render targets that were just
 		// recreated; drop the whole cache so each is re-registered on demand.
 		ReleaseTextures(context);
+		// The preview pass's source slot may now point at a freed target; disable
+		// it until the panel re-selects a live texture next frame.
+		if (auto* rendering = context.TryGet<RenderingSubsystem>())
+		{
+			rendering->SetTexturePreviewRequest(0xFFFFFFFFu, gpu::Extent2D{}, 0, 1.0f, 0, 0, false);
+		}
 	}
 
 	void TextureInspectorPanel::ReleaseTextures(LayerContext& context)
