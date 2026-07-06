@@ -13,7 +13,6 @@
 #include "AetherCore.hpp"
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
-#include "utils/Logger.hpp" // TEMP(camtest)
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
@@ -52,19 +51,6 @@ namespace aether::app
 
 		const bool editing = !playState->IsPlaying();
 		const CameraHandle main = cameras->GetMainCamera();
-		// TEMP(camtest): drive Editing->Play headlessly and log the main cam.
-		{
-			static int s_ctf = 0;
-			++s_ctf;
-			if (editing && s_ctf == 150)
-			{
-				playState->SetMode(PlayState::Mode::Playing);
-			}
-			if (!editing && s_ctf % 90 == 0)
-			{
-				AE_INFO(aether::LogCategory::App, "[camtest] main={} gameCamId={}", cameras->GetMainCamera().id, m_gameCamId);
-			}
-		}
 
 		// F5 script reload re-runs set_main_camera while Editing: the game took
 		// the view back. Drop our claim so the block below re-seeds and reswaps.

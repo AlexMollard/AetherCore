@@ -51,7 +51,7 @@ namespace aether
 
 	private:
 		void RebuildCommandListView();
-		static void CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned);
+		static void CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned, bool copyTextures);
 		static void RebuildView(ImDrawData& dst, std::vector<ImDrawList*>& owned);
 
 		ImDrawData m_drawData;

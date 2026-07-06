@@ -98,6 +98,7 @@ namespace aether::app
 				case LogLevel::Info:
 					++nInfo;
 					break;
+				case LogLevel::Verbose:
 				default:
 					++nVerbose;
 					break;
@@ -169,6 +170,7 @@ namespace aether::app
 					return m_showWarn;
 				case LogLevel::Info:
 					return m_showInfo;
+				case LogLevel::Verbose:
 				default:
 					return m_showVerbose;
 			}

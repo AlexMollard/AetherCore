@@ -60,7 +60,7 @@ namespace aether
 		m_secondary.clear();
 	}
 
-	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned)
+	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned, bool copyTextures)
 	{
 		dst.Clear();
 		owned.clear();
@@ -74,7 +74,11 @@ namespace aether
 		dst.DisplaySize = source->DisplaySize;
 		dst.FramebufferScale = source->FramebufferScale;
 		dst.OwnerViewport = source->OwnerViewport;
-		dst.Textures = source->Textures;
+		// Textures is a pointer INTO the live (main-thread) ImGui context. Only the
+		// main viewport's stock renderer consumes it (safely, serialized by the frame
+		// mutex); the secondary render path never reads it, so don't hand the render
+		// thread a cross-thread pointer it won't use.
+		dst.Textures = copyTextures ? source->Textures : nullptr;
 
 		owned.reserve(static_cast<std::size_t>(source->CmdListsCount));
 		for (const ImDrawList* sourceList: source->CmdLists)
@@ -107,7 +111,7 @@ namespace aether
 	void ImguiFrameData::Capture(const ImDrawData* source)
 	{
 		Clear();
-		CloneInto(source, m_drawData, m_ownedLists);
+		CloneInto(source, m_drawData, m_ownedLists, /*copyTextures=*/true);
 	}
 
 	void ImguiFrameData::CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle)
@@ -122,7 +126,7 @@ namespace aether
 		vp.size = size;
 		vp.fbScale = fbScale;
 		vp.platformHandle = platformHandle;
-		CloneInto(source, vp.draw, vp.owned);
+		CloneInto(source, vp.draw, vp.owned, /*copyTextures=*/false);
 		m_secondary.push_back(std::move(vp));
 	}
 
