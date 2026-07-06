@@ -6,6 +6,7 @@
 #include <format>
 #include <regex>
 #include <string_view>
+#include <unordered_set>
 
 using namespace std::string_view_literals;
 
@@ -20,6 +21,7 @@ using namespace std::string_view_literals;
 
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
+#include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
 #include "debug/LightingPanel.hpp"
@@ -62,6 +64,61 @@ namespace aether::app
 			{
 				AddDebugLine(out, corners[edge[0]], corners[edge[1]], color);
 			}
+		}
+
+		// Font-Awesome glyph shown next to each window in the Window menu. Falls back
+		// to a neutral dot for anything unmapped.
+		const char* WindowMenuIcon(std::string_view panelName)
+		{
+			if (panelName == "Scene")
+			{
+				return ICON_FA_SITEMAP;
+			}
+			if (panelName == "Inspector")
+			{
+				return ICON_FA_MAGNIFYING_GLASS;
+			}
+			if (panelName == "Viewport")
+			{
+				return ICON_FA_EYE;
+			}
+			if (panelName == "Render Graph")
+			{
+				return ICON_FA_DIAGRAM_PROJECT;
+			}
+			if (panelName == "Post Processing")
+			{
+				return ICON_FA_WAND_MAGIC_SPARKLES;
+			}
+			if (panelName == "Tonemap")
+			{
+				return ICON_FA_PALETTE;
+			}
+			if (panelName == "Lighting")
+			{
+				return ICON_FA_LIGHTBULB;
+			}
+			if (panelName == "Day / Night")
+			{
+				return ICON_FA_CLOUD_SUN;
+			}
+			if (panelName == "Textures")
+			{
+				return ICON_FA_IMAGE;
+			}
+			if (panelName == "Performance")
+			{
+				return ICON_FA_GAUGE_HIGH;
+			}
+			if (panelName == "Debug")
+			{
+				return ICON_FA_BUG;
+			}
+			if (panelName == "Settings")
+			{
+				return ICON_FA_GEARS;
+			}
+			return ICON_FA_CIRCLE;
 		}
 
 		// Slugifies a panel name into a stable config key ("Render Graph" ->
@@ -530,10 +587,71 @@ namespace aether::app
 		{
 			if (ImGui::BeginMenu("Window"))
 			{
-				for (auto& panel: m_panels)
+				// Renders one window's toggle (icon + name + checkmark) by resolving
+				// its panel from m_panels.
+				auto windowToggle = [this](std::string_view name)
 				{
-					ImGui::MenuItem(std::string(panel->GetName()).c_str(), nullptr, panel->VisiblePtr());
+					for (auto& panel: m_panels)
+					{
+						if (panel->GetName() == name)
+						{
+							const std::string label = std::string(WindowMenuIcon(name)) + "  " + std::string(name);
+							ImGui::MenuItem(label.c_str(), nullptr, panel->VisiblePtr());
+							return;
+						}
+					}
+				};
+
+				struct MenuGroup
+				{
+					const char* icon;
+					const char* label;
+					std::vector<std::string_view> windows;
+				};
+				static const std::vector<MenuGroup> kGroups = {
+				        {ICON_FA_CUBE, "Scene", {"Scene", "Inspector", "Viewport"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "Textures"}},
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Debug"}},
+				        {ICON_FA_GEARS, "Engine", {"Settings"}},
+				};
+
+				std::unordered_set<std::string_view> grouped;
+				for (const auto& group: kGroups)
+				{
+					for (const auto& name: group.windows)
+					{
+						grouped.insert(name);
+					}
 				}
+
+				for (const auto& group: kGroups)
+				{
+					const std::string groupLabel = std::string(group.icon) + "  " + group.label;
+					if (ImGui::BeginMenu(groupLabel.c_str()))
+					{
+						for (const auto& name: group.windows)
+						{
+							windowToggle(name);
+						}
+						ImGui::EndMenu();
+					}
+				}
+
+				// Safety net: any panel not assigned to a group still gets a toggle so
+				// no window can become unreachable.
+				const bool hasUngrouped = std::ranges::any_of(m_panels, [&](const auto& panel) { return !grouped.contains(panel->GetName()); });
+				if (hasUngrouped && ImGui::BeginMenu(ICON_FA_CIRCLE "  Other"))
+				{
+					for (auto& panel: m_panels)
+					{
+						if (!grouped.contains(panel->GetName()))
+						{
+							windowToggle(panel->GetName());
+						}
+					}
+					ImGui::EndMenu();
+				}
+
 				ImGui::Separator();
 				if (ImGui::MenuItem("Show All Windows"))
 				{

@@ -53,3 +53,8 @@
 #define ICON_FA_BOX_OPEN "\xef\x92\x9e"                // U+F49E prefabs
 #define ICON_FA_CODE "\xef\x84\xa1"                    // U+F121 entity scripts
 #define ICON_FA_CLONE "\xef\x89\x8d"                   // U+F24D duplicate
+
+// Window menu categories / panels
+#define ICON_FA_BUG "\xef\x86\x88"                     // U+F188 debug tools
+#define ICON_FA_GAUGE_HIGH "\xef\x98\xa5"              // U+F625 performance
+#define ICON_FA_CLOUD_SUN "\xef\x9b\x84"               // U+F6C4 day / night
