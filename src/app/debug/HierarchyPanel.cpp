@@ -33,6 +33,7 @@
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/SettingsService.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
@@ -456,7 +457,7 @@ namespace aether::app
 			m_pulseStart = now;
 		}
 
-		ImGui::Begin("Scene");
+		ImGui::Begin("Scene", VisiblePtr());
 		{
 			// ── Toolbar ────────────────────────────────────────────────────────
 			if (ImGui::Button(ICON_FA_PLUS))
@@ -614,7 +615,7 @@ namespace aether::app
 				{
 					ImGui::TextDisabled("No scenes in %s", scene::ScenesDirectory().c_str());
 				}
-				auto* settings = context.TryGet<aether::EngineSettings>();
+				auto* settingsService = context.TryGet<aether::SettingsService>();
 
 				// Fixed name-column width keeps the row layout (and thus the popup
 				// width) stable. Deriving the button X from GetContentRegionMax()
@@ -633,7 +634,7 @@ namespace aether::app
 				for (const std::string& name: m_sceneList)
 				{
 					ImGui::PushID(name.c_str());
-					const bool isStartup = settings != nullptr && settings->app.startupScene == name;
+					const bool isStartup = settingsService != nullptr && settingsService->Get().app.startupScene == name;
 					// A full-width MenuItem swallowed clicks meant for the trailing
 					// startup button. A fixed-width Selectable with AllowOverlap keeps
 					// the button clickable and the popup a stable width; Selectable does
@@ -646,7 +647,7 @@ namespace aether::app
 						}
 						ImGui::CloseCurrentPopup();
 					}
-					if (settings != nullptr)
+					if (settingsService != nullptr)
 					{
 						ImGui::SameLine();
 						if (isStartup)
@@ -657,12 +658,16 @@ namespace aether::app
 						{
 							if (ImGui::SmallButton(ICON_FA_PLAY "##startup"))
 							{
-								settings->app.startupScene = name;
-								aether::EngineSettingsIO::Save(*settings, aether::EngineSettingsIO::ResolvePath());
+								// Edit through the single source of truth and persist the
+								// user delta immediately (startupScene has no live effect;
+								// it takes hold on next launch).
+								settingsService->Values().app.startupScene = name;
+								settingsService->ApplyField("app.startupScene");
+								settingsService->Save();
 							}
 							if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
 							{
-								ImGui::SetTooltip("Set as startup scene (writes engine.toml)");
+								ImGui::SetTooltip("Set as startup scene (saves to user settings)");
 							}
 						}
 					}

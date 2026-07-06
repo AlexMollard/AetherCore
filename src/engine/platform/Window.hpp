@@ -28,6 +28,11 @@ namespace aether
 		[[nodiscard]] FramebufferSize GetFramebufferSize() const;
 		FramebufferSize WaitForValidFramebufferSize();
 
+		// Requests a new window size. GLFW fires the framebuffer-size callback on the
+		// next PollEvents, which drives the main-thread swapchain recreate. Must be
+		// called from the main thread.
+		void SetSize(int width, int height);
+
 		[[nodiscard]] int GetDisplayRefreshRate() const;
 
 		// Set by the GLFW framebuffer-size callback (fires on the main thread

@@ -10,6 +10,7 @@
 #include "platform/Input.hpp"
 #include "platform/Window.hpp"
 #include "rendering/RenderQueue.hpp"
+#include "rendering/Renderer.hpp"
 #include "rendering/ShadowService.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -65,18 +66,24 @@ namespace aether::app
 	}
 
 	Application::Application(const aether::AetherCore::Config& engineConfig)
-	      : Application(engineConfig, aether::EngineSettingsIO::LoadOrCreate(engineConfig.settingsFile))
+	      : Application(engineConfig, aether::EngineSettingsIO::LoadLayered(engineConfig.settingsFile))
 	{
 	}
 
-	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings)
-	      : m_settings(settings), m_engine(BuildConfigFromSettings(engineConfig, settings), settings)
+	Application::Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded)
+	      : m_engine(BuildConfigFromSettings(engineConfig, loaded.values), loaded.values), m_settingsService(loaded.values, loaded.base, m_engine.GetServiceContainer())
 	{
 		AE_INFO(LogCategory::App, "Application created.");
 	}
 
 	Application::~Application()
 	{
+		// Persist user setting changes before any teardown. The VFS and engine
+		// services are still alive at this point (m_engine is destroyed after this
+		// body runs). The service is the single source of truth, so no runtime
+		// state needs to be synced back first.
+		m_settingsService.Save();
+
 		if (!m_layersAttached)
 		{
 			AE_VERBOSE(LogCategory::App, "Application destroyed before layers were attached.");
@@ -155,11 +162,12 @@ namespace aether::app
 
 			// Editor simulation state: the app boots frozen (Editing) unless the
 			// autoplay setting flips it; panels toggle it via Play/Stop.
-			m_playState.SetMode(m_settings.app.autoplay ? PlayState::Mode::Playing : PlayState::Mode::Editing);
+			m_playState.SetMode(m_settingsService.Get().app.autoplay ? PlayState::Mode::Playing : PlayState::Mode::Editing);
 			services.Register<PlayState>(m_playState);
-			// Settings service: layers read app.startupScene; the scene UI's
-			// set-as-startup writes it back through EngineSettingsIO::Save.
-			services.Register<aether::EngineSettings>(m_settings);
+			// Single source of truth for settings: layers read through it, the
+			// settings/scene UIs edit through it (live-applying changes), and it
+			// persists the user delta on shutdown.
+			services.Register<aether::SettingsService>(m_settingsService);
 
 			attachContext.Get<World>().RegisterSystem(std::make_unique<aether::AnimationSystem>());
 
@@ -195,19 +203,10 @@ namespace aether::app
 		m_layers.AttachAll(attachContext);
 		m_layersAttached = true;
 
-		if (m_settings.app.targetFps > 0.0f)
-		{
-			AE_INFO(LogCategory::App, "Using settings TargetFPS={}.", m_settings.app.targetFps);
-			m_engine.SetTargetFps(m_settings.app.targetFps);
-		}
-		else if (m_settings.graphics.vsync)
-		{
-			AE_INFO(LogCategory::App, "VSync is on and TargetFPS is 0 - using swapchain FIFO pacing.");
-		}
-		else
-		{
-			AE_INFO(LogCategory::App, "VSync is off and TargetFPS is 0 - frame pacer running uncapped.");
-		}
+		// Push settings that subsystems don't consume at init (FXAA, target FPS) so
+		// file values actually take effect; VSync/resolution were already applied
+		// during device/window setup and no-op here.
+		m_settingsService.ApplyAll();
 
 		// Hand control to the engine-owned frame loop. This Application supplies
 		// per-frame game logic, UI, and target invalidation through EngineClient

@@ -53,6 +53,8 @@ namespace aether
 		[[nodiscard]] std::uint32_t GetCurrentSwapchainImageIndex() const;
 		[[nodiscard]] bool SwapchainNeedsRecreation() const;
 		void ClearSwapchainRecreationFlag();
+		// Forces a swapchain recreate on the next producer-thread poll (VSync change).
+		void RequestSwapchainRecreation();
 		[[nodiscard]] bool IsSwapchainFrameValid() const;
 
 		void BeginSwapchainFrame();

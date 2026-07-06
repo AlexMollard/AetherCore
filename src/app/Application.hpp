@@ -7,6 +7,7 @@
 #include "PlayState.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/SettingsService.hpp"
 #include "utils/FramePacer.hpp"
 #include "utils/coro/Executor.hpp"
 #include "layers/LayerStack.hpp"
@@ -88,14 +89,18 @@ namespace aether::app
 		}
 
 	private:
-		Application(const aether::AetherCore::Config& engineConfig, const aether::EngineSettings& settings);
+		Application(const aether::AetherCore::Config& engineConfig, const aether::LoadedEngineSettings& loaded);
 
 		// Builds a LayerContext for the given per-frame timing. Layers do not read
 		// elapsedTimeSeconds, so it is left at 0.
 		[[nodiscard]] LayerContext MakeLayerContext(double dtSeconds, std::uint64_t frameIndex);
 
-		aether::EngineSettings m_settings;
+		// Declared before the service so the service can bind the engine's
+		// ServiceContainer; destroyed after it.
 		aether::AetherCore m_engine;
+		// Single source of truth for runtime settings; owns values + base, applies
+		// live changes to subsystems, and persists the user delta on shutdown.
+		aether::SettingsService m_settingsService;
 		aether::coro::queued_executor m_coroExecutor;
 		LayerStack m_layers;
 		PlayState m_playState;

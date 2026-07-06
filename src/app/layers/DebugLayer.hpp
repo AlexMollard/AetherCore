@@ -54,6 +54,9 @@ namespace aether::app
 		TomlConfig m_debugConfig;
 		std::deque<ScriptErrorToast> m_errorToasts;
 		bool m_dockspaceBuilt = false;
+		// Set by the Window > Reset Layout menu item; forces the default dock layout
+		// to be rebuilt on the next frame.
+		bool m_resetLayout = false;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 	};

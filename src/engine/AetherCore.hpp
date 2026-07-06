@@ -83,6 +83,15 @@ namespace aether
 			return m_framePacer.GetTargetFps();
 		}
 
+		// Toggles VSync at runtime: updates the setting and forces a swapchain
+		// recreate (present-mode change) on the next producer-thread poll. No-op
+		// when unchanged.
+		void SetVsync(bool enabled);
+		[[nodiscard]] bool IsVsyncEnabled() const
+		{
+			return m_settings.graphics.vsync;
+		}
+
 		// Frame lifecycle steps (used by the loop and the render thread).
 		[[nodiscard]] bool ShouldClose();
 		void PumpEvents();

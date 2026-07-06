@@ -25,6 +25,7 @@
 #include "systems/DayNightSystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/SettingsService.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/Profiler.hpp"
@@ -207,12 +208,12 @@ namespace aether::app
 
 	void ScriptedSceneLayer::LoadStartupScene(LayerContext& context)
 	{
-		const auto* settings = context.TryGet<aether::EngineSettings>();
-		if (settings == nullptr || settings->app.startupScene.empty())
+		const auto* settingsService = context.TryGet<aether::SettingsService>();
+		if (settingsService == nullptr || settingsService->Get().app.startupScene.empty())
 		{
 			return;
 		}
-		const std::string& sceneName = settings->app.startupScene;
+		const std::string& sceneName = settingsService->Get().app.startupScene;
 		scene::ApplySceneDeps deps{};
 		deps.assets = m_sceneCtx.assets;
 		deps.primitives = m_sceneCtx.primitives;

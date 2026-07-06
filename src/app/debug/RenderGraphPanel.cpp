@@ -159,10 +159,20 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
+		// Self-windowing like every other panel (no longer wrapped by DebugLayer),
+		// so it is closable via the window's X and the Window menu.
+		if (!ImGui::Begin("Render Graph", VisiblePtr()))
+		{
+			ImGui::End();
+			return;
+		}
+
 		if (auto rg = context.TryGet<aether::RenderGraph>())
 		{
 			DrawRenderGraphDebugger(context, *rg);
 		}
+
+		ImGui::End();
 	}
 
 	void RenderGraphPanel::LoadSettings(TomlConfig& config, LayerContext& /*context*/)

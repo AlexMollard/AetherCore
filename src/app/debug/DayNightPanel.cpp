@@ -33,7 +33,7 @@ namespace aether::app
 
 	void DayNightPanel::OnImGui(LayerContext& context)
 	{
-		ImGui::Begin("Day / Night");
+		ImGui::Begin("Day / Night", VisiblePtr());
 		if (auto dayNight = context.TryGet<DayNightSystem>())
 		{
 			bool enabled = dayNight->IsEnabled();

@@ -26,6 +26,7 @@ using namespace std::string_view_literals;
 #include "debug/PerformancePanel.hpp"
 #include "debug/PostProcessingPanel.hpp"
 #include "debug/RenderGraphPanel.hpp"
+#include "debug/SettingsPanel.hpp"
 #include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/ViewportPanel.hpp"
@@ -61,6 +62,18 @@ namespace aether::app
 			{
 				AddDebugLine(out, corners[edge[0]], corners[edge[1]], color);
 			}
+		}
+
+		// Slugifies a panel name into a stable config key ("Render Graph" ->
+		// "debug.window.render_graph") for persisting per-panel visibility.
+		std::string PanelVisibilityKey(std::string_view panelName)
+		{
+			std::string key = "debug.window.";
+			for (const char c: panelName)
+			{
+				key += std::isalnum(static_cast<unsigned char>(c)) ? static_cast<char>(std::tolower(static_cast<unsigned char>(c))) : '_';
+			}
+			return key;
 		}
 	} // namespace
 
@@ -282,6 +295,7 @@ namespace aether::app
 		for (auto& panel: m_panels)
 		{
 			panel->SaveSettings(m_debugConfig, context);
+			m_debugConfig.Set(PanelVisibilityKey(panel->GetName()), panel->IsVisible());
 		}
 		SaveSettings(context);
 	}
@@ -306,6 +320,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<ViewportPanel>());
 		m_panels.push_back(std::make_unique<TonemapPanel>());
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
+		m_panels.push_back(std::make_unique<SettingsPanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
 		m_panels.push_back(std::make_unique<DayNightPanel>());
@@ -316,6 +331,7 @@ namespace aether::app
 		for (auto& panel: m_panels)
 		{
 			panel->LoadSettings(m_debugConfig, context);
+			panel->SetVisible(m_debugConfig.GetBool(PanelVisibilityKey(panel->GetName()), panel->DefaultVisible()));
 		}
 	}
 
@@ -492,22 +508,75 @@ namespace aether::app
 		ImGui::SetNextWindowPos(viewport->WorkPos);
 		ImGui::SetNextWindowSize(viewport->WorkSize);
 		ImGui::SetNextWindowViewport(viewport->ID);
+		// The menu bar is withheld on the very first frame: it shrinks the docked
+		// Viewport by one row, and resizing the scene render target before the first
+		// scene render has established it crashes the renderer. Letting frame 0 lay
+		// out at full size, then adding the bar on frame 1, makes it an ordinary
+		// (already-handled) resize.
+		const bool showMenuBar = m_dockspaceBuilt;
 		ImGuiWindowFlags hostFlags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus
-		                             | ImGuiWindowFlags_NoBackground;
+		                             | ImGuiWindowFlags_NoBackground | (showMenuBar ? ImGuiWindowFlags_MenuBar : 0);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 		ImGui::Begin("DebugDockSpace", nullptr, hostFlags);
 		ImGui::PopStyleVar(3);
 
-		// V3: classic editor arrangement - outliner left, Inspector right (over a
+		// Menu bar lives INSIDE the dockspace host window (the canonical Dear ImGui
+		// dockspace pattern). A separate BeginMainMenuBar() shrinks the viewport
+		// work-area, which collided with this full-viewport host and crashed the
+		// renderer on the first frame.
+		if (showMenuBar && ImGui::BeginMenuBar())
+		{
+			if (ImGui::BeginMenu("Window"))
+			{
+				for (auto& panel: m_panels)
+				{
+					ImGui::MenuItem(std::string(panel->GetName()).c_str(), nullptr, panel->VisiblePtr());
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem("Show All Windows"))
+				{
+					for (auto& panel: m_panels)
+					{
+						panel->SetVisible(true);
+					}
+				}
+				if (ImGui::MenuItem("Hide All Windows"))
+				{
+					for (auto& panel: m_panels)
+					{
+						panel->SetVisible(false);
+					}
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem("Reset Layout"))
+				{
+					m_resetLayout = true;
+				}
+				ImGui::EndMenu();
+			}
+			if (ImGui::BeginMenu("View"))
+			{
+				bool debugRendering = IsDebugRenderingEnabled();
+				if (ImGui::MenuItem("Debug Rendering", nullptr, &debugRendering))
+				{
+					SetDebugRenderingEnabled(debugRendering);
+				}
+				ImGui::MenuItem("Editor UI (F1)", nullptr, &m_visible);
+				ImGui::EndMenu();
+			}
+			ImGui::EndMenuBar();
+		}
+
+		// V4: classic editor arrangement - outliner left, Inspector right (over a
 		// tabbed tool stack), utility tabs bottom, Viewport center. The id bump
-		// retires saved V2 layouts so the new default actually applies once.
-		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV3");
+		// retires saved V3 layouts so the new default (incl. Settings) applies once.
+		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV4");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
-		if (!m_dockspaceBuilt && !hasSavedDockspace)
+		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
 		{
 			ImGui::DockBuilderRemoveNode(dockspace_id);
 			ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
@@ -526,6 +595,7 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Debug", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Tonemap", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Post Processing", dock_right_tools);
+			ImGui::DockBuilderDockWindow("Settings", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
 			ImGui::DockBuilderDockWindow("Day / Night", dock_bottom);
@@ -534,28 +604,19 @@ namespace aether::app
 			ImGui::DockBuilderFinish(dockspace_id);
 		}
 		m_dockspaceBuilt = true;
+		m_resetLayout = false;
 
 		ImGui::End();
 
-		// Panels that manage their own windows
+		// Every panel manages its own window (including Render Graph now); draw only
+		// the ones the user has left visible.
 		for (auto& panel: m_panels)
 		{
-			if (panel->GetName() != "Render Graph"sv)
+			if (panel->IsVisible())
 			{
 				panel->OnImGui(context);
 			}
 		}
-
-		// Render Graph window wraps render graph panel content
-		ImGui::Begin("Render Graph");
-		for (auto& panel: m_panels)
-		{
-			if (panel->GetName() == "Render Graph"sv)
-			{
-				panel->OnImGui(context);
-			}
-		}
-		ImGui::End();
 
 		PersistSettings(context);
 	}

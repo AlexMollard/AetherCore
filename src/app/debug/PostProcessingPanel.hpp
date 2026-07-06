@@ -13,7 +13,6 @@ namespace aether::app
 		}
 
 		void OnImGui(LayerContext& context) override;
-		void OnUpdate(LayerContext& context) override;
 		void LoadSettings(TomlConfig& config, LayerContext& context) override;
 		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
 	};

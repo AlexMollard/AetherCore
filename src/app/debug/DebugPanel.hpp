@@ -78,6 +78,30 @@ namespace aether::app
 
 		virtual std::string_view GetName() const = 0;
 
+		// Whether the panel's window is open on a fresh layout, before any persisted
+		// per-panel visibility is applied. Override to start a niche panel hidden.
+		[[nodiscard]] virtual bool DefaultVisible() const
+		{
+			return true;
+		}
+
+		[[nodiscard]] bool IsVisible() const
+		{
+			return m_visible;
+		}
+
+		void SetVisible(bool visible)
+		{
+			m_visible = visible;
+		}
+
+		// Pass to ImGui::Begin(name, VisiblePtr()) so the window's close button and
+		// the Window menu toggle share a single flag.
+		[[nodiscard]] bool* VisiblePtr()
+		{
+			return &m_visible;
+		}
+
 		virtual void OnAttach(LayerContext&)
 		{
 		}
@@ -106,5 +130,8 @@ namespace aether::app
 		virtual void SaveSettings(TomlConfig&, LayerContext&) const
 		{
 		}
+
+	protected:
+		bool m_visible = true;
 	};
 } // namespace aether::app

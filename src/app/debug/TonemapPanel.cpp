@@ -134,7 +134,7 @@ namespace aether::app
 		auto& rendering = context.Get<RenderingSubsystem>();
 		PostProcessStack& stack = rendering.GetPostProcessStack();
 
-		if (!ImGui::Begin(GetName().data()))
+		if (!ImGui::Begin(GetName().data(), VisiblePtr()))
 		{
 			stack.SetHistogramCaptureEnabled(false);
 			ImGui::End();

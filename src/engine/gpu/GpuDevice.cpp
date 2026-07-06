@@ -103,6 +103,11 @@ namespace aether
 		m_gfx->GetSwapchain().ClearRecreationFlag();
 	}
 
+	void GpuDevice::RequestSwapchainRecreation()
+	{
+		m_gfx->GetSwapchain().RequestRecreation();
+	}
+
 	bool GpuDevice::IsSwapchainFrameValid() const
 	{
 		return m_gfx->GetSwapchain().IsFrameValid();

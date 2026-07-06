@@ -441,6 +441,22 @@ namespace aether
 		return m_rendering->GetRenderGraph().GetPasses().size();
 	}
 
+	void AetherCore::SetVsync(bool enabled)
+	{
+		if (m_settings.graphics.vsync == enabled)
+		{
+			return;
+		}
+		m_settings.graphics.vsync = enabled;
+		if (m_gpu)
+		{
+			// RecreateSwapchain() reads m_settings.graphics.vsync; requesting a
+			// recreate makes the producer thread pick up the new present mode.
+			m_gpu->RequestSwapchainRecreation();
+		}
+		AE_INFO(LogCategory::Engine, "VSync {}.", enabled ? "enabled" : "disabled");
+	}
+
 	void AetherCore::RecreateSwapchain()
 	{
 		auto& platform = m_services.Get<PlatformSubsystem>();

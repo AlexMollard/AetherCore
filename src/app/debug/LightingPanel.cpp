@@ -143,13 +143,8 @@ namespace aether::app
 
 	void LightingPanel::OnUpdate(LayerContext& context)
 	{
-		auto& input = context.Get<aether::Input>();
-		if (input.IsKeyPressed(aether::Key::F9))
-		{
-			m_lightGizmos = !m_lightGizmos;
-			AE_INFO(aether::LogCategory::App, "Light gizmos: {}", m_lightGizmos ? "on" : "off");
-		}
-
+		// The light-gizmo toggle lives on this panel's checkbox; the editor keeps
+		// only scene-manipulation keybinds.
 		if (m_lightGizmos && aether::IsDebugRenderingEnabled())
 		{
 			if (auto engine = context.TryGet<aether::AetherCore>())
@@ -170,7 +165,7 @@ namespace aether::app
 
 	void LightingPanel::OnImGui(LayerContext& context)
 	{
-		ImGui::Begin("Lighting");
+		ImGui::Begin("Lighting", VisiblePtr());
 		{
 			Renderer& renderer = context.Get<Renderer>();
 			ImGui::Text("Point lights: %zu", renderer.GetPointLights().size());

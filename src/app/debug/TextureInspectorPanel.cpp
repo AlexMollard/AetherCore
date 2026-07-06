@@ -42,7 +42,7 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Textures");
+		ImGui::Begin("Textures", VisiblePtr());
 
 		const std::vector<gpu::DebugTextureInfo> textures = gpu::ResourceRegistry::ListDebugTextures();
 		if (textures.empty())

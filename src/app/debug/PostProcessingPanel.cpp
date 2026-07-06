@@ -4,7 +4,6 @@
 #include <imgui.h>
 
 #include "layers/AppLayer.hpp"
-#include "platform/Input.hpp"
 #include "rendering/Renderer.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -22,15 +21,11 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Post Processing");
+		ImGui::Begin("Post Processing", VisiblePtr());
 		{
 			Renderer& renderer = context.Get<Renderer>();
 
-			bool fxaa = renderer.IsFxaaEnabled();
-			if (ImGui::Checkbox("FXAA", &fxaa))
-			{
-				renderer.SetFxaaEnabled(fxaa);
-			}
+			// FXAA now lives in the Settings panel (single source of truth).
 
 			int cullMode = static_cast<int>(renderer.GetCullMode());
 			const char* cullModeNames[] = {"None", "Front", "Back", "Front + Back"};
@@ -43,18 +38,6 @@ namespace aether::app
 			ImGui::Text("Resolution: %u x %u", ext.width, ext.height);
 		}
 		ImGui::End();
-	}
-
-	void PostProcessingPanel::OnUpdate(LayerContext& context)
-	{
-		const Input& input = context.Get<Input>();
-
-		if (input.IsKeyPressed(aether::Key::F))
-		{
-			const bool enabled = !context.Get<Renderer>().IsFxaaEnabled();
-			context.Get<Renderer>().SetFxaaEnabled(enabled);
-			AE_INFO(aether::LogCategory::App, "FXAA: {}", enabled ? "on" : "off");
-		}
 	}
 
 	void PostProcessingPanel::LoadSettings(TomlConfig& config, LayerContext& context)

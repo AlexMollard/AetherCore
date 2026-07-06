@@ -23,21 +23,9 @@ namespace aether::app
 	void DevToolsPanel::OnUpdate(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		const Input& input = context.Get<Input>();
 
-		if (input.IsKeyPressed(aether::Key::F6))
-		{
-			const bool newState = !aether::IsDebugRenderingEnabled();
-			aether::SetDebugRenderingEnabled(newState);
-			AE_INFO(LogCategory::App, "Debug renderer: {}", newState ? "on" : "off");
-		}
-
-		if (input.IsKeyPressed(aether::Key::F7))
-		{
-			m_debugTestShapes = !m_debugTestShapes;
-			AE_INFO(LogCategory::App, "Debug test shapes: {}", m_debugTestShapes ? "on" : "off");
-		}
-
+		// Debug-overlay and test-shapes toggles live on this panel's checkboxes now;
+		// the editor keeps only scene-manipulation keybinds.
 		if (m_debugTestShapes)
 		{
 			if (auto engine = context.TryGet<aether::AetherCore>())
@@ -61,7 +49,7 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Debug");
+		ImGui::Begin("Debug", VisiblePtr());
 		{
 			bool debugRenderer = aether::IsDebugRenderingEnabled();
 			if (ImGui::Checkbox("Debug overlay", &debugRenderer))

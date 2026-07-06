@@ -327,7 +327,7 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin(GetName().data(), nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::Begin(GetName().data(), VisiblePtr(), ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
 		auto& rendering = context.Get<aether::RenderingSubsystem>();
 		auto& post = rendering.GetPostProcessStack();

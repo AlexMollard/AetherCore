@@ -62,6 +62,9 @@ namespace aether
 		[[nodiscard]] bool IsFrameValid() const;
 		[[nodiscard]] bool NeedsRecreation() const;
 		void ClearRecreationFlag();
+		// Forces recreation on the next producer-thread poll (e.g. a VSync change
+		// that alters the present mode without a resize).
+		void RequestRecreation();
 
 	private:
 		struct FrameSync

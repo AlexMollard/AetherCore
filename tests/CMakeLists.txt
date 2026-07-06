@@ -5,6 +5,8 @@ add_executable(EngineTests
     scene/TransformEditTests.cpp
     scene/TransformUtilsTests.cpp
     utils/RayTests.cpp
+    utils/EngineSettingsTests.cpp
+    utils/SettingsServiceTests.cpp
     material/MaterialDescribeTests.cpp
     material/PackMaterialTests.cpp
     material/MaterialRegistryTests.cpp

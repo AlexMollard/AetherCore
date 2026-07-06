@@ -1,226 +1,312 @@
 #include "utils/EngineSettings.hpp"
 
+#include <algorithm>
 #include <fstream>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <type_traits>
+#include <vector>
 
-#include "io/FileSystem.hpp"
+#include "io/PlatformPaths.hpp"
+#include "utils/LogCategory.hpp"
 #include "utils/Logger.hpp"
-#include "utils/TextIni.hpp"
 #include "utils/Profiler.hpp"
+#include "utils/TextIni.hpp"
 
 namespace aether
 {
 	namespace
 	{
-		void ParseSettingsText(std::string_view text, EngineSettings& settings)
+		std::optional<std::string> ReadFileText(const std::filesystem::path& path)
 		{
-			text::ParseToml(text,
-			        [&settings](const text::IniEntry& entry)
-			        {
-				        if (entry.fullKey == "window.width")
-				        {
-					        if (const auto parsed = text::ParseInt(entry.value); parsed && *parsed > 0)
-					        {
-						        settings.window.width = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "window.height")
-				        {
-					        if (const auto parsed = text::ParseInt(entry.value); parsed && *parsed > 0)
-					        {
-						        settings.window.height = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "graphics.vsync" || entry.fullKey == "vsync")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        settings.graphics.vsync = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "graphics.fxaa")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        settings.graphics.fxaa = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "graphics.asynccompute")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        settings.graphics.asyncCompute = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "app.targetfps")
-				        {
-					        if (const auto parsed = text::ParseFloat(entry.value); parsed && *parsed >= 0.0f)
-					        {
-						        settings.app.targetFps = *parsed;
-					        }
-					        return;
-				        }
-				        if (entry.fullKey == "app.startupscene")
-				        {
-					        std::string_view value = entry.value;
-					        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
-					        {
-						        value = value.substr(1, value.size() - 2);
-					        }
-					        settings.app.startupScene = std::string(value);
-					        return;
-				        }
-				        if (entry.fullKey == "app.autoplay")
-				        {
-					        if (const auto parsed = text::ParseBool(entry.value))
-					        {
-						        settings.app.autoplay = *parsed;
-					        }
-				        }
-			        });
+			std::error_code ec;
+			if (!std::filesystem::exists(path, ec))
+			{
+				return std::nullopt;
+			}
+			std::ifstream in(path, std::ios::binary);
+			if (!in.is_open())
+			{
+				return std::nullopt;
+			}
+			std::ostringstream buffer;
+			buffer << in.rdbuf();
+			return buffer.str();
 		}
 
-		void ParseSettingsStream(std::istream& in, EngineSettings& settings)
+		// Parses a raw TOML value string into a typed setting field. The type is
+		// resolved at compile time from the field, so one branch per supported type
+		// covers every current and future setting of that type.
+		template<class T>
+		void AssignField(T& field, std::string_view raw)
 		{
-			std::stringstream buffer;
-			buffer << in.rdbuf();
-			ParseSettingsText(buffer.str(), settings);
+			if constexpr (std::is_same_v<T, bool>)
+			{
+				if (const auto parsed = text::ParseBool(raw))
+				{
+					field = *parsed;
+				}
+			}
+			else if constexpr (std::is_same_v<T, int>)
+			{
+				if (const auto parsed = text::ParseInt(raw))
+				{
+					field = *parsed;
+				}
+			}
+			else if constexpr (std::is_same_v<T, float>)
+			{
+				if (const auto parsed = text::ParseFloat(raw))
+				{
+					field = *parsed;
+				}
+			}
+			else if constexpr (std::is_same_v<T, std::string>)
+			{
+				field = text::StripQuotes(std::string(raw));
+			}
+			else
+			{
+				static_assert(sizeof(T) == 0, "ForEachSettingField uses a field type with no AssignField branch");
+			}
+		}
+
+		// Formats a typed setting field back to its TOML value string.
+		template<class T>
+		std::string FormatField(const T& field)
+		{
+			if constexpr (std::is_same_v<T, bool>)
+			{
+				return field ? "true" : "false";
+			}
+			else if constexpr (std::is_same_v<T, std::string>)
+			{
+				return "\"" + field + "\"";
+			}
+			else if constexpr (std::is_same_v<T, int> || std::is_same_v<T, float>)
+			{
+				std::ostringstream value;
+				value << field;
+				return value.str();
+			}
+			else
+			{
+				static_assert(sizeof(T) == 0, "ForEachSettingField uses a field type with no FormatField branch");
+			}
 		}
 	} // namespace
 
+	void EngineSettingsIO::Apply(std::string_view tomlText, EngineSettings& settings)
+	{
+		text::ParseToml(tomlText,
+		        [&settings](const text::IniEntry& entry)
+		        {
+			        // ParseToml lower-cases entry.fullKey; match our (readable, mixed
+			        // case) reflection keys case-insensitively.
+			        ForEachSettingField(settings,
+			                [&entry](std::string_view key, auto& field)
+			                {
+				                if (text::ToLowerAscii(std::string(key)) == entry.fullKey)
+				                {
+					                AssignField(field, entry.value);
+				                }
+			                });
+		        });
+	}
+
+	void EngineSettingsIO::Sanitize(EngineSettings& settings)
+	{
+		// Non-positive window dimensions are invalid (they break swapchain sizing);
+		// fall back to the compiled defaults rather than a useless 1px window.
+		const EngineSettings defaults{};
+		if (settings.window.width < 1)
+		{
+			settings.window.width = defaults.window.width;
+		}
+		if (settings.window.height < 1)
+		{
+			settings.window.height = defaults.window.height;
+		}
+		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
+	}
+
+	std::string EngineSettingsIO::Serialize(const EngineSettings& settings)
+	{
+		std::ostringstream out;
+		out << "# AetherCore settings (TOML)\n";
+
+		std::string currentSection;
+		ForEachSettingField(settings,
+		        [&](std::string_view key, const auto& field)
+		        {
+			        const auto [section, name] = SplitSettingKey(key);
+			        if (section != currentSection)
+			        {
+				        currentSection = std::string(section);
+				        out << "\n[" << currentSection << "]\n";
+			        }
+			        out << name << " = " << FormatField(field) << "\n";
+		        });
+		return out.str();
+	}
+
+	std::string EngineSettingsIO::SerializeOverrides(const EngineSettings& settings, const EngineSettings& base)
+	{
+		// Format every field of both instances (identical field order), then emit
+		// only those whose formatted value differs. Comparing formatted strings
+		// also sidesteps float-equality pitfalls.
+		struct FieldLine
+		{
+			std::string_view section;
+			std::string_view name;
+			std::string value;
+		};
+		std::vector<FieldLine> current;
+		std::vector<std::string> baseline;
+		ForEachSettingField(settings,
+		        [&](std::string_view key, const auto& field)
+		        {
+			        const auto [section, name] = SplitSettingKey(key);
+			        current.push_back({section, name, FormatField(field)});
+		        });
+		ForEachSettingField(base, [&](std::string_view, const auto& field) { baseline.push_back(FormatField(field)); });
+
+		std::ostringstream out;
+		out << "# AetherCore user settings (TOML)\n";
+		out << "# Overrides layered on top of the shipped engine.toml; only changed keys are stored.\n";
+
+		std::string currentSection;
+		for (std::size_t i = 0; i < current.size(); ++i)
+		{
+			if (current[i].value == baseline[i])
+			{
+				continue;
+			}
+			if (current[i].section != currentSection)
+			{
+				currentSection = std::string(current[i].section);
+				out << "\n[" << currentSection << "]\n";
+			}
+			out << current[i].name << " = " << current[i].value << "\n";
+		}
+		return out.str();
+	}
+
 	std::filesystem::path EngineSettingsIO::ResolvePath(std::string_view fileName)
 	{
-		const auto cwd = std::filesystem::current_path();
 		const std::filesystem::path requested(fileName);
 		if (requested.is_absolute())
 		{
 			return requested;
 		}
 
-		const std::filesystem::path candidates[] = {
-		        cwd / "data" / "config" / requested,
-		        cwd / ".." / "data" / "config" / requested,
-		        cwd / ".." / ".." / "data" / "config" / requested,
-		        cwd / "config" / requested,
-		        cwd / ".." / "config" / requested,
-		        cwd / ".." / ".." / "config" / requested,
-		        cwd / requested,
-		        cwd / ".." / requested,
-		        cwd / ".." / ".." / requested,
-		};
+		const auto exeDir = io::PlatformPaths::GetExecutableDir();
+		std::error_code ec;
+		const auto cwd = std::filesystem::current_path(ec);
+
+		std::vector<std::filesystem::path> candidates;
+		// Executable-relative first: shipped data is deployed beside the exe, so
+		// this resolves correctly in a shipped install regardless of the working
+		// directory (and also when running from the dev build tree).
+		if (!exeDir.empty())
+		{
+			candidates.push_back(exeDir / "data" / "config" / requested);
+			candidates.push_back(exeDir / "config" / requested);
+			candidates.push_back(exeDir / requested);
+		}
+		// Working-directory-relative fallbacks for dev launches from repo/build root.
+		if (!ec)
+		{
+			candidates.push_back(cwd / "data" / "config" / requested);
+			candidates.push_back(cwd / ".." / "data" / "config" / requested);
+			candidates.push_back(cwd / ".." / ".." / "data" / "config" / requested);
+			candidates.push_back(cwd / "config" / requested);
+			candidates.push_back(cwd / ".." / "config" / requested);
+			candidates.push_back(cwd / ".." / ".." / "config" / requested);
+			candidates.push_back(cwd / requested);
+		}
 
 		for (const auto& candidate: candidates)
 		{
-			if (std::filesystem::exists(candidate))
+			std::error_code existsEc;
+			if (std::filesystem::exists(candidate, existsEc))
 			{
 				return candidate;
 			}
 		}
-		return candidates[0];
+		return candidates.empty() ? requested : candidates.front();
 	}
 
-	void EngineSettingsIO::Save(const EngineSettings& settings, const std::filesystem::path& path)
+	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile, std::string_view userFile)
 	{
 		AE_PROFILE_ZONE();
-		std::error_code ec;
-		std::filesystem::create_directories(path.parent_path(), ec);
+		LoadedEngineSettings result; // layer 1: compiled-in defaults
+
+		// Layer 2: shipped project defaults (read-only, beside the executable).
+		const auto shippedPath = ResolvePath(shippedFile);
+		if (const auto text = ReadFileText(shippedPath))
+		{
+			Apply(*text, result.values);
+			AE_INFO(LogCategory::Engine, "Shipped settings loaded from {}", shippedPath.string());
+		}
+		else
+		{
+			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", shippedPath.string());
+		}
+		Sanitize(result.values);
+		result.base = result.values; // base = layers 1 + 2
+
+		// Layer 3: per-user overrides (writable, OS user-config dir).
+		if (const auto userDir = io::PlatformPaths::GetUserConfigDir(); !userDir.empty())
+		{
+			const auto userPath = userDir / userFile;
+			if (const auto text = ReadFileText(userPath))
+			{
+				Apply(*text, result.values);
+				AE_INFO(LogCategory::Engine, "User settings overrides loaded from {}", userPath.string());
+			}
+		}
+		Sanitize(result.values);
+
+		const auto& v = result.values;
+		AE_INFO(LogCategory::Engine,
+		        "Settings resolved ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})",
+		        v.window.width,
+		        v.window.height,
+		        v.graphics.vsync ? "on" : "off",
+		        v.graphics.fxaa ? "on" : "off",
+		        v.graphics.asyncCompute ? "on" : "off",
+		        v.app.targetFps);
+		return result;
+	}
+
+	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view shippedFile, std::string_view userFile)
+	{
+		return LoadLayered(shippedFile, userFile).values;
+	}
+
+	void EngineSettingsIO::SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile)
+	{
+		AE_PROFILE_ZONE();
+		const auto userDir = io::PlatformPaths::GetUserConfigDir();
+		if (userDir.empty())
+		{
+			AE_WARN(LogCategory::Engine, "No user config directory available; settings not saved.");
+			return;
+		}
+
+		const auto path = userDir / userFile;
+		const std::string text = SerializeOverrides(settings, base);
 
 		std::ofstream out(path, std::ios::trunc);
 		if (!out.is_open())
 		{
-			AE_WARN(LogCategory::Engine, "Failed to write settings file: {}", path.string());
+			AE_WARN(LogCategory::Engine, "Failed to write user settings file: {}", path.string());
 			return;
 		}
-
-		out << "# AetherCore settings (TOML)\n\n";
-		out << "[window]\n";
-		out << "width = " << settings.window.width << "\n";
-		out << "height = " << settings.window.height << "\n\n";
-		out << "[graphics]\n";
-		out << "vsync = " << (settings.graphics.vsync ? "true" : "false") << "\n";
-		out << "fxaa = " << (settings.graphics.fxaa ? "true" : "false") << "\n";
-		out << "asyncCompute = " << (settings.graphics.asyncCompute ? "true" : "false") << "\n\n";
-		out << "[app]\n";
-		out << "# 0 = auto policy (swapchain-paced when VSync on, uncapped when off)\n";
-		out << "targetFps = " << settings.app.targetFps << "\n";
-		out << "# Scene file loaded at boot (resources/scenes/<name>.scene.toml); empty disables\n";
-		out << "startupScene = \"" << settings.app.startupScene << "\"\n";
-		out << "# false = boot into the editor's frozen Editing mode (press Play to simulate)\n";
-		out << "autoplay = " << (settings.app.autoplay ? "true" : "false") << "\n";
-	}
-
-	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view fileName)
-	{
-		AE_PROFILE_ZONE();
-		EngineSettings settings;
-		const std::string requestedFile(fileName);
-		const std::string virtualPath = "config://" + requestedFile;
-
-		if (io::FileSystem::IsInitialized())
-		{
-			try
-			{
-				if (io::FileSystem::Exists(virtualPath))
-				{
-					AE_EXPECT_OR_THROW(bytes, io::FileSystem::ReadFile(virtualPath));
-					std::string text;
-					text.resize(bytes.size());
-					for (std::size_t i = 0; i < bytes.size(); ++i)
-					{
-						text[i] = static_cast<char>(bytes[i]);
-					}
-					ParseSettingsText(text, settings);
-					AE_INFO(LogCategory::Engine,
-					        "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})",
-					        virtualPath,
-					        settings.window.width,
-					        settings.window.height,
-					        settings.graphics.vsync ? "on" : "off",
-					        settings.graphics.fxaa ? "on" : "off",
-					        settings.graphics.asyncCompute ? "on" : "off",
-					        settings.app.targetFps);
-					return settings;
-				}
-			}
-			catch (const std::exception& e)
-			{
-				AE_WARN(LogCategory::Engine, "VFS settings read failed ({}): {}", virtualPath, e.what());
-			}
-		}
-
-		const std::filesystem::path path = ResolvePath(fileName);
-
-		if (!std::filesystem::exists(path))
-		{
-			AE_INFO(LogCategory::Engine, "Settings file missing; writing defaults to {}", path.string());
-			Save(settings, path);
-			return settings;
-		}
-
-		std::ifstream in(path);
-		if (!in.is_open())
-		{
-			AE_WARN(LogCategory::Engine, "Failed to open settings file: {}. Using defaults.", path.string());
-			return settings;
-		}
-
-		ParseSettingsStream(in, settings);
-
-		AE_INFO(LogCategory::Engine,
-		        "Settings loaded from {} ({}x{}, VSync={}, FXAA={}, AsyncCompute={}, TargetFPS={})",
-		        path.string(),
-		        settings.window.width,
-		        settings.window.height,
-		        settings.graphics.vsync ? "on" : "off",
-		        settings.graphics.fxaa ? "on" : "off",
-		        settings.graphics.asyncCompute ? "on" : "off",
-		        settings.app.targetFps);
-		return settings;
+		out << text;
+		AE_INFO(LogCategory::Engine, "User settings saved to {}", path.string());
 	}
 } // namespace aether

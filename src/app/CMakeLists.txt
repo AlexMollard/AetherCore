@@ -127,13 +127,18 @@ add_custom_command(TARGET App POST_BUILD
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
         "${CMAKE_BINARY_DIR}/data/assets.pak.manifest"
         "$<TARGET_FILE_DIR:App>/data/assets.pak.manifest"
+    # Shipped default settings (layer 2). Source lives under resources/config/,
+    # not the repo root. Deployed beside the exe (data/config/) as a dev
+    # convenience so running from the build tree finds it; the runtime resolves it
+    # executable-relative, independent of CMake and the working directory. For a
+    # packaged build, install this same file next to the shipped executable.
     COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/engine.toml"
+        "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
         "${CMAKE_BINARY_DIR}/data/config/engine.toml"
     COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:App>/data/config"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_SOURCE_DIR}/engine.toml"
+        "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
         "$<TARGET_FILE_DIR:App>/data/config/engine.toml"
     COMMENT "Packing assets to data/assets.pak"
     VERBATIM

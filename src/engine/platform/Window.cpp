@@ -90,6 +90,15 @@ namespace aether
 		return size;
 	}
 
+	void Window::SetSize(int width, int height)
+	{
+		if (m_window == nullptr || width < 1 || height < 1)
+		{
+			return;
+		}
+		glfwSetWindowSize(m_window, width, height);
+	}
+
 	int Window::GetDisplayRefreshRate() const
 	{
 		GLFWmonitor* monitor = glfwGetWindowMonitor(m_window);

@@ -73,7 +73,7 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 
-		ImGui::Begin("Inspector");
+		ImGui::Begin("Inspector", VisiblePtr());
 		World& world = context.Get<World>();
 		auto& selection = context.Get<SceneSelection>();
 		const Entity entity = selection.Primary();

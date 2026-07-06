@@ -512,4 +512,9 @@ namespace aether
 	{
 		m_needsRecreation.store(false, std::memory_order_release);
 	}
+
+	void Swapchain::RequestRecreation()
+	{
+		m_needsRecreation.store(true, std::memory_order_release);
+	}
 } // namespace aether

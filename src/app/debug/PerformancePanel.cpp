@@ -67,7 +67,7 @@ namespace aether::app
 			m_titleAccum = 0.0f;
 		}
 
-		ImGui::Begin(std::format("Performance  |  {:.0f} FPS  |  {:.2f} ms###Performance", m_titleFps, m_titleMs).c_str());
+		ImGui::Begin(std::format("Performance  |  {:.0f} FPS  |  {:.2f} ms###Performance", m_titleFps, m_titleMs).c_str(), VisiblePtr());
 
 		// Compact 4-column stats grid
 		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))
