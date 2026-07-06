@@ -21,8 +21,7 @@ namespace aether::gpu
 
 	// Opaque handle aliases. Borrowed primitives (lifetime managed by the
 	// facade) live as `void*` typedefs here. Owned resources use the
-	// generation-checked typed handles from `gpu/GpuHandles.hpp`. The full
-	// borrow-vs-owned table lives in docs/plans/gpu-abstraction-rendering-audit.md.
+	// generation-checked typed handles from `gpu/GpuHandles.hpp`.
 	using DescriptorSet = void*;
 	using Pipeline = void*;
 	using PipelineCache = void*;

@@ -158,7 +158,7 @@ Test-Empty 'No Vk* tokens in gpu/GpuProfiler.hpp (excluding comments)' $headerLe
 if ($failed) {
     Write-Host ""
     Write-Host "GPU abstraction guard: FAILED" -ForegroundColor Red
-    Write-Host "See docs/plans/gpu-abstraction-rendering-audit.md for the rules."
+    Write-Host "Rule: engine code outside src/engine/vulkan/ must contain no raw vk*/Vk* tokens - use gpu:: types and typed handles."
     exit 1
 }
 

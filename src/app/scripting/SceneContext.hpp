@@ -46,7 +46,6 @@ namespace aether::app::scripting
 		aether::IEngineRuntime* engineRuntime = nullptr;
 		gpu::CommandPool uploadPool = nullptr;
 		float deltaTime = 0.0f;
-		std::string scriptPath;
 
 		// All entities that should be destroyed on scene unload/reload.
 		std::vector<aether::Entity> sceneEntities;

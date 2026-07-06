@@ -116,7 +116,9 @@ AE_SCRIPT_API std::uint32_t aether_create_mesh(const char* typeC)
 	}
 
 	aether::PrimitiveMesh primType{};
-	const char* displayName = "Mesh";
+	// Assigned together with primType in every branch below; the else path
+	// returns, so it is always set before the read.
+	const char* displayName;
 	const std::string_view sv(typeC != nullptr ? typeC : "");
 	if (sv == "cube")
 	{

@@ -1,10 +1,17 @@
+param(
+    # Directory (relative to repo root) or absolute path to analyse.
+    [string]$Path = 'src'
+)
+
 $ErrorActionPreference = 'Continue'
-$repoRoot = 'D:\AetherCore'
+# Derive the repo root from the script location so this works in any checkout
+# or git worktree (previously hardcoded to a single clone).
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $clangTidy = 'C:\Program Files\LLVM\bin\clang-tidy.exe'
 $buildDir = "$repoRoot\build-ninja-clang"
 
 # Organized output directories
-$outDir = 'D:\AetherCore\audit'
+$outDir = "$repoRoot\audit"
 $fixesDir = "$outDir\fixes"
 $statusPath = "$outDir\status.txt"
 
@@ -16,10 +23,21 @@ Set-Location $repoRoot
 
 # 1. C++23 & Vulkan 1.4 Optimized Checks
 $checks = @(
-    # 🧹 Dead code & Unused 
+    # 🧹 Dead code & Unused
     'misc-unused-*', 'bugprone-unused-*', 'readability-redundant-*',
     'clang-analyzer-deadcode.*', 'clang-analyzer-core.uninitialized.*',
-    
+
+    # 🔊 Surface the compiler -W diagnostics injected below. The leading '-*'
+    # disables the whole clang-diagnostic-* group, so without these the
+    # --extra-arg=-W flags are emitted by the compiler then dropped by tidy.
+    'clang-diagnostic-unused-function', 'clang-diagnostic-unused-member-function',
+    'clang-diagnostic-unused-variable', 'clang-diagnostic-unused-label',
+    'clang-diagnostic-unused-macros', 'clang-diagnostic-unused-private-field',
+    'clang-diagnostic-unused-local-typedef', 'clang-diagnostic-old-style-cast',
+    'clang-diagnostic-non-virtual-dtor', 'clang-diagnostic-shadow',
+    'clang-diagnostic-implicit-fallthrough', 'clang-diagnostic-deprecated-declarations',
+    'clang-diagnostic-header-hygiene',
+
     # 🛡️ Core Guidelines (Memory Safety & Architecture)
     'cppcoreguidelines-special-member-functions', # Rule of 5 enforcement
     'cppcoreguidelines-slicing',                  # Catches silent object slicing
@@ -55,16 +73,23 @@ $checkArg = '-*,' + $checks
 
 # 2. Inject Compiler Warnings for C++23
 $extraArgs = @(
-    # 🚨 CRITICAL: Force C++23 AST Parsing
-    '--extra-arg=-std=c++23', # (Use -std=c++2b if on Clang 15/16)
-    
+    # Note: the C++ standard comes from compile_commands.json (project is C++26);
+    # do NOT override it here or newer-standard code fails to parse.
+
+    # Plain-text diagnostics so the streamed summary.txt stays greppable
+    # (no ANSI colour escapes, no multi-line source carets).
+    '--extra-arg=-fno-color-diagnostics',
+    '--extra-arg=-fno-caret-diagnostics',
+
     # Unused code injection
     '--extra-arg=-Wunused-function',
     '--extra-arg=-Wunused-member-function',
     '--extra-arg=-Wunused-variable',
+    '--extra-arg=-Wunused-private-field',
+    '--extra-arg=-Wunused-local-typedef',
     '--extra-arg=-Wunused-label',
     '--extra-arg=-Wunused-macros',
-    
+
     # 🛡️ Future-Proofing & Tech Debt Args
     '--extra-arg=-Wold-style-cast',           # Force static_cast/reinterpret_cast
     '--extra-arg=-Wnon-virtual-dtor',         # Catch polymorphic memory leaks
@@ -75,7 +100,11 @@ $extraArgs = @(
 )
 
 # Faster file discovery using Where-Object instead of -Include
-$cppFiles = Get-ChildItem "$repoRoot\src" -Recurse -File | Where-Object { $_.Extension -match '^\.(cpp|cc|cxx|c)$' } | Sort-Object FullName
+$target = if ([System.IO.Path]::IsPathRooted($Path)) { $Path } else { Join-Path $repoRoot $Path }
+if (-not (Test-Path $target)) { Write-Error "Path not found: $target"; exit 1 }
+$cppFiles = Get-ChildItem $target -Recurse -File | Where-Object {
+    $_.Extension -match '^\.(cpp|cc|cxx|c)$' -and $_.FullName -notmatch '\\build' -and $_.FullName -notmatch '_deps'
+} | Sort-Object FullName
 $total = $cppFiles.Count
 "Total: $total files" | Out-File -FilePath $statusPath -Encoding utf8
 
@@ -97,8 +126,10 @@ foreach ($f in $cppFiles) {
     $null = $ps.AddScript({
         param($file, $rsTidy, $rsChecks, $rBuildDir, $rExtraArgs, $rFixFile)
         
-        # --header-filter ensures we ALSO lint the .h files included by this .cpp
-        $argsList = @("-p", $rBuildDir, "--checks=$rsChecks", "--quiet", "--header-filter=.*src.*")
+        # --header-filter ensures we ALSO lint the project .h files included by
+        # this .cpp. Anchor on /src/ or /tools/ (slash-delimited) so third-party
+        # dependency headers under _deps/<name>-src/ are NOT matched.
+        $argsList = @("-p", $rBuildDir, "--checks=$rsChecks", "--quiet", "--header-filter=[/\\](src|tools)[/\\]")
         $argsList += $rExtraArgs
         $argsList += "--export-fixes=$rFixFile"
         $argsList += $file

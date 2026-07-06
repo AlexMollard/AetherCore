@@ -1,7 +1,5 @@
 #include "ScriptedSceneLayer.hpp"
 
-#include <filesystem>
-
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include "IEngineRuntime.hpp"
@@ -14,8 +12,6 @@
 #include "mesh/PrimitiveMeshes.hpp"
 #include "passes/PostProcessStack.hpp"
 #include "platform/Input.hpp"
-#include "rendering/RenderThread.hpp"
-#include "rendering/LightingManager.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "rendering/Renderer.hpp"
 #include "rendering/ShadowService.hpp"
@@ -29,7 +25,6 @@
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "vulkan/Swapchain.hpp"
-#include "vulkan/GpuEnumConversions.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app

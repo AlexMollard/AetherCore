@@ -1,5 +1,4 @@
 #include <exception>
-#include <memory>
 
 #include "utils/AetherExceptions.hpp"
 #include "Application.hpp"

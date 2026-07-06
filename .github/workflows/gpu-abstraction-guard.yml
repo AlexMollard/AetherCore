@@ -1,8 +1,7 @@
 # GPU abstraction guard
 #
 # A cheap pre-merge check that enforces the gpu/vulkan two-layer
-# abstraction documented in docs/plans/gpu-abstraction-rendering-audit.md
-# (audit §7, Priority 7). The audit's rule is:
+# abstraction. The rule is:
 #
 #   "Engine-side code (outside src/engine/vulkan/) must contain zero vk*
 #    tokens; all resource lifetime managed through gpu::ResourceRegistry
