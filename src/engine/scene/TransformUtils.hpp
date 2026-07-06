@@ -49,4 +49,27 @@ namespace aether
 		}
 		eulerDeg = {glm::degrees(rotXRad), glm::degrees(rotYRad), glm::degrees(rotZRad)};
 	}
+
+	// A per-channel transform edit (position, euler degrees, per-axis scale) to
+	// layer on top of an existing transform. Used to propagate a multi-select
+	// edit from the primary to the rest of the selection while each entity keeps
+	// its own pose otherwise intact.
+	struct TransformDelta
+	{
+		glm::vec3 position{0.0f};
+		glm::vec3 eulerDeg{0.0f};
+		glm::vec3 scale{0.0f};
+	};
+
+	// Apply a per-channel delta to a TRS matrix: add to position / euler / scale
+	// and recompose. Scale is clamped away from zero so decompose stays defined.
+	inline glm::mat4 ApplyTransformDelta(const glm::mat4& target, const TransformDelta& delta)
+	{
+		glm::vec3 pos{}, euler{}, scale{};
+		DecomposeTRS(target, pos, euler, scale);
+		pos += delta.position;
+		euler += delta.eulerDeg;
+		scale = glm::max(scale + delta.scale, glm::vec3(0.001f));
+		return ComposeTransform(pos, euler, scale);
+	}
 } // namespace aether

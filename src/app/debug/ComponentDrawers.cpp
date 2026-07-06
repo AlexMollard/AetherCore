@@ -85,6 +85,25 @@ namespace aether::app
 			ImGui::PopID();
 			return changed;
 		}
+
+		// True if any strict ancestor of `e` is also in the selection. Such an
+		// entity is already carried by its selected ancestor's cascade, so a group
+		// transform edit must not apply the delta to it a second time.
+		bool HasSelectedAncestor(const World& world, Entity e, const SceneSelection& selection)
+		{
+			const auto* h = world.TryGet<HierarchyComponent>(e);
+			Entity parent = (h != nullptr) ? h->parent : Entity{};
+			while (parent.IsValid())
+			{
+				if (selection.Contains(parent))
+				{
+					return true;
+				}
+				const auto* ph = world.TryGet<HierarchyComponent>(parent);
+				parent = (ph != nullptr) ? ph->parent : Entity{};
+			}
+			return false;
+		}
 	} // namespace
 
 	const char* EntityDisplayName(const World& world, Entity entity)
@@ -182,6 +201,9 @@ namespace aether::app
 
 		glm::vec3 pos{}, euler{}, scale{};
 		DecomposeTRS(tc->localToWorld, pos, euler, scale);
+		const glm::vec3 pos0 = pos;
+		const glm::vec3 euler0 = euler;
+		const glm::vec3 scale0 = scale;
 
 		bool changed = false;
 		changed |= DrawVec3Row("Position", pos, 0.0f, 0.05f);
@@ -194,6 +216,27 @@ namespace aether::app
 
 		scale = glm::max(scale, glm::vec3(0.001f)); // zero scale breaks decompose
 		ApplyWorldTransform(context, world, entity, ComposeTransform(pos, euler, scale));
+
+		// Multi-select: propagate this edit as a per-channel delta to the rest of
+		// the selection so a drag moves/rotates/scales the whole group together,
+		// each entity keeping its own pose. Entities already carried by a selected
+		// ancestor's cascade are skipped so they are not moved twice.
+		const auto* selection = context.TryGet<SceneSelection>();
+		if (selection != nullptr && selection->All().size() > 1)
+		{
+			const TransformDelta delta{pos - pos0, euler - euler0, scale - scale0};
+			for (const Entity other: selection->All())
+			{
+				if (other == entity || HasSelectedAncestor(world, other, *selection))
+				{
+					continue;
+				}
+				if (const auto* otc = world.TryGet<TransformComponent>(other))
+				{
+					ApplyWorldTransform(context, world, other, ApplyTransformDelta(otc->localToWorld, delta));
+				}
+			}
+		}
 	}
 
 	void DrawSkinnedMesh(World& world, Entity entity)
