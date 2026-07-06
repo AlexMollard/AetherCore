@@ -493,6 +493,15 @@ namespace aether
 		}
 	}
 
+	void AetherCore::SetUiScale(float uiScale)
+	{
+		m_settings.graphics.uiScale = uiScale;
+		if (m_imgui)
+		{
+			m_imgui->SetUiScale(uiScale);
+		}
+	}
+
 	void AetherCore::RecreateSwapchain()
 	{
 		auto& platform = m_services.Get<PlatformSubsystem>();

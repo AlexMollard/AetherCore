@@ -130,6 +130,7 @@ namespace aether
 			settings.window.height = defaults.window.height;
 		}
 		settings.app.targetFps = std::max(0.0f, settings.app.targetFps);
+		settings.graphics.uiScale = std::clamp(settings.graphics.uiScale, 0.5f, 3.0f);
 	}
 
 	std::string EngineSettingsIO::Serialize(const EngineSettings& settings)

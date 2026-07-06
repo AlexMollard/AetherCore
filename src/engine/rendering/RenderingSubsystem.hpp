@@ -38,6 +38,7 @@ namespace aether
 		Fixed1080p,
 		Fixed1440p,
 		Custom,
+		MatchPanel, // render at the Viewport panel's physical pixel size (logical x DPI)
 	};
 
 	struct SceneViewportSettings

@@ -21,6 +21,7 @@ namespace aether
 			bool fxaa = false;
 			bool asyncCompute = true;
 			bool imguiViewports = true; // tool panels tear out into OS windows
+			float uiScale = 1.0f;       // manual editor UI scale multiplier, on top of per-monitor DPI
 		} graphics;
 
 		struct App
@@ -66,6 +67,7 @@ namespace aether
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
 		f("graphics.imguiViewports", settings.graphics.imguiViewports);
+		f("graphics.uiScale", settings.graphics.uiScale);
 		f("app.targetFps", settings.app.targetFps);
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);

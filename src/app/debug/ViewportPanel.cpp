@@ -533,7 +533,7 @@ namespace aether::app
 		bool viewportSettingsChanged = false;
 		int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
 
-		const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom"};
+		const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
 		ImGui::SetNextItemWidth(72.0f);
 		if (ImGui::Combo("##res", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
 		{
@@ -562,6 +562,22 @@ namespace aether::app
 					viewportSettingsChanged = true;
 				}
 				ImGui::EndPopup();
+			}
+		}
+
+		if (viewportSettings.resolutionMode == SceneViewportResolutionMode::MatchPanel)
+		{
+			// Render the scene at the panel's PHYSICAL pixel size (logical available x the
+			// panel viewport's DPI scale) for a 1:1 crisp editor view that follows resize
+			// and monitor DPI. Reuses customExtent as the requested-extent carrier.
+			const float dpi = ImGui::GetWindowDpiScale();
+			const auto physW = static_cast<std::uint32_t>(std::clamp(available.x * dpi, 64.0f, 8192.0f));
+			const auto physH = static_cast<std::uint32_t>(std::clamp(available.y * dpi, 64.0f, 8192.0f));
+			if (physW != viewportSettings.customExtent.width || physH != viewportSettings.customExtent.height)
+			{
+				viewportSettings.customExtent.width = physW;
+				viewportSettings.customExtent.height = physH;
+				viewportSettingsChanged = true;
 			}
 		}
 

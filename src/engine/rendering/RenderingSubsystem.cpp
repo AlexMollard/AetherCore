@@ -50,6 +50,7 @@ namespace aether
 				return {1920, 1080};
 			case SceneViewportResolutionMode::Fixed1440p:
 				return {2560, 1440};
+			case SceneViewportResolutionMode::MatchPanel:
 			case SceneViewportResolutionMode::Custom:
 				return clampExtent(m_sceneViewportSettings.customExtent);
 			case SceneViewportResolutionMode::WindowNative:
@@ -87,6 +88,7 @@ namespace aether
 				return {1920, 1080};
 			case SceneViewportResolutionMode::Fixed1440p:
 				return {2560, 1440};
+			case SceneViewportResolutionMode::MatchPanel:
 			case SceneViewportResolutionMode::Custom:
 				return clampExtent(settings.customExtent);
 			case SceneViewportResolutionMode::WindowNative:

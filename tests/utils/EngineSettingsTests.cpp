@@ -137,3 +137,19 @@ TEST_CASE("imguiViewports defaults on and round-trips through Apply") {
     EngineSettingsIO::Apply(toml, rebuilt);
     CHECK(rebuilt.graphics.imguiViewports == false);
 }
+
+TEST_CASE("uiScale defaults to 1 and Sanitize clamps to [0.5, 3.0]") {
+    EngineSettings s;
+    CHECK(s.graphics.uiScale == doctest::Approx(1.0f));
+
+    EngineSettingsIO::Apply("[graphics]\nuiScale = 2.0\n", s);
+    CHECK(s.graphics.uiScale == doctest::Approx(2.0f));
+
+    s.graphics.uiScale = 10.0f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.uiScale == doctest::Approx(3.0f)); // clamped high
+
+    s.graphics.uiScale = 0.1f;
+    EngineSettingsIO::Sanitize(s);
+    CHECK(s.graphics.uiScale == doctest::Approx(0.5f)); // clamped low
+}

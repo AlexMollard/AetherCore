@@ -64,6 +64,9 @@ namespace aether
 		void RetireViewports(const std::vector<ImGuiID>& departedIds);
 		// Enable/disable multi-viewport at runtime (producer thread).
 		void SetViewportsEnabled(bool enabled);
+		// Sets the manual editor UI-scale multiplier (producer thread). Composes with the
+		// per-window DPI scale: GetFontSize == FontSizeBase * FontScaleMain * FontScaleDpi.
+		void SetUiScale(float uiScale);
 		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
 		void UnregisterTexture(ImTextureID textureId);
 

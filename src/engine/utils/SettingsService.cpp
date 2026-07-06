@@ -46,6 +46,13 @@ namespace aether
 				engine->SetImguiViewportsEnabled(m_values.graphics.imguiViewports);
 			}
 		}
+		else if (key == "graphics.uiScale")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetUiScale(m_values.graphics.uiScale);
+			}
+		}
 		else if (key == "window.width" || key == "window.height")
 		{
 			if (auto* platform = m_services.TryGet<PlatformSubsystem>())

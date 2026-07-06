@@ -96,6 +96,9 @@ namespace aether
 		// the ImGui subsystem's ViewportsEnable config flag.
 		void SetImguiViewportsEnabled(bool enabled);
 
+		// Applies the manual editor UI scale at runtime (producer thread).
+		void SetUiScale(float uiScale);
+
 		// Frame lifecycle steps (used by the loop and the render thread).
 		[[nodiscard]] bool ShouldClose();
 		void PumpEvents();

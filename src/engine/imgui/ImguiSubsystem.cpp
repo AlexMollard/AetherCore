@@ -5,6 +5,7 @@
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
+#include <algorithm>
 #include <chrono>
 #include <span>
 
@@ -212,11 +213,13 @@ namespace aether
 		// flag flip; SettingsService::ApplyAll applies the persisted on/off at startup.
 		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-		if (auto window = services.TryGet<Window>())
-		{
-			const auto extent = window->GetFramebufferSize();
-			io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
-		}
+		// ImGui 1.92 per-monitor DPI: dynamic fonts re-rasterize crisply at monitor DPI
+		// (ConfigDpiScaleFonts -> FontScaleDpi), and ImGui window geometry scales across
+		// monitors (ConfigDpiScaleViewports). Complementary; no double font scaling. The
+		// framebuffer-size DisplaySize override is intentionally dropped so imgui_impl_glfw
+		// owns the DPI-aware DisplaySize (logical) + DisplayFramebufferScale.
+		io.ConfigDpiScaleFonts = true;
+		io.ConfigDpiScaleViewports = true;
 
 		ApplyTheme();
 
@@ -296,10 +299,16 @@ namespace aether
 		m_gameThreadFrameLock.emplace(m_mutex);
 		RetirePendingTextureReleases();
 		ImGuiIO& io = ImGui::GetIO();
-		if (auto window = services.TryGet<Window>())
+		// imgui_impl_glfw's NewFrame sets the DPI-aware DisplaySize (logical) +
+		// DisplayFramebufferScale each frame; only provide a fallback when the backends
+		// (and thus that NewFrame) aren't running, so ImGui::NewFrame never sees size 0.
+		if (!m_backendsInitialized)
 		{
-			const auto extent = window->GetFramebufferSize();
-			io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+			if (auto window = services.TryGet<Window>())
+			{
+				const auto extent = window->GetFramebufferSize();
+				io.DisplaySize = ImVec2(static_cast<float>(extent.width), static_cast<float>(extent.height));
+			}
 		}
 		io.DeltaTime = deltaTimeSeconds > 0.0f ? deltaTimeSeconds : 1.0f / 60.0f;
 
@@ -429,6 +438,15 @@ namespace aether
 		{
 			io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
 		}
+	}
+
+	void ImguiSubsystem::SetUiScale(float uiScale)
+	{
+		if (!m_initialized)
+		{
+			return;
+		}
+		ImGui::GetStyle().FontScaleMain = std::clamp(uiScale, 0.5f, 3.0f);
 	}
 
 	void ImguiSubsystem::RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target)
