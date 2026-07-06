@@ -1,5 +1,7 @@
 #include "utils/Logger.hpp"
 
+#include "utils/LogRingBuffer.hpp"
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -667,6 +669,9 @@ namespace aether
 		{
 			return;
 		}
+
+		// Feed the in-editor Console tail (thread-safe; its own lock).
+		LogRingBuffer::Get().Push(level, category, message);
 
 		EnsureInitialized();
 		LoggerBackend& backend = GetBackend();

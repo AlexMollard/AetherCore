@@ -20,6 +20,7 @@ using namespace std::string_view_literals;
 #	include <shellapi.h>
 #endif
 
+#include "debug/ConsolePanel.hpp"
 #include "debug/DayNightPanel.hpp"
 #include "debug/DevToolsPanel.hpp"
 #include "debug/Icons.hpp"
@@ -109,6 +110,10 @@ namespace aether::app
 			if (panelName == "Textures")
 			{
 				return ICON_FA_IMAGE;
+			}
+			if (panelName == "Console")
+			{
+				return ICON_FA_CODE;
 			}
 			if (panelName == "Performance")
 			{
@@ -379,6 +384,7 @@ namespace aether::app
 		m_panels.push_back(std::make_unique<PostProcessingPanel>());
 		m_panels.push_back(std::make_unique<SettingsPanel>());
 		m_panels.push_back(std::make_unique<DevToolsPanel>());
+		m_panels.push_back(std::make_unique<ConsolePanel>());
 		m_panels.push_back(std::make_unique<LightingPanel>());
 		m_panels.push_back(std::make_unique<DayNightPanel>());
 		for (auto& panel: m_panels)
@@ -739,7 +745,7 @@ namespace aether::app
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene", "Inspector", "Viewport"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "Textures"}},
-				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Debug"}},
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "Debug"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
 				};
 
@@ -854,6 +860,7 @@ namespace aether::app
 			ImGui::DockBuilderDockWindow("Post Processing", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Settings", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Performance", dock_bottom);
+			ImGui::DockBuilderDockWindow("Console", dock_bottom);
 			ImGui::DockBuilderDockWindow("Lighting", dock_bottom);
 			ImGui::DockBuilderDockWindow("Day / Night", dock_bottom);
 			ImGui::DockBuilderDockWindow("Textures", dock_bottom);
