@@ -671,7 +671,7 @@ namespace aether
 		}
 
 		// Feed the in-editor Console tail (thread-safe; its own lock).
-		LogRingBuffer::Get().Push(level, category, message);
+		LogRingBuffer::Get().Push(level, category, message, location.file_name(), static_cast<int>(location.line()), std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
 
 		EnsureInitialized();
 		LoggerBackend& backend = GetBackend();
