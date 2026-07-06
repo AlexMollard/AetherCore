@@ -11,6 +11,9 @@
     Apply suggested fixes automatically (clang-tidy -fix).
 .PARAMETER Checks
     Comma-separated checks to enable (default: project-wide sensible set).
+.PARAMETER Refresh
+    Regenerate compile_commands.json before analysing (use after adding/removing
+    source files or changing build flags, so clang-tidy sees current commands).
 .EXAMPLE
     ./scripts/Run-ClangTidy.ps1
     ./scripts/Run-ClangTidy.ps1 -Path src/engine/gpu -Fix
@@ -20,7 +23,8 @@
 param(
     [string]$Path = "",
     [switch]$Fix,
-    [string]$Checks = ""
+    [string]$Checks = "",
+    [switch]$Refresh
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,8 +50,9 @@ $Exe = $ClangTidy.Source ?? $ClangTidy
 # --- Ensure compile_commands.json ----------------------------------------
 $BuildDir = "$RepoRoot\build-ninja-clang"
 $CompileDb = "$BuildDir\compile_commands.json"
-if (-not (Test-Path $CompileDb)) {
-    Write-Host "Generating compile_commands.json (clangd preset)..." -ForegroundColor Yellow
+if ($Refresh -or -not (Test-Path $CompileDb)) {
+    $why = if ($Refresh) { "Refreshing" } else { "Generating" }
+    Write-Host "$why compile_commands.json (clangd preset)..." -ForegroundColor Yellow
     Push-Location $RepoRoot
     try {
         & cmake --preset clangd 2>&1 | Out-Host
@@ -104,7 +109,7 @@ if (-not $Checks) {
 }
 
 # --- Run clang-tidy ------------------------------------------------------
-$FixArg = if ($Fix) { '--fix' } else { '' }
+$DoFix = [bool]$Fix
 $issueFiles = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
 
 $elapsed = Measure-Command {
@@ -112,7 +117,7 @@ $elapsed = Measure-Command {
         $exe = $using:Exe
         $db = $using:CompileDb
         $checks = $using:Checks
-        $fixArg = $using:FixArg
+        $doFix = $using:DoFix
         $issues = $using:issueFiles
         $file = $_.FullName
 
@@ -120,7 +125,15 @@ $elapsed = Measure-Command {
         # Running on headers produces no useful output and duplicates work.
         if ($file -notmatch '\.cpp$') { return }
 
-        $output = & $exe --checks=$checks $fixArg -p=$db $file 2>&1
+        # Build the argument list explicitly. Passing an empty '' string (the old
+        # behaviour when -Fix was off) made clang-tidy treat it as an extra source
+        # path — the current directory — and emit spurious "expected exactly one
+        # compiler job" errors, so only append --fix when actually fixing.
+        $tidyArgs = @("--checks=$checks", "-p=$db")
+        if ($doFix) { $tidyArgs += '--fix' }
+        $tidyArgs += $file
+
+        $output = & $exe @tidyArgs 2>&1
         $hasIssues = ($LASTEXITCODE -ne 0) -or ($output -match 'warning:' -or $output -match 'error:')
 
         if ($hasIssues) {

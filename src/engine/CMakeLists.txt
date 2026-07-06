@@ -63,10 +63,24 @@ target_compile_definitions(Engine PUBLIC
 # Force-include Defines.hpp so it is the very first thing read by every
 # translation unit. Defines.hpp sets TRACY_ENABLE, which must precede any
 # Tracy header include. AAA engines commonly use this pattern.
-target_compile_options(Engine PRIVATE
-    $<$<CXX_COMPILER_ID:MSVC>:/FI"${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp">
-    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-include ${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp>
-)
+#
+# Key off the compiler *frontend variant*, not COMPILER_ID. clang-cl reports
+# COMPILER_ID=Clang yet drives an MSVC-style command line, so it needs the
+# /FI spelling. Feeding clang-cl the GNU "-include" form silently drops the
+# flag (unknown argument) and promotes Defines.hpp to a stray second source
+# input, which breaks every compile_commands.json consumer (clangd, clang-tidy)
+# with "expected exactly one compiler job" and cascading std-library errors
+# such as a bogus 'no type named string_view in namespace std'.
+#
+# Note the quote placement: "/FI${path}" quotes the whole option so CMake sees
+# one clean argument. Writing /FI"${path}" instead embeds literal quotes that
+# Ninja shell-escapes to /FI\"...\" in compile_commands.json — cl.exe copes,
+# but clang-tidy mis-parses it into a bogus 'empty filename' error.
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_options(Engine PRIVATE "/FI${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp")
+else()
+    target_compile_options(Engine PRIVATE -include "${CMAKE_CURRENT_SOURCE_DIR}/Defines.hpp")
+endif()
 
 # Shared pak format header lives at <repo>/include/ - included by PakBackend
 # and the AssetPacker tool so the on-disk layout stays in sync automatically.
