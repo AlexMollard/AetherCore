@@ -39,6 +39,13 @@ namespace aether
 				engine->SetVsync(m_values.graphics.vsync); // no-op when unchanged
 			}
 		}
+		else if (key == "graphics.imguiViewports")
+		{
+			if (auto* engine = m_services.TryGet<AetherCore>())
+			{
+				engine->SetImguiViewportsEnabled(m_values.graphics.imguiViewports);
+			}
+		}
 		else if (key == "window.width" || key == "window.height")
 		{
 			if (auto* platform = m_services.TryGet<PlatformSubsystem>())

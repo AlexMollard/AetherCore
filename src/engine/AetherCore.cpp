@@ -28,6 +28,7 @@
 #include "gpu/CommandList.hpp"
 #include "imgui/ImguiFrameData.hpp"
 #include "imgui/ImguiSubsystem.hpp"
+#include "imgui/ImguiViewportRenderer.hpp" // complete type for ImguiSubsystem's unique_ptr member
 #include "io/FileSystem.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
@@ -320,7 +321,33 @@ namespace aether
 			ImguiFrameData imguiFrame;
 			if (m_imgui)
 			{
-				m_imgui->CaptureFrame(imguiFrame);
+				m_imgui->Render();
+
+				// Structural viewport DESTROY (re-dock / close / toggle-off) must retire the
+				// render-thread swapchains before UpdatePlatformWindows destroys the GLFW
+				// window: park the render thread + idle the GPU via RunExclusive. Create and
+				// resize need no quiesce (render-thread-local).
+				const std::vector<ImGuiID> departedViewports = m_imgui->SecondaryViewportIdsWithPendingDestroy();
+				if (!departedViewports.empty())
+				{
+					// Release the ImGui frame lock BEFORE quiescing: RunExclusive drains and
+					// parks the render thread, which would otherwise deadlock waiting on the
+					// mutex this producer thread still holds via the frame lock.
+					m_imgui->EndFrameLock();
+					RunExclusive(QuiesceMode::Drain,
+					        [this, &departedViewports]()
+					        {
+						        m_imgui->RetireViewports(departedViewports);
+						        m_imgui->UpdatePlatformWindows();
+					        });
+					m_imgui->SnapshotFrame(imguiFrame); // render thread idle post-quiesce
+				}
+				else
+				{
+					m_imgui->UpdatePlatformWindows();
+					m_imgui->SnapshotFrame(imguiFrame);
+					m_imgui->EndFrameLock();
+				}
 			}
 
 			RenderFramePacket packet = PrepareFrame(drawSlot, m_producerFrameIndex);
@@ -455,6 +482,15 @@ namespace aether
 			m_gpu->RequestSwapchainRecreation();
 		}
 		AE_INFO(LogCategory::Engine, "VSync {}.", enabled ? "enabled" : "disabled");
+	}
+
+	void AetherCore::SetImguiViewportsEnabled(bool enabled)
+	{
+		m_settings.graphics.imguiViewports = enabled;
+		if (m_imgui)
+		{
+			m_imgui->SetViewportsEnabled(enabled);
+		}
 	}
 
 	void AetherCore::RecreateSwapchain()
@@ -606,6 +642,12 @@ namespace aether
 		m_imgui->RenderFrame(packet.imgui, m_currentCmdList, m_gpu->BuildFrameTarget());
 
 		SubmitAndAdvance(frameIdx);
+
+		// Secondary (torn-out) viewports render + present on the render thread, after the
+		// main frame's render graph produced any images they sample (e.g. the Viewport
+		// panel's final-color image) — correct GPU synchronization, unlike a producer-side
+		// present.
+		m_imgui->RenderViewports(packet.imgui);
 	}
 
 	void AetherCore::BuildShadowsAndRunLighting(const RenderFramePacket& packet, std::uint32_t frameIdx, FrameConstants& fc)

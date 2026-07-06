@@ -92,6 +92,10 @@ namespace aether
 			return m_settings.graphics.vsync;
 		}
 
+		// Enables/disables ImGui multi-viewport at runtime (producer thread); forwards to
+		// the ImGui subsystem's ViewportsEnable config flag.
+		void SetImguiViewportsEnabled(bool enabled);
+
 		// Frame lifecycle steps (used by the loop and the render thread).
 		[[nodiscard]] bool ShouldClose();
 		void PumpEvents();

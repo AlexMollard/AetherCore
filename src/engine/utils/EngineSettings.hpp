@@ -20,6 +20,7 @@ namespace aether
 			bool vsync = true;
 			bool fxaa = false;
 			bool asyncCompute = true;
+			bool imguiViewports = true; // tool panels tear out into OS windows
 		} graphics;
 
 		struct App
@@ -64,6 +65,7 @@ namespace aether
 		f("graphics.vsync", settings.graphics.vsync);
 		f("graphics.fxaa", settings.graphics.fxaa);
 		f("graphics.asyncCompute", settings.graphics.asyncCompute);
+		f("graphics.imguiViewports", settings.graphics.imguiViewports);
 		f("app.targetFps", settings.app.targetFps);
 		f("app.startupScene", settings.app.startupScene);
 		f("app.autoplay", settings.app.autoplay);

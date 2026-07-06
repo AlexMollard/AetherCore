@@ -8,11 +8,16 @@ namespace aether
 	}
 
 	ImguiFrameData::ImguiFrameData(ImguiFrameData&& other) noexcept
-	      : m_drawData(other.m_drawData), m_ownedLists(std::move(other.m_ownedLists))
+	      : m_drawData(other.m_drawData), m_ownedLists(std::move(other.m_ownedLists)), m_secondary(std::move(other.m_secondary))
 	{
-		RebuildCommandListView();
+		RebuildView(m_drawData, m_ownedLists);
+		for (auto& vp: m_secondary)
+		{
+			RebuildView(vp.draw, vp.owned);
+		}
 		other.m_drawData.Clear();
 		other.m_ownedLists.clear();
+		other.m_secondary.clear();
 	}
 
 	ImguiFrameData& ImguiFrameData::operator=(ImguiFrameData&& other) noexcept
@@ -21,14 +26,18 @@ namespace aether
 		{
 			return *this;
 		}
-
 		Clear();
 		m_drawData = other.m_drawData;
 		m_ownedLists = std::move(other.m_ownedLists);
-		RebuildCommandListView();
-
+		m_secondary = std::move(other.m_secondary);
+		RebuildView(m_drawData, m_ownedLists);
+		for (auto& vp: m_secondary)
+		{
+			RebuildView(vp.draw, vp.owned);
+		}
 		other.m_drawData.Clear();
 		other.m_ownedLists.clear();
+		other.m_secondary.clear();
 		return *this;
 	}
 
@@ -40,49 +49,85 @@ namespace aether
 		}
 		m_ownedLists.clear();
 		m_drawData.Clear();
+
+		for (auto& vp: m_secondary)
+		{
+			for (ImDrawList* list: vp.owned)
+			{
+				IM_DELETE(list);
+			}
+		}
+		m_secondary.clear();
 	}
 
-	void ImguiFrameData::Capture(const ImDrawData* source)
+	void ImguiFrameData::CloneInto(const ImDrawData* source, ImDrawData& dst, std::vector<ImDrawList*>& owned)
 	{
-		Clear();
+		dst.Clear();
+		owned.clear();
 		if (source == nullptr || !source->Valid)
 		{
 			return;
 		}
 
-		m_drawData.Valid = true;
-		m_drawData.DisplayPos = source->DisplayPos;
-		m_drawData.DisplaySize = source->DisplaySize;
-		m_drawData.FramebufferScale = source->FramebufferScale;
-		m_drawData.OwnerViewport = source->OwnerViewport;
-		m_drawData.Textures = source->Textures;
+		dst.Valid = true;
+		dst.DisplayPos = source->DisplayPos;
+		dst.DisplaySize = source->DisplaySize;
+		dst.FramebufferScale = source->FramebufferScale;
+		dst.OwnerViewport = source->OwnerViewport;
+		dst.Textures = source->Textures;
 
-		m_ownedLists.reserve(static_cast<std::size_t>(source->CmdListsCount));
+		owned.reserve(static_cast<std::size_t>(source->CmdListsCount));
 		for (const ImDrawList* sourceList: source->CmdLists)
 		{
 			if (sourceList == nullptr)
 			{
 				continue;
 			}
-
 			ImDrawList* clone = sourceList->CloneOutput();
-			m_drawData.CmdLists.push_back(clone);
-			m_ownedLists.push_back(clone);
-			m_drawData.CmdListsCount = m_drawData.CmdLists.Size;
-			m_drawData.TotalVtxCount += clone->VtxBuffer.Size;
-			m_drawData.TotalIdxCount += clone->IdxBuffer.Size;
+			dst.CmdLists.push_back(clone);
+			owned.push_back(clone);
+			dst.CmdListsCount = dst.CmdLists.Size;
+			dst.TotalVtxCount += clone->VtxBuffer.Size;
+			dst.TotalIdxCount += clone->IdxBuffer.Size;
 		}
+	}
+
+	void ImguiFrameData::RebuildView(ImDrawData& dst, std::vector<ImDrawList*>& owned)
+	{
+		dst.CmdLists.resize(0);
+		dst.CmdLists.reserve(static_cast<int>(owned.size()));
+		dst.CmdListsCount = 0;
+		for (ImDrawList* list: owned)
+		{
+			dst.CmdLists.push_back(list);
+			dst.CmdListsCount = dst.CmdLists.Size;
+		}
+	}
+
+	void ImguiFrameData::Capture(const ImDrawData* source)
+	{
+		Clear();
+		CloneInto(source, m_drawData, m_ownedLists);
+	}
+
+	void ImguiFrameData::CaptureSecondary(const ImDrawData* source, ImGuiID id, ImVec2 pos, ImVec2 size, ImVec2 fbScale, void* platformHandle)
+	{
+		if (source == nullptr || !source->Valid || source->CmdListsCount <= 0)
+		{
+			return;
+		}
+		CapturedViewport vp;
+		vp.id = id;
+		vp.pos = pos;
+		vp.size = size;
+		vp.fbScale = fbScale;
+		vp.platformHandle = platformHandle;
+		CloneInto(source, vp.draw, vp.owned);
+		m_secondary.push_back(std::move(vp));
 	}
 
 	void ImguiFrameData::RebuildCommandListView()
 	{
-		m_drawData.CmdLists.resize(0);
-		m_drawData.CmdLists.reserve(static_cast<int>(m_ownedLists.size()));
-		m_drawData.CmdListsCount = 0;
-		for (ImDrawList* list: m_ownedLists)
-		{
-			m_drawData.CmdLists.push_back(list);
-			m_drawData.CmdListsCount = m_drawData.CmdLists.Size;
-		}
+		RebuildView(m_drawData, m_ownedLists);
 	}
 } // namespace aether

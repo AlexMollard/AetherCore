@@ -626,6 +626,8 @@ namespace aether
 
 > Confirm `VulkanContext` exposes `GetDevice()`, `GetPipelineCache()`, `GetInstance()`, `GetPhysicalDevice()`, `GetGraphicsQueueFamily()`, `GetGraphicsQueue()` (all used by `InitBackends` in `ImguiSubsystem.cpp` today — reuse the same accessors). Confirm the SPIR-V arrays' element type/`sizeof` matches `codeSize` in bytes.
 
+> **CORRECTION (applied during implementation):** ImGui v1.92 uses a SEPARATED image+sampler descriptor model, not a single combined-image-sampler. The committed code uses TWO set layouts — set 0 = `VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE` (identical to the backend's `DescriptorSetLayoutTexture`, so `AddTexture` sets bind) and set 1 = `VK_DESCRIPTOR_TYPE_SAMPLER` — a pipeline layout over both, plus a single shared sampler descriptor set (`m_samplerDS`) written with a linear sampler. Refs: imgui_impl_vulkan.cpp:1105-1212 (layouts + pipeline layout) and :528-564 (SetupRenderState binds set 1). The `offsetof` fallback (not `IM_OFFSETOF`) is also in the committed code.
+
 - [ ] **Step 3: Build**
 
 Run: `cmake --build build-ninja-clang --target Engine`
@@ -821,10 +823,13 @@ Add a helper `CreateOrResizeBuffer(...)` — copy verbatim from imgui_impl_vulka
 		//     draw.CmdLists vtx/idx into rb (imgui_impl_vulkan.cpp:608-643).
 		// (d) Bind m_pipeline; set viewport (0,0,fbW,fbH); push scale/translate from
 		//     draw.DisplayPos/DisplaySize (imgui_impl_vulkan.cpp SetupRenderState 528-570).
+		//     Bind the shared sampler set ONCE at set 1: vkCmdBindDescriptorSets(cmd,
+		//     GRAPHICS, m_pipelineLayout, 1, 1, &m_samplerDS, ...) (matches backend :564).
 		// (e) Draw loop over draw.CmdLists/CmdBuffer: project+clamp scissor with
 		//     clip_off=draw.DisplayPos, clip_scale=draw.FramebufferScale; vkCmdSetScissor;
-		//     bind (VkDescriptorSet)pcmd->GetTexID() at set 0; vkCmdDrawIndexed
-		//     (imgui_impl_vulkan.cpp:660-716). Skip UserCallback cmds (tool UI has none).
+		//     bind (VkDescriptorSet)pcmd->GetTexID() at set 0 (SAMPLED_IMAGE, from
+		//     AddTexture); vkCmdDrawIndexed (imgui_impl_vulkan.cpp:660-716). Skip
+		//     UserCallback cmds (tool UI has none).
 		// (f) vkCmdEndRenderingKHR; barrier -> PRESENT_SRC (imgui_impl_vulkan.cpp:2270-2282).
 
 		vkEndCommandBuffer(fd.CommandBuffer);

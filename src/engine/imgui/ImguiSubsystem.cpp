@@ -1,6 +1,7 @@
 #include "imgui/ImguiSubsystem.hpp"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_vulkan.h>
 
@@ -12,6 +13,7 @@
 #include "gpu/GpuDevice.hpp"
 #include "gpu/FrameTarget.hpp"
 #include "imgui/ImguiFrameData.hpp"
+#include "imgui/ImguiViewportRenderer.hpp"
 #include "platform/Window.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -206,6 +208,9 @@ namespace aether
 		ImGuiIO& io = ImGui::GetIO();
 		io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 		io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+		// Install multi-viewport support unconditionally so the runtime toggle is just a
+		// flag flip; SettingsService::ApplyAll applies the persisted on/off at startup.
+		io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
 		if (auto window = services.TryGet<Window>())
 		{
@@ -214,6 +219,9 @@ namespace aether
 		}
 
 		ApplyTheme();
+
+		// Multi-viewport: OS windows must be opaque or they render translucent.
+		ImGui::GetStyle().Colors[ImGuiCol_WindowBg].w = 1.0f;
 
 		// Load Roboto Regular for tooling UI.
 		constexpr std::string_view kFontPath = "assets://fonts/Roboto-Regular.ttf";
@@ -304,18 +312,123 @@ namespace aether
 		++m_frameIndex;
 	}
 
-	void ImguiSubsystem::CaptureFrame(ImguiFrameData& outFrame)
+	void ImguiSubsystem::Render()
 	{
 		if (!m_initialized)
 		{
 			return;
 		}
-
 		ImGui::Render();
 		const ImGuiIO& io = ImGui::GetIO();
 		m_wantsInputCapture = io.WantCaptureMouse || io.WantCaptureKeyboard;
-		outFrame.Capture(ImGui::GetDrawData());
+	}
+
+	void ImguiSubsystem::UpdatePlatformWindows()
+	{
+		if (!m_initialized)
+		{
+			return;
+		}
+		// When ViewportsEnable is set, ImGui REQUIRES UpdatePlatformWindows() every frame
+		// after Render() (it asserts on the next NewFrame otherwise). GLFW-only here: the
+		// Vulkan renderer hooks are nulled, so spawning an OS window touches no GPU state,
+		// and the swapchain/backend/pipeline all already exist from Init.
+		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+		{
+			ImGui::UpdatePlatformWindows();
+		}
+	}
+
+	std::vector<ImGuiID> ImguiSubsystem::SecondaryViewportIdsWithPendingDestroy() const
+	{
+		std::vector<ImGuiID> departed;
+		if (!m_initialized)
+		{
+			return departed;
+		}
+		const ImGuiContext& g = *ImGui::GetCurrentContext();
+		const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+		for (ImGuiViewportP* vp: g.Viewports)
+		{
+			if (vp == mainViewport)
+			{
+				continue;
+			}
+			// A created OS window that was not active this frame will be destroyed by the
+			// next UpdatePlatformWindows(); its render-thread swapchain must retire first.
+			if (vp->PlatformWindowCreated && vp->LastFrameActive < g.FrameCount)
+			{
+				departed.push_back(vp->ID);
+			}
+		}
+		return departed;
+	}
+
+	void ImguiSubsystem::SnapshotFrame(ImguiFrameData& outFrame)
+	{
+		if (!m_initialized)
+		{
+			return;
+		}
+		// The game thread already holds m_mutex via m_gameThreadFrameLock (BeginFrame), so
+		// do NOT re-lock here.
+		outFrame.Capture(ImGui::GetDrawData()); // main viewport
+		if ((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) != 0)
+		{
+			const ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+			const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+			for (ImGuiViewport* vp: platformIO.Viewports)
+			{
+				if (vp == mainViewport || vp->DrawData == nullptr || vp->PlatformHandle == nullptr)
+				{
+					continue;
+				}
+				// Per-viewport framebuffer scale (correct on hi-DPI secondary monitors);
+				// keeps the swapchain size EnsureWindow picks consistent with the render
+				// viewport in RenderOne.
+				outFrame.CaptureSecondary(vp->DrawData, vp->ID, vp->Pos, vp->Size, vp->DrawData->FramebufferScale, vp->PlatformHandle);
+			}
+		}
+	}
+
+	void ImguiSubsystem::EndFrameLock()
+	{
 		m_gameThreadFrameLock.reset();
+	}
+
+	void ImguiSubsystem::RenderViewports(const ImguiFrameData& frame)
+	{
+		if (!m_initialized || m_viewportRenderer == nullptr)
+		{
+			return;
+		}
+		m_viewportRenderer->Render(frame);
+	}
+
+	void ImguiSubsystem::RetireViewports(const std::vector<ImGuiID>& departedIds)
+	{
+		if (m_viewportRenderer != nullptr)
+		{
+			m_viewportRenderer->RetireViewports(departedIds);
+		}
+	}
+
+	void ImguiSubsystem::SetViewportsEnabled(bool enabled)
+	{
+		if (!m_initialized)
+		{
+			return;
+		}
+		m_viewportsEnabled = enabled;
+		ImGuiIO& io = ImGui::GetIO();
+		if (enabled)
+		{
+			io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+		}
+		else
+		{
+			io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+		}
 	}
 
 	void ImguiSubsystem::RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target)
@@ -463,6 +576,20 @@ namespace aether
 			return;
 		}
 
+		// Suppress the stock Vulkan renderer viewport hooks: UpdatePlatformWindows() must do
+		// GLFW-only work (no swapchain / vkDeviceWaitIdle on the producer thread) and we
+		// never call RenderPlatformWindowsDefault(). Secondary viewports render on the
+		// render thread via our own ImguiViewportRenderer. The glfw PLATFORM hooks stay.
+		ImGuiPlatformIO& platformIO = ImGui::GetPlatformIO();
+		platformIO.Renderer_CreateWindow = nullptr;
+		platformIO.Renderer_DestroyWindow = nullptr;
+		platformIO.Renderer_SetWindowSize = nullptr;
+		platformIO.Renderer_RenderWindow = nullptr;
+		platformIO.Renderer_SwapBuffers = nullptr;
+
+		m_viewportRenderer = std::make_unique<ImguiViewportRenderer>();
+		m_viewportRenderer->Init(vk, ToVk(swapchain.GetImageFormat()));
+
 		m_backendsInitialized = true;
 	}
 
@@ -478,6 +605,11 @@ namespace aether
 			ImGui_ImplVulkan_RemoveTexture(reinterpret_cast<VkDescriptorSet>(static_cast<std::uintptr_t>(pending.textureId)));
 		}
 		m_pendingTextureReleases.clear();
+		if (m_viewportRenderer)
+		{
+			m_viewportRenderer->Shutdown();
+			m_viewportRenderer.reset();
+		}
 		ImGui_ImplVulkan_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
 		m_backendsInitialized = false;

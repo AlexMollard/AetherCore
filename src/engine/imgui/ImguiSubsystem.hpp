@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
@@ -17,7 +18,9 @@ namespace aether
 	class GpuDevice;
 	struct FrameTarget;
 	class ImguiFrameData;
+	class ImguiViewportRenderer;
 	class ServiceContainer;
+	class VulkanContext;
 
 	namespace gpu
 	{
@@ -40,8 +43,27 @@ namespace aether
 		void Shutdown(ServiceContainer& services);
 
 		void BeginFrame(ServiceContainer& services, float deltaTimeSeconds);
-		void CaptureFrame(ImguiFrameData& outFrame);
+		// Producer-thread frame tail (replaces the old CaptureFrame): render ImGui, then
+		// update GLFW platform windows (secondary viewports), then snapshot main + every
+		// secondary viewport for the render thread.
+		void Render();
+		void UpdatePlatformWindows();
+		void SnapshotFrame(ImguiFrameData& outFrame);
+		// Releases the game-thread frame lock taken in BeginFrame. The producer calls this
+		// before a viewport-destroy RunExclusive quiesce so the render thread can drain/park
+		// without deadlocking on the ImGui mutex this thread holds.
+		void EndFrameLock();
+		// Secondary viewports whose OS window will be destroyed this frame (retire under a
+		// quiesce before UpdatePlatformWindows destroys the GLFW window).
+		[[nodiscard]] std::vector<ImGuiID> SecondaryViewportIdsWithPendingDestroy() const;
 		void RenderFrame(const ImguiFrameData& frame, gpu::CommandList& commands, const FrameTarget& target);
+		// Render + present every secondary (torn-out) viewport (render thread).
+		void RenderViewports(const ImguiFrameData& frame);
+		// Destroy render-thread swapchains for departed viewports (producer thread, only
+		// inside a RunExclusive quiesce).
+		void RetireViewports(const std::vector<ImGuiID>& departedIds);
+		// Enable/disable multi-viewport at runtime (producer thread).
+		void SetViewportsEnabled(bool enabled);
 		[[nodiscard]] ImTextureID RegisterTexture(gpu::ImageView imageView, gpu::ImageLayout layout);
 		void UnregisterTexture(ImTextureID textureId);
 
@@ -87,5 +109,7 @@ namespace aether
 		std::vector<std::byte> m_fontData;
 		std::vector<std::byte> m_iconFontData;
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
+		std::unique_ptr<ImguiViewportRenderer> m_viewportRenderer;
+		bool m_viewportsEnabled = true;
 	};
 } // namespace aether

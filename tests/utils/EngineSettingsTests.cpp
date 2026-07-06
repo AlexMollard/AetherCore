@@ -124,3 +124,16 @@ TEST_CASE("Full cascade: user value overrides shipped which overrides compiled d
     EngineSettingsIO::Apply("[graphics]\nvsync = true\n", s);
     CHECK(s.graphics.vsync == true);
 }
+
+TEST_CASE("imguiViewports defaults on and round-trips through Apply") {
+    EngineSettings s; // compiled-in defaults
+    CHECK(s.graphics.imguiViewports == true);
+
+    EngineSettingsIO::Apply("[graphics]\nimguiViewports = false\n", s);
+    CHECK(s.graphics.imguiViewports == false);
+
+    const std::string toml = EngineSettingsIO::Serialize(s);
+    EngineSettings rebuilt;
+    EngineSettingsIO::Apply(toml, rebuilt);
+    CHECK(rebuilt.graphics.imguiViewports == false);
+}
