@@ -3,10 +3,13 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "AppLayer.hpp"
+#include "utils/LayoutPresetStore.hpp"
 #include "utils/TomlConfig.hpp"
 
 #include "debug/DebugPanel.hpp"
@@ -43,6 +46,12 @@ namespace aether::app
 		void DrawStatusBar(LayerContext& context);
 		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
 		void DrawCommandPalette(LayerContext& context);
+		// Named layout presets: capture/apply the ImGui dock ini + panel visibility.
+		void ReloadLayoutPresets();
+		void ApplyLayoutPreset(const LayoutPreset& preset);
+		void CaptureCurrentLayout(std::string name);
+		void DeleteLayoutPreset(std::string_view name);
+		[[nodiscard]] DebugPanel* FindPanelByName(std::string_view name) const;
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
@@ -65,6 +74,16 @@ namespace aether::app
 		// Command palette (Ctrl+P) state.
 		char m_paletteQuery[128] = {};
 		int m_paletteSelected = 0;
+
+		// Named layout presets (persisted under the user config dir) and the
+		// deferred-apply state: a preset's ini is loaded at the top of the next
+		// frame, before any window Begin(), so docking settings take effect cleanly.
+		std::vector<LayoutPreset> m_layoutPresets;
+		bool m_pendingLayoutApply = false;
+		std::string m_pendingLayoutIni;
+		std::vector<std::pair<std::string, bool>> m_pendingLayoutVisibility;
+		bool m_openSavePresetPopup = false;
+		char m_newPresetName[64] = {};
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 	};

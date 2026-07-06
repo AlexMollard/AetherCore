@@ -7,6 +7,7 @@ add_executable(EngineTests
     utils/RayTests.cpp
     utils/FuzzyMatchTests.cpp
     utils/LogRingBufferTests.cpp
+    utils/LayoutPresetStoreTests.cpp
     utils/EngineSettingsTests.cpp
     utils/SettingsServiceTests.cpp
     material/MaterialDescribeTests.cpp

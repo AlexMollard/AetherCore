@@ -391,6 +391,9 @@ namespace aether::app
 		{
 			panel->OnAttach(context);
 		}
+
+		// Load persisted named layout presets (Window > Layouts / command palette).
+		ReloadLayoutPresets();
 		for (auto& panel: m_panels)
 		{
 			panel->LoadSettings(m_debugConfig, context);
@@ -567,6 +570,10 @@ namespace aether::app
 			actions.push_back({"Play: Toggle Play / Stop", [playState]() { playState->SetMode(playState->IsPlaying() ? PlayState::Mode::Editing : PlayState::Mode::Playing); }});
 		}
 		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
+		for (const auto& preset: m_layoutPresets)
+		{
+			actions.push_back({std::string("Layout: ") + preset.name, [this, preset]() { ApplyLayoutPreset(preset); }});
+		}
 
 		if (ImGui::IsWindowAppearing())
 		{
@@ -632,12 +639,77 @@ namespace aether::app
 		ImGui::EndPopup();
 	}
 
+	void DebugLayer::ReloadLayoutPresets()
+	{
+		m_layoutPresets = LayoutPresetStore::LoadAll();
+	}
+
+	void DebugLayer::ApplyLayoutPreset(const LayoutPreset& preset)
+	{
+		m_pendingLayoutIni = preset.imguiIni;
+		m_pendingLayoutVisibility = preset.visibility;
+		m_pendingLayoutApply = true;
+	}
+
+	void DebugLayer::CaptureCurrentLayout(std::string name)
+	{
+		LayoutPreset preset;
+		preset.name = std::move(name);
+		std::size_t iniSize = 0;
+		if (const char* ini = ImGui::SaveIniSettingsToMemory(&iniSize))
+		{
+			preset.imguiIni.assign(ini, iniSize);
+		}
+		preset.visibility.reserve(m_panels.size());
+		for (const auto& panel: m_panels)
+		{
+			preset.visibility.emplace_back(std::string(panel->GetName()), panel->IsVisible());
+		}
+		if (LayoutPresetStore::Save(preset))
+		{
+			ReloadLayoutPresets();
+		}
+	}
+
+	void DebugLayer::DeleteLayoutPreset(std::string_view name)
+	{
+		LayoutPresetStore::Remove(name);
+		ReloadLayoutPresets();
+	}
+
+	DebugPanel* DebugLayer::FindPanelByName(std::string_view name) const
+	{
+		for (const auto& panel: m_panels)
+		{
+			if (panel->GetName() == name)
+			{
+				return panel.get();
+			}
+		}
+		return nullptr;
+	}
+
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
 		// Once per ImGui frame, before any panel might call Manipulate.
 		ImGuizmo::BeginFrame();
+
+		// A layout preset queued last frame is applied here, before any window
+		// Begin(), so ImGui reloads dock/window settings for this frame's panels.
+		if (m_pendingLayoutApply)
+		{
+			ImGui::LoadIniSettingsFromMemory(m_pendingLayoutIni.c_str(), m_pendingLayoutIni.size());
+			for (const auto& [name, visible]: m_pendingLayoutVisibility)
+			{
+				if (DebugPanel* panel = FindPanelByName(name))
+				{
+					panel->SetVisible(visible);
+				}
+			}
+			m_pendingLayoutApply = false;
+		}
 
 		// ── Editor undo (edit mode only) ──────────────────────────────────────
 		// Every LMB press records a pre-gesture snapshot (deduped against the
@@ -802,6 +874,41 @@ namespace aether::app
 					}
 				}
 				ImGui::Separator();
+				if (ImGui::BeginMenu("Layouts"))
+				{
+					if (ImGui::MenuItem("Save Current As..."))
+					{
+						m_openSavePresetPopup = true;
+					}
+					ImGui::Separator();
+					if (m_layoutPresets.empty())
+					{
+						ImGui::TextDisabled("(no saved layouts)");
+					}
+					for (const auto& preset: m_layoutPresets)
+					{
+						if (ImGui::MenuItem(preset.name.c_str()))
+						{
+							ApplyLayoutPreset(preset);
+						}
+					}
+					if (!m_layoutPresets.empty())
+					{
+						ImGui::Separator();
+						if (ImGui::BeginMenu("Delete"))
+						{
+							for (const auto& preset: m_layoutPresets)
+							{
+								if (ImGui::MenuItem(preset.name.c_str()))
+								{
+									DeleteLayoutPreset(preset.name);
+								}
+							}
+							ImGui::EndMenu();
+						}
+					}
+					ImGui::EndMenu();
+				}
 				if (ImGui::MenuItem("Reset Layout"))
 				{
 					m_resetLayout = true;
@@ -818,6 +925,36 @@ namespace aether::app
 				ImGui::EndMenu();
 			}
 			ImGui::EndMenuBar();
+		}
+
+		if (m_openSavePresetPopup)
+		{
+			ImGui::OpenPopup("Save Layout##popup");
+			m_newPresetName[0] = '\0';
+			m_openSavePresetPopup = false;
+		}
+		if (ImGui::BeginPopupModal("Save Layout##popup", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+		{
+			ImGui::TextUnformatted("Preset name");
+			if (ImGui::IsWindowAppearing())
+			{
+				ImGui::SetKeyboardFocusHere();
+			}
+			const bool entered = ImGui::InputText("##presetname", m_newPresetName, sizeof(m_newPresetName), ImGuiInputTextFlags_EnterReturnsTrue);
+			const bool hasName = m_newPresetName[0] != '\0';
+			ImGui::BeginDisabled(!hasName);
+			if ((ImGui::Button("Save") || entered) && hasName)
+			{
+				CaptureCurrentLayout(m_newPresetName);
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndDisabled();
+			ImGui::SameLine();
+			if (ImGui::Button("Cancel"))
+			{
+				ImGui::CloseCurrentPopup();
+			}
+			ImGui::EndPopup();
 		}
 
 		// V4: classic editor arrangement - outliner left, Inspector right (over a
