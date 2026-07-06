@@ -32,6 +32,7 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
 #include "utils/Profiler.hpp"
@@ -644,6 +645,10 @@ namespace aether::app
 						if (scene::LoadSceneFile(name, world, scene::MakeApplySceneDeps(context.services)))
 						{
 							selection.Clear();
+							if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+							{
+								scenes->SetCurrentScene(name);
+							}
 						}
 						ImGui::CloseCurrentPopup();
 					}

@@ -37,14 +37,16 @@ namespace aether::app
 
 	private:
 		void PollScriptErrors(LayerContext& context);
+		// Bottom-of-viewport status bar (scene, play state, resolution, FPS). Only
+		// drawn from the second frame on, so it never resizes the docked viewport
+		// before its render targets exist.
+		void DrawStatusBar(LayerContext& context);
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
-
-		bool m_visible = true;
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;

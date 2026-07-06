@@ -24,6 +24,7 @@
 #include "physics/PhysicsSystem.hpp"
 #include "systems/DayNightSystem.hpp"
 #include "systems/ScriptComponentSystem.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
 #include "utils/Logger.hpp"
@@ -223,6 +224,11 @@ namespace aether::app
 		deps.sceneContext = &m_sceneCtx;
 		deps.physics = m_sceneCtx.physics;
 		deps.renderer = m_sceneCtx.renderer;
+
+		if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+		{
+			scenes->SetCurrentScene(sceneName);
+		}
 
 		if (const auto desc = scene::ReadSceneFile(sceneName))
 		{

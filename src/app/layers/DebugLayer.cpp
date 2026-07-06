@@ -39,7 +39,9 @@ using namespace std::string_view_literals;
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
+#include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
+#include "vulkan/Swapchain.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -332,15 +334,11 @@ namespace aether::app
 			return;
 		}
 
-		m_visible = m_debugConfig.GetBool("debug.visible", m_visible);
-
 		AE_INFO(LogCategory::App, "Debug settings loaded");
 	}
 
 	void DebugLayer::SaveSettings(LayerContext&)
 	{
-		m_debugConfig.Set("debug.visible", m_visible);
-
 		if (m_debugConfig.SaveIfDirty("debug", "Debug layer settings"))
 		{
 			AE_INFO(LogCategory::App, "Debug settings saved");
@@ -414,12 +412,6 @@ namespace aether::app
 		AE_PROFILE_ZONE();
 		const Input& input = context.Get<Input>();
 
-		if (input.IsKeyPressed(aether::Key::F1))
-		{
-			m_visible = !m_visible;
-			SaveSettings(context);
-		}
-
 		if (input.IsKeyPressed(aether::Key::F5))
 		{
 			if (auto scripting = context.TryGet<scripting::CSharpScriptingSubsystem>())
@@ -436,7 +428,7 @@ namespace aether::app
 
 		// Selection outlines: world-space wireframe boxes through the debug-line
 		// pass (same submission path as the light gizmos).
-		if (m_visible && IsDebugRenderingEnabled() && !m_selection.All().empty())
+		if (IsDebugRenderingEnabled() && !m_selection.All().empty())
 		{
 			if (auto* engine = context.TryGet<AetherCore>())
 			{
@@ -486,6 +478,50 @@ namespace aether::app
 		{
 			panel->OnRenderTargetsInvalidated(context);
 		}
+	}
+
+	void DebugLayer::DrawStatusBar(LayerContext& context)
+	{
+		// A child that fills the row reserved below the DockSpace. Drawn inside the
+		// (NoBackground) host window, so it gets its own menu-bar-coloured background.
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImGui::GetStyleColorVec4(ImGuiCol_MenuBarBg));
+		if (ImGui::BeginChild("##StatusBar", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar))
+		{
+			ImGui::AlignTextToFramePadding();
+
+			// Left: current scene + play state.
+			const char* sceneName = "-";
+			if (const auto* scenes = context.TryGet<SceneSubsystem>(); scenes != nullptr && !scenes->GetCurrentScene().empty())
+			{
+				sceneName = scenes->GetCurrentScene().c_str();
+			}
+			ImGui::Text("  " ICON_FA_CUBE "  %s", sceneName);
+			ImGui::SameLine();
+			ImGui::TextDisabled("|");
+			ImGui::SameLine();
+			const auto* playState = context.TryGet<PlayState>();
+			const bool playing = playState != nullptr && playState->IsPlaying();
+			ImGui::TextUnformatted(playing ? ICON_FA_PLAY "  Playing" : ICON_FA_STOP "  Editing");
+
+			// Right (aligned): resolution, FPS, frame time.
+			const ImGuiIO& io = ImGui::GetIO();
+			gpu::Extent2D extent{};
+			if (const auto* swapchain = context.TryGet<Swapchain>())
+			{
+				extent = swapchain->GetExtent();
+			}
+			const float frameMs = io.Framerate > 0.0f ? 1000.0f / io.Framerate : 0.0f;
+			const std::string right = std::format(ICON_FA_GAUGE_HIGH "  {}x{}    {:.0f} FPS    {:.2f} ms  ", extent.width, extent.height, io.Framerate, frameMs);
+			const float rightWidth = ImGui::CalcTextSize(right.c_str()).x;
+			const float targetX = ImGui::GetWindowWidth() - rightWidth;
+			if (targetX > ImGui::GetCursorPosX())
+			{
+				ImGui::SameLine(targetX);
+			}
+			ImGui::TextUnformatted(right.c_str());
+		}
+		ImGui::EndChild();
+		ImGui::PopStyleColor();
 	}
 
 	void DebugLayer::OnImGui(LayerContext& context)
@@ -548,16 +584,6 @@ namespace aether::app
 				m_errorToasts.clear();
 			}
 			ImGui::End();
-		}
-
-		if (!m_visible)
-		{
-			if (auto* rendering = context.TryGet<RenderingSubsystem>())
-			{
-				rendering->GetPostProcessStack().SetHistogramCaptureEnabled(false);
-			}
-			context.Get<Input>().ClearMouseViewportTransform();
-			return;
 		}
 
 		// Root dockspace: invisible full-screen window for docking
@@ -681,7 +707,6 @@ namespace aether::app
 				{
 					SetDebugRenderingEnabled(debugRendering);
 				}
-				ImGui::MenuItem("Editor UI (F1)", nullptr, &m_visible);
 				ImGui::EndMenu();
 			}
 			ImGui::EndMenuBar();
@@ -692,7 +717,14 @@ namespace aether::app
 		// retires saved V3 layouts so the new default (incl. Settings) applies once.
 		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV4");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
-		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
+		// Reserve a row at the bottom of the dockspace for the status bar (frame 1+;
+		// withheld on frame 0 for the same reason as the menu bar). Keeping it inside
+		// the host window - rather than a separate BeginViewportSideBar, which
+		// reserved viewport work-area and black-screened the render - matches the
+		// menu bar's working approach.
+		const bool showStatusBar = m_dockspaceBuilt;
+		const float statusBarHeight = showStatusBar ? ImGui::GetFrameHeightWithSpacing() : 0.0f;
+		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, -statusBarHeight), ImGuiDockNodeFlags_PassthruCentralNode);
 
 		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
 		{
@@ -723,6 +755,11 @@ namespace aether::app
 		}
 		m_dockspaceBuilt = true;
 		m_resetLayout = false;
+
+		if (showStatusBar)
+		{
+			DrawStatusBar(context);
+		}
 
 		ImGui::End();
 
