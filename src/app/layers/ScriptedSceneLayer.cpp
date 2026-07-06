@@ -1,5 +1,7 @@
 #include "ScriptedSceneLayer.hpp"
 
+#include <string>
+
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include "IEngineRuntime.hpp"
@@ -66,6 +68,19 @@ namespace aether::app
 	{
 		AE_PROFILE_ZONE();
 		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading scene + entity scripts");
+
+		// Dev: rebuild the game scripts from source first (no-op in a packaged
+		// build). On a build failure keep the running scene intact and surface the
+		// compiler output instead of tearing everything down for a reload.
+		if (m_csharp != nullptr)
+		{
+			std::string buildError;
+			if (!m_csharp->RebuildFromSource(buildError))
+			{
+				m_csharp->ReportScriptError("Script rebuild failed:\n" + buildError);
+				return;
+			}
+		}
 
 		// Hot-reload frees the buffers backing the scene entities. Route the
 		// teardown through the engine's exclusive-mutation primitive in Discard

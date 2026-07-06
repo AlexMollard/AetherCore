@@ -116,7 +116,7 @@ namespace aether
 
 	// Entity-attached script, by C# script type name (e.g. "Player"). Pure data:
 	// the app-side ScriptComponentSystem instantiates the type from the
-	// AetherScripts assembly and drives OnAttach / OnUpdate(dt) while the editor
+	// AetherGame assembly and drives OnAttach / OnUpdate(dt) while the editor
 	// is Playing. `attached` is runtime state - scene apply leaves it false, so
 	// loads and Stop-restores re-run the attach on the next play tick.
 	// A single serialized script field override (Unity-style [SerializeField]).
@@ -142,7 +142,7 @@ namespace aether
 
 	struct ScriptComponent
 	{
-		// C# script type name, resolved in the AetherScripts assembly.
+		// C# script type name, resolved in the AetherGame assembly.
 		std::string path;
 		bool attached = false;
 		// Per-entity field overrides applied to the script instance on attach and

@@ -196,8 +196,8 @@ namespace aether::scripting
 			setErrorWriter(&ForwardHostfxrError);
 		}
 
-		// ── 2. Initialize the runtime from AetherCore.Managed.runtimeconfig.json ─
-		const string_t configPath = ToCharT(managedDir / "AetherCore.Managed.runtimeconfig.json");
+		// ── 2. Initialize the runtime from AetherCore.Interop.runtimeconfig.json ─
+		const string_t configPath = ToCharT(managedDir / "AetherCore.Interop.runtimeconfig.json");
 		hostfxr_handle ctx = nullptr;
 		const int initRc = initForConfig(configPath.c_str(), nullptr, &ctx);
 		// Negative == failure (HRESULT-style); non-negative success codes include
@@ -206,7 +206,7 @@ namespace aether::scripting
 		{
 			AE_WARN(LogCategory::App,
 				"hostfxr_initialize_for_runtime_config failed (0x{:08X}) for '{}' - C# scripting disabled",
-				static_cast<unsigned>(initRc), (managedDir / "AetherCore.Managed.runtimeconfig.json").string());
+				static_cast<unsigned>(initRc), (managedDir / "AetherCore.Interop.runtimeconfig.json").string());
 			if (ctx != nullptr)
 			{
 				closeCtx(ctx);
@@ -227,19 +227,19 @@ namespace aether::scripting
 		auto loadAssembly = reinterpret_cast<load_assembly_and_get_function_pointer_fn>(loadAssemblyPtr);
 
 		// ── 4. Resolve the managed Bootstrap.Init entry point ────────────────
-		const string_t assemblyPath = ToCharT(managedDir / "AetherCore.Managed.dll");
+		const string_t assemblyPath = ToCharT(managedDir / "AetherCore.Interop.dll");
 		ManagedBootstrapFn bootstrapInit = nullptr;
 		const int fnRc = loadAssembly(assemblyPath.c_str(),
 	#ifdef _WIN32
-			L"AetherCore.Managed.Interop.Bootstrap, AetherCore.Managed", L"Init",
+			L"AetherCore.Interop.Bootstrap, AetherCore.Interop", L"Init",
 	#else
-			"AetherCore.Managed.Interop.Bootstrap, AetherCore.Managed", "Init",
+			"AetherCore.Interop.Bootstrap, AetherCore.Interop", "Init",
 	#endif
 			UNMANAGEDCALLERSONLY_METHOD, nullptr, reinterpret_cast<void**>(&bootstrapInit));
 		if (fnRc != 0 || bootstrapInit == nullptr)
 		{
 			AE_WARN(LogCategory::App,
-				"Failed to bind AetherCore.Managed Bootstrap.Init (0x{:08X}) - C# scripting disabled",
+				"Failed to bind AetherCore.Interop Bootstrap.Init (0x{:08X}) - C# scripting disabled",
 				static_cast<unsigned>(fnRc));
 			return false;
 		}
@@ -254,7 +254,7 @@ namespace aether::scripting
 		if (bootRc != 0)
 		{
 			AE_WARN(LogCategory::App,
-				"AetherCore.Managed rejected the interop ABI (code {}) - C# scripting disabled", bootRc);
+				"AetherCore.Interop rejected the interop ABI (code {}) - C# scripting disabled", bootRc);
 			m_api = {};
 			return false;
 		}

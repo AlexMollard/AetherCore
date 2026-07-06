@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AetherGame is the game-logic assembly. The engine loads it into a collectible
+    AssemblyLoadContext that can be swapped at runtime (F5 hot reload).
+
+    The AetherCore reference is compile-only (Private=false, ExcludeAssets=runtime):
+    the engine already loaded AetherCore into the default context, and the scripts'
+    ALC resolves it from there by identity. Shipping a second copy would give
+    EntityScript a different type identity and break instance creation.
+
+    NuGet packages may be added here as normal <PackageReference> items; the
+    engine's collectible load context resolves them from AetherGame.deps.json.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherGame</AssemblyName>
+    <RootNamespace>AetherGame</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../managed/AetherCore/AetherCore.csproj"
+                      Private="false"
+                      ExcludeAssets="runtime" />
+  </ItemGroup>
+
+</Project>

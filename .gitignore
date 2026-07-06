@@ -7,6 +7,10 @@
 
 # .NET artifacts (IDE-side C# builds; ArtifactsPath in Directory.Build.props)
 /artifacts/
+# Stray per-project intermediates (normally routed to /artifacts via ArtifactsPath)
+**/obj/
+managed/**/bin/
+game/**/bin/
 
 # CMake generated files
 /CMakeFiles/
@@ -20,6 +24,8 @@
 # Visual Studio / MSBuild
 /.vs/
 *.sln
+# ...but the hand-authored managed solution IS checked in (the C++ .sln is generated).
+!/AetherCore.sln
 *.vcxproj*
 *.vcproj*
 *.filters

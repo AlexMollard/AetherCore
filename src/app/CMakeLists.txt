@@ -29,36 +29,63 @@ target_compile_definitions(App PRIVATE
 )
 
 # ── Managed (C#) assemblies ────────────────────────────────────────────────
-# Build the .NET scripting assemblies with `dotnet build` and deploy them next to
-# the app's data/ so DotNetHost can load them at startup. ArtifactsPath keeps all
-# obj/bin output inside the CMake build tree (never in the source resources/).
+# Build the C# projects with `dotnet build` and deploy the assemblies next to the
+# app's data/ so DotNetHost can load them at startup. ArtifactsPath keeps all
+# obj/bin output inside the CMake build tree (never in the source tree).
 # Gated on AETHER_HAS_DOTNET so a machine without the .NET SDK still builds.
+#
+# Projects:
+#   AetherCore          engine SDK, the public gameplay API   -> AetherCore.dll
+#   AetherCore.Interop  ABI + host boot (what DotNetHost binds) -> AetherCore.Interop.dll (+ runtimeconfig)
+#   AetherGame          game scripts (collectible, hot-reloaded) -> AetherGame.dll (+ deps.json)
+#
+# The build invokes `dotnet build` on the two leaf .csproj DIRECTLY (each pulls in
+# the AetherCore SDK via ProjectReference). It deliberately does NOT build the
+# checked-in AetherCore.sln: the solution is only an IDE convenience (VS + Rider),
+# so the CMake build stays generator-agnostic and cross-platform and never depends
+# on a solution file. The C# projects are likewise NOT bolted onto this generated
+# C++ solution via include_external_msproject - editing happens in AetherCore.sln.
+# (CMake cannot generate SDK-style .csproj, so those are hand-authored source.)
 if(AETHER_HAS_DOTNET)
-    # Build the game scripts project; its ProjectReference pulls in AetherCore.Managed,
-    # so a single `dotnet build` produces both assemblies. ArtifactsPath routes all
-    # obj/bin into the CMake tree.
-    set(_aether_scripts_proj "${CMAKE_SOURCE_DIR}/resources/scripts/AetherScripts.csproj")
+    set(_aether_interop_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Interop/AetherCore.Interop.csproj")
+    set(_aether_game_proj "${CMAKE_SOURCE_DIR}/game/AetherGame/AetherGame.csproj")
     set(_aether_managed_cfg "$<IF:$<CONFIG:Debug>,Debug,Release>")
     set(_aether_managed_cfgdir "$<IF:$<CONFIG:Debug>,debug,release>")
-    set(_aether_engine_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Managed/${_aether_managed_cfgdir}")
-    set(_aether_scripts_out "${CMAKE_BINARY_DIR}/managed/bin/AetherScripts/${_aether_managed_cfgdir}")
+    # AetherCore.Interop's output carries the boot assembly + runtimeconfig AND the
+    # SDK dll it references; AetherGame's carries the game dll + deps.json.
+    set(_aether_interop_out "${CMAKE_BINARY_DIR}/managed/bin/AetherCore.Interop/${_aether_managed_cfgdir}")
+    set(_aether_game_out "${CMAKE_BINARY_DIR}/managed/bin/AetherGame/${_aether_managed_cfgdir}")
 
     add_custom_target(ManagedAssemblies ALL
-        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_scripts_proj}"
+        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_interop_proj}"
+                -c ${_aether_managed_cfg} --nologo -v:m
+                -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
+        COMMAND "${AETHER_DOTNET_EXE}" build "${_aether_game_proj}"
                 -c ${_aether_managed_cfg} --nologo -v:m
                 -p:ArtifactsPath=${CMAKE_BINARY_DIR}/managed
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        # Engine assembly first (dll + runtimeconfig the host boots from), then the
-        # game scripts assembly on top.
+        # Boot assembly + SDK first (dll + runtimeconfig the host boots from), then
+        # the game scripts assembly on top.
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${_aether_engine_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
+                "${_aether_interop_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
         COMMAND "${CMAKE_COMMAND}" -E copy_directory
-                "${_aether_scripts_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
-        COMMENT "Building C# managed assemblies (AetherCore.Managed + AetherScripts)"
+                "${_aether_game_out}" "${CMAKE_BINARY_DIR}/data/scripts/managed"
+        COMMENT "Building C# managed assemblies (AetherCore + AetherCore.Interop + AetherGame)"
         VERBATIM USES_TERMINAL)
 
     add_dependencies(App ManagedAssemblies)
     target_link_libraries(App PRIVATE DotNet::NetHost)
+
+    # Dev-only F5 rebuild: let the running engine rebuild AetherGame from source and
+    # redeploy before reloading (CSharpScriptingSubsystem::RebuildFromSource). These
+    # paths only exist in a dev build tree; a packaged build leaves them undefined
+    # and the engine falls back to reload-only.
+    target_compile_definitions(App PRIVATE
+        AETHER_DOTNET_EXE="${AETHER_DOTNET_EXE}"
+        AETHER_GAME_PROJECT="${_aether_game_proj}"
+        AETHER_MANAGED_ARTIFACTS="${CMAKE_BINARY_DIR}/managed"
+        AETHER_MANAGED_CONFIG="$<IF:$<CONFIG:Debug>,Debug,Release>"
+        AETHER_MANAGED_CONFIGDIR="$<IF:$<CONFIG:Debug>,debug,release>")
 
     # Mirror the managed assemblies next to the executable for standalone runs.
     add_custom_command(TARGET App POST_BUILD
@@ -76,30 +103,6 @@ if(AETHER_HAS_DOTNET)
                     "${AETHER_NETHOST_DLL}" "$<TARGET_FILE_DIR:App>"
             COMMENT "Copying nethost.dll to app output"
             VERBATIM)
-    endif()
-
-    # Surface the C# projects in the Visual Studio solution for editing with full
-    # IntelliSense. These are the same projects the ManagedAssemblies target
-    # already builds via `dotnet build`, so they are excluded from the default
-    # "Build Solution" batch (EXCLUDE_FROM_DEFAULT_BUILD) to avoid a redundant
-    # second build - the App still consumes the ManagedAssemblies output. Editing
-    # a script and rebuilding the solution recompiles it through that target.
-    #
-    # Requires an MSBuild that can load SDK-style .csproj, i.e. a full Visual
-    # Studio install with a .NET workload. VS Build Tools alone cannot resolve
-    # Microsoft.NET.Sdk and fails to even load the projects, so allow opting out
-    # (e.g. on CI runners that only have Build Tools) with -DAETHER_ADD_CSHARP_PROJECTS=OFF.
-    option(AETHER_ADD_CSHARP_PROJECTS "Add the C# projects to the Visual Studio solution for editing" ON)
-    if(AETHER_ADD_CSHARP_PROJECTS AND CMAKE_GENERATOR MATCHES "Visual Studio")
-        set(_aether_managed_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Managed/AetherCore.Managed.csproj")
-        # C# project type GUID so VS loads them as real C# projects.
-        include_external_msproject(AetherCore.Managed "${_aether_managed_proj}"
-            TYPE FAE04EC0-301F-11D3-BF4B-00C04F79EFBC)
-        include_external_msproject(AetherScripts "${_aether_scripts_proj}"
-            TYPE FAE04EC0-301F-11D3-BF4B-00C04F79EFBC)
-        set_target_properties(AetherCore.Managed AetherScripts PROPERTIES
-            FOLDER "Managed"
-            EXCLUDE_FROM_DEFAULT_BUILD ON)
     endif()
 endif()
 

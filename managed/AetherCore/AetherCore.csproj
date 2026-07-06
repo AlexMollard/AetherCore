@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AetherCore is the engine-facing C# SDK: the public gameplay API (Entity, World,
+    Input, Camera, ...) plus the internal native binding layer (Internal/Native.cs
+    P/Invokes, Utf8, HostBridge) it is built on. Game scripts reference this
+    assembly compile-only (see AetherGame.csproj) so its types keep a single
+    identity across the default and collectible load contexts.
+
+    It is NOT the assembly the host boots from - that is AetherCore.Interop, which
+    owns the ABI handshake and the process runtimeconfig. This project is a plain
+    library; shared C# settings come from the repo-root Directory.Build.props.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherCore</AssemblyName>
+    <RootNamespace>AetherCore</RootNamespace>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    AetherCore.Interop is the ABI/host-boot assembly the native DotNetHost binds:
+    it owns the [UnmanagedCallersOnly] Bootstrap.Init entry point, the collectible
+    ScriptRegistry load context, and the blittable ABI structs (Abi.cs). It is
+    hidden from game code (the game references only the AetherCore SDK).
+
+    Because the host initializes the runtime from THIS assembly's runtimeconfig,
+    GenerateRuntimeConfigurationFiles and the process-wide GC policy live here.
+  -->
+  <PropertyGroup>
+    <AssemblyName>AetherCore.Interop</AssemblyName>
+    <RootNamespace>AetherCore.Interop</RootNamespace>
+
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <InvariantGlobalization>true</InvariantGlobalization>
+
+    <!-- GC tuned for a game host: workstation concurrent, keep decommitted VM
+         around to avoid re-faulting pages between frames. -->
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <RetainVMGarbageCollection>true</RetainVMGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../AetherCore/AetherCore.csproj" />
+  </ItemGroup>
+
+</Project>

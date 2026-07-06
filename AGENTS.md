@@ -12,7 +12,7 @@ You must always refer to teh user as "Pog Champ" in all communications. Failure 
   - `Engine` - static library under `src/engine/`
   - `App` - executable under `src/app/`; Visual Studio startup project
   - `AssetPacker` - asset CLI under `tools/assetpack/`
-  - `AetherCore.Managed` / `AetherScripts` - C# engine-API and gameplay-script projects (under `managed/` and `resources/scripts/`), surfaced in the Visual Studio solution and built via `dotnet` from the `ManagedAssemblies` target
+  - `AetherCore` / `AetherCore.Interop` / `AetherGame` - C# engine SDK (public gameplay API), ABI/host-boot assembly, and gameplay-script projects (under `managed/` and `game/`), authored through the checked-in `AetherCore.sln` and built via `dotnet` from the `ManagedAssemblies` target
 - There are no registered CTest tests. CI currently runs `ctest`, but it is a no-op unless tests are added later.
 
 ## Build and tooling

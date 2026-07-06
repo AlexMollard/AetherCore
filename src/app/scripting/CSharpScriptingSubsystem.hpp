@@ -23,7 +23,7 @@ namespace aether::app::scripting
 	// surface consumed by DebugLayer / DevToolsPanel (F5 hot-reload, error toasts).
 	//
 	// Constructed once per application. On construction it locates the deployed
-	// managed assemblies, boots CoreCLR, and loads AetherScripts.dll. Everything
+	// managed assemblies, boots CoreCLR, and loads AetherGame.dll. Everything
 	// degrades safely: without .NET, IsAvailable() is false and entity scripts
 	// simply do not run.
 	class CSharpScriptingSubsystem
@@ -42,6 +42,13 @@ namespace aether::app::scripting
 		// (Re)load the game-scripts assembly and refresh the type-name cache.
 		// Returns the number of discovered script types, or -1 on failure.
 		int LoadScripts();
+
+		// Dev-only: rebuild the game scripts (AetherGame) from source with
+		// `dotnet build` and redeploy the assembly into the managed load dir, so
+		// F5 picks up source edits without a separate build step. Returns true - a
+		// no-op - in a packaged build where the source/SDK paths were not baked in.
+		// On a build failure returns false and fills `error` with the build output.
+		bool RebuildFromSource(std::string& error);
 
 		// Concrete EntityScript type names discovered in the loaded assembly.
 		[[nodiscard]] const std::vector<std::string>& GetScriptTypeNames() const

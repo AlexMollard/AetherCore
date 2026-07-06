@@ -31,7 +31,7 @@ namespace aether::app
 	// next play tick with no extra bookkeeping.
 	//
 	// A ScriptComponent's `path` is a C# script type name run through
-	// CSharpScriptingSubsystem; behavior lives in the AetherScripts assembly.
+	// CSharpScriptingSubsystem; behavior lives in the AetherGame assembly.
 	class ScriptComponentSystem final : public System
 	{
 	public:

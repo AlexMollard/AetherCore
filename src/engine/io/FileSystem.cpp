@@ -296,7 +296,8 @@ namespace aether::io
 		Mount("data", dataDirectory);
 
 		// -- scripts:// ----------------------------------------------------------
-		// Scene scripts copied from resources/scripts/ at build time.
+		// Managed C# assemblies are deployed here (data/scripts/managed) by the
+		// ManagedAssemblies build target.
 		const auto scriptsDirectory = ResolveMountedDirectory({
 		        workingDirectory / "data/scripts",
 		        workingDirectory / "../data/scripts",

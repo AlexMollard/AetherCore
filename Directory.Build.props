@@ -1,20 +1,27 @@
 <Project>
 
   <!--
-    Repo-wide MSBuild defaults for the managed (C#) projects: AetherCore.Managed
-    and AetherScripts.
+    Repo-wide MSBuild defaults for the managed (C#) projects: the AetherCore SDK,
+    AetherCore.Interop (ABI/host boot), and AetherGame (game scripts).
+
+    Everything is guarded to '.csproj' so the CMake-generated C++ .vcxproj under
+    build*/ (which also import this file) are left untouched.
 
     ArtifactsPath routes obj/bin out of the source tree. The CMake build overrides
     it on the `dotnet build` command line to target the CMake binary dir, so this
     default only applies when Visual Studio (or a bare `dotnet build`) evaluates a
-    project directly - e.g. on solution load, restore, or right-click Build. That
-    keeps resources/scripts clean so build intermediates never get packed into
-    assets.pak.
-
-    Conditioned to .csproj so the CMake-generated C++ .vcxproj under build/ (which
-    also import Directory.Build.props) are left untouched.
+    project directly - e.g. on solution load, restore, or right-click Build.
   -->
   <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.csproj'">
+    <TargetFramework>net10.0</TargetFramework>
+
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <DebugType>portable</DebugType>
+
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
   </PropertyGroup>
 

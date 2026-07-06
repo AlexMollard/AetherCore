@@ -1,6 +1,9 @@
 #include "scripting/CSharpScriptingSubsystem.hpp"
 
 #include <array>
+#include <cstdio>
+#include <string>
+#include <system_error>
 
 #include "utils/Logger.hpp"
 
@@ -20,7 +23,7 @@ namespace aether::app::scripting
 			};
 			for (const auto& dir: candidates)
 			{
-				if (std::filesystem::exists(dir / "AetherCore.Managed.dll"))
+				if (std::filesystem::exists(dir / "AetherCore.Interop.dll"))
 				{
 					return dir;
 				}
@@ -36,7 +39,7 @@ namespace aether::app::scripting
 
 		if (m_host.Initialize(m_managedDir))
 		{
-			m_scriptsAssemblyPath = (m_managedDir / "AetherScripts.dll").string();
+			m_scriptsAssemblyPath = (m_managedDir / "AetherGame.dll").string();
 			LoadScripts();
 		}
 	}
@@ -65,6 +68,93 @@ namespace aether::app::scripting
 			AE_INFO(LogCategory::App, "C# scripts loaded: {} type(s)", count);
 		}
 		return count;
+	}
+
+	namespace
+	{
+#if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
+		// Runs a shell command, capturing combined stdout+stderr. Returns the
+		// process exit code (0 == success), or -1 if the process failed to start.
+		int RunCapture(const std::string& command, std::string& output)
+		{
+#ifdef _WIN32
+			FILE* pipe = _popen(command.c_str(), "r");
+#else
+			FILE* pipe = popen(command.c_str(), "r");
+#endif
+			if (pipe == nullptr)
+			{
+				output = "failed to start build process";
+				return -1;
+			}
+			char buffer[512];
+			while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr)
+			{
+				output += buffer;
+			}
+#ifdef _WIN32
+			return _pclose(pipe);
+#else
+			return pclose(pipe);
+#endif
+		}
+#endif
+	} // namespace
+
+	// Dev-only. Rebuilds AetherGame from source and redeploys it before a reload so
+	// F5 reflects source edits with no separate build step. In a packaged build the
+	// AETHER_GAME_PROJECT / AETHER_DOTNET_EXE definitions are absent and this is a
+	// no-op (reload-only). SDK/Interop edits are NOT hot-reloadable and still need a
+	// full rebuild + restart; only the collectible game assembly is swapped here.
+	bool CSharpScriptingSubsystem::RebuildFromSource(std::string& error)
+	{
+#if defined(AETHER_GAME_PROJECT) && defined(AETHER_DOTNET_EXE)
+		namespace fs = std::filesystem;
+
+		// Incremental `dotnet build` of the game project (a no-op when it was just
+		// built in VS). ArtifactsPath mirrors the CMake managed build.
+		const std::string inner = std::string("\"") + AETHER_DOTNET_EXE + "\" build \"" + AETHER_GAME_PROJECT
+			+ "\" -c " + AETHER_MANAGED_CONFIG + " --nologo -v:m -p:ArtifactsPath=\"" + AETHER_MANAGED_ARTIFACTS
+			+ "\" 2>&1";
+#ifdef _WIN32
+		// cmd.exe needs the whole command re-wrapped so the quoted, spaced exe path parses.
+		const std::string command = "\"" + inner + "\"";
+#else
+		const std::string command = inner;
+#endif
+
+		std::string output;
+		const int rc = RunCapture(command, output);
+		if (rc != 0)
+		{
+			error = output.empty() ? "dotnet build failed" : output;
+			return false;
+		}
+
+		// Redeploy the freshly built game assembly into the load dir. The scripts
+		// ALC loads from bytes (see ScriptRegistry.Load), so overwriting the on-disk
+		// dll mid-run is safe.
+		const fs::path buildOut = fs::path(AETHER_MANAGED_ARTIFACTS) / "bin" / "AetherGame" / AETHER_MANAGED_CONFIGDIR;
+		for (const char* name: {"AetherGame.dll", "AetherGame.pdb", "AetherGame.deps.json"})
+		{
+			const fs::path src = buildOut / name;
+			if (!fs::exists(src))
+			{
+				continue;
+			}
+			std::error_code ec;
+			fs::copy_file(src, m_managedDir / name, fs::copy_options::overwrite_existing, ec);
+			if (ec)
+			{
+				error = std::string("failed to deploy ") + name + ": " + ec.message();
+				return false;
+			}
+		}
+		return true;
+#else
+		(void) error;
+		return true; // packaged build / no SDK: reload-only
+#endif
 	}
 
 	void CSharpScriptingSubsystem::RefreshTypeNames()

@@ -32,7 +32,7 @@ namespace aether::scripting
 		DotNetHost& operator=(DotNetHost&&) = delete;
 
 		// Boots CoreCLR from the managed assemblies deployed in `managedDir`
-		// (expects AetherCore.Managed.dll + .runtimeconfig.json there). Idempotent:
+		// (expects AetherCore.Interop.dll + .runtimeconfig.json there). Idempotent:
 		// a second call is a no-op that returns the current availability.
 		bool Initialize(const std::filesystem::path& managedDir);
 
