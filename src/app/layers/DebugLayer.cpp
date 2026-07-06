@@ -723,7 +723,12 @@ namespace aether::app
 		// reserved viewport work-area and black-screened the render - matches the
 		// menu bar's working approach.
 		const bool showStatusBar = m_dockspaceBuilt;
-		const float statusBarHeight = showStatusBar ? ImGui::GetFrameHeightWithSpacing() : 0.0f;
+		const float statusBarHeight = showStatusBar ? ImGui::GetFrameHeight() : 0.0f;
+		// Zero the vertical item spacing between the DockSpace and the status bar so
+		// the bar sits flush against the windows above it. Otherwise an ItemSpacing.y
+		// strip is left uncovered and, with no swapchain clear, flashes stale
+		// swapchain contents through the NoBackground host window.
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
 		ImGui::DockSpace(dockspace_id, ImVec2(0.0f, -statusBarHeight), ImGuiDockNodeFlags_PassthruCentralNode);
 
 		if (m_resetLayout || (!m_dockspaceBuilt && !hasSavedDockspace))
@@ -760,6 +765,7 @@ namespace aether::app
 		{
 			DrawStatusBar(context);
 		}
+		ImGui::PopStyleVar(); // ItemSpacing
 
 		ImGui::End();
 
