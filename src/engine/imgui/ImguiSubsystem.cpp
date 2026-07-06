@@ -220,6 +220,10 @@ namespace aether
 		// owns the DPI-aware DisplaySize (logical) + DisplayFramebufferScale.
 		io.ConfigDpiScaleFonts = true;
 		io.ConfigDpiScaleViewports = true;
+		// Windows (including a torn-out Viewport) move only by their title bar, so a
+		// drag over the viewport body / gizmo doesn't drag the whole window and doesn't
+		// steal the press from the scene camera.
+		io.ConfigWindowsMoveFromTitleBarOnly = true;
 
 		ApplyTheme();
 
@@ -319,6 +323,12 @@ namespace aether
 		}
 		ImGui::NewFrame();
 		++m_frameIndex;
+
+		if (m_clampWindowsFrames > 0)
+		{
+			ClampWindowsToMainViewport();
+			--m_clampWindowsFrames;
+		}
 	}
 
 	void ImguiSubsystem::Render()
@@ -437,6 +447,37 @@ namespace aether
 		else
 		{
 			io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+			// ImGui merges torn-out windows back into the main viewport at their last
+			// screen position, which can leave the title bar off the main window's
+			// edge (ungrabbable). Clamp them back into view over the next few frames.
+			m_clampWindowsFrames = 3;
+		}
+	}
+
+	void ImguiSubsystem::ClampWindowsToMainViewport()
+	{
+		if (!m_initialized)
+		{
+			return;
+		}
+		const ImGuiContext& g = *ImGui::GetCurrentContext();
+		const ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+		const ImVec2 workMin = mainViewport->WorkPos;
+		const ImVec2 workMax = ImVec2(mainViewport->WorkPos.x + mainViewport->WorkSize.x, mainViewport->WorkPos.y + mainViewport->WorkSize.y);
+		const float titleH = ImGui::GetFrameHeight();
+		for (ImGuiWindow* window: g.Windows)
+		{
+			if (window == nullptr || !window->WasActive || (window->Flags & ImGuiWindowFlags_ChildWindow) != 0)
+			{
+				continue;
+			}
+			ImVec2 pos = window->Pos;
+			pos.x = std::clamp(pos.x, workMin.x, std::max(workMin.x, workMax.x - window->Size.x));
+			pos.y = std::clamp(pos.y, workMin.y, std::max(workMin.y, workMax.y - titleH));
+			if (pos.x != window->Pos.x || pos.y != window->Pos.y)
+			{
+				ImGui::SetWindowPos(window, pos, ImGuiCond_Always);
+			}
 		}
 	}
 

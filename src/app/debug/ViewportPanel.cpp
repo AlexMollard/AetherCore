@@ -462,7 +462,18 @@ namespace aether::app
 		// engine's per-frame mouse capture on (Tick recomputes captured =
 		// WantsInputCapture && !viewportActive BEFORE cameras update), so no
 		// camera mode fights the drag.
-		const bool gizmoHot = gizmoDrawn && (ImGuizmo::IsUsingAny() || (ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right)));
+		// Gate the gizmo's "using" state on the left button actually being down: a
+		// stale ImGuizmo drag state (which can linger after a multi-viewport window
+		// move) otherwise keeps the gizmo "hot" forever and permanently steals mouse
+		// input from the camera.
+		const ImVec2 gizmoMouse = ImGui::GetIO().MousePos;
+		const bool mouseOverImage = gizmoMouse.x >= imageMin.x && gizmoMouse.x < imageMax.x && gizmoMouse.y >= imageMin.y && gizmoMouse.y < imageMax.y;
+		// Suppress camera input only when the cursor is genuinely over the image AND
+		// either actively dragging a gizmo handle (LMB down) or hovering one. Bounding
+		// on mouseOverImage stops a stale ImGuizmo IsOver/IsUsing state - which can
+		// linger across a multi-viewport window move - from blocking the camera
+		// everywhere (the "no viewport mouse control" case).
+		const bool gizmoHot = gizmoDrawn && mouseOverImage && ((ImGuizmo::IsUsingAny() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) || (ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right)));
 		context.Get<Input>().SetMouseViewportTransform(glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
 		if (gizmoHot)
 		{
@@ -471,7 +482,9 @@ namespace aether::app
 		else
 		{
 			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
-			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive());
+			// Item-hover can go stale across a multi-viewport move; fall back to the
+			// manual mouse-in-image test (additive - only grants input, never removes).
+			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive() || (mouseOverImage && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)));
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
@@ -538,7 +551,7 @@ namespace aether::app
 		int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
 
 		const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
-		ImGui::SetNextItemWidth(72.0f);
+		ImGui::SetNextItemWidth(104.0f);
 		if (ImGui::Combo("##res", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
 		{
 			viewportSettings.resolutionMode = static_cast<SceneViewportResolutionMode>(resolutionMode);
@@ -593,13 +606,13 @@ namespace aether::app
 
 		const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(72.0f);
+		ImGui::SetNextItemWidth(82.0f);
 		ImGui::Combo("##display", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
 		ImGui::SetItemTooltip("Display mode");
 
 		const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
 		ImGui::SameLine();
-		ImGui::SetNextItemWidth(66.0f);
+		ImGui::SetNextItemWidth(80.0f);
 		ImGui::Combo("##aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
 		ImGui::SetItemTooltip("Aspect ratio");
 

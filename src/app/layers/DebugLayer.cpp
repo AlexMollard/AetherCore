@@ -680,6 +680,20 @@ namespace aether::app
 			m_pendingLayoutApply = false;
 		}
 
+		// Fill the main viewport's backbuffer with an opaque editor background behind
+		// every window. The passthrough dockspace otherwise exposes the swapchain,
+		// which shows stale pixels where the central node is empty (e.g. all panels
+		// torn out to other monitors). Every window - including the Viewport panel's
+		// scene image - draws on top, so the normal docked view is unchanged. Gated to
+		// frame 1+ like the menu/status bars: submitting ImGui geometry on frame 0,
+		// before the first real UI frame, faults in this threaded frame-0 setup.
+		if (m_dockspaceBuilt)
+		{
+			ImGuiViewport* mainViewport = ImGui::GetMainViewport();
+			const ImU32 editorBg = ImGui::GetColorU32(ImGuiCol_WindowBg) | IM_COL32(0, 0, 0, 255);
+			ImGui::GetBackgroundDrawList(mainViewport)->AddRectFilled(mainViewport->Pos, ImVec2(mainViewport->Pos.x + mainViewport->Size.x, mainViewport->Pos.y + mainViewport->Size.y), editorBg);
+		}
+
 		// ── Editor undo (edit mode only) ──────────────────────────────────────
 		// Every LMB press records a pre-gesture snapshot (deduped against the
 		// stack top), so a whole gizmo drag, slider drag or destructive click

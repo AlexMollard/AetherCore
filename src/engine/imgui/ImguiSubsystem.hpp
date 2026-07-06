@@ -101,6 +101,9 @@ namespace aether
 		void InitBackends(ServiceContainer& services);
 		void ShutdownBackends();
 		void RetirePendingTextureReleases();
+		// After viewports are disabled, clamp windows merged back from secondary
+		// viewports so their title bars stay grabbable inside the main viewport.
+		void ClampWindowsToMainViewport();
 
 		bool m_initialized = false;
 		bool m_backendsInitialized = false;
@@ -114,5 +117,6 @@ namespace aether
 		std::vector<PendingTextureRelease> m_pendingTextureReleases;
 		std::unique_ptr<ImguiViewportRenderer> m_viewportRenderer;
 		bool m_viewportsEnabled = true;
+		int m_clampWindowsFrames = 0; // >0: pull merged-back windows into the main viewport
 	};
 } // namespace aether
