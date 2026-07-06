@@ -145,6 +145,18 @@ namespace aether
 			return m_postProcessStack;
 		}
 
+		// Fixed square edge of the debug texture-preview render target.
+		static constexpr std::uint32_t kTexturePreviewSize = 2048;
+
+		// Textures panel: request a processed preview of the source at `bindlessSlot`
+		// (enabled=false / slot 0xFFFFFFFF disables). Read on the render thread each
+		// frame by the $TexturePreview pass.
+		void SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled);
+		[[nodiscard]] gpu::ImageView GetTexturePreviewView() const
+		{
+			return m_texturePreviewView;
+		}
+
 		[[nodiscard]] PhysicsDebugRenderer& GetPhysicsDebugRenderer()
 		{
 			return m_physicsDebug;
@@ -188,6 +200,21 @@ namespace aether
 		RGImage m_sceneDepth;
 		BindlessManager* m_bindlessManager = nullptr;
 		std::uint32_t m_sceneDepthBindlessSlot = 0xFFFFFFFFu;
+
+		// Debug texture-preview pass (Textures panel). Request scalars are set on the
+		// producer thread and read in the render-thread Execute (a torn read just
+		// yields a one-frame-stale preview).
+		GraphicsPipeline m_texturePreviewPipeline;
+		gpu::TextureHandle m_texturePreviewHandle;
+		RGImage m_texturePreview;
+		gpu::ImageView m_texturePreviewView = nullptr;
+		gpu::Extent2D m_previewSrcExtent{};
+		std::uint32_t m_previewSrcSlot = 0xFFFFFFFFu;
+		std::uint32_t m_previewChannel = 0;
+		float m_previewExposure = 1.0f;
+		std::uint32_t m_previewFlags = 0;
+		std::uint32_t m_previewTonemap = 0;
+		bool m_previewEnabled = false;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
 		std::atomic_bool m_forwardPassEnabled = true;

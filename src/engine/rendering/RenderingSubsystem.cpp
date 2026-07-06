@@ -14,6 +14,8 @@
 #include "gpu/GpuDevice.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "gpu/GpuTypes.hpp"
+#include "gpu/CommandList.hpp"
+#include "gpu/PushConstantsBytes.hpp"
 #include "material/MaterialBuffer.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "vulkan/Swapchain.hpp"
@@ -215,6 +217,33 @@ namespace aether
 
 		m_renderer.Initialize(&m_postProcessStack);
 
+		// Debug texture-preview: fixed-size RGBA8 target the Textures panel samples.
+		{
+			const gpu::TextureDesc previewDesc{
+			        .format = gpu::Format::R8G8B8A8Unorm,
+			        .extent = {kTexturePreviewSize, kTexturePreviewSize},
+			        .usage = gpu::ImageUsage::ColorAttachment | gpu::ImageUsage::Sampled,
+			        .aspect = gpu::ImageAspect::Color,
+			        .debugName = "Debug.TexturePreview",
+			};
+			m_texturePreviewHandle = gpu::ResourceRegistry::CreateTexture(previewDesc);
+			if (m_texturePreviewHandle.IsValid())
+			{
+				const auto& previewTexture = gpu::ResourceRegistry::ResolveTexture(m_texturePreviewHandle);
+				m_texturePreviewView = previewTexture.view;
+				m_texturePreview = m_renderGraph.RegisterImage(gpu::ResourceRegistry::ResolveTextureImage(m_texturePreviewHandle), previewTexture.view);
+			}
+			AE_EXPECT_OR_THROW(texturePreviewPipeline,
+			        GraphicsPipeline::Create(vk.GetDevice().device,
+			                {
+			                        .shaderVfsPath = "shaders://texture_preview.spv",
+			                        .colorFormat = gpu::Format::R8G8B8A8Unorm,
+			                        .debugName = "TexturePreview",
+			                        .descriptorHeapMappings = bindless.GetDescriptorHeapMappings(),
+			                }));
+			m_texturePreviewPipeline = std::move(texturePreviewPipeline);
+		}
+
 		AE_EXPECT_OR_THROW(skyboxPipeline,
 		        GraphicsPipeline::Create(vk.GetDevice().device,
 		                {
@@ -263,6 +292,12 @@ namespace aether
 		DestroySceneViewportDepth();
 		m_gtaoPass.Destroy();
 		m_postProcessStack.Destroy();
+		m_texturePreviewPipeline.Destroy();
+		if (m_texturePreviewHandle.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_texturePreviewHandle);
+			m_texturePreviewHandle = {};
+		}
 		m_preDepthPipeline.Destroy();
 		m_skyboxPipeline.Destroy();
 		m_cullPass.Shutdown();
@@ -621,6 +656,72 @@ namespace aether
 			        })
 			        .Execute([](PassContext&) {});
 		}
+
+		// Debug texture preview (Textures panel). Runs last so any source texture is
+		// already produced + ShaderReadOnly; samples it by bindless slot into the
+		// preview target, then a no-op read makes the target ImGui-sampleable.
+		if (m_texturePreview.IsValid())
+		{
+			m_renderGraph
+			        .AddFullscreenPass({
+			                .name = "$TexturePreview",
+			                .color = m_texturePreview,
+			                .extent = {kTexturePreviewSize, kTexturePreviewSize},
+			                .loadOp = gpu::LoadOp::Clear,
+			        })
+			        .Execute(
+			                [this, bindless = frame.bindless](PassContext& ctx)
+			                {
+				                if (!m_previewEnabled || m_previewSrcSlot == 0xFFFFFFFFu)
+				                {
+					                return;
+				                }
+				                const std::uint32_t w = std::min(m_previewSrcExtent.width, kTexturePreviewSize);
+				                const std::uint32_t h = std::min(m_previewSrcExtent.height, kTexturePreviewSize);
+				                if (w == 0u || h == 0u)
+				                {
+					                return;
+				                }
+				                gpu::CommandList& cmd = ctx.recorder;
+				                cmd.SetViewport(gpu::Viewport{.width = static_cast<float>(w), .height = static_cast<float>(h)});
+				                cmd.SetScissor(gpu::Rect2D{.x = 0, .y = 0, .width = w, .height = h});
+				                bindless->CmdBindHeaps(cmd);
+				                cmd.BindPipeline(m_texturePreviewPipeline.GetPipeline());
+				                struct
+				                {
+					                std::uint32_t srcSlot;
+					                std::uint32_t channel;
+					                float exposure;
+					                std::uint32_t flags;
+					                std::uint32_t tonemapMode;
+					                std::uint32_t width;
+					                std::uint32_t height;
+					                std::uint32_t pad;
+				                } push;
+				                push.srcSlot = m_previewSrcSlot;
+				                push.channel = m_previewChannel;
+				                push.exposure = m_previewExposure;
+				                push.flags = m_previewFlags;
+				                push.tonemapMode = m_previewTonemap;
+				                push.width = w;
+				                push.height = h;
+				                push.pad = 0u;
+				                cmd.PushDataRaw(0, gpu::AsPushConstantBytes(push));
+				                cmd.Draw(3, 1, 0, 0);
+			                });
+			m_renderGraph.AddPass("$TexturePreviewReady").ReadTexture(m_texturePreview).Execute([](PassContext&) {});
+		}
+	}
+
+	void RenderingSubsystem::SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled)
+	{
+		m_previewSrcSlot = bindlessSlot;
+		m_previewSrcExtent = srcExtent;
+		m_previewChannel = channel;
+		m_previewExposure = exposure;
+		m_previewFlags = flags;
+		m_previewTonemap = tonemapMode;
+		m_previewEnabled = enabled && bindlessSlot != 0xFFFFFFFFu;
 	}
 
 	void RenderingSubsystem::WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries)

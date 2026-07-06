@@ -1,18 +1,23 @@
 #include "debug/TextureInspectorPanel.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <format>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include <imgui.h>
 
 #include "Color.hpp"
 #include "debug/DebugPanel.hpp"
+#include "debug/Icons.hpp"
 #include "gpu/ResourceRegistry.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
+#include "rendering/RenderingSubsystem.hpp"
+#include "utils/FuzzyMatch.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/TomlConfig.hpp"
 
@@ -25,6 +30,59 @@ namespace aether::app
 		{
 			using Underlying = std::underlying_type_t<Enum>;
 			return (static_cast<Underlying>(value) & static_cast<Underlying>(flag)) != 0;
+		}
+
+		// Toolbar "Usage" dropdown: 0=All, then a few common buckets.
+		bool PassesUsageFilter(gpu::ImageUsage usage, gpu::ImageAspect aspect, int filter)
+		{
+			switch (filter)
+			{
+				case 1:
+					return HasFlag(usage, gpu::ImageUsage::Sampled);
+				case 2:
+					return HasFlag(usage, gpu::ImageUsage::ColorAttachment);
+				case 3:
+					return HasFlag(usage, gpu::ImageUsage::DepthStencilAttachment) || HasFlag(aspect, gpu::ImageAspect::Depth);
+				case 4:
+					return HasFlag(usage, gpu::ImageUsage::Storage);
+				default:
+					return true;
+			}
+		}
+
+		// Sort the (already-filtered) view by the clicked column. columnId matches
+		// the user id passed to TableSetupColumn.
+		void SortTextures(std::vector<const gpu::DebugTextureInfo*>& list, ImGuiID columnId, bool ascending)
+		{
+			const auto less = [columnId](const gpu::DebugTextureInfo* a, const gpu::DebugTextureInfo* b)
+			{
+				switch (columnId)
+				{
+					case 1:
+						return static_cast<std::uint64_t>(a->extent.width) * a->extent.height < static_cast<std::uint64_t>(b->extent.width) * b->extent.height;
+					case 2:
+						return static_cast<int>(a->format) < static_cast<int>(b->format);
+					case 4:
+						return a->handle.bits < b->handle.bits;
+					default:
+						return a->debugName < b->debugName;
+				}
+			};
+			std::stable_sort(list.begin(), list.end(), [&](const gpu::DebugTextureInfo* a, const gpu::DebugTextureInfo* b) { return ascending ? less(a, b) : less(b, a); });
+		}
+
+		// Transparency backdrop tiled across the visible preview region.
+		void DrawCheckerboard(ImDrawList* drawList, ImVec2 origin, ImVec2 size)
+		{
+			constexpr float cell = 12.0f;
+			for (float y = 0.0f; y < size.y; y += cell)
+			{
+				for (float x = 0.0f; x < size.x; x += cell)
+				{
+					const bool dark = (static_cast<int>(x / cell) + static_cast<int>(y / cell)) % 2 == 0;
+					drawList->AddRectFilled(ImVec2(origin.x + x, origin.y + y), ImVec2(origin.x + std::min(x + cell, size.x), origin.y + std::min(y + cell, size.y)), dark ? IM_COL32(72, 76, 84, 255) : IM_COL32(112, 116, 124, 255));
+				}
+			}
 		}
 	} // anonymous namespace
 
@@ -52,6 +110,7 @@ namespace aether::app
 			return;
 		}
 
+		// Drop cached ImGui descriptors for textures that no longer exist.
 		if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
 		{
 			for (auto it = m_textureInspectorTextureIds.begin(); it != m_textureInspectorTextureIds.end();)
@@ -69,107 +128,238 @@ namespace aether::app
 			}
 		}
 
+		// Keep a valid selection in the full list (independent of the filter below).
 		const auto selectedIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
 		if (selectedIt == textures.end())
 		{
 			m_selectedTextureBits = textures.front().handle.bits;
 		}
 
-		if (ImGui::BeginTable("TextureList", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY, ImVec2(0.0f, 220.0f)))
+		// ── Search + usage filter ──────────────────────────────────────────────
+		ImGui::SetNextItemWidth(-170.0f);
+		ImGui::InputTextWithHint("##texsearch", ICON_FA_MAGNIFYING_GLASS "  Filter textures", m_texSearch, sizeof(m_texSearch));
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(160.0f);
+		const char* usageFilters[] = {"All usages", "Sampled", "Color target", "Depth / Stencil", "Storage"};
+		ImGui::Combo("##texusage", &m_texUsageFilter, usageFilters, static_cast<int>(std::size(usageFilters)));
+
+		std::vector<const gpu::DebugTextureInfo*> filtered;
+		filtered.reserve(textures.size());
+		for (const gpu::DebugTextureInfo& candidate: textures)
 		{
-			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-			ImGui::TableSetupColumn("Extent", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-			ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, 140.0f);
-			ImGui::TableSetupColumn("Bindless", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-			ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+			if (!PassesUsageFilter(candidate.usage, candidate.aspect, m_texUsageFilter))
+			{
+				continue;
+			}
+			if (m_texSearch[0] != '\0' && !FuzzyMatch(m_texSearch, candidate.debugName).has_value())
+			{
+				continue;
+			}
+			filtered.push_back(&candidate);
+		}
+
+		// ── Sortable list ──────────────────────────────────────────────────────
+		constexpr ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Sortable | ImGuiTableFlags_SortTristate;
+		if (ImGui::BeginTable("TextureList", 5, tableFlags, ImVec2(0.0f, 200.0f)))
+		{
+			ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch | ImGuiTableColumnFlags_DefaultSort, 0.0f, 0);
+			ImGui::TableSetupColumn("Extent", ImGuiTableColumnFlags_WidthFixed, 90.0f, 1);
+			ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, 140.0f, 2);
+			ImGui::TableSetupColumn("Bindless", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoSort, 70.0f, 3);
+			ImGui::TableSetupColumn("Handle", ImGuiTableColumnFlags_WidthFixed, 70.0f, 4);
+			ImGui::TableSetupScrollFreeze(0, 1);
 			ImGui::TableHeadersRow();
 
-			for (const gpu::DebugTextureInfo& texture: textures)
+			if (const ImGuiTableSortSpecs* sortSpecs = ImGui::TableGetSortSpecs(); sortSpecs != nullptr && sortSpecs->SpecsCount > 0)
 			{
+				SortTextures(filtered, sortSpecs->Specs[0].ColumnUserID, sortSpecs->Specs[0].SortDirection != ImGuiSortDirection_Descending);
+			}
+
+			for (const gpu::DebugTextureInfo* entry: filtered)
+			{
+				const gpu::DebugTextureInfo& row = *entry;
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
-				const bool selected = texture.handle.bits == m_selectedTextureBits;
-				const std::string label = std::format("{}###tex{}", ShortRenderPassName(texture.debugName), texture.handle.bits);
+				const bool selected = row.handle.bits == m_selectedTextureBits;
+				const std::string label = std::format("{}###tex{}", ShortRenderPassName(row.debugName), row.handle.bits);
 				if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns))
 				{
-					m_selectedTextureBits = texture.handle.bits;
+					m_selectedTextureBits = row.handle.bits;
 				}
 				ImGui::TableSetColumnIndex(1);
-				ImGui::Text("%u x %u", texture.extent.width, texture.extent.height);
+				ImGui::Text("%u x %u", row.extent.width, row.extent.height);
 				ImGui::TableSetColumnIndex(2);
-				ImGui::TextUnformatted(FormatName(texture.format));
+				ImGui::TextUnformatted(FormatName(row.format));
 				ImGui::TableSetColumnIndex(3);
-				if (texture.hasBindlessSampled)
+				if (row.hasBindlessSampled)
 				{
-					ImGui::Text("%u", texture.bindlessSampledSlot);
+					ImGui::Text("%u", row.bindlessSampledSlot);
 				}
 				else
 				{
 					ImGui::TextDisabled("-");
 				}
 				ImGui::TableSetColumnIndex(4);
-				ImGui::Text("0x%08X", texture.handle.bits);
+				ImGui::Text("0x%08X", row.handle.bits);
 			}
 			ImGui::EndTable();
 		}
+		ImGui::TextDisabled("%zu / %zu textures", filtered.size(), textures.size());
 
 		const auto currentIt = std::ranges::find_if(textures, [this](const gpu::DebugTextureInfo& texture) { return texture.handle.bits == m_selectedTextureBits; });
-		if (currentIt == textures.end())
-		{
-			ImGui::End();
-			return;
-		}
+		const gpu::DebugTextureInfo& texture = (currentIt == textures.end()) ? textures.front() : *currentIt;
 
-		const gpu::DebugTextureInfo& texture = *currentIt;
+		// ── Preview: channel tint, fit / 1:1, zoom, checkerboard ───────────────
 		ImGui::SeparatorText("Preview");
 		const char* channelNames[] = {"RGBA", "Red", "Green", "Blue"};
 		m_texturePreviewChannel = std::clamp(m_texturePreviewChannel, 0, static_cast<int>(std::size(channelNames)) - 1);
-		ImGui::Combo("Channel tint", &m_texturePreviewChannel, channelNames, static_cast<int>(std::size(channelNames)));
-		ImGui::SliderFloat("Zoom", &m_texturePreviewZoom, 0.05f, 16.0f, "%.2fx", ImGuiSliderFlags_Logarithmic);
-		ImGui::Checkbox("Checkerboard", &m_texturePreviewCheckerboard);
+		ImGui::SetNextItemWidth(84.0f);
+		ImGui::Combo("##channel", &m_texturePreviewChannel, channelNames, static_cast<int>(std::size(channelNames)));
+		ImGui::SameLine();
+		if (ImGui::SmallButton("Fit"))
+		{
+			m_texturePreviewFit = true;
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton("1:1"))
+		{
+			m_texturePreviewZoom = 1.0f;
+			m_texturePreviewFit = false;
+		}
+		ImGui::SameLine();
+		ImGui::SetNextItemWidth(120.0f);
+		if (ImGui::SliderFloat("##zoom", &m_texturePreviewZoom, 0.02f, 32.0f, "%.2fx", ImGuiSliderFlags_Logarithmic))
+		{
+			m_texturePreviewFit = false;
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Checker", &m_texturePreviewCheckerboard);
+
+		// Channel isolation / exposure / tonemap render through the $TexturePreview
+		// GPU pass when the source has a bindless slot; else fall back to a tint.
+		auto* rendering = context.TryGet<RenderingSubsystem>();
+		const bool shaderPreview = rendering != nullptr && texture.hasBindlessSampled && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
+		ImGui::SetNextItemWidth(120.0f);
+		ImGui::SliderFloat("Exposure", &m_previewExposure, 0.01f, 16.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+		ImGui::SameLine();
+		ImGui::Checkbox("Tonemap", &m_previewTonemap);
+		if (!shaderPreview)
+		{
+			ImGui::SameLine();
+			ImGui::TextDisabled("(tint only: no bindless slot)");
+		}
+		if (rendering != nullptr)
+		{
+			const std::uint32_t flags = m_previewTonemap ? 1u : 0u; // bit0 = tonemap
+			rendering->SetTexturePreviewRequest(shaderPreview ? texture.bindlessSampledSlot : 0xFFFFFFFFu, texture.extent, static_cast<std::uint32_t>(m_texturePreviewChannel), m_previewExposure, flags, 0u, shaderPreview);
+		}
 
 		const bool canPreview = texture.view != nullptr && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
 		if (canPreview)
 		{
-			std::uint64_t& cachedTextureId = m_textureInspectorTextureIds[texture.handle.bits];
-			if (cachedTextureId == 0)
+			// Shader path samples the $TexturePreview target; fallback samples the
+			// source directly. UV clamps to the source's region of the fixed target.
+			std::uint64_t cachedTextureId = 0;
+			ImVec2 uvMax(1.0f, 1.0f);
+			if (shaderPreview)
 			{
-				if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+				if (m_previewTextureId == 0)
 				{
-					cachedTextureId = static_cast<std::uint64_t>(imgui->RegisterTexture(texture.view, gpu::ImageLayout::ShaderReadOnly));
+					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+					{
+						m_previewTextureId = static_cast<std::uint64_t>(imgui->RegisterTexture(rendering->GetTexturePreviewView(), gpu::ImageLayout::ShaderReadOnly));
+					}
 				}
+				cachedTextureId = m_previewTextureId;
+				const float edge = static_cast<float>(RenderingSubsystem::kTexturePreviewSize);
+				uvMax = ImVec2(std::min(static_cast<float>(texture.extent.width), edge) / edge, std::min(static_cast<float>(texture.extent.height), edge) / edge);
+			}
+			else
+			{
+				std::uint64_t& sourceId = m_textureInspectorTextureIds[texture.handle.bits];
+				if (sourceId == 0)
+				{
+					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
+					{
+						sourceId = static_cast<std::uint64_t>(imgui->RegisterTexture(texture.view, gpu::ImageLayout::ShaderReadOnly));
+					}
+				}
+				cachedTextureId = sourceId;
 			}
 
 			if (cachedTextureId != 0)
 			{
-				const ImVec2 region = ImGui::GetContentRegionAvail();
-				const float aspect = texture.extent.height > 0 ? static_cast<float>(texture.extent.width) / static_cast<float>(texture.extent.height) : 1.0f;
-				ImVec2 previewSize(std::min(region.x, static_cast<float>(texture.extent.width) * m_texturePreviewZoom), 0.0f);
-				previewSize.y = previewSize.x / aspect;
-				if (previewSize.y > region.y)
+				const float texW = static_cast<float>(texture.extent.width);
+				const float texH = static_cast<float>(texture.extent.height);
+				const float childHeight = std::max(120.0f, ImGui::GetContentRegionAvail().y - 150.0f);
+				ImGui::BeginChild("##texpreviewregion", ImVec2(0.0f, childHeight), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar);
+
+				const ImVec2 viewRegion = ImGui::GetContentRegionAvail();
+				if (m_texturePreviewFit && texW > 0.0f && texH > 0.0f)
 				{
-					previewSize.y = region.y;
-					previewSize.x = previewSize.y * aspect;
+					m_texturePreviewZoom = std::clamp(std::min(viewRegion.x / texW, viewRegion.y / texH), 0.02f, 32.0f);
 				}
 
+				// Top-left of the (scrolled) content in screen space; the image is drawn here.
+				const ImVec2 contentOrigin = ImGui::GetCursorScreenPos();
+
+				// Wheel zoom, anchored on the texel under the cursor.
+				const float wheel = ImGui::GetIO().MouseWheel;
+				if (ImGui::IsWindowHovered() && wheel != 0.0f && m_texturePreviewZoom > 0.0f)
+				{
+					const float oldZoom = m_texturePreviewZoom;
+					m_texturePreviewZoom = std::clamp(m_texturePreviewZoom * std::pow(1.15f, wheel), 0.02f, 32.0f);
+					m_texturePreviewFit = false;
+					const ImVec2 mouse = ImGui::GetMousePos();
+					const float texelX = (mouse.x - contentOrigin.x) / oldZoom;
+					const float texelY = (mouse.y - contentOrigin.y) / oldZoom;
+					ImGui::SetScrollX(ImGui::GetScrollX() + contentOrigin.x + texelX * m_texturePreviewZoom - mouse.x);
+					ImGui::SetScrollY(ImGui::GetScrollY() + contentOrigin.y + texelY * m_texturePreviewZoom - mouse.y);
+				}
+
+				const ImVec2 imgSize(texW * m_texturePreviewZoom, texH * m_texturePreviewZoom);
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
 				if (m_texturePreviewCheckerboard)
 				{
-					const ImVec2 p = ImGui::GetCursorScreenPos();
-					ImDrawList* drawList = ImGui::GetWindowDrawList();
-					const float cell = 12.0f;
-					for (float y = 0.0f; y < previewSize.y; y += cell)
-					{
-						for (float x = 0.0f; x < previewSize.x; x += cell)
-						{
-							const bool dark = (static_cast<int>(x / cell) + static_cast<int>(y / cell)) % 2 == 0;
-							drawList->AddRectFilled(ImVec2(p.x + x, p.y + y), ImVec2(p.x + std::min(x + cell, previewSize.x), p.y + std::min(y + cell, previewSize.y)), dark ? IM_COL32(72, 76, 84, 255) : IM_COL32(112, 116, 124, 255));
-						}
-					}
+					DrawCheckerboard(drawList, ImGui::GetWindowPos(), ImGui::GetWindowSize());
 				}
-				const ImU32 tint = m_texturePreviewChannel == 1 ? IM_COL32(255, 0, 0, 255) : m_texturePreviewChannel == 2 ? IM_COL32(0, 255, 0, 255) : m_texturePreviewChannel == 3 ? IM_COL32(0, 0, 255, 255) : IM_COL32_WHITE;
-				const ImVec2 p = ImGui::GetCursorScreenPos();
-				ImGui::GetWindowDrawList()->AddImage(ImTextureRef(static_cast<ImTextureID>(cachedTextureId)), p, ImVec2(p.x + previewSize.x, p.y + previewSize.y), ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), tint);
-				ImGui::Dummy(previewSize);
+				const ImU32 tint = shaderPreview ? IM_COL32_WHITE : (m_texturePreviewChannel == 1 ? IM_COL32(255, 0, 0, 255) : m_texturePreviewChannel == 2 ? IM_COL32(0, 255, 0, 255) : m_texturePreviewChannel == 3 ? IM_COL32(0, 0, 255, 255) : IM_COL32_WHITE);
+				drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(cachedTextureId)), contentOrigin, ImVec2(contentOrigin.x + imgSize.x, contentOrigin.y + imgSize.y), ImVec2(0.0f, 0.0f), uvMax, tint);
+				ImGui::Dummy(imgSize); // reserve layout space so the child scrolls
+
+				// Drag-to-pan while zoomed in.
+				if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+				{
+					const ImVec2 drag = ImGui::GetIO().MouseDelta;
+					ImGui::SetScrollX(ImGui::GetScrollX() - drag.x);
+					ImGui::SetScrollY(ImGui::GetScrollY() - drag.y);
+				}
+
+				// Pixel + UV readout under the cursor.
+				bool hovering = false;
+				int hoverPx = 0;
+				int hoverPy = 0;
+				ImVec2 hoverUv(0.0f, 0.0f);
+				if (ImGui::IsWindowHovered() && imgSize.x > 0.0f && imgSize.y > 0.0f)
+				{
+					const ImVec2 mouse = ImGui::GetMousePos();
+					hoverUv.x = std::clamp((mouse.x - contentOrigin.x) / imgSize.x, 0.0f, 1.0f);
+					hoverUv.y = std::clamp((mouse.y - contentOrigin.y) / imgSize.y, 0.0f, 1.0f);
+					hoverPx = static_cast<int>(hoverUv.x * texW);
+					hoverPy = static_cast<int>(hoverUv.y * texH);
+					hovering = true;
+				}
+
+				ImGui::EndChild();
+
+				if (hovering)
+				{
+					ImGui::Text("px (%d, %d)   uv (%.3f, %.3f)   %.2fx", hoverPx, hoverPy, hoverUv.x, hoverUv.y, m_texturePreviewZoom);
+				}
+				else
+				{
+					ImGui::Text("%.0f x %.0f   %.2fx", texW, texH, m_texturePreviewZoom);
+				}
 			}
 		}
 		else
@@ -223,8 +413,13 @@ namespace aether::app
 			{
 				imgui->UnregisterTexture(static_cast<ImTextureID>(textureId));
 			}
+			if (m_previewTextureId != 0)
+			{
+				imgui->UnregisterTexture(static_cast<ImTextureID>(m_previewTextureId));
+			}
 		}
 		m_textureInspectorTextureIds.clear();
+		m_previewTextureId = 0;
 	}
 
 	const char* TextureInspectorPanel::FormatName(gpu::Format format) noexcept

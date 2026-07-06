@@ -36,5 +36,11 @@ namespace aether::app
 		int m_texturePreviewChannel = 0;
 		float m_texturePreviewZoom = 1.0f;
 		bool m_texturePreviewCheckerboard = true;
+		bool m_texturePreviewFit = false;
+		char m_texSearch[128] = {};
+		int m_texUsageFilter = 0;
+		float m_previewExposure = 1.0f;
+		bool m_previewTonemap = false;
+		std::uint64_t m_previewTextureId = 0;
 	};
 } // namespace aether::app
