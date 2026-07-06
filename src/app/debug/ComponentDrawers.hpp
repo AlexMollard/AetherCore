@@ -38,6 +38,12 @@ namespace aether::app
 	// gizmo both funnel through here; the future undo spec hooks this.
 	void ApplyWorldTransform(LayerContext& context, World& world, Entity entity, const glm::mat4& localToWorld);
 
+	// True if any strict ancestor of `e` is also in the selection - such an entity
+	// is already carried by its selected ancestor's ApplyWorldTransform cascade, so
+	// a group edit (inspector transform drawer or viewport gizmo) must not move it
+	// a second time.
+	[[nodiscard]] bool HasSelectedAncestor(const World& world, Entity e, const SceneSelection& selection);
+
 	// ── Inspector component sections ───────────────────────────────────────────
 	// Each draws one collapsing section for `entity` when the matching component
 	// is present (guarded no-op otherwise). Called in order by InspectorPanel.

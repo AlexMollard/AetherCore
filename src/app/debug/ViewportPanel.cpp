@@ -217,7 +217,25 @@ namespace aether::app
 		glm::mat4 model = tc->localToWorld;
 		if (ImGuizmo::Manipulate(&view[0][0], &proj[0][0], op, mode, &model[0][0], nullptr, snap))
 		{
+			// World-space delta of the primary's edit (captured before
+			// ApplyWorldTransform mutates it) so the rest of a multi-selection
+			// transforms around the gizmo pivot together.
+			const glm::mat4 worldDelta = model * glm::inverse(tc->localToWorld);
 			ApplyWorldTransform(context, world, primary, model);
+			if (selection.All().size() > 1)
+			{
+				for (const Entity other: selection.All())
+				{
+					if (other == primary || HasSelectedAncestor(world, other, selection))
+					{
+						continue;
+					}
+					if (const auto* otc = world.TryGet<TransformComponent>(other))
+					{
+						ApplyWorldTransform(context, world, other, worldDelta * otc->localToWorld);
+					}
+				}
+			}
 		}
 		return true;
 	}

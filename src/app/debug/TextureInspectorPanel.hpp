@@ -42,6 +42,7 @@ namespace aether::app
 		int m_texUsageFilter = 0;
 		float m_previewExposure = 1.0f;
 		bool m_previewTonemap = false;
+		bool m_useGpuPreview = false; // opt-in: GPU channel/exposure pass vs direct display
 		std::uint64_t m_previewTextureId = 0;
 	};
 } // namespace aether::app

@@ -76,7 +76,7 @@ namespace aether::app
 		// to a neutral dot for anything unmapped.
 		const char* WindowMenuIcon(std::string_view panelName)
 		{
-			if (panelName == "Scene")
+			if (panelName == "Scene Outliner")
 			{
 				return ICON_FA_SITEMAP;
 			}
@@ -108,7 +108,7 @@ namespace aether::app
 			{
 				return ICON_FA_CLOUD_SUN;
 			}
-			if (panelName == "Textures")
+			if (panelName == "TextureInspector")
 			{
 				return ICON_FA_IMAGE;
 			}
@@ -120,7 +120,7 @@ namespace aether::app
 			{
 				return ICON_FA_GAUGE_HIGH;
 			}
-			if (panelName == "Debug")
+			if (panelName == "DevTools")
 			{
 				return ICON_FA_BUG;
 			}
@@ -576,6 +576,14 @@ namespace aether::app
 		}
 
 		ImGui::Separator();
+		// One opaque highlight for the keyboard-selected row so the "selected"
+		// (Header) tint and the "hovered" (HeaderHovered) tint don't stack into a
+		// double band on the row under the cursor.
+		ImVec4 paletteSel = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
+		paletteSel.w = 1.0f;
+		ImGui::PushStyleColor(ImGuiCol_Header, paletteSel);
+		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, paletteSel);
+		ImGui::PushStyleColor(ImGuiCol_HeaderActive, paletteSel);
 		int runIndex = -1;
 		for (int i = 0; i < count && i < 12; ++i)
 		{
@@ -585,6 +593,7 @@ namespace aether::app
 				runIndex = static_cast<int>(ranked[static_cast<std::size_t>(i)].index);
 			}
 		}
+		ImGui::PopStyleColor(3);
 		if (submitted && count > 0)
 		{
 			runIndex = static_cast<int>(ranked[static_cast<std::size_t>(m_paletteSelected)].index);
@@ -775,9 +784,9 @@ namespace aether::app
 					std::vector<std::string_view> windows;
 				};
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene", "Inspector", "Viewport"}},
-				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "Textures"}},
-				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "Debug"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Inspector", "Viewport"}},
+				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
+				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
 				};
 

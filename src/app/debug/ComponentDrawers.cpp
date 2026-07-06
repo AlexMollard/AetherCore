@@ -86,25 +86,23 @@ namespace aether::app
 			return changed;
 		}
 
-		// True if any strict ancestor of `e` is also in the selection. Such an
-		// entity is already carried by its selected ancestor's cascade, so a group
-		// transform edit must not apply the delta to it a second time.
-		bool HasSelectedAncestor(const World& world, Entity e, const SceneSelection& selection)
-		{
-			const auto* h = world.TryGet<HierarchyComponent>(e);
-			Entity parent = (h != nullptr) ? h->parent : Entity{};
-			while (parent.IsValid())
-			{
-				if (selection.Contains(parent))
-				{
-					return true;
-				}
-				const auto* ph = world.TryGet<HierarchyComponent>(parent);
-				parent = (ph != nullptr) ? ph->parent : Entity{};
-			}
-			return false;
-		}
 	} // namespace
+
+	bool HasSelectedAncestor(const World& world, Entity e, const SceneSelection& selection)
+	{
+		const auto* h = world.TryGet<HierarchyComponent>(e);
+		Entity parent = (h != nullptr) ? h->parent : Entity{};
+		while (parent.IsValid())
+		{
+			if (selection.Contains(parent))
+			{
+				return true;
+			}
+			const auto* ph = world.TryGet<HierarchyComponent>(parent);
+			parent = (ph != nullptr) ? ph->parent : Entity{};
+		}
+		return false;
+	}
 
 	const char* EntityDisplayName(const World& world, Entity entity)
 	{

@@ -252,15 +252,21 @@ namespace aether::app
 		// Channel isolation / exposure / tonemap render through the $TexturePreview
 		// GPU pass when the source has a bindless slot; else fall back to a tint.
 		auto* rendering = context.TryGet<RenderingSubsystem>();
-		const bool shaderPreview = rendering != nullptr && texture.hasBindlessSampled && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
-		ImGui::SetNextItemWidth(120.0f);
-		ImGui::SliderFloat("Exposure", &m_previewExposure, 0.01f, 16.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
-		ImGui::SameLine();
-		ImGui::Checkbox("Tonemap", &m_previewTonemap);
-		if (!shaderPreview)
+		const bool canShaderPreview = rendering != nullptr && texture.hasBindlessSampled && HasFlag(texture.usage, gpu::ImageUsage::Sampled) && HasFlag(texture.aspect, gpu::ImageAspect::Color);
+		const bool shaderPreview = m_useGpuPreview && canShaderPreview;
+		ImGui::Checkbox("GPU preview", &m_useGpuPreview);
+		if (m_useGpuPreview)
 		{
 			ImGui::SameLine();
-			ImGui::TextDisabled("(tint only: no bindless slot)");
+			ImGui::SetNextItemWidth(100.0f);
+			ImGui::SliderFloat("Exposure", &m_previewExposure, 0.01f, 16.0f, "%.2f", ImGuiSliderFlags_Logarithmic);
+			ImGui::SameLine();
+			ImGui::Checkbox("Tonemap", &m_previewTonemap);
+			if (!canShaderPreview)
+			{
+				ImGui::SameLine();
+				ImGui::TextDisabled("(no bindless slot)");
+			}
 		}
 		if (rendering != nullptr)
 		{
