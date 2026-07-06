@@ -41,6 +41,8 @@ namespace aether::app
 		// drawn from the second frame on, so it never resizes the docked viewport
 		// before its render targets exist.
 		void DrawStatusBar(LayerContext& context);
+		// Ctrl+P fuzzy command palette (panel toggles, play, layout).
+		void DrawCommandPalette(LayerContext& context);
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
@@ -59,6 +61,10 @@ namespace aether::app
 		// Set by the Window > Reset Layout menu item; forces the default dock layout
 		// to be rebuilt on the next frame.
 		bool m_resetLayout = false;
+
+		// Command palette (Ctrl+P) state.
+		char m_paletteQuery[128] = {};
+		int m_paletteSelected = 0;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 	};

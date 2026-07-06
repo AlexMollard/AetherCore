@@ -4,6 +4,7 @@
 #include <cctype>
 #include <filesystem>
 #include <format>
+#include <functional>
 #include <regex>
 #include <string_view>
 #include <unordered_set>
@@ -42,6 +43,7 @@ using namespace std::string_view_literals;
 #include "scene/SceneSubsystem.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
+#include "utils/FuzzyMatch.hpp"
 #include "scripting/CSharpScriptingSubsystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
@@ -524,6 +526,106 @@ namespace aether::app
 		ImGui::PopStyleColor();
 	}
 
+	void DebugLayer::DrawCommandPalette(LayerContext& context)
+	{
+		const ImGuiIO& io = ImGui::GetIO();
+		if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_P, false))
+		{
+			m_paletteQuery[0] = '\0';
+			m_paletteSelected = 0;
+			ImGui::OpenPopup("##CommandPalette");
+		}
+
+		const ImGuiViewport* vp = ImGui::GetMainViewport();
+		ImGui::SetNextWindowPos(ImVec2(vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.16f), ImGuiCond_Appearing, ImVec2(0.5f, 0.0f));
+		ImGui::SetNextWindowSize(ImVec2(std::min(560.0f, vp->WorkSize.x - 40.0f), 0.0f), ImGuiCond_Appearing);
+		if (!ImGui::BeginPopup("##CommandPalette", ImGuiWindowFlags_NoMove))
+		{
+			return;
+		}
+
+		// Build the action list fresh each frame the palette is open (a dozen-ish entries).
+		struct Action
+		{
+			std::string label;
+			std::function<void()> run;
+		};
+		std::vector<Action> actions;
+		for (auto& panel: m_panels)
+		{
+			DebugPanel* p = panel.get();
+			actions.push_back({std::string("View: ") + std::string(p->GetName()), [p]() { *p->VisiblePtr() = !*p->VisiblePtr(); }});
+		}
+		if (auto* playState = context.TryGet<PlayState>())
+		{
+			actions.push_back({"Play: Toggle Play / Stop", [playState]() { playState->SetMode(playState->IsPlaying() ? PlayState::Mode::Editing : PlayState::Mode::Playing); }});
+		}
+		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
+
+		if (ImGui::IsWindowAppearing())
+		{
+			ImGui::SetKeyboardFocusHere();
+		}
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+		const bool submitted = ImGui::InputTextWithHint("##palettequery", "Type a command...", m_paletteQuery, sizeof(m_paletteQuery), ImGuiInputTextFlags_EnterReturnsTrue);
+
+		struct Ranked
+		{
+			int score;
+			std::size_t index;
+		};
+		std::vector<Ranked> ranked;
+		for (std::size_t i = 0; i < actions.size(); ++i)
+		{
+			if (const auto s = FuzzyMatch(m_paletteQuery, actions[i].label))
+			{
+				ranked.push_back({*s, i});
+			}
+		}
+		std::stable_sort(ranked.begin(), ranked.end(), [](const Ranked& a, const Ranked& b) { return a.score > b.score; });
+
+		const int count = static_cast<int>(ranked.size());
+		if (count > 0)
+		{
+			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, true))
+			{
+				m_paletteSelected = (m_paletteSelected + 1) % count;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, true))
+			{
+				m_paletteSelected = (m_paletteSelected + count - 1) % count;
+			}
+			m_paletteSelected = std::clamp(m_paletteSelected, 0, count - 1);
+		}
+		else
+		{
+			m_paletteSelected = 0;
+		}
+
+		ImGui::Separator();
+		int runIndex = -1;
+		for (int i = 0; i < count && i < 12; ++i)
+		{
+			const Action& action = actions[ranked[static_cast<std::size_t>(i)].index];
+			if (ImGui::Selectable(action.label.c_str(), i == m_paletteSelected))
+			{
+				runIndex = static_cast<int>(ranked[static_cast<std::size_t>(i)].index);
+			}
+		}
+		if (submitted && count > 0)
+		{
+			runIndex = static_cast<int>(ranked[static_cast<std::size_t>(m_paletteSelected)].index);
+		}
+
+		if (runIndex >= 0)
+		{
+			actions[static_cast<std::size_t>(runIndex)].run();
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -778,6 +880,8 @@ namespace aether::app
 				panel->OnImGui(context);
 			}
 		}
+
+		DrawCommandPalette(context);
 
 		PersistSettings(context);
 	}
