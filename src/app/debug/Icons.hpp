@@ -37,6 +37,7 @@
 #define ICON_FA_TAG "\xef\x80\xab"                     // U+F02B tags
 #define ICON_FA_BOLT "\xef\x83\xa7"                    // U+F0E7 effect params
 #define ICON_FA_GEARS "\xef\x82\x85"                   // U+F085 pipeline/render
+#define ICON_FA_GEAR "\xef\x80\x93"                    // U+F013 view settings
 #define ICON_FA_IMAGE "\xef\x80\xbe"                   // U+F03E texture
 #define ICON_FA_LINK "\xef\x83\x81"                    // U+F0C1 parent link
 #define ICON_FA_EYE "\xef\x81\xae"                     // U+F06E visibility

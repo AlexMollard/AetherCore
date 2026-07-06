@@ -117,38 +117,40 @@ namespace aether::app
 		auto* assets = context.TryGet<AssetManager>();
 		World& world = context.Get<World>();
 
-		ImGui::SameLine();
-		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-		ImGui::SameLine();
-
-		if (playState->IsPlaying())
+		// Neutral button that adopts the editor's "active = orange accent" language
+		// while playing (same as the selected gizmo tool) - no out-of-palette fill.
+		const bool playing = playState->IsPlaying();
+		if (playing)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.42f, 0.38f, 1.0f));
-			const bool stop = ImGui::SmallButton(ICON_FA_STOP " Stop");
-			ImGui::PopStyleColor();
-			ImGui::SetItemTooltip("Stop and restore the scene captured at Play");
-			if (stop)
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+		}
+		const bool clicked = ImGui::Button(playing ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play", ImVec2(0.0f, ImGui::GetFrameHeight()));
+		if (playing)
+		{
+			ImGui::PopStyleColor(4);
+		}
+		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the scene captured at Play" : "Snapshot the scene and simulate");
+		if (!clicked)
+		{
+			return;
+		}
+		if (playing)
+		{
+			playState->SetMode(PlayState::Mode::Editing);
+			if (playState->stopSnapshot)
 			{
-				playState->SetMode(PlayState::Mode::Editing);
-				if (playState->stopSnapshot)
-				{
-					scene::ReplaceScene(*playState->stopSnapshot, world, scene::MakeApplySceneDeps(context.services));
-					playState->stopSnapshot.reset();
-					context.Get<SceneSelection>().Clear();
-				}
+				scene::ReplaceScene(*playState->stopSnapshot, world, scene::MakeApplySceneDeps(context.services));
+				playState->stopSnapshot.reset();
+				context.Get<SceneSelection>().Clear();
 			}
 		}
-		else
+		else if (assets != nullptr)
 		{
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.85f, 0.45f, 1.0f));
-			const bool play = ImGui::SmallButton(ICON_FA_PLAY " Play");
-			ImGui::PopStyleColor();
-			ImGui::SetItemTooltip("Snapshot the scene and simulate");
-			if (play && assets != nullptr)
-			{
-				playState->stopSnapshot = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
-				playState->SetMode(PlayState::Mode::Playing);
-			}
+			playState->stopSnapshot = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+			playState->SetMode(PlayState::Mode::Playing);
 		}
 	}
 
@@ -359,9 +361,9 @@ namespace aether::app
 			return;
 		}
 
-		const ImGuiStyle& style = ImGui::GetStyle();
-		const float settingsBarHeight = 1.0f + style.ItemSpacing.y * 2.0f + ImGui::GetFrameHeightWithSpacing();
-		const ImVec2 available(ImGui::GetContentRegionAvail().x, std::max(1.0f, ImGui::GetContentRegionAvail().y - settingsBarHeight));
+		// The toolbar is a floating top overlay now, so the scene image uses the full
+		// content region (no reserved bottom bar). Clamp so imageSize stays valid.
+		const ImVec2 available(std::max(1.0f, ImGui::GetContentRegionAvail().x), std::max(1.0f, ImGui::GetContentRegionAvail().y));
 
 		gpu::Extent2D extent = post.GetExtent();
 		if (extent.width == 0 || extent.height == 0)
@@ -484,7 +486,9 @@ namespace aether::app
 			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
 			// Item-hover can go stale across a multi-viewport move; fall back to the
 			// manual mouse-in-image test (additive - only grants input, never removes).
-			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive() || (mouseOverImage && ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)));
+			// IsWindowHovered() without ChildWindows so the floating toolbar overlay
+			// (a child window) does not count as "over the scene" and keep the camera live.
+			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive() || (mouseOverImage && ImGui::IsWindowHovered()));
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
@@ -535,58 +539,19 @@ namespace aether::app
 			if (!overlay.empty())
 			{
 				const ImVec2 textSize = ImGui::CalcTextSize(overlay.c_str());
-				const ImVec2 rectMin(imageMin.x + 8.0f, imageMin.y + 8.0f);
+				const ImVec2 rectMin(imageMin.x + 8.0f, imageMin.y + 44.0f);
 				const ImVec2 rectMax(rectMin.x + textSize.x + pad.x * 2.0f, rectMin.y + textSize.y + pad.y * 2.0f);
 				drawList->AddRectFilled(rectMin, rectMax, IM_COL32(22, 24, 28, 210), 4.0f);
 				drawList->AddText(ImVec2(rectMin.x + pad.x, rectMin.y + pad.y), IM_COL32(235, 238, 242, 255), overlay.c_str());
 			}
 		}
 
-		// Inline toolbar pinned below the image region
-		ImGui::SetCursorPos(ImVec2(imageCursorStart.x, imageCursorStart.y + available.y));
-		ImGui::Separator();
-
+		// ── Match Panel render resolution (functional; recomputed every frame so the
+		// scene target tracks the panel size + DPI) ────────────────────────────────
 		SceneViewportSettings viewportSettings = rendering.GetSceneViewportSettings();
 		bool viewportSettingsChanged = false;
-		int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
-
-		const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
-		ImGui::SetNextItemWidth(104.0f);
-		if (ImGui::Combo("##res", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
-		{
-			viewportSettings.resolutionMode = static_cast<SceneViewportResolutionMode>(resolutionMode);
-			viewportSettingsChanged = true;
-		}
-		ImGui::SetItemTooltip("Render resolution");
-
-		if (static_cast<SceneViewportResolutionMode>(resolutionMode) == SceneViewportResolutionMode::Custom)
-		{
-			ImGui::SameLine(0.0f, 2.0f);
-			const std::string customLabel = std::format("{}x{}##csz", viewportSettings.customExtent.width, viewportSettings.customExtent.height);
-			if (ImGui::Button(customLabel.c_str()))
-			{
-				ImGui::OpenPopup("##customres");
-			}
-
-			if (ImGui::BeginPopup("##customres"))
-			{
-				int customExtent[2] = {static_cast<int>(viewportSettings.customExtent.width), static_cast<int>(viewportSettings.customExtent.height)};
-				ImGui::SetNextItemWidth(150.0f);
-				if (ImGui::InputInt2("Size", customExtent))
-				{
-					viewportSettings.customExtent.width = static_cast<std::uint32_t>(std::clamp(customExtent[0], 64, 8192));
-					viewportSettings.customExtent.height = static_cast<std::uint32_t>(std::clamp(customExtent[1], 64, 8192));
-					viewportSettingsChanged = true;
-				}
-				ImGui::EndPopup();
-			}
-		}
-
 		if (viewportSettings.resolutionMode == SceneViewportResolutionMode::MatchPanel)
 		{
-			// Render the scene at the panel's PHYSICAL pixel size (logical available x the
-			// panel viewport's DPI scale) for a 1:1 crisp editor view that follows resize
-			// and monitor DPI. Reuses customExtent as the requested-extent carrier.
 			const float dpi = ImGui::GetWindowDpiScale();
 			const auto physW = static_cast<std::uint32_t>(std::clamp(available.x * dpi, 64.0f, 8192.0f));
 			const auto physH = static_cast<std::uint32_t>(std::clamp(available.y * dpi, 64.0f, 8192.0f));
@@ -598,63 +563,125 @@ namespace aether::app
 			}
 		}
 
+		// ── Floating toolbar: tools (left) · Play (center) · settings (right) ──────
+		// Three edge-anchored pills instead of one bar. Each pill is its own child
+		// window, which also isolates hover so the camera-input fallback below stays
+		// off while the mouse is over the toolbar.
+		auto* toolbarPlayState = context.TryGet<PlayState>();
+		const bool toolbarPlaying = toolbarPlayState != nullptr && toolbarPlayState->IsPlaying();
+		const float btnH = ImGui::GetFrameHeight();
+		const ImVec2 pillPad(8.0f, 5.0f);
+		const float pillH = btnH + pillPad.y * 2.0f;
+		const float pillTop = imageMin.y + 8.0f;
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.10f, 0.12f, 0.90f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, 4.0f));
+
+		// Left pill: gizmo tools + orientation. The active op gets a filled accent
+		// (segmented-control feel) rather than just tinted text.
+		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + 8.0f, pillTop));
+		ImGui::BeginChild("##vpTools", ImVec2(0.0f, 0.0f), ImGuiChildFlags_AutoResizeX | ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		{
+			const auto tool = [&](const char* icon, int op, const char* tooltip)
+			{
+				const bool active = m_gizmoOp == op;
+				if (active)
+				{
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.96f, 0.58f, 0.20f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.90f, 0.52f, 0.15f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.10f, 0.10f, 0.11f, 1.0f));
+				}
+				if (ImGui::Button(icon, ImVec2(btnH, btnH)))
+				{
+					m_gizmoOp = op;
+				}
+				if (active)
+				{
+					ImGui::PopStyleColor(4);
+				}
+				ImGui::SetItemTooltip("%s", tooltip);
+			};
+			tool(ICON_FA_UP_DOWN_LEFT_RIGHT, 0, "Translate (W)");
+			ImGui::SameLine();
+			tool(ICON_FA_ROTATE, 1, "Rotate (E)");
+			ImGui::SameLine();
+			tool(ICON_FA_EXPAND, 2, "Scale (R)");
+			ImGui::SameLine(0.0f, 10.0f);
+			if (ImGui::Button(m_gizmoLocal ? "Local" : "World", ImVec2(0.0f, btnH)))
+			{
+				m_gizmoLocal = !m_gizmoLocal;
+			}
+			ImGui::SetItemTooltip("Gizmo space (Ctrl-drag snaps)");
+		}
+		ImGui::EndChild();
+
+		// Center pill: Play/Stop, horizontally centered over the scene.
+		const float playBtnW = ImGui::CalcTextSize(toolbarPlaying ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+		const float playPillW = playBtnW + pillPad.x * 2.0f;
+		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - playPillW) * 0.5f, pillTop));
+		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		{
+			DrawPlayControls(context);
+		}
+		ImGui::EndChild();
+
+		// Right pill: view settings gear, anchored to the right edge.
+		const float gearPillW = btnH + pillPad.x * 2.0f;
+		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - gearPillW - 8.0f, pillTop));
+		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		{
+			if (ImGui::Button(ICON_FA_GEAR, ImVec2(btnH, btnH)))
+			{
+				ImGui::OpenPopup("##vpSettings");
+			}
+			ImGui::SetItemTooltip("View settings");
+			if (ImGui::BeginPopup("##vpSettings"))
+			{
+				const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
+				int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
+				ImGui::SetNextItemWidth(150.0f);
+				if (ImGui::Combo("Resolution", &resolutionMode, resolutionModes, static_cast<int>(std::size(resolutionModes))))
+				{
+					viewportSettings.resolutionMode = static_cast<SceneViewportResolutionMode>(resolutionMode);
+					viewportSettingsChanged = true;
+				}
+				if (viewportSettings.resolutionMode == SceneViewportResolutionMode::Custom)
+				{
+					int customExtent[2] = {static_cast<int>(viewportSettings.customExtent.width), static_cast<int>(viewportSettings.customExtent.height)};
+					ImGui::SetNextItemWidth(150.0f);
+					if (ImGui::InputInt2("Custom size", customExtent))
+					{
+						viewportSettings.customExtent.width = static_cast<std::uint32_t>(std::clamp(customExtent[0], 64, 8192));
+						viewportSettings.customExtent.height = static_cast<std::uint32_t>(std::clamp(customExtent[1], 64, 8192));
+						viewportSettingsChanged = true;
+					}
+				}
+				const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
+				ImGui::SetNextItemWidth(150.0f);
+				ImGui::Combo("Display", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
+				const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
+				ImGui::SetNextItemWidth(150.0f);
+				ImGui::Combo("Aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
+				ImGui::Separator();
+				ImGui::Checkbox("Stats overlay", &m_viewportShowStats);
+				ImGui::Checkbox("Mouse overlay", &m_viewportShowMouse);
+				ImGui::EndPopup();
+			}
+		}
+		ImGui::EndChild();
+
+		ImGui::PopStyleVar(4);
+		ImGui::PopStyleColor();
+
 		if (viewportSettingsChanged)
 		{
 			ReleaseSceneViewportTexture(context);
 			rendering.SetSceneViewportSettings(context.services, viewportSettings);
 		}
-
-		const char* displayModes[] = {"Fit", "Fill", "Actual", "Integer"};
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(82.0f);
-		ImGui::Combo("##display", &m_viewportDisplayMode, displayModes, static_cast<int>(std::size(displayModes)));
-		ImGui::SetItemTooltip("Display mode");
-
-		const char* aspectModes[] = {"Render", "Free", "16:9", "16:10", "4:3", "1:1"};
-		ImGui::SameLine();
-		ImGui::SetNextItemWidth(80.0f);
-		ImGui::Combo("##aspect", &m_viewportAspectMode, aspectModes, static_cast<int>(std::size(aspectModes)));
-		ImGui::SetItemTooltip("Aspect ratio");
-
-		ImGui::SameLine();
-		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-		ImGui::SameLine();
-		ImGui::Checkbox("Stats", &m_viewportShowStats);
-		ImGui::SameLine();
-		ImGui::Checkbox("Mouse", &m_viewportShowMouse);
-
-		// Gizmo controls
-		ImGui::SameLine();
-		ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
-		ImGui::SameLine();
-		const auto opButton = [&](const char* icon, int op, const char* tooltip)
-		{
-			const bool active = m_gizmoOp == op;
-			if (active)
-			{
-				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.72f, 0.2f, 1.0f));
-			}
-			if (ImGui::SmallButton(icon))
-			{
-				m_gizmoOp = op;
-			}
-			if (active)
-			{
-				ImGui::PopStyleColor();
-			}
-			ImGui::SetItemTooltip("%s", tooltip);
-			ImGui::SameLine();
-		};
-		opButton(ICON_FA_UP_DOWN_LEFT_RIGHT, 0, "Translate (W)");
-		opButton(ICON_FA_ROTATE, 1, "Rotate (E)");
-		opButton(ICON_FA_EXPAND, 2, "Scale (R)");
-		if (ImGui::SmallButton(m_gizmoLocal ? "Local" : "World"))
-		{
-			m_gizmoLocal = !m_gizmoLocal;
-		}
-		ImGui::SetItemTooltip("Gizmo orientation (Ctrl-drag snaps)");
-
-		DrawPlayControls(context);
 
 		ImGui::End();
 	}

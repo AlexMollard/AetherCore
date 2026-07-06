@@ -266,7 +266,9 @@ namespace aether
 				iconConfig.PixelSnapH = true;
 				iconConfig.SizePixels = 13.0f;
 				iconConfig.GlyphMinAdvanceX = 16.0f;
-				iconConfig.GlyphOffset = ImVec2(0.0f, 1.0f);
+				// Nudge merged icons up-and-left so their ink sits optically centered on
+				// the Roboto baseline instead of low-and-right inside the 16px advance box.
+				iconConfig.GlyphOffset = ImVec2(-1.0f, 0.0f);
 				io.Fonts->AddFontFromMemoryTTF(m_iconFontData.data(), static_cast<int>(m_iconFontData.size()), iconConfig.SizePixels, &iconConfig, kIconRange);
 			}
 		}
