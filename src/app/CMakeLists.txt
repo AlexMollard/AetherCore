@@ -41,10 +41,10 @@ target_compile_definitions(App PRIVATE
 #
 # The build invokes `dotnet build` on the two leaf .csproj DIRECTLY (each pulls in
 # the AetherCore SDK via ProjectReference). It deliberately does NOT build the
-# checked-in AetherCore.sln: the solution is only an IDE convenience (VS + Rider),
+# checked-in AetherCore.slnx: the solution is only an IDE convenience (VS + Rider),
 # so the CMake build stays generator-agnostic and cross-platform and never depends
 # on a solution file. The C# projects are likewise NOT bolted onto this generated
-# C++ solution via include_external_msproject - editing happens in AetherCore.sln.
+# C++ solution via include_external_msproject - editing happens in AetherCore.slnx.
 # (CMake cannot generate SDK-style .csproj, so those are hand-authored source.)
 if(AETHER_HAS_DOTNET)
     set(_aether_interop_proj "${CMAKE_SOURCE_DIR}/managed/AetherCore.Interop/AetherCore.Interop.csproj")

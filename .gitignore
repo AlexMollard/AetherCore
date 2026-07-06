@@ -24,8 +24,8 @@ game/**/bin/
 # Visual Studio / MSBuild
 /.vs/
 *.sln
-# ...but the hand-authored managed solution IS checked in (the C++ .sln is generated).
-!/AetherCore.sln
+# The generated C++ solution is a *.sln and stays ignored. The hand-authored managed
+# solution is AetherCore.slnx (XML format) - *.sln doesn't match it, so it is tracked.
 *.vcxproj*
 *.vcproj*
 *.filters

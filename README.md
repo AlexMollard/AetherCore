@@ -81,10 +81,11 @@ public sealed class Spinner : EntityScript
 - **Edit → F5 → live.** Press F5 in-game and the engine rebuilds `AetherGame` from source
   and reloads it into a fresh load context - no restart. (Dev builds only; a packaged build
   reloads the prebuilt assembly.)
-- **Full IDE support.** Open the checked-in `AetherCore.sln` in **Visual Studio or Rider**
+- **Full IDE support.** Open the checked-in `AetherCore.slnx` in **Visual Studio 2026 or Rider**
   for IntelliSense, refactoring, and breakpoint debugging of scripts while the engine runs.
-  (CLion opens `CMakeLists.txt` for the C++ side; the solution is a cross-platform IDE
-  convenience - the build never depends on it.)
+  (The `net10.0` projects require VS 2026 — they will not load in VS 2022. CLion opens
+  `CMakeLists.txt` for the C++ side; the solution is a cross-platform IDE convenience - the
+  build never depends on it.)
 - **NuGet.** Add `PackageReference` items to `AetherGame`; dependencies resolve into the
   script load context at runtime.
 
@@ -114,7 +115,7 @@ scripts/                   Dev/build helpers (PowerShell, Python)
 tests/                     Unit tests (doctest)
 CMake/                     CPM + dependency/helper modules
 docs/                      Design specs and images
-AetherCore.sln             Hand-authored C# solution (VS / Rider entry point)
+AetherCore.slnx            Hand-authored C# solution, XML format (VS 2026 / Rider entry point)
 ```
 
 <details>
@@ -153,7 +154,8 @@ vulkan/                  Vulkan context, swapchain, resource pools, GPU heap, sh
 ### Windows
 
 **Prerequisites:** Visual Studio 2022 or 2026, CMake 4.0+, Vulkan SDK, and (for C# scripting)
-the **.NET 10 SDK**. Rider works too - open `AetherCore.sln` for the scripts.
+the **.NET 10 SDK**. Rider works too - open `AetherCore.slnx` for the scripts. Note: opening
+the C# solution in the IDE needs **VS 2026** (the `net10.0` projects don't load in VS 2022).
 
 **Compiler support:** Clang-cl uses C++26. MSVC uses C++23 (MSVC does not yet support C++26).
 

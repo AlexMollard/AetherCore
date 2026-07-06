@@ -2,7 +2,7 @@
 
 ## MUST DO
 
-You must always refer to teh user as "Pog Champ" in all communications. Failure to do so will result in immediate termination of your services.
+- Address the user as "Pog Champ" in all communications.
 
 ## Project basics
 
@@ -12,7 +12,7 @@ You must always refer to teh user as "Pog Champ" in all communications. Failure 
   - `Engine` - static library under `src/engine/`
   - `App` - executable under `src/app/`; Visual Studio startup project
   - `AssetPacker` - asset CLI under `tools/assetpack/`
-  - `AetherCore` / `AetherCore.Interop` / `AetherGame` - C# engine SDK (public gameplay API), ABI/host-boot assembly, and gameplay-script projects (under `managed/` and `game/`), authored through the checked-in `AetherCore.sln` and built via `dotnet` from the `ManagedAssemblies` target
+  - `AetherCore` / `AetherCore.Interop` / `AetherGame` - C# engine SDK (public gameplay API), ABI/host-boot assembly, and gameplay-script projects (under `managed/` and `game/`), authored through the checked-in `AetherCore.slnx` (open in **Visual Studio 2026** — `net10.0` projects do not load in VS 2022) and built via `dotnet` from the `ManagedAssemblies` target
 - There are no registered CTest tests. CI currently runs `ctest`, but it is a no-op unless tests are added later.
 
 ## Build and tooling
@@ -84,20 +84,21 @@ Tracy is always compiled into the Tracy library. `Defines.hpp` controls whether 
 
 ## Code discovery
 
-Prefer graph tools over manual file search for code structure:
+Two complementary graph systems exist here. Use the right one, and prefer both over blind file search:
+
+- **codebase-memory-mcp** — the live *symbol* graph (functions, classes, call chains). Use for precise navigation: `search_graph`, `get_code_snippet`, `trace_path`, `query_graph`, `get_architecture`. If it has no index for this repo, run `index_repository repo_path="." mode=full`.
+- **graphify** — the broad *architecture/knowledge* graph in `graphify-out/` (god nodes, communities, cross-file relationships). Use for "how does X fit together / where does this concept live" questions. Query a scoped subgraph with `graphify query "<question>"` — usually far smaller than reading `GRAPH_REPORT.md`. It is auto-generated and goes stale: if `graphify-out/graph.json` predates recent structural changes, run `graphify update .` before relying on it.
 
 | Task | Use first | Fallback |
 |---|---|---|
 | Find a function/class/struct | `search_graph` | clangd workspace symbols, then `rg` |
 | Read a known symbol | `get_code_snippet` | file read with line range |
 | Find callers/callees | `trace_path` | clangd references/call hierarchy |
-| Architecture overview | `get_architecture` or graphify | targeted file reads |
+| How subsystems fit together | `graphify query "..."` | `get_architecture`, then targeted reads |
 | Cross-file patterns | `query_graph` or `search_code` | `rg` |
 | String literals/config/error text | `rg` | file read |
 | Library/API docs | Context7 docs | official web docs |
 | Prior decisions/progress | Mind memory/checkpoints | local notes |
-
-If codebase-memory has no index for this repo, run `index_repository repo_path="." mode=full`.
 
 ## Engine lifecycle
 
@@ -197,27 +198,23 @@ Resource rules:
 - Vulkan uses `volk`, `vk-bootstrap`, VMA, and synchronization2.
 - Always wait for GPU idle before freeing GPU resources. VMA must outlive allocations it manages.
 
-## MCP Setup Guide (for the user)
+## MCP setup
 
-If an agent reports a missing server, install it using these commands:
-
-| Server | Install command |
-|--------|----------------|
-| **Mind** | `git clone https://github.com/GabrielMartinMoran/mind.git C:\Users\alexm\mind && cd C:\Users\alexm\mind && pip install -e . && mind setup codex && mind setup opencode` |
-| **clangd-mcp** | `git clone https://github.com/felipeerias/clangd-mcp-server.git C:\Users\alexm\clangd-mcp-server && cd C:\Users\alexm\clangd-mcp-server && npm install && npx tsc` |
-| **clangd-mcp launcher** | Create `C:\Users\alexm\.bun\bin\clangd-mcp.cmd`: `node "C:\Users\alexm\clangd-mcp-server\build\index.js"` |
-| **Token Optimizer** | `npm install -g @cocaxcode/token-optimizer-mcp` |
-| **Context7** | Used via `npx @upstash/context7-mcp` |
-| **GitHub MCP** | Download `github-mcp-server_Windows_x86_64.zip` from releases, extract to `C:\Users\alexm\.bun\bin\github-mcp-server.exe`. Set `GITHUB_PERSONAL_ACCESS_TOKEN` env var. |
-| **codebase-memory** | Download `codebase-memory-mcp-windows-amd64.zip` from releases, extract to `$env:LOCALAPPDATA\Programs\codebase-memory-mcp\codebase-memory-mcp.exe`. Run `codebase-memory-mcp install -y`. If Opencode wasn't auto-detected, add manually to `~\.config\opencode\opencode.jsonc`. |
-| **graphify** | Provided via opencode skill (built-in). |
-| **vs-mcp** | See `VisualStudio-MCP.md` for setup. |
+The agent-tool MCP servers this repo expects (Mind, clangd-mcp, codebase-memory, graphify, Context7, Token Optimizer, GitHub, vs-mcp) and their install steps live in [docs/mcp-setup.md](docs/mcp-setup.md). If an agent reports a missing server, install it from there.
 
 ## Dependencies
 
 Dependencies are managed through CPM. Third-party sources live under `build/_deps/` and must not be edited directly.
 
 Key libraries: Vulkan SDK, GLFW, GLM, vk-bootstrap, volk, VMA, EnTT, Jolt Physics, Tracy, stb, cgltf, FreeType, zstd, xxHash, toml++, and bc7enc_rdo. Gameplay scripting runs on .NET (CoreCLR, hosted through nethost).
+
+## Repo hygiene
+
+The repo root also holds machine-local state from the agent tools and MCP servers used here — `.opencode/`, `.mind/`, `.codebase-memory/`, `graphify-out/`, `node_modules/`, `artifacts/`, `.aider*`, `.temp/`, and stray `*.log`. All of it is gitignored, so `git status` stays clean even when the working tree looks messy on disk.
+
+- Do not commit any of the above. If you add a tool that writes state to the root, add it to `.gitignore` in the same change.
+- Write build/run logs under `logs/` (gitignored), never the repo root. Delete stray root-level `*.log` when you notice them; they are regenerable.
+- Keep long-form setup/reference docs under `docs/`, not the root.
 
 ## Do not
 
