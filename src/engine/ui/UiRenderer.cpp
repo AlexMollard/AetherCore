@@ -1,17 +1,25 @@
 #include "ui/UiRenderer.hpp"
 
 #include <cstring>
+#include <string>
+#include <string_view>
 
 #include "gpu/BindlessManager.hpp"
 #include "gpu/CommandList.hpp"
 #include "gpu/GpuDevice.hpp"
+#include "gpu/OneShotCmd.hpp"
 #include "gpu/PushConstantsBytes.hpp"
+#include "gpu/UploadContext.hpp"
+#include "io/FileSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "rendering/RenderGraph.hpp"
 #include "scene/World.hpp"
+#include "ui/FontRegistry.hpp"
 #include "ui/UiDrawBuilder.hpp"
 #include "ui/UiLayoutSystem.hpp"
 #include "utils/Logger.hpp"
 #include "utils/Profiler.hpp"
+#include "vulkan/VulkanUtils.hpp"
 
 namespace aether::ui
 {
@@ -31,11 +39,16 @@ namespace aether::ui
 		static_assert(sizeof(ShapesPush) == 32, "ShapesPush must match shaders/ui_shapes.slang ShapesPush layout");
 
 		constexpr std::uint32_t kInitialCommandCapacity = 256;
+		constexpr std::uint32_t kInvalidBindlessSlot = 0xFFFFFFFFu;
 	} // namespace
 
-	void UiRenderer::Init(GpuDevice& gpu, gpu::Format colorFormat)
+	void UiRenderer::Init(GpuDevice& gpu, gpu::UploadContext& upload, TextureRegistry& textures, gpu::Format colorFormat)
 	{
 		AE_PROFILE_ZONE();
+
+		m_gpu = &gpu;
+		m_upload = &upload;
+		m_textures = &textures;
 
 		// ui_shapes.slang samples the bindless resource heap (g_textures[] /
 		// g_linearSampler at set 0, for textured rects + SDF glyphs), so the
@@ -64,6 +77,8 @@ namespace aether::ui
 		{
 			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create ui_shapes pipeline");
 		}
+
+		m_defaultFontReady = EnsureFontAtlasUploaded("Roboto");
 	}
 
 	void UiRenderer::Shutdown()
@@ -84,6 +99,123 @@ namespace aether::ui
 			gpu::ResourceRegistry::Destroy(m_pipeline);
 			m_pipeline = {};
 		}
+
+		if (m_defaultFontAtlas.IsValid())
+		{
+			gpu::ResourceRegistry::Destroy(m_defaultFontAtlas);
+			m_defaultFontAtlas = {};
+		}
+
+		m_defaultFontReady = false;
+		m_textures = nullptr;
+		m_upload = nullptr;
+		m_gpu = nullptr;
+	}
+
+	bool UiRenderer::EnsureFontAtlasUploaded(std::string_view name)
+	{
+		FontAsset* font = nullptr;
+		if (m_fontRegistry.Load(name) != nullptr)
+		{
+			font = m_fontRegistry.GetMutable(name);
+		}
+		if (font == nullptr)
+		{
+			return false;
+		}
+		if (font->atlasBindlessSlot != kInvalidBindlessSlot)
+		{
+			return true;
+		}
+		if (m_gpu == nullptr || m_upload == nullptr || !m_upload->IsValid())
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: cannot upload font atlas '{}', GPU upload context is unavailable", name);
+			return false;
+		}
+
+		const std::string atlasPath = "assets://fonts/" + std::string(name) + "-Regular.fontatlas";
+		const auto atlasBytes = io::FileSystem::ReadFile(atlasPath);
+		if (!atlasBytes.has_value())
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: failed to read '{}'", atlasPath);
+			return false;
+		}
+		if (atlasBytes->size() < sizeof(FontAtlasHeader))
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' is too small for a FontAtlasHeader", atlasPath);
+			return false;
+		}
+
+		FontAtlasHeader header{};
+		std::memcpy(&header, atlasBytes->data(), sizeof(FontAtlasHeader));
+		if (header.magic != kFontAtlasMagic || header.width == 0 || header.height == 0)
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' has an invalid font atlas header", atlasPath);
+			return false;
+		}
+
+		const std::size_t texelBytes = static_cast<std::size_t>(header.width) * static_cast<std::size_t>(header.height);
+		const std::size_t expectedSize = sizeof(FontAtlasHeader) + texelBytes;
+		if (atlasBytes->size() != expectedSize)
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: '{}' size {} does not match atlas dimensions (expected {})", atlasPath, atlasBytes->size(), expectedSize);
+			return false;
+		}
+
+		const std::string debugName = "UI.FontAtlas." + std::string(name);
+		const gpu::TextureDesc desc{
+		        .format = gpu::Format::R8Unorm,
+		        .extent = {header.width, header.height},
+		        .usage = gpu::ImageUsage::TransferDst | gpu::ImageUsage::Sampled | gpu::ImageUsage::HostTransfer,
+		        .aspect = gpu::ImageAspect::Color,
+		        .debugName = debugName.c_str(),
+		};
+		gpu::TextureHandle atlas = gpu::ResourceRegistry::CreateTexture(desc);
+		if (!atlas.IsValid())
+		{
+			AE_ERROR(LogCategory::UI, "UiRenderer: failed to create font atlas texture '{}'", atlasPath);
+			return false;
+		}
+
+		const gpu::Image image = gpu::ResourceRegistry::ResolveTextureImage(atlas);
+		const void* texels = atlasBytes->data() + sizeof(FontAtlasHeader);
+		const std::int32_t copyResult = vkutil::HostCopyToImage(m_gpu->GetDevice(), image, texels, header.width, header.height);
+		if (copyResult != 0)
+		{
+			gpu::ResourceRegistry::Destroy(atlas);
+			AE_ERROR(LogCategory::UI, "UiRenderer: HostCopyToImage failed for '{}' (VkResult={})", atlasPath, copyResult);
+			return false;
+		}
+
+		gpu::OneShotCmd cmd;
+		if (!cmd.Begin(m_gpu->GetDevice(), m_upload->GetCommandPool()))
+		{
+			gpu::ResourceRegistry::Destroy(atlas);
+			AE_ERROR(LogCategory::UI, "UiRenderer: failed to begin font atlas upload barrier command");
+			return false;
+		}
+		cmd.CmdList().ImageMemoryBarrier(
+		        image, gpu::ImageLayout::General, gpu::ImageLayout::ShaderReadOnly, gpu::ImageAspect::Color, gpu::PipelineStage::AllCommands, gpu::AccessFlags::None, gpu::PipelineStage::FragmentShader, gpu::AccessFlags::ShaderRead);
+		if (!cmd.EndAndSubmit(m_gpu->GetGraphicsQueue()))
+		{
+			gpu::ResourceRegistry::Destroy(atlas);
+			AE_ERROR(LogCategory::UI, "UiRenderer: failed to submit font atlas upload barrier command");
+			return false;
+		}
+
+		gpu::ResourceRegistry::EnsureBindlessSampled(atlas, gpu::ImageAspect::Color, gpu::ImageLayout::ShaderReadOnly);
+		const std::uint32_t slot = gpu::ResourceRegistry::GetBindlessSampledSlot(atlas);
+		if (slot == kInvalidBindlessSlot)
+		{
+			gpu::ResourceRegistry::Destroy(atlas);
+			AE_ERROR(LogCategory::UI, "UiRenderer: bindless registration failed for '{}'", atlasPath);
+			return false;
+		}
+
+		font->atlasBindlessSlot = slot;
+		m_defaultFontAtlas = atlas;
+		AE_INFO(LogCategory::UI, "UiRenderer: uploaded font atlas '{}' ({}x{}, slot {})", atlasPath, header.width, header.height, slot);
+		return true;
 	}
 
 	void UiRenderer::EnsureCapacity(Frame& frame, std::uint32_t count)
@@ -144,7 +276,7 @@ namespace aether::ui
 		}
 
 		ResolveCanvases(*m_world, outputExtent);
-		BuildDrawCommands(*m_world, m_scratch);
+		BuildDrawCommands(*m_world, m_scratch, m_defaultFontReady ? &m_fontRegistry : nullptr, m_textures);
 
 		const auto count = static_cast<std::uint32_t>(m_scratch.size());
 		if (count == 0)

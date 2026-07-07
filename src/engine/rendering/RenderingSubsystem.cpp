@@ -5,6 +5,7 @@
 #include <span>
 #include <utility>
 
+#include "assets/AssetSubsystem.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
 #include "camera/CameraManager.hpp"
@@ -293,7 +294,8 @@ namespace aether
 		// format matches m_physicsDebug's (swapchain.GetImageFormat()) since $UiOverlay
 		// draws into the same target ($SceneViewport's FinalColor or the swapchain),
 		// which PostProcessStack itself builds with this same swapchainFormat.
-		m_uiRenderer.Init(gpu, swapchain.GetImageFormat());
+		auto& assets = services.Get<AssetSubsystem>();
+		m_uiRenderer.Init(gpu, assets.GetUploadContext(), assets.GetTextureRegistry(), swapchain.GetImageFormat());
 	}
 
 	void RenderingSubsystem::Shutdown()

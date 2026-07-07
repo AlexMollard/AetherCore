@@ -2,21 +2,29 @@
 
 #include <array>
 #include <cstdint>
+#include <string_view>
 #include <vector>
 
 #include <glm/glm.hpp>
 
 #include "gpu/ResourceRegistry.hpp"       // BufferHandle, PipelineHandle, gpu:: enums (also pulls in aether::kMaxFramesInFlight via GpuTypes.hpp)
 #include "rendering/RenderGraphTypes.hpp" // RGImage, PassContext
+#include "ui/FontRegistry.hpp"
 #include "ui/UiDrawCommand.hpp"
 
 namespace aether
 {
+	class TextureRegistry;
 	class World;
 	class RenderGraph;
 	class BindlessManager;
 	class GpuDevice;
 	struct PassContext;
+
+	namespace gpu
+	{
+		class UploadContext;
+	}
 } // namespace aether
 
 namespace aether::ui
@@ -36,7 +44,7 @@ namespace aether::ui
 	class UiRenderer
 	{
 	public:
-		void Init(GpuDevice& gpu, gpu::Format colorFormat);
+		void Init(GpuDevice& gpu, gpu::UploadContext& upload, TextureRegistry& textures, gpu::Format colorFormat);
 		void Shutdown();
 
 		void SetWorld(World* world)
@@ -80,8 +88,15 @@ namespace aether::ui
 		// old handle first and re-resolving mapped/address. Geometric growth
 		// from a 256-command floor.
 		void EnsureCapacity(Frame& frame, std::uint32_t count);
+		bool EnsureFontAtlasUploaded(std::string_view name);
 
 		World* m_world = nullptr;
+		GpuDevice* m_gpu = nullptr;
+		gpu::UploadContext* m_upload = nullptr;
+		const TextureRegistry* m_textures = nullptr;
+		FontRegistry m_fontRegistry;
+		gpu::TextureHandle m_defaultFontAtlas{};
+		bool m_defaultFontReady = false;
 		gpu::PipelineHandle m_pipeline{};
 		std::array<Frame, kFrames> m_frames{};
 		std::vector<UiDrawCommand> m_scratch;

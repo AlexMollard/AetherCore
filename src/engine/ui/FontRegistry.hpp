@@ -30,6 +30,7 @@ namespace aether::ui
 		const FontAsset* Load(std::string_view name);
 
 		[[nodiscard]] const FontAsset* Get(std::string_view name) const;
+		[[nodiscard]] FontAsset* GetMutable(std::string_view name);
 
 		// Test-only: inject a hand-built FontAsset (e.g. a mono test font) without
 		// touching the VFS or GPU.

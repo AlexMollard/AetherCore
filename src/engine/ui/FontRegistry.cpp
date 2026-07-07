@@ -184,6 +184,12 @@ namespace aether::ui
 		return it == m_fonts.end() ? nullptr : &it->second;
 	}
 
+	FontAsset* FontRegistry::GetMutable(std::string_view name)
+	{
+		const auto it = m_fonts.find(std::string(name));
+		return it == m_fonts.end() ? nullptr : &it->second;
+	}
+
 	void FontRegistry::InjectForTest(std::string name, FontAsset asset)
 	{
 		m_fonts.insert_or_assign(std::move(name), std::move(asset));
