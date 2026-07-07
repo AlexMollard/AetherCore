@@ -579,6 +579,12 @@ namespace aether::app
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, pillPad);
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 5.0f);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(5.0f, 4.0f));
+		const auto pushFlatButtonStyle = []()
+		{
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.3f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.0f, 0.0f, 0.0f, 0.4f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.0f, 0.0f, 0.0f, 0.5f));
+		};
 
 		// Left pill: gizmo tools + orientation. The active op gets a filled accent
 		// (segmented-control feel) rather than just tinted text.
@@ -623,21 +629,34 @@ namespace aether::app
 		const float playBtnW = ImGui::CalcTextSize(toolbarPlaying ? ICON_FA_STOP "  Stop" : ICON_FA_PLAY "  Play").x + ImGui::GetStyle().FramePadding.x * 2.0f;
 		const float playPillW = playBtnW + pillPad.x * 2.0f;
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + (imageSize.x - playPillW) * 0.5f, pillTop));
-		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::BeginChild("##vpPlay", ImVec2(playPillW, pillH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
+			if (!toolbarPlaying)
+			{
+				pushFlatButtonStyle();
+			}
 			DrawPlayControls(context);
+			if (!toolbarPlaying)
+			{
+				ImGui::PopStyleColor(3);
+			}
 		}
 		ImGui::EndChild();
+		ImGui::PopStyleColor();
 
 		// Right pill: view settings gear, anchored to the right edge.
 		const float gearPillW = btnH + pillPad.x * 2.0f;
 		ImGui::SetCursorScreenPos(ImVec2(imageMin.x + imageSize.x - gearPillW - 8.0f, pillTop));
-		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+		ImGui::BeginChild("##vpGear", ImVec2(gearPillW, pillH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 		{
+			pushFlatButtonStyle();
 			if (ImGui::Button(ICON_FA_GEAR, ImVec2(btnH, btnH)))
 			{
 				ImGui::OpenPopup("##vpSettings");
 			}
+			ImGui::PopStyleColor(3);
 			ImGui::SetItemTooltip("View settings");
 			if (ImGui::BeginPopup("##vpSettings"))
 			{
@@ -673,6 +692,7 @@ namespace aether::app
 			}
 		}
 		ImGui::EndChild();
+		ImGui::PopStyleColor();
 
 		ImGui::PopStyleVar(4);
 		ImGui::PopStyleColor();

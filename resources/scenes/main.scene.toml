@@ -13,234 +13,11 @@ name = ''
 version = 6
 
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Point Light'
+euler = [ -0.0, 90.0, 0.0 ]
+name = 'Plane'
 parent = -1
-position = [ 31.71794891357422, 4.999929904937744, -12.902923583984375 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.8584070205688477, 0.0, 1.0 ]
-    intensity = 88.0
-    radius = 23.399999618530273
-    shadow = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Human mesh'
-parent = 3
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.3333333432674408, 0.12452887743711472, 0.10101473331451416, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.858578622341156
-    vertex_color = false
-
-    [entities.mesh]
-    index = 1
-    kind = 'model'
-    path = 'assets://models/Human/Human.mesh'
-
-    [entities.skinned]
-    clip = 0
-    looping = true
-    speed = 1.0
-    time = 0.0
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Human mesh'
-parent = 3
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8370000123977661, 0.30230802297592163, 0.26365500688552856, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.8082915544509888
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'model'
-    path = 'assets://models/Human/Human.mesh'
-
-    [entities.skinned]
-    clip = 0
-    looping = true
-    speed = 1.0
-    time = 0.0
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Player'
-parent = -1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-script = 'Player'
-tags = [ 'player' ]
-
-[[entities]]
-euler = [ -0.0, 20.0, 0.0 ]
-name = 'Fox mesh'
-parent = 5
-position = [ -16.0, 0.0, 14.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-
-    [entities.material]
-    albedo = 'assets://models/Fox/Texture.texture'
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.5799999833106995
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'model'
-    path = 'assets://models/Fox/Fox.mesh'
-
-    [entities.skinned]
-    clip = 2
-    looping = true
-    speed = 0.800000011920929
-    time = 0.6000000238418579
-
-[[entities]]
-euler = [ -0.0, 20.0, 0.0 ]
-name = 'Fox'
-parent = -1
-position = [ -16.0, 0.0, 14.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-tags = [ 'fox' ]
-
-    [entities.orbit]
-    angle_deg = 138.8140869140625
-    center = [ 0.0, 0.0, 0.0 ]
-    height = 0.0
-    radius = 21.260292053222656
-    speed_deg = -25.783000946044922
-    yaw_offset_deg = 180.0
-
-[[entities]]
-euler = [ -0.0, -59.999996185302734, 0.0 ]
-name = 'Fox mesh'
-parent = 7
-position = [ 20.0, 0.0, 8.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-
-    [entities.material]
-    albedo = 'assets://models/Fox/Texture.texture'
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.5799999833106995
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'model'
-    path = 'assets://models/Fox/Fox.mesh'
-
-    [entities.skinned]
-    clip = 2
-    looping = true
-    speed = 0.800000011920929
-    time = 0.30000001192092896
-
-[[entities]]
-euler = [ -0.0, -59.999996185302734, 0.0 ]
-name = 'Fox'
-parent = -1
-position = [ 20.0, 0.0, 8.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-tags = [ 'fox' ]
-
-    [entities.orbit]
-    angle_deg = 21.80138397216797
-    center = [ 0.0, 0.0, 0.0 ]
-    height = 0.0
-    radius = 21.540658950805664
-    speed_deg = -25.783000946044922
-    yaw_offset_deg = 180.0
-
-[[entities]]
-euler = [ -0.0, 39.999996185302734, 0.0 ]
-name = 'Fox mesh'
-parent = 9
-position = [ 14.0, 0.0, 15.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-
-    [entities.material]
-    albedo = 'assets://models/Fox/Texture.texture'
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.5799999833106995
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'model'
-    path = 'assets://models/Fox/Fox.mesh'
-
-    [entities.skinned]
-    clip = 2
-    looping = true
-    speed = 0.800000011920929
-    time = 0.0
-
-[[entities]]
-euler = [ -0.0, 39.999996185302734, 0.0 ]
-name = 'Fox'
-parent = -1
-position = [ 14.0, 0.0, 15.0 ]
-scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
-tags = [ 'fox' ]
-
-    [entities.orbit]
-    angle_deg = 46.974918365478516
-    center = [ 0.0, 0.0, 0.0 ]
-    height = 0.0
-    radius = 20.51828384399414
-    speed_deg = -25.783000946044922
-    yaw_offset_deg = 180.0
-
-[[entities]]
-euler = [ 19.999998092651367, 0.0, 0.0 ]
-name = 'Missing Texture Cube'
-parent = -1
-position = [ -9.0, 3.0, 4.0 ]
-scale = [ 3.0, 3.000000238418579, 3.000000238418579 ]
+position = [ 31.0, 5.0, -40.0 ]
+scale = [ 15.99999713897705, 9.999993324279785, 0.9999998211860657 ]
 
     [entities.material]
     alpha_blend = false
@@ -257,29 +34,14 @@ scale = [ 3.0, 3.000000238418579, 3.000000238418579 ]
     [entities.mesh]
     index = 0
     kind = 'primitive'
-    path = 'cube'
-
-    [entities.spin]
-    euler_deg_per_sec = [ 0.0, 40.0, 0.0 ]
+    path = 'plane'
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Molten Orb'
+name = 'Sphere'
 parent = -1
-position = [ -6.0, 20.0, -18.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.bob]
-    amplitude = 1.5
-    frequency = 0.800000011920929
-    phase = 6.300000190734863
-
-    [entities.effect]
-    intensity = 1.399999976158142
-    name = 'molten'
-    scale = 1.600000023841858
-    speed = 1.0
-    tint = [ 1.0, 0.30000001192092896, 0.05000000074505806, 1.0 ]
+position = [ 35.0, 2.0, -44.0 ]
+scale = [ 4.0, 4.0, 4.0 ]
 
     [entities.material]
     alpha_blend = false
@@ -300,22 +62,2642 @@ scale = [ 3.0, 3.0, 3.0 ]
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 33.20000076293945, 1.5, -45.20000076293945 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 35.5, 1.5, -41.5 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 45.0, 1.5, -35.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 47.79999923706055, 1.5, -35.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 46.400001525878906, 1.5, -37.400001525878906 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Point Light'
+parent = -1
+position = [ -40.0, 13.0, 40.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.8500000238418579, 0.6000000238418579 ]
+    intensity = 45.0
+    radius = 34.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -40.0, 3.0, 40.0 ]
+scale = [ 2.5, 6.0, 2.5 ]
+tags = [ 'ground' ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -31.0, 1.5, 40.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -35.50001907348633, 1.5, 47.79423904418945 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.500038146972656, 1.5, 47.79420471191406 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -49.0, 1.5, 39.999935150146484 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.49992752075195, 1.5, 32.20573043823242 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -35.49990463256836, 1.5, 32.20582580566406 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Point Light'
+parent = -1
+position = [ 34.0, 11.0, 40.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 1.0, 0.25, 0.25 ]
+    intensity = 36.0
+    radius = 30.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Point Light'
+parent = -1
+position = [ 46.0, 11.0, 40.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.30000001192092896, 1.0, 0.4000000059604645 ]
+    intensity = 36.0
+    radius = 30.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Point Light'
+parent = -1
+position = [ 40.0, 11.0, 47.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.point_light]
+    color = [ 0.4000000059604645, 0.5, 1.0 ]
+    intensity = 36.0
+    radius = 30.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ 40.0, 3.5, 40.0 ]
+scale = [ 2.5, 7.0, 2.5 ]
+tags = [ 'ground' ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 46.0, 1.5, 40.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 39.999977111816406, 1.5, 46.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 34.0, 1.5, 39.99995803833008 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 40.000064849853516, 1.5, 34.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Plane'
+parent = -1
+position = [ 0.0, 6.0, -54.0 ]
+scale = [ 20.0, 12.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'plane'
+
+[[entities]]
+euler = [ -8.530767440795898, 0.0, 0.0 ]
+name = 'Spot Light'
+parent = -1
+position = [ 0.0, 13.0, -44.0 ]
+scale = [ 1.0, 0.9999998807907104, 0.9999998807907104 ]
+
+    [entities.spot_light]
+    color = [ 0.8500000238418579, 0.9200000166893005, 1.0 ]
+    inner_rad = 0.3499999940395355
+    intensity = 60.0
+    outer_rad = 0.550000011920929
+    radius = 50.0
+    shadow = true
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ 0.0, 3.0, -49.0 ]
+scale = [ 3.0, 6.0, 3.0 ]
+tags = [ 'ground' ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ 5.0, 2.0, -49.0 ]
+scale = [ 4.0, 4.0, 4.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -50.0, 0.800000011920929, 1.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.05000000074505806
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -48.0, 0.800000011920929, 1.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.2874999940395355
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -46.0, 0.800000011920929, 1.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.5249999761581421
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.0, 0.800000011920929, 1.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.762499988079071
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -42.0, 0.800000011920929, 1.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 1.0
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -50.0, 0.800000011920929, 3.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.25
+    occlusion = 1.0
+    roughness = 0.05000000074505806
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -48.0, 0.800000011920929, 3.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.25
+    occlusion = 1.0
+    roughness = 0.2874999940395355
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -46.0, 0.800000011920929, 3.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.25
+    occlusion = 1.0
+    roughness = 0.5249999761581421
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.0, 0.800000011920929, 3.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.25
+    occlusion = 1.0
+    roughness = 0.762499988079071
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -42.0, 0.800000011920929, 3.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.25
+    occlusion = 1.0
+    roughness = 1.0
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -50.0, 0.800000011920929, 5.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.5
+    occlusion = 1.0
+    roughness = 0.05000000074505806
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -48.0, 0.800000011920929, 5.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.5
+    occlusion = 1.0
+    roughness = 0.2874999940395355
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -46.0, 0.800000011920929, 5.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.5
+    occlusion = 1.0
+    roughness = 0.5249999761581421
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.0, 0.800000011920929, 5.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.5
+    occlusion = 1.0
+    roughness = 0.762499988079071
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -42.0, 0.800000011920929, 5.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.5
+    occlusion = 1.0
+    roughness = 1.0
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -50.0, 0.800000011920929, 7.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.75
+    occlusion = 1.0
+    roughness = 0.05000000074505806
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -48.0, 0.800000011920929, 7.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.75
+    occlusion = 1.0
+    roughness = 0.2874999940395355
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -46.0, 0.800000011920929, 7.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.75
+    occlusion = 1.0
+    roughness = 0.5249999761581421
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.0, 0.800000011920929, 7.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.75
+    occlusion = 1.0
+    roughness = 0.762499988079071
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -42.0, 0.800000011920929, 7.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.75
+    occlusion = 1.0
+    roughness = 1.0
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -50.0, 0.800000011920929, 9.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    roughness = 0.05000000074505806
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -48.0, 0.800000011920929, 9.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    roughness = 0.2874999940395355
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -46.0, 0.800000011920929, 9.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    roughness = 0.5249999761581421
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -44.0, 0.800000011920929, 9.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    roughness = 0.762499988079071
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Sphere'
+parent = -1
+position = [ -42.0, 0.800000011920929, 9.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 1.0
+    occlusion = 1.0
+    roughness = 1.0
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -34.849998474121094, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.54999923706055, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -31.399999618530273, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 1.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 2.1500000953674316 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 3.299999952316284 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 4.449999809265137 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 5.599999904632568 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.25, 0.5, 6.75 ]
+scale = [ 1.0, 1.0, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -49.0, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 0.25017106533050537, 0.24965789914131165, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -47.29999923706055, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.9329123497009277, 0.5003980994224548, 0.06668981909751892, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -45.599998474121094, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.7496524453163147, 0.7505183219909668, 6.258487701416016e-07, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -43.900001525878906, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.4993981420993805, 0.9334118366241455, 0.06748661398887634, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -42.20000076293945, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.24930539727210999, 0.9999989867210388, 0.25103771686553955, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -40.5, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.06648668646812439, 0.9324111938476562, 0.5013980269432068, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -38.79999923706055, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.4603137969970703e-06, 0.7487855553627014, 0.7513831853866577, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -37.099998474121094, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.0676911473274231, 0.49839821457862854, 0.93390953540802, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -35.400001525878906, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.2513910233974457, 0.24844074249267578, 0.9999960064888, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -33.70000076293945, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.5018054246902466, 0.06598928570747375, 0.9319082498550415, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.0, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.7517350912094116, 4.857778549194336e-06, 0.7479177713394165, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -30.299999237060547, 0.6000000238418579, 12.0 ]
+scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.9341118335723877, 0.0681944191455841, 0.497398316860199, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -36.0, 1.0, 16.5 ]
+scale = [ 2.0, 2.0, 2.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -32.5, 1.0, 16.5 ]
+scale = [ 2.0, 2.0, 2.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -49.0, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -46.79999923706055, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -44.599998474121094, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -42.400001525878906, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -40.20000076293945, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -38.0, 0.699999988079071, 20.0 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.4000000059604645
+    vertex_color = false
+
+    [entities.material_pulse]
+    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
+    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
+    frequency = 2.0
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -49.0, 0.699999988079071, 22.5 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.15000000596046448
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -46.79999923706055, 0.699999988079071, 22.5 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.33000001311302185
+    occlusion = 1.0
+    roughness = 0.3500000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -44.599998474121094, 0.699999988079071, 22.5 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.6600000262260437
+    occlusion = 1.0
+    roughness = 0.550000011920929
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Cube'
+parent = -1
+position = [ -42.400001525878906, 0.699999988079071, 22.5 ]
+scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.9900000095367432
+    occlusion = 1.0
+    roughness = 0.75
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'cube'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
 name = 'Plasma Orb'
 parent = -1
-position = [ -12.0, 20.0, -18.0 ]
+position = [ -24.0, 20.0, -18.0 ]
 scale = [ 3.0, 3.0, 3.0 ]
 
     [entities.bob]
     amplitude = 1.5
     frequency = 0.800000011920929
-    phase = 4.199999809265137
+    phase = 0.0
 
     [entities.effect]
-    intensity = 2.4000000953674316
+    intensity = 1.7999999523162842
     name = 'plasma'
-    scale = 3.4000000953674316
-    speed = 0.5
-    tint = [ 0.20000000298023224, 1.0, 0.699999988079071, 1.0 ]
+    scale = 2.0
+    speed = 1.0
+    tint = [ 0.8999999761581421, 0.4000000059604645, 1.0, 1.0 ]
 
     [entities.material]
     alpha_blend = false
@@ -374,20 +2756,56 @@ scale = [ 3.0, 3.0, 3.0 ]
 euler = [ -0.0, 0.0, 0.0 ]
 name = 'Plasma Orb'
 parent = -1
-position = [ -24.0, 20.0, -18.0 ]
+position = [ -12.0, 20.0, -18.0 ]
 scale = [ 3.0, 3.0, 3.0 ]
 
     [entities.bob]
     amplitude = 1.5
     frequency = 0.800000011920929
-    phase = 0.0
+    phase = 4.199999809265137
 
     [entities.effect]
-    intensity = 1.7999999523162842
+    intensity = 2.4000000953674316
     name = 'plasma'
-    scale = 2.0
+    scale = 3.4000000953674316
+    speed = 0.5
+    tint = [ 0.20000000298023224, 1.0, 0.699999988079071, 1.0 ]
+
+    [entities.material]
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    double_sided = true
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.6000000238418579
+    vertex_color = true
+
+    [entities.mesh]
+    index = 0
+    kind = 'primitive'
+    path = 'sphere'
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Molten Orb'
+parent = -1
+position = [ -6.0, 20.0, -18.0 ]
+scale = [ 3.0, 3.0, 3.0 ]
+
+    [entities.bob]
+    amplitude = 1.5
+    frequency = 0.800000011920929
+    phase = 6.300000190734863
+
+    [entities.effect]
+    intensity = 1.399999976158142
+    name = 'molten'
+    scale = 1.600000023841858
     speed = 1.0
-    tint = [ 0.8999999761581421, 0.4000000059604645, 1.0, 1.0 ]
+    tint = [ 1.0, 0.30000001192092896, 0.05000000074505806, 1.0 ]
 
     [entities.material]
     alpha_blend = false
@@ -407,305 +2825,11 @@ scale = [ 3.0, 3.0, 3.0 ]
     path = 'sphere'
 
 [[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
+euler = [ 19.999998092651367, 0.0, 0.0 ]
+name = 'Missing Texture Cube'
 parent = -1
-position = [ -42.400001525878906, 0.699999988079071, 22.5 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.9900000095367432
-    occlusion = 1.0
-    roughness = 0.75
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -44.599998474121094, 0.699999988079071, 22.5 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.6600000262260437
-    occlusion = 1.0
-    roughness = 0.550000011920929
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -46.79999923706055, 0.699999988079071, 22.5 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.33000001311302185
-    occlusion = 1.0
-    roughness = 0.3500000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -49.0, 0.699999988079071, 22.5 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.15000000596046448, 0.550000011920929, 0.8500000238418579, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.15000000596046448
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -38.0, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -40.20000076293945, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -42.400001525878906, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -44.599998474121094, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -46.79999923706055, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -49.0, 0.699999988079071, 20.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.25, 0.15000000596046448, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.4000000059604645
-    vertex_color = false
-
-    [entities.material_pulse]
-    emissive_a = [ 0.0, 0.0, 0.05000000074505806 ]
-    emissive_b = [ 0.8999999761581421, 0.20000000298023224, 0.05000000074505806 ]
-    frequency = 2.0
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.5, 1.0, 16.5 ]
-scale = [ 2.0, 2.0, 2.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 1.0, 16.5 ]
-scale = [ 2.0, 2.0, 2.0 ]
+position = [ -9.0, 3.0, 4.0 ]
+scale = [ 3.0, 3.000000238418579, 3.000000238418579 ]
 
     [entities.material]
     alpha_blend = false
@@ -724,1948 +2848,277 @@ scale = [ 2.0, 2.0, 2.0 ]
     kind = 'primitive'
     path = 'cube'
 
+    [entities.spin]
+    euler_deg_per_sec = [ 0.0, 40.0, 0.0 ]
+
+[[entities]]
+euler = [ -0.0, 39.999996185302734, 0.0 ]
+name = 'Fox'
+parent = -1
+position = [ 14.0, 0.0, 15.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+tags = [ 'fox' ]
+
+    [entities.orbit]
+    angle_deg = 46.974918365478516
+    center = [ 0.0, 0.0, 0.0 ]
+    height = 0.0
+    radius = 20.51828384399414
+    speed_deg = -25.783000946044922
+    yaw_offset_deg = 180.0
+
+[[entities]]
+euler = [ -0.0, 39.999996185302734, 0.0 ]
+name = 'Fox mesh'
+parent = 117
+position = [ 14.0, 0.0, 15.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+
+    [entities.material]
+    albedo = 'assets://models/Fox/Texture.texture'
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.5799999833106995
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'model'
+    path = 'assets://models/Fox/Fox.mesh'
+
+    [entities.skinned]
+    clip = 2
+    looping = true
+    speed = 0.800000011920929
+    time = 0.0
+
+[[entities]]
+euler = [ -0.0, -59.999996185302734, 0.0 ]
+name = 'Fox'
+parent = -1
+position = [ 20.0, 0.0, 8.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+tags = [ 'fox' ]
+
+    [entities.orbit]
+    angle_deg = 21.80138397216797
+    center = [ 0.0, 0.0, 0.0 ]
+    height = 0.0
+    radius = 21.540658950805664
+    speed_deg = -25.783000946044922
+    yaw_offset_deg = 180.0
+
+[[entities]]
+euler = [ -0.0, -59.999996185302734, 0.0 ]
+name = 'Fox mesh'
+parent = 119
+position = [ 20.0, 0.0, 8.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+
+    [entities.material]
+    albedo = 'assets://models/Fox/Texture.texture'
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.5799999833106995
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'model'
+    path = 'assets://models/Fox/Fox.mesh'
+
+    [entities.skinned]
+    clip = 2
+    looping = true
+    speed = 0.800000011920929
+    time = 0.30000001192092896
+
+[[entities]]
+euler = [ -0.0, 20.0, 0.0 ]
+name = 'Fox'
+parent = -1
+position = [ -16.0, 0.0, 14.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+tags = [ 'fox' ]
+
+    [entities.orbit]
+    angle_deg = 138.8140869140625
+    center = [ 0.0, 0.0, 0.0 ]
+    height = 0.0
+    radius = 21.260292053222656
+    speed_deg = -25.783000946044922
+    yaw_offset_deg = 180.0
+
+[[entities]]
+euler = [ -0.0, 20.0, 0.0 ]
+name = 'Fox mesh'
+parent = 121
+position = [ -16.0, 0.0, 14.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+
+    [entities.material]
+    albedo = 'assets://models/Fox/Texture.texture'
+    alpha_blend = false
+    alpha_cutoff = 0.5
+    alpha_mask = false
+    base_color = [ 1.0, 1.0, 1.0, 1.0 ]
+    double_sided = false
+    emissive = [ 0.0, 0.0, 0.0 ]
+    metallic = 0.0
+    occlusion = 1.0
+    roughness = 0.5799999833106995
+    vertex_color = false
+
+    [entities.mesh]
+    index = 0
+    kind = 'model'
+    path = 'assets://models/Fox/Fox.mesh'
+
+    [entities.skinned]
+    clip = 2
+    looping = true
+    speed = 0.800000011920929
+    time = 0.6000000238418579
+
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
+name = 'Player'
 parent = -1
-position = [ -30.299999237060547, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
+script = 'Player'
+tags = [ 'player' ]
+
+[[entities]]
+euler = [ -0.0, 0.0, 0.0 ]
+name = 'Human mesh'
+parent = 123
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
 
     [entities.material]
     alpha_blend = false
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 0.9341118335723877, 0.0681944191455841, 0.497398316860199, 1.0 ]
+    base_color = [ 0.8370000123977661, 0.30230802297592163, 0.26365500688552856, 1.0 ]
     double_sided = false
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
     occlusion = 1.0
-    roughness = 0.6000000238418579
+    roughness = 0.8082915544509888
     vertex_color = false
 
     [entities.mesh]
     index = 0
-    kind = 'primitive'
-    path = 'cube'
+    kind = 'model'
+    path = 'assets://models/Human/Human.mesh'
+
+    [entities.skinned]
+    clip = 0
+    looping = true
+    speed = 1.0
+    time = 0.0
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.0, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
+name = 'Human mesh'
+parent = 123
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 0.05000000074505806, 0.05000000074505806, 0.05000000074505806 ]
 
     [entities.material]
     alpha_blend = false
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 0.7517350912094116, 4.857778549194336e-06, 0.7479177713394165, 1.0 ]
+    base_color = [ 0.3333333432674408, 0.12452887743711472, 0.10101473331451416, 1.0 ]
     double_sided = false
     emissive = [ 0.0, 0.0, 0.0 ]
     metallic = 0.0
     occlusion = 1.0
-    roughness = 0.6000000238418579
+    roughness = 0.858578622341156
     vertex_color = false
 
     [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
+    index = 1
+    kind = 'model'
+    path = 'assets://models/Human/Human.mesh'
+
+    [entities.skinned]
+    clip = 0
+    looping = true
+    speed = 1.0
+    time = 0.0
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
+name = 'Point Light'
 parent = -1
-position = [ -33.70000076293945, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.5018054246902466, 0.06598928570747375, 0.9319082498550415, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -35.400001525878906, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.2513910233974457, 0.24844074249267578, 0.9999960064888, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -37.099998474121094, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.0676911473274231, 0.49839821457862854, 0.93390953540802, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -38.79999923706055, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.4603137969970703e-06, 0.7487855553627014, 0.7513831853866577, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -40.5, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.06648668646812439, 0.9324111938476562, 0.5013980269432068, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -42.20000076293945, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.24930539727210999, 0.9999989867210388, 0.25103771686553955, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -43.900001525878906, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.4993981420993805, 0.9334118366241455, 0.06748661398887634, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -45.599998474121094, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.7496524453163147, 0.7505183219909668, 6.258487701416016e-07, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -47.29999923706055, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.9329123497009277, 0.5003980994224548, 0.06668981909751892, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -49.0, 0.6000000238418579, 12.0 ]
-scale = [ 1.2000000476837158, 1.2000000476837158, 1.2000000476837158 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.25017106533050537, 0.24965789914131165, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 6.75 ]
+position = [ 31.71794891357422, 4.999929904937744, -12.902923583984375 ]
 scale = [ 1.0, 1.0, 1.0 ]
 
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -30.25, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 6.75 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -31.399999618530273, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 6.75 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -32.54999923706055, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 6.75 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -33.70000076293945, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 6.75 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.849998474121094, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 6.75 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 5.599999904632568 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 4.449999809265137 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 3.299999952316284 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 2.1500000953674316 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -36.0, 0.5, 1.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.75, 0.10999999940395355, 0.14000000059604645, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -42.0, 0.800000011920929, 9.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 1.0
-    occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.0, 0.800000011920929, 9.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 1.0
-    occlusion = 1.0
-    roughness = 0.762499988079071
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -46.0, 0.800000011920929, 9.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 1.0
-    occlusion = 1.0
-    roughness = 0.5249999761581421
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -48.0, 0.800000011920929, 9.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 1.0
-    occlusion = 1.0
-    roughness = 0.2874999940395355
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -50.0, 0.800000011920929, 9.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 1.0
-    occlusion = 1.0
-    roughness = 0.05000000074505806
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -42.0, 0.800000011920929, 7.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.75
-    occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.0, 0.800000011920929, 7.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.75
-    occlusion = 1.0
-    roughness = 0.762499988079071
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -46.0, 0.800000011920929, 7.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.75
-    occlusion = 1.0
-    roughness = 0.5249999761581421
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -48.0, 0.800000011920929, 7.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.75
-    occlusion = 1.0
-    roughness = 0.2874999940395355
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -50.0, 0.800000011920929, 7.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.75
-    occlusion = 1.0
-    roughness = 0.05000000074505806
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -42.0, 0.800000011920929, 5.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.5
-    occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.0, 0.800000011920929, 5.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.5
-    occlusion = 1.0
-    roughness = 0.762499988079071
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -46.0, 0.800000011920929, 5.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.5
-    occlusion = 1.0
-    roughness = 0.5249999761581421
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -48.0, 0.800000011920929, 5.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.5
-    occlusion = 1.0
-    roughness = 0.2874999940395355
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -50.0, 0.800000011920929, 5.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.5
-    occlusion = 1.0
-    roughness = 0.05000000074505806
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -42.0, 0.800000011920929, 3.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.25
-    occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.0, 0.800000011920929, 3.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.25
-    occlusion = 1.0
-    roughness = 0.762499988079071
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -46.0, 0.800000011920929, 3.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.25
-    occlusion = 1.0
-    roughness = 0.5249999761581421
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -48.0, 0.800000011920929, 3.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.25
-    occlusion = 1.0
-    roughness = 0.2874999940395355
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -50.0, 0.800000011920929, 3.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.25
-    occlusion = 1.0
-    roughness = 0.05000000074505806
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -42.0, 0.800000011920929, 1.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.0, 0.800000011920929, 1.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.762499988079071
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -46.0, 0.800000011920929, 1.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.5249999761581421
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -48.0, 0.800000011920929, 1.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.2874999940395355
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -50.0, 0.800000011920929, 1.0 ]
-scale = [ 1.600000023841858, 1.600000023841858, 1.600000023841858 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 1.0, 0.765999972820282, 0.335999995470047, 1.0 ]
-    double_sided = false
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.05000000074505806
-    vertex_color = false
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 5.0, 2.0, -49.0 ]
-scale = [ 4.0, 4.0, 4.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ 0.0, 3.0, -49.0 ]
-scale = [ 3.0, 6.0, 3.0 ]
-tags = [ 'ground' ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -8.530767440795898, 0.0, 0.0 ]
-name = 'Spot Light'
-parent = -1
-position = [ 0.0, 13.0, -44.0 ]
-scale = [ 1.0, 0.9999998807907104, 0.9999998807907104 ]
-
-    [entities.spot_light]
-    color = [ 0.8500000238418579, 0.9200000166893005, 1.0 ]
-    inner_rad = 0.3499999940395355
-    intensity = 60.0
-    outer_rad = 0.550000011920929
-    radius = 50.0
+    [entities.point_light]
+    color = [ 0.8584070205688477, 0.0, 1.0 ]
+    intensity = 88.0
+    radius = 23.399999618530273
     shadow = true
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Plane'
+name = 'Ground'
 parent = -1
-position = [ 0.0, 6.0, -54.0 ]
-scale = [ 20.0, 12.0, 1.0 ]
+position = [ 0.0, -0.5, 0.0 ]
+scale = [ 110.0, 1.0, 110.0 ]
 
     [entities.material]
     alpha_blend = false
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
+    base_color = [ 0.06637167930603027, 0.06637167930603027, 0.06637167930603027, 1.0 ]
     double_sided = true
     emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
+    metallic = 0.796999990940094
     occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
+    roughness = 1.0
+    vertex_color = false
 
     [entities.mesh]
     index = 0
     kind = 'primitive'
-    path = 'plane'
+    path = 'cube'
+
+    [entities.physics]
+    half_extents = [ 55.0, 0.5, 55.0 ]
+    half_height = 0.5
+    motion = 'static'
+    radius = 0.5
+    shape = 'box'
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
+name = 'Toy Spawner'
 parent = -1
-position = [ 40.000064849853516, 1.5, 34.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 34.0, 1.5, 39.99995803833008 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 39.999977111816406, 1.5, 46.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 46.0, 1.5, 40.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
+position = [ 0.0, 0.0, 0.0 ]
+scale = [ 1.0, 1.0, 1.0 ]
+script = 'ToySpawner'
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
 name = 'Cube'
 parent = -1
-position = [ 40.0, 3.5, 40.0 ]
-scale = [ 2.5, 7.0, 2.5 ]
+position = [ -46.0, 5.0, -46.0 ]
+scale = [ 3.0, 10.0, 3.0 ]
 tags = [ 'ground' ]
 
     [entities.material]
@@ -2687,447 +3140,10 @@ tags = [ 'ground' ]
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Point Light'
-parent = -1
-position = [ 40.0, 11.0, 47.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.4000000059604645, 0.5, 1.0 ]
-    intensity = 36.0
-    radius = 30.0
-    shadow = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Point Light'
-parent = -1
-position = [ 46.0, 11.0, 40.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 0.30000001192092896, 1.0, 0.4000000059604645 ]
-    intensity = 36.0
-    radius = 30.0
-    shadow = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Point Light'
-parent = -1
-position = [ 34.0, 11.0, 40.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 1.0, 0.25, 0.25 ]
-    intensity = 36.0
-    radius = 30.0
-    shadow = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -35.49990463256836, 1.5, 32.20582580566406 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.49992752075195, 1.5, 32.20573043823242 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -49.0, 1.5, 39.999935150146484 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -44.500038146972656, 1.5, 47.79420471191406 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -35.50001907348633, 1.5, 47.79423904418945 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -31.0, 1.5, 40.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
 name = 'Cube'
 parent = -1
-position = [ -40.0, 3.0, 40.0 ]
-scale = [ 2.5, 6.0, 2.5 ]
-tags = [ 'ground' ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'cube'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Point Light'
-parent = -1
-position = [ -40.0, 13.0, 40.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-
-    [entities.point_light]
-    color = [ 1.0, 0.8500000238418579, 0.6000000238418579 ]
-    intensity = 45.0
-    radius = 34.0
-    shadow = true
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 46.400001525878906, 1.5, -37.400001525878906 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 47.79999923706055, 1.5, -35.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 45.0, 1.5, -35.0 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 35.5, 1.5, -41.5 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 33.20000076293945, 1.5, -45.20000076293945 ]
-scale = [ 3.0, 3.0, 3.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ 35.0, 2.0, -44.0 ]
-scale = [ 4.0, 4.0, 4.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 90.0, 0.0 ]
-name = 'Plane'
-parent = -1
-position = [ 31.0, 5.0, -40.0 ]
-scale = [ 15.99999713897705, 9.999996185302734, 0.9999998211860657 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'plane'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Plane'
-parent = -1
-position = [ 40.0, 5.0, -48.0 ]
-scale = [ 18.0, 10.0, 1.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'plane'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Sphere'
-parent = -1
-position = [ -34.0, 3.0, -34.0 ]
-scale = [ 4.0, 4.0, 4.0 ]
-
-    [entities.material]
-    alpha_blend = false
-    alpha_cutoff = 0.5
-    alpha_mask = false
-    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
-    double_sided = true
-    emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.0
-    occlusion = 1.0
-    roughness = 0.6000000238418579
-    vertex_color = true
-
-    [entities.mesh]
-    index = 0
-    kind = 'primitive'
-    path = 'sphere'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ -34.0, 0.5, -34.0 ]
-scale = [ 6.0, 1.0, 6.0 ]
+position = [ -46.0, 1.5, -34.0 ]
+scale = [ 4.0, 3.0, 4.0 ]
 tags = [ 'ground' ]
 
     [entities.material]
@@ -3176,8 +3192,8 @@ tags = [ 'ground' ]
 euler = [ -0.0, 0.0, 0.0 ]
 name = 'Cube'
 parent = -1
-position = [ -46.0, 1.5, -34.0 ]
-scale = [ 4.0, 3.0, 4.0 ]
+position = [ -34.0, 0.5, -34.0 ]
+scale = [ 6.0, 1.0, 6.0 ]
 tags = [ 'ground' ]
 
     [entities.material]
@@ -3199,11 +3215,10 @@ tags = [ 'ground' ]
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
+name = 'Sphere'
 parent = -1
-position = [ -46.0, 5.0, -46.0 ]
-scale = [ 3.0, 10.0, 3.0 ]
-tags = [ 'ground' ]
+position = [ -34.0, 3.0, -34.0 ]
+scale = [ 4.0, 4.0, 4.0 ]
 
     [entities.material]
     alpha_blend = false
@@ -3220,36 +3235,28 @@ tags = [ 'ground' ]
     [entities.mesh]
     index = 0
     kind = 'primitive'
-    path = 'cube'
+    path = 'sphere'
 
 [[entities]]
 euler = [ -0.0, 0.0, 0.0 ]
-name = 'Toy Spawner'
+name = 'Plane'
 parent = -1
-position = [ 0.0, 0.0, 0.0 ]
-scale = [ 1.0, 1.0, 1.0 ]
-script = 'ToySpawner'
-
-[[entities]]
-euler = [ -0.0, 0.0, 0.0 ]
-name = 'Cube'
-parent = -1
-position = [ 0.0, -0.5, 0.0 ]
-scale = [ 110.0, 1.0, 110.0 ]
+position = [ 40.0, 5.0, -48.0 ]
+scale = [ 18.0, 10.0, 1.0 ]
 
     [entities.material]
     alpha_blend = false
     alpha_cutoff = 0.5
     alpha_mask = false
-    base_color = [ 0.04424780607223511, 0.04424780607223511, 0.04424780607223511, 1.0 ]
+    base_color = [ 0.8500000238418579, 0.8500000238418579, 0.8199999928474426, 1.0 ]
     double_sided = true
     emissive = [ 0.0, 0.0, 0.0 ]
-    metallic = 0.796999990940094
+    metallic = 0.0
     occlusion = 1.0
-    roughness = 1.0
-    vertex_color = false
+    roughness = 0.6000000238418579
+    vertex_color = true
 
     [entities.mesh]
     index = 0
     kind = 'primitive'
-    path = 'cube'
+    path = 'plane'
