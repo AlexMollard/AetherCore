@@ -4,6 +4,7 @@
 // Usage:
 //   AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>
 //   AssetPacker import-materials <source-dir>
+//   AssetPacker bake-font <ttf> <outDir>
 
 #include <charconv>
 #include <filesystem>
@@ -11,6 +12,7 @@
 #include <optional>
 #include <string>
 
+#include "FontProcessor.hpp"
 #include "MaterialImporter.hpp"
 #include "PakWriter.hpp"
 
@@ -64,6 +66,24 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 			const int result = MaterialImporter::ImportDirectory(fs::path(argv[argOffset + 1]));
 			std::exit((result < 0) ? 1 : 0);
 		}
+		else if (arg == "bake-font")
+		{
+			if (argc < argOffset + 3)
+			{
+				std::cerr << "Usage: AssetPacker bake-font <ttf> <outDir>\n";
+				return std::nullopt;
+			}
+			const fs::path ttfPath(argv[argOffset + 1]);
+			const fs::path outDir(argv[argOffset + 2]);
+			const FontProcessor::BakeResult result = FontProcessor::BakeFont(ttfPath, outDir);
+			if (!result.success)
+			{
+				std::cerr << "AssetPacker: bake-font failed: " << result.error << "\n";
+				std::exit(1);
+			}
+			std::cout << "AssetPacker: baked '" << ttfPath.generic_string() << "' -> " << result.glyphCount << " glyphs, atlas " << result.atlasWidth << "x" << result.atlasHeight << "\n";
+			std::exit(0);
+		}
 		else
 		{
 			break;
@@ -74,6 +94,7 @@ static std::optional<Args> ParseArgs(int argc, char* argv[])
 	{
 		std::cerr << "Usage: AssetPacker [--import-materials] [--compress-level N] <source-dir> <output.pak>\n";
 		std::cerr << "       AssetPacker import-materials <source-dir>\n";
+		std::cerr << "       AssetPacker bake-font <ttf> <outDir>\n";
 		return std::nullopt;
 	}
 

@@ -1,0 +1,6 @@
+# Homegrown binary asset formats (tools/assetpack) - never apply text/CRLF
+# transforms. Without this, core.autocrlf can silently corrupt these files on
+# checkin (observed: LF byte 0x0A inside raw glyph-metrics data expanded to
+# CRLF, inflating a 7676-byte .fontmeta to 10292 bytes).
+*.fontatlas binary
+*.fontmeta binary

@@ -22,7 +22,7 @@ target_include_directories(AssetPacker SYSTEM PRIVATE
     "${glm_SOURCE_DIR}"             # glm/glm.hpp
 )
 
-target_link_libraries(AssetPacker PRIVATE zstd::libzstd_static)
+target_link_libraries(AssetPacker PRIVATE zstd::libzstd_static freetype)
 
 if(TARGET tomlplusplus::tomlplusplus)
     target_link_libraries(AssetPacker PRIVATE tomlplusplus::tomlplusplus)
