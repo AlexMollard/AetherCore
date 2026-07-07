@@ -178,7 +178,7 @@ namespace aether
 			{
 				continue;
 			}
-			const std::string text(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+			const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 			if (auto preset = Deserialize(text))
 			{
 				result.push_back(std::move(*preset));
