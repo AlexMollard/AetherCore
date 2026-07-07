@@ -36,13 +36,16 @@ using namespace std::string_view_literals;
 #include "debug/TextureInspectorPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "AetherCore.hpp"
+#include "assets/AssetManager.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
 #include "platform/Input.hpp"
+#include "rendering/Renderer.hpp"
 #include "rendering/RenderingSubsystem.hpp"
 #include "scene/Components.hpp"
 #include "PlayState.hpp"
 #include "scene/SceneSubsystem.hpp"
+#include "scene/SceneWorkflow.hpp"
 #include "scene/World.hpp"
 #include "vulkan/Swapchain.hpp"
 #include "utils/FuzzyMatch.hpp"
@@ -336,7 +339,9 @@ namespace aether::app
 
 		m_panels.push_back(std::make_unique<RenderGraphPanel>());
 		m_panels.push_back(std::make_unique<TextureInspectorPanel>());
-		m_panels.push_back(std::make_unique<HierarchyPanel>());
+		auto hierarchyPanel = std::make_unique<HierarchyPanel>();
+		m_hierarchyPanel = hierarchyPanel.get();
+		m_panels.push_back(std::move(hierarchyPanel));
 		m_panels.push_back(std::make_unique<InspectorPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());
@@ -371,6 +376,7 @@ namespace aether::app
 			panel->OnDetach(context);
 		}
 		m_panels.clear();
+		m_hierarchyPanel = nullptr;
 		context.services.Unregister<UndoStack>();
 		context.services.Unregister<SceneSelection>();
 
@@ -660,6 +666,28 @@ namespace aether::app
 		return nullptr;
 	}
 
+	void DebugLayer::SaveCurrentScene(LayerContext& context)
+	{
+		auto* scenes = context.TryGet<SceneSubsystem>();
+		const std::string currentName = scenes != nullptr ? scenes->GetCurrentScene() : std::string{};
+
+		bool saved = false;
+		if (!currentName.empty())
+		{
+			if (auto* assets = context.TryGet<AssetManager>())
+			{
+				saved = scene::QuickSave(context.Get<World>(), currentName, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+			}
+		}
+
+		if (!saved && m_hierarchyPanel != nullptr)
+		{
+			// No scene name yet (or the quick-save failed) - fall back to the
+			// named Save-As prompt instead of silently doing nothing.
+			m_hierarchyPanel->RequestSaveAsPopup();
+		}
+	}
+
 	void DebugLayer::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -724,6 +752,18 @@ namespace aether::app
 			}
 		}
 
+		// ── Quick save (Ctrl+S) ─────────────────────────────────────────────────
+		// Mirrors File > Save; available in both Editing and Playing mode (same
+		// as the Scene Outliner's Save button). Suppressed while a text field is
+		// focused so typing 's' into a name box can't trigger a save.
+		{
+			const ImGuiIO& io = ImGui::GetIO();
+			if (io.KeyCtrl && !io.WantTextInput && ImGui::IsKeyPressed(ImGuiKey_S, false))
+			{
+				SaveCurrentScene(context);
+			}
+		}
+
 		if (!m_errorToasts.empty())
 		{
 			const ImGuiViewport* viewport = ImGui::GetMainViewport();
@@ -776,6 +816,45 @@ namespace aether::app
 		// renderer on the first frame.
 		if (showMenuBar && ImGui::BeginMenuBar())
 		{
+			if (ImGui::BeginMenu("File"))
+			{
+				if (ImGui::MenuItem(ICON_FA_PLUS "  New Scene"))
+				{
+					// A non-empty return is purely NewScene's success signal (it's the
+					// template's cosmetic display name). A freshly created scene has no
+					// file yet, so track it as UNNAMED - empty is the "unsaved" sentinel
+					// SaveCurrentScene() checks to route Save/Ctrl+S to the Save-As prompt.
+					const std::string name = scene::NewScene(context.Get<World>(), scene::MakeApplySceneDeps(context.services));
+					if (!name.empty())
+					{
+						if (auto* scenes = context.TryGet<SceneSubsystem>())
+						{
+							scenes->SetCurrentScene("");
+						}
+						m_selection.Clear();
+					}
+				}
+				ImGui::Separator();
+				if (ImGui::MenuItem(ICON_FA_FOLDER_OPEN "  Open..."))
+				{
+					if (m_hierarchyPanel != nullptr)
+					{
+						m_hierarchyPanel->RequestOpenPopup();
+					}
+				}
+				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save", "Ctrl+S"))
+				{
+					SaveCurrentScene(context);
+				}
+				if (ImGui::MenuItem(ICON_FA_FLOPPY_DISK "  Save As..."))
+				{
+					if (m_hierarchyPanel != nullptr)
+					{
+						m_hierarchyPanel->RequestSaveAsPopup();
+					}
+				}
+				ImGui::EndMenu();
+			}
 			if (ImGui::BeginMenu("Window"))
 			{
 				// Renders one window's toggle (icon + name + checkmark) by resolving

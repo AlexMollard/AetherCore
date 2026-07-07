@@ -18,6 +18,8 @@
 
 namespace aether::app
 {
+	class HierarchyPanel;
+
 	// Non-blocking error notification for script errors.
 	// Always visible regardless of m_visible (the debug panel toggle).
 	struct ScriptErrorToast
@@ -55,6 +57,10 @@ namespace aether::app
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
+		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
+		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
+		// when there isn't one yet (or the quick-save failed).
+		void SaveCurrentScene(LayerContext& context);
 
 		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
 		static void OpenInVSCode(const std::string& filePath, int line);
@@ -86,5 +92,9 @@ namespace aether::app
 		char m_newPresetName[64] = {};
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
+		// Non-owning: observes the HierarchyPanel instance owned by m_panels, so
+		// the File menu / Ctrl+S can drive its Save-As / Open popups instead of
+		// duplicating them. Set in OnAttach, cleared in OnDetach.
+		HierarchyPanel* m_hierarchyPanel = nullptr;
 	};
 } // namespace aether::app

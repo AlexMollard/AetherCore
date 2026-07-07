@@ -416,6 +416,18 @@ namespace aether::app
 		ImGui::PopID();
 	}
 
+	void HierarchyPanel::RequestSaveAsPopup()
+	{
+		m_requestSaveAsPopup = true;
+		SetVisible(true);
+	}
+
+	void HierarchyPanel::RequestOpenPopup()
+	{
+		m_requestOpenPopup = true;
+		SetVisible(true);
+	}
+
 	void HierarchyPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -473,6 +485,21 @@ namespace aether::app
 
 		ImGui::Begin("Scene", VisiblePtr());
 		{
+			// External requests (File > Open / Save As, Ctrl+S fallback) open the
+			// same popups the toolbar buttons below do, from this window's ID scope
+			// so BeginPopup(...) below actually sees them.
+			if (m_requestSaveAsPopup)
+			{
+				m_requestSaveAsPopup = false;
+				ImGui::OpenPopup("SaveScene");
+			}
+			if (m_requestOpenPopup)
+			{
+				m_requestOpenPopup = false;
+				m_sceneListDirty = true;
+				ImGui::OpenPopup("LoadScene");
+			}
+
 			// ── Toolbar ────────────────────────────────────────────────────────
 			if (ImGui::Button(ICON_FA_PLUS))
 			{
@@ -613,6 +640,10 @@ namespace aether::app
 						const auto captured = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
 						scene::SaveSceneFile(m_sceneNameBuf, captured);
 						m_sceneListDirty = true;
+						if (auto* scenes = context.TryGet<aether::SceneSubsystem>())
+						{
+							scenes->SetCurrentScene(m_sceneNameBuf);
+						}
 					}
 					ImGui::CloseCurrentPopup();
 				}

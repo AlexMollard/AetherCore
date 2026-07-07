@@ -33,6 +33,13 @@ namespace aether::app
 
 		void OnImGui(LayerContext& context) override;
 
+		// Drives this panel's existing Save-As / Open (load) popups from
+		// outside (the editor's File menu and Ctrl+S), so there is one popup
+		// implementation instead of a duplicate. Both force the panel visible
+		// since the popup only draws while this window does.
+		void RequestSaveAsPopup();
+		void RequestOpenPopup();
+
 	private:
 		void DrawNode(World& world, SceneSelection& selection, Entity e);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e);
@@ -49,6 +56,10 @@ namespace aether::app
 		char m_sceneNameBuf[48] = "scene";
 		std::vector<std::string> m_sceneList;
 		bool m_sceneListDirty = true;
+		// Set by RequestSaveAsPopup/RequestOpenPopup; consumed at the top of the
+		// next OnImGui to open the popup below from this window's ID scope.
+		bool m_requestSaveAsPopup = false;
+		bool m_requestOpenPopup = false;
 		// Create-menu asset lists (refreshed when the create popup opens).
 		std::vector<std::string> m_modelList;
 		std::vector<std::string> m_prefabList;
