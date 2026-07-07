@@ -28,6 +28,7 @@
 #include "scene/TransformEdit.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
+#include "ui/UiComponents.hpp"
 
 namespace aether::app
 {
@@ -86,6 +87,28 @@ namespace aether::app
 			return changed;
 		}
 
+		void ApplyAnchorPreset(ui::UIRect& rect, int preset)
+		{
+			if (preset == 9)
+			{
+				rect.anchorMin = {0.f, 0.f};
+				rect.anchorMax = {1.f, 1.f};
+				rect.offsetMin = {0.f, 0.f};
+				rect.offsetMax = {0.f, 0.f};
+				return;
+			}
+
+			const int xIndex = preset % 3;
+			const int yIndex = preset / 3;
+			const glm::vec2 anchor{static_cast<float>(xIndex) * 0.5f, static_cast<float>(yIndex) * 0.5f};
+			const glm::vec2 size = glm::max(rect.offsetMax - rect.offsetMin, glm::vec2(1.f));
+
+			rect.anchorMin = anchor;
+			rect.anchorMax = anchor;
+			rect.offsetMin = -rect.pivot * size;
+			rect.offsetMax = (glm::vec2(1.f) - rect.pivot) * size;
+		}
+
 	} // namespace
 
 	bool HasSelectedAncestor(const World& world, Entity e, const SceneSelection& selection)
@@ -112,6 +135,18 @@ namespace aether::app
 
 	KindBadge EntityKindBadge(const World& world, Entity entity)
 	{
+		if (world.Has<ui::UICanvas>(entity))
+		{
+			return {ICON_FA_IMAGE, ImVec4(0.52f, 0.78f, 1.00f, 1.0f)};
+		}
+		if (world.Has<ui::UIText>(entity))
+		{
+			return {ICON_FA_CODE, ImVec4(0.75f, 0.90f, 1.00f, 1.0f)};
+		}
+		if (world.Has<ui::UIImage>(entity) || world.Has<ui::UIRect>(entity))
+		{
+			return {ICON_FA_IMAGE, ImVec4(0.55f, 0.85f, 0.95f, 1.0f)};
+		}
 		if (world.Has<PointLightComponent>(entity) || world.Has<SpotLightComponent>(entity))
 		{
 			return {ICON_FA_LIGHTBULB, ImVec4(1.00f, 0.86f, 0.40f, 1.0f)};
@@ -399,6 +434,123 @@ namespace aether::app
 			ImGui::TreePop();
 		}
 		ImGui::TextDisabled("GPU slot %u", mc->gpuSlot);
+	}
+
+	void DrawUiCanvas(World& world, Entity entity)
+	{
+		auto* canvas = world.TryGet<ui::UICanvas>(entity);
+		if (canvas == nullptr || !ImGui::CollapsingHeader(ICON_FA_IMAGE "  UI Canvas", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		int scaleMode = static_cast<int>(canvas->scaleMode);
+		if (ImGui::Combo("Scale Mode", &scaleMode, "Constant Pixel\0Scale With Reference\0"))
+		{
+			canvas->scaleMode = static_cast<ui::UICanvas::ScaleMode>(std::clamp(scaleMode, 0, 1));
+		}
+		ImGui::DragFloat2("Reference Resolution", &canvas->referenceResolution.x, 1.f, 1.f, 16384.f);
+		canvas->referenceResolution = glm::max(canvas->referenceResolution, glm::vec2(1.f));
+		ImGui::DragInt("Sort Bias", &canvas->sortBias, 1.f, -100000, 100000);
+	}
+
+	void DrawUiRect(World& world, Entity entity)
+	{
+		auto* rect = world.TryGet<ui::UIRect>(entity);
+		if (rect == nullptr || !ImGui::CollapsingHeader(ICON_FA_EXPAND "  UI Rect", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		static constexpr const char* kPresets[] = {
+		        "Top-Left",
+		        "Top-Center",
+		        "Top-Right",
+		        "Middle-Left",
+		        "Center",
+		        "Middle-Right",
+		        "Bottom-Left",
+		        "Bottom-Center",
+		        "Bottom-Right",
+		        "Stretch-All",
+		};
+
+		int preset = -1;
+		if (ImGui::Combo("Anchor Preset", &preset, kPresets, IM_ARRAYSIZE(kPresets)) && preset >= 0)
+		{
+			ApplyAnchorPreset(*rect, preset);
+		}
+
+		ImGui::DragFloat2("Anchor Min", &rect->anchorMin.x, 0.01f, 0.f, 1.f);
+		ImGui::DragFloat2("Anchor Max", &rect->anchorMax.x, 0.01f, 0.f, 1.f);
+		rect->anchorMin = glm::clamp(rect->anchorMin, glm::vec2(0.f), glm::vec2(1.f));
+		rect->anchorMax = glm::clamp(rect->anchorMax, glm::vec2(0.f), glm::vec2(1.f));
+		rect->anchorMax = glm::max(rect->anchorMax, rect->anchorMin);
+
+		ImGui::DragFloat2("Offset Min", &rect->offsetMin.x, 1.f);
+		ImGui::DragFloat2("Offset Max", &rect->offsetMax.x, 1.f);
+		ImGui::DragFloat2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f);
+		rect->pivot = glm::clamp(rect->pivot, glm::vec2(0.f), glm::vec2(1.f));
+		ImGui::TextDisabled("Resolved %.1f, %.1f  %.1f x %.1f", rect->resolvedRect.x, rect->resolvedRect.y, rect->resolvedRect.z, rect->resolvedRect.w);
+	}
+
+	void DrawUiImage(World& world, Entity entity)
+	{
+		auto* image = world.TryGet<ui::UIImage>(entity);
+		if (image == nullptr || !ImGui::CollapsingHeader(ICON_FA_IMAGE "  UI Image", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		ImGui::ColorEdit4("Color##uiImage", &image->color.x);
+		ImGui::DragFloat("Corner Radius", &image->cornerRadius, 0.5f, 0.f, 200.f);
+		if (image->texture.IsValid())
+		{
+			ImGui::TextDisabled("Texture entry %u", image->texture.index);
+		}
+		else
+		{
+			ImGui::TextDisabled("Texture (none)");
+		}
+	}
+
+	void DrawUiText(World& world, Entity entity)
+	{
+		auto* text = world.TryGet<ui::UIText>(entity);
+		if (text == nullptr || !ImGui::CollapsingHeader(ICON_FA_CODE "  UI Text", ImGuiTreeNodeFlags_DefaultOpen))
+		{
+			return;
+		}
+
+		char textBuf[512]{};
+		std::snprintf(textBuf, sizeof(textBuf), "%s", text->text.c_str());
+		if (ImGui::InputTextMultiline("Text", textBuf, sizeof(textBuf), ImVec2(-FLT_MIN, ImGui::GetTextLineHeight() * 4.0f)))
+		{
+			text->text = textBuf;
+		}
+
+		char fontBuf[128]{};
+		std::snprintf(fontBuf, sizeof(fontBuf), "%s", text->fontName.c_str());
+		if (ImGui::InputText("Font", fontBuf, sizeof(fontBuf)))
+		{
+			text->fontName = fontBuf;
+		}
+
+		ImGui::DragFloat("Pixel Size", &text->pixelSize, 0.5f, 4.f, 200.f);
+		text->pixelSize = std::max(text->pixelSize, 1.f);
+		ImGui::ColorEdit4("Color##uiText", &text->color.x);
+
+		int hAlign = static_cast<int>(text->hAlign);
+		if (ImGui::Combo("H Align", &hAlign, "Left\0Center\0Right\0"))
+		{
+			text->hAlign = static_cast<ui::UIText::HAlign>(std::clamp(hAlign, 0, 2));
+		}
+		int vAlign = static_cast<int>(text->vAlign);
+		if (ImGui::Combo("V Align", &vAlign, "Top\0Middle\0Bottom\0"))
+		{
+			text->vAlign = static_cast<ui::UIText::VAlign>(std::clamp(vAlign, 0, 2));
+		}
+		ImGui::Checkbox("Wrap", &text->wrap);
 	}
 
 	namespace

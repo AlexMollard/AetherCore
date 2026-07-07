@@ -52,6 +52,10 @@ namespace aether::app
 	void DrawSkinnedMesh(World& world, Entity entity);
 	void DrawMaterial(LayerContext& context, World& world, Entity entity);
 	void DrawEffectParams(LayerContext& context, World& world, Entity entity);
+	void DrawUiCanvas(World& world, Entity entity);
+	void DrawUiRect(World& world, Entity entity);
+	void DrawUiImage(World& world, Entity entity);
+	void DrawUiText(World& world, Entity entity);
 	// One section per present behavior component (Bob/Spin/Orbit/MaterialPulse),
 	// each live-editable and removable.
 	void DrawBehaviors(World& world, Entity entity);

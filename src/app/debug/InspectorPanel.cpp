@@ -334,6 +334,10 @@ namespace aether::app
 		DrawSkinnedMesh(world, entity);
 		DrawMaterial(context, world, entity);
 		DrawEffectParams(context, world, entity);
+		DrawUiCanvas(world, entity);
+		DrawUiRect(world, entity);
+		DrawUiImage(world, entity);
+		DrawUiText(world, entity);
 		DrawLights(world, entity);
 		DrawScript(context, world, entity);
 		DrawBehaviors(world, entity);
