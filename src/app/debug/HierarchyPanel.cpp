@@ -37,6 +37,8 @@
 #include "utils/EngineSettings.hpp"
 #include "utils/SettingsService.hpp"
 #include "utils/Profiler.hpp"
+#include "ui/UiComponents.hpp"
+#include "ui/UiEntities.hpp"
 
 namespace aether::app
 {
@@ -133,6 +135,20 @@ namespace aether::app
 			asset.doubleSided = true;
 			MaterialSystem::AssignMaterial(world, e, assets->GetMaterialRegistry(), assets->GetPipelineCache(), asset);
 			selection.Select(e);
+		}
+
+		Entity FindOrCreateCanvas(World& world)
+		{
+			Entity firstCanvas{};
+			world.View<ui::UICanvas>().each(
+			        [&](entt::entity canvasEntity, ui::UICanvas&)
+			        {
+				        if (!firstCanvas.IsValid())
+				        {
+					        firstCanvas = World::FromEntt(canvasEntity);
+				        }
+			        });
+			return firstCanvas.IsValid() ? firstCanvas : ui::CreateCanvasEntity(world);
 		}
 	} // namespace
 
@@ -547,6 +563,23 @@ namespace aether::app
 				{
 					// Spawn aimed forward-down so the cone lands in front of you.
 					selection.Select(ecs::CreateSpotLightEntity(world, {0.0f, 8.0f, 0.0f}, {0.0f, -0.85f, -0.5f}, SpotLightComponent{}));
+				}
+				ImGui::Separator();
+				if (ImGui::BeginMenu(ICON_FA_IMAGE "  UI"))
+				{
+					if (ImGui::MenuItem("Canvas"))
+					{
+						selection.Select(ui::CreateCanvasEntity(world));
+					}
+					if (ImGui::MenuItem("Image"))
+					{
+						selection.Select(ui::CreateImageEntity(world, FindOrCreateCanvas(world)));
+					}
+					if (ImGui::MenuItem("Text"))
+					{
+						selection.Select(ui::CreateTextEntity(world, FindOrCreateCanvas(world)));
+					}
+					ImGui::EndMenu();
 				}
 				ImGui::Separator();
 				if (ImGui::BeginMenu(ICON_FA_PERSON_RUNNING "  Model"))

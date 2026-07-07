@@ -101,7 +101,8 @@ namespace aether::app
 			const int xIndex = preset % 3;
 			const int yIndex = preset / 3;
 			const glm::vec2 anchor{static_cast<float>(xIndex) * 0.5f, static_cast<float>(yIndex) * 0.5f};
-			const glm::vec2 size = glm::max(rect.offsetMax - rect.offsetMin, glm::vec2(1.f));
+			glm::vec2 size = rect.resolvedRect.z > 0.f && rect.resolvedRect.w > 0.f ? glm::vec2(rect.resolvedRect.z, rect.resolvedRect.w) : glm::abs(rect.offsetMax - rect.offsetMin);
+			size = glm::max(size, glm::vec2(1.f));
 
 			rect.anchorMin = anchor;
 			rect.anchorMax = anchor;
@@ -489,6 +490,10 @@ namespace aether::app
 
 		ImGui::DragFloat2("Offset Min", &rect->offsetMin.x, 1.f);
 		ImGui::DragFloat2("Offset Max", &rect->offsetMax.x, 1.f);
+		if (rect->anchorMin == rect->anchorMax)
+		{
+			rect->offsetMax = glm::max(rect->offsetMax, rect->offsetMin + glm::vec2(1.f));
+		}
 		ImGui::DragFloat2("Pivot", &rect->pivot.x, 0.01f, 0.f, 1.f);
 		rect->pivot = glm::clamp(rect->pivot, glm::vec2(0.f), glm::vec2(1.f));
 		ImGui::TextDisabled("Resolved %.1f, %.1f  %.1f x %.1f", rect->resolvedRect.x, rect->resolvedRect.y, rect->resolvedRect.z, rect->resolvedRect.w);

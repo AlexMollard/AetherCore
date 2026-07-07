@@ -23,6 +23,7 @@ add_executable(EngineTests
     material/EffectParamBufferTests.cpp
     material/TextureRegistryTests.cpp
     ui/UiLayoutTests.cpp
+    ui/UiEntitiesTests.cpp
     ui/UiDrawBuilderTests.cpp
     ui/FontShapingTests.cpp
     # App-side translation units under test: EngineTests links Engine only, so

@@ -16,8 +16,9 @@ namespace aether::ui
 
 		const glm::vec2 rectMin = anchorMinPx + rect.offsetMin;
 		const glm::vec2 rectMax = anchorMaxPx + rect.offsetMax;
+		const glm::vec2 size = glm::max(rectMax - rectMin, glm::vec2(0.f));
 
-		return {rectMin.x, rectMin.y, rectMax.x - rectMin.x, rectMax.y - rectMin.y};
+		return {rectMin.x, rectMin.y, size.x, size.y};
 	}
 
 	// Depth-first walk of the HierarchyComponent subtree rooted at `entity`,
