@@ -34,6 +34,7 @@ using namespace std::string_view_literals;
 #include "debug/SettingsPanel.hpp"
 #include "debug/TonemapPanel.hpp"
 #include "debug/TextureInspectorPanel.hpp"
+#include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "AetherCore.hpp"
 #include "assets/AssetManager.hpp"
@@ -90,6 +91,10 @@ namespace aether::app
 			if (panelName == "Viewport")
 			{
 				return ICON_FA_EYE;
+			}
+			if (panelName == "UI Canvas")
+			{
+				return ICON_FA_IMAGE;
 			}
 			if (panelName == "Render Graph")
 			{
@@ -343,6 +348,7 @@ namespace aether::app
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));
 		m_panels.push_back(std::make_unique<InspectorPanel>());
+		m_panels.push_back(std::make_unique<UiCanvasPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());
 		m_panels.push_back(std::make_unique<TonemapPanel>());
@@ -896,7 +902,7 @@ namespace aether::app
 				};
 
 				static const std::vector<MenuGroup> kGroups = {
-				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Inspector", "Viewport"}},
+				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Inspector", "Viewport", "UI Canvas"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},
 				        {ICON_FA_GAUGE_HIGH, "Diagnostics", {"Performance", "Console", "DevTools"}},
 				        {ICON_FA_GEARS, "Engine", {"Settings"}},
@@ -1038,10 +1044,10 @@ namespace aether::app
 			ImGui::EndPopup();
 		}
 
-		// V4: classic editor arrangement - outliner left, Inspector right (over a
-		// tabbed tool stack), utility tabs bottom, Viewport center. The id bump
-		// retires saved V3 layouts so the new default (incl. Settings) applies once.
-		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV4");
+		// V5: classic editor arrangement - outliner left, Inspector right (over a
+		// tabbed tool stack), utility tabs bottom, Viewport/UI Canvas center. The id
+		// bump retires saved V4 layouts so the UI Canvas tab appears by default.
+		ImGuiID dockspace_id = ImGui::GetID("AetherDebugDockSpaceV5");
 		const bool hasSavedDockspace = ImGui::DockBuilderGetNode(dockspace_id) != nullptr;
 		// Reserve a row at the bottom of the dockspace for the status bar (frame 1+;
 		// withheld on frame 0 for the same reason as the menu bar). Keeping it inside
@@ -1071,6 +1077,7 @@ namespace aether::app
 
 			ImGui::DockBuilderDockWindow("Scene", dock_left);
 			ImGui::DockBuilderDockWindow("Viewport", remaining);
+			ImGui::DockBuilderDockWindow("UI Canvas", remaining);
 			ImGui::DockBuilderDockWindow("Inspector", dock_right);
 			ImGui::DockBuilderDockWindow("Render Graph", dock_right_tools);
 			ImGui::DockBuilderDockWindow("Debug", dock_right_tools);

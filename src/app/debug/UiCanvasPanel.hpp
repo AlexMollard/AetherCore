@@ -1,0 +1,70 @@
+#pragma once
+
+#include <cstdint>
+#include <string_view>
+
+#include <glm/vec2.hpp>
+#include <imgui.h>
+
+#include "debug/DebugPanel.hpp"
+#include "scene/Entity.hpp"
+#include "ui/UiComponents.hpp"
+
+namespace aether::app
+{
+	enum class UiRectResizeHandle : std::uint8_t
+	{
+		Left,
+		Right,
+		Top,
+		Bottom,
+		TopLeft,
+		TopRight,
+		BottomLeft,
+		BottomRight
+	};
+
+	enum class UiAnchorHandle : std::uint8_t
+	{
+		Point,
+		TopLeft,
+		TopRight,
+		BottomLeft,
+		BottomRight
+	};
+
+	void TranslateUiRectOffsets(ui::UIRect& rect, glm::vec2 canvasDelta);
+	void ResizeUiRectOffsets(ui::UIRect& rect, UiRectResizeHandle handle, glm::vec2 canvasDelta, glm::vec2 parentExtent);
+
+	class UiCanvasPanel final : public DebugPanel
+	{
+	public:
+		std::string_view GetName() const override
+		{
+			return "UI Canvas";
+		}
+
+		void OnImGui(LayerContext& context) override;
+
+	private:
+		enum class DragKind : std::uint8_t
+		{
+			None,
+			Move,
+			Resize,
+			Anchor
+		};
+
+		struct DragState
+		{
+			DragKind kind = DragKind::None;
+			Entity entity{};
+			UiRectResizeHandle resize = UiRectResizeHandle::BottomRight;
+			UiAnchorHandle anchor = UiAnchorHandle::Point;
+		};
+
+		ImVec2 m_pan{0.f, 0.f};
+		float m_zoom = 1.f;
+		DragState m_drag;
+	};
+} // namespace aether::app
