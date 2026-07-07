@@ -365,9 +365,14 @@ namespace aether
 		        VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
 		        VK_ACCESS_2_NONE);
 
-		if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
 		{
-			Throw(AetherError::Vulkan(0, "Failed to end command buffer."));
+			const auto endStart = std::chrono::steady_clock::now();
+			AE_PROFILE_ZONE_N("Swapchain.EndCommandBuffer");
+			if (vkEndCommandBuffer(cmd) != VK_SUCCESS)
+			{
+				Throw(AetherError::Vulkan(0, "Failed to end command buffer."));
+			}
+			AE_PROFILE_PLOT("Swapchain/EndCommandBufferNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - endStart).count()));
 		}
 
 		VkSemaphore renderFinished = m_renderFinishedSemaphores[m_imageIndex];
@@ -415,7 +420,10 @@ namespace aether
 		        .pSignalSemaphoreInfos = &signalInfo,
 		};
 		{
+			const auto submitStart = std::chrono::steady_clock::now();
+			AE_PROFILE_ZONE_N("Swapchain.QueueSubmit");
 			const VkResult submitResult = vkQueueSubmit2(graphicsQueue, 1, &submit, frame.inFlight);
+			AE_PROFILE_PLOT("Swapchain/QueueSubmitNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - submitStart).count()));
 			if (submitResult == VK_ERROR_DEVICE_LOST)
 			{
 				AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueueSubmit2 (frame {}). GPU has crashed - check validation output above.", m_currentFrame);
@@ -435,7 +443,13 @@ namespace aether
 		        .pSwapchains = &m_swapchain.swapchain,
 		        .pImageIndices = &m_imageIndex,
 		};
-		const VkResult presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
+		VkResult presentResult = VK_SUCCESS;
+		{
+			const auto presentStart = std::chrono::steady_clock::now();
+			AE_PROFILE_ZONE_N("Swapchain.QueuePresent");
+			presentResult = vkQueuePresentKHR(presentQueue, &presentInfo);
+			AE_PROFILE_PLOT("Swapchain/PresentNs", static_cast<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - presentStart).count()));
+		}
 		if (presentResult == VK_ERROR_DEVICE_LOST)
 		{
 			AE_ERROR(LogCategory::Vulkan, "VK_ERROR_DEVICE_LOST on vkQueuePresentKHR (frame {}). GPU has crashed - check validation output above.", m_currentFrame);

@@ -519,6 +519,7 @@ namespace aether::app
 			std::string label;
 			std::function<void()> run;
 		};
+
 		std::vector<Action> actions;
 		for (auto& panel: m_panels)
 		{
@@ -547,6 +548,7 @@ namespace aether::app
 			int score;
 			std::size_t index;
 		};
+
 		std::vector<Ranked> ranked;
 		for (std::size_t i = 0; i < actions.size(); ++i)
 		{
@@ -797,6 +799,7 @@ namespace aether::app
 					const char* label;
 					std::vector<std::string_view> windows;
 				};
+
 				static const std::vector<MenuGroup> kGroups = {
 				        {ICON_FA_CUBE, "Scene", {"Scene Outliner", "Inspector", "Viewport"}},
 				        {ICON_FA_PALETTE, "Rendering", {"Render Graph", "Post Processing", "Tonemap", "Lighting", "Day / Night", "TextureInspector"}},

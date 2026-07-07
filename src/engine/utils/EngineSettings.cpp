@@ -164,6 +164,7 @@ namespace aether
 			std::string_view name;
 			std::string value;
 		};
+
 		std::vector<FieldLine> current;
 		std::vector<std::string> baseline;
 		ForEachSettingField(settings,

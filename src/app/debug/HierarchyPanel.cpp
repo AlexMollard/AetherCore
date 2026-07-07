@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -48,6 +49,16 @@ namespace aether::app
 			return out;
 		}
 
+		bool ContainsCaseInsensitive(std::string_view text, std::string_view lowerNeedle)
+		{
+			if (lowerNeedle.empty())
+			{
+				return true;
+			}
+
+			return std::search(text.begin(), text.end(), lowerNeedle.begin(), lowerNeedle.end(), [](char a, char b) { return static_cast<char>(std::tolower(static_cast<unsigned char>(a))) == b; }) != text.end();
+		}
+
 		// Small icon toggle used for the kind-filter chips.
 		void FilterChip(const char* icon, const char* tooltip, const ImVec4& accent, bool& state)
 		{
@@ -68,6 +79,7 @@ namespace aether::app
 		std::vector<Entity> CollectSelectionRoots(World& world, const SceneSelection& selection)
 		{
 			std::vector<Entity> roots;
+			roots.reserve(selection.All().size());
 			auto& reg = world.GetRegistry();
 			for (const Entity e: selection.All())
 			{
@@ -426,7 +438,8 @@ namespace aether::app
 		const double now = ImGui::GetTime();
 		{
 			// Rebuilding the id set each frame keeps recycled ids flashing too.
-			std::unordered_set<std::uint32_t> current;
+			m_knownIdsScratch.clear();
+			m_knownIdsScratch.reserve(m_knownIds.size());
 			for (const auto handle: reg.storage<entt::entity>())
 			{
 				if (!reg.valid(handle))
@@ -438,13 +451,13 @@ namespace aether::app
 				{
 					continue;
 				}
-				current.insert(e.id);
+				m_knownIdsScratch.insert(e.id);
 				if (m_knownSeeded && !m_knownIds.contains(e.id))
 				{
 					m_spawnFlash[e.id] = now;
 				}
 			}
-			m_knownIds = std::move(current);
+			m_knownIds.swap(m_knownIdsScratch);
 			m_knownSeeded = true;
 
 			for (auto it = m_spawnFlash.begin(); it != m_spawnFlash.end();)
@@ -738,9 +751,10 @@ namespace aether::app
 					++count;
 				}
 			}
-			const std::string countText = std::to_string(count) + " entities";
-			ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::CalcTextSize(countText.c_str()).x);
-			ImGui::TextDisabled("%s", countText.c_str());
+			char countText[32]{};
+			std::snprintf(countText, sizeof(countText), "%zu entities", count);
+			ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::CalcTextSize(countText).x);
+			ImGui::TextDisabled("%s", countText);
 
 			// ── Body ───────────────────────────────────────────────────────────
 			const bool anyChip = m_filterMesh || m_filterSkinned || m_filterPhysics || m_filterEffect;
@@ -761,7 +775,8 @@ namespace aether::app
 			{
 				// Flat, clipper-friendly result list.
 				const std::string needle = ToLower(m_search);
-				std::vector<Entity> matches;
+				m_filteredRowsScratch.clear();
+				m_filteredRowsScratch.reserve(count);
 				for (const auto handle: reg.storage<entt::entity>())
 				{
 					if (!reg.valid(handle))
@@ -775,22 +790,23 @@ namespace aether::app
 					}
 					if (searching)
 					{
-						const std::string idText = "#" + std::to_string(e.id);
-						if (ToLower(EntityDisplayName(world, e)).find(needle) == std::string::npos && idText.find(needle) == std::string::npos)
+						char idText[16]{};
+						std::snprintf(idText, sizeof(idText), "#%u", e.id);
+						if (!ContainsCaseInsensitive(EntityDisplayName(world, e), needle) && std::string_view(idText).find(needle) == std::string::npos)
 						{
 							continue;
 						}
 					}
-					matches.push_back(e);
+					m_filteredRowsScratch.push_back(e);
 				}
 
 				ImGuiListClipper clipper;
-				clipper.Begin(static_cast<int>(matches.size()));
+				clipper.Begin(static_cast<int>(m_filteredRowsScratch.size()));
 				while (clipper.Step())
 				{
 					for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
 					{
-						const Entity e = matches[static_cast<std::size_t>(i)];
+						const Entity e = m_filteredRowsScratch[static_cast<std::size_t>(i)];
 						ImGui::PushID(static_cast<int>(e.id));
 						DrawRowBackdrop(selection, e);
 						// Same interaction path as tree rows: modifier-aware click
@@ -806,7 +822,7 @@ namespace aether::app
 						ImGui::PopID();
 					}
 				}
-				if (matches.empty())
+				if (m_filteredRowsScratch.empty())
 				{
 					ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
 					const char* msg = "No entities match";

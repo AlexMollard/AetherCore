@@ -1,7 +1,6 @@
 #include "scene/LightSystem.hpp"
 
 #include <algorithm>
-#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -18,19 +17,23 @@ namespace aether
 		AE_PROFILE_ZONE();
 		auto& reg = world.GetRegistry();
 
-		std::vector<entt::entity> points;
+		auto& points = m_pointLightScratch;
+		points.clear();
+		points.reserve(reg.view<PointLightComponent, TransformComponent>().size_hint());
 		for (const auto e: reg.view<PointLightComponent, TransformComponent>())
 		{
 			points.push_back(e);
 		}
-		std::sort(points.begin(), points.end());
+		std::ranges::sort(points);
 
-		std::vector<entt::entity> spots;
+		auto& spots = m_spotLightScratch;
+		spots.clear();
+		spots.reserve(reg.view<SpotLightComponent, TransformComponent>().size_hint());
 		for (const auto e: reg.view<SpotLightComponent, TransformComponent>())
 		{
 			spots.push_back(e);
 		}
-		std::sort(spots.begin(), spots.end());
+		std::ranges::sort(spots);
 
 		m_renderer.ClearPointLights();
 		for (const auto e: points)

@@ -87,6 +87,7 @@ namespace aether
 		// recreate (present-mode change) on the next producer-thread poll. No-op
 		// when unchanged.
 		void SetVsync(bool enabled);
+
 		[[nodiscard]] bool IsVsyncEnabled() const
 		{
 			return m_settings.graphics.vsync;

@@ -1,11 +1,13 @@
 #include "debug/TextureInspectorPanel.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <format>
 #include <ranges>
 #include <string_view>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <imgui.h>
@@ -84,6 +86,15 @@ namespace aether::app
 				}
 			}
 		}
+
+		template<typename... Args>
+		void DrawMetricRowFormat(const char* label, std::format_string<Args...> fmt, Args&&... args)
+		{
+			std::array<char, 128> buffer{};
+			const auto result = std::format_to_n(buffer.begin(), buffer.size() - 1, fmt, std::forward<Args>(args)...);
+			*result.out = '\0';
+			DrawMetricRow(label, buffer.data());
+		}
 	} // anonymous namespace
 
 	TextureInspectorPanel::~TextureInspectorPanel()
@@ -98,6 +109,8 @@ namespace aether::app
 
 	void TextureInspectorPanel::OnUpdate(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
+
 		// Runs every frame even while the panel is hidden (unlike OnImGui). Disable
 		// the GPU preview request here; OnImGui re-enables it with a live bindless
 		// slot only when the panel is actually drawn. Without this, hiding the panel
@@ -195,11 +208,12 @@ namespace aether::app
 				ImGui::TableNextRow();
 				ImGui::TableSetColumnIndex(0);
 				const bool selected = row.handle.bits == m_selectedTextureBits;
-				const std::string label = std::format("{}###tex{}", ShortRenderPassName(row.debugName), row.handle.bits);
-				if (ImGui::Selectable(label.c_str(), selected, ImGuiSelectableFlags_SpanAllColumns))
+				ImGui::PushID(static_cast<int>(row.handle.bits));
+				if (ImGui::Selectable(ShortRenderPassName(row.debugName).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns))
 				{
 					m_selectedTextureBits = row.handle.bits;
 				}
+				ImGui::PopID();
 				ImGui::TableSetColumnIndex(1);
 				ImGui::Text("%u x %u", row.extent.width, row.extent.height);
 				ImGui::TableSetColumnIndex(2);
@@ -343,7 +357,11 @@ namespace aether::app
 				{
 					DrawCheckerboard(drawList, ImGui::GetWindowPos(), ImGui::GetWindowSize());
 				}
-				const ImU32 tint = shaderPreview ? IM_COL32_WHITE : (m_texturePreviewChannel == 1 ? IM_COL32(255, 0, 0, 255) : m_texturePreviewChannel == 2 ? IM_COL32(0, 255, 0, 255) : m_texturePreviewChannel == 3 ? IM_COL32(0, 0, 255, 255) : IM_COL32_WHITE);
+				const ImU32 tint = shaderPreview ? IM_COL32_WHITE
+				                                 : (m_texturePreviewChannel == 1          ? IM_COL32(255, 0, 0, 255)
+				                                           : m_texturePreviewChannel == 2 ? IM_COL32(0, 255, 0, 255)
+				                                           : m_texturePreviewChannel == 3 ? IM_COL32(0, 0, 255, 255)
+				                                                                          : IM_COL32_WHITE);
 				drawList->AddImage(ImTextureRef(static_cast<ImTextureID>(cachedTextureId)), contentOrigin, ImVec2(contentOrigin.x + imgSize.x, contentOrigin.y + imgSize.y), ImVec2(0.0f, 0.0f), uvMax, tint);
 				ImGui::Dummy(imgSize); // reserve layout space so the child scrolls
 
@@ -392,12 +410,19 @@ namespace aether::app
 		{
 			DrawMetricRow("Name", ShortRenderPassName(texture.debugName).c_str());
 			DrawMetricRow("Format", FormatName(texture.format));
-			DrawMetricRow("Extent", std::format("{} x {}", texture.extent.width, texture.extent.height).c_str());
-			DrawMetricRow("Mips", std::format("{}", texture.mipLevels).c_str());
-			DrawMetricRow("Layers", std::format("{}", texture.arrayLayers).c_str());
+			DrawMetricRowFormat("Extent", "{} x {}", texture.extent.width, texture.extent.height);
+			DrawMetricRowFormat("Mips", "{}", texture.mipLevels);
+			DrawMetricRowFormat("Layers", "{}", texture.arrayLayers);
 			DrawMetricRow("Usage", ImageUsageText(texture.usage).c_str());
 			DrawMetricRow("Aspect", ImageAspectText(texture.aspect).c_str());
-			DrawMetricRow("Bindless", texture.hasBindlessSampled ? std::format("{}", texture.bindlessSampledSlot).c_str() : "-");
+			if (texture.hasBindlessSampled)
+			{
+				DrawMetricRowFormat("Bindless", "{}", texture.bindlessSampledSlot);
+			}
+			else
+			{
+				DrawMetricRow("Bindless", "-");
+			}
 			ImGui::EndTable();
 		}
 

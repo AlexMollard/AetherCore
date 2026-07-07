@@ -16,7 +16,10 @@ namespace aether
 	{
 		std::string_view Trim(std::string_view s)
 		{
-			const auto notSpace = [](char c) { return c != ' ' && c != '\t'; };
+			const auto notSpace = [](char c)
+			{
+				return c != ' ' && c != '\t';
+			};
 			while (!s.empty() && !notSpace(s.front()))
 			{
 				s.remove_prefix(1);
@@ -175,7 +178,7 @@ namespace aether
 			{
 				continue;
 			}
-			const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			const std::string text(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
 			if (auto preset = Deserialize(text))
 			{
 				result.push_back(std::move(*preset));

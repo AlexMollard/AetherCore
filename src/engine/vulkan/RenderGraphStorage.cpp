@@ -1136,9 +1136,10 @@ namespace aether
 		// running offset; lower-alignment entries then pack into the gaps
 		// with no per-entry padding. Original indices are preserved because
 		// other code accesses transient slots by their insertion index.
-		auto collectCandidates = [](const auto& entries, auto&& isValid, auto&& isAllocatable)
+		auto collectCandidates = [](std::vector<std::uint32_t>& indices, const auto& entries, auto&& isValid, auto&& isAllocatable)
 		{
-			std::vector<std::uint32_t> indices;
+			indices.clear();
+			indices.reserve(entries.size());
 			for (std::uint32_t i = 0; i < entries.size(); ++i)
 			{
 				if (!isValid(entries[i]) && isAllocatable(entries[i]))
@@ -1146,11 +1147,12 @@ namespace aether
 					indices.push_back(i);
 				}
 			}
-			return indices;
 		};
 
-		auto imageIndices = collectCandidates(m_transientImages, [](const TransientImageEntry& e) { return e.image.IsValid(); }, [](const TransientImageEntry& e) { return e.memReqSize > 0; });
-		auto bufferIndices = collectCandidates(m_transientBuffers, [](const TransientBufferEntry& e) { return e.buffer.IsValid(); }, [](const TransientBufferEntry& e) { return e.memReqSize > 0; });
+		auto& imageIndices = m_scratchTransientImageIndices;
+		auto& bufferIndices = m_scratchTransientBufferIndices;
+		collectCandidates(imageIndices, m_transientImages, [](const TransientImageEntry& e) { return e.image.IsValid(); }, [](const TransientImageEntry& e) { return e.memReqSize > 0; });
+		collectCandidates(bufferIndices, m_transientBuffers, [](const TransientBufferEntry& e) { return e.buffer.IsValid(); }, [](const TransientBufferEntry& e) { return e.memReqSize > 0; });
 
 		auto byAlignmentDescImages = [&](std::uint32_t a, std::uint32_t b)
 		{
@@ -1164,6 +1166,7 @@ namespace aether
 		std::ranges::sort(bufferIndices, byAlignmentDescBuffers);
 
 		VkDeviceSize totalSize = 0;
+		VkDeviceSize maxAlignment = kTransientHeapAlignment;
 		auto accumulate = [](VkDeviceSize current, VkDeviceSize size, VkDeviceSize alignment) -> VkDeviceSize
 		{
 			if (size == 0)
@@ -1178,28 +1181,13 @@ namespace aether
 		{
 			const auto& entry = m_transientImages[idx];
 			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
+			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
 		}
 		for (const auto idx: bufferIndices)
 		{
 			const auto& entry = m_transientBuffers[idx];
 			totalSize = accumulate(totalSize, entry.memReqSize, entry.memReqAlignment);
-		}
-
-		// Determine max alignment needed across all transient resources.
-		VkDeviceSize maxAlignment = kTransientHeapAlignment;
-		for (const auto idx: imageIndices)
-		{
-			if (m_transientImages[idx].memReqAlignment > maxAlignment)
-			{
-				maxAlignment = m_transientImages[idx].memReqAlignment;
-			}
-		}
-		for (const auto idx: bufferIndices)
-		{
-			if (m_transientBuffers[idx].memReqAlignment > maxAlignment)
-			{
-				maxAlignment = m_transientBuffers[idx].memReqAlignment;
-			}
+			maxAlignment = std::max(maxAlignment, entry.memReqAlignment);
 		}
 
 		// Allocate heap and virtual block if needed.

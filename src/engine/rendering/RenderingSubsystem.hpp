@@ -152,6 +152,7 @@ namespace aether
 		// (enabled=false / slot 0xFFFFFFFF disables). Read on the render thread each
 		// frame by the $TexturePreview pass.
 		void SetTexturePreviewRequest(std::uint32_t bindlessSlot, gpu::Extent2D srcExtent, std::uint32_t channel, float exposure, std::uint32_t flags, std::uint32_t tonemapMode, bool enabled);
+
 		[[nodiscard]] gpu::ImageView GetTexturePreviewView() const
 		{
 			return m_texturePreviewView;

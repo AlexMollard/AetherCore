@@ -72,6 +72,7 @@ namespace aether::app
 		// previous frame's order is complete by the time a click arrives.
 		std::vector<Entity> m_rowsCur;
 		std::vector<Entity> m_rowsPrev;
+		std::vector<Entity> m_filteredRowsScratch;
 		Entity m_rangeAnchor{};
 		// Plain-press on a multi-selected row defers the collapse to release (the
 		// press may start a multi-entity drag); this remembers where it landed.
@@ -90,6 +91,7 @@ namespace aether::app
 
 		// Juice: newly-seen entities flash briefly; selection changes pulse.
 		std::unordered_set<std::uint32_t> m_knownIds;
+		std::unordered_set<std::uint32_t> m_knownIdsScratch;
 		std::unordered_map<std::uint32_t, double> m_spawnFlash; // id -> first-seen time
 		bool m_knownSeeded = false;                             // no flash on the initial population
 		std::uint64_t m_seenSelectionSerial = 0;

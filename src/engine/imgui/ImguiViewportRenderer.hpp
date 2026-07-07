@@ -40,7 +40,10 @@ namespace aether
 		// Producer thread, inside RunExclusive only.
 		void RetireViewports(const std::vector<ImGuiID>& departedIds);
 
-		[[nodiscard]] bool IsInitialized() const noexcept { return m_device != VK_NULL_HANDLE; }
+		[[nodiscard]] bool IsInitialized() const noexcept
+		{
+			return m_device != VK_NULL_HANDLE;
+		}
 
 	private:
 		// Host-visible vertex/index buffers for one swapchain image.
@@ -75,7 +78,7 @@ namespace aether
 		VkDescriptorSetLayout m_texSetLayout = VK_NULL_HANDLE;     // set 0 (SAMPLED_IMAGE), matches AddTexture
 		VkDescriptorSetLayout m_samplerSetLayout = VK_NULL_HANDLE; // set 1 (SAMPLER)
 		VkDescriptorPool m_samplerPool = VK_NULL_HANDLE;
-		VkDescriptorSet m_samplerDS = VK_NULL_HANDLE;             // shared sampler set, bound at set 1
+		VkDescriptorSet m_samplerDS = VK_NULL_HANDLE; // shared sampler set, bound at set 1
 		VkPipelineLayout m_pipelineLayout = VK_NULL_HANDLE;
 		VkPipeline m_pipeline = VK_NULL_HANDLE;
 

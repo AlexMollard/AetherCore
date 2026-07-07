@@ -39,6 +39,8 @@ namespace aether
 		{
 			if (system)
 			{
+				AE_PROFILE_ZONE_N("SystemRegistry.UpdateSystem");
+				AE_PROFILE_SET_ZONE_NAME(system->GetName());
 				system->Update(world, dt);
 			}
 		}

@@ -41,8 +41,15 @@ namespace aether
 			return m_drawData.Valid && m_drawData.CmdListsCount > 0 && m_drawData.TotalVtxCount > 0;
 		}
 
-		[[nodiscard]] ImDrawData* GetDrawData() noexcept { return &m_drawData; }
-		[[nodiscard]] const ImDrawData* GetDrawData() const noexcept { return &m_drawData; }
+		[[nodiscard]] ImDrawData* GetDrawData() noexcept
+		{
+			return &m_drawData;
+		}
+
+		[[nodiscard]] const ImDrawData* GetDrawData() const noexcept
+		{
+			return &m_drawData;
+		}
 
 		[[nodiscard]] const std::vector<CapturedViewport>& SecondaryViewports() const noexcept
 		{

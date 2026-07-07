@@ -1,7 +1,7 @@
 #include "PerformancePanel.hpp"
 
 #include <algorithm>
-#include <format>
+#include <cstdio>
 
 #include <imgui.h>
 
@@ -67,7 +67,9 @@ namespace aether::app
 			m_titleAccum = 0.0f;
 		}
 
-		ImGui::Begin(std::format("Performance  |  {:.0f} FPS  |  {:.2f} ms###Performance", m_titleFps, m_titleMs).c_str(), VisiblePtr());
+		char title[96];
+		std::snprintf(title, sizeof(title), "Performance  |  %.0f FPS  |  %.2f ms###Performance", m_titleFps, m_titleMs);
+		ImGui::Begin(title, VisiblePtr());
 
 		// Compact 4-column stats grid
 		if (ImGui::BeginTable("PerfStats", 4, ImGuiTableFlags_SizingStretchProp))

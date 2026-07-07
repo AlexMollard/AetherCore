@@ -8,24 +8,24 @@
 #include "utils/Logger.hpp"
 
 #if defined(_WIN32)
-	#ifndef WIN32_LEAN_AND_MEAN
-		#define WIN32_LEAN_AND_MEAN
-	#endif
-	#ifndef NOMINMAX
-		#define NOMINMAX
-	#endif
-	#include <windows.h>
+#	ifndef WIN32_LEAN_AND_MEAN
+#		define WIN32_LEAN_AND_MEAN
+#	endif
+#	ifndef NOMINMAX
+#		define NOMINMAX
+#	endif
+#	include <windows.h>
 
-	#include <shlobj.h>
+#	include <shlobj.h>
 
-	// Link the shell + COM allocator for SHGetKnownFolderPath / CoTaskMemFree.
-	// #pragma comment(lib) is honoured by both MSVC (link.exe) and clang-cl
-	// (lld-link), so no CMakeLists change is required.
-	#pragma comment(lib, "Shell32.lib")
-	#pragma comment(lib, "Ole32.lib")
+// Link the shell + COM allocator for SHGetKnownFolderPath / CoTaskMemFree.
+// #pragma comment(lib) is honoured by both MSVC (link.exe) and clang-cl
+// (lld-link), so no CMakeLists change is required.
+#	pragma comment(lib, "Shell32.lib")
+#	pragma comment(lib, "Ole32.lib")
 #elif defined(__linux__)
-	#include <limits.h>
-	#include <unistd.h>
+#	include <limits.h>
+#	include <unistd.h>
 #endif
 
 namespace aether::io

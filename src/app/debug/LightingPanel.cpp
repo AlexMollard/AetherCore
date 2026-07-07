@@ -143,6 +143,8 @@ namespace aether::app
 
 	void LightingPanel::OnUpdate(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
+
 		// The light-gizmo toggle lives on this panel's checkbox; the editor keeps
 		// only scene-manipulation keybinds.
 		if (m_lightGizmos && aether::IsDebugRenderingEnabled())
@@ -165,6 +167,8 @@ namespace aether::app
 
 	void LightingPanel::OnImGui(LayerContext& context)
 	{
+		AE_PROFILE_ZONE();
+
 		ImGui::Begin("Lighting", VisiblePtr());
 		{
 			Renderer& renderer = context.Get<Renderer>();

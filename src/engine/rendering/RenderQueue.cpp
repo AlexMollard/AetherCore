@@ -4,7 +4,6 @@
 #include <cassert>
 #include <chrono>
 #include <cstddef>
-#include <cstring>
 #include <stdexcept>
 #include <utility>
 
@@ -300,16 +299,6 @@ namespace aether
 		m_skinCopyJobsMapped = static_cast<AnimationContracts::SkinCopyJob*>(m_skinCopyJobs[frameSlot].mapped);
 		m_animationSampleJobsMapped = static_cast<AnimationContracts::AnimatorSampleJob*>(m_animationSampleJobs[frameSlot].mapped);
 
-		// Clear the slot's instance data to zero-bounds (w=0 = always visible) so
-		// that any entries not overwritten by this frame don't carry stale sphere data
-		// from a previous frame that had more draws.
-		std::memset(m_instanceDataMapped, 0, m_maxDraws * sizeof(DrawContracts::InstanceData));
-		std::memset(m_cullInputMapped, 0, m_maxDraws * sizeof(CullContracts::DrawInput));
-		std::memset(m_batchDescMapped, 0, m_maxBatches * sizeof(CullContracts::Batch));
-		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-
 		// Clear device-local animation buffers on first use of each frame slot.
 		// Each slot is cleared individually so in-flight slots don't sit with garbage
 		// until the first animation sample writes their data.
@@ -537,17 +526,17 @@ namespace aether
 			i = batchEnd;
 		}
 
-		// Flush mapped writes before GPU reads.
-		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
-		if (m_skinCopyJobsMapped != nullptr)
+		// Flush only the packed ranges consumed by the cull and animation shaders.
+		gpu::ResourceRegistry::FlushMappedBuffer(m_instanceData[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(DrawContracts::InstanceData));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_cullInput[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(globalDrawIdx) * sizeof(CullContracts::DrawInput));
+		gpu::ResourceRegistry::FlushMappedBuffer(m_batchDesc[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(batchIdx) * sizeof(CullContracts::Batch));
+		if (m_skinCopyJobsMapped != nullptr && skinJobCount > 0)
 		{
-			gpu::ResourceRegistry::FlushMappedBuffer(m_skinCopyJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+			gpu::ResourceRegistry::FlushMappedBuffer(m_skinCopyJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(skinJobCount) * sizeof(AnimationContracts::SkinCopyJob));
 		}
 		if (sampleJobsThisFrame > 0)
 		{
-			gpu::ResourceRegistry::FlushMappedBuffer(m_animationSampleJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(-1));
+			gpu::ResourceRegistry::FlushMappedBuffer(m_animationSampleJobs[frameSlot].handle, 0, static_cast<gpu::DeviceSize>(sampleJobsThisFrame) * sizeof(AnimationContracts::AnimatorSampleJob));
 		}
 
 		// Ensure host writes are visible to subsequent shader reads.
@@ -567,6 +556,7 @@ namespace aether
 
 				cmdList.BindComputePipeline(const_cast<void*>(poseInitPipe.state));
 				cmdList.BeginDebugLabel("Animation.PoseInit", 0.9f, 0.6f, 0.3f, 1.0f);
+				AE_GPU_ZONE_SCOPED(rawCmd, "Animation.PoseInit");
 
 				const gpu::DeviceAddress animJobsBDAForInit = m_animationSampleJobs[frameSlot].address;
 
@@ -730,6 +720,7 @@ namespace aether
 
 			cmdList.BindComputePipeline(const_cast<void*>(nodeFlattenPipe.state));
 			cmdList.BeginDebugLabel("Animation.NodeFlatten", 0.3f, 0.8f, 0.6f, 1.0f);
+			AE_GPU_ZONE_SCOPED(rawCmd, "Animation.NodeFlatten");
 
 			const gpu::DeviceAddress animJobsBDA = m_animationSampleJobs[frameSlot].address;
 
@@ -842,10 +833,6 @@ namespace aether
 			return;
 		}
 
-		const gpu::DeviceSize outputIndirectSize = static_cast<gpu::DeviceSize>(m_outputDrawCapacity) * sizeof(gpu::DrawIndexedIndirectCommand);
-		cmdList.FillBuffer(gpu::ResourceRegistry::ResolveBufferVkHandle(m_outputIndirect[frameSlot].handle), 0, outputIndirectSize, 0);
-		cmdList.PipelineMemoryBarrier(gpu::PipelineStage::Transfer, gpu::AccessFlags::TransferWrite, gpu::PipelineStage::ComputeShader, gpu::AccessFlags::ShaderStorageWrite);
-
 		// -- Cull dispatch: single or multi-frustum --
 		const gpu::DeviceSize inputCmdOffset = 0;
 		const gpu::DeviceSize batchDescOffset = 0;
@@ -874,8 +861,11 @@ namespace aether
 				cmdList.BeginDebugLabel("CullPass.cullDrawsMulti", 0.4f, 0.8f, 0.4f, 1.0f);
 				cmdList.BindComputePipeline(computePipeline);
 				cmdList.PushDataRaw(0, std::span(reinterpret_cast<const std::byte*>(&multiPc), sizeof(multiPc)));
-				const std::uint32_t groups = (totalDraws + 63u) / 64u;
-				cmdList.Dispatch(groups, 1, 1);
+				{
+					AE_GPU_ZONE_SCOPED(rawCmd, "CullPass.cullDrawsMulti");
+					const std::uint32_t groups = (totalDraws + 63u) / 64u;
+					cmdList.Dispatch(groups, 1, 1);
+				}
 				cmdList.EndDebugLabel();
 			}
 		}

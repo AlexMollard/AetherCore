@@ -406,6 +406,8 @@ namespace aether
 		std::vector<gpu::ImageMemoryBarrier> m_scratchBarriers;
 		std::vector<gpu::ImageMemoryBarrier> m_scratchSignalBarriers;
 		std::vector<gpu::BufferMemoryBarrier> m_scratchBufferBarriers;
+		std::vector<std::uint32_t> m_scratchTransientImageIndices;
+		std::vector<std::uint32_t> m_scratchTransientBufferIndices;
 
 		// Event pool for split barriers.
 		std::vector<VkEvent> m_events;
