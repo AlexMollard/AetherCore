@@ -29,7 +29,7 @@ namespace aether::app
 		{
 			const float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
 			const float v = (x * (a * x + b)) / (x * (c * x + d) + e);
-			return (std::min) ((std::max) (v, 0.0f), 1.0f);
+			return (std::min)((std::max)(v, 0.0f), 1.0f);
 		}
 
 		float Uncharted2Partial(float x)
@@ -43,18 +43,18 @@ namespace aether::app
 			const float curr = Uncharted2Partial(x * 2.0f);
 			const float whiteScale = 1.0f / Uncharted2Partial(11.2f);
 			const float v = curr * whiteScale;
-			return (std::min) ((std::max) (v, 0.0f), 1.0f);
+			return (std::min)((std::max)(v, 0.0f), 1.0f);
 		}
 
 		float HejlRichard(float x)
 		{
-			const float v = (std::max) (x - 0.004f, 0.0f);
+			const float v = (std::max)(x - 0.004f, 0.0f);
 			return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
 		}
 
 		float LinearClamp(float x)
 		{
-			return (std::min) ((std::max) (x, 0.0f), 1.0f);
+			return (std::min)((std::max)(x, 0.0f), 1.0f);
 		}
 
 		float ExponentialShift(float x)
@@ -64,7 +64,7 @@ namespace aether::app
 
 		float FilmicDice(float x)
 		{
-			float v = (std::max) (x, 0.0f);
+			float v = (std::max)(x, 0.0f);
 			return (v * (6.2f * v + 0.5f)) / (v * (6.2f * v + 1.7f) + 0.06f);
 		}
 
@@ -76,7 +76,7 @@ namespace aether::app
 		float RomBinDaHouse(float x)
 		{
 			float v = x * (x * 0.26f + 0.68f) / (x * (x * 0.26f + 1.14f) + 0.14f);
-			return (std::min) ((std::max) (v, 0.0f), 1.0f);
+			return (std::min)((std::max)(v, 0.0f), 1.0f);
 		}
 
 		float Vanilla(float x)
@@ -330,7 +330,7 @@ namespace aether::app
 
 		auto drawHistogram = [](const char* label, const float* bins, std::uint32_t binCount, ImU32 color, HistogramAxis axis)
 		{
-			const float plotW = (std::max) (ImGui::GetContentRegionAvail().x, 1.0f);
+			const float plotW = (std::max)(ImGui::GetContentRegionAvail().x, 1.0f);
 			const float plotH = 80.0f;
 			const ImVec2 plotPos = ImGui::GetCursorScreenPos();
 
@@ -345,7 +345,7 @@ namespace aether::app
 			const float barW = plotW / static_cast<float>(binCount);
 			for (std::uint32_t i = 0; i < binCount; ++i)
 			{
-				const float h = std::sqrt((std::min) ((std::max) (bins[i], 0.0f), 1.0f)) * plotH;
+				const float h = std::sqrt((std::min)((std::max)(bins[i], 0.0f), 1.0f)) * plotH;
 				if (h > 0.0f)
 				{
 					const float x0 = plotPos.x + static_cast<float>(i) * barW;
@@ -363,7 +363,7 @@ namespace aether::app
 					const float logMax = PostProcessStack::GetHistogramLogMax();
 					t = (std::log2(luminance) - logMin) / (logMax - logMin);
 				}
-				return plotPos.x + (std::min) ((std::max) (t, 0.0f), 1.0f) * plotW;
+				return plotPos.x + (std::min)((std::max)(t, 0.0f), 1.0f) * plotW;
 			};
 
 			auto drawMarker = [&](float luminance, const char* text)
@@ -371,7 +371,7 @@ namespace aether::app
 				const float x = markerX(luminance);
 				dl->AddLine(ImVec2(x, plotPos.y), ImVec2(x, plotPos.y + plotH), IM_COL32(70, 70, 80, 180));
 				const ImVec2 textSize = ImGui::CalcTextSize(text);
-				const float textX = (std::min) ((std::max) (x - textSize.x * 0.5f, plotPos.x + 2.0f), plotPos.x + plotW - textSize.x - 2.0f);
+				const float textX = (std::min)((std::max)(x - textSize.x * 0.5f, plotPos.x + 2.0f), plotPos.x + plotW - textSize.x - 2.0f);
 				dl->AddText(ImVec2(textX, plotPos.y + plotH - 14.0f), IM_COL32(140, 140, 140, 200), text);
 			};
 

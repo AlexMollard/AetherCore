@@ -454,13 +454,13 @@ namespace aether::app
 		// includes the PREVIOUS frame's hovered item - so merely submitting the
 		// gizmo before the viewport's InvisibleButton is not enough: the button
 		// hovered last frame still vetoes this frame's grab, forever (handles
-		// highlight, drags never start). While a handle is hot the button is
+		// highlight, drags never start). While a handle is hovered the button is
 		// therefore NOT SUBMITTED AT ALL; the hovered-id drains for a frame and
 		// the grab activates. RMB is carved out (the gizmo only activates from
 		// an LMB press) so flying across a handle never stalls the camera.
 		// IsOver/IsUsing are only trusted on frames the gizmo actually drew -
 		// they go stale when the selection clears.
-		// Reporting the viewport as input-inactive while hot also flips the
+		// Reporting the viewport as input-inactive while actively dragging also flips the
 		// engine's per-frame mouse capture on (Tick recomputes captured =
 		// WantsInputCapture && !viewportActive BEFORE cameras update), so no
 		// camera mode fights the drag.
@@ -470,25 +470,14 @@ namespace aether::app
 		// input from the camera.
 		const ImVec2 gizmoMouse = ImGui::GetIO().MousePos;
 		const bool mouseOverImage = gizmoMouse.x >= imageMin.x && gizmoMouse.x < imageMax.x && gizmoMouse.y >= imageMin.y && gizmoMouse.y < imageMax.y;
-		// Suppress camera input only when the cursor is genuinely over the image AND
-		// either actively dragging a gizmo handle (LMB down) or hovering one. Bounding
-		// on mouseOverImage stops a stale ImGuizmo IsOver/IsUsing state - which can
-		// linger across a multi-viewport window move - from blocking the camera
-		// everywhere (the "no viewport mouse control" case).
-		const bool gizmoHot = gizmoDrawn && mouseOverImage && ((ImGuizmo::IsUsingAny() && ImGui::IsMouseDown(ImGuiMouseButton_Left)) || (ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right)));
-		context.Get<Input>().SetMouseViewportTransform(glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
-		if (gizmoHot)
-		{
-			context.Get<Input>().SetMouseViewportInputActive(false);
-		}
-		else
+		const bool gizmoActive = gizmoDrawn && mouseOverImage && ImGuizmo::IsUsingAny() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
+		const bool gizmoHovered = gizmoDrawn && mouseOverImage && ImGuizmo::IsOver() && !ImGui::IsMouseDown(ImGuiMouseButton_Right);
+		const ImVec2 inputViewportOrigin = ImGui::GetWindowViewport() != nullptr ? ImGui::GetWindowViewport()->Pos : ImGui::GetMainViewport()->Pos;
+		const glm::vec2 inputImageMin{imageMin.x - inputViewportOrigin.x, imageMin.y - inputViewportOrigin.y};
+		context.Get<Input>().SetMouseViewportTransform(inputImageMin, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, glm::vec2{static_cast<float>(extent.width), static_cast<float>(extent.height)});
+		if (!gizmoActive && !gizmoHovered)
 		{
 			ImGui::InvisibleButton("SceneViewportInput", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
-			// Item-hover can go stale across a multi-viewport move; fall back to the
-			// manual mouse-in-image test (additive - only grants input, never removes).
-			// IsWindowHovered() without ChildWindows so the floating toolbar overlay
-			// (a child window) does not count as "over the scene" and keep the camera live.
-			context.Get<Input>().SetMouseViewportInputActive(ImGui::IsItemHovered() || ImGui::IsItemActive() || (mouseOverImage && ImGui::IsWindowHovered()));
 			HandleViewportPicking(context, glm::vec2{imageMin.x, imageMin.y}, glm::vec2{imageMax.x - imageMin.x, imageMax.y - imageMin.y}, renderAspect);
 		}
 
@@ -573,6 +562,7 @@ namespace aether::app
 		const ImVec2 pillPad(8.0f, 5.0f);
 		const float pillH = btnH + pillPad.y * 2.0f;
 		const float pillTop = imageMin.y + 8.0f;
+		bool toolbarControlActive = false;
 
 		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.09f, 0.10f, 0.12f, 0.90f));
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
@@ -605,6 +595,7 @@ namespace aether::app
 				{
 					m_gizmoOp = op;
 				}
+				toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 				if (active)
 				{
 					ImGui::PopStyleColor(4);
@@ -621,6 +612,7 @@ namespace aether::app
 			{
 				m_gizmoLocal = !m_gizmoLocal;
 			}
+			toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 			ImGui::SetItemTooltip("Gizmo space (Ctrl-drag snaps)");
 		}
 		ImGui::EndChild();
@@ -637,6 +629,7 @@ namespace aether::app
 				pushFlatButtonStyle();
 			}
 			DrawPlayControls(context);
+			toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 			if (!toolbarPlaying)
 			{
 				ImGui::PopStyleColor(3);
@@ -656,10 +649,12 @@ namespace aether::app
 			{
 				ImGui::OpenPopup("##vpSettings");
 			}
+			toolbarControlActive = toolbarControlActive || ImGui::IsItemActive();
 			ImGui::PopStyleColor(3);
 			ImGui::SetItemTooltip("View settings");
 			if (ImGui::BeginPopup("##vpSettings"))
 			{
+				toolbarControlActive = true;
 				const char* resolutionModes[] = {"Native", "720p", "1080p", "1440p", "Custom", "Match Panel"};
 				int resolutionMode = static_cast<int>(viewportSettings.resolutionMode);
 				ImGui::SetNextItemWidth(150.0f);
@@ -696,6 +691,11 @@ namespace aether::app
 
 		ImGui::PopStyleVar(4);
 		ImGui::PopStyleColor();
+
+		// Tick() consumes this value on the next frame when translating ImGui capture
+		// into camera capture. Toolbar hover is intentionally ignored: the camera
+		// should only lose the mouse while a control/popup/gizmo is actually active.
+		context.Get<Input>().SetMouseViewportInputActive(mouseOverImage && !gizmoActive && !toolbarControlActive);
 
 		if (viewportSettingsChanged)
 		{

@@ -27,6 +27,7 @@ namespace aether::ui
 			std::uint32_t pad0;
 			std::uint32_t pad1;
 		};
+
 		static_assert(sizeof(ShapesPush) == 32, "ShapesPush must match shaders/ui_shapes.slang ShapesPush layout");
 
 		constexpr std::uint32_t kInitialCommandCapacity = 256;

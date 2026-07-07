@@ -661,10 +661,7 @@ namespace aether
 		// AetherCore::ExecuteRenderFrame, mirroring m_physicsDebug's SetWorld/
 		// SetFrameDebugVertices there). Must run before $SceneViewportReady below
 		// samples GetFinalColor().
-		m_uiRenderer.RegisterPass(m_renderGraph,
-		        m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{},
-		        m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{},
-		        *frame.bindless);
+		m_uiRenderer.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{}, *frame.bindless);
 		if (m_sceneViewportEnabled)
 		{
 			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});

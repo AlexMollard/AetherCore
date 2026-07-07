@@ -6,8 +6,8 @@
 
 #include <glm/glm.hpp>
 
-#include "gpu/ResourceRegistry.hpp"        // BufferHandle, PipelineHandle, gpu:: enums (also pulls in aether::kMaxFramesInFlight via GpuTypes.hpp)
-#include "rendering/RenderGraphTypes.hpp"  // RGImage, PassContext
+#include "gpu/ResourceRegistry.hpp"       // BufferHandle, PipelineHandle, gpu:: enums (also pulls in aether::kMaxFramesInFlight via GpuTypes.hpp)
+#include "rendering/RenderGraphTypes.hpp" // RGImage, PassContext
 #include "ui/UiDrawCommand.hpp"
 
 namespace aether

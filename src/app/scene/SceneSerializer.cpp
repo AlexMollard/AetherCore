@@ -1264,7 +1264,8 @@ namespace aether::app::scene
 			}
 			if (rec.uiText)
 			{
-				world.Emplace<ui::UIText>(e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
+				world.Emplace<ui::UIText>(
+				        e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
 			}
 
 			// Mesh (and, for model primitives, the skinned setup that needs the
