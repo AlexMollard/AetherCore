@@ -22,6 +22,7 @@
 #include "rendering/RenderTargetService.hpp"
 #include "rendering/ShadowService.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
+#include "ui/UiRenderer.hpp"
 
 namespace aether
 {
@@ -163,6 +164,11 @@ namespace aether
 			return m_physicsDebug;
 		}
 
+		[[nodiscard]] ui::UiRenderer& GetUiRenderer()
+		{
+			return m_uiRenderer;
+		}
+
 		void WriteResourceTable(std::uint32_t frameIndex, std::span<const ResourceEntry> entries);
 		[[nodiscard]] gpu::DeviceAddress PublishFrameResourceTable(std::uint32_t frameIndex);
 
@@ -218,6 +224,7 @@ namespace aether
 		bool m_previewEnabled = false;
 		std::function<std::uint64_t()> m_frameIndexProvider;
 		PhysicsDebugRenderer m_physicsDebug;
+		ui::UiRenderer m_uiRenderer;
 		std::atomic_bool m_forwardPassEnabled = true;
 		std::atomic_bool m_sceneViewportRebuildPending = false;
 		mutable std::mutex m_sceneViewportMutex;

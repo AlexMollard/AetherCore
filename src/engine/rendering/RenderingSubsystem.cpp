@@ -284,6 +284,16 @@ namespace aether
 		});
 
 		m_physicsDebug.Init(gpu, swapchain.GetImageFormat(), swapchain.GetDepthFormat());
+
+		// UiRenderer::Init resolves gpu.GetBindlessManager().GetDescriptorHeapMappings()
+		// for the ui_shapes pipeline (bindless textured-rect/SDF-glyph sampling), so it
+		// must run after BindlessManager is live - it has been since `bindless` was
+		// fetched above (line ~158) and used throughout this function, so this is safe
+		// anywhere in Init; placed alongside m_physicsDebug.Init for locality. Color
+		// format matches m_physicsDebug's (swapchain.GetImageFormat()) since $UiOverlay
+		// draws into the same target ($SceneViewport's FinalColor or the swapchain),
+		// which PostProcessStack itself builds with this same swapchainFormat.
+		m_uiRenderer.Init(gpu, swapchain.GetImageFormat());
 	}
 
 	void RenderingSubsystem::Shutdown()
@@ -321,6 +331,7 @@ namespace aether
 		m_renderGraph.Shutdown();
 		m_renderQueuePipelines.Shutdown();
 		m_physicsDebug.Shutdown();
+		m_uiRenderer.Shutdown();
 		m_bindlessManager = nullptr;
 	}
 
@@ -644,6 +655,17 @@ namespace aether
 		m_postProcessStack.SetOutputToTexture(m_sceneViewportEnabled);
 		m_postProcessStack.RegisterPasses(m_renderGraph, *frame.bindless);
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
+		// $UiOverlay: registered once here (topology), same as every other pass in
+		// this function; its Execute reads the LIVE ctx.frameSlot (see UiRenderer.cpp),
+		// so the trailing frameSlot argument is inert - BuildFrame is what feeds fresh
+		// per-slot data every frame (driven from AetherCore::ExecuteRenderFrame, mirroring
+		// m_physicsDebug's SetWorld/SetFrameDebugVertices there). Must run before
+		// $SceneViewportReady below samples GetFinalColor().
+		m_uiRenderer.RegisterPass(m_renderGraph,
+		        m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{},
+		        m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{},
+		        *frame.bindless,
+		        0);
 		if (m_sceneViewportEnabled)
 		{
 			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});

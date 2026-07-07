@@ -170,7 +170,18 @@ namespace aether::ui
 			color = graph.GetSwapchainColor();
 		}
 
-		const auto slot = frameSlot % kFrames;
+		// This pass is registered ONCE (render-graph build time, e.g. from
+		// RenderingSubsystem::RegisterPasses), not re-added every frame - matching
+		// every other pass in this codebase (ShadowService, PhysicsDebugRenderer,
+		// PostProcessStack, ...). A `frameSlot` captured here would be a single
+		// value baked into the Execute closure forever, going stale the moment the
+		// real in-flight slot rotates (kMaxFramesInFlight == 3): BuildFrame is
+		// called every frame with the true rotating slot, but the Execute below
+		// would keep reading whatever slot happened to be current at this one-time
+		// registration call. Read the LIVE slot from PassContext instead, exactly
+		// like ShadowService's Execute lambdas use ctx.frameSlot - that is what
+		// makes this draw the SAME slot BuildFrame just uploaded, every frame.
+		(void) frameSlot;
 
 		auto pass = graph.AddPass("$UiOverlay");
 		if (extent.width != 0 && extent.height != 0)
@@ -180,9 +191,9 @@ namespace aether::ui
 
 		pass.WriteColor(color, gpu::LoadOp::Load, gpu::StoreOp::Store)
 		        .Execute(
-		                [this, &bindless, slot](PassContext& ctx)
+		                [this, &bindless](PassContext& ctx)
 		                {
-			                const Frame& frame = m_frames[slot];
+			                const Frame& frame = m_frames[ctx.frameSlot % kFrames];
 			                if (frame.count == 0 || !m_pipeline.IsValid())
 			                {
 				                return;

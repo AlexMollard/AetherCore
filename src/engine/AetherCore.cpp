@@ -593,6 +593,16 @@ namespace aether
 			PhysicsDebugRenderer& debugRenderer = m_rendering->GetPhysicsDebugRenderer();
 			debugRenderer.SetFrameDebugVertices(&packet.debugVertices);
 			debugRenderer.SetWorld(&world);
+
+			// Per-frame UI drive: resolve layout + upload this frame's draw commands
+			// into packet.drawSlot's buffer BEFORE EndFrame -> RenderGraph::Execute
+			// reads that same slot from $UiOverlay's Execute (ctx.frameSlot). Mirrors
+			// the PhysicsDebugRenderer feed immediately above; renderExtent matches
+			// what RegisterPasses used for the pass's own extent (scene-viewport
+			// extent, or the swapchain extent when the scene viewport is disabled).
+			ui::UiRenderer& uiRenderer = m_rendering->GetUiRenderer();
+			uiRenderer.SetWorld(&world);
+			uiRenderer.BuildFrame({static_cast<float>(packet.renderExtent.width), static_cast<float>(packet.renderExtent.height)}, packet.drawSlot);
 		}
 
 		EndFrame(packet);

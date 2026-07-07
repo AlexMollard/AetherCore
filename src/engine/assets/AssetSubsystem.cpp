@@ -6,6 +6,7 @@
 #include "material/MaterialSystem.hpp"
 #include "material/EffectSystem.hpp"
 #include "material/Texture.hpp"
+#include "ui/UiImageSystem.hpp"
 #include "rendering/GraphicsPipeline.hpp"
 #include "utils/Profiler.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -69,6 +70,9 @@ namespace aether
 		m_world = &world;
 		m_assetManager.Initialize(vk, bindless, m_materialRegistry, m_materialAuthoring, m_pipelineCache, m_effectParamBuffer, m_textureRegistry, world, m_uploadContext);
 		EffectSystem::ConnectLifecycle(world, m_effectParamBuffer);
+		// UIImage.texture is Acquire()'d by the scene loader (SceneSerializer::ApplyScene);
+		// release it here on destroy/ReplaceScene's destroy-all, mirroring Material/Effect.
+		UiImageSystem::ConnectLifecycle(world, m_textureRegistry);
 	}
 
 	void AssetSubsystem::InitializePipelineCache(PipelineCache::Context context)
@@ -124,6 +128,7 @@ namespace aether
 		{
 			MaterialSystem::DisconnectLifecycle(*m_world);
 			EffectSystem::DisconnectLifecycle(*m_world);
+			UiImageSystem::DisconnectLifecycle(*m_world);
 			m_world = nullptr;
 		}
 		// Pure-CPU bookkeeping drop (no registry/sink calls); safe before or after
