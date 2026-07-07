@@ -7,7 +7,7 @@ name = "Platform"
 parent = -1
 position = [0.0, 0.0, 0.0]
 euler = [0.0, 0.0, 0.0]
-scale = [1.0, 1.0, 1.0]
+scale = [10.0, 1.0, 10.0]
 [entities.mesh]
 kind = "primitive"
 path = "cube"
