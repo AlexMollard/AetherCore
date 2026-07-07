@@ -23,11 +23,12 @@ using namespace aether::app::scene;
 
 namespace
 {
+    // A fresh World retires entt's raw-0 null slot in its constructor, so the
+    // first Create() is already valid (no "burn entity 0" needed) and capture
+    // sees exactly the entities the tests create - no phantom placeholder.
     World MakeWorld()
     {
-        World world;
-        (void) world.Create(); // burn id 0 (null entity)
-        return world;
+        return World{};
     }
 
     // entt's entity storage iterates newest-first, so captured order is not

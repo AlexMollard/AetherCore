@@ -28,7 +28,6 @@ TEST_CASE("Many entities bound to one unedited material share a single slot") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create(); // burn id 0
 
     MaterialAsset seed; seed.baseColorFactor = {0.2f, 0.6f, 0.9f, 1.0f};
     const std::uint32_t id = authoring.Create(seed);
@@ -49,7 +48,6 @@ TEST_CASE("Editing a material re-binds every bound entity to the new content") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create();
 
     MaterialAsset seed; seed.baseColorFactor = {1, 0, 0, 1};
     const std::uint32_t id = authoring.Create(seed);
@@ -76,7 +74,6 @@ TEST_CASE("Two ids with identical seeds dedup, then diverge on edit") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create();
 
     MaterialAsset seed; seed.baseColorFactor = {0.5f, 0.5f, 0.5f, 1};
     const std::uint32_t idA = authoring.Create(seed);
@@ -101,7 +98,6 @@ TEST_CASE("No-op edit on a material does not churn slots") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create();
 
     MaterialAsset seed; seed.metallicFactor = 0.4f;
     const std::uint32_t id = authoring.Create(seed);
@@ -121,7 +117,6 @@ TEST_CASE("Re-binding an entity untracks it from the previous material") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create();
 
     MaterialAsset red; red.baseColorFactor = {1, 0, 0, 1};
     MaterialAsset blue; blue.baseColorFactor = {0, 0, 1, 1};
@@ -146,7 +141,6 @@ TEST_CASE("ReleaseAll drops bookkeeping without touching the sink") {
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     MaterialAuthoring authoring(reg, cache);
     World world;
-    (void) world.Create();
 
     MaterialAsset seed;
     const std::uint32_t id = authoring.Create(seed);

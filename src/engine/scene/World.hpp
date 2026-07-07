@@ -15,6 +15,8 @@ namespace aether
 	public:
 		using Registry = entt::registry;
 
+		World();
+
 		[[nodiscard]] Entity Create();
 		void Destroy(Entity entity);
 

@@ -1,6 +1,7 @@
 add_executable(EngineTests
     TestMain.cpp
     scene/HierarchyTests.cpp
+    scene/WorldTests.cpp
     scene/SceneSerializerTests.cpp
     scene/SceneWorkflowTests.cpp
     scene/TransformEditTests.cpp

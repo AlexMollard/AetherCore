@@ -12,11 +12,7 @@
 using namespace aether;
 
 TEST_CASE("Builder emits a rect command for a UIImage child, none for the canvas") {
-    World w;
-    // IMPORTANT ECS gotcha: the first entity created is Entity{0}, which IsValid()
-    // treats as null, and ecs::SetParent will NOT populate a null parent's children.
-    // Burn id 0 first so the canvas is a valid parent (same as HierarchyTests.cpp).
-    (void) w.Create();
+    World w; // fresh World retires the raw-0 null slot, so the canvas below is a valid parent
 
     Entity canvas = w.Create();
     w.Emplace<ui::UICanvas>(canvas);

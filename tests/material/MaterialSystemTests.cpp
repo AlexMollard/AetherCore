@@ -69,9 +69,8 @@ TEST_CASE("Destroying an entity releases its material handle via the hook") {
     World world;
     MaterialSystem::ConnectLifecycle(world, reg);
 
-    // entt's first entity gets id 0, which Entity::IsValid()/World::Destroy
-    // treat as the null entity - burn it so the test entity is destroyable.
-    (void) world.Create();
+    // A fresh World retires entt's raw-0 null slot in its constructor, so the
+    // first Create() is a valid, destroyable entity.
     Entity e = world.Create();
     MaterialAsset a; a.baseColorFactor = {0,1,0,1};
     MaterialSystem::AssignMaterial(world, e, reg, cache, a);

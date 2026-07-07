@@ -39,12 +39,7 @@ TEST_CASE("ResolveRect stretches with split anchors") {
 
 TEST_CASE("ResolveCanvases propagates resolved rects down a nested hierarchy") {
     using namespace aether;
-    World world;
-
-    // entt's first entity gets integral id 0, which Entity::IsValid() treats as
-    // the null entity; ecs::SetParent skips linking a child to an invalid parent.
-    // Burn it so the canvas below is a valid parent and its children list fills.
-    (void) world.Create();
+    World world; // fresh World retires the raw-0 null slot, so the canvas below is a valid parent
 
     Entity canvas = world.Create();
     world.Emplace<ui::UICanvas>(canvas);

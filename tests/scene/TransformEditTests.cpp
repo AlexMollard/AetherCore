@@ -12,13 +12,11 @@ using namespace aether;
 
 namespace
 {
-    // entt's first entity gets id 0, which Entity::IsValid() treats as the
-    // null entity - burn it so test entities are all valid.
+    // A fresh World already retires entt's raw-0 null slot in its constructor, so
+    // world.Create() is valid from the first call - no "burn entity 0" needed.
     World MakeWorld()
     {
-        World world;
-        (void) world.Create();
-        return world;
+        return World{};
     }
 
     Entity MakeEntityAt(World& world, const glm::vec3& pos, const glm::vec3& eulerDeg = {}, const glm::vec3& scale = glm::vec3(1.0f))

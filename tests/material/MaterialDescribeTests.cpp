@@ -77,7 +77,6 @@ TEST_CASE("Instance setters seed from the entity's CURRENT material, not default
     MaterialRegistry reg(sink, treg);
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     World world;
-    (void) world.Create(); // burn entity id 0 (treated as null)
     Entity e = world.Create();
 
     // Entity starts with a textured, tinted material (a glTF-spawn stand-in).

@@ -19,7 +19,6 @@ TEST_CASE("First instance setter seeds a default and assigns a material") {
     MaterialRegistry reg(sink, treg);
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     World world;
-    (void) world.Create(); // burn entity id 0 (treated as null)
     Entity e = world.Create();
 
     MaterialSystem::SetMetallic(world, e, reg, cache, 0.0f); // value equals the default
@@ -38,7 +37,6 @@ TEST_CASE("No-op instance edit does not re-acquire or churn the slot") {
     MaterialRegistry reg(sink, treg);
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     World world;
-    (void) world.Create();
     Entity e = world.Create();
 
     MaterialSystem::SetRoughness(world, e, reg, cache, 0.3f);
@@ -58,7 +56,6 @@ TEST_CASE("Changed instance field re-acquires a new material") {
     MaterialRegistry reg(sink, treg);
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     World world;
-    (void) world.Create();
     Entity e = world.Create();
 
     MaterialSystem::SetMetallic(world, e, reg, cache, 0.2f);
@@ -79,7 +76,6 @@ TEST_CASE("Edits accumulate on the same instance, not a fresh default each time"
     MaterialRegistry reg(sink, treg);
     PipelineCache cache; FakePipelineFactory pf; cache.Initialize({}, std::ref(pf));
     World world;
-    (void) world.Create();
     Entity e = world.Create();
 
     MaterialSystem::SetBaseColor(world, e, reg, cache, glm::vec3(1, 0, 0));
