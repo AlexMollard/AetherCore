@@ -51,7 +51,7 @@ public sealed class ToySpawner : EntityScript
         e.Name = isSphere ? "Toy Sphere" : "Toy Cube";
         e.AddTransform();
         e.SetTransform(pos, Vector3.Zero, new Vector3(size, size, size));
-        e.MarkTransient();
+        // e.MarkTransient();
         if (isSphere)
         {
             e.AddMesh(_sphere);
