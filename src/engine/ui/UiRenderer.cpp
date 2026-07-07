@@ -163,7 +163,7 @@ namespace aether::ui
 		frame.count = count;
 	}
 
-	void UiRenderer::RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless, std::uint32_t frameSlot)
+	void UiRenderer::RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless)
 	{
 		if (!color.IsValid())
 		{
@@ -173,16 +173,13 @@ namespace aether::ui
 		// This pass is registered ONCE (render-graph build time, e.g. from
 		// RenderingSubsystem::RegisterPasses), not re-added every frame - matching
 		// every other pass in this codebase (ShadowService, PhysicsDebugRenderer,
-		// PostProcessStack, ...). A `frameSlot` captured here would be a single
-		// value baked into the Execute closure forever, going stale the moment the
-		// real in-flight slot rotates (kMaxFramesInFlight == 3): BuildFrame is
-		// called every frame with the true rotating slot, but the Execute below
-		// would keep reading whatever slot happened to be current at this one-time
-		// registration call. Read the LIVE slot from PassContext instead, exactly
-		// like ShadowService's Execute lambdas use ctx.frameSlot - that is what
-		// makes this draw the SAME slot BuildFrame just uploaded, every frame.
-		(void) frameSlot;
-
+		// PostProcessStack, ...). It deliberately captures NO frame slot: a slot
+		// baked into the Execute closure here would be a single value frozen at
+		// registration, going stale the moment the real in-flight slot rotates
+		// (kMaxFramesInFlight == 3). Instead the Execute below reads the LIVE slot
+		// from PassContext, exactly like ShadowService's Execute lambdas use
+		// ctx.frameSlot - that is what makes this draw the SAME slot BuildFrame
+		// just uploaded, every frame.
 		auto pass = graph.AddPass("$UiOverlay");
 		if (extent.width != 0 && extent.height != 0)
 		{

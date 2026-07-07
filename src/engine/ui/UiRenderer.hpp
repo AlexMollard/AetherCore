@@ -30,9 +30,9 @@ namespace aether::ui
 	//   1. BuildFrame(outputExtent, frameSlot)  - game/render-prep time: resolves
 	//      layout against m_world, builds the command list, uploads it into the
 	//      frame-slot's mapped device buffer.
-	//   2. RegisterPass(graph, color, extent, bindless, frameSlot) - render-graph
-	//      build time: appends the "$UiOverlay" pass that draws what BuildFrame
-	//      uploaded for that same slot.
+	//   2. RegisterPass(graph, color, extent, bindless) - render-graph build time:
+	//      appends the "$UiOverlay" pass (once); each frame it draws whatever
+	//      BuildFrame uploaded for the slot then in flight (live ctx.frameSlot).
 	class UiRenderer
 	{
 	public:
@@ -52,9 +52,10 @@ namespace aether::ui
 		void BuildFrame(glm::vec2 outputExtent, std::uint32_t frameSlot);
 
 		// Appends "$UiOverlay" into `color` (invalid -> swapchain), drawing
-		// Draw(6, N) - one instanced fullscreen-mapped quad per command uploaded
-		// by the matching BuildFrame call for `frameSlot`.
-		void RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless, std::uint32_t frameSlot);
+		// Draw(6, N) - one instanced fullscreen-mapped quad per command. Registered
+		// once; its Execute reads the LIVE PassContext::frameSlot, so it always
+		// draws the commands the matching BuildFrame uploaded that frame.
+		void RegisterPass(RenderGraph& graph, RGImage color, gpu::Extent2D extent, BindlessManager& bindless);
 
 	private:
 		// aether::kMaxFramesInFlight (gpu/GpuTypes.hpp) - the engine-wide frames-in-flight count.

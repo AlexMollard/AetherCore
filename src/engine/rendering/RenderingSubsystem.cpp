@@ -657,15 +657,14 @@ namespace aether
 		m_physicsDebug.RegisterPass(m_renderGraph, m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{}, m_sceneViewportEnabled ? m_sceneDepth : RGImage{}, m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{});
 		// $UiOverlay: registered once here (topology), same as every other pass in
 		// this function; its Execute reads the LIVE ctx.frameSlot (see UiRenderer.cpp),
-		// so the trailing frameSlot argument is inert - BuildFrame is what feeds fresh
-		// per-slot data every frame (driven from AetherCore::ExecuteRenderFrame, mirroring
-		// m_physicsDebug's SetWorld/SetFrameDebugVertices there). Must run before
-		// $SceneViewportReady below samples GetFinalColor().
+		// and BuildFrame feeds fresh per-slot data every frame (driven from
+		// AetherCore::ExecuteRenderFrame, mirroring m_physicsDebug's SetWorld/
+		// SetFrameDebugVertices there). Must run before $SceneViewportReady below
+		// samples GetFinalColor().
 		m_uiRenderer.RegisterPass(m_renderGraph,
 		        m_sceneViewportEnabled ? m_postProcessStack.GetFinalColor() : RGImage{},
 		        m_sceneViewportEnabled ? sceneExtent : gpu::Extent2D{},
-		        *frame.bindless,
-		        0);
+		        *frame.bindless);
 		if (m_sceneViewportEnabled)
 		{
 			m_renderGraph.AddPass("$SceneViewportReady").ReadTexture(m_postProcessStack.GetFinalColor()).Execute([](PassContext&) {});
