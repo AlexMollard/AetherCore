@@ -26,6 +26,7 @@
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
+#include "ui/UiComponents.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
 #include "utils/ServiceContainer.hpp"
@@ -116,6 +117,11 @@ namespace aether::app::scene
 
 		// ── toml helpers ───────────────────────────────────────────────────────
 
+		toml::array Vec2ToToml(const glm::vec2& v)
+		{
+			return toml::array{v.x, v.y};
+		}
+
 		toml::array Vec3ToToml(const glm::vec3& v)
 		{
 			return toml::array{v.x, v.y, v.z};
@@ -124,6 +130,15 @@ namespace aether::app::scene
 		toml::array Vec4ToToml(const glm::vec4& v)
 		{
 			return toml::array{v.x, v.y, v.z, v.w};
+		}
+
+		glm::vec2 Vec2FromToml(const toml::node_view<const toml::node>& node, glm::vec2 fallback)
+		{
+			if (const auto* arr = node.as_array(); arr && arr->size() >= 2)
+			{
+				return {static_cast<float>((*arr)[0].value_or(0.0)), static_cast<float>((*arr)[1].value_or(0.0))};
+			}
+			return fallback;
 		}
 
 		glm::vec3 Vec3FromToml(const toml::node_view<const toml::node>& node, glm::vec3 fallback)
@@ -334,6 +349,31 @@ namespace aether::app::scene
 				{
 					const auto* rb = world.TryGet<RigidBodyComponent>(e);
 					rec.physics = PhysicsRecord{.shapeType = shape->shapeType, .halfExtents = shape->halfExtents, .radius = shape->radius, .halfHeight = shape->halfHeight, .motionType = rb ? rb->motionType : PhysicsMotionType::Static};
+				}
+				if (const auto* c = world.TryGet<ui::UICanvas>(e))
+				{
+					rec.uiCanvas = UICanvasRecord{static_cast<std::uint8_t>(c->scaleMode), c->referenceResolution, c->sortBias};
+				}
+				if (const auto* r = world.TryGet<ui::UIRect>(e))
+				{
+					rec.uiRect = UIRectRecord{r->anchorMin, r->anchorMax, r->offsetMin, r->offsetMax, r->pivot};
+				}
+				if (const auto* im = world.TryGet<ui::UIImage>(e))
+				{
+					UIImageRecord ir;
+					ir.color = im->color;
+					ir.cornerRadius = im->cornerRadius;
+					// Same handle -> stable-path resolution as the material texture
+					// capture above: broken/invalid handles capture as empty (solid fill).
+					if (im->texture.IsValid() && im->texture.index != TextureHandle::kBrokenIndex)
+					{
+						textures.TryGetPath(im->texture, ir.texturePath);
+					}
+					rec.uiImage = std::move(ir);
+				}
+				if (const auto* tx = world.TryGet<ui::UIText>(e))
+				{
+					rec.uiText = UITextRecord{tx->text, tx->fontName, tx->pixelSize, tx->color, static_cast<std::uint8_t>(tx->hAlign), static_cast<std::uint8_t>(tx->vAlign), tx->wrap};
 				}
 				if (const auto* er = world.TryGet<EffectRefComponent>(e))
 				{
@@ -593,6 +633,47 @@ namespace aether::app::scene
 				p.insert("half_height", rec.physics->halfHeight);
 				t.insert("physics", std::move(p));
 			}
+			if (rec.uiCanvas)
+			{
+				toml::table c;
+				c.insert("scale_mode", static_cast<std::int64_t>(rec.uiCanvas->scaleMode));
+				c.insert("reference", Vec2ToToml(rec.uiCanvas->referenceResolution));
+				c.insert("sort_bias", static_cast<std::int64_t>(rec.uiCanvas->sortBias));
+				t.insert("ui_canvas", std::move(c));
+			}
+			if (rec.uiRect)
+			{
+				toml::table r;
+				r.insert("anchor_min", Vec2ToToml(rec.uiRect->anchorMin));
+				r.insert("anchor_max", Vec2ToToml(rec.uiRect->anchorMax));
+				r.insert("offset_min", Vec2ToToml(rec.uiRect->offsetMin));
+				r.insert("offset_max", Vec2ToToml(rec.uiRect->offsetMax));
+				r.insert("pivot", Vec2ToToml(rec.uiRect->pivot));
+				t.insert("ui_rect", std::move(r));
+			}
+			if (rec.uiImage)
+			{
+				toml::table im;
+				im.insert("color", Vec4ToToml(rec.uiImage->color));
+				im.insert("corner_radius", rec.uiImage->cornerRadius);
+				if (!rec.uiImage->texturePath.empty())
+				{
+					im.insert("texture", rec.uiImage->texturePath);
+				}
+				t.insert("ui_image", std::move(im));
+			}
+			if (rec.uiText)
+			{
+				toml::table tx;
+				tx.insert("text", rec.uiText->text);
+				tx.insert("font", rec.uiText->fontName);
+				tx.insert("pixel_size", rec.uiText->pixelSize);
+				tx.insert("color", Vec4ToToml(rec.uiText->color));
+				tx.insert("h_align", static_cast<std::int64_t>(rec.uiText->hAlign));
+				tx.insert("v_align", static_cast<std::int64_t>(rec.uiText->vAlign));
+				tx.insert("wrap", rec.uiText->wrap);
+				t.insert("ui_text", std::move(tx));
+			}
 			if (rec.effect)
 			{
 				toml::table f;
@@ -820,6 +901,48 @@ namespace aether::app::scene
 				        .radius = static_cast<float>(pv["radius"].value_or(0.5)),
 				        .halfHeight = static_cast<float>(pv["half_height"].value_or(0.5)),
 				        .motionType = MotionFromName(pv["motion"].value_or(std::string{"dynamic"}))};
+			}
+			if (const auto* c = tv["ui_canvas"].as_table())
+			{
+				const toml::node_view<const toml::node> cv{*c};
+				UICanvasRecord r;
+				r.scaleMode = static_cast<std::uint8_t>(cv["scale_mode"].value_or(std::int64_t{0}));
+				r.referenceResolution = Vec2FromToml(cv["reference"], r.referenceResolution);
+				r.sortBias = static_cast<int>(cv["sort_bias"].value_or(std::int64_t{0}));
+				rec.uiCanvas = r;
+			}
+			if (const auto* r = tv["ui_rect"].as_table())
+			{
+				const toml::node_view<const toml::node> rv{*r};
+				UIRectRecord rect;
+				rect.anchorMin = Vec2FromToml(rv["anchor_min"], rect.anchorMin);
+				rect.anchorMax = Vec2FromToml(rv["anchor_max"], rect.anchorMax);
+				rect.offsetMin = Vec2FromToml(rv["offset_min"], rect.offsetMin);
+				rect.offsetMax = Vec2FromToml(rv["offset_max"], rect.offsetMax);
+				rect.pivot = Vec2FromToml(rv["pivot"], rect.pivot);
+				rec.uiRect = rect;
+			}
+			if (const auto* im = tv["ui_image"].as_table())
+			{
+				const toml::node_view<const toml::node> iv{*im};
+				UIImageRecord r;
+				r.color = Vec4FromToml(iv["color"], r.color);
+				r.cornerRadius = static_cast<float>(iv["corner_radius"].value_or(0.0));
+				r.texturePath = iv["texture"].value_or(std::string{});
+				rec.uiImage = r;
+			}
+			if (const auto* tx = tv["ui_text"].as_table())
+			{
+				const toml::node_view<const toml::node> v{*tx};
+				UITextRecord r;
+				r.text = v["text"].value_or(std::string{});
+				r.fontName = v["font"].value_or(std::string{"Roboto"});
+				r.pixelSize = static_cast<float>(v["pixel_size"].value_or(24.0));
+				r.color = Vec4FromToml(v["color"], r.color);
+				r.hAlign = static_cast<std::uint8_t>(v["h_align"].value_or(std::int64_t{0}));
+				r.vAlign = static_cast<std::uint8_t>(v["v_align"].value_or(std::int64_t{0}));
+				r.wrap = v["wrap"].value_or(true);
+				rec.uiText = r;
 			}
 			if (const auto* f = tv["effect"].as_table())
 			{
@@ -1115,6 +1238,33 @@ namespace aether::app::scene
 						break;
 					}
 				}
+			}
+
+			if (rec.uiCanvas)
+			{
+				world.Emplace<ui::UICanvas>(e, ui::UICanvas{static_cast<ui::UICanvas::ScaleMode>(rec.uiCanvas->scaleMode), rec.uiCanvas->referenceResolution, rec.uiCanvas->sortBias});
+			}
+			if (rec.uiRect)
+			{
+				world.Emplace<ui::UIRect>(e, ui::UIRect{rec.uiRect->anchorMin, rec.uiRect->anchorMax, rec.uiRect->offsetMin, rec.uiRect->offsetMax, rec.uiRect->pivot, glm::vec4{0.f}});
+			}
+			if (rec.uiImage)
+			{
+				ui::UIImage im;
+				im.color = rec.uiImage->color;
+				im.cornerRadius = rec.uiImage->cornerRadius;
+				// Same acquire-by-path mechanism as the material texture apply
+				// below; unlike MaterialAsset there is no registry cascade for
+				// UI, so the component's handle IS the owning reference.
+				if (!rec.uiImage->texturePath.empty() && deps.assets != nullptr)
+				{
+					im.texture = deps.assets->GetTextureRegistry().Acquire(rec.uiImage->texturePath);
+				}
+				world.Emplace<ui::UIImage>(e, im);
+			}
+			if (rec.uiText)
+			{
+				world.Emplace<ui::UIText>(e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
 			}
 
 			// Mesh (and, for model primitives, the skinned setup that needs the

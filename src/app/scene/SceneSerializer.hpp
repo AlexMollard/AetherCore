@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -75,6 +76,43 @@ namespace aether::app::scene
 		PhysicsMotionType motionType = PhysicsMotionType::Dynamic;
 	};
 
+	// UI records are self-contained plain data - they do NOT depend on the
+	// aether::ui:: enums so this header stays decoupled from the UI module;
+	// Apply (in the .cpp) maps the stored indices to the real ui:: types.
+	struct UICanvasRecord
+	{
+		std::uint8_t scaleMode = 0; // 0 ConstantPixel, 1 ScaleWithReference
+		glm::vec2 referenceResolution{1920.f, 1080.f};
+		int sortBias = 0;
+	};
+
+	struct UIRectRecord
+	{
+		glm::vec2 anchorMin{0.5f, 0.5f};
+		glm::vec2 anchorMax{0.5f, 0.5f};
+		glm::vec2 offsetMin{-50.f, -50.f};
+		glm::vec2 offsetMax{50.f, 50.f};
+		glm::vec2 pivot{0.5f, 0.5f};
+	};
+
+	struct UIImageRecord
+	{
+		glm::vec4 color{1.f};
+		float cornerRadius = 0.f;
+		std::string texturePath; // re-resolved on apply; empty = solid color
+	};
+
+	struct UITextRecord
+	{
+		std::string text;
+		std::string fontName = "Roboto";
+		float pixelSize = 24.f;
+		glm::vec4 color{1.f};
+		std::uint8_t hAlign = 0; // ui::UIText::HAlign
+		std::uint8_t vAlign = 0; // ui::UIText::VAlign
+		bool wrap = true;
+	};
+
 	struct EffectRecord
 	{
 		std::string name;
@@ -95,6 +133,13 @@ namespace aether::app::scene
 		std::optional<SkinnedRecord> skinned;
 		std::optional<PhysicsRecord> physics;
 		std::optional<EffectRecord> effect;
+		// UI components (v6+): entity carries a UI element (canvas root, anchored
+		// rect, image fill and/or text label). Independent optionals - an entity
+		// may carry any subset (e.g. a canvas root has uiCanvas + uiRect only).
+		std::optional<UICanvasRecord> uiCanvas;
+		std::optional<UIRectRecord> uiRect;
+		std::optional<UIImageRecord> uiImage;
+		std::optional<UITextRecord> uiText;
 		// Data-driven behaviors (BehaviorComponents.hpp) serialize as plain data;
 		// transient fields (bob base capture, pulse time) reset on apply.
 		std::optional<BobComponent> bob;
@@ -144,8 +189,9 @@ namespace aether::app::scene
 	// v2 = Spec-4 (behaviors, renderer-level [[lights]], environment);
 	// v3 = lights are entities (per-entity point_light/spot_light tables);
 	// v4 = entity script components (path-referenced scripts);
-	// v5 = C# script type names + serialized script_properties.
-	inline constexpr int kSceneFormatVersion = 5;
+	// v5 = C# script type names + serialized script_properties;
+	// v6 = UI components (ui_canvas/ui_rect/ui_image/ui_text).
+	inline constexpr int kSceneFormatVersion = 6;
 
 	struct SceneDescription
 	{

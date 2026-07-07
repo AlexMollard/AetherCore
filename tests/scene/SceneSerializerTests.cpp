@@ -589,3 +589,89 @@ TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {
     CHECK(RecordOf(*parsed, "B").parentIndex == -1);
     CHECK(RecordOf(*parsed, "A child").parentIndex == IndexOf(*parsed, "A"));
 }
+
+TEST_CASE("UI components round-trip through TOML") {
+    // Value-typed records only - no World/Entity involved, so this exercises
+    // just Write/Parse (Capture/Apply's ui:: mapping is covered indirectly by
+    // the other round-trip tests once entities carry the components). Every
+    // field is set NON-DEFAULT so a wrong TOML key or missing parse line fails
+    // here rather than silently reading back the record's default. texturePath
+    // is a plain string (WriteToml emits "texture" when non-empty, ParseToml
+    // reads it back), so it round-trips with no texture/registry involved.
+    SceneDescription in;
+    in.version = 6;
+
+    EntityRecord ent;
+    ent.name = "Widget";
+    UICanvasRecord uc;
+    uc.scaleMode = 1;
+    uc.referenceResolution = {1280.f, 720.f};
+    uc.sortBias = 3;
+    ent.uiCanvas = uc;
+    UIRectRecord ur;
+    ur.anchorMin = {0.1f, 0.2f};
+    ur.anchorMax = {0.8f, 0.9f};
+    ur.offsetMin = {3.f, 4.f};
+    ur.offsetMax = {-3.f, -4.f};
+    ur.pivot = {0.25f, 0.75f};
+    ent.uiRect = ur;
+    UIImageRecord ui;
+    ui.color = {0.1f, 0.2f, 0.3f, 0.4f};
+    ui.cornerRadius = 7.5f;
+    ui.texturePath = "ui/panel.png";
+    ent.uiImage = ui;
+    UITextRecord ut;
+    ut.text = "Hello";
+    ut.fontName = "Custom";
+    ut.pixelSize = 18.f;
+    ut.color = {0.5f, 0.6f, 0.7f, 0.8f};
+    ut.hAlign = 2;
+    ut.vAlign = 1;
+    ut.wrap = false;
+    ent.uiText = ut;
+    in.entities.push_back(ent);
+
+    const std::string toml = WriteToml(in);
+    const auto out = ParseToml(toml);
+    REQUIRE(out.has_value());
+    REQUIRE(out->entities.size() == 1);
+    const auto& e = out->entities[0];
+
+    REQUIRE(e.uiCanvas.has_value());
+    CHECK(e.uiCanvas->scaleMode == 1);
+    CHECK(e.uiCanvas->referenceResolution.x == doctest::Approx(1280.f));
+    CHECK(e.uiCanvas->referenceResolution.y == doctest::Approx(720.f));
+    CHECK(e.uiCanvas->sortBias == 3);
+
+    REQUIRE(e.uiRect.has_value());
+    CHECK(e.uiRect->anchorMin.x == doctest::Approx(0.1f));
+    CHECK(e.uiRect->anchorMin.y == doctest::Approx(0.2f));
+    CHECK(e.uiRect->anchorMax.x == doctest::Approx(0.8f));
+    CHECK(e.uiRect->anchorMax.y == doctest::Approx(0.9f));
+    CHECK(e.uiRect->offsetMin.x == doctest::Approx(3.f));
+    CHECK(e.uiRect->offsetMin.y == doctest::Approx(4.f));
+    CHECK(e.uiRect->offsetMax.x == doctest::Approx(-3.f));
+    CHECK(e.uiRect->offsetMax.y == doctest::Approx(-4.f));
+    CHECK(e.uiRect->pivot.x == doctest::Approx(0.25f));
+    CHECK(e.uiRect->pivot.y == doctest::Approx(0.75f));
+
+    REQUIRE(e.uiImage.has_value());
+    CHECK(e.uiImage->color.r == doctest::Approx(0.1f));
+    CHECK(e.uiImage->color.g == doctest::Approx(0.2f));
+    CHECK(e.uiImage->color.b == doctest::Approx(0.3f));
+    CHECK(e.uiImage->color.a == doctest::Approx(0.4f));
+    CHECK(e.uiImage->cornerRadius == doctest::Approx(7.5f));
+    CHECK(e.uiImage->texturePath == "ui/panel.png");
+
+    REQUIRE(e.uiText.has_value());
+    CHECK(e.uiText->text == "Hello");
+    CHECK(e.uiText->fontName == "Custom");
+    CHECK(e.uiText->pixelSize == doctest::Approx(18.f));
+    CHECK(e.uiText->color.r == doctest::Approx(0.5f));
+    CHECK(e.uiText->color.g == doctest::Approx(0.6f));
+    CHECK(e.uiText->color.b == doctest::Approx(0.7f));
+    CHECK(e.uiText->color.a == doctest::Approx(0.8f));
+    CHECK(e.uiText->hAlign == 2);
+    CHECK(e.uiText->vAlign == 1);
+    CHECK(e.uiText->wrap == false);
+}
