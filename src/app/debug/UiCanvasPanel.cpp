@@ -792,64 +792,6 @@ namespace aether::app
 		}
 	} // namespace
 
-	void TranslateUiRectOffsets(ui::UIRect& rect, glm::vec2 canvasDelta)
-	{
-		rect.offsetMin += canvasDelta;
-		rect.offsetMax += canvasDelta;
-	}
-
-	void ResizeUiRectOffsets(ui::UIRect& rect, UiRectResizeHandle handle, glm::vec2 canvasDelta, glm::vec2 parentExtent)
-	{
-		const bool left = handle == UiRectResizeHandle::Left || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::BottomLeft;
-		const bool right = handle == UiRectResizeHandle::Right || handle == UiRectResizeHandle::TopRight || handle == UiRectResizeHandle::BottomRight;
-		const bool top = handle == UiRectResizeHandle::Top || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::TopRight;
-		const bool bottom = handle == UiRectResizeHandle::Bottom || handle == UiRectResizeHandle::BottomLeft || handle == UiRectResizeHandle::BottomRight;
-
-		if (left)
-		{
-			rect.offsetMin.x += canvasDelta.x;
-		}
-		if (right)
-		{
-			rect.offsetMax.x += canvasDelta.x;
-		}
-		if (top)
-		{
-			rect.offsetMin.y += canvasDelta.y;
-		}
-		if (bottom)
-		{
-			rect.offsetMax.y += canvasDelta.y;
-		}
-
-		const glm::vec2 anchorSpan = (rect.anchorMax - rect.anchorMin) * glm::max(parentExtent, glm::vec2(1.f));
-		constexpr float minSize = 1.f;
-		const float width = anchorSpan.x + rect.offsetMax.x - rect.offsetMin.x;
-		if (width < minSize)
-		{
-			if (left && !right)
-			{
-				rect.offsetMin.x = rect.offsetMax.x + anchorSpan.x - minSize;
-			}
-			else
-			{
-				rect.offsetMax.x = rect.offsetMin.x - anchorSpan.x + minSize;
-			}
-		}
-		const float height = anchorSpan.y + rect.offsetMax.y - rect.offsetMin.y;
-		if (height < minSize)
-		{
-			if (top && !bottom)
-			{
-				rect.offsetMin.y = rect.offsetMax.y + anchorSpan.y - minSize;
-			}
-			else
-			{
-				rect.offsetMax.y = rect.offsetMin.y - anchorSpan.y + minSize;
-			}
-		}
-	}
-
 	void UiCanvasPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
@@ -950,7 +892,7 @@ namespace aether::app
 		ImVec2 origin = originForZoom(m_zoom);
 
 		const ImGuiIO& io = ImGui::GetIO();
-		if (surfaceHovered && io.MouseWheel != 0.f)
+		if (surfaceHovered && io.MouseWheel != 0.f && m_drag.kind == DragKind::None)
 		{
 			const ImVec2 mouse = ImGui::GetMousePos();
 			const glm::vec2 anchor = ScreenToCanvas(mouse, origin, m_pan, m_zoom);
@@ -964,7 +906,7 @@ namespace aether::app
 		const ImVec2 canvasMin = Add(origin, m_pan);
 		const ImVec2 canvasMax = Add(canvasMin, canvasSize);
 
-		if ((surfaceHovered || surfaceActive) && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.f))
+		if ((surfaceHovered || surfaceActive) && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.f) && m_drag.kind == DragKind::None)
 		{
 			m_pan = Add(m_pan, io.MouseDelta);
 		}
@@ -1050,7 +992,7 @@ namespace aether::app
 		std::vector<GapGuide> gapGuides;
 		if (surfaceHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 		{
-			m_drag = {};
+			DragState newDrag{};
 			const ImVec2 mouse = ImGui::GetMousePos();
 			if (selectedRect != nullptr && IsInCanvasSubtree(world, selected, canvas))
 			{
@@ -1063,24 +1005,24 @@ namespace aether::app
 					const ImVec2 half{kAnchorHandleSize * 0.5f, kAnchorHandleSize * 0.5f};
 					if (Contains(mouse, Sub(hit.center, half), Add(hit.center, half)))
 					{
-						m_drag.kind = DragKind::Anchor;
-						m_drag.entity = selected;
-						m_drag.anchor = hit.handle;
+						newDrag.kind = DragKind::Anchor;
+						newDrag.entity = selected;
+						newDrag.anchor = hit.handle;
 						break;
 					}
 				}
-				if (m_drag.kind == DragKind::None)
+				if (newDrag.kind == DragKind::None)
 				{
 					UiRectResizeHandle hitHandle = UiRectResizeHandle::BottomRight;
 					if (TryHitResizeHandle(mouse, selectedMin, selectedMax, hitHandle))
 					{
-						m_drag.kind = DragKind::Resize;
-						m_drag.entity = selected;
-						m_drag.resize = hitHandle;
+						newDrag.kind = DragKind::Resize;
+						newDrag.entity = selected;
+						newDrag.resize = hitHandle;
 					}
 				}
 			}
-			if (m_drag.kind == DragKind::None)
+			if (newDrag.kind == DragKind::None)
 			{
 				for (auto it = elements.rbegin(); it != elements.rend(); ++it)
 				{
@@ -1090,16 +1032,28 @@ namespace aether::app
 						{
 							selection->Select(it->entity);
 						}
-						m_drag.kind = DragKind::Move;
-						m_drag.entity = it->entity;
+						newDrag.kind = DragKind::Move;
+						newDrag.entity = it->entity;
 						break;
 					}
 				}
 			}
-			if (m_drag.kind == DragKind::None && Contains(mouse, canvasMin, canvasMax) && selection != nullptr)
+			if (newDrag.kind == DragKind::None && Contains(mouse, canvasMin, canvasMax) && selection != nullptr)
 			{
 				selection->Select(canvas);
 			}
+
+			if (newDrag.kind == DragKind::Move || newDrag.kind == DragKind::Resize)
+			{
+				if (auto* rect = world.TryGet<ui::UIRect>(newDrag.entity))
+				{
+					newDrag.startMouseCanvas = ScreenToCanvas(mouse, origin, m_pan, m_zoom);
+					newDrag.startOffsetMin = rect->offsetMin;
+					newDrag.startOffsetMax = rect->offsetMax;
+				}
+			}
+
+			m_drag = newDrag;
 		}
 
 		if (m_drag.kind != DragKind::None)
@@ -1110,11 +1064,15 @@ namespace aether::app
 			}
 			else if (auto* rect = world.TryGet<ui::UIRect>(m_drag.entity))
 			{
-				const ImVec2 mouseDelta = ImGui::GetIO().MouseDelta;
-				const glm::vec2 canvasDelta{mouseDelta.x / m_zoom, mouseDelta.y / m_zoom};
+				const ImVec2 mousePos = ImGui::GetMousePos();
+				const glm::vec2 currentMouseCanvas = ScreenToCanvas(mousePos, origin, m_pan, m_zoom);
+				const glm::vec2 delta = currentMouseCanvas - m_drag.startMouseCanvas;
+
 				if (m_drag.kind == DragKind::Move)
 				{
-					TranslateUiRectOffsets(*rect, canvasDelta);
+					rect->offsetMin = m_drag.startOffsetMin + delta;
+					rect->offsetMax = m_drag.startOffsetMax + delta;
+
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					if (!io.KeyShift)
 					{
@@ -1124,12 +1082,43 @@ namespace aether::app
 				}
 				else if (m_drag.kind == DragKind::Resize)
 				{
+					glm::vec2 targetMin = m_drag.startOffsetMin;
+					glm::vec2 targetMax = m_drag.startOffsetMax;
+
+					const bool left = m_drag.resize == UiRectResizeHandle::Left || m_drag.resize == UiRectResizeHandle::TopLeft || m_drag.resize == UiRectResizeHandle::BottomLeft;
+					const bool right = m_drag.resize == UiRectResizeHandle::Right || m_drag.resize == UiRectResizeHandle::TopRight || m_drag.resize == UiRectResizeHandle::BottomRight;
+					const bool top = m_drag.resize == UiRectResizeHandle::Top || m_drag.resize == UiRectResizeHandle::TopLeft || m_drag.resize == UiRectResizeHandle::TopRight;
+					const bool bottom = m_drag.resize == UiRectResizeHandle::Bottom || m_drag.resize == UiRectResizeHandle::BottomLeft || m_drag.resize == UiRectResizeHandle::BottomRight;
+
+					if (left) targetMin.x += delta.x;
+					if (right) targetMax.x += delta.x;
+					if (top) targetMin.y += delta.y;
+					if (bottom) targetMax.y += delta.y;
+
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
-					ResizeUiRectOffsets(*rect, m_drag.resize, canvasDelta, {parentRect.z, parentRect.w});
+					const glm::vec2 parentExtent{parentRect.z, parentRect.w};
+					const glm::vec2 anchorSpan = (rect->anchorMax - rect->anchorMin) * glm::max(parentExtent, glm::vec2(1.f));
+					constexpr float minSize = 1.f;
+
+					const float width = anchorSpan.x + targetMax.x - targetMin.x;
+					if (width < minSize)
+					{
+						if (left && !right) targetMin.x = targetMax.x + anchorSpan.x - minSize;
+						else targetMax.x = targetMin.x - anchorSpan.x + minSize;
+					}
+					const float height = anchorSpan.y + targetMax.y - targetMin.y;
+					if (height < minSize)
+					{
+						if (top && !bottom) targetMin.y = targetMax.y + anchorSpan.y - minSize;
+						else targetMax.y = targetMin.y - anchorSpan.y + minSize;
+					}
+
+					rect->offsetMin = targetMin;
+					rect->offsetMax = targetMax;
+
 					if (!io.KeyShift)
 					{
 						ApplyResizeSnap(world, *rect, m_drag.resize, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
-						ResizeUiRectOffsets(*rect, m_drag.resize, {}, {parentRect.z, parentRect.w});
 					}
 					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
 				}
@@ -1137,7 +1126,7 @@ namespace aether::app
 				{
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					const glm::vec4 visualRect = ui::ResolveRect(parentRect, *rect);
-					MoveAnchor(*rect, m_drag.anchor, ScreenToCanvas(ImGui::GetMousePos(), origin, m_pan, m_zoom), parentRect, visualRect, ImGui::GetIO().KeyShift);
+					MoveAnchor(*rect, m_drag.anchor, currentMouseCanvas, parentRect, visualRect, io.KeyShift);
 				}
 			}
 		}

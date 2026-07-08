@@ -33,9 +33,6 @@ namespace aether::app
 		BottomRight
 	};
 
-	void TranslateUiRectOffsets(ui::UIRect& rect, glm::vec2 canvasDelta);
-	void ResizeUiRectOffsets(ui::UIRect& rect, UiRectResizeHandle handle, glm::vec2 canvasDelta, glm::vec2 parentExtent);
-
 	class UiCanvasPanel final : public DebugPanel
 	{
 	public:
@@ -61,6 +58,10 @@ namespace aether::app
 			Entity entity{};
 			UiRectResizeHandle resize = UiRectResizeHandle::BottomRight;
 			UiAnchorHandle anchor = UiAnchorHandle::Point;
+
+			glm::vec2 startMouseCanvas{0.f};
+			glm::vec2 startOffsetMin{0.f};
+			glm::vec2 startOffsetMax{0.f};
 		};
 
 		ImVec2 m_pan{0.f, 0.f};
