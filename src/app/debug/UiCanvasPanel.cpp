@@ -994,7 +994,7 @@ namespace aether::app
 
 		for (const UiElement& element: elements)
 		{
-			const bool isSelected = element.entity == selected;
+			const bool isSelected = selection != nullptr && selection->Contains(element.entity);
 			const bool isHovered = element.entity == m_hoveredEntity;
 			const ImU32 outline = isSelected ? ToU32(colors::Primary) : (isHovered ? ToU32(colors::Info) : ToU32(colors::Neutral));
 			const ImU32 fill = isSelected ? ToU32(colors::detail::rgba(255, 124, 50, 0.10f)) : (isHovered ? ToU32(colors::detail::rgba(56, 189, 255, 0.06f)) : ToU32(colors::detail::rgba(226, 214, 196, 0.05f)));
@@ -1132,7 +1132,11 @@ namespace aether::app
 					{
 						if (selection != nullptr)
 						{
-							selection->Select(it->entity);
+							if (!selection->Contains(it->entity))
+							{
+								if (io.KeyShift) selection->AddToSelection(it->entity);
+								else selection->Select(it->entity);
+							}
 						}
 						newDrag.kind = DragKind::Move;
 						newDrag.entity = it->entity;
@@ -1357,8 +1361,7 @@ namespace aether::app
 					{
 						if (RectsOverlap(el.min, el.max, mMin, mMax))
 						{
-							if (io.KeyShift) selection->AddToSelection(el.entity);
-							else selection->Select(el.entity);
+							selection->AddToSelection(el.entity);
 						}
 					}
 				}
@@ -1375,7 +1378,11 @@ namespace aether::app
 		{
 			if (m_hoveredEntity.IsValid())
 			{
-				if (selection != nullptr) selection->Select(m_hoveredEntity);
+				if (selection != nullptr)
+				{
+					if (io.KeyShift) selection->AddToSelection(m_hoveredEntity);
+					else selection->Select(m_hoveredEntity);
+				}
 				ImGui::OpenPopup("##ElementContext");
 			}
 			else
