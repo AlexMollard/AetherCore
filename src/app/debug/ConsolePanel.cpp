@@ -283,45 +283,50 @@ namespace aether::app
 
 		// ── Log rows ──
 		ImGui::BeginChild("##loglines", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar);
-		int rowId = 0;
-		for (const auto& cr: display)
+		ImGuiListClipper clipper;
+		clipper.Begin(static_cast<int>(display.size()));
+		while (clipper.Step())
 		{
-			const auto& r = cr.record;
-			ImGui::PushID(rowId++);
-
-			const std::string label = rowText(cr);
-			ImGui::PushStyleColor(ImGuiCol_Text, LevelColor(r.level));
-			ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
-			ImGui::PopStyleColor();
-
-			if (r.line > 0)
+			for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
 			{
-				if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+				const auto& cr = display[static_cast<std::size_t>(i)];
+				const auto& r = cr.record;
+				ImGui::PushID(i);
+
+				const std::string label = rowText(cr);
+				ImGui::PushStyleColor(ImGuiCol_Text, LevelColor(r.level));
+				ImGui::Selectable(label.c_str(), false, ImGuiSelectableFlags_AllowDoubleClick);
+				ImGui::PopStyleColor();
+
+				if (r.line > 0)
 				{
-					OpenInEditor(r.file, r.line);
+					if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+					{
+						OpenInEditor(r.file, r.line);
+					}
+					if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+					{
+						ImGui::SetTooltip("Double-click to open %s:%d", Basename(r.file).c_str(), r.line);
+					}
 				}
-				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayNormal))
+				if (ImGui::BeginPopupContextItem("##rowctx"))
 				{
-					ImGui::SetTooltip("Double-click to open %s:%d", Basename(r.file).c_str(), r.line);
+					if (ImGui::MenuItem("Copy line"))
+					{
+						ImGui::SetClipboardText(label.c_str());
+					}
+					if (ImGui::MenuItem("Copy message"))
+					{
+						ImGui::SetClipboardText(r.message.c_str());
+					}
+					if (r.line > 0 && ImGui::MenuItem("Open in editor"))
+					{
+						OpenInEditor(r.file, r.line);
+					}
+					ImGui::EndPopup();
 				}
+				ImGui::PopID();
 			}
-			if (ImGui::BeginPopupContextItem("##rowctx"))
-			{
-				if (ImGui::MenuItem("Copy line"))
-				{
-					ImGui::SetClipboardText(label.c_str());
-				}
-				if (ImGui::MenuItem("Copy message"))
-				{
-					ImGui::SetClipboardText(r.message.c_str());
-				}
-				if (r.line > 0 && ImGui::MenuItem("Open in editor"))
-				{
-					OpenInEditor(r.file, r.line);
-				}
-				ImGui::EndPopup();
-			}
-			ImGui::PopID();
 		}
 		if (m_autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f)
 		{
