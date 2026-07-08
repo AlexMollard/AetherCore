@@ -1353,276 +1353,276 @@ namespace aether::app::scene
 				const EntityRecord& rec = scene.entities[i];
 				const Entity e = created[i];
 
-			if (!rec.name.empty())
-			{
-				world.Emplace<NameComponent>(e, NameComponent{.name = rec.name});
-			}
-			for (const std::string& tag: rec.tags)
-			{
-				const std::uint32_t tagId = TagCreate(tag);
-				if (tagId != UINT32_MAX)
+				if (!rec.name.empty())
 				{
-					TagAdd(&world, e.id, tagId);
+					world.Emplace<NameComponent>(e, NameComponent{.name = rec.name});
 				}
-			}
-			if (rec.hasTransform)
-			{
-				world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
-			}
-
-			// Physics: emplace the same descriptor the das bindings emplace (only
-			// shape + motion are authored); FlushPendingBodies builds the body.
-			if (rec.physics)
-			{
-				switch (rec.physics->shapeType)
+				for (const std::string& tag: rec.tags)
 				{
-					case PhysicsShapeType::Sphere:
+					const std::uint32_t tagId = TagCreate(tag);
+					if (tagId != UINT32_MAX)
 					{
-						SphereBodyDesc desc{};
-						desc.radius = rec.physics->radius;
-						desc.motionType = rec.physics->motionType;
-						world.Emplace<SphereBodyDesc>(e, desc);
-						break;
-					}
-					case PhysicsShapeType::Capsule:
-					{
-						CapsuleBodyDesc desc{};
-						desc.halfHeight = rec.physics->halfHeight;
-						desc.radius = rec.physics->radius;
-						desc.motionType = rec.physics->motionType;
-						world.Emplace<CapsuleBodyDesc>(e, desc);
-						break;
-					}
-					default:
-					{
-						BoxBodyDesc desc{};
-						desc.halfExtents = rec.physics->halfExtents;
-						desc.motionType = rec.physics->motionType;
-						world.Emplace<BoxBodyDesc>(e, desc);
-						break;
+						TagAdd(&world, e.id, tagId);
 					}
 				}
-			}
-
-			if (rec.uiCanvas)
-			{
-				world.Emplace<ui::UICanvas>(e, ui::UICanvas{static_cast<ui::UICanvas::ScaleMode>(rec.uiCanvas->scaleMode), rec.uiCanvas->referenceResolution, rec.uiCanvas->sortBias});
-			}
-			if (rec.uiRect)
-			{
-				world.Emplace<ui::UIRect>(e, ui::UIRect{rec.uiRect->anchorMin, rec.uiRect->anchorMax, rec.uiRect->offsetMin, rec.uiRect->offsetMax, rec.uiRect->pivot, glm::vec4{0.f}});
-			}
-			if (rec.uiImage)
-			{
-				ui::UIImage im;
-				im.color = rec.uiImage->color;
-				im.cornerRadius = rec.uiImage->cornerRadius;
-				// Same acquire-by-path mechanism as the material texture apply
-				// below; unlike MaterialAsset there is no registry cascade for
-				// UI, so the component's handle IS the owning reference.
-				if (!rec.uiImage->texturePath.empty() && deps.assets != nullptr)
+				if (rec.hasTransform)
 				{
-					im.texture = deps.assets->GetTextureRegistry().Acquire(rec.uiImage->texturePath);
+					world.Emplace<TransformComponent>(e, TransformComponent{.localToWorld = ComposeTransform(rec.position, rec.eulerDeg, rec.scale)});
 				}
-				world.Emplace<ui::UIImage>(e, im);
-			}
-			if (rec.uiText)
-			{
-				world.Emplace<ui::UIText>(
-				        e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
-			}
 
-			// Mesh (and, for model primitives, the skinned setup that needs the
-			// model's AnimationDatabase).
-			if (rec.mesh)
-			{
-				const Mesh* resolved = nullptr;
-				LoadedModel* model = nullptr;
-				if (rec.mesh->kind == MeshSourceComponent::Kind::Primitive)
+				// Physics: emplace the same descriptor the das bindings emplace (only
+				// shape + motion are authored); FlushPendingBodies builds the body.
+				if (rec.physics)
 				{
-					if (deps.assets != nullptr && deps.primitives != nullptr)
+					switch (rec.physics->shapeType)
 					{
-						if (const auto prim = PrimitiveFromName(rec.mesh->path))
+						case PhysicsShapeType::Sphere:
 						{
-							resolved = &deps.primitives->Get(*prim);
+							SphereBodyDesc desc{};
+							desc.radius = rec.physics->radius;
+							desc.motionType = rec.physics->motionType;
+							world.Emplace<SphereBodyDesc>(e, desc);
+							break;
+						}
+						case PhysicsShapeType::Capsule:
+						{
+							CapsuleBodyDesc desc{};
+							desc.halfHeight = rec.physics->halfHeight;
+							desc.radius = rec.physics->radius;
+							desc.motionType = rec.physics->motionType;
+							world.Emplace<CapsuleBodyDesc>(e, desc);
+							break;
+						}
+						default:
+						{
+							BoxBodyDesc desc{};
+							desc.halfExtents = rec.physics->halfExtents;
+							desc.motionType = rec.physics->motionType;
+							world.Emplace<BoxBodyDesc>(e, desc);
+							break;
 						}
 					}
 				}
-				else if (deps.sceneContext != nullptr)
+
+				if (rec.uiCanvas)
 				{
-					auto& ctx = *deps.sceneContext;
-					if (const auto it = ctx.loadedModelMap.find(rec.mesh->path); it != ctx.loadedModelMap.end())
+					world.Emplace<ui::UICanvas>(e, ui::UICanvas{static_cast<ui::UICanvas::ScaleMode>(rec.uiCanvas->scaleMode), rec.uiCanvas->referenceResolution, rec.uiCanvas->sortBias});
+				}
+				if (rec.uiRect)
+				{
+					world.Emplace<ui::UIRect>(e, ui::UIRect{rec.uiRect->anchorMin, rec.uiRect->anchorMax, rec.uiRect->offsetMin, rec.uiRect->offsetMax, rec.uiRect->pivot, glm::vec4{0.f}});
+				}
+				if (rec.uiImage)
+				{
+					ui::UIImage im;
+					im.color = rec.uiImage->color;
+					im.cornerRadius = rec.uiImage->cornerRadius;
+					// Same acquire-by-path mechanism as the material texture apply
+					// below; unlike MaterialAsset there is no registry cascade for
+					// UI, so the component's handle IS the owning reference.
+					if (!rec.uiImage->texturePath.empty() && deps.assets != nullptr)
 					{
-						model = &ctx.loadedModels[it->second];
+						im.texture = deps.assets->GetTextureRegistry().Acquire(rec.uiImage->texturePath);
 					}
-					else if (deps.assets != nullptr)
+					world.Emplace<ui::UIImage>(e, im);
+				}
+				if (rec.uiText)
+				{
+					world.Emplace<ui::UIText>(
+					        e, ui::UIText{rec.uiText->text, rec.uiText->fontName, rec.uiText->pixelSize, rec.uiText->color, static_cast<ui::UIText::HAlign>(rec.uiText->hAlign), static_cast<ui::UIText::VAlign>(rec.uiText->vAlign), rec.uiText->wrap});
+				}
+
+				// Mesh (and, for model primitives, the skinned setup that needs the
+				// model's AnimationDatabase).
+				if (rec.mesh)
+				{
+					const Mesh* resolved = nullptr;
+					LoadedModel* model = nullptr;
+					if (rec.mesh->kind == MeshSourceComponent::Kind::Primitive)
 					{
-						auto result = deps.assets->LoadModel(rec.mesh->path);
-						if (result)
+						if (deps.assets != nullptr && deps.primitives != nullptr)
 						{
-							ctx.loadedModels.push_back(std::move(result.value()));
-							ctx.loadedModelMap[rec.mesh->path] = ctx.loadedModels.size() - 1;
-							model = &ctx.loadedModels.back();
-						}
-						else
-						{
-							AE_WARN(LogCategory::App, "Scene load: model '{}' failed: {}", rec.mesh->path, result.error());
+							if (const auto prim = PrimitiveFromName(rec.mesh->path))
+							{
+								resolved = &deps.primitives->Get(*prim);
+							}
 						}
 					}
-					if (model != nullptr && rec.mesh->primitiveIndex < model->primitives.size())
+					else if (deps.sceneContext != nullptr)
 					{
-						resolved = &model->primitives[rec.mesh->primitiveIndex].mesh;
+						auto& ctx = *deps.sceneContext;
+						if (const auto it = ctx.loadedModelMap.find(rec.mesh->path); it != ctx.loadedModelMap.end())
+						{
+							model = &ctx.loadedModels[it->second];
+						}
+						else if (deps.assets != nullptr)
+						{
+							auto result = deps.assets->LoadModel(rec.mesh->path);
+							if (result)
+							{
+								ctx.loadedModels.push_back(std::move(result.value()));
+								ctx.loadedModelMap[rec.mesh->path] = ctx.loadedModels.size() - 1;
+								model = &ctx.loadedModels.back();
+							}
+							else
+							{
+								AE_WARN(LogCategory::App, "Scene load: model '{}' failed: {}", rec.mesh->path, result.error());
+							}
+						}
+						if (model != nullptr && rec.mesh->primitiveIndex < model->primitives.size())
+						{
+							resolved = &model->primitives[rec.mesh->primitiveIndex].mesh;
+						}
+					}
+
+					if (resolved != nullptr)
+					{
+						world.Emplace<MeshComponent>(e, MeshComponent{.mesh = resolved});
+						world.Emplace<MeshSourceComponent>(e, *rec.mesh);
+					}
+					else
+					{
+						AE_WARN(LogCategory::App, "Scene load: mesh source '{}' unresolved for '{}'", rec.mesh->path, rec.name);
+					}
+
+					if (rec.skinned && model != nullptr && model->animationDb.IsValid())
+					{
+						const auto& primitive = model->primitives[rec.mesh->primitiveIndex];
+						if (primitive.skinIndex >= 0)
+						{
+							const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);
+							const std::uint32_t joints = model->animationDb.GetSkinJointCount(skinIdx);
+							const std::uint32_t clipCount = model->animationDb.GetClipCount();
+							SkinnedMeshComponent smc{};
+							smc.animDb = &model->animationDb;
+							smc.skinIndex = skinIdx;
+							smc.jointCount = joints;
+							smc.clipIndex = clipCount > 0 ? std::min(rec.skinned->clipIndex, clipCount - 1) : 0;
+							smc.animTime = rec.skinned->animTime;
+							smc.playbackSpeed = rec.skinned->playbackSpeed;
+							smc.looping = rec.skinned->looping;
+							world.EmplaceOrReplace<SkinnedMeshComponent>(e, smc);
+						}
 					}
 				}
 
-				if (resolved != nullptr)
+				// Material before effect: AssignMaterial resolves the material
+				// pipeline, then an effect (if any) overrides it - final state matches
+				// the original authoring order.
+				if (rec.material && deps.assets != nullptr)
 				{
-					world.Emplace<MeshComponent>(e, MeshComponent{.mesh = resolved});
-					world.Emplace<MeshSourceComponent>(e, *rec.mesh);
+					MaterialAsset asset = rec.material->asset;
+					TextureRegistry& textures = deps.assets->GetTextureRegistry();
+					const auto acquire = [&textures](const std::string& path, TextureHandle& out)
+					{
+						out = path.empty() ? TextureHandle{} : textures.Acquire(path);
+					};
+					acquire(rec.material->albedoPath, asset.albedoTex);
+					acquire(rec.material->normalPath, asset.normalTex);
+					acquire(rec.material->metallicRoughnessPath, asset.metallicRoughnessTex);
+					acquire(rec.material->occlusionPath, asset.occlusionTex);
+					acquire(rec.material->emissivePath, asset.emissiveTex);
+					MaterialSystem::AssignMaterial(world, e, deps.assets->GetMaterialRegistry(), deps.assets->GetPipelineCache(), asset);
+					// Registry Acquire (inside AssignMaterial's cascade) now owns the
+					// texture refs; drop the ones this scope took.
+					for (TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
+					{
+						if (h.IsValid())
+						{
+							textures.Release(h);
+						}
+					}
+				}
+
+				if (rec.effect && !rec.effect->name.empty() && deps.effectManager != nullptr && deps.effectParams != nullptr && deps.pipelines != nullptr)
+				{
+					if (effects::ApplyEntityEffect(world, e, rec.effect->name, *deps.effectManager, *deps.pipelines, *deps.effectParams, &rec.effect->params))
+					{
+						++effectCount;
+					}
+					else
+					{
+						AE_WARN(LogCategory::App, "Scene load: unknown effect '{}'", rec.effect->name);
+					}
+				}
+				else if (rec.effect)
+				{
+					AE_WARN(LogCategory::App, "Scene load: effect '{}' on '{}' skipped (missing effect deps)", rec.effect->name, rec.name);
+				}
+
+				if (rec.bob)
+				{
+					world.Emplace<BobComponent>(e, *rec.bob);
+					++behaviorCount;
+				}
+				if (rec.spin)
+				{
+					world.Emplace<SpinComponent>(e, *rec.spin);
+					++behaviorCount;
+				}
+				if (rec.orbit)
+				{
+					world.Emplace<OrbitComponent>(e, *rec.orbit);
+					++behaviorCount;
+				}
+				if (rec.materialPulse)
+				{
+					world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
+					++behaviorCount;
+				}
+				if (rec.pointLight)
+				{
+					world.Emplace<PointLightComponent>(e, *rec.pointLight);
+				}
+				if (rec.spotLight)
+				{
+					world.Emplace<SpotLightComponent>(e, *rec.spotLight);
+				}
+				if (!rec.scripts.empty())
+				{
+					// attached stays false: the script system re-attaches on the
+					// next play tick (loads and Stop-restores restart scripts).
+					ScriptComponent component;
+					component.scripts.reserve(rec.scripts.size());
+					for (const ScriptRecord& script: rec.scripts)
+					{
+						component.scripts.push_back(ScriptEntry{.path = script.type, .attached = false, .properties = ScriptPropsFromSceneRefs(script.properties, created)});
+					}
+					world.Emplace<ScriptComponent>(e, std::move(component));
+				}
+			}
+
+			// Legacy [[lights]] (pre-v3 files): promote each record to a light
+			// entity so it shows in the outliner and re-saves in the new format.
+			std::vector<Entity> migratedLights;
+			for (const LightRecord& light: scene.lights)
+			{
+				if (light.isSpot)
+				{
+					migratedLights.push_back(ecs::CreateSpotLightEntity(world,
+					        light.position,
+					        light.direction,
+					        SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow}));
 				}
 				else
 				{
-					AE_WARN(LogCategory::App, "Scene load: mesh source '{}' unresolved for '{}'", rec.mesh->path, rec.name);
-				}
-
-				if (rec.skinned && model != nullptr && model->animationDb.IsValid())
-				{
-					const auto& primitive = model->primitives[rec.mesh->primitiveIndex];
-					if (primitive.skinIndex >= 0)
-					{
-						const auto skinIdx = static_cast<std::uint32_t>(primitive.skinIndex);
-						const std::uint32_t joints = model->animationDb.GetSkinJointCount(skinIdx);
-						const std::uint32_t clipCount = model->animationDb.GetClipCount();
-						SkinnedMeshComponent smc{};
-						smc.animDb = &model->animationDb;
-						smc.skinIndex = skinIdx;
-						smc.jointCount = joints;
-						smc.clipIndex = clipCount > 0 ? std::min(rec.skinned->clipIndex, clipCount - 1) : 0;
-						smc.animTime = rec.skinned->animTime;
-						smc.playbackSpeed = rec.skinned->playbackSpeed;
-						smc.looping = rec.skinned->looping;
-						world.EmplaceOrReplace<SkinnedMeshComponent>(e, smc);
-					}
+					migratedLights.push_back(ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow}));
 				}
 			}
-
-			// Material before effect: AssignMaterial resolves the material
-			// pipeline, then an effect (if any) overrides it - final state matches
-			// the original authoring order.
-			if (rec.material && deps.assets != nullptr)
+			if (!migratedLights.empty())
 			{
-				MaterialAsset asset = rec.material->asset;
-				TextureRegistry& textures = deps.assets->GetTextureRegistry();
-				const auto acquire = [&textures](const std::string& path, TextureHandle& out)
+				AE_INFO(LogCategory::App, "Scene load: migrated {} legacy light record(s) to light entities - re-save to upgrade the file", migratedLights.size());
+			}
+
+			// Hierarchy after every entity exists.
+			for (std::size_t i = 0; i < scene.entities.size(); ++i)
+			{
+				const int parent = scene.entities[i].parentIndex;
+				if (parent >= 0 && static_cast<std::size_t>(parent) < created.size())
 				{
-					out = path.empty() ? TextureHandle{} : textures.Acquire(path);
-				};
-				acquire(rec.material->albedoPath, asset.albedoTex);
-				acquire(rec.material->normalPath, asset.normalTex);
-				acquire(rec.material->metallicRoughnessPath, asset.metallicRoughnessTex);
-				acquire(rec.material->occlusionPath, asset.occlusionTex);
-				acquire(rec.material->emissivePath, asset.emissiveTex);
-				MaterialSystem::AssignMaterial(world, e, deps.assets->GetMaterialRegistry(), deps.assets->GetPipelineCache(), asset);
-				// Registry Acquire (inside AssignMaterial's cascade) now owns the
-				// texture refs; drop the ones this scope took.
-				for (TextureHandle h: {asset.albedoTex, asset.normalTex, asset.metallicRoughnessTex, asset.occlusionTex, asset.emissiveTex})
-				{
-					if (h.IsValid())
-					{
-						textures.Release(h);
-					}
+					ecs::SetParent(world, created[i], created[static_cast<std::size_t>(parent)]);
 				}
 			}
-
-			if (rec.effect && !rec.effect->name.empty() && deps.effectManager != nullptr && deps.effectParams != nullptr && deps.pipelines != nullptr)
-			{
-				if (effects::ApplyEntityEffect(world, e, rec.effect->name, *deps.effectManager, *deps.pipelines, *deps.effectParams, &rec.effect->params))
-				{
-					++effectCount;
-				}
-				else
-				{
-					AE_WARN(LogCategory::App, "Scene load: unknown effect '{}'", rec.effect->name);
-				}
-			}
-			else if (rec.effect)
-			{
-				AE_WARN(LogCategory::App, "Scene load: effect '{}' on '{}' skipped (missing effect deps)", rec.effect->name, rec.name);
-			}
-
-			if (rec.bob)
-			{
-				world.Emplace<BobComponent>(e, *rec.bob);
-				++behaviorCount;
-			}
-			if (rec.spin)
-			{
-				world.Emplace<SpinComponent>(e, *rec.spin);
-				++behaviorCount;
-			}
-			if (rec.orbit)
-			{
-				world.Emplace<OrbitComponent>(e, *rec.orbit);
-				++behaviorCount;
-			}
-			if (rec.materialPulse)
-			{
-				world.Emplace<MaterialPulseComponent>(e, *rec.materialPulse);
-				++behaviorCount;
-			}
-			if (rec.pointLight)
-			{
-				world.Emplace<PointLightComponent>(e, *rec.pointLight);
-			}
-			if (rec.spotLight)
-			{
-				world.Emplace<SpotLightComponent>(e, *rec.spotLight);
-			}
-			if (!rec.scripts.empty())
-			{
-				// attached stays false: the script system re-attaches on the
-				// next play tick (loads and Stop-restores restart scripts).
-				ScriptComponent component;
-				component.scripts.reserve(rec.scripts.size());
-				for (const ScriptRecord& script: rec.scripts)
-				{
-					component.scripts.push_back(ScriptEntry{.path = script.type, .attached = false, .properties = ScriptPropsFromSceneRefs(script.properties, created)});
-				}
-				world.Emplace<ScriptComponent>(e, std::move(component));
-			}
-		}
-
-		// Legacy [[lights]] (pre-v3 files): promote each record to a light
-		// entity so it shows in the outliner and re-saves in the new format.
-		std::vector<Entity> migratedLights;
-		for (const LightRecord& light: scene.lights)
-		{
-			if (light.isSpot)
-			{
-				migratedLights.push_back(ecs::CreateSpotLightEntity(world,
-				        light.position,
-				        light.direction,
-				        SpotLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .innerAngleRad = light.innerAngleRad, .outerAngleRad = light.outerAngleRad, .castsShadow = light.castsShadow}));
-			}
-			else
-			{
-				migratedLights.push_back(ecs::CreatePointLightEntity(world, light.position, PointLightComponent{.color = light.color, .intensity = light.intensity, .radius = light.radius, .castsShadow = light.castsShadow}));
-			}
-		}
-		if (!migratedLights.empty())
-		{
-			AE_INFO(LogCategory::App, "Scene load: migrated {} legacy light record(s) to light entities - re-save to upgrade the file", migratedLights.size());
-		}
-
-		// Hierarchy after every entity exists.
-		for (std::size_t i = 0; i < scene.entities.size(); ++i)
-		{
-			const int parent = scene.entities[i].parentIndex;
-			if (parent >= 0 && static_cast<std::size_t>(parent) < created.size())
-			{
-				ecs::SetParent(world, created[i], created[static_cast<std::size_t>(parent)]);
-			}
-		}
 
 			if (deps.sceneContext != nullptr && registerSceneEntities)
 			{

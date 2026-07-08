@@ -131,296 +131,296 @@ namespace aether::app
 		return false;
 	}
 
-		void AssignScriptType(ScriptEntry& script, std::string typeName)
+	void AssignScriptType(ScriptEntry& script, std::string typeName)
+	{
+		if (script.path == typeName)
 		{
-			if (script.path == typeName)
-			{
-				return;
-			}
-			script.path = std::move(typeName);
-			script.attached = false;
-			script.properties.clear();
+			return;
+		}
+		script.path = std::move(typeName);
+		script.attached = false;
+		script.properties.clear();
+	}
+
+	ScriptEntry& AddScriptSlot(ScriptComponent& sc, std::string typeName = {})
+	{
+		ScriptEntry& script = sc.scripts.emplace_back();
+		if (!typeName.empty())
+		{
+			AssignScriptType(script, std::move(typeName));
+		}
+		return script;
+	}
+
+	bool AcceptScriptDrop(ScriptComponent& sc)
+	{
+		if (!ImGui::BeginDragDropTarget())
+		{
+			return false;
 		}
 
-		ScriptEntry& AddScriptSlot(ScriptComponent& sc, std::string typeName = {})
+		bool assigned = false;
+		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload))
 		{
-			ScriptEntry& script = sc.scripts.emplace_back();
-			if (!typeName.empty())
+			if (payload->DataSize == sizeof(dragdrop::ScriptPayload))
 			{
-				AssignScriptType(script, std::move(typeName));
+				const auto* script = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
+				AddScriptSlot(sc, script->typeName);
+				assigned = true;
 			}
-			return script;
 		}
+		ImGui::EndDragDropTarget();
+		return assigned;
+	}
 
-		bool AcceptScriptDrop(ScriptComponent& sc)
+	void DrawScriptEntry(LayerContext& context, World& world, Entity entity, ScriptComponent& sc, ScriptEntry& script, std::size_t scriptIndex)
+	{
+		ImGui::PushID(static_cast<int>(scriptIndex));
+		auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>();
+		const bool scriptingAvailable = cs != nullptr && cs->IsAvailable();
+		const char* preview = script.path.empty() ? "Drop or choose a script" : script.path.c_str();
+		ImGui::SetNextItemWidth(-34.0f);
+		if (ImGui::BeginCombo("Script Type", preview))
 		{
-			if (!ImGui::BeginDragDropTarget())
+			if (ImGui::Selectable("None", script.path.empty()))
 			{
-				return false;
+				AssignScriptType(script, {});
 			}
-
-			bool assigned = false;
+			if (cs != nullptr)
+			{
+				for (const std::string& typeName: cs->GetScriptTypeNames())
+				{
+					const bool selected = script.path == typeName;
+					if (ImGui::Selectable(typeName.c_str(), selected))
+					{
+						AssignScriptType(script, typeName);
+					}
+					if (selected)
+					{
+						ImGui::SetItemDefaultFocus();
+					}
+				}
+			}
+			ImGui::EndCombo();
+		}
+		if (ImGui::BeginDragDropTarget())
+		{
 			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload))
 			{
 				if (payload->DataSize == sizeof(dragdrop::ScriptPayload))
 				{
-					const auto* script = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
-					AddScriptSlot(sc, script->typeName);
-					assigned = true;
+					const auto* dropped = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
+					AssignScriptType(script, dropped->typeName);
 				}
 			}
 			ImGui::EndDragDropTarget();
-			return assigned;
+		}
+		ImGui::SameLine();
+		if (ImGui::SmallButton(ICON_FA_XMARK))
+		{
+			sc.scripts.erase(sc.scripts.begin() + static_cast<std::ptrdiff_t>(scriptIndex));
+			ImGui::PopID();
+			return;
 		}
 
-		void DrawScriptEntry(LayerContext& context, World& world, Entity entity, ScriptComponent& sc, ScriptEntry& script, std::size_t scriptIndex)
+		if (script.path.empty())
 		{
-			ImGui::PushID(static_cast<int>(scriptIndex));
-			auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>();
-			const bool scriptingAvailable = cs != nullptr && cs->IsAvailable();
-			const char* preview = script.path.empty() ? "Drop or choose a script" : script.path.c_str();
-			ImGui::SetNextItemWidth(-34.0f);
-			if (ImGui::BeginCombo("Script Type", preview))
+			ImGui::TextDisabled("Drag a C# script here from File Explorer.");
+			ImGui::PopID();
+			return;
+		}
+
+		ImGui::TextDisabled(script.attached ? "Attached (running while playing)" : "Attaches on the next Play tick");
+		if (script.attached && ImGui::SmallButton("Re-attach"))
+		{
+			// Next play tick re-runs OnAttach (handy after editing setup code).
+			script.attached = false;
+		}
+
+		if (!scriptingAvailable)
+		{
+			ImGui::PopID();
+			return;
+		}
+		const auto props = cs->GetScriptProperties(script.path);
+		if (props.empty())
+		{
+			ImGui::PopID();
+			return;
+		}
+
+		// A live instance (while playing) is the source of truth; otherwise the
+		// value is the stored override, falling back to the type default.
+		std::uint64_t handle = 0;
+		if (auto* runner = context.TryGet<ScriptComponentSystem>())
+		{
+			handle = runner->GetInstanceHandle(entity.id, static_cast<std::uint32_t>(scriptIndex));
+		}
+
+		ImGui::SeparatorText("Properties");
+		std::vector<int> propertyOrder;
+		propertyOrder.reserve(props.size());
+		for (int i = 0; i < static_cast<int>(props.size()); ++i)
+		{
+			if (props[i].name == "Self" && props[i].type == ScriptPropertyValue::Type::Entity)
 			{
-				if (ImGui::Selectable("None", script.path.empty()))
-				{
-					AssignScriptType(script, {});
-				}
-				if (cs != nullptr)
-				{
-					for (const std::string& typeName: cs->GetScriptTypeNames())
-					{
-						const bool selected = script.path == typeName;
-						if (ImGui::Selectable(typeName.c_str(), selected))
-						{
-							AssignScriptType(script, typeName);
-						}
-						if (selected)
-						{
-							ImGui::SetItemDefaultFocus();
-						}
-					}
-				}
-				ImGui::EndCombo();
+				propertyOrder.insert(propertyOrder.begin(), i);
 			}
-			if (ImGui::BeginDragDropTarget())
+			else
 			{
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload))
-				{
-					if (payload->DataSize == sizeof(dragdrop::ScriptPayload))
-					{
-						const auto* dropped = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
-						AssignScriptType(script, dropped->typeName);
-					}
-				}
-				ImGui::EndDragDropTarget();
+				propertyOrder.push_back(i);
 			}
-			ImGui::SameLine();
-			if (ImGui::SmallButton(ICON_FA_XMARK))
+		}
+		for (const int i: propertyOrder)
+		{
+			const auto& info = props[i];
+			const bool isSelfProperty = info.name == "Self" && info.type == ScriptPropertyValue::Type::Entity;
+			ScriptPropertyValue value;
+			value.type = info.type;
+			bool haveValue = false;
+			if (handle != 0 && cs->GetPropertyValue(handle, i, value))
 			{
-				sc.scripts.erase(sc.scripts.begin() + static_cast<std::ptrdiff_t>(scriptIndex));
-				ImGui::PopID();
-				return;
+				haveValue = true;
+			}
+			else if (const auto it = script.properties.find(info.name); it != script.properties.end())
+			{
+				value = it->second;
+				haveValue = true;
+			}
+			else if (isSelfProperty)
+			{
+				value.i64 = entity.id;
+				haveValue = true;
+			}
+			else if (cs->GetDefaultPropertyValue(script.path, i, value))
+			{
+				haveValue = true;
+			}
+			if (!haveValue)
+			{
+				continue;
 			}
 
-			if (script.path.empty())
+			bool edited = false;
+			switch (info.type)
 			{
-				ImGui::TextDisabled("Drag a C# script here from File Explorer.");
-				ImGui::PopID();
-				return;
-			}
-
-			ImGui::TextDisabled(script.attached ? "Attached (running while playing)" : "Attaches on the next Play tick");
-			if (script.attached && ImGui::SmallButton("Re-attach"))
-			{
-				// Next play tick re-runs OnAttach (handy after editing setup code).
-				script.attached = false;
-			}
-
-			if (!scriptingAvailable)
-			{
-				ImGui::PopID();
-				return;
-			}
-			const auto props = cs->GetScriptProperties(script.path);
-			if (props.empty())
-			{
-				ImGui::PopID();
-				return;
-			}
-
-			// A live instance (while playing) is the source of truth; otherwise the
-			// value is the stored override, falling back to the type default.
-			std::uint64_t handle = 0;
-			if (auto* runner = context.TryGet<ScriptComponentSystem>())
-			{
-				handle = runner->GetInstanceHandle(entity.id, static_cast<std::uint32_t>(scriptIndex));
-			}
-
-			ImGui::SeparatorText("Properties");
-			std::vector<int> propertyOrder;
-			propertyOrder.reserve(props.size());
-			for (int i = 0; i < static_cast<int>(props.size()); ++i)
-			{
-				if (props[i].name == "Self" && props[i].type == ScriptPropertyValue::Type::Entity)
+				case ScriptPropertyValue::Type::Float:
 				{
-					propertyOrder.insert(propertyOrder.begin(), i);
-				}
-				else
-				{
-					propertyOrder.push_back(i);
-				}
-			}
-			for (const int i: propertyOrder)
-			{
-				const auto& info = props[i];
-				const bool isSelfProperty = info.name == "Self" && info.type == ScriptPropertyValue::Type::Entity;
-				ScriptPropertyValue value;
-				value.type = info.type;
-				bool haveValue = false;
-				if (handle != 0 && cs->GetPropertyValue(handle, i, value))
-				{
-					haveValue = true;
-				}
-				else if (const auto it = script.properties.find(info.name); it != script.properties.end())
-				{
-					value = it->second;
-					haveValue = true;
-				}
-				else if (isSelfProperty)
-				{
-					value.i64 = entity.id;
-					haveValue = true;
-				}
-				else if (cs->GetDefaultPropertyValue(script.path, i, value))
-				{
-					haveValue = true;
-				}
-				if (!haveValue)
-				{
-					continue;
-				}
-
-				bool edited = false;
-				switch (info.type)
-				{
-					case ScriptPropertyValue::Type::Float:
+					float f = value.f4[0];
+					if (ImGui::DragFloat(info.name.c_str(), &f, 0.1f))
 					{
-						float f = value.f4[0];
-						if (ImGui::DragFloat(info.name.c_str(), &f, 0.1f))
-						{
-							value.f4[0] = f;
-							edited = true;
-						}
-						break;
+						value.f4[0] = f;
+						edited = true;
 					}
-					case ScriptPropertyValue::Type::Int:
-					case ScriptPropertyValue::Type::Enum:
+					break;
+				}
+				case ScriptPropertyValue::Type::Int:
+				case ScriptPropertyValue::Type::Enum:
+				{
+					int n = static_cast<int>(value.i64);
+					if (ImGui::DragInt(info.name.c_str(), &n))
 					{
-						int n = static_cast<int>(value.i64);
-						if (ImGui::DragInt(info.name.c_str(), &n))
-						{
-							value.i64 = n;
-							edited = true;
-						}
-						break;
+						value.i64 = n;
+						edited = true;
 					}
-					case ScriptPropertyValue::Type::Bool:
+					break;
+				}
+				case ScriptPropertyValue::Type::Bool:
+				{
+					bool b = value.i64 != 0;
+					if (ImGui::Checkbox(info.name.c_str(), &b))
 					{
-						bool b = value.i64 != 0;
-						if (ImGui::Checkbox(info.name.c_str(), &b))
-						{
-							value.i64 = b ? 1 : 0;
-							edited = true;
-						}
-						break;
+						value.i64 = b ? 1 : 0;
+						edited = true;
 					}
-					case ScriptPropertyValue::Type::Vector3:
+					break;
+				}
+				case ScriptPropertyValue::Type::Vector3:
+				{
+					float v[3] = {value.f4[0], value.f4[1], value.f4[2]};
+					if (ImGui::DragFloat3(info.name.c_str(), v, 0.1f))
 					{
-						float v[3] = {value.f4[0], value.f4[1], value.f4[2]};
-						if (ImGui::DragFloat3(info.name.c_str(), v, 0.1f))
-						{
-							value.f4[0] = v[0];
-							value.f4[1] = v[1];
-							value.f4[2] = v[2];
-							edited = true;
-						}
-						break;
+						value.f4[0] = v[0];
+						value.f4[1] = v[1];
+						value.f4[2] = v[2];
+						edited = true;
 					}
-					case ScriptPropertyValue::Type::String:
+					break;
+				}
+				case ScriptPropertyValue::Type::String:
+				{
+					char buf[256];
+					std::snprintf(buf, sizeof(buf), "%s", value.str.c_str());
+					if (ImGui::InputText(info.name.c_str(), buf, sizeof(buf)))
 					{
-						char buf[256];
-						std::snprintf(buf, sizeof(buf), "%s", value.str.c_str());
-						if (ImGui::InputText(info.name.c_str(), buf, sizeof(buf)))
-						{
-							value.str = buf;
-							edited = true;
-						}
-						break;
+						value.str = buf;
+						edited = true;
 					}
-					case ScriptPropertyValue::Type::Entity:
+					break;
+				}
+				case ScriptPropertyValue::Type::Entity:
+				{
+					const Entity target{static_cast<std::uint32_t>(value.i64)};
+					const bool targetAlive = target.IsValid() && world.GetRegistry().valid(World::ToEntt(target));
+					std::string label = targetAlive ? std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
+					const std::string buttonId = label + "##entityField" + info.name;
+					ImGui::AlignTextToFramePadding();
+					ImGui::TextUnformatted(info.name.c_str());
+					ImGui::SameLine(120.0f);
+					const float trailingButtonWidth = isSelfProperty ? 58.0f : 32.0f;
+					ImGui::Button(buttonId.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - trailingButtonWidth), 0.0f));
+					if (ImGui::BeginDragDropTarget())
 					{
-						const Entity target{static_cast<std::uint32_t>(value.i64)};
-						const bool targetAlive = target.IsValid() && world.GetRegistry().valid(World::ToEntt(target));
-						std::string label = targetAlive ? std::string(EntityDisplayName(world, target)) + " #" + std::to_string(target.id) : "None";
-						const std::string buttonId = label + "##entityField" + info.name;
-						ImGui::AlignTextToFramePadding();
-						ImGui::TextUnformatted(info.name.c_str());
-						ImGui::SameLine(120.0f);
-						const float trailingButtonWidth = isSelfProperty ? 58.0f : 32.0f;
-						ImGui::Button(buttonId.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - trailingButtonWidth), 0.0f));
-						if (ImGui::BeginDragDropTarget())
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload))
 						{
-							if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload))
+							if (payload->DataSize == sizeof(std::uint32_t))
 							{
-								if (payload->DataSize == sizeof(std::uint32_t))
-								{
-									value.i64 = *static_cast<const std::uint32_t*>(payload->Data);
-									edited = true;
-								}
-								else if (payload->DataSize == sizeof(dragdrop::EntityPayload))
-								{
-									value.i64 = static_cast<const dragdrop::EntityPayload*>(payload->Data)->id;
-									edited = true;
-								}
-							}
-							ImGui::EndDragDropTarget();
-						}
-						ImGui::SameLine();
-						if (isSelfProperty)
-						{
-							if (ImGui::SmallButton((std::string(ICON_FA_LINK "##useSelf") + info.name).c_str()))
-							{
-								value.i64 = entity.id;
+								value.i64 = *static_cast<const std::uint32_t*>(payload->Data);
 								edited = true;
 							}
-							ImGui::SetItemTooltip("Set Self to this entity");
-							ImGui::SameLine();
+							else if (payload->DataSize == sizeof(dragdrop::EntityPayload))
+							{
+								value.i64 = static_cast<const dragdrop::EntityPayload*>(payload->Data)->id;
+								edited = true;
+							}
 						}
-						if (ImGui::SmallButton((std::string(ICON_FA_XMARK "##clear") + info.name).c_str()))
+						ImGui::EndDragDropTarget();
+					}
+					ImGui::SameLine();
+					if (isSelfProperty)
+					{
+						if (ImGui::SmallButton((std::string(ICON_FA_LINK "##useSelf") + info.name).c_str()))
 						{
-							value.i64 = 0;
+							value.i64 = entity.id;
 							edited = true;
 						}
-						break;
+						ImGui::SetItemTooltip("Set Self to this entity");
+						ImGui::SameLine();
 					}
-					case ScriptPropertyValue::Type::None:
-					default:
-						break;
-				}
-
-				if (edited)
-				{
-					value.type = info.type;
-					script.properties[info.name] = value; // persist the override
-					if (handle != 0)
+					if (ImGui::SmallButton((std::string(ICON_FA_XMARK "##clear") + info.name).c_str()))
 					{
-						cs->SetPropertyValue(handle, i, value); // live-apply while playing
+						value.i64 = 0;
+						edited = true;
 					}
+					break;
+				}
+				case ScriptPropertyValue::Type::None:
+				default:
+					break;
+			}
+
+			if (edited)
+			{
+				value.type = info.type;
+				script.properties[info.name] = value; // persist the override
+				if (handle != 0)
+				{
+					cs->SetPropertyValue(handle, i, value); // live-apply while playing
 				}
 			}
-			ImGui::PopID();
 		}
+		ImGui::PopID();
+	}
 
 	const char* EntityDisplayName(const World& world, Entity entity)
 	{
