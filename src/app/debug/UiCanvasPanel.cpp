@@ -790,6 +790,42 @@ namespace aether::app
 			const ImVec4 clip{element.min.x, element.min.y, element.max.x, element.max.y};
 			drawList->AddText(font, fontSize, pos, ToU32(text->color), text->text.c_str(), nullptr, wrapWidth, &clip);
 		}
+
+		[[nodiscard]] bool RectsOverlap(ImVec2 min1, ImVec2 max1, ImVec2 min2, ImVec2 max2)
+		{
+			return min1.x < max2.x && max1.x > min2.x && min1.y < max2.y && max1.y > min2.y;
+		}
+
+		void DrawDashedLine(ImDrawList* drawList, ImVec2 a, ImVec2 b, ImU32 col, float dashLen = 6.f, float gapLen = 4.f)
+		{
+			ImVec2 dir = Sub(b, a);
+			const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+			if (len < 0.001f) return;
+			dir.x /= len;
+			dir.y /= len;
+
+			float dist = 0.f;
+			while (dist < len)
+			{
+				const ImVec2 p1 = Add(a, ImVec2{dir.x * dist, dir.y * dist});
+				const float end = std::min(dist + dashLen, len);
+				const ImVec2 p2 = Add(a, ImVec2{dir.x * end, dir.y * end});
+				drawList->AddLine(p1, p2, col, 1.5f);
+				dist += dashLen + gapLen;
+			}
+		}
+
+		void DrawTooltip(ImDrawList* drawList, ImVec2 mousePos, const char* text)
+		{
+			const ImVec2 padding{6.f, 4.f};
+			const ImVec2 textSize = ImGui::CalcTextSize(text);
+			const ImVec2 min = Add(mousePos, ImVec2{15.f, 15.f});
+			const ImVec2 max = Add(min, Add(textSize, Add(padding, padding)));
+
+			drawList->AddRectFilled(min, max, ToU32(colors::detail::rgba(20, 20, 20, 0.9f)), 4.f);
+			drawList->AddRect(min, max, ToU32(colors::Border), 4.f);
+			drawList->AddText(Add(min, padding), ToU32(colors::TextPrimary), text);
+		}
 	} // namespace
 
 	void UiCanvasPanel::OnImGui(LayerContext& context)
@@ -857,6 +893,9 @@ namespace aether::app
 			m_zoom = 1.f;
 		}
 		ImGui::SetItemTooltip("Reset view");
+		ImGui::SameLine();
+		ImGui::Checkbox("Snap", &m_snappingEnabled);
+		ImGui::SetItemTooltip("Toggle snapping (Hold Shift to temporarily invert)");
 
 		const ImVec2 contentMin = ImGui::GetCursorScreenPos();
 		ImVec2 canvasArea = ImGui::GetContentRegionAvail();
@@ -942,13 +981,47 @@ namespace aether::app
 				break;
 			}
 		}
+
+		m_hoveredEntity = {};
+		if (surfaceHovered && m_drag.kind == DragKind::None && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+		{
+			for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+			{
+				if (Contains(io.MousePos, it->min, it->max))
+				{
+					m_hoveredEntity = it->entity;
+					break;
+				}
+			}
+		}
+
 		for (const UiElement& element: elements)
 		{
 			const bool isSelected = element.entity == selected;
-			const ImU32 outline = isSelected ? ToU32(colors::Primary) : ToU32(colors::Neutral);
-			const ImU32 fill = isSelected ? ToU32(colors::detail::rgba(255, 124, 50, 0.10f)) : ToU32(colors::detail::rgba(226, 214, 196, 0.05f));
+			const bool isHovered = element.entity == m_hoveredEntity;
+			const ImU32 outline = isSelected ? ToU32(colors::Primary) : (isHovered ? ToU32(colors::Info) : ToU32(colors::Neutral));
+			const ImU32 fill = isSelected ? ToU32(colors::detail::rgba(255, 124, 50, 0.10f)) : (isHovered ? ToU32(colors::detail::rgba(56, 189, 255, 0.06f)) : ToU32(colors::detail::rgba(226, 214, 196, 0.05f)));
 			drawList->AddRectFilled(element.min, element.max, fill);
-			drawList->AddRect(element.min, element.max, outline, 0.f, 0, isSelected ? 2.f : 1.f);
+			drawList->AddRect(element.min, element.max, outline, 0.f, 0, isSelected ? 2.f : 1.5f);
+		}
+
+		if (m_hoveredEntity.IsValid() && m_drag.kind == DragKind::None)
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+		}
+		else if (surfaceHovered && m_drag.kind == DragKind::None && Contains(io.MousePos, canvasMin, canvasMax))
+		{
+			const float bt = 8.f;
+			const bool cl = std::abs(io.MousePos.x - canvasMin.x) < bt;
+			const bool cr = std::abs(io.MousePos.x - canvasMax.x) < bt;
+			const bool ct = std::abs(io.MousePos.y - canvasMin.y) < bt;
+			const bool cb = std::abs(io.MousePos.y - canvasMax.y) < bt;
+			if (cl && ct) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+			else if (cr && ct) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+			else if (cl && cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+			else if (cr && cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+			else if (cl || cr) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+			else if (ct || cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
 		}
 
 		ui::UIRect* selectedRect = selected.IsValid() ? world.TryGet<ui::UIRect>(selected) : nullptr;
@@ -965,10 +1038,13 @@ namespace aether::app
 				drawList->AddRectFilled(Sub(hit.center, half), Add(hit.center, half), handleFill);
 			}
 
+			const ImVec2 selectedVisualCenter{(selectedMin.x + selectedMax.x) * 0.5f, (selectedMin.y + selectedMax.y) * 0.5f};
 			const ImU32 anchorColor = ToU32(colors::Info);
+			const ImU32 anchorLineColor = ToU32(colors::detail::rgba(56, 189, 255, 0.4f));
 			for (const AnchorHit& hit: AnchorHandles(*selectedRect, selectedParentRect, origin, m_pan, m_zoom))
 			{
 				const ImVec2 half{kAnchorHandleSize * 0.5f, kAnchorHandleSize * 0.5f};
+				DrawDashedLine(drawList, hit.center, selectedVisualCenter, anchorLineColor);
 				drawList->AddRect(Sub(hit.center, half), Add(hit.center, half), anchorColor, 0.f, ImDrawFlags_RoundCornersAll, 2.f);
 				drawList->AddLine({hit.center.x - half.x, hit.center.y}, {hit.center.x + half.x, hit.center.y}, anchorColor);
 				drawList->AddLine({hit.center.x, hit.center.y - half.y}, {hit.center.x, hit.center.y + half.y}, anchorColor);
@@ -985,6 +1061,35 @@ namespace aether::app
 				{
 					ImGui::SetMouseCursor(CursorForResizeHandle(hoverHandle));
 				}
+			}
+		}
+
+		if (m_drag.kind == DragKind::None && selectedRect != nullptr)
+		{
+			const float nudgeAmount = io.KeyShift ? 10.f : 1.f;
+			glm::vec2 nudgeDelta{0.f};
+			if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) nudgeDelta.x -= nudgeAmount;
+			if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) nudgeDelta.x += nudgeAmount;
+			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) nudgeDelta.y -= nudgeAmount;
+			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) nudgeDelta.y += nudgeAmount;
+
+			if (nudgeDelta.x != 0.f || nudgeDelta.y != 0.f)
+			{
+				selectedRect->offsetMin += nudgeDelta;
+				selectedRect->offsetMax += nudgeDelta;
+			}
+
+			if (ImGui::IsKeyPressed(ImGuiKey_F))
+			{
+				const glm::vec4 visualRect = ui::ResolveRect(selectedParentRect, *selectedRect);
+				const float zoomX = (canvasArea.x * 0.8f) / std::max(visualRect.z, 1.f);
+				const float zoomY = (canvasArea.y * 0.8f) / std::max(visualRect.w, 1.f);
+				m_zoom = std::clamp(std::min(zoomX, zoomY), kMinZoom, kMaxZoom);
+				canvasSize = canvasSizeForZoom(m_zoom);
+				origin = originForZoom(m_zoom);
+				const ImVec2 targetScreen = CanvasToScreen({visualRect.x + visualRect.z * 0.5f, visualRect.y + visualRect.w * 0.5f}, origin, ImVec2{0.f, 0.f}, m_zoom);
+				const ImVec2 screenCenter = Add(contentMin, ImVec2{canvasArea.x * 0.5f, canvasArea.y * 0.5f});
+				m_pan = Sub(screenCenter, targetScreen);
 			}
 		}
 
@@ -1038,9 +1143,39 @@ namespace aether::app
 					}
 				}
 			}
-			if (newDrag.kind == DragKind::None && Contains(mouse, canvasMin, canvasMax) && selection != nullptr)
+			if (newDrag.kind == DragKind::None && Contains(mouse, canvasMin, canvasMax))
 			{
-				selection->Select(canvas);
+				const float borderThreshold = 8.f;
+				const bool onLeft = std::abs(mouse.x - canvasMin.x) < borderThreshold;
+				const bool onRight = std::abs(mouse.x - canvasMax.x) < borderThreshold;
+				const bool onTop = std::abs(mouse.y - canvasMin.y) < borderThreshold;
+				const bool onBottom = std::abs(mouse.y - canvasMax.y) < borderThreshold;
+
+				if (onLeft && onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::TopLeft; }
+				else if (onRight && onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::TopRight; }
+				else if (onLeft && onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::BottomLeft; }
+				else if (onRight && onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::BottomRight; }
+				else if (onLeft) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Left; }
+				else if (onRight) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Right; }
+				else if (onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Top; }
+				else if (onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Bottom; }
+
+				if (newDrag.kind == DragKind::CanvasResize)
+				{
+					newDrag.entity = canvas;
+					newDrag.startMouseCanvas = ScreenToCanvas(mouse, origin, m_pan, m_zoom);
+					if (auto* canvasComp = world.TryGet<ui::UICanvas>(canvas))
+					{
+						newDrag.startOffsetMin = {canvasComp->referenceResolution.x, canvasComp->referenceResolution.y};
+					}
+				}
+				else if (selection != nullptr)
+				{
+					selection->Select(canvas);
+					m_isMarqueeActive = true;
+					m_marqueeStart = mouse;
+					m_marqueeEnd = mouse;
+				}
 			}
 
 			if (newDrag.kind == DragKind::Move || newDrag.kind == DragKind::Resize)
@@ -1058,15 +1193,36 @@ namespace aether::app
 
 		if (m_drag.kind != DragKind::None)
 		{
-			if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || !IsAlive(world, m_drag.entity))
+			if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || (m_drag.kind != DragKind::CanvasResize && !IsAlive(world, m_drag.entity)))
 			{
 				m_drag = {};
+			}
+
+			if (m_drag.kind == DragKind::CanvasResize)
+			{
+				if (auto* canvasComp = world.TryGet<ui::UICanvas>(canvas))
+				{
+					const ImVec2 mousePos = ImGui::GetMousePos();
+					const glm::vec2 currentMouseCanvas = ScreenToCanvas(mousePos, origin, m_pan, m_zoom);
+					const glm::vec2 delta = currentMouseCanvas - m_drag.startMouseCanvas;
+					glm::vec2 newRes = m_drag.startOffsetMin;
+
+					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Right || m_drag.canvasResizeHandle == UiRectResizeHandle::TopRight || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight) newRes.x += delta.x;
+					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Bottom || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomLeft || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight) newRes.y += delta.y;
+
+					canvasComp->referenceResolution = glm::max(newRes, glm::vec2(100.f));
+
+					char tooltipBuf[64];
+					std::snprintf(tooltipBuf, sizeof(tooltipBuf), "Res: %.0f x %.0f", canvasComp->referenceResolution.x, canvasComp->referenceResolution.y);
+					DrawTooltip(drawList, mousePos, tooltipBuf);
+				}
 			}
 			else if (auto* rect = world.TryGet<ui::UIRect>(m_drag.entity))
 			{
 				const ImVec2 mousePos = ImGui::GetMousePos();
 				const glm::vec2 currentMouseCanvas = ScreenToCanvas(mousePos, origin, m_pan, m_zoom);
 				const glm::vec2 delta = currentMouseCanvas - m_drag.startMouseCanvas;
+				const bool shouldSnap = m_snappingEnabled != io.KeyShift;
 
 				if (m_drag.kind == DragKind::Move)
 				{
@@ -1074,11 +1230,16 @@ namespace aether::app
 					rect->offsetMax = m_drag.startOffsetMax + delta;
 
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
-					if (!io.KeyShift)
+					if (shouldSnap)
 					{
 						ApplyMoveSnap(world, *rect, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
 					}
 					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
+
+					const glm::vec4 vis = ui::ResolveRect(parentRect, *rect);
+					char dimBuf[64];
+					std::snprintf(dimBuf, sizeof(dimBuf), "X: %.0f  Y: %.0f", vis.x, vis.y);
+					DrawTooltip(drawList, mousePos, dimBuf);
 				}
 				else if (m_drag.kind == DragKind::Resize)
 				{
@@ -1116,18 +1277,49 @@ namespace aether::app
 					rect->offsetMin = targetMin;
 					rect->offsetMax = targetMax;
 
-					if (!io.KeyShift)
+					if (shouldSnap)
 					{
 						ApplyResizeSnap(world, *rect, m_drag.resize, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
 					}
 					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
+
+					const glm::vec4 vis = ui::ResolveRect(parentRect, *rect);
+					char dimBuf[64];
+					std::snprintf(dimBuf, sizeof(dimBuf), "%.0f x %.0f", vis.z, vis.w);
+					DrawTooltip(drawList, mousePos, dimBuf);
 				}
 				else if (m_drag.kind == DragKind::Anchor)
 				{
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					const glm::vec4 visualRect = ui::ResolveRect(parentRect, *rect);
-					MoveAnchor(*rect, m_drag.anchor, currentMouseCanvas, parentRect, visualRect, io.KeyShift);
+					MoveAnchor(*rect, m_drag.anchor, currentMouseCanvas, parentRect, visualRect, shouldSnap);
 				}
+			}
+		}
+
+		if (m_isMarqueeActive)
+		{
+			m_marqueeEnd = ImGui::GetMousePos();
+
+			const ImVec2 mMin = ImVec2{std::min(m_marqueeStart.x, m_marqueeEnd.x), std::min(m_marqueeStart.y, m_marqueeEnd.y)};
+			const ImVec2 mMax = ImVec2{std::max(m_marqueeStart.x, m_marqueeEnd.x), std::max(m_marqueeStart.y, m_marqueeEnd.y)};
+
+			drawList->AddRectFilled(mMin, mMax, ToU32(colors::detail::rgba(56, 189, 255, 0.15f)));
+			drawList->AddRect(mMin, mMax, ToU32(colors::Primary), 0.f, 0, 1.f);
+
+			if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+			{
+				if (selection != nullptr)
+				{
+					for (const UiElement& el: elements)
+					{
+						if (RectsOverlap(el.min, el.max, mMin, mMax))
+						{
+							selection->Select(el.entity);
+						}
+					}
+				}
+				m_isMarqueeActive = false;
 			}
 		}
 

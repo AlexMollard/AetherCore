@@ -49,7 +49,9 @@ namespace aether::app
 			None,
 			Move,
 			Resize,
-			Anchor
+			Anchor,
+			CanvasResize,
+			Marquee
 		};
 
 		struct DragState
@@ -58,6 +60,7 @@ namespace aether::app
 			Entity entity{};
 			UiRectResizeHandle resize = UiRectResizeHandle::BottomRight;
 			UiAnchorHandle anchor = UiAnchorHandle::Point;
+			UiRectResizeHandle canvasResizeHandle = UiRectResizeHandle::BottomRight;
 
 			glm::vec2 startMouseCanvas{0.f};
 			glm::vec2 startOffsetMin{0.f};
@@ -68,5 +71,10 @@ namespace aether::app
 		float m_zoom = 1.f;
 		bool m_previewContent = true;
 		DragState m_drag;
+		bool m_snappingEnabled = true;
+		Entity m_hoveredEntity{};
+		bool m_isMarqueeActive = false;
+		ImVec2 m_marqueeStart{0.f, 0.f};
+		ImVec2 m_marqueeEnd{0.f, 0.f};
 	};
 } // namespace aether::app
