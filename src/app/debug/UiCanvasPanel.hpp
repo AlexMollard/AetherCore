@@ -65,6 +65,7 @@ namespace aether::app
 
 		ImVec2 m_pan{0.f, 0.f};
 		float m_zoom = 1.f;
+		bool m_previewContent = true;
 		DragState m_drag;
 	};
 } // namespace aether::app

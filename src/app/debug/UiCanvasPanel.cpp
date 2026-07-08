@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cfloat>
 #include <cmath>
 #include <vector>
 
@@ -17,6 +18,7 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/World.hpp"
 #include "ui/UiLayoutSystem.hpp"
+#include "ui/UiEntities.hpp"
 #include "utils/Profiler.hpp"
 
 namespace aether::app
@@ -124,6 +126,20 @@ namespace aether::app
 				current = hierarchy->parent;
 			}
 			return false;
+		}
+
+		[[nodiscard]] Entity CreateParentForNewElement(World& world, SceneSelection* selection, Entity canvas)
+		{
+			if (selection == nullptr)
+			{
+				return canvas;
+			}
+			const Entity selected = selection->Primary();
+			if (IsAlive(world, selected) && IsInCanvasSubtree(world, selected, canvas))
+			{
+				return selected;
+			}
+			return canvas;
 		}
 
 		[[nodiscard]] glm::vec2 CanvasExtent(World& world, Entity canvas)
@@ -340,6 +356,54 @@ namespace aether::app
 			}
 			drawList->AddRect(canvasMin, canvasMax, ToU32(colors::Border), 0.f, 0, 1.5f);
 		}
+
+		void DrawPreviewElement(ImDrawList* drawList, World& world, const UiElement& element, float zoom)
+		{
+			if (const auto* image = world.TryGet<ui::UIImage>(element.entity))
+			{
+				drawList->AddRectFilled(element.min, element.max, ToU32(image->color), image->cornerRadius * zoom);
+			}
+
+			const auto* text = world.TryGet<ui::UIText>(element.entity);
+			if (text == nullptr || text->text.empty())
+			{
+				return;
+			}
+
+			const float fontSize = std::clamp(text->pixelSize * zoom, 6.f, 160.f);
+			const float width = std::max(element.max.x - element.min.x, 1.f);
+			const float height = std::max(element.max.y - element.min.y, 1.f);
+			const float wrapWidth = text->wrap ? width : FLT_MAX;
+			ImFont* font = ImGui::GetFont();
+			const ImVec2 textSize = font->CalcTextSizeA(fontSize, FLT_MAX, wrapWidth, text->text.c_str());
+
+			ImVec2 pos = element.min;
+			switch (text->hAlign)
+			{
+				case ui::UIText::HAlign::Left:
+					break;
+				case ui::UIText::HAlign::Center:
+					pos.x += std::max((width - textSize.x) * 0.5f, 0.f);
+					break;
+				case ui::UIText::HAlign::Right:
+					pos.x += std::max(width - textSize.x, 0.f);
+					break;
+			}
+			switch (text->vAlign)
+			{
+				case ui::UIText::VAlign::Top:
+					break;
+				case ui::UIText::VAlign::Middle:
+					pos.y += std::max((height - textSize.y) * 0.5f, 0.f);
+					break;
+				case ui::UIText::VAlign::Bottom:
+					pos.y += std::max(height - textSize.y, 0.f);
+					break;
+			}
+
+			const ImVec4 clip{element.min.x, element.min.y, element.max.x, element.max.y};
+			drawList->AddText(font, fontSize, pos, ToU32(text->color), text->text.c_str(), nullptr, wrapWidth, &clip);
+		}
 	} // namespace
 
 	void TranslateUiRectOffsets(ui::UIRect& rect, glm::vec2 canvasDelta)
@@ -408,9 +472,52 @@ namespace aether::app
 
 		World& world = context.Get<World>();
 		auto* selection = context.TryGet<SceneSelection>();
-		const Entity canvas = ActiveCanvas(world, selection);
+		Entity canvas = ActiveCanvas(world, selection);
+
+		if (ImGui::Button(ICON_FA_PLUS "  Canvas"))
+		{
+			const Entity created = ui::CreateCanvasEntity(world);
+			if (selection != nullptr)
+			{
+				selection->Select(created);
+			}
+			canvas = created;
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(ICON_FA_IMAGE "  Image"))
+		{
+			canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+			const Entity parent = CreateParentForNewElement(world, selection, canvas);
+			const Entity created = ui::CreateImageEntity(world, canvas);
+			if (parent != canvas)
+			{
+				ecs::SetParent(world, created, parent);
+			}
+			if (selection != nullptr)
+			{
+				selection->Select(created);
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button(ICON_FA_CODE "  Text"))
+		{
+			canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+			const Entity parent = CreateParentForNewElement(world, selection, canvas);
+			const Entity created = ui::CreateTextEntity(world, canvas);
+			if (parent != canvas)
+			{
+				ecs::SetParent(world, created, parent);
+			}
+			if (selection != nullptr)
+			{
+				selection->Select(created);
+			}
+		}
+		ImGui::SameLine();
+		ImGui::Checkbox("Preview", &m_previewContent);
 
 		ImGui::SetNextItemWidth(96.f);
+		ImGui::SameLine();
 		if (ImGui::DragFloat("Zoom", &m_zoom, 0.01f, kMinZoom, kMaxZoom, "%.2fx"))
 		{
 			m_zoom = std::clamp(m_zoom, kMinZoom, kMaxZoom);
@@ -432,6 +539,8 @@ namespace aether::app
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		drawList->AddRectFilled(contentMin, contentMax, ToU32(colors::Surface));
 		ImGui::InvisibleButton("##ui-canvas-surface", canvasArea, ImGuiButtonFlags_MouseButtonMiddle | ImGuiButtonFlags_MouseButtonLeft);
+		const bool surfaceHovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+		const bool surfaceActive = ImGui::IsItemActive();
 
 		if (!canvas.IsValid())
 		{
@@ -441,20 +550,44 @@ namespace aether::app
 
 		glm::vec2 extent = CanvasExtent(world, canvas);
 
-		const ImVec2 canvasSize{extent.x * m_zoom, extent.y * m_zoom};
-		const ImVec2 origin{contentMin.x + (canvasArea.x - canvasSize.x) * 0.5f, contentMin.y + (canvasArea.y - canvasSize.y) * 0.5f};
+		auto canvasSizeForZoom = [&](float zoom)
+		{
+			return ImVec2{extent.x * zoom, extent.y * zoom};
+		};
+		auto originForZoom = [&](float zoom)
+		{
+			const ImVec2 size = canvasSizeForZoom(zoom);
+			return ImVec2{contentMin.x + (canvasArea.x - size.x) * 0.5f, contentMin.y + (canvasArea.y - size.y) * 0.5f};
+		};
+
+		ImVec2 canvasSize = canvasSizeForZoom(m_zoom);
+		ImVec2 origin = originForZoom(m_zoom);
+
+		const ImGuiIO& io = ImGui::GetIO();
+		if (surfaceHovered && io.MouseWheel != 0.f)
+		{
+			const ImVec2 mouse = ImGui::GetMousePos();
+			const glm::vec2 anchor = ScreenToCanvas(mouse, origin, m_pan, m_zoom);
+			const float zoomScale = std::pow(1.12f, io.MouseWheel);
+			m_zoom = std::clamp(m_zoom * zoomScale, kMinZoom, kMaxZoom);
+			canvasSize = canvasSizeForZoom(m_zoom);
+			origin = originForZoom(m_zoom);
+			m_pan = Sub(mouse, Add(origin, ImVec2{anchor.x * m_zoom, anchor.y * m_zoom}));
+		}
+
 		const ImVec2 canvasMin = Add(origin, m_pan);
 		const ImVec2 canvasMax = Add(canvasMin, canvasSize);
-		const bool surfaceHovered = ImGui::IsWindowHovered() && Contains(ImGui::GetMousePos(), contentMin, contentMax);
 
-		if (surfaceHovered && ImGui::IsMouseDragging(ImGuiMouseButton_Middle))
+		if ((surfaceHovered || surfaceActive) && ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.f))
 		{
-			const ImVec2 delta = ImGui::GetIO().MouseDelta;
-			m_pan = Add(m_pan, delta);
+			m_pan = Add(m_pan, io.MouseDelta);
+		}
+		if (surfaceHovered && ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+		{
+			ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 		}
 
 		drawList->PushClipRect(contentMin, contentMax, true);
-		DrawGrid(drawList, canvasMin, canvasMax, origin, m_pan, m_zoom, extent);
 
 		std::vector<UiElement> elements;
 		world.View<ui::UIRect>().each(
@@ -469,6 +602,16 @@ namespace aether::app
 			        const glm::vec4 canvasRect = ui::ResolveRect(parentRect, rect);
 			        elements.push_back({entity, &rect, canvasRect, parentRect, RectMin(canvasRect, origin, m_pan, m_zoom), RectMax(canvasRect, origin, m_pan, m_zoom)});
 		        });
+
+		if (m_previewContent)
+		{
+			drawList->AddRectFilled(canvasMin, canvasMax, ToU32(colors::Background));
+			for (const UiElement& element: elements)
+			{
+				DrawPreviewElement(drawList, world, element, m_zoom);
+			}
+		}
+		DrawGrid(drawList, canvasMin, canvasMax, origin, m_pan, m_zoom, extent);
 
 		const Entity selected = selection != nullptr ? selection->Primary() : Entity{};
 		glm::vec4 selectedCanvasRect{0.f};
