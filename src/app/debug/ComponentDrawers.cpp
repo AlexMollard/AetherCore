@@ -21,6 +21,7 @@
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialRegistry.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "physics/PhysicsSystem.hpp"
 #include "scene/BehaviorComponents.hpp"
@@ -662,6 +663,7 @@ namespace aether::app
 			return;
 		}
 		MaterialRegistry& registry = assets->GetMaterialRegistry();
+		std::vector<TextureHandle> transientTextureRefs;
 
 		// Copy-on-write: edits go through a per-entity instance seeded from the
 		// entity's current registry material, so the fox keeps its textures when
@@ -698,15 +700,7 @@ namespace aether::app
 			changed |= ImGui::DragFloat("Cutoff", &asset.alphaCutoff, 0.01f, 0.0f, 1.0f);
 		}
 
-		if (changed)
-		{
-			// One dedup-safe reassign per edited frame; flag changes re-resolve the
-			// pipeline (two-sided/blend), and effect-driven entities keep theirs.
-			MaterialSystem::AssignMaterial(world, entity, registry, assets->GetPipelineCache(), asset);
-		}
-
-		// Texture slots are read-only; swapping needs an asset picker (later spec).
-		auto textureRow = [](const char* label, TextureHandle h)
+		auto textureRow = [&](const char* label, TextureHandle& h)
 		{
 			ImGui::TextDisabled("%s", label);
 			ImGui::SameLine(120.0f);
@@ -722,6 +716,23 @@ namespace aether::app
 			{
 				ImGui::TextDisabled("(none)");
 			}
+			if (ImGui::BeginDragDropTarget())
+			{
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload))
+				{
+					if (payload->DataSize == sizeof(dragdrop::FilePayload))
+					{
+						const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+						if (file->kind == dragdrop::FileKind::Texture)
+						{
+							h = assets->GetTextureRegistry().Acquire(file->path);
+							transientTextureRefs.push_back(h);
+							changed = true;
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
 		};
 		if (ImGui::TreeNodeEx("Textures", ImGuiTreeNodeFlags_SpanAvailWidth))
 		{
@@ -731,6 +742,19 @@ namespace aether::app
 			textureRow("Occlusion", asset.occlusionTex);
 			textureRow("Emissive", asset.emissiveTex);
 			ImGui::TreePop();
+		}
+		if (changed)
+		{
+			// One dedup-safe reassign per edited frame; flag changes re-resolve the
+			// pipeline (two-sided/blend), and effect-driven entities keep theirs.
+			MaterialSystem::AssignMaterial(world, entity, registry, assets->GetPipelineCache(), asset);
+			for (TextureHandle h: transientTextureRefs)
+			{
+				if (h.IsValid())
+				{
+					assets->GetTextureRegistry().Release(h);
+				}
+			}
 		}
 		ImGui::TextDisabled("GPU slot %u", mc->gpuSlot);
 	}

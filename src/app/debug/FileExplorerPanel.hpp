@@ -25,8 +25,8 @@ namespace aether::app
 		void OnImGui(LayerContext& context) override;
 
 	private:
-		void DrawDirectory(const std::filesystem::path& dir, int depth);
-		void DrawFile(const std::filesystem::path& path);
+		void DrawDirectory(LayerContext& context, const std::filesystem::path& dir, int depth);
+		void DrawFile(LayerContext& context, const std::filesystem::path& path);
 		void RefreshRoot();
 
 		std::filesystem::path m_root;

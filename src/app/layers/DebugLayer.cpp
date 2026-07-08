@@ -24,7 +24,6 @@ using namespace std::string_view_literals;
 #include "debug/DayNightPanel.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/DevToolsPanel.hpp"
-#include "debug/FileExplorerPanel.hpp"
 #include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
@@ -354,7 +353,6 @@ namespace aether::app
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));
 		m_panels.push_back(std::make_unique<InspectorPanel>());
-		m_panels.push_back(std::make_unique<FileExplorerPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());

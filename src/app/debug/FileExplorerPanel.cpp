@@ -13,6 +13,7 @@
 
 #include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
+#include "debug/SceneSelection.hpp"
 #include "layers/AppLayer.hpp"
 #include "utils/Profiler.hpp"
 
@@ -34,6 +35,63 @@ namespace aether::app
 		bool IsCSharpScriptFile(const std::filesystem::path& path)
 		{
 			return path.extension() == ".cs";
+		}
+
+		dragdrop::FileKind InferFileKind(const std::filesystem::path& path)
+		{
+			std::string ext = path.extension().generic_string();
+			std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (ext == ".mesh")
+			{
+				return dragdrop::FileKind::Model;
+			}
+			if (ext == ".cs")
+			{
+				return dragdrop::FileKind::Script;
+			}
+			if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" || ext == ".dds" || ext == ".texture")
+			{
+				return dragdrop::FileKind::Texture;
+			}
+			if (ext == ".toml")
+			{
+				const std::string generic = path.generic_string();
+				if (generic.find(".prefab.toml") != std::string::npos)
+				{
+					return dragdrop::FileKind::Prefab;
+				}
+				if (generic.find(".scene.toml") != std::string::npos)
+				{
+					return dragdrop::FileKind::Scene;
+				}
+				if (generic.find("/materials/") != std::string::npos || generic.find("\\materials\\") != std::string::npos || path.filename() == "properties.toml")
+				{
+					return dragdrop::FileKind::Material;
+				}
+			}
+			return dragdrop::FileKind::Unknown;
+		}
+
+		SceneSelection::AssetKind ToSelectionKind(dragdrop::FileKind kind)
+		{
+			switch (kind)
+			{
+				case dragdrop::FileKind::Model:
+					return SceneSelection::AssetKind::Model;
+				case dragdrop::FileKind::Material:
+					return SceneSelection::AssetKind::Material;
+				case dragdrop::FileKind::Texture:
+					return SceneSelection::AssetKind::Texture;
+				case dragdrop::FileKind::Script:
+					return SceneSelection::AssetKind::Script;
+				case dragdrop::FileKind::Prefab:
+					return SceneSelection::AssetKind::Prefab;
+				case dragdrop::FileKind::Scene:
+					return SceneSelection::AssetKind::Scene;
+				case dragdrop::FileKind::Unknown:
+				default:
+					return SceneSelection::AssetKind::File;
+			}
 		}
 
 		std::string TrimCopy(std::string_view text)
@@ -250,7 +308,7 @@ namespace aether::app
 #endif
 	}
 
-	void FileExplorerPanel::OnImGui(LayerContext&)
+	void FileExplorerPanel::OnImGui(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
 
@@ -296,11 +354,11 @@ namespace aether::app
 		}
 		ImGui::Separator();
 
-		DrawDirectory(m_root, 0);
+		DrawDirectory(context, m_root, 0);
 		ImGui::End();
 	}
 
-	void FileExplorerPanel::DrawDirectory(const std::filesystem::path& dir, int depth)
+	void FileExplorerPanel::DrawDirectory(LayerContext& context, const std::filesystem::path& dir, int depth)
 	{
 		std::error_code ec;
 		std::vector<std::filesystem::directory_entry> dirs;
@@ -342,22 +400,30 @@ namespace aether::app
 
 		for (const auto& child: dirs)
 		{
-			DrawDirectory(child.path(), depth + 1);
+			DrawDirectory(context, child.path(), depth + 1);
 		}
 		for (const auto& file: files)
 		{
-			DrawFile(file.path());
+			DrawFile(context, file.path());
 		}
 
 		ImGui::TreePop();
 	}
 
-	void FileExplorerPanel::DrawFile(const std::filesystem::path& path)
+	void FileExplorerPanel::DrawFile(LayerContext& context, const std::filesystem::path& path)
 	{
 		const bool isScript = IsCSharpScriptFile(path);
+		const dragdrop::FileKind kind = InferFileKind(path);
 		const std::string name = path.filename().generic_string();
 		const std::string label = std::string(isScript ? ICON_FA_CODE "  " : ICON_FA_IMAGE "  ") + name;
-		ImGui::Selectable(label.c_str(), false);
+		const std::string pathText = ToUtf8Path(path);
+		if (ImGui::Selectable(label.c_str(), false))
+		{
+			if (auto* selection = context.TryGet<SceneSelection>())
+			{
+				selection->SelectAsset(ToSelectionKind(kind), pathText, name);
+			}
+		}
 
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
 		{
@@ -365,14 +431,16 @@ namespace aether::app
 			{
 				dragdrop::ScriptPayload payload{};
 				CopyToPayload(payload.typeName, path.stem().generic_string());
-				CopyToPayload(payload.sourcePath, ToUtf8Path(path));
+				CopyToPayload(payload.sourcePath, pathText);
 				ImGui::SetDragDropPayload(dragdrop::kScriptPayload, &payload, sizeof(payload));
 				DrawPayloadPreview(ICON_FA_CODE, payload.typeName, payload.sourcePath, IM_COL32(105, 170, 255, 255));
 			}
 			else
 			{
 				dragdrop::FilePayload payload{};
-				CopyToPayload(payload.path, ToUtf8Path(path));
+				payload.kind = kind;
+				CopyToPayload(payload.path, pathText);
+				CopyToPayload(payload.displayName, name);
 				ImGui::SetDragDropPayload(dragdrop::kFilePayload, &payload, sizeof(payload));
 				DrawPayloadPreview(ICON_FA_IMAGE, name.c_str(), payload.path, IM_COL32(168, 179, 196, 255));
 			}

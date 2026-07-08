@@ -4,8 +4,10 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <imgui.h>
@@ -20,6 +22,7 @@
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "physics/PhysicsComponents.hpp"
 #include "scene/BehaviorComponents.hpp"
@@ -27,6 +30,8 @@
 #include "scene/LightComponents.hpp"
 #include "scene/Entity.hpp"
 #include "scene/Hierarchy.hpp"
+#include "scene/ModelSpawn.hpp"
+#include "scene/SceneSerializer.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
@@ -63,6 +68,273 @@ namespace aether::app
 			}
 			return ImGui::MenuItem(label);
 		}
+
+		void ReleaseMaterialAssetTextures(AssetManager& assets, const MaterialAsset& material)
+		{
+			auto& textures = assets.GetTextureRegistry();
+			for (TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			{
+				if (h.IsValid())
+				{
+					textures.Release(h);
+				}
+			}
+		}
+
+		bool AssignMaterialPreset(LayerContext& context, World& world, Entity entity, std::string_view path)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				return false;
+			}
+			auto loaded = assets->LoadMaterialPreset(path);
+			if (!loaded)
+			{
+				return false;
+			}
+			MaterialAsset material = std::move(loaded.value());
+			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
+			ReleaseMaterialAssetTextures(*assets, material);
+			return true;
+		}
+
+		bool AssignTextureToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				return false;
+			}
+			TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
+			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), texture);
+			if (texture.IsValid())
+			{
+				assets->GetTextureRegistry().Release(texture);
+			}
+			return true;
+		}
+
+		Entity SpawnModelAsset(LayerContext& context, World& world, const std::string& path, Entity parent = {})
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			if (assets == nullptr || sceneCtx == nullptr)
+			{
+				return {};
+			}
+			const Entity root = scene::SpawnModelEntity(world, *assets, *sceneCtx, path, glm::mat4(1.0f));
+			if (root.IsValid() && parent.IsValid())
+			{
+				ecs::SetParent(world, root, parent);
+			}
+			return root;
+		}
+
+		Entity InstantiatePrefabAsset(LayerContext& context, World& world, const std::string& name, Entity parent = {})
+		{
+			if (const auto prefab = scene::ReadPrefabFile(name))
+			{
+				const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				if (root.IsValid() && parent.IsValid())
+				{
+					ecs::SetParent(world, root, parent);
+				}
+				return root;
+			}
+			return {};
+		}
+
+		bool IsEntityAlive(const World& world, Entity entity)
+		{
+			return entity.IsValid() && world.GetRegistry().valid(World::ToEntt(entity));
+		}
+
+		std::string EntityTargetLabel(const World& world, Entity entity)
+		{
+			if (const auto* name = world.TryGet<NameComponent>(entity); name != nullptr && !name->name.empty())
+			{
+				return name->name;
+			}
+			return "Entity #" + std::to_string(entity.id);
+		}
+
+		bool ApplyFilePayloadToEntity(LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
+		{
+			switch (payload.kind)
+			{
+				case dragdrop::FileKind::Model:
+				{
+					const Entity root = SpawnModelAsset(context, world, payload.path, entity);
+					if (root.IsValid())
+					{
+						selection.Select(root);
+						return true;
+					}
+					return false;
+				}
+				case dragdrop::FileKind::Prefab:
+				{
+					const Entity root = InstantiatePrefabAsset(context, world, payload.path, entity);
+					if (root.IsValid())
+					{
+						selection.Select(root);
+						return true;
+					}
+					return false;
+				}
+				case dragdrop::FileKind::Material:
+					return AssignMaterialPreset(context, world, entity, payload.path);
+				case dragdrop::FileKind::Texture:
+					return AssignTextureToEntity(context, world, entity, payload.path);
+				default:
+					return false;
+			}
+		}
+
+		const char* AssetKindLabel(SceneSelection::AssetKind kind)
+		{
+			switch (kind)
+			{
+				case SceneSelection::AssetKind::Model:
+					return "Model";
+				case SceneSelection::AssetKind::Material:
+					return "Material";
+				case SceneSelection::AssetKind::Texture:
+					return "Texture";
+				case SceneSelection::AssetKind::Script:
+					return "Script";
+				case SceneSelection::AssetKind::Prefab:
+					return "Prefab";
+				case SceneSelection::AssetKind::Scene:
+					return "Scene";
+				case SceneSelection::AssetKind::File:
+					return "File";
+				case SceneSelection::AssetKind::None:
+				default:
+					return "Asset";
+			}
+		}
+
+		const char* AssetKindIcon(SceneSelection::AssetKind kind)
+		{
+			switch (kind)
+			{
+				case SceneSelection::AssetKind::Model:
+					return ICON_FA_PERSON_RUNNING;
+				case SceneSelection::AssetKind::Material:
+					return ICON_FA_PALETTE;
+				case SceneSelection::AssetKind::Texture:
+					return ICON_FA_IMAGE;
+				case SceneSelection::AssetKind::Script:
+					return ICON_FA_CODE;
+				case SceneSelection::AssetKind::Prefab:
+					return ICON_FA_BOX_OPEN;
+				case SceneSelection::AssetKind::Scene:
+					return ICON_FA_FOLDER_OPEN;
+				case SceneSelection::AssetKind::File:
+				case SceneSelection::AssetKind::None:
+				default:
+					return ICON_FA_IMAGE;
+			}
+		}
+
+		void DrawAssetInspector(LayerContext& context, World& world, SceneSelection& selection)
+		{
+			const SceneSelection::Asset& asset = selection.SelectedAsset();
+			const Entity target = selection.LastEntityPrimary();
+			const bool hasTarget = IsEntityAlive(world, target);
+			ImGui::Text("%s  %s", AssetKindIcon(asset.kind), asset.displayName.c_str());
+			ImGui::TextDisabled("%s", AssetKindLabel(asset.kind));
+			ImGui::Separator();
+			ImGui::TextWrapped("%s", asset.path.c_str());
+			ImGui::Separator();
+			if (hasTarget)
+			{
+				const std::string targetLabel = EntityTargetLabel(world, target);
+				ImGui::TextDisabled("Target  %s", targetLabel.c_str());
+				ImGui::Separator();
+			}
+
+			if (asset.kind == SceneSelection::AssetKind::Model)
+			{
+				if (ImGui::Button(ICON_FA_PLUS "  Spawn"))
+				{
+					if (Entity root = SpawnModelAsset(context, world, asset.path); root.IsValid())
+					{
+						selection.Select(root);
+					}
+				}
+				if (hasTarget)
+				{
+					ImGui::SameLine();
+					if (ImGui::Button(ICON_FA_SITEMAP "  Spawn Under Target"))
+					{
+						if (Entity root = SpawnModelAsset(context, world, asset.path, target); root.IsValid())
+						{
+							selection.Select(root);
+						}
+					}
+				}
+			}
+			else if (asset.kind == SceneSelection::AssetKind::Prefab)
+			{
+				if (ImGui::Button(ICON_FA_PLUS "  Instantiate"))
+				{
+					if (Entity root = InstantiatePrefabAsset(context, world, asset.path); root.IsValid())
+					{
+						selection.Select(root);
+					}
+				}
+				if (hasTarget)
+				{
+					ImGui::SameLine();
+					if (ImGui::Button(ICON_FA_SITEMAP "  Instantiate Under Target"))
+					{
+						if (Entity root = InstantiatePrefabAsset(context, world, asset.path, target); root.IsValid())
+						{
+							selection.Select(root);
+						}
+					}
+				}
+			}
+			else if (asset.kind == SceneSelection::AssetKind::Material)
+			{
+				ImGui::BeginDisabled(!hasTarget);
+				if (ImGui::Button(ICON_FA_PALETTE "  Apply Material"))
+				{
+					if (AssignMaterialPreset(context, world, target, asset.path))
+					{
+						selection.Select(target);
+					}
+				}
+				ImGui::EndDisabled();
+			}
+			else if (asset.kind == SceneSelection::AssetKind::Texture)
+			{
+				ImGui::BeginDisabled(!hasTarget);
+				if (ImGui::Button(ICON_FA_IMAGE "  Apply Albedo"))
+				{
+					if (AssignTextureToEntity(context, world, target, asset.path))
+					{
+						selection.Select(target);
+					}
+				}
+				ImGui::EndDisabled();
+			}
+			else if (asset.kind == SceneSelection::AssetKind::Script)
+			{
+				const std::string typeName = std::filesystem::path(asset.path).stem().generic_string();
+				ImGui::TextDisabled("Type  %s", typeName.c_str());
+				ImGui::BeginDisabled(!hasTarget);
+				if (ImGui::Button(ICON_FA_CODE "  Add Script"))
+				{
+					AddScriptToEntity(world, target, typeName);
+					selection.Select(target);
+				}
+				ImGui::EndDisabled();
+			}
+		}
 	} // namespace
 
 	bool InspectorPanel::IsAlive(const World& world, Entity entity)
@@ -81,6 +353,12 @@ namespace aether::app
 
 		if (!IsAlive(world, entity))
 		{
+			if (selection.HasAsset())
+			{
+				DrawAssetInspector(context, world, selection);
+				ImGui::End();
+				return;
+			}
 			ImGui::Dummy(ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.4f));
 			const char* msg = "Nothing selected";
 			ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
@@ -335,7 +613,7 @@ namespace aether::app
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);
 
-		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && activePayload->IsDataType(dragdrop::kScriptPayload))
+		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && (activePayload->IsDataType(dragdrop::kScriptPayload) || activePayload->IsDataType(dragdrop::kFilePayload)))
 		{
 			const ImVec2 windowPos = ImGui::GetWindowPos();
 			const ImVec2 windowSize = ImGui::GetWindowSize();
@@ -349,6 +627,14 @@ namespace aether::app
 					{
 						const auto* script = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
 						AddScriptToEntity(world, entity, script->typeName);
+					}
+				}
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+				{
+					if (payload->DataSize == sizeof(dragdrop::FilePayload))
+					{
+						const auto* file = static_cast<const dragdrop::FilePayload*>(payload->Data);
+						ApplyFilePayloadToEntity(context, world, selection, entity, *file);
 					}
 				}
 				ImGui::EndDragDropTarget();

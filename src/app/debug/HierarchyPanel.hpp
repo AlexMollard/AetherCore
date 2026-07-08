@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "debug/DebugPanel.hpp"
+#include "debug/SceneSelection.hpp"
 #include "scene/Entity.hpp"
 
 namespace aether
@@ -19,8 +20,6 @@ namespace aether
 
 namespace aether::app
 {
-	class SceneSelection;
-
 	// The scene outliner. Draws the window titled "Scene" (the saved dock-node
 	// mapping keys off the window title, so the title stays even though the
 	// panel class replaced InspectorPanel's old flat list).
@@ -73,13 +72,13 @@ namespace aether::app
 			DropZone zone;
 		};
 
-		void DrawNode(World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
+		void DrawNode(LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
 		void FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
 		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem = true);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		// Drag source + drop target for one row (tree node or flat Selectable).
-		void HandleRowDragDrop(World& world, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
+		void HandleRowDragDrop(LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
 		bool DrawRowContextMenu(World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
@@ -87,6 +86,9 @@ namespace aether::app
 		std::string ComputeEntityPath(const World& world, Entity e) const;
 		void SyncExpandedFromPaths(World& world);
 		void DrawBreadcrumbTrail(const World& world, SceneSelection& selection);
+		void RefreshAssetLists();
+		void DrawAssetBrowser(LayerContext& context, World& world, SceneSelection& selection);
+		void DrawAssetRow(LayerContext& context, World& world, SceneSelection& selection, SceneSelection::AssetKind kind, const std::string& path, const std::string& displayName, const char* icon);
 		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
 		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);
 		bool SceneListOwnsKeyboard() const noexcept;
@@ -102,9 +104,16 @@ namespace aether::app
 		// next OnImGui to open the popup below from this window's ID scope.
 		bool m_requestSaveAsPopup = false;
 		bool m_requestOpenPopup = false;
-		// Create-menu asset lists (refreshed when the create popup opens).
+		// Integrated asset lists.
+		bool m_assetListsDirty = true;
 		std::vector<std::string> m_modelList;
 		std::vector<std::string> m_prefabList;
+		std::vector<std::string> m_materialList;
+		std::vector<std::string> m_textureList;
+		std::vector<std::string> m_scriptList;
+		char m_assetSearch[64] = {};
+		char m_newScriptNameBuf[64] = {};
+		std::string m_newScriptError;
 		// Save-as-prefab popup (opened from the row context menu; the popup is
 		// begun at window level after the tree walk).
 		Entity m_prefabSaveTarget{};

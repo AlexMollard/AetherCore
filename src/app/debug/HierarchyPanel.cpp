@@ -3,8 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#include <fstream>
+#include <filesystem>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <vector>
 
 #include <entt/entt.hpp>
@@ -20,6 +23,7 @@
 #include "layers/AppLayer.hpp"
 #include "material/MaterialAsset.hpp"
 #include "material/MaterialSystem.hpp"
+#include "material/TextureRegistry.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "physics/PhysicsComponents.hpp"
@@ -61,6 +65,274 @@ namespace aether::app
 			}
 
 			return std::search(text.begin(), text.end(), lowerNeedle.begin(), lowerNeedle.end(), [](char a, char b) { return static_cast<char>(std::tolower(static_cast<unsigned char>(a))) == b; }) != text.end();
+		}
+
+		std::string TrimCopy(std::string_view text)
+		{
+			size_t first = 0;
+			while (first < text.size() && std::isspace(static_cast<unsigned char>(text[first])) != 0)
+			{
+				++first;
+			}
+			size_t last = text.size();
+			while (last > first && std::isspace(static_cast<unsigned char>(text[last - 1])) != 0)
+			{
+				--last;
+			}
+			return std::string(text.substr(first, last - first));
+		}
+
+		bool IsValidCSharpIdentifier(std::string_view name)
+		{
+			if (name.empty())
+			{
+				return false;
+			}
+			const auto isAlpha = [](char c)
+			{
+				return std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '_';
+			};
+			const auto isAlnum = [](char c)
+			{
+				return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+			};
+			if (!isAlpha(name.front()) || !std::all_of(name.begin() + 1, name.end(), isAlnum))
+			{
+				return false;
+			}
+			constexpr std::string_view kKeywords[] = {"abstract", "as", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class", "const", "continue", "decimal", "default", "delegate", "do", "double", "else", "enum", "event", "explicit", "extern", "false", "finally", "fixed", "float", "for", "foreach", "goto", "if", "implicit", "in", "int", "interface", "internal", "is", "lock", "long", "namespace", "new", "null", "object", "operator", "out", "override", "params", "private", "protected", "public", "readonly", "record", "ref", "return", "sbyte", "sealed", "short", "sizeof", "stackalloc", "static", "string", "struct", "switch", "this", "throw", "true", "try", "typeof", "uint", "ulong", "unchecked", "unsafe", "ushort", "using", "virtual", "void", "volatile", "while"};
+			return std::find(kKeywords, kKeywords + (sizeof(kKeywords) / sizeof(kKeywords[0])), name) == kKeywords + (sizeof(kKeywords) / sizeof(kKeywords[0]));
+		}
+
+		std::string BuildScriptTemplate(std::string_view typeName)
+		{
+			std::string src;
+			src += "using AetherCore;\n\n";
+			src += "namespace AetherGame;\n\n";
+			src += "public sealed class ";
+			src += typeName;
+			src += " : EntityScript\n";
+			src += "{\n";
+			src += "\tpublic override void OnAttach()\n";
+			src += "\t{\n";
+			src += "\t}\n\n";
+			src += "\tpublic override void OnUpdate(float deltaTime)\n";
+			src += "\t{\n";
+			src += "\t}\n";
+			src += "}\n";
+			return src;
+		}
+
+		bool CreateGameScriptFile(const std::filesystem::path& scriptDir, std::string_view typeName, std::string& error)
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(scriptDir, ec);
+			if (ec)
+			{
+				error = "Could not create script directory: " + ec.message();
+				return false;
+			}
+
+			const std::filesystem::path outPath = scriptDir / (std::string(typeName) + ".cs");
+			if (std::filesystem::exists(outPath))
+			{
+				error = "A script file with that name already exists.";
+				return false;
+			}
+
+			std::ofstream out(outPath, std::ios::binary);
+			if (!out)
+			{
+				error = "Could not open the script file for writing.";
+				return false;
+			}
+			out << BuildScriptTemplate(typeName);
+			if (!out)
+			{
+				error = "Could not write the script file.";
+				return false;
+			}
+			return true;
+		}
+
+		std::string BaseName(std::string_view path)
+		{
+			std::string label(path);
+			if (const auto slash = label.find_last_of("/\\"); slash != std::string::npos)
+			{
+				label = label.substr(slash + 1);
+			}
+			return label;
+		}
+
+		bool MatchesAssetFilter(std::string_view displayName, std::string_view path, std::string_view lowerNeedle)
+		{
+			return lowerNeedle.empty() || ContainsCaseInsensitive(displayName, lowerNeedle) || ContainsCaseInsensitive(path, lowerNeedle);
+		}
+
+		template<std::size_t N>
+		void CopyToPayload(char (&dst)[N], std::string_view src)
+		{
+			std::snprintf(dst, N, "%.*s", static_cast<int>(src.size()), src.data());
+		}
+
+		dragdrop::FileKind ToFileKind(SceneSelection::AssetKind kind)
+		{
+			switch (kind)
+			{
+				case SceneSelection::AssetKind::Model:
+					return dragdrop::FileKind::Model;
+				case SceneSelection::AssetKind::Material:
+					return dragdrop::FileKind::Material;
+				case SceneSelection::AssetKind::Texture:
+					return dragdrop::FileKind::Texture;
+				case SceneSelection::AssetKind::Script:
+					return dragdrop::FileKind::Script;
+				case SceneSelection::AssetKind::Prefab:
+					return dragdrop::FileKind::Prefab;
+				case SceneSelection::AssetKind::Scene:
+					return dragdrop::FileKind::Scene;
+				case SceneSelection::AssetKind::File:
+				case SceneSelection::AssetKind::None:
+				default:
+					return dragdrop::FileKind::Unknown;
+			}
+		}
+
+		void ReleaseMaterialAssetTextures(AssetManager& assets, const MaterialAsset& material)
+		{
+			auto& textures = assets.GetTextureRegistry();
+			for (TextureHandle h: {material.albedoTex, material.normalTex, material.metallicRoughnessTex, material.occlusionTex, material.emissiveTex})
+			{
+				if (h.IsValid())
+				{
+					textures.Release(h);
+				}
+			}
+		}
+
+		bool AssignMaterialPreset(LayerContext& context, World& world, Entity entity, std::string_view path)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				return false;
+			}
+			auto loaded = assets->LoadMaterialPreset(path);
+			if (!loaded)
+			{
+				return false;
+			}
+			MaterialAsset material = std::move(loaded.value());
+			MaterialSystem::AssignMaterial(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), material);
+			ReleaseMaterialAssetTextures(*assets, material);
+			return true;
+		}
+
+		bool AssignTextureToEntity(LayerContext& context, World& world, Entity entity, std::string_view path)
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			if (assets == nullptr)
+			{
+				return false;
+			}
+			TextureHandle texture = assets->GetTextureRegistry().Acquire(path);
+			MaterialSystem::SetAlbedoTexture(world, entity, assets->GetMaterialRegistry(), assets->GetPipelineCache(), texture);
+			if (texture.IsValid())
+			{
+				assets->GetTextureRegistry().Release(texture);
+			}
+			return true;
+		}
+
+		Entity SpawnModelAsset(LayerContext& context, World& world, const std::string& path, Entity parent = {})
+		{
+			auto* assets = context.TryGet<AssetManager>();
+			auto* sceneCtx = context.TryGet<scripting::SceneContext>();
+			if (assets == nullptr || sceneCtx == nullptr)
+			{
+				return {};
+			}
+			const Entity root = scene::SpawnModelEntity(world, *assets, *sceneCtx, path, glm::mat4(1.0f));
+			if (root.IsValid() && parent.IsValid())
+			{
+				ecs::SetParent(world, root, parent);
+			}
+			return root;
+		}
+
+		Entity InstantiatePrefabAsset(LayerContext& context, World& world, const std::string& name, Entity parent = {})
+		{
+			if (const auto prefab = scene::ReadPrefabFile(name))
+			{
+				const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
+				if (root.IsValid() && parent.IsValid())
+				{
+					ecs::SetParent(world, root, parent);
+				}
+				return root;
+			}
+			return {};
+		}
+
+		bool ApplyFilePayloadToEntity(LayerContext& context, World& world, SceneSelection& selection, Entity entity, const dragdrop::FilePayload& payload)
+		{
+			switch (payload.kind)
+			{
+				case dragdrop::FileKind::Model:
+				{
+					const Entity root = SpawnModelAsset(context, world, payload.path, entity);
+					if (root.IsValid())
+					{
+						selection.Select(root);
+						return true;
+					}
+					return false;
+				}
+				case dragdrop::FileKind::Prefab:
+				{
+					const Entity root = InstantiatePrefabAsset(context, world, payload.path, entity);
+					if (root.IsValid())
+					{
+						selection.Select(root);
+						return true;
+					}
+					return false;
+				}
+				case dragdrop::FileKind::Material:
+					return AssignMaterialPreset(context, world, entity, payload.path);
+				case dragdrop::FileKind::Texture:
+					return AssignTextureToEntity(context, world, entity, payload.path);
+				default:
+					return false;
+			}
+		}
+
+		void DrawAssetDragPreview(const char* icon, const char* name, const char* detail)
+		{
+			const ImVec2 padding(10.0f, 7.0f);
+			const ImVec2 gap(7.0f, 0.0f);
+			const ImVec2 mouse = ImGui::GetMousePos();
+			const ImVec2 iconSize = ImGui::CalcTextSize(icon);
+			const ImVec2 nameSize = ImGui::CalcTextSize(name);
+			const ImVec2 detailSize = detail != nullptr && detail[0] != '\0' ? ImGui::CalcTextSize(detail) : ImVec2(0.0f, 0.0f);
+			const float textHeight = nameSize.y + (detailSize.x > 0.0f ? detailSize.y + 3.0f : 0.0f);
+			const float width = padding.x * 2.0f + iconSize.x + gap.x + std::max(nameSize.x, detailSize.x);
+			const float height = std::max(ImGui::GetFrameHeight(), textHeight) + padding.y * 2.0f;
+			const ImVec2 min(mouse.x + 16.0f, mouse.y + 18.0f);
+			const ImVec2 max(min.x + width, min.y + height);
+			const ImVec2 textPos(min.x + padding.x, min.y + (height - textHeight) * 0.5f);
+			const float titleX = textPos.x + iconSize.x + gap.x;
+			ImDrawList* drawList = ImGui::GetForegroundDrawList();
+			drawList->AddRectFilled(ImVec2(min.x + 2.0f, min.y + 3.0f), ImVec2(max.x + 2.0f, max.y + 3.0f), IM_COL32(0, 0, 0, 95), 5.0f);
+			drawList->AddRectFilled(min, max, IM_COL32(31, 34, 40, 238), 5.0f);
+			drawList->AddRect(min, max, IM_COL32(105, 170, 255, 185), 5.0f, 0, 1.0f);
+			drawList->AddText(textPos, IM_COL32(105, 170, 255, 255), icon);
+			drawList->AddText(ImVec2(titleX, textPos.y), ImGui::GetColorU32(ImGuiCol_Text), name);
+			if (detailSize.x > 0.0f)
+			{
+				drawList->AddText(ImVec2(titleX, textPos.y + nameSize.y + 3.0f), ImGui::GetColorU32(ImGuiCol_TextDisabled), detail);
+			}
 		}
 
 		// Small icon toggle used for the kind-filter chips.
@@ -180,6 +452,253 @@ namespace aether::app
 			return firstCanvas.IsValid() ? firstCanvas : ui::CreateCanvasEntity(world);
 		}
 	} // namespace
+
+	void HierarchyPanel::RefreshAssetLists()
+	{
+		const auto assignGlob = [](std::vector<std::string>& out, std::string_view pattern)
+		{
+			out.clear();
+			if (const auto files = io::FileSystem::Glob(pattern); files.has_value())
+			{
+				out = *files;
+				std::sort(out.begin(), out.end());
+			}
+		};
+		assignGlob(m_modelList, "assets://models/**/*.mesh");
+		assignGlob(m_materialList, "assets://materials/**/*.toml");
+
+		m_textureList.clear();
+		for (std::string_view pattern: {"assets://textures/**/*.png", "assets://textures/**/*.jpg", "assets://textures/**/*.jpeg", "assets://textures/**/*.tga", "assets://textures/**/*.dds", "assets://textures/**/*.texture", "assets://materials/**/*.png", "assets://materials/**/*.jpg", "assets://materials/**/*.jpeg", "assets://materials/**/*.tga", "assets://materials/**/*.dds", "assets://models/**/*.png", "assets://models/**/*.jpg", "assets://models/**/*.jpeg", "assets://models/**/*.tga", "assets://models/**/*.dds"})
+		{
+			if (const auto files = io::FileSystem::Glob(pattern); files.has_value())
+			{
+				m_textureList.insert(m_textureList.end(), files->begin(), files->end());
+			}
+		}
+		std::sort(m_textureList.begin(), m_textureList.end());
+		m_textureList.erase(std::unique(m_textureList.begin(), m_textureList.end()), m_textureList.end());
+
+		m_prefabList = scene::ListPrefabFiles();
+		std::sort(m_prefabList.begin(), m_prefabList.end());
+
+		m_scriptList.clear();
+#if defined(AETHER_GAME_PROJECT)
+		const std::filesystem::path scriptRoot = std::filesystem::path(AETHER_GAME_PROJECT).parent_path();
+		std::error_code ec;
+		if (std::filesystem::exists(scriptRoot, ec) && std::filesystem::is_directory(scriptRoot, ec))
+		{
+			for (const auto& entry: std::filesystem::recursive_directory_iterator(scriptRoot, ec))
+			{
+				if (ec)
+				{
+					break;
+				}
+				if (entry.is_regular_file(ec) && entry.path().extension() == ".cs")
+				{
+					m_scriptList.push_back(entry.path().generic_string());
+				}
+			}
+			std::sort(m_scriptList.begin(), m_scriptList.end());
+		}
+#endif
+		m_assetListsDirty = false;
+	}
+
+	void HierarchyPanel::DrawAssetRow(LayerContext& context, World& world, SceneSelection& selection, SceneSelection::AssetKind kind, const std::string& path, const std::string& displayName, const char* icon)
+	{
+		ImGui::PushID(path.c_str());
+		const bool selected = selection.HasAsset() && selection.SelectedAsset().kind == kind && selection.SelectedAsset().path == path;
+		const float rowHeight = ImGui::GetFrameHeight() + ImGui::GetTextLineHeightWithSpacing();
+		const auto rowFlags = static_cast<ImGuiSelectableFlags>(static_cast<int>(ImGuiSelectableFlags_SpanAvailWidth) | static_cast<int>(ImGuiSelectableFlags_AllowOverlap));
+		if (ImGui::Selectable("##assetRow", selected, rowFlags, ImVec2(0.0f, rowHeight)))
+		{
+			selection.SelectAsset(kind, path, displayName);
+		}
+		const bool hovered = ImGui::IsItemHovered();
+		if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		{
+			if (kind == SceneSelection::AssetKind::Model)
+			{
+				if (Entity root = SpawnModelAsset(context, world, path); root.IsValid())
+				{
+					selection.Select(root);
+				}
+			}
+			else if (kind == SceneSelection::AssetKind::Prefab)
+			{
+				if (Entity root = InstantiatePrefabAsset(context, world, path); root.IsValid())
+				{
+					selection.Select(root);
+				}
+			}
+		}
+		const ImVec2 rowMin = ImGui::GetItemRectMin();
+		const float iconX = rowMin.x + ImGui::GetStyle().FramePadding.x;
+		const float textX = iconX + ImGui::CalcTextSize(icon).x + ImGui::GetStyle().ItemSpacing.x;
+		const ImVec2 clipMin(textX, rowMin.y);
+		const ImVec2 clipMax(ImGui::GetItemRectMax().x - ImGui::GetStyle().FramePadding.x, ImGui::GetItemRectMax().y);
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		drawList->AddText(ImVec2(iconX, rowMin.y + 4.0f), hovered || selected ? IM_COL32(105, 170, 255, 255) : ImGui::GetColorU32(ImGuiCol_TextDisabled), icon);
+		drawList->PushClipRect(clipMin, clipMax, true);
+		drawList->AddText(ImVec2(textX, rowMin.y + 2.0f), ImGui::GetColorU32(ImGuiCol_Text), displayName.c_str());
+		drawList->AddText(ImVec2(textX, rowMin.y + ImGui::GetTextLineHeightWithSpacing()), ImGui::GetColorU32(ImGuiCol_TextDisabled), path.c_str());
+		drawList->PopClipRect();
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
+		{
+			if (kind == SceneSelection::AssetKind::Script)
+			{
+				dragdrop::ScriptPayload payload{};
+				CopyToPayload(payload.typeName, std::filesystem::path(path).stem().generic_string());
+				CopyToPayload(payload.sourcePath, path);
+				ImGui::SetDragDropPayload(dragdrop::kScriptPayload, &payload, sizeof(payload));
+			}
+			else
+			{
+				dragdrop::FilePayload payload{};
+				payload.kind = ToFileKind(kind);
+				CopyToPayload(payload.path, path);
+				CopyToPayload(payload.displayName, displayName);
+				ImGui::SetDragDropPayload(dragdrop::kFilePayload, &payload, sizeof(payload));
+			}
+			DrawAssetDragPreview(icon, displayName.c_str(), path.c_str());
+			ImGui::EndDragDropSource();
+		}
+
+		if (ImGui::BeginPopupContextItem("assetCtx"))
+		{
+			if (ImGui::MenuItem(ICON_FA_MAGNIFYING_GLASS "  Inspect"))
+			{
+				selection.SelectAsset(kind, path, displayName);
+			}
+			if (kind == SceneSelection::AssetKind::Model)
+			{
+				if (ImGui::MenuItem(ICON_FA_PLUS "  Spawn"))
+				{
+					if (Entity root = SpawnModelAsset(context, world, path); root.IsValid())
+					{
+						selection.Select(root);
+					}
+				}
+			}
+			else if (kind == SceneSelection::AssetKind::Prefab)
+			{
+				if (ImGui::MenuItem(ICON_FA_PLUS "  Instantiate"))
+				{
+					if (Entity root = InstantiatePrefabAsset(context, world, path); root.IsValid())
+					{
+						selection.Select(root);
+					}
+				}
+			}
+			ImGui::EndPopup();
+		}
+		ImGui::PopID();
+	}
+
+	void HierarchyPanel::DrawAssetBrowser(LayerContext& context, World& world, SceneSelection& selection)
+	{
+		if (m_assetListsDirty)
+		{
+			RefreshAssetLists();
+		}
+
+		if (ImGui::TreeNodeEx(ICON_FA_FOLDER_OPEN "  Project Assets", ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
+		{
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			ImGui::InputTextWithHint("##assetSearch", "Search assets...", m_assetSearch, sizeof(m_assetSearch));
+			const std::string assetNeedle = ToLower(m_assetSearch);
+
+			auto drawSection = [&](const char* label, SceneSelection::AssetKind kind, const std::vector<std::string>& paths, const char* icon)
+			{
+				std::size_t visibleCount = 0;
+				for (const std::string& path: paths)
+				{
+					const std::string display = kind == SceneSelection::AssetKind::Prefab ? path : BaseName(path);
+					if (MatchesAssetFilter(display, path, assetNeedle))
+					{
+						++visibleCount;
+					}
+				}
+				const std::string sectionLabel = std::string(label) + "  " + std::to_string(visibleCount);
+				if (ImGui::TreeNodeEx(sectionLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
+				{
+					if (visibleCount == 0)
+					{
+						ImGui::TextDisabled("(none)");
+					}
+					for (const std::string& path: paths)
+					{
+						const std::string display = kind == SceneSelection::AssetKind::Prefab ? path : BaseName(path);
+						if (!MatchesAssetFilter(display, path, assetNeedle))
+						{
+							continue;
+						}
+						DrawAssetRow(context, world, selection, kind, path, display, icon);
+					}
+					ImGui::TreePop();
+				}
+			};
+
+			drawSection(ICON_FA_PERSON_RUNNING "  Models", SceneSelection::AssetKind::Model, m_modelList, ICON_FA_PERSON_RUNNING);
+			drawSection(ICON_FA_BOX_OPEN "  Prefabs", SceneSelection::AssetKind::Prefab, m_prefabList, ICON_FA_BOX_OPEN);
+			drawSection(ICON_FA_PALETTE "  Materials", SceneSelection::AssetKind::Material, m_materialList, ICON_FA_PALETTE);
+			drawSection(ICON_FA_IMAGE "  Textures", SceneSelection::AssetKind::Texture, m_textureList, ICON_FA_IMAGE);
+			std::size_t visibleScripts = 0;
+			for (const std::string& path: m_scriptList)
+			{
+				if (MatchesAssetFilter(BaseName(path), path, assetNeedle))
+				{
+					++visibleScripts;
+				}
+			}
+			const std::string scriptSectionLabel = std::string(ICON_FA_CODE "  Scripts  ") + std::to_string(visibleScripts);
+			if (ImGui::TreeNodeEx(scriptSectionLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen | ImGuiTreeNodeFlags_SpanAvailWidth))
+			{
+#if defined(AETHER_GAME_PROJECT)
+				const std::string typeName = TrimCopy(m_newScriptNameBuf);
+				const bool validName = IsValidCSharpIdentifier(typeName);
+				ImGui::SetNextItemWidth(std::max(120.0f, ImGui::GetContentRegionAvail().x - 88.0f));
+				ImGui::InputTextWithHint("##newScriptName", "New script name", m_newScriptNameBuf, sizeof(m_newScriptNameBuf));
+				ImGui::SameLine();
+				ImGui::BeginDisabled(!validName);
+				if (ImGui::SmallButton(ICON_FA_PLUS "##createScript"))
+				{
+					m_newScriptError.clear();
+					const std::filesystem::path scriptRoot = std::filesystem::path(AETHER_GAME_PROJECT).parent_path();
+					if (CreateGameScriptFile(scriptRoot, typeName, m_newScriptError))
+					{
+						m_newScriptNameBuf[0] = '\0';
+						m_assetListsDirty = true;
+					}
+				}
+				ImGui::EndDisabled();
+				if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+				{
+					ImGui::SetTooltip("Create script");
+				}
+				if (!m_newScriptError.empty())
+				{
+					ImGui::TextColored(ImVec4(1.0f, 0.45f, 0.45f, 1.0f), "%s", m_newScriptError.c_str());
+				}
+#endif
+				if (visibleScripts == 0)
+				{
+					ImGui::TextDisabled("(none)");
+				}
+				for (const std::string& path: m_scriptList)
+				{
+					const std::string display = BaseName(path);
+					if (!MatchesAssetFilter(display, path, assetNeedle))
+					{
+						continue;
+					}
+					DrawAssetRow(context, world, selection, SceneSelection::AssetKind::Script, path, display, ICON_FA_CODE);
+				}
+				ImGui::TreePop();
+			}
+			ImGui::TreePop();
+		}
+	}
 
 	// Subtle stripes plus the two juice overlays (spawn flash, selection pulse),
 	// drawn behind the row before its widgets so highlights and text sit on top.
@@ -305,7 +824,7 @@ namespace aether::app
 		}
 	}
 
-	void HierarchyPanel::HandleRowDragDrop(World& world, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
+	void HierarchyPanel::HandleRowDragDrop(LayerContext& context, World& world, SceneSelection& selection, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
 	{
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
 		{
@@ -349,6 +868,11 @@ namespace aether::app
 				const ImGuiPayload* activePayload = ImGui::GetDragDropPayload();
 				return activePayload != nullptr && activePayload->IsDataType(dragdrop::kScriptPayload) && activePayload->DataSize == sizeof(dragdrop::ScriptPayload);
 			}();
+			const bool hasFilePayload = []()
+			{
+				const ImGuiPayload* activePayload = ImGui::GetDragDropPayload();
+				return activePayload != nullptr && activePayload->IsDataType(dragdrop::kFilePayload) && activePayload->DataSize == sizeof(dragdrop::FilePayload);
+			}();
 
 			const auto* targetHierarchy = world.TryGet<HierarchyComponent>(e);
 			const Entity targetParent = targetHierarchy ? targetHierarchy->parent : Entity{};
@@ -357,12 +881,12 @@ namespace aether::app
 			const bool canDropHere = zone == DropZone::Inside ? canParentHere : canReorderHere;
 
 			// Visual feedback while dragging over this item.
-			if (ImGui::IsDragDropActive() && (hasScriptPayload || canDropHere))
+			if (ImGui::IsDragDropActive() && (hasScriptPayload || hasFilePayload || canDropHere))
 			{
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
 				const ImU32 lineCol = IM_COL32(105, 170, 255, 230);
 				const ImU32 fillCol = IM_COL32(70, 135, 255, 52);
-				if (hasScriptPayload)
+				if (hasScriptPayload || hasFilePayload)
 				{
 					drawList->AddRectFilled(dropRect.Min, dropRect.Max, fillCol);
 					drawList->AddRectFilled(dropRect.Min, ImVec2(dropRect.Min.x + 3.0f, dropRect.Max.y), lineCol);
@@ -379,6 +903,15 @@ namespace aether::app
 				{
 					drawList->AddRectFilled(dropRect.Min, dropRect.Max, fillCol);
 					drawList->AddRectFilled(dropRect.Min, ImVec2(dropRect.Min.x + 3.0f, dropRect.Max.y), lineCol);
+				}
+			}
+
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(dragdrop::kFilePayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+			{
+				if (p->DataSize == sizeof(dragdrop::FilePayload))
+				{
+					const auto* file = static_cast<const dragdrop::FilePayload*>(p->Data);
+					ApplyFilePayloadToEntity(context, world, selection, e, *file);
 				}
 			}
 
@@ -709,7 +1242,7 @@ namespace aether::app
 
 	// One row of the outliner: flat Selectable row with depth-based indent,
 	// expand/collapse arrow, badge, name and muted id drawn inline.
-	void HierarchyPanel::DrawNode(World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
+	void HierarchyPanel::DrawNode(LayerContext& context, World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
 		const bool hasKids = h && !h->children.empty();
@@ -767,7 +1300,7 @@ namespace aether::app
 		{
 			HandleRowClick(selection, e);
 			const float gapHalf = ImGui::GetStyle().ItemSpacing.y * 0.5f;
-			HandleRowDragDrop(world, e, rowMin.y - gapHalf, rowMax.y + gapHalf, visualRowMax.x);
+			HandleRowDragDrop(context, world, selection, e, rowMin.y - gapHalf, rowMax.y + gapHalf, visualRowMax.x);
 		}
 		const bool destroyed = DrawRowContextMenu(world, selection, e);
 
@@ -908,14 +1441,6 @@ namespace aether::app
 			// ── Toolbar ────────────────────────────────────────────────────────
 			if (ImGui::Button(ICON_FA_PLUS))
 			{
-				// Refresh the asset lists once per open, not per frame.
-				m_modelList.clear();
-				if (const auto models = io::FileSystem::Glob("assets://models/**/*.mesh"); models.has_value())
-				{
-					m_modelList = *models;
-					std::sort(m_modelList.begin(), m_modelList.end());
-				}
-				m_prefabList = scene::ListPrefabFiles();
 				ImGui::OpenPopup("CreateEntity");
 			}
 			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
@@ -970,60 +1495,6 @@ namespace aether::app
 					}
 					ImGui::EndMenu();
 				}
-				ImGui::Separator();
-				if (ImGui::BeginMenu(ICON_FA_PERSON_RUNNING "  Model"))
-				{
-					if (m_modelList.empty())
-					{
-						ImGui::TextDisabled("No .mesh files under assets://models");
-					}
-					auto* assets = context.TryGet<AssetManager>();
-					auto* sceneCtx = context.TryGet<scripting::SceneContext>();
-					for (const std::string& path: m_modelList)
-					{
-						std::string label = path;
-						if (const auto slash = label.find_last_of("/\\"); slash != std::string::npos)
-						{
-							label = label.substr(slash + 1);
-						}
-						ImGui::PushID(path.c_str());
-						if (ImGui::MenuItem(label.c_str()) && assets != nullptr && sceneCtx != nullptr)
-						{
-							const Entity root = scene::SpawnModelEntity(world, *assets, *sceneCtx, path, glm::mat4(1.0f));
-							if (root.IsValid())
-							{
-								selection.Select(root);
-							}
-						}
-						ImGui::PopID();
-					}
-					ImGui::EndMenu();
-				}
-				if (ImGui::BeginMenu(ICON_FA_BOX_OPEN "  Prefab"))
-				{
-					if (m_prefabList.empty())
-					{
-						ImGui::TextDisabled("No prefabs in %s", scene::PrefabsDirectory().c_str());
-						ImGui::TextDisabled("(right-click an entity -> Save as Prefab)");
-					}
-					for (const std::string& name: m_prefabList)
-					{
-						ImGui::PushID(name.c_str());
-						if (ImGui::MenuItem(name.c_str()))
-						{
-							if (const auto prefab = scene::ReadPrefabFile(name))
-							{
-								const Entity root = scene::InstantiatePrefab(*prefab, world, scene::MakeApplySceneDeps(context.services), glm::mat4(1.0f));
-								if (root.IsValid())
-								{
-									selection.Select(root);
-								}
-							}
-						}
-						ImGui::PopID();
-					}
-					ImGui::EndMenu();
-				}
 				ImGui::EndPopup();
 			}
 
@@ -1046,6 +1517,15 @@ namespace aether::app
 			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
 			{
 				ImGui::SetTooltip("Load scene (replaces all entities)");
+			}
+			ImGui::SameLine();
+			if (ImGui::Button(ICON_FA_ROTATE))
+			{
+				m_assetListsDirty = true;
+			}
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			{
+				ImGui::SetTooltip("Refresh project assets");
 			}
 
 			if (ImGui::BeginPopup("SaveScene"))
@@ -1174,6 +1654,7 @@ namespace aether::app
 						if (auto* assets = context.TryGet<AssetManager>())
 						{
 							scene::SavePrefabFile(m_prefabNameBuf, scene::CapturePrefab(world, m_prefabSaveTarget, assets->GetMaterialRegistry(), assets->GetTextureRegistry()));
+							m_assetListsDirty = true;
 						}
 						ImGui::CloseCurrentPopup();
 					}
@@ -1301,7 +1782,7 @@ namespace aether::app
 							m_scrollToEntity = {};
 						}
 						HandleRowClick(selection, e);
-						HandleRowDragDrop(world, e, rowMin.y, rowMax.y, rowMax.x);
+						HandleRowDragDrop(context, world, selection, e, rowMin.y, rowMax.y, rowMax.x);
 						if (!DrawRowContextMenu(world, selection, e))
 						{
 							DrawRowContent(world, e, searching, needle);
@@ -1369,12 +1850,13 @@ namespace aether::app
 					for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
 					{
 						const FlatTreeEntry& entry = m_flatTree[static_cast<std::size_t>(i)];
-						DrawNode(world, selection, entry.entity, entry.depth, i, false, {});
+						DrawNode(context, world, selection, entry.entity, entry.depth, i, false, {});
 					}
 				}
 
-				// Remaining empty area: drop here to detach to root.
-				const float remaining = ImGui::GetContentRegionAvail().y;
+				// Small tail drop target: drop here to detach to root without
+				// consuming the asset browser area below the scene rows.
+				const float remaining = std::min(ImGui::GetFrameHeight(), ImGui::GetContentRegionAvail().y);
 				if (remaining > 4.0f)
 				{
 					ImGui::InvisibleButton("##emptyDrop", ImVec2(ImGui::GetContentRegionAvail().x, remaining));
@@ -1388,6 +1870,11 @@ namespace aether::app
 						ImGui::EndDragDropTarget();
 					}
 				}
+			}
+			if (!filtering)
+			{
+				ImGui::Separator();
+				DrawAssetBrowser(context, world, selection);
 			}
 			ImGui::EndChild();
 

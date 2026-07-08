@@ -8,6 +8,17 @@ namespace aether::app::dragdrop
 	inline constexpr const char* kScriptPayload = "AETHER_SCRIPT_TYPE";
 	inline constexpr const char* kFilePayload = "AETHER_FILE_PATH";
 
+	enum class FileKind : std::uint32_t
+	{
+		Unknown,
+		Model,
+		Material,
+		Texture,
+		Script,
+		Prefab,
+		Scene,
+	};
+
 	struct ScriptPayload
 	{
 		char typeName[128] = {};
@@ -16,7 +27,9 @@ namespace aether::app::dragdrop
 
 	struct FilePayload
 	{
+		FileKind kind = FileKind::Unknown;
 		char path[260] = {};
+		char displayName[128] = {};
 	};
 
 	struct EntityPayload

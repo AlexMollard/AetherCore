@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -15,6 +16,25 @@ namespace aether::app
 	class SceneSelection
 	{
 	public:
+		enum class AssetKind
+		{
+			None,
+			Model,
+			Material,
+			Texture,
+			Script,
+			Prefab,
+			Scene,
+			File,
+		};
+
+		struct Asset
+		{
+			AssetKind kind = AssetKind::None;
+			std::string path;
+			std::string displayName;
+		};
+
 		void Select(Entity e)
 		{
 			m_selected.clear();
@@ -23,6 +43,11 @@ namespace aether::app
 				m_selected.push_back(e);
 			}
 			m_primary = e;
+			if (m_primary.IsValid())
+			{
+				m_lastEntityPrimary = m_primary;
+			}
+			m_asset = {};
 			m_lastChangeSerial++;
 		}
 
@@ -33,6 +58,11 @@ namespace aether::app
 				m_selected.push_back(e);
 			}
 			m_primary = e;
+			if (m_primary.IsValid())
+			{
+				m_lastEntityPrimary = m_primary;
+			}
+			m_asset = {};
 			m_lastChangeSerial++;
 		}
 
@@ -53,6 +83,11 @@ namespace aether::app
 				m_selected.push_back(e);
 				m_primary = e;
 			}
+			if (m_primary.IsValid())
+			{
+				m_lastEntityPrimary = m_primary;
+			}
+			m_asset = {};
 			m_lastChangeSerial++;
 		}
 
@@ -64,6 +99,7 @@ namespace aether::app
 			}
 			m_selected.clear();
 			m_primary = {};
+			m_asset = {};
 		}
 
 		void Replace(std::vector<Entity> selected, Entity primary)
@@ -77,12 +113,48 @@ namespace aether::app
 			{
 				primary = selected.empty() ? Entity{} : selected.back();
 			}
-			if (m_selected != selected || m_primary != primary)
+			if (m_selected != selected || m_primary != primary || m_asset.kind != AssetKind::None)
 			{
 				m_selected = std::move(selected);
 				m_primary = primary;
+				if (m_primary.IsValid())
+				{
+					m_lastEntityPrimary = m_primary;
+				}
+				m_asset = {};
 				m_lastChangeSerial++;
 			}
+		}
+
+		void SelectAsset(AssetKind kind, std::string path, std::string displayName = {})
+		{
+			if (displayName.empty())
+			{
+				displayName = path;
+			}
+			Asset next{kind, std::move(path), std::move(displayName)};
+			if (!m_selected.empty() || m_primary.IsValid() || m_asset.kind != next.kind || m_asset.path != next.path || m_asset.displayName != next.displayName)
+			{
+				m_selected.clear();
+				m_primary = {};
+				m_asset = std::move(next);
+				m_lastChangeSerial++;
+			}
+		}
+
+		[[nodiscard]] bool HasAsset() const
+		{
+			return m_asset.kind != AssetKind::None && !m_asset.path.empty();
+		}
+
+		[[nodiscard]] const Asset& SelectedAsset() const
+		{
+			return m_asset;
+		}
+
+		[[nodiscard]] Entity LastEntityPrimary() const
+		{
+			return m_lastEntityPrimary;
 		}
 
 		[[nodiscard]] bool Contains(Entity e) const
@@ -124,11 +196,17 @@ namespace aether::app
 			{
 				m_primary = m_selected.empty() ? Entity{} : m_selected.back();
 			}
+			if (dead(m_lastEntityPrimary))
+			{
+				m_lastEntityPrimary = {};
+			}
 		}
 
 	private:
 		std::vector<Entity> m_selected;
 		Entity m_primary{};
+		Entity m_lastEntityPrimary{};
+		Asset m_asset{};
 		std::uint64_t m_lastChangeSerial = 0;
 	};
 } // namespace aether::app
