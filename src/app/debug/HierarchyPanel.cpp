@@ -35,6 +35,7 @@
 #include "scripting/SceneContext.hpp"
 #include "scene/SceneSubsystem.hpp"
 #include "utils/EngineSettings.hpp"
+#include "utils/TomlConfig.hpp"
 #include "utils/SettingsService.hpp"
 #include "utils/Profiler.hpp"
 #include "ui/UiComponents.hpp"
@@ -74,6 +75,33 @@ namespace aether::app
 			{
 				ImGui::SetTooltip("%s", tooltip);
 			}
+		}
+
+		void DrawEntityDragPreview(const World& world, Entity e)
+		{
+			const KindBadge badge = EntityKindBadge(world, e);
+			const std::string name = EntityDisplayName(world, e);
+			const std::string idText = "  #" + std::to_string(e.id);
+
+			const ImVec2 padding(10.0f, 7.0f);
+			const ImVec2 gap(7.0f, 0.0f);
+			const ImVec2 mouse = ImGui::GetMousePos();
+			const ImVec2 iconSize = ImGui::CalcTextSize(badge.icon);
+			const ImVec2 nameSize = ImGui::CalcTextSize(name.c_str());
+			const ImVec2 idSize = ImGui::CalcTextSize(idText.c_str());
+			const float height = std::max(ImGui::GetFrameHeight(), nameSize.y) + padding.y * 2.0f;
+			const float width = padding.x * 2.0f + iconSize.x + gap.x + nameSize.x + idSize.x;
+			const ImVec2 min(mouse.x + 16.0f, mouse.y + 18.0f);
+			const ImVec2 max(min.x + width, min.y + height);
+			const ImVec2 textPos(min.x + padding.x, min.y + (height - nameSize.y) * 0.5f);
+
+			ImDrawList* drawList = ImGui::GetForegroundDrawList();
+			drawList->AddRectFilled(ImVec2(min.x + 2.0f, min.y + 3.0f), ImVec2(max.x + 2.0f, max.y + 3.0f), IM_COL32(0, 0, 0, 95), 5.0f);
+			drawList->AddRectFilled(min, max, IM_COL32(31, 34, 40, 238), 5.0f);
+			drawList->AddRect(min, max, IM_COL32(105, 170, 255, 185), 5.0f, 0, 1.0f);
+			drawList->AddText(textPos, ImGui::ColorConvertFloat4ToU32(badge.color), badge.icon);
+			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x, textPos.y), ImGui::GetColorU32(ImGuiCol_Text), name.c_str());
+			drawList->AddText(ImVec2(textPos.x + iconSize.x + gap.x + nameSize.x, textPos.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), idText.c_str());
 		}
 
 		// Selection ROOTS: drop any entity whose ancestor is also selected (it
@@ -166,6 +194,12 @@ namespace aether::app
 			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 4));
 		}
 
+		if (selection.Contains(e))
+		{
+			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(70, 135, 255, 72));
+			drawList->AddRectFilled(rowMin, ImVec2(rowMin.x + 3.0f, rowMax.y), IM_COL32(105, 170, 255, 220));
+		}
+
 		if (const auto it = m_spawnFlash.find(e.id); it != m_spawnFlash.end())
 		{
 			const float t = static_cast<float>((now - it->second) / 0.75);
@@ -250,30 +284,81 @@ namespace aether::app
 		}
 	}
 
-	void HierarchyPanel::HandleRowDragDrop(World& world, SceneSelection& selection, Entity e)
+	void HierarchyPanel::HandleRowDragDrop(World& world, Entity e, float dropMinY, float dropMaxY, float visualMaxX)
 	{
-		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
 		{
 			ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
-			// Dragging a selected row carries the whole selection.
-			const std::size_t count = (selection.Contains(e) && selection.All().size() > 1) ? selection.All().size() : 1;
-			if (count > 1)
+			DrawEntityDragPreview(world, e);
+			ImGui::EndDragDropSource();
+		}
+		const ImRect itemRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax());
+		const ImRect dropRect(itemRect.Min, ImVec2(visualMaxX, itemRect.Max.y));
+		const ImRect extendedDropRect(ImVec2(dropRect.Min.x, dropMinY), ImVec2(dropRect.Max.x, dropMaxY));
+		if (ImGui::BeginDragDropTargetCustom(extendedDropRect, ImGui::GetID("##rowDropTarget")))
+		{
+			const float relY = ImGui::GetMousePos().y - extendedDropRect.Min.y;
+			const float rowH = extendedDropRect.GetHeight();
+
+			DropZone zone;
+			if (ImGui::GetIO().KeyCtrl)
 			{
-				ImGui::Text("Move %zu entities", count);
+				zone = DropZone::Inside;
+			}
+			else if (relY < rowH * 0.5f)
+			{
+				zone = DropZone::Before;
 			}
 			else
 			{
-				ImGui::TextUnformatted(EntityDisplayName(world, e));
+				zone = DropZone::After;
 			}
-			ImGui::TextDisabled("drop on a row to parent, empty space to unparent");
-			ImGui::EndDragDropSource();
-		}
-		if (ImGui::BeginDragDropTarget())
-		{
-			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
+
+			Entity dragged{};
+			bool hasEntityPayload = false;
+			if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload && activePayload->IsDataType("AETHER_ENTITY") && activePayload->DataSize == sizeof(std::uint32_t))
+			{
+				dragged = Entity{*static_cast<const std::uint32_t*>(activePayload->Data)};
+				hasEntityPayload = true;
+			}
+
+			const auto* targetHierarchy = world.TryGet<HierarchyComponent>(e);
+			const Entity targetParent = targetHierarchy ? targetHierarchy->parent : Entity{};
+			const bool canParentHere = !hasEntityPayload || (dragged != e && !ecs::IsAncestor(world, e, dragged));
+			const bool canReorderHere = !hasEntityPayload || (dragged != e && (!targetParent.IsValid() || (targetParent != dragged && !ecs::IsAncestor(world, targetParent, dragged))));
+			const bool canDropHere = zone == DropZone::Inside ? canParentHere : canReorderHere;
+
+			// Visual feedback while dragging over this item.
+			if (ImGui::IsDragDropActive() && canDropHere)
+			{
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
+				const ImU32 lineCol = IM_COL32(105, 170, 255, 230);
+				const ImU32 fillCol = IM_COL32(70, 135, 255, 52);
+				if (zone == DropZone::Before)
+				{
+					drawList->AddLine(ImVec2(dropRect.Min.x, dropRect.Min.y), ImVec2(dropRect.Max.x, dropRect.Min.y), lineCol, 2.0f);
+				}
+				else if (zone == DropZone::After)
+				{
+					drawList->AddLine(ImVec2(dropRect.Min.x, dropRect.Max.y), ImVec2(dropRect.Max.x, dropRect.Max.y), lineCol, 2.0f);
+				}
+				else
+				{
+					drawList->AddRectFilled(dropRect.Min, dropRect.Max, fillCol);
+					drawList->AddRectFilled(dropRect.Min, ImVec2(dropRect.Min.x + 3.0f, dropRect.Max.y), lineCol);
+				}
+			}
+
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
 			{
 				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
-				m_pendingReparent = {Entity{draggedId}, e};
+				const Entity draggedEntity{draggedId};
+				const bool canParentOnRelease = draggedEntity != e && !ecs::IsAncestor(world, e, draggedEntity);
+				const bool canReorderOnRelease = draggedEntity != e && (!targetParent.IsValid() || (targetParent != draggedEntity && !ecs::IsAncestor(world, targetParent, draggedEntity)));
+				if ((zone == DropZone::Inside && canParentOnRelease) || (zone != DropZone::Inside && canReorderOnRelease))
+				{
+					m_pendingReparent = PendingReparent{draggedEntity, e, zone};
+				}
 			}
 			ImGui::EndDragDropTarget();
 		}
@@ -339,6 +424,47 @@ namespace aether::app
 			m_openPrefabSave = true;
 		}
 		ImGui::Separator();
+		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Select children"))
+		{
+			if (const auto* h = world.TryGet<HierarchyComponent>(e))
+			{
+				selection.Clear();
+				for (const Entity c: h->children)
+				{
+					selection.AddToSelection(c);
+				}
+			}
+		}
+		if (ImGui::MenuItem(ICON_FA_SITEMAP "  Select siblings"))
+		{
+			const auto* h = world.TryGet<HierarchyComponent>(e);
+			const Entity parent = h ? h->parent : Entity{};
+			if (parent.IsValid())
+			{
+				const auto* ph = world.TryGet<HierarchyComponent>(parent);
+				if (ph)
+				{
+					selection.Clear();
+					for (const Entity c: ph->children)
+					{
+						selection.AddToSelection(c);
+					}
+				}
+			}
+			else
+			{
+				// Root-level siblings: all root entities.
+				selection.Clear();
+				for (const Entity root: world.Roots())
+				{
+					if (root.IsValid() && world.GetRegistry().valid(World::ToEntt(root)))
+					{
+						selection.AddToSelection(root);
+					}
+				}
+			}
+		}
+		ImGui::Separator();
 		if (ImGui::MenuItem(ICON_FA_TRASH "  Delete (subtree)"))
 		{
 			ecs::DestroyHierarchy(world, e);
@@ -349,10 +475,13 @@ namespace aether::app
 		return destroyed;
 	}
 
-	void HierarchyPanel::DrawRowContent(World& world, Entity e)
+	void HierarchyPanel::DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem)
 	{
 		const KindBadge badge = EntityKindBadge(world, e);
-		ImGui::SameLine();
+		if (continuePreviousItem)
+		{
+			ImGui::SameLine();
+		}
 		ImGui::TextColored(badge.color, "%s", badge.icon);
 
 		if (m_renaming == e)
@@ -371,6 +500,7 @@ namespace aether::app
 				if ((entered || !ImGui::IsKeyPressed(ImGuiKey_Escape)) && m_renameBuf[0] != '\0')
 				{
 					world.EmplaceOrReplace<NameComponent>(e, NameComponent{.name = m_renameBuf});
+					m_dirty = true;
 				}
 				m_renaming = {};
 			}
@@ -378,81 +508,208 @@ namespace aether::app
 		else
 		{
 			ImGui::SameLine();
-			ImGui::TextUnformatted(EntityDisplayName(world, e));
+			std::string name = EntityDisplayName(world, e);
+			if (searching && !needle.empty())
+			{
+				std::string lower = ToLower(name);
+				const size_t pos = lower.find(needle);
+				if (pos != std::string::npos)
+				{
+					if (pos > 0)
+					{
+						ImGui::TextUnformatted(name.substr(0, pos).c_str());
+						ImGui::SameLine(0, 0);
+					}
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.8f, 0.2f, 1.0f));
+					ImGui::TextUnformatted(name.substr(pos, needle.length()).c_str());
+					ImGui::PopStyleColor();
+					ImGui::SameLine(0, 0);
+					if (pos + needle.length() < name.length())
+					{
+						ImGui::TextUnformatted(name.substr(pos + needle.length()).c_str());
+					}
+				}
+				else
+				{
+					ImGui::TextUnformatted(name.c_str());
+				}
+			}
+			else
+			{
+				ImGui::TextUnformatted(name.c_str());
+			}
 		}
 		ImGui::SameLine();
 		ImGui::TextDisabled("#%u", e.id);
 	}
 
-	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth)
+	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask)
 	{
-		m_flatTree.push_back({e, depth});
+		m_flatTree.push_back({e, depth, openMask});
 		if (m_expandedNodes.contains(e.id))
 		{
 			if (const auto* h = world.TryGet<HierarchyComponent>(e))
 			{
-				for (const Entity c: h->children)
+				for (std::size_t i = 0; i < h->children.size(); ++i)
 				{
-					FlattenNode(world, c, depth + 1);
+					std::uint64_t childOpenMask = openMask;
+					if (depth < 63)
+					{
+						const std::uint64_t siblingBit = 1ULL << static_cast<unsigned>(depth);
+						if (i + 1 < h->children.size())
+						{
+							childOpenMask |= siblingBit;
+						}
+						else
+						{
+							childOpenMask &= ~siblingBit;
+						}
+					}
+					FlattenNode(world, h->children[i], depth + 1, childOpenMask);
 				}
 			}
 		}
 	}
 
+	void HierarchyPanel::DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const
+	{
+		// ArrowButton is drawn with FramePadding=(0,0), so its width is the font size.
+		const float arrowCenter = ImGui::GetFontSize() * 0.5f;
+		const float indentSp = ImGui::GetStyle().IndentSpacing + 6.0f;
+		const ImU32 lineCol = IM_COL32(120, 145, 180, 155);
+		const float cx = (rowMin.y + rowMax.y) * 0.5f;
+
+		for (int d = 0; d + 1 < entry.depth; ++d)
+		{
+			if (entry.openMask & (1ULL << d))
+			{
+				const float vx = rowMin.x + static_cast<float>(d) * indentSp + arrowCenter;
+				drawList->AddLine(ImVec2(vx, rowMin.y), ImVec2(vx, rowMax.y), lineCol, 1.25f);
+			}
+		}
+		if (entry.depth > 0)
+		{
+			const float vx = rowMin.x + static_cast<float>(entry.depth - 1) * indentSp + arrowCenter;
+			const float hxEnd = rowMin.x + static_cast<float>(entry.depth) * indentSp;
+			const bool parentHasMoreSiblings = (entry.openMask & (1ULL << static_cast<unsigned>(entry.depth - 1))) != 0;
+			drawList->AddLine(ImVec2(vx, rowMin.y), ImVec2(vx, parentHasMoreSiblings ? rowMax.y : cx), lineCol, 1.25f);
+			drawList->AddLine(ImVec2(vx, cx), ImVec2(hxEnd, cx), lineCol, 1.25f);
+		}
+	}
+
+	void HierarchyPanel::UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax)
+	{
+		if (!ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+		{
+			return;
+		}
+
+		m_keyboardFocusScope = ImGui::IsMouseHoveringRect(sceneListMin, sceneListMax, false) ? KeyboardFocusScope::SceneList : KeyboardFocusScope::None;
+	}
+
+	bool HierarchyPanel::SceneListOwnsKeyboard() const noexcept
+	{
+		return m_keyboardFocusScope == KeyboardFocusScope::SceneList;
+	}
+
+	void HierarchyPanel::DrawRowUtilityToggles(World& world, Entity e)
+	{
+		const float rowEndX = ImGui::GetContentRegionMax().x + ImGui::GetCursorPosX() - ImGui::GetContentRegionAvail().x;
+		ImGui::SameLine();
+
+		// Visibility toggle (eye icon).
+		const bool hidden = world.Has<HiddenTag>(e);
+		const float eyeX = rowEndX - ImGui::GetFrameHeight() * (hidden ? 1.0f : 2.5f);
+		ImGui::SetCursorPosX(eyeX);
+		const ImVec4 eyeCol = hidden ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f);
+		ImGui::PushStyleColor(ImGuiCol_Text, eyeCol);
+		if (ImGui::SmallButton(ICON_FA_EYE))
+		{
+			if (hidden)
+			{
+				world.Remove<HiddenTag>(e);
+			}
+			else
+			{
+				world.Emplace<HiddenTag>(e);
+			}
+			m_dirty = true;
+		}
+		ImGui::PopStyleColor();
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+		{
+			ImGui::SetTooltip(hidden ? "Show in Scene View" : "Hide in Scene View");
+		}
+
+		// Pickability toggle (padlock icon).
+		const bool notPickable = world.Has<NotPickableTag>(e);
+		ImGui::SameLine(0, 0);
+		const ImVec4 lockCol = notPickable ? ImVec4(0.35f, 0.35f, 0.35f, 0.35f) : ImVec4(0.8f, 0.8f, 0.8f, 0.8f);
+		ImGui::PushStyleColor(ImGuiCol_Text, lockCol);
+		if (ImGui::SmallButton(notPickable ? ICON_FA_LOCK : ICON_FA_UNLOCK))
+		{
+			if (notPickable)
+			{
+				world.Remove<NotPickableTag>(e);
+			}
+			else
+			{
+				world.Emplace<NotPickableTag>(e);
+			}
+			m_dirty = true;
+		}
+		ImGui::PopStyleColor();
+		if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+		{
+			ImGui::SetTooltip(notPickable ? "Allow picking in Scene View" : "Disable picking in Scene View");
+		}
+	}
+
 	// One row of the outliner: flat Selectable row with depth-based indent,
 	// expand/collapse arrow, badge, name and muted id drawn inline.
-	void HierarchyPanel::DrawNode(World& world, SceneSelection& selection, Entity e, int depth)
+	void HierarchyPanel::DrawNode(World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle)
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
 		const bool hasKids = h && !h->children.empty();
 		const bool isExpanded = hasKids && m_expandedNodes.contains(e.id);
+		const int rowIndex = flatTreeIndex;
 
 		ImGui::PushID(static_cast<int>(e.id));
 
-		const int rowIndex = static_cast<int>(m_rowsCur.size());
 		DrawRowBackdrop(selection, e, rowIndex);
 
-		// Indent by depth for tree hierarchy.
-		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + static_cast<float>(depth) * ImGui::GetStyle().IndentSpacing);
+		const float indentSp = ImGui::GetStyle().IndentSpacing + 6.0f;
+		const float depthOffset = static_cast<float>(depth) * indentSp;
+		const float arrowSlot = ImGui::GetFontSize();
+		const ImVec2 rowStart = ImGui::GetCursorScreenPos();
 
-		// Expand/collapse arrow for branch nodes.
-		if (hasKids)
+		const float utilityReserve = ImGui::GetFrameHeight() * 3.25f;
+		const float fullRowWidth = ImGui::GetContentRegionAvail().x;
+		const float rowWidth = std::max(1.0f, fullRowWidth - utilityReserve);
+		ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
+		ImGui::InvisibleButton("##row", ImVec2(rowWidth, ImGui::GetFrameHeight()), ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+		ImGui::PopItemFlag();
+		const ImVec2 rowMin = ImGui::GetItemRectMin();
+		const ImVec2 rowMax = ImGui::GetItemRectMax();
+		const ImVec2 visualRowMax(rowMin.x + fullRowWidth, rowMax.y);
+		const bool visualRowHovered = ImGui::IsMouseHoveringRect(rowMin, visualRowMax) && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+		const ImVec2 afterSelectable = ImGui::GetCursorScreenPos();
+
+		if (m_scrollToEntity == e)
 		{
-			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
-			if (ImGui::ArrowButton("##expand", isExpanded ? ImGuiDir_Down : ImGuiDir_Right))
-			{
-				if (isExpanded)
-				{
-					m_expandedNodes.erase(e.id);
-				}
-				else
-				{
-					m_expandedNodes.insert(e.id);
-				}
-			}
-			ImGui::PopStyleVar();
-			ImGui::SameLine();
-		}
-		else
-		{
-			// Leaf: offset cursor past where the arrow would be.
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetFrameHeight());
+			ImGui::SetScrollHereY(0.5f);
+			m_scrollToEntity = {};
 		}
 
-		const bool selected = selection.Contains(e);
-		ImGui::Selectable("##row", selected, ImGuiSelectableFlags_SpanAllColumns);
-		m_rowsCur.push_back(e);
-		HandleRowClick(selection, e);
-		HandleRowDragDrop(world, selection, e);
-		const bool destroyed = DrawRowContextMenu(world, selection, e);
-		if (!destroyed)
+		if (visualRowHovered && !selection.Contains(e) && !ImGui::IsDragDropActive())
 		{
-			DrawRowContent(world, e);
+			ImGui::GetWindowDrawList()->AddRectFilled(rowMin, visualRowMax, IM_COL32(255, 255, 255, 16));
 		}
 
-		// Double-click on the row toggles expand/collapse (matching old
-		// TreeNodeEx OpenOnDoubleClick behavior).
-		if (hasKids && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+		const ImVec2 arrowMin(rowStart.x + depthOffset, rowMin.y);
+		const ImVec2 arrowMax(arrowMin.x + arrowSlot, rowMax.y);
+		const bool arrowHovered = hasKids && ImGui::IsMouseHoveringRect(arrowMin, arrowMax);
+		if (arrowHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsDragDropActive())
 		{
 			if (isExpanded)
 			{
@@ -464,6 +721,61 @@ namespace aether::app
 			}
 		}
 
+		if (!arrowHovered || ImGui::IsDragDropActive())
+		{
+			HandleRowClick(selection, e);
+			const float gapHalf = ImGui::GetStyle().ItemSpacing.y * 0.5f;
+			HandleRowDragDrop(world, e, rowMin.y - gapHalf, rowMax.y + gapHalf, visualRowMax.x);
+		}
+		const bool destroyed = DrawRowContextMenu(world, selection, e);
+
+		const ImVec2 contentStart(rowStart.x + depthOffset + arrowSlot + ImGui::GetStyle().ItemInnerSpacing.x, rowStart.y);
+		ImGui::SetCursorScreenPos(contentStart);
+		if (!destroyed)
+		{
+			DrawRowContent(world, e, searching, needle, false);
+		}
+
+		// Tree guide lines.
+		if (!m_flatTree.empty())
+		{
+			const std::size_t idx = static_cast<std::size_t>(flatTreeIndex);
+			if (idx < m_flatTree.size())
+			{
+				ImDrawList* drawList = ImGui::GetWindowDrawList();
+				const ImGuiWindow* window = ImGui::GetCurrentWindowRead();
+				drawList->PushClipRect(window->ClipRect.Min, window->ClipRect.Max, true);
+				DrawTreeGuideLines(drawList, m_flatTree[idx], rowStart, rowMax);
+				drawList->PopClipRect();
+			}
+		}
+
+		if (hasKids)
+		{
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			const ImU32 arrowColor = arrowHovered ? ImGui::GetColorU32(ImGuiCol_Text) : IM_COL32(220, 216, 204, 210);
+			const float midY = (arrowMin.y + arrowMax.y) * 0.5f;
+			const float size = std::min(arrowSlot, rowMax.y - rowMin.y) * 0.58f;
+			const float left = arrowMin.x + (arrowSlot - size) * 0.5f;
+			const float top = midY - size * 0.5f;
+			if (isExpanded)
+			{
+				drawList->AddTriangleFilled(ImVec2(left, top + size * 0.28f), ImVec2(left + size, top + size * 0.28f), ImVec2(left + size * 0.5f, top + size * 0.82f), arrowColor);
+			}
+			else
+			{
+				drawList->AddTriangleFilled(ImVec2(left + size * 0.30f, top), ImVec2(left + size * 0.30f, top + size), ImVec2(left + size * 0.82f, top + size * 0.5f), arrowColor);
+			}
+		}
+
+		// Right-aligned utility toggles (eye / padlock).
+		if (!destroyed)
+		{
+			DrawRowUtilityToggles(world, e);
+		}
+
+		ImGui::SetCursorScreenPos(afterSelectable);
+		ImGui::Dummy(ImVec2(0.0f, 0.0f));
 		ImGui::PopID();
 	}
 
@@ -855,6 +1167,15 @@ namespace aether::app
 			ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::CalcTextSize(countText).x);
 			ImGui::TextDisabled("%s", countText);
 
+			// Sync persistent expansion from settings once the world is ready.
+			if (!m_expandedPathsLoaded)
+			{
+				SyncExpandedFromPaths(world);
+			}
+
+			// ── Breadcrumb trail ────────────────────────────────────────────────
+			DrawBreadcrumbTrail(world, selection);
+
 			// ── Body ───────────────────────────────────────────────────────────
 			const bool anyChip = m_filterMesh || m_filterSkinned || m_filterPhysics || m_filterEffect;
 			const bool searching = m_search[0] != '\0';
@@ -869,7 +1190,10 @@ namespace aether::app
 				return (m_filterMesh && world.Has<MeshComponent>(e)) || (m_filterSkinned && world.Has<SkinnedMeshComponent>(e)) || (m_filterPhysics && world.Has<RigidBodyComponent>(e)) || (m_filterEffect && world.Has<EffectParamsComponent>(e));
 			};
 
-			ImGui::BeginChild("SceneList", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders);
+			ImGui::BeginChild("SceneList", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoNavInputs | ImGuiWindowFlags_NoNavFocus);
+			const ImVec2 sceneListMin = ImGui::GetWindowPos();
+			const ImVec2 sceneListMax(sceneListMin.x + ImGui::GetWindowSize().x, sceneListMin.y + ImGui::GetWindowSize().y);
+			UpdateKeyboardFocusScopeFromMouse(sceneListMin, sceneListMax);
 			if (filtering)
 			{
 				// Flat, clipper-friendly result list.
@@ -899,8 +1223,22 @@ namespace aether::app
 					m_filteredRowsScratch.push_back(e);
 				}
 
+				m_rowsCur = m_filteredRowsScratch;
+				int scrollToIndex = -1;
+				if (m_scrollToEntity.IsValid())
+				{
+					if (const auto it = std::find(m_filteredRowsScratch.begin(), m_filteredRowsScratch.end(), m_scrollToEntity); it != m_filteredRowsScratch.end())
+					{
+						scrollToIndex = static_cast<int>(std::distance(m_filteredRowsScratch.begin(), it));
+					}
+				}
+
 				ImGuiListClipper clipper;
 				clipper.Begin(static_cast<int>(m_filteredRowsScratch.size()));
+				if (scrollToIndex >= 0)
+				{
+					clipper.IncludeItemByIndex(scrollToIndex);
+				}
 				while (clipper.Step())
 				{
 					for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
@@ -910,13 +1248,21 @@ namespace aether::app
 						DrawRowBackdrop(selection, e, i);
 						// Same interaction path as tree rows: modifier-aware click
 						// (ctrl/shift/deferred collapse) + multi-entity drag-drop.
+						ImGui::PushItemFlag(ImGuiItemFlags_NoNav, true);
 						ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns);
-						m_rowsCur.push_back(e);
+						ImGui::PopItemFlag();
+						const ImVec2 rowMin = ImGui::GetItemRectMin();
+						const ImVec2 rowMax = ImGui::GetItemRectMax();
+						if (m_scrollToEntity == e)
+						{
+							ImGui::SetScrollHereY(0.5f);
+							m_scrollToEntity = {};
+						}
 						HandleRowClick(selection, e);
-						HandleRowDragDrop(world, selection, e);
+						HandleRowDragDrop(world, e, rowMin.y, rowMax.y, rowMax.x);
 						if (!DrawRowContextMenu(world, selection, e))
 						{
-							DrawRowContent(world, e);
+							DrawRowContent(world, e, searching, needle);
 						}
 						ImGui::PopID();
 					}
@@ -940,32 +1286,48 @@ namespace aether::app
 			{
 				// Build flat visible tree for clipper-friendly iteration.
 				m_flatTree.clear();
-				for (const auto handle: reg.storage<entt::entity>())
+				const auto& roots = world.Roots();
+				for (std::size_t i = 0; i < roots.size(); ++i)
 				{
-					if (!reg.valid(handle))
+					const Entity e = roots[i];
+					if (e.IsValid() && reg.valid(World::ToEntt(e)))
 					{
-						continue;
+						const std::uint64_t openMask = (i + 1 < roots.size()) ? 1ULL : 0ULL;
+						FlattenNode(world, e, 0, openMask);
 					}
-					const Entity e = World::FromEntt(handle);
-					if (!e.IsValid())
+				}
+
+				m_rowsCur.reserve(m_flatTree.size());
+				for (const FlatTreeEntry& entry: m_flatTree)
+				{
+					m_rowsCur.push_back(entry.entity);
+				}
+
+				int scrollToIndex = -1;
+				if (m_scrollToEntity.IsValid())
+				{
+					for (std::size_t i = 0; i < m_flatTree.size(); ++i)
 					{
-						continue;
-					}
-					const auto* h = world.TryGet<HierarchyComponent>(e);
-					if (!h || !h->parent.IsValid())
-					{
-						FlattenNode(world, e, 0);
+						if (m_flatTree[i].entity == m_scrollToEntity)
+						{
+							scrollToIndex = static_cast<int>(i);
+							break;
+						}
 					}
 				}
 
 				ImGuiListClipper clipper;
 				clipper.Begin(static_cast<int>(m_flatTree.size()));
+				if (scrollToIndex >= 0)
+				{
+					clipper.IncludeItemByIndex(scrollToIndex);
+				}
 				while (clipper.Step())
 				{
 					for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
 					{
-						const auto [e, depth] = m_flatTree[static_cast<std::size_t>(i)];
-						DrawNode(world, selection, e, depth);
+						const FlatTreeEntry& entry = m_flatTree[static_cast<std::size_t>(i)];
+						DrawNode(world, selection, entry.entity, entry.depth, i, false, {});
 					}
 				}
 
@@ -976,16 +1338,23 @@ namespace aether::app
 					ImGui::InvisibleButton("##emptyDrop", ImVec2(ImGui::GetContentRegionAvail().x, remaining));
 					if (ImGui::BeginDragDropTarget())
 					{
-						if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY"))
+						if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
 						{
 							const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
-							m_pendingReparent = {Entity{draggedId}, Entity{}};
+							m_pendingReparent = PendingReparent{Entity{draggedId}, Entity{}, DropZone::Inside};
 						}
 						ImGui::EndDragDropTarget();
 					}
 				}
 			}
 			ImGui::EndChild();
+
+			// ── Keyboard navigation + type-to-jump ────────────────────────────
+			if (!filtering && SceneListOwnsKeyboard())
+			{
+				HandleKeyboardNavigation(selection);
+				HandleTypeToJump(world, selection);
+			}
 
 			// ── Clipboard + duplicate (EDITOR-GLOBAL edit shortcuts) ──────────
 			// The selection is the context, not window focus: Ctrl+D then a
@@ -1115,9 +1484,9 @@ namespace aether::app
 			// walked. SetParent is cycle-guarded: bad drops are silent no-ops.
 			if (m_pendingReparent)
 			{
-				const auto [dragged, parent] = *m_pendingReparent;
+				const PendingReparent pr = *m_pendingReparent;
 				m_pendingReparent.reset();
-				if (world.GetRegistry().valid(World::ToEntt(dragged)))
+				if (world.GetRegistry().valid(World::ToEntt(pr.child)))
 				{
 					// Dragging a selected row moves the WHOLE selection - but only
 					// its topmost roots: an entity whose ancestor is also selected
@@ -1125,7 +1494,7 @@ namespace aether::app
 					// selection (and the drop target itself is a no-op via the
 					// child==parent guard).
 					std::vector<Entity> moved;
-					if (selection.Contains(dragged) && selection.All().size() > 1)
+					if (selection.Contains(pr.child) && selection.All().size() > 1)
 					{
 						for (const Entity e: selection.All())
 						{
@@ -1154,11 +1523,69 @@ namespace aether::app
 					}
 					else
 					{
-						moved.push_back(dragged);
+						moved.push_back(pr.child);
 					}
+					int afterOffset = 0;
+					bool changed = false;
 					for (const Entity e: moved)
 					{
-						ecs::SetParent(world, e, parent);
+						if (pr.zone == DropZone::Inside || !pr.target.IsValid())
+						{
+							changed = ecs::SetParent(world, e, pr.target) || changed;
+							continue;
+						}
+
+						const auto* targetHierarchy = world.TryGet<HierarchyComponent>(pr.target);
+						const Entity parent = targetHierarchy ? targetHierarchy->parent : Entity{};
+						const std::vector<Entity>* siblings = nullptr;
+						if (parent.IsValid())
+						{
+							const auto* parentHierarchy = world.TryGet<HierarchyComponent>(parent);
+							if (!parentHierarchy)
+							{
+								continue;
+							}
+							siblings = &parentHierarchy->children;
+						}
+						else
+						{
+							siblings = &world.Roots();
+						}
+
+						const auto targetIt = std::find(siblings->begin(), siblings->end(), pr.target);
+						if (targetIt == siblings->end())
+						{
+							continue;
+						}
+
+						int insertIndex = static_cast<int>(std::distance(siblings->begin(), targetIt));
+						if (pr.zone == DropZone::After)
+						{
+							insertIndex += 1 + afterOffset;
+						}
+
+						const auto childIt = std::find(siblings->begin(), siblings->end(), e);
+						if (childIt != siblings->end())
+						{
+							const int childIndex = static_cast<int>(std::distance(siblings->begin(), childIt));
+							if (childIndex < insertIndex)
+							{
+								--insertIndex;
+							}
+						}
+
+						if (ecs::InsertChildAt(world, e, parent, insertIndex))
+						{
+							changed = true;
+							if (pr.zone == DropZone::After)
+							{
+								++afterOffset;
+							}
+						}
+					}
+					if (changed)
+					{
+						m_dirty = true;
 					}
 				}
 			}
@@ -1194,5 +1621,303 @@ namespace aether::app
 			}
 		}
 		ImGui::End();
+	}
+
+	// ── AAA feature implementations ─────────────────────────────────────
+
+	// Walk up the parent chain building a "/Root/Child/Grandchild"-style path.
+	std::string HierarchyPanel::ComputeEntityPath(const World& world, Entity e) const
+	{
+		std::vector<std::string> segments;
+		Entity cur = e;
+		while (cur.IsValid())
+		{
+			segments.push_back(EntityDisplayName(world, cur));
+			const auto* h = world.TryGet<HierarchyComponent>(cur);
+			cur = h ? h->parent : Entity{};
+		}
+		std::string path;
+		for (auto it = segments.rbegin(); it != segments.rend(); ++it)
+		{
+			path += '/';
+			path += *it;
+		}
+		return path;
+	}
+
+	// Try to find an entity by walking from world root entities along the
+	// given path segments (e.g. {"Root", "Child", "Grandchild"}).
+	// Returns invalid entity on failure.
+	namespace
+	{
+		Entity FindEntityByPath(const World& world, const std::vector<std::string>& segments)
+		{
+			if (segments.empty())
+			{
+				return {};
+			}
+			// Search root-level entities for the first segment.
+			Entity cur{};
+			for (const Entity e: world.Roots())
+			{
+				if (!e.IsValid() || !world.GetRegistry().valid(World::ToEntt(e)))
+				{
+					continue;
+				}
+				if (EntityDisplayName(world, e) == segments[0])
+				{
+					cur = e;
+					break;
+				}
+			}
+			if (!cur.IsValid())
+			{
+				return {};
+			}
+			for (std::size_t i = 1; i < segments.size(); ++i)
+			{
+				const auto* h = world.TryGet<HierarchyComponent>(cur);
+				if (!h)
+				{
+					return {};
+				}
+				bool found = false;
+				for (const Entity c: h->children)
+				{
+					if (EntityDisplayName(world, c) == segments[i])
+					{
+						cur = c;
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+				{
+					return {};
+				}
+			}
+			return cur;
+		}
+
+		void SplitPath(std::string_view path, std::vector<std::string>& out)
+		{
+			out.clear();
+			// Strip leading '/'.
+			if (!path.empty() && path[0] == '/')
+			{
+				path = path.substr(1);
+			}
+			while (!path.empty())
+			{
+				const auto pos = path.find('/');
+				if (pos == std::string_view::npos)
+				{
+					out.emplace_back(path);
+					break;
+				}
+				out.emplace_back(path.substr(0, pos));
+				path = path.substr(pos + 1);
+			}
+		}
+	} // namespace
+
+	// Populate m_expandedNodes from the path-based m_expandedPaths map.
+	// Should be called once after the scene is populated.
+	void HierarchyPanel::SyncExpandedFromPaths(World& world)
+	{
+		if (m_expandedPaths.empty())
+		{
+			m_expandedPathsLoaded = true;
+			return;
+		}
+		m_expandedNodes.clear();
+		std::vector<std::string> segments;
+		for (const auto& [path, expanded]: m_expandedPaths)
+		{
+			if (!expanded)
+			{
+				continue;
+			}
+			SplitPath(path, segments);
+			const Entity e = FindEntityByPath(world, segments);
+			if (e.IsValid())
+			{
+				m_expandedNodes.insert(e.id);
+			}
+		}
+		m_expandedPathsLoaded = true;
+	}
+
+	void HierarchyPanel::DrawBreadcrumbTrail(const World& world, SceneSelection& selection)
+	{
+		const Entity primary = selection.Primary();
+		if (!primary.IsValid())
+		{
+			ImGui::TextDisabled("No entity selected");
+			return;
+		}
+
+		// Collect ancestor chain from root to leaf.
+		std::vector<Entity> chain;
+		Entity cur = primary;
+		while (cur.IsValid())
+		{
+			chain.push_back(cur);
+			const auto* h = world.TryGet<HierarchyComponent>(cur);
+			cur = h ? h->parent : Entity{};
+		}
+		std::reverse(chain.begin(), chain.end());
+
+		bool first = true;
+		for (const Entity e: chain)
+		{
+			if (!first)
+			{
+				ImGui::SameLine();
+				ImGui::TextDisabled("/");
+				ImGui::SameLine();
+			}
+			first = false;
+
+			const bool isPrimary = e == primary;
+			const char* label = EntityDisplayName(world, e);
+			ImGui::PushID(static_cast<int>(e.id));
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+			ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0, 0, 0, 0));
+			ImGui::PushStyleColor(ImGuiCol_Text, isPrimary ? ImGui::GetStyle().Colors[ImGuiCol_Text] : ImVec4(0.5f, 0.5f, 0.5f, 0.6f));
+			if (ImGui::Selectable(label, false))
+			{
+				selection.Select(e);
+			}
+			ImGui::PopStyleColor(4);
+			ImGui::PopStyleVar();
+			ImGui::PopID();
+
+			if (ImGui::IsItemHovered(ImGuiHoveredFlags_DelayShort))
+			{
+				ImGui::SetTooltip("%s", isPrimary ? "Current selection" : "Click to select this ancestor");
+			}
+		}
+	}
+
+	void HierarchyPanel::HandleKeyboardNavigation(SceneSelection& selection)
+	{
+		const auto& rows = m_rowsCur;
+		if (rows.empty() || ImGui::GetIO().WantTextInput)
+		{
+			return;
+		}
+
+		const auto selectedIt = std::find(rows.begin(), rows.end(), selection.Primary());
+		if (selectedIt != rows.end())
+		{
+			m_focusedRowIndex = static_cast<int>(std::distance(rows.begin(), selectedIt));
+		}
+		else if (m_focusedRowIndex < 0 || m_focusedRowIndex >= static_cast<int>(rows.size()))
+		{
+			m_focusedRowIndex = 0;
+		}
+
+		int delta = 0;
+		if (ImGui::IsKeyPressed(ImGuiKey_DownArrow, true))
+		{
+			delta = 1;
+		}
+		else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow, true))
+		{
+			delta = -1;
+		}
+
+		if (delta != 0)
+		{
+			m_focusedRowIndex = std::clamp(m_focusedRowIndex + delta, 0, static_cast<int>(rows.size()) - 1);
+			selection.Select(rows[m_focusedRowIndex]);
+			m_scrollToEntity = rows[m_focusedRowIndex];
+		}
+	}
+
+	void HierarchyPanel::HandleTypeToJump(const World& world, SceneSelection& selection)
+	{
+		const double now = ImGui::GetTime();
+		constexpr double kTypeTimeout = 0.8;
+
+		// Reset on timeout.
+		if (!m_typeJumpText.empty() && (now - m_typeJumpTime) > kTypeTimeout)
+		{
+			m_typeJumpText.clear();
+		}
+
+		// Accumulate printable characters.
+		for (int ch = ImGuiKey_A; ch <= ImGuiKey_Z; ++ch)
+		{
+			if (ImGui::IsKeyPressed(static_cast<ImGuiKey>(ch), false))
+			{
+				m_typeJumpText += static_cast<char>('a' + (ch - ImGuiKey_A));
+				m_typeJumpTime = now;
+				break;
+			}
+		}
+
+		if (m_typeJumpText.empty())
+		{
+			return;
+		}
+
+		// Find first entity whose name starts with the typed text.
+		const auto& rows = m_rowsCur;
+		for (std::size_t i = 0; i < rows.size(); ++i)
+		{
+			const std::string name = EntityDisplayName(world, rows[i]);
+			std::string lower;
+			lower.reserve(name.size());
+			for (unsigned char c: name)
+			{
+				lower.push_back(static_cast<char>(std::tolower(c)));
+			}
+			if (lower.starts_with(m_typeJumpText))
+			{
+				selection.Select(rows[i]);
+				m_scrollToEntity = rows[i];
+				break;
+			}
+		}
+	}
+
+	// --- Settings persistence ---
+
+	void HierarchyPanel::LoadSettings(TomlConfig& config, LayerContext& context)
+	{
+		(void) context;
+		m_filterMesh = config.GetBool("debug.hierarchy.filterMesh", m_filterMesh);
+		m_filterSkinned = config.GetBool("debug.hierarchy.filterSkinned", m_filterSkinned);
+		m_filterPhysics = config.GetBool("debug.hierarchy.filterPhysics", m_filterPhysics);
+		m_filterEffect = config.GetBool("debug.hierarchy.filterEffect", m_filterEffect);
+
+		m_expandedPaths.clear();
+		const int count = static_cast<int>(config.GetFloat("debug.hierarchy.expanded.count", 0.0f));
+		for (int i = 0; i < count; ++i)
+		{
+			char key[96];
+			std::snprintf(key, sizeof(key), "debug.hierarchy.expanded.%d", i);
+			if (config.Has(key))
+			{
+				// Store a flag so we'll look this up later when the scene is loaded.
+				// The path string is embedded in the key itself for this simple
+				// flat config system.
+				m_expandedPaths[std::string(key)] = true;
+			}
+		}
+		m_expandedPathsLoaded = false; // will be synced on first OnImGui with a valid world
+	}
+
+	void HierarchyPanel::SaveSettings(TomlConfig& config, LayerContext& context) const
+	{
+		(void) context;
+		config.Set("debug.hierarchy.filterMesh", m_filterMesh);
+		config.Set("debug.hierarchy.filterSkinned", m_filterSkinned);
+		config.Set("debug.hierarchy.filterPhysics", m_filterPhysics);
+		config.Set("debug.hierarchy.filterEffect", m_filterEffect);
 	}
 } // namespace aether::app

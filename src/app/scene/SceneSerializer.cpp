@@ -6,6 +6,7 @@
 #include <fstream>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <entt/entt.hpp>
 #include <toml++/toml.hpp>
@@ -276,6 +277,24 @@ namespace aether::app::scene
 
 	namespace
 	{
+		void AppendCaptureOrder(World& world, Entity entity, std::vector<Entity>& order, std::unordered_set<std::uint32_t>& seen)
+		{
+			if (!entity.IsValid() || seen.contains(entity.id) || !world.GetRegistry().valid(World::ToEntt(entity)) || ecs::HasSceneTransientAncestor(world, entity))
+			{
+				return;
+			}
+
+			seen.insert(entity.id);
+			order.push_back(entity);
+			if (const auto* h = world.TryGet<HierarchyComponent>(entity))
+			{
+				for (const Entity child: h->children)
+				{
+					AppendCaptureOrder(world, child, order, seen);
+				}
+			}
+		}
+
 		// One EntityRecord per entity in `order` (parent refs resolve through
 		// `indexOf`; parents outside the map record -1). Shared by full-scene
 		// capture and prefab (subtree) capture.
@@ -448,7 +467,12 @@ namespace aether::app::scene
 		// - excluded so boot auto-generation and Play snapshots never duplicate
 		// them when the script respawns its own actors.
 		std::vector<Entity> order;
-		std::unordered_map<std::uint32_t, int> indexOf;
+		std::unordered_set<std::uint32_t> seen;
+		for (const Entity root: world.Roots())
+		{
+			AppendCaptureOrder(world, root, order, seen);
+		}
+
 		for (const auto handle: reg.storage<entt::entity>())
 		{
 			if (!reg.valid(handle))
@@ -460,8 +484,17 @@ namespace aether::app::scene
 			{
 				continue;
 			}
-			indexOf[e.id] = static_cast<int>(order.size());
-			order.push_back(e);
+			const auto* h = world.TryGet<HierarchyComponent>(e);
+			if (!seen.contains(e.id) && (!h || !h->parent.IsValid()))
+			{
+				AppendCaptureOrder(world, e, order, seen);
+			}
+		}
+
+		std::unordered_map<std::uint32_t, int> indexOf;
+		for (std::size_t i = 0; i < order.size(); ++i)
+		{
+			indexOf[order[i].id] = static_cast<int>(i);
 		}
 
 		AppendEntityRecords(scene, world, order, indexOf, materials, textures);

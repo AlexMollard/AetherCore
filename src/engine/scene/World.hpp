@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <entt/entt.hpp>
 #include <utility>
+#include <vector>
 
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
@@ -95,11 +96,21 @@ namespace aether
 		System* FindSystem(const char* name);
 		void UpdateSystems(float dt);
 
+		[[nodiscard]] const std::vector<Entity>& Roots() const noexcept
+		{
+			return m_rootOrder;
+		}
+
+		void RegisterRoot(Entity entity);
+		void UnregisterRoot(Entity entity);
+		void InsertRootAt(Entity entity, int index);
+
 		[[nodiscard]] static entt::entity ToEntt(Entity entity) noexcept;
 		[[nodiscard]] static Entity FromEntt(entt::entity entity) noexcept;
 
 	private:
 		SystemRegistry m_systems;
 		Registry m_registry;
+		std::vector<Entity> m_rootOrder;
 	};
 } // namespace aether

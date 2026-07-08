@@ -13,6 +13,7 @@
 
 namespace aether
 {
+	class TomlConfig;
 	class World;
 } // namespace aether
 
@@ -32,6 +33,8 @@ namespace aether::app
 		}
 
 		void OnImGui(LayerContext& context) override;
+		void LoadSettings(TomlConfig& config, LayerContext& context) override;
+		void SaveSettings(TomlConfig& config, LayerContext& context) const override;
 
 		// Drives this panel's existing Save-As / Open (load) popups from
 		// outside (the editor's File menu and Ctrl+S), so there is one popup
@@ -41,16 +44,54 @@ namespace aether::app
 		void RequestOpenPopup();
 
 	private:
-		void DrawNode(World& world, SceneSelection& selection, Entity e, int depth);
-		void FlattenNode(World& world, Entity e, int depth);
+		// Flattened tree entry with guide-line open-mask bits.
+		struct FlatTreeEntry
+		{
+			Entity entity;
+			int depth;
+			std::uint64_t openMask; // bit d set = more nodes at depth d follow
+		};
+
+		// Tri-zone drag-drop target zone.
+		enum class DropZone : std::uint8_t
+		{
+			Before,
+			Inside,
+			After
+		};
+		enum class KeyboardFocusScope : std::uint8_t
+		{
+			None,
+			SceneList
+		};
+
+		// Pending reparent (with sibling-reorder zone info).
+		struct PendingReparent
+		{
+			Entity child;
+			Entity target;
+			DropZone zone;
+		};
+
+		void DrawNode(World& world, SceneSelection& selection, Entity e, int depth, int flatTreeIndex, bool searching, std::string_view needle);
+		void FlattenNode(World& world, Entity e, int depth, std::uint64_t openMask);
 		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
-		void DrawRowContent(World& world, Entity e);
+		void DrawRowContent(World& world, Entity e, bool searching, std::string_view needle, bool continuePreviousItem = true);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		// Drag source + drop target for one row (tree node or flat Selectable).
-		void HandleRowDragDrop(World& world, SceneSelection& selection, Entity e);
+		void HandleRowDragDrop(World& world, Entity e, float dropMinY, float dropMaxY, float visualMaxX);
 		// Returns true if the menu destroyed `e` (callers must not touch it after).
 		bool DrawRowContextMenu(World& world, SceneSelection& selection, Entity e);
 		void BeginRename(const World& world, Entity e);
+		void DrawRowUtilityToggles(World& world, Entity e);
+		std::string ComputeEntityPath(const World& world, Entity e) const;
+		void SyncExpandedFromPaths(World& world);
+		void DrawBreadcrumbTrail(const World& world, SceneSelection& selection);
+		void DrawTreeGuideLines(ImDrawList* drawList, const FlatTreeEntry& entry, const ImVec2& rowMin, const ImVec2& rowMax) const;
+		void UpdateKeyboardFocusScopeFromMouse(const ImVec2& sceneListMin, const ImVec2& sceneListMax);
+		bool SceneListOwnsKeyboard() const noexcept;
+		void HandleKeyboardNavigation(SceneSelection& selection);
+		void HandleTypeToJump(const World& world, SceneSelection& selection);
 
 		char m_search[64] = {};
 		// Scene save/load popups.
@@ -85,16 +126,16 @@ namespace aether::app
 		std::vector<Entity> m_rowsCur;
 		std::vector<Entity> m_rowsPrev;
 		std::vector<Entity> m_filteredRowsScratch;
-		std::vector<std::pair<Entity, int>> m_flatTree;
+		std::vector<FlatTreeEntry> m_flatTree;
 		std::unordered_set<std::uint32_t> m_expandedNodes;
 		Entity m_rangeAnchor{};
 		// Plain-press on a multi-selected row defers the collapse to release (the
 		// press may start a multi-entity drag); this remembers where it landed.
 		Entity m_pendingCollapse{};
 
-		// Drag-drop reparent is queued during the tree walk and applied after it:
+		// Tri-zone drag-drop reparent (queued during the tree walk, applied after):
 		// SetParent mutates children vectors the recursion may still be iterating.
-		std::optional<std::pair<Entity, Entity>> m_pendingReparent; // {child, newParent}
+		std::optional<PendingReparent> m_pendingReparent;
 		// Duplicate (context menu / Ctrl+D) also defers past the walk: it
 		// creates entities, which would invalidate the iteration. The
 		// clipboard trio defers the same way for the context menu items.
@@ -110,5 +151,29 @@ namespace aether::app
 		bool m_knownSeeded = false;                             // no flash on the initial population
 		std::uint64_t m_seenSelectionSerial = 0;
 		double m_pulseStart = -1.0;
+
+		// Dirty state (unsaved changes indicator).
+		bool m_dirty = false;
+
+		// Keyboard arrow navigation: the row index in m_rowsCur that has
+		// keyboard focus. -1 means "no focus, click or keyboard first".
+		int m_focusedRowIndex = -1;
+		KeyboardFocusScope m_keyboardFocusScope = KeyboardFocusScope::None;
+
+		// Type-to-jump: accumulate typed characters with a timeout.
+		std::string m_typeJumpText;
+		double m_typeJumpTime = -1.0;
+
+		// Entity to scroll into view on the next frame (set by F key).
+		Entity m_scrollToEntity{};
+
+		// Group / Ungroup pending flags (applied after the tree walk).
+		bool m_pendingGroup = false;
+		bool m_pendingUngroup = false;
+
+		// Persistent expansion state: maps hierarchy path -> expanded.
+		// Populated from LoadSettings; used to seed m_expandedNodes.
+		std::unordered_map<std::string, bool> m_expandedPaths;
+		bool m_expandedPathsLoaded = false;
 	};
 } // namespace aether::app

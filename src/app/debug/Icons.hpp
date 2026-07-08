@@ -53,7 +53,9 @@
 #define ICON_FA_LIGHTBULB "\xef\x83\xab"               // U+F0EB lights
 #define ICON_FA_BOX_OPEN "\xef\x92\x9e"                // U+F49E prefabs
 #define ICON_FA_CODE "\xef\x84\xa1"                    // U+F121 entity scripts
-#define ICON_FA_CLONE "\xef\x89\x8d"                   // U+F24D duplicate
+#define ICON_FA_CLONE                   "\xef\x89\x8d"  // U+F24D duplicate
+#define ICON_FA_LOCK                    "\xef\x80\xa3"  // U+F023 not pickable
+#define ICON_FA_UNLOCK                  "\xef\x82\x9c"  // U+F09C pickable
 
 // Window menu categories / panels
 #define ICON_FA_BUG "\xef\x86\x88"                     // U+F188 debug tools

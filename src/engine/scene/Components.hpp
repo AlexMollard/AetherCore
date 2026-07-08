@@ -199,4 +199,20 @@ namespace aether
 		bool applyToTransform = true;                 // push delta to TransformComponent (visual sync)
 		bool enabled = true;
 	};
+
+	// -- Hierarchy panel editor tags ------------------------------------------
+
+	// Present when the entity is hidden in the Scene View.
+	// Toggled via the eye icon in the Hierarchy Panel row.
+	struct HiddenTag
+	{
+		bool dummy = true;
+	};
+
+	// Present when the entity is *not* pickable via the scene-view ray-cast.
+	// Toggled via the padlock icon in the Hierarchy Panel row.
+	struct NotPickableTag
+	{
+		bool dummy = true;
+	};
 } // namespace aether

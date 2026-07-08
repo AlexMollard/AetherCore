@@ -1,5 +1,7 @@
 #include "scene/World.hpp"
 
+#include <algorithm>
+
 #include "scene/Components.hpp"
 #include "scene/Entity.hpp"
 #include "utils/Profiler.hpp"
@@ -42,7 +44,9 @@ namespace aether
 
 	Entity World::Create()
 	{
-		return FromEntt(m_registry.create());
+		const Entity entity = FromEntt(m_registry.create());
+		RegisterRoot(entity);
+		return entity;
 	}
 
 	void World::Destroy(Entity entity)
@@ -50,7 +54,45 @@ namespace aether
 		const entt::entity enttEntity = ToEntt(entity);
 		if (entity.IsValid() && m_registry.valid(enttEntity))
 		{
+			UnregisterRoot(entity);
 			m_registry.destroy(enttEntity);
+		}
+	}
+
+	void World::RegisterRoot(Entity entity)
+	{
+		const entt::entity enttEntity = ToEntt(entity);
+		if (!entity.IsValid() || !m_registry.valid(enttEntity))
+		{
+			return;
+		}
+		if (std::find(m_rootOrder.begin(), m_rootOrder.end(), entity) == m_rootOrder.end())
+		{
+			m_rootOrder.push_back(entity);
+		}
+	}
+
+	void World::UnregisterRoot(Entity entity)
+	{
+		m_rootOrder.erase(std::remove(m_rootOrder.begin(), m_rootOrder.end(), entity), m_rootOrder.end());
+	}
+
+	void World::InsertRootAt(Entity entity, int index)
+	{
+		const entt::entity enttEntity = ToEntt(entity);
+		if (!entity.IsValid() || !m_registry.valid(enttEntity))
+		{
+			return;
+		}
+
+		UnregisterRoot(entity);
+		if (index >= 0 && static_cast<std::size_t>(index) < m_rootOrder.size())
+		{
+			m_rootOrder.insert(m_rootOrder.begin() + index, entity);
+		}
+		else
+		{
+			m_rootOrder.push_back(entity);
 		}
 	}
 
