@@ -5,6 +5,7 @@
 
 #include <glm/vec2.hpp>
 #include <imgui.h>
+#include <vector>
 
 #include "debug/DebugPanel.hpp"
 #include "scene/Entity.hpp"
@@ -31,6 +32,13 @@ namespace aether::app
 		TopRight,
 		BottomLeft,
 		BottomRight
+	};
+
+	struct DragOrigin
+	{
+		Entity entity;
+		glm::vec2 startOffsetMin;
+		glm::vec2 startOffsetMax;
 	};
 
 	class UiCanvasPanel final : public DebugPanel
@@ -73,8 +81,8 @@ namespace aether::app
 		DragState m_drag;
 		bool m_snappingEnabled = true;
 		Entity m_hoveredEntity{};
-		bool m_isMarqueeActive = false;
 		ImVec2 m_marqueeStart{0.f, 0.f};
 		ImVec2 m_marqueeEnd{0.f, 0.f};
+		std::vector<DragOrigin> m_multiDragOrigins;
 	};
 } // namespace aether::app

@@ -378,6 +378,10 @@ namespace aether::app
 				}
 				AppendRectSnapCandidates(element.canvasRect, xCandidates, yCandidates);
 			}
+
+			const float gridStep = 10.f;
+			for (float x = 0.f; x <= extent.x + 1.f; x += gridStep) xCandidates.push_back(x);
+			for (float y = 0.f; y <= extent.y + 1.f; y += gridStep) yCandidates.push_back(y);
 		}
 
 		[[nodiscard]] bool TryBestSnapDelta(const std::vector<float>& sources, const std::vector<float>& candidates, float threshold, float& outDelta, float& outPosition)
@@ -838,44 +842,37 @@ namespace aether::app
 		auto* selection = context.TryGet<SceneSelection>();
 		Entity canvas = ActiveCanvas(world, selection);
 
-		if (ImGui::Button(ICON_FA_PLUS "  Canvas"))
+		if (ImGui::Button(ICON_FA_PLUS "  Add Element"))
 		{
-			const Entity created = ui::CreateCanvasEntity(world);
-			if (selection != nullptr)
-			{
-				selection->Select(created);
-			}
-			canvas = created;
+			ImGui::OpenPopup("##AddElementPopup");
 		}
-		ImGui::SameLine();
-		if (ImGui::Button(ICON_FA_IMAGE "  Image"))
+
+		if (ImGui::BeginPopup("##AddElementPopup"))
 		{
-			canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-			const Entity parent = CreateParentForNewElement(world, selection, canvas);
-			const Entity created = ui::CreateImageEntity(world, canvas);
-			if (parent != canvas)
+			if (ImGui::MenuItem(ICON_FA_IMAGE " Image"))
 			{
-				ecs::SetParent(world, created, parent);
+				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+				const Entity parent = CreateParentForNewElement(world, selection, canvas);
+				const Entity created = ui::CreateImageEntity(world, canvas);
+				if (parent != canvas) ecs::SetParent(world, created, parent);
+				if (selection != nullptr) selection->Select(created);
 			}
-			if (selection != nullptr)
+			if (ImGui::MenuItem(ICON_FA_CODE " Text"))
 			{
-				selection->Select(created);
+				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+				const Entity parent = CreateParentForNewElement(world, selection, canvas);
+				const Entity created = ui::CreateTextEntity(world, canvas);
+				if (parent != canvas) ecs::SetParent(world, created, parent);
+				if (selection != nullptr) selection->Select(created);
 			}
-		}
-		ImGui::SameLine();
-		if (ImGui::Button(ICON_FA_CODE "  Text"))
-		{
-			canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
-			const Entity parent = CreateParentForNewElement(world, selection, canvas);
-			const Entity created = ui::CreateTextEntity(world, canvas);
-			if (parent != canvas)
+			ImGui::Separator();
+			if (ImGui::MenuItem(ICON_FA_SITEMAP " Canvas (Root)"))
 			{
-				ecs::SetParent(world, created, parent);
+				const Entity created = ui::CreateCanvasEntity(world);
+				if (selection != nullptr) selection->Select(created);
+				canvas = created;
 			}
-			if (selection != nullptr)
-			{
-				selection->Select(created);
-			}
+			ImGui::EndPopup();
 		}
 		ImGui::SameLine();
 		ImGui::Checkbox("Preview", &m_previewContent);
@@ -1169,10 +1166,10 @@ namespace aether::app
 						newDrag.startOffsetMin = {canvasComp->referenceResolution.x, canvasComp->referenceResolution.y};
 					}
 				}
-				else if (selection != nullptr)
+				else
 				{
-					selection->Select(canvas);
-					m_isMarqueeActive = true;
+					if (!io.KeyShift && selection != nullptr) selection->Clear();
+					newDrag.kind = DragKind::Marquee;
 					m_marqueeStart = mouse;
 					m_marqueeEnd = mouse;
 				}
@@ -1188,14 +1185,50 @@ namespace aether::app
 				}
 			}
 
+			if (newDrag.kind == DragKind::Move && selection != nullptr)
+			{
+				m_multiDragOrigins.clear();
+				for (const Entity e : selection->All())
+				{
+					if (e == newDrag.entity) continue;
+					if (auto* r = world.TryGet<ui::UIRect>(e))
+					{
+						m_multiDragOrigins.push_back({e, r->offsetMin, r->offsetMax});
+					}
+				}
+			}
+
 			m_drag = newDrag;
 		}
 
 		if (m_drag.kind != DragKind::None)
 		{
+			if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+			{
+				if (auto* r = world.TryGet<ui::UIRect>(m_drag.entity))
+				{
+					r->offsetMin = m_drag.startOffsetMin;
+					r->offsetMax = m_drag.startOffsetMax;
+				}
+				for (const auto& dragOrigin : m_multiDragOrigins)
+				{
+					if (auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity))
+					{
+						r->offsetMin = dragOrigin.startOffsetMin;
+						r->offsetMax = dragOrigin.startOffsetMax;
+					}
+				}
+				m_multiDragOrigins.clear();
+				m_drag = {};
+			}
+
 			if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || (m_drag.kind != DragKind::CanvasResize && !IsAlive(world, m_drag.entity)))
 			{
-				m_drag = {};
+				if (m_drag.kind != DragKind::Marquee)
+				{
+					m_multiDragOrigins.clear();
+					m_drag = {};
+				}
 			}
 
 			if (m_drag.kind == DragKind::CanvasResize)
@@ -1228,6 +1261,15 @@ namespace aether::app
 				{
 					rect->offsetMin = m_drag.startOffsetMin + delta;
 					rect->offsetMax = m_drag.startOffsetMax + delta;
+
+				for (const auto& dragOrigin : m_multiDragOrigins)
+				{
+					if (auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity))
+					{
+						r->offsetMin = dragOrigin.startOffsetMin + delta;
+						r->offsetMax = dragOrigin.startOffsetMax + delta;
+					}
+				}
 
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					if (shouldSnap)
@@ -1297,7 +1339,7 @@ namespace aether::app
 			}
 		}
 
-		if (m_isMarqueeActive)
+		if (m_drag.kind == DragKind::Marquee)
 		{
 			m_marqueeEnd = ImGui::GetMousePos();
 
@@ -1315,16 +1357,100 @@ namespace aether::app
 					{
 						if (RectsOverlap(el.min, el.max, mMin, mMax))
 						{
-							selection->Select(el.entity);
+							if (io.KeyShift) selection->AddToSelection(el.entity);
+							else selection->Select(el.entity);
 						}
 					}
 				}
-				m_isMarqueeActive = false;
+				m_multiDragOrigins.clear();
+				m_drag = {};
 			}
 		}
 
 		DrawSnapGuides(drawList, snapGuides, origin, m_pan, m_zoom, extent);
 		DrawGapGuides(drawList, gapGuides, origin, m_pan, m_zoom);
+
+		// Context menus
+		if (surfaceHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right))
+		{
+			if (m_hoveredEntity.IsValid())
+			{
+				if (selection != nullptr) selection->Select(m_hoveredEntity);
+				ImGui::OpenPopup("##ElementContext");
+			}
+			else
+			{
+				ImGui::OpenPopup("##CanvasContext");
+			}
+		}
+
+		if (ImGui::BeginPopup("##CanvasContext"))
+		{
+			if (ImGui::MenuItem(ICON_FA_IMAGE " Add Image"))
+			{
+				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+				const Entity parent = CreateParentForNewElement(world, selection, canvas);
+				const Entity created = ui::CreateImageEntity(world, canvas);
+				if (parent != canvas) ecs::SetParent(world, created, parent);
+				if (selection != nullptr) selection->Select(created);
+			}
+			if (ImGui::MenuItem(ICON_FA_CODE " Add Text"))
+			{
+				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
+				const Entity parent = CreateParentForNewElement(world, selection, canvas);
+				const Entity created = ui::CreateTextEntity(world, canvas);
+				if (parent != canvas) ecs::SetParent(world, created, parent);
+				if (selection != nullptr) selection->Select(created);
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Reset View"))
+			{
+				m_pan = {0.f, 0.f};
+				m_zoom = 1.f;
+			}
+			if (ImGui::MenuItem("Zoom to Fit (F)"))
+			{
+				if (selectedRect != nullptr)
+				{
+					const glm::vec4 visualRect = ui::ResolveRect(selectedParentRect, *selectedRect);
+					const float zoomX = (canvasArea.x * 0.8f) / std::max(visualRect.z, 1.f);
+					const float zoomY = (canvasArea.y * 0.8f) / std::max(visualRect.w, 1.f);
+					m_zoom = std::clamp(std::min(zoomX, zoomY), kMinZoom, kMaxZoom);
+					canvasSize = canvasSizeForZoom(m_zoom);
+					origin = originForZoom(m_zoom);
+					const ImVec2 targetScreen = CanvasToScreen({visualRect.x + visualRect.z * 0.5f, visualRect.y + visualRect.w * 0.5f}, origin, ImVec2{0.f, 0.f}, m_zoom);
+					const ImVec2 screenCenter = Add(contentMin, ImVec2{canvasArea.x * 0.5f, canvasArea.y * 0.5f});
+					m_pan = Sub(screenCenter, targetScreen);
+				}
+			}
+			ImGui::EndPopup();
+		}
+
+		if (ImGui::BeginPopup("##ElementContext"))
+		{
+			if (ImGui::MenuItem("Delete", "Del"))
+			{
+				if (selection != nullptr) selection->Clear();
+				world.Destroy(m_hoveredEntity);
+			}
+			ImGui::Separator();
+			if (ImGui::MenuItem("Zoom to Fit (F)"))
+			{
+				if (selectedRect != nullptr)
+				{
+					const glm::vec4 visualRect = ui::ResolveRect(selectedParentRect, *selectedRect);
+					const float zoomX = (canvasArea.x * 0.8f) / std::max(visualRect.z, 1.f);
+					const float zoomY = (canvasArea.y * 0.8f) / std::max(visualRect.w, 1.f);
+					m_zoom = std::clamp(std::min(zoomX, zoomY), kMinZoom, kMaxZoom);
+					canvasSize = canvasSizeForZoom(m_zoom);
+					origin = originForZoom(m_zoom);
+					const ImVec2 targetScreen = CanvasToScreen({visualRect.x + visualRect.z * 0.5f, visualRect.y + visualRect.w * 0.5f}, origin, ImVec2{0.f, 0.f}, m_zoom);
+					const ImVec2 screenCenter = Add(contentMin, ImVec2{canvasArea.x * 0.5f, canvasArea.y * 0.5f});
+					m_pan = Sub(screenCenter, targetScreen);
+				}
+			}
+			ImGui::EndPopup();
+		}
 
 		drawList->PopClipRect();
 		ImGui::End();
