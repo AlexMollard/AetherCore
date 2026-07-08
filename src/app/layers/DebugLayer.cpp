@@ -24,6 +24,7 @@ using namespace std::string_view_literals;
 #include "debug/DayNightPanel.hpp"
 #include "debug/OpenInEditor.hpp"
 #include "debug/DevToolsPanel.hpp"
+#include "debug/FileExplorerPanel.hpp"
 #include "debug/Icons.hpp"
 #include "debug/HierarchyPanel.hpp"
 #include "debug/InspectorPanel.hpp"
@@ -37,6 +38,7 @@ using namespace std::string_view_literals;
 #include "debug/UiCanvasPanel.hpp"
 #include "debug/ViewportPanel.hpp"
 #include "AetherCore.hpp"
+#include "PlaySession.hpp"
 #include "assets/AssetManager.hpp"
 #include "mesh/Mesh.hpp"
 #include "physics/PhysicsDebugRenderer.hpp"
@@ -87,6 +89,10 @@ namespace aether::app
 			if (panelName == "Inspector")
 			{
 				return ICON_FA_MAGNIFYING_GLASS;
+			}
+			if (panelName == "File Explorer")
+			{
+				return ICON_FA_FOLDER_OPEN;
 			}
 			if (panelName == "Viewport")
 			{
@@ -348,6 +354,7 @@ namespace aether::app
 		m_hierarchyPanel = hierarchyPanel.get();
 		m_panels.push_back(std::move(hierarchyPanel));
 		m_panels.push_back(std::make_unique<InspectorPanel>());
+		m_panels.push_back(std::make_unique<FileExplorerPanel>());
 		m_panels.push_back(std::make_unique<UiCanvasPanel>());
 		m_panels.push_back(std::make_unique<PerformancePanel>());
 		m_panels.push_back(std::make_unique<ViewportPanel>());
@@ -540,7 +547,7 @@ namespace aether::app
 		}
 		if (auto* playState = context.TryGet<PlayState>())
 		{
-			actions.push_back({"Play: Toggle Play / Stop", [playState]() { playState->SetMode(playState->IsPlaying() ? PlayState::Mode::Editing : PlayState::Mode::Playing); }});
+			actions.push_back({"Play: Toggle Play / Stop", [&context]() { TogglePlaySession(context); }});
 		}
 		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
 		for (const auto& preset: m_layoutPresets)

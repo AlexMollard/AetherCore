@@ -226,7 +226,14 @@ AE_SCRIPT_API void aether_add_material_pulse(std::uint32_t id, Vec3 emissiveA, V
 // Attach a script component by type name; runs while playing and serializes.
 AE_SCRIPT_API void aether_add_script(std::uint32_t id, const char* typeName)
 {
-	ActiveWorld().EmplaceOrReplace<aether::ScriptComponent>(aether::Entity{id}, aether::ScriptComponent{.path = typeName != nullptr ? typeName : ""});
+	auto& world = ActiveWorld();
+	const aether::Entity entity{id};
+	auto* scripts = world.TryGet<aether::ScriptComponent>(entity);
+	if (scripts == nullptr)
+	{
+		scripts = &world.Emplace<aether::ScriptComponent>(entity);
+	}
+	scripts->scripts.push_back(aether::ScriptEntry{.path = typeName != nullptr ? typeName : ""});
 }
 
 AE_SCRIPT_API std::int32_t aether_scene_file_exists(const char* name)

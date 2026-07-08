@@ -13,6 +13,7 @@
 
 #include "assets/AssetManager.hpp"
 #include "debug/ComponentDrawers.hpp"
+#include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "io/FileSystem.hpp"
@@ -235,51 +236,71 @@ namespace aether::app
 
 		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
 		{
-			if (io.KeyCtrl)
-			{
-				selection.ToggleSelection(e);
-				m_rangeAnchor = e;
-			}
-			else if (io.KeyShift && m_rangeAnchor.IsValid())
-			{
-				const auto& rows = m_rowsPrev;
-				const auto ia = std::find(rows.begin(), rows.end(), m_rangeAnchor);
-				const auto ib = std::find(rows.begin(), rows.end(), e);
-				if (ia != rows.end() && ib != rows.end())
-				{
-					const auto lo = std::min(ia, ib);
-					const auto hi = std::max(ia, ib);
-					selection.Clear();
-					for (auto it = lo; it != hi + 1; ++it)
-					{
-						selection.AddToSelection(*it);
-					}
-				}
-				else
-				{
-					selection.Select(e);
-					m_rangeAnchor = e;
-				}
-			}
-			else if (!inMultiSelection)
-			{
-				selection.Select(e);
-				m_rangeAnchor = e;
-			}
-			else
+			if (!io.KeyCtrl && !io.KeyShift && inMultiSelection)
 			{
 				// Pressing a row that is part of a multi-selection must NOT
 				// collapse it yet - the press may start a multi-entity drag. The
 				// collapse happens on release, only if no drag occurred.
 				m_pendingCollapse = e;
+				m_pendingClick = {};
+			}
+			else
+			{
+				m_pendingClick = e;
+				m_pendingClickCtrl = io.KeyCtrl;
+				m_pendingClickShift = io.KeyShift;
+				m_pendingCollapse = {};
 			}
 		}
 
-		if (m_pendingCollapse == e && inMultiSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Left) && !ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f)
-		        && !ImGui::IsDragDropActive())
+		const bool released = ImGui::IsMouseReleased(ImGuiMouseButton_Left);
+		const bool becameDrag = ImGui::IsMouseDragPastThreshold(ImGuiMouseButton_Left, 4.0f) || ImGui::IsDragDropActive();
+		if (m_pendingClick == e && released)
 		{
-			selection.Select(e);
-			m_rangeAnchor = e;
+			if (ImGui::IsItemHovered() && !becameDrag)
+			{
+				if (m_pendingClickCtrl)
+				{
+					selection.ToggleSelection(e);
+					m_rangeAnchor = e;
+				}
+				else if (m_pendingClickShift && m_rangeAnchor.IsValid())
+				{
+					const auto& rows = m_rowsPrev;
+					const auto ia = std::find(rows.begin(), rows.end(), m_rangeAnchor);
+					const auto ib = std::find(rows.begin(), rows.end(), e);
+					if (ia != rows.end() && ib != rows.end())
+					{
+						const auto lo = std::min(ia, ib);
+						const auto hi = std::max(ia, ib);
+						selection.Clear();
+						for (auto it = lo; it != hi + 1; ++it)
+						{
+							selection.AddToSelection(*it);
+						}
+					}
+					else
+					{
+						selection.Select(e);
+						m_rangeAnchor = e;
+					}
+				}
+				else if (!inMultiSelection)
+				{
+					selection.Select(e);
+					m_rangeAnchor = e;
+				}
+			}
+			m_pendingClick = {};
+		}
+
+		if (m_pendingCollapse == e && released)
+		{
+			if (inMultiSelection && !io.KeyCtrl && !io.KeyShift && ImGui::IsItemHovered() && !becameDrag)
+			{
+				selection.Select(e);
+				m_rangeAnchor = e;
+			}
 			m_pendingCollapse = {};
 		}
 	}
@@ -288,7 +309,9 @@ namespace aether::app
 	{
 		if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip))
 		{
-			ImGui::SetDragDropPayload("AETHER_ENTITY", &e.id, sizeof(e.id));
+			m_pendingClick = {};
+			m_pendingCollapse = {};
+			ImGui::SetDragDropPayload(dragdrop::kEntityPayload, &e.id, sizeof(e.id));
 			DrawEntityDragPreview(world, e);
 			ImGui::EndDragDropSource();
 		}
@@ -316,11 +339,16 @@ namespace aether::app
 
 			Entity dragged{};
 			bool hasEntityPayload = false;
-			if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload && activePayload->IsDataType("AETHER_ENTITY") && activePayload->DataSize == sizeof(std::uint32_t))
+			if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload && activePayload->IsDataType(dragdrop::kEntityPayload) && activePayload->DataSize == sizeof(std::uint32_t))
 			{
 				dragged = Entity{*static_cast<const std::uint32_t*>(activePayload->Data)};
 				hasEntityPayload = true;
 			}
+			const bool hasScriptPayload = []()
+			{
+				const ImGuiPayload* activePayload = ImGui::GetDragDropPayload();
+				return activePayload != nullptr && activePayload->IsDataType(dragdrop::kScriptPayload) && activePayload->DataSize == sizeof(dragdrop::ScriptPayload);
+			}();
 
 			const auto* targetHierarchy = world.TryGet<HierarchyComponent>(e);
 			const Entity targetParent = targetHierarchy ? targetHierarchy->parent : Entity{};
@@ -329,12 +357,17 @@ namespace aether::app
 			const bool canDropHere = zone == DropZone::Inside ? canParentHere : canReorderHere;
 
 			// Visual feedback while dragging over this item.
-			if (ImGui::IsDragDropActive() && canDropHere)
+			if (ImGui::IsDragDropActive() && (hasScriptPayload || canDropHere))
 			{
 				ImDrawList* drawList = ImGui::GetWindowDrawList();
 				const ImU32 lineCol = IM_COL32(105, 170, 255, 230);
 				const ImU32 fillCol = IM_COL32(70, 135, 255, 52);
-				if (zone == DropZone::Before)
+				if (hasScriptPayload)
+				{
+					drawList->AddRectFilled(dropRect.Min, dropRect.Max, fillCol);
+					drawList->AddRectFilled(dropRect.Min, ImVec2(dropRect.Min.x + 3.0f, dropRect.Max.y), lineCol);
+				}
+				else if (zone == DropZone::Before)
 				{
 					drawList->AddLine(ImVec2(dropRect.Min.x, dropRect.Min.y), ImVec2(dropRect.Max.x, dropRect.Min.y), lineCol, 2.0f);
 				}
@@ -349,7 +382,16 @@ namespace aether::app
 				}
 			}
 
-			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+			{
+				if (p->DataSize == sizeof(dragdrop::ScriptPayload))
+				{
+					const auto* script = static_cast<const dragdrop::ScriptPayload*>(p->Data);
+					AddScriptToEntity(world, e, script->typeName);
+				}
+			}
+
+			if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
 			{
 				const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
 				const Entity draggedEntity{draggedId};
@@ -1338,7 +1380,7 @@ namespace aether::app
 					ImGui::InvisibleButton("##emptyDrop", ImVec2(ImGui::GetContentRegionAvail().x, remaining));
 					if (ImGui::BeginDragDropTarget())
 					{
-						if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("AETHER_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+						if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
 						{
 							const auto draggedId = *static_cast<const std::uint32_t*>(p->Data);
 							m_pendingReparent = PendingReparent{Entity{draggedId}, Entity{}, DropZone::Inside};

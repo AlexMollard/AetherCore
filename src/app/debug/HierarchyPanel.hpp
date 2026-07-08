@@ -132,6 +132,11 @@ namespace aether::app
 		// Plain-press on a multi-selected row defers the collapse to release (the
 		// press may start a multi-entity drag); this remembers where it landed.
 		Entity m_pendingCollapse{};
+		// Plain row selection is also deferred until release so starting a drag
+		// from the hierarchy does not steal inspector focus before the drop.
+		Entity m_pendingClick{};
+		bool m_pendingClickCtrl = false;
+		bool m_pendingClickShift = false;
 
 		// Tri-zone drag-drop reparent (queued during the tree walk, applied after):
 		// SetParent mutates children vectors the recursion may still be iterating.

@@ -16,6 +16,7 @@ internal enum PropertyType
     Vector3 = 4,
     String = 5,
     Enum = 6,
+    Entity = 7,
 }
 
 /// <summary>Blittable tagged union for one script property crossing the boundary.</summary>
@@ -25,7 +26,7 @@ internal unsafe struct PropertyValue
     public int Type; // PropertyType
     public int Reserved;
     public fixed float F4[4]; // Float (x), Vector3 (xyz)
-    public long I64; // Int, Bool (0/1), Enum
+    public long I64; // Int, Bool (0/1), Enum, Entity id
     public byte* Str; // String (UTF-8, caller-owned)
 }
 

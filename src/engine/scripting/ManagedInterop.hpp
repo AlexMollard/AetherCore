@@ -31,6 +31,7 @@ namespace aether::scripting
 		Vector3 = 4,
 		String = 5,
 		Enum = 6,
+		Entity = 7,
 	};
 
 	// A single serialized script property crossing the boundary. Blittable
@@ -42,7 +43,7 @@ namespace aether::scripting
 		PropertyType type = PropertyType::None;
 		std::int32_t reserved = 0; // padding / future flags
 		float f4[4] = {};          // Float (x), Vector3 (xyz)
-		std::int64_t i64 = 0;      // Int, Bool (0/1), Enum
+		std::int64_t i64 = 0;      // Int, Bool (0/1), Enum, Entity id
 		const char* str = nullptr; // String
 	};
 

@@ -14,6 +14,21 @@ namespace aether::app
 {
 	namespace
 	{
+		std::uint64_t InstanceKey(std::uint32_t entityId, std::uint32_t scriptIndex)
+		{
+			return (static_cast<std::uint64_t>(entityId) << 32) | static_cast<std::uint64_t>(scriptIndex);
+		}
+
+		std::uint32_t InstanceEntityId(std::uint64_t key)
+		{
+			return static_cast<std::uint32_t>(key >> 32);
+		}
+
+		std::uint32_t InstanceScriptIndex(std::uint64_t key)
+		{
+			return static_cast<std::uint32_t>(key & 0xffffffffu);
+		}
+
 		// Installs the active SceneContext for the duration of a managed call
 		// group, so the C# exports (which read scripting::ActiveContext()) resolve.
 		struct ActiveContextScope
@@ -40,34 +55,35 @@ namespace aether::app
 		m_instances.clear();
 	}
 
-	std::uint64_t ScriptComponentSystem::GetInstanceHandle(std::uint32_t entityId) const
+	std::uint64_t ScriptComponentSystem::GetInstanceHandle(std::uint32_t entityId, std::uint32_t scriptIndex) const
 	{
-		const auto it = m_instances.find(entityId);
-		return it != m_instances.end() ? it->second : 0;
+		const auto it = m_instances.find(InstanceKey(entityId, scriptIndex));
+		return it != m_instances.end() ? it->second.handle : 0;
 	}
 
-	bool ScriptComponentSystem::UpdateCSharpEntity(
-	        scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/, Entity entity, const std::string& typeName, const std::map<std::string, ScriptPropertyValue>& properties, bool& attached, float dt)
+	bool ScriptComponentSystem::UpdateCSharpEntity(scripting::CSharpScriptingSubsystem& cs, scripting::SceneContext& /*ctx*/, Entity entity, std::uint32_t scriptIndex, ScriptEntry& script, float dt)
 	{
 		const auto* api = cs.Api();
 		if (api == nullptr)
 		{
 			return false;
 		}
+		const std::string& typeName = script.path;
 		if (m_failedTypes.contains(typeName))
 		{
 			return false;
 		}
 
+		const std::uint64_t key = InstanceKey(entity.id, scriptIndex);
 		std::uint64_t handle = 0;
-		if (const auto it = m_instances.find(entity.id); it != m_instances.end())
+		if (const auto it = m_instances.find(key); it != m_instances.end())
 		{
-			handle = it->second;
+			handle = it->second.handle;
 		}
 
 		// Re-play / re-attach (scene apply reset `attached`): discard the previous
 		// instance so the script restarts from fresh per-entity state.
-		if (!attached && handle != 0)
+		if (!script.attached && handle != 0)
 		{
 			if (api->InvokeDetach != nullptr)
 			{
@@ -77,7 +93,7 @@ namespace aether::app
 			{
 				api->DestroyInstance(handle);
 			}
-			m_instances.erase(entity.id);
+			m_instances.erase(key);
 			handle = 0;
 		}
 
@@ -90,17 +106,17 @@ namespace aether::app
 				m_failedTypes.insert(typeName);
 				return false;
 			}
-			m_instances[entity.id] = handle;
+			m_instances[key] = Instance{.handle = handle, .typeName = typeName};
 			// Apply serialized field overrides before OnAttach sees them.
-			cs.ApplyProperties(handle, typeName, properties);
-			attached = false; // a freshly created instance must attach
+			cs.ApplyProperties(handle, typeName, script.properties);
+			script.attached = false; // a freshly created instance must attach
 		}
 
-		if (!attached)
+		if (!script.attached)
 		{
 			// Flag first for parity with the das runner's no-retry contract
 			// (managed OnAttach also guards its own exceptions).
-			attached = true;
+			script.attached = true;
 			if (api->InvokeAttach != nullptr)
 			{
 				api->InvokeAttach(handle);
@@ -123,16 +139,18 @@ namespace aether::app
 		}
 
 		auto& reg = world.GetRegistry();
-		std::vector<std::uint32_t> stale;
-		for (const auto& [id, handle]: m_instances)
+		std::vector<std::uint64_t> stale;
+		for (const auto& [key, instance]: m_instances)
 		{
+			const std::uint32_t id = InstanceEntityId(key);
+			const std::uint32_t scriptIndex = InstanceScriptIndex(key);
 			const auto enttE = World::ToEntt(Entity{id});
 			const bool alive = reg.valid(enttE);
 			const auto* sc = alive ? world.TryGet<ScriptComponent>(Entity{id}) : nullptr;
-			const bool stillScripted = sc != nullptr && !sc->path.empty();
+			const bool stillScripted = sc != nullptr && scriptIndex < sc->scripts.size() && !sc->scripts[scriptIndex].path.empty() && sc->scripts[scriptIndex].path == instance.typeName;
 			if (!stillScripted)
 			{
-				stale.push_back(id);
+				stale.push_back(key);
 			}
 		}
 
@@ -142,9 +160,9 @@ namespace aether::app
 		}
 
 		ActiveContextScope scope(ctx);
-		for (const std::uint32_t id: stale)
+		for (const std::uint64_t key: stale)
 		{
-			const std::uint64_t handle = m_instances[id];
+			const std::uint64_t handle = m_instances[key].handle;
 			if (api->InvokeDetach != nullptr)
 			{
 				api->InvokeDetach(handle);
@@ -153,7 +171,7 @@ namespace aether::app
 			{
 				api->DestroyInstance(handle);
 			}
-			m_instances.erase(id);
+			m_instances.erase(key);
 		}
 	}
 
@@ -167,15 +185,15 @@ namespace aether::app
 		}
 
 		ActiveContextScope scope(ctx);
-		for (const auto& [id, handle]: m_instances)
+		for (const auto& [key, instance]: m_instances)
 		{
 			if (api->InvokeDetach != nullptr)
 			{
-				api->InvokeDetach(handle);
+				api->InvokeDetach(instance.handle);
 			}
 			if (api->DestroyInstance != nullptr)
 			{
-				api->DestroyInstance(handle);
+				api->DestroyInstance(instance.handle);
 			}
 		}
 		m_instances.clear();
@@ -214,13 +232,22 @@ namespace aether::app
 				continue; // destroyed by an earlier script this tick
 			}
 			auto* sc = world.TryGet<ScriptComponent>(e);
-			if (sc == nullptr || sc->path.empty())
+			if (sc == nullptr || sc->scripts.empty())
 			{
 				continue;
 			}
 
-			ActiveContextScope scope(*sceneCtx);
-			UpdateCSharpEntity(*csScripting, *sceneCtx, e, sc->path, sc->properties, sc->attached, dt);
+			for (std::size_t i = 0; i < sc->scripts.size(); ++i)
+			{
+				ScriptEntry& script = sc->scripts[i];
+				if (script.path.empty())
+				{
+					continue;
+				}
+
+				ActiveContextScope scope(*sceneCtx);
+				UpdateCSharpEntity(*csScripting, *sceneCtx, e, static_cast<std::uint32_t>(i), script, dt);
+			}
 		}
 
 		// Detach C# instances whose entity/component went away this frame.
@@ -242,7 +269,10 @@ namespace aether::app
 
 		for (auto&& [enttE, sc]: world.GetRegistry().view<ScriptComponent>().each())
 		{
-			sc.attached = false;
+			for (ScriptEntry& script: sc.scripts)
+			{
+				script.attached = false;
+			}
 		}
 		AE_INFO(LogCategory::App, "ScriptComponentSystem: handles invalidated (reload)");
 	}

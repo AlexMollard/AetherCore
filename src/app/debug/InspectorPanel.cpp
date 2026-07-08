@@ -9,9 +9,11 @@
 #include <vector>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
 #include "assets/AssetManager.hpp"
 #include "debug/ComponentDrawers.hpp"
+#include "debug/EditorDragDrop.hpp"
 #include "debug/Icons.hpp"
 #include "debug/SceneSelection.hpp"
 #include "material/EffectManager.hpp"
@@ -27,7 +29,6 @@
 #include "scene/Hierarchy.hpp"
 #include "scene/TransformUtils.hpp"
 #include "scene/World.hpp"
-#include "scripting/CSharpScriptingSubsystem.hpp"
 #include "scripting/SceneContext.hpp"
 #include "utils/Profiler.hpp"
 
@@ -127,13 +128,6 @@ namespace aether::app
 		{
 			m_addFilter[0] = '\0';
 			m_addFocusPending = true;
-			// Entity-script list refreshes once per open.
-			m_scriptList.clear();
-			if (auto* cs = context.TryGet<scripting::CSharpScriptingSubsystem>())
-			{
-				m_scriptList = cs->GetScriptTypeNames();
-				std::sort(m_scriptList.begin(), m_scriptList.end());
-			}
 			ImGui::OpenPopup("AddComponent");
 		}
 		ImGui::SameLine();
@@ -250,17 +244,11 @@ namespace aether::app
 				}
 			}
 
-			if (!m_scriptList.empty())
 			{
 				ImGui::SeparatorText("Scripts");
-				const bool hasScript = world.Has<ScriptComponent>(entity);
-				for (const std::string& typeName: m_scriptList)
+				if (PaletteEntry(ICON_FA_CODE "  Script", m_addFilter, false))
 				{
-					const std::string entry = std::string(ICON_FA_CODE "  Script - ") + typeName;
-					if (PaletteEntry(entry.c_str(), m_addFilter, hasScript))
-					{
-						world.Emplace<ScriptComponent>(entity, ScriptComponent{.path = typeName});
-					}
+					AddScriptToEntity(world, entity);
 				}
 			}
 
@@ -346,6 +334,26 @@ namespace aether::app
 		DrawHierarchy(world, entity, selection);
 		DrawTags(world, entity, m_addTagBuf, sizeof(m_addTagBuf));
 		DrawSceneTransient(world, entity);
+
+		if (const ImGuiPayload* activePayload = ImGui::GetDragDropPayload(); activePayload != nullptr && activePayload->IsDataType(dragdrop::kScriptPayload))
+		{
+			const ImVec2 windowPos = ImGui::GetWindowPos();
+			const ImVec2 windowSize = ImGui::GetWindowSize();
+			const ImRect dropRect(windowPos, ImVec2(windowPos.x + windowSize.x, windowPos.y + windowSize.y));
+			ImGui::GetWindowDrawList()->AddRect(ImVec2(dropRect.Min.x + 3.0f, dropRect.Min.y + 3.0f), ImVec2(dropRect.Max.x - 3.0f, dropRect.Max.y - 3.0f), IM_COL32(105, 170, 255, 180), 4.0f, 0, 2.0f);
+			if (ImGui::BeginDragDropTargetCustom(dropRect, ImGui::GetID("##inspectorScriptDropTarget")))
+			{
+				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kScriptPayload, ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+				{
+					if (payload->DataSize == sizeof(dragdrop::ScriptPayload))
+					{
+						const auto* script = static_cast<const dragdrop::ScriptPayload*>(payload->Data);
+						AddScriptToEntity(world, entity, script->typeName);
+					}
+				}
+				ImGui::EndDragDropTarget();
+			}
+		}
 
 		ImGui::End();
 	}

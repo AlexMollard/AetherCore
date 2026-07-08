@@ -11,8 +11,8 @@
 #include <ImGuizmo.h>
 
 #include "AetherCore.hpp"
+#include "PlaySession.hpp"
 #include "PlayState.hpp"
-#include "assets/AssetManager.hpp"
 #include "camera/CameraManager.hpp"
 #include "debug/ComponentDrawers.hpp"
 #include "debug/DebugPanel.hpp"
@@ -21,7 +21,6 @@
 #include "debug/ScenePicker.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "mesh/PrimitiveMeshes.hpp"
-#include "scene/SceneSerializer.hpp"
 #include "scripting/SceneContext.hpp"
 #include "imgui/ImguiSubsystem.hpp"
 #include "layers/AppLayer.hpp"
@@ -114,8 +113,6 @@ namespace aether::app
 		{
 			return;
 		}
-		auto* assets = context.TryGet<AssetManager>();
-		World& world = context.Get<World>();
 
 		// Neutral button that adopts the editor's "active = orange accent" language
 		// while playing (same as the selected gizmo tool) - no out-of-palette fill.
@@ -132,26 +129,12 @@ namespace aether::app
 		{
 			ImGui::PopStyleColor(4);
 		}
-		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the scene captured at Play" : "Snapshot the scene and simulate");
+		ImGui::SetItemTooltip("%s", playing ? "Stop and restore the Play snapshot in-place" : "Snapshot the scene and simulate");
 		if (!clicked)
 		{
 			return;
 		}
-		if (playing)
-		{
-			playState->SetMode(PlayState::Mode::Editing);
-			if (playState->stopSnapshot)
-			{
-				scene::ReplaceScene(*playState->stopSnapshot, world, scene::MakeApplySceneDeps(context.services));
-				playState->stopSnapshot.reset();
-				context.Get<SceneSelection>().Clear();
-			}
-		}
-		else if (assets != nullptr)
-		{
-			playState->stopSnapshot = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
-			playState->SetMode(PlayState::Mode::Playing);
-		}
+		TogglePlaySession(context);
 	}
 
 	bool ViewportPanel::DrawTransformGizmo(LayerContext& context, glm::vec2 imageMin, glm::vec2 imageSize, float renderAspect)

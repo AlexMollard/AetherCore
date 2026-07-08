@@ -16,9 +16,6 @@
 #include "platform/Input.hpp"
 #include "scene/SceneSerializer.hpp"
 #include "rendering/Renderer.hpp"
-#include "rendering/ShadowService.hpp"
-#include "rendering/LocalShadowService.hpp"
-#include "rendering/RenderQueue.hpp"
 #include "gpu/GpuDevice.hpp"
 #include "scene/World.hpp"
 #include "physics/PhysicsSystem.hpp"
@@ -69,7 +66,7 @@ namespace aether::app
 	void ScriptedSceneLayer::DoReload(LayerContext& context)
 	{
 		AE_PROFILE_ZONE();
-		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading scene + entity scripts");
+		AE_INFO(LogCategory::App, "ScriptedSceneLayer: reloading entity scripts in-place");
 
 		// Dev: rebuild the game scripts from source first (no-op in a packaged
 		// build). On a build failure keep the running scene intact and surface the
@@ -84,37 +81,10 @@ namespace aether::app
 			}
 		}
 
-		// Hot-reload frees the buffers backing the scene entities. Route the
-		// teardown through the engine's exclusive-mutation primitive in Discard
-		// mode: the render thread drops in-flight frames (which still reference
-		// those buffers) as it parks, rather than draining and rendering them
-		// against freed memory. RunExclusive supplies the park + GPU WaitIdle.
-		// This runs regardless of the main script: the scene file loaded
-		// entities that reference the model cache DestroySceneEntities frees.
-		context.Get<aether::IEngineRuntime>().RunExclusive(aether::QuiesceMode::Discard,
-		        [&]()
-		        {
-			        // Clear render queues that reference destroyed meshes /
-			        // animation databases BEFORE destroying the entities.
-			        context.Get<RenderQueue>().DiscardAllPending();
-			        if (auto shadowService = context.TryGet<ShadowService>())
-			        {
-				        shadowService->ClearAllQueues();
-			        }
-			        if (auto localShadowService = context.TryGet<LocalShadowService>())
-			        {
-				        localShadowService->ClearAllQueues();
-			        }
-			        DestroySceneEntities(context);
-		        });
-
-		// DestroySceneEntities above tore down the FILE-loaded world; re-load
-		// it (or a broken-reload F5 would leave a void that a later save
-		// captures).
-		LoadStartupScene(context);
-
 		// Tear down every live managed instance before reloading the assembly so
 		// the collectible load context can unload (no live GCHandles remain).
+		// Keep the authored world intact: ScriptComponent paths, overrides and
+		// unsaved Entity field assignments belong to the editor scene state.
 		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
 		{
 			scriptSystem->Invalidate(context.Get<World>());

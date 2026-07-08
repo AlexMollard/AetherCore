@@ -181,6 +181,8 @@ namespace aether::app::scene
 					return "string";
 				case ScriptPropertyValue::Type::Enum:
 					return "enum";
+				case ScriptPropertyValue::Type::Entity:
+					return "entity";
 				case ScriptPropertyValue::Type::None:
 				default:
 					return "none";
@@ -201,6 +203,7 @@ namespace aether::app::scene
 						break;
 					case ScriptPropertyValue::Type::Int:
 					case ScriptPropertyValue::Type::Enum:
+					case ScriptPropertyValue::Type::Entity:
 						entry.insert("v", static_cast<std::int64_t>(value.i64));
 						break;
 					case ScriptPropertyValue::Type::Bool:
@@ -244,6 +247,11 @@ namespace aether::app::scene
 					pv.type = tag == "enum" ? ScriptPropertyValue::Type::Enum : ScriptPropertyValue::Type::Int;
 					pv.i64 = value.value_or(std::int64_t{0});
 				}
+				else if (tag == "entity")
+				{
+					pv.type = ScriptPropertyValue::Type::Entity;
+					pv.i64 = value.value_or(std::int64_t{0});
+				}
 				else if (tag == "bool")
 				{
 					pv.type = ScriptPropertyValue::Type::Bool;
@@ -267,6 +275,39 @@ namespace aether::app::scene
 					continue;
 				}
 				out.emplace(std::string(key.str()), std::move(pv));
+			}
+			return out;
+		}
+
+		std::map<std::string, ScriptPropertyValue> ScriptPropsToSceneRefs(const std::map<std::string, ScriptPropertyValue>& props, const std::unordered_map<std::uint32_t, int>& indexOf)
+		{
+			std::map<std::string, ScriptPropertyValue> out = props;
+			for (auto& [_, value]: out)
+			{
+				if (value.type != ScriptPropertyValue::Type::Entity || value.i64 == 0)
+				{
+					continue;
+				}
+				const auto it = indexOf.find(static_cast<std::uint32_t>(value.i64));
+				value.i64 = it != indexOf.end() ? it->second : 0;
+			}
+			return out;
+		}
+
+		std::map<std::string, ScriptPropertyValue> ScriptPropsFromSceneRefs(const std::map<std::string, ScriptPropertyValue>& props, const std::vector<Entity>& created)
+		{
+			std::map<std::string, ScriptPropertyValue> out = props;
+			for (auto& [_, value]: out)
+			{
+				if (value.type != ScriptPropertyValue::Type::Entity || value.i64 < 0 || static_cast<std::size_t>(value.i64) >= created.size())
+				{
+					if (value.type == ScriptPropertyValue::Type::Entity)
+					{
+						value.i64 = 0;
+					}
+					continue;
+				}
+				value.i64 = created[static_cast<std::size_t>(value.i64)].id;
 			}
 			return out;
 		}
@@ -304,6 +345,7 @@ namespace aether::app::scene
 			for (const Entity e: order)
 			{
 				EntityRecord rec;
+				rec.entityId = e.id;
 				if (const auto* nc = world.TryGet<NameComponent>(e))
 				{
 					rec.name = nc->name;
@@ -433,10 +475,16 @@ namespace aether::app::scene
 				{
 					rec.spotLight = *sl;
 				}
-				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr && !script->path.empty())
+				if (const auto* script = world.TryGet<ScriptComponent>(e); script != nullptr)
 				{
-					rec.script = script->path;
-					rec.scriptProperties = script->properties;
+					for (const ScriptEntry& entry: script->scripts)
+					{
+						if (entry.path.empty())
+						{
+							continue;
+						}
+						rec.scripts.push_back(ScriptRecord{.type = entry.path, .properties = ScriptPropsToSceneRefs(entry.properties, indexOf)});
+					}
 				}
 				scene.entities.push_back(std::move(rec));
 			}
@@ -770,13 +818,20 @@ namespace aether::app::scene
 				l.insert("shadow", rec.spotLight->castsShadow);
 				t.insert("spot_light", std::move(l));
 			}
-			if (rec.script)
+			if (!rec.scripts.empty())
 			{
-				t.insert("script", *rec.script);
-			}
-			if (!rec.scriptProperties.empty())
-			{
-				t.insert("script_properties", ScriptPropsToToml(rec.scriptProperties));
+				toml::array scripts;
+				for (const ScriptRecord& script: rec.scripts)
+				{
+					toml::table s;
+					s.insert("type", script.type);
+					if (!script.properties.empty())
+					{
+						s.insert("properties", ScriptPropsToToml(script.properties));
+					}
+					scripts.push_back(std::move(s));
+				}
+				t.insert("scripts", std::move(scripts));
 			}
 			entities.push_back(std::move(t));
 		}
@@ -1030,13 +1085,39 @@ namespace aether::app::scene
 				        .outerAngleRad = static_cast<float>(lv["outer_rad"].value_or(0.60)),
 				        .castsShadow = lv["shadow"].value_or(false)};
 			}
-			if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
+			if (const auto* scripts = tv["scripts"].as_array())
 			{
-				rec.script = *script;
+				for (const toml::node& scriptNode: *scripts)
+				{
+					const auto* scriptTable = scriptNode.as_table();
+					if (scriptTable == nullptr)
+					{
+						continue;
+					}
+					const toml::node_view<const toml::node> sv{*scriptTable};
+					const auto type = sv["type"].value<std::string>();
+					if (!type.has_value() || type->empty())
+					{
+						continue;
+					}
+					ScriptRecord script;
+					script.type = *type;
+					if (const auto* props = sv["properties"].as_table())
+					{
+						script.properties = ScriptPropsFromToml(*props);
+					}
+					rec.scripts.push_back(std::move(script));
+				}
 			}
-			if (const auto* props = tv["script_properties"].as_table())
+			else if (const auto script = tv["script"].value<std::string>(); script.has_value() && !script->empty())
 			{
-				rec.scriptProperties = ScriptPropsFromToml(*props);
+				ScriptRecord legacy;
+				legacy.type = *script;
+				if (const auto* props = tv["script_properties"].as_table())
+				{
+					legacy.properties = ScriptPropsFromToml(*props);
+				}
+				rec.scripts.push_back(std::move(legacy));
 			}
 			scene.entities.push_back(std::move(rec));
 		}
@@ -1189,38 +1270,88 @@ namespace aether::app::scene
 		return deps;
 	}
 
-	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
+	namespace
 	{
-		// Environment rig (sun/ambient/sky) is renderer-level state; punctual
-		// lights are entities and arrive with the records below (or migrate
-		// from the legacy [[lights]] list at the end).
-		if (deps.renderer != nullptr && scene.environment)
+		template<typename T>
+		void RemoveIf(World& world, Entity entity)
 		{
-			const EnvironmentRecord& env = *scene.environment;
-			deps.renderer->SetAmbientLight(env.ambient);
-			deps.renderer->SetDirectionalLight(env.sunDirection, env.sunIntensity);
-			deps.renderer->SetSunColor(env.sunColor);
-			deps.renderer->SetSkyGradient(env.skyHorizon, env.skyZenith);
-			deps.renderer->SetSkyVoidColor(env.skyVoid);
+			if (world.Has<T>(entity))
+			{
+				world.Remove<T>(entity);
+			}
 		}
 
-		std::vector<Entity> created;
-		created.reserve(scene.entities.size());
-		for (std::size_t i = 0; i < scene.entities.size(); ++i)
+		void ClearTags(World& world, Entity entity)
 		{
-			created.push_back(world.Create());
+			ForEachTag(
+			        [&](const std::string&, std::uint32_t tagId)
+			        {
+				        if (TagHas(&world, entity.id, tagId))
+				        {
+					        TagRemove(&world, entity.id, tagId);
+				        }
+			        });
 		}
 
-		// Apply-health counters: surfaced in the summary log below so a load
-		// that silently degrades (missing deps, unknown effects, old file
-		// format) is visible in the log instead of just "looking wrong".
-		std::size_t behaviorCount = 0;
-		std::size_t effectCount = 0;
-
-		for (std::size_t i = 0; i < scene.entities.size(); ++i)
+		void ResetRestorableEntity(World& world, Entity entity)
 		{
-			const EntityRecord& rec = scene.entities[i];
-			const Entity e = created[i];
+			ecs::DetachFromParent(world, entity);
+			ClearTags(world, entity);
+
+			RemoveIf<NameComponent>(world, entity);
+			RemoveIf<TransformComponent>(world, entity);
+			RemoveIf<HierarchyComponent>(world, entity);
+			RemoveIf<MeshComponent>(world, entity);
+			RemoveIf<MeshSourceComponent>(world, entity);
+			RemoveIf<MaterialComponent>(world, entity);
+			RemoveIf<MaterialInstanceComponent>(world, entity);
+			RemoveIf<SkinnedMeshComponent>(world, entity);
+			RemoveIf<SphereBodyDesc>(world, entity);
+			RemoveIf<CapsuleBodyDesc>(world, entity);
+			RemoveIf<BoxBodyDesc>(world, entity);
+			RemoveIf<RigidBodyComponent>(world, entity);
+			RemoveIf<PhysicsStateComponent>(world, entity);
+			RemoveIf<PhysicsDebugShapeComponent>(world, entity);
+			RemoveIf<ui::UICanvas>(world, entity);
+			RemoveIf<ui::UIRect>(world, entity);
+			RemoveIf<ui::UIImage>(world, entity);
+			RemoveIf<ui::UIText>(world, entity);
+			RemoveIf<EffectRefComponent>(world, entity);
+			RemoveIf<EffectParamsComponent>(world, entity);
+			RemoveIf<BobComponent>(world, entity);
+			RemoveIf<SpinComponent>(world, entity);
+			RemoveIf<OrbitComponent>(world, entity);
+			RemoveIf<MaterialPulseComponent>(world, entity);
+			RemoveIf<PointLightComponent>(world, entity);
+			RemoveIf<SpotLightComponent>(world, entity);
+			RemoveIf<ScriptComponent>(world, entity);
+		}
+
+		std::vector<Entity> ApplySceneToEntities(const SceneDescription& scene, World& world, const ApplySceneDeps& deps, std::vector<Entity> created, bool registerSceneEntities)
+		{
+			// Environment rig (sun/ambient/sky) is renderer-level state; punctual
+			// lights are entities and arrive with the records below (or migrate
+			// from the legacy [[lights]] list at the end).
+			if (deps.renderer != nullptr && scene.environment)
+			{
+				const EnvironmentRecord& env = *scene.environment;
+				deps.renderer->SetAmbientLight(env.ambient);
+				deps.renderer->SetDirectionalLight(env.sunDirection, env.sunIntensity);
+				deps.renderer->SetSunColor(env.sunColor);
+				deps.renderer->SetSkyGradient(env.skyHorizon, env.skyZenith);
+				deps.renderer->SetSkyVoidColor(env.skyVoid);
+			}
+
+			// Apply-health counters: surfaced in the summary log below so a load
+			// that silently degrades (missing deps, unknown effects, old file
+			// format) is visible in the log instead of just "looking wrong".
+			std::size_t behaviorCount = 0;
+			std::size_t effectCount = 0;
+
+			for (std::size_t i = 0; i < scene.entities.size(); ++i)
+			{
+				const EntityRecord& rec = scene.entities[i];
+				const Entity e = created[i];
 
 			if (!rec.name.empty())
 			{
@@ -1447,11 +1578,17 @@ namespace aether::app::scene
 			{
 				world.Emplace<SpotLightComponent>(e, *rec.spotLight);
 			}
-			if (rec.script)
+			if (!rec.scripts.empty())
 			{
 				// attached stays false: the script system re-attaches on the
 				// next play tick (loads and Stop-restores restart scripts).
-				world.Emplace<ScriptComponent>(e, ScriptComponent{.path = *rec.script, .properties = rec.scriptProperties});
+				ScriptComponent component;
+				component.scripts.reserve(rec.scripts.size());
+				for (const ScriptRecord& script: rec.scripts)
+				{
+					component.scripts.push_back(ScriptEntry{.path = script.type, .attached = false, .properties = ScriptPropsFromSceneRefs(script.properties, created)});
+				}
+				world.Emplace<ScriptComponent>(e, std::move(component));
 			}
 		}
 
@@ -1487,20 +1624,91 @@ namespace aether::app::scene
 			}
 		}
 
-		if (deps.sceneContext != nullptr)
-		{
-			for (const Entity e: created)
+			if (deps.sceneContext != nullptr && registerSceneEntities)
 			{
-				deps.sceneContext->sceneEntities.push_back(e);
+				for (const Entity e: created)
+				{
+					deps.sceneContext->sceneEntities.push_back(e);
+				}
+				// Migrated legacy lights are scene content too - F5 teardown owns them.
+				for (const Entity e: migratedLights)
+				{
+					deps.sceneContext->sceneEntities.push_back(e);
+				}
 			}
-			// Migrated legacy lights are scene content too - F5 teardown owns them.
-			for (const Entity e: migratedLights)
+			AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.version);
+			return created;
+		}
+	} // namespace
+
+	std::vector<Entity> ApplyScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
+	{
+		std::vector<Entity> created;
+		created.reserve(scene.entities.size());
+		for (std::size_t i = 0; i < scene.entities.size(); ++i)
+		{
+			created.push_back(world.Create());
+		}
+		return ApplySceneToEntities(scene, world, deps, std::move(created), true);
+	}
+
+	void RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
+	{
+		if (deps.physics != nullptr)
+		{
+			deps.physics->WaitForStepIdle();
+		}
+
+		auto& reg = world.GetRegistry();
+		std::vector<Entity> targets;
+		targets.reserve(scene.entities.size());
+		std::unordered_set<std::uint32_t> restoredIds;
+		for (const EntityRecord& rec: scene.entities)
+		{
+			Entity target{rec.entityId};
+			if (!target.IsValid() || !reg.valid(World::ToEntt(target)))
 			{
-				deps.sceneContext->sceneEntities.push_back(e);
+				target = world.Create();
+			}
+			restoredIds.insert(target.id);
+			targets.push_back(target);
+		}
+
+		std::vector<Entity> doomed;
+		for (const auto handle: reg.storage<entt::entity>())
+		{
+			if (!reg.valid(handle))
+			{
+				continue;
+			}
+			const Entity e = World::FromEntt(handle);
+			if (e.IsValid() && !restoredIds.contains(e.id))
+			{
+				doomed.push_back(e);
 			}
 		}
-		AE_INFO(LogCategory::App, "Scene apply: {} entities, {} behaviors, {} effects (format v{})", created.size() + migratedLights.size(), behaviorCount, effectCount, scene.version);
-		return created;
+		for (const Entity e: doomed)
+		{
+			if (reg.valid(World::ToEntt(e)))
+			{
+				ecs::DetachFromParent(world, e);
+				world.Destroy(e);
+			}
+		}
+
+		for (const Entity e: targets)
+		{
+			if (reg.valid(World::ToEntt(e)))
+			{
+				ResetRestorableEntity(world, e);
+			}
+		}
+
+		if (deps.sceneContext != nullptr)
+		{
+			deps.sceneContext->sceneEntities.clear();
+		}
+		ApplySceneToEntities(scene, world, deps, std::move(targets), true);
 	}
 
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)

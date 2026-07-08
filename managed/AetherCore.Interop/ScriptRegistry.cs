@@ -82,6 +82,7 @@ internal static unsafe class ScriptRegistry
         if (t == typeof(bool)) return PropertyType.Bool;
         if (t == typeof(System.Numerics.Vector3)) return PropertyType.Vector3;
         if (t == typeof(string)) return PropertyType.String;
+        if (t == typeof(Entity)) return PropertyType.Entity;
         if (t.IsEnum) return PropertyType.Enum;
         return PropertyType.None;
     }
@@ -105,6 +106,13 @@ internal static unsafe class ScriptRegistry
             {
                 props.Add(new Prop { Name = field.Name, Type = pt, Field = field });
             }
+        }
+        int selfIndex = props.FindIndex(static p => p.Name == "Self");
+        if (selfIndex > 0)
+        {
+            Prop self = props[selfIndex];
+            props.RemoveAt(selfIndex);
+            props.Insert(0, self);
         }
         return props.ToArray();
     }
@@ -378,6 +386,9 @@ internal static unsafe class ScriptRegistry
                 s_stringScratch = Marshal.StringToCoTaskMemUTF8((string?)value ?? string.Empty);
                 outValue->Str = (byte*)s_stringScratch;
                 break;
+            case PropertyType.Entity:
+                outValue->I64 = ((Entity)value!).Id;
+                break;
             default:
                 return 0;
         }
@@ -418,6 +429,9 @@ internal static unsafe class ScriptRegistry
                     break;
                 case PropertyType.String:
                     p.Field.SetValue(script, Utf8.ToString(value->Str));
+                    break;
+                case PropertyType.Entity:
+                    p.Field.SetValue(script, new Entity((uint)value->I64));
                     break;
                 default:
                     return 0;

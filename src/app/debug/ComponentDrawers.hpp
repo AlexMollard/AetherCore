@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include <glm/glm.hpp>
 #include <imgui.h>
@@ -64,6 +65,8 @@ namespace aether::app
 	void DrawLights(World& world, Entity entity);
 	// Entity script section: type/path, attach state, and (for C# scripts) the
 	// inspector-exposed, per-entity serialized properties. Removable.
+	void AddScriptToEntity(World& world, Entity entity, std::string typeName = {});
+	bool AcceptScriptDropOnEntity(World& world, Entity entity);
 	void DrawScript(LayerContext& context, World& world, Entity entity);
 	// Scene-transient marker (excluded from captures), removable.
 	void DrawSceneTransient(World& world, Entity entity);

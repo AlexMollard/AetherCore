@@ -301,7 +301,11 @@ namespace aether::app
 				{
 					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
 					{
-						m_previewTextureId = static_cast<std::uint64_t>(imgui->RegisterTexture(rendering->GetTexturePreviewView(), gpu::ImageLayout::ShaderReadOnly));
+						const ImTextureID textureId = imgui->RegisterTexture(rendering->GetTexturePreviewView(), gpu::ImageLayout::ShaderReadOnly);
+						if (textureId != ImTextureID_Invalid)
+						{
+							m_previewTextureId = static_cast<std::uint64_t>(textureId);
+						}
 					}
 				}
 				cachedTextureId = m_previewTextureId;
@@ -315,13 +319,17 @@ namespace aether::app
 				{
 					if (auto imgui = context.TryGet<aether::ImguiSubsystem>())
 					{
-						sourceId = static_cast<std::uint64_t>(imgui->RegisterTexture(texture.view, gpu::ImageLayout::ShaderReadOnly));
+						const ImTextureID textureId = imgui->RegisterTexture(texture.view, gpu::ImageLayout::ShaderReadOnly);
+						if (textureId != ImTextureID_Invalid)
+						{
+							sourceId = static_cast<std::uint64_t>(textureId);
+						}
 					}
 				}
 				cachedTextureId = sourceId;
 			}
 
-			if (cachedTextureId != 0)
+			if (cachedTextureId != 0 && static_cast<ImTextureID>(cachedTextureId) != ImTextureID_Invalid)
 			{
 				const float texW = static_cast<float>(texture.extent.width);
 				const float texH = static_cast<float>(texture.extent.height);

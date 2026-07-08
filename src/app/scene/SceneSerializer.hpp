@@ -119,8 +119,17 @@ namespace aether::app::scene
 		EffectParams params{};
 	};
 
+	struct ScriptRecord
+	{
+		std::string type;
+		std::map<std::string, ScriptPropertyValue> properties;
+	};
+
 	struct EntityRecord
 	{
+		// Runtime-only source entity id used by editor play-mode snapshots to
+		// restore in-place. TOML read/write deliberately ignores it.
+		std::uint32_t entityId = 0;
 		std::string name;
 		std::vector<std::string> tags;
 		bool hasTransform = false;
@@ -149,10 +158,8 @@ namespace aether::app::scene
 		// Entity lights (v3+): position/aim come from the TRS above.
 		std::optional<PointLightComponent> pointLight;
 		std::optional<SpotLightComponent> spotLight;
-		// Entity script path/type (v4+, ScriptComponent). Attach state is runtime.
-		std::optional<std::string> script;
-		// Serialized C# script field overrides (v5+). Empty when none.
-		std::map<std::string, ScriptPropertyValue> scriptProperties;
+		// Entity script slots (v7+, ScriptComponent). Attach state is runtime.
+		std::vector<ScriptRecord> scripts;
 	};
 
 	// LEGACY (pre-v3): renderer-level light list. Still parsed so old files
@@ -190,8 +197,9 @@ namespace aether::app::scene
 	// v3 = lights are entities (per-entity point_light/spot_light tables);
 	// v4 = entity script components (path-referenced scripts);
 	// v5 = C# script type names + serialized script_properties;
-	// v6 = UI components (ui_canvas/ui_rect/ui_image/ui_text).
-	inline constexpr int kSceneFormatVersion = 6;
+	// v6 = UI components (ui_canvas/ui_rect/ui_image/ui_text);
+	// v7 = multiple entity script slots.
+	inline constexpr int kSceneFormatVersion = 7;
 
 	struct SceneDescription
 	{
@@ -266,6 +274,12 @@ namespace aether::app::scene
 	// applies the description and re-registers sceneEntities so F5 script reload
 	// still cleans up. Shared by LoadSceneFile and the editor's Stop-restore.
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
+
+	// Editor play-mode restore: keeps captured entities alive and restores their
+	// serialized components in-place, destroying entities created after the
+	// snapshot. This preserves unsaved authored entity ids and script Entity
+	// field references when leaving Play.
+	void RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
 
 	// ReplaceScene from a scene file on disk.
 	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps);

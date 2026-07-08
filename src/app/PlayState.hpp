@@ -15,8 +15,8 @@ namespace aether::app
 	// the inspector stay live.
 	//
 	// Playing: everything simulates. `stopSnapshot` holds the scene captured
-	// when Play was pressed; Stop restores it (replace-all) and returns to
-	// Editing.
+	// when Play was pressed; Stop restores it in-place and returns to Editing,
+	// preserving unsaved authored entity ids and editor references.
 	class PlayState
 	{
 	public:

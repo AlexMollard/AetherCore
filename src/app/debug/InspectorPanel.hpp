@@ -1,7 +1,6 @@
 #pragma once
 
-#include <string>
-#include <vector>
+#include <string_view>
 
 #include "debug/DebugPanel.hpp"
 #include "scene/Entity.hpp"
@@ -31,7 +30,5 @@ namespace aether::app
 		char m_addFilter[48] = {};
 		bool m_addFocusPending = false;
 		char m_addTagBuf[48] = {};
-		// C# script type names available to attach (refreshed per popup open).
-		std::vector<std::string> m_scriptList;
 	};
 } // namespace aether::app
