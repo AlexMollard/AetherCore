@@ -367,8 +367,12 @@ namespace aether::app
 					ImGui::AlignTextToFramePadding();
 					ImGui::TextUnformatted(info.name.c_str());
 					ImGui::SameLine(120.0f);
-					const float trailingButtonWidth = isSelfProperty ? 58.0f : 32.0f;
-					ImGui::Button(buttonId.c_str(), ImVec2(std::max(120.0f, ImGui::GetContentRegionAvail().x - trailingButtonWidth), 0.0f));
+					const ImGuiStyle& style = ImGui::GetStyle();
+					const float clearButtonWidth = ImGui::CalcTextSize(ICON_FA_XMARK).x + style.FramePadding.x * 2.0f;
+					const float selfButtonWidth = ImGui::CalcTextSize(ICON_FA_LINK).x + style.FramePadding.x * 2.0f;
+					const float trailingButtonWidth = clearButtonWidth + style.ItemSpacing.x + (isSelfProperty ? selfButtonWidth + style.ItemSpacing.x : 0.0f);
+					const float entityButtonWidth = std::max(ImGui::GetFrameHeight(), ImGui::GetContentRegionAvail().x - trailingButtonWidth);
+					ImGui::Button(buttonId.c_str(), ImVec2(entityButtonWidth, 0.0f));
 					if (ImGui::BeginDragDropTarget())
 					{
 						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(dragdrop::kEntityPayload))

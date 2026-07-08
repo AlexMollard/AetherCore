@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "scene/Entity.hpp"
@@ -63,6 +64,25 @@ namespace aether::app
 			}
 			m_selected.clear();
 			m_primary = {};
+		}
+
+		void Replace(std::vector<Entity> selected, Entity primary)
+		{
+			std::erase_if(selected, [](Entity e) { return !e.IsValid(); });
+			for (auto it = selected.begin(); it != selected.end(); ++it)
+			{
+				selected.erase(std::remove(it + 1, selected.end(), *it), selected.end());
+			}
+			if (!primary.IsValid() || std::find(selected.begin(), selected.end(), primary) == selected.end())
+			{
+				primary = selected.empty() ? Entity{} : selected.back();
+			}
+			if (m_selected != selected || m_primary != primary)
+			{
+				m_selected = std::move(selected);
+				m_primary = primary;
+				m_lastChangeSerial++;
+			}
 		}
 
 		[[nodiscard]] bool Contains(Entity e) const

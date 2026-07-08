@@ -542,22 +542,23 @@ TEST_CASE("Script components round-trip through capture, TOML and apply") {
     Entity e = world.Create();
     world.Emplace<NameComponent>(e, NameComponent{.name = "Scripted"});
     world.Emplace<TransformComponent>(e, TransformComponent{});
-    world.Emplace<ScriptComponent>(e, ScriptComponent{.path = "Spinner", .attached = true});
+    world.Emplace<ScriptComponent>(e, ScriptComponent{.scripts = {ScriptEntry{.path = "Spinner", .attached = true}}});
 
     const auto parsed = ParseToml(WriteToml(CaptureScene(world, mreg, treg)));
     REQUIRE(parsed.has_value());
     CHECK(parsed->version == kSceneFormatVersion);
     const EntityRecord& rec = RecordOf(*parsed, "Scripted");
-    REQUIRE(rec.script.has_value());
-    CHECK(*rec.script == "Spinner");
+    REQUIRE(rec.scripts.size() == 1);
+    CHECK(rec.scripts[0].type == "Spinner");
 
     World fresh = MakeWorld();
     const auto created = ApplyScene(*parsed, fresh, ApplySceneDeps{});
     const Entity applied = AppliedOf(*parsed, created, "Scripted");
     const auto* sc = fresh.TryGet<ScriptComponent>(applied);
     REQUIRE(sc != nullptr);
-    CHECK(sc->path == "Spinner");
-    CHECK(!sc->attached); // runtime state resets: scripts re-attach on the next play tick
+    REQUIRE(sc->scripts.size() == 1);
+    CHECK(sc->scripts[0].path == "Spinner");
+    CHECK(!sc->scripts[0].attached); // runtime state resets: scripts re-attach on the next play tick
 }
 
 TEST_CASE("CaptureSubtrees copies multiple roots with local parent links") {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
 #include "scene/SceneSerializer.hpp"
 
@@ -42,6 +43,8 @@ namespace aether::app
 		}
 
 		std::optional<scene::SceneDescription> stopSnapshot;
+		std::vector<Entity> stopSelection;
+		Entity stopSelectionPrimary{};
 
 	private:
 		Mode m_mode = Mode::Editing;

@@ -1,6 +1,9 @@
 #include "PlaySession.hpp"
 
+#include <cstddef>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "PlayState.hpp"
 #include "assets/AssetManager.hpp"
@@ -39,6 +42,16 @@ namespace aether::app
 
 		World& world = context.Get<World>();
 		playState->stopSnapshot = scene::CaptureScene(world, assets->GetMaterialRegistry(), assets->GetTextureRegistry(), context.TryGet<Renderer>());
+		if (const auto* selection = context.TryGet<SceneSelection>())
+		{
+			playState->stopSelection = selection->All();
+			playState->stopSelectionPrimary = selection->Primary();
+		}
+		else
+		{
+			playState->stopSelection.clear();
+			playState->stopSelectionPrimary = {};
+		}
 		playState->SetMode(PlayState::Mode::Playing);
 		return true;
 	}
@@ -52,6 +65,15 @@ namespace aether::app
 		}
 
 		World& world = context.Get<World>();
+		auto* selection = context.TryGet<SceneSelection>();
+		std::vector<Entity> selectionToRestore = playState->stopSelection;
+		Entity primaryToRestore = playState->stopSelectionPrimary;
+		if (selection != nullptr && !selection->All().empty())
+		{
+			selectionToRestore = selection->All();
+			primaryToRestore = selection->Primary();
+		}
+
 		playState->SetMode(PlayState::Mode::Editing);
 
 		if (auto* scriptSystem = context.TryGet<ScriptComponentSystem>())
@@ -61,12 +83,32 @@ namespace aether::app
 
 		if (playState->stopSnapshot)
 		{
-			scene::RestoreSceneInPlace(*playState->stopSnapshot, world, scene::MakeApplySceneDeps(context.services));
+			const auto& snapshot = *playState->stopSnapshot;
+			const std::vector<Entity> restored = scene::RestoreSceneInPlace(snapshot, world, scene::MakeApplySceneDeps(context.services));
+			const auto remapRestored = [&snapshot, &restored](Entity e)
+			{
+				for (std::size_t i = 0; i < snapshot.entities.size() && i < restored.size(); ++i)
+				{
+					if (snapshot.entities[i].entityId == e.id)
+					{
+						return restored[i];
+					}
+				}
+				return e;
+			};
+			for (Entity& e: selectionToRestore)
+			{
+				e = remapRestored(e);
+			}
+			primaryToRestore = remapRestored(primaryToRestore);
 			playState->stopSnapshot.reset();
 		}
+		playState->stopSelection.clear();
+		playState->stopSelectionPrimary = {};
 
-		if (auto* selection = context.TryGet<SceneSelection>())
+		if (selection != nullptr)
 		{
+			selection->Replace(std::move(selectionToRestore), primaryToRestore);
 			selection->Prune(world);
 		}
 		return true;

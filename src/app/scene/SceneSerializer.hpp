@@ -279,7 +279,7 @@ namespace aether::app::scene
 	// serialized components in-place, destroying entities created after the
 	// snapshot. This preserves unsaved authored entity ids and script Entity
 	// field references when leaving Play.
-	void RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
+	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps);
 
 	// ReplaceScene from a scene file on disk.
 	bool LoadSceneFile(const std::string& sceneName, World& world, const ApplySceneDeps& deps);

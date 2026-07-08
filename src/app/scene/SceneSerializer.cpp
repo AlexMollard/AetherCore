@@ -1652,7 +1652,7 @@ namespace aether::app::scene
 		return ApplySceneToEntities(scene, world, deps, std::move(created), true);
 	}
 
-	void RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
+	std::vector<Entity> RestoreSceneInPlace(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
 	{
 		if (deps.physics != nullptr)
 		{
@@ -1708,7 +1708,9 @@ namespace aether::app::scene
 		{
 			deps.sceneContext->sceneEntities.clear();
 		}
+		std::vector<Entity> restored = targets;
 		ApplySceneToEntities(scene, world, deps, std::move(targets), true);
+		return restored;
 	}
 
 	void ReplaceScene(const SceneDescription& scene, World& world, const ApplySceneDeps& deps)
