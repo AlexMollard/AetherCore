@@ -17,6 +17,7 @@ namespace aether::ui
 	// (tools/assetpack/FontProcessor.hpp). Packed to 1 so the runtime reader
 	// can safely memcpy raw .fontmeta bytes straight into an array of these.
 #pragma pack(push, 1)
+
 	struct GlyphMeta
 	{
 		std::uint32_t codepoint;
@@ -25,6 +26,7 @@ namespace aether::ui
 		float bearingX, bearingY; // left/top bearing in px (at bakeSize em)
 		float advance;            // horizontal advance in px (at bakeSize em)
 	};
+
 #pragma pack(pop)
 
 	static_assert(sizeof(GlyphMeta) == 40, "must match FontProcessor::GlyphMeta - runtime/baker format drift");
@@ -33,6 +35,7 @@ namespace aether::ui
 	// byte-for-byte (tools/assetpack/FontProcessor.hpp). Redeclared here so the
 	// runtime loader parses .fontatlas/.fontmeta without depending on the tool.
 #pragma pack(push, 1)
+
 	struct FontAtlasHeader
 	{
 		std::uint32_t magic;
@@ -52,6 +55,7 @@ namespace aether::ui
 		float lineHeight;
 		float bakeSize;
 	};
+
 #pragma pack(pop)
 
 	static_assert(sizeof(FontAtlasHeader) == 12, "must match FontProcessor::FontAtlasHeader");

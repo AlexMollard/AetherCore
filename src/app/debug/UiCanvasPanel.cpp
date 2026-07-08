@@ -378,10 +378,6 @@ namespace aether::app
 				}
 				AppendRectSnapCandidates(element.canvasRect, xCandidates, yCandidates);
 			}
-
-			const float gridStep = 10.f;
-			for (float x = 0.f; x <= extent.x + 1.f; x += gridStep) xCandidates.push_back(x);
-			for (float y = 0.f; y <= extent.y + 1.f; y += gridStep) yCandidates.push_back(y);
 		}
 
 		[[nodiscard]] bool TryBestSnapDelta(const std::vector<float>& sources, const std::vector<float>& candidates, float threshold, float& outDelta, float& outPosition)
@@ -414,6 +410,22 @@ namespace aether::app
 
 			const float threshold = kSnapScreenDistance / std::max(zoom, 0.001f);
 			glm::vec4 visualRect = ui::ResolveRect(parentRect, rect);
+
+			{
+				const float gridStep = 10.f;
+				float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
+				float endX = visualRect.x + visualRect.z + threshold;
+				for (float x = startX; x <= endX; x += gridStep)
+				{
+					xCandidates.push_back(x);
+				}
+				float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
+				float endY = visualRect.y + visualRect.w + threshold;
+				for (float y = startY; y <= endY; y += gridStep)
+				{
+					yCandidates.push_back(y);
+				}
+			}
 
 			float delta = 0.f;
 			float position = 0.f;
@@ -483,6 +495,22 @@ namespace aether::app
 
 			const float threshold = kSnapScreenDistance / std::max(zoom, 0.001f);
 			const glm::vec4 visualRect = ui::ResolveRect(parentRect, rect);
+
+			{
+				const float gridStep = 10.f;
+				float startX = std::floor((visualRect.x - threshold) / gridStep) * gridStep;
+				float endX = visualRect.x + visualRect.z + threshold;
+				for (float x = startX; x <= endX; x += gridStep)
+				{
+					xCandidates.push_back(x);
+				}
+				float startY = std::floor((visualRect.y - threshold) / gridStep) * gridStep;
+				float endY = visualRect.y + visualRect.w + threshold;
+				for (float y = startY; y <= endY; y += gridStep)
+				{
+					yCandidates.push_back(y);
+				}
+			}
 
 			float delta = 0.f;
 			float position = 0.f;
@@ -804,7 +832,10 @@ namespace aether::app
 		{
 			ImVec2 dir = Sub(b, a);
 			const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-			if (len < 0.001f) return;
+			if (len < 0.001f)
+			{
+				return;
+			}
 			dir.x /= len;
 			dir.y /= len;
 
@@ -854,22 +885,37 @@ namespace aether::app
 				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
 				const Entity parent = CreateParentForNewElement(world, selection, canvas);
 				const Entity created = ui::CreateImageEntity(world, canvas);
-				if (parent != canvas) ecs::SetParent(world, created, parent);
-				if (selection != nullptr) selection->Select(created);
+				if (parent != canvas)
+				{
+					ecs::SetParent(world, created, parent);
+				}
+				if (selection != nullptr)
+				{
+					selection->Select(created);
+				}
 			}
 			if (ImGui::MenuItem(ICON_FA_CODE " Text"))
 			{
 				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
 				const Entity parent = CreateParentForNewElement(world, selection, canvas);
 				const Entity created = ui::CreateTextEntity(world, canvas);
-				if (parent != canvas) ecs::SetParent(world, created, parent);
-				if (selection != nullptr) selection->Select(created);
+				if (parent != canvas)
+				{
+					ecs::SetParent(world, created, parent);
+				}
+				if (selection != nullptr)
+				{
+					selection->Select(created);
+				}
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem(ICON_FA_SITEMAP " Canvas (Root)"))
 			{
 				const Entity created = ui::CreateCanvasEntity(world);
-				if (selection != nullptr) selection->Select(created);
+				if (selection != nullptr)
+				{
+					selection->Select(created);
+				}
 				canvas = created;
 			}
 			ImGui::EndPopup();
@@ -1013,12 +1059,30 @@ namespace aether::app
 			const bool cr = std::abs(io.MousePos.x - canvasMax.x) < bt;
 			const bool ct = std::abs(io.MousePos.y - canvasMin.y) < bt;
 			const bool cb = std::abs(io.MousePos.y - canvasMax.y) < bt;
-			if (cl && ct) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
-			else if (cr && ct) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
-			else if (cl && cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
-			else if (cr && cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
-			else if (cl || cr) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-			else if (ct || cb) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+			if (cl && ct)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+			}
+			else if (cr && ct)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+			}
+			else if (cl && cb)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNESW);
+			}
+			else if (cr && cb)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+			}
+			else if (cl || cr)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+			}
+			else if (ct || cb)
+			{
+				ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+			}
 		}
 
 		ui::UIRect* selectedRect = selected.IsValid() ? world.TryGet<ui::UIRect>(selected) : nullptr;
@@ -1065,10 +1129,22 @@ namespace aether::app
 		{
 			const float nudgeAmount = io.KeyShift ? 10.f : 1.f;
 			glm::vec2 nudgeDelta{0.f};
-			if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) nudgeDelta.x -= nudgeAmount;
-			if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) nudgeDelta.x += nudgeAmount;
-			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) nudgeDelta.y -= nudgeAmount;
-			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) nudgeDelta.y += nudgeAmount;
+			if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow))
+			{
+				nudgeDelta.x -= nudgeAmount;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_RightArrow))
+			{
+				nudgeDelta.x += nudgeAmount;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_UpArrow))
+			{
+				nudgeDelta.y -= nudgeAmount;
+			}
+			if (ImGui::IsKeyPressed(ImGuiKey_DownArrow))
+			{
+				nudgeDelta.y += nudgeAmount;
+			}
 
 			if (nudgeDelta.x != 0.f || nudgeDelta.y != 0.f)
 			{
@@ -1134,8 +1210,14 @@ namespace aether::app
 						{
 							if (!selection->Contains(it->entity))
 							{
-								if (io.KeyShift) selection->AddToSelection(it->entity);
-								else selection->Select(it->entity);
+								if (io.KeyShift)
+								{
+									selection->AddToSelection(it->entity);
+								}
+								else
+								{
+									selection->Select(it->entity);
+								}
 							}
 						}
 						newDrag.kind = DragKind::Move;
@@ -1152,14 +1234,46 @@ namespace aether::app
 				const bool onTop = std::abs(mouse.y - canvasMin.y) < borderThreshold;
 				const bool onBottom = std::abs(mouse.y - canvasMax.y) < borderThreshold;
 
-				if (onLeft && onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::TopLeft; }
-				else if (onRight && onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::TopRight; }
-				else if (onLeft && onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::BottomLeft; }
-				else if (onRight && onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::BottomRight; }
-				else if (onLeft) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Left; }
-				else if (onRight) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Right; }
-				else if (onTop) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Top; }
-				else if (onBottom) { newDrag.kind = DragKind::CanvasResize; newDrag.canvasResizeHandle = UiRectResizeHandle::Bottom; }
+				if (onLeft && onTop)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::TopLeft;
+				}
+				else if (onRight && onTop)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::TopRight;
+				}
+				else if (onLeft && onBottom)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::BottomLeft;
+				}
+				else if (onRight && onBottom)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::BottomRight;
+				}
+				else if (onLeft)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::Left;
+				}
+				else if (onRight)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::Right;
+				}
+				else if (onTop)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::Top;
+				}
+				else if (onBottom)
+				{
+					newDrag.kind = DragKind::CanvasResize;
+					newDrag.canvasResizeHandle = UiRectResizeHandle::Bottom;
+				}
 
 				if (newDrag.kind == DragKind::CanvasResize)
 				{
@@ -1172,7 +1286,10 @@ namespace aether::app
 				}
 				else
 				{
-					if (!io.KeyShift && selection != nullptr) selection->Clear();
+					if (!io.KeyShift && selection != nullptr)
+					{
+						selection->Clear();
+					}
 					newDrag.kind = DragKind::Marquee;
 					m_marqueeStart = mouse;
 					m_marqueeEnd = mouse;
@@ -1192,9 +1309,12 @@ namespace aether::app
 			if (newDrag.kind == DragKind::Move && selection != nullptr)
 			{
 				m_multiDragOrigins.clear();
-				for (const Entity e : selection->All())
+				for (const Entity e: selection->All())
 				{
-					if (e == newDrag.entity) continue;
+					if (e == newDrag.entity)
+					{
+						continue;
+					}
 					if (auto* r = world.TryGet<ui::UIRect>(e))
 					{
 						m_multiDragOrigins.push_back({e, r->offsetMin, r->offsetMax});
@@ -1214,7 +1334,7 @@ namespace aether::app
 					r->offsetMin = m_drag.startOffsetMin;
 					r->offsetMax = m_drag.startOffsetMax;
 				}
-				for (const auto& dragOrigin : m_multiDragOrigins)
+				for (const auto& dragOrigin: m_multiDragOrigins)
 				{
 					if (auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity))
 					{
@@ -1244,8 +1364,14 @@ namespace aether::app
 					const glm::vec2 delta = currentMouseCanvas - m_drag.startMouseCanvas;
 					glm::vec2 newRes = m_drag.startOffsetMin;
 
-					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Right || m_drag.canvasResizeHandle == UiRectResizeHandle::TopRight || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight) newRes.x += delta.x;
-					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Bottom || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomLeft || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight) newRes.y += delta.y;
+					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Right || m_drag.canvasResizeHandle == UiRectResizeHandle::TopRight || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight)
+					{
+						newRes.x += delta.x;
+					}
+					if (m_drag.canvasResizeHandle == UiRectResizeHandle::Bottom || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomLeft || m_drag.canvasResizeHandle == UiRectResizeHandle::BottomRight)
+					{
+						newRes.y += delta.y;
+					}
 
 					canvasComp->referenceResolution = glm::max(newRes, glm::vec2(100.f));
 
@@ -1266,20 +1392,25 @@ namespace aether::app
 					rect->offsetMin = m_drag.startOffsetMin + delta;
 					rect->offsetMax = m_drag.startOffsetMax + delta;
 
-				for (const auto& dragOrigin : m_multiDragOrigins)
-				{
-					if (auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity))
-					{
-						r->offsetMin = dragOrigin.startOffsetMin + delta;
-						r->offsetMax = dragOrigin.startOffsetMax + delta;
-					}
-				}
-
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
+
+					const glm::vec2 preSnapMin = rect->offsetMin;
 					if (shouldSnap)
 					{
 						ApplyMoveSnap(world, *rect, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
 					}
+
+					const glm::vec2 snapDelta = shouldSnap ? (rect->offsetMin - preSnapMin) : glm::vec2{0.f, 0.f};
+
+					for (const auto& dragOrigin: m_multiDragOrigins)
+					{
+						if (auto* r = world.TryGet<ui::UIRect>(dragOrigin.entity))
+						{
+							r->offsetMin = dragOrigin.startOffsetMin + delta + snapDelta;
+							r->offsetMax = dragOrigin.startOffsetMax + delta + snapDelta;
+						}
+					}
+
 					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
 
 					const glm::vec4 vis = ui::ResolveRect(parentRect, *rect);
@@ -1297,10 +1428,22 @@ namespace aether::app
 					const bool top = m_drag.resize == UiRectResizeHandle::Top || m_drag.resize == UiRectResizeHandle::TopLeft || m_drag.resize == UiRectResizeHandle::TopRight;
 					const bool bottom = m_drag.resize == UiRectResizeHandle::Bottom || m_drag.resize == UiRectResizeHandle::BottomLeft || m_drag.resize == UiRectResizeHandle::BottomRight;
 
-					if (left) targetMin.x += delta.x;
-					if (right) targetMax.x += delta.x;
-					if (top) targetMin.y += delta.y;
-					if (bottom) targetMax.y += delta.y;
+					if (left)
+					{
+						targetMin.x += delta.x;
+					}
+					if (right)
+					{
+						targetMax.x += delta.x;
+					}
+					if (top)
+					{
+						targetMin.y += delta.y;
+					}
+					if (bottom)
+					{
+						targetMax.y += delta.y;
+					}
 
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					const glm::vec2 parentExtent{parentRect.z, parentRect.w};
@@ -1310,14 +1453,26 @@ namespace aether::app
 					const float width = anchorSpan.x + targetMax.x - targetMin.x;
 					if (width < minSize)
 					{
-						if (left && !right) targetMin.x = targetMax.x + anchorSpan.x - minSize;
-						else targetMax.x = targetMin.x - anchorSpan.x + minSize;
+						if (left && !right)
+						{
+							targetMin.x = targetMax.x + anchorSpan.x - minSize;
+						}
+						else
+						{
+							targetMax.x = targetMin.x - anchorSpan.x + minSize;
+						}
 					}
 					const float height = anchorSpan.y + targetMax.y - targetMin.y;
 					if (height < minSize)
 					{
-						if (top && !bottom) targetMin.y = targetMax.y + anchorSpan.y - minSize;
-						else targetMax.y = targetMin.y - anchorSpan.y + minSize;
+						if (top && !bottom)
+						{
+							targetMin.y = targetMax.y + anchorSpan.y - minSize;
+						}
+						else
+						{
+							targetMax.y = targetMin.y - anchorSpan.y + minSize;
+						}
 					}
 
 					rect->offsetMin = targetMin;
@@ -1380,8 +1535,14 @@ namespace aether::app
 			{
 				if (selection != nullptr)
 				{
-					if (io.KeyShift) selection->AddToSelection(m_hoveredEntity);
-					else selection->Select(m_hoveredEntity);
+					if (io.KeyShift)
+					{
+						selection->AddToSelection(m_hoveredEntity);
+					}
+					else
+					{
+						selection->Select(m_hoveredEntity);
+					}
 				}
 				ImGui::OpenPopup("##ElementContext");
 			}
@@ -1398,16 +1559,28 @@ namespace aether::app
 				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
 				const Entity parent = CreateParentForNewElement(world, selection, canvas);
 				const Entity created = ui::CreateImageEntity(world, canvas);
-				if (parent != canvas) ecs::SetParent(world, created, parent);
-				if (selection != nullptr) selection->Select(created);
+				if (parent != canvas)
+				{
+					ecs::SetParent(world, created, parent);
+				}
+				if (selection != nullptr)
+				{
+					selection->Select(created);
+				}
 			}
 			if (ImGui::MenuItem(ICON_FA_CODE " Add Text"))
 			{
 				canvas = canvas.IsValid() ? canvas : ui::CreateCanvasEntity(world);
 				const Entity parent = CreateParentForNewElement(world, selection, canvas);
 				const Entity created = ui::CreateTextEntity(world, canvas);
-				if (parent != canvas) ecs::SetParent(world, created, parent);
-				if (selection != nullptr) selection->Select(created);
+				if (parent != canvas)
+				{
+					ecs::SetParent(world, created, parent);
+				}
+				if (selection != nullptr)
+				{
+					selection->Select(created);
+				}
 			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Reset View"))
@@ -1437,7 +1610,10 @@ namespace aether::app
 		{
 			if (ImGui::MenuItem("Delete", "Del"))
 			{
-				if (selection != nullptr) selection->Clear();
+				if (selection != nullptr)
+				{
+					selection->Clear();
+				}
 				world.Destroy(m_hoveredEntity);
 			}
 			ImGui::Separator();

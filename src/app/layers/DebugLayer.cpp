@@ -536,32 +536,16 @@ namespace aether::app
 		for (auto& panel: m_panels)
 		{
 			DebugPanel* p = panel.get();
-			actions.push_back({std::string("View: ") + std::string(p->GetName()),
-			        [p]()
-			        {
-				        *p->VisiblePtr() = !*p->VisiblePtr();
-			        }});
+			actions.push_back({std::string("View: ") + std::string(p->GetName()), [p]() { *p->VisiblePtr() = !*p->VisiblePtr(); }});
 		}
 		if (auto* playState = context.TryGet<PlayState>())
 		{
-			actions.push_back({"Play: Toggle Play / Stop",
-			        [playState]()
-			        {
-				        playState->SetMode(playState->IsPlaying() ? PlayState::Mode::Editing : PlayState::Mode::Playing);
-			        }});
+			actions.push_back({"Play: Toggle Play / Stop", [playState]() { playState->SetMode(playState->IsPlaying() ? PlayState::Mode::Editing : PlayState::Mode::Playing); }});
 		}
-		actions.push_back({"Layout: Reset to Default",
-		        [this]()
-		        {
-			        m_resetLayout = true;
-		        }});
+		actions.push_back({"Layout: Reset to Default", [this]() { m_resetLayout = true; }});
 		for (const auto& preset: m_layoutPresets)
 		{
-			actions.push_back({std::string("Layout: ") + preset.name,
-			        [this, preset]()
-			        {
-				        ApplyLayoutPreset(preset);
-			        }});
+			actions.push_back({std::string("Layout: ") + preset.name, [this, preset]() { ApplyLayoutPreset(preset); }});
 		}
 
 		if (ImGui::IsWindowAppearing())
