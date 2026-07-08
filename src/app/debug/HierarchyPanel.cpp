@@ -154,14 +154,14 @@ namespace aether::app
 
 	// Subtle stripes plus the two juice overlays (spawn flash, selection pulse),
 	// drawn behind the row before its widgets so highlights and text sit on top.
-	void HierarchyPanel::DrawRowBackdrop(const SceneSelection& selection, Entity e)
+	void HierarchyPanel::DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex)
 	{
 		ImDrawList* drawList = ImGui::GetWindowDrawList();
 		const ImVec2 rowMin = ImGui::GetCursorScreenPos();
 		const ImVec2 rowMax = ImVec2(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + ImGui::GetFrameHeight());
 		const double now = ImGui::GetTime();
 
-		if ((m_rowsCur.size() & 1) == 1)
+		if ((rowIndex & 1) == 1)
 		{
 			drawList->AddRectFilled(rowMin, rowMax, IM_COL32(255, 255, 255, 4));
 		}
@@ -384,26 +384,63 @@ namespace aether::app
 		ImGui::TextDisabled("#%u", e.id);
 	}
 
-	// One row of the outliner: tree node (arrow + full-row hit area) with the
-	// badge, name and muted id drawn inline; recurses into children.
-	void HierarchyPanel::DrawNode(World& world, SceneSelection& selection, Entity e)
+	void HierarchyPanel::FlattenNode(World& world, Entity e, int depth)
+	{
+		m_flatTree.push_back({e, depth});
+		if (m_expandedNodes.contains(e.id))
+		{
+			if (const auto* h = world.TryGet<HierarchyComponent>(e))
+			{
+				for (const Entity c: h->children)
+				{
+					FlattenNode(world, c, depth + 1);
+				}
+			}
+		}
+	}
+
+	// One row of the outliner: flat Selectable row with depth-based indent,
+	// expand/collapse arrow, badge, name and muted id drawn inline.
+	void HierarchyPanel::DrawNode(World& world, SceneSelection& selection, Entity e, int depth)
 	{
 		const auto* h = world.TryGet<HierarchyComponent>(e);
 		const bool hasKids = h && !h->children.empty();
-
-		ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick | ImGuiTreeNodeFlags_SpanAvailWidth | ImGuiTreeNodeFlags_DrawLinesToNodes;
-		if (selection.Contains(e))
-		{
-			flags |= ImGuiTreeNodeFlags_Selected;
-		}
-		if (!hasKids)
-		{
-			flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
-		}
+		const bool isExpanded = hasKids && m_expandedNodes.contains(e.id);
 
 		ImGui::PushID(static_cast<int>(e.id));
-		DrawRowBackdrop(selection, e);
-		const bool open = ImGui::TreeNodeEx("##node", flags);
+
+		const int rowIndex = static_cast<int>(m_rowsCur.size());
+		DrawRowBackdrop(selection, e, rowIndex);
+
+		// Indent by depth for tree hierarchy.
+		ImGui::SetCursorPosX(ImGui::GetCursorPosX() + static_cast<float>(depth) * ImGui::GetStyle().IndentSpacing);
+
+		// Expand/collapse arrow for branch nodes.
+		if (hasKids)
+		{
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 0));
+			if (ImGui::ArrowButton("##expand", isExpanded ? ImGuiDir_Down : ImGuiDir_Right))
+			{
+				if (isExpanded)
+				{
+					m_expandedNodes.erase(e.id);
+				}
+				else
+				{
+					m_expandedNodes.insert(e.id);
+				}
+			}
+			ImGui::PopStyleVar();
+			ImGui::SameLine();
+		}
+		else
+		{
+			// Leaf: offset cursor past where the arrow would be.
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetFrameHeight());
+		}
+
+		const bool selected = selection.Contains(e);
+		ImGui::Selectable("##row", selected, ImGuiSelectableFlags_SpanAllColumns);
 		m_rowsCur.push_back(e);
 		HandleRowClick(selection, e);
 		HandleRowDragDrop(world, selection, e);
@@ -413,22 +450,20 @@ namespace aether::app
 			DrawRowContent(world, e);
 		}
 
-		if (open && hasKids)
+		// Double-click on the row toggles expand/collapse (matching old
+		// TreeNodeEx OpenOnDoubleClick behavior).
+		if (hasKids && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
 		{
-			if (!destroyed)
+			if (isExpanded)
 			{
-				// Re-fetch: creating a child inside the context menu may have
-				// reallocated the HierarchyComponent pool.
-				if (const auto* hNow = world.TryGet<HierarchyComponent>(e))
-				{
-					for (const Entity c: hNow->children)
-					{
-						DrawNode(world, selection, c);
-					}
-				}
+				m_expandedNodes.erase(e.id);
 			}
-			ImGui::TreePop();
+			else
+			{
+				m_expandedNodes.insert(e.id);
+			}
 		}
+
 		ImGui::PopID();
 	}
 
@@ -872,7 +907,7 @@ namespace aether::app
 					{
 						const Entity e = m_filteredRowsScratch[static_cast<std::size_t>(i)];
 						ImGui::PushID(static_cast<int>(e.id));
-						DrawRowBackdrop(selection, e);
+						DrawRowBackdrop(selection, e, i);
 						// Same interaction path as tree rows: modifier-aware click
 						// (ctrl/shift/deferred collapse) + multi-entity drag-drop.
 						ImGui::Selectable("##row", selection.Contains(e), ImGuiSelectableFlags_SpanAllColumns);
@@ -903,7 +938,8 @@ namespace aether::app
 			}
 			else
 			{
-				// Roots: no HierarchyComponent, or an explicit root parent ({0}).
+				// Build flat visible tree for clipper-friendly iteration.
+				m_flatTree.clear();
 				for (const auto handle: reg.storage<entt::entity>())
 				{
 					if (!reg.valid(handle))
@@ -913,12 +949,23 @@ namespace aether::app
 					const Entity e = World::FromEntt(handle);
 					if (!e.IsValid())
 					{
-						continue; // id 0 is the null entity, never listed
+						continue;
 					}
 					const auto* h = world.TryGet<HierarchyComponent>(e);
 					if (!h || !h->parent.IsValid())
 					{
-						DrawNode(world, selection, e);
+						FlattenNode(world, e, 0);
+					}
+				}
+
+				ImGuiListClipper clipper;
+				clipper.Begin(static_cast<int>(m_flatTree.size()));
+				while (clipper.Step())
+				{
+					for (int i = clipper.DisplayStart; i < clipper.DisplayEnd; ++i)
+					{
+						const auto [e, depth] = m_flatTree[static_cast<std::size_t>(i)];
+						DrawNode(world, selection, e, depth);
 					}
 				}
 

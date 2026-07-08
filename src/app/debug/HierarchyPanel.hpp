@@ -41,8 +41,9 @@ namespace aether::app
 		void RequestOpenPopup();
 
 	private:
-		void DrawNode(World& world, SceneSelection& selection, Entity e);
-		void DrawRowBackdrop(const SceneSelection& selection, Entity e);
+		void DrawNode(World& world, SceneSelection& selection, Entity e, int depth);
+		void FlattenNode(World& world, Entity e, int depth);
+		void DrawRowBackdrop(const SceneSelection& selection, Entity e, int rowIndex);
 		void DrawRowContent(World& world, Entity e);
 		void HandleRowClick(SceneSelection& selection, Entity e);
 		// Drag source + drop target for one row (tree node or flat Selectable).
@@ -84,6 +85,8 @@ namespace aether::app
 		std::vector<Entity> m_rowsCur;
 		std::vector<Entity> m_rowsPrev;
 		std::vector<Entity> m_filteredRowsScratch;
+		std::vector<std::pair<Entity, int>> m_flatTree;
+		std::unordered_set<std::uint32_t> m_expandedNodes;
 		Entity m_rangeAnchor{};
 		// Plain-press on a multi-selected row defers the collapse to release (the
 		// press may start a multi-entity drag); this remembers where it landed.
