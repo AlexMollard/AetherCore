@@ -4,6 +4,7 @@
 #include <array>
 #include <cfloat>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include <glm/common.hpp>
@@ -30,6 +31,14 @@ namespace aether::app
 		constexpr float kHandleSize = 8.f;
 		constexpr float kAnchorHandleSize = 9.f;
 		constexpr float kGridStep = 64.f;
+		constexpr float kSnapScreenDistance = 8.f;
+		constexpr float kGapGuideMinPixels = 1.f;
+
+		enum class GuideAxis : std::uint8_t
+		{
+			Horizontal,
+			Vertical
+		};
 
 		struct UiElement
 		{
@@ -51,6 +60,20 @@ namespace aether::app
 		{
 			UiAnchorHandle handle;
 			ImVec2 center;
+		};
+
+		struct SnapGuide
+		{
+			GuideAxis axis = GuideAxis::Vertical;
+			float position = 0.f;
+		};
+
+		struct GapGuide
+		{
+			GuideAxis axis = GuideAxis::Horizontal;
+			float from = 0.f;
+			float to = 0.f;
+			float cross = 0.f;
 		};
 
 		[[nodiscard]] bool IsAlive(const World& world, Entity entity)
@@ -295,6 +318,324 @@ namespace aether::app
 				}
 			}
 			return false;
+		}
+
+		[[nodiscard]] float RectLeft(const glm::vec4& rect)
+		{
+			return rect.x;
+		}
+
+		[[nodiscard]] float RectRight(const glm::vec4& rect)
+		{
+			return rect.x + rect.z;
+		}
+
+		[[nodiscard]] float RectTop(const glm::vec4& rect)
+		{
+			return rect.y;
+		}
+
+		[[nodiscard]] float RectBottom(const glm::vec4& rect)
+		{
+			return rect.y + rect.w;
+		}
+
+		[[nodiscard]] float RectCenterX(const glm::vec4& rect)
+		{
+			return rect.x + rect.z * 0.5f;
+		}
+
+		[[nodiscard]] float RectCenterY(const glm::vec4& rect)
+		{
+			return rect.y + rect.w * 0.5f;
+		}
+
+		[[nodiscard]] bool RangesOverlap(float a0, float a1, float b0, float b1)
+		{
+			return std::max(a0, b0) <= std::min(a1, b1);
+		}
+
+		void AppendRectSnapCandidates(const glm::vec4& rect, std::vector<float>& xCandidates, std::vector<float>& yCandidates)
+		{
+			xCandidates.push_back(RectLeft(rect));
+			xCandidates.push_back(RectCenterX(rect));
+			xCandidates.push_back(RectRight(rect));
+			yCandidates.push_back(RectTop(rect));
+			yCandidates.push_back(RectCenterY(rect));
+			yCandidates.push_back(RectBottom(rect));
+		}
+
+		void BuildSnapCandidates(World& world, Entity active, const std::vector<UiElement>& elements, glm::vec2 extent, const glm::vec4& parentRect, std::vector<float>& xCandidates, std::vector<float>& yCandidates)
+		{
+			AppendRectSnapCandidates({0.f, 0.f, extent.x, extent.y}, xCandidates, yCandidates);
+			AppendRectSnapCandidates(parentRect, xCandidates, yCandidates);
+
+			for (const UiElement& element: elements)
+			{
+				if (IsInCanvasSubtree(world, element.entity, active))
+				{
+					continue;
+				}
+				AppendRectSnapCandidates(element.canvasRect, xCandidates, yCandidates);
+			}
+		}
+
+		[[nodiscard]] bool TryBestSnapDelta(const std::vector<float>& sources, const std::vector<float>& candidates, float threshold, float& outDelta, float& outPosition)
+		{
+			float bestDistance = threshold;
+			bool found = false;
+			for (const float source: sources)
+			{
+				for (const float candidate: candidates)
+				{
+					const float delta = candidate - source;
+					const float distance = std::abs(delta);
+					if (distance <= bestDistance)
+					{
+						bestDistance = distance;
+						outDelta = delta;
+						outPosition = candidate;
+						found = true;
+					}
+				}
+			}
+			return found;
+		}
+
+		void ApplyMoveSnap(World& world, ui::UIRect& rect, Entity active, const std::vector<UiElement>& elements, glm::vec2 extent, const glm::vec4& parentRect, float zoom, std::vector<SnapGuide>& snapGuides)
+		{
+			std::vector<float> xCandidates;
+			std::vector<float> yCandidates;
+			BuildSnapCandidates(world, active, elements, extent, parentRect, xCandidates, yCandidates);
+
+			const float threshold = kSnapScreenDistance / std::max(zoom, 0.001f);
+			glm::vec4 visualRect = ui::ResolveRect(parentRect, rect);
+
+			float delta = 0.f;
+			float position = 0.f;
+			if (TryBestSnapDelta({RectLeft(visualRect), RectCenterX(visualRect), RectRight(visualRect)}, xCandidates, threshold, delta, position))
+			{
+				rect.offsetMin.x += delta;
+				rect.offsetMax.x += delta;
+				visualRect.x += delta;
+				snapGuides.push_back({GuideAxis::Vertical, position});
+			}
+			if (TryBestSnapDelta({RectTop(visualRect), RectCenterY(visualRect), RectBottom(visualRect)}, yCandidates, threshold, delta, position))
+			{
+				rect.offsetMin.y += delta;
+				rect.offsetMax.y += delta;
+				snapGuides.push_back({GuideAxis::Horizontal, position});
+			}
+		}
+
+		[[nodiscard]] bool ResizeKeepsMinimum(const glm::vec4& visualRect, UiRectResizeHandle handle, GuideAxis axis, float target)
+		{
+			constexpr float minSize = 1.f;
+			if (axis == GuideAxis::Vertical)
+			{
+				const bool left = handle == UiRectResizeHandle::Left || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::BottomLeft;
+				const bool right = handle == UiRectResizeHandle::Right || handle == UiRectResizeHandle::TopRight || handle == UiRectResizeHandle::BottomRight;
+				return (!left || target <= RectRight(visualRect) - minSize) && (!right || target >= RectLeft(visualRect) + minSize);
+			}
+
+			const bool top = handle == UiRectResizeHandle::Top || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::TopRight;
+			const bool bottom = handle == UiRectResizeHandle::Bottom || handle == UiRectResizeHandle::BottomLeft || handle == UiRectResizeHandle::BottomRight;
+			return (!top || target <= RectBottom(visualRect) - minSize) && (!bottom || target >= RectTop(visualRect) + minSize);
+		}
+
+		[[nodiscard]] bool TryBestResizeSnap(float source, const std::vector<float>& candidates, float threshold, const glm::vec4& visualRect, UiRectResizeHandle handle, GuideAxis axis, float& outDelta, float& outPosition)
+		{
+			float bestDistance = threshold;
+			bool found = false;
+			for (const float candidate: candidates)
+			{
+				if (!ResizeKeepsMinimum(visualRect, handle, axis, candidate))
+				{
+					continue;
+				}
+				const float delta = candidate - source;
+				const float distance = std::abs(delta);
+				if (distance <= bestDistance)
+				{
+					bestDistance = distance;
+					outDelta = delta;
+					outPosition = candidate;
+					found = true;
+				}
+			}
+			return found;
+		}
+
+		void ApplyResizeSnap(World& world, ui::UIRect& rect, UiRectResizeHandle handle, Entity active, const std::vector<UiElement>& elements, glm::vec2 extent, const glm::vec4& parentRect, float zoom, std::vector<SnapGuide>& snapGuides)
+		{
+			std::vector<float> xCandidates;
+			std::vector<float> yCandidates;
+			BuildSnapCandidates(world, active, elements, extent, parentRect, xCandidates, yCandidates);
+
+			const bool left = handle == UiRectResizeHandle::Left || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::BottomLeft;
+			const bool right = handle == UiRectResizeHandle::Right || handle == UiRectResizeHandle::TopRight || handle == UiRectResizeHandle::BottomRight;
+			const bool top = handle == UiRectResizeHandle::Top || handle == UiRectResizeHandle::TopLeft || handle == UiRectResizeHandle::TopRight;
+			const bool bottom = handle == UiRectResizeHandle::Bottom || handle == UiRectResizeHandle::BottomLeft || handle == UiRectResizeHandle::BottomRight;
+
+			const float threshold = kSnapScreenDistance / std::max(zoom, 0.001f);
+			const glm::vec4 visualRect = ui::ResolveRect(parentRect, rect);
+
+			float delta = 0.f;
+			float position = 0.f;
+			if (left && TryBestResizeSnap(RectLeft(visualRect), xCandidates, threshold, visualRect, handle, GuideAxis::Vertical, delta, position))
+			{
+				rect.offsetMin.x += delta;
+				snapGuides.push_back({GuideAxis::Vertical, position});
+			}
+			else if (right && TryBestResizeSnap(RectRight(visualRect), xCandidates, threshold, visualRect, handle, GuideAxis::Vertical, delta, position))
+			{
+				rect.offsetMax.x += delta;
+				snapGuides.push_back({GuideAxis::Vertical, position});
+			}
+
+			if (top && TryBestResizeSnap(RectTop(visualRect), yCandidates, threshold, visualRect, handle, GuideAxis::Horizontal, delta, position))
+			{
+				rect.offsetMin.y += delta;
+				snapGuides.push_back({GuideAxis::Horizontal, position});
+			}
+			else if (bottom && TryBestResizeSnap(RectBottom(visualRect), yCandidates, threshold, visualRect, handle, GuideAxis::Horizontal, delta, position))
+			{
+				rect.offsetMax.y += delta;
+				snapGuides.push_back({GuideAxis::Horizontal, position});
+			}
+		}
+
+		void AppendGapGuide(float from, float to, float cross, GuideAxis axis, std::vector<GapGuide>& gapGuides)
+		{
+			if (std::abs(to - from) >= kGapGuideMinPixels)
+			{
+				gapGuides.push_back({axis, from, to, cross});
+			}
+		}
+
+		void BuildGapGuides(World& world, const glm::vec4& visualRect, Entity active, const std::vector<UiElement>& elements, const glm::vec4& bounds, std::vector<GapGuide>& gapGuides)
+		{
+			const float left = RectLeft(visualRect);
+			const float right = RectRight(visualRect);
+			const float top = RectTop(visualRect);
+			const float bottom = RectBottom(visualRect);
+			const float centerX = RectCenterX(visualRect);
+			const float centerY = RectCenterY(visualRect);
+
+			float nearestLeft = RectLeft(bounds);
+			float nearestRight = RectRight(bounds);
+			float nearestTop = RectTop(bounds);
+			float nearestBottom = RectBottom(bounds);
+
+			for (const UiElement& element: elements)
+			{
+				if (IsInCanvasSubtree(world, element.entity, active))
+				{
+					continue;
+				}
+
+				const glm::vec4& other = element.canvasRect;
+				if (RangesOverlap(top, bottom, RectTop(other), RectBottom(other)))
+				{
+					const float otherRight = RectRight(other);
+					const float otherLeft = RectLeft(other);
+					if (otherRight <= left && otherRight > nearestLeft)
+					{
+						nearestLeft = otherRight;
+					}
+					if (otherLeft >= right && otherLeft < nearestRight)
+					{
+						nearestRight = otherLeft;
+					}
+				}
+
+				if (RangesOverlap(left, right, RectLeft(other), RectRight(other)))
+				{
+					const float otherBottom = RectBottom(other);
+					const float otherTop = RectTop(other);
+					if (otherBottom <= top && otherBottom > nearestTop)
+					{
+						nearestTop = otherBottom;
+					}
+					if (otherTop >= bottom && otherTop < nearestBottom)
+					{
+						nearestBottom = otherTop;
+					}
+				}
+			}
+
+			if (nearestLeft <= left)
+			{
+				AppendGapGuide(nearestLeft, left, centerY, GuideAxis::Horizontal, gapGuides);
+			}
+			if (nearestRight >= right)
+			{
+				AppendGapGuide(right, nearestRight, centerY, GuideAxis::Horizontal, gapGuides);
+			}
+			if (nearestTop <= top)
+			{
+				AppendGapGuide(nearestTop, top, centerX, GuideAxis::Vertical, gapGuides);
+			}
+			if (nearestBottom >= bottom)
+			{
+				AppendGapGuide(bottom, nearestBottom, centerX, GuideAxis::Vertical, gapGuides);
+			}
+		}
+
+		void DrawSnapGuides(ImDrawList* drawList, const std::vector<SnapGuide>& snapGuides, ImVec2 origin, ImVec2 pan, float zoom, glm::vec2 extent)
+		{
+			const ImU32 guideColor = ToU32(colors::detail::rgba(56, 189, 255, 0.78f));
+			for (const SnapGuide& guide: snapGuides)
+			{
+				if (guide.axis == GuideAxis::Vertical)
+				{
+					drawList->AddLine(CanvasToScreen({guide.position, 0.f}, origin, pan, zoom), CanvasToScreen({guide.position, extent.y}, origin, pan, zoom), guideColor, 1.5f);
+				}
+				else
+				{
+					drawList->AddLine(CanvasToScreen({0.f, guide.position}, origin, pan, zoom), CanvasToScreen({extent.x, guide.position}, origin, pan, zoom), guideColor, 1.5f);
+				}
+			}
+		}
+
+		void DrawGapGuides(ImDrawList* drawList, const std::vector<GapGuide>& gapGuides, ImVec2 origin, ImVec2 pan, float zoom)
+		{
+			const ImU32 lineColor = ToU32(colors::detail::rgba(226, 214, 196, 0.74f));
+			const ImU32 textColor = ToU32(colors::TextPrimary);
+			const ImU32 textBg = ToU32(colors::detail::rgba(30, 27, 24, 0.86f));
+			for (const GapGuide& guide: gapGuides)
+			{
+				const bool horizontal = guide.axis == GuideAxis::Horizontal;
+				const ImVec2 a = horizontal ? CanvasToScreen({guide.from, guide.cross}, origin, pan, zoom) : CanvasToScreen({guide.cross, guide.from}, origin, pan, zoom);
+				const ImVec2 b = horizontal ? CanvasToScreen({guide.to, guide.cross}, origin, pan, zoom) : CanvasToScreen({guide.cross, guide.to}, origin, pan, zoom);
+				const float screenDistance = horizontal ? std::abs(b.x - a.x) : std::abs(b.y - a.y);
+				if (screenDistance < 6.f)
+				{
+					continue;
+				}
+
+				drawList->AddLine(a, b, lineColor, 1.f);
+				const float cap = 4.f;
+				if (horizontal)
+				{
+					drawList->AddLine({a.x, a.y - cap}, {a.x, a.y + cap}, lineColor, 1.f);
+					drawList->AddLine({b.x, b.y - cap}, {b.x, b.y + cap}, lineColor, 1.f);
+				}
+				else
+				{
+					drawList->AddLine({a.x - cap, a.y}, {a.x + cap, a.y}, lineColor, 1.f);
+					drawList->AddLine({b.x - cap, b.y}, {b.x + cap, b.y}, lineColor, 1.f);
+				}
+
+				char label[32]{};
+				std::snprintf(label, sizeof(label), "%.0f px", std::abs(guide.to - guide.from));
+				const ImVec2 labelSize = ImGui::CalcTextSize(label);
+				const ImVec2 midpoint{(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f};
+				const ImVec2 labelMin{midpoint.x - labelSize.x * 0.5f - 4.f, midpoint.y - labelSize.y * 0.5f - 2.f};
+				const ImVec2 labelMax{midpoint.x + labelSize.x * 0.5f + 4.f, midpoint.y + labelSize.y * 0.5f + 2.f};
+				drawList->AddRectFilled(labelMin, labelMax, textBg, 3.f);
+				drawList->AddText({labelMin.x + 4.f, labelMin.y + 2.f}, textColor, label);
+			}
 		}
 
 		[[nodiscard]] glm::vec2 SnapAnchor(glm::vec2 anchor, bool snap)
@@ -705,6 +1046,8 @@ namespace aether::app
 			}
 		}
 
+		std::vector<SnapGuide> snapGuides;
+		std::vector<GapGuide> gapGuides;
 		if (surfaceHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
 		{
 			m_drag = {};
@@ -772,11 +1115,23 @@ namespace aether::app
 				if (m_drag.kind == DragKind::Move)
 				{
 					TranslateUiRectOffsets(*rect, canvasDelta);
+					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
+					if (!io.KeyShift)
+					{
+						ApplyMoveSnap(world, *rect, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
+					}
+					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
 				}
 				else if (m_drag.kind == DragKind::Resize)
 				{
 					const glm::vec4 parentRect = ResolveParentRect(world, m_drag.entity, canvas, extent);
 					ResizeUiRectOffsets(*rect, m_drag.resize, canvasDelta, {parentRect.z, parentRect.w});
+					if (!io.KeyShift)
+					{
+						ApplyResizeSnap(world, *rect, m_drag.resize, m_drag.entity, elements, extent, parentRect, m_zoom, snapGuides);
+						ResizeUiRectOffsets(*rect, m_drag.resize, {}, {parentRect.z, parentRect.w});
+					}
+					BuildGapGuides(world, ui::ResolveRect(parentRect, *rect), m_drag.entity, elements, parentRect, gapGuides);
 				}
 				else if (m_drag.kind == DragKind::Anchor)
 				{
@@ -786,6 +1141,9 @@ namespace aether::app
 				}
 			}
 		}
+
+		DrawSnapGuides(drawList, snapGuides, origin, m_pan, m_zoom, extent);
+		DrawGapGuides(drawList, gapGuides, origin, m_pan, m_zoom);
 
 		drawList->PopClipRect();
 		ImGui::End();
