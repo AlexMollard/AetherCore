@@ -129,3 +129,41 @@ TEST_CASE("Builder emits image before glyphs on the same entity")
 	CHECK(cmds[1].type == ui::kShapeSdfGlyph);
 	CHECK(cmds[1].layer == 1);
 }
+
+TEST_CASE("Builder emits parent image before child image")
+{
+	World w;
+
+	Entity canvas = w.Create();
+	w.Emplace<ui::UICanvas>(canvas);
+	auto& cr = w.Emplace<ui::UIRect>(canvas);
+	cr.resolvedRect = {0, 0, 1000, 800};
+	w.Emplace<HierarchyComponent>(canvas);
+
+	Entity parent = w.Create();
+	auto& parentRect = w.Emplace<ui::UIRect>(parent);
+	parentRect.resolvedRect = {0, 0, 300, 300};
+	auto& parentImage = w.Emplace<ui::UIImage>(parent);
+	parentImage.color = {1, 0, 0, 1};
+	w.Emplace<HierarchyComponent>(parent);
+	ecs::SetParent(w, parent, canvas);
+
+	Entity child = w.Create();
+	auto& childRect = w.Emplace<ui::UIRect>(child);
+	childRect.resolvedRect = {25, 25, 100, 100};
+	auto& childImage = w.Emplace<ui::UIImage>(child);
+	childImage.color = {0, 1, 0, 1};
+	w.Emplace<HierarchyComponent>(child);
+	ecs::SetParent(w, child, parent);
+
+	std::vector<ui::UiDrawCommand> cmds;
+	ui::BuildDrawCommands(w, cmds);
+
+	REQUIRE(cmds.size() == 2);
+	CHECK(cmds[0].color.r == doctest::Approx(1.f));
+	CHECK(cmds[0].color.g == doctest::Approx(0.f));
+	CHECK(cmds[0].layer == 0);
+	CHECK(cmds[1].color.r == doctest::Approx(0.f));
+	CHECK(cmds[1].color.g == doctest::Approx(1.f));
+	CHECK(cmds[1].layer == 1);
+}

@@ -229,14 +229,25 @@ namespace aether::app
 			return parentRect;
 		}
 
-		[[nodiscard]] glm::vec4 ResolveElementRect(World& world, Entity entity, Entity canvas, glm::vec2 extent)
+		void AppendElementsPreOrder(World& world, Entity entity, Entity canvas, glm::vec2 extent, ImVec2 origin, ImVec2 pan, float zoom, std::vector<UiElement>& elements)
 		{
-			const glm::vec4 parentRect = ResolveParentRect(world, entity, canvas, extent);
-			if (const auto* rect = world.TryGet<ui::UIRect>(entity))
+			if (entity != canvas)
 			{
-				return ui::ResolveRect(parentRect, *rect);
+				if (auto* rect = world.TryGet<ui::UIRect>(entity))
+				{
+					const glm::vec4 parentRect = ResolveParentRect(world, entity, canvas, extent);
+					const glm::vec4 canvasRect = ui::ResolveRect(parentRect, *rect);
+					elements.push_back({entity, rect, canvasRect, parentRect, RectMin(canvasRect, origin, pan, zoom), RectMax(canvasRect, origin, pan, zoom)});
+				}
 			}
-			return parentRect;
+
+			if (const auto* hierarchy = world.TryGet<HierarchyComponent>(entity))
+			{
+				for (const Entity child: hierarchy->children)
+				{
+					AppendElementsPreOrder(world, child, canvas, extent, origin, pan, zoom, elements);
+				}
+			}
 		}
 
 		[[nodiscard]] std::array<ResizeHit, 8> ResizeHandles(ImVec2 min, ImVec2 max)
@@ -250,6 +261,40 @@ namespace aether::app
 			        {UiRectResizeHandle::Bottom, {mid.x, max.y}},
 			        {UiRectResizeHandle::BottomLeft, {min.x, max.y}},
 			        {UiRectResizeHandle::Left, {min.x, mid.y}}}};
+		}
+
+		[[nodiscard]] ImGuiMouseCursor CursorForResizeHandle(UiRectResizeHandle handle)
+		{
+			switch (handle)
+			{
+				case UiRectResizeHandle::Left:
+				case UiRectResizeHandle::Right:
+					return ImGuiMouseCursor_ResizeEW;
+				case UiRectResizeHandle::Top:
+				case UiRectResizeHandle::Bottom:
+					return ImGuiMouseCursor_ResizeNS;
+				case UiRectResizeHandle::TopLeft:
+				case UiRectResizeHandle::BottomRight:
+					return ImGuiMouseCursor_ResizeNWSE;
+				case UiRectResizeHandle::TopRight:
+				case UiRectResizeHandle::BottomLeft:
+					return ImGuiMouseCursor_ResizeNESW;
+			}
+			return ImGuiMouseCursor_Arrow;
+		}
+
+		[[nodiscard]] bool TryHitResizeHandle(ImVec2 mouse, ImVec2 rectMin, ImVec2 rectMax, UiRectResizeHandle& outHandle)
+		{
+			for (const ResizeHit& hit: ResizeHandles(rectMin, rectMax))
+			{
+				const ImVec2 half{kHandleSize * 0.5f, kHandleSize * 0.5f};
+				if (Contains(mouse, Sub(hit.center, half), Add(hit.center, half)))
+				{
+					outHandle = hit.handle;
+					return true;
+				}
+			}
+			return false;
 		}
 
 		[[nodiscard]] glm::vec2 SnapAnchor(glm::vec2 anchor, bool snap)
@@ -590,18 +635,7 @@ namespace aether::app
 		drawList->PushClipRect(contentMin, contentMax, true);
 
 		std::vector<UiElement> elements;
-		world.View<ui::UIRect>().each(
-		        [&](entt::entity enttEntity, ui::UIRect& rect)
-		        {
-			        const Entity entity = World::FromEntt(enttEntity);
-			        if (entity == canvas || !IsInCanvasSubtree(world, entity, canvas))
-			        {
-				        return;
-			        }
-			        const glm::vec4 parentRect = ResolveParentRect(world, entity, canvas, extent);
-			        const glm::vec4 canvasRect = ui::ResolveRect(parentRect, rect);
-			        elements.push_back({entity, &rect, canvasRect, parentRect, RectMin(canvasRect, origin, m_pan, m_zoom), RectMax(canvasRect, origin, m_pan, m_zoom)});
-		        });
+		AppendElementsPreOrder(world, canvas, canvas, extent, origin, m_pan, m_zoom, elements);
 
 		if (m_previewContent)
 		{
@@ -656,6 +690,19 @@ namespace aether::app
 				drawList->AddLine({hit.center.x - half.x, hit.center.y}, {hit.center.x + half.x, hit.center.y}, anchorColor);
 				drawList->AddLine({hit.center.x, hit.center.y - half.y}, {hit.center.x, hit.center.y + half.y}, anchorColor);
 			}
+
+			if (!ImGui::IsMouseDown(ImGuiMouseButton_Middle))
+			{
+				UiRectResizeHandle hoverHandle = UiRectResizeHandle::BottomRight;
+				if (m_drag.kind == DragKind::Resize && m_drag.entity == selected)
+				{
+					ImGui::SetMouseCursor(CursorForResizeHandle(m_drag.resize));
+				}
+				else if (surfaceHovered && TryHitResizeHandle(ImGui::GetMousePos(), selectedMin, selectedMax, hoverHandle))
+				{
+					ImGui::SetMouseCursor(CursorForResizeHandle(hoverHandle));
+				}
+			}
 		}
 
 		if (surfaceHovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
@@ -681,16 +728,12 @@ namespace aether::app
 				}
 				if (m_drag.kind == DragKind::None)
 				{
-					for (const ResizeHit& hit: ResizeHandles(selectedMin, selectedMax))
+					UiRectResizeHandle hitHandle = UiRectResizeHandle::BottomRight;
+					if (TryHitResizeHandle(mouse, selectedMin, selectedMax, hitHandle))
 					{
-						const ImVec2 half{kHandleSize * 0.5f, kHandleSize * 0.5f};
-						if (Contains(mouse, Sub(hit.center, half), Add(hit.center, half)))
-						{
-							m_drag.kind = DragKind::Resize;
-							m_drag.entity = selected;
-							m_drag.resize = hit.handle;
-							break;
-						}
+						m_drag.kind = DragKind::Resize;
+						m_drag.entity = selected;
+						m_drag.resize = hitHandle;
 					}
 				}
 			}
