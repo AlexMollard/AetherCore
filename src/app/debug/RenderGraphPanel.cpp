@@ -201,16 +201,16 @@ namespace aether::app
 
 	void RenderGraphPanel::LoadSettings(TomlConfig& config, LayerContext& /*context*/)
 	{
-		m_renderGraphAutoSelectHotPass = config.GetBool("renderGraph.AutoSelectHotPass", false);
-		m_renderGraphShowDisabled = config.GetBool("renderGraph.ShowDisabled", true);
-		m_renderGraphShowCulled = config.GetBool("renderGraph.ShowCulled", true);
+		m_renderGraphAutoSelectHotPass = config.GetBool("debug.rendergraphautoselecthotpass", false);
+		m_renderGraphShowDisabled = config.GetBool("debug.rendergraphshowdisabled", true);
+		m_renderGraphShowCulled = config.GetBool("debug.rendergraphshowculled", true);
 	}
 
 	void RenderGraphPanel::SaveSettings(TomlConfig& config, LayerContext& /*context*/) const
 	{
-		config.Set("renderGraphAutoSelectHotPass", m_renderGraphAutoSelectHotPass);
-		config.Set("renderGraphShowDisabled", m_renderGraphShowDisabled);
-		config.Set("renderGraphShowCulled", m_renderGraphShowCulled);
+		config.Set("debug.rendergraphautoselecthotpass", m_renderGraphAutoSelectHotPass);
+		config.Set("debug.rendergraphshowdisabled", m_renderGraphShowDisabled);
+		config.Set("debug.rendergraphshowculled", m_renderGraphShowCulled);
 	}
 
 	void RenderGraphPanel::DrawRenderGraphDebugger(LayerContext& context, RenderGraph& graph)

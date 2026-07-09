@@ -12,6 +12,7 @@ add_executable(EngineTests
     utils/LayoutPresetStoreTests.cpp
     utils/EngineSettingsTests.cpp
     utils/SettingsServiceTests.cpp
+    utils/TomlConfigTests.cpp
     material/MaterialDescribeTests.cpp
     material/PackMaterialTests.cpp
     material/MaterialRegistryTests.cpp

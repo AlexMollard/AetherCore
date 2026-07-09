@@ -55,33 +55,10 @@ namespace aether
 		text::ParseToml(tomlText, [this](const text::IniEntry& entry) { m_values[entry.fullKey] = entry.value; });
 	}
 
-	void TomlConfig::Save(std::ostream& out, std::string_view headerComment) const
+	namespace
 	{
-		if (!headerComment.empty())
+		void WriteEntry(std::ostream& out, std::string_view key, std::string_view rawValue)
 		{
-			out << "# " << headerComment << "\n";
-		}
-
-		std::string currentSection;
-		for (const auto& [fullKey, rawValue]: m_values)
-		{
-			const auto dot = fullKey.find('.');
-			const std::string_view section = dot != std::string_view::npos ? std::string_view(fullKey).substr(0, dot) : std::string_view{};
-			const std::string_view key = dot != std::string_view::npos ? std::string_view(fullKey).substr(dot + 1) : std::string_view(fullKey);
-
-			if (section != currentSection)
-			{
-				if (!currentSection.empty() || !headerComment.empty())
-				{
-					out << "\n";
-				}
-				currentSection = std::string(section);
-				if (!section.empty())
-				{
-					out << "[" << section << "]\n";
-				}
-			}
-
 			out << key << " = ";
 			if (IsBareStringValue(rawValue))
 			{
@@ -92,6 +69,58 @@ namespace aether
 				out << rawValue;
 			}
 			out << "\n";
+		}
+	} // namespace
+
+	void TomlConfig::Save(std::ostream& out, std::string_view headerComment) const
+	{
+		if (!headerComment.empty())
+		{
+			out << "# " << headerComment << "\n";
+		}
+
+		// Section-less (top-level) keys MUST be emitted before any [section]
+		// header. In TOML a bare key that appears after a header belongs to that
+		// table, so a top-level key written mid-file would be silently reparented
+		// under the preceding section on reload - and if a correctly-sectioned key
+		// of the same name is then written, the file gains a duplicate key and the
+		// whole config is rejected on the next parse. m_values is sorted, so a
+		// top-level key does not necessarily precede every sectioned key; walk the
+		// top-level keys in an explicit first pass to guarantee correct ordering.
+		bool wroteAny = !headerComment.empty();
+		for (const auto& [fullKey, rawValue]: m_values)
+		{
+			if (fullKey.find('.') != std::string::npos)
+			{
+				continue;
+			}
+			WriteEntry(out, fullKey, rawValue);
+			wroteAny = true;
+		}
+
+		std::string currentSection;
+		for (const auto& [fullKey, rawValue]: m_values)
+		{
+			const auto dot = fullKey.find('.');
+			if (dot == std::string::npos)
+			{
+				continue;
+			}
+			const std::string_view section = std::string_view(fullKey).substr(0, dot);
+			const std::string_view key = std::string_view(fullKey).substr(dot + 1);
+
+			if (section != currentSection)
+			{
+				if (wroteAny)
+				{
+					out << "\n";
+				}
+				currentSection = std::string(section);
+				out << "[" << section << "]\n";
+				wroteAny = true;
+			}
+
+			WriteEntry(out, key, rawValue);
 		}
 	}
 
