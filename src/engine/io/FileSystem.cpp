@@ -250,6 +250,16 @@ namespace aether::io
 		return s_backend != nullptr;
 	}
 
+	bool FileSystem::IsMounted(std::string_view mountPoint)
+	{
+		if (s_backend == nullptr)
+		{
+			return false;
+		}
+		std::scoped_lock lock(s_backend->mountsMutex);
+		return s_backend->mounts.contains(std::string(mountPoint));
+	}
+
 	void FileSystem::InitializeDefaultMounts()
 	{
 		Initialize();

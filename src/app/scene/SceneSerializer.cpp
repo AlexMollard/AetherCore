@@ -26,6 +26,7 @@
 #include "scene/World.hpp"
 #include "scripting/SceneContext.hpp"
 #include "ui/UiComponents.hpp"
+#include "io/FileSystem.hpp"
 #include "io/FileUtil.hpp"
 #include "utils/EngineSettings.hpp"
 #include "utils/Logger.hpp"
@@ -1129,6 +1130,66 @@ namespace aether::app::scene
 	{
 		std::filesystem::path g_projectScenesDirectory;
 		std::filesystem::path g_projectPrefabsDirectory;
+
+		constexpr std::string_view kProjectScenesVfsDir = "scenes";
+		constexpr std::string_view kProjectPrefabsVfsDir = "assets/prefabs";
+		constexpr std::string_view kSceneSuffix = ".scene.toml";
+		constexpr std::string_view kPrefabSuffix = ".prefab.toml";
+
+		std::string ProjectVirtualPath(std::string_view directory, const std::string& name, std::string_view suffix)
+		{
+			std::string path = "project://";
+			path += directory;
+			path += "/";
+			path += name;
+			path += suffix;
+			return path;
+		}
+
+		std::optional<std::string> ReadProjectText(std::string_view directory, const std::string& name, std::string_view suffix)
+		{
+			if (!io::FileSystem::IsInitialized() || !io::FileSystem::IsMounted("project"))
+			{
+				return std::nullopt;
+			}
+
+			auto text = io::FileSystem::ReadFileText(ProjectVirtualPath(directory, name, suffix));
+			if (!text)
+			{
+				return std::nullopt;
+			}
+			return std::move(*text);
+		}
+
+		std::vector<std::string> ListProjectFiles(std::string_view directory, std::string_view suffix)
+		{
+			std::vector<std::string> names;
+			if (!io::FileSystem::IsInitialized() || !io::FileSystem::IsMounted("project"))
+			{
+				return names;
+			}
+
+			std::string pattern = "project://";
+			pattern += directory;
+			pattern += "/*";
+			pattern += suffix;
+			auto matches = io::FileSystem::Glob(pattern);
+			if (!matches)
+			{
+				return names;
+			}
+
+			for (const std::string& match: *matches)
+			{
+				std::string file = std::filesystem::path(match).filename().generic_string();
+				if (file.size() > suffix.size() && file.ends_with(suffix))
+				{
+					names.push_back(file.substr(0, file.size() - suffix.size()));
+				}
+			}
+			std::sort(names.begin(), names.end());
+			return names;
+		}
 	} // namespace
 
 	void SetProjectSceneDirectories(std::filesystem::path scenesDir, std::filesystem::path prefabsDir)
@@ -1190,6 +1251,11 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadPrefabFile(const std::string& prefabName)
 	{
+		if (auto text = ReadProjectText(kProjectPrefabsVfsDir, prefabName, kPrefabSuffix))
+		{
+			return ParseToml(*text);
+		}
+
 		const std::filesystem::path path = std::filesystem::path{PrefabsDirectory()} / (prefabName + ".prefab.toml");
 		auto text = io::file_util::ReadText(path);
 		if (!text)
@@ -1202,7 +1268,12 @@ namespace aether::app::scene
 
 	std::vector<std::string> ListPrefabFiles()
 	{
-		std::vector<std::string> names;
+		std::vector<std::string> names = ListProjectFiles(kProjectPrefabsVfsDir, kPrefabSuffix);
+		if (!names.empty())
+		{
+			return names;
+		}
+
 		const std::filesystem::path dir{PrefabsDirectory()};
 		std::error_code ec;
 		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
@@ -1212,7 +1283,7 @@ namespace aether::app::scene
 				continue;
 			}
 			std::string file = entry.path().filename().string();
-			constexpr std::string_view kSuffix = ".prefab.toml";
+			constexpr std::string_view kSuffix = kPrefabSuffix;
 			if (file.size() > kSuffix.size() && file.ends_with(kSuffix))
 			{
 				names.push_back(file.substr(0, file.size() - kSuffix.size()));
@@ -1243,6 +1314,11 @@ namespace aether::app::scene
 
 	std::optional<SceneDescription> ReadSceneFile(const std::string& sceneName)
 	{
+		if (auto text = ReadProjectText(kProjectScenesVfsDir, sceneName, kSceneSuffix))
+		{
+			return ParseToml(*text);
+		}
+
 		const std::filesystem::path path = std::filesystem::path{ScenesDirectory()} / (sceneName + ".scene.toml");
 		auto text = io::file_util::ReadText(path);
 		if (!text)
@@ -1255,7 +1331,12 @@ namespace aether::app::scene
 
 	std::vector<std::string> ListSceneFiles()
 	{
-		std::vector<std::string> names;
+		std::vector<std::string> names = ListProjectFiles(kProjectScenesVfsDir, kSceneSuffix);
+		if (!names.empty())
+		{
+			return names;
+		}
+
 		const std::filesystem::path dir{ScenesDirectory()};
 		std::error_code ec;
 		for (const auto& entry: std::filesystem::directory_iterator(dir, ec))
@@ -1265,7 +1346,7 @@ namespace aether::app::scene
 				continue;
 			}
 			std::string file = entry.path().filename().string();
-			constexpr std::string_view kSuffix = ".scene.toml";
+			constexpr std::string_view kSuffix = kSceneSuffix;
 			if (file.size() > kSuffix.size() && file.ends_with(kSuffix))
 			{
 				names.push_back(file.substr(0, file.size() - kSuffix.size()));

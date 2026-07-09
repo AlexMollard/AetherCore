@@ -1,7 +1,11 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
+
 #include <glm/glm.hpp>
 
+#include "io/FileSystem.hpp"
+#include "io/FileUtil.hpp"
 #include "material/EffectManager.hpp"
 #include "material/EffectParamBuffer.hpp"
 #include "material/MaterialRegistry.hpp"
@@ -676,4 +680,48 @@ TEST_CASE("UI components round-trip through TOML") {
     CHECK(e.uiText->hAlign == 2);
     CHECK(e.uiText->vAlign == 1);
     CHECK(e.uiText->wrap == false);
+}
+
+TEST_CASE("Scene and prefab file helpers read and list through mounted project VFS") {
+    namespace fs = std::filesystem;
+
+    if (io::FileSystem::IsInitialized())
+    {
+        io::FileSystem::Shutdown();
+    }
+    ClearProjectSceneDirectories();
+
+    const fs::path root = fs::temp_directory_path() / "aethercore_scene_vfs_test";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+
+    SceneDescription scene;
+    scene.name = "MountedScene";
+    EntityRecord entity;
+    entity.name = "Vfs Entity";
+    scene.entities.push_back(entity);
+
+    REQUIRE(io::file_util::WriteText(root / "scenes" / "MountedScene.scene.toml", WriteToml(scene)).has_value());
+    REQUIRE(io::file_util::WriteText(root / "assets" / "prefabs" / "MountedPrefab.prefab.toml", WriteToml(scene)).has_value());
+
+    io::FileSystem::Initialize();
+    io::FileSystem::Mount("project", root);
+
+    const auto sceneNames = ListSceneFiles();
+    CHECK(std::find(sceneNames.begin(), sceneNames.end(), "MountedScene") != sceneNames.end());
+    const auto prefabNames = ListPrefabFiles();
+    CHECK(std::find(prefabNames.begin(), prefabNames.end(), "MountedPrefab") != prefabNames.end());
+
+    const auto loadedScene = ReadSceneFile("MountedScene");
+    REQUIRE(loadedScene.has_value());
+    REQUIRE(loadedScene->entities.size() == 1);
+    CHECK(loadedScene->entities[0].name == "Vfs Entity");
+
+    const auto loadedPrefab = ReadPrefabFile("MountedPrefab");
+    REQUIRE(loadedPrefab.has_value());
+    REQUIRE(loadedPrefab->entities.size() == 1);
+    CHECK(loadedPrefab->entities[0].name == "Vfs Entity");
+
+    io::FileSystem::Shutdown();
+    fs::remove_all(root, ec);
 }

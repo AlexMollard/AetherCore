@@ -24,6 +24,7 @@ namespace aether::io
 		static void InitializeDefaultMounts();
 		static void Shutdown();
 		[[nodiscard]] static bool IsInitialized();
+		[[nodiscard]] static bool IsMounted(std::string_view mountPoint);
 
 		// Register a physical directory under a virtual mount point name.
 		// Replaces any existing backend registered to that mount point.
