@@ -1,7 +1,7 @@
 # AetherCore project settings
 
 [app]
-startupScene = "Testing"
+startupscene = "Testing"
 targetfps = 0
 
 [graphics]
