@@ -1,7 +1,5 @@
 #pragma once
 
-#include <deque>
-#include <filesystem>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -9,31 +7,19 @@
 #include <utility>
 #include <vector>
 
-#include "editor/EditorProjectActions.hpp"
 #include "AppLayer.hpp"
-#include "editor/EditorProjectContext.hpp"
 #include "utils/LayoutPresetStore.hpp"
 #include "utils/TomlConfig.hpp"
 
 #include "debug/DebugPanel.hpp"
-#include "debug/ProjectLauncherWindow.hpp"
+#include "debug/EditorProjectManager.hpp"
 #include "debug/SceneSelection.hpp"
+#include "debug/ScriptErrorOverlay.hpp"
 #include "debug/UndoStack.hpp"
 
 namespace aether::app
 {
 	class HierarchyPanel;
-
-	// Non-blocking error notification for script errors.
-	// Always visible regardless of m_visible (the debug panel toggle).
-	struct ScriptErrorToast
-	{
-		std::string message;
-		std::string summary;
-		std::string filePath;
-		int line = 0;
-		bool dismissed = false;
-	};
 
 	class DebugLayer final : public AppLayer
 	{
@@ -45,7 +31,6 @@ namespace aether::app
 		void OnRenderTargetsInvalidated(LayerContext& context) override;
 
 	private:
-		void PollScriptErrors(LayerContext& context);
 		// Bottom-of-viewport status bar (scene, play state, resolution, FPS). Only
 		// drawn from the second frame on, so it never resizes the docked viewport
 		// before its render targets exist.
@@ -61,21 +46,10 @@ namespace aether::app
 		void LoadSettings(LayerContext& context);
 		void SaveSettings(LayerContext& context);
 		void PersistSettings(LayerContext& context);
-		void LoadLauncherSettings();
-		void SaveLauncherSettings();
-		void DrawProjectLauncher(LayerContext& context);
-		void OpenProject(std::filesystem::path root);
-		void RefreshProjectServices();
-		void CreateProject(std::filesystem::path root, std::string_view name);
-		void AddRecentProject(std::filesystem::path root, std::string name);
-		[[nodiscard]] bool HasCurrentProject() const;
 		// File > Save and Ctrl+S: quick-saves to the current scene name (tracked
 		// by SceneSubsystem), falling back to the Scene Outliner's Save-As popup
 		// when there isn't one yet (or the quick-save failed).
 		void SaveCurrentScene(LayerContext& context);
-
-		static void ParseErrorLocation(const std::string& error, std::string& outPath, int& outLine);
-		static void OpenInVSCode(const std::string& filePath, int line);
 
 		SceneSelection m_selection;
 		UndoStack m_undoStack;
@@ -83,7 +57,7 @@ namespace aether::app
 		std::uint64_t m_outlineSeenSerial = 0;
 		double m_outlinePulseStart = -1.0;
 		TomlConfig m_debugConfig;
-		std::deque<ScriptErrorToast> m_errorToasts;
+		ScriptErrorOverlay m_scriptErrors;
 		bool m_dockspaceBuilt = false;
 		// Set by the Window > Reset Layout menu item; forces the default dock layout
 		// to be rebuilt on the next frame.
@@ -103,14 +77,7 @@ namespace aether::app
 		bool m_openSavePresetPopup = false;
 		char m_newPresetName[64] = {};
 
-		EditorProjectContext m_currentProject;
-		EditorProjectActions m_projectActions;
-		ServiceContainer* m_services = nullptr;
-		std::vector<EditorProjectContext> m_recentProjects;
-		bool m_projectLoaded = false;
-		bool m_launcherOpen = true;
-		ProjectLauncherWindow m_projectLauncher;
-		ProjectLauncherWindowState m_projectLauncherState;
+		EditorProjectManager m_projects;
 
 		std::vector<std::unique_ptr<DebugPanel>> m_panels;
 		// Non-owning: observes the HierarchyPanel instance owned by m_panels, so
