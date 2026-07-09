@@ -159,7 +159,7 @@ namespace aether
 
 		std::ostringstream out;
 		out << "# AetherCore user settings (TOML)\n";
-		out << "# Overrides layered on top of the shipped engine.toml; only changed keys are stored.\n";
+		out << "# Overrides layered on top of the shipped EngineSettings.toml; only changed keys are stored.\n";
 
 		std::string currentSection;
 		for (std::size_t i = 0; i < current.size(); ++i)
@@ -222,7 +222,9 @@ namespace aether
 		return candidates.empty() ? requested : candidates.front();
 	}
 
-	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile, std::string_view userFile)
+	LoadedEngineSettings EngineSettingsIO::LoadLayered(std::string_view shippedFile,
+	                                                   const std::filesystem::path& projectFile,
+	                                                   std::string_view userFile)
 	{
 		AE_PROFILE_ZONE();
 		LoadedEngineSettings result; // layer 1: compiled-in defaults
@@ -238,10 +240,22 @@ namespace aether
 		{
 			AE_INFO(LogCategory::Engine, "No shipped settings file at {}; using compiled-in defaults.", shippedPath.string());
 		}
-		Sanitize(result.values);
-		result.base = result.values; // base = layers 1 + 2
 
-		// Layer 3: per-user overrides (writable, OS user-config dir).
+		// Layer 3: per-project overrides (the open project's ProjectSettings.toml,
+		// passed by the editor; empty in headless/engine-only runs).
+		if (!projectFile.empty())
+		{
+			if (auto text = io::file_util::ReadText(projectFile))
+			{
+				Apply(*text, result.values);
+				AE_INFO(LogCategory::Engine, "Project settings loaded from {}", projectFile.string());
+			}
+		}
+
+		Sanitize(result.values);
+		result.base = result.values; // base = layers 1 + 2 + 3
+
+		// Layer 4: per-user overrides (writable, OS user-config dir).
 		if (const auto userDir = io::PlatformPaths::GetUserConfigDir(); !userDir.empty())
 		{
 			const auto userPath = userDir / userFile;
@@ -265,9 +279,11 @@ namespace aether
 		return result;
 	}
 
-	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view shippedFile, std::string_view userFile)
+	EngineSettings EngineSettingsIO::LoadOrCreate(std::string_view shippedFile,
+	                                              const std::filesystem::path& projectFile,
+	                                              std::string_view userFile)
 	{
-		return LoadLayered(shippedFile, userFile).values;
+		return LoadLayered(shippedFile, projectFile, userFile).values;
 	}
 
 	void EngineSettingsIO::SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile)

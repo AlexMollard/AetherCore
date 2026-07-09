@@ -80,31 +80,40 @@ namespace aether
 		EngineSettings base;   // defaults -> shipped only
 	};
 
-	// Three-layer settings I/O:
+	// Four-layer settings I/O:
 	//   1. compiled-in EngineSettings defaults (the struct above)
-	//   2. shipped project defaults -> engine.toml, read-only, resolved beside the
-	//      executable (release) or in the build tree (dev)
-	//   3. per-user overrides       -> settings.toml in the OS user-config dir,
+	//   2. shipped engine defaults  -> EngineSettings.toml, read-only, resolved
+	//      beside the executable (release) or in the build tree (dev)
+	//   3. per-project overrides    -> ProjectSettings.toml, an already-resolved
+	//      absolute path supplied by the caller; optional
+	//   4. per-user overrides       -> UserSettings.toml in the OS user-config dir,
 	//      the only file ever written back
 	//
-	// Loading merges 1 -> 2 -> 3. Saving writes ONLY the keys that differ from the
-	// base (1+2), so keys the user never touched keep tracking shipped defaults
-	// across updates, and the shipped file is never modified.
+	// Loading merges 1 -> 2 -> 3 -> 4. Saving writes ONLY the keys that differ from
+	// the base (1+2+3), so keys the user never touched keep tracking shipped/project
+	// defaults across updates, and neither the shipped nor project files are ever
+	// modified.
 	class EngineSettingsIO
 	{
 	public:
-		// Loads and merges all three layers, returning both the merged values and
-		// the base (1+2) for later delta saves.
-		[[nodiscard]] static LoadedEngineSettings LoadLayered(std::string_view shippedFile = "engine.toml", std::string_view userFile = "settings.toml");
+		// Loads and merges all layers, returning both the merged values and the
+		// base (1+2+3) for later delta saves. Unlike shippedFile/userFile (looked up
+		// via ResolvePath / GetUserConfigDir), projectFile is an already-resolved
+		// absolute path supplied by the caller; an empty path skips the project layer.
+		[[nodiscard]] static LoadedEngineSettings LoadLayered(std::string_view shippedFile = "EngineSettings.toml",
+		                                                      const std::filesystem::path& projectFile = {},
+		                                                      std::string_view userFile = "UserSettings.toml");
 
 		// Convenience wrapper returning only the merged values. Kept for callers
 		// that don't need to save (e.g. one-shot engine embedders).
-		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view shippedFile = "engine.toml", std::string_view userFile = "settings.toml");
+		[[nodiscard]] static EngineSettings LoadOrCreate(std::string_view shippedFile = "EngineSettings.toml",
+		                                                 const std::filesystem::path& projectFile = {},
+		                                                 std::string_view userFile = "UserSettings.toml");
 
 		// Writes only the keys where 'settings' differs from 'base' to the per-user
 		// settings file (io::PlatformPaths::GetUserConfigDir()/userFile). Never
 		// touches the shipped file.
-		static void SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "settings.toml");
+		static void SaveUserOverrides(const EngineSettings& settings, const EngineSettings& base, std::string_view userFile = "UserSettings.toml");
 
 		// Overlays a TOML document onto 'settings' in place: only keys present in
 		// the text are changed. Exposed for layered loading and unit testing.
@@ -124,6 +133,6 @@ namespace aether
 
 		// Resolves a shipped config file, preferring executable-relative locations
 		// (release layout) over working-directory-relative ones (dev layout).
-		[[nodiscard]] static std::filesystem::path ResolvePath(std::string_view fileName = "engine.toml");
+		[[nodiscard]] static std::filesystem::path ResolvePath(std::string_view fileName = "EngineSettings.toml");
 	};
 } // namespace aether

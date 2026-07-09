@@ -1,5 +1,6 @@
 #pragma once
 
+#include <filesystem>
 #include <map>
 #include <ostream>
 #include <string>
@@ -16,6 +17,9 @@ namespace aether
 		[[nodiscard]] bool LoadFile(std::string_view fileName);
 		bool SaveFile(std::string_view fileName, std::string_view headerComment = {}) const;
 		bool SaveIfDirty(std::string_view fileName, std::string_view headerComment = {});
+
+		[[nodiscard]] bool LoadFromPath(const std::filesystem::path& path);
+		bool SaveToPath(const std::filesystem::path& path, std::string_view headerComment = {}) const;
 
 		bool GetBool(std::string_view key, bool defaultValue) const;
 		float GetFloat(std::string_view key, float defaultValue) const;

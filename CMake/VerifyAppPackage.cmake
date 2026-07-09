@@ -16,7 +16,7 @@ endif()
 
 set(_required_files
     "${RUNTIME_EXE}"
-    "data/config/engine.toml"
+    "data/config/EngineSettings.toml"
     "data/engine.pak"
 )
 

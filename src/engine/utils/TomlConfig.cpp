@@ -195,6 +195,29 @@ namespace aether
 		return true;
 	}
 
+	bool TomlConfig::LoadFromPath(const std::filesystem::path& path)
+	{
+		auto text = io::file_util::ReadText(path);
+		if (!text)
+		{
+			return false;
+		}
+		Load(*text);
+		return true;
+	}
+
+	bool TomlConfig::SaveToPath(const std::filesystem::path& path, std::string_view headerComment) const
+	{
+		std::ostringstream buffer;
+		Save(buffer, headerComment);
+		if (auto result = io::file_util::WriteText(path, buffer.str()); !result)
+		{
+			AE_WARN(LogCategory::Engine, "Failed to write config file: {} - {}", path.string(), result.error().message);
+			return false;
+		}
+		return true;
+	}
+
 	bool TomlConfig::GetBool(std::string_view key, bool defaultValue) const
 	{
 		const auto it = m_values.find(text::ToLowerAscii(std::string(key)));

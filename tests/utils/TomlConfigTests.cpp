@@ -1,7 +1,10 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
 #include <sstream>
+#include <system_error>
 
+#include "io/FileUtil.hpp"
 #include "utils/TomlConfig.hpp"
 
 using namespace aether;
@@ -53,4 +56,19 @@ TEST_CASE("TomlConfig: repeated save/reload does not corrupt into duplicate keys
     third.Load(secondOut.str());
     CHECK(third.Has("launcher.name"));
     CHECK(third.Has("rendergraphautoselecthotpass"));
+}
+
+TEST_CASE("TomlConfig: LoadFromPath/SaveToPath round-trips an absolute path") {
+    const auto path = std::filesystem::temp_directory_path() / "aether_editorstate_test.toml";
+    std::error_code ec; std::filesystem::remove(path, ec);
+
+    TomlConfig out;
+    out.Set("window.viewport", true);
+    REQUIRE(out.SaveToPath(path, "Editor state"));
+
+    TomlConfig in;
+    REQUIRE(in.LoadFromPath(path));
+    CHECK(in.GetBool("window.viewport", false) == true);
+
+    std::filesystem::remove(path, ec);
 }

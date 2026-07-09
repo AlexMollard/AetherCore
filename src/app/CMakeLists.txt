@@ -195,12 +195,12 @@ function(aethercore_add_runtime_payload target_name)
         # packaged build, install this same file next to the shipped executable.
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/data/config"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
-            "${CMAKE_BINARY_DIR}/data/config/engine.toml"
+            "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
+            "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${target_name}>/data/config"
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-            "${CMAKE_SOURCE_DIR}/resources/config/engine.toml"
-            "$<TARGET_FILE_DIR:${target_name}>/data/config/engine.toml"
+            "${CMAKE_SOURCE_DIR}/resources/config/EngineSettings.toml"
+            "$<TARGET_FILE_DIR:${target_name}>/data/config/EngineSettings.toml"
         COMMENT "Packing engine runtime assets to data/engine.pak"
         VERBATIM
     )
@@ -265,8 +265,8 @@ set(_aether_package_commands
         "${CMAKE_BINARY_DIR}/data/engine.pak"
         "${_aether_package_dir}/data/engine.pak"
     COMMAND "${CMAKE_COMMAND}" -E copy_if_different
-        "${CMAKE_BINARY_DIR}/data/config/engine.toml"
-        "${_aether_package_dir}/data/config/engine.toml"
+        "${CMAKE_BINARY_DIR}/data/config/EngineSettings.toml"
+        "${_aether_package_dir}/data/config/EngineSettings.toml"
     COMMAND "${CMAKE_COMMAND}"
         -DAPP_EXE=$<TARGET_FILE:GameRuntime>
         -DPACKAGE_DIR=${_aether_package_dir}

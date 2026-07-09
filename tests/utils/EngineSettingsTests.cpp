@@ -1,5 +1,10 @@
 #include <doctest/doctest.h>
 
+#include <filesystem>
+#include <string>
+#include <system_error>
+
+#include "io/FileUtil.hpp"
 #include "utils/EngineSettings.hpp"
 
 using namespace aether;
@@ -152,4 +157,25 @@ TEST_CASE("uiScale defaults to 1 and Sanitize clamps to [0.5, 3.0]") {
     s.graphics.uiScale = 0.1f;
     EngineSettingsIO::Sanitize(s);
     CHECK(s.graphics.uiScale == doctest::Approx(0.5f)); // clamped low
+}
+
+TEST_CASE("LoadLayered applies the project file as a layer and includes it in base") {
+    // Write a temp ProjectSettings.toml and load it through the real LoadLayered.
+    const auto projectPath =
+        std::filesystem::temp_directory_path() / "aethercore_projectsettings_xyztest.toml";
+    REQUIRE(io::file_util::WriteText(projectPath, "[window]\nwidth = 1600\n[graphics]\nvsync = false\n").has_value());
+
+    // Use shipped/user filenames that will NOT resolve on disk, so only compiled
+    // defaults + the temp project file participate (independent of the real
+    // user-config dir / build tree).
+    const auto loaded = EngineSettingsIO::LoadLayered(
+        "nonexistent_shipped_xyztest.toml", projectPath, "nonexistent_user_xyztest.toml");
+
+    CHECK(loaded.values.window.width == 1600);    // project layer applied by LoadLayered
+    CHECK(loaded.base.window.width == 1600);      // base INCLUDES the project layer (regression guard)
+    CHECK(loaded.values.graphics.vsync == false); // project override took effect
+    CHECK(loaded.values.window.height == 720);    // compiled default not in project file is untouched
+
+    std::error_code ec;
+    std::filesystem::remove(projectPath, ec);
 }
